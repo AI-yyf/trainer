@@ -1,0 +1,3769 @@
+
+> trainer-workspace@1.3.4 test:vsix-e2e
+> node ./extension/scripts/verify-vsix-e2e.mjs
+
+{
+  "ok": true,
+  "codeCli": "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+  "extensionId": "local.trainer-extension",
+  "version": "1.3.4",
+  "vsixPath": "/Users/Apple/Desktop/trainer/extension/trainer-extension-1.3.4-darwin-arm64.vsix",
+  "rebuiltCurrentVsix": true,
+  "workspaceDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+  "reportPath": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/trainer-e2e-report.json",
+  "keptArtifacts": false,
+  "tempRoot": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH",
+  "artifactsDir": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/opencode/vsix-installed-state",
+  "provider": {
+    "source": "fixture",
+    "protocol": "openai_chat_completions_compatible",
+    "model": "trainer-e2e-fixture-model",
+    "usedPartialExternalOverride": false,
+    "fixtureStats": {
+      "modelsRequests": 2,
+      "chatCompletionRequests": 18,
+      "responsesRequests": 0,
+      "streamingRequests": 3,
+      "toolProbeRequests": 2
+    }
+  },
+  "report": {
+    "ok": true,
+    "extensionId": "local.trainer-extension",
+    "trainerExtension": {
+      "id": "local.trainer-extension",
+      "packageJSON": {
+        "name": "trainer-extension",
+        "publisher": "local",
+        "version": "1.3.4"
+      }
+    },
+    "durationMs": 59354,
+    "steps": [
+      {
+        "name": "find-installed-extension",
+        "ok": true,
+        "startedAt": "2026-10-31T20:30:40.119Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "id": "local.trainer-extension",
+          "packageJSON": {
+            "name": "trainer-extension",
+            "publisher": "local",
+            "version": "1.3.4"
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:30:40.120Z",
+        "durationMs": 1
+      },
+      {
+        "name": "activate-installed-extension",
+        "ok": true,
+        "startedAt": "2026-10-31T20:30:40.120Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "id": "local.trainer-extension",
+          "isActive": true,
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:30:40.151Z",
+        "durationMs": 31
+      },
+      {
+        "name": "open-coach-sidebar",
+        "ok": true,
+        "startedAt": "2026-10-31T20:30:40.151Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "Trainer coach sidebar opened.",
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:30:41.691Z",
+        "durationMs": 1540
+      },
+      {
+        "name": "focus-sidebar",
+        "ok": true,
+        "startedAt": "2026-10-31T20:30:41.692Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "focused": true,
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:30:41.697Z",
+        "durationMs": 5
+      },
+      {
+        "name": "restart-sidecar",
+        "ok": true,
+        "startedAt": "2026-10-31T20:30:41.698Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "A project was found. Choose Add to Trainer, Browse only, or Ignore.",
+          "data": {
+            "lifecycle": "ready",
+            "host": "127.0.0.1",
+            "port": 34891,
+            "pid": 93523,
+            "commandLine": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/extensions/local.trainer-extension-1.3.4/bundled/bin/darwin-arm64/trainer-sidecar --host 127.0.0.1 --port 34891",
+            "canStart": true,
+            "detail": "Sidecar ready.",
+            "lastHealthcheckAt": "2026-10-31T20:31:23.524Z"
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:23.528Z",
+        "durationMs": 41830
+      },
+      {
+        "name": "probe-sidecar-health",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:23.529Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "status": "ok",
+          "initialized": true,
+          "database_path": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/trainer.sqlite3",
+          "provider": {
+            "configured": false,
+            "name": null,
+            "model": null,
+            "base_url": null,
+            "has_api_key": "[redacted]"
+          },
+          "research": {
+            "provider_attached": true
+          },
+          "resource_fetch": {
+            "network_enabled": true
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:23.537Z",
+        "durationMs": 8
+      },
+      {
+        "name": "admit-temporary-trainer-workspace",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:23.537Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "commandOk": true,
+          "commandMessage": "The current project was added to Trainer with an isolated project lane.",
+          "rootPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/trainer-workspace",
+          "projectPath": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+          "status": "managed",
+          "rootId": "root-b1ea197385464b439ce80c2e50c10f1d",
+          "projectId": "project-c77e85c398de42e79b14d759779faab6",
+          "contextId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+          "sessionId": "session-project-ba05cbdf39f64b99a2b78c86713c4901",
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:26.335Z",
+        "durationMs": 2798
+      },
+      {
+        "name": "refresh-memory",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.336Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "Trainer memory refreshed.",
+          "data": {
+            "contextId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+            "sidecar_status": "ready",
+            "active_panel": "chat",
+            "snapshotRevision": 0,
+            "messages": [],
+            "stageMaterials": {},
+            "sessionHistoryRestored": true,
+            "profile": {
+              "long_term_goal": "Understand and advance the workspace project.",
+              "long_term_goals": [
+                "Understand and advance the workspace project."
+              ],
+              "background": "",
+              "weekly_hours": 4,
+              "teaching_style": "auto",
+              "answer_policy": "auto",
+              "target_project": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+              "preferred_libraries": []
+            },
+            "plan": null,
+            "global_plan": null,
+            "project_plan_link": null,
+            "current_task": null,
+            "evaluation": null,
+            "memory": {
+              "profile": {
+                "long_term_goal": "Understand and advance the workspace project.",
+                "long_term_goals": [
+                  "Understand and advance the workspace project."
+                ],
+                "background": "",
+                "weekly_hours": 4,
+                "teaching_style": "auto",
+                "answer_policy": "auto",
+                "target_project": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                "preferred_libraries": []
+              },
+              "globalMemory": {
+                "ownerId": "local-trainer",
+                "preferences": {},
+                "longTermGoals": [],
+                "capabilityProfile": {},
+                "growthHistory": [],
+                "createdAt": "2026-10-31T20:31:25.029900+00:00",
+                "updatedAt": "2026-10-31T20:31:25.029904+00:00"
+              },
+              "active_plan": null,
+              "subplans": [],
+              "resources": [],
+              "assetCatalog": {
+                "contextId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                "revision": "d0f14b8e5ebf88f8",
+                "active": [],
+                "deleted": []
+              },
+              "teaching_assets": [],
+              "memory_share_grants": [],
+              "teaching_knowledge_catalog": {
+                "total": 0,
+                "by_scope": {},
+                "by_kind": {},
+                "by_origin": {},
+                "top_assets": []
+              },
+              "coaching_adaptation": {
+                "challenge_level": "steady",
+                "hint_depth": "guided",
+                "review_urgency": "normal",
+                "explanation_mode": "grounded",
+                "next_step_bias": "steady",
+                "summary": "Adaptive coaching: next step follows current time, urgency, and project scope. No learning outcome yet.",
+                "evidence": [
+                  "complexity:simple"
+                ],
+                "difficulty": "medium",
+                "hint_count": 2,
+                "explanation_depth": "grounded",
+                "code_reveal": "scaffold",
+                "practice_type": "focused",
+                "review_frequency": "normal",
+                "material_recommendation": "current",
+                "next_plan_step": "hold",
+                "should_reveal_code": false,
+                "success_streak": 0,
+                "failure_streak": 0,
+                "pedagogy_mode": "direct",
+                "transfer_scene_count": 0,
+                "time_budget": "normal",
+                "project_complexity": "simple",
+                "task_urgency": "medium"
+              },
+              "teaching_strategy_effectiveness": [],
+              "learning_outcomes": [],
+              "weaknesses": [],
+              "reflections": [
+                "Prefer spec-first feedback over direct answers.",
+                "Track repeated boundary-condition misses."
+              ],
+              "recent_summary": "Trainer is maintaining a local memory snapshot for this workspace.",
+              "current_focus": "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+              "coach_anchor": "implementation",
+              "top_weakness": "",
+              "lowest_mastery_concepts": [],
+              "recent_wins": [
+                "The training workspace is ready for the first focused implementation loop."
+              ],
+              "review_rhythm": "Review rhythm: finish one visible move, verify it, then decide whether to expand or revisit.",
+              "due_reviews": [],
+              "due_review_count": 0,
+              "pace_signal": "steady",
+              "teaching_observations": [
+                "No repeated coaching pattern has solidified yet.",
+                "Long-term goal still in view: Understand and advance the workspace project.."
+              ],
+              "userFeedback": [],
+              "workspace": {
+                "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                "context_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                "root_id": "root-b1ea197385464b439ce80c2e50c10f1d",
+                "root_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/trainer-workspace",
+                "project_id": "project-c77e85c398de42e79b14d759779faab6",
+                "project_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                "canonical_project_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                "project_name": "workspace",
+                "project_memory": {
+                  "id": "project-memory-d0979ba178bb49018c4b53927e018704",
+                  "scope": "project",
+                  "status": "ready"
+                },
+                "project_training_state": {
+                  "id": "project-training-eb20ac42dfeb4c5080c9450b76b72e48",
+                  "status": "ready",
+                  "active_card_id": null,
+                  "evidence_status": "awaiting_evidence"
+                },
+                "project_agent_context": {
+                  "id": "project-agent-210e4149669f4cf58298f4d9449c919c",
+                  "session_id": "session-project-ba05cbdf39f64b99a2b78c86713c4901",
+                  "checkpoint_id": "checkpoint-context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                  "status": "ready"
+                },
+                "project_provisioning": {
+                  "contextId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                  "rootId": "root-b1ea197385464b439ce80c2e50c10f1d",
+                  "projectId": "project-c77e85c398de42e79b14d759779faab6",
+                  "projectMemoryId": "project-memory-d0979ba178bb49018c4b53927e018704",
+                  "projectPlanId": "project-plan-fdbf603264fc41acbae2bff94d2af62c",
+                  "projectTrainingId": "project-training-eb20ac42dfeb4c5080c9450b76b72e48",
+                  "projectAgentContextId": "project-agent-210e4149669f4cf58298f4d9449c919c",
+                  "agentSessionId": "session-project-ba05cbdf39f64b99a2b78c86713c4901",
+                  "legacyWorkspaceId": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                  "globalPlanId": null,
+                  "status": "provisioned",
+                  "revision": 1,
+                  "createdAt": "2026-10-31T20:31:25.068416+00:00",
+                  "updatedAt": "2026-10-31T20:31:25.068418+00:00",
+                  "workspaceId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                  "projectPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                  "projectName": "workspace",
+                  "rootPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/trainer-workspace",
+                  "rootRevision": 1,
+                  "projectRevision": 1
+                },
+                "workspace_understanding": {
+                  "repo_summary": "",
+                  "entry_points": [],
+                  "feature_lanes": [],
+                  "risk_zones": [],
+                  "training_opportunities": [],
+                  "resource_brief": "",
+                  "first_look_summary": {
+                    "folder_role": "idea_scratchpad",
+                    "project_type_guess": "unknown",
+                    "subject_family": "code",
+                    "confidence": 0.7,
+                    "why_this_guess": "Few files, mostly markdown/text, no dependency manifests. Folder classified as idea scratchpad.",
+                    "entry_points": [],
+                    "directory_anchors": [],
+                    "core_modules_or_materials": [],
+                    "risk_zones": [],
+                    "training_opportunities": [
+                      "Turn scattered ideas into a structured implementation plan."
+                    ],
+                    "unknowns": [
+                      "No dependency manifest — tech stack may be implicit.",
+                      "No recognized source-code extensions found."
+                    ],
+                    "recommended_next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                    "classification_method": "heuristic",
+                    "classified_at": "2026-10-31T20:31:25.037323+00:00"
+                  },
+                  "updated_at": "2026-10-31T20:31:25.081446+00:00"
+                },
+                "latest_coach_orientation": {
+                  "object_kind": "provider",
+                  "object_label": "Provider",
+                  "state": "needs_setup",
+                  "why": "No usable model connection is available.",
+                  "primary_action": "open_settings",
+                  "primary_action_label": "Open Settings",
+                  "next_step": "Save and test a provider first.",
+                  "advanced_where": "Settings · provider",
+                  "source": "snapshot",
+                  "revision": 1
+                },
+                "remote_name": "",
+                "is_remote_workspace": false,
+                "workspace_trusted": true,
+                "latest_training_chrome": null,
+                "latest_training_handoff": null,
+                "latest_training_next_hop": null,
+                "selected_card_title": "",
+                "latest_current_task": null,
+                "latest_coaching_focus": null,
+                "latest_coach_focus": null,
+                "latest_coach_turn": null,
+                "latest_next_step_hint": null,
+                "latest_coaching_adaptation": null,
+                "latest_evaluation": null,
+                "latest_learner_state": null,
+                "latest_teaching_decision": null,
+                "latest_affect_state": null,
+                "latest_tone_decision": null,
+                "latest_adaptation_guide": null,
+                "latest_project_sources": null,
+                "latest_principle_notes": null
+              },
+              "active_thread": null,
+              "memory_evidence": [
+                "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+                "Long-term goal: Understand and advance the workspace project.",
+                "The training workspace is ready for the first focused implementation loop.",
+                "No repeated coaching pattern has solidified yet.",
+                "Adaptive coaching: next step follows current time, urgency, and project scope. No learning outcome yet."
+              ],
+              "workspace_understanding": {
+                "repo_summary": "",
+                "entry_points": [],
+                "feature_lanes": [],
+                "risk_zones": [],
+                "training_opportunities": [],
+                "resource_brief": "",
+                "firstLookSummary": {
+                  "folder_role": "idea_scratchpad",
+                  "project_type_guess": "unknown",
+                  "subject_family": "code",
+                  "confidence": 0.7,
+                  "why_this_guess": "Few files, mostly markdown/text, no dependency manifests. Folder classified as idea scratchpad.",
+                  "entry_points": [],
+                  "directory_anchors": [],
+                  "core_modules_or_materials": [],
+                  "risk_zones": [],
+                  "training_opportunities": [
+                    "Turn scattered ideas into a structured implementation plan."
+                  ],
+                  "unknowns": [
+                    "No dependency manifest — tech stack may be implicit.",
+                    "No recognized source-code extensions found."
+                  ],
+                  "recommended_next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                  "classification_method": "heuristic",
+                  "classified_at": "2026-10-31T20:31:25.037323+00:00"
+                },
+                "updated_at": "2026-10-31T20:31:25.081446+00:00"
+              },
+              "dependency_mastery": [],
+              "dependency_skill_maps": [],
+              "dependency_skill_map_history": [],
+              "flash_deck": null,
+              "recent_flash_attempts": [],
+              "theory_drill": null,
+              "theory_drill_history": [],
+              "scenario_lab": null,
+              "scenario_lab_history": [],
+              "review_queue_actions": [],
+              "review_artifact": null,
+              "review_artifact_history": [],
+              "training_card_candidates": [],
+              "active_training_card_routing": null,
+              "training_event_ledger": [],
+              "evidence_queue": {
+                "pending": [],
+                "deferred": [],
+                "adopted": [],
+                "rejected": [],
+                "history": [],
+                "unscoped": [],
+                "total_count": 0
+              },
+              "planChangeCandidates": []
+            },
+            "provider": null,
+            "coaching_state": {
+              "scenario": "general",
+              "answer_mode": "guided",
+              "learner_signal": "steady",
+              "summary": "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+              "next_step": "Review rhythm: finish one visible move, verify it, then decide whether to expand or revisit.",
+              "encouragement": "Keep the loop tight: implement, verify, reflect.",
+              "intervention_strategy": "First compress the problem into one visible, verifiable move before expanding explanation or scope.",
+              "teaching_goal": "Train implementation judgment inside the current project instead of only giving an answer.",
+              "resume_thread": "Resume from the current coaching lane, verify this slice, then decide whether to widen.",
+              "decision": "",
+              "blocker": "",
+              "teaching_note": "",
+              "confidence": "",
+              "evidence": [],
+              "support_strategy": "If the learner feels blocked, reduce scope and keep the next move extremely concrete.",
+              "updated_at": "2026-10-31T20:31:26.354422+00:00"
+            },
+            "learner_state": null,
+            "teaching_decision": null,
+            "affect_state": null,
+            "tone_decision": null,
+            "implementation_guide": null,
+            "project_ideas": [],
+            "project_adaptation_guide": null,
+            "project_sources": [],
+            "principle_notes": null,
+            "selected_teaching_assets": [],
+            "exercise_prompt": null,
+            "review_queue_summary": "No immediate review item is due yet.",
+            "next_review_due": null,
+            "plan_runtime_status": {
+              "current_stage": null,
+              "current_main_thread": {
+                "focus_area": "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+                "summary": "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+                "next_step": "Review rhythm: finish one visible move, verify it, then decide whether to expand or revisit.",
+                "blocker": "",
+                "current_step": "",
+                "why_now": "",
+                "verify_method": [],
+                "blocked_reason": "",
+                "next_after_current": ""
+              },
+              "current_step": "",
+              "why_now": "",
+              "verify_method": [],
+              "blocked_reason": "",
+              "next_after_current": "",
+              "plan_id": null,
+              "review_points": [],
+              "coach_judgment": {
+                "summary": "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+                "teaching_goal": "Train implementation judgment inside the current project instead of only giving an answer.",
+                "intervention_strategy": "First compress the problem into one visible, verifiable move before expanding explanation or scope.",
+                "support_strategy": "If the learner feels blocked, reduce scope and keep the next move extremely concrete.",
+                "resume_thread": "Resume from the current coaching lane, verify this slice, then decide whether to widen."
+              },
+              "next_training_action": "Review rhythm: finish one visible move, verify it, then decide whether to expand or revisit.",
+              "next_step_hint": {
+                "title": "Review rhythm: finish one visible move, verify it, then decide whether to expand or revisit.",
+                "recommended_action": "task",
+                "source": "coaching_state",
+                "continue_in": "coach",
+                "summary": "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+                "focus_area": "Current coaching focus: keep following the learner's latest concrete thread, especially this signal from the recent loop: Trainer is maintaining a local memory snapshot for this workspace.",
+                "prompt": "Guide me through \"Review rhythm: finish one visible move, verify it, then decide whether to expand or revisit.\" and keep it to this one small step."
+              },
+              "review_queue_summary": "No immediate review item is due yet.",
+              "next_review_due": null,
+              "recovered": false,
+              "current_stage_id": null,
+              "resume_state": null,
+              "request_id": null,
+              "revision": null
+            },
+            "coachOrientation": {
+              "object_kind": "provider",
+              "object_label": "Provider",
+              "state": "needs_setup",
+              "why": "No usable model connection is available.",
+              "primary_action": "open_settings",
+              "primary_action_label": "Open Settings",
+              "next_step": "Save and test a provider first.",
+              "advanced_where": "Settings · provider",
+              "source": "snapshot",
+              "revision": 1
+            },
+            "suggestedActions": [
+              {
+                "id": "suggested-3",
+                "label": "Stay with a smaller hint. Do not generate a plan, card, or task.",
+                "action": "hint",
+                "rationale": "Use this when you want a smaller coaching nudge tied to the exact code boundary, not a full branch of work.",
+                "artifact_kind": "idea_implementation",
+                "prompt": "Give me a smaller hint grounded in the current code, current focus, and goal.",
+                "focus_area": null
+              }
+            ]
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:26.366Z",
+        "durationMs": 30
+      },
+      {
+        "name": "upload-inline-resource",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.366Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "Imported 1 resource(s) and indexed 1.",
+          "data": [
+            {
+              "id": "resource-d319bf78b4",
+              "kind": "markdown",
+              "name": "vsix-e2e-sandbox-capability.md",
+              "source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+              "tags": [
+                "vsix-e2e",
+                "sandbox-capability"
+              ],
+              "source_items": [],
+              "content_language": null,
+              "collection_path": null,
+              "collection_root": null,
+              "summary": "# VSIX E2E capability proof\n\nThis file verifies resource upload inside installed extension smoke.\n",
+              "parse_status": "parsed",
+              "index_status": "indexed",
+              "source_type": "local:markdown",
+              "canonical_source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+              "fetched_at": "2026-10-31T20:31:26.381339+00:00",
+              "source_declaration": {
+                "license_expression": "",
+                "license_evidence_uri": "",
+                "maintenance_updated_at": "",
+                "maintenance_evidence_uri": ""
+              },
+              "source_governance": {
+                "policy_version": "source-intake-v1",
+                "assessed_at": "2026-10-31T20:31:26.381389+00:00",
+                "source_provenance_status": "unknown",
+                "license_status": "unknown",
+                "license_expression": "",
+                "license_evidence_kind": "none",
+                "license_evidence_source": "",
+                "license_evidence_excerpt": "",
+                "maintenance_status": "unknown",
+                "maintenance_updated_at": null,
+                "maintenance_evidence_kind": "none",
+                "maintenance_evidence_source": "",
+                "maintenance_evidence_excerpt": "",
+                "commercial_reuse_policy": "permissive-spdx-v1",
+                "commercial_reuse_status": "review_required",
+                "commercial_reuse_reason_codes": [
+                  "controlled_provenance_missing",
+                  "license_unknown",
+                  "maintenance_unknown"
+                ]
+              },
+              "trust_score": 0.84,
+              "freshness": "fresh",
+              "duplicate_key": "markdown:/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md:abe04dc2c0d26840",
+              "quality_flags": [],
+              "warnings": [],
+              "knowledge_fragments": [
+                {
+                  "id": "chunk_a0ac451228e64472b16bc3a1866c3f57",
+                  "resource_id": "resource-d319bf78b4",
+                  "title": "vsix-e2e-sandbox-capability.md",
+                  "snippet": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                  "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                  "evidence_summary": "This file verifies resource upload inside installed extension smoke.",
+                  "source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                  "source_type": "local:markdown",
+                  "kind": "markdown",
+                  "trust_score": 0.84,
+                  "freshness": "fresh",
+                  "fetched_at": null,
+                  "duplicate_key": "markdown:/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md:abe04dc2c0d26840",
+                  "quality_flags": [],
+                  "focus_area": "vsix-e2e-sandbox-capability.md",
+                  "line_start": null,
+                  "line_end": null,
+                  "paragraph_anchor": "¶chunk:0@0",
+                  "content_language": null,
+                  "location": {
+                    "path": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                    "chunk_id": "chunk_a0ac451228e64472b16bc3a1866c3f57",
+                    "paragraph_anchor": "¶chunk:0@0"
+                  },
+                  "why_it_matters": "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md.",
+                  "version_id": "rv-bd8028f5d82b42b2b5a0c1aa2a357ac3",
+                  "content_hash": "e611ee76783d29b4f520d8ad0892a8b0b99c1cd27c26e931e8d864039a3d8de3",
+                  "citation_id": "citation:resource-d319bf78b4:rv-bd8028f5d82b42b2b5a0c1aa2a357ac3:1fcfe7c2370ff0f8"
+                }
+              ],
+              "sandbox_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-d319bf78b4/vsix-e2e-sandbox-capability.md",
+              "sandbox_origin": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+              "sandbox_synced_at": "2026-10-31T20:31:26.393114+00:00",
+              "sandbox_dirty": false,
+              "extracted_artifact_path": null,
+              "content_hash": "e611ee76783d29b4f520d8ad0892a8b0b99c1cd27c26e931e8d864039a3d8de3",
+              "library_paths": [],
+              "trust_state": "trusted"
+            }
+          ],
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:26.422Z",
+        "durationMs": 56
+      },
+      {
+        "name": "refresh-sandbox-capability",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.423Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "Sandbox capability refreshed.",
+          "data": {
+            "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+            "root_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+            "sandbox_root_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+            "workspace_root_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+            "active_workspace_root": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+            "trash_root_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/trash",
+            "managed_roots": [
+              "plan",
+              "cards",
+              "knowledge",
+              "sources",
+              "notes",
+              "outputs"
+            ],
+            "ready": true,
+            "linked_resource_count": 1,
+            "total_files": 1,
+            "total_directories": 19,
+            "total_size_bytes": 98,
+            "last_updated_at": "2026-10-31T20:31:26.392945+00:00",
+            "nodes": [
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/cards",
+                "relative_path": "cards",
+                "name": "cards",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425832+00:00",
+                "children_count": 5,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/cards/current",
+                "relative_path": "cards/current",
+                "name": "current",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425662+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/cards/flash",
+                "relative_path": "cards/flash",
+                "name": "flash",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425708+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/cards/practice",
+                "relative_path": "cards/practice",
+                "name": "practice",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425751+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/cards/review",
+                "relative_path": "cards/review",
+                "name": "review",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425831+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/cards/scenario",
+                "relative_path": "cards/scenario",
+                "name": "scenario",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425793+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/knowledge",
+                "relative_path": "knowledge",
+                "name": "knowledge",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.426040+00:00",
+                "children_count": 4,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/knowledge/apis",
+                "relative_path": "knowledge/apis",
+                "name": "apis",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.426031+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/knowledge/debug",
+                "relative_path": "knowledge/debug",
+                "name": "debug",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425948+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/knowledge/function-guidance",
+                "relative_path": "knowledge/function-guidance",
+                "name": "function-guidance",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425987+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/knowledge/remote",
+                "relative_path": "knowledge/remote",
+                "name": "remote",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425908+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/notes",
+                "relative_path": "notes",
+                "name": "notes",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.426233+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/outputs",
+                "relative_path": "outputs",
+                "name": "outputs",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.426287+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/plan",
+                "relative_path": "plan",
+                "name": "plan",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.425573+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources",
+                "relative_path": "sources",
+                "name": "sources",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.426192+00:00",
+                "children_count": 3,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/folders",
+                "relative_path": "sources/folders",
+                "name": "folders",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.426191+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox",
+                "relative_path": "sources/inbox",
+                "name": "inbox",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:26.392817+00:00",
+                "children_count": 1,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-d319bf78b4",
+                "relative_path": "sources/inbox/resource-d319bf78b4",
+                "name": "resource-d319bf78b4",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:26.392945+00:00",
+                "children_count": 1,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/web",
+                "relative_path": "sources/web",
+                "name": "web",
+                "node_kind": "directory",
+                "file_kind": "directory",
+                "resource_id": null,
+                "source_uri": null,
+                "size_bytes": 0,
+                "updated_at": "2026-10-31T20:31:25.426155+00:00",
+                "children_count": 0,
+                "is_editable": false,
+                "children": []
+              },
+              {
+                "path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-d319bf78b4/vsix-e2e-sandbox-capability.md",
+                "relative_path": "sources/inbox/resource-d319bf78b4/vsix-e2e-sandbox-capability.md",
+                "name": "vsix-e2e-sandbox-capability.md",
+                "node_kind": "file",
+                "file_kind": "markdown",
+                "resource_id": "resource-d319bf78b4",
+                "source_uri": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                "size_bytes": 98,
+                "updated_at": "2026-10-31T20:30:35.466958+00:00",
+                "children_count": 0,
+                "is_editable": true,
+                "children": []
+              }
+            ],
+            "recent_commands": [],
+            "latest_command": null,
+            "notes": [
+              "Sandbox root: /private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+              "Trainer layout: plan / cards / knowledge / sources / notes / outputs",
+              "Linked resources: 1",
+              "Managed files: 1",
+              "Imported materials default to sources/inbox, sources/web, or sources/folders; derived work stays in the Trainer workspace."
+            ],
+            "capability_summary": {
+              "platform": {
+                "os": "macos",
+                "architecture": "arm64",
+                "shell_family": "posix",
+                "path_separator": "/",
+                "case_sensitivity": "case-insensitive",
+                "default_encoding": "utf-8",
+                "workspace_trust_state": "trusted"
+              },
+              "permission_state": "coach_only",
+              "path_guard_status": {
+                "status": "available",
+                "summary": "Sandbox path resolution is enforced server-side and escapes are blocked before file operations.",
+                "policy": "trainer.resource_sandbox.path_guard.v1",
+                "reason_code": "",
+                "reasons": [],
+                "network_facts": null
+              },
+              "archive_audit_status": {
+                "status": "available",
+                "summary": "Archive dry-run audit blocks zip-slip, tar-slip, symlink/junction pivots, nested archive payloads, and unsafe payload patterns.",
+                "policy": "trainer.resource_sandbox.archive_dry_run.v1",
+                "reason_code": "",
+                "reasons": [],
+                "network_facts": null
+              },
+              "skill_manifest_status": {
+                "status": "available",
+                "summary": "Skill manifest audit blocks prompt injection, supply-chain, credential, and path-escape risks before runtime.",
+                "policy": "trainer.resource_sandbox.skill_manifest.v1",
+                "reason_code": "",
+                "reasons": [],
+                "network_facts": null
+              },
+              "skill_runtime_status": {
+                "status": "available",
+                "summary": "Runtime preflight validates declared platform, command templates, env whitelist, output paths, and timeout.",
+                "policy": "trainer.resource_sandbox.skill_runtime.v1",
+                "reason_code": "",
+                "reasons": [],
+                "network_facts": null
+              },
+              "network_execution_status": {
+                "status": "degraded",
+                "summary": "Narrow Python and Node.js socket guards can run audited entry scripts with an explicit allowlist; broader OS/container egress enforcement still depends on host runtime availability, locally trusted audited images, and verified container execution.",
+                "policy": "trainer.resource_sandbox.skill_isolated_executor.v1",
+                "reason_code": "network_egress_os_container_runtime_missing",
+                "reasons": [
+                  "Only audited sandbox Python and Node.js scripts can enter per-run guarded egress.",
+                  "Runtime preflight still blocks unaudited and child-process escape lanes before execution.",
+                  "OS/container-level per-run egress isolation is unavailable because no supported container runtime (Docker or Podman) was found on the current host. Checked runtimes: docker, podman."
+                ],
+                "network_facts": {
+                  "audited_python": {
+                    "status": "guarded_allowlist_only",
+                    "current_enforcement": "python_socket_guard",
+                    "next_requirement": "os_or_container_egress_enforcement",
+                    "reason_code": "",
+                    "reason": "Audited Python entry scripts can use the narrow per-run Python socket guard.",
+                    "required_executor": "python_socket_guard"
+                  },
+                  "unaudited_python": {
+                    "status": "blocked",
+                    "current_enforcement": "runtime_preflight",
+                    "next_requirement": "audited_sandbox_python_script",
+                    "reason_code": "network_egress_unaudited_command_path",
+                    "reason": "Network execution is blocked because the runtime command path is not an audited sandbox Python or Node.js script; per-run guarded egress only applies to preflight-audited entry scripts.",
+                    "required_executor": "python_socket_guard"
+                  },
+                  "non_python": {
+                    "status": "guarded_allowlist_only",
+                    "current_enforcement": "node_socket_guard",
+                    "next_requirement": "os_or_container_egress_enforcement",
+                    "reason_code": "",
+                    "reason": "Audited Node.js entry scripts can use the narrow per-run Node socket guard; broader non-Python network execution still requires verified OS/container lanes.",
+                    "required_executor": "node_socket_guard"
+                  },
+                  "child_process": {
+                    "status": "blocked_by_preflight",
+                    "current_enforcement": "runtime_preflight",
+                    "next_requirement": "subprocess_free_audited_entrypoint",
+                    "reason_code": "network_egress_child_process_escape_blocked",
+                    "reason": "Child-process and fan-out escape paths are blocked during runtime preflight before any network execution right is evaluated.",
+                    "required_executor": "none"
+                  },
+                  "os_container": {
+                    "status": "missing",
+                    "current_enforcement": "missing",
+                    "next_requirement": "os_or_container_egress_enforcement",
+                    "reason_code": "network_egress_os_container_runtime_missing",
+                    "reason": "OS/container-level per-run egress isolation is unavailable because no supported container runtime (Docker or Podman) was found on the current host. Checked runtimes: docker, podman.",
+                    "required_executor": "os_container_egress"
+                  },
+                  "os_container_probe": {
+                    "availability": "unavailable_runtime_missing",
+                    "selected_runtime": "none",
+                    "selected_executor_mode": "none",
+                    "selected_entry_runtime": "none",
+                    "supported_entry_runtimes": [],
+                    "reason_code": "network_egress_os_container_runtime_missing",
+                    "reason": "OS/container-level per-run egress isolation is unavailable because no supported container runtime (Docker or Podman) was found on the current host. Checked runtimes: docker, podman.",
+                    "checked_at": "2026-10-31T20:31:26.437338+00:00",
+                    "runtime_path": "",
+                    "probe_command": [],
+                    "probe_stdout_excerpt": "",
+                    "probe_stderr_excerpt": "",
+                    "probe_exit_code": null,
+                    "image_reference": "",
+                    "image_repo_digests": [],
+                    "selected_image_repo_digest": "",
+                    "image_trust_policy": "",
+                    "image_trust_status": ""
+                  }
+                }
+              },
+              "output_boundary_status": {
+                "status": "available",
+                "summary": "Skill output writes are restricted to declared sandbox paths and reject symlink/junction/reparse boundary escapes.",
+                "policy": "trainer.resource_sandbox.skill_isolated_executor.v1",
+                "reason_code": "",
+                "reasons": [],
+                "network_facts": null
+              },
+              "cross_system_degradation": [
+                "Skill network execution stays degraded across windows/macos/linux outside the audited Python or Node.js guard paths because os/container-level per-run egress isolation is unavailable because no supported container runtime (docker or podman) was found on the current host. checked runtimes: docker, podman.",
+                "Sandbox root and platform path semantics are normalized for macos; the current root is /private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0."
+              ]
+            },
+            "authority": {
+              "has_workspace_root": true,
+              "active_workspace_root": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+              "root_uri": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+              "root_detail": "source: workspace_authority_service | root_uri: /private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+              "source": "workspace_authority_service",
+              "source_detail": "authority_source: workspace_authority_service | mode: level_inspect",
+              "authority_source": "workspace_authority_service",
+              "remote_name": "",
+              "is_remote_workspace": false,
+              "permission_level": "INSPECT",
+              "permission_label": "read/list/search/index/preview/summarize",
+              "permission_detail": "level_inspect",
+              "authority_mode": "level_inspect",
+              "authority_scope": "trainer_sandbox",
+              "resource_write_allowed": true,
+              "resource_write_evidence": {
+                "operation": "write",
+                "scope": "trainer_sandbox",
+                "target_root": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                "allowed": true,
+                "reason": "Trainer artifact writes are confined to the managed sandbox root."
+              },
+              "allowed_operations": [
+                "read",
+                "list",
+                "search",
+                "index",
+                "preview",
+                "summarize"
+              ],
+              "allowed_operations_text": "read / list / search / index / preview / summarize",
+              "mounted_sources": [],
+              "ledger_entry_count": 0,
+              "checkpoint_count": 0,
+              "counts_text": "0 / 0",
+              "trash_root": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/trash",
+              "trash_detail": "trash: /private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/trash",
+              "next_safe_action": "Start by reading, searching, and previewing the key material, then pick the first verifiable task.",
+              "summary_text": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace | read/list/search/index/preview/summarize | workspace_authority_service"
+            },
+            "threat_summary": null,
+            "rootPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+            "sandboxRootPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+            "workspaceRootPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+            "activeWorkspaceRoot": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+            "trashRootPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/trash",
+            "managedRoots": [
+              "plan",
+              "cards",
+              "knowledge",
+              "sources",
+              "notes",
+              "outputs"
+            ],
+            "capabilitySummary": "[circular]"
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:26.442Z",
+        "durationMs": 19
+      },
+      {
+        "name": "assert-sandbox-capability-truth",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.442Z",
+        "evidenceScope": "host-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "hasCapabilitySummary": true,
+          "permissionState": "coach_only",
+          "skillManifestStatus": "available",
+          "skillManifestPolicy": "trainer.resource_sandbox.skill_manifest.v1",
+          "skillRuntimeStatus": "available",
+          "skillRuntimePolicy": "trainer.resource_sandbox.skill_runtime.v1",
+          "platformOs": "macos",
+          "networkExecutionStatus": "degraded",
+          "networkReasonCode": "network_egress_os_container_runtime_missing",
+          "networkPolicy": "trainer.resource_sandbox.skill_isolated_executor.v1",
+          "nonPythonStatus": "guarded_allowlist_only",
+          "nonPythonCurrentEnforcement": "node_socket_guard",
+          "nonPythonReasonCode": null,
+          "nonPythonRequiredExecutor": "node_socket_guard",
+          "osContainerStatus": "missing",
+          "osContainerCurrentEnforcement": "missing",
+          "osContainerRequiredExecutor": "os_container_egress",
+          "osContainerReasonCode": "network_egress_os_container_runtime_missing",
+          "osContainerProbeAvailability": "unavailable_runtime_missing",
+          "osContainerSelectedRuntime": "none",
+          "osContainerSelectedEntryRuntime": "none",
+          "osContainerProbeReasonCode": "network_egress_os_container_runtime_missing",
+          "osContainerSupportedEntryRuntimes": [],
+          "evidenceScope": "host-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:26.442Z",
+        "durationMs": 0
+      },
+      {
+        "name": "provider-and-message",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.442Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "source": "fixture",
+          "model": "trainer-e2e-fixture-model",
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:27.603Z",
+        "durationMs": 1161
+      },
+      {
+        "name": "set-provider-verification-language",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.442Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "commandOk": true,
+          "responseLanguage": "zh-CN",
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:26.463Z",
+        "durationMs": 21
+      },
+      {
+        "name": "save-provider",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.463Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "连接设置已保存。这组连接指向本机服务,不需要 API 密钥即可使用。请测试连接以确认可用。",
+          "data": {
+            "name": "trainer-e2e-openai-compatible",
+            "label": "trainer-e2e-openai-compatible",
+            "profileLabel": "trainer-e2e-openai-compatible",
+            "baseUrl": "http://127.0.0.1:56960/v1",
+            "model": "trainer-e2e-fixture-model",
+            "protocol": "openai_chat_completions_compatible",
+            "apiKeyRef": "[redacted]",
+            "capabilities": {
+              "chat": true,
+              "responses": false,
+              "vision": false,
+              "embeddings": false,
+              "tools": false,
+              "jsonSchema": false,
+              "streaming": true,
+              "structuredOutput": false,
+              "thinking": false
+            },
+            "credentialMode": "ui_proxy",
+            "catalogModels": [
+              "trainer-e2e-fixture-model"
+            ],
+            "allowedModels": [],
+            "deniedModels": [],
+            "catalogSource": "provider_live",
+            "requestDefaults": {
+              "extra_body": {},
+              "thinking": {
+                "type": "disabled"
+              }
+            },
+            "thinkingConfig": {
+              "mode": "disabled"
+            },
+            "modelCapabilities": {},
+            "contextWindowTokens": "[redacted]",
+            "maxOutputTokens": "[redacted]",
+            "modelTokenLimits": "[redacted]"
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:26.471Z",
+        "durationMs": 8
+      },
+      {
+        "name": "test-provider-connection",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:26.471Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "trainer-e2e-openai-compatible 已连通。 Provider reachable. Chat probe succeeded with model trainer-e2e-fixture-model. Response: 先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。",
+          "data": {
+            "ok": true,
+            "configured": true,
+            "api_key_supplied": "[redacted]",
+            "reachable": true,
+            "success": true,
+            "status": "connected",
+            "provider_name": "trainer-e2e-openai-compatible",
+            "protocol": "openai_chat_completions_compatible",
+            "protocol_family": "openai",
+            "detail": "Provider reachable. Chat probe succeeded with model trainer-e2e-fixture-model. Response: 先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。",
+            "diagnostics": [
+              "provider：trainer-e2e-openai-compatible",
+              "base URL：http://127.0.0.1:56960/v1",
+              "model：trainer-e2e-fixture-model",
+              "live connectivity check 已通过。",
+              "chat probe 已通过，使用的 model 是 trainer-e2e-fixture-model。",
+              "Probe response preview: 先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。",
+              "语言完整性探测通过了：基于当前消息生成的探测文本和 mixed CJK/ASCII 探测文本都被完整保留下来了。",
+              "Tool capability verified. Provider returned the requested structured tool call.",
+              "Streaming capability verified. Streaming probe returned visible incremental content.",
+              "Model listing capability verified. Model listing returned live model ids.",
+              "Provider reachable. Chat probe succeeded with model trainer-e2e-fixture-model. Response: 先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。"
+            ],
+            "error_category": null,
+            "retryable": false,
+            "status_code": null,
+            "model_supported": true,
+            "probe_usage": {
+              "inputTokens": "[redacted]",
+              "outputTokens": "[redacted]",
+              "totalTokens": "[redacted]"
+            },
+            "capability_evidence": [
+              {
+                "name": "chat",
+                "declared": true,
+                "observed": true,
+                "state": "verified"
+              },
+              {
+                "name": "responses",
+                "declared": false,
+                "observed": null,
+                "state": "disabled"
+              },
+              {
+                "name": "vision",
+                "declared": false,
+                "observed": null,
+                "state": "disabled"
+              },
+              {
+                "name": "embeddings",
+                "declared": false,
+                "observed": null,
+                "state": "disabled"
+              },
+              {
+                "name": "tools",
+                "declared": false,
+                "observed": true,
+                "state": "verified"
+              },
+              {
+                "name": "json_schema",
+                "declared": false,
+                "observed": null,
+                "state": "disabled"
+              },
+              {
+                "name": "structured_output",
+                "declared": false,
+                "observed": null,
+                "state": "disabled"
+              },
+              {
+                "name": "streaming",
+                "declared": true,
+                "observed": true,
+                "state": "verified"
+              },
+              {
+                "name": "thinking",
+                "declared": false,
+                "observed": null,
+                "state": "disabled"
+              },
+              {
+                "name": "model_listing",
+                "declared": false,
+                "observed": true,
+                "state": "verified"
+              }
+            ],
+            "tools_ready": true,
+            "tool_probe_status": "verified",
+            "streaming_ready": true,
+            "stream_probe_status": "verified",
+            "vision_ready": false,
+            "vision_probe_status": "disabled",
+            "thinking_ready": false,
+            "thinking_probe_status": "disabled",
+            "base_url": "http://127.0.0.1:56960/v1",
+            "model": "trainer-e2e-fixture-model",
+            "available_models": [],
+            "resolved_model": null,
+            "warnings": [],
+            "context_window_tokens": "[redacted]",
+            "max_output_tokens": "[redacted]",
+            "model_token_limits": "[redacted]",
+            "capabilities": {
+              "chat": true,
+              "responses": false,
+              "vision": false,
+              "embeddings": false,
+              "tools": false,
+              "jsonSchema": false,
+              "structuredOutput": false,
+              "streaming": true,
+              "thinking": false
+            },
+            "model_capabilities": {
+              "trainer-e2e-fixture-model": {
+                "chat": true,
+                "responses": false,
+                "vision": false,
+                "embeddings": false,
+                "tools": false,
+                "jsonSchema": false,
+                "structuredOutput": false,
+                "streaming": true,
+                "thinking": false
+              }
+            },
+            "reliability": {
+              "phase": "acked",
+              "outcome": "success"
+            }
+          },
+          "providerTest": {
+            "ok": true,
+            "errorCategory": null,
+            "statusCode": null,
+            "retryable": false
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:27.489Z",
+        "durationMs": 1018
+      },
+      {
+        "name": "await-provider-verification",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:27.489Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ready": true,
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:27.489Z",
+        "durationMs": 0
+      },
+      {
+        "name": "send-coach-message",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:27.489Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "ok": true,
+          "message": "Session message sent.",
+          "data": {
+            "session_id": "session-project-ba05cbdf39f64b99a2b78c86713c4901",
+            "reply": {
+              "id": "message-1de5a6b088",
+              "role": "assistant",
+              "content": "先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。\n\n它在这里重要，是因为Keep implementation grounded in one observable behavior before abstracting. because concept teaching works best when the learner can connect the rule to one live code boundary and then transfer it to a nearby case. Reuse the saved teaching asset 'vsix-e2e-sandbox-capability.md · concept card' as the stable framing.。 继续沿着 `vsix-e2e-sandbox-capability.md · concept card` 这条解释线。\n\n这一步算过的信号是：The learner can restate the concept in plain words, point at the code boundary, and name where it transfers next。",
+              "timestamp": "2026-10-31T20:31:27.571583Z",
+              "metadata": {
+                "intent": "coach",
+                "response_language": "zh-CN",
+                "context_note": "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                "support": {
+                  "preview": "参考了外部参考和长期记忆",
+                  "lines": [
+                    "参考资料：# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.（来源：/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md）",
+                    "这次也带上了长期记忆：沿着当前聚焦点继续：请只作为代码教练回答：我想理解这个临时项目"
+                  ]
+                },
+                "next_step_hint": {
+                  "title": "Pick the most promising idea and create a minimal project scaffold.",
+                  "recommended_action": "task",
+                  "source": "coach_turn",
+                  "continue_in": "coach",
+                  "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                  "focus_area": "请只作为代码教练回答：我想理解这个临时项目",
+                  "prompt": "请围绕「Pick the most promising idea and create a minimal project scaffold.」继续指导我，先只做这一小步。",
+                  "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                },
+                "external_references": [
+                  {
+                    "id": "chunk_a0ac451228e64472b16bc3a1866c3f57",
+                    "resource_id": "resource-d319bf78b4",
+                    "title": "vsix-e2e-sandbox-capability.md",
+                    "snippet": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "evidence_summary": "This file verifies resource upload inside installed extension smoke.",
+                    "source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                    "source_type": "local:markdown",
+                    "kind": "markdown",
+                    "trust_score": 0.84,
+                    "freshness": "fresh",
+                    "fetched_at": null,
+                    "created_at": null,
+                    "duplicate_key": "markdown:/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md:abe04dc2c0d26840",
+                    "quality_flags": [
+                      "curated_resource"
+                    ],
+                    "focus_area": "vsix-e2e-sandbox-capability.md",
+                    "why_it_matters": "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md.",
+                    "reference_origin": "curated_resource",
+                    "source_governance": {
+                      "policy_version": "source-intake-v1",
+                      "assessed_at": "2026-10-31T20:31:26.381389+00:00",
+                      "source_provenance_status": "unknown",
+                      "license_status": "unknown",
+                      "license_expression": "",
+                      "license_evidence_kind": "none",
+                      "license_evidence_source": "",
+                      "license_evidence_excerpt": "",
+                      "maintenance_status": "unknown",
+                      "maintenance_updated_at": null,
+                      "maintenance_evidence_kind": "none",
+                      "maintenance_evidence_source": "",
+                      "maintenance_evidence_excerpt": "",
+                      "commercial_reuse_policy": "permissive-spdx-v1",
+                      "commercial_reuse_status": "review_required",
+                      "commercial_reuse_reason_codes": [
+                        "controlled_provenance_missing",
+                        "license_unknown",
+                        "maintenance_unknown"
+                      ]
+                    },
+                    "commercial_reuse_status": "review_required",
+                    "commercial_reuse_reason_codes": [
+                      "controlled_provenance_missing",
+                      "license_unknown",
+                      "maintenance_unknown"
+                    ]
+                  }
+                ],
+                "coach_turn": {
+                  "scenario": "general",
+                  "learner_signal": "steady",
+                  "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                  "next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                  "review_queue_summary": "",
+                  "teaching_mode": "coach",
+                  "emotional_tone": "challenging",
+                  "review_rhythm": "",
+                  "teaching_observation": "",
+                  "decision_reason": "",
+                  "decision": "",
+                  "blocker": "",
+                  "teaching_note": "",
+                  "confidence": "",
+                  "evidence": [],
+                  "tone": "reflective",
+                  "verbosity_bias": "expanded",
+                  "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                },
+                "coach_focus": {
+                  "current_focus": "请只作为代码教练回答：我想理解这个临时项目",
+                  "review_rhythm": "",
+                  "next_step": "围绕「请只作为代码教练回答：我想理解这个临时项目」先做一个小动作，把结果带回来。",
+                  "next_step_hint": {
+                    "title": "Pick the most promising idea and create a minimal project scaffold.",
+                    "recommended_action": "task",
+                    "source": "coach_turn",
+                    "continue_in": "coach",
+                    "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                    "focus_area": "请只作为代码教练回答：我想理解这个临时项目",
+                    "prompt": "请围绕「Pick the most promising idea and create a minimal project scaffold.」继续指导我，先只做这一小步。",
+                    "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                  },
+                  "scenario": "general",
+                  "relationship_stage": "intake",
+                  "first_turn_priority": "re-anchor on the newly requested coaching lane and keep the first move compact",
+                  "strategy_preference_summary": "",
+                  "continuity_summary": "",
+                  "recent_teaching_signals": [],
+                  "active_stage": null,
+                  "active_task": null,
+                  "teaching_observations": [],
+                  "recent_wins": [],
+                  "due_review_count": 0,
+                  "requested_resources": null,
+                  "requested_resource_count": null,
+                  "coach_defaults": null
+                }
+              },
+              "created_at": "2026-10-31T20:31:27.571583+00:00"
+            },
+            "snapshot": {
+              "contextId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+              "sidecar_status": "ready",
+              "active_panel": "chat",
+              "snapshotRevision": 1,
+              "messages": [
+                {
+                  "id": "message-426bbc7ea8",
+                  "role": "user",
+                  "content": "请只作为代码教练回答：我想理解这个临时项目，先给我一个不替我写代码的最小训练切片。",
+                  "timestamp": "2026-10-31T20:31:27.510992Z",
+                  "metadata": {
+                    "response_language": "zh-CN",
+                    "answer_mode": "guided"
+                  },
+                  "created_at": "2026-10-31T20:31:27.510992+00:00"
+                },
+                {
+                  "id": "message-1de5a6b088",
+                  "role": "assistant",
+                  "content": "先把目标缩小为一个可验证的练习：选出当前项目中的一个入口文件，写下它的输入、输出和一个不确定点。完成后把这三项发给我，我再带你走下一步。\n\n它在这里重要，是因为Keep implementation grounded in one observable behavior before abstracting. because concept teaching works best when the learner can connect the rule to one live code boundary and then transfer it to a nearby case. Reuse the saved teaching asset 'vsix-e2e-sandbox-capability.md · concept card' as the stable framing.。 继续沿着 `vsix-e2e-sandbox-capability.md · concept card` 这条解释线。\n\n这一步算过的信号是：The learner can restate the concept in plain words, point at the code boundary, and name where it transfers next。",
+                  "timestamp": "2026-10-31T20:31:27.571583Z",
+                  "metadata": {
+                    "intent": "coach",
+                    "response_language": "zh-CN",
+                    "context_note": "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                    "support": {
+                      "preview": "参考了外部参考和长期记忆",
+                      "lines": [
+                        "参考资料：# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.（来源：/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md）",
+                        "这次也带上了长期记忆：沿着当前聚焦点继续：请只作为代码教练回答：我想理解这个临时项目"
+                      ]
+                    },
+                    "next_step_hint": {
+                      "title": "Pick the most promising idea and create a minimal project scaffold.",
+                      "recommended_action": "task",
+                      "source": "coach_turn",
+                      "continue_in": "coach",
+                      "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                      "focus_area": "请只作为代码教练回答：我想理解这个临时项目",
+                      "prompt": "请围绕「Pick the most promising idea and create a minimal project scaffold.」继续指导我，先只做这一小步。",
+                      "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                    },
+                    "external_references": [
+                      {
+                        "id": "chunk_a0ac451228e64472b16bc3a1866c3f57",
+                        "resource_id": "resource-d319bf78b4",
+                        "title": "vsix-e2e-sandbox-capability.md",
+                        "snippet": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                        "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                        "evidence_summary": "This file verifies resource upload inside installed extension smoke.",
+                        "source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                        "source_type": "local:markdown",
+                        "kind": "markdown",
+                        "trust_score": 0.84,
+                        "freshness": "fresh",
+                        "fetched_at": null,
+                        "created_at": null,
+                        "duplicate_key": "markdown:/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md:abe04dc2c0d26840",
+                        "quality_flags": [
+                          "curated_resource"
+                        ],
+                        "focus_area": "vsix-e2e-sandbox-capability.md",
+                        "why_it_matters": "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md.",
+                        "reference_origin": "curated_resource",
+                        "source_governance": {
+                          "policy_version": "source-intake-v1",
+                          "assessed_at": "2026-10-31T20:31:26.381389+00:00",
+                          "source_provenance_status": "unknown",
+                          "license_status": "unknown",
+                          "license_expression": "",
+                          "license_evidence_kind": "none",
+                          "license_evidence_source": "",
+                          "license_evidence_excerpt": "",
+                          "maintenance_status": "unknown",
+                          "maintenance_updated_at": null,
+                          "maintenance_evidence_kind": "none",
+                          "maintenance_evidence_source": "",
+                          "maintenance_evidence_excerpt": "",
+                          "commercial_reuse_policy": "permissive-spdx-v1",
+                          "commercial_reuse_status": "review_required",
+                          "commercial_reuse_reason_codes": [
+                            "controlled_provenance_missing",
+                            "license_unknown",
+                            "maintenance_unknown"
+                          ]
+                        },
+                        "commercial_reuse_status": "review_required",
+                        "commercial_reuse_reason_codes": [
+                          "controlled_provenance_missing",
+                          "license_unknown",
+                          "maintenance_unknown"
+                        ]
+                      }
+                    ],
+                    "coach_turn": {
+                      "scenario": "general",
+                      "learner_signal": "steady",
+                      "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                      "next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                      "review_queue_summary": "",
+                      "teaching_mode": "coach",
+                      "emotional_tone": "challenging",
+                      "review_rhythm": "",
+                      "teaching_observation": "",
+                      "decision_reason": "",
+                      "decision": "",
+                      "blocker": "",
+                      "teaching_note": "",
+                      "confidence": "",
+                      "evidence": [],
+                      "tone": "reflective",
+                      "verbosity_bias": "expanded",
+                      "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                    },
+                    "coach_focus": {
+                      "current_focus": "请只作为代码教练回答：我想理解这个临时项目",
+                      "review_rhythm": "",
+                      "next_step": "围绕「请只作为代码教练回答：我想理解这个临时项目」先做一个小动作，把结果带回来。",
+                      "next_step_hint": {
+                        "title": "Pick the most promising idea and create a minimal project scaffold.",
+                        "recommended_action": "task",
+                        "source": "coach_turn",
+                        "continue_in": "coach",
+                        "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                        "focus_area": "请只作为代码教练回答：我想理解这个临时项目",
+                        "prompt": "请围绕「Pick the most promising idea and create a minimal project scaffold.」继续指导我，先只做这一小步。",
+                        "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                      },
+                      "scenario": "general",
+                      "relationship_stage": "intake",
+                      "first_turn_priority": "re-anchor on the newly requested coaching lane and keep the first move compact",
+                      "strategy_preference_summary": "",
+                      "continuity_summary": "",
+                      "recent_teaching_signals": [],
+                      "active_stage": null,
+                      "active_task": null,
+                      "teaching_observations": [],
+                      "recent_wins": [],
+                      "due_review_count": 0,
+                      "requested_resources": null,
+                      "requested_resource_count": null,
+                      "coach_defaults": null
+                    }
+                  },
+                  "created_at": "2026-10-31T20:31:27.571583+00:00"
+                }
+              ],
+              "stageMaterials": {},
+              "sessionHistoryRestored": false,
+              "profile": {
+                "long_term_goal": "Understand and advance the workspace project.",
+                "long_term_goals": [
+                  "理解这个临时项目，先给我一个不替我写代码的最小训练切片",
+                  "Understand and advance the workspace project."
+                ],
+                "background": "",
+                "weekly_hours": 4,
+                "teaching_style": "auto",
+                "answer_policy": "auto",
+                "target_project": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                "preferred_libraries": []
+              },
+              "plan": null,
+              "global_plan": null,
+              "project_plan_link": null,
+              "current_task": null,
+              "evaluation": null,
+              "memory": {
+                "profile": {
+                  "long_term_goal": "Understand and advance the workspace project.",
+                  "long_term_goals": [
+                    "理解这个临时项目，先给我一个不替我写代码的最小训练切片",
+                    "Understand and advance the workspace project."
+                  ],
+                  "background": "",
+                  "weekly_hours": 4,
+                  "teaching_style": "auto",
+                  "answer_policy": "auto",
+                  "target_project": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                  "preferred_libraries": []
+                },
+                "globalMemory": {
+                  "ownerId": "local-trainer",
+                  "preferences": {},
+                  "longTermGoals": [],
+                  "capabilityProfile": {},
+                  "growthHistory": [],
+                  "createdAt": "2026-10-31T20:31:25.029900+00:00",
+                  "updatedAt": "2026-10-31T20:31:25.029904+00:00"
+                },
+                "active_plan": null,
+                "subplans": [],
+                "resources": [
+                  {
+                    "id": "resource-d319bf78b4",
+                    "kind": "markdown",
+                    "name": "vsix-e2e-sandbox-capability.md",
+                    "source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                    "tags": [
+                      "vsix-e2e",
+                      "sandbox-capability"
+                    ],
+                    "source_items": [],
+                    "content_language": null,
+                    "collection_path": null,
+                    "collection_root": null,
+                    "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "parse_status": "parsed",
+                    "index_status": "indexed",
+                    "source_type": "local:markdown",
+                    "canonical_source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                    "fetched_at": "2026-10-31T20:31:26.381339+00:00",
+                    "source_declaration": {
+                      "license_expression": "",
+                      "license_evidence_uri": "",
+                      "maintenance_updated_at": "",
+                      "maintenance_evidence_uri": ""
+                    },
+                    "source_governance": {
+                      "policy_version": "source-intake-v1",
+                      "assessed_at": "2026-10-31T20:31:26.381389+00:00",
+                      "source_provenance_status": "unknown",
+                      "license_status": "unknown",
+                      "license_expression": "",
+                      "license_evidence_kind": "none",
+                      "license_evidence_source": "",
+                      "license_evidence_excerpt": "",
+                      "maintenance_status": "unknown",
+                      "maintenance_updated_at": null,
+                      "maintenance_evidence_kind": "none",
+                      "maintenance_evidence_source": "",
+                      "maintenance_evidence_excerpt": "",
+                      "commercial_reuse_policy": "permissive-spdx-v1",
+                      "commercial_reuse_status": "review_required",
+                      "commercial_reuse_reason_codes": [
+                        "controlled_provenance_missing",
+                        "license_unknown",
+                        "maintenance_unknown"
+                      ]
+                    },
+                    "trust_score": 0.84,
+                    "freshness": "fresh",
+                    "duplicate_key": "markdown:/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md:abe04dc2c0d26840",
+                    "quality_flags": [],
+                    "warnings": [],
+                    "knowledge_fragments": [
+                      {
+                        "id": "chunk_a0ac451228e64472b16bc3a1866c3f57",
+                        "resource_id": "resource-d319bf78b4",
+                        "title": "vsix-e2e-sandbox-capability.md",
+                        "snippet": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                        "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                        "evidence_summary": "This file verifies resource upload inside installed extension smoke.",
+                        "source": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                        "source_type": "local:markdown",
+                        "kind": "markdown",
+                        "trust_score": 0.84,
+                        "freshness": "fresh",
+                        "fetched_at": null,
+                        "duplicate_key": "markdown:/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md:abe04dc2c0d26840",
+                        "quality_flags": [],
+                        "focus_area": "vsix-e2e-sandbox-capability.md",
+                        "line_start": null,
+                        "line_end": null,
+                        "paragraph_anchor": "¶chunk:0@0",
+                        "content_language": null,
+                        "location": {
+                          "path": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                          "chunk_id": "chunk_a0ac451228e64472b16bc3a1866c3f57",
+                          "paragraph_anchor": "¶chunk:0@0"
+                        },
+                        "why_it_matters": "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md.",
+                        "version_id": "rv-bd8028f5d82b42b2b5a0c1aa2a357ac3",
+                        "content_hash": "e611ee76783d29b4f520d8ad0892a8b0b99c1cd27c26e931e8d864039a3d8de3",
+                        "citation_id": "citation:resource-d319bf78b4:rv-bd8028f5d82b42b2b5a0c1aa2a357ac3:1fcfe7c2370ff0f8"
+                      }
+                    ],
+                    "sandbox_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-d319bf78b4/vsix-e2e-sandbox-capability.md",
+                    "sandbox_origin": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md",
+                    "sandbox_synced_at": "2026-10-31T20:31:26.393114+00:00",
+                    "sandbox_dirty": false,
+                    "extracted_artifact_path": null,
+                    "content_hash": "e611ee76783d29b4f520d8ad0892a8b0b99c1cd27c26e931e8d864039a3d8de3",
+                    "library_paths": [],
+                    "trust_state": "trusted"
+                  }
+                ],
+                "assetCatalog": {
+                  "contextId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                  "revision": "d0f14b8e5ebf88f8",
+                  "active": [],
+                  "deleted": []
+                },
+                "teaching_assets": [
+                  {
+                    "id": "asset-2bab5a211b7d",
+                    "kind": "concept_card",
+                    "scope": "project",
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                    "title": "vsix-e2e-sandbox-capability.md · concept card",
+                    "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "concept_card": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "implementation_pattern": "",
+                    "common_pitfall": "",
+                    "exercise_seed": "",
+                    "explanation_recipe": "",
+                    "why_it_matters": "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md.",
+                    "example": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "anti_pattern": "",
+                    "focus_area": "vsix-e2e-sandbox-capability.md",
+                    "scenario": "resource_ingest",
+                    "origin": "resource",
+                    "source_key": "resource::resource-d319bf78b4::concept_card::0",
+                    "source_ids": [
+                      "resource-d319bf78b4"
+                    ],
+                    "source_fragments": [
+                      "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md"
+                    ],
+                    "evidence_snippets": [
+                      "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                      "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                      "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md."
+                    ],
+                    "retrieval_hints": [
+                      "vsix-e2e-sandbox-capability.md",
+                      "markdown",
+                      "vsix-e2e",
+                      "sandbox-capability"
+                    ],
+                    "source_summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "source_quality_flags": [],
+                    "source_freshness": "fresh",
+                    "source_retrieved_at": null,
+                    "tags": [
+                      "markdown",
+                      "vsix-e2e",
+                      "sandbox-capability"
+                    ],
+                    "trust_score": 0.84,
+                    "usage_count": 1,
+                    "plan_stage_id": "",
+                    "success_count": 0,
+                    "failure_count": 0,
+                    "last_outcome": "",
+                    "last_effective_at": null,
+                    "effectiveness_by_scenario": {},
+                    "last_used_at": "2026-10-31T20:31:27.549062+00:00",
+                    "created_at": "2026-10-31T20:31:26.393749+00:00",
+                    "updated_at": "2026-10-31T20:31:27.549068+00:00"
+                  },
+                  {
+                    "id": "asset-7dd2e7b699f1",
+                    "kind": "concept_card",
+                    "scope": "project",
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                    "title": "general · reflection",
+                    "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                    "concept_card": "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                    "implementation_pattern": "",
+                    "common_pitfall": "",
+                    "exercise_seed": "",
+                    "explanation_recipe": "Pick the most promising idea and create a minimal project scaffold.",
+                    "why_it_matters": "Pick the most promising idea and create a minimal project scaffold.",
+                    "example": "",
+                    "anti_pattern": "",
+                    "focus_area": "general",
+                    "scenario": "general",
+                    "origin": "reflection",
+                    "source_key": "reflection::context-f2ed5164bc1d41859d8ed7f3d9beb0a0::general::general",
+                    "source_ids": [],
+                    "source_fragments": [
+                      "Pick the most promising idea and create a minimal project scaffold."
+                    ],
+                    "evidence_snippets": [
+                      "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                      "Pick the most promising idea and create a minimal project scaffold.",
+                      ""
+                    ],
+                    "retrieval_hints": [
+                      "general",
+                      "general",
+                      "reflection"
+                    ],
+                    "source_summary": "Pick the most promising idea and create a minimal project scaffold.",
+                    "source_quality_flags": [],
+                    "source_freshness": "unknown",
+                    "source_retrieved_at": null,
+                    "tags": [
+                      "reflection",
+                      "general"
+                    ],
+                    "trust_score": 0.55,
+                    "usage_count": 0,
+                    "plan_stage_id": "",
+                    "success_count": 0,
+                    "failure_count": 0,
+                    "last_outcome": "",
+                    "last_effective_at": null,
+                    "effectiveness_by_scenario": {},
+                    "last_used_at": null,
+                    "created_at": "2026-10-31T20:31:27.551023+00:00",
+                    "updated_at": "2026-10-31T20:31:27.551032+00:00"
+                  }
+                ],
+                "memory_share_grants": [],
+                "teaching_knowledge_catalog": {
+                  "total": 2,
+                  "by_scope": {
+                    "project": {
+                      "count": 2,
+                      "examples": [
+                        {
+                          "id": "asset-7dd2e7b699f1",
+                          "title": "general · reflection",
+                          "kind": "concept_card",
+                          "scope": "project",
+                          "origin": "reflection",
+                          "focus_area": "general",
+                          "scenario": "general",
+                          "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                          "source_summary": "Pick the most promising idea and create a minimal project scaffold.",
+                          "source_quality_flags": [],
+                          "source_freshness": "unknown",
+                          "source_retrieved_at": null,
+                          "source_ids": [],
+                          "source_fragments": [
+                            "Pick the most promising idea and create a minimal project scaffold."
+                          ],
+                          "evidence_snippets": [
+                            "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                            "Pick the most promising idea and create a minimal project scaffold.",
+                            ""
+                          ],
+                          "retrieval_hints": [
+                            "general",
+                            "general",
+                            "reflection"
+                          ],
+                          "trust_score": 0.55,
+                          "usage_count": 0
+                        },
+                        {
+                          "id": "asset-2bab5a211b7d",
+                          "title": "vsix-e2e-sandbox-capability.md · concept card",
+                          "kind": "concept_card",
+                          "scope": "project",
+                          "origin": "resource",
+                          "focus_area": "vsix-e2e-sandbox-capability.md",
+                          "scenario": "resource_ingest",
+                          "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                          "source_summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                          "source_quality_flags": [],
+                          "source_freshness": "fresh",
+                          "source_retrieved_at": null,
+                          "source_ids": [
+                            "resource-d319bf78b4"
+                          ],
+                          "source_fragments": [
+                            "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md"
+                          ],
+                          "evidence_snippets": [
+                            "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                            "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                            "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md."
+                          ],
+                          "retrieval_hints": [
+                            "vsix-e2e-sandbox-capability.md",
+                            "markdown",
+                            "vsix-e2e",
+                            "sandbox-capability"
+                          ],
+                          "trust_score": 0.84,
+                          "usage_count": 1
+                        }
+                      ]
+                    }
+                  },
+                  "by_kind": {
+                    "concept_card": {
+                      "count": 2,
+                      "examples": [
+                        {
+                          "id": "asset-7dd2e7b699f1",
+                          "title": "general · reflection",
+                          "kind": "concept_card",
+                          "scope": "project",
+                          "origin": "reflection",
+                          "focus_area": "general",
+                          "scenario": "general",
+                          "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                          "source_summary": "Pick the most promising idea and create a minimal project scaffold.",
+                          "source_quality_flags": [],
+                          "source_freshness": "unknown",
+                          "source_retrieved_at": null,
+                          "source_ids": [],
+                          "source_fragments": [
+                            "Pick the most promising idea and create a minimal project scaffold."
+                          ],
+                          "evidence_snippets": [
+                            "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                            "Pick the most promising idea and create a minimal project scaffold.",
+                            ""
+                          ],
+                          "retrieval_hints": [
+                            "general",
+                            "general",
+                            "reflection"
+                          ],
+                          "trust_score": 0.55,
+                          "usage_count": 0
+                        },
+                        {
+                          "id": "asset-2bab5a211b7d",
+                          "title": "vsix-e2e-sandbox-capability.md · concept card",
+                          "kind": "concept_card",
+                          "scope": "project",
+                          "origin": "resource",
+                          "focus_area": "vsix-e2e-sandbox-capability.md",
+                          "scenario": "resource_ingest",
+                          "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                          "source_summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                          "source_quality_flags": [],
+                          "source_freshness": "fresh",
+                          "source_retrieved_at": null,
+                          "source_ids": [
+                            "resource-d319bf78b4"
+                          ],
+                          "source_fragments": [
+                            "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md"
+                          ],
+                          "evidence_snippets": [
+                            "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                            "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                            "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md."
+                          ],
+                          "retrieval_hints": [
+                            "vsix-e2e-sandbox-capability.md",
+                            "markdown",
+                            "vsix-e2e",
+                            "sandbox-capability"
+                          ],
+                          "trust_score": 0.84,
+                          "usage_count": 1
+                        }
+                      ]
+                    }
+                  },
+                  "by_origin": {
+                    "resource": {
+                      "count": 1,
+                      "examples": [
+                        {
+                          "id": "asset-2bab5a211b7d",
+                          "title": "vsix-e2e-sandbox-capability.md · concept card",
+                          "kind": "concept_card",
+                          "scope": "project",
+                          "origin": "resource",
+                          "focus_area": "vsix-e2e-sandbox-capability.md",
+                          "scenario": "resource_ingest",
+                          "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                          "source_summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                          "source_quality_flags": [],
+                          "source_freshness": "fresh",
+                          "source_retrieved_at": null,
+                          "source_ids": [
+                            "resource-d319bf78b4"
+                          ],
+                          "source_fragments": [
+                            "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md"
+                          ],
+                          "evidence_snippets": [
+                            "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                            "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                            "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md."
+                          ],
+                          "retrieval_hints": [
+                            "vsix-e2e-sandbox-capability.md",
+                            "markdown",
+                            "vsix-e2e",
+                            "sandbox-capability"
+                          ],
+                          "trust_score": 0.84,
+                          "usage_count": 1
+                        }
+                      ]
+                    },
+                    "reflection": {
+                      "count": 1,
+                      "examples": [
+                        {
+                          "id": "asset-7dd2e7b699f1",
+                          "title": "general · reflection",
+                          "kind": "concept_card",
+                          "scope": "project",
+                          "origin": "reflection",
+                          "focus_area": "general",
+                          "scenario": "general",
+                          "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                          "source_summary": "Pick the most promising idea and create a minimal project scaffold.",
+                          "source_quality_flags": [],
+                          "source_freshness": "unknown",
+                          "source_retrieved_at": null,
+                          "source_ids": [],
+                          "source_fragments": [
+                            "Pick the most promising idea and create a minimal project scaffold."
+                          ],
+                          "evidence_snippets": [
+                            "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                            "Pick the most promising idea and create a minimal project scaffold.",
+                            ""
+                          ],
+                          "retrieval_hints": [
+                            "general",
+                            "general",
+                            "reflection"
+                          ],
+                          "trust_score": 0.55,
+                          "usage_count": 0
+                        }
+                      ]
+                    }
+                  },
+                  "top_assets": [
+                    {
+                      "id": "asset-2bab5a211b7d",
+                      "title": "vsix-e2e-sandbox-capability.md · concept card",
+                      "kind": "concept_card",
+                      "scope": "project",
+                      "origin": "resource",
+                      "focus_area": "vsix-e2e-sandbox-capability.md",
+                      "scenario": "resource_ingest",
+                      "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                      "source_summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                      "source_quality_flags": [],
+                      "source_freshness": "fresh",
+                      "source_retrieved_at": null,
+                      "source_ids": [
+                        "resource-d319bf78b4"
+                      ],
+                      "source_fragments": [
+                        "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md"
+                      ],
+                      "evidence_snippets": [
+                        "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                        "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                        "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md."
+                      ],
+                      "retrieval_hints": [
+                        "vsix-e2e-sandbox-capability.md",
+                        "markdown",
+                        "vsix-e2e",
+                        "sandbox-capability"
+                      ],
+                      "trust_score": 0.84,
+                      "usage_count": 1
+                    },
+                    {
+                      "id": "asset-7dd2e7b699f1",
+                      "title": "general · reflection",
+                      "kind": "concept_card",
+                      "scope": "project",
+                      "origin": "reflection",
+                      "focus_area": "general",
+                      "scenario": "general",
+                      "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                      "source_summary": "Pick the most promising idea and create a minimal project scaffold.",
+                      "source_quality_flags": [],
+                      "source_freshness": "unknown",
+                      "source_retrieved_at": null,
+                      "source_ids": [],
+                      "source_fragments": [
+                        "Pick the most promising idea and create a minimal project scaffold."
+                      ],
+                      "evidence_snippets": [
+                        "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                        "Pick the most promising idea and create a minimal project scaffold.",
+                        ""
+                      ],
+                      "retrieval_hints": [
+                        "general",
+                        "general",
+                        "reflection"
+                      ],
+                      "trust_score": 0.55,
+                      "usage_count": 0
+                    }
+                  ]
+                },
+                "coaching_adaptation": {
+                  "challenge_level": "steady",
+                  "hint_depth": "guided",
+                  "review_urgency": "normal",
+                  "explanation_mode": "grounded",
+                  "next_step_bias": "steady",
+                  "summary": "自适应教学：下一步先跟着当前的时间、紧迫度和项目范围走。还没有学习结果。",
+                  "evidence": [
+                    "task_urgency:low",
+                    "complexity:simple",
+                    "affect_urgency:low"
+                  ],
+                  "difficulty": "medium",
+                  "hint_count": 2,
+                  "explanation_depth": "grounded",
+                  "code_reveal": "scaffold",
+                  "practice_type": "focused",
+                  "review_frequency": "normal",
+                  "material_recommendation": "current",
+                  "next_plan_step": "hold",
+                  "should_reveal_code": false,
+                  "success_streak": 0,
+                  "failure_streak": 0,
+                  "pedagogy_mode": "direct",
+                  "transfer_scene_count": 0,
+                  "time_budget": "normal",
+                  "project_complexity": "simple",
+                  "task_urgency": "low"
+                },
+                "teaching_strategy_effectiveness": [],
+                "learning_outcomes": [],
+                "weaknesses": [],
+                "reflections": [
+                  "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目 Pick the most promising idea and create a minimal project scaffold."
+                ],
+                "recent_summary": "user: 请只作为代码教练回答：我想理解这个临时项目，先给我一个不替我写代码的最小训练切片。",
+                "current_focus": "当前主线的下一步是：Pick the most promising idea and create a minimal project scaffold.",
+                "coach_anchor": "implementation",
+                "top_weakness": "",
+                "lowest_mastery_concepts": [],
+                "recent_wins": [
+                  "教练已经保留了一条可复用的判断，主题是：general。",
+                  "教练已经把当前这条主线压成了一段可直接接续的摘要：当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                  "当前工作区资料已经可用，后续回复可以更稳地贴着资料和代码继续推进。"
+                ],
+                "review_rhythm": "当前有 1 个点已经该回看了。先围绕「general」做这一步动作：把当前主线收成一个可见的小补丁或验证步骤：Pick the most promising idea and create a minimal project scaffold. 另外还有 1 个低压力回看点已经被收进后面的 digest，不会抢走主线。",
+                "due_reviews": [
+                  {
+                    "concept": "general",
+                    "reason": "回到最近这一轮教练主线，先把这一步验证掉：Pick the most promising idea and create a minimal project scaffold.",
+                    "due_at": "2026-11-01T20:31:27.557477+00:00",
+                    "source": "reflection",
+                    "severity": "medium",
+                    "surface_mode": "due",
+                    "task_hint": "把当前主线收成一个可见的小补丁或验证步骤：Pick the most promising idea and create a minimal project scaffold.",
+                    "focus_area": "general",
+                    "linked_context": "Pick the most promising idea and create a minimal project scaffold.",
+                    "interval_days": 1,
+                    "mastery_score": null
+                  },
+                  {
+                    "concept": "general",
+                    "reason": "把最近这次复盘当作一个具体回看提示：当前聚焦点：请只作为代码教练回答：我想理解这个临时项目 Pick the most promising idea and create a minimal project scaffold.",
+                    "due_at": "2026-11-02T20:31:27.550299+00:00",
+                    "source": "reflection",
+                    "severity": "low",
+                    "surface_mode": "digest",
+                    "task_hint": "把当前主线收成一个可见的小补丁或验证步骤：当前聚焦点：请只作为代码教练回答：我想理解这个临时项目 Pick the most promising idea and create a minimal project scaffold.",
+                    "focus_area": "recent-reflection",
+                    "linked_context": "Pick the most promising idea and create a minimal project scaffold. | Pick the most promising idea and create a minimal project scaffold.",
+                    "interval_days": 2,
+                    "mastery_score": null
+                  }
+                ],
+                "due_review_count": 2,
+                "pace_signal": "steady",
+                "teaching_observations": [
+                  "最近这一轮已经有了一个清楚的下一步，在它落地前先不要扩范围。",
+                  "首轮建联里提到的关键锚点仍然重要：先给我一个不替我写代码的最小训练切片",
+                  "已记住你的偏好：teaching_preference.response_language = zh-CN",
+                  "长期目标仍然在前面：Understand and advance the workspace project.。"
+                ],
+                "userFeedback": [],
+                "workspace": {
+                  "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                  "context_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                  "root_id": "root-b1ea197385464b439ce80c2e50c10f1d",
+                  "root_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/trainer-workspace",
+                  "project_id": "project-c77e85c398de42e79b14d759779faab6",
+                  "project_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                  "canonical_project_path": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                  "project_name": "workspace",
+                  "project_memory": {
+                    "id": "project-memory-d0979ba178bb49018c4b53927e018704",
+                    "scope": "project",
+                    "status": "ready"
+                  },
+                  "project_training_state": {
+                    "id": "project-training-eb20ac42dfeb4c5080c9450b76b72e48",
+                    "status": "ready",
+                    "active_card_id": null,
+                    "evidence_status": "awaiting_evidence"
+                  },
+                  "project_agent_context": {
+                    "id": "project-agent-210e4149669f4cf58298f4d9449c919c",
+                    "session_id": "session-project-ba05cbdf39f64b99a2b78c86713c4901",
+                    "checkpoint_id": "checkpoint-context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                    "status": "ready"
+                  },
+                  "project_provisioning": {
+                    "contextId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                    "rootId": "root-b1ea197385464b439ce80c2e50c10f1d",
+                    "projectId": "project-c77e85c398de42e79b14d759779faab6",
+                    "projectMemoryId": "project-memory-d0979ba178bb49018c4b53927e018704",
+                    "projectPlanId": "project-plan-fdbf603264fc41acbae2bff94d2af62c",
+                    "projectTrainingId": "project-training-eb20ac42dfeb4c5080c9450b76b72e48",
+                    "projectAgentContextId": "project-agent-210e4149669f4cf58298f4d9449c919c",
+                    "agentSessionId": "session-project-ba05cbdf39f64b99a2b78c86713c4901",
+                    "legacyWorkspaceId": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                    "globalPlanId": null,
+                    "status": "provisioned",
+                    "revision": 1,
+                    "createdAt": "2026-10-31T20:31:25.068416+00:00",
+                    "updatedAt": "2026-10-31T20:31:25.068418+00:00",
+                    "workspaceId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                    "projectPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace",
+                    "projectName": "workspace",
+                    "rootPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/trainer-workspace",
+                    "rootRevision": 1,
+                    "projectRevision": 1
+                  },
+                  "workspace_understanding": {
+                    "repo_summary": "",
+                    "entry_points": [],
+                    "feature_lanes": [],
+                    "risk_zones": [],
+                    "training_opportunities": [],
+                    "resource_brief": "",
+                    "first_look_summary": {
+                      "folder_role": "idea_scratchpad",
+                      "project_type_guess": "unknown",
+                      "subject_family": "code",
+                      "confidence": 0.7,
+                      "why_this_guess": "Few files, mostly markdown/text, no dependency manifests. Folder classified as idea scratchpad.",
+                      "entry_points": [],
+                      "directory_anchors": [],
+                      "core_modules_or_materials": [],
+                      "risk_zones": [],
+                      "training_opportunities": [
+                        "Turn scattered ideas into a structured implementation plan."
+                      ],
+                      "unknowns": [
+                        "No dependency manifest — tech stack may be implicit.",
+                        "No recognized source-code extensions found."
+                      ],
+                      "recommended_next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                      "classification_method": "heuristic",
+                      "classified_at": "2026-10-31T20:31:25.037323+00:00"
+                    },
+                    "updated_at": "2026-10-31T20:31:25.081446+00:00"
+                  },
+                  "latest_coach_orientation": {
+                    "object_kind": "provider",
+                    "object_label": "模型连接",
+                    "state": "needs_setup",
+                    "why": "还没有可用的模型连接。",
+                    "primary_action": "open_settings",
+                    "primary_action_label": "去设置",
+                    "next_step": "先保存并测试 provider。",
+                    "advanced_where": "设置 · Provider",
+                    "source": "snapshot",
+                    "revision": 1
+                  },
+                  "remote_name": "",
+                  "is_remote_workspace": false,
+                  "workspace_trusted": true,
+                  "answer_mode": "guided",
+                  "response_language": "zh-CN",
+                  "latest_affect_state": {
+                    "urgency_level": "low",
+                    "recovery_signal": "recovering",
+                    "frustration_level": 0.15,
+                    "confidence_level": 0.7,
+                    "momentum_level": 0.7,
+                    "needs_reassurance": false,
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "task_urgency": "low",
+                  "latest_learner_state": {
+                    "active_focus": "implementation",
+                    "evidence": [],
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "latest_teaching_decision": {
+                    "reason": "message_requests_concept_teaching; affect_recovery:recovering; adaptive_bias:steady",
+                    "primary_goal": "Explain 'implementation' through one concrete code anchor and one failure mode.",
+                    "teaching_strategy": "Teach the mechanism through the code the learner can see right now, not abstract theory. Ground the next move in the saved teaching asset '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.'.",
+                    "closing_move": "Ask the learner to restate the mechanism in their own words. Keep the learner attached to 'vsix-e2e-sandbox-capability.md' for one more verifiable loop.",
+                    "focus_area": "implementation",
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "latest_tone_decision": {
+                    "tone": "reflective",
+                    "verbosity_bias": "expanded",
+                    "acknowledge_progress": true,
+                    "avoid_overwhelm": false,
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "latest_principle_notes": {
+                    "current_principle": "Keep implementation grounded in one observable behavior before abstracting.",
+                    "why_it_matters": "Keep implementation grounded in one observable behavior before abstracting. because concept teaching works best when the learner can connect the rule to one live code boundary and then transfer it to a nearby case. Reuse the saved teaching asset 'vsix-e2e-sandbox-capability.md · concept card' as the stable framing.",
+                    "apply_now": "Teach 'Keep implementation grounded in one observable behavior before abstracting.' back through one tiny example: name the boundary, the rule, and the failure mode it prevents. Keep it tied to implementation. Reuse the saved example '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.' if it helps.",
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "latest_coach_focus": {
+                    "current_focus": "请只作为代码教练回答：我想理解这个临时项目",
+                    "next_step": "围绕「请只作为代码教练回答：我想理解这个临时项目」先做一个小动作，把结果带回来。",
+                    "first_turn_priority": "re-anchor on the newly requested coaching lane and keep the first move compact",
+                    "continuity_summary": "",
+                    "strategy_preference_summary": "",
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "latest_coaching_adaptation": {
+                    "summary": "Adaptive coaching: next step follows current time, urgency, and project scope. No learning outcome yet.",
+                    "evidence": [
+                      "complexity:simple"
+                    ],
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "latest_coach_scenario": "general",
+                  "latest_coach_summary": "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                  "latest_coach_next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                  "latest_coach_review_note": "",
+                  "latest_coach_focus_area": "",
+                  "latest_coach_reflection": "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目 Pick the most promising idea and create a minimal project scaffold.",
+                  "latest_coach_teaching_signal": "Pick the most promising idea and create a minimal project scaffold.",
+                  "latest_coach_decision": "",
+                  "latest_coach_teaching_note": "",
+                  "latest_coach_confidence": "",
+                  "latest_coach_evidence": [],
+                  "latest_coaching_focus": {
+                    "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                    "next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                    "focus_area": "",
+                    "teaching_goal": "",
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0"
+                  },
+                  "latest_coach_provenance": {
+                    "summary": "model_claim",
+                    "next_step": "model_claim",
+                    "decision": "model_claim",
+                    "teaching_note": "model_claim",
+                    "review_note": "model_claim",
+                    "review_queue_summary": "model_claim",
+                    "evidence": "model_claim",
+                    "focus": "model_claim"
+                  },
+                  "latest_coach_grounding_outcome": "grounded",
+                  "project_context": "先给我一个不替我写代码的最小训练切片",
+                  "preferred_language": "zh-CN",
+                  "latest_turn_scenario": "general",
+                  "latest_turn_summary": "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                  "latest_turn_next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                  "latest_turn_focus_area": "",
+                  "latest_turn_verified_result": "",
+                  "latest_turn_blocker": "",
+                  "latest_turn_teaching_signal": "在当前项目里训练实现判断，而不是只给结果。",
+                  "latest_turn_continuity_note": "Pick the most promising idea and create a minimal project scaffold. | 在当前项目里训练实现判断，而不是只给结果。",
+                  "latest_turn_decision": "",
+                  "latest_turn_teaching_note": "",
+                  "latest_turn_confidence": "",
+                  "latest_turn_evidence": [],
+                  "latest_turn_teaching_goal": "在当前项目里训练实现判断，而不是只给结果。",
+                  "exercise_prompt": {
+                    "type": "principle",
+                    "title": "Teach the concept through the code",
+                    "prompt": "Teach 'Keep implementation grounded in one observable behavior before abstracting.' back through one tiny example: name the boundary, the rule, and the failure mode it prevents. Keep it tied to implementation. Reuse the saved example '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.' if it helps.",
+                    "focus_area": "implementation",
+                    "success_signal": "The learner can restate the concept in plain words, point at the code boundary, and name where it transfers next.",
+                    "fallback_step": "Reduce the concept to one branch, one boundary, one bug it prevents, and one plain-language sentence.",
+                    "constraints": [
+                      "Keep the explanation anchored to the teaching asset 'vsix-e2e-sandbox-capability.md · concept card': # VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.. Teach from the knowledge base asset 'vsix-e2e-sandbox-capability.md · concept card' before widening beyond implementation.",
+                      "Start with plain language before returning to code.",
+                      "Keep the concept attached to one concrete code location.",
+                      "Name one nearby boundary where the same rule transfers next."
+                    ],
+                    "scenario": "concept_teaching",
+                    "lesson_shape": "A concept-first explanation grounded in one code boundary and one failure mode.",
+                    "exercise_shape": "One explanation plus one concrete application check.",
+                    "teaching_strategy": "Teach the mechanism through the code the learner can see right now, not abstract theory. Ground the next move in the saved teaching asset '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.'.",
+                    "closing_move": "Ask the learner to restate the mechanism in their own words. Keep the learner attached to 'vsix-e2e-sandbox-capability.md' for one more verifiable loop.",
+                    "artifact_priority": [
+                      "exercise",
+                      "principle"
+                    ],
+                    "selected_teaching_asset_ids": [
+                      "asset-2bab5a211b7d"
+                    ],
+                    "selected_teaching_asset_titles": [
+                      "vsix-e2e-sandbox-capability.md · concept card"
+                    ]
+                  },
+                  "active_thread": {
+                    "scenario": "general",
+                    "focus_area": "",
+                    "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                    "next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                    "blocker": "",
+                    "verified_result": "",
+                    "updated_at": "2026-10-31T20:31:27.554973+00:00"
+                  },
+                  "latest_training_chrome": null,
+                  "latest_training_handoff": null,
+                  "latest_training_next_hop": null,
+                  "selected_card_title": "",
+                  "latest_current_task": null,
+                  "latest_coach_turn": null,
+                  "latest_next_step_hint": null,
+                  "latest_evaluation": null,
+                  "latest_adaptation_guide": null,
+                  "latest_project_sources": null,
+                  "latest_provider_capability": {
+                    "revision": 1,
+                    "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                    "provider_profile_id": null,
+                    "provider_name": "trainer-e2e-openai-compatible",
+                    "base_url": "http://127.0.0.1:56960/v1",
+                    "model": "trainer-e2e-fixture-model",
+                    "protocol": "openai_chat_completions_compatible",
+                    "ok": true,
+                    "checked_at": "2026-10-31T20:31:27.481170+00:00",
+                    "tools_ready": true,
+                    "tool_probe_status": "verified",
+                    "streaming_ready": true,
+                    "stream_probe_status": "verified",
+                    "vision_ready": false,
+                    "vision_probe_status": "disabled",
+                    "thinking_ready": false,
+                    "thinking_probe_status": "disabled",
+                    "capability_evidence": [
+                      {
+                        "name": "chat",
+                        "declared": true,
+                        "observed": true,
+                        "state": "verified"
+                      },
+                      {
+                        "name": "responses",
+                        "declared": false,
+                        "observed": null,
+                        "state": "disabled"
+                      },
+                      {
+                        "name": "vision",
+                        "declared": false,
+                        "observed": null,
+                        "state": "disabled"
+                      },
+                      {
+                        "name": "embeddings",
+                        "declared": false,
+                        "observed": null,
+                        "state": "disabled"
+                      },
+                      {
+                        "name": "tools",
+                        "declared": false,
+                        "observed": true,
+                        "state": "verified"
+                      },
+                      {
+                        "name": "json_schema",
+                        "declared": false,
+                        "observed": null,
+                        "state": "disabled"
+                      },
+                      {
+                        "name": "structured_output",
+                        "declared": false,
+                        "observed": null,
+                        "state": "disabled"
+                      },
+                      {
+                        "name": "streaming",
+                        "declared": true,
+                        "observed": true,
+                        "state": "verified"
+                      },
+                      {
+                        "name": "thinking",
+                        "declared": false,
+                        "observed": null,
+                        "state": "disabled"
+                      },
+                      {
+                        "name": "model_listing",
+                        "declared": false,
+                        "observed": true,
+                        "state": "verified"
+                      }
+                    ]
+                  }
+                },
+                "active_thread": {
+                  "scenario": "general",
+                  "focus_area": "",
+                  "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                  "next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                  "blocker": "",
+                  "verified_result": "",
+                  "decision": "",
+                  "teaching_note": "",
+                  "confidence": "",
+                  "evidence": [],
+                  "updated_at": "2026-10-31T20:31:27.554973+00:00"
+                },
+                "memory_evidence": [
+                  "当前聚焦点：请只作为代码教练回答：我想理解这个临时项目",
+                  "当前主线的下一步是：Pick the most promising idea and create a minimal project scaffold.",
+                  "Long-term goal: Understand and advance the workspace project.",
+                  "教练已经保留了一条可复用的判断，主题是：general。",
+                  "最近这一轮已经有了一个清楚的下一步，在它落地前先不要扩范围。"
+                ],
+                "workspace_understanding": {
+                  "repo_summary": "",
+                  "entry_points": [],
+                  "feature_lanes": [],
+                  "risk_zones": [],
+                  "training_opportunities": [],
+                  "resource_brief": "",
+                  "firstLookSummary": {
+                    "folder_role": "idea_scratchpad",
+                    "project_type_guess": "unknown",
+                    "subject_family": "code",
+                    "confidence": 0.7,
+                    "why_this_guess": "Few files, mostly markdown/text, no dependency manifests. Folder classified as idea scratchpad.",
+                    "entry_points": [],
+                    "directory_anchors": [],
+                    "core_modules_or_materials": [],
+                    "risk_zones": [],
+                    "training_opportunities": [
+                      "Turn scattered ideas into a structured implementation plan."
+                    ],
+                    "unknowns": [
+                      "No dependency manifest — tech stack may be implicit.",
+                      "No recognized source-code extensions found."
+                    ],
+                    "recommended_next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                    "classification_method": "heuristic",
+                    "classified_at": "2026-10-31T20:31:25.037323+00:00"
+                  },
+                  "updated_at": "2026-10-31T20:31:25.081446+00:00"
+                },
+                "dependency_mastery": [],
+                "dependency_skill_maps": [],
+                "dependency_skill_map_history": [],
+                "flash_deck": null,
+                "recent_flash_attempts": [],
+                "theory_drill": null,
+                "theory_drill_history": [],
+                "scenario_lab": null,
+                "scenario_lab_history": [],
+                "review_queue_actions": [],
+                "review_artifact": null,
+                "review_artifact_history": [],
+                "training_card_candidates": [],
+                "active_training_card_routing": null,
+                "training_event_ledger": [],
+                "evidence_queue": {
+                  "pending": [],
+                  "deferred": [],
+                  "adopted": [],
+                  "rejected": [],
+                  "history": [],
+                  "unscoped": [],
+                  "total_count": 0
+                },
+                "planChangeCandidates": []
+              },
+              "provider": null,
+              "coaching_state": {
+                "scenario": "general",
+                "answer_mode": "guided",
+                "learner_signal": "steady",
+                "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                "next_step": "围绕「请只作为代码教练回答：我想理解这个临时项目」先做一个小动作，把结果带回来。",
+                "encouragement": "把循环保持紧凑：实现、验证、复盘。",
+                "intervention_strategy": "先把问题压成一个可见、可验证的小动作，再决定是否扩大解释和范围。",
+                "teaching_goal": "在当前项目里训练实现判断，而不是只给结果。",
+                "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。",
+                "decision": "",
+                "blocker": "",
+                "teaching_note": "",
+                "confidence": "",
+                "evidence": [],
+                "support_strategy": "如果用户开始卡住，就继续缩小范围，把下一步压得更具体。",
+                "updated_at": "2026-10-31T20:31:27.559925+00:00"
+              },
+              "learner_state": {
+                "current_confidence": 0.7,
+                "frustration_level": 0.15,
+                "attempt_count_recent": 0,
+                "needs_rescue": false,
+                "needs_review": false,
+                "preferred_hint_depth": "small",
+                "learner_signal": "steady",
+                "active_focus": "implementation",
+                "evidence": []
+              },
+              "teaching_decision": {
+                "mode": "concept_teaching",
+                "reason": "message_requests_concept_teaching; affect_recovery:recovering; adaptive_bias:steady",
+                "primary_goal": "Explain 'implementation' through one concrete code anchor and one failure mode.",
+                "lesson_shape": "A concept-first explanation grounded in one code boundary and one failure mode.",
+                "exercise_shape": "One explanation plus one concrete application check.",
+                "teaching_strategy": "Teach the mechanism through the code the learner can see right now, not abstract theory. Ground the next move in the saved teaching asset '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.'.",
+                "closing_move": "Ask the learner to restate the mechanism in their own words. Keep the learner attached to 'vsix-e2e-sandbox-capability.md' for one more verifiable loop.",
+                "artifact_priority": [
+                  "exercise",
+                  "principle"
+                ],
+                "should_end_with_question": false,
+                "should_generate_exercise": true,
+                "should_reveal_code": false,
+                "should_produce_plan_artifact": false,
+                "should_trigger_deep_analysis": false,
+                "should_focus_on_implementation_steps": true,
+                "tone_profile": "teaching_clarity",
+                "focus_area": "implementation"
+              },
+              "affect_state": {
+                "frustration_level": 0.15,
+                "confidence_level": 0.7,
+                "momentum_level": 0.7,
+                "needs_reassurance": false,
+                "urgency_level": "low",
+                "recovery_signal": "recovering"
+              },
+              "tone_decision": {
+                "tone": "reflective",
+                "verbosity_bias": "expanded",
+                "acknowledge_progress": true,
+                "avoid_overwhelm": false
+              },
+              "implementation_guide": null,
+              "project_ideas": [],
+              "project_adaptation_guide": null,
+              "project_sources": [],
+              "principle_notes": {
+                "current_principle": "Keep implementation grounded in one observable behavior before abstracting.",
+                "why_it_matters": "Keep implementation grounded in one observable behavior before abstracting. because concept teaching works best when the learner can connect the rule to one live code boundary and then transfer it to a nearby case. Reuse the saved teaching asset 'vsix-e2e-sandbox-capability.md · concept card' as the stable framing.",
+                "common_mistake": "A common mistake is to talk about 'Keep implementation grounded in one observable behavior before abstracting.' without checking where it changes the concrete behavior for implementation.",
+                "apply_now": "Teach 'Keep implementation grounded in one observable behavior before abstracting.' back through one tiny example: name the boundary, the rule, and the failure mode it prevents. Keep it tied to implementation. Reuse the saved example '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.' if it helps.",
+                "transfer_targets": [
+                  "Name one concrete branch, line, or edge case where the principle matters.",
+                  "Restate the rule in plain language before returning to code.",
+                  "Say how this changes the implementation choice for implementation.",
+                  "Reuse the saved teaching asset 'vsix-e2e-sandbox-capability.md · concept card' instead of inventing a broader explanation.",
+                  "State what would likely go wrong if the principle were ignored.",
+                  "Describe the smallest code change or verification step that proves you understood it."
+                ],
+                "concrete_anchor": "Use the saved teaching asset focus 'vsix-e2e-sandbox-capability.md' as the concrete teaching anchor before widening.",
+                "transferable_lesson": "The transferable lesson is to apply 'Keep implementation grounded in one observable behavior before abstracting.' whenever a broad request can be compressed into one smaller behavior, one code boundary, and one verification loop. After the learner names the rule once, immediately ask where the same rule transfers next. The saved teaching asset reinforces this with: Grounds follow-up coaching with vsix-e2e-sandbox-capability.md..",
+                "related_checks": [
+                  "Name one concrete branch, line, or edge case where the principle matters.",
+                  "Restate the rule in plain language before returning to code.",
+                  "Say how this changes the implementation choice for implementation.",
+                  "Reuse the saved teaching asset 'vsix-e2e-sandbox-capability.md · concept card' instead of inventing a broader explanation.",
+                  "State what would likely go wrong if the principle were ignored.",
+                  "Describe the smallest code change or verification step that proves you understood it."
+                ],
+                "source_asset_title": "vsix-e2e-sandbox-capability.md · concept card"
+              },
+              "selected_teaching_assets": [
+                {
+                  "id": "asset-2bab5a211b7d",
+                  "kind": "concept_card",
+                  "scope": "project",
+                  "workspace_id": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+                  "title": "vsix-e2e-sandbox-capability.md · concept card",
+                  "summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                  "concept_card": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                  "implementation_pattern": "",
+                  "common_pitfall": "",
+                  "exercise_seed": "",
+                  "explanation_recipe": "",
+                  "why_it_matters": "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md.",
+                  "example": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                  "anti_pattern": "",
+                  "focus_area": "vsix-e2e-sandbox-capability.md",
+                  "scenario": "resource_ingest",
+                  "origin": "resource",
+                  "source_key": "resource::resource-d319bf78b4::concept_card::0",
+                  "source_ids": [
+                    "resource-d319bf78b4"
+                  ],
+                  "source_fragments": [
+                    "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/workspace/vsix-e2e-sandbox-capability.md"
+                  ],
+                  "evidence_snippets": [
+                    "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                    "Grounds follow-up coaching with vsix-e2e-sandbox-capability.md."
+                  ],
+                  "retrieval_hints": [
+                    "vsix-e2e-sandbox-capability.md",
+                    "markdown",
+                    "vsix-e2e",
+                    "sandbox-capability"
+                  ],
+                  "source_summary": "# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.",
+                  "source_quality_flags": [],
+                  "source_freshness": "fresh",
+                  "source_retrieved_at": null,
+                  "tags": [
+                    "markdown",
+                    "vsix-e2e",
+                    "sandbox-capability"
+                  ],
+                  "trust_score": 0.84,
+                  "usage_count": 0,
+                  "plan_stage_id": "",
+                  "success_count": 0,
+                  "failure_count": 0,
+                  "last_outcome": "",
+                  "last_effective_at": null,
+                  "effectiveness_by_scenario": {},
+                  "last_used_at": null,
+                  "created_at": "2026-10-31T20:31:26.393749+00:00",
+                  "updated_at": "2026-10-31T20:31:26.393767+00:00"
+                }
+              ],
+              "exercise_prompt": {
+                "type": "principle",
+                "title": "Teach the concept through the code",
+                "prompt": "Teach 'Keep implementation grounded in one observable behavior before abstracting.' back through one tiny example: name the boundary, the rule, and the failure mode it prevents. Keep it tied to implementation. Reuse the saved example '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.' if it helps.",
+                "focus_area": "implementation",
+                "success_signal": "The learner can restate the concept in plain words, point at the code boundary, and name where it transfers next.",
+                "fallback_step": "Reduce the concept to one branch, one boundary, one bug it prevents, and one plain-language sentence.",
+                "constraints": [
+                  "Keep the explanation anchored to the teaching asset 'vsix-e2e-sandbox-capability.md · concept card': # VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.. Teach from the knowledge base asset 'vsix-e2e-sandbox-capability.md · concept card' before widening beyond implementation.",
+                  "Start with plain language before returning to code.",
+                  "Keep the concept attached to one concrete code location.",
+                  "Name one nearby boundary where the same rule transfers next."
+                ],
+                "scenario": "concept_teaching",
+                "lesson_shape": "A concept-first explanation grounded in one code boundary and one failure mode.",
+                "exercise_shape": "One explanation plus one concrete application check.",
+                "teaching_strategy": "Teach the mechanism through the code the learner can see right now, not abstract theory. Ground the next move in the saved teaching asset '# VSIX E2E capability proof This file verifies resource upload inside installed extension smoke.'.",
+                "closing_move": "Ask the learner to restate the mechanism in their own words. Keep the learner attached to 'vsix-e2e-sandbox-capability.md' for one more verifiable loop.",
+                "artifact_priority": [
+                  "exercise",
+                  "principle"
+                ],
+                "selected_teaching_asset_ids": [
+                  "asset-2bab5a211b7d"
+                ],
+                "selected_teaching_asset_titles": [
+                  "vsix-e2e-sandbox-capability.md · concept card"
+                ]
+              },
+              "review_queue_summary": "有 2 个后续复习点已经就绪或即将到期。",
+              "next_review_due": "2026-11-01T20:31:27.557477+00:00",
+              "plan_runtime_status": {
+                "current_stage": null,
+                "current_main_thread": {
+                  "scenario": "general",
+                  "focus_area": "",
+                  "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                  "next_step": "Pick the most promising idea and create a minimal project scaffold.",
+                  "blocker": "",
+                  "current_step": "",
+                  "why_now": "",
+                  "verify_method": [],
+                  "blocked_reason": "",
+                  "next_after_current": "",
+                  "verified_result": ""
+                },
+                "current_step": "",
+                "why_now": "",
+                "verify_method": [],
+                "blocked_reason": "",
+                "next_after_current": "",
+                "plan_id": null,
+                "review_points": [
+                  {
+                    "concept": "general",
+                    "reason": "回到最近这一轮教练主线，先把这一步验证掉：Pick the most promising idea and create a minimal project scaffold.",
+                    "severity": "medium",
+                    "due_at": "2026-11-01T20:31:27.557477+00:00",
+                    "source": "reflection",
+                    "surface_mode": "due",
+                    "task_hint": "把当前主线收成一个可见的小补丁或验证步骤：Pick the most promising idea and create a minimal project scaffold.",
+                    "focus_area": "general",
+                    "linked_context": "Pick the most promising idea and create a minimal project scaffold.",
+                    "interval_days": 1,
+                    "mastery_score": null
+                  },
+                  {
+                    "concept": "general",
+                    "reason": "把最近这次复盘当作一个具体回看提示：当前聚焦点：请只作为代码教练回答：我想理解这个临时项目 Pick the most promising idea and create a minimal project scaffold.",
+                    "severity": "low",
+                    "due_at": "2026-11-02T20:31:27.550299+00:00",
+                    "source": "reflection",
+                    "surface_mode": "digest",
+                    "task_hint": "把当前主线收成一个可见的小补丁或验证步骤：当前聚焦点：请只作为代码教练回答：我想理解这个临时项目 Pick the most promising idea and create a minimal project scaffold.",
+                    "focus_area": "recent-reflection",
+                    "linked_context": "Pick the most promising idea and create a minimal project scaffold. | Pick the most promising idea and create a minimal project scaffold.",
+                    "interval_days": 2,
+                    "mastery_score": null
+                  }
+                ],
+                "coach_judgment": {
+                  "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                  "teaching_goal": "在当前项目里训练实现判断，而不是只给结果。",
+                  "intervention_strategy": "先把问题压成一个可见、可验证的小动作，再决定是否扩大解释和范围。",
+                  "support_strategy": "如果用户开始卡住，就继续缩小范围，把下一步压得更具体。",
+                  "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                },
+                "next_training_action": "围绕「请只作为代码教练回答：我想理解这个临时项目」先做一个小动作，把结果带回来。",
+                "next_step_hint": {
+                  "title": "Pick the most promising idea and create a minimal project scaffold.",
+                  "recommended_action": "task",
+                  "source": "coach_turn",
+                  "continue_in": "coach",
+                  "summary": "请只作为代码教练回答：我想理解这个临时项目",
+                  "focus_area": "请只作为代码教练回答：我想理解这个临时项目",
+                  "prompt": "请围绕「Pick the most promising idea and create a minimal project scaffold.」继续指导我，先只做这一小步。",
+                  "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。"
+                },
+                "review_queue_summary": "有 2 个后续复习点已经就绪或即将到期。",
+                "next_review_due": "2026-11-01T20:31:27.557477+00:00",
+                "recovered": false,
+                "current_stage_id": null,
+                "resume_state": null,
+                "request_id": null,
+                "revision": null
+              },
+              "coachOrientation": {
+                "object_kind": "provider",
+                "object_label": "模型连接",
+                "state": "needs_setup",
+                "why": "还没有可用的模型连接。",
+                "primary_action": "open_settings",
+                "primary_action_label": "去设置",
+                "next_step": "先保存并测试 provider。",
+                "advanced_where": "设置 · Provider",
+                "source": "snapshot",
+                "revision": 1
+              },
+              "suggestedActions": [
+                {
+                  "id": "suggested-5",
+                  "label": "先给更小的提示，不要生成计划、卡片或任务。",
+                  "action": "hint",
+                  "rationale": "当你只需要一个贴着具体 code 边界的小提示，而不是新开一条任务分支时，用这个。",
+                  "artifact_kind": "idea_implementation",
+                  "prompt": "结合当前 code、当前聚焦点和目标，给我一个更小的提示。",
+                  "focus_area": null
+                }
+              ]
+            },
+            "suggested_actions": [
+              {
+                "id": "suggested-6",
+                "label": "从这次第一眼判断继续",
+                "action": "hint",
+                "rationale": "当你只需要一个贴着具体 code 边界的小提示，而不是新开一条任务分支时，用这个。",
+                "artifact_kind": "idea_implementation",
+                "prompt": "结合当前 code、当前聚焦点和目标，给我一个更小的提示。",
+                "focus_area": null
+              },
+              {
+                "id": "suggested-7",
+                "label": "先问一个澄清问题",
+                "action": "hint",
+                "rationale": "当你只需要一个贴着具体 code 边界的小提示，而不是新开一条任务分支时，用这个。",
+                "artifact_kind": "idea_implementation",
+                "prompt": "结合当前 code、当前聚焦点和目标，给我一个更小的提示。",
+                "focus_area": null
+              },
+              {
+                "id": "suggested-8",
+                "label": "Pick the most promising idea and create a minimal project scaffold.",
+                "action": "hint",
+                "rationale": "当你只需要一个贴着具体 code 边界的小提示，而不是新开一条任务分支时，用这个。",
+                "artifact_kind": "idea_implementation",
+                "prompt": "结合当前 code、当前聚焦点和目标，给我一个更小的提示。",
+                "focus_area": null
+              }
+            ],
+            "artifacts": {},
+            "coach_turn": {
+              "scenario": "general",
+              "learner_signal": "steady",
+              "summary": "请只作为代码教练回答：我想理解这个临时项目",
+              "next_step": "Pick the most promising idea and create a minimal project scaffold.",
+              "encouragement": "把循环保持紧凑：实现、验证、复盘。",
+              "teaching_mode": "coach",
+              "emotional_tone": "challenging",
+              "review_rhythm": "",
+              "teaching_observation": "",
+              "intervention_strategy": "先把问题压成一个可见、可验证的小动作，再决定是否扩大解释和范围。",
+              "teaching_goal": "在当前项目里训练实现判断，而不是只给结果。",
+              "resume_thread": "下一轮继续沿着当前训练主线接上，先验证这一小步，再决定是否扩展。",
+              "decision": "",
+              "blocker": "",
+              "teaching_note": "",
+              "confidence": "",
+              "evidence": [],
+              "support_strategy": "如果用户开始卡住，就继续缩小范围，把下一步压得更具体。",
+              "decision_reason": "",
+              "tone": "reflective",
+              "verbosity_bias": "expanded",
+              "active_stage": null,
+              "active_task": null,
+              "due_review_count": 0,
+              "review_queue_summary": "",
+              "failing_checks": [],
+              "artifact_kinds": [],
+              "suggested_action_types": [
+                "hint",
+                "hint",
+                "hint"
+              ],
+              "background_mode": "embedded",
+              "requires_confirmation": false
+            },
+            "agent_meta": null,
+            "agent": null
+          },
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:27.603Z",
+        "durationMs": 114
+      },
+      {
+        "name": "bootstrap-snapshot-cached",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:27.603Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "cachedMessages": 2,
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:29.128Z",
+        "durationMs": 1525
+      },
+      {
+        "name": "seed-review-queue-through-public-command",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:29.128Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "commandOk": true,
+          "responseOk": true,
+          "actionCount": 1,
+          "action": "reset",
+          "actionConcept": "dependency injection",
+          "actionOutcome": "needs_more_practice",
+          "reviewArtifactId": "review-a73ad11725",
+          "reviewArtifactSource": "review_queue",
+          "reviewArtifactFocusArea": "dependency injection",
+          "reviewArtifactLastAction": "reviewed",
+          "latestTrainingSubmode": "review_queue",
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:29.203Z",
+        "durationMs": 75
+      },
+      {
+        "name": "assert-training-review-queue-host-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:29.203Z",
+        "evidenceScope": "host-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "hasHostTrainingState": true,
+          "workbenchVisible": true,
+          "latestTrainingSubmode": "review_queue",
+          "reviewArtifactId": "review-a73ad11725",
+          "reviewArtifactSource": "review_queue",
+          "reviewArtifactStatus": "active",
+          "expectedReviewArtifactId": "review-a73ad11725",
+          "evidenceScope": "host-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:29.203Z",
+        "durationMs": 0
+      },
+      {
+        "name": "capture-owned-workbench-after-review-queue-command",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:29.203Z",
+        "evidenceScope": "native-capture-artifact",
+        "visualTargetAsserted": false,
+        "data": {
+          "skipped": true,
+          "captureRequired": false,
+          "capturePlatform": "darwin",
+          "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+          "windowScreenshotPath": null,
+          "sidebarScreenshotPath": null,
+          "exists": false,
+          "evidenceScope": "native-capture-artifact",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:29.204Z",
+        "durationMs": 1
+      },
+      {
+        "name": "assert-training-theory-drill-host-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:29.204Z",
+        "evidenceScope": "host-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "sessionId": "session-49de68abce",
+          "generatedCardId": "a86ae255-9c1c-4988-9802-203d95456b1b",
+          "generatedCardPresent": true,
+          "theoryDrillId": "theory-5c81c5e8c0",
+          "hasHostTrainingState": true,
+          "workbenchVisible": true,
+          "currentTheoryDrillId": "theory-5c81c5e8c0",
+          "theoryDrillTitle": "理论演练：dependency mastery",
+          "theoryDrillStatus": "ready",
+          "theoryQuestionPrompt": "依赖选择: 说明为什么这里该用这个 dependency，而不是一个泛化替代。",
+          "evidenceScope": "host-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:30.423Z",
+        "durationMs": 1219
+      },
+      {
+        "name": "seed-dependency-mastery-through-public-command",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:29.352Z",
+        "evidenceScope": "host-command-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "commandOk": true,
+          "responseOk": true,
+          "mapCount": 1,
+          "dependencyKey": "fastapi",
+          "responseScenarioLabId": "scenario-175029133b",
+          "hostScenarioLabId": "scenario-175029133b",
+          "evidenceScope": "host-command-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:29.410Z",
+        "durationMs": 58
+      },
+      {
+        "name": "capture-owned-workbench-after-theory-drill-command",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:30.424Z",
+        "evidenceScope": "native-capture-artifact",
+        "visualTargetAsserted": false,
+        "data": {
+          "skipped": true,
+          "captureRequired": false,
+          "capturePlatform": "darwin",
+          "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+          "windowScreenshotPath": null,
+          "sidebarScreenshotPath": null,
+          "exists": false,
+          "evidenceScope": "native-capture-artifact",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:30.424Z",
+        "durationMs": 0
+      },
+      {
+        "name": "assert-training-scenario-lab-webview-debug-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:30.424Z",
+        "evidenceScope": "webview-debug-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "sessionId": "session-a159a1ef1d",
+          "scenarioLabId": "scenario-175029133b",
+          "restoreSucceeded": true,
+          "hasVisibleFacts": true,
+          "surface": "training",
+          "activeView": "training",
+          "restoreKind": "scenario_lab",
+          "surfaceMode": "project",
+          "activeSubmode": "scenario",
+          "scenarioLabMaterialized": true,
+          "scenarioLabVisible": true,
+          "visibleScenarioLabId": "scenario-175029133b",
+          "scenarioLabTitle": "Scenario lab: FastAPI",
+          "scenarioLabStatus": "ready",
+          "scenarioLabScenario": "Rebuild the dependency judgment in one minimum scenario.",
+          "expectedScenarioLabTitle": "Scenario lab: FastAPI",
+          "singleCardImmersive": true,
+          "routeStripCollapsedByDefault": true,
+          "cardOnlyMode": true,
+          "secondaryPanelsCollapsedByDefault": true,
+          "evidenceScope": "webview-debug-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:31.048Z",
+        "durationMs": 624
+      },
+      {
+        "name": "capture-owned-workbench-after-scenario-restore",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:31.049Z",
+        "evidenceScope": "native-capture-artifact",
+        "visualTargetAsserted": false,
+        "data": {
+          "skipped": true,
+          "captureRequired": false,
+          "capturePlatform": "darwin",
+          "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+          "windowScreenshotPath": null,
+          "sidebarScreenshotPath": null,
+          "exists": false,
+          "evidenceScope": "native-capture-artifact",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:31.049Z",
+        "durationMs": 0
+      },
+      {
+        "name": "assert-training-next-hop-webview-debug-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:31.049Z",
+        "evidenceScope": "webview-debug-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "sessionId": "session-51662647ea",
+          "activeCardId": "a86ae255-9c1c-4988-9802-203d95456b1b",
+          "practiceReturnRecorded": true,
+          "hasPracticeReturnEvent": true,
+          "hasVisibleFacts": true,
+          "surface": "training",
+          "activeView": "training",
+          "surfaceMode": "project",
+          "activeSubmode": "practice",
+          "nextHopVisible": true,
+          "nextHopTitle": "Fixture 闪记：dependency injection",
+          "nextHopStatus": "verification_required",
+          "nextHopContinueIn": "training",
+          "nextHopCandidateType": "practice_candidate",
+          "nextHopTargetKind": "training_card",
+          "nextHopTargetId": "a86ae255-9c1c-4988-9802-203d95456b1b",
+          "nextHopReviewArtifactId": null,
+          "nextHopPlanEvidenceId": null,
+          "bootstrapWorkspaceId": "context-f2ed5164bc1d41859d8ed7f3d9beb0a0",
+          "bootstrapNextHopCandidateType": "practice_candidate",
+          "bootstrapNextHopTargetKind": "training_card",
+          "bootstrapNextHopTargetId": "a86ae255-9c1c-4988-9802-203d95456b1b",
+          "bootstrapNextHopStatus": "verification_required",
+          "bootstrapNextHopContinueIn": "training",
+          "bootstrapLatestMaterializedEventType": null,
+          "bootstrapLatestMaterializedCandidateType": null,
+          "bootstrapLatestMaterializedTargetId": null,
+          "bootstrapLatestMaterializedStatus": null,
+          "expectedCandidateType": "practice_candidate",
+          "expectedTargetKind": "training_card",
+          "expectedTargetId": "a86ae255-9c1c-4988-9802-203d95456b1b",
+          "expectedPlanEvidenceId": null,
+          "expectedContinueIn": "training",
+          "expectedStatus": "verification_required",
+          "expectedReviewArtifactId": null,
+          "singleCardImmersive": true,
+          "routeStripCollapsedByDefault": true,
+          "cardOnlyMode": true,
+          "secondaryPanelsCollapsedByDefault": true,
+          "evidenceScope": "webview-debug-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:34.043Z",
+        "durationMs": 2994
+      },
+      {
+        "name": "capture-owned-workbench-after-next-hop-restore",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:34.043Z",
+        "evidenceScope": "native-capture-artifact",
+        "visualTargetAsserted": false,
+        "data": {
+          "skipped": true,
+          "captureRequired": false,
+          "capturePlatform": "darwin",
+          "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+          "windowScreenshotPath": null,
+          "sidebarScreenshotPath": null,
+          "exists": false,
+          "evidenceScope": "native-capture-artifact",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:34.044Z",
+        "durationMs": 1
+      },
+      {
+        "name": "assert-resources-resource-detail-webview-debug-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:34.044Z",
+        "evidenceScope": "webview-debug-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "resourceId": "resource-71380c21d3",
+          "hasVisibleFacts": true,
+          "surface": "resources",
+          "activeView": "resources",
+          "activeSurface": "detail",
+          "resourceDetailVisible": true,
+          "resourceDetailId": "resource-71380c21d3",
+          "resourceDetailTitle": "vsix-resource-detail-proof.md",
+          "selectedResourceId": "resource-71380c21d3",
+          "singleWorkbenchSurface": true,
+          "compactMode": true,
+          "detailPaneVisible": true,
+          "sandboxPaneVisible": false,
+          "previewPaneVisible": false,
+          "evidenceScope": "webview-debug-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:35.676Z",
+        "durationMs": 1632
+      },
+      {
+        "name": "capture-owned-workbench-after-resource-detail-restore",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:35.677Z",
+        "evidenceScope": "native-capture-artifact",
+        "visualTargetAsserted": false,
+        "data": {
+          "skipped": true,
+          "captureRequired": false,
+          "capturePlatform": "darwin",
+          "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+          "windowScreenshotPath": null,
+          "sidebarScreenshotPath": null,
+          "exists": false,
+          "evidenceScope": "native-capture-artifact",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:35.678Z",
+        "durationMs": 1
+      },
+      {
+        "name": "assert-resources-embedded-preview-webview-debug-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:35.678Z",
+        "evidenceScope": "webview-debug-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "sandboxPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-62995fd0eb/vsix-sandbox-preview-proof.md",
+          "previewSucceeded": true,
+          "previewCanNativeOpen": true,
+          "restoreSucceeded": true,
+          "hasVisibleFacts": true,
+          "activeSurface": "sandbox",
+          "selectedSandboxPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-62995fd0eb/vsix-sandbox-preview-proof.md",
+          "sandboxPreviewVisible": true,
+          "sandboxPreviewEmbedded": true,
+          "sandboxPreviewPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-62995fd0eb/vsix-sandbox-preview-proof.md",
+          "singleWorkbenchSurface": true,
+          "detailPaneVisible": true,
+          "sandboxPaneVisible": false,
+          "previewPaneVisible": false,
+          "evidenceScope": "webview-debug-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:36.534Z",
+        "durationMs": 856
+      },
+      {
+        "name": "capture-owned-workbench-after-embedded-preview-restore",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:36.535Z",
+        "evidenceScope": "native-capture-artifact",
+        "visualTargetAsserted": false,
+        "data": {
+          "skipped": true,
+          "captureRequired": false,
+          "capturePlatform": "darwin",
+          "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+          "windowScreenshotPath": null,
+          "sidebarScreenshotPath": null,
+          "exists": false,
+          "evidenceScope": "native-capture-artifact",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:36.535Z",
+        "durationMs": 0
+      },
+      {
+        "name": "assert-resources-sandbox-restore-webview-debug-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:36.536Z",
+        "evidenceScope": "webview-debug-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "sandboxPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-62995fd0eb/vsix-sandbox-preview-proof.md",
+          "restoreSucceeded": true,
+          "hasVisibleFacts": true,
+          "surface": "resources",
+          "activeView": "resources",
+          "activeSurface": "sandbox",
+          "selectedSandboxPath": "/private/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/user-data/User/globalStorage/local.trainer-extension/sidecar/roots/root-b1ea197385464b439ce80c2e50c10f1d/sandboxes/context-f2ed5164bc1d41859d8ed7f3d9beb0a0/sources/inbox/resource-62995fd0eb/vsix-sandbox-preview-proof.md",
+          "singleWorkbenchSurface": true,
+          "compactMode": true,
+          "modebarHiddenInCompact": true,
+          "detailPaneVisible": true,
+          "sandboxPaneVisible": false,
+          "previewPaneVisible": false,
+          "evidenceScope": "webview-debug-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:36.572Z",
+        "durationMs": 36
+      },
+      {
+        "name": "capture-owned-workbench-after-sandbox-restore",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:36.572Z",
+        "evidenceScope": "native-capture-artifact",
+        "visualTargetAsserted": false,
+        "data": {
+          "skipped": true,
+          "captureRequired": false,
+          "capturePlatform": "darwin",
+          "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+          "windowScreenshotPath": null,
+          "sidebarScreenshotPath": null,
+          "exists": false,
+          "evidenceScope": "native-capture-artifact",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:36.572Z",
+        "durationMs": 0
+      },
+      {
+        "name": "assert-title-configuration-and-theme-state",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:36.572Z",
+        "evidenceScope": "title-configuration-and-theme-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "containerId": "trainer",
+          "containerTitle": "Trainer",
+          "viewId": "trainer.sidebar",
+          "viewName": " ",
+          "contextualTitle": null,
+          "openCommandTitle": "Trainer: Open Coach Sidebar",
+          "runtimeWebviewTitle": "",
+          "runtimeTitleAssignmentFound": true,
+          "runtimeTitleSourcePath": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-vsix-e2e-ICVAOH/extensions/local.trainer-extension-1.3.4/dist/extension/src/core/webviewBridge.js",
+          "themeRuns": [
+            {
+              "id": "dark",
+              "expectedKind": "dark",
+              "activeKind": "dark",
+              "kindMatch": true,
+              "selectedTheme": "Default Dark Modern",
+              "applied": true,
+              "tried": [
+                "Default Dark Modern"
+              ],
+              "screenshot": {
+                "evidenceScope": "native-capture-artifact",
+                "visualTargetAsserted": false,
+                "targetSurfaceConfirmed": null,
+                "skipped": true,
+                "captureRequired": false,
+                "capturePlatform": "darwin",
+                "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+                "windowScreenshotPath": null,
+                "sidebarScreenshotPath": null,
+                "exists": false,
+                "windowTitle": null,
+                "captureMethod": null
+              }
+            },
+            {
+              "id": "light",
+              "expectedKind": "light",
+              "activeKind": "light",
+              "kindMatch": true,
+              "selectedTheme": "Default Light Modern",
+              "applied": true,
+              "tried": [
+                "Default Light Modern"
+              ],
+              "screenshot": {
+                "evidenceScope": "native-capture-artifact",
+                "visualTargetAsserted": false,
+                "targetSurfaceConfirmed": null,
+                "skipped": true,
+                "captureRequired": false,
+                "capturePlatform": "darwin",
+                "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+                "windowScreenshotPath": null,
+                "sidebarScreenshotPath": null,
+                "exists": false,
+                "windowTitle": null,
+                "captureMethod": null
+              }
+            },
+            {
+              "id": "high-contrast",
+              "expectedKind": "high-contrast",
+              "activeKind": "high-contrast",
+              "kindMatch": true,
+              "selectedTheme": "Default High Contrast",
+              "applied": true,
+              "tried": [
+                "Default High Contrast"
+              ],
+              "screenshot": {
+                "evidenceScope": "native-capture-artifact",
+                "visualTargetAsserted": false,
+                "targetSurfaceConfirmed": null,
+                "skipped": true,
+                "captureRequired": false,
+                "capturePlatform": "darwin",
+                "reason": "Window capture is only implemented for win32 in this smoke driver, current platform=darwin.",
+                "windowScreenshotPath": null,
+                "sidebarScreenshotPath": null,
+                "exists": false,
+                "windowTitle": null,
+                "captureMethod": null
+              }
+            }
+          ],
+          "evidenceScope": "title-configuration-and-theme-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:39.174Z",
+        "durationMs": 2602
+      },
+      {
+        "name": "assert-cross-workspace-reopen-history-truth",
+        "ok": true,
+        "startedAt": "2026-10-31T20:31:39.175Z",
+        "evidenceScope": "host-state",
+        "visualTargetAsserted": false,
+        "data": {
+          "oldSessionId": "session-a48c5b5ee6",
+          "newSessionId": "session-ec628bce76",
+          "workspaceId": "trainer-vsix-reopen-new",
+          "planId": "plan_9b3a05d469b042fd9cde35ad9242551b",
+          "currentStageTitle": "基础",
+          "routedCardId": "35b4fd34-06f5-41bb-8966-e38695d4d46e",
+          "routedCardGenerationAttempts": 1,
+          "trainingRouteCardId": "35b4fd34-06f5-41bb-8966-e38695d4d46e",
+          "resourceNames": [
+            "VSIX Reopen Resource"
+          ],
+          "userHasNewWorkspaceMarker": true,
+          "userLeaksOldWorkspaceMarker": false,
+          "assistantMessageCount": 1,
+          "assistantHasVisibleReply": true,
+          "historyHasNewWorkspaceMarker": true,
+          "historyLeaksOldWorkspaceMarker": false,
+          "resourceDetailName": "VSIX Reopen Resource",
+          "resourceDetailSummary": "# VSIX Reopen Resource\nKeep the installed extension authoritative.\n",
+          "evidenceScope": "host-state",
+          "visualTargetAsserted": false,
+          "targetSurfaceConfirmed": null
+        },
+        "finishedAt": "2026-10-31T20:31:39.472Z",
+        "durationMs": 297
+      }
+    ],
+    "evidenceSummary": {
+      "evidenceScope": "installed-host-checks",
+      "visualTargetAsserted": false,
+      "visualChecksPerformed": 0,
+      "stepCountsByEvidenceScope": {
+        "host-command-state": 19,
+        "host-state": 4,
+        "native-capture-artifact": 7,
+        "webview-debug-state": 5,
+        "title-configuration-and-theme-state": 1
+      },
+      "captureStepPassCount": 0,
+      "captureStepSkipCount": 7,
+      "captureStepFailCount": 0,
+      "themeCapturePairPassCount": 0,
+      "themeCapturePairSkipCount": 3,
+      "themeCapturePairFailCount": 0
+    }
+  }
+}

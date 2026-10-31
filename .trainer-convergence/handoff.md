@@ -210,3 +210,17 @@
   owner teaching sign-off remain BLOCKED on external conditions; T-0026 latency
   measurement is unchanged and needs a re-run only when the owner relay/model
   changes. Do not convert any of these to PASS without new evidence.
+
+## 2026-11-01 — install-state gate re-run at current code
+
+- Local `npm run test:vsix-e2e` rebuilt the packaged VSIX from the working tree
+  (sourceCommit 07fc780, code 52fe632) and passed 36/36 installed-host steps with
+  the fixture provider (`rebuiltCurrentVsix=true`). Evidence:
+  `evidence/vsix-e2e-07fc780.json` + `.log`.
+- Scope honesty: the visual window-capture probe is win32-only and was skipped on
+  macOS; this run proves installed activation/commands/state, not pixel capture.
+  The three-platform package jobs passed separately in run 41236836839.
+- With that gate closed, the remaining blockers are external: T-0028 owner
+  teaching sign-off, real Remote-SSH L2 window, and a T-0026 latency re-run when
+  the owner relay/model changes. Phase returned to BLOCKED_ON_EXTERNAL; no
+  external gate is marked PASS.

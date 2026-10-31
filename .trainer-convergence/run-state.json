@@ -1,8 +1,8 @@
 {
   "version": 1,
   "loop": 6,
-  "phase": "IN_PROGRESS",
-  "head": "52fe632",
+  "phase": "BLOCKED_ON_EXTERNAL",
+  "head": "07fc780",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -42,7 +42,8 @@
     "T-0050": "FIXED_VALIDATED @1c73222 (first-run capture onboarding + per-browser picker; failure-first tests 4/4; check clean)",
     "browser_zero_code_autopair": "FIXED_VALIDATED (93b3798; popup pairing panel removed, auto-pair binds the latest host workspace, stale 401 self-heals; real Chrome + sidecar e2e 24/24 at 52fe632; evidence/browser-e2e-52fe632.log)",
     "primary_nav_text_only": "FIXED_VALIDATED (7ee45f9; primary nav is text-only, 46px->34px; nav e2e 26/26, geometry 471/471, a11y 96/96; evidence/geometry-52fe632.log, design-a11y-report-52fe632.json)",
-    "capture_intent": "FIXED_VALIDATED (52fe632; link/selection snapshots never impersonate full sources, queue identity includes workspace/focus/intent/excerpt, GitHub blob + PDF magic-byte capture; server 3688 passed, extension suite exit 0, pyright 0)"
+    "capture_intent": "FIXED_VALIDATED (52fe632; link/selection snapshots never impersonate full sources, queue identity includes workspace/focus/intent/excerpt, GitHub blob + PDF magic-byte capture; server 3688 passed, extension suite exit 0, pyright 0)",
+    "install_state_e2e_current": "FIXED_VALIDATED (07fc780 / code 52fe632: local packaged VSIX host E2E 36/36 steps, fixture provider, rebuiltCurrentVsix=true; evidence/vsix-e2e-07fc780.json. Visual window capture skipped on macOS because that probe is win32-only.)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -58,7 +59,6 @@
     "jobs": "9/9"
   },
   "next": [
-    "run install-state VSIX host E2E at 52fe632",
     "owner sign-off (T-0028) — human",
     "real Remote-SSH window (L2) — environment",
     "re-run T-0026 latency only when the owner relay/model changes"
@@ -73,14 +73,16 @@
   },
   "popup_redesign": "owner-directed minimal card @7cf5760; pairing panel removed @93b3798 (zero-code auto-connect); the card has no pairing code, status page, history list or queue manager",
   "install_state_e2e": {
-    "last_run": "40179403488 @04770cc",
-    "current_head": "52fe632",
-    "status": "STALE_NOT_RUN_AT_CURRENT_SHA"
+    "run": "local npm run test:vsix-e2e",
+    "sha": "07fc780 (code 52fe632)",
+    "status": "PASS",
+    "steps": "36/36",
+    "provider": "fixture (no real key claimed)",
+    "limitation": "visual window capture skipped on macOS; Windows job covers its own package build, not this probe"
   },
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
-    "install-state VSIX host E2E has not been re-run at 52fe632 (last run 40179403488 @04770cc)",
     "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available)",
     "teaching acceptance remains BLOCKED on owner sign-off T-0028; real-model journey evidence is 10/10 from 2026-10-24 at an older SHA",
     "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at 52fe632",

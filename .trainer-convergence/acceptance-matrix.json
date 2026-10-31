@@ -6,8 +6,8 @@
       "evidence": "run 41236836839 @52fe632 on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu); prior main run 41234103343 @7ee45f9 also 9/9"
     },
     "native_install_e2e": {
-      "status": "NOT_RUN_AT_CURRENT_SHA",
-      "evidence": "last successful installed-VSIX host E2E: run 40179403488 @04770cc; current head 52fe632 has not been re-run"
+      "status": "PASS",
+      "evidence": "local packaged VSIX host E2E at 07fc780 (code 52fe632): report ok=true, 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-07fc780.json. Visual window capture is win32-only and was skipped on this macOS run; cross-platform package jobs passed in run 41236836839."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
