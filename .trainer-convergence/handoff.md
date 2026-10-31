@@ -180,3 +180,33 @@
 - 失败用例先行：browserCaptureOnboarding.test.js 4/4（门控矩阵 + 防御性
   输入 + 8 语言文案完整性 + 按浏览器启动组合）；npm run check 干净；扩展
   全量套件绿。Webview 未动，设计验收无需重拍。
+
+## 2026-11-01 — branch reconciled; zero-code capture + text nav + capture intent evidenced
+
+- Branch is now `maturity/p1-final-convergence-2026-10-20`, fast-forwarded to main
+  (`93b3798` zero-code browser capture, `7ee45f9` text-only primary nav) and then
+  `52fe632` capture-intent correctness. Working tree was reviewed; the previously
+  uncommitted server/browser capture-intent changes are now committed with tests.
+- Browser capture no longer asks for a pairing code. The popup is the original
+  280px capture card with the pairing panel removed; the worker discovers the
+  loopback sidecar, auto-pairs to the latest host session, queues captures and
+  coach drafts offline, fences queue items by workspace, and self-heals a 401 by
+  clearing the stale credential and re-pairing on the next flush.
+- Primary navigation is text-only (对话 / 学习 / 资料); icons were removed and the
+  tab height tightened. Nav e2e 26/26; an old composer-scope assertion was aligned
+  with the documented dock ruling (Coach/Learning/Resources dock; Training/
+  Progress/Settings do not).
+- Capture intent is now honest: link/selection snapshots carry their own intent
+  tag and never dedupe against a full source; queue identity includes workspace,
+  focus, capture mode and excerpt; GitHub blob pages are read through the contents
+  API; PDFs are detected by magic bytes; selection requires an excerpt and
+  non-snapshot captures refuse artifact downloads.
+- Evidence at 52fe632: server 3688 passed / 28 subtests; extension suite exit 0;
+  `npm run check` clean; pyright 0 errors; real Chrome browser e2e 24/24;
+  geometry 471/471; a11y 96/96; perf budgets pass; Cross-Platform CI run
+  41236836839 = 9/9 success. Evidence files are under `evidence/*52fe632*`.
+- Remaining gaps are recorded in `run-state.json` and the acceptance matrix:
+  install-state VSIX host E2E has not been re-run at 52fe632; Remote-SSH L2 and
+  owner teaching sign-off remain BLOCKED on external conditions; T-0026 latency
+  measurement is unchanged and needs a re-run only when the owner relay/model
+  changes. Do not convert any of these to PASS without new evidence.

@@ -1,0 +1,30 @@
+
+> trainer-workspace@1.3.4 test:browser-capture-e2e
+> node ./scripts/run-browser-capture-e2e.mjs
+
+  ok  sidecar-health — http://127.0.0.1:34891
+  ok  workspace-session — /var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-browser-e2e-project-htuYiV
+  ok  extension-worker — jpghkiohpcighdmchjkcccbobkfcmfdg
+  ok  auto-paired
+  ok  credential-stored
+  ok  capture-indexed — ok
+  ok  library-status — count=1
+  ok  github-readme-captured
+  ok  pdf-captured
+  ok  multi-kind-library-status — count=3
+  ok  pdf-downloaded — Trainer Library/Downloads/Sample PDF.pdf
+  ok  pdf-not-overwritten — Sample PDF.pdf
+  ok  github-repo-downloaded — Trainer Library/Repos/Hello-World
+  ok  github-repo-not-overwritten — Trainer Library/Repos/Hello-World
+  ok  download-404-not-retried
+  ok  download-path-traversal-refused
+  ok  sidecar-stopped-for-offline
+  ok  offline-queued — web + pdf download
+  ok  offline-flushed — remaining=0
+  ok  offline-pdf-retried — Retry PDF.pdf
+  ok  offline-library-status — count=6
+  ok  stale-credential-queued
+  ok  stale-credential-recovered
+  ok  revoked-credential-rejected
+
+[PASS] 24/24 browser-capture checks

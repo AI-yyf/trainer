@@ -1,0 +1,33 @@
+{
+ "generatedAt": "2026-10-31T20:03:11.073Z",
+ "viewport": {
+  "width": 420,
+  "height": 900
+ },
+ "languages": [
+  "zh-CN",
+  "en-US",
+  "es-ES",
+  "fr-FR",
+  "de-DE",
+  "ja-JP",
+  "ko-KR",
+  "pt-BR"
+ ],
+ "views": [
+  "coach",
+  "plan",
+  "resources",
+  "training",
+  "progress",
+  "settings"
+ ],
+ "modes": [
+  "normal-light",
+  "font200-dark"
+ ],
+ "pages": 96,
+ "passed": 96,
+ "failed": 0,
+ "failures": []
+}

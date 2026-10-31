@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "loop": 5,
-  "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "04770cc",
+  "loop": 6,
+  "phase": "IN_PROGRESS",
+  "head": "52fe632",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -39,7 +39,10 @@
     "install_state_e2e": "run 40179403488 @04770cc (dispatch, run_vsix_host_e2e=true): 9/9 success; prior 39995273745 @04a33ce",
     "teaching_journey_real_model": "COMPLETE (2026-10-24, linksub relay + glm-5.3, key env-only, zero key in repo): evidence/journey-real/ 10/10 steps — capability gate verified, honest replies, restart continuity, concrete next step w/ success signal, isolation holds; run 2 archived (evidence/journey-real-run2/) confirming the fix against the real relay — 10/10 again",
     "T-0049": "FIXED_VALIDATED (streaming persist lanes: pre-persist repair added to /session/message/stream and /turn/stream; failure-first test; suite 3678 green)",
-    "T-0050": "FIXED_VALIDATED @1c73222 (first-run capture onboarding + per-browser picker; failure-first tests 4/4; check clean)"
+    "T-0050": "FIXED_VALIDATED @1c73222 (first-run capture onboarding + per-browser picker; failure-first tests 4/4; check clean)",
+    "browser_zero_code_autopair": "FIXED_VALIDATED (93b3798; popup pairing panel removed, auto-pair binds the latest host workspace, stale 401 self-heals; real Chrome + sidecar e2e 24/24 at 52fe632; evidence/browser-e2e-52fe632.log)",
+    "primary_nav_text_only": "FIXED_VALIDATED (7ee45f9; primary nav is text-only, 46px->34px; nav e2e 26/26, geometry 471/471, a11y 96/96; evidence/geometry-52fe632.log, design-a11y-report-52fe632.json)",
+    "capture_intent": "FIXED_VALIDATED (52fe632; link/selection snapshots never impersonate full sources, queue identity includes workspace/focus/intent/excerpt, GitHub blob + PDF magic-byte capture; server 3688 passed, extension suite exit 0, pyright 0)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -48,30 +51,39 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 39957586539,
-    "sha": "1806154",
+    "run_id": 41236836839,
+    "sha": "52fe632",
+    "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
   },
   "next": [
+    "run install-state VSIX host E2E at 52fe632",
     "owner sign-off (T-0028) — human",
     "real Remote-SSH window (L2) — environment",
-    "T-0027 contract fix validated vs real provider — owner relay cadence"
+    "re-run T-0026 latency only when the owner relay/model changes"
   ],
-  "updated": "2026-10-23",
+  "updated": "2026-11-01",
   "design_acceptance": {
-    "sha": "ce024b9 (code: popup @7cf5760, spacing @1806154, T-0048 @6d8fb10)",
-    "geometry": "471/471",
-    "a11y": "96/96",
-    "perf": "budgets pass; perf-probe-baseline.json unchanged (no workbench surface-structure change)",
-    "reshot": "2026-10-24"
+    "sha": "52fe632",
+    "geometry": "471/471 (evidence/geometry-52fe632.log)",
+    "a11y": "96/96 (evidence/design-a11y-report-52fe632.json)",
+    "perf": "budgets pass: streaming longtask=0, warm nav p90=39ms (evidence/perf-52fe632.log)",
+    "reshot": "2026-11-01"
   },
-  "popup_redesign": "owner-directed minimal card @7cf5760: removed import-history panel, connection-status displays and queue manager UI; two states (pairing / capture) remain",
+  "popup_redesign": "owner-directed minimal card @7cf5760; pairing panel removed @93b3798 (zero-code auto-connect); the card has no pairing code, status page, history list or queue manager",
   "install_state_e2e": {
-    "run_id": 39961046680,
-    "sha": "1806154",
-    "conclusion": "success",
-    "platforms": "windows/macos/ubuntu"
+    "last_run": "40179403488 @04770cc",
+    "current_head": "52fe632",
+    "status": "STALE_NOT_RUN_AT_CURRENT_SHA"
   },
-  "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2)."
+  "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
+  "branch": "maturity/p1-final-convergence-2026-10-20",
+  "gaps": [
+    "install-state VSIX host E2E has not been re-run at 52fe632 (last run 40179403488 @04770cc)",
+    "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available)",
+    "teaching acceptance remains BLOCKED on owner sign-off T-0028; real-model journey evidence is 10/10 from 2026-10-24 at an older SHA",
+    "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at 52fe632",
+    "browser capture is verified in real Chrome on macOS; Windows/Linux browser installs are not part of the current evidence"
+  ]
 }

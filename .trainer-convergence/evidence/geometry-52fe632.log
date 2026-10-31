@@ -1,0 +1,476 @@
+
+[verify-ui-geometry]
+  PASS  ux-02: configured provider is send-ready without a connection test
+  PASS  coach: banner→first-message gap 6px (limit 24px); first item offset 606px in a 703px list
+  PASS  coach: content sits 12px above the list bottom (limit 24px) in a 703px list
+  PASS  settings: connection detail is reachable (index or direct)
+  PASS  settings/connection: actual content pane is usable (186px)
+  PASS  settings/teaching: actual content pane is usable (558px)
+  PASS  settings/workspace: actual content pane is usable (499px)
+  PASS  settings/preferences: actual content pane is usable (1893px)
+  PASS  palette: does not cover the upper half of the coach thread (deckTop=553px vs list mid 421px)
+  PASS  palette width 393px tracks composer 395px (tolerance 4px)
+  PASS  navigation: coach/ready has three stable destinations
+  PASS  composer: coach/ready has the correct owner
+  PASS  navigation: coach/empty has three stable destinations
+  PASS  composer: coach/empty has the correct owner
+  PASS  navigation: plan/ready has three stable destinations
+  PASS  composer: plan/ready has the correct owner
+  PASS  navigation: plan/empty has three stable destinations
+  PASS  composer: plan/empty has the correct owner
+  PASS  navigation: resources/ready has three stable destinations
+  PASS  composer: resources/ready has the correct owner
+  PASS  navigation: resources/empty has three stable destinations
+  PASS  composer: resources/empty has the correct owner
+  PASS  navigation: training/ready has three stable destinations
+  PASS  composer: training/ready has the correct owner
+  PASS  navigation: training/empty has three stable destinations
+  PASS  composer: training/empty has the correct owner
+  PASS  navigation: progress/ready has three stable destinations
+  PASS  composer: progress/ready has the correct owner
+  PASS  navigation: progress/empty has three stable destinations
+  PASS  composer: progress/empty has the correct owner
+  PASS  navigation: settings/ready has three stable destinations
+  PASS  composer: settings/ready has the correct owner
+  PASS  navigation: settings/empty has three stable destinations
+  PASS  composer: settings/empty has the correct owner
+  PASS  plan: no action group renders twice with all disclosures open
+  PASS  progress: all 4 capability rows share one height (38px) so the set scans as a set
+  PASS  progress: evidence counts share one right-aligned column (90px, align=end)
+  PASS  learning: current learning uses the shared home template
+  PASS  learning: review, route and growth start closed (§3.4 evidence merged into review)
+  PASS  coach/340/dark/zh-CN: no horizontal overflow
+  PASS  coach/340/dark/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  plan/340/dark/zh-CN: no horizontal overflow
+  PASS  plan/340/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  resources/340/dark/zh-CN: no horizontal overflow
+  PASS  resources/340/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  training/340/dark/zh-CN: no horizontal overflow
+  PASS  training/340/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  progress/340/dark/zh-CN: no horizontal overflow
+  PASS  progress/340/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  settings/340/dark/zh-CN: no horizontal overflow
+  PASS  settings/340/dark/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  coach/340/dark/en-US: no horizontal overflow
+  PASS  coach/340/dark/en-US: 0 primary page action(s) in the first viewport
+  PASS  plan/340/dark/en-US: no horizontal overflow
+  PASS  plan/340/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  resources/340/dark/en-US: no horizontal overflow
+  PASS  resources/340/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  training/340/dark/en-US: no horizontal overflow
+  PASS  training/340/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  progress/340/dark/en-US: no horizontal overflow
+  PASS  progress/340/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  settings/340/dark/en-US: no horizontal overflow
+  PASS  settings/340/dark/en-US: 0 primary page action(s) in the first viewport
+  PASS  coach/340/light/zh-CN: no horizontal overflow
+  PASS  coach/340/light/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  plan/340/light/zh-CN: no horizontal overflow
+  PASS  plan/340/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  resources/340/light/zh-CN: no horizontal overflow
+  PASS  resources/340/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  training/340/light/zh-CN: no horizontal overflow
+  PASS  training/340/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  progress/340/light/zh-CN: no horizontal overflow
+  PASS  progress/340/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  settings/340/light/zh-CN: no horizontal overflow
+  PASS  settings/340/light/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  coach/340/light/en-US: no horizontal overflow
+  PASS  coach/340/light/en-US: 0 primary page action(s) in the first viewport
+  PASS  plan/340/light/en-US: no horizontal overflow
+  PASS  plan/340/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  resources/340/light/en-US: no horizontal overflow
+  PASS  resources/340/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  training/340/light/en-US: no horizontal overflow
+  PASS  training/340/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  progress/340/light/en-US: no horizontal overflow
+  PASS  progress/340/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  settings/340/light/en-US: no horizontal overflow
+  PASS  settings/340/light/en-US: 0 primary page action(s) in the first viewport
+  PASS  coach/420/dark/zh-CN: no horizontal overflow
+  PASS  coach/420/dark/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  plan/420/dark/zh-CN: no horizontal overflow
+  PASS  plan/420/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  resources/420/dark/zh-CN: no horizontal overflow
+  PASS  resources/420/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  training/420/dark/zh-CN: no horizontal overflow
+  PASS  training/420/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  progress/420/dark/zh-CN: no horizontal overflow
+  PASS  progress/420/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  settings/420/dark/zh-CN: no horizontal overflow
+  PASS  settings/420/dark/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  coach/420/dark/en-US: no horizontal overflow
+  PASS  coach/420/dark/en-US: 0 primary page action(s) in the first viewport
+  PASS  plan/420/dark/en-US: no horizontal overflow
+  PASS  plan/420/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  resources/420/dark/en-US: no horizontal overflow
+  PASS  resources/420/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  training/420/dark/en-US: no horizontal overflow
+  PASS  training/420/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  progress/420/dark/en-US: no horizontal overflow
+  PASS  progress/420/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  settings/420/dark/en-US: no horizontal overflow
+  PASS  settings/420/dark/en-US: 0 primary page action(s) in the first viewport
+  PASS  coach/420/light/zh-CN: no horizontal overflow
+  PASS  coach/420/light/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  plan/420/light/zh-CN: no horizontal overflow
+  PASS  plan/420/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  resources/420/light/zh-CN: no horizontal overflow
+  PASS  resources/420/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  training/420/light/zh-CN: no horizontal overflow
+  PASS  training/420/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  progress/420/light/zh-CN: no horizontal overflow
+  PASS  progress/420/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  settings/420/light/zh-CN: no horizontal overflow
+  PASS  settings/420/light/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  coach/420/light/en-US: no horizontal overflow
+  PASS  coach/420/light/en-US: 0 primary page action(s) in the first viewport
+  PASS  plan/420/light/en-US: no horizontal overflow
+  PASS  plan/420/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  resources/420/light/en-US: no horizontal overflow
+  PASS  resources/420/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  training/420/light/en-US: no horizontal overflow
+  PASS  training/420/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  progress/420/light/en-US: no horizontal overflow
+  PASS  progress/420/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  settings/420/light/en-US: no horizontal overflow
+  PASS  settings/420/light/en-US: 0 primary page action(s) in the first viewport
+  PASS  coach/460/dark/zh-CN: no horizontal overflow
+  PASS  coach/460/dark/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  plan/460/dark/zh-CN: no horizontal overflow
+  PASS  plan/460/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  resources/460/dark/zh-CN: no horizontal overflow
+  PASS  resources/460/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  training/460/dark/zh-CN: no horizontal overflow
+  PASS  training/460/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  progress/460/dark/zh-CN: no horizontal overflow
+  PASS  progress/460/dark/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  settings/460/dark/zh-CN: no horizontal overflow
+  PASS  settings/460/dark/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  coach/460/dark/en-US: no horizontal overflow
+  PASS  coach/460/dark/en-US: 0 primary page action(s) in the first viewport
+  PASS  plan/460/dark/en-US: no horizontal overflow
+  PASS  plan/460/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  resources/460/dark/en-US: no horizontal overflow
+  PASS  resources/460/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  training/460/dark/en-US: no horizontal overflow
+  PASS  training/460/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  progress/460/dark/en-US: no horizontal overflow
+  PASS  progress/460/dark/en-US: 1 primary page action(s) in the first viewport
+  PASS  settings/460/dark/en-US: no horizontal overflow
+  PASS  settings/460/dark/en-US: 0 primary page action(s) in the first viewport
+  PASS  coach/460/light/zh-CN: no horizontal overflow
+  PASS  coach/460/light/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  plan/460/light/zh-CN: no horizontal overflow
+  PASS  plan/460/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  resources/460/light/zh-CN: no horizontal overflow
+  PASS  resources/460/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  training/460/light/zh-CN: no horizontal overflow
+  PASS  training/460/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  progress/460/light/zh-CN: no horizontal overflow
+  PASS  progress/460/light/zh-CN: 1 primary page action(s) in the first viewport
+  PASS  settings/460/light/zh-CN: no horizontal overflow
+  PASS  settings/460/light/zh-CN: 0 primary page action(s) in the first viewport
+  PASS  coach/460/light/en-US: no horizontal overflow
+  PASS  coach/460/light/en-US: 0 primary page action(s) in the first viewport
+  PASS  plan/460/light/en-US: no horizontal overflow
+  PASS  plan/460/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  resources/460/light/en-US: no horizontal overflow
+  PASS  resources/460/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  training/460/light/en-US: no horizontal overflow
+  PASS  training/460/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  progress/460/light/en-US: no horizontal overflow
+  PASS  progress/460/light/en-US: 1 primary page action(s) in the first viewport
+  PASS  settings/460/light/en-US: no horizontal overflow
+  PASS  settings/460/light/en-US: 0 primary page action(s) in the first viewport
+  PASS  plan/340x728/dark/zh-CN: single surface has one occupied row
+  PASS  plan/340x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/340x728/dark/zh-CN: single surface has one occupied row
+  PASS  resources/340x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/340x728/dark/zh-CN: single surface has one occupied row
+  PASS  training/340x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/340x728/dark/zh-CN: single surface has one occupied row
+  PASS  progress/340x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/340x728/dark/en-US: single surface has one occupied row
+  PASS  plan/340x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/340x728/dark/en-US: single surface has one occupied row
+  PASS  resources/340x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/340x728/dark/en-US: single surface has one occupied row
+  PASS  training/340x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/340x728/dark/en-US: single surface has one occupied row
+  PASS  progress/340x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/340x728/light/zh-CN: single surface has one occupied row
+  PASS  plan/340x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/340x728/light/zh-CN: single surface has one occupied row
+  PASS  resources/340x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/340x728/light/zh-CN: single surface has one occupied row
+  PASS  training/340x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/340x728/light/zh-CN: single surface has one occupied row
+  PASS  progress/340x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/340x728/light/en-US: single surface has one occupied row
+  PASS  plan/340x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/340x728/light/en-US: single surface has one occupied row
+  PASS  resources/340x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/340x728/light/en-US: single surface has one occupied row
+  PASS  training/340x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/340x728/light/en-US: single surface has one occupied row
+  PASS  progress/340x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/420x728/dark/zh-CN: single surface has one occupied row
+  PASS  plan/420x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/420x728/dark/zh-CN: single surface has one occupied row
+  PASS  resources/420x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/420x728/dark/zh-CN: single surface has one occupied row
+  PASS  training/420x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/420x728/dark/zh-CN: single surface has one occupied row
+  PASS  progress/420x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/420x728/dark/en-US: single surface has one occupied row
+  PASS  plan/420x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/420x728/dark/en-US: single surface has one occupied row
+  PASS  resources/420x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/420x728/dark/en-US: single surface has one occupied row
+  PASS  training/420x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/420x728/dark/en-US: single surface has one occupied row
+  PASS  progress/420x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/420x728/light/zh-CN: single surface has one occupied row
+  PASS  plan/420x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/420x728/light/zh-CN: single surface has one occupied row
+  PASS  resources/420x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/420x728/light/zh-CN: single surface has one occupied row
+  PASS  training/420x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/420x728/light/zh-CN: single surface has one occupied row
+  PASS  progress/420x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/420x728/light/en-US: single surface has one occupied row
+  PASS  plan/420x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/420x728/light/en-US: single surface has one occupied row
+  PASS  resources/420x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/420x728/light/en-US: single surface has one occupied row
+  PASS  training/420x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/420x728/light/en-US: single surface has one occupied row
+  PASS  progress/420x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/460x728/dark/zh-CN: single surface has one occupied row
+  PASS  plan/460x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/460x728/dark/zh-CN: single surface has one occupied row
+  PASS  resources/460x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/460x728/dark/zh-CN: single surface has one occupied row
+  PASS  training/460x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/460x728/dark/zh-CN: single surface has one occupied row
+  PASS  progress/460x728/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/460x728/dark/en-US: single surface has one occupied row
+  PASS  plan/460x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/460x728/dark/en-US: single surface has one occupied row
+  PASS  resources/460x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/460x728/dark/en-US: single surface has one occupied row
+  PASS  training/460x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/460x728/dark/en-US: single surface has one occupied row
+  PASS  progress/460x728/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/460x728/light/zh-CN: single surface has one occupied row
+  PASS  plan/460x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/460x728/light/zh-CN: single surface has one occupied row
+  PASS  resources/460x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/460x728/light/zh-CN: single surface has one occupied row
+  PASS  training/460x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/460x728/light/zh-CN: single surface has one occupied row
+  PASS  progress/460x728/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/460x728/light/en-US: single surface has one occupied row
+  PASS  plan/460x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/460x728/light/en-US: single surface has one occupied row
+  PASS  resources/460x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/460x728/light/en-US: single surface has one occupied row
+  PASS  training/460x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/460x728/light/en-US: single surface has one occupied row
+  PASS  progress/460x728/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/340x760/dark/zh-CN: single surface has one occupied row
+  PASS  plan/340x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/340x760/dark/zh-CN: single surface has one occupied row
+  PASS  resources/340x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/340x760/dark/zh-CN: single surface has one occupied row
+  PASS  training/340x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/340x760/dark/zh-CN: single surface has one occupied row
+  PASS  progress/340x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/340x760/dark/en-US: single surface has one occupied row
+  PASS  plan/340x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/340x760/dark/en-US: single surface has one occupied row
+  PASS  resources/340x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/340x760/dark/en-US: single surface has one occupied row
+  PASS  training/340x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/340x760/dark/en-US: single surface has one occupied row
+  PASS  progress/340x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/340x760/light/zh-CN: single surface has one occupied row
+  PASS  plan/340x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/340x760/light/zh-CN: single surface has one occupied row
+  PASS  resources/340x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/340x760/light/zh-CN: single surface has one occupied row
+  PASS  training/340x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/340x760/light/zh-CN: single surface has one occupied row
+  PASS  progress/340x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/340x760/light/en-US: single surface has one occupied row
+  PASS  plan/340x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/340x760/light/en-US: single surface has one occupied row
+  PASS  resources/340x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/340x760/light/en-US: single surface has one occupied row
+  PASS  training/340x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/340x760/light/en-US: single surface has one occupied row
+  PASS  progress/340x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/420x760/dark/zh-CN: single surface has one occupied row
+  PASS  plan/420x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/420x760/dark/zh-CN: single surface has one occupied row
+  PASS  resources/420x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/420x760/dark/zh-CN: single surface has one occupied row
+  PASS  training/420x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/420x760/dark/zh-CN: single surface has one occupied row
+  PASS  progress/420x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/420x760/dark/en-US: single surface has one occupied row
+  PASS  plan/420x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/420x760/dark/en-US: single surface has one occupied row
+  PASS  resources/420x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/420x760/dark/en-US: single surface has one occupied row
+  PASS  training/420x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/420x760/dark/en-US: single surface has one occupied row
+  PASS  progress/420x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/420x760/light/zh-CN: single surface has one occupied row
+  PASS  plan/420x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/420x760/light/zh-CN: single surface has one occupied row
+  PASS  resources/420x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/420x760/light/zh-CN: single surface has one occupied row
+  PASS  training/420x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/420x760/light/zh-CN: single surface has one occupied row
+  PASS  progress/420x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/420x760/light/en-US: single surface has one occupied row
+  PASS  plan/420x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/420x760/light/en-US: single surface has one occupied row
+  PASS  resources/420x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/420x760/light/en-US: single surface has one occupied row
+  PASS  training/420x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/420x760/light/en-US: single surface has one occupied row
+  PASS  progress/420x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/460x760/dark/zh-CN: single surface has one occupied row
+  PASS  plan/460x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/460x760/dark/zh-CN: single surface has one occupied row
+  PASS  resources/460x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/460x760/dark/zh-CN: single surface has one occupied row
+  PASS  training/460x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/460x760/dark/zh-CN: single surface has one occupied row
+  PASS  progress/460x760/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/460x760/dark/en-US: single surface has one occupied row
+  PASS  plan/460x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/460x760/dark/en-US: single surface has one occupied row
+  PASS  resources/460x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/460x760/dark/en-US: single surface has one occupied row
+  PASS  training/460x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/460x760/dark/en-US: single surface has one occupied row
+  PASS  progress/460x760/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/460x760/light/zh-CN: single surface has one occupied row
+  PASS  plan/460x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/460x760/light/zh-CN: single surface has one occupied row
+  PASS  resources/460x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/460x760/light/zh-CN: single surface has one occupied row
+  PASS  training/460x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/460x760/light/zh-CN: single surface has one occupied row
+  PASS  progress/460x760/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/460x760/light/en-US: single surface has one occupied row
+  PASS  plan/460x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/460x760/light/en-US: single surface has one occupied row
+  PASS  resources/460x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/460x760/light/en-US: single surface has one occupied row
+  PASS  training/460x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/460x760/light/en-US: single surface has one occupied row
+  PASS  progress/460x760/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/340x761/dark/zh-CN: single surface has one occupied row
+  PASS  plan/340x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/340x761/dark/zh-CN: single surface has one occupied row
+  PASS  resources/340x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/340x761/dark/zh-CN: single surface has one occupied row
+  PASS  training/340x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/340x761/dark/zh-CN: single surface has one occupied row
+  PASS  progress/340x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/340x761/dark/en-US: single surface has one occupied row
+  PASS  plan/340x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/340x761/dark/en-US: single surface has one occupied row
+  PASS  resources/340x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/340x761/dark/en-US: single surface has one occupied row
+  PASS  training/340x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/340x761/dark/en-US: single surface has one occupied row
+  PASS  progress/340x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/340x761/light/zh-CN: single surface has one occupied row
+  PASS  plan/340x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/340x761/light/zh-CN: single surface has one occupied row
+  PASS  resources/340x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/340x761/light/zh-CN: single surface has one occupied row
+  PASS  training/340x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/340x761/light/zh-CN: single surface has one occupied row
+  PASS  progress/340x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/340x761/light/en-US: single surface has one occupied row
+  PASS  plan/340x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/340x761/light/en-US: single surface has one occupied row
+  PASS  resources/340x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/340x761/light/en-US: single surface has one occupied row
+  PASS  training/340x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/340x761/light/en-US: single surface has one occupied row
+  PASS  progress/340x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/420x761/dark/zh-CN: single surface has one occupied row
+  PASS  plan/420x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/420x761/dark/zh-CN: single surface has one occupied row
+  PASS  resources/420x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/420x761/dark/zh-CN: single surface has one occupied row
+  PASS  training/420x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/420x761/dark/zh-CN: single surface has one occupied row
+  PASS  progress/420x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/420x761/dark/en-US: single surface has one occupied row
+  PASS  plan/420x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/420x761/dark/en-US: single surface has one occupied row
+  PASS  resources/420x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/420x761/dark/en-US: single surface has one occupied row
+  PASS  training/420x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/420x761/dark/en-US: single surface has one occupied row
+  PASS  progress/420x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/420x761/light/zh-CN: single surface has one occupied row
+  PASS  plan/420x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/420x761/light/zh-CN: single surface has one occupied row
+  PASS  resources/420x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/420x761/light/zh-CN: single surface has one occupied row
+  PASS  training/420x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/420x761/light/zh-CN: single surface has one occupied row
+  PASS  progress/420x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/420x761/light/en-US: single surface has one occupied row
+  PASS  plan/420x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/420x761/light/en-US: single surface has one occupied row
+  PASS  resources/420x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/420x761/light/en-US: single surface has one occupied row
+  PASS  training/420x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/420x761/light/en-US: single surface has one occupied row
+  PASS  progress/420x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/460x761/dark/zh-CN: single surface has one occupied row
+  PASS  plan/460x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/460x761/dark/zh-CN: single surface has one occupied row
+  PASS  resources/460x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/460x761/dark/zh-CN: single surface has one occupied row
+  PASS  training/460x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/460x761/dark/zh-CN: single surface has one occupied row
+  PASS  progress/460x761/dark/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/460x761/dark/en-US: single surface has one occupied row
+  PASS  plan/460x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/460x761/dark/en-US: single surface has one occupied row
+  PASS  resources/460x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  training/460x761/dark/en-US: single surface has one occupied row
+  PASS  training/460x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/460x761/dark/en-US: single surface has one occupied row
+  PASS  progress/460x761/dark/en-US: single surface uses available height (0.0px unused)
+  PASS  plan/460x761/light/zh-CN: single surface has one occupied row
+  PASS  plan/460x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  resources/460x761/light/zh-CN: single surface has one occupied row
+  PASS  resources/460x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  training/460x761/light/zh-CN: single surface has one occupied row
+  PASS  training/460x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  progress/460x761/light/zh-CN: single surface has one occupied row
+  PASS  progress/460x761/light/zh-CN: single surface uses available height (0.0px unused)
+  PASS  plan/460x761/light/en-US: single surface has one occupied row
+  PASS  plan/460x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  resources/460x761/light/en-US: single surface has one occupied row
+  PASS  resources/460x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  training/460x761/light/en-US: single surface has one occupied row
+  PASS  training/460x761/light/en-US: single surface uses available height (0.0px unused)
+  PASS  progress/460x761/light/en-US: single surface has one occupied row
+  PASS  progress/460x761/light/en-US: single surface uses available height (0.0px unused)
+
+[verify-ui-geometry] OK 471 geometry assertions passed
+
