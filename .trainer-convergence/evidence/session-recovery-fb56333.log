@@ -1,0 +1,54 @@
+
+Running 20 tests using 1 worker
+
+[1/20] e2e/trainer-session-recovery.spec.js:5:1 › an English recovery step does not hide its matching formal plan in Chinese
+[2/20] e2e/trainer-session-recovery.spec.js:25:1 › compact Plan keeps its stages reachable from a dedicated disclosure
+[3/20] e2e/trainer-session-recovery.spec.js:51:1 › restored workspace settings show saved custom skills without a formal plan
+[4/20] e2e/trainer-session-recovery.spec.js:73:1 › restored conversation and uploaded resources remain visible without a formal plan
+[5/20] e2e/trainer-session-recovery.spec.js:101:1 › flash training shows the question before generic practice instructions
+[6/20] e2e/trainer-session-recovery.spec.js:134:1 › Chinese flash questions keep inline code identifiers visible
+[7/20] e2e/trainer-session-recovery.spec.js:171:1 › empty Plan honors an explicit Generate plan action
+  1) e2e/trainer-session-recovery.spec.js:171:1 › empty Plan honors an explicit Generate plan action 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator: getByRole('textbox')
+    Expected pattern: /生成正式计划/
+    Received string:  ""
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toHaveValue" with timeout 5000ms
+      - waiting for getByRole('textbox')
+        14 × locator resolved to <textarea rows="2" placeholder="问教练" id="coach-composer" aria-describedby="coach-composer-status"></textarea>
+           - unexpected value ""
+
+
+      204 |   await expect(page.locator(".template-context")).toContainText("生成计划");
+      205 |   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+    > 206 |   await expect(page.getByRole("textbox")).toHaveValue(/生成正式计划/);
+          |                                           ^
+      207 | });
+      208 |
+      209 | test("training generation keeps raw card JSON out of the conversation surface", async ({ page }) => {
+        at /Users/Apple/Desktop/trainer/e2e/trainer-session-recovery.spec.js:206:43
+
+    Error Context: test-results/trainer-session-recovery-e-f0dda-plicit-Generate-plan-action/error-context.md
+
+
+[8/20] e2e/trainer-session-recovery.spec.js:209:1 › training generation keeps raw card JSON out of the conversation surface
+[9/20] e2e/trainer-session-recovery.spec.js:224:1 › stage materials live inside per-stage disclosures and old plan materials clear
+[10/20] e2e/trainer-session-recovery.spec.js:296:1 › restored trusted verification advances to reflection and carries its full record to Coach
+[11/20] e2e/trainer-session-recovery.spec.js:350:1 › switching conversations isolates unsent drafts and restores each one when returning
+[12/20] e2e/trainer-session-recovery.spec.js:368:1 › same-context backups isolate growth evidence and unsent drafts by database
+[13/20] e2e/trainer-session-recovery.spec.js:402:1 › an unbound evaluation cannot replace the formal plan next step
+[14/20] e2e/trainer-session-recovery.spec.js:427:1 › Start review opens the due queue while preserving the current practice card
+[15/20] e2e/trainer-session-recovery.spec.js:522:1 › a recorded review resumes as recall without a coding verification or empty Return action
+[16/20] e2e/trainer-session-recovery.spec.js:547:1 › an explicit saved-plan correction from Coach uses the formal mutation route
+[17/20] e2e/trainer-session-recovery.spec.js:607:5 › restored zh-CN training preserves its English technical focus and exact card identity, recovered=true
+[18/20] e2e/trainer-session-recovery.spec.js:607:5 › restored zh-CN training preserves its English technical focus and exact card identity, recovered=false
+[19/20] e2e/trainer-session-recovery.spec.js:607:5 › restored en-US training preserves its English technical focus and exact card identity, recovered=true
+[20/20] e2e/trainer-session-recovery.spec.js:607:5 › restored en-US training preserves its English technical focus and exact card identity, recovered=false
+  1 failed
+    e2e/trainer-session-recovery.spec.js:171:1 › empty Plan honors an explicit Generate plan action 
+  19 passed (29.6s)

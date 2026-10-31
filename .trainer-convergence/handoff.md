@@ -224,3 +224,14 @@
   teaching sign-off, real Remote-SSH L2 window, and a T-0026 latency re-run when
   the owner relay/model changes. Phase returned to BLOCKED_ON_EXTERNAL; no
   external gate is marked PASS.
+
+## 2026-11-01 — Plan → Coach prompt scope regression fixed
+
+- `e2e/trainer-session-recovery.spec.js` reproduced a real P1: clicking
+  「生成计划」 switched to Coach but wrote the prompt into the Plan draft scope,
+  leaving the composer empty. Root cause: the dock's per-surface draft scope was
+  not selected before `setComposerDraft`.
+- Fixed at fb56333 by selecting the Coach draft scope first; the failing test now
+  passes and the full session-recovery spec is 20/20. Experience matrix was
+  200/200 at the preceding docs head; both are local preview evidence, not a
+  substitute for real-provider acceptance.

@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 6,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "07fc780",
+  "head": "fb56333",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -43,7 +43,10 @@
     "browser_zero_code_autopair": "FIXED_VALIDATED (93b3798; popup pairing panel removed, auto-pair binds the latest host workspace, stale 401 self-heals; real Chrome + sidecar e2e 24/24 at 52fe632; evidence/browser-e2e-52fe632.log)",
     "primary_nav_text_only": "FIXED_VALIDATED (7ee45f9; primary nav is text-only, 46px->34px; nav e2e 26/26, geometry 471/471, a11y 96/96; evidence/geometry-52fe632.log, design-a11y-report-52fe632.json)",
     "capture_intent": "FIXED_VALIDATED (52fe632; link/selection snapshots never impersonate full sources, queue identity includes workspace/focus/intent/excerpt, GitHub blob + PDF magic-byte capture; server 3688 passed, extension suite exit 0, pyright 0)",
-    "install_state_e2e_current": "FIXED_VALIDATED (07fc780 / code 52fe632: local packaged VSIX host E2E 36/36 steps, fixture provider, rebuiltCurrentVsix=true; evidence/vsix-e2e-07fc780.json. Visual window capture skipped on macOS because that probe is win32-only.)"
+    "install_state_e2e_current": "FIXED_VALIDATED (07fc780 / code 52fe632: local packaged VSIX host E2E 36/36 steps, fixture provider, rebuiltCurrentVsix=true; evidence/vsix-e2e-07fc780.json. Visual window capture skipped on macOS because that probe is win32-only.)",
+    "composer_draft_scope": "FIXED_VALIDATED (fb56333: Plan generate guidance writes the Coach draft scope before switching surfaces; the regression test failed with an empty textarea pre-fix and session recovery is 20/20 post-fix)",
+    "experience_matrix": "PASS_LOCAL (200/200 at 6c3683c; preview layer)",
+    "session_recovery": "PASS_LOCAL (20/20 at fb56333)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
