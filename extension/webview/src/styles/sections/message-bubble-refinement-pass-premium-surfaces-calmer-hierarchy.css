@@ -437,6 +437,7 @@
 
 .onboarding-setup__row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding: 6px var(--space-2);
@@ -454,12 +455,15 @@
 }
 
 .onboarding-setup__name {
-  flex: 1;
+  flex: 1 1 9em;
+  min-width: 0;
   color: var(--fg, inherit);
+  overflow-wrap: normal;
 }
 
 .onboarding-setup__action {
   flex: none;
+  margin-inline-start: auto;
 }
 
 .onboarding-setup__panel {
