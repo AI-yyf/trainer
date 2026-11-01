@@ -18,6 +18,21 @@ test("connection editing exposes required fields first and keeps optional tools 
   await expect(page.getByLabel("Service root")).toBeVisible();
 });
 
+test("settings index names the learning folder, not the managed data path", async ({ page }) => {
+  await page.goto("/vscode-preview.html?view=settings&lang=zh-CN&scenario=workspace-admission&workspaceAdmission=project-found&connection=connected&run=settings-workspace-summary");
+  await openSettingsIndex(page);
+  const workspaceRow = page.locator('[data-template=SettingsIndex] li').nth(2);
+  await expect(workspaceRow).toContainText("D:\\TrainerWorkspace");
+  await expect(page.locator('[data-template=SettingsIndex]')).not.toContainText("globalStorage");
+  await expect(page.locator('[data-template=SettingsIndex]')).not.toContainText("sidecar");
+
+  await page.goto("/vscode-preview.html?view=settings&lang=zh-CN&scenario=workspace-admission&workspaceAdmission=root-missing&connection=connected&run=settings-workspace-missing");
+  await openSettingsIndex(page);
+  const missingRow = page.locator('[data-template=SettingsIndex] li').nth(2);
+  await expect(missingRow).toContainText("未选择学习文件夹");
+  await expect(missingRow.getByRole("button", { name: "选择学习文件夹", exact: true })).toBeVisible();
+});
+
 test('remote support uses the host window identity and is absent in a local window', async ({ page }) => {
   await page.goto('/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=remote-settings-identity');
   await openSettingsCategory(page, "workspace");

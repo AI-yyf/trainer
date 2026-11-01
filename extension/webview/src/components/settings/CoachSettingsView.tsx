@@ -4302,7 +4302,7 @@ function CoachSettingsViewSheet({
     : shouldRoutePrimaryToSavedProfiles
       ? settingsText(language, "先应用一个已保存的 profile", "Apply a saved profile first")
       : localizedResolvedAvailabilityHeadline;
-  const workspaceRootReminder = settingsText(language, "先在上方选择工作区根目录，否则对话和训练无法使用。", "Choose a workspace root above first — Coach and Training cannot work without it.");
+  const workspaceRootReminder = settingsText(language, "先选择学习文件夹，否则对话和训练无法使用。", "Choose a learning folder first — Coach and Training cannot work without it.");
   const displayAvailabilityDetail = (
     workspaceRootMissing
       ? `${workspaceRootReminder} `
@@ -5508,11 +5508,26 @@ function CoachSettingsViewSheet({
           title={copy.title}
           items={(["connection", "teaching", "workspace", "preferences"] as const).map((id) => {
             const item = settingsNavItems.find((item) => item.id === id)!;
-            return { ...item, summary: id === "connection"
-              ? [provider.model, providerRequirementNote].filter(Boolean).join(" · ")
-              : id === "workspace" ? remoteWorkspaceName || resourceSandbox?.effectivePath || trainerWorkspace?.rootPath
-              : id === "teaching" ? teachingStyleItems.find((item) => item.value === teachingStyle)?.label ?? copy.auto
-              : `${language} · ${themePreference}` };
+            return {
+              ...item,
+              summary: id === "connection"
+                ? [provider.model, providerRequirementNote].filter(Boolean).join(" · ")
+                : id === "workspace"
+                  ? remoteWorkspaceName ||
+                    (workspaceRootMissing
+                      ? settingsPhrase(language, "workspaceNotSelected")
+                      : trainerWorkspace?.rootPath)
+                  : id === "teaching"
+                    ? teachingStyleItems.find((item) => item.value === teachingStyle)?.label ?? copy.auto
+                    : `${language} · ${themePreference}`,
+              action:
+                id === "workspace" && workspaceRootMissing && onChooseTrainerWorkspaceRoot
+                  ? {
+                      label: settingsPhrase(language, "workspaceChooseFolder"),
+                      onClick: onChooseTrainerWorkspaceRoot,
+                    }
+                  : undefined,
+            };
           })}
           onSelect={openSettingsCategorySection}
         />

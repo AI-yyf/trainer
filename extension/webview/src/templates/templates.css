@@ -92,6 +92,9 @@
 .template-settings-index h2 { margin: 0 0 16px; font-size: var(--trainer-font-lg); font-weight: 600; }
 .template-settings-index ul { margin: 0; padding: 0; list-style: none; }
 .template-settings-index li + li { margin-top: 8px; }
+.template-settings-index__row { display: flex; align-items: center; gap: 8px; }
+.template-settings-index__row > button:first-child { flex: 1; }
+.template-settings-index__action { flex: none; width: auto !important; padding: 6px 10px !important; border: 1px solid var(--line) !important; border-radius: 8px; font-size: var(--trainer-font-xs) !important; color: var(--accent) !important; }
 .template-settings-index button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; border: 0; background: transparent; color: var(--fg-0); text-align: start; font: inherit; cursor: pointer; }
 .template-settings-index button:hover { background: var(--bg-1); border-radius: 8px; }
 .template-settings-index button > span:nth-last-child(2) { flex: 1; min-width: 0; }

@@ -854,6 +854,8 @@ export type SettingsPhraseKey =
   | "navResources"
   | "navTraining"
   | "navWorkspace"
+  | "workspaceNotSelected"
+  | "workspaceChooseFolder"
   | "probeCost";
 
 export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhraseKey, string>> = {
@@ -911,6 +913,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "资料库",
     navTraining: "训练卡",
     navWorkspace: "工作区",
+    workspaceNotSelected: "未选择学习文件夹",
+    workspaceChooseFolder: "选择学习文件夹",
     probeCost: "费用",
   },
   "en-US": {
@@ -967,6 +971,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "Library",
     navTraining: "Training card",
     navWorkspace: "Workspace",
+    workspaceNotSelected: "No learning folder selected",
+    workspaceChooseFolder: "Choose learning folder",
     probeCost: "cost",
   },
   "es-ES": {
@@ -1023,6 +1029,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "Biblioteca",
     navTraining: "Tarjeta de entrenamiento",
     navWorkspace: "Espacio",
+    workspaceNotSelected: "Sin carpeta de aprendizaje",
+    workspaceChooseFolder: "Elegir carpeta de aprendizaje",
     probeCost: "coste",
   },
   "fr-FR": {
@@ -1079,6 +1087,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "Bibliothèque",
     navTraining: "Carte d’entraînement",
     navWorkspace: "Espace",
+    workspaceNotSelected: "Aucun dossier d’apprentissage",
+    workspaceChooseFolder: "Choisir le dossier d’apprentissage",
     probeCost: "coût",
   },
   "de-DE": {
@@ -1135,6 +1145,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "Bibliothek",
     navTraining: "Übungskarte",
     navWorkspace: "Bereich",
+    workspaceNotSelected: "Kein Lernordner ausgewählt",
+    workspaceChooseFolder: "Lernordner wählen",
     probeCost: "Kosten",
   },
   "ja-JP": {
@@ -1191,6 +1203,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "ライブラリ",
     navTraining: "トレーニングカード",
     navWorkspace: "ワークスペース",
+    workspaceNotSelected: "学習フォルダー未選択",
+    workspaceChooseFolder: "学習フォルダーを選択",
     probeCost: "コスト",
   },
   "ko-KR": {
@@ -1247,6 +1261,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "라이브러리",
     navTraining: "훈련 카드",
     navWorkspace: "작업 영역",
+    workspaceNotSelected: "학습 폴더 미선택",
+    workspaceChooseFolder: "학습 폴더 선택",
     probeCost: "비용",
   },
   "pt-BR": {
@@ -1303,6 +1319,8 @@ export const settingsPhraseTable: Record<ComposerLanguage, Record<SettingsPhrase
     navResources: "Biblioteca",
     navTraining: "Cartão de treino",
     navWorkspace: "Espaço",
+    workspaceNotSelected: "Nenhuma pasta de aprendizagem",
+    workspaceChooseFolder: "Escolher pasta de aprendizagem",
     probeCost: "custo",
   },
 };
