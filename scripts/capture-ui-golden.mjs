@@ -6,7 +6,7 @@
  * The script re-captures every app-UI PNG under assets/screenshots/ in place
  * (same filenames, so README links keep working) from the current zh-CN dark UI:
  *
- *   chat-first-run.png        Coach view, ready scenario
+ *   chat-first-run.png        Coach first-run empty state (starter prompts)
  *   plan.png                  Plan (学习) view
  *   resources.png             Resources (资料) view with a loaded library
  *   training.png              Training (训练) view with the active card
@@ -168,8 +168,8 @@ const SHOTS = [
   {
     name: "chat-first-run",
     file: "chat-first-run.png",
-    title: "Coach view (ready)",
-    urlParams: { view: "coach", scenario: "ready" },
+    title: "Coach first-run empty state",
+    urlParams: { view: "coach", scenario: "empty" },
   },
   {
     name: "plan",

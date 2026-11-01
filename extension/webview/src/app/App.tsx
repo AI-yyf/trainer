@@ -9250,6 +9250,7 @@ export function App() {
   const coachSuggestionChipTexts = (
     activeView === "coach" &&
     !composerUsesTrainingFlow &&
+    !isFirstCoachConversation &&
     coachThreadNearEmpty &&
     providerCanCoachNow &&
     !shouldShowNeutralEmptyState &&
