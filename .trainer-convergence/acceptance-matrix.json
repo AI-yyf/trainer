@@ -47,7 +47,7 @@
     },
     "native_install_e2e_real_provider": {
       "status": "PASS",
-      "evidence": "2026-11-02 at 8e97664: isolated installed VSIX host E2E with external MiniMax-M2.7 (no fixture), 36/36; evidence/vsix-e2e-real-8e97664.json"
+      "evidence": "2026-11-02 at df8a050: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36; evidence/vsix-e2e-real-df8a050.json"
     }
   }
 }

@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 6,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "8e97664",
+  "head": "df8a050",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -66,7 +66,8 @@
     "coach_empty_state": "FIXED_VALIDATED (8e97664: centered empty canvas, concrete start hint, no stale task chip on first run; empty-canvas e2e + matrix 200/200)",
     "dock_copy": "FIXED_VALIDATED (bcb7cf6: 看回答 / 留在这里 replaces technical 跳转回答 / 留在本页; geometry 471/471, a11y 96/96)",
     "provider_stream_gate": "FIXED_VALIDATED (bcb7cf6: mandatory-thinking stream probe uses thinking negotiation; reasoning-first agent budget 8k + 32k truncation retry; real provider test streaming/tools verified)",
-    "install_state_real_provider": "PASS (2026-11-02 at 8e97664: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36; evidence/vsix-e2e-real-8e97664.json)"
+    "install_state_real_provider": "PASS (2026-11-02 at df8a050: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36; evidence/vsix-e2e-real-df8a050.json)",
+    "workspace_trust_copy": "FIXED_VALIDATED (df8a050: trust state now explains what is blocked; parity 17/17; screenshots refreshed)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -98,11 +99,11 @@
   "popup_redesign": "owner-directed minimal card @7cf5760; pairing panel removed @93b3798 (zero-code auto-connect); the card has no pairing code, status page, history list or queue manager",
   "install_state_e2e": {
     "run": "local npm run test:vsix-e2e",
-    "sha": "8e97664",
+    "sha": "df8a050",
     "status": "PASS",
     "steps": "36/36",
     "provider": "fixture (no real key claimed)",
-    "evidence": "evidence/vsix-e2e-real-8e97664.json",
+    "evidence": "evidence/vsix-e2e-real-df8a050.json",
     "limitation": "visual window capture is win32-only and skipped on macOS",
     "real_provider": "PASS 36/36 external M2.7"
   },
