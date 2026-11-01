@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "productVersion": "1.3.4",
   "targetPlatform": "darwin-arm64",
-  "sourceCommit": "bcb7cf67a382d462e07cf4e4d1cc065b317d42a2",
-  "sourceDirty": true,
+  "sourceCommit": "5a272eee830c6e601e0e02db44c274cf86c725c7",
+  "sourceDirty": false,
   "sourceSnapshot": {
     "fileCount": 187,
     "sha256": "01462a168ffd106b36b7857578535b8869efeec74d54267be06760aae9dea7c9"
@@ -12,7 +12,7 @@
     "manifestVersion": 1,
     "platform": "darwin-arm64",
     "entryName": "trainer-sidecar",
-    "generatedAt": "2026-11-01T19:53:04.497Z",
+    "generatedAt": "2026-11-01T20:17:36.604Z",
     "sourceSnapshot": {
       "fileCount": 187,
       "sha256": "01462a168ffd106b36b7857578535b8869efeec74d54267be06760aae9dea7c9"
@@ -111,8 +111,8 @@
   },
   "vsix": {
     "file": "trainer-extension-1.3.4-darwin-arm64.vsix",
-    "bytes": 124790248,
-    "sha256": "69d5a85b848d58744120d9f4f58408bbe04d3180e95c14aceb1995b089707dfa"
+    "bytes": 124790510,
+    "sha256": "5dddecd7e0437e3f15c4bf94d2a52747ab85a7bc32cad481f0e555deb56f1e04"
   },
   "tools": {
     "node": "v26.8.2",

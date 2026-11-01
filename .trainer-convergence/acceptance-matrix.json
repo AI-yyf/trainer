@@ -19,7 +19,7 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "Owner T-0028 sign-off is human-only. Current real-model journey passes for M2.7; an M3.1 tool-loop sample is retained as a residual output-limit risk. Do not convert human sign-off to PASS."
+      "evidence": "Owner T-0028 sign-off is human-only. Machine evidence at bcb7cf6: real-model journey 10/10 (M2.7), installed-host E2E 36/36 with the same external provider, model switch to M3.1. One M3.1 tool-loop output-limit sample remains a residual provider risk. Do not convert human sign-off to PASS."
     },
     "design_acceptance": {
       "status": "PASS",
@@ -44,6 +44,10 @@
     "real_model_journey": {
       "status": "PASS",
       "evidence": "2026-11-02 at bcb7cf6: real sidecar+SQLite, MiniMax-M2.7, 10/10 steps 200 — streaming+tools verified, real plan id, restart same session, continuity 229 visible chars, workspace B isolation, model switch to M3.1; evidence/journey-real-2026-11-02/. Not a human teaching-quality sign-off."
+    },
+    "native_install_e2e_real_provider": {
+      "status": "PASS",
+      "evidence": "2026-11-02 at bcb7cf6: isolated installed VSIX host E2E with external MiniMax-M2.7 (provider.source=external, no fixture), 36/36 steps; evidence/vsix-e2e-real-bcb7cf6.json"
     }
   }
 }
