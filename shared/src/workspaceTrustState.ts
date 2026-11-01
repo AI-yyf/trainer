@@ -22,12 +22,12 @@ const TRUST_SENTENCES: Record<
   Partial<Record<WorkspaceTrustSurfaceLanguage, string>> & Record<"zh-CN" | "en-US", string>
 > = {
   unknown: {
-    "zh-CN": "工作区还没确认。",
-    "en-US": "Workspace trust is not confirmed yet.",
+    "zh-CN": "需要信任此工作区后，Trainer 才能读取项目文件。",
+    "en-US": "Trust this workspace before Trainer can read project files.",
   },
   untrusted: {
-    "zh-CN": "这个工作区还不能写入。",
-    "en-US": "This workspace is untrusted; writes stay limited.",
+    "zh-CN": "此工作区未受信任，Trainer 只会读取，不会写入。",
+    "en-US": "This workspace is untrusted; Trainer stays read-only.",
   },
   remote: {
     "zh-CN": "远程工作区，破坏性操作默认关闭。",

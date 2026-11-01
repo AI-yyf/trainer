@@ -45,7 +45,7 @@ test('workspace trust states map to honest sentences (zh-CN + en-US)', () => {
 
   assert.equal(
     describeWorkspaceTrustState('untrusted', 'zh-CN'),
-    '这个工作区还不能写入。',
+    '此工作区未受信任，Trainer 只会读取，不会写入。',
   );
   assert.equal(
     describeWorkspaceTrustState('remote', 'en-US'),
@@ -57,7 +57,7 @@ test('workspace trust states map to honest sentences (zh-CN + en-US)', () => {
   );
   assert.equal(
     describeWorkspaceTrustState('unknown', 'zh-CN'),
-    '工作区还没确认。',
+    '需要信任此工作区后，Trainer 才能读取项目文件。',
   );
 });
 
