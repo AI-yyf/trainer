@@ -48,6 +48,10 @@
     "native_install_e2e_real_provider": {
       "status": "PASS",
       "evidence": "2026-11-02 at df8a050: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36; evidence/vsix-e2e-real-df8a050.json"
+    },
+    "real_vscode_gui": {
+      "status": "PARTIAL",
+      "evidence": "real installed VS Code 1.127 + isolated profile at 0860ee4: first-run/settings/narrow+200% screenshots; mouse click opened Settings. Training verification/model switch NOT_EXECUTED in GUI; human visual sign-off BLOCKED. evidence/real-vscode-2026-11-02/"
     }
   }
 }

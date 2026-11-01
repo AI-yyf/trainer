@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 6,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "df8a050",
+  "head": "0860ee4",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -67,7 +67,8 @@
     "dock_copy": "FIXED_VALIDATED (bcb7cf6: 看回答 / 留在这里 replaces technical 跳转回答 / 留在本页; geometry 471/471, a11y 96/96)",
     "provider_stream_gate": "FIXED_VALIDATED (bcb7cf6: mandatory-thinking stream probe uses thinking negotiation; reasoning-first agent budget 8k + 32k truncation retry; real provider test streaming/tools verified)",
     "install_state_real_provider": "PASS (2026-11-02 at df8a050: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36; evidence/vsix-e2e-real-df8a050.json)",
-    "workspace_trust_copy": "FIXED_VALIDATED (df8a050: trust state now explains what is blocked; parity 17/17; screenshots refreshed)"
+    "workspace_trust_copy": "FIXED_VALIDATED (df8a050: trust state now explains what is blocked; parity 17/17; screenshots refreshed)",
+    "real_vscode_gui": "PARTIAL (2026-11-02 at 0860ee4: real installed VS Code 1.127, isolated profile, command palette opened Trainer, mouse clicked 设置 inside the webview; first-run/settings/narrow+200% screenshots captured; setup row wrap fixed. Training verification and model switch were NOT_EXECUTED in GUI; human visual sign-off remains BLOCKED. evidence/real-vscode-2026-11-02/)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -111,6 +112,7 @@
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
+    "Settings workspace summary still shows the internal globalStorage/sidecar path as “工作区” while a project folder is open; needs a learning-folder summary + direct choose action",
     "real VS Code GUI visual/mouse journey was not executed in this headless session; installed-host E2E and browser-preview screenshots are machine evidence, not human visual sign-off",
     "teaching acceptance still needs owner T-0028 human sign-off; current installed-host + real-model + journey evidence is machine-verified",
     "M3.1 tool-loop continuity residual: upstream output limit can still produce a recovery/error instead of visible text",
