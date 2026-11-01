@@ -42,9 +42,9 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from inspect import isawaitable
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import httpx
@@ -1423,7 +1423,8 @@ class ProviderAgentBinding:
             None,
         )
         if callable(negotiated):
-            return await negotiated(client, payload)
+            create = cast(Callable[..., Awaitable[Any]], negotiated)
+            return await create(client, payload)
         return await client.chat.completions.create(**payload)
 
     async def _openai_visible_retry_result(

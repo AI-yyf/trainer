@@ -282,3 +282,25 @@
   (warm nav p90 40ms), VSIX host E2E 36/36, Cross-Platform run 41259410960 = 9/9.
 - Real-model teaching, Remote-SSH L2, T-0026 latency and Windows/Linux browser
   install remain external BLOCKED; do not convert them to PASS.
+
+## 2026-11-02 — real provider journey + experience pass
+
+- Owner supplied a temporary relay key for this session (environment only; never
+  written to the repo). Provider: MiniMax-M2.7 primary, M3.1-Flash switch.
+- Fixed two provider-path P1s found by the real journey:
+  - streaming capability probe was injecting `thinking.disabled` and falsely
+    reporting mandatory-thinking models as unverified; it now uses the same
+    thinking re-negotiation as real sends;
+  - after a sidecar restart, agent stream calls re-injected disabled thinking
+    and the truncation retry used a raw client. Both now negotiate thinking and
+    give reasoning-first agent turns 8k initial / 32k truncation headroom.
+- Current real-model journey: 10/10 steps 200 — streaming+tools verified, real
+  plan id, restart same session, continuity 229 visible chars, workspace
+  isolation, model switch to M3.1. Evidence: evidence/journey-real-2026-11-02/.
+- Residual: one M3.1 tool-loop sample hit the provider output limit before a
+  visible answer; kept at evidence/journey-real-m3.1-tool-loop-limit-2026-11-02/.
+  M2.7 full journey passes; do not generalize a provider guarantee.
+- UX: Coach empty state centered with a concrete starting hint; dock wording
+  changed to 看回答 / 留在这里. Matrix 200/200, geometry 471/471, a11y 96/96.
+- CI 41343904971 @bcb7cf6 = 9/9; VSIX host E2E 36/36. T-0028 human sign-off and
+  Remote-SSH L2 remain BLOCKED.

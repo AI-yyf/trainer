@@ -3,11 +3,11 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 41259410960 @d72e98b on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu)"
+      "evidence": "run 41343904971 @bcb7cf6: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu)"
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "local packaged VSIX host E2E at d72e98b: report ok=true, 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-d72e98b.json. Visual window capture is win32-only and skipped on macOS."
+      "evidence": "local packaged VSIX host E2E at bcb7cf6: 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-bcb7cf6.json. Visual window capture is win32-only and skipped on macOS."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
@@ -19,11 +19,11 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "No real provider key in this session, so real plan/card/model teaching turns are BLOCKED. Historical real-model journey evidence (2026-10-24, linksub + glm-5.3) is 10/10 at an older SHA; it is not re-used as current-HEAD proof. Owner T-0028 sign-off is human-only."
+      "evidence": "Owner T-0028 sign-off is human-only. Current real-model journey passes for M2.7; an M3.1 tool-loop sample is retained as a residual output-limit risk. Do not convert human sign-off to PASS."
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "at d72e98b: 471/471 geometry (evidence/geometry-d72e98b.log), 96/96 a11y pages (evidence/design-a11y-report-d72e98b.json), perf budgets pass (streaming longtask=0, warm nav p90=40ms; evidence/perf-d72e98b.log)"
+      "evidence": "at bcb7cf6: 471/471 geometry, 96/96 a11y, screenshots refreshed; evidence/geometry-bcb7cf6.log, design-a11y-report-bcb7cf6.json"
     },
     "core_journey_structure": {
       "status": "PASS_STRUCTURAL",
@@ -40,6 +40,10 @@
     "structural_teaching_journey": {
       "status": "PASS_STRUCTURAL_WITH_BLOCKED_REAL_MODEL",
       "evidence": "real sidecar + SQLite: 14 PASS / 0 FAIL / 4 BLOCKED at d72e98b (real plan generate, real training card, real model switch, Remote-SSH). Blocked steps are provider/environment gates, not passes. evidence/journey-structural-d72e98b/summary.json"
+    },
+    "real_model_journey": {
+      "status": "PASS",
+      "evidence": "2026-11-02 at bcb7cf6: real sidecar+SQLite, MiniMax-M2.7, 10/10 steps 200 — streaming+tools verified, real plan id, restart same session, continuity 229 visible chars, workspace B isolation, model switch to M3.1; evidence/journey-real-2026-11-02/. Not a human teaching-quality sign-off."
     }
   }
 }

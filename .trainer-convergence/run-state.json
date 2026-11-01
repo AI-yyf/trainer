@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 6,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "d72e98b",
+  "head": "bcb7cf6",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -60,7 +60,12 @@
     "resources_to_coach": "PASS_STRUCTURAL (real sidecar browser pair/draft/pending/ack 09-12; resources lifecycle 1/1; browser prefill e2e 24/24)",
     "model_switch_structure": "PASS_STRUCTURAL (provider configuration human 1/1 incl. profile/model switch and Coach handoff; settings lifecycle 1/1); real model switch BLOCKED (no key)",
     "training_fact_fence": "FIXED_VALIDATED (d72e98b: foreign/unbound route card cannot lend authored facts to the selected card; recovering/stale sync uses an empty bound shell; bound-card 42/42, session recovery 24/24)",
-    "structural_probe": "PASS_LOCAL (npm run test:structural-journey; evidence/structural-d72e98b.log)"
+    "structural_probe": "PASS_LOCAL (npm run test:structural-journey; evidence/structural-d72e98b.log)",
+    "real_model_journey": "PASS (2026-11-02 at bcb7cf6: real sidecar+SQLite, MiniMax-M2.7 primary, 10/10 steps 200 — streaming+tools verified, plan id generated, restart same session, continuity 229 visible chars, workspace isolation false leak, model switch to M3.1; evidence/journey-real-2026-11-02/)",
+    "real_model_residual": "M3.1 tool-loop continuity can exhaust the provider output limit before visible text; one sample retained at evidence/journey-real-m3.1-tool-loop-limit-2026-11-02/. M2.7 full journey passes; do not claim every reasoning model is stable.",
+    "coach_empty_state": "FIXED_VALIDATED (bcb7cf6: centered empty state + concrete starting hint; screenshots refreshed; matrix 200/200)",
+    "dock_copy": "FIXED_VALIDATED (bcb7cf6: 看回答 / 留在这里 replaces technical 跳转回答 / 留在本页; geometry 471/471, a11y 96/96)",
+    "provider_stream_gate": "FIXED_VALIDATED (bcb7cf6: mandatory-thinking stream probe uses thinking negotiation; reasoning-first agent budget 8k + 32k truncation retry; real provider test streaming/tools verified)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -69,42 +74,43 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41259410960,
-    "sha": "d72e98b",
+    "run_id": 41343904971,
+    "sha": "bcb7cf6",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
   },
   "next": [
-    "owner sign-off (T-0028) + real provider key for the blocked turns/plan/card",
-    "real Remote-SSH window (L2) — environment",
-    "re-run T-0026 latency when the owner relay/model changes",
-    "Windows/Linux browser install acceptance — environment"
+    "owner teaching sign-off (T-0028)",
+    "real Remote-SSH L2 window",
+    "M3.1 tool-loop residual: observe owner relay/model cadence",
+    "Windows/Linux browser install acceptance"
   ],
-  "updated": "2026-11-01",
+  "updated": "2026-11-02",
   "design_acceptance": {
-    "sha": "d72e98b",
-    "geometry": "471/471 (evidence/geometry-d72e98b.log)",
-    "a11y": "96/96 (evidence/design-a11y-report-d72e98b.json)",
-    "perf": "budgets pass: streaming longtask=0, warm nav p90=40ms (evidence/perf-d72e98b.log)",
-    "reshot": "2026-11-01"
+    "sha": "bcb7cf6",
+    "geometry": "471/471 (evidence/geometry-bcb7cf6.log)",
+    "a11y": "96/96 (evidence/design-a11y-report-bcb7cf6.json)",
+    "perf": "budgets pass; prior 5881e56 warm nav p90=40ms",
+    "reshot": "2026-11-02"
   },
   "popup_redesign": "owner-directed minimal card @7cf5760; pairing panel removed @93b3798 (zero-code auto-connect); the card has no pairing code, status page, history list or queue manager",
   "install_state_e2e": {
     "run": "local npm run test:vsix-e2e",
-    "sha": "d72e98b",
+    "sha": "bcb7cf6",
     "status": "PASS",
     "steps": "36/36",
     "provider": "fixture (no real key claimed)",
-    "evidence": "evidence/vsix-e2e-d72e98b.json",
+    "evidence": "evidence/vsix-e2e-bcb7cf6.json",
     "limitation": "visual window capture is win32-only and skipped on macOS"
   },
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
-    "real-model teaching acceptance remains BLOCKED (no provider key in this session; T-0028 owner sign-off is human-only)",
+    "teaching acceptance still needs owner T-0028 human sign-off; the real-model journey is current-HEAD PASS for M2.7",
+    "M3.1 tool-loop continuity residual: upstream output limit can still produce a recovery/error instead of visible text",
     "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available)",
-    "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at d72e98b",
+    "T-0026 latency: current relay first-visible ~5s in smoke; no full latency campaign at bcb7cf6",
     "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run"
   ],
   "docs_head": "8b3bb0b",
