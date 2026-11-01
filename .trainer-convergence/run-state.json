@@ -76,8 +76,9 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41347335748,
-    "sha": "8e97664",
+    "run_id": 41350244087,
+    "sha": "5f40c9a",
+    "code_sha": "df8a050",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
@@ -110,12 +111,13 @@
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
+    "real VS Code GUI visual/mouse journey was not executed in this headless session; installed-host E2E and browser-preview screenshots are machine evidence, not human visual sign-off",
     "teaching acceptance still needs owner T-0028 human sign-off; current installed-host + real-model + journey evidence is machine-verified",
     "M3.1 tool-loop continuity residual: upstream output limit can still produce a recovery/error instead of visible text",
     "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available)",
     "T-0026 latency: current relay first-visible ~5s in smoke; no full latency campaign at bcb7cf6",
     "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run"
   ],
-  "docs_head": "8b3bb0b",
+  "docs_head": "5f40c9a",
   "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING"
 }
