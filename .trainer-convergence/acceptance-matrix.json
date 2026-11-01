@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 41350244087 @5f40c9a (code df8a050): 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu)"
+      "evidence": "run 41353446510 @2e4d313 (code 0860ee4): 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu)"
     },
     "native_install_e2e": {
       "status": "PASS",

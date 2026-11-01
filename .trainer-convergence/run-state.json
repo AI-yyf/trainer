@@ -77,9 +77,9 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41350244087,
-    "sha": "5f40c9a",
-    "code_sha": "df8a050",
+    "run_id": 41353446510,
+    "sha": "2e4d313",
+    "code_sha": "0860ee4",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
@@ -120,6 +120,6 @@
     "T-0026 latency: current relay first-visible ~5s in smoke; no full latency campaign at bcb7cf6",
     "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run"
   ],
-  "docs_head": "5f40c9a",
+  "docs_head": "2e4d313",
   "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING"
 }
