@@ -1,0 +1,5 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e/trainer-settings-lifecycle.spec.js:231:3 › Trainer Settings provider lifecycle › 32/33: saves reusable metadata, shows a failed test, then clears it after a corrected retry
+  1 passed (18.8s)

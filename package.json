@@ -35,7 +35,8 @@
     "verify:version": "node ./scripts/verify-version.mjs",
     "verify:credentials": "node ./scripts/verify-no-plaintext-credentials.mjs",
     "verify:server-pyright": "node ./scripts/run-server-pyright.mjs",
-    "test:browser-focus-e2e": "node ./scripts/run-browser-focus-e2e.mjs"
+    "test:browser-focus-e2e": "node ./scripts/run-browser-focus-e2e.mjs",
+    "test:structural-journey": "node ./scripts/run-structural-journey.mjs"
   },
   "repository": {
     "type": "git",

@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 6,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "5881e56",
+  "head": "d72e98b",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -54,7 +54,13 @@
     "composer_draft_safety": "FIXED_VALIDATED (360aaed + e913644: browser prefill appends to Coach draft, Plan generate preserves unsent Coach draft, coachPrompt selects Coach scope; session recovery 24/24)",
     "browser_focus_e2e": "PASS_LOCAL (focus e2e 1/1 at 5881e56; evidence/focus-e2e-5881e56.log)",
     "browser_capture_e2e": "PASS_LOCAL (25/25 at 5881e56; evidence/browser-e2e-5881e56.log)",
-    "server_final": "PASS_LOCAL (3691 passed / 28 subtests at 5881e56 code; evidence/server-5881e56.log)"
+    "server_final": "PASS_LOCAL (3691 passed / 28 subtests at 5881e56 code; evidence/server-5881e56.log)",
+    "structural_teaching_journey": "PASS_STRUCTURAL (14 PASS / 4 BLOCKED / 0 FAIL at d72e98b; real sidecar+SQLite: session, upload/index/search, global plan, attempt/evidence, browser draft/ack, restart restore, workspace isolation; real plan/card/model switch blocked on missing key; evidence/journey-structural-d72e98b/)",
+    "core_ui_journey": "PASS_STRUCTURAL (template navigation 26/26, bound-card 42/42, experience matrix 200/200, session recovery 24/24; Coach/Learning/Training/Verification/Progress surfaces)",
+    "resources_to_coach": "PASS_STRUCTURAL (real sidecar browser pair/draft/pending/ack 09-12; resources lifecycle 1/1; browser prefill e2e 24/24)",
+    "model_switch_structure": "PASS_STRUCTURAL (provider configuration human 1/1 incl. profile/model switch and Coach handoff; settings lifecycle 1/1); real model switch BLOCKED (no key)",
+    "training_fact_fence": "FIXED_VALIDATED (d72e98b: foreign/unbound route card cannot lend authored facts to the selected card; recovering/stale sync uses an empty bound shell; bound-card 42/42, session recovery 24/24)",
+    "structural_probe": "PASS_LOCAL (npm run test:structural-journey; evidence/structural-d72e98b.log)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -63,43 +69,43 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41251375795,
-    "sha": "5881e56",
+    "run_id": 41259410960,
+    "sha": "d72e98b",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
   },
   "next": [
-    "owner sign-off (T-0028) — human",
+    "owner sign-off (T-0028) + real provider key for the blocked turns/plan/card",
     "real Remote-SSH window (L2) — environment",
-    "re-run T-0026 latency only when the owner relay/model changes",
+    "re-run T-0026 latency when the owner relay/model changes",
     "Windows/Linux browser install acceptance — environment"
   ],
   "updated": "2026-11-01",
   "design_acceptance": {
-    "sha": "5881e56",
-    "geometry": "471/471 (evidence/geometry-5881e56.log)",
-    "a11y": "96/96 (evidence/design-a11y-report-5881e56.json)",
-    "perf": "budgets pass: streaming longtask=0, warm nav p90=35ms (evidence/perf-5881e56.log)",
+    "sha": "d72e98b",
+    "geometry": "471/471 (evidence/geometry-d72e98b.log)",
+    "a11y": "96/96 (evidence/design-a11y-report-d72e98b.json)",
+    "perf": "budgets pass: streaming longtask=0, warm nav p90=40ms (evidence/perf-d72e98b.log)",
     "reshot": "2026-11-01"
   },
   "popup_redesign": "owner-directed minimal card @7cf5760; pairing panel removed @93b3798 (zero-code auto-connect); the card has no pairing code, status page, history list or queue manager",
   "install_state_e2e": {
     "run": "local npm run test:vsix-e2e",
-    "sha": "5881e56",
+    "sha": "d72e98b",
     "status": "PASS",
     "steps": "36/36",
     "provider": "fixture (no real key claimed)",
-    "evidence": "evidence/vsix-e2e-5881e56.json",
+    "evidence": "evidence/vsix-e2e-d72e98b.json",
     "limitation": "visual window capture is win32-only and skipped on macOS"
   },
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
+    "real-model teaching acceptance remains BLOCKED (no provider key in this session; T-0028 owner sign-off is human-only)",
     "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available)",
-    "teaching acceptance remains BLOCKED on owner sign-off T-0028; real-model journey evidence is 10/10 from 2026-10-24 at an older SHA",
-    "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at 5881e56",
-    "browser capture is verified in real Chrome on macOS; Windows/Linux browser installs are not part of the current evidence"
+    "T-0026 real-provider latency remains measured beyond budget (first chunk 5.6-12.8s, total 10.9-19.0s); no re-run at d72e98b",
+    "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run"
   ],
   "docs_head": "8b3bb0b",
   "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING"

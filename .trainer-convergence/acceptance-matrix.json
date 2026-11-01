@@ -3,15 +3,15 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 41251375795 @5881e56 on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu); prior 41236836839 @52fe632 and 41240042027 @ac72b35 also 9/9"
+      "evidence": "run 41259410960 @d72e98b on maturity/p1-final-convergence-2026-10-20: 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu)"
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "local packaged VSIX host E2E at 5881e56: report ok=true, 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-5881e56.json. Visual window capture is win32-only and was skipped on macOS; cross-platform package jobs passed in run 41251375795."
+      "evidence": "local packaged VSIX host E2E at d72e98b: report ok=true, 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-d72e98b.json. Visual window capture is win32-only and skipped on macOS."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
-      "evidence": "25/25 real Chrome + sidecar checks at 5881e56 (auto-pair/focus switch, capture, offline queue, head-of-line rotation, PDF retry, stale-credential recovery); evidence/browser-e2e-5881e56.log + focus-e2e-5881e56.log. Windows/Linux browser installs not included."
+      "evidence": "25/25 real Chrome + sidecar checks at 5881e56 (browser lane unchanged at d72e98b); focus e2e PASS; evidence/browser-e2e-5881e56.log + focus-e2e-5881e56.log. Windows/Linux browser installs not included."
     },
     "remote_ssh_e2e": {
       "status": "BLOCKED",
@@ -19,11 +19,27 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "owner sign-off still pending (T-0028, human-only). Real-model journey evidence now COMPLETE (2026-10-24, linksub relay + glm-5.3, key env-only): 10/10 journey steps pass — streaming capability verified, honest-unseen-code replies, plan continuity across sidecar restart, concrete tool-anchored next step with success signal (SLICE OK) + formal-verify offer, cross-workspace isolation holds. evidence/journey-real/. Structural gates T-0027 @e84049d and T-0029 @b91194b stand."
+      "evidence": "No real provider key in this session, so real plan/card/model teaching turns are BLOCKED. Historical real-model journey evidence (2026-10-24, linksub + glm-5.3) is 10/10 at an older SHA; it is not re-used as current-HEAD proof. Owner T-0028 sign-off is human-only."
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "at 5881e56: 471/471 geometry (evidence/geometry-5881e56.log), 96/96 a11y pages (evidence/design-a11y-report-5881e56.json), perf budgets pass (streaming longtask=0, warm nav p90=35ms; evidence/perf-5881e56.log)"
+      "evidence": "at d72e98b: 471/471 geometry (evidence/geometry-d72e98b.log), 96/96 a11y pages (evidence/design-a11y-report-d72e98b.json), perf budgets pass (streaming longtask=0, warm nav p90=40ms; evidence/perf-d72e98b.log)"
+    },
+    "core_journey_structure": {
+      "status": "PASS_STRUCTURAL",
+      "evidence": "at d72e98b: template navigation 26/26, bound-card 42/42, experience matrix 200/200, session recovery 24/24; evidence/template-navigation-d72e98b.log, bound-card-d72e98b.log, experience-matrix-d72e98b.log, session-recovery-d72e98b.log"
+    },
+    "resources_to_coach": {
+      "status": "PASS_STRUCTURAL",
+      "evidence": "real sidecar browser pair/draft/pending/ack steps 09-12 in evidence/journey-structural-d72e98b/; resources lifecycle 1/1; browser prefill e2e in session recovery 24/24; real model answer remains BLOCKED"
+    },
+    "model_switch": {
+      "status": "PASS_STRUCTURAL",
+      "evidence": "provider configuration human spec 1/1 (template/model/thinking/profile switch/Coach handoff) + settings lifecycle 1/1 at d72e98b; real provider model switch BLOCKED (no key)"
+    },
+    "structural_teaching_journey": {
+      "status": "PASS_STRUCTURAL_WITH_BLOCKED_REAL_MODEL",
+      "evidence": "real sidecar + SQLite: 14 PASS / 0 FAIL / 4 BLOCKED at d72e98b (real plan generate, real training card, real model switch, Remote-SSH). Blocked steps are provider/environment gates, not passes. evidence/journey-structural-d72e98b/summary.json"
     }
   }
 }

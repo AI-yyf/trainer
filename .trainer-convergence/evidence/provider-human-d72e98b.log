@@ -1,0 +1,5 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e/trainer-provider-configuration-human.spec.js:84:3 › human Provider configuration preview › empty state, template, model, native thinking, intercepted failure/retry, profile switch, Coach
+  1 passed (14.4s)

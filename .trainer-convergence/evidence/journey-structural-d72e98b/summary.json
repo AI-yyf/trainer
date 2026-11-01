@@ -1,0 +1,165 @@
+{
+  "generatedAt": "2026-11-01T00:51:49.827Z",
+  "baseUrl": "http://127.0.0.1:34978",
+  "steps": [
+    {
+      "id": "01-session-start",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "session_id": "session-22864bfd3e"
+      }
+    },
+    {
+      "id": "02-resource-upload",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "resource_id": "resource-94c4b751ab"
+      }
+    },
+    {
+      "id": "02b-resource-index",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "index_status": "indexed"
+      }
+    },
+    {
+      "id": "03-resource-search",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "hit_count": 1,
+        "indexed_resource_found": true
+      }
+    },
+    {
+      "id": "04-global-plan",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "plan_titles": []
+      }
+    },
+    {
+      "id": "05-real-plan-generate",
+      "status": "BLOCKED",
+      "detail": {
+        "status": 400,
+        "reason": "No real provider key in this session; fail-closed response recorded.",
+        "error": "{\"detail\":\"Trainer needs a saved model provider and API key before a coaching turn can start.\"}"
+      }
+    },
+    {
+      "id": "06-real-training-card",
+      "status": "BLOCKED",
+      "detail": {
+        "status": 400,
+        "reason": "Card generation is provider-gated; no real key in this session.",
+        "error": "{\"detail\":\"Trainer needs a saved model provider and API key before a coaching turn can start.\"}"
+      }
+    },
+    {
+      "id": "07-attempt-start",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "attempt_id": "attempt-60425e5b8347423fb5fae5aac0c88879",
+        "note": "synthetic card id; structural persistence only"
+      }
+    },
+    {
+      "id": "08-attempt-evidence",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "trust_level": null,
+        "note": "self_reported by design; not host-attested"
+      }
+    },
+    {
+      "id": "09-browser-pair",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "workspace_id": "journey-structural-a"
+      }
+    },
+    {
+      "id": "10-browser-draft",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "draft_id": "draft-3e87b589fda3"
+      }
+    },
+    {
+      "id": "11-draft-visible-to-host",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "pending_ids": [
+          "draft-3e87b589fda3"
+        ]
+      }
+    },
+    {
+      "id": "12-draft-ack",
+      "status": "PASS",
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "id": "13-memory-summary",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "has_summary": true,
+        "resource_ids": [
+          "resource-94c4b751ab"
+        ]
+      }
+    },
+    {
+      "id": "14-restart-restore",
+      "status": "PASS",
+      "detail": {
+        "status": 200,
+        "same_session": true
+      }
+    },
+    {
+      "id": "15-workspace-isolation",
+      "status": "PASS",
+      "detail": {
+        "search_status": 200,
+        "workspace_b_resource_ids": [],
+        "cross_workspace_leak": false
+      }
+    },
+    {
+      "id": "16-real-model-switch",
+      "status": "BLOCKED",
+      "detail": {
+        "reason": "No real provider key in this session; UI model-switch path is covered by trainer-settings-lifecycle / provider configuration specs."
+      }
+    },
+    {
+      "id": "17-remote-ssh-l2",
+      "status": "BLOCKED",
+      "detail": {
+        "reason": "No real Remote-SSH window in this environment."
+      }
+    }
+  ],
+  "blocked": [
+    "05-real-plan-generate",
+    "06-real-training-card",
+    "16-real-model-switch",
+    "17-remote-ssh-l2"
+  ],
+  "failed": []
+}

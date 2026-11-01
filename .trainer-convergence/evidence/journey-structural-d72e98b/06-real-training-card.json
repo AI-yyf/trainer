@@ -1,0 +1,6 @@
+{
+  "id": "06-real-training-card",
+  "status": 400,
+  "reason": "Card generation is provider-gated; no real key in this session.",
+  "error": "{\"detail\":\"Trainer needs a saved model provider and API key before a coaching turn can start.\"}"
+}

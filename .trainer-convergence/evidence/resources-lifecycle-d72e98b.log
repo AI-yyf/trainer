@@ -1,0 +1,5 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e/trainer-resources-lifecycle.spec.js:118:3 › Trainer Resources lifecycle through the VS Code host bridge › 34: preserves resource identity through upload, open, delete, and per-item restore
+  1 passed (13.8s)

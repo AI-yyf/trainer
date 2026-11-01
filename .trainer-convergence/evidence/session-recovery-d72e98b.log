@@ -1,0 +1,28 @@
+
+Running 24 tests using 1 worker
+
+[1/24] e2e/trainer-session-recovery.spec.js:5:1 › an English recovery step does not hide its matching formal plan in Chinese
+[2/24] e2e/trainer-session-recovery.spec.js:25:1 › compact Plan keeps its stages reachable from a dedicated disclosure
+[3/24] e2e/trainer-session-recovery.spec.js:51:1 › restored workspace settings show saved custom skills without a formal plan
+[4/24] e2e/trainer-session-recovery.spec.js:73:1 › restored conversation and uploaded resources remain visible without a formal plan
+[5/24] e2e/trainer-session-recovery.spec.js:101:1 › flash training shows the question before generic practice instructions
+[6/24] e2e/trainer-session-recovery.spec.js:134:1 › Chinese flash questions keep inline code identifiers visible
+[7/24] e2e/trainer-session-recovery.spec.js:171:1 › empty Plan honors an explicit Generate plan action
+[8/24] e2e/trainer-session-recovery.spec.js:209:1 › browser selection prefill lands in Coach and preserves the Learning draft
+[9/24] e2e/trainer-session-recovery.spec.js:227:1 › host coach prompt lands in Coach without leaking into the Learning draft
+[10/24] e2e/trainer-session-recovery.spec.js:243:1 › browser selection prefill appends to an unsent Coach draft
+[11/24] e2e/trainer-session-recovery.spec.js:260:1 › Plan generate keeps an unsent Coach draft instead of overwriting it
+[12/24] e2e/trainer-session-recovery.spec.js:301:1 › training generation keeps raw card JSON out of the conversation surface
+[13/24] e2e/trainer-session-recovery.spec.js:316:1 › stage materials live inside per-stage disclosures and old plan materials clear
+[14/24] e2e/trainer-session-recovery.spec.js:388:1 › restored trusted verification advances to reflection and carries its full record to Coach
+[15/24] e2e/trainer-session-recovery.spec.js:442:1 › switching conversations isolates unsent drafts and restores each one when returning
+[16/24] e2e/trainer-session-recovery.spec.js:460:1 › same-context backups isolate growth evidence and unsent drafts by database
+[17/24] e2e/trainer-session-recovery.spec.js:494:1 › an unbound evaluation cannot replace the formal plan next step
+[18/24] e2e/trainer-session-recovery.spec.js:519:1 › Start review opens the due queue while preserving the current practice card
+[19/24] e2e/trainer-session-recovery.spec.js:614:1 › a recorded review resumes as recall without a coding verification or empty Return action
+[20/24] e2e/trainer-session-recovery.spec.js:639:1 › an explicit saved-plan correction from Coach uses the formal mutation route
+[21/24] e2e/trainer-session-recovery.spec.js:699:5 › restored zh-CN training preserves its English technical focus and exact card identity, recovered=true
+[22/24] e2e/trainer-session-recovery.spec.js:699:5 › restored zh-CN training preserves its English technical focus and exact card identity, recovered=false
+[23/24] e2e/trainer-session-recovery.spec.js:699:5 › restored en-US training preserves its English technical focus and exact card identity, recovered=true
+[24/24] e2e/trainer-session-recovery.spec.js:699:5 › restored en-US training preserves its English technical focus and exact card identity, recovered=false
+  24 passed (25.1s)

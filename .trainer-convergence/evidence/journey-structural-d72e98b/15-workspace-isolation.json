@@ -1,0 +1,7 @@
+{
+  "id": "15-workspace-isolation",
+  "status": "PASS",
+  "search_status": 200,
+  "workspace_b_resource_ids": [],
+  "cross_workspace_leak": false
+}

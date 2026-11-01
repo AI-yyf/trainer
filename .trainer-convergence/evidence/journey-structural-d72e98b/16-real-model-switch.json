@@ -1,0 +1,5 @@
+{
+  "id": "16-real-model-switch",
+  "status": "BLOCKED",
+  "reason": "No real provider key in this session; UI model-switch path is covered by trainer-settings-lifecycle / provider configuration specs."
+}

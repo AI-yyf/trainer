@@ -1,0 +1,46 @@
+
+Running 42 tests using 1 worker
+
+[1/42] e2e/trainer-bound-card-facts.spec.js:56:5 › bound authored practice facts survive UI locale zh-CN, recovered=true
+[2/42] e2e/trainer-bound-card-facts.spec.js:56:5 › bound authored practice facts survive UI locale zh-CN, recovered=false
+[3/42] e2e/trainer-bound-card-facts.spec.js:56:5 › bound authored practice facts survive UI locale en-US, recovered=true
+[4/42] e2e/trainer-bound-card-facts.spec.js:56:5 › bound authored practice facts survive UI locale en-US, recovered=false
+[5/42] e2e/trainer-bound-card-facts.spec.js:84:3 › unbound foreign practice cannot promote authored card facts
+[6/42] e2e/trainer-bound-card-facts.spec.js:84:3 › unbound missing practice cannot promote authored card facts
+[7/42] e2e/trainer-bound-card-facts.spec.js:84:3 › unbound stale practice cannot promote authored card facts
+[8/42] e2e/trainer-bound-card-facts.spec.js:100:3 › explicit sync recovering does not elevate mixed-language author facts
+[9/42] e2e/trainer-bound-card-facts.spec.js:100:3 › explicit sync stale does not elevate mixed-language author facts
+[10/42] e2e/trainer-bound-card-facts.spec.js:168:3 › missing bound restored scenario fields never borrow foreign Flash zh-CN
+[11/42] e2e/trainer-bound-card-facts.spec.js:168:3 › missing bound restored scenario fields never borrow foreign Flash en-US
+[12/42] e2e/trainer-bound-card-facts.spec.js:202:3 › bound missing title and focus use neutral defaults zh-CN
+[13/42] e2e/trainer-bound-card-facts.spec.js:213:5 › bound local verification payload rejects foreign fields zh-CN, ownChecks=false
+[14/42] e2e/trainer-bound-card-facts.spec.js:213:5 › bound local verification payload rejects foreign fields zh-CN, ownChecks=true
+[15/42] e2e/trainer-bound-card-facts.spec.js:202:3 › bound missing title and focus use neutral defaults en-US
+[16/42] e2e/trainer-bound-card-facts.spec.js:213:5 › bound local verification payload rejects foreign fields en-US, ownChecks=false
+[17/42] e2e/trainer-bound-card-facts.spec.js:213:5 › bound local verification payload rejects foreign fields en-US, ownChecks=true
+[18/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links zh-CN
+[19/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links en-US
+[20/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links es-ES
+[21/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links fr-FR
+[22/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links de-DE
+[23/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links ja-JP
+[24/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links ko-KR
+[25/42] e2e/trainer-bound-card-facts.spec.js:246:3 › current recovered practice note and independent Learning links pt-BR
+[26/42] e2e/trainer-bound-card-facts.spec.js:280:3 › Learning note cannot claim practice readiness when stale
+[27/42] e2e/trainer-bound-card-facts.spec.js:280:3 › Learning note cannot claim practice readiness when busy
+[28/42] e2e/trainer-bound-card-facts.spec.js:280:3 › Learning note cannot claim practice readiness when return_pending
+[29/42] e2e/trainer-bound-card-facts.spec.js:280:3 › Learning note cannot claim practice readiness when no_live_card
+[30/42] e2e/trainer-bound-card-facts.spec.js:305:3 › restored scenario without authored summary has no control-enum task zh-CN
+[31/42] e2e/trainer-bound-card-facts.spec.js:305:3 › restored scenario without authored summary has no control-enum task en-US
+[32/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice zh-CN
+[33/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice en-US
+[34/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice es-ES
+[35/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice fr-FR
+[36/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice de-DE
+[37/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice ja-JP
+[38/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice ko-KR
+[39/42] e2e/trainer-bound-card-facts.spec.js:371:3 › remote mismatch clears only current request with Training notice pt-BR
+[40/42] e2e/trainer-bound-card-facts.spec.js:396:1 › remote decoder ignores foreign and unbound events but shows current authoritative result
+[41/42] e2e/trainer-bound-card-facts.spec.js:425:1 › remote A-B-A ignores old same-card events and failure without cancelling an execution
+[42/42] e2e/trainer-bound-card-facts.spec.js:459:1 › palette remote result still requires exact displayed card and current host scope
+  42 passed (37.6s)

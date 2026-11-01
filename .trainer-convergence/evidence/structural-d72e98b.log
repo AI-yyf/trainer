@@ -1,0 +1,19 @@
+[PASS] 01-session-start
+[PASS] 02-resource-upload
+[PASS] 02b-resource-index
+[PASS] 03-resource-search
+[PASS] 04-global-plan
+[BLOCKED] 05-real-plan-generate — No real provider key in this session; fail-closed response recorded.
+[BLOCKED] 06-real-training-card — Card generation is provider-gated; no real key in this session.
+[PASS] 07-attempt-start
+[PASS] 08-attempt-evidence
+[PASS] 09-browser-pair
+[PASS] 10-browser-draft
+[PASS] 11-draft-visible-to-host
+[PASS] 12-draft-ack
+[PASS] 13-memory-summary
+[PASS] 14-restart-restore
+[PASS] 15-workspace-isolation
+[BLOCKED] 16-real-model-switch — No real provider key in this session; UI model-switch path is covered by trainer-settings-lifecycle / provider configuration specs.
+[BLOCKED] 17-remote-ssh-l2 — No real Remote-SSH window in this environment.
+[structural] 14 PASS, 4 BLOCKED, 0 FAIL -> /Users/Apple/Desktop/trainer/.trainer-convergence/evidence/journey-structural-current

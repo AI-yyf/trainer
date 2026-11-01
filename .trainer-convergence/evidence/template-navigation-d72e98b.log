@@ -1,0 +1,30 @@
+
+Running 26 tests using 1 worker
+
+[1/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 340/dark/zh-CN
+[2/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 340/dark/en-US
+[3/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 340/light/zh-CN
+[4/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 340/light/en-US
+[5/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 420/dark/zh-CN
+[6/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 420/dark/en-US
+[7/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 420/light/zh-CN
+[8/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 420/light/en-US
+[9/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 460/dark/zh-CN
+[10/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 460/dark/en-US
+[11/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 460/light/zh-CN
+[12/26] e2e/trainer-template-navigation.spec.js:8:7 › three stable destinations and composer ownership: 460/light/en-US
+[13/26] e2e/trainer-template-navigation.spec.js:33:1 › surface switches retain the Coach draft and resource search without sharing activity input
+[14/26] e2e/trainer-template-navigation.spec.js:87:1 › reload restores the same session draft and reading position; history returns keyboard focus
+[15/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 340/dark/zh-CN
+[16/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 340/dark/en-US
+[17/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 340/light/zh-CN
+[18/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 340/light/en-US
+[19/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 420/dark/zh-CN
+[20/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 420/dark/en-US
+[21/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 420/light/zh-CN
+[22/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 420/light/en-US
+[23/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 460/dark/zh-CN
+[24/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 460/dark/en-US
+[25/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 460/light/zh-CN
+[26/26] e2e/trainer-template-navigation.spec.js:148:7 › Settings details have a usable reading pane: 460/light/en-US
+  26 passed (39.3s)

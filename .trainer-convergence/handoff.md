@@ -259,3 +259,26 @@
   Remote-SSH L2 window, T-0026 latency re-run when the relay/model changes, and
   Windows/Linux browser install acceptance. Do not mark these PASS without new
   evidence.
+
+## 2026-11-01 — current-HEAD structural journey evidence (d72e98b)
+
+- Added `scripts/run-structural-journey.mjs` (`npm run test:structural-journey`):
+  real sidecar + real SQLite, no provider mock. It records 14 PASS, 4 BLOCKED,
+  0 FAIL. PASS covers session start, upload/index/search, global plan, real
+  attempt + self-reported evidence, browser pair → draft → host pending → ack,
+  memory summary, sidecar restart/session restore, and workspace isolation.
+  BLOCKED are explicit: real plan generation, real training-card generation,
+  real model switch (no key) and Remote-SSH L2 (no window).
+- UI structural evidence at d72e98b: template navigation 26/26, bound-card
+  42/42, experience matrix 200/200, session recovery 24/24, provider human
+  configuration 1/1 (model/thinking/profile switch), settings lifecycle 1/1,
+  resources lifecycle 1/1.
+- Found and fixed one P1 during the training journey: an unbound/foreign
+  `activeTrainingCardRouting.selectedCard` could lend authored title/deliverable
+  to the selected card. Route facts are now exposed only when the cardId matches
+  the active id; recovering/stale sync uses an empty bound shell; review
+  artifacts and flash cards keep their own surfaces.
+- Design/install/CI at d72e98b: geometry 471/471, a11y 96/96, perf budgets
+  (warm nav p90 40ms), VSIX host E2E 36/36, Cross-Platform run 41259410960 = 9/9.
+- Real-model teaching, Remote-SSH L2, T-0026 latency and Windows/Linux browser
+  install remain external BLOCKED; do not convert them to PASS.
