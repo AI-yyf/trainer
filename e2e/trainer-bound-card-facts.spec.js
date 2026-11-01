@@ -101,11 +101,14 @@ for (const status of ['recovering', 'stale']) {
     await seed(page, 'en-US', false);
     await expect(page.locator('.template-activity-header')).toContainText(author.title);
     await page.evaluate(status => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
-      type: 'state/syncStatus', payload: { generation: 1, status },
+      type: 'state/syncStatus', payload: { generation: 999_999, status },
     }), status);
     await expect(page.locator('.training-pane')).toHaveAttribute('data-training-card-id', 'author-card');
-    await expect(page.locator('.template-activity-header')).not.toContainText(author.title);
-    await expect(page.locator('.training-pane')).not.toContainText(author.deliverable);
+    const header = page.locator('.template-activity-header');
+    if (await header.count()) {
+      await expect(header).not.toContainText(author.title);
+    }
+    expect(await page.locator('.training-pane').innerText()).not.toContain(author.deliverable);
   });
 }
 

@@ -3841,7 +3841,7 @@ export function App() {
     resourceConversationContextIds,
   ]);
   const trainingState = data.workspaceTrainingState;
-  const selectedTrainingRouteCard = trainingState?.activeTrainingCardRouting?.selectedCard;
+  const rawTrainingRouteCard = trainingState?.activeTrainingCardRouting?.selectedCard;
   const normalizedTrainingSubmode = normalizeSharedTrainingSubmode(
     trainingState?.latestTrainingSubmode,
   );
@@ -3871,7 +3871,7 @@ export function App() {
     }
 
     const selectedCardId = trainingState?.selectedCardId?.trim();
-    const routeSelectedCardId = selectedTrainingRouteCard?.cardId?.trim();
+    const routeSelectedCardId = rawTrainingRouteCard?.cardId?.trim();
 
     // Leftover stored cards / title / current_step must not count as live selectedCardId.
     // Live only when runtime still carries a matching card id — never candidates[0] fallback.
@@ -3925,16 +3925,23 @@ export function App() {
   const trainingCardType = reviewArtifactForeground || trainingRestoreForeground
     ? (selectedTrainingCardCandidate?.type ?? "practice")
     : (trainingState?.selectedCardType ??
-      selectedTrainingRouteCard?.type ??
+      rawTrainingRouteCard?.type ??
       selectedTrainingCardCandidate?.type ??
       "practice");
   const activeTrainingCardId = reviewArtifactForeground || trainingRestoreForeground
     ? selectedTrainingCardCandidate?.cardId
     : (trainingState?.selectedCardId ??
-      (selectedTrainingRouteCard?.cardId &&
-      selectedTrainingRouteCard.cardId === trainingState?.selectedCardId
-        ? selectedTrainingRouteCard.cardId
+      (rawTrainingRouteCard?.cardId &&
+      rawTrainingRouteCard.cardId === trainingState?.selectedCardId
+        ? rawTrainingRouteCard.cardId
         : undefined));
+  // Authored facts are only safe to show when the route card is the active
+  // card. A foreign/unbound route card must not lend its text to the selected
+  // identity (the P1 caught by trainer-bound-card-facts).
+  const selectedTrainingRouteCard =
+    rawTrainingRouteCard?.cardId && rawTrainingRouteCard.cardId === activeTrainingCardId
+      ? rawTrainingRouteCard
+      : undefined;
   displayedTrainingCardIdRef.current = activeTrainingCardId;
   // §三: a card or scope change invalidates the in-flight remote verification
   // panel; the controller owns that state and clears it here.
@@ -4676,18 +4683,35 @@ export function App() {
     ? false
     : Boolean(
         trainingState?.selectedCardId?.trim() &&
-          (selectedTrainingCardCandidate || selectedTrainingRouteCard),
+          (selectedTrainingCardCandidate || rawTrainingRouteCard),
       );
   const hasRenderableTrainingCard = leftoverTrainingHandoffChromeNotLive
     ? false
     : hasTrainingCard || Boolean(trainingState?.latestTrainingNextHop);
-  const boundTrainingCardFacts = useMemo(() => resolveBoundTrainingCardFacts({
-    eligible: hasTrainingCard && syncStatus === "current" &&
-      !reviewArtifactForeground && trainingCardType !== "flash",
-    activeCardId: activeTrainingCardId,
-    candidate: selectedTrainingCardCandidate,
-    routeCard: selectedTrainingRouteCard,
-  }), [hasTrainingCard, syncStatus, reviewArtifactForeground, trainingCardType,
+  const boundTrainingCardFacts = useMemo(() => {
+    const resolved = resolveBoundTrainingCardFacts({
+      eligible: hasTrainingCard && syncStatus === "current" &&
+        !reviewArtifactForeground && trainingCardType !== "flash",
+      activeCardId: activeTrainingCardId,
+      candidate: selectedTrainingCardCandidate,
+      routeCard: selectedTrainingRouteCard,
+    });
+    if (resolved) {
+      return resolved;
+    }
+    // The card shell may still be visible (selected identity), but no authored
+    // fact is eligible. Return an empty bound shell instead of undefined so
+    // readTrainingCardText/List cannot fall back to foreign/stale legacy data.
+    if (
+      hasTrainingCard &&
+      activeTrainingCardId &&
+      !reviewArtifactForeground &&
+      trainingCardType !== "flash"
+    ) {
+      return { cardId: activeTrainingCardId, text: {}, lists: {}, bound: false };
+    }
+    return undefined;
+  }, [hasTrainingCard, syncStatus, reviewArtifactForeground, trainingCardType,
     activeTrainingCardId, selectedTrainingCardCandidate, selectedTrainingRouteCard]);
   useEffect(() => {
     if (activeView !== "training") {
@@ -10496,7 +10520,7 @@ export function App() {
     },
   );
   const learningPracticeReadyToContinue = Boolean(
-    boundTrainingCardFacts && trainingCardType === "practice" && recoveredRuntime &&
+    boundTrainingCardFacts?.bound !== false && boundTrainingCardFacts && trainingCardType === "practice" && recoveredRuntime &&
     syncStatus === "current" && learningPrimaryAction.intent === "resume_training" &&
     learningPrimaryAction.target.cardId === boundTrainingCardFacts.cardId &&
     !learningPrimaryAction.disabled && !learningPrimaryAction.busy,

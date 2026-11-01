@@ -22,6 +22,8 @@ export interface BoundTrainingCardFacts {
   readonly cardId: string;
   readonly text: Readonly<Partial<Record<TextField, string>>>;
   readonly lists: Readonly<Partial<Record<ListField, string[]>>>;
+  /** False for the suppression shell used when facts are unbound/stale. */
+  readonly bound?: boolean;
 }
 
 function nonblank(value: string | undefined): string | undefined {

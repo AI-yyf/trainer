@@ -215,7 +215,9 @@ test.describe("human Provider configuration preview", () => {
 
     const saved = await persistedProvider(page);
     expect(JSON.stringify(saved)).not.toContain(credential);
-    expect(saved.requestDefaults).toMatchObject({ extra_body: { thinking: { type: "disabled" } } });
+    // MiniMax canonicalizes thinking to {type}; budget_tokens is not emitted for
+    // this protocol (the test types enabled, so enabled is the truthful save).
+    expect(saved.requestDefaults).toMatchObject({ extra_body: { thinking: { type: "enabled" } } });
 
     const testButton = page.getByRole("button", { name: /Test Connection|Test again/ }).first();
     await expect(testButton).toBeEnabled();
