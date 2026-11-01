@@ -120,7 +120,7 @@ OPENAI_VISIBLE_REPLY_RETRY_ATTEMPTS = 2
 #: reasoning and end with finish_reason="length" and no visible text. One
 #: escalation retry (4x base, capped here) recovers them without changing the
 #: normal budget for everyone else.
-OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS = 8192
+OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS = 32768
 OPENAI_VISIBLE_REPLY_RETRY_HINT = (
     "Return at least one visible user-facing coaching sentence outside any <think>...</think> block. "
     "Do not leave the visible reply empty."
@@ -1407,6 +1407,25 @@ class ProviderAgentBinding:
             "stop_reason": "tool_calls" if tool_calls else "stop",
         }
 
+    async def _create_openai_negotiated(
+        self,
+        client: Any,
+        payload: dict[str, Any],
+    ) -> Any:
+        """Create through the provider's thinking re-negotiation when present.
+
+        Unit-test bindings and third-party provider services may only expose a
+        raw OpenAI client; production ProviderService owns the negotiated path.
+        """
+        negotiated = getattr(
+            self._provider_service,
+            "_create_chat_completion_negotiated_async",
+            None,
+        )
+        if callable(negotiated):
+            return await negotiated(client, payload)
+        return await client.chat.completions.create(**payload)
+
     async def _openai_visible_retry_result(
         self,
         client: Any,
@@ -1480,7 +1499,10 @@ class ProviderAgentBinding:
         kwargs.update(_openai_tool_payload(tools))
         kwargs = self._provider_service._apply_request_defaults(kwargs)  # noqa: SLF001
         try:
-            response = await client.chat.completions.create(model=model, **kwargs)
+            response = await self._create_openai_negotiated(
+                client,
+                {"model": model, **kwargs},
+            )
         except Exception as exc:  # noqa: BLE001 - escalation is best-effort
             logger.warning(
                 "openai_truncated_budget_retry_failed",
@@ -1530,7 +1552,10 @@ class ProviderAgentBinding:
         last_error: Exception | None = None
         for candidate in self._provider_service._model_candidates(model):  # noqa: SLF001
             try:
-                response = await client.chat.completions.create(model=candidate, **kwargs)
+                response = await self._create_openai_negotiated(
+                    client,
+                    {"model": candidate, **kwargs},
+                )
             except Exception as exc:  # noqa: BLE001 - normalised below
                 last_error = exc
                 if not self._provider_service._is_model_not_supported_error(exc):  # noqa: SLF001
@@ -1592,7 +1617,10 @@ class ProviderAgentBinding:
         chosen_model = model
         for candidate in self._provider_service._model_candidates(model):  # noqa: SLF001
             try:
-                stream = await client.chat.completions.create(model=candidate, **kwargs)
+                stream = await self._create_openai_negotiated(
+                    client,
+                    {"model": candidate, **kwargs},
+                )
                 chosen_model = candidate
                 break
             except Exception as exc:  # noqa: BLE001

@@ -9088,6 +9088,12 @@ export function App() {
           <p>
             {appUiCopy(layout.composerLanguage, "你在做什么？")}
           </p>
+          <p className="coach-empty-state__lead">
+            {appUiCopy(
+              layout.composerLanguage,
+              "可以从当前代码、一篇文章或一个问题开始。",
+            )}
+          </p>
           <div className="coach-empty-state__starters" role="group"
             aria-label={appUiCopy(layout.composerLanguage, "开始方式")}>
             {starters.map((starter) => (

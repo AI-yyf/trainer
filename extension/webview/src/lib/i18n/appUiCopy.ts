@@ -1459,6 +1459,15 @@ export const APP_UI_TEXT: Record<string, Record<string, string>> = {
     "ko-KR": "무엇을 작업하고 있나요?",
     "pt-BR": "No que você está trabalhando?",
   },
+  "可以从当前代码、一篇文章或一个问题开始。": {
+    "en-US": "Start from the current code, an article, or a question.",
+    "es-ES": "Empieza por el código actual, un artículo o una pregunta.",
+    "fr-FR": "Pars du code actuel, d’un article ou d’une question.",
+    "de-DE": "Starte mit dem aktuellen Code, einem Artikel oder einer Frage.",
+    "ja-JP": "現在のコード、記事、質問のどれからでも始められます。",
+    "ko-KR": "현재 코드, 글, 질문 중 어디서든 시작하세요.",
+    "pt-BR": "Comece pelo código atual, um artigo ou uma pergunta.",
+  },
   "开始方式": {
     "en-US": "Ways to start",
     "es-ES": "Formas de empezar",

@@ -2541,7 +2541,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             stream = None
             try:
                 client = self._create_sync_client(provider, api_key)
-                max_tokens = 256 if _needs_generous_visible_probe_budget(provider) else 16
+                max_tokens = _visible_probe_max_tokens(provider, 16)
                 payload = self._apply_request_defaults(
                     {
                         "model": provider.model,
@@ -2558,7 +2558,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     extra_body = dict(payload.get("extra_body") or {})
                     extra_body["thinking"] = {"type": "disabled"}
                     payload["extra_body"] = extra_body
-                stream = client.chat.completions.create(**payload)
+                stream = self._create_chat_completion_negotiated(
+                    client, payload, provider
+                )
                 reasoning_filter = ReasoningBlockFilter()
                 observed = False
                 for chunk in stream:
@@ -2593,7 +2595,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 # before emitting their first visible token. Keep this probe
                 # aligned with the other visible-token probes so a working
                 # native stream is not reported as unavailable.
-                max_tokens=256 if _needs_generous_visible_probe_budget(provider) else 16,
+                max_tokens=_visible_probe_max_tokens(provider, 16),
             )
             try:
                 async for chunk in stream:
@@ -4800,6 +4802,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             requested_max_tokens=max_tokens,
             prefer_configured_output=True,
         )
+        # Reasoning-first models can spend the whole coaching budget on hidden
+        # thought before the visible answer (or after tool results). Give the
+        # agent loop the same generous headroom the one-shot probes use.
+        effective_max_tokens = self.recommended_generation_max_tokens(effective_max_tokens)
         provider_obj, binding = build_agent_provider_for(
             self,
             protocol=protocol,

@@ -190,14 +190,14 @@ function surfaceBackCopy(language: string): string {
  * send there always stays in the thread.
  */
 const DOCK_SEND_PREFERENCE_COPY: Record<string, { label: string; jump: string; stay: string }> = {
-  "zh-CN": { label: "发送后", jump: "跳转回答", stay: "留在本页" },
-  "en-US": { label: "After send", jump: "Jump to reply", stay: "Stay here" },
-  "es-ES": { label: "Tras enviar", jump: "Ir a la respuesta", stay: "Quedarme aquí" },
-  "fr-FR": { label: "Après l'envoi", jump: "Aller à la réponse", stay: "Rester ici" },
-  "de-DE": { label: "Nach dem Senden", jump: "Zur Antwort", stay: "Hierbleiben" },
-  "ja-JP": { label: "送信後", jump: "回答へ移動", stay: "ここに留まる" },
-  "ko-KR": { label: "전송 후", jump: "답변으로 이동", stay: "여기 머무르기" },
-  "pt-BR": { label: "Após enviar", jump: "Ir para a resposta", stay: "Ficar aqui" },
+  "zh-CN": { label: "发送后", jump: "看回答", stay: "留在这里" },
+  "en-US": { label: "After send", jump: "View reply", stay: "Stay here" },
+  "es-ES": { label: "Tras enviar", jump: "Ver respuesta", stay: "Quedarme aquí" },
+  "fr-FR": { label: "Après l'envoi", jump: "Voir la réponse", stay: "Rester ici" },
+  "de-DE": { label: "Nach dem Senden", jump: "Antwort ansehen", stay: "Hierbleiben" },
+  "ja-JP": { label: "送信後", jump: "回答を見る", stay: "ここに留まる" },
+  "ko-KR": { label: "전송 후", jump: "답변 보기", stay: "여기 머무르기" },
+  "pt-BR": { label: "Após enviar", jump: "Ver resposta", stay: "Ficar aqui" },
 };
 
 export function dockSendPreferenceCopy(language: string): { label: string; jump: string; stay: string } {

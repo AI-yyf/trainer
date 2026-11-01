@@ -4962,7 +4962,9 @@ async def test_openai_chat_call_escalates_the_budget_after_a_truncated_reply() -
     assert result["content"] == "Recovered visible coaching reply."
     first_call, second_call = mock_client.chat.completions.create.await_args_list
     assert first_call.kwargs["max_tokens"] == 1024
-    assert second_call.kwargs["max_tokens"] == 8192
+    # Reasoning-first models can exhaust even 16k on hidden thought after tool
+    # results; the single truncation retry now grants 32k.
+    assert second_call.kwargs["max_tokens"] == 32768
 
 
 async def test_agent_binding_protocol_call_matrix_preserves_tools() -> None:

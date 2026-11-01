@@ -640,7 +640,9 @@ def test_minimax_streaming_probe_uses_generous_visible_budget() -> None:
         result, _ = service._probe_streaming_capability(provider, "sk-test")
 
     assert result is True
-    assert observed["max_tokens"] == 256
+    # Reasoning-first providers get the same generous visible-token tier as
+    # the thinking/chat probes; 256 can still be consumed by hidden thought.
+    assert observed["max_tokens"] == 1024
 
 
 def test_reasoning_first_provider_visible_probes_reserve_a_generous_budget() -> None:
