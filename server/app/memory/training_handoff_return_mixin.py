@@ -441,7 +441,7 @@ class TrainingHandoffReturnMixin:
             "card_title": live_card_title,
             "scenario_pack": card.scenario_pack,
             "verification_steps": [] if returned else ["Complete Return after reviewing the reflection."],
-            "success_signal": verified_summary if returned else "",
+            "success_signal": "" if self_reported else verified_summary if returned else "",
             "return_with": verified_summary,
             "next_after_completion": card.next_after_completion or next_after_completion,
             "fallback_action": fallback_action,
@@ -458,7 +458,9 @@ class TrainingHandoffReturnMixin:
             "title": live_card_title,
             "summary": verified_summary,
             "why_now": (
-                "This card completed Learn, Try, Verify, Reflect, and Return with trusted evidence."
+                "This card returned a self-reported result; it is not host-verified."
+                if self_reported and returned
+                else "This card completed Learn, Try, Verify, Reflect, and Return with trusted evidence."
                 if returned
                 else "Return evidence was not persisted, so this card is not credited."
                 if evidence_failed
@@ -499,9 +501,15 @@ class TrainingHandoffReturnMixin:
             latest_training_next_hop=next_hop,
             latest_learning_focus_area=card.focus_area or card.target_skill,
             latest_learning_followup=card.next_after_completion or next_after_completion,
-            latest_learning_verified_result=verified_summary if returned else "",
+            latest_learning_verified_result=(
+                verified_summary if returned and not self_reported else ""
+            ),
             latest_learning_blocker="",
-            latest_learning_partial_progress="" if returned else handoff.reflection,
+            latest_learning_partial_progress=(
+                verified_summary
+                if self_reported and returned
+                else "" if returned else handoff.reflection
+            ),
             latest_learning_outcome=(
                 "self_reported"
                 if self_reported and returned

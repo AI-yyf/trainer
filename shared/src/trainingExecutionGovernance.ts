@@ -7,19 +7,22 @@ export type TrainingReflectReason =
   | "skipped"
   | "flash_answered"
   | "reviewed"
-  | "verification_passed";
+  | "verification_passed"
+  | "self_reported";
 
 export type TrainingVerificationReason =
   | "practice_completed"
   | "flash_answered"
-  | "evidence_recorded";
+  | "evidence_recorded"
+  | "self_reported";
 
 export type TrainingVerificationStatus =
   | "not_started"
   | "awaiting_evidence"
   | "passed"
   | "failed"
-  | "evidence_missing";
+  | "evidence_missing"
+  | "self_reported";
 
 export type TrainingVerificationSource =
   | "none"
@@ -46,6 +49,8 @@ export interface DeriveTrainingExecutionStateInput {
   latestTrainingBlockedBy?: string;
   latestVerifiedResult?: string;
   latestLearningBlocker?: string;
+  /** Persisted handoff trust state, e.g. verified / self_reported. */
+  latestTrainingVerificationState?: string;
   /** Persisted Learn→Try→Verify→Reflect→Return phase from card/handoff. */
   learningPhase?: string;
 }
@@ -117,6 +122,7 @@ export function deriveTrainingVerificationLifecycle(
   const selectedStatus = normalizeTrainingStatus(input.selectedCardStatus);
   const handoffStatus = normalizeTrainingStatus(input.latestTrainingHandoffStatus);
   const nextHopStatus = normalizeTrainingStatus(input.latestTrainingNextHopStatus);
+  const verificationState = normalizeTrainingStatus(input.latestTrainingVerificationState);
   const hasLatestBlocker =
     hasTrainingText(input.latestLearningBlocker) || hasTrainingText(input.latestTrainingBlockedBy);
   const hasFailedVerification =
@@ -144,6 +150,10 @@ export function deriveTrainingVerificationLifecycle(
     };
   }
 
+  if (verificationState === "self_reported") {
+    return { status: "self_reported", source: "handoff", evidenceRecorded: true };
+  }
+
   const trustedHandoffProgress =
     handoffStatus === "needs_reflection" ||
     handoffStatus === "ready_to_return" ||
@@ -168,6 +178,7 @@ export function deriveTrainingVerificationLifecycle(
     selectedStatus === "archived" ||
     handoffStatus === "resolved" ||
     handoffStatus === "fed_back" ||
+    handoffStatus === "self_reported" ||
     nextHopStatus === "continued_in_chat";
   const currentCardIsBeforeVerification =
     selectedStatus === "candidate" ||
@@ -266,7 +277,9 @@ export function deriveTrainingExecutionState(
     : returnRequired
       ? undefined
       : reflectionRequired
-        ? "verification_passed"
+        ? verification.status === "self_reported"
+          ? "self_reported"
+          : "verification_passed"
     : skipped
       ? "skipped"
       : blocked
@@ -279,6 +292,8 @@ export function deriveTrainingExecutionState(
   const verificationReason =
     verification.status === "passed"
       ? "evidence_recorded"
+      : verification.status === "self_reported"
+        ? "self_reported"
       : verification.status === "awaiting_evidence"
         ? verification.source === "flash_answer"
           ? "flash_answered"

@@ -123,6 +123,59 @@ def test_rebind_lets_first_card_finish_after_second_card_steals_handoff(tmp_path
     assert returned["latest_training_handoff"]["status"] == "completed"
 
 
+def test_rebind_never_transfers_another_cards_trusted_evidence(tmp_path: Path) -> None:
+    workspace_id = "ws-rebind-no-transfer"
+    service = MemoryService(TrainerRepository(tmp_path / "rebind-transfer.db"))
+    card_a = service.upsert_card(workspace_id, _practice_card("card-transfer-a", "Boundary A"))
+    card_b = service.upsert_card(workspace_id, _practice_card("card-transfer-b", "Retry B"))
+
+    _select_card(service, workspace_id, card_a)
+    _verify_card(service, workspace_id, card_a.card_id)
+    _select_card(service, workspace_id, card_b)
+    _verify_card(service, workspace_id, card_b.card_id)
+
+    rebound = service.rebind_training_handoff(workspace_id, card_a.card_id)
+    handoff = rebound["handoff"]
+    assert handoff["card_id"] == card_a.card_id
+    assert "Retry B" not in str(handoff.get("evidence", []))
+    assert all(
+        record.get("card_id") == card_a.card_id for record in handoff.get("evidence", [])
+    )
+
+    reflected = service.record_training_handoff_reflection(
+        workspace_id=workspace_id,
+        card_id=card_a.card_id,
+        reflection="A's own verification remains the only evidence.",
+        handoff_id=handoff["handoff_id"],
+    )
+    returned = service.return_training_handoff(
+        workspace_id=workspace_id,
+        card_id=card_a.card_id,
+        handoff_id=reflected["latest_training_handoff"]["handoff_id"],
+    )
+    summary = returned["latest_training_handoff"].get("return_summary", "")
+    assert "Retry B" not in summary
+
+
+def test_rebind_without_own_cached_handoff_mints_fresh_unverified(tmp_path: Path) -> None:
+    workspace_id = "ws-rebind-fresh-unverified"
+    service = MemoryService(TrainerRepository(tmp_path / "rebind-unverified.db"))
+    card_a = service.upsert_card(workspace_id, _practice_card("card-unverified-a", "A"))
+    card_b = service.upsert_card(workspace_id, _practice_card("card-unverified-b", "B"))
+
+    # A never verified; B is the live verified handoff.
+    _select_card(service, workspace_id, card_a)
+    _select_card(service, workspace_id, card_b)
+    _verify_card(service, workspace_id, card_b.card_id)
+
+    rebound = service.rebind_training_handoff(workspace_id, card_a.card_id)
+    handoff = rebound["handoff"]
+    assert handoff["card_id"] == card_a.card_id
+    assert handoff["learning_phase"] == "learn"
+    assert handoff["verification_state"] != "verified"
+    assert not handoff.get("evidence")
+
+
 def test_rebind_mints_fresh_handoff_when_none_exists(tmp_path: Path) -> None:
     workspace_id = "ws-handoff-rebind-fresh"
     service = MemoryService(TrainerRepository(tmp_path / "rebind-fresh.db"))

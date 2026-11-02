@@ -49,9 +49,11 @@ export function ProviderQuickSetup({
 
   const baseUrlReady = draft.baseUrl.trim().length > 0;
   const keyReady = draft.apiKey.trim().length > 0 || hasStoredApiKey;
+  const modelReady = draft.model.trim().length > 0;
   const step1Done = baseUrlReady;
   const step2Done = keyReady;
-  const canSave = baseUrlReady && keyReady;
+  const step3Done = modelReady;
+  const canSave = baseUrlReady && keyReady && modelReady;
 
   const connectedSummary = useMemo(
     () => Boolean(connected && savedBaseUrl),
@@ -150,6 +152,25 @@ export function ProviderQuickSetup({
           value={draft.apiKey}
           placeholder={hasStoredApiKey && !draft.apiKey ? copy(language, "keyStored") : copy(language, "keyPlaceholder")}
           onChange={(event) => onDraftChange({ apiKey: event.target.value })}
+        />
+      </label>
+
+      <label className="settings-field">
+        <span>
+          {copy(language, "modelLabel")}
+          {step3Done ? (
+            <span className="settings-quick-setup__done" aria-hidden="true">
+              <DoneIcon size={12} />
+            </span>
+          ) : (
+            ""
+          )}
+        </span>
+        <input
+          type="text"
+          value={draft.model}
+          placeholder={copy(language, "modelPlaceholder")}
+          onChange={(event) => onDraftChange({ model: event.target.value })}
         />
         <p className="settings-sheet__note settings-sheet__note--compact">
           {copy(language, "modelHint")}

@@ -952,6 +952,7 @@ export type TrainingWorkbenchTextKey =
   | "taskDetails"
   | "returnCompleteEyebrow"
   | "returnCompleteTitle"
+  | "selfReportedReturnNote"
   | "mismatchCardHint"
   | "mismatchSwitchLabel";
 
@@ -1033,6 +1034,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "任务详情",
     returnCompleteEyebrow: "已完成",
     returnCompleteTitle: "结果已带给教练",
+    selfReportedReturnNote: "这是你的自我报告，尚未经过服务器验证。",
     mismatchCardHint: "这张卡与当前进度不一致。",
     mismatchSwitchLabel: "切换到当前卡",
   },
@@ -1110,6 +1112,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "Task details",
     returnCompleteEyebrow: "Done",
     returnCompleteTitle: "Your result is with the coach",
+    selfReportedReturnNote: "This is your self-report; it has not been host-verified.",
     mismatchCardHint: "This card does not match your current progress.",
     mismatchSwitchLabel: "Switch to the current card",
   },
@@ -1187,6 +1190,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "Detalles de la tarea",
     returnCompleteEyebrow: "Completado",
     returnCompleteTitle: "Tu resultado ya está con el coach",
+    selfReportedReturnNote: "Este es tu autoinforme; no ha sido verificado por el host.",
     mismatchCardHint: "Esta tarjeta no coincide con tu progreso actual.",
     mismatchSwitchLabel: "Cambiar a la tarjeta actual",
   },
@@ -1264,6 +1268,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "Détails de la tâche",
     returnCompleteEyebrow: "Terminé",
     returnCompleteTitle: "Votre résultat est chez le coach",
+    selfReportedReturnNote: "Ceci est votre auto-déclaration ; elle n'a pas été vérifiée par l'hôte.",
     mismatchCardHint: "Cette carte ne correspond pas à votre progression actuelle.",
     mismatchSwitchLabel: "Aller à la carte actuelle",
   },
@@ -1341,6 +1346,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "Aufgabendetails",
     returnCompleteEyebrow: "Abgeschlossen",
     returnCompleteTitle: "Dein Ergebnis ist beim Coach",
+    selfReportedReturnNote: "Dies ist Ihre Selbstauskunft; sie wurde nicht vom Host verifiziert.",
     mismatchCardHint: "Diese Karte passt nicht zu deinem aktuellen Fortschritt.",
     mismatchSwitchLabel: "Zur aktuellen Karte wechseln",
   },
@@ -1418,6 +1424,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "タスクの詳細",
     returnCompleteEyebrow: "完了",
     returnCompleteTitle: "結果をコーチに渡しました",
+    selfReportedReturnNote: "これは自己申告であり、ホストによる検証はまだです。",
     mismatchCardHint: "このカードは現在の進捗と一致していません。",
     mismatchSwitchLabel: "現在のカードに切り替え",
   },
@@ -1495,6 +1502,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "과제 세부 정보",
     returnCompleteEyebrow: "완료",
     returnCompleteTitle: "결과를 코치에게 전달했습니다",
+    selfReportedReturnNote: "이것은 자기 보고이며 호스트에서 검증되지 않았습니다.",
     mismatchCardHint: "이 카드는 현재 진행과 일치하지 않습니다.",
     mismatchSwitchLabel: "현재 카드로 전환",
   },
@@ -1572,6 +1580,7 @@ export const trainingWorkbenchTextCopy: Record<
     taskDetails: "Detalhes da tarefa",
     returnCompleteEyebrow: "Concluído",
     returnCompleteTitle: "Seu resultado está com o coach",
+    selfReportedReturnNote: "Este é o seu autorrelato; ele não foi verificado pelo host.",
     mismatchCardHint: "Este cartão não corresponde ao seu progresso atual.",
     mismatchSwitchLabel: "Trocar para o cartão atual",
   },

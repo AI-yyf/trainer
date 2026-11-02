@@ -255,6 +255,36 @@ test('derives verification truth from the evidence lifecycle in precedence order
   }
 });
 
+test('self-reported handoffs stay unverified through reflect and return', () => {
+  const reflection = deriveTrainingExecutionState({
+    cardType: 'practice',
+    selectedCardStatus: 'active',
+    latestTrainingHandoffStatus: 'needs_reflection',
+    latestTrainingNextHopStatus: 'reflection_required',
+    latestTrainingVerificationState: 'self_reported',
+    learningPhase: 'verify',
+  });
+  assert.equal(reflection.verification.status, 'self_reported');
+  assert.equal(reflection.verified, false);
+  assert.equal(reflection.pendingPlanConfirmation, false);
+  assert.equal(reflection.composerPhase, 'reflect');
+  assert.equal(reflection.reflectReason, 'self_reported');
+
+  const returned = deriveTrainingExecutionState({
+    cardType: 'practice',
+    selectedCardStatus: 'answered',
+    latestTrainingHandoffStatus: 'self_reported',
+    latestTrainingNextHopStatus: 'continued_in_chat',
+    latestTrainingVerificationState: 'self_reported',
+    latestVerifiedResult: 'self report must not count as verified',
+    learningPhase: 'return',
+  });
+  assert.equal(returned.verification.status, 'self_reported');
+  assert.equal(returned.verified, false);
+  assert.equal(returned.pendingPlanConfirmation, false);
+  assert.equal(returned.composerPhase, 'return');
+});
+
 test('skipped practice cards reflect without being treated as blocked', () => {
   const state = deriveTrainingExecutionState({
     cardType: 'practice',

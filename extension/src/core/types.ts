@@ -1172,6 +1172,7 @@ export interface TrainingHandoffView {
   fallbackAction?: string;
   returnMode?: 'result' | 'blocker' | 'verification_required' | 'reflection_required' | 'return_required';
   returnSummary?: string;
+  verificationState?: string;
   judgedAt?: string;
   sourceChain?: string[];
 }

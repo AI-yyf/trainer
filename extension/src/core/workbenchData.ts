@@ -5081,6 +5081,10 @@ function mapTrainingHandoff(
       fallback?.returnMode,
     returnSummary:
       asString(record.return_summary) ?? asString(record.returnSummary) ?? fallback?.returnSummary,
+    verificationState:
+      asString(record.verification_state) ??
+      asString(record.verificationState) ??
+      (sameHandoff ? fallback?.verificationState : undefined),
     judgedAt:
       asString(record.judged_at) ??
       asString(record.judgedAt) ??

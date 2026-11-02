@@ -438,7 +438,7 @@ def test_legacy_self_reported_try_handoff_can_reflect(tmp_path: Path) -> None:
         assert final["learning_phase"] == "return"
         assert final["status"] == "completed"
         assert final["handoff_status"] == "self_reported"
-        assert (
-            runtime.memory_service.snapshot(workspace).workspace["latest_learning_outcome"]
-            == "self_reported"
-        )
+        final_workspace = runtime.memory_service.snapshot(workspace).workspace
+        assert final_workspace["latest_learning_outcome"] == "self_reported"
+        assert not str(final_workspace.get("latest_learning_verified_result") or "").strip()
+        assert not str(final.get("success_signal") or "").strip()

@@ -1281,6 +1281,7 @@ class MemoryService(
         self._resource_dedupe_hook: Callable[[list[ResourceRecord]], list[ResourceRecord]] | None = None
         self._card_ledger: list[dict[str, Any]] = []
         self._authoritative_training_handoffs: dict[tuple[str, str], Any] = {}
+        self._training_handoff_records: dict[str, Any] = {}
         # Per-workspace memoization of snapshot(): every lane/repository mutation
         # funnels through _persist_structured (MemoryService-owned counter) or a
         # direct TrainerRepository write (write_generation), so a cache entry is
@@ -8096,6 +8097,7 @@ class MemoryService(
         reflected = generator.record_reflection(handoff.handoff_id, reflection, handoff=handoff)
         if reflected is None:
             raise LookupError("Training handoff not found.")
+        self._training_handoff_records[reflected.handoff_id] = reflected
         self.record_reflection(
             card.card_id,
             reflected.reflection,
@@ -8161,6 +8163,7 @@ class MemoryService(
             returned = generator.return_handoff(handoff.handoff_id, handoff=handoff)
             if returned is None:
                 raise LookupError("Training handoff not found.")
+            self._training_handoff_records[returned.handoff_id] = returned
             return self._persist_training_handoff_progress(
                 workspace_id=resolved_workspace_id,
                 structured=structured,
@@ -8248,23 +8251,30 @@ class MemoryService(
 
         generator = self._training_handoff_generator(resolved_workspace_id)
         payload = structured._workspace.get("latest_training_handoff")
-        handoff = generator.hydrate_handoff(payload) if isinstance(payload, dict) else None
-        if handoff is not None and handoff.handoff_id:
-            rebound_title = str(getattr(card, "title", "") or "").strip() or handoff.card_title
-            handoff = replace(
-                handoff,
-                card_id=card.card_id,
-                handoff_id=f"handoff-{card.card_id}-{uuid4().hex[:12]}",
-                card_title=rebound_title,
-                handoff_content=replace(
-                    handoff.handoff_content,
-                    card_id=card.card_id,
-                    card_title=rebound_title,
-                ),
-                evidence=[
-                    record if record.card_id == card.card_id else replace(record, card_id=card.card_id)
-                    for record in handoff.evidence
-                ],
+        current = generator.hydrate_handoff(payload) if isinstance(payload, dict) else None
+        # Rebind must never transfer another card's evidence. When the live
+        # handoff belongs to a different card, rebuild this card's own handoff
+        # from its own evidence (trusted or self-reported); otherwise start it
+        # fresh at Learn.
+        phase_rank = {
+            TrainingPhase.LEARN: 0,
+            TrainingPhase.TRY: 1,
+            TrainingPhase.VERIFY: 2,
+            TrainingPhase.REFLECT: 3,
+            TrainingPhase.RETURN: 4,
+        }
+        own_records = [
+            item
+            for item in self._training_handoff_records.values()
+            if item.card_id == card.card_id
+            and item.status is not HandoffStatus.COMPLETED
+        ]
+        if current is not None and current.card_id == card.card_id:
+            handoff = current
+        elif own_records:
+            handoff = max(
+                own_records,
+                key=lambda item: (phase_rank.get(item.phase, 0), item.handoff_id),
             )
         else:
             handoff = generator.build_handoff_record(
@@ -8272,8 +8282,51 @@ class MemoryService(
                 {},
                 response_language=_workspace_language(structured._workspace),
             )
+            own_evidence = [
+                item
+                for item in structured._evidence_items.values()
+                if item.source_card_id == card.card_id
+                and str(getattr(item, "summary", "") or "").strip()
+            ]
+            trusted = [item for item in own_evidence if item.verified]
+            self_reported = [
+                item
+                for item in own_evidence
+                if not item.verified and item.verification_source == "self_reported"
+            ]
+            supporting = trusted or self_reported
+            if supporting:
+                for item in supporting[-3:]:
+                    handoff.evidence.append(
+                        EvidenceRecord(
+                            id=f"ev-{card.card_id}-{uuid4().hex[:10]}",
+                            card_id=card.card_id,
+                            concept=handoff.handoff_content.concept_practiced,
+                            content=item.summary,
+                            source=str(item.source or "learner_return"),
+                            created_at=utc_now(),
+                            verified=bool(item.verified),
+                            verification_source=str(item.verification_source or ""),
+                        )
+                    )
+                generator._advance_phase(
+                    handoff,
+                    TrainingPhase.TRY,
+                    detail="Rebind restored this card's own recorded attempt.",
+                    recorded_at=utc_now(),
+                )
+                generator._advance_phase(
+                    handoff,
+                    TrainingPhase.VERIFY,
+                    detail="Rebind restored this card's own evidence.",
+                    recorded_at=utc_now(),
+                )
+                generator._sync_handoff_verification_state(
+                    handoff, "verified" if trusted else "self_reported"
+                )
         handoff_payload = TrainingHandoffGenerator._handoff_payload(handoff)
         self._authoritative_training_handoffs[(resolved_workspace_id, card.card_id)] = handoff
+        self._training_handoff_records[handoff.handoff_id] = handoff
         # Rebind is an explicit live-selection bind: mirror
         # persist_active_card_selection so the leftover guard treats the
         # handoff owner as live for reflect/return/activation.
@@ -8520,6 +8573,7 @@ class MemoryService(
                     )
                 )
         self._authoritative_training_handoffs[(resolved_workspace_id, card.card_id)] = handoff_record
+        self._training_handoff_records[handoff_record.handoff_id] = handoff_record
         handoff_payload = TrainingHandoffGenerator._handoff_payload(handoff_record)
         verification_state = handoff_record.verification_state
         handoff_completed = recovered_handoff is not None and passed

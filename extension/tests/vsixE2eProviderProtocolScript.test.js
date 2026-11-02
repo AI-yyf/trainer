@@ -470,12 +470,15 @@ test('settings provider form wires the CC-Switch-style quick setup card', () => 
   assert.match(source, /trusted=\{resolvedWorkspaceTrustState === "trusted"\}/);
   assert.match(source, /onSave=\{\(\) => \{\s*if \(onSaveProvider\)/);
 
-  // The card component itself splits relay blobs and never gates saving on a
-  // hand-picked model (the host auto-adopts one).
+  // The card component itself splits relay blobs and requires the user to
+  // provide the model: the host refuses an empty model, so quick setup must
+  // not promise a save it cannot complete.
   const cardSource = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'ProviderQuickSetup.tsx'),
     'utf8',
   );
   assert.match(cardSource, /parseProviderConnectionPaste/);
-  assert.doesNotMatch(cardSource, /model\.trim\(\) && !canSave/);
+  assert.match(cardSource, /const modelReady = draft\.model\.trim\(\)\.length > 0/);
+  assert.match(cardSource, /const canSave = baseUrlReady && keyReady && modelReady/);
+  assert.match(cardSource, /onDraftChange\(\{ model: event\.target\.value \}\)/);
 });

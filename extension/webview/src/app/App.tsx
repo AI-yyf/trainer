@@ -4352,6 +4352,10 @@ export function App() {
         latestTrainingNextHopStatus: reviewArtifactForeground || trainingRestoreReplacesSelectedCard
           ? undefined
           : trainingState?.latestTrainingNextHop?.status,
+        latestTrainingVerificationState:
+          reviewArtifactForeground || trainingRestoreReplacesSelectedCard
+            ? undefined
+            : trainingState?.latestTrainingHandoff?.verificationState,
         latestTrainingBlockedBy:
           reviewArtifactForeground || trainingRestoreReplacesSelectedCard
             ? undefined
@@ -4381,6 +4385,7 @@ export function App() {
       trainingState?.latestLearningBlocker,
       trainingState?.latestLearningVerifiedResult,
       trainingState?.latestTrainingHandoff?.handoffStatus,
+      trainingState?.latestTrainingHandoff?.verificationState,
       trainingState?.latestTrainingHandoff?.learningPhase,
       trainingState?.latestTrainingHandoff?.blockedBy,
       selectedTrainingCardCandidate?.learningPhase,
@@ -4407,6 +4412,21 @@ export function App() {
   const trainingOutcomeCard: TrainingSummaryCard | undefined = trainingRestoreReplacesSelectedCard
     ? undefined
     : (() => {
+    if (trainingExecutionState.verification.status === "self_reported") {
+      const selfReportedSummary = pickFirstText(
+        trainingState?.latestTrainingHandoff?.returnSummary,
+        trainingState?.latestTrainingHandoff?.handoffSummary,
+        trainingState?.latestLearningPartialProgress,
+        trainingState?.latestLearningFollowup,
+      );
+      if (selfReportedSummary) {
+        return {
+          title: appUiCopy(layout.composerLanguage, "自我报告结果"),
+          detail: selfReportedSummary,
+          meta: trainingStatusMeta,
+        };
+      }
+    }
     const verifiedResult = pickFirstText(
       trainingState?.latestLearningVerifiedResult,
       activeTrainingReviewArtifact?.verifiedResult,
@@ -10358,6 +10378,10 @@ export function App() {
               reviewArtifactForeground || trainingRestoreReplacesSelectedCard
                 ? undefined
                 : trainingState?.latestTrainingHandoff?.handoffStatus,
+            latestTrainingVerificationState:
+              reviewArtifactForeground || trainingRestoreReplacesSelectedCard
+                ? undefined
+                : trainingState?.latestTrainingHandoff?.verificationState,
             latestTrainingLearningPhase:
               reviewArtifactForeground || trainingRestoreReplacesSelectedCard
                 ? selectedTrainingCardCandidate?.learningPhase

@@ -127,6 +127,7 @@ export interface TrainingCardFacts {
  */
 export interface TrainingHandoffFacts {
   latestTrainingHandoffStatus?: string;
+  latestTrainingVerificationState?: string;
   latestTrainingLearningPhase?: string;
   latestTrainingReliability?: TrainingReliability;
   reliabilityInFlight?: boolean;
@@ -685,6 +686,7 @@ export function TrainingWorkbenchView({
   } = card;
   const {
     latestTrainingHandoffStatus,
+    latestTrainingVerificationState,
     latestTrainingLearningPhase,
     latestTrainingReliability,
     reliabilityInFlight = false,
@@ -757,6 +759,7 @@ export function TrainingWorkbenchView({
     trainingSubmode,
     selectedCardStatus,
     latestTrainingHandoffStatus,
+    latestTrainingVerificationState,
     latestTrainingNextHopStatus,
     latestTrainingBlockedBy,
     latestVerifiedResult,
@@ -1089,15 +1092,19 @@ export function TrainingWorkbenchView({
                 {verificationNotice ? <VerificationResult language={language} verdict="unknown" summary={verificationNotice} /> : null}
                 {returnContinuedInChat ? (
                   <section
-                    className="training-verification-return is-verified"
+                    className={`training-verification-return ${trainingExecutionState.verified ? "is-verified" : "is-needs-review"}`}
                     role="status"
                     aria-live="polite"
                     data-training-return-complete="true"
+                    data-training-verification-status={trainingExecutionState.verification.status}
                   >
                     <span className="training-verification-return__rail" aria-hidden="true" />
                     <div className="training-verification-return__copy">
                       <span className="training-verification-return__eyebrow">{trainingWorkbenchText(language, "returnCompleteEyebrow")}</span>
                       <strong>{trainingWorkbenchText(language, "returnCompleteTitle")}</strong>
+                      {!trainingExecutionState.verified ? (
+                        <p className="muted">{trainingWorkbenchText(language, "selfReportedReturnNote")}</p>
+                      ) : null}
                       {latestVerifiedResult?.trim() ? <p>{latestVerifiedResult}</p> : null}
                       {actions ? <div className="training-verification-return__actions">{actions}</div> : null}
                       {nextCardButton}
