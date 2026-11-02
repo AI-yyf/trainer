@@ -5656,7 +5656,6 @@ class MemoryService(
         # Training renders it as if it were still active while every governed
         # action is rejected. Clear only when the transitioned card is the
         # selected one so unrelated card transitions stay side-effect free.
-        cleared_selection = False
         if new_status in {"skipped", "archived"}:
             selected_card_id = str(structured._workspace.get("selected_card_id") or "").strip()
             if selected_card_id == card_id:
@@ -5688,7 +5687,6 @@ class MemoryService(
                         scoped = stamp_workspace_scope(runtime_record, workspace_id)
                         if scoped is not None:
                             structured.update_workspace(**{PLAN_RUNTIME_KEY: scoped})
-                cleared_selection = True
         self._record_training_event(
             structured,
             event_type="training_card_status_changed",

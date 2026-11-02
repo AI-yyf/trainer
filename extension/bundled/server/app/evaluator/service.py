@@ -362,23 +362,25 @@ class EvaluationPipeline:
         # Always own a TemporaryDirectory as tool cwd — ignore any caller workspace
         # that might point at the learner project.
         temp_dir = tempfile.TemporaryDirectory()
-        target = request.target_path or "<snippet>"
+        target_path_value = request.target_path
+        target = target_path_value or "<snippet>"
         code = request.code or ""
 
         try:
             sandbox = temp_dir.name
             reported_target = target
             project_copy = False
-            if request.target_path is not None:
+            if target_path_value is not None:
                 # Fail-close: never rewrite the learner project. Copy in-memory
                 # content (or the on-disk bytes) into the sandbox and run tools there.
                 if not code:
-                    code = Path(request.target_path).read_text(encoding="utf-8")
-                original_abs = str(Path(request.target_path).resolve())
+                    code = Path(target_path_value).read_text(encoding="utf-8")
+                original_abs = str(Path(target_path_value).resolve())
                 original_target = Path(original_abs)
+                project_root_value = request.project_root
                 project_root = (
-                    Path(request.project_root).resolve()
-                    if request.project_root
+                    Path(project_root_value).resolve()
+                    if project_root_value
                     else None
                 )
                 if (
@@ -408,7 +410,7 @@ class EvaluationPipeline:
                     reported_target = original_abs
                     project_copy = True
                 if not project_copy:
-                    sandbox_name = Path(request.target_path).name or "trainer_current_file.py"
+                    sandbox_name = Path(target_path_value).name or "trainer_current_file.py"
                     sandbox_file = Path(sandbox) / sandbox_name
                     sandbox_file.write_text(code, encoding="utf-8")
                     sandbox_target = str(sandbox_file)

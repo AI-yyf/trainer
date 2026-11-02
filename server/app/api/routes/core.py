@@ -71,10 +71,10 @@ from ...memory.workspace_recovery import (
     select_plan_runtime_for_scope,
     stamp_produced_workspace_record,
 )
-from ...training.reliability import should_replay
 from ...training.card_generator import (
     CardGenerationProviderFailure,
 )
+from ...training.reliability import should_replay
 from .. import coach_support
 from .._helpers import (
     localized_text,
