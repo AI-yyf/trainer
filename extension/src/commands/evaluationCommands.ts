@@ -47,8 +47,12 @@ export async function evaluateCurrentFileCommand(
 
   const evaluationPayload = extractEvaluationPayload(payload);
   const editor = vscode.window.activeTextEditor;
+  const editorWorkspaceFolder = editor
+    ? vscode.workspace?.getWorkspaceFolder?.(editor.document.uri)?.uri.fsPath
+    : undefined;
   const runtimeWorkspace = getRuntimeWorkspaceContext(context);
   const workspaceFolder =
+    editorWorkspaceFolder ??
     runtimeWorkspace.canonicalProjectPath ??
     vscode.workspace?.workspaceFolders?.[0]?.uri.fsPath ??
     context.getHostState().workspace?.workspaceFolder;
@@ -91,7 +95,9 @@ export async function evaluatePublishedFileCommand(context: CommandContext, uri:
     ? routed
     : training?.trainingCardCandidates?.find(candidate => candidate.cardId === cardId);
   const files = card?.filesToTouch ?? [];
-  const workspaceFolder = state.workspace.workspaceFolder;
+  const workspaceFolder =
+    vscode.workspace?.getWorkspaceFolder?.(document.uri)?.uri.fsPath ??
+    state.workspace.workspaceFolder;
   const matches = files.some(file => trainingFileMatchesEditorPath({
     filePath: file,
     editorPath: document.uri.fsPath,

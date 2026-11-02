@@ -63,3 +63,29 @@ def test_markdown_wrapped_placeholder_still_downgrades_to_reading() -> None:
 
     assert card.files_to_touch == ["<current failing file>"]
     assert card.learning_subtype == "reading"
+
+
+def test_analysis_card_with_file_downgrades_to_reading() -> None:
+    card = TrainingCardCandidateSnapshot(
+        card_type="practice",
+        title="梳理 queue_lock.py 的加锁边界",
+        learning_family="code",
+        learning_subtype="function",
+        files_to_touch=["queue_lock.py"],
+        problem_statement="聚焦第 1-41 行，记录锁相关符号和调用点。不要先改生产代码。",
+    )
+
+    assert card.learning_subtype == "reading"
+
+
+def test_implementation_card_with_change_verb_stays_implementation() -> None:
+    card = TrainingCardCandidateSnapshot(
+        card_type="practice",
+        title="为 Queue 增加受锁保护的快照",
+        learning_family="code",
+        learning_subtype="implementation",
+        files_to_touch=["queue_lock.py"],
+        problem_statement="实现 snapshot，返回副本。",
+    )
+
+    assert card.learning_subtype == "implementation"

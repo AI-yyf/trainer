@@ -103,6 +103,7 @@ from ..routes._deps import RouterDeps
 from ..runtime import SessionState, TrainerRuntime
 from ..training_card_identity import (
     prepare_training_file_evaluation,
+    training_card_is_live_for_verify,
 )
 
 logger = logging.getLogger(__name__)
@@ -4020,6 +4021,11 @@ def build_core_router(
         workspace_id = core.current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
         request = prepare_training_file_evaluation(runtime, workspace_id, request)
+        training_verification_live = True
+        if str(request.evaluation_source or "").strip().lower() == "training":
+            training_verification_live = training_card_is_live_for_verify(
+                runtime, workspace_id, str(request.training_card_id or "")
+            )
         leftover = core.leftover_plan_state_fields(workspace_id)
         leftover_runtime = leftover.get("leftover_runtime")
         training_project_root: str | None = None
@@ -4043,6 +4049,12 @@ def build_core_router(
             workspace_id,
         )
         state.snapshot.evaluation = report
+        if not training_verification_live:
+            # Historical evaluation remains readable, but a skipped/terminal
+            # card must not add learning outcomes, evidence, FSRS or plan changes.
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            runtime.save_session_state(state.session_id)
+            return report
         core.persist_evaluation_learning_loop(
             workspace_id=workspace_id,
             state=state,

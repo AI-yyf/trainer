@@ -391,3 +391,14 @@
 - CI `41436248837` failed on exactly the three server tests the audit fixes changed; the local full suite now passes `3716 passed` and extension tests exit 0. `41443397666` is the new run for `64e02a0`.
 - Installed VSIX re-check: Learning now reads "还没有正式计划。先用当前这一步继续，或从模板开始。" (no internal "旧痕迹" copy); the completed training card still shows verified evidence and Return. "下一张" waited for the cold sidecar, then hit the Provider relay (`Provider request failed`), not "Sidecar is not running".
 - Remaining external: provider relay stability for new card generation, native resource picker, Remote-SSH L2, Windows/Linux real-browser install, T-0028 human sign-off. Next: destructive recovery, resources/browser UI, high-frequency residual checks, independent re-audit of `64e02a0`.
+
+## 2026-11-02 — re-audit P1s closed; full suite green
+- Independent re-audit of `64e02a0` found residual P1s; fixed in `4ac04fb`:
+  - Skipped/terminal cards can no longer record current-file evidence: the evaluator route now returns the historical report without the learning loop, evidence, FSRS or plan changes when the training card is not live.
+  - Only explicit explanation prompts may defer to reflection; substantive unsignalled requirements (e.g. "保证所有共享状态访问都在锁保护之内") now fail. Guardrail criteria ("不修改") still cannot defer.
+  - Four cold-start training actions (flashcard answer, practice return, reflect, return) now wait for `ensureRunning()`.
+  - Two previously uncollected status tests were moved into the unit class (43 collected).
+  - Leaf matching requires a managed project root; client matching requires a workspace; verification uses the managed project root for multi-root safety.
+- Full server suite `3721 passed` (15:11) after deleting a FIFO left by the new project-copy test; the test now unlinks it. Full extension suite exit 0; `npm run check` clean.
+- Installed VSIX rebuilt from `4ac04fb`; cold-sidecar check still to be recorded. CI `41451465660` is the run for `4ac04fb`.
+- Remaining external: provider relay for new card generation, native resource picker, Remote-SSH L2, Windows/Linux real-browser install, T-0028 human sign-off.

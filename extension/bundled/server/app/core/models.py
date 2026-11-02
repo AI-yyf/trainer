@@ -1407,6 +1407,55 @@ class TrainingCardCandidateSnapshot(BaseModel):
             ]
             if not concrete_files:
                 self.learning_subtype = "reading"
+        # Inspection/note tasks that only reference a file must not force a
+        # current-file edit verification. Keep a real change verb as hands-on.
+        if self.learning_subtype.strip().lower() in {"implementation", "function", "debug"}:
+            task_text = " ".join(
+                str(value or "")
+                for value in (
+                    self.title,
+                    self.problem_statement,
+                    self.suggested_workspace_action,
+                    self.deliverable,
+                    self.success_signal,
+                    self.target_skill,
+                    self.focus_area,
+                )
+            ).lower()
+            analysis_markers = (
+                "梳理",
+                "记录",
+                "说明",
+                "不要先改",
+                "不要修改",
+                "阅读",
+                "检查",
+                "分析",
+                "review",
+                "inspect",
+                "explain",
+                "describe",
+                "record",
+                "note",
+                "do not modify",
+            )
+            change_markers = (
+                "实现",
+                "新增",
+                "增加",
+                "修改",
+                "修复",
+                "重构",
+                "implement",
+                "add ",
+                "modify",
+                "fix",
+                "refactor",
+            )
+            if any(marker in task_text for marker in analysis_markers) and not any(
+                marker in task_text for marker in change_markers
+            ):
+                self.learning_subtype = "reading"
         if self.learning_phase not in {"learn", "try", "verify", "reflect", "return"}:
             self.learning_phase = "learn"
         return self
