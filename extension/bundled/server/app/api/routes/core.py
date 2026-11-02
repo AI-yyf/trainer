@@ -4822,8 +4822,14 @@ def build_core_router(
 
     @router.post("/training/practice-return")
     def training_practice_return(request: PracticeReturnRequest) -> dict[str, object]:
-        if runtime.memory_service.get_card(request.workspace_id, request.card_id) is None:
+        card = runtime.memory_service.get_card(request.workspace_id, request.card_id)
+        if card is None:
             raise HTTPException(status_code=404, detail="Training card not found.")
+        manual_verification = (
+            str(getattr(card, "learning_subtype", "") or "").strip().lower()
+            in {"reading", "writing", "derivation", "memorization", "orientation", "project_orientation"}
+            or str(getattr(card, "verification_method", "") or "").strip().lower() == "manual"
+        )
         updated = runtime.memory_service.record_training_practice_evaluation_result(
             workspace_id=request.workspace_id,
             card_id=request.card_id,
@@ -4835,6 +4841,7 @@ def build_core_router(
             missing_requirements=request.missing_requirements,
             evidence_source=request.evidence_source,
             verified_by_evaluator=False,
+            manual_verification=manual_verification,
             request_id=request.request_id,
             idempotency_key=request.idempotency_key,
             revision=request.revision,

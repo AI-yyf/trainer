@@ -873,28 +873,32 @@ class TrainingHandoffGenerator:
         status: HandoffStatus,
     ) -> TrainingPhase:
         requested = cls._parse_phase(payload.get("learning_phase"))
-        verified = verification_state == "verified"
+        # Self-reported manual results are a legitimate (untrusted) progression
+        # source: the learner completed the task and is reflecting/returning.
+        # Honour their persisted phase exactly like verified evidence, without
+        # ever upgrading the verification state itself.
+        progressed = verification_state in {"verified", "self_reported"}
         reflected = bool(reflection.strip())
         returned = status is HandoffStatus.COMPLETED or bool(payload.get("returned_at"))
 
         # A completed, reflected return has a durable timestamp. Older
         # snapshots can retain a stale Reflect/Verify display phase; restoring
         # them must not reopen a cycle whose Return already committed.
-        if verified and reflected and status is HandoffStatus.COMPLETED and payload.get("returned_at"):
+        if progressed and reflected and status is HandoffStatus.COMPLETED and payload.get("returned_at"):
             return TrainingPhase.RETURN
 
-        if requested is TrainingPhase.RETURN and verified and reflected and returned:
+        if requested is TrainingPhase.RETURN and progressed and reflected and returned:
             return requested
-        if requested is TrainingPhase.REFLECT and verified and reflected:
+        if requested is TrainingPhase.REFLECT and progressed and reflected:
             return requested
-        if requested is TrainingPhase.VERIFY and verified:
+        if requested is TrainingPhase.VERIFY and progressed:
             return requested
         if requested is TrainingPhase.TRY:
             return requested
         if requested is TrainingPhase.LEARN:
             return requested
 
-        if verified:
+        if progressed:
             return TrainingPhase.REFLECT if reflected else TrainingPhase.VERIFY
         evidence = payload.get("evidence")
         return TrainingPhase.TRY if isinstance(evidence, list) and evidence else TrainingPhase.LEARN
@@ -1163,13 +1167,25 @@ class TrainingHandoffGenerator:
         self._persist_transition(handoff)
         return handoff
 
-    def record_reflection(self, handoff_id: str, reflection: str) -> ProjectHandoff | None:
-        """Record reflection only after trusted verification has completed."""
-        handoff = self.resume_handoff(handoff_id)
+    def record_reflection(
+        self,
+        handoff_id: str,
+        reflection: str,
+        *,
+        handoff: ProjectHandoff | None = None,
+    ) -> ProjectHandoff | None:
+        """Record reflection after trusted verification or a self-reported manual result."""
+        handoff = handoff or self.resume_handoff(handoff_id)
         if handoff is None:
             return None
-        if handoff.phase is not TrainingPhase.VERIFY or handoff.verification_state != "verified":
-            raise ValueError("Reflection requires trusted verification after a recorded training attempt.")
+        if handoff.phase is not TrainingPhase.VERIFY or handoff.verification_state not in {
+            "verified",
+            "self_reported",
+        }:
+            raise ValueError(
+                "Reflection requires verification or a self-reported manual result "
+                "after a recorded training attempt."
+            )
         reflection_text = reflection.strip()
         if not reflection_text:
             raise ValueError("A reflection is required before returning this training handoff.")
@@ -1185,9 +1201,14 @@ class TrainingHandoffGenerator:
         self._persist_transition(handoff)
         return handoff
 
-    def return_handoff(self, handoff_id: str) -> ProjectHandoff | None:
+    def return_handoff(
+        self,
+        handoff_id: str,
+        *,
+        handoff: ProjectHandoff | None = None,
+    ) -> ProjectHandoff | None:
         """Complete Return only after the reflection phase is durable."""
-        handoff = self.resume_handoff(handoff_id)
+        handoff = handoff or self.resume_handoff(handoff_id)
         if handoff is None:
             return None
         if handoff.phase is not TrainingPhase.REFLECT:

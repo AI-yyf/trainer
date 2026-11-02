@@ -61,6 +61,18 @@ class TrainingHandoffReturnMixin:
             if record.verified and record.content.strip()
         ]
         if not verified:
+            if handoff.verification_state == "self_reported":
+                self_reported = [record for record in handoff.evidence if record.content.strip()]
+                if self_reported:
+                    summary = "\n".join(
+                        dict.fromkeys(record.content.strip() for record in self_reported[-3:])
+                    )
+                    return summary, "self_reported"
+                # Legacy self-reported handoffs may carry no EvidenceRecord yet;
+                # the learner's own reflection is still an honest summary.
+                fallback = handoff.reflection.strip() or handoff.handoff_content.key_takeaway.strip()
+                if fallback:
+                    return fallback, "self_reported"
             raise ValueError("A completed Return requires trusted verification evidence.")
         summary = "\n".join(dict.fromkeys(record.content.strip() for record in verified[-3:]))
         source = next(
@@ -245,6 +257,7 @@ class TrainingHandoffReturnMixin:
         card_title = (card.title or "").strip()
         if live_plan and card_title and card_title not in concepts:
             concepts.append(card_title)
+        trusted_source = verification_source != "self_reported"
         item = self.enqueue_evidence(
             workspace_id,
             EvidenceItem(
@@ -259,13 +272,13 @@ class TrainingHandoffReturnMixin:
                 ),
                 target_plan_id=binding.plan_id if binding else "",
             ).model_copy(update={"verification_artifact": artifact} if artifact is not None else {}),
-            verified=True,
+            verified=trusted_source,
             verification_source=verification_source,
             auto_bind_current_plan=binding is None,
             bound_plan_step=binding.step if binding else "",
         )
         persisted = self._training_return_evidence_for_card(workspace_id, card.card_id)
-        if persisted is None or persisted.id != item.id or not persisted.verified:
+        if persisted is None or persisted.id != item.id or (trusted_source and not persisted.verified):
             raise RuntimeError("Training return evidence was not persisted.")
         self._bind_training_return_evidence_to_plan_runtime(
             workspace_id=workspace_id,
@@ -309,6 +322,28 @@ class TrainingHandoffReturnMixin:
         card = self.get_card(workspace_id, card_id)
         if card is None:
             raise LookupError("Training card not found.")
+        authoritative = getattr(self, "_authoritative_training_handoffs", {}).get(
+            (workspace_id, card.card_id)
+        )
+        live_payload = structured._workspace.get("latest_training_handoff")
+        live_card_id = (
+            str(
+                (live_payload or {}).get("card_id")
+                or (live_payload or {}).get("candidate_id")
+                or (live_payload or {}).get("target_id")
+                or ""
+            ).strip()
+            if isinstance(live_payload, dict)
+            else ""
+        )
+        if (
+            authoritative is not None
+            and authoritative.card_id == card.card_id
+            and live_card_id == card.card_id
+        ):
+            generator = self._training_handoff_generator(workspace_id)
+            generator._handoff_cache[authoritative.handoff_id] = authoritative
+            return structured, card, generator, authoritative
         payload = structured._workspace.get("latest_training_handoff")
         if not isinstance(payload, dict):
             raise LookupError("No training handoff is available for this card.")
@@ -344,10 +379,11 @@ class TrainingHandoffReturnMixin:
             and handoff.status is HandoffStatus.COMPLETED
             and not evidence_persisted
         )
+        self_reported = handoff.verification_state == "self_reported"
         returned = (
             handoff.phase is TrainingPhase.RETURN
             and handoff.status is HandoffStatus.COMPLETED
-            and evidence_persisted
+            and (evidence_persisted or self_reported)
         )
         return_mode = "result" if returned else "return_required"
         next_hop_status = (
@@ -359,9 +395,15 @@ class TrainingHandoffReturnMixin:
         )
         continue_in = "chat" if returned else "training"
         accepted_into = "coach" if returned else "training"
-        handoff_status = "verified" if returned else "unverified" if evidence_failed else "ready_to_return"
+        handoff_status = (
+            "self_reported"
+            if self_reported and returned
+            else "verified" if returned else "unverified" if evidence_failed else "ready_to_return"
+        )
         next_after_completion = (
-            "Return to Coach with the verified result, then route the next card."
+            "Return to Coach with the self-reported result; it is not host-verified."
+            if self_reported and returned
+            else "Return to Coach with the verified result, then route the next card."
             if returned
             else "Retry Return so the verified result is persisted as plan evidence."
             if evidence_failed
@@ -461,7 +503,9 @@ class TrainingHandoffReturnMixin:
             latest_learning_blocker="",
             latest_learning_partial_progress="" if returned else handoff.reflection,
             latest_learning_outcome=(
-                "tests_passed" if returned else "unverified" if evidence_failed else "return_required"
+                "self_reported"
+                if self_reported and returned
+                else "tests_passed" if returned else "unverified" if evidence_failed else "return_required"
             ),
             selected_card_id=card.card_id,
             selected_card_type=card.card_type,

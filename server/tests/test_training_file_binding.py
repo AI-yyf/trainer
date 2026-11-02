@@ -284,3 +284,161 @@ def test_leaf_target_without_project_root_is_rejected(tmp_path: Path) -> None:
             },
         )
         assert response.status_code == 409, response.text
+
+
+def test_manual_reading_card_raw_and_snapshot_agree_through_return(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        workspace = "ws-manual-reading"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Manual reading"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        target = tmp_path / "src" / "queue_lock.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("import threading\n", encoding="utf-8")
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-manual-reading",
+            card_type="practice",
+            status="active",
+            title="梳理 queue_lock.py 的加锁边界",
+            learning_family="code",
+            learning_subtype="reading",
+            files_to_touch=[str(target)],
+            problem_statement="记录锁相关符号和行号。不要先改生产代码。",
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(
+            workspace,
+            selected_card_id=card.card_id,
+            canonical_project_path=str(tmp_path),
+        )
+        response = client.post(
+            "/training/practice-return",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "card_id": card.card_id,
+                "passed": True,
+                "summary": "源码笔记：_lock 在第 3 行；with 在第 6 行；异常路径由 with 释放。",
+                "next_step": "Record one reflection.",
+                "focus_area": "queue_lock",
+                "evidence_source": "learner_return",
+            },
+        )
+        assert response.status_code == 200, response.text
+        card_after = runtime.memory_service.get_card(workspace, card.card_id)
+        assert card_after is not None
+        assert card_after.status == "answered"
+        raw = runtime.memory_service._structured_for(workspace)._workspace["latest_training_handoff"]
+        snapshot = runtime.memory_service.snapshot(workspace).workspace["latest_training_handoff"]
+        assert raw["learning_phase"] == "verify"
+        assert raw["verification_state"] == "self_reported"
+        assert snapshot["learning_phase"] == raw["learning_phase"]
+        assert snapshot["verification_state"] == raw["verification_state"]
+        evidence = [
+            item
+            for item in runtime.memory_service._structured_for(workspace)._evidence_items.values()
+            if item.source_card_id == card.card_id
+        ]
+        assert evidence
+        assert all(not item.verified for item in evidence)
+        assert any(item.verification_source == "self_reported" for item in evidence)
+
+        reflected = client.post(
+            "/training/reflect",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "card_id": card.card_id,
+                "handoff_id": raw["handoff_id"],
+                "reflection": "我把获取、释放和异常路径分别对应到了具体行号。",
+            },
+        )
+        assert reflected.status_code == 200, reflected.text
+        after_reflect = runtime.memory_service.snapshot(workspace).workspace["latest_training_handoff"]
+        assert after_reflect["learning_phase"] == "reflect"
+        assert after_reflect["reflection"]
+
+        returned = client.post(
+            "/training/return",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "card_id": card.card_id,
+                "handoff_id": raw["handoff_id"],
+            },
+        )
+        assert returned.status_code == 200, returned.text
+        after_return = runtime.memory_service.snapshot(workspace).workspace["latest_training_handoff"]
+        assert after_return["learning_phase"] == "return"
+        assert after_return["status"] == "completed"
+
+
+def test_legacy_self_reported_try_handoff_can_reflect(tmp_path: Path) -> None:
+    from app.training.handoff import TrainingHandoffGenerator, TrainingPhase
+
+    with build_client(tmp_path) as client:
+        workspace = "ws-legacy-manual-reflect"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Legacy manual"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-legacy-manual",
+            card_type="practice",
+            status="answered",
+            title="梳理 queue_lock.py 的加锁边界",
+            learning_family="code",
+            learning_subtype="reading",
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(
+            workspace, selected_card_id=card.card_id, canonical_project_path=str(tmp_path)
+        )
+        generator = runtime.memory_service._training_handoff_generator(workspace)
+        handoff = generator.build_handoff_record(card, {}, response_language="en-US")
+        handoff.phase = TrainingPhase.TRY
+        generator._sync_handoff_verification_state(handoff, "self_reported")
+        structured = runtime.memory_service._structured_for(workspace)
+        structured.update_workspace(
+            latest_training_handoff=TrainingHandoffGenerator._handoff_payload(handoff),
+            selected_card_id=card.card_id,
+            selected_card_status="answered",
+        )
+        runtime.memory_service._persist_structured(workspace)
+
+        reflected = client.post(
+            "/training/reflect",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "card_id": card.card_id,
+                "handoff_id": handoff.handoff_id,
+                "reflection": "迁移后的自我报告复盘。",
+            },
+        )
+        assert reflected.status_code == 200, reflected.text
+        after = runtime.memory_service.snapshot(workspace).workspace["latest_training_handoff"]
+        assert after["learning_phase"] == "reflect"
+        assert after["verification_state"] == "self_reported"
+
+        returned = client.post(
+            "/training/return",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "card_id": card.card_id,
+                "handoff_id": handoff.handoff_id,
+            },
+        )
+        assert returned.status_code == 200, returned.text
+        final = runtime.memory_service.snapshot(workspace).workspace["latest_training_handoff"]
+        assert final["learning_phase"] == "return"
+        assert final["status"] == "completed"
+        assert final["handoff_status"] == "self_reported"
+        assert (
+            runtime.memory_service.snapshot(workspace).workspace["latest_learning_outcome"]
+            == "self_reported"
+        )

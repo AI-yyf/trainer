@@ -69,6 +69,7 @@ from ..pedagogy.evidence_controls import (
 )
 from ..resources.asset_library import AssetLibraryService
 from ..training.handoff import (
+    EvidenceRecord,
     HandoffStatus,
     TrainingHandoffGenerator,
     TrainingPhase,
@@ -1279,6 +1280,7 @@ class MemoryService(
         self._review_scheduler = ReviewScheduler()
         self._resource_dedupe_hook: Callable[[list[ResourceRecord]], list[ResourceRecord]] | None = None
         self._card_ledger: list[dict[str, Any]] = []
+        self._authoritative_training_handoffs: dict[tuple[str, str], Any] = {}
         # Per-workspace memoization of snapshot(): every lane/repository mutation
         # funnels through _persist_structured (MemoryService-owned counter) or a
         # direct TrainerRepository write (write_generation), so a cache entry is
@@ -5716,7 +5718,14 @@ class MemoryService(
                 "workspace_id": workspace_id,
                 "timestamp": item.timestamp or utc_now().isoformat(),
                 "verified": verified,
-                "verification_source": verification_source.strip() if verified else "",
+                # Unverified evidence keeps no trust source, except the explicit
+                # self-reported provenance: it is honest about where the claim
+                # came from while remaining non-trusted (verified stays False).
+                "verification_source": (
+                    verification_source.strip()
+                    if verified or verification_source.strip() == "self_reported"
+                    else ""
+                ),
                 "target_plan_step": bound_plan_step.strip(),
             }
         )
@@ -8047,11 +8056,20 @@ class MemoryService(
             card_id,
             handoff_id,
         )
+        generator._handoff_cache[handoff.handoff_id] = handoff
+        if handoff.verification_state == "self_reported" and handoff.phase is TrainingPhase.TRY:
+            generator._advance_phase(
+                handoff,
+                TrainingPhase.VERIFY,
+                detail="Migrated self-reported manual result before reflection.",
+                recorded_at=utc_now(),
+            )
+            generator._sync_handoff_verification_state(handoff, "self_reported")
         if handoff.phase is TrainingPhase.REFLECT and handoff.reflection.strip():
             return dict(structured._workspace)
         if handoff.phase is TrainingPhase.RETURN:
             raise ValueError("A completed training handoff cannot be reflected again.")
-        reflected = generator.record_reflection(handoff.handoff_id, reflection)
+        reflected = generator.record_reflection(handoff.handoff_id, reflection, handoff=handoff)
         if reflected is None:
             raise LookupError("Training handoff not found.")
         self.record_reflection(
@@ -8113,6 +8131,19 @@ class MemoryService(
             card_id,
             handoff_id,
         )
+        if handoff.verification_state == "self_reported":
+            if handoff.phase is not TrainingPhase.REFLECT:
+                raise ValueError("Return requires a recorded reflection before completion.")
+            returned = generator.return_handoff(handoff.handoff_id, handoff=handoff)
+            if returned is None:
+                raise LookupError("Training handoff not found.")
+            return self._persist_training_handoff_progress(
+                workspace_id=resolved_workspace_id,
+                structured=structured,
+                card=card,
+                handoff=returned,
+                return_evidence_persisted=True,
+            )
         verified_summary, verification_source = self._verified_training_handoff_evidence(handoff)
         already_returned = (
             handoff.phase is TrainingPhase.RETURN and handoff.status is HandoffStatus.COMPLETED
@@ -8160,7 +8191,7 @@ class MemoryService(
                 handoff=handoff,
                 return_evidence_persisted=False,
             )
-        returned = generator.return_handoff(handoff.handoff_id)
+        returned = generator.return_handoff(handoff.handoff_id, handoff=handoff)
         if returned is None:
             raise LookupError("Training handoff not found.")
         credited = self._credit_returned_training_card(resolved_workspace_id, card)
@@ -8218,6 +8249,7 @@ class MemoryService(
                 response_language=_workspace_language(structured._workspace),
             )
         handoff_payload = TrainingHandoffGenerator._handoff_payload(handoff)
+        self._authoritative_training_handoffs[(resolved_workspace_id, card.card_id)] = handoff
         # Rebind is an explicit live-selection bind: mirror
         # persist_active_card_selection so the leftover guard treats the
         # handoff owner as live for reflect/return/activation.
@@ -8253,6 +8285,7 @@ class MemoryService(
         missing_requirements: list[str] | None = None,
         evidence_source: str = "ide_current_file",
         verified_by_evaluator: bool = False,
+        manual_verification: bool = False,
         request_id: str = "",
         idempotency_key: str = "",
         revision: int = 0,
@@ -8276,6 +8309,7 @@ class MemoryService(
                 missing_requirements=missing_requirements,
                 evidence_source=evidence_source,
                 verified_by_evaluator=verified_by_evaluator,
+                manual_verification=manual_verification,
                 verification_artifact=verification_artifact,
             )
 
@@ -8307,6 +8341,7 @@ class MemoryService(
         missing_requirements: list[str] | None = None,
         evidence_source: str = "ide_current_file",
         verified_by_evaluator: bool = False,
+        manual_verification: bool = False,
         verification_artifact: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
@@ -8430,6 +8465,37 @@ class MemoryService(
             and any(marker in summary_next_step_text for marker in pending_verification_markers)
         ):
             handoff_generator._sync_handoff_verification_state(handoff_record, "verification_required")
+        manual_pass = bool(manual_verification and passed and not verified_by_evaluator)
+        if manual_pass:
+            if handoff_record.phase is TrainingPhase.LEARN:
+                handoff_generator._advance_phase(
+                    handoff_record, TrainingPhase.TRY,
+                    detail="Self-reported manual attempt recorded.", recorded_at=utc_now(),
+                )
+            if handoff_record.phase is TrainingPhase.TRY:
+                handoff_generator._advance_phase(
+                    handoff_record, TrainingPhase.VERIFY,
+                    detail="Self-reported manual result recorded; reflection required.",
+                    recorded_at=utc_now(),
+                )
+            handoff_generator._sync_handoff_verification_state(handoff_record, "self_reported")
+            if cleaned_summary and not any(
+                record.content.strip() == cleaned_summary and not record.verified
+                for record in handoff_record.evidence
+            ):
+                handoff_record.evidence.append(
+                    EvidenceRecord(
+                        id=f"ev-{handoff_record.card_id}-{uuid4().hex[:10]}",
+                        card_id=handoff_record.card_id,
+                        concept=handoff_record.handoff_content.concept_practiced,
+                        content=cleaned_summary,
+                        source="learner_return",
+                        created_at=utc_now(),
+                        verified=False,
+                        verification_source="self_reported",
+                    )
+                )
+        self._authoritative_training_handoffs[(resolved_workspace_id, card.card_id)] = handoff_record
         handoff_payload = TrainingHandoffGenerator._handoff_payload(handoff_record)
         verification_state = handoff_record.verification_state
         handoff_completed = recovered_handoff is not None and passed
@@ -8483,6 +8549,17 @@ class MemoryService(
                         verified_by_evaluator=True,
                     )
                     current_card = transition.card
+            elif manual_pass:
+                if current_card.status in {"candidate", "needs_primer", "blocked"}:
+                    current_card = self.transition_card_status(
+                        resolved_workspace_id, current_card.card_id, "active",
+                        reason="Self-reported manual result; reflection and return are still required.",
+                    ).card
+                if current_card.status == "active":
+                    current_card = self.transition_card_status(
+                        resolved_workspace_id, current_card.card_id, "answered",
+                        reason="Self-reported manual result recorded; reflection and return are required.",
+                    ).card
             elif verification_pending:
                 if current_card.status in {"candidate", "needs_primer", "blocked"}:
                     pending_reason = (
@@ -8557,6 +8634,17 @@ class MemoryService(
             next_hop_status = "continued_in_chat"
             default_next_after_completion = "Return to Coach with the verified result, then route the next card."
             fallback_action = "Ask Coach for the next training card."
+        elif manual_pass:
+            return_mode = "reflection_required"
+            blocked_by = ""
+            handoff_status = "needs_reflection"
+            continue_in = "training"
+            accepted_into = "training"
+            next_hop_status = "reflection_required"
+            default_next_after_completion = (
+                "Record one reflection, then complete Return. This result is self-reported, not host-verified."
+            )
+            fallback_action = "Explain the evidence in your own words, then return through the training handoff."
         elif verified_pass:
             return_mode = "reflection_required"
             blocked_by = ""
@@ -8605,12 +8693,12 @@ class MemoryService(
                 or normalized_missing[:3]
                 or (
                     ["Record one reflection, then complete Return."]
-                    if verified_pass and not handoff_completed
+                    if (verified_pass or manual_pass) and not handoff_completed
                     else ["Verify the current IDE file."] if verification_pending else []
                 )
             ),
             "success_signal": cleaned_summary if handoff_completed else "",
-            "return_with": cleaned_summary if verification_pending or handoff_completed else blocked_by,
+            "return_with": cleaned_summary if verification_pending or handoff_completed or manual_pass else blocked_by,
             "next_after_completion": next_after_completion,
             "fallback_action": fallback_action,
             "return_mode": return_mode,
@@ -8620,6 +8708,9 @@ class MemoryService(
         }
         handoff.update(handoff_payload)
         handoff["card_title"] = title
+        handoff["learning_phase"] = handoff_record.phase.value
+        handoff["verification_state"] = verification_state
+        handoff["handoff_status"] = handoff_status
         if verification_artifact is not None:
             handoff["verification_artifact"] = dict(verification_artifact)
         next_hop = {
@@ -8631,6 +8722,10 @@ class MemoryService(
                 "This card completed Learn, Try, Verify, Reflect, and Return with trusted evidence."
                 if handoff_completed
                 else (
+                    "A self-reported manual result is recorded; reflection and an explicit Return are required "
+                    "before this card can leave the training flow."
+                    if manual_pass
+                    else (
                     "Trusted evidence is recorded, but reflection and an explicit Return are required "
                     "before this card can count as implemented."
                     if verified_pass
@@ -8638,6 +8733,7 @@ class MemoryService(
                         "The learner submitted a result; run current-file verification before it counts as mastery."
                         if verification_pending
                         else "This card still has a concrete verification blocker."
+                    )
                     )
                 )
             ),
@@ -8670,6 +8766,20 @@ class MemoryService(
             "resume_action": handoff_record.handoff_content.resume_action,
         }
 
+        if manual_pass and updated_card is not None:
+            self.enqueue_evidence(
+                resolved_workspace_id,
+                EvidenceItem(
+                    summary=cleaned_summary,
+                    source="learner_return",
+                    source_card_id=updated_card.card_id,
+                    concepts=[item for item in [updated_card.target_skill, updated_card.focus_area] if item],
+                    outcome="partial",
+                    confidence=0.4,
+                ),
+                verified=False,
+                verification_source="self_reported",
+            )
         if handoff_completed and updated_card is not None:
             self.enqueue_evidence(
                 resolved_workspace_id,
@@ -8716,7 +8826,7 @@ class MemoryService(
                 "tests_passed"
                 if handoff_completed
                 else "reflection_required"
-                if verified_pass
+                if verified_pass or manual_pass
                 else "verification_pending"
                 if verification_pending
                 else "evaluation"
