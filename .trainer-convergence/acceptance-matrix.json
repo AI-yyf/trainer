@@ -47,7 +47,7 @@
     },
     "native_install_e2e_real_provider": {
       "status": "PASS",
-      "evidence": "1c82a41: installed VSIX host E2E external MiniMax-M2.7 36/36 (run 2); run 1 /training/generate-card timeout recorded as external-provider flake"
+      "evidence": "2026-11-02 at 6cb2e98: installed VSIX host E2E external MiniMax-M2.7 36/36; evidence/vsix-e2e-real-6cb2e98.json"
     },
     "real_vscode_gui": {
       "status": "PARTIAL",
