@@ -105,6 +105,23 @@ function learning() {
   const plan = read('components/plan/CoachPlanView.tsx');
   for (const marker of ['evidenceActions?.onAdoptEvidence', 'evidenceActions?.onRejectEvidence', 'evidenceActions?.onDeferEvidence', 'plan.frozen', '<PlanStageSection', '<LearningHome']) assert.ok(plan.includes(marker), marker);
   assert.ok(!plan.includes('<textarea'));
+  // Settled-only evidence is history, not debt: it stays reachable as a
+  // practice-records disclosure even when the pending/deferred queue is empty.
+  const settledOnly = learningPlan(learningAction(), {
+    evidenceQueue: {
+      pending: [],
+      deferred: [],
+      adopted: [{ id: 'e1', summary: 'Settled observation', source: 'manual', concepts: [], outcome: 'completed', confidence: 1, adopted: true, timestamp: '2026-11-02T10:00:00Z' }],
+      rejected: [],
+      history: [],
+      unscoped: [],
+      totalCount: 1,
+    },
+  });
+  assert.ok(settledOnly.includes('data-evidence-disclosure="true"'));
+  assert.ok(settledOnly.includes('Settled observation'));
+  assert.ok(settledOnly.includes('Practice records'));
+  assert.ok(!settledOnly.includes('data-learning-card-group="reviews"'));
 }
 function reply() {
   const html = render('templates/CoachReply.tsx','CoachReply',{body:'BODY',evidence:'EVIDENCE',nextAction:'NEXT',tools:'TOOLS'});

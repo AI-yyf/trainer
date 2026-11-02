@@ -1099,12 +1099,102 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const hasTrajectoryDetails = trajectoryRows.length > 0;
   const hasBackgroundDetails = backgroundRows.length > 0 || noteRows.length > 0 || hasTrajectoryDetails;
   const evidenceTone = evidenceCounts.pending > 0 ? "warning" : evidenceCounts.deferred > 0 ? "muted" : "good";
-  const hasEvidenceDetails = evidenceCounts.pending + evidenceCounts.deferred > 0;
+  const evidenceDebtCount = evidenceCounts.pending + evidenceCounts.deferred;
+  const hasEvidenceDetails = evidenceCounts.total > 0;
   // §3.4: reviews and evidence are one debt to the learner — "待回顾 (N)".
   // The number counts what is actually owed (due reviews + pending/deferred
-  // evidence); settled history stays inside, never in the headline.
-  const proofDebtCount = (props.dueReviewItems?.length ?? 0) + evidenceCounts.pending + evidenceCounts.deferred;
-  const hasProofDetails = hasReviewDetails || hasEvidenceDetails;
+  // evidence); settled history stays reachable without inflating the headline.
+  const proofDebtCount = (props.dueReviewItems?.length ?? 0) + evidenceDebtCount;
+  const hasProofDetails = hasReviewDetails || evidenceDebtCount > 0;
+
+  const evidenceDisclosure = hasEvidenceDetails ? (
+    <details
+      className="board-card board-card--evidence"
+      data-board-card="evidence"
+      data-evidence-disclosure="true"
+    >
+      <summary className="coach-plan-view__evidence-summary">
+        <strong>{planViewText.practiceRecordsLabel}</strong>
+        <span>{evidenceCounts.total}</span>
+      </summary>
+    <section
+      className={`coach-plan-view__details-group coach-plan-view__details-group--evidence is-${evidenceTone}`}
+      aria-label={planViewText.practiceRecordsLabel}
+    >
+      {pendingEvidenceItems.length > 0 ? (
+        <div className="coach-plan-view__evidence-list">
+          {pendingEvidenceItems.map((item) => {
+            const summary = inlineText(item.summary);
+            const outcome = formatEvidenceOutcome(item.outcome, t);
+            const time = formatEvidenceTime(item.timestamp, language);
+            return (
+              <article key={item.id} className="coach-plan-view__evidence-row board-card board-card--evidence" data-plan-evidence-row="pending" data-board-card="evidence">
+                <div className="coach-plan-view__evidence-row-head">
+                  <div>
+                    <strong title={summary}>{summary}</strong>
+                    <p>{[outcome, time].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <StatusLabel label={t("pending")} />
+                </div>
+                {(evidenceActions?.onAdoptEvidence ||
+                  evidenceActions?.onRejectEvidence ||
+                  evidenceActions?.onDeferEvidence) &&
+                !(showLiveEvidenceDecisions && !item.deferredAt) ? (
+                  <div className="coach-plan-view__evidence-actions">
+                    {evidenceActions?.onAdoptEvidence ? (
+                      <ActionButton
+                        tone="accent"
+                        icon={<CheckMarkIcon size={12} />}
+                        label={t("evidenceAdopt")}
+                        onClick={() => evidenceActions.onAdoptEvidence?.(item.id)}
+                        fullWidth={false}
+                      />
+                    ) : null}
+                    {evidenceActions?.onDeferEvidence || evidenceActions?.onRejectEvidence ? (
+                      <EvidenceDecisionControls
+                        pendingId={item.id}
+                        labels={evidenceDecisionLabels}
+                        onDefer={evidenceActions?.onDeferEvidence}
+                        onReject={evidenceActions?.onRejectEvidence}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+      {settledEvidenceItems.length > 0 ? (
+        <div className="coach-plan-view__evidence-list coach-plan-view__evidence-list--settled">
+          {settledEvidenceItems.map((item) => {
+            const summary = inlineText(item.summary);
+            const outcome = formatEvidenceOutcome(item.outcome, t);
+            const time = formatEvidenceTime(item.timestamp, language);
+            const state = item.adopted
+              ? t("evidenceFilterAdopted")
+              : item.rejectedAt
+                ? t("evidenceFilterRejected")
+                : item.deferredAt
+                  ? t("evidenceFilterDeferred")
+                  : t("history");
+            return (
+              <article key={item.id} className="coach-plan-view__evidence-row coach-plan-view__evidence-row--settled board-card board-card--evidence" data-plan-evidence-row="settled" data-board-card="evidence">
+                <div className="coach-plan-view__evidence-row-head">
+                  <div>
+                    <strong title={summary}>{summary}</strong>
+                    <p>{[state, outcome, time].filter(Boolean).join(" · ")}</p>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
+    </details>
+  ) : null;
+
   return (
     <LearningHome
       currentLabel={templateCopy[language].currentLearning}
@@ -1143,97 +1233,12 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         {reviewSupportRow ? <div className="learning-card-group__note" data-review-support-note="true">{renderNodeWithParagraph(reviewSupportRow.body)}</div> : null}
         {props.dueReviewItems?.slice(0, 2).map((item) => <article key={item.id} className="board-card board-card--review" data-board-card="review"><strong title={item.title}>{item.title}</strong><p title={compactReviewLane(item, language)}>{compactReviewLane(item, language)}</p></article>)}
         <button type="button" className="template-back" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>{templateCopy[language].startReview}</button>
-        {hasEvidenceDetails ? (
-        <details
-          className="board-card board-card--evidence"
-          data-board-card="evidence"
-          data-evidence-disclosure="true"
-        >
-          <summary className="coach-plan-view__evidence-summary">
-            <strong>{planViewText.practiceRecordsLabel}</strong>
-            <span>{evidenceCounts.pending + evidenceCounts.deferred}</span>
-          </summary>
-        <section
-          className={`coach-plan-view__details-group coach-plan-view__details-group--evidence is-${evidenceTone}`}
-          aria-label={planViewText.practiceRecordsLabel}
-        >
-          {pendingEvidenceItems.length > 0 ? (
-            <div className="coach-plan-view__evidence-list">
-              {pendingEvidenceItems.map((item) => {
-                const summary = inlineText(item.summary);
-                const outcome = formatEvidenceOutcome(item.outcome, t);
-                const time = formatEvidenceTime(item.timestamp, language);
-                return (
-                  <article key={item.id} className="coach-plan-view__evidence-row board-card board-card--evidence" data-plan-evidence-row="pending" data-board-card="evidence">
-                    <div className="coach-plan-view__evidence-row-head">
-                      <div>
-                        <strong title={summary}>{summary}</strong>
-                        <p>{[outcome, time].filter(Boolean).join(" · ")}</p>
-                      </div>
-                      <StatusLabel label={t("pending")} />
-                    </div>
-                    {(evidenceActions?.onAdoptEvidence ||
-                      evidenceActions?.onRejectEvidence ||
-                      evidenceActions?.onDeferEvidence) &&
-                    !(showLiveEvidenceDecisions && !item.deferredAt) ? (
-                      <div className="coach-plan-view__evidence-actions">
-                        {evidenceActions?.onAdoptEvidence ? (
-                          <ActionButton
-                            tone="accent"
-                            icon={<CheckMarkIcon size={12} />}
-                            label={t("evidenceAdopt")}
-                            onClick={() => evidenceActions.onAdoptEvidence?.(item.id)}
-                            fullWidth={false}
-                          />
-                        ) : null}
-                        {evidenceActions?.onDeferEvidence || evidenceActions?.onRejectEvidence ? (
-                          <EvidenceDecisionControls
-                            pendingId={item.id}
-                            labels={evidenceDecisionLabels}
-                            onDefer={evidenceActions?.onDeferEvidence}
-                            onReject={evidenceActions?.onRejectEvidence}
-                          />
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          ) : null}
-          {settledEvidenceItems.length > 0 ? (
-            <div className="coach-plan-view__evidence-list coach-plan-view__evidence-list--settled">
-              {settledEvidenceItems.map((item) => {
-                const summary = inlineText(item.summary);
-                const outcome = formatEvidenceOutcome(item.outcome, t);
-                const time = formatEvidenceTime(item.timestamp, language);
-                const state = item.adopted
-                  ? t("evidenceFilterAdopted")
-                  : item.rejectedAt
-                    ? t("evidenceFilterRejected")
-                    : item.deferredAt
-                      ? t("evidenceFilterDeferred")
-                      : t("history");
-                return (
-                  <article key={item.id} className="coach-plan-view__evidence-row coach-plan-view__evidence-row--settled board-card board-card--evidence" data-plan-evidence-row="settled" data-board-card="evidence">
-                    <div className="coach-plan-view__evidence-row-head">
-                      <div>
-                        <strong title={summary}>{summary}</strong>
-                        <p>{[state, outcome, time].filter(Boolean).join(" · ")}</p>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : null}
-        </section>
-        </details>
-        ) : null}
+        {evidenceDisclosure}
       </> } : undefined}
     >
       {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
       {renderComposerDraftReplacement("project-subplan")}
+      {!hasProofDetails ? evidenceDisclosure : null}
       {completedStages.length > 0 ? (
         <details className="template-disclosure" data-learning-section="completed-stages">
           <summary>{resolveStageStatusLabel("done", stageStatusLabels?.done, language)} ({completedStages.length})</summary>
