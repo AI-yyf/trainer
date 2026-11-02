@@ -327,6 +327,12 @@
   empty state (three starters) instead of floating task chips that read as
   orphan messages. Installed VSIX: 0 conversation items, 0 suggestion chips,
   starter click fills the draft.
+- UI actions: Learning's primary next action, Training's start/return/next
+  actions and Coach's training-resume action now carry semantic icons. The
+  Training leftover “Open Coach” action had white text on a transparent
+  background because `.training-current__actions--primary .button` overrode the
+  accent fill; the accent primary variant now keeps its fill. Installed VSIX
+  screenshot confirms the blue accent button with a chevron.
 - Settings: failed test no longer reads as “未实测 / 可直接使用”. The summary
   keeps the failure note, removes Go-to-Chat as the primary action, and offers
   retest; the model is shown verbatim (`MiniMax-M3.1-Flash`). The Add-provider
