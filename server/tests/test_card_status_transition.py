@@ -1137,3 +1137,26 @@ class CardStatusTransitionAPITests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_skipped_selected_card_is_not_live(self) -> None:
+        card = _make_card(card_id="card-stale-skip", status="skipped")
+        self._seed_card(card)
+        self.service.update_workspace_state(
+            self.workspace_id, selected_card_id=card.card_id
+        )
+        assert self.service.live_selected_training_card_id(self.workspace_id) == ""
+
+    def test_skipped_card_handoff_owner_is_not_live(self) -> None:
+        card = _make_card(card_id="card-stale-handoff", status="skipped")
+        self._seed_card(card)
+        structured = self.service._structured_for(self.workspace_id)
+        structured.update_workspace(
+            latest_training_handoff={
+                "card_id": card.card_id,
+                "candidate_id": card.card_id,
+                "handoff_id": "handoff-stale",
+                "learning_phase": "try",
+                "status": "generated",
+            }
+        )
+        assert self.service._training_handoff_owner_card_id(self.workspace_id) == ""

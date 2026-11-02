@@ -31,3 +31,22 @@ def test_missing_project_root_cannot_be_copied(tmp_path: Path) -> None:
     sandbox = tmp_path / "sandbox"
     sandbox.mkdir()
     assert _copy_project_to_sandbox(tmp_path / "missing", sandbox) is False
+
+
+def test_project_copy_skips_non_regular_files(tmp_path: Path) -> None:
+    import os
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "test_ok.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    fifo = project / "pipe"
+    try:
+        os.mkfifo(fifo)
+    except (AttributeError, OSError):
+        return
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+
+    assert _copy_project_to_sandbox(project, sandbox) is True
+    assert (sandbox / "test_ok.py").exists()
+    assert not (sandbox / "pipe").exists()

@@ -435,7 +435,7 @@ export const koKR: Copy = {
   orientationStateBlocked: "차단됨",
   orientationStateReady: "준비됨",
   orientationStateInterrupted: "중단됨",
-  leftoverNotLive: "이건 이 작업 공간에 남은 기록이지, 현재 공식 계획이 아닙니다.",
+  leftoverNotLive: "아직 공식 계획이 없습니다. 지금 단계를 계속하거나 템플릿에서 시작하세요.",
   leftoverNotLiveHint: "이건 힌트일 뿐입니다. 계획이나 과제를 만들지 않습니다.",
   history: "기록",
   composerAccessibility: "메시지 입력란",

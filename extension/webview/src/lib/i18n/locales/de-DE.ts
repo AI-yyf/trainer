@@ -435,7 +435,7 @@ export const deDE: Copy = {
   orientationStateBlocked: "Blockiert",
   orientationStateReady: "Bereit",
   orientationStateInterrupted: "Unterbrochen",
-  leftoverNotLive: "Das ist ein gespeicherter Rest in diesem Arbeitsbereich, nicht der aktuelle Plan.",
+  leftoverNotLive: "Noch kein formeller Plan. Mach mit diesem Schritt weiter oder starte mit einer Vorlage.",
   leftoverNotLiveHint: "Das sind nur Hinweise. Sie erzeugen keinen Plan und keine Aufgabe.",
   history: "Verlauf",
   composerAccessibility: "Nachrichtenfeld",

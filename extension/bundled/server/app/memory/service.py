@@ -4551,7 +4551,7 @@ class MemoryService(
         if card is None:
             return ""
         card_status = str(getattr(card, "status", "") or "").strip().lower()
-        if card_status in {"implemented", "completed", "archived"}:
+        if card_status in {"implemented", "completed", "archived", "skipped"}:
             return ""
         return owner_id
 
@@ -4583,6 +4583,8 @@ class MemoryService(
         card = self.get_card(workspace_id, candidate)
         if card is None:
             return handoff_owner
+        if str(getattr(card, "status", "") or "").strip().lower() in {"skipped", "archived"}:
+            return ""
         leftover_plan, leftover_runtime, _leftover_task = self._leftover_persist_context(
             workspace_id
         )

@@ -435,7 +435,7 @@ export const frFR: Copy = {
   orientationStateBlocked: "Bloqué",
   orientationStateReady: "Prêt",
   orientationStateInterrupted: "Interrompu",
-  leftoverNotLive: "Ceci est un reste enregistré sur cet espace, pas le plan actuel.",
+  leftoverNotLive: "Pas encore de plan formel. Continuez cette étape ou partez d’un modèle.",
   leftoverNotLiveHint: "Ce sont seulement des indices. Ils ne créent ni plan ni tâche.",
   history: "Historique",
   composerAccessibility: "Zone de message",

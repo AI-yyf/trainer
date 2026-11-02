@@ -71,6 +71,7 @@ from ...memory.workspace_recovery import (
     select_plan_runtime_for_scope,
     stamp_produced_workspace_record,
 )
+from ...training.reliability import should_replay
 from ...training.card_generator import (
     CardGenerationProviderFailure,
 )
@@ -4325,7 +4326,17 @@ def build_core_router(
                 status_code=422,
                 detail="Use current-file verification before marking a training card implemented or completed.",
             )
-        core.require_live_selected_card_for_status(request.workspace_id, request.card_id)
+        reliability = runtime.memory_service.latest_training_reliability(request.workspace_id)
+        status_replay = bool(
+            isinstance(reliability, dict)
+            and should_replay(reliability, request.request_id, request.idempotency_key)
+            and str(reliability.get("command_id") or "") == "trainer.training.cardStatusTransition"
+            and str(reliability.get("card_id") or "") == request.card_id
+        )
+        # A successful same-request replay returns the recorded card even after
+        # the skip released the live selection. New requests still fail closed.
+        if not status_replay:
+            core.require_live_selected_card_for_status(request.workspace_id, request.card_id)
         if request.cancel:
             try:
                 runtime.memory_service.cancel_training_reliability(

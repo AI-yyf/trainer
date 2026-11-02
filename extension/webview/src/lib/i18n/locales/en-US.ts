@@ -435,7 +435,7 @@ export const enUS: Copy = {
   orientationStateBlocked: "Blocked",
   orientationStateReady: "Ready",
   orientationStateInterrupted: "Interrupted",
-  leftoverNotLive: "This is stored leftover on this workspace, not the live plan.",
+  leftoverNotLive: "No formal plan yet. Continue with the current step, or start from a template.",
   leftoverNotLiveHint: "These chips are hints only. They do not create a plan or task.",
   history: "History",
   composerAccessibility: "Composer",

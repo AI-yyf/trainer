@@ -370,3 +370,14 @@
   content-visibility (must be re-shot); Learning/Coach per-screen polish is the
   next visual pass. T-0028 human sign-off, real Remote-SSH L2 and Windows/Linux
   browser installation remain external BLOCKED.
+
+## 2026-11-02 — file-bound training closure + verification honesty
+- HEAD `241973b` (pushed). Real isolated profile installed from the current VSIX; practice project at `.../workspace` (queue_lock.py).
+- Fixed a live-selection leak: skipping the selected card left `selected_card_id`/handoff pointing at it, so Training kept rendering an unactionable card. Write-side release now clears selection, next hop, live selection and the matching handoff on skip/archive; the snapshot hides legacy terminal selections; the client mapping treats an explicitly empty selected card as authoritative. `test_card_status_transition` 41 passed.
+- File binding: model-authored targets (`queue_lock.py` with backticks or leaf-only) now normalize in the shared resolver, host, and server identity. Matching is exact or leaf-only, never a different file. `trainingFilePathsShared` 5 passed; `test_training_file_binding` 3 passed; `test_card_taxonomy` 5 passed.
+- Verification root causes found:
+  1. The active editor buffer (not disk) is the source of truth. A stale dirty buffer produced `13 / threading`; `File: Revert File` restored the saved file. Command failures now log to the Trainer output channel (`[command:failed] ...`).
+  2. The evaluator copied only the target file, so the project's pytest could not run. Training evaluation now copies a bounded, symlink-free project tree into a sandbox, writes the in-memory buffer over the target, and runs the project's tests there. The real project is never written. Direct pipeline: ruff passed, pyright passed, pytest 2 passed. `test_evaluator_project_copy` 2 passed.
+  3. Explanation-only acceptance criteria blocked code verification. They now defer to the reflection step; file-path “symbols” are treated as targets, not code identifiers; real missing code symbols still fail. `test_evaluator_training_acceptance` 2 passed.
+- Installed-VSIX loop (real GUI): verification passed with ruff/pyright/pytest; reflection recorded code locations and run output; Return completed; Growth shows 实现 · 反复验证 2 次验证通过. Card `a20c0f4e…` implemented; handoff verified/completed; evidence `ev-f611f129d1` verified=True, source `ide_current_file`.
+- Still external: first-use on a brand-new profile needs the provider key (kept in SecretStorage; not printed), native resource picker, real Remote-SSH L2 and Windows/Linux browser install. High-frequency/destructive and independent reverse audit are next.

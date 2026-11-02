@@ -1492,7 +1492,9 @@ def test_live_selected_card_status_skip_replays_request_id(tmp_path: Path) -> No
         assert second.status_code == 200, second.text
         assert first.json()["card"]["status"] == "skipped"
         assert second.json()["card"]["status"] == "skipped"
-        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == live_card_id
+        # The skip releases the live selection; the same request id still
+        # replays the recorded result without acting on the released card.
+        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == ""
         ledger = [
             entry
             for entry in runtime.memory_service._card_ledger

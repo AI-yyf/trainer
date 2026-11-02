@@ -51,6 +51,12 @@ export function trainingFileMatchesEditorPath(
     return false;
   }
   const editor = normalizeFsPathForMatch(input.editorPath);
+  const workspace = input.workspaceFolder
+    ? normalizeFsPathForMatch(input.workspaceFolder)
+    : "";
+  if (workspace && editor !== workspace && !editor.startsWith(`${workspace}/`)) {
+    return false;
+  }
   const absolute = isAbsoluteFsPath(file)
     ? normalizeFsPathForMatch(file)
     : input.workspaceFolder

@@ -435,7 +435,7 @@ export const esES: Copy = {
   orientationStateBlocked: "Bloqueado",
   orientationStateReady: "Listo",
   orientationStateInterrupted: "Interrumpido",
-  leftoverNotLive: "Esto es un resto guardado en este espacio, no el plan en vivo.",
+  leftoverNotLive: "Aún no hay un plan formal. Continúa con este paso o empieza con una plantilla.",
   leftoverNotLiveHint: "Estas son solo pistas. No crean un plan ni una tarea.",
   history: "Historial",
   composerAccessibility: "Campo de mensaje",

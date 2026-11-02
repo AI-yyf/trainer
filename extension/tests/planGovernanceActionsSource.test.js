@@ -482,7 +482,7 @@ test('Plan first screen keeps one primary action and leftover-not-live honesty',
     path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'segments', 'planInlineText.ts'),
     'utf8',
   );
-  assert.match(planTableSource, /leftoverNotLive: "This is stored leftover on this workspace, not the live plan."/);
+  assert.match(planTableSource, /leftoverNotLive: "No formal plan yet. Continue with the current step, or start from a template."/);
   assert.match(appSource, /const leftoverPlanNotLive = Boolean\(recoveredRuntime\) && !formalPlanLive/);
   assert.match(appSource, /leftoverNote=\{leftoverPlanNotLive\s*\? learningPracticeReadyToContinue\s*\? templateCopy\[layout\.composerLanguage\]\.practiceReadyToContinue\s*: t\.leftoverNotLive\s*: undefined\}/);
   assert.match(appSource, /hasFormalPlan: hasFormalPlan && formalPlanLive/);

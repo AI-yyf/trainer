@@ -384,26 +384,51 @@ async function resolveTrainingVerifyDocument(input: {
   ) {
     return input.editor?.document;
   }
-  for (const uri of candidateUrisForTrainingFiles(normalizedFiles, input.workspaceFolder)) {
-    try {
-      return await vscode.workspace.openTextDocument(uri);
-    } catch {
+  for (const filePath of normalizedFiles) {
+    if (filePath.split("/").includes("..")) {
       continue;
     }
-  }
-  // Cards may name only the leaf file (`queue_lock.py`) while the project
-  // stores it under a source directory. Resolve exactly one on-disk match;
-  // never guess when several files share the leaf name.
-  for (const filePath of normalizedFiles) {
+    const leafOnly = !filePath.includes("/") && !isAbsoluteFsPath(filePath);
+    if (isAbsoluteFsPath(filePath)) {
+      if (
+        !trainingFileMatchesEditorPath({
+          filePath,
+          editorPath: filePath,
+          workspaceFolder: input.workspaceFolder,
+        })
+      ) {
+        continue;
+      }
+      try {
+        return await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+      } catch {
+        continue;
+      }
+    }
+    if (!leafOnly) {
+      for (const uri of candidateUrisForTrainingFiles([filePath], input.workspaceFolder)) {
+        try {
+          return await vscode.workspace.openTextDocument(uri);
+        } catch {
+          continue;
+        }
+      }
+    }
+    // A leaf-only card (`queue_lock.py`) must resolve to exactly one on-disk
+    // match. Never open a same-named file at the workspace root first, and
+    // never guess when several files share the leaf name.
     const matches = await vscode.workspace.findFiles(
       `**/${filePath}`,
       '**/node_modules/**',
       5,
     );
-    const exact = matches.filter((uri) => {
-      const candidate = normalizeFsPath(uri.fsPath);
-      return candidate === normalizeFsPath(filePath) || candidate.endsWith(`/${filePath}`);
-    });
+    const exact = matches.filter((uri) =>
+      trainingFileMatchesEditorPath({
+        filePath,
+        editorPath: uri.fsPath,
+        workspaceFolder: input.workspaceFolder,
+      }),
+    );
     if (exact.length === 1) {
       try {
         return await vscode.workspace.openTextDocument(exact[0]);

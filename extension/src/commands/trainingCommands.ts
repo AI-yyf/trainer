@@ -794,9 +794,9 @@ export async function trainingCardStatusTransitionCommand(
 ): Promise<CommandExecutionResult> {
   const { cardId, newStatus, reason } = extractCardStatusPayload(payload);
   const workspaceId = getRuntimeWorkspaceId(context);
-  const status = context.sidecarManager.getStatus();
+  const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== "ready" || !status.port) {
-    return { ok: false, message: "Sidecar is not running." };
+    return { ok: false, message: status.detail ?? "Sidecar is unavailable." };
   }
   try {
     const response = await context.sidecarClient.postJson<{
@@ -842,9 +842,9 @@ export async function trainingGenerateCardCommand(
     return resourceTrainingBlock;
   }
   const workspaceId = getRuntimeWorkspaceId(context);
-  const status = context.sidecarManager.getStatus();
+  const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== "ready" || !status.port) {
-    return { ok: false, message: "Sidecar is not running." };
+    return { ok: false, message: status.detail ?? "Sidecar is unavailable." };
   }
   // If submode is "flash", override cardType to "flash"
   const finalCardType = submode === "flash" ? "flash" : cardType;

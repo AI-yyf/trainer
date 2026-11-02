@@ -435,7 +435,7 @@ export const ptBR: Copy = {
   orientationStateBlocked: "Bloqueado",
   orientationStateReady: "Pronto",
   orientationStateInterrupted: "Interrompido",
-  leftoverNotLive: "Isto é um resto guardado neste espaço, não o plano ao vivo.",
+  leftoverNotLive: "Ainda não há um plano formal. Continue com este passo ou comece com um modelo.",
   leftoverNotLiveHint: "Isto são só dicas. Não criam plano nem tarefa.",
   history: "Histórico",
   composerAccessibility: "Campo de mensagem",

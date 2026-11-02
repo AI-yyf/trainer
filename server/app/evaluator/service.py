@@ -4,6 +4,7 @@ import ast
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -297,9 +298,12 @@ def _copy_project_to_sandbox(project_root: Path, sandbox: Path) -> bool:
             if source.is_symlink():
                 continue
             try:
-                total_bytes += source.stat().st_size
+                file_stat = source.stat()
             except OSError:
                 continue
+            if not stat.S_ISREG(file_stat.st_mode):
+                continue
+            total_bytes += file_stat.st_size
             total_files += 1
             if total_files > _PROJECT_COPY_MAX_FILES or total_bytes > _PROJECT_COPY_MAX_BYTES:
                 return False
@@ -314,6 +318,12 @@ def _copy_project_to_sandbox(project_root: Path, sandbox: Path) -> bool:
         for name in files:
             source = current_path / name
             if source.is_symlink():
+                continue
+            try:
+                file_stat = source.stat()
+            except OSError:
+                continue
+            if not stat.S_ISREG(file_stat.st_mode):
                 continue
             destination = sandbox / source.relative_to(project_root)
             try:
@@ -930,9 +940,9 @@ class EvaluatorService:
         # flow. They must not become impossible source-code presence checks.
         criteria = _dedupe_non_empty(acceptance_criteria or learner_deliverables)
         all_symbols = _dedupe_non_empty(expected_symbols)
-        file_references = [item for item in all_symbols if _looks_like_file_reference(item)]
-        symbols = [item for item in all_symbols if item not in file_references]
-        if not criteria and not symbols:
+        if not criteria and not all_symbols:
+            # No card contract was supplied at all: keep the historical warning,
+            # not a hard failure, so generic current-file inspection still works.
             return EvaluationCheck(
                 id="training-acceptance",
                 label="training-acceptance",
@@ -940,6 +950,21 @@ class EvaluatorService:
                 detail=(
                     "No training acceptance criteria were supplied with this current-file "
                     "verification, so Trainer cannot mark the practice card as passed."
+                ),
+            )
+        file_references = [item for item in all_symbols if _looks_like_file_reference(item)]
+        symbols = [item for item in all_symbols if item not in file_references]
+        if not criteria and not symbols:
+            # A contract existed, but only as file targets: a file verification
+            # cannot pass on the target file alone.
+            return EvaluationCheck(
+                id="training-acceptance",
+                label="training-acceptance",
+                status="failed",
+                detail=(
+                    "This card has no concrete code criterion or code symbol; a file "
+                    "verification cannot pass on the target file alone. Use reflection "
+                    "or manual verification for an explanation-only card."
                 ),
             )
 
@@ -980,7 +1005,7 @@ class EvaluatorService:
                 python_expressions=python_expressions,
                 script_stdout=script_stdout,
                 raw_code=literal_evidence,
-                defer_without_signals=True,
+                defer_without_signals=not _criterion_requires_explicit_evidence(item),
             )
             for item in criteria
         ]
@@ -1002,6 +1027,7 @@ class EvaluatorService:
         ]
         total_signals = len(criteria_results) + len(symbol_results)
         matched_signals = total_signals - len(missing_results) - len(deferred_results)
+        no_concrete_code_evidence = total_signals > 0 and matched_signals == 0
         detail_lines = [
             f"Acceptance progress: {matched_signals}/{total_signals} acceptance signals matched.",
             f"Acceptance criteria supplied: {len(criteria)}.",
@@ -1023,12 +1049,16 @@ class EvaluatorService:
                 [f"File targets verified as the current file: {', '.join(file_references)}"]
                 if file_references else []
             ),
+            *(
+                ["No concrete code signal matched; deferred explanation alone cannot verify a file."]
+                if no_concrete_code_evidence else []
+            ),
         ]
 
         return EvaluationCheck(
             id="training-acceptance",
             label="training-acceptance",
-            status="passed" if not missing_results else "failed",
+            status="passed" if not missing_results and not no_concrete_code_evidence else "failed",
             detail="\n".join(detail_lines),
         )
 
@@ -1392,6 +1422,19 @@ def _criterion_code_signals(criterion: str, expected_symbols: list[str]) -> list
         ):
             add(token)
     return signals
+
+
+def _criterion_requires_explicit_evidence(criterion: str) -> bool:
+    """Guardrail claims ("do not modify X") cannot be deferred to reflection."""
+    return bool(
+        re.search(
+            r"不修改|不要修改|未修改|保持不变|不得修改|不要改动|不改动|保留|"
+            r"without\s+(?:modifying|changing)|do\s+not\s+(?:modify|change)|"
+            r"must\s+not\s+(?:modify|change)|unchanged",
+            criterion,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _criterion_result(

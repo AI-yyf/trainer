@@ -55,3 +55,45 @@ def test_real_missing_code_symbol_still_fails() -> None:
     assert check is not None
     assert check.status == "failed"
     assert "snapshot" in check.detail
+
+
+def test_deferred_only_acceptance_cannot_pass_without_code_evidence() -> None:
+    service = EvaluatorService()
+    check = _check(
+        service,
+        code="def untouched():\n    pass\n",
+        acceptance_criteria=["实现线程安全队列，保证所有共享状态访问都在锁保护之内。"],
+        expected_symbols=["queue_lock.py"],
+    )
+
+    assert check is not None
+    assert check.status == "failed"
+    assert "No concrete code signal matched" in check.detail
+
+
+def test_file_only_symbols_cannot_pass_without_a_code_criterion() -> None:
+    service = EvaluatorService()
+    check = _check(
+        service,
+        code="def untouched():\n    pass\n",
+        acceptance_criteria=[],
+        expected_symbols=["queue_lock.py"],
+    )
+
+    assert check is not None
+    assert check.status == "failed"
+    assert "no concrete code criterion" in check.detail.lower()
+
+
+def test_no_modification_guardrail_cannot_defer_to_reflection() -> None:
+    service = EvaluatorService()
+    check = _check(
+        service,
+        code="def sum_nested():\n    return 0\n",
+        acceptance_criteria=["在 `sum_nested.py` 中不修改 `list_pairs.py`"],
+        expected_symbols=["sum_nested"],
+    )
+
+    assert check is not None
+    assert check.status == "failed", check.detail
+    assert "不修改" in check.detail

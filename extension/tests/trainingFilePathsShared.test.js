@@ -66,3 +66,36 @@ test('rejects a partial directory mismatch', () => {
     false,
   );
 });
+
+test('rejects the same leaf outside the managed workspace', () => {
+  assert.equal(
+    trainingFileMatchesEditorPath({
+      filePath: 'queue_lock.py',
+      editorPath: '/work/outside/queue_lock.py',
+      workspaceFolder: '/work/project',
+    }),
+    false,
+  );
+});
+
+test('rejects a relative card path outside the managed workspace', () => {
+  assert.equal(
+    trainingFileMatchesEditorPath({
+      filePath: 'src/queue_lock.py',
+      editorPath: '/work/outside/src/queue_lock.py',
+      workspaceFolder: '/work/project',
+    }),
+    false,
+  );
+});
+
+test('accepts an absolute target inside the managed workspace', () => {
+  assert.equal(
+    trainingFileMatchesEditorPath({
+      filePath: '/work/project/src/queue_lock.py',
+      editorPath: '/work/project/src/queue_lock.py',
+      workspaceFolder: '/work/project',
+    }),
+    true,
+  );
+});

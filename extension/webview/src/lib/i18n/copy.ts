@@ -438,35 +438,35 @@ type LeftoverHonestyCopy = Pick<Copy, "leftoverNotLive" | "leftoverNotLiveHint">
 
 const leftoverHonestyLocaleOverrides: Record<ComposerLanguage, LeftoverHonestyCopy> = {
   "zh-CN": {
-    leftoverNotLive: "这是此工作区里存下的旧痕迹，不是当前正式计划。",
+    leftoverNotLive: "还没有正式计划。先用当前这一步继续，或从模板开始。",
     leftoverNotLiveHint: "这些只是提示，不会生成计划或任务。",
   },
   "en-US": {
-    leftoverNotLive: "This is stored leftover on this workspace, not the live plan.",
+    leftoverNotLive: "No formal plan yet. Continue with the current step, or start from a template.",
     leftoverNotLiveHint: "These chips are hints only. They do not create a plan or task.",
   },
   "es-ES": {
-    leftoverNotLive: "Esto es un resto guardado en este espacio, no el plan en vivo.",
+    leftoverNotLive: "Aún no hay un plan formal. Continúa con este paso o empieza con una plantilla.",
     leftoverNotLiveHint: "Estas son solo pistas. No crean un plan ni una tarea.",
   },
   "fr-FR": {
-    leftoverNotLive: "Ceci est un reste enregistré sur cet espace, pas le plan actuel.",
+    leftoverNotLive: "Pas encore de plan formel. Continuez cette étape ou partez d’un modèle.",
     leftoverNotLiveHint: "Ce sont seulement des indices. Ils ne créent ni plan ni tâche.",
   },
   "de-DE": {
-    leftoverNotLive: "Das ist ein gespeicherter Rest in diesem Arbeitsbereich, nicht der aktuelle Plan.",
+    leftoverNotLive: "Noch kein formeller Plan. Mach mit diesem Schritt weiter oder starte mit einer Vorlage.",
     leftoverNotLiveHint: "Das sind nur Hinweise. Sie erzeugen keinen Plan und keine Aufgabe.",
   },
   "ja-JP": {
-    leftoverNotLive: "これはこのワークスペースに残った記録であり、現在の正式な計画ではありません。",
+    leftoverNotLive: "正式な計画はまだありません。このステップを続けるか、テンプレートから始めてください。",
     leftoverNotLiveHint: "これは手がかりだけです。計画やタスクは作りません。",
   },
   "ko-KR": {
-    leftoverNotLive: "이건 이 작업 공간에 남은 기록이지, 현재 공식 계획이 아닙니다.",
+    leftoverNotLive: "아직 공식 계획이 없습니다. 지금 단계를 계속하거나 템플릿에서 시작하세요.",
     leftoverNotLiveHint: "이건 힌트일 뿐입니다. 계획이나 과제를 만들지 않습니다.",
   },
   "pt-BR": {
-    leftoverNotLive: "Isto é um resto guardado neste espaço, não o plano ao vivo.",
+    leftoverNotLive: "Ainda não há um plano formal. Continue com este passo ou comece com um modelo.",
     leftoverNotLiveHint: "Isto são só dicas. Não criam plano nem tarefa.",
   },
 };

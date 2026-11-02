@@ -71,6 +71,8 @@ class TestPlanRequirementCardGeneration(unittest.TestCase):
 
         self.assertNotEqual(card.scenario_pack, "function_guidance")
         self.assertEqual(card.learning_family, "code")
-        self.assertEqual(card.learning_subtype, "implementation")
+        # No concrete file target: the product rule routes the card to
+        # reading/manual verification instead of forcing "verify current file".
+        self.assertEqual(card.learning_subtype, "reading")
         self.assertEqual(card.expected_symbols, [])
         self.assertIn("SSE", card.title)

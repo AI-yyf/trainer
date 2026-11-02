@@ -435,7 +435,7 @@ export const jaJP: Copy = {
   orientationStateBlocked: "停止",
   orientationStateReady: "準備完了",
   orientationStateInterrupted: "中断",
-  leftoverNotLive: "これはこのワークスペースに残った記録であり、現在の正式な計画ではありません。",
+  leftoverNotLive: "正式な計画はまだありません。このステップを続けるか、テンプレートから始めてください。",
   leftoverNotLiveHint: "これは手がかりだけです。計画やタスクは作りません。",
   history: "履歴",
   composerAccessibility: "メッセージ入力欄",

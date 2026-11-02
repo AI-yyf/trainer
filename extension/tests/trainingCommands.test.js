@@ -93,6 +93,9 @@ function createContext(overrides = {}) {
           port: 34891,
         };
       },
+      async ensureRunning() {
+        return this.getStatus();
+      },
     },
     sidecarClient: {
       async postJson(port, requestPath, body) {

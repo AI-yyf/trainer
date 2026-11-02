@@ -52,6 +52,16 @@ def _normalize_card_target(value: object) -> str:
     return text.strip()
 
 
+def _path_is_within_project(value: str, project: str) -> bool:
+    if not project:
+        return True
+    try:
+        Path(value).resolve().relative_to(Path(project).resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def prepare_training_file_evaluation(
     runtime: Any, workspace_id: str, request: EvaluateCurrentFileRequest,
 ) -> EvaluateCurrentFileRequest:
@@ -85,6 +95,11 @@ def prepare_training_file_evaluation(
         if (normalized := _normalize_card_target(item))
     ]
     requested_path = canonical(request.file_path)
+    if targets and requested_path and not _path_is_within_project(requested_path, project):
+        raise HTTPException(
+            status_code=409,
+            detail="This file is outside the current project; open the training card target and retry.",
+        )
     if targets:
         target_paths = {canonical(item) for item in targets}
         matched = bool(requested_path) and requested_path in target_paths

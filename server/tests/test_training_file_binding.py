@@ -122,3 +122,75 @@ def test_leaf_only_card_target_matches_nested_project_file(tmp_path: Path) -> No
             },
         )
         assert rejected.status_code == 409, rejected.text
+
+
+def test_leaf_target_outside_project_is_rejected(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        workspace = "ws-outside-leaf"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Outside leaf test"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        project = tmp_path / "project"
+        project.mkdir()
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-outside-leaf",
+            card_type="practice",
+            status="active",
+            title="Outside",
+            files_to_touch=["queue_lock.py"],
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(
+            workspace, selected_card_id=card.card_id, canonical_project_path=str(project)
+        )
+        response = client.post(
+            "/evaluate/current-file",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "evaluation_source": "training",
+                "training_card_id": card.card_id,
+                "file_path": str(tmp_path / "outside" / "queue_lock.py"),
+                "language_id": "python",
+                "content": "x = 1\n",
+            },
+        )
+        assert response.status_code == 409, response.text
+
+
+def test_relative_target_outside_project_is_rejected(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        workspace = "ws-outside-relative"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Outside relative test"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        project = tmp_path / "project"
+        project.mkdir()
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-outside-relative",
+            card_type="practice",
+            status="active",
+            title="Outside",
+            files_to_touch=["src/queue_lock.py"],
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(
+            workspace, selected_card_id=card.card_id, canonical_project_path=str(project)
+        )
+        response = client.post(
+            "/evaluate/current-file",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "evaluation_source": "training",
+                "training_card_id": card.card_id,
+                "file_path": str(tmp_path / "outside" / "src" / "queue_lock.py"),
+                "language_id": "python",
+                "content": "x = 1\n",
+            },
+        )
+        assert response.status_code == 409, response.text
