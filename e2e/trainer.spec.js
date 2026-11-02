@@ -361,9 +361,9 @@ test.describe("Trainer three-destination shell", () => {
       await expectActiveView(page, "en-US", view);
       await expect(tabs.first()).toBeVisible();
       await expect(page.locator(".composer-shell")).toHaveCount(1);
-      // §3.7 red line 5: the visible send-preference switch belongs to the
-      // docked surfaces only — a Coach send always keeps the thread in front.
-      await expect(page.locator("[data-dock-send-preference]")).toHaveCount(view === "coach" ? 0 : 1);
+      // The send-preference decision lives in Settings > Preferences; no
+      // dock strip asks the learner to re-decide on every surface.
+      await expect(page.locator("[data-dock-send-preference]")).toHaveCount(0);
     }
 
     // Settings lives in the header gear and is not a chat surface.
@@ -389,14 +389,20 @@ test.describe("Trainer three-destination shell", () => {
     });
     await expectActiveView(page, "en-US", "plan");
 
-    const preference = page.locator("[data-dock-send-preference]");
-    await expect(preference).toBeVisible();
-    const jump = preference.locator('[data-dock-send-preference-option="jump"]');
-    const stay = preference.locator('[data-dock-send-preference-option="stay"]');
-    await expect(jump).toHaveAttribute("aria-pressed", "true");
-    await stay.click();
-    await expect(stay).toHaveAttribute("aria-pressed", "true");
-    await expect(jump).toHaveAttribute("aria-pressed", "false");
+    // Choose stay mode once in Settings; the dock no longer asks per send.
+    await page.getByTestId("trainer-view-nav-settings").click();
+    await expectActiveView(page, "en-US", "settings");
+    await openSettingsCategory(page, "preferences");
+    const sendPreference = page.locator('[data-settings-send-preference="true"]');
+    await expect(sendPreference).toBeVisible();
+    const sendPreferenceTrigger = sendPreference.locator(".settings-choice__trigger");
+    await expect(sendPreferenceTrigger).toContainText("View reply");
+    await sendPreferenceTrigger.click();
+    await sendPreference.getByRole("option", { name: "Stay here", exact: true }).click();
+    await expect(sendPreferenceTrigger).toContainText("Stay here");
+    await page.getByTestId("trainer-view-nav-plan").click();
+    await expectActiveView(page, "en-US", "plan");
+    await expect(page.locator("[data-dock-send-preference]")).toHaveCount(0);
 
     // Stay-mode send keeps Learning in front and lands the actionable bar.
     await page.locator("#coach-composer").fill("Stay-mode dock closure check.");

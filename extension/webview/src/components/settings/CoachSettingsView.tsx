@@ -103,6 +103,7 @@ import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "../../lib/i18n/segm
 import { settingsText } from "./settingsText";
 import { languageIntegrityText } from "./languageIntegrityCopy";
 import { useCoachSettingsViewState, useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
+import { dockSendPreferenceCopy } from "../../lib/composerDock";
 import { useProviderConnection } from "../../app/providerConnectionContext";
 import { postMessage as postWebviewMessage, requestLocalUsageInsights } from "../../lib/vscode";
 import {
@@ -2243,6 +2244,7 @@ function CoachSettingsViewSheet({
     telemetryOptIn,
     themePreference,
     learningSurfaceAlignment,
+    composerSendPreference,
     language,
     answerMode,
     teachingStyle,
@@ -2262,6 +2264,7 @@ function CoachSettingsViewSheet({
     longTermMemoryStateLabel,
     onThemePreferenceChange,
     onLearningSurfaceAlignmentChange,
+    onComposerSendPreferenceChange,
     onLanguageChange,
     onAnswerModeChange,
     onTeachingStyleChange,
@@ -6551,6 +6554,29 @@ function CoachSettingsViewSheet({
                     onChange={onLearningSurfaceAlignmentChange}
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="settings-subsection" data-settings-subsection="send-preference">
+              <span className="eyebrow settings-subsection__title">
+                {dockSendPreferenceCopy(language).label}
+              </span>
+              <div className="settings-row" data-settings-send-preference="true">
+                <ChoiceList
+                  active={composerSendPreference}
+                  items={[
+                    { label: dockSendPreferenceCopy(language).jump, value: "jump" },
+                    { label: dockSendPreferenceCopy(language).stay, value: "stay" },
+                  ]}
+                  onChange={onComposerSendPreferenceChange}
+                />
+                <p className="settings-sheet__note settings-sheet__note--compact">
+                  {settingsText(
+                    language,
+                    "从学习或资料发送后：看回答会切到对话；留在这里会保留当前页面。",
+                    "After sending from Learning or Resources: View reply jumps to Chat; Stay here keeps this page.",
+                  )}
+                </p>
               </div>
             </div>
 

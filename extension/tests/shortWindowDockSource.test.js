@@ -12,10 +12,9 @@ const composerCss = fs.readFileSync(
   'utf8',
 );
 
-test('short windows collapse dock anchor, send preference and shrink the frame', () => {
+test('short windows collapse the dock anchor and shrink the frame', () => {
   assert.match(composerCss, /@media \(max-height: 700px\)/);
   assert.match(composerCss, /\.template-context\[data-dock-anchor="true"\]/);
-  assert.match(composerCss, /\[data-dock-send-preference="true"\]/);
   assert.match(composerCss, /min-height: 30px;/);
 });
 

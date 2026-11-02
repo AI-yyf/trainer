@@ -1461,11 +1461,10 @@
 
 /* T-0022: on short windows the dock must never squeeze out the learning
    content or hide the primary send action. Collapse secondary dock chrome
-   (context anchor, send preference) and shrink the frame; the context anchor
-   remains reachable — its chips move into the message when relevant. */
+   (context anchor) and shrink the frame; the context anchor remains
+   reachable — its chips move into the message when relevant. */
 @media (max-height: 700px) {
-  .trainer-shell .template-context[data-dock-anchor="true"],
-  .trainer-shell [data-dock-send-preference="true"] {
+  .trainer-shell .template-context[data-dock-anchor="true"] {
     display: none;
   }
 

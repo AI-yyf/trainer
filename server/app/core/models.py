@@ -2598,6 +2598,11 @@ class SessionMessageRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
     message: str
+    # Host-recorded live test evidence. The streaming route adopts it for this
+    # exact provider when a project admission restarted the sidecar and the
+    # in-process capability cache is empty. Snake case and the camelCase alias
+    # both parse (the host sends both).
+    last_test_result: dict[str, Any] | None = Field(default=None, alias="lastTestResult")
     active_view: Literal[
         "coach",
         "plan",

@@ -1172,6 +1172,18 @@ test('ProviderConfigStore last-test is isolated by workspace and provider profil
   assert.equal(store.getLastTestResult(sharedConfig, { workspaceId: 'workspace-b' }), undefined);
   assert.equal(store.getLastTestResult({ ...sharedConfig, profileId: 'profile-b' }, { workspaceId: 'workspace-a' }), undefined);
   assert.equal(store.getLastTestResult(sharedConfig, { workspaceId: 'workspace-a' })?.detail, 'Workspace A last-test');
+
+  // Project admission re-keys the same physical project from the folder path
+  // to the managed project context. Carrying the passed result forward is an
+  // explicit copy; a third workspace still never sees it.
+  const carried = await store.saveLastTestResult(
+    sharedConfig,
+    storedA ?? { ok: true, status: 'connected', checkedAt: '2026-08-25T00:00:00.000Z' },
+    { workspaceId: 'workspace-managed', providerProfileId: 'profile-a' },
+  );
+  assert.equal(carried.workspaceId, 'workspace-managed');
+  assert.equal(store.getLastTestResult(sharedConfig, { workspaceId: 'workspace-managed' })?.detail, 'Workspace A last-test');
+  assert.equal(store.getLastTestResult(sharedConfig, { workspaceId: 'workspace-c' }), undefined);
 });
 
 const THINKING_MODEL_CAPABILITIES = {

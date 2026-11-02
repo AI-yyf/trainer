@@ -26,7 +26,7 @@ import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
 import type { TrainingPlanBinding } from "../../../../shared/src/models";
 import { isComposerLanguage } from "../../../../shared/src/types";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
-import { analyzeSendIntent, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
+import { analyzeSendIntent, messageReferencesWorkspaceFile, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
 import { deriveTrainerCapabilityVerdict } from "../../../../shared/src/capabilityVerdict";
 import {
   selectScopedSettingsLastTest,
@@ -223,7 +223,7 @@ import {
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
 import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
-import { CoachComposer, ComposerIconButton, DockReturnToSurfaceBar, DockSendPreferenceSwitch } from "../components/composer";
+import { CoachComposer, ComposerIconButton, DockReturnToSurfaceBar } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
@@ -5551,7 +5551,9 @@ export function App() {
         ? true
         : laneNeedsVerifiedTools && providerSupportsFormalPlanTools
           ? true
-          : undefined,
+          : messageReferencesWorkspaceFile(text) && providerSupportsFormalPlanTools
+            ? true
+            : undefined,
       requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     };
     setLastTurnView(turnActiveView);
@@ -11370,13 +11372,6 @@ export function App() {
               <span>{dockAnchorControl.anchor.label}</span>
               <button type="button" className="template-back" onClick={dockAnchorControl.suppress}>{appUiCopy(layout.composerLanguage, "清除")}</button>
             </div> : null}
-            {activeView === "plan" || activeView === "resources" ? (
-              <DockSendPreferenceSwitch
-                language={layout.composerLanguage}
-                value={normalizeDockSendPreference(layout.composerSendPreference)}
-                onChange={setComposerSendPreference}
-              />
-            ) : null}
             {coachSuggestionChips}
             <CoachComposer
               attachmentScope={attachmentScope}

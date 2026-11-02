@@ -32,6 +32,7 @@ import type {
   TrainerWorkspaceAdmission,
 } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
+import { normalizeDockSendPreference, type DockSendPreference } from "../../lib/composerDock";
 
 /**
  * Selector module for CoachSettingsView (props-debt round: store-driven data).
@@ -104,6 +105,7 @@ export interface CoachSettingsViewState {
   // §layout knobs
   themePreference: ThemePreference;
   learningSurfaceAlignment: LearningSurfaceAlignment;
+  composerSendPreference: DockSendPreference;
   language: ComposerLanguage;
   answerMode: "auto" | "coach-first" | "balanced" | "direct";
   teachingStyle: TeachingStyle;
@@ -125,6 +127,7 @@ export interface CoachSettingsViewState {
   // §actions
   onThemePreferenceChange: (value: ThemePreference) => void;
   onLearningSurfaceAlignmentChange: (value: LearningSurfaceAlignment) => void;
+  onComposerSendPreferenceChange: (value: DockSendPreference) => void;
   onLanguageChange: (value: ComposerLanguage) => void;
   onAnswerModeChange: (value: "auto" | "coach-first" | "balanced" | "direct") => void;
   onTeachingStyleChange: (value: TeachingStyle) => void;
@@ -184,6 +187,9 @@ export function useCoachSettingsViewState({
   const learningSurfaceAlignment = useWorkbenchState(
     (state) => state.layout.learningSurfaceAlignment,
   );
+  const composerSendPreference = useWorkbenchState((state) =>
+    normalizeDockSendPreference(state.layout.composerSendPreference),
+  );
   const language = useWorkbenchState((state) => state.layout.composerLanguage);
   const answerMode = useWorkbenchState((state) => state.layout.composerAnswerMode);
   const teachingStyle = useWorkbenchState((state) => state.layout.teachingStyle);
@@ -200,6 +206,7 @@ export function useCoachSettingsViewState({
   const setLearningSurfaceAlignment = useWorkbenchState(
     (state) => state.setLearningSurfaceAlignment,
   );
+  const setComposerSendPreference = useWorkbenchState((state) => state.setComposerSendPreference);
   const setComposerLanguage = useWorkbenchState((state) => state.setComposerLanguage);
   const setComposerAnswerMode = useWorkbenchState((state) => state.setComposerAnswerMode);
   const setTeachingStyle = useWorkbenchState((state) => state.setTeachingStyle);
@@ -314,6 +321,7 @@ export function useCoachSettingsViewState({
     // §layout knobs
     themePreference,
     learningSurfaceAlignment,
+    composerSendPreference,
     language,
     answerMode,
     teachingStyle,
@@ -347,6 +355,7 @@ export function useCoachSettingsViewState({
     // §actions — plain setters apply directly; mutated knobs queue App's persist.
     onThemePreferenceChange: setThemePreference,
     onLearningSurfaceAlignmentChange: setLearningSurfaceAlignment,
+    onComposerSendPreferenceChange: setComposerSendPreference,
     onLanguageChange: (value) => {
       setComposerLanguage(value);
       mutateCoachSettings();

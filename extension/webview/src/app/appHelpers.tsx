@@ -223,7 +223,7 @@ import {
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
 import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
-import { CoachComposer, ComposerIconButton, DockReturnToSurfaceBar, DockSendPreferenceSwitch } from "../components/composer";
+import { CoachComposer, ComposerIconButton, DockReturnToSurfaceBar } from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";

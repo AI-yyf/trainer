@@ -6,6 +6,7 @@ import { SidecarHttpError, type SidecarErrorPathState } from '../core/httpClient
 import { provisionRemoteProject } from './remoteProjectAdmission';
 
 import type { CommandContext } from '../core/commandContext';
+import { getRuntimeWorkspaceContext } from './workspaceContext';
 import { maybePromptCarryOverOnProjectSwitch } from './memoryCommands';
 import { rehydrateWorkbenchRuntime, rememberServerIssuedSession } from '../core/runtimeRehydration';
 import { resolveTrainerWorkspaceAdmission, resolveTrainerProjectsList } from '../core/trainerWorkspaceAdmission';
@@ -1008,6 +1009,47 @@ async function patchProjectFoundFirstLookSummary(
   }
 }
 
+/**
+ * A project admitted from the pre-admission folder keeps the same physical
+ * project but changes its runtime workspace id to the managed project context.
+ * A connection test that just passed for that folder must follow the project,
+ * otherwise the learner is forced to re-test the same connection immediately
+ * after choosing "加入 Trainer". Only a passed test for the same provider
+ * fingerprint and profile is carried; cross-workspace results still never leak.
+ */
+async function carryProviderTestAcrossProjectAdmission(context: CommandContext): Promise<void> {
+  const config = context.providerStore.getConfig();
+  if (!config) {
+    return;
+  }
+  const { workspaceId: targetWorkspaceId, legacyWorkspaceId } = getRuntimeWorkspaceContext(context);
+  const sourceWorkspaceId = legacyWorkspaceId?.trim();
+  if (!sourceWorkspaceId || !targetWorkspaceId || sourceWorkspaceId === targetWorkspaceId) {
+    return;
+  }
+  const previous = context.providerStore.getLastTestResult(config, {
+    workspaceId: sourceWorkspaceId,
+    providerProfileId: config.profileId,
+  });
+  if (!previous?.ok) {
+    return;
+  }
+  const carried = await context.providerStore.saveLastTestResult(config, previous, {
+    workspaceId: targetWorkspaceId,
+    providerProfileId: config.profileId,
+  });
+  // The next bootstrap snapshot reads the default store scope; point it at the
+  // managed project context so providerConfig.lastTestResult carries the new
+  // workspaceId the webview scopes against.
+  context.providerStore.setActiveWorkspaceId(targetWorkspaceId);
+  await context.patchWorkbenchData({
+    providerConfig: {
+      ...context.getHostState().bootstrap.providerConfig,
+      lastTestResult: carried,
+    },
+  });
+}
+
 async function setCurrentWorkspaceProjectAdmission(
   context: CommandContext,
   adoptionMode: TrainerProjectAdoptionMode,
@@ -1078,6 +1120,9 @@ async function setCurrentWorkspaceProjectAdmission(
       ensureSidecar: true,
       syncWorkbench: true,
     });
+    // Rehydrate replaces the workbench bootstrap, so the carried connection
+    // evidence must land after it, not before.
+    await carryProviderTestAcrossProjectAdmission(context);
     // Trusted personal account: offer once to carry mastery into the
     // freshly adopted project instead of silently sharing.
     await maybePromptCarryOverOnProjectSwitch(context);

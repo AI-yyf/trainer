@@ -24,6 +24,15 @@ const workbenchDataModulePath = path.resolve(
   'core',
   'workbenchData.js',
 );
+const workspaceContextModulePath = path.resolve(
+  __dirname,
+  '..',
+  'dist',
+  'extension',
+  'src',
+  'commands',
+  'workspaceContext.js',
+);
 
 function createVscodeMock(...selectedPaths) {
   const selectionQueue = [...selectedPaths];
@@ -248,6 +257,10 @@ function createContext(options = {}) {
               projectPath,
               workspaceRoot: activeRoot,
               adoptionMode: projectCall.adoptionMode,
+              projectId: projectCall.managedIdentity?.projectId,
+              contextId: projectCall.managedIdentity?.contextId,
+              canonicalProjectPath:
+                projectCall.managedIdentity?.canonicalProjectPath ?? projectPath,
               updatedAt: '2026-07-11T00:00:00.000Z',
             }
           : undefined,
@@ -445,13 +458,44 @@ function createContext(options = {}) {
         throw new Error(`Unexpected GET ${requestPath}`);
       },
     },
-    providerStore: {
-      getConfig() {
-        return undefined;
-      },
-      async getApiKey() {
-        return undefined;
-      },
+    providerStore: (() => {
+      const config = options.providerConfig;
+      const results = new Map();
+      let activeWorkspaceId;
+      const scopeKey = (workspaceId, profileId) => `${workspaceId}|${profileId ?? config?.profileId ?? ''}`;
+      return {
+        getConfig() {
+          return config;
+        },
+        async getResolvedConfig() {
+          return config;
+        },
+        getLastTestResult(_config, scope) {
+          if (!scope?.workspaceId) {
+            return undefined;
+          }
+          return results.get(scopeKey(scope.workspaceId, scope.providerProfileId));
+        },
+        async saveLastTestResult(_config, result, scope) {
+          const stored = {
+            ...result,
+            workspaceId: scope?.workspaceId ?? result.workspaceId,
+            profileId: scope?.providerProfileId ?? config?.profileId,
+          };
+          results.set(scopeKey(stored.workspaceId, stored.profileId), stored);
+          return stored;
+        },
+        setActiveWorkspaceId(workspaceId) {
+          activeWorkspaceId = workspaceId;
+        },
+        __results: results,
+        __activeWorkspaceId() {
+          return activeWorkspaceId;
+        },
+      };
+    })(),
+    async getApiKey() {
+      return undefined;
     },
     workbench: {
       async syncState() {
@@ -688,6 +732,64 @@ test('managing the current project starts the recovered session after admission'
     0,
   );
   assert.equal(context.__workbenchSyncs.length, workbenchSyncsBeforeAdmission + 1);
+});
+
+test('a passed connection test follows the project through managed admission', async () => {
+  const vscodeMock = createVscodeMock('C:\\trainer-workspace-tests\\root');
+  const { adoptWorkspaceProjectCommand, chooseTrainerWorkspaceRootCommand } = loadWithVscodeMock(
+    commandsModulePath,
+    vscodeMock,
+  );
+  const { getRuntimeWorkspaceContext } = require(workspaceContextModulePath);
+  const providerConfig = {
+    name: 'relay',
+    baseUrl: 'https://relay.test/v1',
+    model: 'relay-model',
+    protocol: 'openai_chat_completions_compatible',
+    profileId: 'profile-a',
+  };
+  const context = createContext({ providerConfig });
+  await chooseTrainerWorkspaceRootCommand(context);
+  const before = getRuntimeWorkspaceContext(context).workspaceId;
+  await context.providerStore.saveLastTestResult(
+    providerConfig,
+    {
+      ok: true,
+      status: 'connected',
+      detail: 'ready before admission',
+      checkedAt: '2026-11-01T00:00:00.000Z',
+      providerName: 'relay',
+      baseUrl: 'https://relay.test/v1',
+      model: 'relay-model',
+      profileId: 'profile-a',
+    },
+    { workspaceId: before, providerProfileId: 'profile-a' },
+  );
+
+  const result = await adoptWorkspaceProjectCommand(context);
+  assert.equal(result.ok, true);
+
+  const after = getRuntimeWorkspaceContext(context).workspaceId;
+  assert.equal(after, 'context-admission');
+  assert.equal(
+    context.providerStore.getLastTestResult(providerConfig, {
+      workspaceId: after,
+      providerProfileId: 'profile-a',
+    })?.detail,
+    'ready before admission',
+  );
+  assert.equal(
+    context.providerStore.getLastTestResult(providerConfig, {
+      workspaceId: 'unrelated-workspace',
+      providerProfileId: 'profile-a',
+    }),
+    undefined,
+  );
+  assert.equal(context.providerStore.__activeWorkspaceId(), 'context-admission');
+  const providerPatch = [...context.__patches]
+    .reverse()
+    .find((patch) => patch?.providerConfig?.lastTestResult);
+  assert.equal(providerPatch.providerConfig.lastTestResult.workspaceId, 'context-admission');
 });
 
 test('managed admission forwards the current response language to both first-look requests', async () => {

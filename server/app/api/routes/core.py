@@ -1825,6 +1825,8 @@ def build_core_router(
                 media_type="text/event-stream",
             )
         try:
+            if coaching_service is not None:
+                runtime.adopt_request_provider_evidence(request, coaching_service)
             core.ensure_streaming_ready(coaching_service, request.response_language)
             core.ensure_agent_tools_ready(request, coaching_service)
 
@@ -2752,6 +2754,8 @@ def build_core_router(
                 media_type="text/event-stream",
             )
         try:
+            if coaching_service is not None:
+                runtime.adopt_request_provider_evidence(request, coaching_service)
             core.ensure_streaming_ready(coaching_service, request.response_language)
             core.ensure_agent_tools_ready(request, coaching_service)
             use_agent_stream = _resolve_agent_loop_enabled(
@@ -4421,6 +4425,7 @@ def build_core_router(
             stream_payload,
             getattr(request, "response_language", None),
         )
+        runtime.adopt_request_provider_evidence(request, training_provider_service)
         core.ensure_streaming_ready(
             training_provider_service,
             getattr(request, "response_language", None),

@@ -143,6 +143,24 @@ export function analyzeSendIntent(input: SendIntelligenceInput): SendIntelligenc
   };
 }
 
+const WORKSPACE_FILE_REFERENCE_PATTERN =
+  /(?:^|[\s`'"([{])((?:[\w.@-]+\/)*[\w.@-]+\.(?:py|pyi|ts|tsx|js|jsx|mjs|cjs|go|rs|java|kt|kts|swift|c|cc|cpp|cxx|h|hpp|cs|rb|php|sh|bash|zsh|sql|md|mdx|json|jsonc|toml|ya?ml|txt|ini|cfg))(?=$|[\s`'",)\]}:;])/gi;
+
+/**
+ * True when the learner names a concrete workspace file (for example
+ * ``queue_lock.py`` or ``src/app.ts``). Such a turn needs the real file, not a
+ * guess: Coach enables its verified tool loop so it can read the workspace
+ * snapshot before answering.
+ */
+export function messageReferencesWorkspaceFile(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) {
+    return false;
+  }
+  WORKSPACE_FILE_REFERENCE_PATTERN.lastIndex = 0;
+  return WORKSPACE_FILE_REFERENCE_PATTERN.test(normalized);
+}
+
 export function shouldAttachCurrentFile(text: string, intent?: SendIntent): boolean {
   if (intent === "review" || intent === "task") {
     return true;

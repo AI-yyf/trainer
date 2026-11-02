@@ -152,13 +152,17 @@ test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banne
   assert.match(state, /dockReturnNotice: dockStaySurface, dockStaySendSurface: null/);
   assert.match(state, /clearDockReturnNotice: \(\) => set\(\{ dockReturnNotice: null \}\)/);
 
-  // The visible send-preference switch renders in the dock strip on
-  // Learning/Resources only and persists through the store action.
-  assert.match(app, /<DockSendPreferenceSwitch/);
-  assert.match(app, /value=\{normalizeDockSendPreference\(layout\.composerSendPreference\)\}/);
-  assert.match(app, /onChange=\{setComposerSendPreference\}/);
-  assert.match(app, /activeView === "plan" \|\| activeView === "resources" \? \(/);
-  assert.match(app, /setComposerSendPreference: state\.setComposerSendPreference,/);
+  // The send-preference decision lives once in Settings > Preferences, not in
+  // the dock strip on every Learning/Resources send.
+  assert.doesNotMatch(app, /<DockSendPreferenceSwitch/);
+  assert.doesNotMatch(app, /activeView === "plan" \|\| activeView === "resources" \? \(/);
+  const settingsView = read('components/settings/CoachSettingsView.tsx');
+  const settingsHook = read('components/settings/useCoachSettingsViewState.ts');
+  assert.match(settingsView, /data-settings-send-preference="true"/);
+  assert.match(settingsView, /dockSendPreferenceCopy\(language\)\.jump/);
+  assert.match(settingsView, /dockSendPreferenceCopy\(language\)\.stay/);
+  assert.match(settingsHook, /composerSendPreference/);
+  assert.match(settingsHook, /onComposerSendPreferenceChange/);
 
   // The returnToSurface bar is injected into Learning's Now area (live and
   // leftover branches) and the top of the Resources surface.
@@ -169,12 +173,6 @@ test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banne
   assert.match(bar, /data-dock-return-action="view"/);
   assert.match(bar, /data-dock-return-action="stay"/);
   assert.match(bar, /dockReturnBannerCopy\(language, surface\)/);
-  const preference = read('components/composer/DockSendPreferenceSwitch.tsx');
-  assert.match(preference, /data-dock-send-preference="true"/);
-  assert.match(preference, /data-dock-send-preference-option="jump"/);
-  assert.match(preference, /data-dock-send-preference-option="stay"/);
-  assert.match(preference, /aria-pressed=\{value === "stay"\}/);
-  assert.match(preference, /dockSendPreferenceCopy\(language\)/);
   const planView = read('components/plan/CoachPlanView.tsx');
   assert.match(planView, /dockReturnNotice\?: ReactNode;/);
   assert.match(planView, /nextTools=\{props\.dockReturnNotice \? <>\{props\.dockReturnNotice\}\{liveEvidenceDecisionRow\}<\/> : liveEvidenceDecisionRow\}/);
