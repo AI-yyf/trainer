@@ -1857,8 +1857,25 @@ export function resolveTrainingLearningFamily(...cards: Array<TrainingSubjectCar
 export function resolveTrainingPracticeVerificationMode(input: {
   cardType: "practice" | "flash";
   learningFamily: TrainingLearningFamily;
+  learningSubtype?: string;
+  filesToTouch?: readonly string[];
+  apiHints?: readonly string[];
+  expectedSymbols?: readonly string[];
 }): "file" | "manual" {
   if (input.cardType !== "practice") {
+    return "manual";
+  }
+  const subtype = (input.learningSubtype ?? "").trim().toLowerCase();
+  if (["reading", "writing", "derivation", "memorization", "orientation", "project_orientation"].includes(subtype)) {
+    return "manual";
+  }
+  // A code-family card that carries no file/API/symbol artifact is a manual
+  // orientation/reading task, not a file edit. Do not force "verify current
+  // file" merely because the workspace is a code project.
+  // apiHints/expectedSymbols are guidance for reading and commands; only an
+  // actual file to touch binds the card to file verification.
+  const hasCodeArtifacts = (input.filesToTouch?.length ?? 0) > 0;
+  if (!hasCodeArtifacts) {
     return "manual";
   }
   return input.learningFamily === "code" ? "file" : "manual";

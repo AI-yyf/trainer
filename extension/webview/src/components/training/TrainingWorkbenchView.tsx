@@ -314,11 +314,22 @@ type PracticeVerificationMode = "file" | "manual";
 function resolvePracticeVerificationMode(input: {
   isFlashCard: boolean;
   learningFamily?: "code" | "theory";
+  learningSubtype?: string;
   filesToTouch: string[];
   apiHints: string[];
   expectedSymbols: string[];
 }): PracticeVerificationMode {
   if (input.isFlashCard) {
+    return "manual";
+  }
+  const subtype = (input.learningSubtype ?? "").trim().toLowerCase();
+  if (["reading", "writing", "derivation", "memorization", "orientation", "project_orientation"].includes(subtype)) {
+    return "manual";
+  }
+  // Commands and symbol hints guide a manual answer; only a real file edit
+  // binds the card to "verify current file".
+  const hasCodeArtifacts = input.filesToTouch.length > 0;
+  if (!hasCodeArtifacts) {
     return "manual";
   }
   if (input.learningFamily === "code") {
@@ -327,9 +338,7 @@ function resolvePracticeVerificationMode(input: {
   if (input.learningFamily === "theory") {
     return "manual";
   }
-  return input.filesToTouch.length > 0 || input.apiHints.length > 0 || input.expectedSymbols.length > 0
-    ? "file"
-    : "manual";
+  return "file";
 }
 
 function resolveManualPracticeVerificationCopy(
@@ -795,6 +804,7 @@ export function TrainingWorkbenchView({
     .filter((file) => file.length > 0 && !/^<[^>]*>$/.test(file) && !file.includes("<current failing file>"));
   const practiceVerificationMode = resolvePracticeVerificationMode({
     isFlashCard,
+    learningSubtype,
     learningFamily,
     filesToTouch: resolvedFilesToTouch,
     apiHints,

@@ -327,6 +327,12 @@
   empty state (three starters) instead of floating task chips that read as
   orphan messages. Installed VSIX: 0 conversation items, 0 suggestion chips,
   starter click fills the draft.
+- Training taxonomy: an implementation card without a concrete
+  `files_to_touch` target is downgraded to `reading` by the shared card model,
+  so the UI uses manual verification instead of “verify current file”. A
+  concrete file target keeps `implementation`. Chat capability no longer
+  requires a prior provider test (configured + key is sendable); streaming,
+  tools, vision and formal-plan capabilities remain probe-gated.
 - UI actions: Learning's primary next action, Training's start/return/next
   actions and Coach's training-resume action now carry semantic icons. The
   Training leftover “Open Coach” action had white text on a transparent

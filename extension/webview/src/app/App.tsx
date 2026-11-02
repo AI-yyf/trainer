@@ -1716,10 +1716,9 @@ export function App() {
       ),
     [data.providerConfig, scopedProviderLastTest, layout.composerLanguage, providerTestClock],
   );
-  // Capability gating keys off provider readiness (configured + API key + a
-  // live passing test). Sidecar connection state is informational only — the
-  // host lazy-starts the sidecar per request, so an offline indicator must
-  // never lock the workbench.
+  // Chat is gated only by configuration + API key; the first real send is the
+  // confirmation. Streaming/tools/vision/formal plan still require a probe
+  // observation, and sidecar connection state never locks the workbench.
   const capabilityVerdict = useMemo(
     () => deriveTrainerCapabilityVerdict({
       connectionState: data.connection.state,
@@ -4060,6 +4059,10 @@ export function App() {
   const trainingPracticeVerificationMode = resolveTrainingPracticeVerificationMode({
     cardType: trainingCardType,
     learningFamily: trainingLearningFamily,
+    learningSubtype: trainingLearningSubtype,
+    filesToTouch: selectedTrainingCardCandidate?.filesToTouch,
+    apiHints: selectedTrainingCardCandidate?.apiHints,
+    expectedSymbols: selectedTrainingCardCandidate?.expectedSymbols,
   });
   const trainingScenarioPackLabel = pickFirstText(
     selectedTrainingCardCandidate?.scenarioPack,

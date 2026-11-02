@@ -1376,6 +1376,19 @@ class TrainingCardCandidateSnapshot(BaseModel):
             )
         self.learning_family = self.learning_family or "theory"
         self.learning_subtype = self.learning_subtype or "concept"
+        # A hands-on implementation card must point at at least one concrete
+        # file. If the generator omitted the file target, the card is actually
+        # a reading/orientation task; downgrade it so the UI uses manual
+        # verification instead of forcing "verify current file".
+        if self.learning_subtype.strip().lower() == "implementation":
+            concrete_files = [
+                str(path).strip()
+                for path in self.files_to_touch
+                if str(path).strip()
+                and not (str(path).strip().startswith("<") and str(path).strip().endswith(">"))
+            ]
+            if not concrete_files:
+                self.learning_subtype = "reading"
         if self.learning_phase not in {"learn", "try", "verify", "reflect", "return"}:
             self.learning_phase = "learn"
         return self

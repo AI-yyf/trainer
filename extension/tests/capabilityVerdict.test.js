@@ -23,14 +23,14 @@ test('provider not configured keeps all provider capabilities unavailable', () =
   assert.equal(verdict.reason, 'provider_not_configured');
 });
 
-test('never-tested provider does not claim chat or tools as live', () => {
+test('never-tested provider can chat but does not claim verified tools or streaming', () => {
   const verdict = deriveTrainerCapabilityVerdict({
     providerConfigured: true,
     apiKeyConfigured: true,
     connectionState: 'connected',
   });
 
-  assert.equal(verdict.chat, false);
+  assert.equal(verdict.chat, true);
   assert.equal(verdict.streaming, false);
   assert.equal(verdict.verifiedTools, false);
   assert.equal(verdict.formalPlan, false);
@@ -48,14 +48,14 @@ test('connected provider keeps chat usable while streaming remains independently
   assert.equal(verdict.reason, 'tools_not_verified');
 });
 
-test('never-tested connected provider stays fail-closed for chat and chips', () => {
+test('never-tested connected provider can chat while capability chips stay unverified', () => {
   const verdict = deriveTrainerCapabilityVerdict({
     providerConfigured: true,
     apiKeyConfigured: true,
     connectionState: 'connected',
   });
 
-  assert.equal(verdict.chat, false);
+  assert.equal(verdict.chat, true);
   assert.equal(verdict.streaming, false);
   assert.equal(verdict.verifiedTools, false);
   assert.equal(verdict.imageInput, false);
@@ -63,7 +63,7 @@ test('never-tested connected provider stays fail-closed for chat and chips', () 
   assert.equal(verdict.reason, 'provider_not_tested');
 });
 
-test('all-true capabilityTruth cannot bypass failed or missing last-test', () => {
+test('all-true capabilityTruth cannot bypass failed or missing last-test for probed capabilities', () => {
   const claimedReady = {
     toolsReady: true,
     streamingReady: true,
@@ -79,7 +79,7 @@ test('all-true capabilityTruth cannot bypass failed or missing last-test', () =>
       capabilityTruth: claimedReady,
       imageProtocolSupported: true,
     });
-    assert.equal(verdict.chat, false);
+    assert.equal(verdict.chat, true);
     assert.equal(verdict.streaming, false);
     assert.equal(verdict.verifiedTools, false);
     assert.equal(verdict.imageInput, false);

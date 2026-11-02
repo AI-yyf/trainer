@@ -44,13 +44,19 @@ export function deriveTrainerCapabilityVerdict(
   const configured = input.providerConfigured === true;
   const credentials = input.apiKeyConfigured === true;
   const lastTestOk = input.lastTestOk === true;
-  const transportReady =
-    configured && credentials && input.sendBlocked !== true && lastTestOk;
+  // Chat is sendable as soon as configuration and credentials exist. The
+  // first real send is the live confirmation; a prior test is diagnostic, not
+  // a gate. Tool/streaming/vision/formal-plan capabilities stay probe-gated
+  // because they need an observed capability, not just a configured transport.
+  const transportReady = configured && credentials && input.sendBlocked !== true;
   const chat = transportReady;
-  const streaming = transportReady && input.capabilityTruth?.streamingReady === true;
-  const verifiedTools = transportReady && input.capabilityTruth?.toolsReady === true;
+  const streaming =
+    transportReady && lastTestOk && input.capabilityTruth?.streamingReady === true;
+  const verifiedTools =
+    transportReady && lastTestOk && input.capabilityTruth?.toolsReady === true;
   const imageInput =
     transportReady &&
+    lastTestOk &&
     input.capabilityTruth?.visionReady === true &&
     input.imageProtocolSupported === true;
   const authorityEvidence = input.authority?.resourceWriteEvidence;
