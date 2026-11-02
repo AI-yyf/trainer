@@ -12,6 +12,7 @@ import {
   type PendingBrowserDraft,
 } from './draftPoller';
 import { resolveBrowserCaptureCopyLanguage } from './hostCopy';
+import { BrowserLibraryPoller } from './libraryPoller';
 import {
   createTrainerUriHandler,
   handleTrainerDeepLink,
@@ -46,11 +47,17 @@ export interface BrowserCaptureRuntimeDeps {
   intervalMs?: number;
   /** How long a forwarded draft waits for its applied receipt (test seam). */
   receiptTimeoutMs?: number;
+  /**
+   * Fetch a fresh /memory/summary and push it to the workbench. The library
+   * poller calls this only when the sidecar's resource-id set changes.
+   */
+  refreshLibrary?: () => Promise<void>;
 }
 
 export interface BrowserCaptureRuntime {
   pairing: BrowserPairingSession;
   drafts: BrowserDraftPoller;
+  library: BrowserLibraryPoller;
   /**
    * Applied receipt for `ui/coachDraftPrefill` (from the workbench webview):
    * resolves the delivery wait of the draft with this id.
@@ -151,6 +158,27 @@ export function createBrowserCaptureRuntime(
     onError: (message) => log(`draft forwarding skipped: ${message}`),
   });
 
+  const library = new BrowserLibraryPoller({
+    getSidecarPort: () => {
+      const status = deps.getSidecarStatus();
+      return status.lifecycle === 'ready' ? status.port : undefined;
+    },
+    isWorkbenchVisible: () => deps.workbench.isVisible?.() === true,
+    getWorkspaceId: () => deps.getWorkspaceId(),
+    fetchLibraryRevision: (port, workspaceId) =>
+      sidecarClient.getJson(
+        port,
+        `${BROWSER_CAPTURE.libraryRevisionPath}?workspace_id=${encodeURIComponent(workspaceId)}`,
+      ),
+    refreshLibrary: async () => {
+      if (deps.refreshLibrary) {
+        await deps.refreshLibrary();
+      }
+    },
+    intervalMs: deps.intervalMs,
+    onError: (message) => log(`library refresh skipped: ${message}`),
+  });
+
   const deepLinkWorkbench = {
     show: () => workbench.show(),
     postMessage: (message: unknown) => workbench.postMessage(message),
@@ -161,11 +189,15 @@ export function createBrowserCaptureRuntime(
   return {
     pairing,
     drafts,
+    library,
     notifyDraftApplied: (draftId: string) => receipts.notify(draftId),
     uriHandler,
     handleDeepLink: (uri) =>
       handleTrainerDeepLink({ workbench: deepLinkWorkbench, outputChannel, language }, uri),
-    dispose: () => drafts.dispose(),
+    dispose: () => {
+      drafts.dispose();
+      library.dispose();
+    },
   };
 }
 

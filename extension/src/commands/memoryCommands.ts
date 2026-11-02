@@ -56,7 +56,11 @@ type RestoreRequestStep = {
 
 export async function refreshMemoryCommand(
   context: CommandContext,
+  payload?: unknown,
 ): Promise<CommandExecutionResult> {
+  const silent = Boolean(
+    payload && typeof payload === 'object' && (payload as { silent?: unknown }).silent === true,
+  );
   if (!(await context.trustGuard.ensureTrusted('refresh Trainer memory'))) {
     return { ok: false, message: 'Workspace trust is required to refresh memory.' };
   }
@@ -80,7 +84,7 @@ export async function refreshMemoryCommand(
   await patchFromSummary(context, summary);
   return {
     ok: true,
-    message: 'Trainer memory refreshed.',
+    message: silent ? '' : 'Trainer memory refreshed.',
     data: summary,
   };
 }

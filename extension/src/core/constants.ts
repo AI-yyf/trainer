@@ -192,6 +192,8 @@ export const BROWSER_CAPTURE = {
   pairingCodeTtlMs: 10 * 60 * 1_000,
   /** Draft forwarding cadence while a workbench surface is visible. */
   draftPollIntervalMs: 3_000,
+  /** Library fingerprint cadence while a workbench surface is visible. */
+  libraryPollIntervalMs: 2_000,
   /**
    * How long a forwarded draft waits for the workbench's applied receipt
    * before the poll retries. The queue entry stays unacknowledged until the
@@ -203,6 +205,7 @@ export const BROWSER_CAPTURE = {
   pairPath: '/browser/pair',
   pendingDraftsPath: '/browser/pending-drafts',
   pendingDraftsAckPath: '/browser/pending-drafts/ack',
+  libraryRevisionPath: '/browser/library-revision',
 } as const;
 
 export const SIDECAR_DEFAULTS = {

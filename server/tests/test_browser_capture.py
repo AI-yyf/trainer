@@ -142,6 +142,18 @@ def test_web_capture_extracts_body_and_registers_it_in_the_library(tmp_path, mon
         assert summary.status_code == 200, summary.text
         assert payload["id"] in {item["id"] for item in summary.json()["memory"]["resources"]}
 
+        # The host-facing fingerprint is what lets the live sidebar refresh
+        # without restarting; it must change after a capture.
+        revision = client.get(
+            "/browser/library-revision",
+            params={"workspace_id": workspace_id},
+        )
+        assert revision.status_code == 200, revision.text
+        revision_payload = revision.json()
+        assert revision_payload["workspace_id"] == workspace_id
+        assert revision_payload["count"] >= 1
+        assert revision_payload["revision"]
+
 
 def test_pdf_capture_downloads_bounded_bytes_and_uses_existing_pdf_ingest(tmp_path, monkeypatch) -> None:
     workspace_id = "workspace-capture-pdf"

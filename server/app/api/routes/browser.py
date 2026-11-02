@@ -16,7 +16,9 @@ boundary. Route-level behavior:
                                    trusted loopback / instance token, and an
                                    explicit workspace reference is required);
 - ``POST /browser/pending-drafts/ack`` host acks the drafts it forwarded (same
-                                   host-facing boundary).
+                                   host-facing boundary);
+- ``GET  /browser/library-revision`` host polls a cheap library fingerprint so
+                                   browser captures refresh the live snapshot.
 
 The browser extension never reads the pending queue — the host is its only
 consumer — so the two queue routes do not take a Bearer credential. They are
@@ -26,6 +28,7 @@ polling for gets an error, never another project's captures.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -371,6 +374,33 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             session_id=session_id or None,
             workspace_id=workspace_id or None,
         )
+
+    @router.get("/browser/library-revision")
+    def library_revision(
+        workspace_id: str | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, object]:
+        """Host poll: a cheap fingerprint of the workspace library.
+
+        Browser captures land in the sidecar without a coaching turn, so the
+        host has no event to react to. Polling the resource-id set is cheap and
+        lets the host fetch /memory/summary only when the library actually
+        changed; the webview then receives one fresh snapshot.
+        """
+
+        scope = host_workspace_scope(workspace_id, session_id)
+        resources = runtime.repository.list_resources(scope)
+        resource_ids = sorted({str(resource.id) for resource in resources})
+        revision = (
+            hashlib.sha1("\n".join(resource_ids).encode("utf-8")).hexdigest()[:16]
+            if resource_ids
+            else ""
+        )
+        return {
+            "workspace_id": scope,
+            "count": len(resource_ids),
+            "revision": revision,
+        }
 
     @router.get("/browser/pending-drafts")
     def list_pending_drafts(

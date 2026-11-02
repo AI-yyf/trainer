@@ -4,6 +4,7 @@ import { registerCommands } from './commands';
 import { maybePromptCaptureOnboarding } from './commands/browserCaptureCommands';
 import { createBrowserCaptureRuntime } from './browserCapture/runtime';
 import { evaluatePublishedFileCommand } from './commands/evaluationCommands';
+import { refreshMemoryCommand } from './commands/memoryCommands';
 import { primeProviderModelsState } from './commands/providerWebviewCommands';
 import { invalidateActiveTrainerStreams } from './commands/sessionCommands';
 import { getRuntimeWorkspaceContext } from './commands/workspaceContext';
@@ -390,6 +391,9 @@ export async function activate(
   // (vscode://local.trainer-extension/library/<resourceId>).
   const browserCapture = createBrowserCaptureRuntime({
     sidecarClient,
+    refreshLibrary: async () => {
+      await refreshMemoryCommand(commandContext, { silent: true });
+    },
     getWorkspaceId: () => getRuntimeWorkspaceContext({ getHostState }).workspaceId,
     getSidecarStatus: () => {
       const status = sidecarManager.getStatus();
@@ -414,6 +418,7 @@ export async function activate(
   workbench.setDraftPrefillReceiptHandler(handleDraftPrefillReceipt);
   editorPanel.setDraftPrefillReceiptHandler(handleDraftPrefillReceipt);
   browserCapture.drafts.start();
+  browserCapture.library.start();
   extensionContext.subscriptions.push(
     browserCapture,
     vscode.window.registerUriHandler(browserCapture.uriHandler),
