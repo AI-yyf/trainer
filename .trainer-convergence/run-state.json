@@ -2,7 +2,7 @@
   "version": 1,
   "loop": 6,
   "phase": "BLOCKED_ON_EXTERNAL",
-  "head": "0860ee4",
+  "head": "1c82a41",
   "results": {
     "T-0026": "MEASURED (real provider glm-5.3, 5 samples: first chunk 5.6-12.8s, total 10.9-19.0s; evidence/real-provider-latency-glm53-*.json)",
     "T-0027": "FIXED_VALIDATED (e84049d: 4-layer contract fix — schema+prompt, router repair incl. pasted-prose blobs, first-step label family extractor, honest-empty fresh-workspace focus; real provider glm-5.3 4/5 samples emit exact concrete step consistent with prose, evidence/t0027-final-1..5.json; residual 1/5 = pedagogy rescue lane template, split out as T-0029)",
@@ -61,14 +61,19 @@
     "model_switch_structure": "PASS_STRUCTURAL (provider configuration human 1/1 incl. profile/model switch and Coach handoff; settings lifecycle 1/1); real model switch BLOCKED (no key)",
     "training_fact_fence": "FIXED_VALIDATED (d72e98b: foreign/unbound route card cannot lend authored facts to the selected card; recovering/stale sync uses an empty bound shell; bound-card 42/42, session recovery 24/24)",
     "structural_probe": "PASS_LOCAL (npm run test:structural-journey; evidence/structural-d72e98b.log)",
-    "real_model_journey": "PASS (2026-11-02 at bcb7cf6: real sidecar+SQLite, MiniMax-M2.7 primary, 10/10 steps 200 — streaming+tools verified, plan id generated, restart same session, continuity 229 visible chars, workspace isolation false leak, model switch to M3.1; evidence/journey-real-2026-11-02/)",
+    "real_model_journey": "PASS (2026-11-02 at 1c82a41: real sidecar+SQLite, MiniMax-M2.7 primary, 10/10 steps 200; streaming/tools verified, real plan id, restart same session, continuity 1747 visible chars, workspace isolation, model switch to M3.1; evidence/journey-real-1c82a41/)",
     "real_model_residual": "M3.1 tool-loop continuity can exhaust the provider output limit before visible text; one sample retained at evidence/journey-real-m3.1-tool-loop-limit-2026-11-02/. M2.7 full journey passes; do not claim every reasoning model is stable.",
     "coach_empty_state": "FIXED_VALIDATED (8e97664: centered empty canvas, concrete start hint, no stale task chip on first run; empty-canvas e2e + matrix 200/200)",
     "dock_copy": "FIXED_VALIDATED (bcb7cf6: 看回答 / 留在这里 replaces technical 跳转回答 / 留在本页; geometry 471/471, a11y 96/96)",
     "provider_stream_gate": "FIXED_VALIDATED (bcb7cf6: mandatory-thinking stream probe uses thinking negotiation; reasoning-first agent budget 8k + 32k truncation retry; real provider test streaming/tools verified)",
-    "install_state_real_provider": "PASS (2026-11-02 at df8a050: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36; evidence/vsix-e2e-real-df8a050.json)",
+    "install_state_real_provider": "PASS (2026-11-02 at 1c82a41: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36 on run 2; run 1 timed out at /training/generate-card with the external relay, recorded as an external-provider flake; evidence/vsix-e2e-real-1c82a41-run2.json)",
     "workspace_trust_copy": "FIXED_VALIDATED (df8a050: trust state now explains what is blocked; parity 17/17; screenshots refreshed)",
-    "real_vscode_gui": "PARTIAL (2026-11-02 at 0860ee4: real installed VS Code 1.127, isolated profile, command palette opened Trainer, mouse clicked 设置 inside the webview; first-run/settings/narrow+200% screenshots captured; setup row wrap fixed. Training verification and model switch were NOT_EXECUTED in GUI; human visual sign-off remains BLOCKED. evidence/real-vscode-2026-11-02/)"
+    "real_vscode_gui": "PARTIAL/PASS (2026-11-02 at 1c82a41: real installed VS Code 1.127 + isolated profile; mouse/keyboard first-run, settings, real provider setup/test, project admission, real M2.7 reply grounded in src/queue_lock.py, model switch to M3.1; GUI training verification NOT_EXECUTED; M3.1 second reply produced visible text but its stream did not close -> PARTIAL; evidence/real-vscode-gui-2026-11-02/)",
+    "settings_workspace_summary": "FIXED_VALIDATED (1c82a41: settings workspace row shows trainerWorkspace.rootPath or 未选择学习文件夹 with a direct 选择学习文件夹 action; no globalStorage/sidecar path; Playwright root-present and root-missing tests pass; real VS Code screenshot confirms)",
+    "dock_send_preference": "FIXED_VALIDATED (1c82a41: dock switch removed; one-time choice lives in Settings > Preferences; default 看回答/View reply; stay mode e2e passes; matrix 200/200)",
+    "provider_admission_carry": "FIXED_VALIDATED (1c82a41: a passed provider test follows the same project through managed admission; host copies the scoped result and the sidecar adopts fresh host evidence after a root switch; GUI composer no longer forces a re-test)",
+    "coach_workspace_file_grounding": "FIXED_VALIDATED (1c82a41: a Coach message naming a workspace file enables the verified tool loop; real GUI reply read src/queue_lock.py and README instead of claiming the source was unavailable)",
+    "m3.1_stream_completion": "PARTIAL_RESIDUAL (1c82a41: MiniMax-M3.1 produced correct visible text for a normal Coach turn, but the provider stream did not close within 240s; recorded as PARTIAL, not PASS; M2.7 journey is 10/10)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -86,8 +91,9 @@
   },
   "next": [
     "owner teaching sign-off (T-0028)",
+    "M3.1 stream-close residual: capture a provider trace and decide whether to cap/retry",
+    "GUI training verification in real VS Code",
     "real Remote-SSH L2 window",
-    "M3.1 tool-loop residual: observe owner relay/model cadence",
     "Windows/Linux browser install acceptance"
   ],
   "updated": "2026-11-02",
@@ -101,25 +107,32 @@
   "popup_redesign": "owner-directed minimal card @7cf5760; pairing panel removed @93b3798 (zero-code auto-connect); the card has no pairing code, status page, history list or queue manager",
   "install_state_e2e": {
     "run": "local npm run test:vsix-e2e",
-    "sha": "df8a050",
+    "sha": "1c82a41",
     "status": "PASS",
     "steps": "36/36",
     "provider": "fixture (no real key claimed)",
-    "evidence": "evidence/vsix-e2e-real-df8a050.json",
+    "evidence": "evidence/vsix-e2e-real-1c82a41-run2.json",
     "limitation": "visual window capture is win32-only and skipped on macOS",
-    "real_provider": "PASS 36/36 external M2.7"
+    "real_provider": "PASS 36/36 external M2.7 (run 2)"
   },
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
-    "Settings workspace summary still shows the internal globalStorage/sidecar path as “工作区” while a project folder is open; needs a learning-folder summary + direct choose action",
-    "real VS Code GUI visual/mouse journey was not executed in this headless session; installed-host E2E and browser-preview screenshots are machine evidence, not human visual sign-off",
-    "teaching acceptance still needs owner T-0028 human sign-off; current installed-host + real-model + journey evidence is machine-verified",
-    "M3.1 tool-loop continuity residual: upstream output limit can still produce a recovery/error instead of visible text",
-    "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available)",
-    "T-0026 latency: current relay first-visible ~5s in smoke; no full latency campaign at bcb7cf6",
-    "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run"
+    "M3.1 normal Coach stream can emit correct visible text yet not close within 240s; recorded as PARTIAL residual.",
+    "GUI training verification is NOT_EXECUTED; the real VS Code journey covers first-run, settings, provider, project admission, teaching, and model switch.",
+    "Owner T-0028 teaching-quality sign-off is human-only and remains BLOCKED.",
+    "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available).",
+    "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run."
   ],
   "docs_head": "2e4d313",
-  "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING"
+  "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING",
+  "tests": {
+    "server": "3694 passed",
+    "extension": "node --test extension/tests/*.test.js exit 0",
+    "matrix": "200/200",
+    "geometry": "471/471",
+    "a11y": "96/96",
+    "real_model_journey": "10/10",
+    "installed_vsix_real_provider": "36/36 (run 2)"
+  }
 }

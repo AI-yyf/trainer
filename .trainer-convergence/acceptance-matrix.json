@@ -43,15 +43,35 @@
     },
     "real_model_journey": {
       "status": "PASS",
-      "evidence": "2026-11-02 at bcb7cf6: real sidecar+SQLite, MiniMax-M2.7, 10/10 steps 200 — streaming+tools verified, real plan id, restart same session, continuity 229 visible chars, workspace B isolation, model switch to M3.1; evidence/journey-real-2026-11-02/. Not a human teaching-quality sign-off."
+      "evidence": "1c82a41: 10/10 real sidecar+SQLite M2.7 journey, streaming/tools verified, continuity 1747 chars, workspace isolation, model switch"
     },
     "native_install_e2e_real_provider": {
       "status": "PASS",
-      "evidence": "2026-11-02 at df8a050: isolated installed VSIX host E2E with external MiniMax-M2.7, 36/36; evidence/vsix-e2e-real-df8a050.json"
+      "evidence": "1c82a41: installed VSIX host E2E external MiniMax-M2.7 36/36 (run 2); run 1 /training/generate-card timeout recorded as external-provider flake"
     },
     "real_vscode_gui": {
       "status": "PARTIAL",
-      "evidence": "real installed VS Code 1.127 + isolated profile at 0860ee4: first-run/settings/narrow+200% screenshots; mouse click opened Settings. Training verification/model switch NOT_EXECUTED in GUI; human visual sign-off BLOCKED. evidence/real-vscode-2026-11-02/"
+      "evidence": "2026-11-02 at 1c82a41: installed VS Code 1.127 + isolated profile, mouse/keyboard first-run/settings/provider/admission/M2.7 teaching/model switch; M3.1 second reply visible text but stream did not close -> PARTIAL; GUI training verification NOT_EXECUTED; evidence/real-vscode-gui-2026-11-02/"
+    },
+    "settings_workspace_summary": {
+      "status": "PASS",
+      "evidence": "1c82a41: learning folder or 未选择学习文件夹 + direct action; no globalStorage path; Playwright root-present/root-missing tests; real VS Code screenshot"
+    },
+    "dock_send_preference": {
+      "status": "PASS",
+      "evidence": "1c82a41: dock switch removed; Settings > Preferences choice; default View reply/看回答; stay-mode e2e pass; matrix 200/200"
+    },
+    "provider_admission_carry": {
+      "status": "PASS",
+      "evidence": "1c82a41: passed test carried across managed admission; host scoped copy + sidecar fresh-evidence adoption; GUI no re-test"
+    },
+    "coach_workspace_file_grounding": {
+      "status": "PASS",
+      "evidence": "1c82a41: real GUI M2.7 reply read src/queue_lock.py + README via the verified tool loop"
+    },
+    "m3_1_stream_completion": {
+      "status": "PARTIAL",
+      "evidence": "1c82a41: correct visible text but stream did not close within 240s; not claimed as pass"
     }
   }
 }
