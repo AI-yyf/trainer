@@ -7,6 +7,7 @@ import logging
 import re
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, Iterable, TypedDict, cast
@@ -196,6 +197,39 @@ def _provider_service_cache_key(
     except Exception:
         serialized = repr(provider_config)
     return "::".join([serialized, api_key_fingerprint])
+
+
+def _provider_test_record_matches(record: dict[str, Any], config: Any) -> bool:
+    def normalized(value: object) -> str:
+        return str(value or "").strip().rstrip("/").casefold()
+
+    record_base_url = normalized(record.get("baseUrl") or record.get("base_url"))
+    config_base_url = normalized(getattr(config, "base_url", None))
+    if not record_base_url or record_base_url != config_base_url:
+        return False
+    record_model = normalized(record.get("model"))
+    config_model = normalized(getattr(config, "model", None))
+    if not record_model or record_model != config_model:
+        return False
+    record_protocol = str(record.get("protocol") or "").strip()
+    config_protocol = str(getattr(config, "protocol", None) or "").strip()
+    if record_protocol and config_protocol:
+        if record_protocol != config_protocol:
+            return False
+    return True
+
+
+def _provider_test_checked_at(record: dict[str, Any]) -> datetime | None:
+    raw = record.get("checkedAt") or record.get("checked_at")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _provider_capability_cache_key(
@@ -1541,6 +1575,41 @@ class TrainerRuntime:
             if oldest_key != key:
                 self.provider_capability_cache.pop(oldest_key, None)
         self._overlay_last_test_on_matching_services(provider_config, api_key, states)
+
+    PROVIDER_TEST_EVIDENCE_MAX_AGE_SECONDS = 30 * 60
+
+    def adopt_request_provider_evidence(
+        self,
+        request: Any,
+        provider_service: ProviderService,
+    ) -> None:
+        """Seed this runtime from a host-recorded, fresh connection test.
+
+        A project admission can move the sidecar to a new data root, which
+        starts a new process with an empty capability cache. The host keeps the
+        passed test result and sends it with the next turn; adopting it here
+        restores exactly that provider's observed capabilities instead of
+        forcing the learner to re-test seconds later. Fail-closed: only an
+        explicit ``ok`` record for the same base URL/model/protocol, checked
+        within the same 30-minute freshness window the UI uses, is accepted.
+        """
+
+        record = getattr(request, "last_test_result", None)
+        if not isinstance(record, dict) or record.get("ok") is not True:
+            return
+        config = getattr(provider_service, "_config", None)
+        if config is None:
+            return
+        if not _provider_test_record_matches(record, config):
+            return
+        checked_at = _provider_test_checked_at(record)
+        if checked_at is None:
+            return
+        age_seconds = (datetime.now(UTC) - checked_at).total_seconds()
+        if age_seconds < -60 or age_seconds > self.PROVIDER_TEST_EVIDENCE_MAX_AGE_SECONDS:
+            return
+        api_key = getattr(provider_service, "_api_key", None)
+        self.remember_provider_capability_test(config, api_key, record)
 
     def hydrate_provider_capability_cache(self) -> None:
         """Reload persisted capability truth into the process cache at boot."""
