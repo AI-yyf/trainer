@@ -13,6 +13,7 @@ export * from "./skillCatalog";
 export * from "./coachDefaults";
 export * from "./sidebarCommands";
 export * from "./trainingCardCopy";
+export * from "./trainingFilePaths";
 export * from "./trainingExecutionGovernance";
 export * from "./trainingReliabilityGovernance";
 export * from "./trainingVerification";

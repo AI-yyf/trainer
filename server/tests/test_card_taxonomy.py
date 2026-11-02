@@ -37,3 +37,29 @@ def test_placeholder_file_targets_do_not_count_as_concrete_files() -> None:
     )
 
     assert card.learning_subtype == "reading"
+
+
+def test_files_to_touch_normalizes_markdown_and_keeps_concrete_target() -> None:
+    card = TrainingCardCandidateSnapshot(
+        card_type="practice",
+        title="Check lock boundary",
+        learning_family="code",
+        learning_subtype="implementation",
+        files_to_touch=["`queue_lock.py`", " src/queue_lock.py ", "`queue_lock.py`"],
+    )
+
+    assert card.files_to_touch == ["queue_lock.py", "src/queue_lock.py"]
+    assert card.learning_subtype == "implementation"
+
+
+def test_markdown_wrapped_placeholder_still_downgrades_to_reading() -> None:
+    card = TrainingCardCandidateSnapshot(
+        card_type="practice",
+        title="Fill the implementation",
+        learning_family="code",
+        learning_subtype="implementation",
+        files_to_touch=["`<current failing file>`"],
+    )
+
+    assert card.files_to_touch == ["<current failing file>"]
+    assert card.learning_subtype == "reading"

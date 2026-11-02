@@ -247,6 +247,83 @@ def default_command_runner() -> CommandRunner:
     return SubprocessCommandRunner()
 
 
+_PROJECT_COPY_IGNORED_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    ".turbo",
+}
+_PROJECT_COPY_MAX_FILES = 2000
+_PROJECT_COPY_MAX_BYTES = 50 * 1024 * 1024
+
+
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _copy_project_to_sandbox(project_root: Path, sandbox: Path) -> bool:
+    """Copy a bounded, symlink-free project tree for project-test verification.
+
+    The learner project itself is never written to. The copy exists so a
+    training card's `pytest` check can discover the project's own tests while
+    the edited file comes from the in-memory editor buffer.
+    """
+    if not project_root.is_dir():
+        return False
+    total_files = 0
+    total_bytes = 0
+    for current, dirs, files in os.walk(project_root, followlinks=False):
+        current_path = Path(current)
+        dirs[:] = [
+            name
+            for name in dirs
+            if name not in _PROJECT_COPY_IGNORED_DIRS
+            and not (current_path / name).is_symlink()
+        ]
+        for name in files:
+            source = current_path / name
+            if source.is_symlink():
+                continue
+            try:
+                total_bytes += source.stat().st_size
+            except OSError:
+                continue
+            total_files += 1
+            if total_files > _PROJECT_COPY_MAX_FILES or total_bytes > _PROJECT_COPY_MAX_BYTES:
+                return False
+    for current, dirs, files in os.walk(project_root, followlinks=False):
+        current_path = Path(current)
+        dirs[:] = [
+            name
+            for name in dirs
+            if name not in _PROJECT_COPY_IGNORED_DIRS
+            and not (current_path / name).is_symlink()
+        ]
+        for name in files:
+            source = current_path / name
+            if source.is_symlink():
+                continue
+            destination = sandbox / source.relative_to(project_root)
+            try:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+            except OSError:
+                return False
+    return True
+
+
 class EvaluationPipeline:
     def __init__(
         self,
@@ -281,27 +358,61 @@ class EvaluationPipeline:
         try:
             sandbox = temp_dir.name
             reported_target = target
+            project_copy = False
             if request.target_path is not None:
                 # Fail-close: never rewrite the learner project. Copy in-memory
                 # content (or the on-disk bytes) into the sandbox and run tools there.
                 if not code:
                     code = Path(request.target_path).read_text(encoding="utf-8")
                 original_abs = str(Path(request.target_path).resolve())
-                sandbox_name = Path(request.target_path).name or "trainer_current_file.py"
-                sandbox_file = Path(sandbox) / sandbox_name
-                sandbox_file.write_text(code, encoding="utf-8")
-                sandbox_target = str(sandbox_file)
-                request = EvaluationRequest(
-                    spec=request.spec,
-                    target_path=sandbox_target,
-                    code=code,
-                    workspace=sandbox,
-                    pytest_args=request.pytest_args or [sandbox_target],
-                    hypothesis_target=request.hypothesis_target,
-                    verification_python=request.verification_python,
+                original_target = Path(original_abs)
+                project_root = (
+                    Path(request.project_root).resolve()
+                    if request.project_root
+                    else None
                 )
-                target = sandbox_target
-                reported_target = original_abs
+                if (
+                    project_root is not None
+                    and project_root.is_dir()
+                    and _path_is_within(original_target, project_root)
+                    and _copy_project_to_sandbox(project_root, Path(sandbox))
+                ):
+                    # Run the project's own tests against the learner's edited
+                    # file inside the bounded sandbox copy. The real project is
+                    # never written to.
+                    relative_target = original_target.relative_to(project_root)
+                    sandbox_file = Path(sandbox) / relative_target
+                    sandbox_file.parent.mkdir(parents=True, exist_ok=True)
+                    sandbox_file.write_text(code, encoding="utf-8")
+                    sandbox_target = str(sandbox_file)
+                    request = EvaluationRequest(
+                        spec=request.spec,
+                        target_path=sandbox_target,
+                        code=code,
+                        workspace=sandbox,
+                        pytest_args=[sandbox],
+                        hypothesis_target=request.hypothesis_target,
+                        verification_python=request.verification_python,
+                    )
+                    target = sandbox_target
+                    reported_target = original_abs
+                    project_copy = True
+                if not project_copy:
+                    sandbox_name = Path(request.target_path).name or "trainer_current_file.py"
+                    sandbox_file = Path(sandbox) / sandbox_name
+                    sandbox_file.write_text(code, encoding="utf-8")
+                    sandbox_target = str(sandbox_file)
+                    request = EvaluationRequest(
+                        spec=request.spec,
+                        target_path=sandbox_target,
+                        code=code,
+                        workspace=sandbox,
+                        pytest_args=request.pytest_args or [sandbox_target],
+                        hypothesis_target=request.hypothesis_target,
+                        verification_python=request.verification_python,
+                    )
+                    target = sandbox_target
+                    reported_target = original_abs
             elif request.code is not None:
                 # Snippet-only: materialize under TemporaryDirectory, never under the project.
                 temp_path = Path(sandbox) / "trainer_snippet.py"
@@ -416,6 +527,7 @@ class EvaluatorService:
         leftover_runtime: dict[str, Any] | None = None,
         leftover_task_title: str = "",
         response_language: str | None = None,
+        project_root: str | None = None,
     ) -> EvaluationReport:
         if spec is not None and request.task_spec_id != spec.id:
             spec = None
@@ -434,6 +546,7 @@ class EvaluatorService:
                 ),
                 target_path=request.file_path,
                 code=request.content,
+                project_root=project_root,
                 verification_python=request.verification_python,
                 # cwd sandbox is owned by EvaluationPipeline.evaluate (TemporaryDirectory);
                 # never pass the learner project parent (avoids .pytest_cache / pyc writes).
@@ -816,7 +929,9 @@ class EvaluatorService:
         # Explanations, screenshots and reflections are collected by the return
         # flow. They must not become impossible source-code presence checks.
         criteria = _dedupe_non_empty(acceptance_criteria or learner_deliverables)
-        symbols = _dedupe_non_empty(expected_symbols)
+        all_symbols = _dedupe_non_empty(expected_symbols)
+        file_references = [item for item in all_symbols if _looks_like_file_reference(item)]
+        symbols = [item for item in all_symbols if item not in file_references]
         if not criteria and not symbols:
             return EvaluationCheck(
                 id="training-acceptance",
@@ -865,6 +980,7 @@ class EvaluatorService:
                 python_expressions=python_expressions,
                 script_stdout=script_stdout,
                 raw_code=literal_evidence,
+                defer_without_signals=True,
             )
             for item in criteria
         ]
@@ -878,11 +994,14 @@ class EvaluatorService:
             )
             for item in symbols
         ]
+        deferred_results = [item for item in criteria_results if item["status"] == "deferred"]
         missing_results = [
-            item for item in [*criteria_results, *symbol_results] if item["status"] != "matched"
+            item
+            for item in [*criteria_results, *symbol_results]
+            if item["status"] not in {"matched", "deferred"}
         ]
         total_signals = len(criteria_results) + len(symbol_results)
-        matched_signals = total_signals - len(missing_results)
+        matched_signals = total_signals - len(missing_results) - len(deferred_results)
         detail_lines = [
             f"Acceptance progress: {matched_signals}/{total_signals} acceptance signals matched.",
             f"Acceptance criteria supplied: {len(criteria)}.",
@@ -896,6 +1015,14 @@ class EvaluatorService:
                 f"Missing: {item['text']} ({', '.join(item['missing_signals'])})"
                 for item in missing_results
             ],
+            *[
+                f"Deferred to reflection: {item['text']}"
+                for item in deferred_results
+            ],
+            *(
+                [f"File targets verified as the current file: {', '.join(file_references)}"]
+                if file_references else []
+            ),
         ]
 
         return EvaluationCheck(
@@ -1278,6 +1405,7 @@ def _criterion_result(
     python_expressions: set[str] | None = None,
     script_stdout: str | None = None,
     raw_code: str | None = None,
+    defer_without_signals: bool = False,
 ) -> dict[str, list[str] | str]:
     if requires_code_evidence:
         output_numbers = _criterion_output_numbers(criterion)
@@ -1295,9 +1423,12 @@ def _criterion_result(
         if not signals:
             return {
                 "text": criterion,
-                "status": "missing",
+                "status": "deferred" if defer_without_signals else "missing",
                 "matched_signals": [],
-                "missing_signals": ["a verifiable code symbol or explicit acceptance test"],
+                "missing_signals": (
+                    [] if defer_without_signals
+                    else ["a verifiable code symbol or explicit acceptance test"]
+                ),
             }
         describes_protocol = bool(re.search(r"\b(?:from|via)\b|来自|对应", criterion, re.IGNORECASE))
         matched_signals = [
@@ -1343,6 +1474,21 @@ def _criterion_result(
         "matched_signals": matched_signals,
         "missing_signals": [signal for signal in signals if signal not in matched_signals],
     }
+
+
+def _looks_like_file_reference(value: str) -> bool:
+    text = value.strip().strip("`")
+    if not text:
+        return False
+    if "/" in text or "\\" in text:
+        return True
+    return bool(
+        re.search(
+            r"\.(?:py|pyi|js|jsx|ts|tsx|json|md|txt|rs|go|java|cpp|c|cs|sh|html|css)$",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _expected_symbol_result(

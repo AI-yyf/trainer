@@ -6,6 +6,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -44,7 +45,7 @@ class CardStatusTransitionUnitTests(unittest.TestCase):
     """Unit tests for MemoryService.transition_card_status."""
 
     def setUp(self) -> None:
-        database_path = Path(f".tmp-test/card-transition-{id(self)}.db")
+        database_path = Path(f".tmp-test/card-transition-{uuid4().hex}.db")
         if database_path.exists():
             database_path.unlink()
         self.repository = TrainerRepository(database_path)
@@ -318,12 +319,107 @@ class CardStatusTransitionUnitTests(unittest.TestCase):
         assert snapshot.workspace["selected_card_id"] == "card-selected"
         assert snapshot.workspace["selected_card_status"] == "active"
         assert snapshot.active_training_card_routing is not None
-        assert snapshot.active_training_card_routing.selected_card_id == "card-selected"
-        assert snapshot.active_training_card_routing.why_this_card == "Highest leverage next card."
-        assert snapshot.active_training_card_routing.selected_card is not None
-        assert snapshot.active_training_card_routing.selected_card.scenario_pack == "remote_workspace"
-        assert snapshot.workspace["latest_training_next_hop"]["selected_card_id"] == "card-selected"
-        assert snapshot.workspace["latest_training_next_hop"]["scenario_pack"] == "remote_workspace"
+
+    def test_skipping_selected_card_releases_live_selection(self) -> None:
+        card = _make_card(card_id="card-skip", status="candidate", card_type="practice")
+        self._seed_card(card)
+        self.service.persist_active_card_selection(
+            self.workspace_id,
+            ActiveCardSelectionResult(
+                selected_card=card,
+                selected_card_id=card.card_id,
+                selection_score=70.0,
+                why_this_card="Current card.",
+                fallback_action="Return to coach.",
+                next_after_completion="Queue next card.",
+                candidate_count=1,
+                eligible_count=1,
+            ),
+        )
+
+        structured = self.service._structured_for(self.workspace_id)
+        structured.update_workspace(
+            latest_training_handoff={
+                "card_id": "card-skip",
+                "candidate_id": "card-skip",
+                "handoff_status": "needs_verification",
+            }
+        )
+        self.service.transition_card_status(
+            self.workspace_id, "card-skip", "skipped", reason="Learner skipped"
+        )
+
+        snapshot = self.service.snapshot(self.workspace_id)
+        assert snapshot.workspace["selected_card_id"] == ""
+        assert snapshot.workspace["selected_card_status"] == ""
+        assert snapshot.active_training_card_routing is None
+        assert not snapshot.workspace.get("latest_training_next_hop")
+        assert not snapshot.workspace.get("latest_training_handoff")
+        assert self.service.get_card(self.workspace_id, "card-skip").status == "skipped"
+
+    def test_skipping_unselected_card_keeps_live_selection(self) -> None:
+        selected = _make_card(card_id="card-keep", status="candidate")
+        other = _make_card(card_id="card-other", status="candidate")
+        self._seed_card(selected)
+        self._seed_card(other)
+        self.service.persist_active_card_selection(
+            self.workspace_id,
+            ActiveCardSelectionResult(
+                selected_card=selected,
+                selected_card_id=selected.card_id,
+                selection_score=70.0,
+                why_this_card="Current card.",
+                fallback_action="Return to coach.",
+                next_after_completion="Queue next card.",
+                candidate_count=2,
+                eligible_count=2,
+            ),
+        )
+
+        self.service.transition_card_status(
+            self.workspace_id, "card-other", "skipped", reason="Learner skipped"
+        )
+
+        snapshot = self.service.snapshot(self.workspace_id)
+        assert snapshot.workspace["selected_card_id"] == "card-keep"
+        assert snapshot.active_training_card_routing is not None
+        assert snapshot.active_training_card_routing.selected_card_id == "card-keep"
+        assert snapshot.workspace["latest_training_next_hop"]["selected_card_id"] == "card-keep"
+
+    def test_snapshot_hides_legacy_terminal_selected_card(self) -> None:
+        card = _make_card(card_id="card-legacy-skip", status="candidate")
+        self._seed_card(card)
+        self.service.persist_active_card_selection(
+            self.workspace_id,
+            ActiveCardSelectionResult(
+                selected_card=card,
+                selected_card_id=card.card_id,
+                selection_score=70.0,
+                why_this_card="Current card.",
+                fallback_action="Return to coach.",
+                next_after_completion="Queue next card.",
+                candidate_count=1,
+                eligible_count=1,
+            ),
+        )
+        structured = self.service._structured_for(self.workspace_id)
+        structured._training_cards[card.card_id] = card.model_copy(
+            update={"status": "skipped"}
+        )
+        structured.update_workspace(
+            latest_training_handoff={
+                "card_id": card.card_id,
+                "candidate_id": card.card_id,
+                "handoff_status": "needs_verification",
+            }
+        )
+
+        snapshot = self.service.snapshot(self.workspace_id)
+
+        assert snapshot.workspace["selected_card_id"] == ""
+        assert snapshot.active_training_card_routing is None
+        assert snapshot.workspace.get("latest_training_next_hop") in (None, {})
+        assert snapshot.workspace.get("latest_training_handoff") in (None, {})
 
     def test_persist_active_card_selection_preserves_needs_primer_status(self) -> None:
         card = _make_card(

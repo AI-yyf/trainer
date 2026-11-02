@@ -145,6 +145,11 @@ export class CommandRegistry implements vscode.Disposable {
       try {
         this.appendLog(`[command] ${commandId}`);
         const result = await handler(this.context!, payload);
+        if (result && result.ok === false) {
+          this.appendLog(
+            `[command:failed] ${commandId}: ${(result.message ?? '').trim() || 'no message'}`,
+          );
+        }
         await this.context!.workbench.syncState();
         return result;
       } catch (error) {

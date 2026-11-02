@@ -1261,6 +1261,16 @@ class TrainingPlanBinding(BaseModel):
     revision: int | None = Field(default=None, ge=0)
 
 
+def _normalize_training_file_path(value: object) -> str:
+    """Normalize a card-authored file target without guessing a new file."""
+    text = str(value).strip()
+    text = text.strip("`'\"")
+    text = text.replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    return text.strip()
+
+
 class TrainingCardCandidateSnapshot(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -1344,6 +1354,14 @@ class TrainingCardCandidateSnapshot(BaseModel):
             self.updated_at = utc_now_iso()
         if not self.title:
             self.title = self.question or self.problem_statement or self.target_skill or self.focus_area or "Training Card"
+        normalized_files: list[str] = []
+        seen_files: set[str] = set()
+        for path in self.files_to_touch:
+            normalized = _normalize_training_file_path(path)
+            if normalized and normalized not in seen_files:
+                seen_files.add(normalized)
+                normalized_files.append(normalized)
+        self.files_to_touch = normalized_files
         if not self.source_chain:
             self.source_chain = ["card_generation_router"]
         try:

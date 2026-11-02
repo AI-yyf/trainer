@@ -61,3 +61,64 @@ def test_relative_target_is_resolved_against_managed_project(tmp_path: Path) -> 
         })
         assert response.status_code == 200, response.text
         runtime.evaluator_service.evaluate_current_file.assert_called_once()
+
+
+def test_leaf_only_card_target_matches_nested_project_file(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        workspace = "ws-leaf-card-file"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Leaf binding test"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-leaf",
+            card_type="practice",
+            status="active",
+            title="Lock boundary",
+            files_to_touch=["`queue_lock.py`"],
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(
+            workspace,
+            selected_card_id=card.card_id,
+            canonical_project_path=str(tmp_path),
+        )
+        runtime.evaluator_service.evaluate_current_file = MagicMock(
+            return_value=EvaluationReport(
+                passed=True,
+                summary="ok",
+                next_step="Reflect",
+                reflection="",
+                dynamic_checks=[
+                    EvaluationCheck(id="pytest", label="pytest", status="passed", detail="1 passed")
+                ],
+            )
+        )
+        accepted = client.post(
+            "/evaluate/current-file",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "evaluation_source": "training",
+                "training_card_id": card.card_id,
+                "file_path": str(tmp_path / "src" / "queue_lock.py"),
+                "language_id": "python",
+                "content": "x = 1\n",
+            },
+        )
+        assert accepted.status_code == 200, accepted.text
+        runtime.evaluator_service.evaluate_current_file.assert_called_once()
+        rejected = client.post(
+            "/evaluate/current-file",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "evaluation_source": "training",
+                "training_card_id": card.card_id,
+                "file_path": str(tmp_path / "src" / "other.py"),
+                "language_id": "python",
+                "content": "x = 1\n",
+            },
+        )
+        assert rejected.status_code == 409, rejected.text

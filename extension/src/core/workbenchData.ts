@@ -4700,8 +4700,19 @@ function mapWorkspaceTrainingState(
     incomingWorkspaceId === fallbackWorkspaceId;
   const incomingSelectedCardId =
     asString(workspaceRecord?.selected_card_id) ?? asString(workspaceRecord?.selectedCardId);
+  const hasIncomingSelectedCardId = Boolean(
+    workspaceRecord &&
+      (Object.prototype.hasOwnProperty.call(workspaceRecord, "selected_card_id") ||
+        Object.prototype.hasOwnProperty.call(workspaceRecord, "selectedCardId")),
+  );
+  // An explicitly empty selected_card_id is a server release (skip/archive),
+  // not "no information". It must not inherit the previous card chrome.
+  const selectionExplicitlyCleared =
+    hasIncomingSelectedCardId && !incomingSelectedCardId;
   const sameSelectedCard = !incomingSelectedCardId || incomingSelectedCardId === fallback?.selectedCardId;
-  const chromeFallback = sameWorkspace && sameSelectedCard ? fallback : undefined;
+  const chromeFallback = sameWorkspace && sameSelectedCard && !selectionExplicitlyCleared
+    ? fallback
+    : undefined;
   const rawHandoff = workspaceRecord?.latest_training_handoff ?? workspaceRecord?.latestTrainingHandoff;
   const rawNextHop = workspaceRecord?.latest_training_next_hop ?? workspaceRecord?.latestTrainingNextHop;
   const scopedHandoff =
@@ -4874,9 +4885,15 @@ function mapWorkspaceTrainingState(
   const selectedCard = mapped.trainingCardCandidates?.find(card => card.cardId === selectedCardId) ??
     (mapped.activeTrainingCardRouting?.selectedCard?.cardId === selectedCardId
       ? mapped.activeTrainingCardRouting?.selectedCard : undefined);
-  if (selectedCardId && handoffCardId && selectedCardId !== handoffCardId) {
+  const handoffMismatched = Boolean(handoffCardId) && (
+    (Boolean(selectedCardId) && selectedCardId !== handoffCardId) ||
+    selectionExplicitlyCleared
+  );
+  if (handoffMismatched) {
     // Stored handoffs remain historical facts. They cannot supply completion,
-    // proof, or a Return action for a different newly selected card.
+    // proof, or a Return action for a different newly selected card, and an
+    // explicitly released selection (skip/archive) must not be resurrected by
+    // a stale handoff fallback.
     mapped.latestTrainingHandoff = undefined;
     mapped.latestTrainingNextHop = undefined;
     mapped.latestLearningVerifiedResult = undefined;
@@ -4887,6 +4904,17 @@ function mapWorkspaceTrainingState(
     mapped.latestTrainingSubmode = mapped.reviewArtifact?.id === selectedCardId
       ? mapped.latestTrainingSubmode : mapped.selectedCardType;
     mapped.selectedCardTitle = selectedCard?.title;
+  }
+  if (selectionExplicitlyCleared) {
+    // The server released the selection (skip/archive). Keep candidates and
+    // the event ledger as history, but never let stale fallbacks resurrect an
+    // unactionable Training card.
+    mapped.latestTrainingHandoff = undefined;
+    mapped.latestTrainingNextHop = undefined;
+    mapped.activeTrainingCardRouting = undefined;
+    mapped.selectedCardTitle = undefined;
+    mapped.selectedCardStatus = undefined;
+    mapped.latestTrainingSubmode = undefined;
   }
   const selectedCardChanged = Boolean(
     sameWorkspace && fallback?.selectedCardId && incomingSelectedCardId && !sameSelectedCard,

@@ -4021,6 +4021,14 @@ def build_core_router(
         request = prepare_training_file_evaluation(runtime, workspace_id, request)
         leftover = core.leftover_plan_state_fields(workspace_id)
         leftover_runtime = leftover.get("leftover_runtime")
+        training_project_root: str | None = None
+        if str(request.evaluation_source or "").strip().lower() == "training":
+            workspace_payload = runtime.memory_service.snapshot(workspace_id).workspace
+            training_project_root = str(
+                workspace_payload.get("canonical_project_path")
+                or workspace_payload.get("project_path")
+                or ""
+            ).strip() or None
         report = stamp_produced_workspace_record(
             runtime.evaluator_service.evaluate_current_file(
                 request,
@@ -4029,6 +4037,7 @@ def build_core_router(
                 leftover_runtime=leftover_runtime if isinstance(leftover_runtime, dict) else {},
                 leftover_task_title=str(leftover.get("leftover_task_title") or ""),
                 response_language=core.workspace_response_language(workspace_id),
+                project_root=training_project_root,
             ),
             workspace_id,
         )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import ntpath
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from fastapi import HTTPException
@@ -43,6 +43,15 @@ def training_card_is_live_for_verify(runtime: Any, workspace_id: str, card_id: s
     return not leftover_runtime
 
 
+def _normalize_card_target(value: object) -> str:
+    """Strip model-authored Markdown wrappers without inventing a new path."""
+    text = str(value).strip().strip("`'\"")
+    text = text.replace("\\", "/")
+    while text.startswith("./"):
+        text = text[2:]
+    return text.strip()
+
+
 def prepare_training_file_evaluation(
     runtime: Any, workspace_id: str, request: EvaluateCurrentFileRequest,
 ) -> EvaluateCurrentFileRequest:
@@ -70,13 +79,35 @@ def prepare_training_file_evaluation(
             path = Path(project) / path
         return str(path.resolve())
 
-    targets = list(card.files_to_touch or [])
+    targets = [
+        normalized
+        for item in (card.files_to_touch or [])
+        if (normalized := _normalize_card_target(item))
+    ]
     requested_path = canonical(request.file_path)
-    if targets and (not requested_path or requested_path not in {canonical(item) for item in targets}):
-        raise HTTPException(
-            status_code=409,
-            detail="This file is not a target of the current training card. Open its target file and retry.",
-        )
+    if targets:
+        target_paths = {canonical(item) for item in targets}
+        matched = bool(requested_path) and requested_path in target_paths
+        if not matched:
+            # Cards often name only the leaf file (`queue_lock.py`) while the
+            # project keeps it under src/. Match the leaf for that form, and
+            # require the full relative suffix when the card names a directory.
+            requested_posix = str(request.file_path or "").replace("\\", "/")
+            requested_name = PurePosixPath(requested_posix).name
+            for target in targets:
+                normalized_target = target.replace("\\", "/")
+                if "/" not in normalized_target:
+                    if requested_name == normalized_target:
+                        matched = True
+                        break
+                elif requested_posix.endswith("/" + normalized_target):
+                    matched = True
+                    break
+        if not matched:
+            raise HTTPException(
+                status_code=409,
+                detail="This file is not a target of the current training card. Open its target file and retry.",
+            )
     updates: dict[str, object] = {}
     for field in ("acceptance_criteria", "learner_deliverables", "expected_symbols"):
         values = list(getattr(card, field, []) or [])

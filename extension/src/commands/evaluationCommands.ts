@@ -7,6 +7,10 @@ import type { CommandExecutionResult } from '../core/types';
 import { mergeEvaluationResultSnapshot, mergeMemorySummarySnapshot } from '../core/workbenchData';
 import { getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
 import { describeProviderSendState } from '../../../shared/src/providerStatus';
+import {
+  normalizeTrainingFilePath,
+  trainingFileMatchesEditorPath,
+} from '../../../shared/src/trainingFilePaths';
 
 function leftoverTrainingEvaluateHttpFailure(error: unknown): CommandExecutionResult | undefined {
   if (typeof error !== "object" || error === null) {
@@ -86,10 +90,11 @@ export async function evaluatePublishedFileCommand(context: CommandContext, uri:
     : training?.trainingCardCandidates?.find(candidate => candidate.cardId === cardId);
   const files = card?.filesToTouch ?? [];
   const workspaceFolder = state.workspace.workspaceFolder;
-  const matches = files.some(file => {
-    const absolute = isAbsoluteFsPath(file) ? file : workspaceFolder ? path.join(workspaceFolder, file) : '';
-    return absolute && normalizeFsPath(absolute) === normalizeFsPath(document.uri.fsPath);
-  });
+  const matches = files.some(file => trainingFileMatchesEditorPath({
+    filePath: file,
+    editorPath: document.uri.fsPath,
+    workspaceFolder,
+  }));
   const livePractice = cardId && training?.selectedCardType === 'practice'
     && !['fed_back', 'archived', 'reviewed', 'skipped'].includes(training.selectedCardStatus ?? '') && matches;
   const result = await evaluateDocument(context, document, document.getText(), '/evaluate/current-file',
@@ -271,7 +276,9 @@ function extractEvaluationPayload(payload: unknown): {
     acceptanceCriteria: extractStringArray(record.acceptanceCriteria ?? record.acceptance_criteria),
     learnerDeliverables: extractStringArray(record.learnerDeliverables ?? record.learner_deliverables),
     expectedSymbols: extractStringArray(record.expectedSymbols ?? record.expected_symbols),
-    filesToTouch: extractStringArray(record.filesToTouch ?? record.files_to_touch),
+    filesToTouch: extractStringArray(record.filesToTouch ?? record.files_to_touch)
+      .map(normalizeTrainingFilePath)
+      .filter((filePath) => filePath.length > 0),
   };
 }
 
@@ -338,12 +345,16 @@ function candidateUrisForTrainingFiles(
 ): vscode.Uri[] {
   const uris: vscode.Uri[] = [];
   for (const filePath of filesToTouch) {
-    if (isAbsoluteFsPath(filePath)) {
-      uris.push(vscode.Uri.file(filePath));
+    const normalized = normalizeTrainingFilePath(filePath);
+    if (!normalized) {
+      continue;
+    }
+    if (isAbsoluteFsPath(normalized)) {
+      uris.push(vscode.Uri.file(normalized));
       continue;
     }
     if (workspaceFolder) {
-      uris.push(vscode.Uri.file(joinWorkspacePath(workspaceFolder, filePath)));
+      uris.push(vscode.Uri.file(joinWorkspacePath(workspaceFolder, normalized)));
     }
   }
   return uris;
@@ -354,31 +365,54 @@ async function resolveTrainingVerifyDocument(input: {
   editor: vscode.TextEditor | undefined;
   workspaceFolder: string | undefined;
 }): Promise<vscode.TextDocument | undefined> {
-  if (input.filesToTouch.length > 0) {
-    const editorPath = input.editor?.document.uri.fsPath;
-    if (
-      editorPath &&
-      input.filesToTouch.some((filePath) => {
-        const absolute = isAbsoluteFsPath(filePath)
-          ? filePath
-          : input.workspaceFolder
-            ? joinWorkspacePath(input.workspaceFolder, filePath)
-            : filePath;
-        return normalizeFsPath(editorPath) === normalizeFsPath(absolute);
-      })
-    ) {
-      return input.editor?.document;
+  const normalizedFiles = input.filesToTouch
+    .map(normalizeTrainingFilePath)
+    .filter((filePath) => filePath.length > 0);
+  if (normalizedFiles.length === 0) {
+    return input.editor?.document;
+  }
+  const editorPath = input.editor?.document.uri.fsPath;
+  if (
+    editorPath &&
+    normalizedFiles.some((filePath) =>
+      trainingFileMatchesEditorPath({
+        filePath,
+        editorPath,
+        workspaceFolder: input.workspaceFolder,
+      }),
+    )
+  ) {
+    return input.editor?.document;
+  }
+  for (const uri of candidateUrisForTrainingFiles(normalizedFiles, input.workspaceFolder)) {
+    try {
+      return await vscode.workspace.openTextDocument(uri);
+    } catch {
+      continue;
     }
-    for (const uri of candidateUrisForTrainingFiles(input.filesToTouch, input.workspaceFolder)) {
+  }
+  // Cards may name only the leaf file (`queue_lock.py`) while the project
+  // stores it under a source directory. Resolve exactly one on-disk match;
+  // never guess when several files share the leaf name.
+  for (const filePath of normalizedFiles) {
+    const matches = await vscode.workspace.findFiles(
+      `**/${filePath}`,
+      '**/node_modules/**',
+      5,
+    );
+    const exact = matches.filter((uri) => {
+      const candidate = normalizeFsPath(uri.fsPath);
+      return candidate === normalizeFsPath(filePath) || candidate.endsWith(`/${filePath}`);
+    });
+    if (exact.length === 1) {
       try {
-        return await vscode.workspace.openTextDocument(uri);
+        return await vscode.workspace.openTextDocument(exact[0]);
       } catch {
         continue;
       }
     }
-    return undefined;
   }
-  return input.editor?.document;
+  return undefined;
 }
 
 function extractStringArray(value: unknown): string[] {

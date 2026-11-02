@@ -1958,8 +1958,13 @@ export function restoredTrainingCard(
           returnWith: reviewArtifact.nextSelfImplementationRule,
         }
       : undefined;
+  const nextHopTargetsTrainingCard =
+    nextHop?.targetKind === "training_card" ||
+    Boolean(nextHop?.cardType);
   const nextHopCard =
-    nextHop && (nextHop.targetId || nextHop.candidateId || nextHop.title || nextHop.cardTitle)
+    nextHop &&
+    (!nextHopTargetsTrainingCard || Boolean(trainingState?.selectedCardId)) &&
+    (nextHop.targetId || nextHop.candidateId || nextHop.title || nextHop.cardTitle)
       ? {
           cardId: nextHop.targetId ?? nextHop.candidateId ?? "next-hop",
           type: nextHop.cardType ?? "practice",

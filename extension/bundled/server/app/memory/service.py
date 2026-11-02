@@ -3048,14 +3048,18 @@ class MemoryService(
             ),
             workspace_id,
         )
-        # Keep the recovered runtime step visible after all scope/gating passes.
+        # Keep the recovered runtime step visible after all scope/gating passes,
+        # but only while a live card selection still owns it. A skipped/archived
+        # selection was already released above; re-adding its runtime step here
+        # would resurrect the dead card as a "next hop" in Training.
         current_runtime = structured_service._workspace.get(PLAN_RUNTIME_KEY)
         recovered_step = str(
             (current_runtime or {}).get("current_step")
             or (recovered or {}).get("current_step")
             or ""
         ).strip()
-        if recovered_step:
+        live_selected_card_id = str(workspace_payload.get("selected_card_id") or "").strip()
+        if recovered_step and live_selected_card_id:
             current_hop = workspace_payload.get("latest_training_next_hop")
             if not isinstance(current_hop, dict):
                 current_hop = structured_service._workspace.get("latest_training_next_hop")
@@ -3293,6 +3297,34 @@ class MemoryService(
                     "evidence": list(gated_adaptation.get("evidence") or []),
                 }
             )
+        # Read-side guard: a terminal card must never be exposed as the live
+        # selection. Existing profiles can still carry a selected_card_id that
+        # was skipped/archived before the write-side release landed; clearing it
+        # here keeps Training from rendering an unactionable card after restart.
+        selected_card_id = str(workspace_payload.get("selected_card_id") or "").strip()
+        if selected_card_id:
+            selected_card = next(
+                (item for item in training_card_items if item.card_id == selected_card_id),
+                None,
+            )
+            if selected_card is None or selected_card.status in {"skipped", "archived"}:
+                workspace_payload["selected_card_id"] = ""
+                workspace_payload["selected_card_status"] = ""
+                workspace_payload["latest_training_next_hop"] = {}
+                workspace_payload["live_training_selection"] = {}
+                live_handoff = workspace_payload.get("latest_training_handoff")
+                if isinstance(live_handoff, dict) and selected_card_id in {
+                    str(live_handoff.get("card_id") or "").strip(),
+                    str(live_handoff.get("candidate_id") or "").strip(),
+                    str(live_handoff.get("target_id") or "").strip(),
+                }:
+                    workspace_payload["latest_training_handoff"] = {}
+                if (
+                    structured_service._active_training_card_routing is not None
+                    and structured_service._active_training_card_routing.selected_card_id
+                    == selected_card_id
+                ):
+                    structured_service._active_training_card_routing = None
         snapshot = MemorySnapshot(
             profile=profile,
             globalMemory=global_memory,
@@ -5617,6 +5649,44 @@ class MemoryService(
         }
         structured._card_ledger.append(ledger_entry)
         self._card_ledger.append(dict(ledger_entry))
+        # A terminal skip/archive must release the live selection: otherwise the
+        # workspace keeps pointing at a card that can no longer be trained, and
+        # Training renders it as if it were still active while every governed
+        # action is rejected. Clear only when the transitioned card is the
+        # selected one so unrelated card transitions stay side-effect free.
+        cleared_selection = False
+        if new_status in {"skipped", "archived"}:
+            selected_card_id = str(structured._workspace.get("selected_card_id") or "").strip()
+            if selected_card_id == card_id:
+                live_handoff = structured._workspace.get("latest_training_handoff")
+                handoff_belongs_to_card = isinstance(live_handoff, dict) and card_id in {
+                    str(live_handoff.get("card_id") or "").strip(),
+                    str(live_handoff.get("candidate_id") or "").strip(),
+                    str(live_handoff.get("target_id") or "").strip(),
+                }
+                structured.update_workspace(
+                    selected_card_id="",
+                    selected_card_status="",
+                    latest_training_next_hop={},
+                    live_training_selection={},
+                    latest_training_handoff={} if handoff_belongs_to_card else None,
+                )
+                if (
+                    structured._active_training_card_routing is not None
+                    and structured._active_training_card_routing.selected_card_id == card_id
+                ):
+                    structured._active_training_card_routing = None
+                existing_runtime = structured._workspace.get(PLAN_RUNTIME_KEY)
+                if not isinstance(existing_runtime, dict):
+                    existing_runtime = structured._workspace.get("latestPlanRuntime")
+                if isinstance(existing_runtime, dict):
+                    runtime_record = dict(existing_runtime)
+                    if str(runtime_record.get("selected_card_id") or "") == card_id:
+                        runtime_record["selected_card_id"] = ""
+                        scoped = stamp_workspace_scope(runtime_record, workspace_id)
+                        if scoped is not None:
+                            structured.update_workspace(**{PLAN_RUNTIME_KEY: scoped})
+                cleared_selection = True
         self._record_training_event(
             structured,
             event_type="training_card_status_changed",

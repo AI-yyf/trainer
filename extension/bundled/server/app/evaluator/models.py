@@ -49,6 +49,7 @@ class EvaluationRequest:
     code: str | None = None
     workspace: str | None = None
     pytest_args: list[str] = field(default_factory=list)
+    project_root: str | None = None
     hypothesis_target: str | None = None
     verification_python: str | None = None
 
