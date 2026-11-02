@@ -9,24 +9,23 @@ export interface WorkbenchSurfaceButtonProps {
 
 /**
  * Compact surface control shared by the Learning header, the Resources toolbar
- * and the editor-panel shell header. Icon + label; the label collapses first
- * when the surface gets narrow (container query on `.trainer-shell`).
+ * and the editor-panel shell header. Icon-only by design; aria-label/title
+ * carry the action name so the narrow sidebar stays quiet.
  */
 export function WorkbenchSurfaceButton({ mode, label, onClick }: WorkbenchSurfaceButtonProps) {
   const Icon = mode === "expand" ? ExpandPanelIcon : CollapsePanelIcon;
   return (
     <button
       type="button"
-      className="button button--ghost button--micro workbench-surface-button"
+      className="button button--ghost button--micro workbench-surface-button workbench-surface-button--icon"
       data-workbench-surface-action={mode}
       aria-label={label}
       title={label}
       onClick={onClick}
     >
       <span className="button__icon" aria-hidden="true">
-        <Icon size={14} />
+        <Icon size={16} />
       </span>
-      <span className="workbench-surface-button__label">{label}</span>
     </button>
   );
 }

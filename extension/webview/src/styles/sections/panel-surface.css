@@ -14,15 +14,29 @@
 
 .workbench-surface-button {
   flex: none;
-  white-space: nowrap;
 }
 
-/* The label collapses first on narrow sidebar widths; the icon keeps the
-   control reachable and aria-label/title keeps it understandable. */
-@container trainer (max-width: 400px) {
-  .workbench-surface-button__label {
-    display: none;
-  }
+.workbench-surface-button--icon {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  gap: 0;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+.workbench-surface-button--icon .button__icon {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.workbench-surface-button--icon:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .template-learning-home__header-actions,
