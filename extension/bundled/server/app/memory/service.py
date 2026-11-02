@@ -5604,6 +5604,30 @@ class MemoryService(
         card = self.get_card(workspace_id, card_id)
         if card is None:
             raise ValueError(f"Card {card_id!r} not found")
+        # A selected card is already `active` while it still sits at Learn.
+        # The Training surface's "start" action sends active -> active with
+        # reason=start_step; that is a phase advance, not a status conflict.
+        if (
+            new_status == "active"
+            and card.status == "active"
+            and str(getattr(card, "learning_phase", "") or "").strip().lower() == "learn"
+            and reason == "start_step"
+        ):
+            updated = card.model_copy(
+                update={"learning_phase": "try", "updated_at": utc_now().isoformat()}
+            )
+            structured._training_cards[card_id] = updated
+            self._record_training_event(
+                structured,
+                event_type="training_card_started",
+                payload={
+                    "selected_card_id": card_id,
+                    "candidate_status": card.status,
+                    "learning_phase": "try",
+                },
+            )
+            self._persist_structured(workspace_id)
+            return CardStatusTransitionResponse(card=updated)
         allowed = {
             "candidate": {"active", "needs_primer", "skipped", "blocked"},
             "active": {"needs_primer", "answered", "implemented", "completed", "skipped", "blocked"},

@@ -320,6 +320,27 @@ class CardStatusTransitionUnitTests(unittest.TestCase):
         assert snapshot.workspace["selected_card_status"] == "active"
         assert snapshot.active_training_card_routing is not None
 
+    def test_active_learn_card_start_advances_to_try(self) -> None:
+        card = _make_card(card_id="card-start", status="active", card_type="practice")
+        card = card.model_copy(update={"learning_phase": "learn"})
+        self._seed_card(card)
+
+        result = self.service.transition_card_status(
+            self.workspace_id, card.card_id, "active", reason="start_step"
+        )
+
+        assert result.card.status == "active"
+        assert result.card.learning_phase == "try"
+
+    def test_active_to_active_without_start_reason_still_fails(self) -> None:
+        card = _make_card(card_id="card-start-invalid", status="active")
+        self._seed_card(card)
+
+        with self.assertRaises(ValueError):
+            self.service.transition_card_status(
+                self.workspace_id, card.card_id, "active", reason="other"
+            )
+
     def test_skipping_selected_card_releases_live_selection(self) -> None:
         card = _make_card(card_id="card-skip", status="candidate", card_type="practice")
         self._seed_card(card)

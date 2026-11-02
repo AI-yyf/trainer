@@ -419,3 +419,10 @@
 - Installed-VSIX real GUI: fresh reading card `card-manual-fresh-1` completed Learn → Try → Reflect → Return. Log shows `POST /training/reflect 200` and `POST /training/return 200`; Growth keeps 理解 as “还未验证”. Persisted state: card `answered`, handoff `return/self_reported/completed`, evidence `verified=False`, `verification_source=self_reported`, `latest_learning_outcome=self_reported`.
 - Gates: `ruff check app tests` clean; `pyright app` 0 errors; full server suite **3728 passed**; extension suite exit 0; `npm run check` clean.
 - Newly observed P1 to verify next: a card seeded as `status=active, learning_phase=learn` renders “开始这一步”, which calls card-status transition and returns 422 (active→active). Need to check whether normal card generation can produce that state, and make the start action phase-aware if so.
+
+## 2026-11-03 — active/learn start action fixed
+- A selected card can be `status=active` while still at `learning_phase=learn` (card selection activates it before the learner presses Start). Training rendered “开始这一步”, which sent `active -> active` and the server returned 422.
+- `transition_card_status` now treats `active -> active` with `reason=start_step` as a phase advance to `try` (no status change, no invalid transition). Any other `active -> active` still fails.
+- Regression tests: `test_active_learn_card_start_advances_to_try` and `test_active_to_active_without_start_reason_still_fails`; `test_card_status_transition.py` 45 passed.
+- Installed-VSIX real GUI: seeded active/learn card, clicked “开始这一步”; log shows `POST /training/card-status 200`, UI advanced to “动手 · 2/5”.
+- Final gates: ruff clean, pyright 0 errors, full server suite **3730 passed**, extension suite exit 0.
