@@ -3,7 +3,7 @@
   "gates": {
     "ci_cross_platform": {
       "status": "PASS",
-      "evidence": "run 41353446510 @2e4d313 (code 0860ee4): 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu)"
+      "evidence": "run 41378308262 @d9e4fda (code 1c82a41): 9/9 jobs success (UI/Server/Package on windows/macos/ubuntu)"
     },
     "native_install_e2e": {
       "status": "PASS",
@@ -72,6 +72,10 @@
     "m3_1_stream_completion": {
       "status": "PARTIAL",
       "evidence": "1c82a41: correct visible text but stream did not close within 240s; not claimed as pass"
+    },
+    "local_e2e_full": {
+      "status": "PARTIAL",
+      "evidence": "58/61 in e2e/trainer.spec.js + settings spec; 3 blocked-recovery fixture tests fail in the preview harness, recorded not hidden. Matrix 200/200 and targeted settings/stay-mode tests pass."
     }
   }
 }

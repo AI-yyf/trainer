@@ -82,9 +82,9 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41353446510,
-    "sha": "2e4d313",
-    "code_sha": "0860ee4",
+    "run_id": 41378308262,
+    "sha": "d9e4fda",
+    "code_sha": "1c82a41",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
     "jobs": "9/9"
@@ -133,6 +133,7 @@
     "geometry": "471/471",
     "a11y": "96/96",
     "real_model_journey": "10/10",
-    "installed_vsix_real_provider": "36/36 (run 2)"
+    "installed_vsix_real_provider": "36/36 (run 2)",
+    "local_e2e_full": "PARTIAL 58/61: 3 blocked-recovery fixture tests fail in the browser-preview harness; targeted matrix 200/200, settings tests, and stay-mode dock test pass. Not claimed as a product pass."
   }
 }
