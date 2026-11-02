@@ -86,8 +86,8 @@
     "T-0024_note": "view-aware card landed; oscillation root cause fixed at c7be597 (stale layout persist); monitor X11 in CI"
   },
   "ci": {
-    "run_id": 41388893613,
-    "sha": "312ec5b",
+    "run_id": 41391159710,
+    "sha": "d6dbda9",
     "code_sha": "6cb2e98",
     "workflow": "Trainer Cross-Platform Verify",
     "conclusion": "success",
@@ -128,7 +128,7 @@
     "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available).",
     "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run."
   ],
-  "docs_head": "312ec5b",
+  "docs_head": "d6dbda9",
   "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING",
   "tests": {
     "server": "3696 passed",
