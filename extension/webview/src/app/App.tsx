@@ -10007,13 +10007,20 @@ export function App() {
             leftoverResourceLibraryListNotLive && resourcesOrientation
               ? {
                   ...resourcesOrientation,
-                  why: t.leftoverNotLive,
+                  why: appUiCopy(
+                    layout.composerLanguage,
+                    "资料库只显示已确认导入的资料。",
+                  ),
                   primaryAction: "open_coach",
                   primaryActionLabel: t.openCoach,
                 }
               : resourcesOrientation
           }
-          leftoverNote={leftoverResourceLibraryListNotLive ? t.leftoverNotLive : undefined}
+          leftoverNote={
+            leftoverResourceLibraryListNotLive
+              ? appUiCopy(layout.composerLanguage, "资料库只显示已确认导入的资料。")
+              : undefined
+          }
           onOrientationAction={handleResourcesOrientationAction}
           deletedResources={data.deletedResources}
           sandboxState={liveSandboxState}

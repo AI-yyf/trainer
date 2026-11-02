@@ -127,7 +127,10 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
   assert.match(appSource, /leftoverResourceLibraryListIsNotLive\(/);
   assert.match(appSource, /primaryAction: "open_coach"/);
   assert.match(appSource, /leftoverResourceLibraryListNotLive && resourcesOrientation/);
-  assert.match(appSource, /leftoverNote=\{leftoverResourceLibraryListNotLive \? t\.leftoverNotLive : undefined\}/);
+  assert.match(
+    appSource,
+    /leftoverNote=\{\s*leftoverResourceLibraryListNotLive\s*\? appUiCopy\(layout\.composerLanguage, "资料库只显示已确认导入的资料。"\)\s*:\s*undefined\s*\}/,
+  );
   assert.match(appSource, /leftoverNote=\{leftoverTrainingHandoffChromeNotLive \? t\.leftoverNotLive : undefined\}/);
   assert.match(appSource, /runtimePlanId: data\.memory\.workspace\?\.latestPlanRuntime\?\.planId,/);
   assert.match(appSource, /leftoverCoachConversationIsNotLive\(/);

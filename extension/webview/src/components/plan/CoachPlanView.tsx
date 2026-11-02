@@ -898,6 +898,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       : undefined) ??
     plan.stages.find((stage) => stage.status === "active") ??
     plan.stages[0];
+  const completedStages = plan.stages.filter((stage) => stage.status === "done");
+  const routeStages = plan.stages.filter((stage) => stage.status !== "done");
   const liveStageIsCurrent = props.liveStageIsCurrent !== false;
   const liveCurrentStep = plan.currentStep?.trim() || "";
   const activeStageTitle = liveStageIsCurrent
@@ -1107,19 +1109,12 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       state={learningSystemState}
       next={props.primaryAction}
       nextTools={props.dockReturnNotice ? <>{props.dockReturnNotice}{liveEvidenceDecisionRow}</> : liveEvidenceDecisionRow}
-      route={{ label: stageProgressText ? `${resolvedStagesLabel} · ${stageProgressText}` : resolvedStagesLabel, content: <>
+      route={{ label: resolvedStagesLabel, count: routeStages.length, content: <>
         {renderComposerDraftReplacement("stage")}
-        {plan.stages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
-        <details className="template-disclosure" data-learning-section="template">
-          <summary>{templateCopy[language].startFromTemplate}</summary>
-          {/* P2 #21: a live projection scopes the packs to the workspace subject. */}
-          {starterTemplateDefsFor(resolveStarterSubjectFamily(props.projection)).map((def) => (
-            <StarterTemplateArticle key={def.id} def={def} language={language} />
-          ))}
-        </details>
+        {routeStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
       </> }}
-      growth={{ label: templateCopy[language].growth, content: (
-        <>
+      growth={{ label: templateCopy[language].growth, count: GROWTH_DIMENSION_KEYS.length, content: (
+        <div className="board-card board-card--growth" data-board-card="growth">
           <div className="template-metadata" data-plan-growth-dots="true">
             {GROWTH_DIMENSION_KEYS.map((key) => {
               const dimension = props.projection?.dimensions?.[key];
@@ -1131,11 +1126,11 @@ export function CoachPlanView(props: CoachPlanViewProps) {
             })}
           </div>
           <button type="button" className="template-back" data-plan-growth-link="progress" onClick={() => props.onNavigateToView?.("progress")}>{planViewText.viewGrowth}</button>
-        </>
+        </div>
       ) }}
       proof={hasProofDetails ? { label: `${templateCopy[language].proofPending} (${proofDebtCount})`, content: <>
-        {reviewSupportRow ? renderNodeWithParagraph(reviewSupportRow.body) : null}
-        {props.dueReviewItems?.slice(0, 4).map((item) => <div key={item.id}><strong>{item.title}</strong><p>{compactReviewLane(item, language)}</p></div>)}
+        {reviewSupportRow ? <div className="board-card board-card--review" data-board-card="review">{renderNodeWithParagraph(reviewSupportRow.body)}</div> : null}
+        {props.dueReviewItems?.slice(0, 4).map((item) => <article key={item.id} className="board-card board-card--review" data-board-card="review"><strong>{item.title}</strong><p>{compactReviewLane(item, language)}</p></article>)}
         <button type="button" className="template-back" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>{templateCopy[language].startReview}</button>
         {hasEvidenceDetails ? (
         <section
@@ -1149,7 +1144,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                 const outcome = formatEvidenceOutcome(item.outcome, t);
                 const time = formatEvidenceTime(item.timestamp, language);
                 return (
-                  <article key={item.id} className="coach-plan-view__evidence-row" data-plan-evidence-row="pending">
+                  <article key={item.id} className="coach-plan-view__evidence-row board-card board-card--evidence" data-plan-evidence-row="pending" data-board-card="evidence">
                     <div className="coach-plan-view__evidence-row-head">
                       <div>
                         <strong>{summary}</strong>
@@ -1200,7 +1195,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                       ? t("evidenceFilterDeferred")
                       : t("history");
                 return (
-                  <article key={item.id} className="coach-plan-view__evidence-row coach-plan-view__evidence-row--settled" data-plan-evidence-row="settled">
+                  <article key={item.id} className="coach-plan-view__evidence-row coach-plan-view__evidence-row--settled board-card board-card--evidence" data-plan-evidence-row="settled" data-board-card="evidence">
                     <div className="coach-plan-view__evidence-row-head">
                       <div>
                         <strong>{summary}</strong>
@@ -1218,6 +1213,18 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     >
       {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
       {renderComposerDraftReplacement("project-subplan")}
+      {completedStages.length > 0 ? (
+        <details className="template-disclosure" data-learning-section="completed-stages">
+          <summary>{resolveStageStatusLabel("done", stageStatusLabels?.done, language)} ({completedStages.length})</summary>
+          {completedStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={false} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
+        </details>
+      ) : null}
+      <details className="template-disclosure" data-learning-section="template">
+        <summary>{templateCopy[language].startFromTemplate}</summary>
+        {starterTemplateDefsFor(resolveStarterSubjectFamily(props.projection)).map((def) => (
+          <StarterTemplateArticle key={def.id} def={def} language={language} />
+        ))}
+      </details>
       <details className="template-disclosure" data-plan-more-plans="true">
         <summary>{templateCopy[language].morePlans}</summary>
         <div>
@@ -1358,14 +1365,11 @@ function PlanStageSection({
 }) {
   return (
     <div
-      className={`stage-row${isActive ? " stage-row--active" : ""}`}
+      className={`stage-row board-card board-card--stage${isActive ? " stage-row--active" : ""}`}
       data-plan-stage={stage.id}
       data-stage-status={stage.status}
     >
-      <details
-        className="template-disclosure coach-plan-view__stage-details"
-        open={isActive}
-      >
+      <details className="template-disclosure coach-plan-view__stage-details">
         <summary>
           <span className="stage-block__title-text">{stage.title}</span>
           <StatusLabel label={statusLabel} />

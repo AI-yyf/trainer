@@ -32,6 +32,7 @@ import "./styles/sections/collapsible-block.css";
 import "./styles/sections/coach-conversation-view.css";
 import "./styles/sections/coach-empty-state.css";
 import "./styles/sections/coach-plan-view.css";
+import "./styles/sections/board.css";
 import "./styles/sections/coach-settings-view.css";
 import "./styles/sections/settings-sheet.css";
 import "./styles/sections/settings-section.css";

@@ -98,7 +98,7 @@ test('cold-start recovered stamp lights leftover overlay without leftover plan o
   );
   assert.match(
     appSource,
-    /leftoverNote=\{leftoverResourceLibraryListNotLive \? t\.leftoverNotLive : undefined\}/,
+    /leftoverNote=\{\s*leftoverResourceLibraryListNotLive\s*\? appUiCopy\(layout\.composerLanguage, "资料库只显示已确认导入的资料。"\)\s*:\s*undefined\s*\}/,
   );
   assert.match(
     trainingSource,

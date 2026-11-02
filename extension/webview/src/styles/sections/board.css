@@ -1,0 +1,227 @@
+/* Learning is a stack of cards, not a board frame.
+ *
+ * Each group label is a quiet eyebrow; every stage/review/evidence item is its
+ * own compact card. Resources intentionally has no board: the library stays a
+ * single rounded shell around the existing file-manager tree.
+ */
+
+.learning-cards {
+  display: grid;
+  gap: 8px;
+}
+
+.learning-cards__header {
+  display: grid;
+  gap: 2px;
+}
+
+.learning-cards__header h2 {
+  margin: 0;
+  font-size: var(--trainer-font-lg);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.learning-card-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.learning-card-stack--more {
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.learning-card {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-1) 46%, transparent);
+}
+
+.learning-card--now {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-1));
+}
+
+.learning-card-group {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.learning-card-group__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-inline: 1px;
+}
+
+.learning-card-group__header h3 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--trainer-font-3xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.learning-card-group__count {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-0) 55%, transparent);
+  color: var(--fg-2);
+  font-size: var(--trainer-font-3xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.learning-card-group__cards {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.board-card {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-1) 46%, transparent);
+  box-shadow: none;
+  transition:
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+
+.board-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--bg-1) 70%, transparent);
+}
+
+.board-card:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent) 48%, transparent);
+  outline-offset: 1px;
+}
+
+.board-card--stage {
+  padding: 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-1) 38%, transparent);
+}
+
+.board-card--stage.stage-row--active {
+  border-inline-start: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-1));
+}
+
+.board-card--review {
+  border-inline-start: 2px solid color-mix(in srgb, var(--warning) 55%, var(--line));
+}
+
+.board-card--evidence {
+  border-inline-start: 2px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.board-card--growth {
+  display: grid;
+  gap: 4px;
+}
+
+.board-card--review p,
+.board-card--evidence p {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.4;
+}
+
+.board-card--review strong,
+.board-card--evidence strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.learning-card--now .template-next-action {
+  padding-block: 2px 4px;
+  gap: 4px;
+}
+
+.learning-card--now .template-next-action h3 {
+  font-size: var(--trainer-font-sm);
+  line-height: 1.35;
+}
+
+.learning-card--now .template-next-action__detail {
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.4;
+}
+
+.learning-card--now .template-next-action > button {
+  margin-top: 0;
+}
+
+.board-card--stage .template-disclosure {
+  padding-block: 0;
+  border-top: 0;
+}
+
+.board-card--stage summary {
+  padding: 2px 0;
+}
+
+.board-card--stage .coach-plan-view__details-body {
+  padding-top: 4px;
+  gap: 4px;
+}
+
+/* Resources: one rounded shell around the whole library (toolbar + tree). */
+.resources-pane .template-library {
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-2) 16%, transparent);
+}
+
+.resources-library-shell {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.resources-library-shell .resources-knowledge__tree {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-card {
+    transition: none;
+  }
+}
+
+
+/* Path cards use two columns on the sidebar width; an expanded card spans
+ * the row so its objective and materials never squeeze into a narrow column. */
+@media (min-width: 460px) {
+  .learning-card-group[data-learning-section="route"] .learning-card-group__cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .learning-card-group[data-learning-section="route"] .board-card--stage:has(details[open]) {
+    grid-column: 1 / -1;
+  }
+}

@@ -2917,7 +2917,7 @@ export function ResourcesWorkbenchView({
           action={orientation && orientationCanAct && !(orientation.state === "needs_setup" && canWriteResources)
             ? { label: orientation.primaryActionLabel, onClick: () => onOrientationAction?.(orientation.primaryAction) }
             : undefined} />
-      ) : orientation?.why && resources.length > 0 ? <p className="template-metadata">{orientation.why}</p> : null}
+      ) : orientation?.why && resources.length > 0 && orientation.why.trim() !== leftoverStoredNote.trim() ? <p className="template-metadata">{orientation.why}</p> : null}
 
       {isImportMenuOpen && canWriteResources ? (
         <div
@@ -3207,6 +3207,7 @@ export function ResourcesWorkbenchView({
         action={mutationStatus.tone === "failed" && onRefreshDeletedResources ? { label: localize(language, "refreshTrash"), onClick: onRefreshDeletedResources } : undefined} /> : null}
 
       {omitLeftoverLibrary ? null : (
+      <div className="resources-library-shell" data-resource-library-shell="true">
       <div
         className="resources-knowledge__tree"
         ref={treeRef}
@@ -3472,6 +3473,7 @@ export function ResourcesWorkbenchView({
         </div>
       </details>
       )}
+      </div>
       </div>
       )}
 

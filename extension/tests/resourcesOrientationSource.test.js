@@ -31,7 +31,7 @@ test('Resources view renders snapshot-backed orientation instead of inferred rea
   assert.match(view, /leftoverResourceLibraryListNotLive && resourcesOrientation/);
   assert.match(view, /primaryAction: "open_coach"/);
   assert.match(view, /primaryActionLabel: t\.openCoach/);
-  assert.match(view, /leftoverNote=\{leftoverResourceLibraryListNotLive \? t\.leftoverNotLive : undefined\}/);
+  assert.match(view, /leftoverNote=\{\s*leftoverResourceLibraryListNotLive\s*\? appUiCopy\(layout\.composerLanguage, "资料库只显示已确认导入的资料。"\)\s*:\s*undefined\s*\}/);
   assert.match(view, /onOrientationAction=\{handleResourcesOrientationAction\}/);
   assert.doesNotMatch(view, /<CoachOrientationRail/);
   assert.doesNotMatch(

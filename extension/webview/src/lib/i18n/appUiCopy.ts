@@ -685,6 +685,15 @@ export const APP_UI_TEXT: Record<string, Record<string, string>> = {
     "ko-KR": "현재 진행 상황",
     "pt-BR": "Progresso parcial",
   },
+  "资料库只显示已确认导入的资料。": {
+    "en-US": "The library only shows resources with a confirmed import.",
+    "es-ES": "La biblioteca solo muestra recursos con una importación confirmada.",
+    "fr-FR": "La bibliothèque n’affiche que les ressources dont l’importation est confirmée.",
+    "de-DE": "Die Bibliothek zeigt nur Materialien mit bestätigtem Import.",
+    "ja-JP": "ライブラリにはインポートが確認された資料だけを表示します。",
+    "ko-KR": "라이브러리에는 가져오기가 확인된 자료만 표시합니다.",
+    "pt-BR": "A biblioteca mostra apenas recursos com importação confirmada.",
+  },
   "自我报告结果": {
     "en-US": "Self-reported result",
     "es-ES": "Resultado autoinformado",
