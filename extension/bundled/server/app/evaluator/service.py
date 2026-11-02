@@ -830,6 +830,11 @@ class EvaluatorService:
 
         requires_code_evidence = _requires_code_evidence(language_id)
         evidence = _code_evidence_text(code, language_id) if requires_code_evidence else code
+        literal_evidence = (
+            _code_evidence_text(code, language_id, mask_strings=False)
+            if requires_code_evidence
+            else code
+        )
         implicit_protocols: set[str] = set()
         python_expressions: set[str] = set()
         if str(language_id or "").lower() in _PYTHON_LANGUAGE_IDS:
@@ -859,6 +864,7 @@ class EvaluatorService:
                 implicit_protocols=implicit_protocols,
                 python_expressions=python_expressions,
                 script_stdout=script_stdout,
+                raw_code=literal_evidence,
             )
             for item in criteria
         ]
@@ -868,6 +874,7 @@ class EvaluatorService:
                 evidence,
                 requires_code_evidence=requires_code_evidence,
                 python_expressions=python_expressions,
+                raw_code=literal_evidence,
             )
             for item in symbols
         ]
@@ -1097,7 +1104,12 @@ def _requires_code_evidence(language_id: str | None) -> bool:
     return str(language_id or "").strip().lower() not in _NON_CODE_LANGUAGE_IDS
 
 
-def _code_evidence_text(source: str, language_id: str | None) -> str:
+def _code_evidence_text(
+    source: str,
+    language_id: str | None,
+    *,
+    mask_strings: bool = True,
+) -> str:
     characters = list(source)
     language = str(language_id or "").strip().lower()
     uses_hash_comments = language not in _SLASH_COMMENT_LANGUAGE_IDS
@@ -1147,7 +1159,8 @@ def _code_evidence_text(source: str, language_id: str | None) -> str:
                 index += len(delimiter)
                 break
             index += 1
-        mask(start, min(index, len(source)))
+        if mask_strings:
+            mask(start, min(index, len(source)))
 
     return "".join(characters)
 
@@ -1185,6 +1198,28 @@ def _normalize_code_symbol(value: str) -> str | None:
     if not normalized or _CODE_SYMBOL_PATTERN.fullmatch(normalized) is None:
         return None
     return re.sub(r"\s*\.\s*", ".", normalized)
+
+
+def _matches_string_literal(symbol: str, code: str | None) -> bool:
+    """Match an explicit returned string value without trusting comments.
+
+    ``_code_evidence_text`` masks string literals so prose can never satisfy a
+    symbol check. Some practice cards legitimately require an exact returned
+    string (``"ask_clarification"`` / ``"answer"``). Match those only when the
+    identifier appears as a quoted string in the original source.
+    """
+
+    if not code:
+        return False
+    normalized = _normalize_code_symbol(symbol)
+    if normalized is None:
+        return False
+    return bool(
+        re.search(
+            rf"(['\"]){re.escape(normalized)}\1",
+            code,
+        )
+    )
 
 
 def _matches_code_symbol(symbol: str, evidence: str) -> bool:
@@ -1242,6 +1277,7 @@ def _criterion_result(
     implicit_protocols: set[str] | None = None,
     python_expressions: set[str] | None = None,
     script_stdout: str | None = None,
+    raw_code: str | None = None,
 ) -> dict[str, list[str] | str]:
     if requires_code_evidence:
         output_numbers = _criterion_output_numbers(criterion)
@@ -1267,6 +1303,7 @@ def _criterion_result(
         matched_signals = [
             signal for signal in code_signals
             if _matches_code_symbol(signal, evidence)
+            or _matches_string_literal(signal, raw_code)
             or _python_expression_key(signal) in (python_expressions or set()) or (
                 describes_protocol and signal not in expected_symbols
                 and signal in (implicit_protocols or set())
@@ -1314,11 +1351,15 @@ def _expected_symbol_result(
     *,
     requires_code_evidence: bool,
     python_expressions: set[str] | None = None,
+    raw_code: str | None = None,
 ) -> dict[str, list[str] | str]:
     normalized = symbol.strip()
     matched = (
-        (_matches_code_symbol(normalized, evidence)
-         or _python_expression_key(normalized) in (python_expressions or set()))
+        (
+            _matches_code_symbol(normalized, evidence)
+            or _matches_string_literal(normalized, raw_code)
+            or _python_expression_key(normalized) in (python_expressions or set())
+        )
         if requires_code_evidence
         else bool(normalized and normalized.lower() in evidence.lower())
     )

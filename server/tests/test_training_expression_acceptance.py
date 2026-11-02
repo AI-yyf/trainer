@@ -67,3 +67,33 @@ def test_nested_and_empty_list_literals_are_matched_as_real_syntax():
 def test_list_literals_in_comments_strings_or_with_wrong_values_do_not_match(code):
     result = acceptance(code, ["[]", "[1, [2, [3, 4]], 5]"])
     assert result is not None and result.status == "failed"
+
+
+def test_explicit_returned_string_values_can_satisfy_acceptance_signals():
+    code = '''
+class ConversationState:
+    required_context: set[str]
+    present_context: set[str]
+
+
+def next_action(state: ConversationState) -> str:
+    missing_context = set(state.required_context) - set(state.present_context)
+    if missing_context:
+        return "ask_clarification"
+    return "answer"
+'''
+    result = acceptance(
+        code,
+        ["ConversationState", "next_action", "missing_context",
+         "required_context", "present_context", "ask_clarification", "answer"],
+        ['定义 `next_action` 在上下文缺失时返回 `"ask_clarification"` 的分支'],
+    )
+    assert result is not None
+    assert result.status == "passed", result.detail
+
+
+def test_string_values_only_in_comments_do_not_satisfy_symbol_acceptance():
+    code = '# return "ask_clarification"\ndef next_action(state):\n    return "answer"\n'
+    result = acceptance(code, ["ask_clarification"])
+    assert result is not None
+    assert result.status == "failed"

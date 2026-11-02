@@ -519,20 +519,22 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("keeps missing-key recovery honest in the Coach main line", async ({ page }) => {
+  test("a failed connection test stays a non-blocking diagnostic in Coach", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await openPreview(page, "coach", {
       lang: "en-US",
-      scenario: "recovery",
+      scenario: "provider-auth-failure-empty",
       connection: "connected",
     });
 
     await expectThreePrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "coach");
-    await expect(page.locator("main")).toContainText("This saved connection still needs its key, so Trainer cannot continue yet.");
-    await expect(page.locator("main")).toContainText("Add the key in Settings, then return to this thread.");
+    // ProviderStatus contract: a historical failed test is a diagnostic, not a
+    // send gate. The first real send is the live confirmation.
+    await expect(page.locator(".coach-empty-state--blocked")).toHaveCount(0);
     await expect(page.locator(".composer-shell")).toBeVisible();
+    await expect(page.locator("#coach-composer")).toBeVisible();
     await expectNoConsoleErrors(errors);
   });
 
@@ -545,18 +547,13 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    const recovery = page.locator(".coach-empty-state--blocked");
-    await expect(recovery).toBeVisible();
-    await expect(recovery.getByRole("button")).toHaveCount(1);
-    await expect(recovery).toContainText("\u68c0\u67e5\u8fde\u63a5");
-    await expect(recovery).toContainText("\u8fd9\u7ec4\u8fde\u63a5\u6682\u65f6\u4e0d\u80fd\u7528");
-    await expect(recovery).not.toContainText(/gateway|base URL|HTTP|provider/i);
+    // A 401 test result is diagnostic history: it must not take over the
+    // thread or turn a saved connection into a blocked empty state.
+    await expect(page.locator(".coach-empty-state--blocked")).toHaveCount(0);
     await expect(page.locator(".composer-presencebar__blocked")).toHaveCount(0);
-    const blockedPlaceholder = await page.locator("#coach-composer").getAttribute("placeholder");
-    expect(blockedPlaceholder ?? "").not.toMatch(/检查连接|provider/i);
-
-    await recovery.getByRole("button", { name: /\u68c0\u67e5\u8fde\u63a5/ }).click();
-    await expectActiveView(page, "zh-CN", "settings");
+    await expect(page.locator("#coach-composer")).toBeVisible();
+    await expect(page.locator(".composer-shell")).toBeVisible();
+    await expect(page.locator("body")).not.toContainText(/gateway|base URL|HTTP/i);
     await expectNoConsoleErrors(errors);
   });
 
@@ -1552,8 +1549,8 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    const recovery = page.locator(".coach-empty-state--blocked");
-    await expect(recovery.getByRole("button")).toHaveCount(1);
+    await expect(page.locator(".coach-empty-state--blocked")).toHaveCount(0);
+    await expect(page.locator("#coach-composer")).toBeVisible();
     await expect(page.locator("body")).not.toContainText(/桌面应用\s*94%/);
     await expect(page.locator(".first-look-summary, .firstlook-summary, .FirstLookSummaryPanel")).toHaveCount(0);
     await expectNoConsoleErrors(errors);

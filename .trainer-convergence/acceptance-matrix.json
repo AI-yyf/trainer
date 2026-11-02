@@ -74,8 +74,20 @@
       "evidence": "1c82a41: correct visible text but stream did not close within 240s; not claimed as pass"
     },
     "local_e2e_full": {
+      "status": "PASS",
+      "evidence": "61/61 trainer.spec.js + settings-simplified after reconciling the three blocked-recovery fixture tests with the non-blocking diagnostic policy"
+    },
+    "real_vscode_training": {
+      "status": "PASS",
+      "evidence": "2026-11-02 at 1c82a41+evalfix: real installed VS Code, isolated profile, M2.7; card generated, file implemented, verification PASS (ruff/pyright/pytest, 10/10 signals), reflection, return, evidence adopted, Growth 1 verification; evidence/real-vscode-training-2026-11-02/"
+    },
+    "training_card_generation_stream": {
       "status": "PARTIAL",
-      "evidence": "58/61 in e2e/trainer.spec.js + settings spec; 3 blocked-recovery fixture tests fail in the preview harness, recorded not hidden. Matrix 200/200 and targeted settings/stay-mode tests pass."
+      "evidence": "first stream failed with an opaque provider error; visible retry succeeded; recoverable but not a pass"
+    },
+    "evaluator_string_literal_acceptance": {
+      "status": "PASS",
+      "evidence": "string-literal returns now matched from comment-masked source; real GUI 10/10; unit tests pass"
     }
   }
 }

@@ -73,7 +73,11 @@
     "dock_send_preference": "FIXED_VALIDATED (1c82a41: dock switch removed; one-time choice lives in Settings > Preferences; default 看回答/View reply; stay mode e2e passes; matrix 200/200)",
     "provider_admission_carry": "FIXED_VALIDATED (1c82a41: a passed provider test follows the same project through managed admission; host copies the scoped result and the sidecar adopts fresh host evidence after a root switch; GUI composer no longer forces a re-test)",
     "coach_workspace_file_grounding": "FIXED_VALIDATED (1c82a41: a Coach message naming a workspace file enables the verified tool loop; real GUI reply read src/queue_lock.py and README instead of claiming the source was unavailable)",
-    "m3.1_stream_completion": "PARTIAL_RESIDUAL (1c82a41: MiniMax-M3.1 produced correct visible text for a normal Coach turn, but the provider stream did not close within 240s; recorded as PARTIAL, not PASS; M2.7 journey is 10/10)"
+    "m3.1_stream_completion": "PARTIAL_RESIDUAL (1c82a41: MiniMax-M3.1 produced correct visible text for a normal Coach turn, but the provider stream did not close within 240s; recorded as PARTIAL, not PASS; M2.7 journey is 10/10)",
+    "real_vscode_training": "PASS (2026-11-02 at 1c82a41+evalfix: installed VS Code + isolated profile + real M2.7; generated practice card, implemented conversation_router.py, verification PASS with ruff/pyright/pytest and 10/10 acceptance signals, reflection recorded, returned to Coach, evidence adopted, Growth shows 实现 · 独立完成 · 1 次验证通过; evidence/real-vscode-training-2026-11-02/)",
+    "training_card_generation_stream": "PARTIAL_RECOVERABLE (first card-generation stream failed with an opaque provider error after partial output; the visible retry succeeded. Recorded as recoverable, not a pass.)",
+    "evaluator_string_literal_acceptance": "FIXED_VALIDATED (cards requiring exact returned strings like \"ask_clarification\"/\"answer\" were impossible to pass because all string literals were masked; comment-masked literal evidence now matches quoted returns; 10/10 acceptance in the real GUI and new unit tests pass)",
+    "local_e2e_full": "PASS 61/61 (trainer.spec.js + settings-simplified; three blocked-recovery fixture tests reconciled with the documented non-blocking diagnostic policy)"
   },
   "blocked": {
     "T-0028": "owner sign-off (docs/maturity/2026-10-20-real-project-review.md §6) — human-only",
@@ -92,7 +96,7 @@
   "next": [
     "owner teaching sign-off (T-0028)",
     "M3.1 stream-close residual: capture a provider trace and decide whether to cap/retry",
-    "GUI training verification in real VS Code",
+    "card-generation stream failure copy: show the provider reason and retry action",
     "real Remote-SSH L2 window",
     "Windows/Linux browser install acceptance"
   ],
@@ -118,8 +122,8 @@
   "notes": "Owner delivered a fresh linksub test key on 2026-10-24; real-model journey evidence completed same day. Remaining external gates: T-0028 owner §6 sign-off (teaching_acceptance), real Remote-SSH window (remote_ssh_e2e L2).",
   "branch": "maturity/p1-final-convergence-2026-10-20",
   "gaps": [
-    "M3.1 normal Coach stream can emit correct visible text yet not close within 240s; recorded as PARTIAL residual.",
-    "GUI training verification is NOT_EXECUTED; the real VS Code journey covers first-run, settings, provider, project admission, teaching, and model switch.",
+    "MiniMax-M3.1 normal Coach stream can emit correct visible text yet not close within 240s; recorded as PARTIAL residual.",
+    "The first training card-generation stream failed with an opaque provider error; retry succeeded. Surface a clearer reason and keep the retry action obvious.",
     "Owner T-0028 teaching-quality sign-off is human-only and remains BLOCKED.",
     "Remote-SSH L2 real-window acceptance remains BLOCKED (environment not available).",
     "Windows/Linux browser install acceptance is not covered by the macOS real-Chrome run."
@@ -127,13 +131,15 @@
   "docs_head": "2e4d313",
   "engineering_status": "ENGINEERING_CONVERGED — EXTERNAL_ACCEPTANCE_PENDING",
   "tests": {
-    "server": "3694 passed",
+    "server": "3696 passed",
     "extension": "node --test extension/tests/*.test.js exit 0",
     "matrix": "200/200",
     "geometry": "471/471",
     "a11y": "96/96",
     "real_model_journey": "10/10",
     "installed_vsix_real_provider": "36/36 (run 2)",
-    "local_e2e_full": "PARTIAL 58/61: 3 blocked-recovery fixture tests fail in the browser-preview harness; targeted matrix 200/200, settings tests, and stay-mode dock test pass. Not claimed as a product pass."
+    "local_e2e_full": "PARTIAL 58/61: 3 blocked-recovery fixture tests fail in the browser-preview harness; targeted matrix 200/200, settings tests, and stay-mode dock test pass. Not claimed as a product pass.",
+    "e2e_full": "61/61",
+    "real_vscode_training": "PASS (verification 10/10, evidence adopted, Growth 1 verification)"
   }
 }
