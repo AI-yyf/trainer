@@ -15,9 +15,14 @@
  * group from looking sheared off at the viewport boundary; the bottom padding
  * lets the last card scroll clear of the fade. */
 .view-stack--plan .plan-view {
-  padding-bottom: 16px;
   -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 14px), transparent);
   mask-image: linear-gradient(to bottom, currentColor calc(100% - 14px), transparent);
+}
+
+/* This selector matches views-panes.css and loads later, so the bottom pad
+ * actually clears the fade instead of being overridden by `padding: 0`. */
+.view-stack--plan > .view-stack__primary > .plan-view {
+  padding-bottom: 18px;
 }
 
 .learning-cards__header {
