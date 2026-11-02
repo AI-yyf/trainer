@@ -257,7 +257,7 @@ export function researchStreamMessageHandler(
           if (workbench) {
             await workbench.postMessage({
               type: 'stream/error',
-              payload: { error: safeError },
+              payload: { error: safeError, messageId },
             });
           }
           return { ok: false, message: `Stream error: ${safeError}` };
@@ -282,7 +282,7 @@ export function researchStreamMessageHandler(
             if (workbench) {
               await workbench.postMessage({
                 type: 'stream/chunk',
-                payload: { chunk: parsed.chunk },
+                payload: { chunk: parsed.chunk, messageId },
               });
             }
           }
@@ -290,7 +290,7 @@ export function researchStreamMessageHandler(
           if (workbench) {
             await workbench.postMessage({
               type: 'stream/chunk',
-              payload: { chunk: chunk.data },
+              payload: { chunk: chunk.data, messageId },
             });
           }
         }
@@ -299,7 +299,7 @@ export function researchStreamMessageHandler(
       if (workbench) {
         await workbench.postMessage({
           type: 'stream/complete',
-          payload: { tokens: totalTokens },
+          payload: { tokens: totalTokens, messageId },
         });
       }
 

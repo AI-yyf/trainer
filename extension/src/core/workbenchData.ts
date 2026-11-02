@@ -369,6 +369,7 @@ export function mergeSessionMessage(
   current: BootstrapData,
   payload: unknown,
   userMessage: string,
+  fallbackReplyText = "",
 ): { sessionId?: string; patch: Partial<BootstrapData> } {
   const record = asRecord(payload);
   const snapshot = asRecord(record?.snapshot);
@@ -451,17 +452,24 @@ export function mergeSessionMessage(
       ? undefined
       : memoryWithPressureStamp.activeThread);
 
+  const mappedConversation = snapshot
+    ? mapConversation(
+        snapshot.messages,
+        workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) ? [] : fallbackConversation,
+        incomingWorkspaceId,
+        currentWorkspaceId,
+      )
+    : workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId)
+      ? []
+      : fallbackConversation;
+  const conversation = ensureLiveTurnBodies(
+    mappedConversation,
+    userMessage,
+    asString(reply?.content) || fallbackReplyText,
+    asString(reply?.id),
+  );
   const patch: Partial<BootstrapData> = {
-    conversation: snapshot
-      ? mapConversation(
-          snapshot.messages,
-          workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) ? [] : fallbackConversation,
-          incomingWorkspaceId,
-          currentWorkspaceId,
-        )
-      : workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId)
-        ? []
-        : fallbackConversation,
+    conversation,
     memory: {
       ...memoryWithPressureStamp,
       activeThread,
@@ -1381,8 +1389,14 @@ export function mergeSessionMessageSnapshot(
   payload: unknown,
   userMessage: string,
   incomingWorkspaceId?: string,
+  streamedReplyText = "",
 ): { sessionId?: string; patch: Partial<BootstrapData> } {
-  const { sessionId, patch } = mergeSessionMessage(current, payload, userMessage);
+  const { sessionId, patch } = mergeSessionMessage(
+    current,
+    payload,
+    userMessage,
+    streamedReplyText,
+  );
   const record = asRecord(payload) ?? {};
   const snapshot = asRecord(record.snapshot) ?? record;
   const stamped = mergeWorkspaceStampedSnapshot(current, snapshot, incomingWorkspaceId);
@@ -6700,6 +6714,44 @@ function mapSuggestedActions(
       } satisfies SuggestedActionView;
     })
     .filter((item): item is SuggestedActionView => item !== undefined);
+}
+
+function ensureLiveTurnBodies<T extends { role: string; body: string; id?: string }>(
+  messages: T[],
+  userMessage: string,
+  replyContent: string,
+  replyId?: string,
+): T[] {
+  if (messages.length === 0) {
+    return messages;
+  }
+  const next = [...messages];
+  const last = next[next.length - 1];
+  const prior = next[next.length - 2];
+  const replyText = (replyContent ?? "").trim();
+  const userText = (userMessage ?? "").trim();
+  // A slim live turn can arrive with both bodies empty. Only repair it when
+  // the trailing turn is demonstrably the current one: the reply id matches,
+  // or a non-empty prior user body matches this send. Otherwise a stale
+  // snapshot (no new messages yet) would overwrite the last old assistant
+  // with the new reply.
+  const replyIdMatches = Boolean(replyId && last?.id && last.id === replyId);
+  const priorIsCurrentTurn =
+    !prior ||
+    prior.role !== "user" ||
+    !(prior.body ?? "").trim() ||
+    !userText ||
+    prior.body.trim() === userText;
+  if (!replyIdMatches && !priorIsCurrentTurn) {
+    return messages;
+  }
+  if (last && last.role === "assistant" && replyIdMatches && !(last.body ?? "").trim() && replyText) {
+    next[next.length - 1] = { ...last, body: replyContent };
+  }
+  if (prior && prior.role === "user" && !(prior.body ?? "").trim() && userText) {
+    next[next.length - 2] = { ...prior, body: userMessage };
+  }
+  return next;
 }
 
 function createConversationMessage(

@@ -302,6 +302,24 @@ export function parseLivePlanTaskGateMarker(message: string): LivePlanTaskGateKi
   return kind === "no_live" || kind === "leftover" ? kind : undefined;
 }
 
+export const TRAINING_CARD_GENERATION_FAILURE_MARKER =
+  "[[trainer-training-card-generation-failed]]";
+
+const trainingCardGenerationFailureCopy: Record<ComposerLanguage, string> = {
+  "zh-CN": "训练卡没有生成成功：模型请求中断。检查连接后点“开始训练”重试。",
+  "en-US": "The training card was not generated: the model request was interrupted. Check the connection, then retry with Start training.",
+  "es-ES": "La tarjeta de entrenamiento no se generó: la solicitud al modelo se interrumpió. Revisa la conexión y reintenta con Empezar entrenamiento.",
+  "fr-FR": "La carte d'entraînement n'a pas été générée : la requête au modèle a été interrompue. Vérifiez la connexion puis réessayez avec Commencer l'entraînement.",
+  "de-DE": "Die Trainingskarte wurde nicht erzeugt: Die Modellanfrage wurde unterbrochen. Prüfe die Verbindung und starte das Training erneut.",
+  "ja-JP": "トレーニングカードを生成できませんでした。モデルへのリクエストが中断されました。接続を確認して「トレーニングを開始」で再試行してください。",
+  "ko-KR": "학습 카드를 만들지 못했습니다. 모델 요청이 중단되었습니다. 연결을 확인한 뒤 '학습 시작'으로 다시 시도하세요.",
+  "pt-BR": "O cartão de treinamento não foi gerado: a solicitação ao modelo foi interrompida. Verifique a conexão e tente novamente em Iniciar treinamento.",
+};
+
+export function trainingCardGenerationFailureMessage(language: ComposerLanguage): string {
+  return trainingCardGenerationFailureCopy[language] ?? trainingCardGenerationFailureCopy["en-US"];
+}
+
 export function sanitizeOperationFailureMessage(
   message: OperationMessage,
   language: ComposerLanguage,
@@ -339,6 +357,8 @@ export function sanitizeOperationFailureMessage(
       ? planRevisionConflictMessage(revisionConflict2.revision, language)
       : livePlanGate
       ? livePlanTaskGateFailureMessage(livePlanGate, language)
+      : message.message.includes(TRAINING_CARD_GENERATION_FAILURE_MARKER)
+        ? trainingCardGenerationFailureMessage(language)
       : localRecoveryMessages.includes(message.message)
         ? message.message
         : recoverableFailureMessage("operation", language),

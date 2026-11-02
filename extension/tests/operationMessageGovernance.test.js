@@ -203,6 +203,21 @@ test('failure sanitization keeps known local recovery copy verbatim and collapse
   );
 });
 
+test('training card generation failures keep a specific reason and retry entry', () => {
+  const zh = governance.sanitizeOperationFailureMessage(
+    { tone: 'error', message: '[[trainer-training-card-generation-failed]] Provider request failed.' },
+    'zh-CN',
+  );
+  assert.match(zh.message, /训练卡没有生成成功/);
+  assert.match(zh.message, /开始训练/);
+  const en = governance.sanitizeOperationFailureMessage(
+    { tone: 'error', message: '[[trainer-training-card-generation-failed]] Provider request failed.' },
+    'en-US',
+  );
+  assert.match(en.message, /training card/i);
+  assert.match(en.message, /Start training/i);
+});
+
 test('the operation-status controller keeps the 5-second self-dismiss for non-error banners (error stays until closed)', () => {
   const source = fs.readFileSync(operationStatusControllerPath, 'utf8');
   assert.match(

@@ -2786,13 +2786,14 @@ export function ResourcesWorkbenchView({
     && resourceWriteAccess?.allowed !== true;
   // The folder section is part of the live Library, so a leftover-only
   // placeholder does not render it.
-  const showLibraryFolders = !omitLeftoverLibrary;
+  const showLibraryFolders = !omitLeftoverLibrary
+    && (resources.length > 0
+      || (libraryFolders?.length ?? 0) > 0
+      || libraryFoldersState.phase === "loading");
   const orientationTone = orientation ? coachOrientationTone(orientation.state) : undefined;
-  const orientationState = leftoverStoredNote
-    ? undefined
-    : orientation
-      ? orientationStateLabel(orientation.state, language)
-      : undefined;
+  const orientationState = orientation
+    ? orientationStateLabel(orientation.state, language)
+    : undefined;
   const orientationCanAct = Boolean(
     orientation &&
       onOrientationAction &&
@@ -2911,8 +2912,11 @@ export function ResourcesWorkbenchView({
 
       {orientationState && (orientation?.state === "needs_setup" || orientationTone === "blocker" || !canWriteResources) ? (
         <SystemState kind={orientation?.state === "needs_setup" ? "empty" : orientationTone === "blocker" ? "recoverable-error" : "read-only"}
-          title={orientationState} detail={orientation?.why}
-          action={orientation && orientationCanAct ? { label: orientation.primaryActionLabel, onClick: () => onOrientationAction?.(orientation.primaryAction) } : undefined} />
+          title={orientationState}
+          detail={orientation?.state === "needs_setup" ? localize(language, "emptyBody") : orientation?.why}
+          action={orientation && orientationCanAct && !(orientation.state === "needs_setup" && canWriteResources)
+            ? { label: orientation.primaryActionLabel, onClick: () => onOrientationAction?.(orientation.primaryAction) }
+            : undefined} />
       ) : orientation?.why && resources.length > 0 ? <p className="template-metadata">{orientation.why}</p> : null}
 
       {isImportMenuOpen && canWriteResources ? (
@@ -3239,7 +3243,11 @@ export function ResourcesWorkbenchView({
                 ("needs setup / library is empty" + import action); rendering
                 this generic empty block too duplicated the same message. */}
             {resources.length === 0 && !hasSearchQuery && orientation?.state !== "needs_setup" ? (
-              <SystemState kind="empty" title={localize(language, "emptyTitle")} detail={localize(language, "emptyBody")} />
+              <SystemState
+                kind="empty"
+                title={localize(language, "emptyTitle")}
+                detail={localize(language, "emptyBody")}
+              />
             ) : null}
 
             {shouldShowNoMatches ? (

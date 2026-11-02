@@ -484,7 +484,11 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   assert.match(viewSource, /function resourceReuseSummary\(language: ComposerLanguage\): string/);
   assert.match(viewSource, /const selectedResourceReuseSummary = selectedResource \? resourceReuseSummary\(language\) : undefined;/);
   assert.match(viewSource, /resources-knowledge__reuse-summary/);
-  assert.match(viewSource, /<SystemState kind="empty" title=\{localize\(language, "emptyTitle"\)\}/);
+  // The setup empty state is owned by the orientation card, whose title is
+  // the same emptyTitle label. Keep the assertion on the visible empty state
+  // instead of the old standalone SystemState call.
+  assert.match(viewSource, /<SystemState kind=\{orientation\?\.state === "needs_setup" \? "empty"/);
+  assert.match(viewSource, /title=\{orientationState\}/);
   assert.match(viewSource, /detail=\{localize\(language, "emptyBody"\)\}/);
 
   assert.match(appSource, /const requestResourceTrainingHandoff = useCallback/);

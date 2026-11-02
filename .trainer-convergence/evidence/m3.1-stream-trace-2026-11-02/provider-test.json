@@ -1,0 +1,140 @@
+{
+  "ok": true,
+  "configured": true,
+  "api_key_supplied": true,
+  "reachable": true,
+  "success": true,
+  "status": "connected",
+  "provider_name": "custom-openai-compatible",
+  "protocol": "openai_chat_completions_compatible",
+  "protocol_family": "openai",
+  "detail": "自然 zh-CN 探测已通过：虽然严格回显探测不稳定，Trainer 仍然能在这条连接上继续 zh-CN 教练。",
+  "diagnostics": [
+    "provider：custom-openai-compatible",
+    "base URL：http://provider.invalid/v1",
+    "model：MiniMax-M3.1-Flash",
+    "live connectivity check 已通过。",
+    "chat probe 已通过，使用的 model 是 MiniMax-M3.1-Flash。",
+    "Probe response preview: 提供商已就绪。",
+    "自然 zh-CN 探测已通过：虽然严格回显探测不稳定，Trainer 仍然能在这条连接上继续 zh-CN 教练。",
+    "Tool capability verified. Provider returned the requested structured tool call.",
+    "Streaming capability verified. Streaming probe returned visible incremental content.",
+    "Thinking capability verified. Thinking probe returned the expected visible token.",
+    "Model listing capability verified. Model listing returned live model ids."
+  ],
+  "error_category": null,
+  "retryable": false,
+  "status_code": null,
+  "model_supported": true,
+  "probe_usage": {
+    "inputTokens": 212,
+    "outputTokens": 77,
+    "totalTokens": 289
+  },
+  "capability_evidence": [
+    {
+      "name": "chat",
+      "declared": true,
+      "observed": true,
+      "state": "verified"
+    },
+    {
+      "name": "responses",
+      "declared": false,
+      "observed": null,
+      "state": "disabled"
+    },
+    {
+      "name": "vision",
+      "declared": false,
+      "observed": null,
+      "state": "disabled"
+    },
+    {
+      "name": "embeddings",
+      "declared": false,
+      "observed": null,
+      "state": "disabled"
+    },
+    {
+      "name": "tools",
+      "declared": false,
+      "observed": true,
+      "state": "verified"
+    },
+    {
+      "name": "json_schema",
+      "declared": false,
+      "observed": null,
+      "state": "disabled"
+    },
+    {
+      "name": "structured_output",
+      "declared": false,
+      "observed": null,
+      "state": "disabled"
+    },
+    {
+      "name": "streaming",
+      "declared": true,
+      "observed": true,
+      "state": "verified"
+    },
+    {
+      "name": "thinking",
+      "declared": false,
+      "observed": true,
+      "state": "verified"
+    },
+    {
+      "name": "model_listing",
+      "declared": false,
+      "observed": true,
+      "state": "verified"
+    }
+  ],
+  "tools_ready": true,
+  "tool_probe_status": "verified",
+  "streaming_ready": true,
+  "stream_probe_status": "verified",
+  "vision_ready": false,
+  "vision_probe_status": "disabled",
+  "thinking_ready": true,
+  "thinking_probe_status": "verified",
+  "base_url": "http://provider.invalid/v1",
+  "model": "MiniMax-M3.1-Flash",
+  "available_models": [],
+  "resolved_model": null,
+  "warnings": [],
+  "context_window_tokens": null,
+  "max_output_tokens": null,
+  "model_token_limits": {},
+  "capabilities": {
+    "chat": true,
+    "responses": false,
+    "vision": false,
+    "embeddings": false,
+    "tools": false,
+    "jsonSchema": false,
+    "structuredOutput": false,
+    "streaming": true,
+    "thinking": false
+  },
+  "model_capabilities": {
+    "MiniMax-M3.1-Flash": {
+      "chat": true,
+      "responses": false,
+      "vision": false,
+      "embeddings": false,
+      "tools": false,
+      "jsonSchema": false,
+      "structuredOutput": false,
+      "streaming": true,
+      "thinking": false
+    }
+  },
+  "reliability": {
+    "phase": "acked",
+    "outcome": "success"
+  }
+}

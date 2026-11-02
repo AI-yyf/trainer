@@ -178,7 +178,7 @@ def test_stream_route_completes_honestly_when_provider_was_never_tested(tmp_path
     assert "next_task" not in actions
 
 
-def test_stream_route_rejects_verified_chat_without_streaming_probe(tmp_path: Path) -> None:
+def test_stream_route_attempts_when_chat_verified_but_streaming_unverified(tmp_path: Path) -> None:
     with build_client(tmp_path) as client:
         runtime = client.app.state.runtime
         provider = runtime.provider_config
@@ -221,8 +221,65 @@ def test_stream_route_rejects_verified_chat_without_streaming_probe(tmp_path: Pa
             },
         )
 
+    # The first real send is the live confirmation; an unverified stream must
+    # be attempted instead of blocked. The fixture points at an unreachable
+    # provider, so the terminal reliability must record an honest failure.
+    assert response.status_code == 200, response.text
+    phases = streamed_status_phases(response.text)
+    assert "requesting_model" in phases
+    body = completed_stream_response(response.text)
+    reliability = body.get("reliability") or {}
+    assert reliability.get("phase") == "acked"
+    assert reliability.get("outcome") == "failure"
+    agent = body.get("agent") or {}
+    assert agent.get("provider_reachable") is False
+
+
+def test_stream_route_rejects_explicitly_unsupported_streaming(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        provider = runtime.provider_config
+        assert isinstance(provider, ProviderConfig)
+        runtime.provider_capability_cache.clear()
+        runtime.remember_provider_capability_test(
+            provider,
+            "sk-test",
+            ProviderTestResponse(
+                ok=True,
+                detail="provider reports streaming unsupported",
+                capability_evidence=[
+                    ProviderCapabilityEvidence(
+                        name="streaming",
+                        declared=True,
+                        observed=False,
+                        state="unsupported",
+                    )
+                ],
+                tools_ready=False,
+                streaming_ready=False,
+                stream_probe_status="unsupported",
+            ),
+        )
+        start = client.post(
+            "/session/start",
+            json={
+                "workspace_id": "workspace-unsupported-stream",
+                "workspace_name": "Unsupported stream",
+            },
+        )
+        response = client.post(
+            "/session/message/stream",
+            json={
+                "session_id": start.json()["session_id"],
+                "workspace_id": "workspace-unsupported-stream",
+                "message": "Give me the next small debugging step.",
+                "response_language": "en-US",
+                "use_agent_loop": False,
+            },
+        )
+
     assert response.status_code == 409
-    assert "real streaming probe" in response.json()["detail"]
+    assert "streaming is unsupported" in response.json()["detail"]
 
 
 def test_provider_test_caches_verified_streaming_for_the_matching_service(tmp_path: Path) -> None:

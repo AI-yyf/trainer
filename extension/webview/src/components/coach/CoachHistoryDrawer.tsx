@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import { SystemState } from "../../templates/SystemState";
 
-import { CheckMarkIcon, RefreshIcon } from "../icons";
+import { PlusIcon, SearchIcon } from "../icons";
 import type { CoachSessionSummary, ComposerLanguage } from "../../lib/types";
 import { HISTORY_COPY } from "../../lib/i18n/segments/coachInlineText";
 
@@ -127,34 +127,24 @@ export function CoachHistoryDrawer({
     if (Number.isNaN(stamp.getTime())) {
       return "";
     }
-    return stamp.toLocaleString(language, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const now = new Date();
+    const sameDay =
+      stamp.getFullYear() === now.getFullYear() &&
+      stamp.getMonth() === now.getMonth() &&
+      stamp.getDate() === now.getDate();
+    if (sameDay) {
+      return stamp.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" });
+    }
+    return stamp.toLocaleDateString(language, { month: "short", day: "numeric" });
   };
 
   return (
     <>
       <div className="composer-menu-panel__header">
-        <span className="eyebrow">{copy.title}</span>
-        <div className="composer-menu-panel__header-actions">
-          <button className="composer-history-new" type="button" onClick={onNewChat}>
-            {copy.newChat}
-          </button>
-          <button
-            type="button"
-            aria-label={copy.refresh}
-            title={copy.refresh}
-            disabled={status === "loading"}
-            onClick={onRefresh}
-          >
-            <RefreshIcon size={14} />
-          </button>
-        </div>
+        <span className="composer-history-title eyebrow">{copy.title}</span>
       </div>
       <div className="composer-history-search">
+        <SearchIcon size={14} />
         <input
           type="text"
           value={query}
@@ -163,14 +153,16 @@ export function CoachHistoryDrawer({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
+      <button className="composer-history-new" type="button" onClick={onNewChat}>
+        <PlusIcon size={14} />
+        {copy.newChat.replace(/^\+\s*/, "")}
+      </button>
       <div className="composer-menu-panel__section">
-        {status === "loading" && sessions.length === 0 ? (
-          <SystemState kind="loading" title={copy.loading} />
-        ) : status === "error" && sessions.length === 0 ? (
+        {status === "error" && sessions.length === 0 ? (
           <SystemState kind="recoverable-error" title={statusMessage ?? copy.error} action={{ label: copy.refresh, onClick: onRefresh }} />
-        ) : sessions.length === 0 ? (
+        ) : sessions.length === 0 && status !== "loading" ? (
           <SystemState kind="empty" title={copy.empty} />
-        ) : groups.length === 0 ? (
+        ) : groups.length === 0 && status !== "loading" ? (
           <SystemState kind="empty" title={copy.noMatches} />
         ) : (
           groups.map((group) => (
@@ -202,12 +194,7 @@ export function CoachHistoryDrawer({
                             {[messageCountLabel(session.message_count), time].filter(Boolean).join(" · ")}
                           </span>
                         </span>
-                        {active ? (
-                          <span className="composer-provider-list__state">
-                            <CheckMarkIcon size={12} />
-                            <span className="sr-only">{copy.current}</span>
-                          </span>
-                        ) : null}
+                        {active ? <span className="sr-only">{copy.current}</span> : null}
                       </div>
                     </button>
                   );
@@ -216,6 +203,22 @@ export function CoachHistoryDrawer({
             </div>
           ))
         )}
+        {status === "loading" ? (
+          <div className="composer-history-loading" role="status" aria-live="polite">
+            <p className="composer-history-loading__label">{copy.loading}</p>
+            <div className="composer-history-skeleton" aria-hidden="true">
+              {Array.from({ length: sessions.length > 0 ? 2 : 3 }, (_, index) => (
+                <span key={index} className="skeleton composer-history-skeleton__row" />
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {status === "error" && sessions.length > 0 ? (
+          <p className="composer-history-error">
+            <span>{statusMessage ?? copy.error}</span>
+            <button type="button" onClick={onRefresh}>{copy.refresh}</button>
+          </p>
+        ) : null}
       </div>
     </>
   );

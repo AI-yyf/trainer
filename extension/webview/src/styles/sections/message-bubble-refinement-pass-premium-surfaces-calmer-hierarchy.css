@@ -381,13 +381,6 @@
   border-left-color: var(--line);
 }
 
-/* Long sessions: let the compositor skip offscreen message items instead of
-   laying out the whole transcript. */
-.coach-conversation-view__item {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
-}
-
 /* Phase-C navigation: Settings lives in the header as an icon-only gear. */
 
 /* ------------------------------------------------------------------ */

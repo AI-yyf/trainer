@@ -6844,3 +6844,90 @@ test('new selected card never inherits another card completed handoff or proof',
   assert.equal(blocked.latestTrainingHandoff.blockedBy, 'Missing executable hash boundary');
 
 });
+
+test('mergeSessionMessage fills an empty slim live turn from reply text', () => {
+  const bootstrap = createBootstrap();
+  const result = mergeSessionMessage(
+    bootstrap,
+    {
+      session_id: 'session-slim-live',
+      reply: { id: 'assistant-live', role: 'assistant', content: '可以，当前连接可用。' },
+      snapshot: {
+        messages: [
+          { id: 'user-empty', role: 'user', content: '', timestamp: '2026-11-02T06:25:33Z' },
+          { id: 'assistant-live', role: 'assistant', content: '', timestamp: '2026-11-02T06:25:49Z' },
+        ],
+      },
+    },
+    '不用先测试也能直接发送吗？',
+  );
+  const conversation = result.patch.conversation ?? [];
+  assert.equal(conversation.at(-2)?.body, '不用先测试也能直接发送吗？');
+  assert.equal(conversation.at(-1)?.body, '可以，当前连接可用。');
+});
+
+test('mergeSessionMessage uses streamed text when the slim reply snapshot is empty', () => {
+  const bootstrap = createBootstrap();
+  const result = mergeSessionMessage(
+    bootstrap,
+    {
+      session_id: 'session-slim-stream',
+      reply: { id: 'assistant-slim', role: 'assistant', content: '' },
+      snapshot: {
+        messages: [
+          { id: 'user-empty', role: 'user', content: '', timestamp: '2026-11-02T06:30:00Z' },
+          { id: 'assistant-slim', role: 'assistant', content: '', timestamp: '2026-11-02T06:30:10Z' },
+        ],
+      },
+    },
+    '不用先测试也能直接发送吗？',
+    '可以，当前连接可用，无需先测试即可直接发送。',
+  );
+  const conversation = result.patch.conversation ?? [];
+  assert.equal(conversation.at(-2)?.body, '不用先测试也能直接发送吗？');
+  assert.equal(conversation.at(-1)?.body, '可以，当前连接可用，无需先测试即可直接发送。');
+});
+
+
+test('mergeSessionMessage never repairs an old turn from a stale snapshot', () => {
+  const bootstrap = createBootstrap();
+  const result = mergeSessionMessage(
+    bootstrap,
+    {
+      session_id: 'session-stale-turn',
+      reply: { id: 'assistant-new', role: 'assistant', content: '这是新一轮的回复。' },
+      snapshot: {
+        messages: [
+          { id: 'user-old', role: 'user', content: '上一轮的问题。', timestamp: '2026-11-02T06:40:00Z' },
+          { id: 'assistant-old', role: 'assistant', content: '', timestamp: '2026-11-02T06:40:10Z' },
+        ],
+      },
+    },
+    '这是新一轮的问题。',
+  );
+  const conversation = result.patch.conversation ?? [];
+  assert.equal(conversation.at(-2)?.body, '上一轮的问题。');
+  assert.equal(conversation.at(-1)?.body, '');
+});
+
+
+test('mergeSessionMessage repairs a current turn when the reply id matches even if the user body was rewritten', () => {
+  const bootstrap = createBootstrap();
+  const result = mergeSessionMessage(
+    bootstrap,
+    {
+      session_id: 'session-reply-id',
+      reply: { id: 'assistant-current', role: 'assistant', content: '当前轮的安全回复。' },
+      snapshot: {
+        messages: [
+          { id: 'user-current', role: 'user', content: '服务端重写后的用户文本。', timestamp: '2026-11-02T06:45:00Z' },
+          { id: 'assistant-current', role: 'assistant', content: '', timestamp: '2026-11-02T06:45:05Z' },
+        ],
+      },
+    },
+    '客户端原始用户文本。',
+  );
+  const conversation = result.patch.conversation ?? [];
+  assert.equal(conversation.at(-2)?.body, '服务端重写后的用户文本。');
+  assert.equal(conversation.at(-1)?.body, '当前轮的安全回复。');
+});

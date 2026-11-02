@@ -2186,6 +2186,7 @@ export async function sendStreamMessageCommand(
     // instead of per token.
     const CHUNK_COALESCE_WINDOW_MS = 66;
     let pendingChunkText = '';
+    let streamedVisibleText = '';
     let lastChunkFlushAt = 0;
     const flushChunkFrame = async (force = false): Promise<void> => {
       if (!pendingChunkText) {
@@ -2197,6 +2198,7 @@ export async function sendStreamMessageCommand(
       }
       const frame = pendingChunkText;
       pendingChunkText = '';
+      streamedVisibleText += frame;
       lastChunkFlushAt = now;
       if (!firstTokenRecorded) {
         firstTokenRecorded = true;
@@ -2228,7 +2230,15 @@ export async function sendStreamMessageCommand(
         signal: abortController.signal,
       },
     )) {
+      if (event.event === 'complete' || event.event === 'error') {
+        context.outputChannel?.appendLine(
+          `[stream] ${requestPath} ${event.event} message=${messageId} bytes=${event.data.length}`,
+        );
+      }
       if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
+        context.outputChannel?.appendLine(
+          `[stream] ${requestPath} invalidated message=${messageId} event=${event.event}`,
+        );
         return {
           ok: true,
           message: 'Stream invalidated.',
@@ -2282,11 +2292,19 @@ export async function sendStreamMessageCommand(
           }
         }
         completionResponse = effectiveResponse;
+        // The final coalesced chunk is still pending here; the completion
+        // merge runs before the loop's final flush. Fold it into the fallback
+        // now so an empty slim reply never persists a truncated answer.
+        if (pendingChunkText) {
+          streamedVisibleText += pendingChunkText;
+          pendingChunkText = '';
+        }
         const { sessionId, patch } = mergeSessionMessageSnapshot(
           context.getHostState().bootstrap,
           effectiveResponse,
           streamPayload.text,
           getRuntimeWorkspaceId(context),
+          streamedVisibleText,
         );
         await context.setSessionId(sessionId ?? context.getSessionId());
         if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
@@ -2483,6 +2501,9 @@ export async function sendStreamMessageCommand(
     }
 
     await flushChunkFrame(true);
+    context.outputChannel?.appendLine(
+      `[stream] ${requestPath} loop-ended message=${messageId} complete=${sawCompletion} response=${completionResponse !== undefined}`,
+    );
 
     if (!sawCompletion || completionResponse === undefined) {
       throw new Error('SSE stream ended before a valid completion event.');

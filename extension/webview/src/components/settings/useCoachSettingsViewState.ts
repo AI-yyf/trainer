@@ -138,7 +138,7 @@ export interface CoachSettingsViewState {
   onIncludeSelectionChange: (value: boolean) => void;
   onIncludeDiagnosticsChange: (value: boolean) => void;
   onIncludeRelatedFilesChange: (value: boolean) => void;
-  onNavigateToView: (view: "resources" | "training") => void;
+  onNavigateToView: (view: "coach" | "resources" | "training") => void;
   onGenerateSkillDraft: (
     description: string,
   ) => Promise<

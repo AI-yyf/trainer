@@ -3878,22 +3878,33 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         coaching_service: ProviderService,
         response_language: str | None,
     ) -> None:
-        """Never enter an SSE route without an observed streaming capability."""
+        """Block only an explicitly unsupported stream, never an unverified one.
 
-        if (
-            coaching_service.has_api_key
-            and runtime.provider_connection_verified(coaching_service)
-            and runtime.provider_capability_state_for(coaching_service, "streaming") == "verified"
-        ):
-            return
-        raise HTTPException(
-            status_code=409,
-            detail=localized_text(
-                "This streaming action needs a provider that passed the real streaming probe. Test the connection in Settings before continuing.",
-                "这个流式动作需要通过真实流式探测的 Provider。请先在设置中测试连接，再继续。",
-                response_language,
-            ),
-        )
+        The first real send is the live confirmation. Requiring a prior test
+        made a saved connection unusable until the learner ran Settings > Test.
+        If the provider explicitly reported streaming as unsupported, fail
+        closed; otherwise let the actual stream attempt produce the truth.
+        """
+
+        if not coaching_service.has_api_key:
+            raise HTTPException(
+                status_code=409,
+                detail=localized_text(
+                    "Add the API key before continuing.",
+                    "请先补上 API 密钥再继续。",
+                    response_language,
+                ),
+            )
+        state = runtime.provider_capability_state_for(coaching_service, "streaming")
+        if state in {"unsupported", "disabled"}:
+            raise HTTPException(
+                status_code=409,
+                detail=localized_text(
+                    "This provider reports that streaming is unsupported. Choose a streaming-capable provider or protocol.",
+                    "这个 Provider 明确不支持流式输出。请换一个支持流式的 Provider 或协议。",
+                    response_language,
+                ),
+            )
 
     def provider_payload_declares_unknown_protocol(payload: dict) -> bool:
         provider_payload = payload.get("provider")

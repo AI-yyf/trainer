@@ -69,7 +69,11 @@ test('async surfaces use the spinner instead of bare text ellipses', () => {
     path.join(webviewRoot, 'components', 'coach', 'CoachHistoryDrawer.tsx'),
     'utf8',
   );
-  assert.match(drawer, /<SystemState kind="loading" title=\{copy.loading\}/);
+  // Known-structure history rows use the shared skeleton primitive; bare
+  // ellipsis text is still forbidden.
+  assert.match(drawer, /className="skeleton composer-history-skeleton__row"/);
+  assert.match(drawer, /composer-history-loading/);
+  assert.doesNotMatch(drawer, /copy\.loading\)\.\.\./);
 
   // The streaming orb keeps its own reduced-motion fallback.
   const dots = fs.readFileSync(

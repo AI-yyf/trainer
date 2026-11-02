@@ -6,6 +6,7 @@ import {
 } from "../../../../shared/src/webviewSync";
 
 import { trainerCommands } from "../../../../shared/src/commands";
+import { isCurrentStreamEvent } from "../../../../shared/src/streamEventScope";
 import { sanitizeErrorSurfaceText } from "../../../../shared/src/errorSurfaceSanitizer";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
 import { formalPlanIdentityIsLive } from "../../../../shared/src/workspaceRecoveryGovernance";
@@ -440,10 +441,6 @@ function scheduleComposerDraftPersist(getLayout: () => PersistedWorkbenchState):
 
 function freshStreamingState(): StreamingState {
   return createEmptyTrainerStreamingState();
-}
-
-function isCurrentStreamEvent(streaming: StreamingState, messageId: string | undefined): boolean {
-  return messageId === undefined || messageId === streaming.streamMessageId;
 }
 
 function sameOperationMessage(left?: OperationMessage, right?: OperationMessage): boolean {
@@ -1226,6 +1223,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       if (message.type === "stream/start") {
         if (
           state.streaming.isStreaming &&
+          state.streaming.streamMessageId &&
           state.streaming.streamMessageId !== message.payload.messageId
         ) {
           return {};

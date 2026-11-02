@@ -1,5 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { CloseIcon } from "../components/icons";
+
 /** AppShell utilities keep focus inside the dialog and return it to their entry. */
 export function UtilityOverlay({ label, closeLabel, onClose, children }: {
   label: string;
@@ -36,7 +38,15 @@ export function UtilityOverlay({ label, closeLabel, onClose, children }: {
   return <div className="app-shell-overlay" data-overlay="history">
     <button type="button" tabIndex={-1} className="app-shell-overlay__backdrop" aria-label={closeLabel} onClick={onClose} />
     <div ref={panel} className="app-shell-overlay__panel" role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
-      <button type="button" className="template-back" aria-label={closeLabel} onClick={onClose}>×</button>
+      <button
+        type="button"
+        className="app-shell-overlay__close"
+        aria-label={closeLabel}
+        title={closeLabel}
+        onClick={onClose}
+      >
+        <CloseIcon size={14} />
+      </button>
       {children}
     </div>
   </div>;

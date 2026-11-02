@@ -92,10 +92,11 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, FileIcon, PlusIcon, RefreshIcon, TrashIcon, UploadIcon } from "../icons";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ComposeIcon, FileIcon, PlayIcon, PlusIcon, RefreshIcon, TrashIcon, UploadIcon } from "../icons";
 import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
 import { RemoteIcon } from "../icons/brand/trainerBrand";
 import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
+import { CoachNavIcon } from "../icons/navigation/primaryNav";
 import { SettingsAdvancedIcon, SettingsConnectionIcon, SettingsPreferencesIcon, SettingsSkillsIcon, SettingsTeachingIcon, SettingsWorkspaceIcon } from "../icons/navigation/settingsNav";
 import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
 import { trainerCommands } from "../../../../../shared/src/commands";
@@ -2329,10 +2330,9 @@ function CoachSettingsViewSheet({
   const sectionFlashTimerRef = useRef<number | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = useState(() => !providerDraft.model.trim());
   type SettingsCategory = SettingsSectionId;
-  // 已配置过的连接回访时直接落在连接详情;只有冷启动(未配置)才先看 Index。
-  const [settingsIndexOpen, setSettingsIndexOpen] = useState(
-    !providerApiKeyFocusRequest && !(provider.configured && Boolean(provider.model.trim())),
-  );
+  // Always land on the settings overview; explicit deep links (API-key focus,
+  // sectionRequest, settingsCategoryRequest) still open their category.
+  const [settingsIndexOpen, setSettingsIndexOpen] = useState(!providerApiKeyFocusRequest);
   const [activeSettingsCategory, setActiveSettingsCategory] =
     useState<SettingsCategory>("connection");
   const openSettingsCategorySection = (id: SettingsCategory) => {
@@ -4259,24 +4259,28 @@ function CoachSettingsViewSheet({
   // selector renders, its active row already carries the identity (name · model
   // · state) and the "连接详情" row expands to the full truth — so the big
   // summary card stands down and the selector stays the single summary.
-  const providerIdentityListVisible =
-    providerProfiles.length > 0 ||
-    canSaveProviderProfile ||
-    (providerSaved && (onRefreshProviderProfiles || onUseProviderTemplateLabel));
-  const showConnectionSummary =
-    providerSaved && !providerHasDraftChanges && connectionView === "auto" && !providerIdentityListVisible;
-  const showProviderTemplates = Boolean(onUseProviderTemplateLabel) && connectionView === "add";
   // Empty state stays a single-purpose screen: the paste card plus one entry
   // into the template directory. The full form only appears once the user
   // drills into edit (directly or via a template).
   const showConnectionForm = providerSaved
     ? providerHasDraftChanges || connectionView === "edit"
     : connectionView === "edit";
+  // The compact summary owns the auto view. The moment the form opens, the
+  // profile directory must return so "Save as connection" can still mint a
+  // second profile from the current draft.
+  const providerIdentityListVisible =
+    showConnectionForm ||
+    providerProfiles.length > 1 ||
+    (!providerSaved && canSaveProviderProfile);
+  const showConnectionSummary =
+    providerSaved && !providerHasDraftChanges && connectionView === "auto" && !providerIdentityListVisible;
+  const showProviderTemplates = Boolean(onUseProviderTemplateLabel) && connectionView === "add";
   const showQuickSetup = !providerSaved && connectionView === "auto";
   const showAvailabilityStrip =
+    !showConnectionSummary &&
     providerSetupReason !== "workspace_untrusted" &&
-    (Boolean(backendRecovery) || (showConnectionForm && connectionView !== "advanced") ||
-      (showConnectionSummary && resolvedAvailabilityTone !== "connected"));
+    (Boolean(backendRecovery) ||
+      (showConnectionForm && connectionView !== "advanced"));
   const connectionHost = (provider.baseUrl || providerDraft.baseUrl || "")
     .replace(/^https?:\/\//i, "")
     .split("/")[0];
@@ -4462,6 +4466,36 @@ function CoachSettingsViewSheet({
                     };
   const effectiveAvailabilityPrimaryTone =
     availabilityMode === "ready" && !providerHasDraftChanges ? "ghost" : "accent";
+  const connectionTestFailed = Boolean(lastTestFailure) || providerTestTransportFailed;
+  const connectionReadyForUse =
+    providerSaved &&
+    !providerHasDraftChanges &&
+    provider.configured &&
+    Boolean(provider.apiKeyConfigured) &&
+    !connectionTestFailed;
+  const connectionModelFull = provider.model || providerDraft.model || copy.notConfigured;
+  const connectionModelSummary =
+    (provider.model || providerDraft.model || "").replace(/^MiniMax-/i, "") || copy.notConfigured;
+  const connectionSummaryStatusLabel = providerTestPending
+    ? settingsText(language, "检查中", "Checking")
+    : providerTestPassed
+      ? settingsText(language, "已就绪", "Ready")
+      : connectionTestFailed
+        ? copy.lastTestFailed
+        : providerSaved
+          ? settingsText(language, "未实测", "Not tested")
+          : settingsText(language, "未配置", "Not set");
+  const connectionSummaryNote = providerTestPassed
+    ? lastTestDetail
+    : connectionTestFailed
+      ? lastTestDetail ?? safeProviderFailureHint
+      : providerSaved
+        ? settingsText(
+            language,
+            "可直接使用；测试可选。",
+            "Ready to use; testing is optional.",
+          )
+        : lastTestDetail;
   const connectionSummaryCard = showConnectionSummary ? (
     <div className="settings-connection-summary">
       <div className="settings-connection-summary__main">
@@ -4471,18 +4505,12 @@ function CoachSettingsViewSheet({
             data-state={resolvedAvailabilityTone}
             aria-hidden="true"
           />
-          <strong className="settings-connection-summary__name">
-            {provider.profileLabel || provider.name || providerDraft.name || provider.profileId ||
-              settingsPhrase(language, "currentConnectionPrefix")}
+          <strong className="settings-connection-summary__model" title={provider.model || ""}>
+            {connectionModelFull}
           </strong>
-          <StatusPill tone={resolvedAvailabilityTone}>{lastTestLabel}</StatusPill>
         </div>
         <div className="settings-connection-summary__meta">
-          <span className="settings-connection-summary__model" title={provider.model || ""}>
-            {provider.model || providerDraft.model || copy.notConfigured}
-          </span>
-          <span aria-hidden="true">·</span>
-          <span>{liveProtocolLabel}</span>
+          <StatusPill tone={resolvedAvailabilityTone}>{connectionSummaryStatusLabel}</StatusPill>
           {connectionHost ? (
             <>
               <span aria-hidden="true">·</span>
@@ -4492,12 +4520,25 @@ function CoachSettingsViewSheet({
             </>
           ) : null}
         </div>
-        {lastTestDetail ? (
-          <p className="settings-sheet__note settings-sheet__note--compact">{lastTestDetail}</p>
+        {connectionSummaryNote ? (
+          <p className="settings-sheet__note settings-sheet__note--compact">{connectionSummaryNote}</p>
         ) : null}
       </div>
       <div className="settings-actions settings-actions--compact">
-        {showAvailabilityPrimaryAction && !showAvailabilityStrip ? (
+        {connectionReadyForUse && onNavigateToView ? (
+          <ActionButton
+            fullWidth={false}
+            icon={<CoachNavIcon size={14} />}
+            label={settingsText(language, "去对话", "Go to Chat")}
+            detail={settingsText(
+              language,
+              "直接开始使用；第一次真实发送会确认连接。",
+              "Start using it now; the first real send confirms the connection.",
+            )}
+            ariaLabel={settingsText(language, "去对话", "Go to Chat")}
+            onClick={() => onNavigateToView("coach")}
+          />
+        ) : showAvailabilityPrimaryAction ? (
           <ActionButton
             fullWidth={false}
             icon={effectiveAvailabilityPrimaryCta.icon}
@@ -4511,13 +4552,56 @@ function CoachSettingsViewSheet({
         ) : null}
         <ActionButton
           fullWidth={false}
-          icon={<SettingsPreferencesIcon size={14} />}
+          icon={<ComposeIcon size={14} />}
           label={settingsPhrase(language, "editConfiguration")}
           ariaLabel={settingsPhrase(language, "editConfiguration")}
           detail={settingsPhrase(language, "editConfigurationDetail")}
           onClick={() => setConnectionView("edit")}
         />
       </div>
+      {providerSaved &&
+      (onTestProvider || onSaveProviderProfile || onUseProviderTemplateLabel) ? (
+        <details className="settings-connection-summary__manage">
+          <summary>
+            <span>{settingsText(language, "管理连接", "Manage connection")}</span>
+            <ChevronDownIcon size={12} />
+          </summary>
+          <div className="settings-connection-summary__manage-actions">
+            {connectionReadyForUse && canRetestProvider && onTestProvider ? (
+              <button
+                type="button"
+                className="settings-connection-summary__link"
+                onClick={onTestProvider}
+              >
+                {providerTestPassed || connectionTestFailed ? <ReloadIcon size={12} /> : <PlayIcon size={12} />}
+                {providerTestPassed || connectionTestFailed
+                  ? settingsText(language, "重新测试连接", "Test connection again")
+                  : settingsText(language, "测试连接（可选）", "Test connection (optional)")}
+              </button>
+            ) : null}
+            {providerProfiles.length <= 1 && canSaveProviderProfile && onSaveProviderProfile ? (
+              <button
+                type="button"
+                className="settings-connection-summary__link"
+                onClick={onSaveProviderProfile}
+              >
+                <PlusIcon size={12} />
+                {localizedSaveProfileLabel}
+              </button>
+            ) : null}
+            {providerProfiles.length <= 1 && onUseProviderTemplateLabel ? (
+              <button
+                type="button"
+                className="settings-connection-summary__link"
+                onClick={() => setConnectionView("add")}
+              >
+                <PlusIcon size={12} />
+                {settingsPhrase(language, "addProvider")}
+              </button>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
     </div>
   ) : null;
   const appliedProviderFactValue =
@@ -4658,7 +4742,7 @@ function CoachSettingsViewSheet({
       target: "connection",
       action: openProviderApiKey,
     });
-  } else if (providerSaved && !providerTestPassed) {
+  } else if (providerSaved && !providerTestPassed && !showConnectionSummary) {
     settingsStatusIssues.push({
       id: "test",
       label: settingsGlobalCopy.settingsStatusNeedsTest,
@@ -5191,9 +5275,10 @@ function CoachSettingsViewSheet({
       </details>
     ) : null;
   const providerListBar =
-    providerProfiles.length > 0 ||
-    canSaveProviderProfile ||
-    (providerSaved && (onRefreshProviderProfiles || onUseProviderTemplateLabel)) ? (
+    providerIdentityListVisible &&
+    (providerProfiles.length > 0 ||
+      canSaveProviderProfile ||
+      (providerSaved && (onRefreshProviderProfiles || onUseProviderTemplateLabel))) ? (
       <div
         ref={providerDirectoryRef}
         className="settings-provider-bar"
@@ -5253,7 +5338,7 @@ function CoachSettingsViewSheet({
                 aria-label={settingsPhrase(language, "editConfiguration")}
                 onClick={() => setConnectionView("edit")}
               >
-                <SettingsPreferencesIcon size={14} />
+                <ComposeIcon size={14} />
               </button>
             ) : null}
             {canSaveProviderProfile && !showConnectionSummary ? (
@@ -5513,21 +5598,33 @@ function CoachSettingsViewSheet({
             const item = settingsNavItems.find((item) => item.id === id)!;
             return {
               ...item,
-              summary: id === "connection"
-                ? [provider.model, providerRequirementNote].filter(Boolean).join(" · ")
+              summary: (id === "connection"
+                ? connectionModelSummary === copy.notConfigured
+                  ? providerRequirementNote
+                  : connectionModelSummary
                 : id === "workspace"
                   ? remoteWorkspaceName ||
-                    (workspaceRootMissing
-                      ? settingsPhrase(language, "workspaceNotSelected")
-                      : trainerWorkspace?.rootPath)
+                    (() => {
+                      const rootPath = trainerWorkspace?.rootPath?.replace(/[\\/]+$/, "");
+                      if (workspaceRootMissing || !rootPath) {
+                        return settingsPhrase(language, "workspaceNotSelected");
+                      }
+                      return rootPath.split(/[\\/]/).pop() || rootPath;
+                    })()
                   : id === "teaching"
                     ? teachingStyleItems.find((item) => item.value === teachingStyle)?.label ?? copy.auto
-                    : `${language} · ${themePreference}`,
+                    : LANGUAGE_LABELS[language]) ?? undefined,
+              summaryTitle: (id === "workspace"
+                ? remoteWorkspaceName || trainerWorkspace?.rootPath
+                : id === "connection"
+                  ? [provider.model || providerDraft.model, lastTestLabel].filter(Boolean).join(" · ")
+                  : undefined) ?? undefined,
               action:
                 id === "workspace" && workspaceRootMissing && onChooseTrainerWorkspaceRoot
                   ? {
                       label: settingsPhrase(language, "workspaceChooseFolder"),
                       onClick: onChooseTrainerWorkspaceRoot,
+                      icon: <DataFolderIcon size={12} />,
                     }
                   : undefined,
             };
@@ -5649,6 +5746,17 @@ function CoachSettingsViewSheet({
             {providerListBar}
 
             {connectionSummaryCard}
+
+            {connectionView === "add" ? (
+              <button
+                type="button"
+                className="template-back settings-connection-back"
+                onClick={() => setConnectionView("auto")}
+              >
+                <ChevronLeftIcon size={14} />
+                <span>{settingsPhrase(language, "backToConnection")}</span>
+              </button>
+            ) : null}
 
             {providerDirectory}
 

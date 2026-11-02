@@ -304,3 +304,51 @@
   changed to 看回答 / 留在这里. Matrix 200/200, geometry 471/471, a11y 96/96.
 - CI 41343904971 @bcb7cf6 = 9/9; VSIX host E2E 36/36. T-0028 human sign-off and
   Remote-SSH L2 remain BLOCKED.
+
+## 2026-11-02 — settings / history / Resources / stream visibility pass
+
+- Real installed VSIX (`local.trainer-extension@1.3.4`, isolated Profile,
+  real sidecar, owner relay) verified end-to-end:
+  settings overview → connection summary → Go to Chat → first send without a
+  prior connection test. Reply arrived and the newest two bubbles rendered at
+  the bottom (`安装态验收…` / `可以，当前连接可用，无需先测试即可直接发送。`).
+- History panel rebuilt for the narrow sidebar: canonical Close/Search/Plus
+  glyphs, one-line title, full-width New chat, live current-conversation row
+  before the host answers, skeleton rows while loading, and one in-flight
+  `session/list` request (mount prefetch and open no longer race). Measured in
+  the installed VSIX: panel 100ms, current row 233ms, cached reopen 184ms,
+  0 skeletons on reopen; no wrapped title/action.
+- Resources empty state now shows the real setup guidance even when a stored
+  leftover list exists; the folder section is hidden when there is nothing to
+  organize; the leftover plan note remains visible (honesty preserved).
+- Settings: failed test no longer reads as “未实测 / 可直接使用”. The summary
+  keeps the failure note, removes Go-to-Chat as the primary action, and offers
+  retest; the model is shown verbatim (`MiniMax-M3.1-Flash`). The Add-provider
+  template view gained an in-view “返回连接” control; real check returned to
+  the summary.
+- Stream visibility root cause: `content-visibility: auto` collapsed
+  off-screen conversation items to a 4px placeholder, and auto-scroll never
+  revealed the completed reply. Removed the collapsing rule and force-scroll
+  on a send that starts in Coach; the cross-surface restore and 90ms settle now
+  respect the pin.
+- State integrity: stream completion fence for a cleared id; live-turn body
+  repair now requires a matching reply id (legacy no-id snapshots still use the
+  user-text guard); final coalesced chunk is folded into the fallback before
+  merge; research stream frames carry their own message id; `stream/start`
+  accepts a cleared-id handoff and resets content.
+- Verification for this pass: server 3697 passed (server unchanged since),
+  extension suite exit 0, `npm run check` clean, settings lifecycle e2e 1/1,
+  geometry 472/472, a11y 96/96, pyright/ruff clean. The final packaged VSIX
+  passed the installed-host E2E (exit 0) and the real-profile acceptance
+  (settings → no-test send → visible reply; history 94/229/182ms). Perf probe
+  passed both budgets (streaming longtasks 0, warm nav p90 61ms). The
+  plaintext-credential gate is clean after redacting the private relay host in
+  historical E2E evidence to `provider.invalid`; no key was found. Previous
+  SHAs are not evidence for this working tree.
+- Independent audit found and this pass fixed: failed-test summary lie,
+  Add-provider dead-end, final-chunk fallback truncation, stale stream/start
+  handoff, repeated-prompt assistant overwrite risk, and research id-less
+  stream pollution. Remaining measured risk: performance probe after removing
+  content-visibility (must be re-shot); Learning/Coach per-screen polish is the
+  next visual pass. T-0028 human sign-off, real Remote-SSH L2 and Windows/Linux
+  browser installation remain external BLOCKED.

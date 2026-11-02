@@ -184,13 +184,14 @@ test('settings keeps availability as the compact source of provider truth', () =
   assert.match(strip, /title=\{displayAvailabilityHeadline\}/);
   assert.match(strip, /localizedResolvedAvailabilityStatusLabel/);
   assert.match(strip, /effectiveAvailabilityPrimaryCta\.label/);
-  // The compact connected summary hides the strip; it stays mounted while
-  // configuring or whenever the saved connection needs attention. The strip
-  // Backend recovery also stays visible in advanced details. Workspace-trust
-  // states are owned by the blocker banner so trust is never stated twice.
+  // The compact saved-connection summary owns the availability facts now, so
+  // the strip yields to it entirely (the summary carries the same tone, note
+  // and retest path). The strip stays mounted while configuring, and backend
+  // recovery stays visible. Workspace-trust states are owned by the blocker
+  // banner so trust is never stated twice.
   assert.match(
     source,
-    /const showAvailabilityStrip =\s*providerSetupReason !== "workspace_untrusted" &&\s*\(Boolean\(backendRecovery\) \|\| \(showConnectionForm && connectionView !== "advanced"\) \|\|\s*\(showConnectionSummary && resolvedAvailabilityTone !== "connected"\)\);/,
+    /const showAvailabilityStrip =\s*!showConnectionSummary &&\s*providerSetupReason !== "workspace_untrusted" &&\s*\(Boolean\(backendRecovery\) \|\|\s*\(showConnectionForm && connectionView !== "advanced"\)\);/,
   );
   assert.match(source, /\{showAvailabilityStrip \? availabilityState : null\}/);
   assert.match(source, /\{connectionView === "advanced" \? \(/);

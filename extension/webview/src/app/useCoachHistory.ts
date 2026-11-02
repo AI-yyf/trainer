@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { postMessage } from "../lib/vscode";
 import { trainerCommands } from "../../../../shared/src/commands";
@@ -20,6 +20,7 @@ export interface CoachSessionListPayload {
 }
 
 const HISTORY_CACHE_PREFIX = "trainer.coachHistory.v1.";
+export const LIVE_SESSION_ID = "__live__";
 
 function historyCacheKey(cacheScope: string): string {
   return `${HISTORY_CACHE_PREFIX}${cacheScope.trim() || "default"}`;
@@ -47,6 +48,20 @@ function writeCachedSessions(cacheScope: string, sessions: CoachSessionSummary[]
   } catch {
     // Cache write failure only costs first-open latency, never correctness.
   }
+}
+
+/** Pure: the live conversation is a history entry before the network answers. */
+export function buildLiveSessionEntry(input: {
+  zh: boolean;
+  conversationCount: number;
+}): CoachSessionSummary {
+  return {
+    session_id: LIVE_SESSION_ID,
+    summary: input.zh ? "当前会话" : "Current conversation",
+    message_count: input.conversationCount,
+    updated_at: new Date().toISOString(),
+    is_active: true,
+  };
 }
 
 /** Pure: the synthetic entry the browser preview shows for the live chat. */
@@ -131,9 +146,39 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
   );
   const [coachSessionsMessage, setCoachSessionsMessage] = useState<string>();
   const prefetchedRef = useRef(false);
+  const requestInFlightRef = useRef(false);
+  const requestTimerRef = useRef<number | undefined>(undefined);
+
+  const markRequestStarted = useCallback(() => {
+    requestInFlightRef.current = true;
+    if (requestTimerRef.current !== undefined) {
+      window.clearTimeout(requestTimerRef.current);
+    }
+    // A host reply can be lost when a window closes mid-request. Do not let
+    // one lost ack block every manual refresh for the rest of the session.
+    requestTimerRef.current = window.setTimeout(() => {
+      requestInFlightRef.current = false;
+      requestTimerRef.current = undefined;
+    }, 6000);
+  }, []);
+
+  const markRequestSettled = useCallback(() => {
+    requestInFlightRef.current = false;
+    if (requestTimerRef.current !== undefined) {
+      window.clearTimeout(requestTimerRef.current);
+      requestTimerRef.current = undefined;
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (requestTimerRef.current !== undefined) {
+      window.clearTimeout(requestTimerRef.current);
+    }
+  }, []);
 
   const applySessionList = useCallback(
     (payload: unknown) => {
+      markRequestSettled();
       const next = applySessionListPayload(payload as CoachSessionListPayload);
       setCoachSessions(next.sessions);
       setCoachSessionsStatus(next.status);
@@ -142,7 +187,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
         writeCachedSessions(cacheScope, next.sessions);
       }
     },
-    [cacheScope],
+    [cacheScope, markRequestSettled],
   );
 
   const requestCoachSessions = useCallback(() => {
@@ -163,11 +208,17 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
       setCoachSessionsStatus("ready");
       return;
     }
+    // The mount prefetch and the panel open can race. Keep one request in
+    // flight; the current conversation renders immediately meanwhile.
+    if (requestInFlightRef.current) {
+      return;
+    }
+    markRequestStarted();
     postMessage({
       type: "command/execute",
       payload: { commandId: trainerCommands.listCoachSessions },
     });
-  }, [conversationCount, isBrowserPreview, previewSessionId, zh]);
+  }, [conversationCount, isBrowserPreview, markRequestStarted, previewSessionId, zh]);
 
   // Prefetch once on mount: the cache warms (and the sidecar starts warming)
   // long before the first history click.
@@ -176,11 +227,14 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
       return;
     }
     prefetchedRef.current = true;
+    setCoachSessionsStatus((current) => (current === "ready" ? current : "loading"));
+    setCoachSessionsMessage(undefined);
+    markRequestStarted();
     postMessage({
       type: "command/execute",
       payload: { commandId: trainerCommands.listCoachSessions },
     });
-  }, [isBrowserPreview]);
+  }, [isBrowserPreview, markRequestStarted]);
 
   const toggleComposerHistoryMenu = useCallback(() => {
     setOpenMenu((current: ComposerContextMenu) => {
@@ -191,6 +245,14 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
       return next;
     });
   }, [requestCoachSessions, setOpenMenu]);
+
+  const liveSession = useMemo(() => {
+    if (conversationCount <= 0 || coachSessions.some((session) => session.is_active === true)) {
+      return undefined;
+    }
+    return buildLiveSessionEntry({ zh, conversationCount });
+  }, [coachSessions, conversationCount, zh]);
+  const visibleCoachSessions = liveSession ? [liveSession, ...coachSessions] : coachSessions;
 
   const activateCoachSession = useCallback(
     (sessionId: string) => {
@@ -231,7 +293,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
   }, [isBrowserPreview, setOpenMenu, zh]);
 
   return {
-    coachSessions,
+    coachSessions: visibleCoachSessions,
     coachSessionsStatus,
     coachSessionsMessage,
     applySessionList,

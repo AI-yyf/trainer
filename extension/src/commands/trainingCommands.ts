@@ -344,8 +344,12 @@ async function settleTrainingGenerateCardWaiter(
         });
       }
     }
-    return { ok: false, message: sanitizeErrorSurfaceText(error) };
+    return { ok: false, message: trainingCardGenerationFailureMessage(error) };
   }
+}
+
+function trainingCardGenerationFailureMessage(error: unknown): string {
+  return `[[trainer-training-card-generation-failed]] ${sanitizeErrorSurfaceText(error)}`;
 }
 
 function nextTrainingStreamGeneration(context: CommandContext): number {
@@ -1215,7 +1219,7 @@ export async function trainingGenerateCardCommand(
     context.outputChannel.appendLine(
       `[training] Card generation error: ${sanitizeErrorSurfaceText(error)}`,
     );
-    return { ok: false, message: sanitizeErrorSurfaceText(error) };
+    return { ok: false, message: trainingCardGenerationFailureMessage(error) };
   } finally {
     if (activeTrainingStream && activeTrainingCardStreams.get(context) === activeTrainingStream) {
       activeTrainingCardStreams.delete(context);

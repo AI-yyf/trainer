@@ -690,6 +690,8 @@ export function App() {
   );
   const resourceTrainingHandoffSequenceRef = useRef(0);
   const coachAutoScrollPinnedRef = useRef(true);
+  const coachWasStreamingRef = useRef(false);
+  const coachViewIdentityRef = useRef<string | null>(null);
   const pinCoachScrollToBottom = useCallback(() => {
     coachAutoScrollPinnedRef.current = true;
   }, []);
@@ -2509,6 +2511,9 @@ export function App() {
   activeViewRef.current = activeView;
 
   useEffect(() => {
+    const viewChanged =
+      coachViewIdentityRef.current !== null && coachViewIdentityRef.current !== activeView;
+    coachViewIdentityRef.current = activeView;
     if (activeView !== "coach") {
       return;
     }
@@ -2528,15 +2533,33 @@ export function App() {
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
 
-    coachAutoScrollPinnedRef.current = isPinnedToBottom();
+    // A send always reveals the turn the learner just started, even when they
+    // were reading older messages. Once streaming is running, the pin follows
+    // their scroll position again so browsing history stays respected.
+    const streamingStarted = streaming.isStreaming && !coachWasStreamingRef.current;
+    coachWasStreamingRef.current = streaming.isStreaming;
+    coachAutoScrollPinnedRef.current = (streamingStarted && !viewChanged) || isPinnedToBottom();
+    const scrollToBottom = () => {
+      container.scrollTop = container.scrollHeight;
+    };
     const handle = window.requestAnimationFrame(() => {
       if (coachAutoScrollPinnedRef.current) {
-        container.scrollTop = container.scrollHeight;
+        scrollToBottom();
       }
     });
+    const settle = streamingStarted
+      ? window.setTimeout(() => {
+          if (coachAutoScrollPinnedRef.current) {
+            scrollToBottom();
+          }
+        }, 90)
+      : undefined;
 
     return () => {
       window.cancelAnimationFrame(handle);
+      if (settle !== undefined) {
+        window.clearTimeout(settle);
+      }
       container.removeEventListener("scroll", handleScroll);
     };
   }, [activeView, data.conversation.length, streaming.isStreaming]);
