@@ -81,6 +81,13 @@
    pressed option lifts out of the muted text color. */
 .template-context [aria-pressed="true"] { color: var(--fg-0); font-weight: 600; }
 .template-secondary-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.template-secondary-links--learning { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.template-learning-route { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--line) 52%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--bg-1) 78%, transparent); color: var(--fg-1); font: inherit; font-size: var(--trainer-font-xs); line-height: 1.3; text-align: start; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.template-learning-route:hover { border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--fg-0); }
+.template-learning-route:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.template-learning-route svg { flex: none; color: var(--fg-muted); }
+.template-learning-route span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-learning-home > header .eyebrow { margin: 0; }
 .template-practice-response { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding-block: 16px; }
 .template-practice-response label { font-size: var(--trainer-font-sm); font-weight: 600; }
 .template-practice-response textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); color: var(--fg-0); font: inherit; line-height: 1.5; resize: vertical; }
