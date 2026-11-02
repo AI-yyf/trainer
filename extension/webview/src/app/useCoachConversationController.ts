@@ -56,6 +56,10 @@ export function useCoachConversationController({
     onOptimisticTurnAppended?.();
   }, [onOptimisticTurnAppended]);
 
+  const clearOptimisticTurns = useCallback(() => {
+    setOptimisticTurns([]);
+  }, []);
+
   // Drop echoes once the server-confirmed turn lands at the same position (or
   // they outlive their TTL).
   useEffect(() => {
@@ -148,6 +152,7 @@ export function useCoachConversationController({
 
   return {
     optimisticTurns,
+    clearOptimisticTurns,
     appendOptimisticTurn,
     pendingMessageAction,
     beginPendingMessageAction,

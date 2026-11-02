@@ -3337,12 +3337,28 @@ export async function restartSessionCommand(
     asNonEmptyString(asTrainingRecord(response)?.session_id) ?? context.getSessionId();
   await context.setStreamingState(createEmptyTrainerStreamingState());
   await context.setSessionId(startedSessionId);
+  const startSnapshot = mergeSessionStartSnapshot(
+    context.getHostState().bootstrap,
+    response,
+    runtimeWorkspace.workspaceId,
+  );
+  // A force-new session must not inherit the previous thread. The merge keeps
+  // the current conversation when the incoming snapshot carries no messages
+  // (a defensive fallback for ordinary refreshes), so clear it explicitly when
+  // the server confirms an empty new session.
+  const responseRecord =
+    response && typeof response === 'object' ? (response as Record<string, unknown>) : undefined;
+  const responseSnapshot =
+    responseRecord && responseRecord.snapshot && typeof responseRecord.snapshot === 'object'
+      ? (responseRecord.snapshot as Record<string, unknown>)
+      : responseRecord;
+  const responseMessages = Array.isArray(responseSnapshot?.messages)
+    ? (responseSnapshot.messages as unknown[])
+    : undefined;
   await context.patchWorkbenchData(
-    mergeSessionStartSnapshot(
-      context.getHostState().bootstrap,
-      response,
-      runtimeWorkspace.workspaceId,
-    ),
+    responseMessages && responseMessages.length === 0
+      ? { ...startSnapshot, conversation: [] }
+      : startSnapshot,
   );
 
   const summary = await fetchMemorySummaryForWorkspace(

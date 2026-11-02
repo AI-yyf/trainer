@@ -321,6 +321,12 @@
 - Resources empty state now shows the real setup guidance even when a stored
   leftover list exists; the folder section is hidden when there is nothing to
   organize; the leftover plan note remains visible (honesty preserved).
+- New chat: the host clears an inherited conversation when a force-new
+  `/session/start` snapshot carries no messages; the webview also clears
+  optimistic echoes. An empty Coach thread now renders the centered starter
+  empty state (three starters) instead of floating task chips that read as
+  orphan messages. Installed VSIX: 0 conversation items, 0 suggestion chips,
+  starter click fills the draft.
 - Settings: failed test no longer reads as “未实测 / 可直接使用”. The summary
   keeps the failure note, removes Go-to-Chat as the primary action, and offers
   retest; the model is shown verbatim (`MiniMax-M3.1-Flash`). The Add-provider

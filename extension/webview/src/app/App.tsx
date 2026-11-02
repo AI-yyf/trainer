@@ -699,6 +699,7 @@ export function App() {
   // pending reply action, preview session id, last-turn view, transition).
   const {
     optimisticTurns,
+    clearOptimisticTurns,
     appendOptimisticTurn,
     pendingMessageAction,
     beginPendingMessageAction,
@@ -714,6 +715,18 @@ export function App() {
     conversation: data.conversation,
     onOptimisticTurnAppended: pinCoachScrollToBottom,
   });
+  // A new chat / restored session replaces the conversation identity. The
+  // server snapshot is authoritative; unsettled optimistic echoes from the
+  // previous session must not survive as orphan user chips.
+  const coachSessionIdentityRef = useRef<string | undefined>(syncCursor.sessionId);
+  useEffect(() => {
+    const nextSessionId = syncCursor.sessionId;
+    const previous = coachSessionIdentityRef.current;
+    if (previous !== undefined && previous !== nextSessionId) {
+      clearOptimisticTurns();
+    }
+    coachSessionIdentityRef.current = nextSessionId;
+  }, [clearOptimisticTurns, syncCursor.sessionId]);
   // §三: the plan-composer domain owns its composer mode/context/draft state.
   const {
     planComposerMode,
@@ -1844,6 +1857,11 @@ export function App() {
   // (not configured / blocked) — never for a connecting or offline sidecar.
   const shouldShowNeutralEmptyState =
     data.conversation.length === 0 && (!providerCanCoachNow || Boolean(providerBlockReason));
+  // A forced-new chat has an empty conversation but no first-run onboarding
+  // left to show. Reuse the centered starter empty state for it; otherwise the
+  // only content is a pair of floating task chips above the composer.
+  const coachStarterEmptyStateVisible =
+    data.conversation.length === 0 && providerCanCoachNow && !shouldShowNeutralEmptyState;
   const hasDurableCoachContext = Boolean(
     data.memory.activeThread ||
       data.memory.memoryEvidence.length > 0 ||
@@ -7217,6 +7235,7 @@ export function App() {
     cacheScope: data.workspaceName,
     setOpenMenu,
     setOperationMessage,
+    onNewChatStart: clearOptimisticTurns,
   });
 
   const setComposerThinking = useCallback(
@@ -9103,7 +9122,7 @@ export function App() {
         </div>
       );
     }
-    if (isFirstCoachConversation && providerCanCoachNow) {
+    if (coachStarterEmptyStateVisible) {
       // §六十一: three starter prompts — not a dashboard. Filling the draft
       // keeps the learner in control of what gets sent.
       const starters =
@@ -9276,6 +9295,7 @@ export function App() {
     activeView === "coach" &&
     !composerUsesTrainingFlow &&
     !isFirstCoachConversation &&
+    !coachStarterEmptyStateVisible &&
     coachThreadNearEmpty &&
     providerCanCoachNow &&
     !shouldShowNeutralEmptyState &&

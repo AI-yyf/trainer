@@ -107,6 +107,8 @@ export interface UseCoachHistoryInput {
     tone: "info" | "error";
     message: string;
   }) => void;
+  /** Invoked at the click, before the host replaces the session snapshot. */
+  onNewChatStart?: () => void;
 }
 
 export interface CoachHistoryController {
@@ -133,6 +135,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
     cacheScope,
     setOpenMenu,
     setOperationMessage,
+    onNewChatStart,
   } = input;
   const zh = composerLanguage === "zh-CN";
 
@@ -277,6 +280,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
 
   const startNewCoachChat = useCallback(() => {
     setOpenMenu(undefined);
+    onNewChatStart?.();
     if (isBrowserPreview) {
       setOperationMessage({
         tone: "info",
@@ -290,7 +294,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
       type: "command/execute",
       payload: { commandId: trainerCommands.newCoachSession },
     });
-  }, [isBrowserPreview, setOpenMenu, zh]);
+  }, [isBrowserPreview, onNewChatStart, setOpenMenu, zh]);
 
   return {
     coachSessions: visibleCoachSessions,
