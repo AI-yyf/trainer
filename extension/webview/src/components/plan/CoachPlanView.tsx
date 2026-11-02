@@ -900,6 +900,11 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     plan.stages[0];
   const completedStages = plan.stages.filter((stage) => stage.status === "done");
   const routeStages = plan.stages.filter((stage) => stage.status !== "done");
+  const orderedRouteStages = activeStage && routeStages.some((stage) => stage.id === activeStage.id)
+    ? [activeStage, ...routeStages.filter((stage) => stage.id !== activeStage.id)]
+    : routeStages;
+  const visibleRouteStages = orderedRouteStages.slice(0, 2);
+  const remainingRouteStages = orderedRouteStages.slice(2);
   const liveStageIsCurrent = props.liveStageIsCurrent !== false;
   const liveCurrentStep = plan.currentStep?.trim() || "";
   const activeStageTitle = liveStageIsCurrent
@@ -1094,7 +1099,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const hasTrajectoryDetails = trajectoryRows.length > 0;
   const hasBackgroundDetails = backgroundRows.length > 0 || noteRows.length > 0 || hasTrajectoryDetails;
   const evidenceTone = evidenceCounts.pending > 0 ? "warning" : evidenceCounts.deferred > 0 ? "muted" : "good";
-  const hasEvidenceDetails = evidenceCounts.total > 0;
+  const hasEvidenceDetails = evidenceCounts.pending + evidenceCounts.deferred > 0;
   // §3.4: reviews and evidence are one debt to the learner — "待回顾 (N)".
   // The number counts what is actually owed (due reviews + pending/deferred
   // evidence); settled history stays inside, never in the headline.
@@ -1111,7 +1116,13 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       nextTools={props.dockReturnNotice ? <>{props.dockReturnNotice}{liveEvidenceDecisionRow}</> : liveEvidenceDecisionRow}
       route={{ label: resolvedStagesLabel, count: routeStages.length, content: <>
         {renderComposerDraftReplacement("stage")}
-        {routeStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
+        {visibleRouteStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
+        {remainingRouteStages.length > 0 ? (
+          <details className="template-disclosure" data-learning-section="more-route-stages">
+            <summary>{planCopy(language, "moreLabel")} ({remainingRouteStages.length})</summary>
+            {remainingRouteStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={false} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
+          </details>
+        ) : null}
       </> }}
       growth={{ label: templateCopy[language].growth, count: GROWTH_DIMENSION_KEYS.length, content: (
         <div className="board-card board-card--growth" data-board-card="growth">
@@ -1129,10 +1140,19 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         </div>
       ) }}
       proof={hasProofDetails ? { label: `${templateCopy[language].proofPending} (${proofDebtCount})`, content: <>
-        {reviewSupportRow ? <div className="board-card board-card--review" data-board-card="review">{renderNodeWithParagraph(reviewSupportRow.body)}</div> : null}
-        {props.dueReviewItems?.slice(0, 4).map((item) => <article key={item.id} className="board-card board-card--review" data-board-card="review"><strong>{item.title}</strong><p>{compactReviewLane(item, language)}</p></article>)}
+        {reviewSupportRow ? <div className="learning-card-group__note" data-review-support-note="true">{renderNodeWithParagraph(reviewSupportRow.body)}</div> : null}
+        {props.dueReviewItems?.slice(0, 2).map((item) => <article key={item.id} className="board-card board-card--review" data-board-card="review"><strong title={item.title}>{item.title}</strong><p title={compactReviewLane(item, language)}>{compactReviewLane(item, language)}</p></article>)}
         <button type="button" className="template-back" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>{templateCopy[language].startReview}</button>
         {hasEvidenceDetails ? (
+        <details
+          className="board-card board-card--evidence"
+          data-board-card="evidence"
+          data-evidence-disclosure="true"
+        >
+          <summary className="coach-plan-view__evidence-summary">
+            <strong>{planViewText.practiceRecordsLabel}</strong>
+            <span>{evidenceCounts.pending + evidenceCounts.deferred}</span>
+          </summary>
         <section
           className={`coach-plan-view__details-group coach-plan-view__details-group--evidence is-${evidenceTone}`}
           aria-label={planViewText.practiceRecordsLabel}
@@ -1147,7 +1167,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                   <article key={item.id} className="coach-plan-view__evidence-row board-card board-card--evidence" data-plan-evidence-row="pending" data-board-card="evidence">
                     <div className="coach-plan-view__evidence-row-head">
                       <div>
-                        <strong>{summary}</strong>
+                        <strong title={summary}>{summary}</strong>
                         <p>{[outcome, time].filter(Boolean).join(" · ")}</p>
                       </div>
                       <StatusLabel label={t("pending")} />
@@ -1198,7 +1218,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
                   <article key={item.id} className="coach-plan-view__evidence-row coach-plan-view__evidence-row--settled board-card board-card--evidence" data-plan-evidence-row="settled" data-board-card="evidence">
                     <div className="coach-plan-view__evidence-row-head">
                       <div>
-                        <strong>{summary}</strong>
+                        <strong title={summary}>{summary}</strong>
                         <p>{[state, outcome, time].filter(Boolean).join(" · ")}</p>
                       </div>
                     </div>
@@ -1208,6 +1228,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
             </div>
           ) : null}
         </section>
+        </details>
         ) : null}
       </> } : undefined}
     >

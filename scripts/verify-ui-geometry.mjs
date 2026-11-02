@@ -476,10 +476,60 @@ async function main() {
   // Learning presents the current task before closed secondary destinations.
   await page.goto(`${base}?view=plan&scenario=ready`, { waitUntil: "networkidle" });
   check(await page.locator('[data-template="LearningHome"]').isVisible(), "learning: current learning uses the shared home template");
-  const learningDisclosures = await page.locator('[data-template="LearningHome"] > [data-learning-section]').evaluateAll(items => items.map(item => item.open));
-  // §3.4 merged proof debt (due reviews + evidence to adopt) into the
-  // "reviews" section, so the home carries three closed disclosures.
-  check(learningDisclosures.length === 3 && learningDisclosures.every(open => !open), "learning: review, route and growth start closed (§3.4 evidence merged into review)");
+  const learningGroups = await page.locator('[data-template="LearningHome"] [data-learning-card-group]').evaluateAll(items => items.map(item => item.getAttribute('data-learning-card-group')));
+  // Learning is a card stack: the current action leads, then review debt,
+  // the remaining path and growth. No board frame or closed disclosure gate.
+  check(
+    learningGroups.length === 4 &&
+      learningGroups[0] === 'current' &&
+      learningGroups[1] === 'reviews' &&
+      learningGroups[2] === 'route' &&
+      learningGroups[3] === 'growth',
+    `learning: current action leads four card groups (${learningGroups.join('/')})`,
+  );
+  const closedRoute = await page.evaluate(() => {
+    const details = document.querySelector('[data-learning-card-group="route"]');
+    const cards = details?.querySelector('.learning-card-group__cards');
+    const stage = details?.querySelector('.board-card--stage');
+    return {
+      open: details ? details.open : null,
+      cardsHeight: cards ? cards.getBoundingClientRect().height : 0,
+      stageHeight: stage ? stage.getBoundingClientRect().height : 0,
+    };
+  });
+  check(
+    closedRoute.open === false &&
+      closedRoute.cardsHeight === 0 &&
+      closedRoute.stageHeight === 0,
+    `learning: closed path group takes no card layout (${JSON.stringify(closedRoute)})`,
+  );
+
+  // Resources is one rounded library shell around the existing file manager:
+  // search/toolbar, tree and folders stay inside it. The fixture proves the
+  // authored structure; it does not claim native import completion.
+  await page.goto(`${base}?view=resources&scenario=ready`, { waitUntil: 'networkidle' });
+  const resourceShell = await page.evaluate(() => {
+    const shells = [...document.querySelectorAll('[data-resource-library-shell="true"]')];
+    const shell = shells[0];
+    const toolbar = document.querySelector('.resources-knowledge__toolbar');
+    const tree = document.querySelector('.resources-knowledge__tree');
+    const style = shell ? getComputedStyle(shell) : null;
+    return {
+      count: shells.length,
+      toolbarInside: Boolean(shell && toolbar && shell.contains(toolbar)),
+      treeInside: Boolean(shell && tree && shell.contains(tree)),
+      border: style ? parseFloat(style.borderTopWidth) : 0,
+      radius: style ? parseFloat(style.borderTopLeftRadius) : 0,
+    };
+  });
+  check(
+    resourceShell.count === 1 &&
+      resourceShell.toolbarInside &&
+      resourceShell.treeInside &&
+      resourceShell.border > 0 &&
+      resourceShell.radius > 0,
+    `resources: one rounded shell contains toolbar and tree (${JSON.stringify(resourceShell)})`,
+  );
 
   // Visual fixtures validate geometry, not native/backend completion.
   for (const width of [340, 420, 460]) for (const theme of ['dark', 'light']) for (const lang of ['zh-CN', 'en-US']) {

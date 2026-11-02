@@ -3207,7 +3207,7 @@ export function ResourcesWorkbenchView({
         action={mutationStatus.tone === "failed" && onRefreshDeletedResources ? { label: localize(language, "refreshTrash"), onClick: onRefreshDeletedResources } : undefined} /> : null}
 
       {omitLeftoverLibrary ? null : (
-      <div className="resources-library-shell" data-resource-library-shell="true">
+      <div className="resources-library-shell">
       <div
         className="resources-knowledge__tree"
         ref={treeRef}

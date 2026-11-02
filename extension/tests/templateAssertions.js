@@ -96,10 +96,11 @@ function practice() {
 function learning() {
   const html = render('templates/LearningHome.tsx', 'LearningHome', { currentLabel: 'Current learning', title: 'Goal', stage: '2 / 4', next: {label: 'Next step', title: 'Repair mapping', detail: 'Done when checks pass', action: {label:'Continue',onClick(){}}}, ...Object.fromEntries(['proof','route','growth'].map(key => [key,{label:key,content:key+'-content'}])) });
   assert.equal((html.match(/data-primary-action="true"/g) || []).length, 1);
-  // Learning is a stack of four card groups: current, route, reviews, growth.
+  // Learning is a stack of four card groups: current, reviews, route, growth.
   assert.equal((html.match(/data-learning-card-group=/g) || []).length, 4);
   assert.ok(html.includes('data-learning-card-group="current"'));
-  assert.ok(!html.includes('<details'));
+  assert.match(html, /data-learning-card-group="route"[^>]*data-learning-collapsible="true"/);
+  assert.ok(!/data-learning-card-group="current"[^>]*data-learning-collapsible/.test(html));
   assert.ok(html.indexOf('Goal') < html.indexOf('Repair mapping'));
   const plan = read('components/plan/CoachPlanView.tsx');
   for (const marker of ['evidenceActions?.onAdoptEvidence', 'evidenceActions?.onRejectEvidence', 'evidenceActions?.onDeferEvidence', 'plan.frozen', '<PlanStageSection', '<LearningHome']) assert.ok(plan.includes(marker), marker);

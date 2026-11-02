@@ -28,25 +28,43 @@ function LearningCardGroup({
   id,
   label,
   count,
+  collapsible = false,
   children,
 }: {
   id: string;
   label: string;
   count?: number;
+  collapsible?: boolean;
   children: ReactNode;
 }) {
+  const header = (
+    <header className="learning-card-group__header">
+      <h3>{label}</h3>
+      {typeof count === "number" ? (
+        <span className="learning-card-group__count">{count}</span>
+      ) : null}
+    </header>
+  );
+  if (collapsible) {
+    return (
+      <details
+        className="learning-card-group learning-card-group--collapsible"
+        data-learning-section={id}
+        data-learning-card-group={id}
+        data-learning-collapsible="true"
+      >
+        <summary>{header}</summary>
+        <div className="learning-card-group__cards">{children}</div>
+      </details>
+    );
+  }
   return (
     <section
       className="learning-card-group"
       data-learning-section={id}
       data-learning-card-group={id}
     >
-      <header className="learning-card-group__header">
-        <h3>{label}</h3>
-        {typeof count === "number" ? (
-          <span className="learning-card-group__count">{count}</span>
-        ) : null}
-      </header>
+      {header}
       <div className="learning-card-group__cards">{children}</div>
     </section>
   );
@@ -54,7 +72,7 @@ function LearningCardGroup({
 
 /**
  * Learning is a stack of cards: one current-action card, then compact groups
- * of path, proof and growth cards. There is no board frame around the groups:
+ * of proof, path and growth cards. There is no board frame around the groups:
  * each item stands on its own, so the sidebar stays quiet and scannable.
  */
 export function LearningHome({
@@ -93,14 +111,14 @@ export function LearningHome({
           {state ? state : <NextAction {...next} />}
           {nextTools}
         </section>
-        {route ? (
-          <LearningCardGroup id="route" label={route.label} count={route.count}>
-            {route.content}
-          </LearningCardGroup>
-        ) : null}
         {proof ? (
           <LearningCardGroup id="reviews" label={proof.label} count={proof.count}>
             {proof.content}
+          </LearningCardGroup>
+        ) : null}
+        {route ? (
+          <LearningCardGroup id="route" label={route.label} count={route.count} collapsible>
+            {route.content}
           </LearningCardGroup>
         ) : null}
         {growth ? (

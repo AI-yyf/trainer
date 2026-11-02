@@ -7,5 +7,5 @@ import type { ReactNode } from "react";
  * hidden behind the reader (trash guard dialogs stay reachable there).
  */
 export function Library({ hidden, toolbar, children }: { hidden?: boolean; toolbar: ReactNode; children: ReactNode }) {
-  return <section className="template-library" data-template="Library" hidden={hidden}><div>{toolbar}</div><div>{children}</div></section>;
+  return <section className="template-library" data-template="Library" data-resource-library-shell="true" hidden={hidden}><div>{toolbar}</div><div>{children}</div></section>;
 }

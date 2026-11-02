@@ -8,6 +8,16 @@
 .learning-cards {
   display: grid;
   gap: 8px;
+  max-width: 760px;
+}
+
+/* Learning scrolls inside its own pane. A soft bottom edge keeps the next
+ * group from looking sheared off at the viewport boundary; the bottom padding
+ * lets the last card scroll clear of the fade. */
+.view-stack--plan .plan-view {
+  padding-bottom: 16px;
+  -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to bottom, currentColor calc(100% - 14px), transparent);
 }
 
 .learning-cards__header {
@@ -18,7 +28,6 @@
 .learning-cards__header h2 {
   margin: 0;
   font-size: var(--trainer-font-lg);
-  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -66,7 +75,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--trainer-font-3xs);
-  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--fg-2);
@@ -87,6 +95,18 @@
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.learning-card-group__note {
+  margin: 0 0 1px;
+  padding-inline: 1px;
+  color: var(--fg-2);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .board-card {
@@ -139,7 +159,7 @@
 .board-card--review p,
 .board-card--evidence p {
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   font-size: var(--trainer-font-3xs);
@@ -149,7 +169,7 @@
 .board-card--review strong,
 .board-card--evidence strong {
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -171,6 +191,11 @@
 
 .learning-card--now .template-next-action > button {
   margin-top: 0;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .board-card--stage .template-disclosure {
@@ -213,7 +238,6 @@
   }
 }
 
-
 /* Path cards use two columns on the sidebar width; an expanded card spans
  * the row so its objective and materials never squeeze into a narrow column. */
 @media (min-width: 460px) {
@@ -224,4 +248,76 @@
   .learning-card-group[data-learning-section="route"] .board-card--stage:has(details[open]) {
     grid-column: 1 / -1;
   }
+}
+
+.board-card--evidence[data-evidence-disclosure="true"] {
+  padding: 0;
+}
+
+.board-card--evidence[data-evidence-disclosure="true"] > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-3xs);
+}
+
+.board-card--evidence[data-evidence-disclosure="true"] > summary strong {
+  font-weight: 400;
+}
+
+.board-card--evidence[data-evidence-disclosure="true"] > summary span {
+  margin-inline-start: auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-0) 50%, transparent);
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-card--evidence[data-evidence-disclosure="true"] > .coach-plan-view__details-group {
+  padding: 0 7px 6px;
+  border: 0;
+  background: transparent;
+}
+
+/* A closed <details> must not inherit the grid display of an open card group:
+ * Chrome then keeps the slotted cards in layout even though the group is
+ * closed, inflating the pane and leaving a clipped sliver at the bottom. */
+.learning-card-group--collapsible {
+  display: block;
+}
+
+/* The card grid is an author display rule on a direct child, so it would
+ * override the UA rule that hides closed details content. Hide it explicitly. */
+.learning-card-group--collapsible:not([open]) > .learning-card-group__cards {
+  display: none;
+}
+
+.learning-card-group--collapsible[open] > .learning-card-group__cards {
+  margin-top: 3px;
+}
+
+.learning-card-group--collapsible > summary {
+  display: block;
+  list-style: none;
+  cursor: pointer;
+}
+
+.learning-card-group--collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+.learning-card-group--collapsible > summary .learning-card-group__header h3::before {
+  content: "▸";
+  display: inline-block;
+  margin-inline-end: 4px;
+  color: var(--fg-2);
+  transition: transform var(--motion-fast) ease;
+}
+
+.learning-card-group--collapsible[open] > summary .learning-card-group__header h3::before {
+  transform: rotate(90deg);
 }

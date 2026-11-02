@@ -426,3 +426,13 @@
 - Regression tests: `test_active_learn_card_start_advances_to_try` and `test_active_to_active_without_start_reason_still_fails`; `test_card_status_transition.py` 45 passed.
 - Installed-VSIX real GUI: seeded active/learn card, clicked “开始这一步”; log shows `POST /training/card-status 200`, UI advanced to “动手 · 2/5”.
 - Final gates: ruff clean, pyright 0 errors, full server suite **3730 passed**, extension suite exit 0.
+
+## 2026-11-03 — 831bf84 audit: Learning cards / Resources shell
+- Independent audit of `831bf84` found two P1s: review/evidence text was clamped to one line with no title, and `scripts/verify-ui-geometry.mjs` still asserted the old three-disclosure contract. Both are fixed in this commit.
+- Learning is now a four-group card stack (current → reviews → route → growth): review cards are capped at two with two-line text plus `title`; evidence history is a compact disclosure for pending/deferred debt only; the path group is a native `<details>` that starts closed, shows the active stage plus one upcoming card, and folds the rest under “more”; completed stages and templates sit below the cards.
+- Found and fixed a real closed-details bug: the author `display: grid` on the path card group overrode the UA hidden state, so closed stage cards kept layout height and produced a clipped sliver. Added an explicit `:not([open]) > cards { display: none }` and a geometry assertion (`closed path group takes no card layout`).
+- Resources is one rounded `.template-library` shell containing toolbar, tree and folders; the shell marker moved from the inner tree wrapper to the shell itself.
+- Wide container query removed; `.learning-cards` max-width 760px; action buttons wrap at 200%; `board.css` is in the section manifest; geometry gate updated (474 assertions).
+- Installed-VSIX re-check: 340/420/460 no horizontal overflow; `stageWidth=0` when the path is closed; both review cards fully visible; Resources shell contains toolbar/tree/folders; 200% French/German buttons wrap (`scrollWidth=clientWidth`); all eight languages at 340 have no overflow/raw key/undefined. Screenshots in `.tmp/audit831/`.
+- Gates: `npm run check` clean; extension suite exit 0; `verify-ui-geometry` 474 passed; `verify-css-sections` balanced. Server code unchanged; last full server suite was **3732 passed** (`4d999cb` era).
+- Remaining external/not executed: Journey A first send is still blocked by the native workspace picker; Journey D browser capture/native import remain **NOT_EXECUTED**; macOS CI runner acquisition failures remain external. Next: independent re-audit of this commit, then finish Journey A.
