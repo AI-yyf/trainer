@@ -329,7 +329,6 @@ import {
 import {
   appUiAltCopy,
   appUiCopy,
-  COACH_CHECKPOINT_RECOVERY_COPY,
   COACH_STARTER_PROMPTS,
   PLAN_DRAFT_REPLACEMENT_COPY,
   SCENARIO_TEXT,
@@ -353,7 +352,6 @@ import {
   COACH_REPLY_BODY_MAX_CHARS,
   COACH_SETTINGS_AUTOSAVE_DELAY_MS,
   COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT,
-  CoachCheckpointRecoveryAction,
   CoachPlanView,
   CoachSettingsView,
   ComposerDeckKind,
@@ -9217,40 +9215,6 @@ export function App() {
     [],
   );
 
-  const coachCheckpointRecovery =
-    leftoverStreamingCheckpointNotLive ? false : isCoachCheckpointRecoveryState(streaming);
-  const coachCheckpointRecoveryCopy =
-    COACH_CHECKPOINT_RECOVERY_COPY[layout.composerLanguage] ??
-    COACH_CHECKPOINT_RECOVERY_COPY["en-US"];
-  const runCoachCheckpointRecoveryAction = (action: CoachCheckpointRecoveryAction) => {
-    if (isBrowserPreview) {
-      return;
-    }
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId:
-          action === "resume"
-            ? trainerCommands.resumeLatestCoachCheckpoint
-            : trainerCommands.replayLatestCoachCheckpoint,
-      },
-    });
-  };
-  const coachCheckpointRecoveryActions = coachCheckpointRecovery ? (
-    <section className="coach-checkpoint-recovery" aria-label={coachCheckpointRecoveryCopy.title}>
-      <strong>{coachCheckpointRecoveryCopy.title}</strong>
-      <p>{coachCheckpointRecoveryCopy.hint}</p>
-      <div className="coach-checkpoint-recovery__actions">
-        <button className="button button--accent" type="button" onClick={() => runCoachCheckpointRecoveryAction("resume")}>
-          {coachCheckpointRecoveryCopy.resume}
-        </button>
-        <button className="button button--ghost" type="button" onClick={() => runCoachCheckpointRecoveryAction("replay")}>
-          {coachCheckpointRecoveryCopy.replay}
-        </button>
-      </div>
-    </section>
-  ) : null;
-
   const renderCoachConversationPane = (className: string, embedded = false) => (
     <CoachConversationView
       messages={coachRenderConversation}
@@ -9266,7 +9230,6 @@ export function App() {
       language={layout.composerLanguage}
       emptyState={embedded || workspaceSessionBlocked ? null : coachSuperEntryContent(false)}
       listHead={embedded ? undefined : coachTrainingResumeLine}
-      footer={embedded ? undefined : coachCheckpointRecoveryActions}
       streamingMessage={
         streaming.isStreaming
           ? {

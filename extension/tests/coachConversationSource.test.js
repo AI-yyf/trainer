@@ -426,28 +426,11 @@ test('coach composer does not gate sending on an unverified streaming probe', ()
   );
 });
 
-test('Coach interrupted recovery exposes last-progress resume and replay without resending the draft', () => {
+test('Coach interrupted recovery bar is absent', () => {
   const source = readAppModuleSource();
-  const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
-  assert.match(source, /function isCoachCheckpointRecoveryState\(/);
-  assert.match(source, /streaming\.streamError/);
-  assert.match(source, /completionStopReason/);
-  assert.match(source, /trainerCommands\.resumeLatestCoachCheckpoint/);
-  assert.match(source, /trainerCommands\.replayLatestCoachCheckpoint/);
-  assert.match(source, /COACH_CHECKPOINT_RECOVERY_COPY\[layout\.composerLanguage\]/);
-  // §simplification: learner-facing copy drops the "checkpoint" jargon —
-  // zh speaks of 上次进度 and the no-resend promise names what was typed.
-  assert.match(appUiCopySource, /title: "本轮已中断，可从上次进度继续"/);
-  assert.match(appUiCopySource, /resume: "恢复上次进度"/);
-  assert.match(appUiCopySource, /replay: "查看本轮记录"/);
-  assert.match(appUiCopySource, /不会重复发送你输入的内容/);
-  assert.match(appUiCopySource, /does not resend what you typed/);
-  assert.doesNotMatch(appUiCopySource, /checkpoint|检查点/);
-  assert.match(source, /action === "resume"/);
-  assert.doesNotMatch(
-    source.slice(source.indexOf('const coachCheckpointRecoveryActions'), source.indexOf('const renderCoachConversationPane')),
-    /sendStreamMessage|handleSubmit|composerDraft/,
-  );
+  assert.doesNotMatch(source, /coach-checkpoint-recovery/);
+  assert.doesNotMatch(source, /coachCheckpointRecoveryActions/);
+  assert.doesNotMatch(source, /COACH_CHECKPOINT_RECOVERY_COPY/);
 });
 
 test('Plan next-step copy prefers the live current step before stale artifact teasers', () => {

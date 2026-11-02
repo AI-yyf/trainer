@@ -227,7 +227,6 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     source,
     /emptyState=\{embedded \|\| workspaceSessionBlocked \? null : coachSuperEntryContent\(false\)\}/,
   );
-  assert.match(source, /footer=\{embedded \? undefined : coachCheckpointRecoveryActions\}/);
   assert.match(source, /message: blockedComposerGuidance,/);
   assert.match(
     source,

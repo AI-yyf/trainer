@@ -328,7 +328,6 @@ import {
 import {
   appUiAltCopy,
   appUiCopy,
-  COACH_CHECKPOINT_RECOVERY_COPY,
   COACH_STARTER_PROMPTS,
   PLAN_DRAFT_REPLACEMENT_COPY,
   SCENARIO_TEXT,
@@ -399,7 +398,6 @@ export type SettingsActionKind =
   | "reset-defaults"
   | "start-provider-trial";
 
-export type CoachCheckpointRecoveryAction = "resume" | "replay";
 
 export function isCoachCheckpointRecoveryState(
   streaming: { isStreaming: boolean; streamError?: string; completionStopReason?: string },

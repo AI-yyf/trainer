@@ -2556,63 +2556,6 @@ export const COACH_STARTER_PROMPTS: Record<ComposerLanguage, Array<{ label: stri
   ],
 };
 
-/** §十五: coach recovery line copy in eight languages (structured copy). */
-export const COACH_CHECKPOINT_RECOVERY_COPY: Record<ComposerLanguage, {
-  title: string;
-  resume: string;
-  replay: string;
-  hint: string;
-}> = {
-  "zh-CN": {
-    title: "本轮已中断，可从上次进度继续",
-    resume: "恢复上次进度",
-    replay: "查看本轮记录",
-    hint: "从上次进度继续不会重复发送你输入的内容；查看记录也不会改变当前对话。",
-  },
-  "en-US": {
-    title: "This turn was interrupted. Continue from where you left off.",
-    resume: "Continue where I left off",
-    replay: "View this turn's record",
-    hint: "Continuing where you left off does not resend what you typed; viewing the record does not change this conversation.",
-  },
-  "es-ES": {
-    title: "Este turno se interrumpió. Continúa donde lo dejaste.",
-    resume: "Continuar donde lo dejé",
-    replay: "Ver el registro de este turno",
-    hint: "Continuar donde lo dejaste no reenvía lo que escribiste; ver el registro no cambia esta conversación.",
-  },
-  "fr-FR": {
-    title: "Ce tour a été interrompu. Reprenez où vous en étiez.",
-    resume: "Reprendre où j'en étais",
-    replay: "Voir l'enregistrement de ce tour",
-    hint: "Reprendre où vous en étiez ne renvoie pas ce que vous avez écrit ; voir l'enregistrement ne change pas cette conversation.",
-  },
-  "de-DE": {
-    title: "Dieser Turn wurde unterbrochen. Mach dort weiter, wo du aufgehört hast.",
-    resume: "Dort weitermachen, wo ich aufgehört habe",
-    replay: "Aufzeichnung dieses Turns ansehen",
-    hint: "Das Weitermachen an der letzten Stelle sendet nichts erneut; das Ansehen der Aufzeichnung ändert diese Konversation nicht.",
-  },
-  "ja-JP": {
-    title: "このターンは中断されました。前回の進捗から続けられます。",
-    resume: "前回の進捗から再開",
-    replay: "このターンの記録を見る",
-    hint: "前回の進捗から再開しても入力内容を再送しません。記録を見てもこの会話は変わりません。",
-  },
-  "ko-KR": {
-    title: "이 턴이 중단되었습니다. 마지막 진행 상황에서 계속할 수 있습니다.",
-    resume: "마지막 진행 상황에서 계속",
-    replay: "이 턴 기록 보기",
-    hint: "마지막 진행 상황에서 계속해도 입력한 내용을 다시 보내지 않습니다. 기록을 봐도 이 대화는 바뀌지 않습니다.",
-  },
-  "pt-BR": {
-    title: "Este turno foi interrompido. Continue de onde parou.",
-    resume: "Continuar de onde parei",
-    replay: "Ver o registro deste turno",
-    hint: "Continuar de onde parou não reenvia o que você escreveu; ver o registro não muda esta conversa.",
-  },
-};
-
 /** §十五: plan draft replacement dialog copy in eight languages ({t} = target title). */
 export const PLAN_DRAFT_REPLACEMENT_COPY: Record<ComposerLanguage, {
   title: string;
