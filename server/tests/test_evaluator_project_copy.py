@@ -47,6 +47,12 @@ def test_project_copy_skips_non_regular_files(tmp_path: Path) -> None:
     sandbox = tmp_path / "sandbox"
     sandbox.mkdir()
 
-    assert _copy_project_to_sandbox(project, sandbox) is True
-    assert (sandbox / "test_ok.py").exists()
-    assert not (sandbox / "pipe").exists()
+    try:
+        assert _copy_project_to_sandbox(project, sandbox) is True
+        assert (sandbox / "test_ok.py").exists()
+        assert not (sandbox / "pipe").exists()
+    finally:
+        try:
+            fifo.unlink()
+        except OSError:
+            pass

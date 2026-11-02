@@ -99,3 +99,13 @@ test('accepts an absolute target inside the managed workspace', () => {
     true,
   );
 });
+
+test('rejects a leaf target without a managed workspace', () => {
+  assert.equal(
+    trainingFileMatchesEditorPath({
+      filePath: 'queue_lock.py',
+      editorPath: '/work/outside/queue_lock.py',
+    }),
+    false,
+  );
+});

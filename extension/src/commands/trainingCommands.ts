@@ -1616,9 +1616,9 @@ export async function trainingFlashcardAnswerCommand(
   } | undefined;
   const learnerAnswer = p?.learnerAnswer ?? p?.answer ?? '';
   const workspaceId = getRuntimeWorkspaceId(context);
-  const status = context.sidecarManager.getStatus();
+  const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: 'Sidecar is not running.' };
+    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
   try {
     const requestBody: Record<string, unknown> = {
@@ -1710,9 +1710,9 @@ export async function trainingPracticeReturnCommand(
     evidenceSource?: string;
   } | undefined;
   const workspaceId = getRuntimeWorkspaceId(context);
-  const status = context.sidecarManager.getStatus();
+  const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: 'Sidecar is not running.' };
+    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
   try {
     const response = await context.sidecarClient.postJson<{ ok: boolean; workspace?: unknown }>(
@@ -1932,9 +1932,9 @@ export async function trainingReflectCommand(
 ): Promise<CommandExecutionResult> {
   const p = payload as { cardId?: string; handoffId?: string; reflection?: string } | undefined;
   const workspaceId = getRuntimeWorkspaceId(context);
-  const status = context.sidecarManager.getStatus();
+  const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: 'Sidecar is not running.' };
+    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
   try {
     const response = await context.sidecarClient.postJson<{ ok: boolean; workspace?: unknown }>(
@@ -1967,9 +1967,9 @@ export async function trainingReturnCommand(
 ): Promise<CommandExecutionResult> {
   const p = payload as { cardId?: string; handoffId?: string } | undefined;
   const workspaceId = getRuntimeWorkspaceId(context);
-  const status = context.sidecarManager.getStatus();
+  const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: 'Sidecar is not running.' };
+    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
   try {
     const response = await context.sidecarClient.postJson<{ ok: boolean; workspace?: unknown }>(

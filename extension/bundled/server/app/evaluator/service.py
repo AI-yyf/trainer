@@ -1005,7 +1005,10 @@ class EvaluatorService:
                 python_expressions=python_expressions,
                 script_stdout=script_stdout,
                 raw_code=literal_evidence,
-                defer_without_signals=not _criterion_requires_explicit_evidence(item),
+                defer_without_signals=(
+                    _criterion_is_explanation_only(item)
+                    and not _criterion_requires_explicit_evidence(item)
+                ),
             )
             for item in criteria
         ]
@@ -1422,6 +1425,23 @@ def _criterion_code_signals(criterion: str, expected_symbols: list[str]) -> list
         ):
             add(token)
     return signals
+
+
+def _criterion_is_explanation_only(criterion: str) -> bool:
+    """Only explicit explanation prompts may defer to reflection.
+
+    A substantive code requirement without a code signal is a real gap, not a
+    reflection item; deferring it would let an untouched file pass.
+    """
+    return bool(
+        re.search(
+            r"解释|说明|为什么|描述|标出|指出|列出|总结|回答|对比|"
+            r"\bexplain\b|\bwhy\b|\bdescribe\b|\bidentify\b|\bmark\b|"
+            r"\blist\b|\bsummarize\b|\bcompare\b",
+            criterion,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _criterion_requires_explicit_evidence(criterion: str) -> bool:

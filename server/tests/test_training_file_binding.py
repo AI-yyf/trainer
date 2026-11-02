@@ -194,3 +194,93 @@ def test_relative_target_outside_project_is_rejected(tmp_path: Path) -> None:
             },
         )
         assert response.status_code == 409, response.text
+
+
+def test_skipped_card_cannot_record_current_file_evidence(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        workspace = "ws-skipped-verify"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Skipped verify"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        project = tmp_path / "project"
+        target = project / "src" / "queue_lock.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("x = 1\n", encoding="utf-8")
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-skipped-verify",
+            card_type="practice",
+            status="active",
+            title="Skipped verify",
+            files_to_touch=[str(target)],
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(
+            workspace,
+            selected_card_id=card.card_id,
+            canonical_project_path=str(project),
+        )
+        runtime.memory_service.transition_card_status(
+            workspace, card.card_id, "skipped", reason="test skip"
+        )
+        before = len(runtime.memory_service._structured_for(workspace)._evidence_items)
+        runtime.evaluator_service.evaluate_current_file = MagicMock(
+            return_value=EvaluationReport(
+                passed=True,
+                summary="ok",
+                next_step="",
+                reflection="",
+                dynamic_checks=[
+                    EvaluationCheck(id="pytest", label="pytest", status="passed", detail="1 passed")
+                ],
+            )
+        )
+        response = client.post(
+            "/evaluate/current-file",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "evaluation_source": "training",
+                "training_card_id": card.card_id,
+                "file_path": str(target),
+                "language_id": "python",
+                "content": target.read_text(encoding="utf-8"),
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert runtime.memory_service.get_card(workspace, card.card_id).status == "skipped"
+        after = len(runtime.memory_service._structured_for(workspace)._evidence_items)
+        assert after == before
+
+
+def test_leaf_target_without_project_root_is_rejected(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        workspace = "ws-leaf-no-project"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Leaf no project"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-leaf-no-project",
+            card_type="practice",
+            status="active",
+            title="Leaf no project",
+            files_to_touch=["queue_lock.py"],
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(workspace, selected_card_id=card.card_id)
+        response = client.post(
+            "/evaluate/current-file",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "evaluation_source": "training",
+                "training_card_id": card.card_id,
+                "file_path": str(tmp_path / "outside" / "queue_lock.py"),
+                "language_id": "python",
+                "content": "x = 1\n",
+            },
+        )
+        assert response.status_code == 409, response.text

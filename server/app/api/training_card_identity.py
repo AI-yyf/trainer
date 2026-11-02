@@ -36,6 +36,12 @@ def training_card_is_live_for_verify(runtime: Any, workspace_id: str, card_id: s
     requested = str(card_id or "").strip()
     if not requested:
         return False
+    card = runtime.memory_service.get_card(workspace_id, requested)
+    if card is None:
+        return False
+    card_status = str(getattr(card, "status", "") or "").strip().lower()
+    if card_status in {"skipped", "archived", "implemented", "completed", "reviewed", "fed_back"}:
+        return False
     live_id = runtime.memory_service.live_selected_training_card_id(workspace_id)
     if live_id:
         return requested == live_id
@@ -103,7 +109,7 @@ def prepare_training_file_evaluation(
     if targets:
         target_paths = {canonical(item) for item in targets}
         matched = bool(requested_path) and requested_path in target_paths
-        if not matched:
+        if not matched and project:
             # Cards often name only the leaf file (`queue_lock.py`) while the
             # project keeps it under src/. Match the leaf for that form, and
             # require the full relative suffix when the card names a directory.

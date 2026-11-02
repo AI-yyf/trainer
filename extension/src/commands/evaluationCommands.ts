@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import { mergeEvaluationResultSnapshot, mergeMemorySummarySnapshot } from '../core/workbenchData';
-import { getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
+import { getRuntimeWorkspaceContext, getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
 import { describeProviderSendState } from '../../../shared/src/providerStatus';
 import {
   normalizeTrainingFilePath,
@@ -47,7 +47,9 @@ export async function evaluateCurrentFileCommand(
 
   const evaluationPayload = extractEvaluationPayload(payload);
   const editor = vscode.window.activeTextEditor;
+  const runtimeWorkspace = getRuntimeWorkspaceContext(context);
   const workspaceFolder =
+    runtimeWorkspace.canonicalProjectPath ??
     vscode.workspace?.workspaceFolders?.[0]?.uri.fsPath ??
     context.getHostState().workspace?.workspaceFolder;
   const targetDocument = await resolveTrainingVerifyDocument({

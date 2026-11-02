@@ -57,6 +57,11 @@ export function trainingFileMatchesEditorPath(
   if (workspace && editor !== workspace && !editor.startsWith(`${workspace}/`)) {
     return false;
   }
+  if (!workspace && !isAbsoluteFsPath(file)) {
+    // Without a managed workspace the host cannot prove containment; never
+    // match a relative/leaf card path by suffix alone.
+    return false;
+  }
   const absolute = isAbsoluteFsPath(file)
     ? normalizeFsPathForMatch(file)
     : input.workspaceFolder

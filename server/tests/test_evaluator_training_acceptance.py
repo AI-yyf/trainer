@@ -97,3 +97,20 @@ def test_no_modification_guardrail_cannot_defer_to_reflection() -> None:
     assert check is not None
     assert check.status == "failed", check.detail
     assert "不修改" in check.detail
+
+
+def test_substantive_unsignalled_requirement_cannot_defer() -> None:
+    service = EvaluatorService()
+    check = _check(
+        service,
+        code="import threading\nlock = threading.Lock()\n",
+        acceptance_criteria=[
+            "使用 `Lock` 初始化锁。",
+            "保证所有共享状态访问都在锁保护之内。",
+        ],
+        expected_symbols=["Lock"],
+    )
+
+    assert check is not None
+    assert check.status == "failed", check.detail
+    assert "共享状态" in check.detail

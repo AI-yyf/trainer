@@ -381,3 +381,13 @@
   3. Explanation-only acceptance criteria blocked code verification. They now defer to the reflection step; file-path “symbols” are treated as targets, not code identifiers; real missing code symbols still fail. `test_evaluator_training_acceptance` 2 passed.
 - Installed-VSIX loop (real GUI): verification passed with ruff/pyright/pytest; reflection recorded code locations and run output; Return completed; Growth shows 实现 · 反复验证 2 次验证通过. Card `a20c0f4e…` implemented; handoff verified/completed; evidence `ev-f611f129d1` verified=True, source `ide_current_file`.
 - Still external: first-use on a brand-new profile needs the provider key (kept in SecretStorage; not printed), native resource picker, real Remote-SSH L2 and Windows/Linux browser install. High-frequency/destructive and independent reverse audit are next.
+
+## 2026-11-02 — independent audit P0/P1 closed; CI failure root causes
+- Independent read-only audit of `241973b` found one P0 and two P1s; all fixed in `64e02a0`:
+  - P0: a supplied acceptance contract with only deferred/file signals could pass with zero concrete code evidence. `_training_acceptance_check` now fails that case; a no-contract request keeps the historical warning. Guardrail criteria ("do not modify X") can never defer.
+  - P1: training file targets outside `canonical_project_path` were accepted; server and shared host matching now enforce project containment, and leaf-only targets require exactly one on-disk match (no root-file guess).
+  - P1: the host tried `<workspace>/<leaf>` before the unique search, so a stale same-named file could be verified; resolver order is now exact/unique-first.
+  - Also closed: skipped cards no longer count as live; a successful same-request card-status replay still returns 200 after release; the project-copy skips non-regular files; training card actions wait for `ensureRunning()` instead of failing on a cold sidecar.
+- CI `41436248837` failed on exactly the three server tests the audit fixes changed; the local full suite now passes `3716 passed` and extension tests exit 0. `41443397666` is the new run for `64e02a0`.
+- Installed VSIX re-check: Learning now reads "还没有正式计划。先用当前这一步继续，或从模板开始。" (no internal "旧痕迹" copy); the completed training card still shows verified evidence and Return. "下一张" waited for the cold sidecar, then hit the Provider relay (`Provider request failed`), not "Sidecar is not running".
+- Remaining external: provider relay stability for new card generation, native resource picker, Remote-SSH L2, Windows/Linux real-browser install, T-0028 human sign-off. Next: destructive recovery, resources/browser UI, high-frequency residual checks, independent re-audit of `64e02a0`.
