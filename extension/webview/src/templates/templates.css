@@ -73,6 +73,7 @@
 .template-system-state--error h3, .template-system-state--recoverable-error h3 { color: var(--danger); }
 .template-activity-header { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-block: 12px 16px; }
 .template-activity-header h2 { margin: 0; font-size: var(--trainer-font-lg); font-weight: 600; line-height: 1.4; }
+.template-back--with-icon { display: inline-flex; align-items: center; gap: 4px; }
 .template-back { display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px 4px 0; border: 0; border-radius: 6px; background: transparent; color: var(--fg-muted); font: inherit; font-size: var(--trainer-font-sm); cursor: pointer; }
 .template-back:hover { color: var(--fg-0); }
 .template-back:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }

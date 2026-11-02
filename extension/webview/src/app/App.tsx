@@ -249,6 +249,7 @@ import type {
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
 import {
+  ArrowRightIcon,
   CheckMarkIcon,
   ChevronRightIcon,
   ContextLayersIcon,
@@ -9572,7 +9573,8 @@ export function App() {
           className="button button--ghost"
           onClick={() => setActiveView("training")}
         >
-          {appUiCopy(layout.composerLanguage, "继续")}
+          <span className="button__icon" aria-hidden="true"><ChevronRightIcon size={14} /></span>
+          <span>{appUiCopy(layout.composerLanguage, "继续")}</span>
         </button>
       </p>
     );
@@ -9964,7 +9966,8 @@ export function App() {
         }
       }}
     >
-      {appUiCopy(layout.composerLanguage, "开始练习")}
+      <span className="button__icon" aria-hidden="true"><ArrowRightIcon size={14} /></span>
+      <span>{appUiCopy(layout.composerLanguage, "开始练习")}</span>
     </button>
   );
 
@@ -9989,7 +9992,8 @@ export function App() {
         type="button"
         onClick={handleResumeTrainingInCoach}
       >
-        {trainingCoachActionLabel}
+        <span className="button__icon" aria-hidden="true"><ChevronRightIcon size={14} /></span>
+        <span>{trainingCoachActionLabel}</span>
       </button>
     </>
   );
@@ -10463,7 +10467,8 @@ export function App() {
                   requestCoachComposerFocus();
                 }}
               >
-                {t.openCoach}
+                <span className="button__icon" aria-hidden="true"><ChevronRightIcon size={14} /></span>
+                <span>{t.openCoach}</span>
               </button>
             ) : trainingPrimaryAction
           }

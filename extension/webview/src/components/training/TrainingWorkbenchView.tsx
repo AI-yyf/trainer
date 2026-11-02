@@ -18,6 +18,7 @@ import { RemoteVerificationPanel } from "./RemoteVerificationPanel";
 import { remoteVerifyCopy } from "./remoteVerificationCopy";
 import { useTrainingWorkbenchViewState } from "./useTrainingWorkbenchViewState";
 import { MessageRichContent } from "../coach/MessageRichContent";
+import { ArrowRightIcon } from "../icons";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
@@ -944,12 +945,13 @@ export function TrainingWorkbenchView({
   const nextCardButton = onNextCard ? (
     <button
       type="button"
-      className="template-back"
+      className="template-back template-back--with-icon"
       data-training-next-card="true"
       disabled={cardGenerationPending}
       onClick={() => onNextCard()}
     >
-      {t.nextCard}
+      <ArrowRightIcon size={14} />
+      <span>{t.nextCard}</span>
     </button>
   ) : null;
 
