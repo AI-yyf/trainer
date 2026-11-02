@@ -402,3 +402,12 @@
 - Full server suite `3721 passed` (15:11) after deleting a FIFO left by the new project-copy test; the test now unlinks it. Full extension suite exit 0; `npm run check` clean.
 - Installed VSIX rebuilt from `4ac04fb`; cold-sidecar check still to be recorded. CI `41451465660` is the run for `4ac04fb`.
 - Remaining external: provider relay for new card generation, native resource picker, Remote-SSH L2, Windows/Linux real-browser install, T-0028 human sign-off.
+
+## 2026-11-02 — audit P1s tightened; manual reading-card handoff P1 open
+- Third independent audit of `8df085c` accepted the prior P0/P1 closures and found two parser/taxonomy P1s; fixed here:
+  - taxonomy change verbs now include 补充/添加/编写/创建/优化/更新/完善 (and English equivalents), so "检查并补充回归测试" and "分析并优化临界区" stay implementation;
+  - explanation verbs no longer defer a criterion that also contains 实现/修复/补充/…; an unchanged file cannot pass "解释并实现…" or "说明并修复…".
+- Focused tests: `test_card_taxonomy.py`, `test_evaluator_training_acceptance.py`, `test_card_generator.py`, `test_card_router.py` → 131 passed; full server suite at `8df085c` → 3721 passed; extension suite exit 0; `npm run check` clean.
+- Manual reading card (self-reported) reached Reflect in the installed VSIX, but the reflect request still sees the raw handoff phase `try` while the scoped snapshot shows `verify`, returning 422. The incomplete manual-path changes were reverted to keep the tree green. Root cause is the raw-vs-scoped `latest_training_handoff` source; next round must make the live handoff the single source and re-enable self-reported reflect/return.
+- Cold-sidecar recovery PASS: killing the sidecar and clicking 下一张 restarted it (`[sidecar] starting`, new PID) and generated a new card; no "Sidecar is not running." failure.
+- Remaining external: provider relay stability, native resource picker, Remote-SSH L2, Windows/Linux real-browser install, T-0028 human sign-off.

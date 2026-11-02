@@ -89,3 +89,19 @@ def test_implementation_card_with_change_verb_stays_implementation() -> None:
     )
 
     assert card.learning_subtype == "implementation"
+
+
+def test_supplement_or_optimize_keeps_implementation() -> None:
+    for title, statement in (
+        ("检查 queue_lock.py 中的竞态并补充回归测试", "补充回归测试。"),
+        ("分析 Queue 的锁设计并优化临界区", "优化临界区。"),
+    ):
+        card = TrainingCardCandidateSnapshot(
+            card_type="practice",
+            title=title,
+            learning_family="code",
+            learning_subtype="implementation",
+            files_to_touch=["queue_lock.py"],
+            problem_statement=statement,
+        )
+        assert card.learning_subtype == "implementation", title

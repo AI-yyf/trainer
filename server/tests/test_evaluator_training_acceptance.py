@@ -114,3 +114,35 @@ def test_substantive_unsignalled_requirement_cannot_defer() -> None:
     assert check is not None
     assert check.status == "failed", check.detail
     assert "共享状态" in check.detail
+
+
+def test_explanation_plus_implementation_cannot_defer() -> None:
+    service = EvaluatorService()
+    check = _check(
+        service,
+        code="import threading\nlock = threading.Lock()\n",
+        acceptance_criteria=[
+            "使用 `Lock` 初始化锁。",
+            "解释并实现所有共享状态的锁保护。",
+        ],
+        expected_symbols=["Lock"],
+    )
+
+    assert check is not None
+    assert check.status == "failed", check.detail
+
+
+def test_explanation_plus_fix_cannot_defer() -> None:
+    service = EvaluatorService()
+    check = _check(
+        service,
+        code="import threading\nlock = threading.Lock()\n",
+        acceptance_criteria=[
+            "使用 `Lock` 初始化锁。",
+            "说明并修复队列的竞态。",
+        ],
+        expected_symbols=["Lock"],
+    )
+
+    assert check is not None
+    assert check.status == "failed", check.detail

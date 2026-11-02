@@ -1433,6 +1433,15 @@ def _criterion_is_explanation_only(criterion: str) -> bool:
     A substantive code requirement without a code signal is a real gap, not a
     reflection item; deferring it would let an untouched file pass.
     """
+    if re.search(
+        r"实现|修复|补充|添加|编写|创建|优化|更新|完善|"
+        r"\bimplement\b|\bfix\b|\badd\b|\bmodify\b|\brefactor\b|"
+        r"\bcreate\b|\bupdate\b|\boptimize\b|\bimprove\b|\bwrite\b|\bbuild\b",
+        criterion,
+        flags=re.IGNORECASE,
+    ):
+        # An implementation/fix clause must not hide behind an explanation verb.
+        return False
     return bool(
         re.search(
             r"解释|说明|为什么|描述|标出|指出|列出|总结|回答|对比|"
