@@ -122,6 +122,23 @@ function learning() {
   assert.ok(settledOnly.includes('Settled observation'));
   assert.ok(settledOnly.includes('Practice records'));
   assert.ok(!settledOnly.includes('data-learning-card-group="reviews"'));
+  const reviewsWithHistory = learningPlan(learningAction(), {
+    dueReviewItems: [{ id: 'r1', title: 'Recall the boundary', detail: 'Review the lock release path', surfaceMode: 'due' }],
+    evidenceQueue: {
+      pending: [],
+      deferred: [],
+      adopted: [{ id: 'e1', summary: 'Settled observation', source: 'manual', concepts: [], outcome: 'completed', confidence: 1, adopted: true, timestamp: '2026-11-02T10:00:00Z' }],
+      rejected: [],
+      history: [],
+      unscoped: [],
+      totalCount: 1,
+    },
+  });
+  assert.ok(reviewsWithHistory.includes('data-learning-card-group="reviews"'));
+  assert.ok(
+    reviewsWithHistory.indexOf('data-evidence-disclosure="true"') > reviewsWithHistory.indexOf('data-learning-card-group="growth"'),
+    'settled history sits below the card groups, not inside the review debt group',
+  );
 }
 function reply() {
   const html = render('templates/CoachReply.tsx','CoachReply',{body:'BODY',evidence:'EVIDENCE',nextAction:'NEXT',tools:'TOOLS'});

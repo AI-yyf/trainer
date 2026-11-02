@@ -1106,6 +1106,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   // evidence); settled history stays reachable without inflating the headline.
   const proofDebtCount = (props.dueReviewItems?.length ?? 0) + evidenceDebtCount;
   const hasProofDetails = hasReviewDetails || evidenceDebtCount > 0;
+  const hasSettledEvidence = hasEvidenceDetails && evidenceDebtCount === 0;
 
   const evidenceDisclosure = hasEvidenceDetails ? (
     <details
@@ -1233,12 +1234,12 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         {reviewSupportRow ? <div className="learning-card-group__note" data-review-support-note="true">{renderNodeWithParagraph(reviewSupportRow.body)}</div> : null}
         {props.dueReviewItems?.slice(0, 2).map((item) => <article key={item.id} className="board-card board-card--review" data-board-card="review"><strong title={item.title}>{item.title}</strong><p title={compactReviewLane(item, language)}>{compactReviewLane(item, language)}</p></article>)}
         <button type="button" className="template-back" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>{templateCopy[language].startReview}</button>
-        {evidenceDisclosure}
+        {evidenceDebtCount > 0 ? evidenceDisclosure : null}
       </> } : undefined}
     >
       {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
       {renderComposerDraftReplacement("project-subplan")}
-      {!hasProofDetails ? evidenceDisclosure : null}
+      {hasSettledEvidence ? evidenceDisclosure : null}
       {completedStages.length > 0 ? (
         <details className="template-disclosure" data-learning-section="completed-stages">
           <summary>{resolveStageStatusLabel("done", stageStatusLabels?.done, language)} ({completedStages.length})</summary>
