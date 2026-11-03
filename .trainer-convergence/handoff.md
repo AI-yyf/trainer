@@ -488,3 +488,10 @@
 - Evidence: `.tmp/first-use/62-journey-b-long-wait.png`, `.tmp/first-use/63-journey-b-long-wait-frame.png`, `.tmp/first-use/67-journey-b-followup-m27.png`, `.tmp/first-use/68-journey-b-followup-m27-frame.png`, `.tmp/first-use/69-journey-b-report.json`.
 - Provider config was restored to the original `MiniMax-M3.1-Flash` after the check. M3.1 remains a confirmed provider/reasoning-budget P1; M2.7 is the working real model in this environment.
 - Not executed: completing a formal plan step/training card with the real provider, Journey C/E/F, PDF/GitHub download-to-folder, multi-window isolation.
+
+## 2026-11-03 — M3.1 reasoning budget, M2.7 working default; Journey C blocked
+- Provider budget fix: `MiniMax-M3.x` is now recognized as reasoning-first; the coaching stream starts with 8192 output tokens and the one-shot empty/truncated retry cap is raised from 8192 to 16384. Focused tests: `test_provider_reasoning_budget.py` 3 passed; provider wire/persistence 16 passed; ruff/pyright clean.
+- Real `MiniMax-M3.1-Flash` still did not produce a visible coaching reply after 6 minutes (the provider test also stayed in “正在检查”); the relay/model remains unusable for Journey B. The apparent later reply in the transcript belongs to the M2.7 turn and is not evidence for M3.1.
+- `MiniMax-M2.7` is now the working default in the real profile. It already produced two correct real Q&A replies with file/line references. A later short question returned English-only visible prose while zh-CN was selected, and the language guard rejected it with “这条回复没有读清。请把刚才的问题再发一次。” — honest, but the provider/model is still flaky on short answers.
+- Learning state after these attempts: current step still “在 queue_lock.py 中标出 with self._lock 的进入、退出和异常路径”; training acceptance **0/4**; the failed-turn/provider-error text appears repeatedly inside the 待回顾 cards. A formal plan/training step was not completed, so Journey C/E/F remain **NOT_EXECUTED**.
+- The provider language/error text leaking into Learning review cards is a new state-pollution issue to investigate next, alongside the M3.1 relay latency.

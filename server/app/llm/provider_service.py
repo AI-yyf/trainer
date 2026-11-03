@@ -1267,7 +1267,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         so models that answer within the normal budget never pay for it.
         """
         base = _positive_int(requested) or DEFAULT_COACHING_MAX_OUTPUT_TOKENS
-        escalated = min(max(int(base) * 4, 8192), 8192)
+        escalated = min(max(int(base) * 4, 8192), 16384)
         return escalated if escalated > int(base) else None
 
     def _plain_completion_protocol(self) -> str | None:
@@ -6315,6 +6315,9 @@ async def _provider_service_coaching_reply_stream(
         messages, max_tokens = self._prepare_context_budget(
             messages,
             model=model,
+            requested_max_tokens=self.recommended_generation_max_tokens(
+                DEFAULT_COACHING_MAX_OUTPUT_TOKENS
+            ),
             prefer_configured_output=True,
         )
         if self._plain_completion_uses_agent_binding():

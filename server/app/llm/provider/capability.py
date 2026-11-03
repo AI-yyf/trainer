@@ -82,6 +82,7 @@ def _is_kimi_like_provider(provider: ProviderConfig | None) -> bool:
 # small output budget before the first visible token, regardless of gateway.
 _REASONING_FIRST_MODEL_PATTERN = re.compile(
     r"deepseek[-_. ]?r|deepseek[-_. ]?reasoner|deepseek[-_. ]?v\d|qwq|"
+    r"minimax[-_. ]?m3|"
     r"o1(?:[-_.](?:mini|preview|pro))?|"
     r"o3(?:[-_.]mini)?|o4[-_.]mini|glm[-_. ]?\d*[-_. ]?z|thinking|reasoner",
     re.IGNORECASE,
