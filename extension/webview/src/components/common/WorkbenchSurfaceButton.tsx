@@ -17,7 +17,7 @@ export function WorkbenchSurfaceButton({ mode, label, onClick }: WorkbenchSurfac
   return (
     <button
       type="button"
-      className="button button--ghost button--micro workbench-surface-button workbench-surface-button--icon"
+      className="button button--quiet button--micro workbench-surface-button workbench-surface-button--icon"
       data-workbench-surface-action={mode}
       aria-label={label}
       title={label}

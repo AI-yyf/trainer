@@ -100,3 +100,31 @@ def test_workspace_language_keeps_review_rhythm_in_en_us_even_when_turn_context_
     assert snapshot.due_reviews
     assert snapshot.due_reviews[0].task_hint
     assert not contains_chinese(snapshot.due_reviews[0].task_hint)
+
+
+def test_generic_plan_next_after_localizes_for_chinese_workspace() -> None:
+    from app.core.models import LearningPlan
+    from app.memory.service import (
+        _GENERIC_NEXT_AFTER_CURRENT_EN,
+        _GENERIC_NEXT_AFTER_CURRENT_ZH,
+        _localize_plan_runtime_next_after,
+        _localized_plan_next_after,
+    )
+
+    plan = LearningPlan(
+        id="plan-generic-next",
+        title="Plan",
+        next_after_current=_GENERIC_NEXT_AFTER_CURRENT_EN,
+    )
+    localized = _localized_plan_next_after(plan, "zh-CN")
+    assert localized is not None
+    assert localized.next_after_current == _GENERIC_NEXT_AFTER_CURRENT_ZH
+    assert _localized_plan_next_after(plan, "en-US") is plan
+
+    payload = {
+        "latest_plan_runtime": {"next_after_current": _GENERIC_NEXT_AFTER_CURRENT_EN},
+        "latestPlanRuntime": {"next_after_current": _GENERIC_NEXT_AFTER_CURRENT_EN},
+    }
+    _localize_plan_runtime_next_after(payload, "zh-CN")
+    assert payload["latest_plan_runtime"]["next_after_current"] == _GENERIC_NEXT_AFTER_CURRENT_ZH
+    assert payload["latestPlanRuntime"]["next_after_current"] == _GENERIC_NEXT_AFTER_CURRENT_ZH

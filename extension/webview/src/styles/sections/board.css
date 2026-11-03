@@ -36,6 +36,18 @@
   line-height: 1.35;
 }
 
+.learning-cards__subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.learning-cards__subhead .template-metadata {
+  margin: 0;
+}
+
 .learning-card-stack {
   display: grid;
   gap: 8px;
@@ -144,16 +156,8 @@
 }
 
 .board-card--stage.stage-row--active {
-  border-inline-start: 2px solid var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
   background: color-mix(in srgb, var(--accent) 5%, var(--bg-1));
-}
-
-.board-card--review {
-  border-inline-start: 2px solid color-mix(in srgb, var(--warning) 55%, var(--line));
-}
-
-.board-card--evidence {
-  border-inline-start: 2px solid color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 
 .board-card--growth {
@@ -179,6 +183,53 @@
   overflow: hidden;
 }
 
+/* One disclosure keeps non-stage material out of the first view. The current
+ * step stays open; reviews, the later path, growth and records live behind it. */
+.learning-focus-more {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+}
+
+.learning-focus-more > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 0 3px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-xs);
+}
+
+.learning-focus-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.learning-focus-more > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--fg-2);
+  transition: transform var(--motion-fast) ease;
+}
+
+.learning-focus-more[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.learning-focus-more__hint {
+  color: var(--fg-2);
+  font-size: var(--trainer-font-2xs);
+}
+
+.learning-focus-more:not([open]) > .learning-card-stack {
+  display: none;
+}
+
+.learning-focus-more[open] > .learning-card-stack {
+  margin-top: 4px;
+}
+
 .learning-card--now .template-next-action {
   padding-block: 2px 4px;
   gap: 4px;
@@ -201,6 +252,26 @@
   white-space: normal;
   overflow-wrap: anywhere;
   text-align: center;
+}
+
+/* Secondary practice entry on the current plan step. The primary action stays
+ * the discussion/continue action; this one mints a plan-bound card. */
+.plan-step-card-action {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.plan-step-card-action .button {
+  align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.plan-step-card-action .template-metadata {
+  margin: 0;
 }
 
 .board-card--stage .template-disclosure {

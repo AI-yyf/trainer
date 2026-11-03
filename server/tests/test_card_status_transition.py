@@ -320,6 +320,67 @@ class CardStatusTransitionUnitTests(unittest.TestCase):
         assert snapshot.workspace["selected_card_status"] == "active"
         assert snapshot.active_training_card_routing is not None
 
+    def test_transitioning_selected_card_syncs_active_routing_snapshot(self) -> None:
+        card = _make_card(card_id="card-routing-sync", status="candidate", card_type="practice")
+        self._seed_card(card)
+        self.service.persist_active_card_selection(
+            self.workspace_id,
+            ActiveCardSelectionResult(
+                selected_card=card,
+                selected_card_id=card.card_id,
+                selection_score=70.0,
+                why_this_card="Current card.",
+                fallback_action="Return to coach.",
+                next_after_completion="Queue next card.",
+                candidate_count=1,
+                eligible_count=1,
+            ),
+        )
+        # persist_active_card_selection already lands the card on `active`.
+        self.service.transition_card_status(
+            self.workspace_id, card.card_id, "answered", reason="Learner submitted evidence."
+        )
+        snapshot = self.service.snapshot(self.workspace_id)
+        routing = snapshot.active_training_card_routing
+        assert routing is not None
+        assert routing.selected_card is not None
+        assert routing.selected_card.status == "answered"
+
+        self.service.transition_card_status(
+            self.workspace_id,
+            card.card_id,
+            "implemented",
+            reason="Return completed with persisted evidence.",
+            verified_by_evaluator=True,
+        )
+        snapshot = self.service.snapshot(self.workspace_id)
+        routing = snapshot.active_training_card_routing
+        assert routing is not None
+        assert routing.selected_card is not None
+        assert routing.selected_card.status == "implemented"
+
+    def test_snapshot_reconciles_stale_active_routing_status(self) -> None:
+        card = _make_card(card_id="card-stale-routing", status="implemented", card_type="practice")
+        self._seed_card(card)
+        structured = self.service._structured_for(self.workspace_id)
+        stale = card.model_copy(update={"status": "active", "learning_phase": "verify"})
+        structured._active_training_card_routing = ActiveCardSelectionResult(
+            selected_card=stale,
+            selected_card_id=card.card_id,
+            selection_score=70.0,
+            why_this_card="Current card.",
+            fallback_action="Return to coach.",
+            next_after_completion="Queue next card.",
+            candidate_count=1,
+            eligible_count=1,
+        )
+
+        snapshot = self.service.snapshot(self.workspace_id)
+        routing = snapshot.active_training_card_routing
+        assert routing is not None
+        assert routing.selected_card is not None
+        assert routing.selected_card.status == "implemented"
+
     def test_active_learn_card_start_advances_to_try(self) -> None:
         card = _make_card(card_id="card-start", status="active", card_type="practice")
         card = card.model_copy(update={"learning_phase": "learn"})

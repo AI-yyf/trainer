@@ -249,6 +249,29 @@ def _cjk_answer_similarity(expected: str, answer: str) -> float:
 def _prefers_chinese_text(context: str = "") -> bool:
     normalized_context = context.strip().lower()
     return normalized_context.startswith("zh") or _contains_chinese(context)
+
+_GENERIC_NEXT_AFTER_CURRENT_EN = "Review the result and decide whether to widen scope."
+_GENERIC_NEXT_AFTER_CURRENT_ZH = "复核结果，再决定是否扩大范围。"
+
+
+def _localized_plan_next_after(plan, language_context: str):
+    """Localize the English generic plan fallback for a Chinese workspace."""
+    if plan is None or not _prefers_chinese_text(language_context):
+        return plan
+    if str(getattr(plan, "next_after_current", "") or "").strip() != _GENERIC_NEXT_AFTER_CURRENT_EN:
+        return plan
+    return plan.model_copy(update={"next_after_current": _GENERIC_NEXT_AFTER_CURRENT_ZH})
+
+
+def _localize_plan_runtime_next_after(payload: dict, language_context: str) -> None:
+    if not isinstance(payload, dict) or not _prefers_chinese_text(language_context):
+        return
+    for key in ("latest_plan_runtime", "latestPlanRuntime"):
+        runtime = payload.get(key)
+        if not isinstance(runtime, dict):
+            continue
+        if str(runtime.get("next_after_current") or "").strip() == _GENERIC_NEXT_AFTER_CURRENT_EN:
+            runtime["next_after_current"] = _GENERIC_NEXT_AFTER_CURRENT_ZH
 def _normalize_source_freshness(value: object) -> Literal["fresh", "stale", "unknown"]:
     normalized = str(value or "").strip().lower()
     if normalized == "fresh":
@@ -855,7 +878,33 @@ class StructuredMemoryService:
             return StructuredMemoryService._serialize_dataclass(value)
         return value
 
+    def sync_active_card_routing(self) -> None:
+        """Keep the routing snapshot consistent with the canonical card map.
+
+        The routing copy is a projection, not a second source of truth. A
+        status transition (especially Return -> implemented) must be visible
+        immediately, and persisted profiles written before that rule still
+        carry a stale copy.
+        """
+        routing = self._active_training_card_routing
+        if routing is None or not routing.selected_card_id:
+            return
+        card = self._training_cards.get(routing.selected_card_id)
+        if card is None:
+            return
+        selected = routing.selected_card
+        if (
+            selected is not None
+            and selected.status == card.status
+            and selected.learning_phase == card.learning_phase
+        ):
+            return
+        self._active_training_card_routing = routing.model_copy(
+            update={"selected_card": card, "selected_card_id": card.card_id}
+        )
+
     def export_state(self) -> dict[str, Any]:
+        self.sync_active_card_routing()
         return {
             "profile": dict(self._profile),
             "workspace": dict(self._workspace),
@@ -2483,6 +2532,7 @@ class MemoryService(
             self._workspace_value(active_lane_snapshot, "summary"),
             self._workspace_value(active_lane_snapshot, "focus_area"),
         )
+        plan = _localized_plan_next_after(plan, current_focus_context)
         profile_goal = (
             profile.long_term_goal
             if profile and profile.long_term_goal
@@ -2799,6 +2849,7 @@ class MemoryService(
         teaching_observations = curated_teaching_observations[:4]
         workspace_payload = dict(lane_snapshot.workspace)
         workspace_payload.setdefault("workspace_id", workspace_id)
+        _localize_plan_runtime_next_after(workspace_payload, current_focus_context)
         user_feedback_items = [
             {
                 "kind": item.kind,
@@ -3328,6 +3379,7 @@ class MemoryService(
                     == selected_card_id
                 ):
                     structured_service._active_training_card_routing = None
+        structured_service.sync_active_card_routing()
         snapshot = MemorySnapshot(
             profile=profile,
             globalMemory=global_memory,
@@ -5670,6 +5722,14 @@ class MemoryService(
             }
         )
         structured._training_cards[card_id] = updated
+        # The active-routing snapshot is what the training surface renders.
+        # Without this sync a returned/implemented card keeps its old
+        # active/verify shape and the completed return action stays visible.
+        routing = structured._active_training_card_routing
+        if routing is not None and routing.selected_card_id == card_id:
+            structured._active_training_card_routing = routing.model_copy(
+                update={"selected_card": updated, "selected_card_id": updated.card_id}
+            )
         ledger_entry = {
             "card_id": card_id,
             "workspace_id": workspace_id,

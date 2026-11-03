@@ -26,8 +26,9 @@ function facts(overrides = {}) {
 const cases = [
   ['workspace required before any action', { workspace: { ready: false, detail: 'Select an admitted root' } }, 'choose_workspace', false],
   ['stale state refresh never starts work', { freshness: 'stale' }, 'restore_state', false],
-  ['recovering state disables work', { freshness: 'recovering' }, 'wait_for_restore', true],
-  ['recovering connection disables work', { connection: 'recovering' }, 'wait_for_restore', true],
+  ['recovering state paints the cached step disabled', { freshness: 'recovering' }, 'continue_step', true],
+  ['recovering without a cached step keeps the restoring state', { freshness: 'recovering', plan: { state: 'active', id: 'plan-1' } }, 'wait_for_restore', true],
+  ['recovering connection paints the cached step disabled', { connection: 'recovering' }, 'continue_step', true],
   ['offline connection points to setup', { connection: 'offline' }, 'configure_provider', false],
   ['provider missing points to actual setup', { provider: { ready: false, canGeneratePlan: false } }, 'configure_provider', false],
   ['a live frozen plan is resumed without replacement', { plan: { state: 'frozen', id: 'plan-1', revision: 7, currentStep: 'Add tests' } }, 'resume_plan', false],
@@ -69,7 +70,7 @@ test('priority combinations keep recovery, current work, and genuine blockers ho
     for (const state of ['absent', 'active', 'frozen']) {
       const action = resolve(facts({ freshness: recovery, training, evidence: pending,
         plan: { state, id: 'plan-1', currentStep: 'Add tests', blocker: 'Missing runner' } }));
-      assert.equal(action.intent, recovery === 'stale' ? 'restore_state' : 'wait_for_restore');
+      assert.equal(action.intent, recovery === 'stale' ? 'restore_state' : 'continue_step');
     }
   }
   assert.equal(resolve(facts({ training, evidence: pending,

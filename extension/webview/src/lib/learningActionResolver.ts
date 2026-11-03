@@ -87,6 +87,22 @@ export function resolveLearningPrimaryAction(facts: LearningFacts): ActionDescri
     return make("restore_state", copy.staleTitle, copy.staleLabel, copy.staleDetail, {}, false);
   }
   if (facts.freshness === "recovering" || facts.connection === "recovering") {
+    // Paint the cached step immediately while the host/sidecar is still
+    // coming up. The action stays disabled until the authoritative patch
+    // lands, but the learner never sees an empty restoring card instead of
+    // the step they already had.
+    const cachedStep = text(facts.plan.currentStep);
+    if (cachedStep) {
+      const planTarget = facts.plan.state !== "absent" && text(facts.plan.id)
+        ? { planId: facts.plan.id, revision: facts.plan.revision } : {};
+      const completion = (facts.plan.completion ?? []).map(item => item.trim()).filter(Boolean);
+      const detail = [
+        completion.length ? `${copy.complete}: ${completion.join(" · ")}` : copy.continueDetail,
+        copy.recoveringLabel,
+      ].filter(Boolean).join(" · ");
+      return make("continue_step", cachedStep, copy.continueLabel, detail,
+        { ...planTarget, step: cachedStep }, true);
+    }
     return make("wait_for_restore", copy.recoveringTitle, copy.recoveringLabel, copy.recoveringDetail, {}, true);
   }
   if (facts.connection === "offline") {

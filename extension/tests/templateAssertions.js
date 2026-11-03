@@ -99,12 +99,20 @@ function learning() {
   // Learning is a stack of four card groups: current, reviews, route, growth.
   assert.equal((html.match(/data-learning-card-group=/g) || []).length, 4);
   assert.ok(html.includes('data-learning-card-group="current"'));
+  assert.ok(html.includes('data-learning-focus-more="true"'));
+  const focusMoreIndex = html.indexOf('data-learning-focus-more');
+  assert.ok(html.indexOf('data-learning-card-group="current"') < focusMoreIndex);
+  assert.ok(focusMoreIndex < html.indexOf('data-learning-card-group="reviews"'));
   assert.match(html, /data-learning-card-group="route"[^>]*data-learning-collapsible="true"/);
   assert.ok(!/data-learning-card-group="current"[^>]*data-learning-collapsible/.test(html));
   assert.ok(html.indexOf('Goal') < html.indexOf('Repair mapping'));
   const plan = read('components/plan/CoachPlanView.tsx');
   for (const marker of ['evidenceActions?.onAdoptEvidence', 'evidenceActions?.onRejectEvidence', 'evidenceActions?.onDeferEvidence', 'plan.frozen', '<PlanStageSection', '<LearningHome']) assert.ok(plan.includes(marker), marker);
   assert.ok(!plan.includes('<textarea'));
+  const planStepAction = learningPlan(learningAction(), { onPracticePlanStep() {} });
+  assert.ok(planStepAction.includes('data-plan-step-card-action="true"'));
+  assert.ok(planStepAction.includes('Practice this step'));
+  assert.ok(planStepAction.includes('Generate a verifiable training card for the current plan step.'));
   // Settled-only evidence is history, not debt: it stays reachable as a
   // practice-records disclosure even when the pending/deferred queue is empty.
   const settledOnly = learningPlan(learningAction(), {

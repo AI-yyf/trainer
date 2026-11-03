@@ -233,6 +233,12 @@ export interface CoachPlanViewProps {
   onExpandToEditor?: () => void;
   expandToEditorLabel?: string;
   /**
+   * Secondary action on the current plan step: mint a plan-bound practice
+   * card. The view owns the copy and the quiet secondary placement; the host
+   * owns the plan binding and generation command.
+   */
+  onPracticePlanStep?: () => void;
+  /**
    * §3.7 red line 5 (stay mode): returnToSurface bar injected into the Now
    * area after a stay-mode dock send finishes on Learning.
    */
@@ -1204,7 +1210,23 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       headerActions={expandToEditorControl}
       state={learningSystemState}
       next={props.primaryAction}
-      nextTools={props.dockReturnNotice ? <>{props.dockReturnNotice}{liveEvidenceDecisionRow}</> : liveEvidenceDecisionRow}
+      moreLabel={planViewText.detailsSummaryLabel}
+      nextTools={<>
+        {props.dockReturnNotice}
+        {liveEvidenceDecisionRow}
+        {props.onPracticePlanStep ? (
+          <div className="plan-step-card-action" data-plan-step-card-action="true">
+            <button
+              type="button"
+              className="button button--ghost button--compact"
+              onClick={props.onPracticePlanStep}
+            >
+              {planViewText.practiceStepLabel}
+            </button>
+            <p className="template-metadata">{planViewText.practiceStepDetail}</p>
+          </div>
+        ) : null}
+      </>}
       route={{ label: resolvedStagesLabel, count: routeStages.length, content: <>
         {renderComposerDraftReplacement("stage")}
         {visibleRouteStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}

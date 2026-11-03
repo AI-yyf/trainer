@@ -21,6 +21,8 @@ export interface LearningHomeProps {
   growth?: LearningHomeSlot;
   /** Optional surface control rendered in the header (e.g. open full width). */
   headerActions?: ReactNode;
+  /** Label for the one disclosure that holds non-stage content. */
+  moreLabel?: string;
   children?: ReactNode;
 }
 
@@ -86,6 +88,7 @@ export function LearningHome({
   route,
   growth,
   headerActions,
+  moreLabel,
   children,
 }: LearningHomeProps) {
   return (
@@ -97,9 +100,13 @@ export function LearningHome({
       <header className="learning-cards__header">
         <p className="eyebrow">{currentLabel}</p>
         <h2>{title}</h2>
-        {stage ? <p className="template-metadata">{stage}</p> : null}
-        {headerActions ? (
-          <div className="template-learning-home__header-actions">{headerActions}</div>
+        {stage || headerActions ? (
+          <div className="learning-cards__subhead">
+            {stage ? <p className="template-metadata">{stage}</p> : <span />}
+            {headerActions ? (
+              <div className="template-learning-home__header-actions">{headerActions}</div>
+            ) : null}
+          </div>
         ) : null}
       </header>
       <div className="learning-card-stack">
@@ -111,25 +118,35 @@ export function LearningHome({
           {state ? state : <NextAction {...next} />}
           {nextTools}
         </section>
-        {proof ? (
-          <LearningCardGroup id="reviews" label={proof.label} count={proof.count}>
-            {proof.content}
-          </LearningCardGroup>
-        ) : null}
-        {route ? (
-          <LearningCardGroup id="route" label={route.label} count={route.count} collapsible>
-            {route.content}
-          </LearningCardGroup>
-        ) : null}
-        {growth ? (
-          <LearningCardGroup id="growth" label={growth.label} count={growth.count}>
-            {growth.content}
-          </LearningCardGroup>
+        {proof || route || growth || children ? (
+          <details className="learning-focus-more" data-learning-focus-more="true">
+            <summary>
+              <span>{moreLabel ?? "More"}</span>
+              {proof ? <span className="learning-focus-more__hint">{proof.label}</span> : null}
+            </summary>
+            <div className="learning-card-stack">
+              {proof ? (
+                <LearningCardGroup id="reviews" label={proof.label} count={proof.count}>
+                  {proof.content}
+                </LearningCardGroup>
+              ) : null}
+              {route ? (
+                <LearningCardGroup id="route" label={route.label} count={route.count} collapsible>
+                  {route.content}
+                </LearningCardGroup>
+              ) : null}
+              {growth ? (
+                <LearningCardGroup id="growth" label={growth.label} count={growth.count}>
+                  {growth.content}
+                </LearningCardGroup>
+              ) : null}
+              {children ? (
+                <div className="learning-card-stack learning-card-stack--more">{children}</div>
+              ) : null}
+            </div>
+          </details>
         ) : null}
       </div>
-      {children ? (
-        <div className="learning-card-stack learning-card-stack--more">{children}</div>
-      ) : null}
     </section>
   );
 }

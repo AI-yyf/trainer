@@ -175,7 +175,8 @@ test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banne
   assert.match(bar, /dockReturnBannerCopy\(language, surface\)/);
   const planView = read('components/plan/CoachPlanView.tsx');
   assert.match(planView, /dockReturnNotice\?: ReactNode;/);
-  assert.match(planView, /nextTools=\{props\.dockReturnNotice \? <>\{props\.dockReturnNotice\}\{liveEvidenceDecisionRow\}<\/> : liveEvidenceDecisionRow\}/);
+  assert.match(planView, /nextTools=\{<>\s*\{props\.dockReturnNotice\}\s*\{liveEvidenceDecisionRow\}/);
+  assert.match(planView, /props\.onPracticePlanStep \? \(/);
   assert.match(planView, /\{props\.dockReturnNotice\}\n        \{leftoverNote/);
 
   // Preference persists in the workbench layout state, default jump.

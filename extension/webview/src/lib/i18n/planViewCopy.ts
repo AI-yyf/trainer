@@ -35,6 +35,9 @@ export type PlanViewCopy = {
   projectSubplansLabel: string;
   /** Learner-language label for the collapsed practice-record list (was "Evidence governance"). */
   practiceRecordsLabel: string;
+  /** Secondary action on the current plan step: mint a plan-bound practice card. */
+  practiceStepLabel: string;
+  practiceStepDetail: string;
   /** Plain text-style link inside the Growth disclosure that opens the progress route. */
   viewGrowth: string;
 };
@@ -74,6 +77,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "这条子计划已归档。",
     projectSubplansLabel: "项目子计划",
     practiceRecordsLabel: "练习记录确认",
+    practiceStepLabel: "用训练卡练这一步",
+    practiceStepDetail: "按当前计划步骤生成一张带验收的训练卡。",
     viewGrowth: "查看成长",
   },
   "en-US": {
@@ -110,6 +115,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "This project plan is archived.",
     projectSubplansLabel: "Project plans",
     practiceRecordsLabel: "Practice records",
+    practiceStepLabel: "Practice this step",
+    practiceStepDetail: "Generate a verifiable training card for the current plan step.",
     viewGrowth: "View growth",
   },
   "es-ES": {
@@ -146,6 +153,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "Este plan de proyecto está archivado.",
     projectSubplansLabel: "Planes de proyecto",
     practiceRecordsLabel: "Registros de práctica",
+    practiceStepLabel: "Practicar este paso",
+    practiceStepDetail: "Genera una tarjeta de entrenamiento verificable para el paso actual del plan.",
     viewGrowth: "Ver crecimiento",
   },
   "fr-FR": {
@@ -182,6 +191,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "Ce plan de projet est archivé.",
     projectSubplansLabel: "Plans de projet",
     practiceRecordsLabel: "Registres d'exercices",
+    practiceStepLabel: "Pratiquer cette étape",
+    practiceStepDetail: "Générez une carte d’entraînement vérifiable pour l’étape actuelle du plan.",
     viewGrowth: "Voir la progression",
   },
   "de-DE": {
@@ -218,6 +229,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "Dieser Projektplan ist archiviert.",
     projectSubplansLabel: "Projektpläne",
     practiceRecordsLabel: "Übungsprotokoll",
+    practiceStepLabel: "Diesen Schritt üben",
+    practiceStepDetail: "Erzeuge eine überprüfbare Trainingskarte für den aktuellen Planschritt.",
     viewGrowth: "Entwicklung ansehen",
   },
   "ja-JP": {
@@ -254,6 +267,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "このプロジェクト計画はアーカイブされました。",
     projectSubplansLabel: "プロジェクト計画",
     practiceRecordsLabel: "練習記録の確認",
+    practiceStepLabel: "このステップを練習",
+    practiceStepDetail: "現在の計画ステップ用の検証可能なトレーニングカードを生成します。",
     viewGrowth: "成長を見る",
   },
   "ko-KR": {
@@ -290,6 +305,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "이 프로젝트 계획은 보관되었습니다.",
     projectSubplansLabel: "프로젝트 계획",
     practiceRecordsLabel: "연습 기록 확인",
+    practiceStepLabel: "이 단계 연습",
+    practiceStepDetail: "현재 계획 단계에 대한 검증 가능한 훈련 카드를 생성합니다.",
     viewGrowth: "성장 보기",
   },
   "pt-BR": {
@@ -326,6 +343,8 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanArchived: "Este plano de projeto está arquivado.",
     projectSubplansLabel: "Planos de projeto",
     practiceRecordsLabel: "Registros de prática",
+    practiceStepLabel: "Praticar esta etapa",
+    practiceStepDetail: "Gere um cartão de treino verificável para a etapa atual do plano.",
     viewGrowth: "Ver crescimento",
   },
 };

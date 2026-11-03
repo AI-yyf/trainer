@@ -435,9 +435,9 @@ export function TrainingIcon(props: CoachIconProps) {
 export function ExpandPanelIcon(props: CoachIconProps) {
   return (
     <CoachIconBase {...props}>
-      <path d="M2.4 3.2h4.4v9.6H2.4z" />
-      <path d="M9.4 8h4.2" />
-      <path d="m11.5 5.9 2.1 2.1-2.1 2.1" />
+      <path d="M9.5 2.6h3.9v3.9" />
+      <path d="M13.4 2.6 7.9 8.1" />
+      <path d="M6.2 3.4H3.7A1.2 1.2 0 0 0 2.5 4.6v7.8a1.2 1.2 0 0 0 1.2 1.2h7.8a1.2 1.2 0 0 0 1.2-1.2V9.8" />
     </CoachIconBase>
   );
 }
@@ -445,9 +445,9 @@ export function ExpandPanelIcon(props: CoachIconProps) {
 export function CollapsePanelIcon(props: CoachIconProps) {
   return (
     <CoachIconBase {...props}>
-      <path d="M2.4 3.2h4.4v9.6H2.4z" />
-      <path d="M13.6 8H9.4" />
-      <path d="M11.5 5.9 9.4 8l2.1 2.1" />
+      <rect x="2.5" y="3.3" width="4.8" height="9.4" rx="1.2" />
+      <path d="M13.4 8H7.7" />
+      <path d="m10.1 5.6-2.4 2.4 2.4 2.4" />
     </CoachIconBase>
   );
 }

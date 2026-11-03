@@ -5487,6 +5487,44 @@ export function App() {
     livePlanFrozen,
     recoveredDisplayFacts.currentStep,
   ]);
+  // Secondary Learning action: mint a card for the live plan step with the
+  // plan binding the server requires. The primary "continue" action stays a
+  // deliberate discussion; this is the practice path.
+  const handleGeneratePlanStepCard = useCallback(() => {
+    const step = recoveredDisplayFacts.currentStep?.trim();
+    if (!formalPlanLive || livePlanFrozen || !activePlanStage?.id || !data.plan.id || !step) {
+      return;
+    }
+    if (workspaceSessionBlocked) {
+      openWorkspaceAdmission();
+      return;
+    }
+    if (!providerCanCoachNow || providerBlockReason) {
+      setOperationMessage({ tone: "info", message: blockedComposerGuidance });
+      return;
+    }
+    setActiveView("training");
+    handleGenerateTrainingCard(activePlanStage.title, step, {
+      planId: data.plan.id,
+      stageId: activePlanStage.id,
+      step,
+      revision: data.plan.revision,
+    });
+  }, [
+    activePlanStage,
+    blockedComposerGuidance,
+    data.plan.id,
+    data.plan.revision,
+    formalPlanLive,
+    handleGenerateTrainingCard,
+    livePlanFrozen,
+    openWorkspaceAdmission,
+    providerBlockReason,
+    providerCanCoachNow,
+    recoveredDisplayFacts.currentStep,
+    setOperationMessage,
+    workspaceSessionBlocked,
+  ]);
   const composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode;
   // A missing provider must not destroy a useful draft. Let submission surface the
   // in-place recovery state and keep the learner in the view where they were working.
@@ -10631,6 +10669,16 @@ export function App() {
             disabled: learningPrimaryAction.disabled, busy: learningPrimaryAction.busy,
             onClick: runLearningPrimaryAction },
         }}
+        onPracticePlanStep={
+          formalPlanLive &&
+          !livePlanFrozen &&
+          activePlanStage?.id &&
+          data.plan.id &&
+          recoveredDisplayFacts.currentStep?.trim() &&
+          learningPrimaryAction.intent === "continue_step"
+            ? handleGeneratePlanStepCard
+            : undefined
+        }
         primaryEvidenceId={learningPrimaryAction.target.evidenceId}
         projection={data.workspaceTrainingState?.skillProjection}
         onNavigateToView={setActiveView}

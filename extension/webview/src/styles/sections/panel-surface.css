@@ -17,13 +17,19 @@
 }
 
 .workbench-surface-button--icon {
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
   padding: 0;
   gap: 0;
   justify-content: center;
   border-radius: 7px;
+  color: var(--fg-muted);
+}
+
+.workbench-surface-button--icon:hover {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--bg-2) 58%, transparent);
 }
 
 .workbench-surface-button--icon .button__icon {
@@ -43,7 +49,7 @@
 .coach-plan-view__surface-control {
   display: flex;
   justify-content: flex-end;
-  margin-top: var(--space-1);
+  margin-top: 0;
 }
 
 /* Editor-panel surface: at panel widths the sidebar reading caps no longer

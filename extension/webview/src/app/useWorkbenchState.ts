@@ -784,7 +784,11 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   latestOperationRequests: {},
   operations: {},
   syncCursor: emptyWebviewSyncCursor(),
-  syncStatus: inVsCodeWebview() ? "recovering" : "current",
+  // The host injects its stale-while-revalidate bootstrap before React
+  // mounts. If it already carries a plan, render that cached plan
+  // immediately instead of replacing the card with a full restoring state;
+  // the authoritative patch still lands right after.
+  syncStatus: inVsCodeWebview() && !initialData.plan?.id ? "recovering" : "current",
   clearOperationMessage: (expected) => set(state => state.operationMessage === expected ? { operationMessage: undefined, operationMessageSurface: "global" as const } : {}),
   hasReceivedHostState: !inVsCodeWebview(),
   stageMaterials: initialData.stageMaterials ?? {},

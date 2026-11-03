@@ -504,6 +504,39 @@ async function main() {
     `learning: closed path group takes no card layout (${JSON.stringify(closedRoute)})`,
   );
 
+  const closedFocus = await page.evaluate(() => {
+    const details = document.querySelector('[data-learning-focus-more="true"]');
+    const stack = details?.querySelector('.learning-card-stack');
+    const current = document.querySelector('[data-learning-card-group="current"]');
+    const reviews = document.querySelector('[data-learning-card-group="reviews"]');
+    return {
+      open: details ? details.open : null,
+      stackHeight: stack ? stack.getBoundingClientRect().height : 0,
+      currentInside: details && current ? details.contains(current) : null,
+      reviewsInside: details && reviews ? details.contains(reviews) : null,
+    };
+  });
+  check(
+    closedFocus.open === false &&
+      closedFocus.stackHeight === 0 &&
+      closedFocus.currentInside === false &&
+      closedFocus.reviewsInside === true,
+    `learning: only the current stage is open; secondary content is one closed disclosure (${JSON.stringify(closedFocus)})`,
+  );
+  await page.evaluate(() => {
+    const details = document.querySelector('[data-learning-focus-more="true"]');
+    if (details) details.open = true;
+  });
+  const learningLeftEdges = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.board-card--review, .board-card--evidence, .board-card--stage.stage-row--active'))
+      .map((element) => parseFloat(getComputedStyle(element).borderLeftWidth) || 0)
+      .filter((width) => width >= 2),
+  );
+  check(
+    learningLeftEdges.length === 0,
+    `learning: no left-edge accent on review/evidence/stage cards (${JSON.stringify(learningLeftEdges)})`,
+  );
+
   // Resources is one rounded library shell around the existing file manager:
   // search/toolbar, tree and folders stay inside it. The fixture proves the
   // authored structure; it does not claim native import completion.
