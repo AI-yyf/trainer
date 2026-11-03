@@ -8976,6 +8976,7 @@ class MemoryService(
     ) -> LearningOutcomeRecord:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
         structured = self._structured_for(resolved_workspace_id)
+        language = _workspace_language(structured._workspace)
         normalized_concepts = [item.strip() for item in concepts if item and item.strip()]
         normalized_outcome = outcome.strip() or "unknown"
         normalized_summary = summary.strip()
@@ -9119,7 +9120,11 @@ class MemoryService(
                 scenario=scenario or normalized_outcome,
                 focus_area=focus_area or focus_anchor,
                 summary=normalized_summary or verified_result,
-                next_step="Widen the scope only after the verified result is preserved.",
+                next_step=_localized_memory_text(
+                    "Widen the scope only after the verified result is preserved.",
+                    "先保留已验证结果，再扩大范围。",
+                    language,
+                ),
                 verified_result=verified_result,
             )
         if (
@@ -9162,7 +9167,19 @@ class MemoryService(
                 topic=focus_area or focus_anchor,
                 decision=normalized_outcome,
                 rationale=normalized_summary,
-                next_step="Reduce the next step and tighten verification." if repeated_failure else "Keep the next move attached to the verified result.",
+                next_step=(
+                    _localized_memory_text(
+                        "Reduce the next step and tighten verification.",
+                        "缩小下一步并收紧验证。",
+                        language,
+                    )
+                    if repeated_failure
+                    else _localized_memory_text(
+                        "Keep the next move attached to the verified result.",
+                        "让下一步紧贴已验证结果。",
+                        language,
+                    )
+                ),
                 source="learning-outcome",
             )
         if normalized_summary or normalized_outcome:
@@ -9170,7 +9187,19 @@ class MemoryService(
                 scenario or normalized_outcome,
                 focus_area or focus_anchor,
                 normalized_summary or normalized_outcome,
-                "Tighten the next practice loop." if repeated_failure else "Continue with the verified slice.",
+                (
+                    _localized_memory_text(
+                        "Tighten the next practice loop.",
+                        "收紧下一轮练习。",
+                        language,
+                    )
+                    if repeated_failure
+                    else _localized_memory_text(
+                        "Continue with the verified slice.",
+                        "继续已验证的切片。",
+                        language,
+                    )
+                ),
             )
         evidence_outcome = (
             "pass"

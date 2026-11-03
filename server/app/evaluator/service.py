@@ -1024,6 +1024,24 @@ class EvaluatorService:
             )
             for item in symbols
         ]
+        # A criterion such as "verify the result via `queue_lock.py`" names a
+        # file target, not a missing code symbol. When that target is the
+        # current verified file, the criterion is satisfied. Implementation
+        # verbs stay strict so an untouched file cannot pass that way.
+        verified_file_references = {item.lower() for item in file_references}
+        for result in criteria_results:
+            if result["status"] != "missing" or result["matched_signals"]:
+                continue
+            criterion_text = str(result["text"])
+            criterion_files = _criterion_file_references(criterion_text)
+            if (
+                criterion_files
+                and _FILE_VERIFICATION_VERB.search(criterion_text)
+                and all(item.lower() in verified_file_references for item in criterion_files)
+            ):
+                result["status"] = "matched"
+                result["matched_signals"] = ["current file target"]
+                result["missing_signals"] = []
         deferred_results = [item for item in criteria_results if item["status"] == "deferred"]
         missing_results = [
             item
@@ -1565,6 +1583,29 @@ def _looks_like_file_reference(value: str) -> bool:
             flags=re.IGNORECASE,
         )
     )
+
+
+_FILE_VERIFICATION_VERB = re.compile(
+    r"验证|检查|核对|打开|运行|确认|verify|check|confirm|open|run",
+    re.IGNORECASE,
+)
+_FILE_REFERENCE_TOKEN = re.compile(
+    r"[A-Za-z0-9_./\\-]+\.(?:py|pyi|js|jsx|ts|tsx|json|md|txt|rs|go|java|cpp|c|cs|sh|html|css)\b",
+    re.IGNORECASE,
+)
+
+
+def _criterion_file_references(criterion: str) -> list[str]:
+    """File targets named by one acceptance criterion (not code symbols)."""
+    references: list[str] = []
+    for literal in re.findall(r"`([^`]+)`", criterion):
+        text = literal.strip().strip("`")
+        if _looks_like_file_reference(text) and text not in references:
+            references.append(text)
+    for token in _FILE_REFERENCE_TOKEN.findall(criterion):
+        if _looks_like_file_reference(token) and token not in references:
+            references.append(token)
+    return references
 
 
 def _expected_symbol_result(

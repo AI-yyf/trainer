@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import datetime, timedelta
 from enum import Enum
@@ -193,11 +194,14 @@ class ReviewScheduler:
                 latest_focus_area=latest_focus_area,
             ):
                 continue
-            linked_context = self._join_context(
-                active_thread_next_step,
-                latest_next_step,
-                active_thread_verified,
-                active_thread_blocker,
+            linked_context = self._language_safe_context(
+                self._join_context(
+                    active_thread_next_step,
+                    latest_next_step,
+                    active_thread_verified,
+                    active_thread_blocker,
+                ),
+                language_context,
             )
             task_hint = self._mastery_task_hint(
                 mastery=mastery,
@@ -277,10 +281,13 @@ class ReviewScheduler:
                         language_context=language_context or active_thread_next_step,
                     ),
                     focus_area=active_thread_focus,
-                    linked_context=self._join_context(
-                        active_thread_next_step,
-                        active_thread_blocker,
-                        active_thread_verified,
+                    linked_context=self._language_safe_context(
+                        self._join_context(
+                            active_thread_next_step,
+                            active_thread_blocker,
+                            active_thread_verified,
+                        ),
+                        language_context,
                     ),
                     interval_days=1,
                     mastery_score=mastery_map.get(active_thread_focus),
@@ -314,7 +321,10 @@ class ReviewScheduler:
                         language_context=language_context or latest_next_step,
                     ),
                     focus_area=latest_focus_area,
-                    linked_context=self._join_context(latest_next_step, latest_review_note),
+                    linked_context=self._language_safe_context(
+                        self._join_context(latest_next_step, latest_review_note),
+                        language_context,
+                    ),
                     interval_days=1,
                     mastery_score=mastery_map.get(latest_focus_area),
                 )
@@ -604,7 +614,7 @@ class ReviewScheduler:
             review_cadence=review_cadence,
             task_hint=reflection_hint,
             focus_area=fallback_focus_area,
-            linked_context=linked_context,
+            linked_context=self._language_safe_context(linked_context, language_context),
             interval_days=2,
         )
 
@@ -1210,13 +1220,37 @@ class ReviewScheduler:
 
     def _sanitize_context_for_language(self, value: str, language_context: str) -> str:
         cleaned = str(value or "").strip()
-        if not cleaned or not _prefers_explicit_non_chinese_locale(language_context):
+        if not cleaned:
+            return cleaned
+        if _prefers_chinese(language_context):
+            # A Chinese workspace must not show a prose-only English next step
+            # (for example an evaluator recommendation) as review content.
+            # Keep short technical tokens (`with self._lock`, `pytest`), drop
+            # prose-length English so the localized fallback wins.
+            if not _contains_chinese(cleaned) and len(re.findall(r"[A-Za-z]{3,}", cleaned)) >= 3:
+                return ""
+            return cleaned
+        if not _prefers_explicit_non_chinese_locale(language_context):
             return cleaned
         parts = [part.strip() for part in cleaned.split("|")]
         filtered = [part for part in parts if part and not _contains_chinese(part)]
         if not filtered:
             return ""
         return " | ".join(filtered[:3])[:220]
+
+    def _language_safe_context(self, value: str, language_context: str) -> str:
+        """Drop prose-only foreign context while keeping Chinese/technical parts."""
+        cleaned = str(value or "").strip()
+        if not cleaned or not _prefers_chinese(language_context):
+            return self._sanitize_context_for_language(cleaned, language_context)
+        kept: list[str] = []
+        for part in cleaned.split("|"):
+            piece = part.strip()
+            if not piece:
+                continue
+            if _contains_chinese(piece) or len(re.findall(r"[A-Za-z]{3,}", piece)) < 3:
+                kept.append(piece)
+        return " | ".join(kept)[:220]
 
     def _language_safe_dynamic_value(
         self,

@@ -293,3 +293,35 @@ def test_review_scheduler_prefers_explicit_zh_cn_over_english_workspace_text() -
     assert reviews[0].task_hint
     assert contains_chinese(reviews[0].task_hint)
     assert contains_chinese(rhythm)
+
+
+def test_chinese_review_queue_drops_english_evaluator_prose() -> None:
+    scheduler = ReviewScheduler()
+    lane_snapshot = build_lane_snapshot(
+        response_language="zh-CN",
+        latest_turn_summary="Widen the scope only after the verified result is preserved.",
+        latest_turn_next_step="Widen the scope only after the verified result is preserved.",
+    )
+    reviews = scheduler.derive_due_reviews(
+        plan=build_plan(),
+        lane_snapshot=lane_snapshot,
+        weakness_records=[],
+    )
+    assert reviews
+    for item in reviews:
+        haystack = " ".join(
+            str(getattr(item, field, "") or "")
+            for field in ("concept", "reason", "task_hint", "focus_area", "linked_context")
+        )
+        assert "Widen the scope only after the verified result is preserved" not in haystack
+    assert any("当前这一步" in item.task_hint or "当前这一步" in item.reason for item in reviews)
+
+
+def test_language_safe_dynamic_value_falls_back_for_english_prose_in_chinese() -> None:
+    scheduler = ReviewScheduler()
+    assert scheduler._language_safe_dynamic_value(  # pyright: ignore[reportAttributeAccessIssue]
+        "Widen the scope only after the verified result is preserved.",
+        "zh-CN",
+        fallback_english="the current next step",
+        fallback_chinese="当前这一步",
+    ) == "当前这一步"

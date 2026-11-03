@@ -168,3 +168,52 @@ def test_statement_symbol_and_reflection_evidence_pass_the_model_card_contract()
     assert check.status == "passed", check.detail
     assert "5/6 acceptance signals matched" in check.detail
     assert "Deferred to reflection" in check.detail
+
+
+def test_file_target_verification_criterion_matches_the_current_file() -> None:
+    check = EvaluatorService()._training_acceptance_check(
+        source="training",
+        code=QUEUE_LOCK_CODE,
+        language_id="python",
+        acceptance_criteria=[
+            "使用 `with` 完成交付物中的关键一步",
+            "定义 `finally` 并让它出现在提交的代码里",
+            "通过 `queue_lock.py` 验证最终结果",
+            "运行时无 `SyntaxError` 或 `RuntimeError`",
+        ],
+        learner_deliverables=[],
+        expected_symbols=["queue_lock.py", "with", "finally"],
+        execution_passed=True,
+    )
+    assert check is not None
+    assert check.status == "passed", check.detail
+    assert "6/6 acceptance signals matched" in check.detail
+
+
+def test_file_target_criterion_stays_missing_without_target_evidence() -> None:
+    check = EvaluatorService()._training_acceptance_check(
+        source="training",
+        code=QUEUE_LOCK_CODE,
+        language_id="python",
+        acceptance_criteria=["通过 `other_file.py` 验证最终结果"],
+        learner_deliverables=[],
+        expected_symbols=["with"],
+        execution_passed=False,
+    )
+    assert check is not None
+    assert check.status == "failed"
+    assert "other_file.py" in check.detail
+
+
+def test_implementation_file_criterion_is_not_credited_by_the_file_target() -> None:
+    check = EvaluatorService()._training_acceptance_check(
+        source="training",
+        code=QUEUE_LOCK_CODE,
+        language_id="python",
+        acceptance_criteria=["实现 `queue_lock.py` 中的真实行为"],
+        learner_deliverables=[],
+        expected_symbols=["queue_lock.py"],
+        execution_passed=True,
+    )
+    assert check is not None
+    assert check.status == "failed"
