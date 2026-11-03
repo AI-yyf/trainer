@@ -457,3 +457,10 @@
 - Browser-related server tests: `test_browser_capture.py`, `test_browser_bridge.py`, `test_library_folders.py` → **68 passed**.
 - CI `41547169955` (`57c65c9`) is fully green: all 9 jobs passed, including Server/UI/Package on macOS, Windows and Ubuntu.
 - Remaining: Journey D selection/GitHub capture and PDF after the upstream/proxy fetch is usable; Journeys B/C/E/F on the installed VSIX; remote/Windows/Linux and human sign-off gates.
+
+## 2026-11-03 — Journey D breadth after the live-refresh fix
+- **Page capture + live refresh PASS**: `https://www.rfc-editor.org/rfc/rfc8174` added while the sidebar stayed on Coach; Resources went 5 → 6 and showed `RFC 8174` without restart.
+- **Selection draft PASS**: `POST /browser/coach-draft` with a selected passage returned `ok` and `draft_id`; the host prefilled the Coach composer with the quoted selection plus the coaching prompt, without auto-sending. Evidence: `.tmp/first-use/43-selection-prefill.png`, `.tmp/first-use/44-selection-prefill-frame.png`.
+- **GitHub capture + live refresh PASS**: `https://github.com/octocat/Hello-World` returned `status=ok`, `resource-b66f3a6c64`; Resources went 6 → 7 and showed `octocat/Hello-World` without restart. Evidence: `.tmp/first-use/45-github-capture.png`, `.tmp/first-use/46-github-capture-frame.png`.
+- **PDF capture BLOCKED by upstream fetch**: W3C dummy PDF returned HTTP 502 from the sidecar fetch; the extension kept it queued (`queueCount=1`, `attempts=2`, `lastError=添加失败（HTTP 502）...`), stayed paired/connected, and the library did not claim success. Reopening Chrome replayed the queue without duplication. This is an environment/upstream block, not a silent failure.
+- Still not executed: PDF/GitHub download-to-project-folder, PDF page button, multi-window queue isolation, Journeys B/C/E/F.
