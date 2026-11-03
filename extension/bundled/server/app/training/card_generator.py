@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import lru_cache
 from importlib.resources import files as resource_files
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
@@ -3025,6 +3026,60 @@ def _extract_acceptance_symbols(
     return symbols[:_ACCEPTANCE_MAX_SYMBOLS]
 
 
+_PLAN_FILE_SYMBOL_TOKENS = (
+    "acquire",
+    "release",
+    "finally",
+    "threading",
+    "async",
+    "await",
+)
+
+
+def _plan_file_symbols(context: CardGenerationContext) -> list[str]:
+    """Real symbols from the active file for a plan-bound fallback card.
+
+    A plan card must stay verifiable when the provider is unavailable. These
+    symbols come from the learner's current file, so the evaluator's
+    current-file acceptance check can prove them instead of asking for a
+    generic `main`/`pytest` scaffold the file never had.
+    """
+    content = str(
+        context.current_file_content
+        or context.current_file_selection
+        or context.current_file_excerpt
+        or ""
+    )
+    if not content.strip():
+        return []
+    symbols: list[str] = []
+    for dotted in re.findall(r"self\.[A-Za-z_][A-Za-z0-9_]*lock[A-Za-z0-9_]*", content):
+        if dotted not in symbols:
+            symbols.append(dotted)
+    for token in _PLAN_FILE_SYMBOL_TOKENS:
+        if re.search(rf"\b{re.escape(token)}\b", content) and token not in symbols:
+            symbols.append(token)
+    return symbols[:4]
+
+
+def _plan_acceptance_criteria(
+    context: CardGenerationContext,
+    symbols: list[str],
+) -> list[str]:
+    file_name = Path(str(context.current_file_path or "")).name or "current file"
+    if len(symbols) < 2:
+        return []
+    first = symbols[0]
+    second = symbols[1]
+    third = symbols[2] if len(symbols) > 2 else symbols[0]
+    fourth = symbols[3] if len(symbols) > 3 else symbols[1]
+    return [
+        f"在 `{file_name}` 中确认 `{first}` 与 `{second}` 的真实使用位置",
+        f"在 `{file_name}` 中确认 `{third}` 的退出路径",
+        f"通过 `{fourth}` 说明这一步的验证边界",
+    ]
+
+
 def derive_acceptance_criteria(
     deliverable: str,
     grading_rubric: list[str],
@@ -4080,12 +4135,19 @@ class CardGenerationService:
                 break
         if last_stream_error is not None:
             if isinstance(last_stream_error, asyncio.TimeoutError) and not raw_parts:
-                # Explicit deterministic fallback: no model text was visible,
-                # so a local card cannot conflict with streamed content. The
-                # card is marked degraded/recoverable by _finalize_card.
+                # Explicit deterministic fallback only for a stalled stream: no
+                # model text was visible, so a local card cannot conflict with
+                # streamed content. A provider error stays an honest failure
+                # (the UI keeps the retry path); it must not be disguised as a
+                # model-authored or fallback card.
+                fallback_source = (
+                    "plan_requirement"
+                    if str(context.plan_stage_id or "").strip()
+                    else source
+                )
                 yield CardGenerationStreamEvent(
                     card=self.generate_card(
-                        source,
+                        fallback_source,
                         context,
                         allow_llm=False,
                         fallback_reason="provider_stalled",
@@ -4397,11 +4459,23 @@ class CardGenerationService:
                     ),
                 ],
                 grading_rubric=plan_rubric,
-                acceptance_criteria=derive_acceptance_criteria(
-                    plan_deliverable,
-                    plan_rubric,
-                    context.target_skill or context.focus_area or "",
-                    language=language,
+                acceptance_criteria=(
+                    _plan_acceptance_criteria(
+                        context,
+                        _plan_file_symbols(context),
+                    )
+                    or derive_acceptance_criteria(
+                        plan_deliverable,
+                        plan_rubric,
+                        context.target_skill or context.focus_area or "",
+                        language=language,
+                    )
+                ),
+                expected_symbols=_plan_file_symbols(context),
+                files_to_touch=(
+                    [Path(str(context.current_file_path)).name]
+                    if str(context.current_file_path or "").strip()
+                    else []
                 ),
                 common_mistakes=[
                     _localized_text(

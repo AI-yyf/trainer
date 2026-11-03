@@ -5456,6 +5456,37 @@ export function App() {
       workspaceSessionBlocked,
     ],
   );
+  // "Next card" is a plan action when a live formal step exists: minting a
+  // context-free conversation card here used to replace the learner's plan
+  // step with a generic fallback. Bind the live stage only when the plan can
+  // still advance (not frozen); otherwise keep the explicit manual request.
+  const handleNextTrainingCard = useCallback(() => {
+    const step = recoveredDisplayFacts.currentStep?.trim();
+    if (
+      formalPlanLive &&
+      !livePlanFrozen &&
+      activePlanStage?.id &&
+      data.plan.id &&
+      step
+    ) {
+      handleGenerateTrainingCard(activePlanStage.title, step, {
+        planId: data.plan.id,
+        stageId: activePlanStage.id,
+        step,
+        revision: data.plan.revision,
+      });
+      return;
+    }
+    handleGenerateTrainingCard();
+  }, [
+    activePlanStage,
+    data.plan.id,
+    data.plan.revision,
+    formalPlanLive,
+    handleGenerateTrainingCard,
+    livePlanFrozen,
+    recoveredDisplayFacts.currentStep,
+  ]);
   const composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode;
   // A missing provider must not destroy a useful draft. Let submission surface the
   // in-place recovery state and keep the learner in the view where they were working.
@@ -10477,7 +10508,7 @@ export function App() {
               action={{ label: workspaceSessionBlocked ? t.settings : t.startTraining, onClick: () => workspaceSessionBlocked ? openWorkspaceAdmission() : handleGenerateTrainingCard() }} />
             )
           }
-          onNextCard={handleGenerateTrainingCard}
+          onNextCard={handleNextTrainingCard}
           />
 
         </Suspense>

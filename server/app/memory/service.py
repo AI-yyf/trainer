@@ -5633,7 +5633,9 @@ class MemoryService(
             "candidate": {"active", "needs_primer", "skipped", "blocked"},
             "active": {"needs_primer", "answered", "implemented", "completed", "skipped", "blocked"},
             "needs_primer": {"active", "skipped", "blocked"},
-            "answered": {"reviewed"},
+            # Return credits a verified answered card as implemented; review is
+            # the other allowed follow-up for a settled answer.
+            "answered": {"implemented", "completed", "reviewed"},
             "implemented": {"reviewed", "completed"},
             "completed": {"reviewed"},
             "reviewed": {"fed_back", "archived"},

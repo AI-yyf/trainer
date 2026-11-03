@@ -48,7 +48,7 @@ test('training empty state creates the first small card without redirecting to C
   const source = readAppModuleSource();
   const trainingActionsStart = source.indexOf('actions={hasTrainingCard ? trainingCoachAction : undefined}');
   const emptyStateStart = source.indexOf('emptyState={', trainingActionsStart);
-  const emptyStateEnd = source.indexOf('onNextCard={handleGenerateTrainingCard}', emptyStateStart);
+  const emptyStateEnd = source.indexOf('onNextCard={handleNextTrainingCard}', emptyStateStart);
 
   assert.ok(trainingActionsStart >= 0, 'expected Coach handoff to be gated by a training card');
   assert.ok(emptyStateStart >= 0 && emptyStateEnd > emptyStateStart, 'expected the training empty state');

@@ -2206,6 +2206,29 @@
   background: transparent;
 }
 
+/* A provider-stalled card stays usable, but it must not read as a normal
+ * model-authored card. One quiet warning strip + the retry action. */
+.training-degraded {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--line));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+}
+
+.training-degraded p {
+  margin: 0;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.45;
+}
+
+.training-degraded .button {
+  align-self: flex-start;
+}
+
 .training-pane--card-only .training-current--single-card {
   padding: 0;
   border: 0;

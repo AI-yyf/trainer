@@ -1447,8 +1447,10 @@ def _criterion_is_explanation_only(criterion: str) -> bool:
     return bool(
         re.search(
             r"解释|说明|为什么|描述|标出|指出|列出|总结|回答|对比|"
+            r"记录.*(?:证据|输出)|调试控制台|测试输出|"
             r"\bexplain\b|\bwhy\b|\bdescribe\b|\bidentify\b|\bmark\b|"
-            r"\blist\b|\bsummarize\b|\bcompare\b",
+            r"\blist\b|\bsummarize\b|\bcompare\b|"
+            r"\bdebug console\b|\btest output\b",
             criterion,
             flags=re.IGNORECASE,
         )
@@ -1574,10 +1576,20 @@ def _expected_symbol_result(
     raw_code: str | None = None,
 ) -> dict[str, list[str] | str]:
     normalized = symbol.strip()
+    # Some cards name a statement, not an identifier (`with self._lock`).
+    # A statement is verified by the exact normalized code line, not by the
+    # identifier-only matcher, otherwise a true option is reported missing.
+    statement_match = bool(
+        requires_code_evidence
+        and re.search(r"\s", normalized)
+        and normalized
+        and normalized in (raw_code or "")
+    )
     matched = (
         (
             _matches_code_symbol(normalized, evidence)
             or _matches_string_literal(normalized, raw_code)
+            or statement_match
             or _python_expression_key(normalized) in (python_expressions or set())
         )
         if requires_code_evidence

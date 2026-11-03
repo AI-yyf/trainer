@@ -954,7 +954,10 @@ export type TrainingWorkbenchTextKey =
   | "returnCompleteTitle"
   | "selfReportedReturnNote"
   | "mismatchCardHint"
-  | "mismatchSwitchLabel";
+  | "mismatchSwitchLabel"
+  | "degradedCardEyebrow"
+  | "degradedCardBody"
+  | "degradedCardRetry";
 
 export const trainingWorkbenchTextCopy: Record<
   ComposerLanguage,
@@ -1037,6 +1040,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "这是你的自我报告，尚未经过服务器验证。",
     mismatchCardHint: "这张卡与当前进度不一致。",
     mismatchSwitchLabel: "切换到当前卡",
+    degradedCardEyebrow: "降级卡",
+    degradedCardBody: "模型没有返回可见内容。这张卡只用于保留当前学习动作，不会记为模型生成；重试后会按当前计划重新发卡。",
+    degradedCardRetry: "重新生成",
   },
   "en-US": {
     ungrouped: "Ungrouped",
@@ -1115,6 +1121,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "This is your self-report; it has not been host-verified.",
     mismatchCardHint: "This card does not match your current progress.",
     mismatchSwitchLabel: "Switch to the current card",
+    degradedCardEyebrow: "Fallback card",
+    degradedCardBody: "The model returned no visible content. This card keeps the current learning move available and is not presented as model-authored; retry to mint a card from the current plan.",
+    degradedCardRetry: "Retry card",
   },
   "es-ES": {
     ungrouped: "Sin agrupar",
@@ -1193,6 +1202,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "Este es tu autoinforme; no ha sido verificado por el host.",
     mismatchCardHint: "Esta tarjeta no coincide con tu progreso actual.",
     mismatchSwitchLabel: "Cambiar a la tarjeta actual",
+    degradedCardEyebrow: "Tarjeta de respaldo",
+    degradedCardBody: "El modelo no devolvió contenido visible. Esta tarjeta mantiene disponible el paso actual y no se presenta como generada por el modelo; reintenta para crear una tarjeta desde el plan actual.",
+    degradedCardRetry: "Reintentar tarjeta",
   },
   "fr-FR": {
     ungrouped: "Non groupé",
@@ -1271,6 +1283,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "Ceci est votre auto-déclaration ; elle n'a pas été vérifiée par l'hôte.",
     mismatchCardHint: "Cette carte ne correspond pas à votre progression actuelle.",
     mismatchSwitchLabel: "Aller à la carte actuelle",
+    degradedCardEyebrow: "Carte de secours",
+    degradedCardBody: "Le modèle n’a renvoyé aucun contenu visible. Cette carte garde l’étape en cours disponible et n’est pas présentée comme générée par le modèle ; réessayez pour créer une carte à partir du plan actuel.",
+    degradedCardRetry: "Régénérer la carte",
   },
   "de-DE": {
     ungrouped: "Ungruppiert",
@@ -1349,6 +1364,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "Dies ist Ihre Selbstauskunft; sie wurde nicht vom Host verifiziert.",
     mismatchCardHint: "Diese Karte passt nicht zu deinem aktuellen Fortschritt.",
     mismatchSwitchLabel: "Zur aktuellen Karte wechseln",
+    degradedCardEyebrow: "Ersatzkarte",
+    degradedCardBody: "Das Modell hat keinen sichtbaren Inhalt geliefert. Diese Karte hält den aktuellen Lernschritt verfügbar und gilt nicht als modellgeneriert; erneut versuchen, um eine Karte aus dem aktuellen Plan zu erzeugen.",
+    degradedCardRetry: "Karte erneut erzeugen",
   },
   "ja-JP": {
     ungrouped: "未グループ",
@@ -1427,6 +1445,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "これは自己申告であり、ホストによる検証はまだです。",
     mismatchCardHint: "このカードは現在の進捗と一致していません。",
     mismatchSwitchLabel: "現在のカードに切り替え",
+    degradedCardEyebrow: "代替カード",
+    degradedCardBody: "モデルから可視の応答がありませんでした。このカードは現在の学習ステップを保持するためのもので、モデル生成としては扱いません。再試行すると現在の計画からカードを作成します。",
+    degradedCardRetry: "カードを再生成",
   },
   "ko-KR": {
     ungrouped: "그룹 없음",
@@ -1505,6 +1526,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "이것은 자기 보고이며 호스트에서 검증되지 않았습니다.",
     mismatchCardHint: "이 카드는 현재 진행과 일치하지 않습니다.",
     mismatchSwitchLabel: "현재 카드로 전환",
+    degradedCardEyebrow: "대체 카드",
+    degradedCardBody: "모델이 표시 가능한 내용을 반환하지 않았습니다. 이 카드는 현재 학습 단계를 유지하기 위한 것이며 모델 생성 카드로 간주하지 않습니다. 다시 시도하면 현재 계획에서 카드를 만듭니다.",
+    degradedCardRetry: "카드 다시 생성",
   },
   "pt-BR": {
     ungrouped: "Sem grupo",
@@ -1583,6 +1607,9 @@ export const trainingWorkbenchTextCopy: Record<
     selfReportedReturnNote: "Este é o seu autorrelato; ele não foi verificado pelo host.",
     mismatchCardHint: "Este cartão não corresponde ao seu progresso atual.",
     mismatchSwitchLabel: "Trocar para o cartão atual",
+    degradedCardEyebrow: "Cartão de fallback",
+    degradedCardBody: "O modelo não retornou conteúdo visível. Este cartão mantém a etapa atual disponível e não é apresentado como gerado pelo modelo; tente novamente para criar um cartão a partir do plano atual.",
+    degradedCardRetry: "Gerar cartão novamente",
   },
 };
 

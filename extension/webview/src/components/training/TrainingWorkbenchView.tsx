@@ -798,6 +798,11 @@ export function TrainingWorkbenchView({
   });
   const needsPrimerState = trainingExecutionState.needsPrimer;
   const displayTitle = stripTrainingCardTitlePrefix(title);
+  // A deterministic fallback is honest about why it exists, but the reason
+  // used to live only inside the collapsed task details. Keep the status and
+  // one retry action on the card itself so the learner never mistakes a
+  // provider stall for a normal model-authored card.
+  const degradedCard = /确定性降级卡|deterministic fallback/i.test(whyNow ?? "");
   const visibleExpectedSymbols = expectedSymbols.map((symbol) => symbol.trim()).filter(Boolean).slice(0, 4);
   // r1-g1-5: scenario packs can ship unfilled placeholders ("<current failing
   // file>"). The renderer never shows them raw — an entry with no resolvable
@@ -1089,6 +1094,27 @@ export function TrainingWorkbenchView({
                 onBack={onBackToLearning}
                 details={cardTaskDetails}
               >
+                {degradedCard ? (
+                  <section
+                    className="training-degraded"
+                    role="status"
+                    aria-live="polite"
+                    data-training-degraded="true"
+                  >
+                    <span className="template-metadata">{trainingWorkbenchText(language, "degradedCardEyebrow")}</span>
+                    <p>{trainingWorkbenchText(language, "degradedCardBody")}</p>
+                    {onNextCard ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--compact"
+                        onClick={onNextCard}
+                        disabled={reliabilityInFlight}
+                      >
+                        {trainingWorkbenchText(language, "degradedCardRetry")}
+                      </button>
+                    ) : null}
+                  </section>
+                ) : null}
                 {verificationNotice ? <VerificationResult language={language} verdict="unknown" summary={verificationNotice} /> : null}
                 {returnContinuedInChat ? (
                   <section

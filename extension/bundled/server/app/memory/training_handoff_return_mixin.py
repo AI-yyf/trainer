@@ -300,7 +300,11 @@ class TrainingHandoffReturnMixin:
                 "active",
                 reason="Return is applying already-trusted verification evidence.",
             ).card
-        if current_card.status == "active":
+        # `answered` means the learner already submitted the answer/reflection.
+        # Once the handoff carries trusted verification, Return is the step
+        # that credits the card; requiring `active` here made a completed
+        # verify+reflect turn fail with 422.
+        if current_card.status in {"active", "answered"}:
             current_card = self.transition_card_status(
                 workspace_id,
                 current_card.card_id,
