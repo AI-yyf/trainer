@@ -167,3 +167,15 @@ test('parses the host-facing revision payload and ignores malformed values', () 
     revision: '',
   });
 });
+
+test('the command registry forwards the silent refresh payload', () => {
+  const fs = require('node:fs');
+  const registry = fs.readFileSync(
+    path.resolve(__dirname, '..', 'src', 'commands', 'registry.config.ts'),
+    'utf8',
+  );
+  assert.match(
+    registry,
+    /commandId: COMMAND_IDS\.refreshMemory,\s*register: \(ctx, payload\) => refreshMemoryCommand\(ctx, payload\)/,
+  );
+});

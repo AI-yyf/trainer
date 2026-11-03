@@ -6,9 +6,9 @@ import { BROWSER_CAPTURE } from '../core/constants';
  * A capture writes to the sidecar without starting a coaching turn, so the
  * workbench snapshot the webview already holds does not know about it. While a
  * workbench surface is visible, poll a cheap library fingerprint and fetch a
- * fresh /memory/summary only when the resource-id set changes. The first read
- * is a baseline; the startup bootstrap already carries the library, so it must
- * not trigger a redundant refresh.
+ * fresh /memory/summary only when the resource-id set changes. The first
+ * visible read refreshes too, so a capture made while the workbench was hidden
+ * is never swallowed; subsequent unchanged reads are no-ops.
  *
  * The poller is workspace-scoped end to end: a response stamped with another
  * workspace is reported and ignored, never merged into this workbench.

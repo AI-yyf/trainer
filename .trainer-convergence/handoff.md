@@ -474,3 +474,9 @@
 - Regression tests updated: `browserLibraryPoller.test.js` 6/6 (first-poll refresh, changed/unchanged, alias acceptance, foreign rejection, failed-refresh retry); browser server tests 50 passed; full extension suite exit 0; `npm run check` clean; geometry 474; CSS balanced.
 - Installed-VSIX live proof: Resources was **already visible**, captured `https://www.iana.org/domains/root`, and the view changed 7 → 8 and showed `Root Zone Management` without navigation or restart. Evidence: `.tmp/first-use/49-visible-root-zone.png`, `.tmp/first-use/50-visible-root-zone-frame.png`.
 - Still open: PDF capture is blocked by upstream HTTP 502 (queue retention verified); selection/GitHub download-to-folder, multi-window isolation, and Journeys B/C/E/F remain.
+
+## 2026-11-03 — audit closure and final visible-library proof
+- Independent re-audit of `0a4866e`: all three P1s closed, no new P0/P1; verdict “safe to keep.” The audit's remaining note was that the command registry dropped the `{silent:true}` payload (message-only) and the poller header comment still described the old baseline behavior. Both are fixed here; a source guard asserts the registry forwards the payload.
+- Final installed-VSIX proof with the visible Resources view: captured `https://example.net/`; the view changed 8 → 9 and showed `Example Domain (net)` **without navigation or restart**, with no refresh toast. Evidence: `.tmp/first-use/53-visible-example-net.png`, `.tmp/first-use/54-visible-example-net-frame.png`.
+- CI `41553878760` (`0a4866e`) is fully green: all 9 jobs passed. The final registry/comment guard commit requires its own CI run.
+- Still open: PDF capture blocked by upstream HTTP 502 (queue retention verified); selection/GitHub download-to-folder, multi-window isolation, and Journeys B/C/E/F remain.
