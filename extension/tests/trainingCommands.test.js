@@ -1896,3 +1896,32 @@ test('attempt updates without an attempt or card identity fail before transport'
   assert.equal(result.ok, false);
   assert.equal(context.__postCalls.length, 0);
 });
+
+test('orphaned training streaming state does not block the next card retry', async () => {
+  const { trainingGenerateCardCommand } = loadWithVscodeMock(trainingCommandsModulePath, {
+    commands: { async executeCommand() { return undefined; } },
+  });
+  const context = createContext();
+  await context.setStreamingState({
+    isStreaming: true,
+    streamedContent: '',
+    streamMessageId: 'stale-training-stream',
+    streamError: undefined,
+  });
+
+  const result = await trainingGenerateCardCommand(context, {
+    source: 'conversation',
+    cardType: 'practice',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    context.__postCalls.some(([, requestPath]) => requestPath === '/training/generate-card/stream'),
+    true,
+  );
+  assert.equal(context.getStreamingState().isStreaming, false);
+  assert.equal(
+    context.__streamMessages.some((message) => message.type === 'stream/error'),
+    true,
+  );
+});

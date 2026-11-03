@@ -76,6 +76,9 @@ class CardGenerationStreamEvent:
     card: TrainingCardCandidateSnapshot | None = None
 
 
+_CARD_STREAM_IDLE_TIMEOUT_SECONDS = 45.0
+
+
 class CardGenerationProviderFailure(RuntimeError):
     """A live provider did not produce a valid card; do not persist a template."""
 
@@ -727,6 +730,11 @@ def _fallback_provenance_copy(
         "language_mismatch": _localized_text(
             "language mismatch",
             "语言不匹配",
+            language,
+        ),
+        "provider_stalled": _localized_text(
+            "provider stalled",
+            "provider 无响应",
             language,
         ),
     }.get(
@@ -4037,10 +4045,18 @@ class CardGenerationService:
         # transient failure does not abort card generation the learner never saw.
         for stream_attempt in range(2):
             try:
-                async for chunk in self._provider.chat_completion_stream(
+                stream_iterator = self._provider.chat_completion_stream(
                     self._llm_messages(context, source, card_type),
                     **stream_kwargs,
-                ):
+                ).__aiter__()
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            stream_iterator.__anext__(),
+                            timeout=_CARD_STREAM_IDLE_TIMEOUT_SECONDS,
+                        )
+                    except StopAsyncIteration:
+                        break
                     if not isinstance(chunk, str) or not chunk:
                         continue
                     raw_parts.append(chunk)
@@ -4049,6 +4065,13 @@ class CardGenerationService:
                 break
             except asyncio.CancelledError:
                 raise
+            except asyncio.TimeoutError as exc:
+                # No token for a full idle window: the provider is stalled, not
+                # producing a partial card. The caller gets a deterministic
+                # fallback below instead of hanging indefinitely. A timeout
+                # after visible chunks is still an honest interruption.
+                last_stream_error = exc
+                break
             except Exception as exc:
                 last_stream_error = exc
                 if stream_attempt == 0 and not raw_parts:
@@ -4056,6 +4079,19 @@ class CardGenerationService:
                     continue
                 break
         if last_stream_error is not None:
+            if isinstance(last_stream_error, asyncio.TimeoutError) and not raw_parts:
+                # Explicit deterministic fallback: no model text was visible,
+                # so a local card cannot conflict with streamed content. The
+                # card is marked degraded/recoverable by _finalize_card.
+                yield CardGenerationStreamEvent(
+                    card=self.generate_card(
+                        source,
+                        context,
+                        allow_llm=False,
+                        fallback_reason="provider_stalled",
+                    )
+                )
+                return
             if self._event_ledger is not None:
                 self._event_ledger.record_event(
                     "card_generation_failed",

@@ -1844,3 +1844,44 @@ Use it carefully.
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _StallingStreamProvider:
+    async def chat_completion_stream(self, *args, **kwargs):
+        del args, kwargs
+        await asyncio.sleep(30)
+        yield ""
+
+
+class TestCardGenerationStreamIdleFallback(unittest.TestCase):
+    def test_stalled_stream_yields_a_marked_deterministic_fallback_card(self) -> None:
+        service = CardGenerationService(provider_service=_StallingStreamProvider())
+
+        async def collect():
+            return [
+                event
+                async for event in service.generate_card_stream(
+                    "conversation_gap",
+                    _ctx(
+                        workspace_id="ws-stream-stalled",
+                        response_language="zh-CN",
+                        focus_area="queue_lock.py exception safety",
+                        target_skill="with self._lock / finally release",
+                    ),
+                )
+            ]
+
+        with patch(
+            "app.training.card_generator._CARD_STREAM_IDLE_TIMEOUT_SECONDS",
+            0.01,
+        ):
+            events = asyncio.run(collect())
+
+        cards = [event.card for event in events if event.card is not None]
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(card.generation_source, "deterministic_fallback")
+        self.assertEqual(card.generation_fallback_reason, "provider_stalled")
+        self.assertEqual(card.generation_status, "degraded")
+        self.assertTrue(card.generation_recoverable)
+        self.assertIn("降级", card.why_now)

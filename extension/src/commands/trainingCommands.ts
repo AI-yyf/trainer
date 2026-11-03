@@ -853,7 +853,25 @@ export async function trainingGenerateCardCommand(
   const streamingState = readTrainerStreamingState(context);
   const activeOwnerStream = activeTrainingCardStreams.get(context);
   const incomingRequestId = readNonEmptyString(payloadRequestId);
-  if (streamingState.isStreaming) {
+  if (streamingState.isStreaming && !activeOwnerStream) {
+    // A provider timeout/crash can leave the persisted isStreaming flag set
+    // after the in-memory owner is gone. Without this repair every later
+    // "next card" is rejected as "another stream is already in progress" and
+    // no request reaches the sidecar. Clear the orphan and let this click retry.
+    await writeTrainerStreamingState(context, createEmptyTrainerStreamingState());
+    await context.workbench.postMessage({
+      type: "stream/error",
+      payload: {
+        messageId: streamingState.streamMessageId ?? "",
+        error: "Previous training stream ended before completion. Retrying.",
+        reliabilityPhase: "acked",
+        reliabilityOutcome: "failure",
+      },
+    });
+    context.outputChannel.appendLine(
+      "[training] cleared orphaned training streaming state before retry",
+    );
+  } else if (streamingState.isStreaming) {
     // Same request_id waiter may finish while owner is still flagged streaming.
     // Distinct ids stay blocked; waiter must not bump generation / remint.
     if (
