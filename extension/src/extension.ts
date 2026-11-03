@@ -4,11 +4,10 @@ import { registerCommands } from './commands';
 import { maybePromptCaptureOnboarding } from './commands/browserCaptureCommands';
 import { createBrowserCaptureRuntime } from './browserCapture/runtime';
 import { evaluatePublishedFileCommand } from './commands/evaluationCommands';
-import { refreshMemoryCommand } from './commands/memoryCommands';
 import { primeProviderModelsState } from './commands/providerWebviewCommands';
 import { invalidateActiveTrainerStreams } from './commands/sessionCommands';
 import { getRuntimeWorkspaceContext } from './commands/workspaceContext';
-import { CONTEXT_KEYS, OUTPUT_CHANNEL_NAME, STORAGE_KEYS } from './core/constants';
+import { COMMAND_IDS, CONTEXT_KEYS, OUTPUT_CHANNEL_NAME, STORAGE_KEYS } from './core/constants';
 import type { CommandContext } from './core/commandContext';
 import { BootstrapSnapshotCache } from './core/bootstrapSnapshotCache';
 import { SidecarHttpClient } from './core/httpClient';
@@ -392,7 +391,10 @@ export async function activate(
   const browserCapture = createBrowserCaptureRuntime({
     sidecarClient,
     refreshLibrary: async () => {
-      await refreshMemoryCommand(commandContext, { silent: true });
+      const result = await registry.execute(COMMAND_IDS.refreshMemory, { silent: true });
+      if (!result.ok) {
+        throw new Error(result.message || 'Trainer memory refresh failed.');
+      }
     },
     getWorkspaceId: () => getRuntimeWorkspaceContext({ getHostState }).workspaceId,
     getSidecarStatus: () => {

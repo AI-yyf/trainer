@@ -398,6 +398,7 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         )
         return {
             "workspace_id": scope,
+            "requested_workspace_id": str(workspace_id or "").strip(),
             "count": len(resource_ids),
             "revision": revision,
         }

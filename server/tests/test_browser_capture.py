@@ -151,6 +151,7 @@ def test_web_capture_extracts_body_and_registers_it_in_the_library(tmp_path, mon
         assert revision.status_code == 200, revision.text
         revision_payload = revision.json()
         assert revision_payload["workspace_id"] == workspace_id
+        assert revision_payload["requested_workspace_id"] == workspace_id
         assert revision_payload["count"] >= 1
         assert revision_payload["revision"]
 

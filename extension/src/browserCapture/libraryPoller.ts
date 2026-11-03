@@ -15,7 +15,10 @@ import { BROWSER_CAPTURE } from '../core/constants';
  */
 
 export interface BrowserLibraryRevision {
+  /** Resolved workspace/context id returned by the sidecar. */
   workspaceId: string;
+  /** Raw workspace id the host asked for (survives path -> context alias). */
+  requestedWorkspaceId: string;
   count: number;
   revision: string;
 }
@@ -42,7 +45,6 @@ export type BrowserLibraryPollState =
   | 'hidden'
   | 'no-sidecar'
   | 'unscoped'
-  | 'baseline'
   | 'unchanged'
   | 'changed'
   | 'error';
@@ -62,6 +64,10 @@ export function parseBrowserLibraryRevision(payload: unknown): BrowserLibraryRev
       : {};
   return {
     workspaceId: typeof record.workspace_id === 'string' ? record.workspace_id.trim() : '',
+    requestedWorkspaceId:
+      typeof record.requested_workspace_id === 'string'
+        ? record.requested_workspace_id.trim()
+        : '',
     count:
       typeof record.count === 'number' && Number.isFinite(record.count)
         ? record.count
@@ -149,9 +155,10 @@ export class BrowserLibraryPoller {
         this.reportError('library revision response has no workspace stamp');
         return { state: 'error', error: 'missing workspace stamp' };
       }
-      if (revision.workspaceId !== workspaceId) {
+      const stampedWorkspace = revision.requestedWorkspaceId || revision.workspaceId;
+      if (stampedWorkspace !== workspaceId) {
         this.reportError(
-          `library revision belongs to ${revision.workspaceId}, not ${workspaceId}`,
+          `library revision belongs to ${stampedWorkspace}, not ${workspaceId}`,
         );
         return {
           state: 'unscoped',
@@ -161,14 +168,15 @@ export class BrowserLibraryPoller {
         };
       }
 
-      const hadBaseline = this.hasBaseline;
-      const changed = hadBaseline && revision.revision !== this.lastRevision;
-      this.hasBaseline = true;
-      this.lastRevision = revision.revision;
+      // The first visible poll refreshes too: a capture may have landed while
+      // the workbench was hidden, and baselining that revision would swallow
+      // it. Only commit the revision after the refresh succeeds, so a failed
+      // summary is retried on the next tick instead of being lost.
+      const changed = !this.hasBaseline || revision.revision !== this.lastRevision;
       if (!changed) {
         this.resetBackoff();
         return {
-          state: hadBaseline ? 'unchanged' : 'baseline',
+          state: 'unchanged',
           workspaceId,
           count: revision.count,
           revision: revision.revision,
@@ -176,6 +184,8 @@ export class BrowserLibraryPoller {
       }
 
       await this.options.refreshLibrary(revision);
+      this.hasBaseline = true;
+      this.lastRevision = revision.revision;
       this.resetBackoff();
       return {
         state: 'changed',

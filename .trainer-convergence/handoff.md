@@ -464,3 +464,13 @@
 - **GitHub capture + live refresh PASS**: `https://github.com/octocat/Hello-World` returned `status=ok`, `resource-b66f3a6c64`; Resources went 6 → 7 and showed `octocat/Hello-World` without restart. Evidence: `.tmp/first-use/45-github-capture.png`, `.tmp/first-use/46-github-capture-frame.png`.
 - **PDF capture BLOCKED by upstream fetch**: W3C dummy PDF returned HTTP 502 from the sidecar fetch; the extension kept it queued (`queueCount=1`, `attempts=2`, `lastError=添加失败（HTTP 502）...`), stayed paired/connected, and the library did not claim success. Reopening Chrome replayed the queue without duplication. This is an environment/upstream block, not a silent failure.
 - Still not executed: PDF/GitHub download-to-project-folder, PDF page button, multi-window queue isolation, Journeys B/C/E/F.
+
+## 2026-11-03 — independent audit follow-up: visible sync, retry and first-poll
+- The independent audit of `57c65c9` found three P1s; all were fixed here:
+  1. `refreshMemoryCommand` was called directly and bypassed `workbench.syncState()`, so a visible Resources view did not receive the patch. The poller now executes `COMMAND_IDS.refreshMemory` through the command registry and treats `ok:false` as a failed refresh.
+  2. A failed refresh committed the revision before awaiting the summary, so the same revision was never retried. The revision is now committed only after a successful refresh; failures retain it and back off.
+  3. The first visible poll used to baseline the post-capture revision and swallow captures made while hidden. The first visible poll now refreshes immediately; only subsequent unchanged reads are no-ops.
+- Alias hardening: `/browser/library-revision` echoes `requested_workspace_id`; the poller compares that raw host id, so a path→context alias cannot be mistaken for a foreign workspace.
+- Regression tests updated: `browserLibraryPoller.test.js` 6/6 (first-poll refresh, changed/unchanged, alias acceptance, foreign rejection, failed-refresh retry); browser server tests 50 passed; full extension suite exit 0; `npm run check` clean; geometry 474; CSS balanced.
+- Installed-VSIX live proof: Resources was **already visible**, captured `https://www.iana.org/domains/root`, and the view changed 7 → 8 and showed `Root Zone Management` without navigation or restart. Evidence: `.tmp/first-use/49-visible-root-zone.png`, `.tmp/first-use/50-visible-root-zone-frame.png`.
+- Still open: PDF capture is blocked by upstream HTTP 502 (queue retention verified); selection/GitHub download-to-folder, multi-window isolation, and Journeys B/C/E/F remain.
