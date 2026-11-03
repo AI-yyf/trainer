@@ -123,6 +123,19 @@ def test_session_message_language_block_persists_recovery_context_into_memory(
         "provider" in observation or "gateway" in observation
         for observation in memory["teaching_observations"]
     )
+    # A failed provider turn is resumable, but its recovery sentence must never
+    # become a Learning review card: the review queue is learning content.
+    recovery_next_step = str(active_thread["next_step"] or "")
+    recovery_blocker = str(active_thread["blocker"] or "")
+    for review in memory.get("due_reviews", []):
+        haystack = " ".join(
+            str(review.get(field) or "")
+            for field in ("concept", "reason", "task_hint", "focus_area", "linked_context")
+        )
+        if recovery_next_step:
+            assert recovery_next_step not in haystack
+        if recovery_blocker:
+            assert recovery_blocker not in haystack
 
     with build_client(tmp_path, configure_provider=False) as restarted_client:
         restored_memory = restarted_client.app.state.runtime.memory_service.snapshot(workspace_id)

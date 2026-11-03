@@ -395,7 +395,10 @@ def _wrong_language_zh_reply_detail(
     prose = re.sub(r"```[\\s\\S]*?```", "", visible).strip()
     prose = re.sub(r"`[^`]*`", "", prose).strip()
     latin_words = re.findall(r"[A-Za-z]{3,}", prose)
-    if len(latin_words) < 3:
+    # A one-line technical answer ("False", "It returns False immediately")
+    # is not language corruption; only reject prose-length English. This keeps
+    # short code answers usable without accepting a full English coaching turn.
+    if len(latin_words) < 10:
         return None
     return (
         "The provider returned English-only visible prose while zh-CN is selected. "

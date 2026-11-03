@@ -350,19 +350,35 @@ class CoachingAdaptationMixin:
 
         focus_area = str(active_thread.get("focus_area") or "").strip()
         next_step = str(active_thread.get("next_step") or "").strip()
+        blocker = str(active_thread.get("blocker") or "").strip()
         if not focus_area or not next_step:
             return due_reviews
 
-        # Keep historical review evidence visible, but never enqueue the provider-recovery thread itself.
-        return [
-            item
-            for item in due_reviews
-            if not (
-                item.source == "reflection"
-                and item.concept.strip() == focus_area
-                and next_step in str(item.linked_context or "")
+        # Keep historical review evidence visible, but never let the recovery
+        # sentence or provider error become a Learning review card. The focus
+        # area alone is not a marker: it can be a legitimate learning topic.
+        recovery_markers: list[str] = []
+        for text in (next_step, blocker):
+            cleaned = text.strip()
+            if len(cleaned) < 8:
+                continue
+            # The UI/card layer may truncate a long recovery sentence, so the
+            # full marker alone is not enough. Prefix markers keep the filter
+            # effective on the clamped review text.
+            for marker in (cleaned, cleaned[:24], cleaned[:12], cleaned[:8]):
+                if len(marker) >= 8 and marker not in recovery_markers:
+                    recovery_markers.append(marker)
+
+        def is_recovery_review(item: ReviewQueueItem) -> bool:
+            if not recovery_markers:
+                return False
+            haystack = " ".join(
+                str(getattr(item, field, "") or "")
+                for field in ("concept", "reason", "task_hint", "focus_area", "linked_context")
             )
-        ]
+            return any(marker in haystack for marker in recovery_markers)
+
+        return [item for item in due_reviews if not is_recovery_review(item)]
 
     def _derive_teaching_observations(
         self,
