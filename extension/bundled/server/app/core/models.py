@@ -748,7 +748,19 @@ class SourceIntakeGovernance(BaseModel):
 
 class ResourceRecord(BaseModel):
     id: str
-    kind: Literal["pdf", "epub", "image", "text", "markdown", "code", "url", "video"]
+    kind: Literal[
+        "pdf",
+        "epub",
+        "docx",
+        "pptx",
+        "html",
+        "image",
+        "text",
+        "markdown",
+        "code",
+        "url",
+        "video",
+    ]
     name: str
     source: str
     tags: list[str] = Field(default_factory=list)
@@ -781,6 +793,15 @@ class ResourceRecord(BaseModel):
     # TR-059: SHA-256 of the uploaded content, pinned at upload time so
     # evidence records can cite the exact content version they were built on.
     content_hash: str | None = None
+    # Canonical Markdown digest of this resource (workspace-relative POSIX
+    # path). Search, the reader, training cards and agent context read this
+    # document; the original file stays untouched next to it in the library.
+    canonical_markdown_path: str | None = None
+    canonical_original_path: str | None = None
+    parser: str = ""
+    parser_version: str = ""
+    page_count: int | None = None
+    slide_count: int | None = None
     # Trainer Library bookkeeping: workspace-relative POSIX paths of downloaded
     # copies of this resource's source (see ``app.resources.library``). Empty
     # for captures that were never downloaded into a library folder; kept in
@@ -3094,7 +3115,19 @@ class ProviderModelsResponse(BaseModel):
 class ResourceUploadRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
-    kind: Literal["pdf", "epub", "image", "text", "markdown", "code", "url", "video"]
+    kind: Literal[
+        "pdf",
+        "epub",
+        "docx",
+        "pptx",
+        "html",
+        "image",
+        "text",
+        "markdown",
+        "code",
+        "url",
+        "video",
+    ]
     name: str
     source: str
     content: str | None = None

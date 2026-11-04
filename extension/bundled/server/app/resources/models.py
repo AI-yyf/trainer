@@ -14,6 +14,9 @@ def utc_now() -> datetime:
 class ResourceKind(StrEnum):
     PDF = "pdf"
     EPUB = "epub"
+    DOCX = "docx"
+    PPTX = "pptx"
+    HTML = "html"
     IMAGE = "image"
     TEXT = "text"
     MARKDOWN = "markdown"

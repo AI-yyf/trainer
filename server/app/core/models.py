@@ -3115,7 +3115,19 @@ class ProviderModelsResponse(BaseModel):
 class ResourceUploadRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
-    kind: Literal["pdf", "epub", "image", "text", "markdown", "code", "url", "video"]
+    kind: Literal[
+        "pdf",
+        "epub",
+        "docx",
+        "pptx",
+        "html",
+        "image",
+        "text",
+        "markdown",
+        "code",
+        "url",
+        "video",
+    ]
     name: str
     source: str
     content: str | None = None
