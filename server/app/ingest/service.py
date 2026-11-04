@@ -77,6 +77,8 @@ class IngestService:
         if kind is ResourceKind.EPUB or Path(request.source_uri).suffix.lower() == ".epub":
             text, warnings, provenance = _extract_epub_text(request)
             return text, warnings, provenance
+        if kind in {ResourceKind.DOCX, ResourceKind.PPTX, ResourceKind.HTML}:
+            return _extract_canonical_text(request)
         if kind is ResourceKind.IMAGE:
             text, warnings = _extract_image_stub(request, vision_enabled=vision_enabled)
             return text, warnings, {}
@@ -173,6 +175,12 @@ class ResourceIngestor:
             return ResourceKind.PDF
         if suffix == ".epub":
             return ResourceKind.EPUB
+        if suffix in {".docx", ".docm"}:
+            return ResourceKind.DOCX
+        if suffix in {".pptx", ".pptm"}:
+            return ResourceKind.PPTX
+        if suffix in {".html", ".htm", ".xhtml"}:
+            return ResourceKind.HTML
         if suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}:
             return ResourceKind.IMAGE
         if suffix in {".md", ".markdown"}:
@@ -395,6 +403,33 @@ def _extract_epub_text(request: IngestionRequest) -> tuple[str, list[str], dict[
     except Exception as exc:
         warnings.append(f"EPUB parsing failed: {exc}")
         return "", warnings, {}
+
+
+def _extract_canonical_text(
+    request: IngestionRequest,
+) -> tuple[str, list[str], dict[str, object]]:
+    """Read a DOCX/PPTX/HTML source through the canonical Markdown parser."""
+
+    from app.resources.canonical import CanonicalParseError, build_canonical_document
+
+    path = Path(request.source_uri)
+    if not path.is_file():
+        return "", [f"Source file is missing: {request.source_uri}"], {}
+    try:
+        document = build_canonical_document(path, resource_id="ingest-preview")
+    except CanonicalParseError as exc:
+        return "", [str(exc), *exc.warnings], {}
+    provenance: dict[str, object] = {
+        "source_type": document.source_type,
+        "parser": document.parser,
+        "parser_version": document.parser_version,
+        "canonical_anchors": [anchor.as_payload() for anchor in document.anchors],
+    }
+    if document.page_count is not None:
+        provenance["page_count"] = document.page_count
+    if document.slide_count is not None:
+        provenance["slide_count"] = document.slide_count
+    return document.body, list(document.warnings), provenance
 
 
 def _extract_image_stub(request: IngestionRequest, *, vision_enabled: bool) -> tuple[str, list[str]]:

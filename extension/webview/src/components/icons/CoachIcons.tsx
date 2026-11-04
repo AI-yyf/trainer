@@ -379,6 +379,15 @@ export function TargetIcon(props: CoachIconProps) {
   );
 }
 
+export function SkillCubeIcon(props: CoachIconProps) {
+  return (
+    <CoachIconBase {...props}>
+      <path d="M8 2.4 13.6 5.5v5.3L8 14 2.4 10.8V5.5z" />
+      <path d="M2.4 5.5 8 8.6l5.6-3.1M8 8.6V14" />
+    </CoachIconBase>
+  );
+}
+
 export function FireIcon(props: CoachIconProps) {
   return (
     <CoachIconBase {...props}>

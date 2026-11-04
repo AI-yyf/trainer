@@ -7,8 +7,9 @@ import type { AgentToolActivity } from "../../app/useWorkbenchState";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import type { CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
+import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
+import { currentTrainerStage } from "../../lib/trainerStage";
 import { CoachMessageBubble, type CoachMessageAction } from "./CoachMessageBubble";
-import { COACH_TYPING_LABELS } from "../../lib/i18n/segments/coachInlineText";
 
 export interface StreamingMessageState {
   body: string;
@@ -52,8 +53,6 @@ export interface CoachConversationViewProps {
    * re-renders this view only, never the whole workbench (DESIGN.md §3 R3).
    */
   liveContentFromStore?: boolean;
-  /** Copy shown until the first visible chunk arrives (language-owned). */
-  streamingPlaceholder?: string;
 }
 
 interface CoachConversationItem {
@@ -86,7 +85,6 @@ function CoachConversationViewImpl({
   pendingMessageAction,
   turnNextStepRequiresConfirmation = false,
   liveContentFromStore = false,
-  streamingPlaceholder,
 }: CoachConversationViewProps) {
   // Per-chunk streaming content lives here, not in App: the workbench shell
   // stays put while the in-flight reply grows (DESIGN.md §3 R3).
@@ -101,8 +99,8 @@ function CoachConversationViewImpl({
       ? streamingMessage.body?.trim()
         ? streamingMessage.body
         : storeStreamMessageId?.startsWith("training_")
-          ? streamingPlaceholder ?? ""
-          : storeStreamedContent || streamingPlaceholder || ""
+          ? ""
+          : storeStreamedContent || ""
       : streamingMessage.body
     : undefined;
   const classes = [
@@ -155,6 +153,7 @@ function CoachConversationViewImpl({
   const streamingStripVisible = Boolean(
     streamingMessage && resolvedAgentActivity && resolvedAgentActivity.length > 0,
   );
+  const activeTrainerStage = currentTrainerStage(resolvedAgentActivity ?? [], language);
 
   return (
     <Conversation className={classes} label={title}>
@@ -174,7 +173,7 @@ function CoachConversationViewImpl({
         }`}
       >
         {listHead}
-        {messages.length === 0 && emptyState ? emptyState : null}
+        {messages.length === 0 && !streamingMessage && emptyState ? emptyState : null}
 
         {items.map((item, itemIndex) => (
           <div
@@ -213,16 +212,7 @@ function CoachConversationViewImpl({
                   ) : undefined
                 }
               >
-                {item.streaming ? (
-                  <div
-                    className="coach-streaming-dots"
-                    role="status"
-                    aria-live="polite"
-                    aria-label={COACH_TYPING_LABELS[language] ?? COACH_TYPING_LABELS["en-US"]}
-                  >
-                    <span className="coach-streaming-orb" aria-hidden="true" />
-                  </div>
-                ) : null}
+                {item.streaming && !streamingStripVisible ? <CoachWorkingIndicator language={language} messageId={storeStreamMessageId ?? undefined} stage={activeTrainerStage} /> : null}
               </CoachMessageBubble>
             </div>
           </div>

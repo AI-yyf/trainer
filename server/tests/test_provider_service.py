@@ -4175,8 +4175,6 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
         "generate_training_card",
         "save_formal_plan",
         "record_learning_note",
-        "import_resource_url",
-        "organize_resources",
         "run_rubric_review",
         "specify_task",
         "next_task",
@@ -6810,8 +6808,8 @@ def test_provider_failure_reply_uses_visible_zh_fallback_with_detail() -> None:
     assert reply.strip()
     assert "Trainer 当前卡在 provider path" in reply
     assert "API key 或 permission" in reply
-    assert "Error code: 401 - Invalid token" not in reply
-    assert "upstream response body redacted" in reply
+    assert "Error code: 401 - Invalid token" in reply
+    assert "upstream response body redacted" not in reply
     assert "下一步" in reply
 
 

@@ -56,7 +56,7 @@
 }
 .app-shell-nav__item > span { min-width: 0; overflow-wrap: anywhere; text-align: center; }
 .app-shell-nav__item:hover { color: var(--fg-0); }
-.app-shell-nav__item[aria-current="page"] { color: var(--fg-0); border-bottom-color: var(--accent); }
+.app-shell-nav__item[aria-current="page"] { color: var(--fg-0); border-bottom-color: color-mix(in srgb, var(--fg-0) 30%, transparent); }
 :where(.app-shell-header button, .template-back):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .template-metadata { overflow-wrap: anywhere; margin: 0; color: var(--fg-muted); font-size: var(--trainer-font-xs); line-height: 1.5; }
 .template-next-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-block: 16px; }
@@ -163,18 +163,21 @@
    max-height CommandPalette row-aligns to whole entries; the wrapper hosts the
    bottom fade + "↓ N more" hint while rows sit below the fold. */
 .template-command-palette { position: relative; background: var(--bg-0); border: 1px solid var(--line); border-radius: 8px; }
-.template-command-palette__scroll { padding: 8px; max-height: min(260px, 36vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 70%, transparent) transparent; }
+.template-command-palette__scroll { padding: 6px; max-height: min(260px, 36vh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 70%, transparent) transparent; }
 .template-command-palette.is-scrollable::after { content: ""; position: absolute; inset-inline: 1px; bottom: 1px; height: 28px; pointer-events: none; background: linear-gradient(to bottom, transparent, var(--bg-0) 70%); border-radius: 0 0 8px 8px; }
 .template-command-palette__more { position: absolute; inset-inline: 0; bottom: 0; margin: 0; padding: 6px 8px 7px; text-align: center; color: var(--fg-muted); font-size: var(--trainer-font-3xs); background: var(--bg-0); border-radius: 0 0 8px 8px; pointer-events: none; }
-.template-command-palette__scroll > p { margin: 4px 4px 8px; }
-.template-command-palette__entry { display: flex; gap: 12px; width: 100%; text-align: start; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-0); font: inherit; cursor: pointer; }
+.template-command-palette__scroll > p { margin: 2px 4px 4px; }
+.template-command-palette__group { margin: 0 2px 2px; color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.35; }
+.template-command-palette__entry { display: flex; align-items: center; gap: 6px; width: 100%; text-align: start; padding: 3px 6px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-0); font: inherit; cursor: pointer; }
 .template-command-palette__entry:is(:hover, .is-active) { background: var(--bg-1); }
-.template-command-palette__entry[aria-selected="true"] { box-shadow: inset 2px 0 var(--accent); }
-.template-command-palette__entry > span:last-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.template-command-palette__entry strong { font-weight: 500; font-size: var(--trainer-font-sm); }
-.template-command-palette__entry > span > span { color: var(--fg-muted); font-size: var(--trainer-font-xs); }
-.template-command-palette__trigger { flex: none; color: var(--fg-muted); font-family: var(--font-mono); font-size: var(--trainer-font-xs); }
-.template-command-palette__footer { padding: 4px 8px; }
+.template-command-palette__entry[aria-selected="true"] { background: var(--bg-2); box-shadow: none; }
+.template-command-palette__icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; color: var(--fg-muted); }
+.template-command-palette__copy { display: flex; flex-direction: column; gap: 0; min-width: 0; flex: 1; }
+.template-command-palette__copy strong { font-weight: 400; font-size: var(--trainer-font-xs); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-command-palette__detail { color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-command-palette__tag { flex: none; padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--line) 50%, transparent); border-radius: var(--radius-full); color: var(--fg-muted); font-size: var(--trainer-font-2xs); }
+.template-command-palette__entry:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.template-command-palette__footer { padding: 2px 6px; }
 .skill-projection-entry { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; padding-block: 4px; font-size: var(--trainer-font-sm); }
 .template-growth-evidence { padding-block: 8px 16px; }
 .template-global-state { padding-inline: var(--trainer-gutter); flex: none; }

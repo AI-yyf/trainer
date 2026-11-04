@@ -1736,6 +1736,8 @@ export interface SessionMessagePayload {
   contextDetail?: 'focused' | 'balanced' | 'full';
   responseLanguage?: ComposerLanguage;
   answerMode?: 'auto' | 'coach-first' | 'balanced' | 'direct';
+  /** One small goal, learner does the work (no plan/evidence minting). */
+  goalMode?: boolean;
   teachingStyle?: 'auto' | 'guided' | 'concept-first' | 'hands-on' | 'challenging';
   coachDefaults?: {
     memoryScope?: 'project' | 'personal' | 'session';

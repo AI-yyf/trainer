@@ -133,6 +133,9 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* The conversation list owns the horizontal gutter so the thread, empty
+     state and composer share one measure. */
+  padding-inline: 0;
 }
 
 .coach-pane,
@@ -1486,13 +1489,13 @@
   /* r1-g2-0: the row renders three children (indent, kind, title) into this
      five-column contract; the title copy spans columns 3 / -1 (see below) so
      it owns the whole remaining row instead of slipping into an 18px track. */
-  grid-template-columns: 18px 18px 18px minmax(0, 1fr) auto;
+  grid-template-columns: 18px 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-1);
   width: 100%;
   min-width: 0;
-  min-height: 28px;
-  padding: var(--space-1) var(--space-2);
+  min-height: 38px;
+  padding: 5px var(--space-2);
   color: var(--fg-1);
   border: 1px solid transparent;
   background: transparent;
@@ -1504,7 +1507,8 @@
 .resources-library-tree__node:hover,
 .resources-library-tree__node:focus-visible {
   color: var(--fg-0);
-  border-left-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  border-color: color-mix(in srgb, var(--line) 55%, transparent);
+  border-left-color: transparent;
   background: color-mix(in srgb, var(--bg-1) 72%, transparent);
   outline: none;
 }
@@ -1516,13 +1520,15 @@
 
 .resources-library-tree__node.is-selected {
   color: var(--fg-0);
-  border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-0));
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  border-left-color: transparent;
+  background: var(--bg-2);
 }
 
 .resources-library-tree__node.is-marked:not(.is-selected) {
-  border-left-color: color-mix(in srgb, var(--accent) 56%, transparent);
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg-0));
+  border-color: color-mix(in srgb, var(--line) 45%, transparent);
+  border-left-color: transparent;
+  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
 }
 
 .resources-library-tree__node--resource {
@@ -1535,23 +1541,92 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  /* r1-g2-0: the title spans from the third track to the row end. Without the
-     span it landed in the third 18px track and wrapped CJK titles one
-     character per line ("登录错误码对照" became unreadable). */
-  grid-column: 3 / -1;
+  /* The title occupies the flexible track; the hover action owns the last
+     track so a long title never pushes it out of the row. */
+  grid-column: 3 / 4;
+  gap: 1px;
 }
 
-/* r2-g2-0: expanded groups whose items all live in nested subgroups say so,
-   instead of reading as an empty group. */
-.resources-library-tree__nested-note {
-  margin: 0;
-  padding: 2px 0 var(--space-1);
+.resources-library-tree__meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--fg-muted);
   font-size: var(--trainer-font-3xs);
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
-.resources-library-tree__indent,
+.resources-library-tree__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  align-self: center;
+}
+
+.resources-library-tree__preview,
+.resources-library-tree__open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  align-self: center;
+}
+
+.resources-library-tree__preview {
+  opacity: 0;
+}
+
+.resources-library-tree__open {
+  opacity: 0.5;
+}
+
+.resources-library-tree__node:hover .resources-library-tree__preview,
+.resources-library-tree__node:focus-within .resources-library-tree__preview,
+.resources-library-tree__node.is-selected .resources-library-tree__preview,
+.resources-library-tree__node:hover .resources-library-tree__open,
+.resources-library-tree__node:focus-within .resources-library-tree__open,
+.resources-library-tree__node.is-selected .resources-library-tree__open {
+  opacity: 1;
+}
+
+.resources-library-tree__preview:hover,
+.resources-library-tree__open:hover {
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+  color: var(--fg-0);
+}
+
+.resources-library-tree__preview:focus-visible,
+.resources-library-tree__open:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+  opacity: 1;
+}
+
+@media (max-width: 380px) {
+  .resources-library-tree__preview {
+    opacity: 1;
+  }
+}
+
+/* The leftover-library caveat is a quiet trust note, not a second heading. */
+.resources-knowledge .resources-knowledge__leftover-note {
+  margin: 0;
+  max-width: none;
+  padding: 0 2px var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.45;
+}
+
 .resources-library-tree__icon {
   display: inline-flex;
   width: 18px;

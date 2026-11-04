@@ -33,6 +33,14 @@ from .models import (
     ResourceRecord,
     utc_now,
 )
+from .canonical import (
+    PARSER_BY_SOURCE_TYPE,
+    CanonicalParseError,
+    build_canonical_document,
+    build_canonical_from_text,
+    canonicalizable,
+)
+from .canonical_store import write_canonical_artifact
 from .search import SearchFilters, SearchIndex, SearchResponse
 from .source_governance import (
     commercial_reuse_eligibility_reason_codes,
@@ -45,6 +53,16 @@ from .source_governance import (
     is_commercial_reuse_eligible as source_is_commercial_reuse_eligible,
 )
 from .versioning import ResourceVersionStore, provenance_payload
+
+def _last_anchor_before(anchors: list[Any], line: int) -> Any | None:
+    match = None
+    for anchor in anchors:
+        if anchor.line <= line:
+            match = anchor
+        else:
+            break
+    return match
+
 
 _REFERENCE_STOPWORDS = {
     "a",
@@ -282,7 +300,23 @@ class ResourceService:
         if self._is_folder_resource(resource):
             self._validate_folder_source_items(resource.source, resource.source_items)
         network_allowed = self._network_fetch_enabled(request.enable_network)
-        ingest_result = self._ingest_resource_record(resource, network_allowed=network_allowed)
+        canonical_meta: dict[str, Any] = {}
+        canonical_ingest = self._canonical_local_ingest(workspace_id, resource)
+        if canonical_ingest is not None:
+            ingest_result, canonical_meta = canonical_ingest
+        else:
+            ingest_result = self._ingest_resource_record(
+                resource,
+                network_allowed=network_allowed,
+            )
+            url_canonical = self._canonicalize_url_ingest(workspace_id, resource, ingest_result)
+            if url_canonical is not None:
+                ingest_result, canonical_meta = url_canonical
+
+        def canonical_field(name: str, fallback: Any) -> Any:
+            value = canonical_meta.get(name)
+            return fallback if value in {None, ""} else value
+
         normalized_chunks = [
             replace(chunk, resource_id=resource.id) if chunk.resource_id != resource.id else chunk
             for chunk in ingest_result.chunks
@@ -344,6 +378,15 @@ class ResourceService:
             duplicate_key,
             exclude_id=resource.id,
         )
+        if canonical_duplicate is None and resource.content_hash:
+            # Identical bytes imported under a different path/name are the same
+            # source content; reuse the first indexed copy instead of creating a
+            # second knowledge projection.
+            canonical_duplicate = self._canonical_resource_for_content_hash(
+                workspace_id,
+                resource.content_hash,
+                exclude_id=resource.id,
+            )
         if canonical_duplicate is not None:
             quality_flags = self._append_unique(quality_flags, ["duplicate"])
         conflicting_resource = self._conflicting_resource_for_source(
@@ -420,6 +463,12 @@ class ResourceService:
                 },
                 "paragraph_anchors": paragraph_anchors[:64],
                 "content_language": detected_content_language or "",
+                "canonical_markdown_path": str(canonical_meta.get("canonical_markdown_path") or ""),
+                "canonical_original_path": str(canonical_meta.get("canonical_original_path") or ""),
+                "parser": str(canonical_meta.get("parser") or ""),
+                "parser_version": str(canonical_meta.get("parser_version") or ""),
+                "page_count": canonical_meta.get("page_count"),
+                "slide_count": canonical_meta.get("slide_count"),
             },
         )
         self.registry.mark_indexed(
@@ -452,6 +501,16 @@ class ResourceService:
                 "source_governance": source_governance,
                 "content_hash": (current_version or {}).get("content_hash") or resource.content_hash,
                 "content_language": detected_content_language or resource.content_language,
+                "canonical_markdown_path": canonical_field(
+                    "canonical_markdown_path", resource.canonical_markdown_path
+                ),
+                "canonical_original_path": canonical_field(
+                    "canonical_original_path", resource.canonical_original_path
+                ),
+                "parser": canonical_field("parser", resource.parser),
+                "parser_version": canonical_field("parser_version", resource.parser_version),
+                "page_count": canonical_field("page_count", resource.page_count),
+                "slide_count": canonical_field("slide_count", resource.slide_count),
             }
         )
         if canonical_duplicate is not None:
@@ -1050,6 +1109,257 @@ class ResourceService:
             artifact_paths[""] = primary_path
         return artifact_paths
 
+    # ------------------------------------------------------------- canonical md
+
+    def _canonical_local_ingest(
+        self,
+        workspace_id: str,
+        resource: ApiResourceRecord,
+    ) -> tuple[IngestionResult, dict[str, Any]] | None:
+        """Digest a local document into its canonical Markdown projection.
+
+        Returns ``None`` when the source is not a local file the canonical
+        pipeline owns (folders, inline captures, unsupported extensions).
+        """
+
+        source_path = self._local_source_path(resource.source)
+        if source_path is None or not source_path.is_file():
+            return None
+        suffix = source_path.suffix.lower()
+        if suffix in {".doc", ".ppt", ".xls"}:
+            replacement = {".doc": ".docx", ".ppt": ".pptx", ".xls": ".xlsx"}[suffix]
+            warning = (
+                f"Legacy {suffix} files are not supported; save the file as "
+                f"{replacement} and import it again."
+            )
+            return self._canonical_failure(resource, [warning]), {}
+        if not canonicalizable(source_path):
+            return None
+        try:
+            raw = source_path.read_bytes()
+        except OSError as exc:
+            return self._canonical_failure(
+                resource,
+                [f"Could not read the source file: {exc}"],
+            ), {}
+        current_version = self._record_resource_version(workspace_id, resource, raw)
+        version_id = str((current_version or {}).get("version_id") or "")
+        content_hash = str((current_version or {}).get("content_hash") or "")
+        try:
+            document = build_canonical_document(
+                source_path,
+                resource_id=resource.id,
+                version_id=version_id,
+                content_hash=f"sha256:{content_hash}" if content_hash else "",
+                original_name=source_path.name,
+            )
+        except CanonicalParseError as exc:
+            return self._canonical_failure(resource, [str(exc), *exc.warnings]), {}
+        return self._canonical_result(
+            workspace_id,
+            resource,
+            document,
+            original_bytes=raw,
+            original_filename=source_path.name,
+        )
+
+    def _canonicalize_url_ingest(
+        self,
+        workspace_id: str,
+        resource: ApiResourceRecord,
+        ingest_result: IngestionResult,
+    ) -> tuple[IngestionResult, dict[str, Any]] | None:
+        """Re-project a fetched URL capture into a canonical Markdown snapshot."""
+
+        if resource.kind != "url":
+            return None
+        provenance = getattr(ingest_result, "source_provenance", {}) or {}
+        if str(provenance.get("status") or "") != "fetched":
+            return None
+        text = "\n\n".join(chunk.text for chunk in ingest_result.chunks if chunk.text).strip()
+        if not text:
+            return None
+        final_url = str(provenance.get("final_url") or resource.source)
+        fetched_at = str(provenance.get("fetched_at") or "").strip() or None
+        current_version = self._record_resource_version(workspace_id, resource, text)
+        version_id = str((current_version or {}).get("version_id") or "")
+        content_hash = str((current_version or {}).get("content_hash") or "")
+        filename = f"{self._safe_slug(resource.name) or 'capture'}.md"
+        try:
+            document = build_canonical_from_text(
+                text,
+                resource_id=resource.id,
+                original_filename=filename,
+                source_url=final_url,
+                imported_at=fetched_at,
+                version_id=version_id,
+                content_hash=f"sha256:{content_hash}" if content_hash else "",
+            )
+        except CanonicalParseError as exc:
+            return None
+        return self._canonical_result(
+            workspace_id,
+            resource,
+            document,
+            original_bytes=text.encode("utf-8"),
+            original_filename=filename,
+        )
+
+    def _canonical_result(
+        self,
+        workspace_id: str,
+        resource: ApiResourceRecord,
+        document: Any,
+        *,
+        original_bytes: bytes,
+        original_filename: str,
+    ) -> tuple[IngestionResult, dict[str, Any]]:
+        store_warnings: list[str] = []
+        canonical_meta: dict[str, Any] = {
+            "canonical_markdown_path": "",
+            "canonical_original_path": "",
+            "parser": document.parser,
+            "parser_version": document.parser_version,
+            "page_count": document.page_count,
+            "slide_count": document.slide_count,
+            "source_type": document.source_type,
+        }
+        workspace_root = self._resolved_workspace_path(workspace_id)
+        if workspace_root is None:
+            store_warnings.append(
+                "Canonical Markdown was generated but no workspace root is available to store it."
+            )
+        else:
+            try:
+                artifact = write_canonical_artifact(
+                    workspace_root,
+                    document,
+                    original_bytes=original_bytes,
+                    original_filename=original_filename,
+                )
+            except OSError as exc:
+                store_warnings.append(
+                    f"Canonical Markdown could not be written to the library: {exc}"
+                )
+            else:
+                canonical_meta["canonical_markdown_path"] = artifact.markdown_relative
+                canonical_meta["canonical_original_path"] = artifact.original_relative or ""
+        chunks, paragraph_anchors = self._canonical_chunks(
+            resource,
+            document,
+            markdown_path=str(canonical_meta["canonical_markdown_path"] or ""),
+        )
+        summary = IngestionSummary(
+            text_preview=document.body[:240],
+            detected_kind=ResourceKind(resource.kind),
+            extracted_characters=len(document.body),
+            chunk_count=len(chunks),
+        )
+        source_provenance: dict[str, Any] = {
+            "paragraph_anchors": paragraph_anchors,
+            "source_type": document.source_type,
+            "parser": document.parser,
+            "parser_version": document.parser_version,
+            "page_count": document.page_count,
+            "slide_count": document.slide_count,
+            "canonical": canonical_meta,
+        }
+        result = IngestionResult(
+            record=self.registry.clone_resource(resource.id),
+            chunks=chunks,
+            summary=summary,
+            warnings=[*document.warnings, *store_warnings],
+            vision_payload=None,
+            source_provenance=source_provenance,
+        )
+        return result, canonical_meta
+
+    def _canonical_failure(
+        self,
+        resource: ApiResourceRecord,
+        warnings: list[str],
+    ) -> IngestionResult:
+        return IngestionResult(
+            record=self.registry.clone_resource(resource.id),
+            chunks=[
+                ResourceChunk.create(
+                    resource_id=resource.id,
+                    order=0,
+                    text="",
+                    metadata={"kind": resource.kind},
+                )
+            ],
+            summary=IngestionSummary(
+                text_preview=warnings[0] if warnings else "The source could not be parsed.",
+                detected_kind=ResourceKind(resource.kind),
+                extracted_characters=0,
+                chunk_count=0,
+            ),
+            warnings=list(warnings),
+            vision_payload=None,
+            source_provenance={},
+        )
+
+    def _canonical_chunks(
+        self,
+        resource: ApiResourceRecord,
+        document: Any,
+        *,
+        markdown_path: str,
+    ) -> tuple[list[ResourceChunk], list[dict[str, Any]]]:
+        chunk_size = 1200
+        chunk_overlap = 120
+        body = document.body
+        chunks = self.ingestor._chunk_text(
+            resource.id,
+            body,
+            chunk_size,
+            chunk_overlap,
+            kind=ResourceKind(resource.kind),
+        )
+        step = max(chunk_size - chunk_overlap, 1)
+        page_anchors = [anchor for anchor in document.anchors if anchor.kind == "page"]
+        slide_anchors = [anchor for anchor in document.anchors if anchor.kind == "slide"]
+        heading_anchors = [anchor for anchor in document.anchors if anchor.kind == "heading"]
+        paragraph_anchors: list[dict[str, Any]] = []
+        normalized: list[ResourceChunk] = []
+        for index, chunk in enumerate(chunks):
+            start_offset = min(index * step, len(body))
+            end_offset = min(start_offset + chunk_size, len(body))
+            start_line = body.count("\n", 0, start_offset) + 1
+            end_line = body.count("\n", 0, end_offset) + 1
+            metadata: dict[str, Any] = {
+                "kind": document.source_type,
+                "line_start": start_line,
+                "line_end": end_line,
+            }
+            if markdown_path:
+                metadata["markdown_path"] = markdown_path
+            page = _last_anchor_before(page_anchors, start_line)
+            slide = _last_anchor_before(slide_anchors, start_line)
+            heading = _last_anchor_before(heading_anchors, start_line)
+            if page is not None:
+                metadata["page"] = page.index
+                metadata["anchor_id"] = f"¶page{page.index}@{start_line}"
+            elif slide is not None:
+                metadata["slide"] = slide.index
+                if slide.label:
+                    metadata["slide_title"] = slide.label
+                metadata["anchor_id"] = f"¶slide{slide.index}@{start_line}"
+            if heading is not None:
+                metadata["heading"] = heading.label
+                metadata.setdefault("anchor_id", f"¶h{heading.index}@{start_line}")
+            paragraph_anchors.append(dict(metadata))
+            normalized.append(
+                replace(
+                    chunk,
+                    start_line=start_line,
+                    end_line=end_line,
+                    metadata=metadata,
+                )
+            )
+        return normalized, paragraph_anchors
+
     def _ingest_resource_record(
         self,
         resource: ApiResourceRecord,
@@ -1419,7 +1729,12 @@ class ResourceService:
             or resource.summary
             or resource.name
         )
-        search_path = str(resource.sandbox_path or resource.source or "")
+        search_path = str(
+            resource.canonical_markdown_path
+            or resource.sandbox_path
+            or resource.source
+            or ""
+        )
         current_version = self.version_store.current_version(workspace_id, resource.id)
         self._search_index(workspace_id).index_document(
             path=search_path,
@@ -1810,6 +2125,9 @@ class ResourceService:
             "text": ".txt",
             "pdf": ".pdf",
             "epub": ".epub",
+            "docx": ".docx",
+            "pptx": ".pptx",
+            "html": ".html",
             "image": ".txt",
         }.get(kind, ".txt")
 
@@ -1982,7 +2300,13 @@ class ResourceService:
         return flags
 
     def _trust_score(self, kind: str, quality_flags: list[str]) -> float:
-        base = 0.84 if kind in {"markdown", "code", "text", "pdf", "epub"} else 0.74 if kind == "url" else 0.55
+        base = (
+            0.84
+            if kind in {"markdown", "code", "text", "pdf", "epub", "docx", "pptx", "html"}
+            else 0.74
+            if kind == "url"
+            else 0.55
+        )
         if "network_disabled" in quality_flags:
             base -= 0.4
         if "fetch_failed" in quality_flags:
@@ -2103,6 +2427,23 @@ class ResourceService:
             if item.id == exclude_id:
                 continue
             if item.duplicate_key == duplicate_key:
+                return item
+        return None
+
+    def _canonical_resource_for_content_hash(
+        self,
+        workspace_id: str,
+        content_hash: str,
+        *,
+        exclude_id: str,
+    ) -> ApiResourceRecord | None:
+        wanted = str(content_hash or "").strip()
+        if not wanted or wanted == "no-content":
+            return None
+        for item in self.repository.list_resources(workspace_id):
+            if item.id == exclude_id or item.index_status != "indexed":
+                continue
+            if str(item.content_hash or "").strip() == wanted:
                 return item
         return None
 

@@ -17,7 +17,7 @@ test('view rails keep an active stream visible after switching away from its sou
 
   assert.match(
     railSource,
-    /const liveValue = streaming\.isStreaming\s*\?\s*[\s\S]*?streaming\.streamedContent \|\| streamingPlaceholderBody/,
+    /const liveValue = streaming\.isStreaming\s*\?\s*[\s\S]*?streaming\.streamedContent \|\| "", textLimit\)/,
   );
   assert.match(
     railSource,

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 import {
@@ -7,7 +8,7 @@ import {
   normalizeResourceSearchMode,
   resourceSearchModeRequest,
 } from '../../../shared/src/resourceSearch';
-import { resolveResourceOpenTarget } from '../../../shared/src/resourceOpen';
+import { resolveResourceLocalCandidates, resolveResourceOpenTarget } from '../../../shared/src/resourceOpen';
 import type { CommandContext } from '../core/commandContext';
 import { attachPreviewAssetUris } from '../core/previewAssetUris';
 import type {
@@ -19,7 +20,7 @@ import type {
 import type { ManagedDataFolderChangeResult } from '../core/sidecarProcessManager';
 import { mergeMemorySummarySnapshot, mergeResourceRecords, resetWorkbenchAfterRuntimeDataChange } from '../core/workbenchData';
 import { rehydrateWorkbenchRuntime, trainerSessionBlockReason } from '../core/runtimeRehydration';
-import { getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
+import { getRuntimeWorkspaceId, isRemoteWorkspaceSnapshot, withWorkspaceQuery } from './workspaceContext';
 import { basenameFs, looksLikeWindowsAbsolutePath, normalizeFsPath } from '../core/workspaceRoots';
 import { runtimeDataRootUnder } from './workspaceAdmissionCommands';
 
@@ -423,15 +424,20 @@ export async function uploadResourceCommand(
     }
 
     try {
-      const upload = await context.sidecarClient.postJson<unknown>(status.port, '/resource/upload', {
-        session_id: context.getSessionId(),
-        workspace_id: workspaceId,
-        kind: 'url',
-        name: inferUrlTitle(source),
-        source,
-        tags: [],
+      // A web resource is captured through the same controlled pipeline as the
+      // Resources URL form: HTML is read and stored as an indexed Markdown
+      // snapshot, never as the raw page. The later index pass is a cheap
+      // re-index of that owned Markdown file.
+      const capture = await captureResourceCommand(context, {
+        url: source,
+        title: inferUrlTitle(source),
+        kind: captureKindForUrl(source),
       });
-      await recordUploaded(upload);
+      if (!capture.ok) {
+        failedUploads += 1;
+      } else if (capture.data !== undefined) {
+        uploads.push(capture.data);
+      }
     } catch {
       failedUploads += 1;
     }
@@ -524,6 +530,7 @@ type LibraryCopyKey =
   | 'previewUnavailable'
   | 'previewSandboxLoadFailed'
   | 'openMissingSource'
+  | 'openMissingFile'
   | 'openInvalidSource';
 
 /**
@@ -586,6 +593,11 @@ function libraryCopy(key: LibraryCopyKey, language?: string, detail?: string): s
       return failure(`受管资料区暂时没能加载（${detail ?? 'unknown'}）。稍后重试预览。`, `The governed library area could not be loaded (${detail ?? 'unknown'}). Retry the preview shortly.`);
     case 'openMissingSource':
       return failure('这份资料没有可打开的原文。', 'This resource has no source to open.');
+    case 'openMissingFile':
+      return failure(
+        '这份资料的原文不在当前工作区或资料库里，暂时不能打开。可在资料库中预览，或重新导入原文。',
+        "This resource's source file is not in the current workspace or library, so it cannot be opened. Preview it in the library, or import the original again.",
+      );
     case 'openInvalidSource':
       return failure('这份资料的原文地址无效，无法打开。', 'This resource has an invalid source and cannot be opened.');
   }
@@ -932,16 +944,50 @@ export async function openResourceCommand(
     };
   }
 
-  if (target.kind === 'vscode') {
-    if (isNativeOpenExtension(path.extname(target.source).toLowerCase())) {
-      // PDF/Office/archive/media binaries render as garbage walls in a text
-      // editor; the OS default app is the honest "open the original" path.
-      await vscode.env.openExternal(vscode.Uri.file(target.source));
-    } else {
-      await openLocalPathInVscode(target.source);
-    }
-  } else {
+  if (target.kind === 'browser') {
     await vscode.env.openExternal(vscode.Uri.parse(target.source));
+    return {
+      ok: true,
+      message: language === 'zh-CN' ? `已打开：${resource.title}` : `Opened ${resource.title}.`,
+    };
+  }
+
+  const targetUri = await resolveExistingResourceUri(
+    context,
+    resolveResourceLocalCandidates(resource),
+  );
+  if (!targetUri) {
+    const urlFallback = [resource.source, resource.canonicalSource]
+      .map((value) => value?.trim())
+      .find((value): value is string => Boolean(value) && /^https?:\/\//i.test(value!));
+    if (resource.kind === 'url' && urlFallback) {
+      // A URL whose captured copy disappeared still has an honest destination:
+      // the live source. Opening a broken local tab would be worse.
+      await vscode.env.openExternal(vscode.Uri.parse(urlFallback));
+      return {
+        ok: true,
+        message:
+          language === 'zh-CN'
+            ? `本地快照不可用，已在浏览器打开来源：${resource.title}`
+            : `The local snapshot is unavailable; opened the source for ${resource.title} in your browser.`,
+      };
+    }
+    return { ok: false, message: libraryCopy('openMissingFile', language) };
+  }
+
+  const extension = path.extname(targetUri.path).toLowerCase();
+  if (isNativeOpenExtension(extension) && targetUri.scheme === 'file') {
+    // PDF/Office/archive/media binaries render as garbage walls in a text
+    // editor; the OS default app is the honest "open the original" path.
+    await vscode.env.openExternal(targetUri);
+  } else {
+    await vscode.commands.executeCommand('vscode.open', targetUri, {
+      preview: false,
+      preserveFocus: false,
+      // Open at the start: a library row click should reveal the file, not a
+      // stale scroll position or selection from an earlier visit.
+      selection: new vscode.Range(0, 0, 0, 0),
+    });
   }
   return {
     ok: true,
@@ -973,12 +1019,155 @@ function isNativeOpenExtension(extension: string): boolean {
   ]).has(extension);
 }
 
-async function openLocalPathInVscode(targetPath: string): Promise<void> {
-  const targetUri = vscode.Uri.file(targetPath);
-  await vscode.commands.executeCommand('vscode.open', targetUri, {
-    preview: false,
-    preserveFocus: false,
-  });
+function expandResourceHomePath(value: string): string {
+  if (value === '~') {
+    return os.homedir();
+  }
+  if (value.startsWith('~/') || value.startsWith('~\\')) {
+    return path.join(os.homedir(), value.slice(2));
+  }
+  return value;
+}
+
+/**
+ * Roots a relative resource source may be relative to. The workspace folder
+ * is the common case; the admission roots cover resources imported before the
+ * project was adopted, and the sandbox roots cover managed library copies.
+ */
+function resourceOpenRoots(context: CommandContext): string[] {
+  const state = context.getHostState();
+  const admission = state.bootstrap.memory?.workspace?.trainerWorkspace;
+  const sandbox = state.bootstrap.memory?.sandboxState;
+  const roots = new Set<string>();
+  const add = (value: string | undefined) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return;
+    if (!looksLikeWindowsAbsolutePath(trimmed) && !path.isAbsolute(trimmed)) return;
+    roots.add(normalizeFsPath(trimmed));
+  };
+  add(state.workspace.activeWorkspaceRoot);
+  add(state.workspace.workspaceFolder);
+  add(admission?.rootPath);
+  add(admission?.projectPath);
+  add(admission?.canonicalProjectPath);
+  add(sandbox?.rootPath);
+  add(sandbox?.sandboxRootPath);
+  add(sandbox?.workspaceRootPath);
+  add(sandbox?.activeWorkspaceRoot);
+  for (const folder of vscode.workspace?.workspaceFolders ?? []) {
+    if (folder.uri.scheme === 'file') {
+      add(folder.uri.fsPath);
+    }
+  }
+  return [...roots];
+}
+
+async function localResourceFileExists(targetPath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(targetPath);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function resolveLocalResourceUri(
+  context: CommandContext,
+  candidates: string[],
+): Promise<vscode.Uri | undefined> {
+  const roots = resourceOpenRoots(context);
+  for (const candidate of candidates) {
+    const expanded = expandResourceHomePath(candidate);
+    if (/^file:\/\//i.test(expanded)) {
+      try {
+        const uri = vscode.Uri.parse(expanded);
+        if (uri.scheme === 'file' && (await localResourceFileExists(uri.fsPath))) {
+          return uri;
+        }
+      } catch {
+        // A malformed file URI is not a reason to stop trying the next source
+        // candidate; the final failure stays honest either way.
+      }
+      continue;
+    }
+    if (looksLikeWindowsAbsolutePath(expanded)) {
+      if (process.platform !== 'win32') {
+        // A Windows identifier cannot name a readable file on a POSIX host;
+        // opening it would only produce the same broken tab we are fixing.
+        continue;
+      }
+      const normalized = normalizeFsPath(expanded);
+      if (await localResourceFileExists(normalized)) {
+        return vscode.Uri.file(normalized);
+      }
+      continue;
+    }
+    if (path.isAbsolute(expanded)) {
+      const normalized = normalizeFsPath(expanded);
+      if (await localResourceFileExists(normalized)) {
+        return vscode.Uri.file(normalized);
+      }
+      continue;
+    }
+    for (const root of roots) {
+      const resolved = path.resolve(root, expanded);
+      if (await localResourceFileExists(resolved)) {
+        return vscode.Uri.file(resolved);
+      }
+    }
+  }
+  return undefined;
+}
+
+async function resolveRemoteResourceUri(
+  context: CommandContext,
+  candidates: string[],
+): Promise<vscode.Uri | undefined> {
+  const folders = (vscode.workspace?.workspaceFolders ?? []).filter(
+    (folder) => folder.uri.scheme !== 'file',
+  );
+  if (folders.length === 0) {
+    return undefined;
+  }
+  for (const candidate of candidates) {
+    const expanded = expandResourceHomePath(candidate);
+    if (/^file:\/\//i.test(expanded)) {
+      continue;
+    }
+    for (const folder of folders) {
+      let uri: vscode.Uri | undefined;
+      if (!looksLikeWindowsAbsolutePath(expanded) && path.isAbsolute(expanded)) {
+        uri = folder.uri.with({ path: expanded });
+      } else if (!looksLikeWindowsAbsolutePath(expanded)) {
+        uri = vscode.Uri.joinPath(folder.uri, expanded);
+      }
+      if (!uri) {
+        continue;
+      }
+      try {
+        const stat = await context.workspaceGateway.stat(uri);
+        if ((stat.type & 1) === 1) {
+          return uri;
+        }
+      } catch {
+        // Keep looking: a missing remote path is not an error until every
+        // candidate and root has been tried.
+      }
+    }
+  }
+  return undefined;
+}
+
+async function resolveExistingResourceUri(
+  context: CommandContext,
+  candidates: string[],
+): Promise<vscode.Uri | undefined> {
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  return isRemoteWorkspaceSnapshot(context.getHostState().workspace)
+    ? resolveRemoteResourceUri(context, candidates)
+    : resolveLocalResourceUri(context, candidates);
 }
 
 export function deleteResourceCommand(
@@ -2159,6 +2348,24 @@ function inferUrlTitle(source: string): string {
   } catch {
     return source;
   }
+}
+
+function captureKindForUrl(source: string): 'web' | 'pdf' | 'github_repo' {
+  try {
+    const url = new URL(source);
+    if (
+      /^(?:www\.)?github\.com$/i.test(url.hostname) &&
+      /^\/[^/]+\/[^/]+/.test(url.pathname)
+    ) {
+      return 'github_repo';
+    }
+    if (/\.pdf$/i.test(url.pathname)) {
+      return 'pdf';
+    }
+  } catch {
+    // The sidecar performs the real validation; malformed URLs fall back to web.
+  }
+  return 'web';
 }
 
 async function uploadLocalFiles(

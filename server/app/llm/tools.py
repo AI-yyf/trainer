@@ -62,6 +62,7 @@ from ..evaluator.verifiers import (
     verifier_pack_for,
     verify_submission_with_pack,
 )
+from ..resources.capture import CaptureError, capture_source
 from ..training.card_request import DeliverableKind, normalize_deliverable_kind
 
 logger = logging.getLogger("trainer.llm.tools")
@@ -200,10 +201,6 @@ class ToolRegistry:
             denied.add("save_formal_plan")
         if explicit_learning_note_request is not True:
             denied.add("record_learning_note")
-        if explicit_resource_import is not True:
-            denied.add("import_resource_url")
-        if explicit_resource_organize is not True:
-            denied.add("organize_resources")
         if live_formal_plan_for_task_mint is not True:
             denied.add("specify_task")
             denied.add("next_task")
@@ -261,24 +258,6 @@ class ToolRegistry:
                 "ok": False,
                 "error": "formal_plan_mutation_required",
                 "detail": "This write is only available during an explicit formal plan turn.",
-            }
-        if name == "import_resource_url" and not _resource_url_import_allowed(context):
-            return {
-                "ok": False,
-                "error": "resource_import_not_allowed",
-                "detail": (
-                    "URL import is only available for an explicit Resources turn with "
-                    "resource_composer_intent.mode=download."
-                ),
-            }
-        if name == "organize_resources" and not _resource_organize_allowed(context):
-            return {
-                "ok": False,
-                "error": "resource_organization_not_allowed",
-                "detail": (
-                    "Resource organization is only available for an explicit Resources turn "
-                    "with resource_composer_intent.mode=organize."
-                ),
             }
         if name == "run_rubric_review" and not _rubric_review_allowed(context):
             return {
@@ -1508,6 +1487,18 @@ def _resource_import_name(url: str, requested_name: Any) -> str:
     return (path_name or parsed.hostname or "Imported URL")[:200]
 
 
+def _capture_kind_for_url(url: str) -> str:
+    """Pick the controlled-capture lane before the fetch starts."""
+
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    if host in {"github.com", "www.github.com"}:
+        return "github_repo"
+    if parsed.path.lower().endswith(".pdf"):
+        return "pdf"
+    return "web"
+
+
 def _resource_model_payload(resource: Any) -> dict[str, Any]:
     if hasattr(resource, "model_dump") and callable(resource.model_dump):
         try:
@@ -1539,16 +1530,6 @@ def _resource_provenance(resource_service: Any, resource: Any) -> dict[str, Any]
 
 
 async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
-    if not _resource_url_import_allowed(context):
-        return {
-            "ok": False,
-            "error": "resource_import_not_allowed",
-            "detail": (
-                "URL import is only available for an explicit Resources turn with "
-                "resource_composer_intent.mode=download."
-            ),
-        }
-
     url, validation_error = _validate_public_http_url(args.get("url"))
     if validation_error:
         return {
@@ -1567,15 +1548,43 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
         }
 
     raw_tags = args.get("tags")
-    tags = cast(list[Any], raw_tags) if isinstance(raw_tags, list) else []
-    request = ResourceUploadRequest(
+    tags = (
+        [str(tag).strip() for tag in raw_tags if str(tag).strip()][:20]
+        if isinstance(raw_tags, list)
+        else []
+    )
+    capture_kind = _capture_kind_for_url(url)
+    try:
+        captured = capture_source(
+            capture_kind,
+            url,
+            network_enabled=True,
+            declared_title=str(args.get("name") or "").strip() or None,
+        )
+    except CaptureError as exc:
+        return {
+            "ok": False,
+            "error": "resource_capture_failed",
+            "detail": exc.detail,
+            "source": {"requested_url": url, "capture_kind": capture_kind},
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": "resource_capture_failed",
+            "detail": str(exc),
+            "source": {"requested_url": url, "capture_kind": capture_kind},
+        }
+
+    # The controlled capture pipeline reads the source and leaves a real
+    # Markdown (or PDF) snapshot in the library; a URL-only record would not be
+    # openable or teachable after the page changes.
+    request = captured.as_upload_request(
         session_id=context.session_id,
         workspace_id=context.workspace_id,
-        kind="url",
-        name=_resource_import_name(url, args.get("name")),
-        source=url,
-        source_type="url",
-        tags=[str(tag).strip() for tag in tags if str(tag).strip()][:20],
+    )
+    request = request.model_copy(
+        update={"tags": list(dict.fromkeys([*request.tags, *tags]))}
     )
     try:
         uploaded = resource_service.upload(context.workspace_id, request)
@@ -1586,7 +1595,7 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
             "ok": False,
             "error": "resource_upload_failed",
             "detail": str(exc),
-            "source": {"requested_url": url},
+            "source": {"requested_url": url, "capture_kind": capture_kind},
         }
 
     try:
@@ -1654,9 +1663,11 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
         "resource_id": payload.get("id"),
         "status": index_status or parse_status or "unknown",
         "source": {
-            "requested_url": payload.get("source") or url,
-            "canonical_url": payload.get("canonical_source") or url,
-            "fetched_at": payload.get("fetched_at"),
+            "requested_url": url,
+            "canonical_url": captured.source_url or url,
+            "fetched_at": payload.get("fetched_at") or captured.captured_at,
+            "capture_kind": captured.kind,
+            "content_format": "markdown" if captured.upload_kind == "markdown" else captured.upload_kind,
             "provenance": provenance,
         },
         "resource": payload,
@@ -1670,6 +1681,176 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
             "The URL was registered, but controlled ingestion did not produce an indexed resource."
         )
     return result
+
+
+# --- resource library management ----------------------------------------
+
+
+async def _handle_list_resources(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    repository = getattr(context.runtime, "repository", None)
+    list_resources = getattr(repository, "list_resources", None)
+    if not callable(list_resources):
+        return {
+            "ok": False,
+            "error": "service_unavailable",
+            "detail": "The resource library is not attached to this run.",
+        }
+    try:
+        resources = list(cast("Iterable[Any]", list_resources(context.workspace_id)) or [])
+    except Exception as exc:
+        return {"ok": False, "error": "resource_list_failed", "detail": str(exc)}
+
+    query = str(args.get("query") or "").strip().casefold()
+    raw_limit = args.get("limit")
+    try:
+        limit = max(1, min(int(raw_limit), 100))
+    except (TypeError, ValueError):
+        limit = 40
+    rows: list[dict[str, Any]] = []
+    for resource in resources:
+        name = str(getattr(resource, "name", "") or "")
+        summary = str(getattr(resource, "summary", "") or "")
+        if query and query not in f"{name}\n{summary}".casefold():
+            continue
+        rows.append(
+            {
+                "resource_id": str(getattr(resource, "id", "") or ""),
+                "name": name,
+                "kind": str(getattr(resource, "kind", "") or ""),
+                "parse_status": str(getattr(resource, "parse_status", "") or ""),
+                "index_status": str(getattr(resource, "index_status", "") or ""),
+                "source": str(getattr(resource, "source", "") or ""),
+                "sandbox_path": str(getattr(resource, "sandbox_path", "") or ""),
+                "summary": summary[:240],
+                "tags": list(getattr(resource, "tags", []) or []),
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return {"ok": True, "count": len(rows), "resources": rows}
+
+
+async def _handle_delete_resource(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    resource_id = str(args.get("resource_id") or "").strip()
+    if not resource_id:
+        return {
+            "ok": False,
+            "error": "missing_resource_id",
+            "detail": "delete_resource requires a resource_id.",
+        }
+    resource_service = getattr(context.runtime, "resource_service", None)
+    if resource_service is None:
+        return {
+            "ok": False,
+            "error": "service_unavailable",
+            "detail": "The resource library is not attached to this run.",
+        }
+    sandbox_service = getattr(context.runtime, "sandbox_service", None)
+    try:
+        result = resource_service.delete(
+            context.workspace_id,
+            resource_id,
+            sandbox_service=sandbox_service,
+        )
+        if inspect.isawaitable(result):
+            result = await result
+    except KeyError:
+        return {"ok": False, "error": "resource_not_found", "detail": "That resource is not in this workspace."}
+    except PermissionError as exc:
+        return {"ok": False, "error": "resource_delete_blocked", "detail": str(exc)}
+    except Exception as exc:
+        return {"ok": False, "error": "resource_delete_failed", "detail": str(exc)}
+    payload = result if isinstance(result, dict) else {}
+    removed = bool(payload.get("removed"))
+    return {
+        "ok": removed,
+        "resource_id": resource_id,
+        "removed": removed,
+        "recoverable": bool(payload.get("recoverable", True)),
+        "detail": str(payload.get("detail") or ""),
+    }
+
+
+async def _handle_restore_resource(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    resource_id = str(args.get("resource_id") or "").strip()
+    if not resource_id:
+        return {
+            "ok": False,
+            "error": "missing_resource_id",
+            "detail": "restore_resource requires a resource_id.",
+        }
+    resource_service = getattr(context.runtime, "resource_service", None)
+    if resource_service is None:
+        return {
+            "ok": False,
+            "error": "service_unavailable",
+            "detail": "The resource library is not attached to this run.",
+        }
+    sandbox_service = getattr(context.runtime, "sandbox_service", None)
+    try:
+        result = resource_service.restore_resource(
+            context.workspace_id,
+            resource_id,
+            sandbox_service=sandbox_service,
+        )
+        if inspect.isawaitable(result):
+            result = await result
+    except KeyError:
+        return {"ok": False, "error": "resource_not_found", "detail": "That resource is not in the library Trash."}
+    except Exception as exc:
+        return {"ok": False, "error": "resource_restore_failed", "detail": str(exc)}
+    payload = result if isinstance(result, dict) else {}
+    restored = payload.get("resource")
+    return {
+        "ok": True,
+        "resource_id": resource_id,
+        "resource": _resource_model_payload(restored) if restored is not None else {},
+        "reindex_required": bool(payload.get("reindex_required", True)),
+    }
+
+
+async def _handle_refresh_resource_index(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    resource_id = str(args.get("resource_id") or "").strip()
+    if not resource_id:
+        return {
+            "ok": False,
+            "error": "missing_resource_id",
+            "detail": "refresh_resource_index requires a resource_id.",
+        }
+    resource_service = getattr(context.runtime, "resource_service", None)
+    if resource_service is None:
+        return {
+            "ok": False,
+            "error": "service_unavailable",
+            "detail": "The resource library is not attached to this run.",
+        }
+    try:
+        indexed = resource_service.index(
+            context.workspace_id,
+            ResourceIndexRequest(
+                session_id=context.session_id,
+                workspace_id=context.workspace_id,
+                resource_id=resource_id,
+                enable_network=args.get("enable_network") is not False,
+            ),
+        )
+        if inspect.isawaitable(indexed):
+            indexed = await indexed
+    except KeyError:
+        return {"ok": False, "error": "resource_not_found", "detail": "That resource is not in this workspace."}
+    except Exception as exc:
+        return {"ok": False, "error": "resource_index_failed", "detail": str(exc)}
+    payload = _resource_model_payload(indexed)
+    succeeded = (
+        str(payload.get("index_status") or "").strip().lower() == "indexed"
+        and str(payload.get("parse_status") or "").strip().lower() == "parsed"
+    )
+    return {
+        "ok": succeeded,
+        "resource_id": resource_id,
+        "status": payload.get("index_status") or payload.get("parse_status") or "unknown",
+        "resource": payload,
+    }
 
 
 # --- organize_resources --------------------------------------------------
@@ -5652,22 +5833,112 @@ def build_default_tool_registry(
         ToolDefinition(
             name="import_resource_url",
             description=(
-                "Import one explicitly requested public HTTP(S) URL into the "
-                "Resources library. Use only in a Resources turn whose "
-                "resource_composer_intent.mode is download. The tool performs "
-                "controlled ingestion through ResourceService, preserves source "
-                "provenance and failure status, and never moves or deletes local files."
+                "Capture one public HTTP(S) URL into the learner's resource library. "
+                "The controlled fetcher reads the page and stores a durable, indexed "
+                "Markdown document (headings, lists, links and formatting preserved); "
+                "PDFs keep their PDF bytes and GitHub repositories keep a README "
+                "Markdown snapshot. Use this whenever the learner asks to add, save, "
+                "import, or capture a web page. Raw HTML is never placed in the library."
             ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "url": _string("Public HTTP(S) URL to import after the learner explicitly requests a download."),
-                    "name": _string("Optional display name for the imported source."),
-                    "tags": _string_array("Optional tags to attach to the imported source."),
+                    "url": _string("Public HTTP(S) URL to capture."),
+                    "name": _string("Optional display name for the captured source."),
+                    "tags": _string_array("Optional tags to attach to the captured source."),
                 },
                 "required": ["url"],
             },
             handler=_handle_import_resource_url,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="list_resources",
+            description=(
+                "List the learner's resource library for the current workspace with "
+                "resource ids, names, kinds, index status, sources, summaries and tags. "
+                "Use this to discover a resource before reading, refreshing, renaming, "
+                "moving or deleting it."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": _string("Optional case-insensitive name/summary filter."),
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum resources to return (1-100).",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "default": 40,
+                    },
+                },
+            },
+            handler=_handle_list_resources,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="delete_resource",
+            description=(
+                "Move one resource from the learner's library to Trash. This is "
+                "reversible: the record and any owned artifact are archived, and "
+                "restore_resource can bring them back. Use only when the learner "
+                "explicitly asks to delete or remove a resource."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "resource_id": _string("Resource id to move to Trash."),
+                },
+                "required": ["resource_id"],
+            },
+            handler=_handle_delete_resource,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="restore_resource",
+            description=(
+                "Restore one resource from the library Trash. The resource comes back "
+                "with pending index state; call refresh_resource_index afterwards when "
+                "the learner needs search or grounded teaching immediately."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "resource_id": _string("Resource id to restore from Trash."),
+                },
+                "required": ["resource_id"],
+            },
+            handler=_handle_restore_resource,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="refresh_resource_index",
+            description=(
+                "Re-read and re-index one resource in the library. Use after a source "
+                "changed, after restore, or when the learner asks to refresh a resource. "
+                "Network fetch is enabled by default for URL-backed sources."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "resource_id": _string("Resource id to refresh."),
+                    "enable_network": {
+                        "type": "boolean",
+                        "description": "Allow a network fetch while re-indexing (default true).",
+                        "default": True,
+                    },
+                },
+                "required": ["resource_id"],
+            },
+            handler=_handle_refresh_resource_index,
         )
     )
 

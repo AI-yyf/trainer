@@ -6,10 +6,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { readAppModuleSource } = require('./helpers/appModuleSource');
 
-const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
-const appUiCopyPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'appUiCopy.ts');
-// Round 3: the in-flight body moved into the conversation view's own store
-// subscription; App keeps the placeholder copy and the preview fallbacks.
+// The in-flight body lives in the conversation view's own store subscription.
+// App only forwards live chunks; it must not invent a canned sentence before
+// the first chunk arrives (Copilot keeps a single quiet working line instead).
 const conversationViewPath = path.resolve(
   __dirname,
   '..',
@@ -19,41 +18,41 @@ const conversationViewPath = path.resolve(
   'coach',
   'CoachConversationView.tsx',
 );
+const workingIndicatorPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'components',
+  'coach',
+  'CoachWorkingIndicator.tsx',
+);
 
-test('coach streaming placeholder stays descriptive before the first chunk arrives', () => {
+test('coach streaming shows one working label, never a canned placeholder sentence', () => {
   const source = readAppModuleSource();
   const conversationView = fs.readFileSync(conversationViewPath, 'utf8');
-  const appUiCopySource = fs.readFileSync(appUiCopyPath, 'utf8');
+  const workingIndicator = fs.readFileSync(workingIndicatorPath, 'utf8');
 
-  assert.match(source, /const streamingPlaceholderBody = useMemo\(\(\) => \{/);
+  assert.doesNotMatch(source, /streamingPlaceholderBody/);
+  assert.doesNotMatch(source, /正在梳理你的问题，然后给出第一段可见回复。/);
+  assert.doesNotMatch(source, /正在整理当前步骤，然后给出第一段可见回复。/);
+  assert.doesNotMatch(source, /streamingPlaceholder=\{/);
   assert.match(
     source,
-    /appUiCopy\(layout\.composerLanguage, "正在整理当前步骤，然后给出第一段可见回复。"\)/,
+    /: useWorkbenchState\.getState\(\)\.streaming\.streamedContent \|\| "", textLimit\)/,
   );
-  assert.match(
-    source,
-    /appUiCopy\(layout\.composerLanguage, "正在梳理你的问题，然后给出第一段可见回复。"\)/,
-  );
-  assert.match(
-    appUiCopySource,
-    /"en-US": "Working through the current step, then writing the first visible reply\."/,
-  );
-  assert.match(
-    appUiCopySource,
-    /"en-US": "Thinking through your prompt, then writing the first visible reply\."/,
-  );
-  assert.match(
-    source,
-    /: useWorkbenchState\.getState\(\)\.streaming\.streamedContent \|\| streamingPlaceholderBody,/,
-  );
-  // The live bubble itself falls back to the same placeholder, never to a
-  // fake "..." body.
+  // The live bubble falls back to live chunks only, never to fake copy.
   assert.match(
     conversationView,
-    /: storeStreamedContent \|\| streamingPlaceholder \|\| ""/,
+    /storeStreamMessageId\?\.startsWith\("training_"\)\s*\?\s*""\s*:\s*storeStreamedContent \|\| ""/,
   );
-  assert.doesNotMatch(source, /body: streaming\.streamedContent \|\| "\.\.\.",/);
   assert.doesNotMatch(conversationView, /body: .*"\.\.\."/);
+  assert.match(
+    conversationView,
+    /<CoachWorkingIndicator language=\{language\} messageId=\{storeStreamMessageId \?\? undefined\} stage=\{activeTrainerStage\} \/>/,
+  );
+  assert.match(workingIndicator, /coach-working__label/);
+  assert.match(workingIndicator, /coach-working__elapsed/);
 });
 
 test('every direct composer turn keeps streaming, even when intent analysis finds a task-shaped request', () => {

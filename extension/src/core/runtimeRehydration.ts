@@ -11,6 +11,10 @@ import { mapResourceTrash, mergeMemorySummary, mergeMemorySummarySnapshot, merge
 import { describeProviderSendState } from '../../../shared/src/providerStatus';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
 import { buildWorkspaceFileSnapshot } from './workspaceFileSnapshot';
+import {
+  currentSessionActivationGeneration,
+  isCurrentSessionActivation,
+} from './sessionActivationFence';
 
 export interface RuntimeStatusMessage {
   tone: 'info' | 'success' | 'error';
@@ -409,6 +413,15 @@ async function restoreStoredSession(
   sessionId: string,
   workspaceIdAtStart: string,
 ): Promise<string | undefined> {
+  const activationGeneration = currentSessionActivationGeneration(context);
+  if (sessionId !== context.getSessionId()) {
+    context.outputChannel.appendLine(
+      `[session] discarded stored session restore for ${sessionId}; current session is ${
+        context.getSessionId() ?? 'none'
+      }`,
+    );
+    return context.getSessionId();
+  }
   try {
     const payload = await context.sidecarClient.postJson<{ session_id?: string; snapshot?: unknown }>(
       port,
@@ -418,6 +431,12 @@ async function restoreStoredSession(
     if (getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart) {
       context.outputChannel.appendLine(
         `[session] discarded stored session restore from stale workspace ${workspaceIdAtStart}`,
+      );
+      return context.getSessionId();
+    }
+    if (!isCurrentSessionActivation(context, activationGeneration)) {
+      context.outputChannel.appendLine(
+        `[session] discarded stored session restore ${sessionId}; a newer session activation owns the UI`,
       );
       return context.getSessionId();
     }

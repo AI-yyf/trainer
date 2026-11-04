@@ -32,10 +32,6 @@ def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
         denied.append("save_formal_plan")
     if extra.get("explicit_learning_note_request") is not True:
         denied.append("record_learning_note")
-    if extra.get("explicit_resource_import") is not True:
-        denied.append("import_resource_url")
-    if extra.get("explicit_resource_organize") is not True:
-        denied.append("organize_resources")
     # Host-gated rubric review (P2 #15): arms only on an explicit learner
     # request with a host card rubric present, or a host flag.
     if extra.get("rubric_review_allowed") is not True:

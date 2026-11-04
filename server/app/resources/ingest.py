@@ -66,6 +66,29 @@ def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedCon
         raise PdfSourceDetected(response)
     downloaded = response.body.decode("utf-8", errors="replace")
 
+    # The library keeps a readable Markdown document, not the raw HTML page.
+    # trafilatura's Markdown output preserves headings, lists, tables, links and
+    # inline formatting; the plain-text pass remains the fallback when the
+    # optional extractor is unavailable or produces nothing.
+    markdown_text = ""
+    if trafilatura is not None:
+        try:
+            markdown_text = (
+                trafilatura.extract(
+                    downloaded,
+                    url=response.final_url,
+                    output_format="markdown",
+                    include_links=True,
+                    include_formatting=True,
+                    include_tables=True,
+                    include_images=False,
+                    favor_recall=True,
+                )
+                or ""
+            ).strip()
+        except Exception:
+            markdown_text = ""
+
     if trafilatura is None:
         result = {
             "title": "",
@@ -80,7 +103,7 @@ def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedCon
         raise ValueError(msg)
 
     metadata = result if isinstance(result, dict) else result.as_dict()
-    text = metadata.get("text") or ""
+    text = markdown_text or metadata.get("text") or ""
     stripped_text = text.strip()
     if not stripped_text:
         msg = f"Extracted content is empty for URL: {url}"

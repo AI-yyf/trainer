@@ -170,6 +170,9 @@ from .provider.service_support import (
     agent_tool_events as _agent_tool_events,
 )
 from .provider.service_support import (
+    has_successful_agent_tool_result as _has_successful_agent_tool_result,
+)
+from .provider.service_support import (
     agentic_recoverable_grounded_stop_reason as _agentic_recoverable_grounded_stop_reason,
 )
 from .provider.service_support import (
@@ -770,8 +773,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
     ) -> str:
         if category == "quota_exhausted":
             return provider_quota_reply(response_language)
-        detail_text = _compact_text(
-            redact_provider_error({"upstream_body": detail}, api_key=self._api_key)
+        detail_text = (
+            _compact_text(redact_provider_error(detail, api_key=self._api_key))
+            if detail
+            else ""
         )
         if _prefers_chinese(response_language):
             category_hint = {
@@ -3506,6 +3511,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         response_language: str | None = None,
         answer_mode: str | None = None,
         coach_context: dict[str, Any] | None = None,
+        grounded_completion: bool = False,
     ) -> str:
         visible_content = _strip_internal_coach_meta(content)
         visible_content = _strip_leading_html_shell_artifact(visible_content)
@@ -3542,6 +3548,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             response_language=response_language,
             answer_mode=answer_mode,
             coach_context=coach_context,
+            grounded_completion=grounded_completion,
         )
         if _should_preserve_visible_reply(
             message,
@@ -3554,6 +3561,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 current_file=current_file,
                 coach_context=coach_context,
                 response_language=response_language,
+                grounded_completion=grounded_completion,
             )
         context = extract_coaching_context(message, current_file, coach_context)
         is_non_execution_intake = (
@@ -3567,6 +3575,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 current_file=current_file,
                 coach_context=coach_context,
                 response_language=response_language,
+                grounded_completion=grounded_completion,
             )
         reframed_reply = self._postprocess_first_turn_reply(
             reply,
@@ -3581,6 +3590,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             current_file=current_file,
             coach_context=coach_context,
             response_language=response_language,
+            grounded_completion=grounded_completion,
         )
 
     def _postprocess_coaching_reply(
@@ -3593,6 +3603,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         response_language: str | None = None,
         answer_mode: str | None = None,
         coach_context: dict[str, Any] | None = None,
+        grounded_completion: bool = False,
     ) -> str:
         reply = content.strip()
         if not reply:
@@ -3686,6 +3697,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 current_file=current_file,
                 coach_context=coach_context,
                 response_language=response_language,
+                grounded_completion=grounded_completion,
             )
 
         context = extract_coaching_context(message, current_file, coach_context)
@@ -3763,7 +3775,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     current_file=current_file,
                     coach_context=coach_context,
                     response_language=response_language,
-                )
+                    grounded_completion=grounded_completion,
+                    )
         pace_signal = str(context.get("pace_signal") or "").strip()
 
         implementation_guide = (
@@ -3884,7 +3897,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         response_language: str | None = None,
         answer_mode: str | None = None,
         coach_context: dict[str, Any] | None = None,
+        tool_events: list[dict[str, Any]] | None = None,
     ) -> str:
+        grounded_completion = _has_successful_agent_tool_result(tool_events)
         reply = _strip_internal_coach_meta(content).strip()
         if not reply:
             return reply
@@ -3915,6 +3930,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 current_file=current_file,
                 coach_context=coach_context,
                 response_language=response_language,
+                grounded_completion=grounded_completion,
             )
 
         context = extract_coaching_context(message, current_file, coach_context)
@@ -3989,6 +4005,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     current_file=current_file,
                     coach_context=coach_context,
                     response_language=response_language,
+                    grounded_completion=grounded_completion,
                 )
         return _reanchor_visible_reply_to_current_request(
             reply,
@@ -3996,6 +4013,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             current_file=current_file,
             coach_context=coach_context,
             response_language=response_language,
+            grounded_completion=grounded_completion,
         )
 
     def _postprocess_first_turn_reply(
@@ -5332,6 +5350,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             response_language=response_language,
             answer_mode=answer_mode,
             coach_context=coach_context,
+            tool_events=tool_events,
         )
         reply_corruption_detail = _mixed_script_reply_corruption_detail(
             final_text,
@@ -6048,6 +6067,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             response_language=response_language,
             answer_mode=answer_mode,
             coach_context=coach_context,
+            tool_events=tool_events,
         )
         final_event["content"] = content
         if str(final_event.get("summary") or "").strip():

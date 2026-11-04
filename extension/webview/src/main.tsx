@@ -1,5 +1,7 @@
 import React, { type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
+
+performance.mark("trainer:webview-script-start");
 import "katex/dist/katex.min.css";
 
 import { sanitizeVisibleText } from "./lib/visibleText";

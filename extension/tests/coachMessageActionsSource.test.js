@@ -198,7 +198,7 @@ test('browser preview mirrors the inline upload and card generation paths', () =
 
   const appSource = readAppModuleSource();
   const handlerStart = appSource.indexOf('const handleCoachMessageAction');
-  const handler = appSource.slice(handlerStart, handlerStart + 3000);
+  const handler = appSource.slice(handlerStart, handlerStart + 5000);
   assert.match(handler, /browserPreview\.uploadBrowserPreviewResources/);
 });
 

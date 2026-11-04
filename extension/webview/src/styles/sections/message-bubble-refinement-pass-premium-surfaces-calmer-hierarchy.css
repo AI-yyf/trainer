@@ -71,12 +71,141 @@
 .settings-view section:nth-child(3) { animation-delay: 80ms; }
 .settings-view section:nth-child(n + 4) { animation-delay: 120ms; }
 
-/* 流式等待：单枚呼吸光点（ChatGPT 式）——加载时只有动画，不带文字注释；
-   思考细节由 AgentActivityStrip 同排显示。屏幕阅读器走容器的 aria-label。 */
+/* 流式等待：一枚安静的“工作中”微光文字；思考细节由 AgentActivityStrip
+   同排显示。屏幕阅读器走容器的 aria-label。 */
 .coach-streaming-dots {
   display: inline-flex;
   align-items: center;
   padding: 3px 0;
+}
+
+/* Compact working label: a quiet sheen across the text instead of a lone
+ * pulsing dot. The elapsed duration is a separate tabular span. */
+.coach-working {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 0 2px;
+}
+
+.coach-working__elapsed {
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.coach-working__label {
+  position: relative;
+  display: inline-block;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-sm);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.coach-working__label::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 72%, white 28%) 46%,
+    transparent 82%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: coach-working-sheen 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes coach-working-sheen {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+.coach-work-trail {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.coach-work-trail > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  padding: 1px 0;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-muted);
+  list-style: none;
+  cursor: pointer;
+}
+
+.coach-work-trail > summary::-webkit-details-marker {
+  display: none;
+}
+
+.coach-work-trail > summary::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.coach-work-trail[open] > summary::after {
+  transform: rotate(45deg);
+}
+
+.coach-work-trail > summary:hover {
+  color: var(--fg-1);
+}
+
+.coach-work-trail__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 3px 0 0;
+  padding: 0 0 0 10px;
+  list-style: none;
+  border-left: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+}
+
+.coach-work-trail__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--trainer-font-2xs);
+  color: var(--fg-1);
+  line-height: 1.5;
+}
+
+.coach-work-trail__row > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coach-work-trail__hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
 }
 
 .coach-streaming-orb {
@@ -129,6 +258,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .coach-working__label::after {
+    animation: none;
+    background: none;
+    opacity: 0;
+  }
+
   .coach-streaming-orb {
     animation: none;
     opacity: 0.85;
@@ -496,5 +631,47 @@
   .onboarding-setup,
   .onboarding-setup__panel {
     animation: none;
+  }
+}
+
+/* Stage-aware coach working line. The icon tile is the visual anchor; the
+   existing shimmering label keeps the live turn legible without a second
+   spinner. */
+.coach-working {
+  align-items: center;
+}
+
+.coach-working__stage-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--vscode-symbolIcon-classForeground, var(--accent));
+}
+
+.coach-working--download .coach-working__stage-icon {
+  color: var(--vscode-textLink-foreground, var(--accent));
+}
+
+.coach-working--organize .coach-working__stage-icon {
+  color: var(--warning);
+}
+
+.coach-working--cards .coach-working__stage-icon {
+  color: var(--success);
+}
+
+.coach-working--finalize .coach-working__stage-icon,
+.coach-working--think .coach-working__stage-icon {
+  color: var(--fg-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-working__stage-icon {
+    opacity: 0.9;
   }
 }

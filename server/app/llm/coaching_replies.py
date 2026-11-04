@@ -1532,6 +1532,7 @@ def _reply_needs_current_request_reanchor(
     message: str | None,
     current_file: dict[str, object] | None,
     coach_context: dict[str, Any] | None,
+    grounded_completion: bool = False,
 ) -> bool:
     resolved_guided_scenario = _resolve_first_turn_guided_lane(
         scenario=str((coach_context or {}).get("scenario") or "").strip(),
@@ -1574,6 +1575,11 @@ def _reply_needs_current_request_reanchor(
         )
         if reply_has_active_view_signal and not request_has_active_view_signal:
             return True
+    if grounded_completion:
+        # A successful tool result is real work for this request. The short
+        # "completed" reply is the outcome, not a generic completion phrase to
+        # be replaced by a reanchor.
+        return False
     return len(normalized) <= 160 and any(
         marker in normalized for marker in _GENERIC_COMPLETION_MARKERS
     )
@@ -1721,6 +1727,10 @@ def _clean_provider_failure_summary(
             "The provider reached the endpoint, but returned no usable visible reply.",
             "这个 provider 可达，但没有返回可用的可见回复。",
         ),
+        "truncated_or_empty": (
+            "The provider ended the response before it produced a complete visible coaching reply.",
+            "provider 在完整返回之前就结束了流，这一轮没有可信的完整答案。",
+        ),
         "malformed_response": (
             "The endpoint responded, but the payload did not match the configured protocol.",
             "这个 endpoint 有响应，但 payload 不符合当前配置的 protocol。",
@@ -1791,6 +1801,10 @@ def _clean_provider_failure_next_step(
             "Retest with a visible-text probe or switch to a model that returns visible text.",
             "先用 visible-text probe 重新测试，或切换到会返回可见文本的 model。",
         ),
+        "truncated_or_empty": (
+            "Raise the model's output limit or shorten the visible answer, then resend this exact turn.",
+            "先提高 model 的输出上限或缩短可见答案，再重发这一轮。",
+        ),
         "malformed_response": (
             "Check that the endpoint really speaks the configured protocol, then retest and resend this exact turn.",
             "先确认这个 endpoint 真的支持当前配置的 protocol，再测试并重发这一轮。",
@@ -1831,8 +1845,10 @@ def _clean_provider_failure_reply(
 ) -> str:
     if category == "quota_exhausted":
         return provider_quota_reply(response_language)
-    detail_text = _compact_text(
-        redact_provider_error({"upstream_body": detail}, api_key=self._api_key)
+    detail_text = (
+        _compact_text(redact_provider_error(detail, api_key=self._api_key))
+        if detail
+        else ""
     )
     summary = self.provider_failure_summary(category, response_language)
     next_step = self.provider_failure_next_step(category, response_language)

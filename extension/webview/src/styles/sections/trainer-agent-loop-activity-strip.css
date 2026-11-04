@@ -186,3 +186,74 @@
   }
 }
 
+
+/* Live stage: one icon tile + one moving rail, so a long turn reads as
+   "Trainer is retrieving / downloading / organizing / creating cards" rather
+   than an undifferentiated spinner. */
+.agent-activity-strip {
+  position: relative;
+}
+
+.agent-activity-strip__stage {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--vscode-symbolIcon-classForeground, var(--accent));
+}
+
+.agent-activity-strip__stage--download {
+  color: var(--vscode-textLink-foreground, var(--accent));
+}
+
+.agent-activity-strip__stage--organize {
+  color: var(--warning);
+}
+
+.agent-activity-strip__stage--cards {
+  color: var(--success);
+}
+
+.agent-activity-strip__stage--finalize,
+.agent-activity-strip__stage--think {
+  color: var(--fg-muted);
+}
+
+.agent-activity-strip__progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: var(--space-2);
+  height: 1.5px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--line) 45%, transparent);
+}
+
+.agent-activity-strip__progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: trainer-stage-progress 1.6s var(--ease-out) infinite;
+}
+
+@keyframes trainer-stage-progress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(240%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-activity-strip__progress::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.55;
+    background: var(--accent);
+  }
+}

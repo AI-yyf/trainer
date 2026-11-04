@@ -4,6 +4,11 @@
 
 .trainer-shell {
   --trainer-gutter: 12px;
+  /* Coach reads as one calm column: real side gutters at every width and a
+     capped measure on wide sidebars, matching Copilot Chat rather than a
+     full-bleed document. */
+  --coach-gutter: clamp(16px, 4vw, 28px);
+  --coach-content-max: 660px;
   display: flex;
   flex-direction: column;
   height: 100%;

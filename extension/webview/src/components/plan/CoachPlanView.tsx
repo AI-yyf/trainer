@@ -36,6 +36,7 @@ import {
 import { TrainingNavIcon } from "../icons/navigation/coreNav";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import { resolvePlanViewCopy } from "../../lib/i18n/planViewCopy";
+import { resolveLearningTodayCopy } from "../../lib/i18n/segments/learningTodayCopy";
 import {
   PLAN_COPY,
   type PlanCopyKey,
@@ -1113,6 +1114,21 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const proofDebtCount = (props.dueReviewItems?.length ?? 0) + evidenceDebtCount;
   const hasProofDetails = hasReviewDetails || evidenceDebtCount > 0;
   const hasSettledEvidence = hasEvidenceDetails && evidenceDebtCount === 0;
+  const todayCopy = resolveLearningTodayCopy(language);
+  const todayTotal = Math.max(plan.stages.length, 1);
+  const todayProgress = Math.round((completedStages.length / todayTotal) * 100);
+  const learningToday = {
+    eyebrow: todayCopy.eyebrow,
+    title: activeStageTitle || plan.title,
+    detail: stageProgressText || plan.summary,
+    progress: Math.max(0, Math.min(100, todayProgress)),
+    done: completedStages.length,
+    total: todayTotal,
+    due: proofDebtCount,
+    dueLabel: todayCopy.due,
+    remaining: Math.max(todayTotal - completedStages.length, 0),
+    remainingLabel: todayCopy.remaining,
+  };
 
   const evidenceDisclosure = hasEvidenceDetails ? (
     <details
@@ -1207,6 +1223,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       currentLabel={templateCopy[language].currentLearning}
       title={plan.title}
       stage={stageProgressText ? `${stageProgressText} · ${activeStageTitle}` : activeStageTitle}
+      today={learningToday}
       headerActions={expandToEditorControl}
       state={learningSystemState}
       next={props.primaryAction}

@@ -7,17 +7,44 @@ import pytest
 
 from app.core.models import ResourceIndexRequest, ResourceRecord, ResourceUploadRequest
 from app.llm.tools import ToolContext, build_default_tool_registry
+from app.resources.capture import CapturedSource
 
 
-def _context(resource_service: object, *, mode: str = "download", active_view: str = "resources") -> ToolContext:
+def _context(
+    resource_service: object,
+    *,
+    mode: str = "download",
+    active_view: str = "resources",
+    runtime: object | None = None,
+) -> ToolContext:
     return ToolContext(
-        runtime=SimpleNamespace(resource_service=resource_service),
+        runtime=runtime or SimpleNamespace(resource_service=resource_service),
         workspace_id="workspace-url-tool",
         session_id="session-url-tool",
         extra={
             "active_view": active_view,
             "resource_composer_intent": {"mode": mode},
         },
+    )
+
+
+def _captured_source() -> CapturedSource:
+    return CapturedSource(
+        kind="web",
+        source_url="https://final.example/source",
+        title="Imported source",
+        content="# Imported source\n\nBody with [link](https://example.com).\n",
+        content_encoding=None,
+        upload_kind="markdown",
+        tags=(
+            "trainer-capture:web",
+            "captured-from:https://origin.example/source",
+        ),
+        capture_url="https://final.example/source",
+        content_hash="hash",
+        selection_present=False,
+        source_domain="example.com",
+        captured_at="2026-07-30T00:00:00+00:00",
     )
 
 
@@ -33,9 +60,9 @@ def _resource(
 ) -> ResourceRecord:
     return ResourceRecord(
         id=resource_id,
-        kind="url",
+        kind="markdown",
         name="Imported source",
-        source="https://origin.example/source",
+        source="/library/imported-source.md",
         summary="Imported summary",
         parse_status=parse_status,
         index_status=index_status,
@@ -47,7 +74,9 @@ def _resource(
 
 
 @pytest.mark.asyncio
-async def test_import_resource_url_calls_resource_service_and_returns_provenance() -> None:
+async def test_import_resource_url_captures_markdown_and_returns_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     uploaded = _resource(resource_id="resource-url-1", index_status="pending", parse_status="pending")
     indexed = _resource(
         resource_id="resource-url-1",
@@ -75,6 +104,7 @@ async def test_import_resource_url_calls_resource_service_and_returns_provenance
         upload=Mock(return_value=uploaded),
         index=Mock(return_value=indexed),
     )
+    monkeypatch.setattr("app.llm.tools.capture_source", lambda *args, **kwargs: _captured_source())
 
     result = await build_default_tool_registry().invoke(
         _context(service),
@@ -87,18 +117,23 @@ async def test_import_resource_url_calls_resource_service_and_returns_provenance
     assert result["status"] == "indexed"
     assert result["source"]["requested_url"] == "https://origin.example/source"
     assert result["source"]["canonical_url"] == "https://final.example/source"
+    assert result["source"]["content_format"] == "markdown"
     assert result["source"]["provenance"]["status"] == "fetched"
     upload_request = service.upload.call_args.args[1]
     index_request = service.index.call_args.args[1]
     assert isinstance(upload_request, ResourceUploadRequest)
-    assert upload_request.kind == "url"
-    assert upload_request.source_type == "url"
+    assert upload_request.kind == "markdown"
+    assert upload_request.source.startswith("inline://trainer-capture/web/")
+    assert "# Imported source" in (upload_request.content or "")
+    assert "docs" in upload_request.tags
     assert isinstance(index_request, ResourceIndexRequest)
     assert index_request.enable_network is True
 
 
 @pytest.mark.asyncio
-async def test_import_resource_url_returns_failed_index_facts_without_hiding_error() -> None:
+async def test_import_resource_url_returns_failed_index_facts_without_hiding_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     uploaded = _resource(resource_id="resource-url-failed", index_status="pending", parse_status="pending")
     failed = _resource(
         resource_id="resource-url-failed",
@@ -112,6 +147,7 @@ async def test_import_resource_url_returns_failed_index_facts_without_hiding_err
         upload=Mock(return_value=uploaded),
         index=Mock(return_value=failed),
     )
+    monkeypatch.setattr("app.llm.tools.capture_source", lambda *args, **kwargs: _captured_source())
 
     result = await build_default_tool_registry().invoke(
         _context(service),
@@ -127,24 +163,36 @@ async def test_import_resource_url_returns_failed_index_facts_without_hiding_err
 
 
 @pytest.mark.asyncio
-async def test_import_resource_url_rejects_non_download_or_non_resources_turn() -> None:
-    service = SimpleNamespace(upload=Mock(), index=Mock())
+async def test_import_resource_url_runs_from_an_ordinary_coach_turn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    uploaded = _resource(resource_id="resource-url-coach", index_status="pending", parse_status="pending")
+    indexed = _resource(resource_id="resource-url-coach", index_status="indexed", parse_status="parsed")
+    service = SimpleNamespace(
+        registry=SimpleNamespace(get=Mock(return_value=SimpleNamespace(metadata={}))),
+        upload=Mock(return_value=uploaded),
+        index=Mock(return_value=indexed),
+    )
+    monkeypatch.setattr("app.llm.tools.capture_source", lambda *args, **kwargs: _captured_source())
 
     result = await build_default_tool_registry().invoke(
-        _context(service, mode="locate", active_view="resources"),
+        _context(service, mode="locate", active_view="coach"),
         "import_resource_url",
         {"url": "https://example.com/source"},
     )
 
-    assert result["ok"] is False
-    assert result["error"] == "resource_import_not_allowed"
-    service.upload.assert_not_called()
-    service.index.assert_not_called()
+    assert result["ok"] is True
+    service.upload.assert_called_once()
+    service.index.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_import_resource_url_rejects_missing_and_invalid_urls_before_service_call() -> None:
+async def test_import_resource_url_rejects_missing_and_invalid_urls_before_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     service = SimpleNamespace(upload=Mock(), index=Mock())
+    capture = Mock()
+    monkeypatch.setattr("app.llm.tools.capture_source", capture)
     registry = build_default_tool_registry()
     context = _context(service)
 
@@ -158,5 +206,55 @@ async def test_import_resource_url_rejects_missing_and_invalid_urls_before_servi
     }
     assert invalid["ok"] is False
     assert invalid["error"] == "invalid_url"
+    capture.assert_not_called()
     service.upload.assert_not_called()
     service.index.assert_not_called()
+
+
+def test_resource_management_tools_are_always_visible() -> None:
+    names = {
+        schema["function"]["name"]
+        for schema in build_default_tool_registry().as_protocol_schemas(
+            "openai_chat_completions",
+            allow_coach_only=True,
+        )
+    }
+    for name in (
+        "import_resource_url",
+        "organize_resources",
+        "list_resources",
+        "delete_resource",
+        "restore_resource",
+        "refresh_resource_index",
+    ):
+        assert name in names
+
+
+@pytest.mark.asyncio
+async def test_delete_and_restore_resource_tools_use_reversible_trash() -> None:
+    restored_resource = _resource(
+        resource_id="resource-trash-1",
+        index_status="pending",
+        parse_status="pending",
+    )
+    service = SimpleNamespace(
+        delete=Mock(return_value={"removed": True, "recoverable": True, "detail": "trashed"}),
+        restore_resource=Mock(
+            return_value={"resource": restored_resource, "reindex_required": True}
+        ),
+    )
+    runtime = SimpleNamespace(resource_service=service, sandbox_service=None)
+    context = _context(service, runtime=runtime)
+    registry = build_default_tool_registry()
+
+    deleted = await registry.invoke(context, "delete_resource", {"resource_id": "resource-trash-1"})
+    restored = await registry.invoke(context, "restore_resource", {"resource_id": "resource-trash-1"})
+
+    assert deleted["ok"] is True
+    assert deleted["removed"] is True
+    assert deleted["recoverable"] is True
+    assert restored["ok"] is True
+    assert restored["reindex_required"] is True
+    assert restored["resource"]["id"] == "resource-trash-1"
+    service.delete.assert_called_once()
+    service.restore_resource.assert_called_once()

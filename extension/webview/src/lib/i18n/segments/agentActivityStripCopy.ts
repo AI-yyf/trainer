@@ -156,6 +156,46 @@ export const TOOL_LABELS: Record<string, Record<ComposerLanguage, string>> = {
     "fr-FR": "Génération de carte", "de-DE": "Kartenerstellung",
     "ja-JP": "カード生成", "ko-KR": "카드 생성", "pt-BR": "Geração de cartão",
   },
+  import_resource_url: {
+    "zh-CN": "导入网页", "en-US": "Import page", "es-ES": "Importar página",
+    "fr-FR": "Importer la page", "de-DE": "Seite importieren",
+    "ja-JP": "ページをインポート", "ko-KR": "페이지 가져오기", "pt-BR": "Importar página",
+  },
+  list_resources: {
+    "zh-CN": "浏览资料", "en-US": "List resources", "es-ES": "Listar recursos",
+    "fr-FR": "Lister les ressources", "de-DE": "Ressourcen auflisten",
+    "ja-JP": "資料一覧", "ko-KR": "자료 목록", "pt-BR": "Listar recursos",
+  },
+  delete_resource: {
+    "zh-CN": "删除资料", "en-US": "Delete resource", "es-ES": "Eliminar recurso",
+    "fr-FR": "Supprimer la ressource", "de-DE": "Ressource löschen",
+    "ja-JP": "資料を削除", "ko-KR": "자료 삭제", "pt-BR": "Excluir recurso",
+  },
+  restore_resource: {
+    "zh-CN": "恢复资料", "en-US": "Restore resource", "es-ES": "Restaurar recurso",
+    "fr-FR": "Restaurer la ressource", "de-DE": "Ressource wiederherstellen",
+    "ja-JP": "資料を復元", "ko-KR": "자료 복원", "pt-BR": "Restaurar recurso",
+  },
+  refresh_resource_index: {
+    "zh-CN": "刷新索引", "en-US": "Refresh index", "es-ES": "Actualizar índice",
+    "fr-FR": "Actualiser l'index", "de-DE": "Index aktualisieren",
+    "ja-JP": "インデックス更新", "ko-KR": "색인 새로 고침", "pt-BR": "Atualizar índice",
+  },
+  organize_resources: {
+    "zh-CN": "整理资料", "en-US": "Organize library", "es-ES": "Organizar biblioteca",
+    "fr-FR": "Organiser la bibliothèque", "de-DE": "Bibliothek organisieren",
+    "ja-JP": "ライブラリ整理", "ko-KR": "라이브러리 정리", "pt-BR": "Organizar biblioteca",
+  },
+  write_sandbox_file: {
+    "zh-CN": "写入资料", "en-US": "Write library file", "es-ES": "Escribir archivo",
+    "fr-FR": "Écrire un fichier", "de-DE": "Datei schreiben",
+    "ja-JP": "ファイル書き込み", "ko-KR": "파일 쓰기", "pt-BR": "Escrever arquivo",
+  },
+  index_sandbox_file: {
+    "zh-CN": "索引资料", "en-US": "Index file", "es-ES": "Indexar archivo",
+    "fr-FR": "Indexer le fichier", "de-DE": "Datei indexieren",
+    "ja-JP": "ファイルを索引", "ko-KR": "파일 색인", "pt-BR": "Indexar arquivo",
+  },
   run_diagnostics: {
     "zh-CN": "运行诊断", "en-US": "Run diagnostics", "es-ES": "Ejecutar diagnóstico",
     "fr-FR": "Exécuter le diagnostic", "de-DE": "Diagnose ausführen",

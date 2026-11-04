@@ -200,13 +200,11 @@ test('coach agent activity renders as a normalized lightweight progress rail', (
   const activityMeta = styles.match(/\.agent-activity-strip__meta\s*\{[\s\S]*?\n\}/);
   const activityWorking = styles.match(/\.agent-activity-strip__working\s*\{[\s\S]*?\n\}/);
 
-  assert.match(source, /const displayStep/);
-  assert.match(source, /step >= activities\.length \? step : step \+ 1/);
-  assert.match(
-    source,
-    /agentActivityStripCopy\(language, "第 \{n\} 步"\)\.replace\("\{n\}", String\(displayStep\)\)/,
-  );
-  assert.doesNotMatch(source, /`Step \$\{step \+ 1\}`/);
+  assert.match(source, /currentTrainerStage\(activities, language\)/);
+  assert.match(source, /trainerStageLabel\("finalize", language\)/);
+  assert.match(source, /agent-activity-strip__progress/);
+  assert.doesNotMatch(source, /displayStep/);
+  assert.doesNotMatch(source, /activityPills/);
   assert.match(activityStrip[0], /border-left/);
   assert.doesNotMatch(activityStrip[0], /border:\s*1px/);
   assert.ok(activityMeta, 'expected meta styles');
@@ -222,14 +220,16 @@ test('coach activity details render flat with no fold toggling mid-stream', () =
     'utf8',
   );
 
-  // Tool activity is a live progress rail: pills and the stop reason stay
-  // visible without a disclosure that opens/closes as steps settle.
+  // Progressive disclosure: the live strip shows one stage line and a moving
+  // rail; completed tool pills stay in the message work trail.
   assert.doesNotMatch(source, /CollapsibleBlock/);
   assert.doesNotMatch(source, /collapsible\?: boolean/);
   assert.doesNotMatch(source, /运行详情/);
   assert.doesNotMatch(conversation, /collapsible/);
-  assert.match(source, /activityPills\(activities, language\)/);
+  assert.doesNotMatch(source, /activityPills/);
+  assert.doesNotMatch(source, /displayStep/);
   assert.match(source, /stopReasonLine\(stopReason, language\)/);
+  assert.match(source, /agent-activity-strip__progress/);
 });
 
 test('coach context status does not become a second transcript message', () => {
@@ -607,7 +607,14 @@ test('Composer expansion decks keep flat idle rows and visible selected/focus st
   assert.match(commandTrigger[0], /border:\s*0/);
   assert.match(paletteStyles, /\.template-command-palette__entry \{[^}]*border: 0;[^}]*background: transparent;/);
   assert.match(paletteStyles, /\.template-command-palette__entry:is\(:hover, \.is-active\) \{[^}]*background: var\(--bg-1\)/);
-  assert.match(paletteStyles, /\.template-command-palette__entry\[aria-selected="true"\] \{[^}]*var\(--accent\)/);
+  assert.match(
+    paletteStyles,
+    /\.template-command-palette__entry\[aria-selected="true"\] \{[^}]*background: var\(--bg-2\)/,
+  );
+  assert.doesNotMatch(
+    paletteStyles,
+    /\.template-command-palette__entry\[aria-selected="true"\] \{[^}]*var\(--accent\)/,
+  );
   assert.match(paletteStyles, /\.template-command-palette__entry:focus-visible/);
 });
 

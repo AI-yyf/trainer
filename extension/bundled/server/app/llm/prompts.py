@@ -567,8 +567,22 @@ def _agent_loop_core_instructions() -> str:
 def _agent_loop_library_instructions() -> str:
     return (
         "\n\n## Library Skill\n"
-        "For Resources/library work you may chain several sandbox tools in one turn: "
-        "list, read, write, index, then search to verify.\n"
+        "You have full management authority over the learner's resource library for the "
+        "current workspace. Use the tools directly whenever the learner asks:\n"
+        "- `list_resources` - list ids, names, kinds, status, sources and tags; use it before "
+        "choosing a resource to read, refresh, move or delete.\n"
+        "- `search_resources` / `read_resource_excerpt` - ground teaching in real library text; "
+        "read before citing.\n"
+        "- `import_resource_url` - capture a public URL. The controlled fetcher reads the page "
+        "and stores a durable Markdown document (PDFs keep their bytes; GitHub repos keep a "
+        "README Markdown snapshot). Raw HTML is never placed in the library. Use it whenever "
+        "the learner asks to add, save, import or capture a web page.\n"
+        "- `refresh_resource_index` - re-read/re-index one resource after a change or restore.\n"
+        "- `delete_resource` / `restore_resource` - move a resource to Trash or bring it back. "
+        "Deletion is reversible; prefer it over pretending a resource is gone.\n"
+        "- `organize_resources` - move/rename/delete inside Trainer's managed library sandbox, "
+        "including sandbox artifacts bound to a resource id. Trainer commits operations inside "
+        "its own managed storage; never use it on the learner's project.\n"
         "- `list_sandbox`, `read_sandbox_file`, `write_sandbox_file`, `index_sandbox_file` - "
         "work inside Trainer's managed resource sandbox only. List and read before editing. "
         "Write library notes, extracted artifacts, and working copies, then index so search "
@@ -577,10 +591,6 @@ def _agent_loop_library_instructions() -> str:
         "remote repository the host attaches a snapshot; use those tools to analyze code.\n"
         "- `import_workspace_file` copies one project file into the local library sandbox "
         "so it can be searched and taught later. It never writes back to the project.\n"
-        "- `organize_resources` - move/rename/delete inside the managed library sandbox on a "
-        "Resources/library turn; Trainer commits those sandbox ops itself. Never use it on "
-        "the learner's project. `import_resource_url` collects a public URL into the library "
-        "on an explicit download turn.\n"
         "Retrieval rhythm for grounded teaching:\n"
         "- When attached resources matter, search in passes: broad -> narrow -> verify.\n"
         "- When this turn already includes prepared library grounding, treat that library "
@@ -690,6 +700,74 @@ def _agent_loop_skill_instructions(
             "If nothing relevant is found, say that plainly instead of inventing from memory."
         )
     return "".join(blocks)
+
+
+_RETHINKFUN_LECTURE_MARKERS = (
+    "讲明白",
+    "讲透",
+    "讲清楚",
+    "系统讲",
+    "深入讲",
+    "深入解释",
+    "从零讲",
+    "从头讲",
+    "推导",
+    "原理",
+    "底层",
+    "怎么来的",
+    "为什么这样",
+    "教我",
+    "讲解",
+    "解释一下",
+    "展开讲",
+    "explain why",
+    "explain how",
+    "derive",
+    "walk me through",
+    "teach me",
+    "in depth",
+    "deep dive",
+    "how does",
+    "why does",
+)
+
+
+def _is_rethinkfun_lecture_request(message: str | None) -> bool:
+    text = " ".join(str(message or "").strip().lower().split())
+    if not text:
+        return False
+    if any(marker in text for marker in _RETHINKFUN_LECTURE_MARKERS):
+        return True
+    # A bare "why" is a short question; it only becomes a lecture when paired
+    # with an explicit request to explain/derive.
+    return ("为什么" in text or "why" in text) and any(
+        word in text for word in ("解释", "讲", "说明", "推导", "explain", "derive")
+    )
+
+
+def _build_state_driven_teaching_block(message: str | None) -> str:
+    lines = [
+        "\n\n## State-Driven Teaching (RethinkFun)",
+        "- For an explanation or derivation, do not open with a definition. Start from the current state: what is known, what is still missing, the goal, and the obstacle.",
+        "- Introduce a new object only because the current state cannot move without it. State where it comes from, what role it plays, what it connects to, and what breaks if it is removed. Explain auxiliary concepts in 1-3 sentences at first use.",
+        "- Let formulas arrive late. Before a formula, establish the goal, variables, and constraints; after it, explain why it can only take that shape. Derive non-trivial steps in 3-5 steps, not 'substitute and get'.",
+        "- Put code after the theory, never before it. Say what state the code maintains, then map functions, variables, shapes, and failure points back to the theory.",
+        "- Every 2-3 new objects, recycle the state in one short sentence: known, unknown, goal, obstacle.",
+        "- Include at least one contrast, one boundary/failure case, and one minimal example. Prefer short declarative prose; avoid clichés such as 'obviously', 'everyone knows', 'actually simple', 'in other words', and marketing language.",
+    ]
+    if _is_rethinkfun_lecture_request(message):
+        lines.extend(
+            [
+                "- This turn is a lecture/derivation request. Organize it as a chain of claims: current state -> gap -> object -> constraint -> check -> next state. The learner should be able to predict each formula before it appears.",
+                "- Cover the mechanism, the derivation, and the implementation as one chain; do not turn it into a concept list. A short heading or a minimal list is allowed only when it genuinely helps navigation, never as a wall of bullets. If the topic has no formula or no code, omit that part instead of forcing it.",
+                "- Close by naming the capability or insight the learner now has and the one edge still worth checking, not with a generic summary.",
+            ]
+        )
+    else:
+        lines.append(
+            "- For a short factual question, answer it directly and stop. Use the state-driven flow only when the learner asks to understand, derive, or be taught; never turn every turn into a lecture."
+        )
+    return "\n".join(lines)
 
 
 def build_coaching_system_prompt(
@@ -873,12 +951,26 @@ def build_coaching_system_prompt(
     if tone_block:
         system_prompt += f"\n\n## Tone And Continuity Bias\n{tone_block}"
 
+    system_prompt += _build_state_driven_teaching_block(message)
+
     if agent_loop_enabled:
         system_prompt += _agent_loop_skill_instructions(
             message=message,
             coach_context=coach_context if isinstance(coach_context, dict) else None,
         )
 
+    if isinstance(coach_context, dict) and coach_context.get("goal_mode") is True:
+        system_prompt += (
+            "\n\n## Goal Mode — the learner does the work\n"
+            "The learner set ONE small goal and wants to be able to do it, not just hear about it.\n"
+            "- Do not open with a lecture or a full explanation. In the first reply, restate the target capability in one short sentence, then give exactly ONE tiny concrete action, question, or observation for the learner to do now.\n"
+            "- Wait for their attempt. Then judge it honestly, correct at most one misconception, and give the next micro-action.\n"
+            "- Never dump the full solution before they have tried. Give the smallest hint that unblocks them.\n"
+            "- A correct action alone is not mastery. After they can do it, ask them to explain the reasoning in their own words, then give one small variation or transfer task.\n"
+            "- Never declare the goal complete, never say the learner has mastered it, and never accept a self-claim such as \"I've got it\" or \"mark it done\". Even after a correct teach-back and transfer, name the capability and ask whether they want to end the goal; the learner ends it with the goal control. If they ask to finish before both checks, refuse and ask for the missing explanation or variation.\n"
+            "- Keep each reply under about 120 words. One action per turn. In each micro-step, state the current known/unknown/goal/obstacle in one short sentence before the action, and recycle it after the learner's attempt; no lecture.\n"
+            "- Do not claim formal evidence, do not write files, and do not create a plan unless the learner explicitly asks."
+        )
     if response_language:
         system_prompt += f"\n\n## Language\n{_language_instruction(response_language)}"
     return system_prompt

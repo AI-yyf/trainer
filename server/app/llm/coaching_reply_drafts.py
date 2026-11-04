@@ -286,12 +286,14 @@ def _reanchor_visible_reply_to_current_request(
     current_file: dict[str, object] | None,
     coach_context: dict[str, Any] | None,
     response_language: str | None,
+    grounded_completion: bool = False,
 ) -> str:
     if not _reply_needs_current_request_reanchor(
         reply,
         message=message,
         current_file=current_file,
         coach_context=coach_context,
+        grounded_completion=grounded_completion,
     ):
         return reply
     repaired = _relevance_reanchor_visible_reply(

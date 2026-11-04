@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const { loadWithVscodeMock } = require('./helpers/loadWithVscodeMock');
@@ -1761,4 +1762,16 @@ test('delete A demotes B transferable and queues exclude when sidecar is not rea
   assert.ok(excludeCall.body.workspaceIds.includes('workspace-a'));
   assert.ok(!excludeCall.body.workspaceIds.includes('workspace-b'));
   assert.equal(context.__globalState.get('trainer.transfer.pendingPromotionScope'), undefined);
+});
+
+
+test('admission mutations serialize and report the persisted mode', () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, '..', 'src', 'commands', 'workspaceAdmissionCommands.ts'),
+    'utf8',
+  );
+  assert.match(source, /admissionMutationQueue/);
+  assert.match(source, /serializeAdmissionMutation/);
+  assert.match(source, /runSetCurrentWorkspaceProjectAdmission/);
+  assert.match(source, /persistedAdoptionMode/);
 });

@@ -47,6 +47,7 @@ const vscodeMock = { workspace: { name: 'trainer' }, env: { language: 'zh-cn' } 
 
 const { createDefaultBootstrapData } = loadWithVscodeMock(workbenchDataModulePath, vscodeMock);
 const { rehydrateWorkbenchRuntime } = loadWithVscodeMock(runtimeRehydrationModulePath, vscodeMock);
+const { bumpSessionActivationGeneration } = require('../dist/extension/src/core/sessionActivationFence.js');
 
 // The host derives the runtime workspace id from the sovereign project path
 // and normalizes it with the host platform's path rules (on Windows the same
@@ -216,3 +217,50 @@ test('a stale stored session id self-heals to the workspace latest thread', asyn
     ],
   );
 });
+
+test('a stored-session restore cannot overwrite a newer chat started while it is in flight', async () => {
+  const sessions = new Map([
+    ['session-saved', { sessionId: 'session-saved', messages: SAVED_MESSAGES }],
+    // The new chat has its own empty thread; the later memory refresh must not
+    // resurrect the saved transcript through the fake's latest-session fallback.
+    ['session-new', { sessionId: 'session-new', messages: [] }],
+  ]);
+  const sidecar = createFakeSidecar(sessions, 'session-saved');
+  let releaseActivate;
+  const activateGate = new Promise((resolve) => {
+    releaseActivate = resolve;
+  });
+  let markActivateStarted;
+  const activateStarted = new Promise((resolve) => {
+    markActivateStarted = resolve;
+  });
+  const originalPost = sidecar.postJson;
+  sidecar.postJson = async (...args) => {
+    if (args[1] === '/session/activate') {
+      markActivateStarted();
+      await activateGate;
+    }
+    return originalPost(...args);
+  };
+
+  const sessionIds = [];
+  const { context, hostState } = createReloadedHost(sidecar, 'session-saved', sessionIds);
+  const rehydration = rehydrateWorkbenchRuntime(context, {
+    ensureSidecar: true,
+    syncWorkbench: true,
+  });
+  await activateStarted;
+
+  // The user starts a new chat while the stored restore is still in flight.
+  bumpSessionActivationGeneration(context);
+  await context.setSessionId('session-new');
+  hostState.bootstrap.conversation = [];
+  releaseActivate();
+  await rehydration;
+
+  // The late restore must not write the old id or transcript back.
+  assert.equal(hostState.sessionId, 'session-new');
+  assert.deepEqual(sessionIds, ['session-new']);
+  assert.deepEqual(hostState.bootstrap.conversation, []);
+});
+

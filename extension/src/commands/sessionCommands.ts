@@ -6,6 +6,11 @@ import { SIDECAR_DEFAULTS } from '../core/constants';
 import { SidecarHttpError, SidecarRequestAbortedError, type SSEMessage } from '../core/httpClient';
 import { recordSendFirstTokenMs } from '../core/runtimeMetrics';
 import { trainerSessionBlockReason } from '../core/runtimeRehydration';
+import {
+  bumpSessionActivationGeneration,
+  currentSessionActivationGeneration,
+  isCurrentSessionActivation,
+} from '../core/sessionActivationFence';
 import type {
   BootstrapData,
   CoachSettingsPayload,
@@ -1894,6 +1899,7 @@ export async function sendMessageCommand(
     workspace_file_snapshot: workspaceFileSnapshot,
     response_language: sessionPayload?.responseLanguage,
     answer_mode: normalizeAnswerMode(sessionPayload?.answerMode),
+    goal_mode: sessionPayload?.goalMode === true,
     teaching_style: sessionPayload?.teachingStyle,
     coach_defaults: sessionPayload?.coachDefaults,
     attachments: normalizeAttachments(sessionPayload?.attachments),
@@ -2157,6 +2163,7 @@ export async function sendStreamMessageCommand(
       workspace_file_snapshot: workspaceFileSnapshot,
       response_language: streamPayload.responseLanguage,
       answer_mode: normalizeAnswerMode(streamPayload.answerMode),
+      goal_mode: streamPayload.goalMode === true,
       teaching_style: streamPayload.teachingStyle,
       coach_defaults: streamPayload.coachDefaults,
       attachments: normalizeAttachments(streamPayload.attachments),
@@ -2314,6 +2321,44 @@ export async function sendStreamMessageCommand(
           };
         }
         await context.patchWorkbenchData(patch);
+        // Agent resource tools mutate the library inside the sidecar. The turn
+        // snapshot can be built before those writes land, so refresh the
+        // authoritative resource list once when a mutating resource tool ran.
+        const resourceMutationTools = new Set([
+          'import_resource_url',
+          'delete_resource',
+          'restore_resource',
+          'refresh_resource_index',
+          'organize_resources',
+          'write_sandbox_file',
+          'index_sandbox_file',
+        ]);
+        const usedResourceTool = (context.getStreamingState().agentActivity ?? []).some(
+          (activity) => resourceMutationTools.has(activity.name),
+        );
+        if (usedResourceTool) {
+          try {
+            const runtimeWorkspaceId = getRuntimeWorkspaceId(context);
+            const summary = await fetchMemorySummaryForWorkspace(
+              context,
+              runtimeWorkspaceId,
+              context.getSessionId(),
+            );
+            await context.patchWorkbenchData(
+              mergeMemorySummarySnapshot(
+                context.getHostState().bootstrap,
+                summary,
+                runtimeWorkspaceId,
+              ),
+            );
+          } catch (error) {
+            context.outputChannel?.appendLine(
+              `[trainer] post-agent resource refresh failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+        }
         break;
       }
 
@@ -3310,6 +3355,9 @@ export async function restartSessionCommand(
   if (workspaceGate) {
     return workspaceGate;
   }
+  // A force-new chat owns the visible session. Invalidate any stored-session
+  // restore or activation that started before this command.
+  bumpSessionActivationGeneration(context);
 
   await invalidateActiveTrainerStreams(context);
 
@@ -3336,6 +3384,9 @@ export async function restartSessionCommand(
   const startedSessionId =
     asNonEmptyString(asTrainingRecord(response)?.session_id) ?? context.getSessionId();
   await context.setStreamingState(createEmptyTrainerStreamingState());
+  // A restore that read the old id while /session/start was in flight must
+  // not commit after the new id becomes authoritative.
+  bumpSessionActivationGeneration(context);
   await context.setSessionId(startedSessionId);
   const startSnapshot = mergeSessionStartSnapshot(
     context.getHostState().bootstrap,
@@ -3636,6 +3687,7 @@ function extractSessionPayload(payload: unknown): ResourceComposerSessionMessage
       asRecord.answerMode === 'direct'
         ? asRecord.answerMode
         : undefined,
+    goalMode: asRecord.goalMode === true ? true : undefined,
     coachDefaults: coachDefaultsRecord
       ? {
           memoryScope:
@@ -3843,7 +3895,11 @@ async function getCurrentFilePayload(
       related_files?: Array<{ path: string; reason: string; excerpt?: string; line_span?: string }>;
     }
   | undefined> {
-  const editor = vscode.window?.activeTextEditor;
+  // A webview view takes focus and VS Code can clear activeTextEditor even
+  // though the user's editor and selection are still the intended context.
+  // Older test doubles and host shims may not expose the tracker yet.
+  const lastActiveEditor = context.trustGuard?.getLastActiveEditor?.();
+  const editor = vscode.window?.activeTextEditor ?? lastActiveEditor;
   if (!editor) {
     return undefined;
   }
@@ -4480,33 +4536,7 @@ export async function listCoachSessionsCommand(
   }
 }
 
-// Session selection identity: only the newest activate request may commit.
-// A slow activation for session A must never overwrite a newer selection of B,
-// and a workspace switch during the request must discard the stale result
-// (issue T-0002).
-const sessionActivationGenerations = new WeakMap<object, { latest: number }>();
-
-function nextSessionActivationGeneration(context: CommandContext): number {
-  let state = sessionActivationGenerations.get(context);
-  if (!state) {
-    state = { latest: 0 };
-    sessionActivationGenerations.set(context, state);
-  }
-  state.latest += 1;
-  return state.latest;
-}
-
-function currentSessionActivationGeneration(context: CommandContext): number {
-  return sessionActivationGenerations.get(context)?.latest ?? 0;
-}
-
-function isCurrentSessionActivation(context: CommandContext, generation: number): boolean {
-  return currentSessionActivationGeneration(context) === generation;
-}
-
-function isLatestSessionActivation(context: CommandContext, generation: number): boolean {
-  return sessionActivationGenerations.get(context)?.latest === generation;
-}
+// Session selection identity lives in core/sessionActivationFence.
 
 export async function activateCoachSessionCommand(
   context: CommandContext,
@@ -4516,7 +4546,7 @@ export async function activateCoachSessionCommand(
   if (!requestedSessionId) {
     return { ok: false, message: 'session_id is required.' };
   }
-  const activationGeneration = nextSessionActivationGeneration(context);
+  const activationGeneration = bumpSessionActivationGeneration(context);
   const requestedWorkspaceId = getRuntimeWorkspaceContext(context).workspaceId;
   const workspaceGate = trainerWorkspaceSessionGate(context);
   if (workspaceGate) {
@@ -4541,7 +4571,7 @@ export async function activateCoachSessionCommand(
   }
   // Stale-result fence: a newer activation or a workspace switch owns the UI.
   if (
-    !isLatestSessionActivation(context, activationGeneration) ||
+    !isCurrentSessionActivation(context, activationGeneration) ||
     getRuntimeWorkspaceContext(context).workspaceId !== requestedWorkspaceId
   ) {
     return { ok: true, cancelled: true };

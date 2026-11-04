@@ -125,7 +125,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(appUiCopySource, /"en-US": "Browser preview cannot restore real resources\. Use the VS Code sidebar\."/);
 });
 
-test('Resources opens the reader from one click, opens in VS Code from Enter, and has no row double-click handler', () => {
+test('Resources opens in VS Code from one click, previews from Space or the row action, and has no row double-click handler', () => {
   const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   const treeItemStart = viewSource.indexOf('function ResourceTreeItem(');
   const treeItemEnd = viewSource.indexOf('export function ResourcesWorkbenchView', treeItemStart);
@@ -134,13 +134,13 @@ test('Resources opens the reader from one click, opens in VS Code from Enter, an
   assert.ok(treeItemEnd > treeItemStart, 'expected the resource tree item renderer to end');
   const treeItemSource = viewSource.slice(treeItemStart, treeItemEnd);
 
-  assert.match(treeItemSource, /onClick=\{\(\) => onSelect\(node\.resource!\)\}/);
-  assert.doesNotMatch(treeItemSource, /onClick=\{\(\) => onOpen\(node\.resource!\)\}/);
-  // A raw row double-click can never fire: the first click opens the reader
-  // and hides the tree, so the handler is gone.
+  assert.match(treeItemSource, /onClick=\{\(\) => onOpen\(node\.resource!\)\}/);
+  assert.doesNotMatch(treeItemSource, /onClick=\{\(\) => onSelect\(node\.resource!\)\}/);
+  // A raw row double-click can never fire: the first click opens the editor.
   assert.doesNotMatch(treeItemSource, /onDoubleClick/);
   assert.match(treeItemSource, /event\.key === "Enter"[\s\S]*?onOpen\(node\.resource!\);/);
-  assert.match(treeItemSource, /aria-keyshortcuts="Enter"/);
+  assert.match(treeItemSource, /event\.key === " "[\s\S]*?onSelect\(node\.resource!\);/);
+  assert.match(treeItemSource, /aria-keyshortcuts="Enter Space"/);
   // Reading-first tree: no per-row checkboxes, no batch-selection handlers.
   assert.doesNotMatch(treeItemSource, /type="checkbox"/);
   assert.doesNotMatch(treeItemSource, /onToggleSelection/);
@@ -291,7 +291,9 @@ test('Resources treats URL material as webpage snapshots without restoring statu
   assert.doesNotMatch(viewSource, /resources-file-toolbar/);
   assert.doesNotMatch(viewSource, /resources-knowledge__state/);
   assert.doesNotMatch(viewSource, /collectionSegmentPrefix}links/);
-  assert.match(stylesSource, /grid-template-columns: 18px 18px 18px minmax\(0, 1fr\) auto;/);
+  assert.match(stylesSource, /grid-template-columns: 20px minmax\(0, 1fr\);/);
+  assert.match(stylesSource, /padding: 0 8px 0 24px;/);
+  assert.doesNotMatch(stylesSource, /\.resources-library-tree__indent \{/);
   assert.match(stylesSource, /\.resources-knowledge__actions \.resources-knowledge__icon-button/);
   assert.doesNotMatch(stylesSource, /\.resources-knowledge__state/);
 });
@@ -325,7 +327,7 @@ test('Resources keeps folder counts recursive and moves deletion into the reader
     /const visibleResourceTree = useMemo\([\s\S]*?filterResourceTree\(resourceTree, visibleResourceIds\)/,
   );
   assert.match(collectionSource, /resourceIdsInTreeNode\(node\)/);
-  assert.match(collectionSource, /resources-library-tree__count/);
+  assert.match(collectionSource, /resourceIdsInTreeNode\(node\)/);
   assert.doesNotMatch(collectionSource, /node\.children\.length/);
   assert.match(treeItemSource, /aria-label=\{node\.resource\.title\}/);
   assert.match(treeItemSource, /aria-current=\{isSelected \? "true" : undefined\}/);
@@ -489,7 +491,8 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   // instead of the old standalone SystemState call.
   assert.match(viewSource, /<SystemState kind=\{orientation\?\.state === "needs_setup" \? "empty"/);
   assert.match(viewSource, /title=\{orientationState\}/);
-  assert.match(viewSource, /detail=\{localize\(language, "emptyBody"\)\}/);
+  assert.match(viewSource, /className="resources-empty-state"/);
+  assert.match(viewSource, /localize\(language, "emptyOpenHint"\)/);
 
   assert.match(appSource, /const requestResourceTrainingHandoff = useCallback/);
   assert.match(appSource, /source: "resource_knowledge",[\s\S]*?cardType: "flash",[\s\S]*?submode: "flash"/);

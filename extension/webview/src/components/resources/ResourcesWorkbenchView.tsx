@@ -36,6 +36,12 @@ import {
   TrashIcon,
   UploadIcon,
 } from "../icons";
+import {
+  resourceFolderIconUrl,
+  resourceFolderOpenIconUrl,
+  resourceIconKey,
+  resourceIconUrl,
+} from "./resourceIconAssets";
 import { CollapseSection } from "../common/CollapseSection";
 import { WorkbenchSurfaceButton } from "../common/WorkbenchSurfaceButton";
 import { MessageRichContent } from "../coach/MessageRichContent";
@@ -933,17 +939,22 @@ function fallbackCollectionSegments(
   }
 
   if (isUrl(source)) {
-    return [
-      `${collectionSegmentPrefix}web-snapshots`,
-      ...sourceSegments.slice(0, Math.max(0, sourceSegments.length - 1)),
-    ];
+    const host = sourceSegments[0];
+    return host
+      ? [`${collectionSegmentPrefix}web-snapshots`, host]
+      : [`${collectionSegmentPrefix}web-snapshots`];
   }
 
   if (sourceSegments.length > 1) {
-    return [
-      `${collectionSegmentPrefix}references`,
-      ...sourceSegments.slice(Math.max(0, sourceSegments.length - 3), -1),
-    ];
+    // Local folders are already the learner's own filing system. Wrapping
+    // them in an artificial "References" root added a level that made the
+    // visible counts disagree with the library total, so the real folders stay
+    // top-level.
+    return visibleCollectionSegments(
+      trimHiddenCollectionRoots(
+        sourceSegments.slice(Math.max(0, sourceSegments.length - 3), -1),
+      ),
+    );
   }
 
   return [
@@ -1207,10 +1218,25 @@ function visibleTreeItemIds(nodes: ResourceTreeNode[], expandedIds: Set<string>)
   });
 }
 
-function ResourceKindIcon({ kind }: { kind: ResourceRecord["kind"] | undefined }) {
-  const Icon =
-    kind === "url" ? LinkIcon : kind === "pdf" || kind === "image" || kind === "video" ? PageIcon : FileIcon;
-  return <Icon size={12} aria-hidden="true" />;
+function ResourceKindIcon({ resource }: { resource: ResourceRecord }) {
+  return (
+    <img
+      className="resources-library-tree__file-icon"
+      src={resourceIconUrl(resource)}
+      alt=""
+      width={18}
+      height={18}
+      draggable={false}
+      data-resource-icon={resourceIconKey(resource)}
+    />
+  );
+}
+
+function resourceRowMeta(resource: ResourceRecord): string | undefined {
+  const kind = resource.kind ? resource.kind.toUpperCase() : "";
+  const context = resource.collectionPath?.trim() || resource.source?.trim() || "";
+  const meta = [kind, context].filter(Boolean).join(" \u00b7 ");
+  return meta ? meta.slice(0, 96) : undefined;
 }
 
 interface ResourceTreeItemProps {
@@ -1255,27 +1281,32 @@ function ResourceTreeItem({
         aria-current={isSelected ? "true" : undefined}
         data-resource-tree-item-id={node.id}
         tabIndex={activeTreeItemId === node.id ? 0 : -1}
-        style={{
-          paddingInlineStart: `calc(var(--space-2) + ${depth} * var(--space-4))`,
-        }}
-        title={node.resource.title}
+        title={[node.resource.title, resourceRowMeta(node.resource)].filter(Boolean).join(" — ")}
         onFocus={() => onActiveTreeItemChange(node.id)}
-        onClick={() => onSelect(node.resource!)}
+        onMouseDown={(event) => event.currentTarget.focus()}
+        onClick={() => onOpen(node.resource!)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             onOpen(node.resource!);
+          }
+          if (event.key === " ") {
+            event.preventDefault();
+            onSelect(node.resource!);
           }
           if (event.key === "ArrowLeft" && parentId) {
             event.preventDefault();
             onMoveTreeFocus(parentId);
           }
         }}
-        aria-keyshortcuts="Enter"
+        aria-keyshortcuts="Enter Space"
       >
-        <span className="resources-library-tree__indent" aria-hidden="true" />
-        <span className="resources-library-tree__kind" aria-hidden="true">
-          <ResourceKindIcon kind={node.resource.kind} />
+        <span
+          className="resources-library-tree__kind"
+          data-resource-kind={resourceIconKey(node.resource)}
+          aria-hidden="true"
+        >
+          <ResourceKindIcon resource={node.resource} />
         </span>
         <span className="resources-library-tree__copy">
           <strong>{node.resource.title}</strong>
@@ -1288,12 +1319,6 @@ function ResourceTreeItem({
   const descendantResourceIds = resourceIdsInTreeNode(node);
   const firstChildId = node.children[0]?.id;
   const isLogicalCollection = node.collectionKind === "logical";
-  // r2-g2-0: a group whose count lives entirely in nested subgroups must not
-  // read as empty once expanded — say where the items are.
-  const directResourceCount = node.children.filter((child) => child.kind === "resource").length;
-  const nestedResourceCount = descendantResourceIds.length - directResourceCount;
-  const showNestedItemsNote =
-    isExpanded && directResourceCount === 0 && nestedResourceCount > 0;
   const collectionDescription = isLogicalCollection
     ? `${localize(language, "logicalCollection")}: ${node.label}`
     : node.label;
@@ -1302,7 +1327,7 @@ function ResourceTreeItem({
       className="resources-library-tree__item"
       role="group"
       aria-label={node.label}
-      aria-description={isLogicalCollection ? localize(language, "logicalCollection") : undefined}
+      aria-description={`${descendantResourceIds.length}${isLogicalCollection ? ` · ${localize(language, "logicalCollection")}` : ""}`}
       data-resource-tree-item-id={node.id}
       tabIndex={-1}
       onKeyDown={(event) => {
@@ -1331,22 +1356,21 @@ function ResourceTreeItem({
         persistenceKey={resourceCollectionPersistenceKey(node.id)}
         title={
           <span className="resources-library-tree__collection-label" title={collectionDescription}>
-            <FolderIcon size={12} aria-hidden="true" />
+            <img
+              className="resources-library-tree__folder-icon"
+              src={isExpanded ? resourceFolderOpenIconUrl : resourceFolderIconUrl}
+              alt=""
+              width={18}
+              height={18}
+              draggable={false}
+            />
             <span>{node.label}</span>
           </span>
         }
         subtitle={undefined}
-        badge={
-          <span className="resources-library-tree__count">{descendantResourceIds.length}</span>
-        }
         open={isExpanded}
         onToggle={() => onToggle(node.id)}
       >
-        {showNestedItemsNote ? (
-          <p className="resources-library-tree__nested-note" data-resource-nested-note="true">
-            {localizeCount(language, "nestedInSubgroups", nestedResourceCount)}
-          </p>
-        ) : null}
         {isExpanded
           ? node.children.map((child) => (
               <ResourceTreeItem
@@ -1795,7 +1819,6 @@ export function ResourcesWorkbenchView({
           : undefined;
   const shouldShowNoMatches =
     hasSearchQuery && !isServerSearchPending && !searchFailure && visibleResources.length === 0;
-  const isResourceListLoading = isServerSearchPending;
   const visibleResourceIds = useMemo(
     () => new Set(visibleResources.map((resource) => resource.id)),
     [visibleResources],
@@ -1804,6 +1827,14 @@ export function ResourcesWorkbenchView({
     () => filterResourceTree(resourceTree, visibleResourceIds),
     [resourceTree, visibleResourceIds],
   );
+  const firstRowMarkedRef = useRef(false);
+  useEffect(() => {
+    if (!firstRowMarkedRef.current && visibleResourceTree.length > 0) {
+      firstRowMarkedRef.current = true;
+      performance.mark("trainer:resources-first-row");
+    }
+  }, [visibleResourceTree.length]);
+
   const selectedResourceAncestorIds = useMemo(
     () =>
       selectedResourceId
@@ -2083,7 +2114,8 @@ export function ResourcesWorkbenchView({
   };
 
   const openResourceInVsCode = (resource: ResourceRecord) => {
-    setSelectedResourceId(resource.id);
+    // Row click is a native "open file" action: keep the tree visible and let
+    // VS Code own the editor. The Reader remains available from Space.
     onOpenResource?.(resource.id);
   };
 
@@ -2899,9 +2931,10 @@ export function ResourcesWorkbenchView({
       )}>
 
 
+
       {leftoverStoredNote ? (
         <p
-          className="coach-plan-view__leftover-note"
+          className="sr-only"
           data-resources-leftover-note="true"
           role="status"
           aria-live="polite"
@@ -2910,14 +2943,14 @@ export function ResourcesWorkbenchView({
         </p>
       ) : null}
 
-      {orientationState && (orientation?.state === "needs_setup" || orientationTone === "blocker" || !canWriteResources) ? (
+      {orientationState && (orientation?.state === "needs_setup" || orientationTone === "blocker" || (!canWriteResources && resources.length === 0)) ? (
         <SystemState kind={orientation?.state === "needs_setup" ? "empty" : orientationTone === "blocker" ? "recoverable-error" : "read-only"}
           title={orientationState}
           detail={orientation?.state === "needs_setup" ? localize(language, "emptyBody") : orientation?.why}
           action={orientation && orientationCanAct && !(orientation.state === "needs_setup" && canWriteResources)
             ? { label: orientation.primaryActionLabel, onClick: () => onOrientationAction?.(orientation.primaryAction) }
             : undefined} />
-      ) : orientation?.why && resources.length > 0 && orientation.why.trim() !== leftoverStoredNote.trim() ? <p className="template-metadata">{orientation.why}</p> : null}
+      ) : null}
 
       {isImportMenuOpen && canWriteResources ? (
         <div
@@ -3215,13 +3248,7 @@ export function ResourcesWorkbenchView({
         aria-label={localize(language, "title")}
         onKeyDown={handleTreeKeyDown}
       >
-        {isResourceListLoading ? (
-          <div className="resources-skeleton-list" aria-hidden="true">
-            <div className="skeleton resources-skeleton-row" />
-            <div className="skeleton resources-skeleton-row" />
-            <div className="skeleton resources-skeleton-row" />
-          </div>
-        ) : (
+        {(
           <>
             {visibleResourceTree.map((node) => (
               <ResourceTreeItem
@@ -3244,11 +3271,16 @@ export function ResourcesWorkbenchView({
                 ("needs setup / library is empty" + import action); rendering
                 this generic empty block too duplicated the same message. */}
             {resources.length === 0 && !hasSearchQuery && orientation?.state !== "needs_setup" ? (
-              <SystemState
-                kind="empty"
-                title={localize(language, "emptyTitle")}
-                detail={localize(language, "emptyBody")}
-              />
+              <div className="resources-empty-state" data-resources-empty="true">
+                <span className="resources-empty-state__icon" aria-hidden="true">
+                  <PageIcon size={18} />
+                </span>
+                <div className="resources-empty-state__copy">
+                  <strong>{localize(language, "emptyTitle")}</strong>
+                  <p>{localize(language, "emptyBody")}</p>
+                  <p className="resources-empty-state__hint">{localize(language, "emptyOpenHint")}</p>
+                </div>
+              </div>
             ) : null}
 
             {shouldShowNoMatches ? (

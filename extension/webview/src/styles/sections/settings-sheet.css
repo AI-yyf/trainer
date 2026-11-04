@@ -481,7 +481,7 @@
 .toolbar-button[aria-pressed="true"]::before,
 .settings-sheet__choice-pill.is-active::before,
 .context-chip.is-enabled::before {
-  background: var(--accent);
+  background: var(--fg-1);
 }
 
 .settings-sheet__note {

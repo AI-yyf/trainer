@@ -1050,7 +1050,33 @@ async function carryProviderTestAcrossProjectAdmission(context: CommandContext):
   });
 }
 
-async function setCurrentWorkspaceProjectAdmission(
+// Admission actions can be triggered in quick succession (or by a stale
+// secondary click while the panel re-renders). Serialize them so a late
+// ignore response cannot overwrite a newer adopt, and make the final message
+// reflect the persisted project mode.
+let admissionMutationQueue: Promise<unknown> = Promise.resolve();
+
+function serializeAdmissionMutation<T>(task: () => Promise<T>): Promise<T> {
+  const next = admissionMutationQueue.then(task, task);
+  admissionMutationQueue = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
+}
+
+function setCurrentWorkspaceProjectAdmission(
+  context: CommandContext,
+  adoptionMode: TrainerProjectAdoptionMode,
+  responseLanguage?: ComposerLanguage,
+  selectedProjectPath?: string,
+): Promise<CommandExecutionResult> {
+  return serializeAdmissionMutation(() =>
+    runSetCurrentWorkspaceProjectAdmission(context, adoptionMode, responseLanguage, selectedProjectPath),
+  );
+}
+
+async function runSetCurrentWorkspaceProjectAdmission(
   context: CommandContext,
   adoptionMode: TrainerProjectAdoptionMode,
   responseLanguage?: ComposerLanguage,
@@ -1127,10 +1153,13 @@ async function setCurrentWorkspaceProjectAdmission(
     // freshly adopted project instead of silently sharing.
     await maybePromptCarryOverOnProjectSwitch(context);
   }
+  const persistedAdoptionMode =
+    (project as { adoptionMode?: TrainerProjectAdoptionMode } | undefined)?.adoptionMode ??
+    adoptionMode;
   const description =
-    adoptionMode === 'managed'
+    persistedAdoptionMode === 'managed'
       ? 'was added to Trainer with an isolated project lane.'
-      : adoptionMode === 'browse'
+      : persistedAdoptionMode === 'browse'
         ? 'will stay browse-only and will not receive long-lived project memory.'
         : 'will be ignored by Trainer.';
   return {

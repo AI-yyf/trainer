@@ -170,7 +170,7 @@
   margin-top: var(--space-2);
   padding: 0 0 0 var(--space-2);
   border: 0;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 52%, var(--line));
+  border-left: 2px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: 0;
   background: transparent;
 }
@@ -315,8 +315,8 @@
 }
 
 .coach-plan-view__read-rail-item.is-current {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 52%, transparent);
+  box-shadow: none;
 }
 
 .coach-plan-view__read-rail-item.is-current strong {
@@ -417,8 +417,8 @@
 }
 
 .coach-plan-view__empty-outline-row.is-current::before {
-  background: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 72%, var(--line));
+  background: var(--fg-muted);
+  border-color: color-mix(in srgb, var(--fg-muted) 60%, var(--line));
 }
 
 .coach-plan-view__empty-outline-row span {
@@ -514,7 +514,8 @@
 }
 
 .coach-plan-view__stage-row.is-active {
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 42%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 56%, transparent);
+  box-shadow: none;
 }
 
 .coach-plan-view__stage-topline {
@@ -696,4 +697,132 @@
 
 .coach-plan-view .template-next-action + .coach-plan-view__secondary-action {
   margin-top: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Learning today hero: one calm daily dashboard above the current-action
+   card. It carries progress, proof debt and the next stage, not a second CTA.
+   --------------------------------------------------------------------------- */
+.learning-today {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0 0 var(--space-2);
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 88% 16%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 44%),
+    linear-gradient(135deg, color-mix(in srgb, var(--bg-1) 92%, var(--accent)), var(--bg-1));
+}
+
+.learning-today__copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.learning-today__copy h2 {
+  margin: 0;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-lg);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.learning-today__detail {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.learning-today__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+}
+
+.learning-today__stats strong {
+  margin-right: 4px;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-sm);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.learning-today__ring {
+  --learning-progress: 0%;
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--accent) var(--learning-progress),
+    color-mix(in srgb, var(--line) 48%, transparent) 0
+  );
+  transition: background var(--motion-base) var(--ease-out);
+}
+
+.learning-today__ring::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--bg-1);
+}
+
+.learning-today__ring span {
+  position: relative;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 420px) {
+  .learning-today {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .learning-today__ring {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learning-today__ring {
+    transition: none;
+  }
+}
+
+.learning-today {
+  position: relative;
+}
+
+.learning-today__actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+}
+
+.learning-today__copy {
+  padding-right: 26px;
 }

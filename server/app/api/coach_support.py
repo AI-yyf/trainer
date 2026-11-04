@@ -5497,6 +5497,8 @@ def resolve_coach_turn(deps: CoachSupportDeps,
         plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
         context_tier=context_tier,
     )
+    if getattr(request, "goal_mode", False):
+        coach_context["goal_mode"] = True
     if completed_return and current_evaluation is not None and current_evaluation.passed:
         coach_context["completed_training_return_feedback"] = True
         coach_context["next_step_hint"] = current_evaluation.next_step
@@ -5759,6 +5761,8 @@ def build_session_response(deps: CoachSupportDeps,
             response_language=request.response_language,
             plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
         )
+        if getattr(request, "goal_mode", False):
+            refreshed_coach_context["goal_mode"] = True
         original_history_mode = (
             str(original_coach_context.get("history_mode") or "").strip().lower()
             if isinstance(original_coach_context, dict)
@@ -7047,6 +7051,8 @@ async def execute_turn(deps: CoachSupportDeps,
             response_language=request.response_language,
             plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
         )
+    if isinstance(request_coach_context, dict) and getattr(request, "goal_mode", False):
+        request_coach_context["goal_mode"] = True
     if request.intent == "plan" and not stream and provider_live_usable:
         history = deps.build_conversation_history(
             state.snapshot.messages,

@@ -1378,8 +1378,10 @@ test.describe("Trainer three-destination shell", () => {
 
     await expect(page.locator(".notice")).toHaveCount(0);
     await expect(page.locator(".message-bubble--streaming")).toBeVisible();
-    await expect(page.locator(".message-bubble--streaming")).toContainText(
-      "正在梳理你的问题，然后给出第一段可见回复。",
+    // No canned sentence before the first chunk: one quiet working label.
+    await expect(page.locator(".message-bubble--streaming .coach-working__label")).toHaveText("工作中");
+    await expect(page.locator(".message-bubble--streaming")).not.toContainText(
+      "正在梳理你的问题",
     );
 
     await page.evaluate(() => {

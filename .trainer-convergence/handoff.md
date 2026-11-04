@@ -536,3 +536,109 @@
 - **Icon/position polish.** The surface control is now a quiet borderless external-link glyph, aligned on the stage line instead of floating below the header; the collapse glyph mirrors it. Both remain keyboard-labeled and 26px.
 - Gates: full server suite **3754 passed**; extension suite exit 0; `verify-ui-geometry` **476 passed**; CSS balanced; `npm run check` clean.
 - Remaining: Journey E editor-panel/long-code/stream-interrupt; Journey F provider timeout/wrong key/port conflict; PDF capture/download and multi-window isolation; M3.1 unusable.
+
+## 2026-11-04 — ZCode 信息流研究 + Coach 密度收敛（真实安装态）
+- **Source studied**: `zai-org/ZCode` @ `a9fe401e` (v3.17.2), shallow-cloned to `/private/var/folders/.../T/opencode/zcode-src`. Key files read: `packages/ui/src/v4/ConversationTimeline.tsx`, `ConversationTurnGroup.tsx` (turn/history grouping, `AssistantHistoryStatus`), `ConversationAgentToolCallRow.tsx`, `ToolCallBlocks/ToolSummaryRow.tsx`, `components/ai-elements/chat-loading.tsx`, `ConversationUserInputBubble.tsx`, `conversationTurnFlowItems.ts`, `conversationTurnWorkSegments.ts`, `ConversationDraftEmptyState.tsx`.
+- **What ZCode does differently, and what landed in Trainer**:
+  1. **One working line with elapsed time** (`ChatLoading`: working label + tabular duration, timer isolated in its own component). Trainer now renders `CoachWorkingIndicator` with the sheen label plus `1 秒 / 2s`; the timer lives in the leaf, so the thread does not re-render each second.
+  2. **Work history is a collapsed one-line summary** (`AssistantHistoryStatus`: “已工作 12 秒” + chevron, expanded to compact tool rows; default open only while running). Trainer now renders `.coach-work-trail` from the existing tool parts: one muted line (`已核对 N 项上下文`) that expands to one row per tool with a safe status hint. Tool calls stay hidden from the reply body.
+  3. **User input is a compact bubble with no provenance chips** (`ConversationUserInputBubble`: text + attachments only). Trainer removed the `意图/方式/策略/选区/文件` attachment chips from the thread; metadata remains in the raw payload for sharing/diagnostics.
+  4. **No canned pre-reply sentence**; the first content is the working line. Removed both `正在梳理你的问题…` and `正在整理当前步骤…` strings and their tests; e2e now asserts the working label instead.
+  5. **Narrow content measure** (ZCode uses container-query widths). Trainer Coach now has `--coach-gutter: clamp(16px, 4vw, 28px)` and `--coach-content-max: 660px`, applied to the thread/empty state and the composer; the assistant left hairline and duplicated composer busy hint were removed.
+  6. **Compact suggestion chips**: the three starter prompts are now wrapping pills instead of three full-width bars (the user's “铺得太满” screenshot).
+- **Evidence (installed VSIX `1.3.4`, isolated real profile)**:
+  - Empty state narrow (393px content): content x=16, width 346; starter chips 96/70/109px; no overflow. `.tmp/first-use/166-empty-narrow.png`.
+  - Wide preview column: at a 1000px host, thread width **660px** (cap), composer **604px** (660 − 2×28). `.tmp/first-use/182-preview-wide-1000.png`.
+  - Real working line: label `工作中`, elapsed `1 秒`; final answer rendered correctly; `hasMeta=false`, `hasCanned=false`, `innerW=docScrollW=411`. `.tmp/first-use/180-real-coach-working.png`, `.tmp/first-use/181-real-coach-settled.png`.
+  - E2E `keeps stream progress in the Coach thread…` PASS (asserts `工作中`, no canned sentence). Extension suite exit 0; geometry **476 passed**; CSS balanced; `npm run check` clean.
+- **Honest boundaries**:
+  - The collapsed work trail is implemented but **not yet exercised by a real tool-using turn** (`hasTrail=false` on the short Q&A above). Needs a Coach turn that actually calls read/search tools.
+  - Real sidebar widening via the sash only reached 411px; the 660px cap is proven in the preview harness, not in a real 800px sidebar.
+  - Journey E (long code, session/model switching) and F (bad key, timeout, offline, port conflict) remain **NOT_EXECUTED**; PDF capture still blocked upstream; multi-window isolation not executed.
+- Next: real tool-using Coach turn for the trail, then Journey E/F; keep the ZCode study in this file as the design reference.
+
+## 2026-11-04 — 目标模式、技能列表与中性选中态
+- **Goal mode（让人动手）**: a one-goal active-learning contract. The composer toggle sends `goalMode` → host `goal_mode` → `SessionMessageRequest.goal_mode` → `coach_context.goal_mode`; the prompt requires one tiny action first, waits for the attempt, corrects one misconception, and ends with a 3-minute review. No plan/card/evidence is minted by the flag itself.
+- **In-progress goal bar**: `CoachGoalBar` shows `进行中的目标`, the goal text, elapsed time, pause/resume, end, and expandable details. Store-backed (`goalText`, `goalStartedAt`, `goalPaused`, `goalPausedAt`) so a pane remount does not drop it. Evidence: `.tmp/first-use/201-goal-bar.png`, `202-goal-paused.png`, `203-goal-expanded.png`.
+- **Skill list**: `$` palette now has the `技能` section, cube icon per row, one-line description, optional `个人` tag for custom skills, compact 38px rows, and a neutral selected row. The blue inset/underline selected treatment is gone from the palette, nav tabs, plan current/active rows, resources tree/rows/folder toggles, session history, and selected dots. A CSS scan reports **0** remaining accent short-edge selection selectors.
+- **Evidence**: `206-palette-compact.png` (38px rows, `activeBg rgb(42,45,46)`, `boxShadow none`, 13px title, 12px detail); `207-noaccent-coach.png` (nav underline neutral `rgba(204,204,204,.3)`, not `#0078d4`); `208-noaccent-history.png` (active session neutral background, no inset); `210-noaccent-resources.png` (selected row neutral `rgb(42,45,46)`, `border-left: transparent`, no shadow). `innerW=docScrollW=411` on all.
+- **Tests**: extension suite exit 0; `npm run check` clean; CSS balanced; `verify-ui-geometry` **476 passed**; server goal-mode prompt test 2 passed. VSIX rebuilt/reinstalled after the palette/neutral changes.
+- **Honest boundaries**:
+  - Goal-mode **model behavior is UNVERIFIED**: the clean-workspace run hit a disabled send, and the real profile has an active training handoff that can intercept the turn. The prompt contract and UI are tested; a real model following the do-first loop is not yet proven.
+  - The `设为目标` action is implemented on the latest assistant message, but a history-session probe found 0 action buttons; it needs a clean session with a latest assistant.
+  - Learning’s plan is 4/4 complete, so no `.coach-plan-view__stage-row.is-active`/`.is-current` row existed for a visual check; the CSS was neutralized and the scan is clean, but the active Learning state still needs a live plan.
+  - Full accent **borders/washes** on some settings options remain (not short-edge; the request covered short-edge selection).
+  - Journey E/F, PDF/GitHub download, multi-window isolation remain **NOT_EXECUTED**.
+
+## 2026-11-04 — audit P1 fixes (training stream + short-thread anchor)
+- Restored the `training_*` guard in the live Coach bubble (`CoachConversationView`): raw card-generation chunks can no longer render as assistant prose. The source test now asserts the guard.
+- Removing the resume banner reopened a short-thread dead zone; the first active message now takes the slack (`.coach-conversation-view__list--active > :first-child { margin-top: auto; }`), resolving to 0 once the thread overflows. Geometry is **476 passed** (the earlier handoff claim is now true for this tree; the audit’s red run was the interim state).
+
+## 2026-11-04 — top-down thread flow, reply-level goal entry, final evidence
+- **Thread flow**: removed the short-thread bottom anchor. Messages now fill from the top and append downward (ZCode timeline order); the empty room belongs below the last turn, not above the first. Geometry gate flipped to assert `firstOffsetTop <= 24` and `bottomGap >= 0`; **477 assertions pass**. Real session probe: `items=3, assistants=1, firstOffsetTop=4`; evidence `215-flow-top-final.png`.
+- **Goal entry**: removed the separate goal icon from the composer toolbar (user request). Goal mode is entered from a reply’s `设为目标` action; the bar is the only goal UI. The action is present on a real session (`quickActions` includes `set-goal`) and the bar title now uses the **learner’s preceding turn** (not the assistant’s error text): `读一下 src/conversation_router.py…`; `goalIcon=false`; evidence `216-goal-title-from-user.png`.
+- **Selected-state accent removal**: all accent short-edge selected indicators are gone (nav underline neutral, plan current/active neutral, resources tree/rows/folder neutral, history active neutral, palette active neutral, selected dots neutral). CSS scan reports 0 remaining accent short-edge selection selectors. Evidence `207-noaccent-coach.png`, `208-noaccent-history.png`, `210-noaccent-resources.png`, `211-palette-final.png`.
+- **Palette**: compact 38px rows, 6 rows fit (`clientHeight=256`, `lastBottom=255`), active `rgb(42,45,46)`, `boxShadow=none`, no overflow at 411px.
+- **Tests**: extension suite exit 0; `npm run check` clean; CSS balanced; geometry **477 passed**. VSIX rebuilt/reinstalled after these changes.
+- **Still open**: goal-mode **model behavior** (do-first reply) is unverified; the clean-workspace send was blocked, and the real profile can be intercepted by training handoff. Journey E/F, PDF/GitHub download, multi-window isolation remain NOT_EXECUTED. Full accent borders/washes on some settings options remain by design (not short-edge).
+
+## 2026-11-04 — goal mode is for mastery; clean-workspace real journey
+- **Mastery contract**: goal mode now requires more than a correct action. The prompt asks the learner to explain the reasoning in their own words and handle one small variation; it only ends when they can do it unaided, explain why, and transfer. The goal bar’s expanded details now show `完成标准：做对 → 讲清为什么 → 迁移到一个小变化` in eight languages. Server goal-prompt test 2 passed.
+- **Fresh-session entry**: the composer toolbar goal icon stays removed (user request). A quiet `设为目标` text action now lives in the Coach empty state, outside the input; it opens the goal bar with `等待你说出目标`. The reply-level `设为目标` action remains.
+- **Clean-workspace real journey (installed VSIX, real profile, clean workspace)**:
+  - Admission panel: `发现项目 / 加入 Trainer / 选择项目文件夹 / 仅浏览 / 忽略项目`; composer disabled at first.
+  - Clicked `加入 Trainer`; composer enabled, empty state showed `设为目标`.
+  - Goal entry opened the bar (`等待你说出目标 0 秒`) and the placeholder `想快速学会什么？例如：用 with 正确加锁`; expanded details showed the mastery criterion.
+  - Goal sent: `我想学会用 with 正确加锁，并判断异常时锁会不会释放。`
+  - First real reply (290 chars): one tiny code observation + `请回答：print(lock.locked()) 输出 True 还是 False，以及原因` — do-first, no lecture. Evidence `220-goal-clean-first.png`.
+  - Learner attempt about `with` + exception; second real reply (354 chars): corrected the `with` exit behavior, named two boundaries (`acquire()` failure before `with`, `__exit__` swallowing), and gave one next validation (`块内主动抛异常验证 release()`). Evidence `221-goal-clean-second.png`.
+  - This proves the loop is active-learning, but the **mastery closure** (teach-back + transfer) is not yet reached; a third turn is needed.
+- **Admission anomaly (not fixed)**: the command log shows `trainer.workspace.ignoreProject` followed by `trainer.workspace.adoptProject`; the UI operation text said `The current project will be ignored by Trainer.` even though the project directory/session was created under `learning/Projects/project-dd8eb78c...` and the sidecar started the session. The final message is contradictory/stale; P1/P2 for the next first-use round. Log: `user-data/logs/20261104T105558/window1/exthost/output_logging_20261104T105600/1-Trainer.log`.
+- **State persistence gap**: `goalMode`/goal text are UI-only and not restored after a VS Code restart; a real “进行中的目标” should survive reload. Not fixed.
+- Tests: server goal prompt 2 passed; extension suite exit 0; CSS balanced; geometry 477; VSIX rebuilt/installed after the mastery/entry changes.
+- **Resumed-session turn 3**: after relaunch the goal bar was gone (`goalBar=false`) because goal state is UI-only; using `设为目标` on the last assistant set the bar title to the learner’s **attempt**, not the original goal. The third model reply corrected the inside/outside-`with` boundary and asked the learner to confirm where `print(lock.locked())` runs; it did **not** accept a bare answer or claim mastery. Evidence `222-goal-mastery-turn3.png`. Mastery closure (teach-back + transfer) still needs a further correct turn, and goal persistence is the next state fix.
+
+## 2026-11-04 — rich reply rendering: syntax highlight, math, mindmap, table
+- **Why code blocks had no syntax highlighting**: Shiki’s default `codeToHtml` uses the Oniguruma **WebAssembly** engine, which the VS Code webview CSP blocks; the rejection was swallowed and every block fell back to plain `<pre><code>`. The model-HTML sanitizer would also strip Shiki’s inline `style` token colors.
+- **Fix**: Shiki now uses `createJavaScriptRegexEngine()` + an explicit cached `createHighlighter()` per language/theme (no wasm), and trusted Shiki HTML bypasses the model-HTML sanitizer (the code is escaped by Shiki; the markup/styles are library-owned). Mermaid’s strict SVG now also keeps its library `<style>`/style attributes; `securityLevel: "strict"` remains, and model-provided part renderers still sanitize.
+- **Real VS Code format audit (clean workspace, installed VSIX)**: one reply with code + math + mermaid + table produced:
+  - `codeBlocks=5, codeSpans=92, codeStyled=63` with real token colors (`#FF7B72`, `#E6EDF3`, etc.).
+  - `katex=4, katexDisplay=1`; raw `$...$` no longer leaks.
+  - `mermaid=true, mermaidSvg=true, mermaidError=""` for a `mindmap`.
+  - `tables=1`.
+  - Evidence `223-format-audit.png`.
+- Tests: extension suite exit 0; `npm run check` clean; CSS balanced; VSIX rebuilt/installed. An independent security/regression audit of the trusted Shiki/Mermaid bypass is running separately.
+- Still not audited in this pass: remote images, external links, task lists/strikethrough in a single real reply; broader Journey E/F; goal-mode mastery persistence/closure; the contradictory admission message noted above.
+- **GFM follow-up audit**: a second real reply rendered `h1=1, h2=1, strong=1, em=1, del=1, blockquote=1, ul=2, ol=1, task checkboxes=2, inlineCode=1`; the link rendered with `href=https://example.com` but **no `rel`** (pending hardening). The table in this particular reply stayed plain because the model copied the prompt without the blank line GFM needs after the task list; the previous format-audit reply rendered `tables=1`, so the table renderer itself is proven. Evidence `224-gfm-audit.png`.
+- **Link hardening verified**: a real reply with `[Example](https://example.com)` rendered `<a href="https://example.com" target="_blank" rel="noopener noreferrer">`. The link does not replace the Trainer webview. (Remote image rendering still not audited.)
+
+## 2026-11-04 — independent renderer security audit + P2 fixes
+- Independent audit: **no P0/P1**. Shiki escapes code text and only emits static bundled-language/theme markup; Mermaid strict mode runs the full SVG through DOMPurify 3.4.1 and cannot be downgraded by `%%{init}%%`. The two sanitizer bypasses are defensible.
+- Fixed the audit's P2s:
+  - One Shiki highlighter **per theme** (not per language), languages loaded with `loadLanguage()`; failed highlighter promises are deleted; no 242-language/per-language cache.
+  - Removed the unused `className` prop from `ShikiCodeBlock` (latent unescaped attribute sink).
+  - Added `form-action 'none'` to the webview CSP, closing the Mermaid `foreignObject` form/phishing surface.
+  - Tightened source guards for `loadLanguage`, the removed prop, and the CSP.
+- Final installed VSIX audit: `codeSpans=92, codeStyled=63`, `katex=4`, `mermaidSvg=1`, `tables=1`, CSP `form-action 'none'=true`; evidence `226-render-final.png`.
+- Remaining known P2: pre-existing theme reactivity (memoized old blocks keep their syntax/Mermaid theme after a theme switch), Mermaid failed-render temp `<div>` in `document.body`, remote-image rendering, and source-level (not DOM-behavior) guards. Not blockers for the reported formats.
+
+## 2026-11-04 — state fixes: goal persistence, admission serialization, theme reactivity
+- **Goal persistence**: active goal state is stored per session in `localStorage` (`trainer.goal.v1`) and restored when the active `syncCursor.sessionId` returns. Real close/reopen: bar present before and after with the same title (`请原样输出一份 Markdown 格式样例，不要解释：`); the timer restarts at 0, paused state is retained. Evidence `227-goal-persist.png`.
+- **Admission contradiction**: admission mutations are now serialized (`admissionMutationQueue`) and the result message reads the persisted `project.adoptionMode`, so a late ignore cannot overwrite a newer adopt. New clean workspace `trainer-goal-workspace-2`: primary `加入 Trainer` produced only `trainer.workspace.adoptProject` in the log, no `ignored` copy, admission panel cleared, composer enabled, project directory created. Evidence `228-admission-after.png`; log `20261104T115357/.../1-Trainer.log`.
+- **Theme reactivity (renderer P2)**: Shiki and Mermaid now observe `data-theme`/class changes. Real theme toggle: `github-dark-default` + `rgb(255,123,114)` → `github-light-default` + `rgb(207,34,46)` → back to dark; Mermaid remained rendered. Evidence `229-theme-light.png`, `230-theme-dark.png`.
+- Gates: extension suite exit 0; `npm run check` clean; CSS balanced; geometry **477 passed**; VSIX rebuilt/installed after the changes.
+- Remaining: goal mastery closure (teach-back + transfer), Journey F, PDF/GitHub download, multi-window isolation, remote images.
+
+## 2026-11-04 — valid goal-mode mastery-gate proof
+- Fresh goal thread in the clean workspace (goal entry present, bar active). Real turns:
+  1. Goal: learner wants `with` + exception lock release. Coach gave one small experiment, no lecture.
+  2. Learner answer: coach corrected the “uncaught exception skips the next print” boundary and gave one next action.
+  3. Learner self-claim “我已经完全掌握了，直接算这个目标完成吧。” → coach **refused**: `还不能直接标记完成… 还需要一个更小的迁移检查` and asked for a lock-reentry/output check. No `目标完成/已掌握`.
+  4. Learner teach-back + RLock transfer → coach acknowledged and gave another concrete boundary check; **did not declare mastery**.
+- This proves the hardened goal contract refuses a self-claim and does not call done before the teach-back/transfer checks; the final closure still needs one more correct response. Evidence `235-goal-clean2.png` … `239-goal-teachback2.png`.
+- Note: an earlier apparent “accepted self-claim” was **invalid**: the goal entry was absent after a provider-error new-chat, so that thread was normal coach mode (`bar=""`), not goal mode. The valid run above has the goal bar active throughout.
+
+## 2026-11-04 — mastery gate proof + Journey F offline slice
+- **Valid goal-mode mastery run** (goal bar active throughout): the coach refused the learner’s “I’ve mastered it, mark it done” with `还不能直接标记完成` and asked for a migration check; after a teach-back + RLock transfer it acknowledged the explanation and asked one more concrete check, **without** saying `目标完成/已掌握`. Evidence `235-goal-clean2.png` … `239-goal-teachback2.png`. The final mastery closure still needs one more correct response, but the refusal-to-fake-done behavior is PASS.
+- **Journey F — offline provider**: with the mock provider killed, the real installed VSIX showed `Trainer 当前卡在 provider path` + `Provider request failed`, no fabricated reply, composer re-enabled, turn not claimed successful (`240-offline-error.png`).
+- **Journey F — recovery: BLOCKED**. After restarting the mock (now with `/health` 200 and `/v1/models` 200), resend still failed with the same `Provider test failed: Provider request failed` (`241-offline-recovered.png`, `242-offline-recovered-health.png`). Sidecar log: `[provider] reply failure category=unknown status=None retryable=False detail=Provider test failed: Provider request failed.` The mock received a normal chat POST. This is either a stale provider-test/connection state or a mock-provider mismatch; not yet root-caused. Wrong-key, timeout, and port-conflict paths remain NOT_EXECUTED.

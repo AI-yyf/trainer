@@ -2719,6 +2719,9 @@ class SessionMessageRequest(BaseModel):
     )
     response_language: str | None = Field(default=None, alias="responseLanguage")
     answer_mode: CoachRequestAnswerMode | None = None
+    # Goal mode: one small learning goal, learner does the work. The flag only
+    # changes the coaching contract; explicit plan/card actions stay separate.
+    goal_mode: bool = Field(default=False, alias="goalMode")
     teaching_style: str | None = None
     coach_defaults: CoachDefaults | None = None
     attachments: list[MessageAttachment] = Field(default_factory=list, max_length=MAX_IMAGE_COUNT)

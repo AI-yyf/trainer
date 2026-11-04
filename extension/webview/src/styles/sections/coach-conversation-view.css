@@ -84,8 +84,11 @@
    r2-g0-4: the hairline uses the panel-border semantic variable at full
    strength — one notch up from the Round 2 62% mix. */
 .coach-conversation-view--quiet-surface .message-bubble--assistant {
-  border-left: 1px solid var(--vscode-panel-border, var(--line));
-  padding-left: 10px;
+  /* Copilot-style thread: no vertical rule beside every reply. Left
+     alignment and spacing carry the grouping; the speaker rail is hidden on
+     the quiet surface by design. */
+  border-left: 0;
+  padding-left: 0;
 }
 
 .coach-conversation-view--quiet-surface .message-bubble--assistant .message-bubble__assistant-rail {
@@ -336,7 +339,11 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-1) 0 6px;
+  width: 100%;
+  max-width: var(--coach-content-max, 660px);
+  margin-inline: auto;
+  box-sizing: border-box;
+  padding: var(--space-1) var(--coach-gutter, 16px) 6px;
 }
 
 .coach-conversation-view__list--empty {
@@ -357,34 +364,6 @@
   /* Let the last turn clear the capability chips and the composer instead of
      ending flush against them — a half-visible final row reads as clipped. */
   padding-bottom: 10px;
-}
-
-/* Chat convention, second act: once the resume banner renders INSIDE the list
-   (it moves in from App.tsx as the list's first child), the auto margin pins
-   the whole banner+thread group to the composer, so a short thread no longer
-   strands ~70% dead pane between the last message and the input. The banner
-   travels WITH the messages, so the banner→first-message hole that killed the
-   old spacer cannot reopen. Once the thread overflows the pane the auto margin
-   resolves to 0 and normal top-down scrolling is untouched. */
-.coach-conversation-view__list > [data-coach-training-resume] {
-  margin-top: auto;
-}
-
-/* The $ skill palette is an overlay above the composer: with the thread
-   anchored, the palette would slide over the banner and the very messages the
-   user is narrowing (and trip the palette-must-not-cover-the-thread gate).
-   While it is open, drop the anchor — the thread returns to the top and the
-   palette covers only the empty tail, exactly as before the anchor existed. */
-.trainer-shell:has(.template-command-palette) .coach-conversation-view__list > [data-coach-training-resume] {
-  margin-top: 0;
-}
-
-@media (max-width: 360px) {
-  .coach-conversation-view__summary {
-    margin-inline: 2px;
-  }
-
-  
 }
 
 .coach-conversation-view__footer {

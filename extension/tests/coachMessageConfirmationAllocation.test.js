@@ -272,7 +272,7 @@ test('the five quick-action icons feed a CSS label instead of a title tooltip', 
     'utf8',
   );
 
-  for (const action of ['copy', 'share', 'save-resource', 'training-card', 'retry']) {
+  for (const action of ['copy', 'share', 'save-resource', 'training-card', 'set-goal', 'retry']) {
     assert.ok(
       source.includes(`data-action-label={messageActionLabels`),
       `expected the ${action} action to carry a label attribute`,
@@ -280,8 +280,8 @@ test('the five quick-action icons feed a CSS label instead of a title tooltip', 
   }
   assert.equal(
     countOccurrences(source, 'data-action-label={'),
-    6,
-    'five shortcuts plus the next-action reveal',
+    7,
+    'six shortcuts plus the next-action reveal',
   );
   assert.doesNotMatch(source, /title=\{messageActionLabels/, 'the native tooltip stays removed');
 });

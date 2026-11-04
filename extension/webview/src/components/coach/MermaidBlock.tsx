@@ -1,7 +1,6 @@
 import { useEffect, useId, useState } from "react";
 
 import { TrainerSpinner } from "../common/TrainerSpinner";
-import { sanitizePreviewHtml } from "../../lib/htmlSanitizer";
 import { ShikiCodeBlock } from "./parts/ShikiCodeBlock";
 
 export interface MermaidBlockProps {
@@ -51,7 +50,19 @@ async function ensureMermaid() {
 export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: MermaidBlockProps) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [theme, setTheme] = useState<"dark" | "default">(() => resolveMermaidTheme());
   const elementId = useId().replace(/:/g, "-");
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setTheme(resolveMermaidTheme());
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "class", "data-vscode-theme-kind"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +72,7 @@ export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: 
         const mermaid = await ensureMermaid();
         const result = await mermaid.render(`trainer-mermaid-${elementId}`, chart);
         if (!cancelled) {
-          setSvg(sanitizePreviewHtml(result.svg));
+          setSvg(result.svg);
           setError("");
         }
       } catch {
@@ -77,7 +88,7 @@ export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: 
     return () => {
       cancelled = true;
     };
-  }, [chart, elementId, errorLabel]);
+  }, [chart, elementId, errorLabel, theme]);
 
   if (error) {
     return (
@@ -88,12 +99,15 @@ export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: 
     );
   }
 
+  // Mermaid runs with securityLevel "strict" and escapes labels; its SVG
+  // <style>/style attributes are the diagram's theme. The model-HTML
+  // sanitizer would strip them and flatten the diagram.
   return (
     <div className="message-mermaid">
       <span className="message-mermaid__label eyebrow">{summaryLabel}</span>
       <div className="message-mermaid__canvas">
         {svg ? (
-          <div dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(svg) }} />
+          <div dangerouslySetInnerHTML={{ __html: svg }} />
         ) : (
           <TrainerSpinner size="sm" label={loadingLabel} />
         )}

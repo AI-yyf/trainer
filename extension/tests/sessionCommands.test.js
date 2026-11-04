@@ -233,6 +233,9 @@ function createContext(overrides = {}) {
       async refreshSnapshot() {
         return undefined;
       },
+      getLastActiveEditor() {
+        return undefined;
+      },
     },
     workbench: {
       async show() {

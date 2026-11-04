@@ -19,6 +19,158 @@ export const COACH_TYPING_LABELS: Record<ComposerLanguage, string> = {
   "pt-BR": "O coach está digitando…",
 };
 
+/** Goal mode: one small goal, the learner does the work and is taught by doing. */
+export const GOAL_MODE_COPY: Record<
+  ComposerLanguage,
+  {
+    enter: string;
+    setGoal: string;
+    exit: string;
+    placeholder: string;
+    hint: string;
+    mastery: string;
+    inProgress: string;
+    waiting: string;
+    paused: string;
+    pause: string;
+    resume: string;
+    clear: string;
+    expand: string;
+  }
+> = {
+  "zh-CN": {
+    enter: "目标模式",
+    setGoal: "设为目标",
+    exit: "退出目标模式",
+    placeholder: "想快速学会什么？例如：用 with 正确加锁",
+    hint: "目标模式：你先动手，教练按你的结果纠偏。",
+    mastery: "完成标准：做对 → 讲清为什么 → 迁移到一个小变化",
+    inProgress: "进行中的目标",
+    waiting: "等待你说出目标",
+    paused: "已暂停",
+    pause: "暂停目标",
+    resume: "继续目标",
+    clear: "结束目标",
+    expand: "展开目标详情",
+  },
+  "en-US": {
+    enter: "Goal mode",
+    setGoal: "Set as goal",
+    exit: "Exit goal mode",
+    placeholder: "What do you want to be able to do? e.g. lock correctly with `with`",
+    hint: "Goal mode: you do the work; the coach corrects from your result.",
+    mastery: "Done = do it → explain why → handle one small variation",
+    inProgress: "Active goal",
+    waiting: "Waiting for your goal",
+    paused: "Paused",
+    pause: "Pause goal",
+    resume: "Resume goal",
+    clear: "End goal",
+    expand: "Show goal details",
+  },
+  "es-ES": {
+    enter: "Modo objetivo",
+    setGoal: "Establecer como objetivo",
+    exit: "Salir del modo objetivo",
+    placeholder: "¿Qué quieres poder hacer? p. ej., bloquear con `with`",
+    hint: "Modo objetivo: tú haces el trabajo; el entrenador corrige desde tu resultado.",
+    mastery: "Listo = hacerlo → explicar por qué → resolver una variante pequeña",
+    inProgress: "Objetivo activo",
+    waiting: "Esperando tu objetivo",
+    paused: "En pausa",
+    pause: "Pausar objetivo",
+    resume: "Reanudar objetivo",
+    clear: "Finalizar objetivo",
+    expand: "Ver detalles del objetivo",
+  },
+  "fr-FR": {
+    enter: "Mode objectif",
+    setGoal: "Définir comme objectif",
+    exit: "Quitter le mode objectif",
+    placeholder: "Que voulez-vous savoir faire ? ex. verrouiller avec `with`",
+    hint: "Mode objectif : vous faites le travail ; le coach corrige à partir de votre résultat.",
+    mastery: "Terminé = le faire → expliquer pourquoi → gérer une petite variante",
+    inProgress: "Objectif actif",
+    waiting: "En attente de votre objectif",
+    paused: "En pause",
+    pause: "Mettre l'objectif en pause",
+    resume: "Reprendre l'objectif",
+    clear: "Terminer l'objectif",
+    expand: "Afficher les détails de l'objectif",
+  },
+  "de-DE": {
+    enter: "Zielmodus",
+    setGoal: "Als Ziel setzen",
+    exit: "Zielmodus verlassen",
+    placeholder: "Was möchtest du können? z. B. korrekt mit `with` sperren",
+    hint: "Zielmodus: Du machst die Arbeit; der Coach korrigiert anhand deines Ergebnisses.",
+    mastery: "Fertig = selbst tun → begründen → eine kleine Variante lösen",
+    inProgress: "Aktives Ziel",
+    waiting: "Warte auf dein Ziel",
+    paused: "Pausiert",
+    pause: "Ziel pausieren",
+    resume: "Ziel fortsetzen",
+    clear: "Ziel beenden",
+    expand: "Zieldetails anzeigen",
+  },
+  "ja-JP": {
+    enter: "目標モード",
+    setGoal: "目標にする",
+    exit: "目標モードを終了",
+    placeholder: "できるようになりたいことは？例：`with` で正しくロックする",
+    hint: "目標モード：まず自分で手を動かし、結果に基づいてコーチが直します。",
+    mastery: "完了 = できる → 理由を説明 → 小さな応用を解く",
+    inProgress: "進行中の目標",
+    waiting: "目標の入力を待っています",
+    paused: "一時停止中",
+    pause: "目標を一時停止",
+    resume: "目標を再開",
+    clear: "目標を終了",
+    expand: "目標の詳細を表示",
+  },
+  "ko-KR": {
+    enter: "목표 모드",
+    setGoal: "목표로 설정",
+    exit: "목표 모드 종료",
+    placeholder: "무엇을 할 수 있게 되고 싶나요? 예: `with`로 올바르게 잠금",
+    hint: "목표 모드: 직접 해보고, 결과를 바탕으로 코치가 교정합니다.",
+    mastery: "완료 = 직접 하기 → 이유 설명 → 작은 변형 해결",
+    inProgress: "진행 중인 목표",
+    waiting: "목표를 기다리는 중",
+    paused: "일시 중지됨",
+    pause: "목표 일시 중지",
+    resume: "목표 재개",
+    clear: "목표 종료",
+    expand: "목표 세부정보 표시",
+  },
+  "pt-BR": {
+    enter: "Modo meta",
+    setGoal: "Definir como meta",
+    exit: "Sair do modo meta",
+    placeholder: "O que você quer conseguir fazer? ex.: bloquear com `with`",
+    hint: "Modo meta: você faz o trabalho; o treinador corrige a partir do seu resultado.",
+    mastery: "Concluído = fazer → explicar por quê → resolver uma pequena variação",
+    inProgress: "Meta ativa",
+    waiting: "Aguardando sua meta",
+    paused: "Pausada",
+    pause: "Pausar meta",
+    resume: "Retomar meta",
+    clear: "Encerrar meta",
+    expand: "Ver detalhes da meta",
+  },
+};
+
+export const COACH_WORKING_LABELS: Record<ComposerLanguage, string> = {
+  "zh-CN": "工作中",
+  "en-US": "Working",
+  "es-ES": "Trabajando",
+  "fr-FR": "En cours",
+  "de-DE": "Arbeitet",
+  "ja-JP": "作業中",
+  "ko-KR": "작업 중",
+  "pt-BR": "Trabalhando",
+};
+
 export const HISTORY_COPY: Record<ComposerLanguage, Record<"title" | "newChat" | "refresh" | "search" | "untitled" | "messages" | "loading" | "error" | "empty" | "noMatches" | "current" | "today" | "yesterday" | "last7" | "earlier", string>> = {
   "zh-CN": {
     "title": "历史会话",

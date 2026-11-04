@@ -61,6 +61,7 @@ from ...llm.provider_service import (
     ProviderService,
     redact_provider_error,
 )
+from ...llm.provider.service_support import has_successful_agent_tool_result
 from ...llm.stream_agent_metadata import merge_stream_agent_metadata
 from ...memory.workspace_recovery import (
     PLAN_RUNTIME_KEY,
@@ -2105,6 +2106,7 @@ def build_core_router(
                             response_language=request.response_language,
                             answer_mode=request.answer_mode,
                             coach_context=dict(coach_turn["coach_context"]),
+                            grounded_completion=has_successful_agent_tool_result(agent_tool_events),
                         )
                     if not agent_resume_thread and (agent_summary or agent_next_step):
                         agent_resume_thread = core.build_resume_thread_text(
@@ -3031,6 +3033,7 @@ def build_core_router(
                                 response_language=request.response_language,
                                 answer_mode=request.answer_mode,
                                 coach_context=coach_context,
+                                grounded_completion=has_successful_agent_tool_result(agent_tool_events),
                             )
                         if not agent_resume_thread and (agent_summary or agent_next_step):
                             agent_resume_thread = core.build_resume_thread_text(
@@ -3454,6 +3457,7 @@ def build_core_router(
                             response_language=request.response_language,
                             answer_mode=request.answer_mode,
                             coach_context=dict(coach_turn["coach_context"]),
+                            grounded_completion=has_successful_agent_tool_result(agent_tool_events),
                         )
                     if not full_content:
                         local_sequence_fallback = core.build_local_sequence_visible_fallback(

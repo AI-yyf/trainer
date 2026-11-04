@@ -217,6 +217,19 @@ function RichMarkdownRenderer({
             />
           );
         },
+        a({ node, children, href, ...props }) {
+          // External links leave the webview instead of replacing Trainer.
+          return (
+            <a
+              {...props}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {children}
+            </a>
+          );
+        },
         // 处理 pre 元素 - 防止嵌套问题
         pre({ children }) {
           // pre 元素的内容应该由 code 组件处理

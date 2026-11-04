@@ -277,7 +277,9 @@ export function CoachComposer({
   const sendState = busy ? "streaming" : submitDisabled ? "blocked" : hasSubmissionPermission ? "ready" : "idle";
   const resolvedSummary = summary?.trim() ? summary : undefined;
   const resolvedHintText = hintText?.trim() ? hintText : undefined;
-  const primaryHelperText = busy ? resolvedBusyLabel : resolvedSummary ?? resolvedHintText;
+  // While a reply is in flight the thread already carries the working line;
+  // the composer drops its duplicate hint and keeps only the sr-only status.
+  const primaryHelperText = busy ? "" : resolvedSummary ?? resolvedHintText;
   const resolvedShortcutHint = !busy && shortcutHint?.trim() ? shortcutHint : undefined;
   const resolvedLeadingActions = leadingActions ?? [];
   const resolvedSecondaryActions = secondaryActions ?? [];
@@ -294,8 +296,7 @@ export function CoachComposer({
   const plusMenuAriaLabel = localizedCopy.plusMenu;
   const showToolbarDivider = hasLeadingActions || hasSecondaryActions || hasModeControl;
   const showHelperText = Boolean(
-    busy ||
-      resolvedSummary ||
+    resolvedSummary ||
       (resolvedHintText && trimmedValue.length > 0 && trimmedValue.length < 24) ||
       (resolvedShortcutHint && trimmedValue.length === 0),
   );
@@ -806,7 +807,7 @@ export function CoachComposer({
         {showHelperText ? (
           <div className="composer__summary" aria-live={busy ? "polite" : undefined}>
             <span className="composer__summary-main">
-              {(busy || resolvedSummary || (resolvedHintText && trimmedValue.length > 0)) ? (
+              {(resolvedSummary || (resolvedHintText && trimmedValue.length > 0)) && primaryHelperText ? (
                 <span className="composer__hint" title={resolvedHintText ?? primaryHelperText}>
                   {primaryHelperText}
                 </span>

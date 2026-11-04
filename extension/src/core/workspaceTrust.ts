@@ -84,6 +84,12 @@ function resolveWorkspaceTrustLanguage(): WorkspaceTrustLanguage {
 export class WorkspaceTrustGuard {
   private readonly recentFiles: string[] = [];
   private readonly recentEditedFiles: string[] = [];
+  /**
+   * VS Code clears `window.activeTextEditor` when focus moves into a webview
+   * view. The last editor (and its live selection) is still the context the
+   * user meant to attach, so keep a reference and fall back to it.
+   */
+  private lastActiveEditor: vscode.TextEditor | undefined;
 
   async ensureTrusted(_reason: string): Promise<boolean> {
     if (vscode.workspace.isTrusted) {
@@ -135,11 +141,18 @@ export class WorkspaceTrustGuard {
   }
 
   rememberActiveEditor(editor: vscode.TextEditor | undefined = vscode.window.activeTextEditor): void {
+    if (editor) {
+      this.lastActiveEditor = editor;
+    }
     const path = editor?.document.uri.fsPath;
     if (!path) {
       return;
     }
     this.rememberPath(this.recentFiles, path);
+  }
+
+  getLastActiveEditor(): vscode.TextEditor | undefined {
+    return this.lastActiveEditor;
   }
 
   rememberDocumentEdit(document: vscode.TextDocument): void {
@@ -174,7 +187,7 @@ export class WorkspaceTrustGuard {
     relatedFiles?: string[];
   } {
     const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-    const editor = vscode.window.activeTextEditor;
+    const editor = vscode.window.activeTextEditor ?? this.lastActiveEditor;
     const document = editor?.document;
     const activeFile = document?.uri.fsPath;
     this.rememberActiveEditor(editor);

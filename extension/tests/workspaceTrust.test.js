@@ -121,3 +121,56 @@ test('WorkspaceTrustGuard gives a short localized trust prompt without leaking c
   ]);
   assert.deepEqual(commandCalls, ['workbench.trust.manage']);
 });
+
+test('WorkspaceTrustGuard keeps the last editor selection after the webview takes focus', () => {
+  const editor = {
+    document: {
+      uri: { fsPath: 'F:\\trainer-alpha\\src\\queue.py' },
+      languageId: 'python',
+      version: 3,
+      lineCount: 20,
+      getText(selection) {
+        return selection ? 'with self._lock:' : 'from queue import Queue';
+      },
+    },
+    selection: {
+      isEmpty: false,
+      start: { line: 3, character: 4 },
+      end: { line: 3, character: 18 },
+    },
+  };
+  const vscodeMock = {
+    workspace: {
+      isTrusted: true,
+      workspaceFolders: [{ uri: { fsPath: 'F:\\trainer-alpha' } }],
+      getDiagnostics() {
+        return [];
+      },
+    },
+    window: {
+      activeTextEditor: editor,
+    },
+    env: {
+      remoteName: undefined,
+    },
+    languages: {
+      getDiagnostics() {
+        return [];
+      },
+    },
+  };
+
+  const { WorkspaceTrustGuard } = loadWithVscodeMock(workspaceTrustModulePath, vscodeMock);
+  const guard = new WorkspaceTrustGuard();
+  guard.rememberActiveEditor(editor);
+  // The Trainer webview now owns focus; VS Code clears the active editor.
+  vscodeMock.window.activeTextEditor = undefined;
+
+  const snapshot = guard.getSnapshot();
+
+  assert.equal(snapshot.activeFile, 'F:\\trainer-alpha\\src\\queue.py');
+  assert.equal(snapshot.selectionText, 'with self._lock:');
+  assert.equal(snapshot.selectionRange, '4:5-4:19');
+  assert.equal(guard.getLastActiveEditor(), editor);
+});
+

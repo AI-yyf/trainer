@@ -114,6 +114,8 @@ export type ResourceTextKey =
   | "stale"
   | "unknown"
   | "openInVsCode"
+  | "previewResource"
+  | "emptyOpenHint"
   | "openInBrowser"
   | "openUnavailable"
   | "sandboxTitle"
@@ -253,6 +255,8 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   trustUnverified: { zh: "\u6765\u6e90\u5f85\u786e\u8ba4", en: "Source unverified" },
   fileActionsTitle: { zh: "\u6587\u4ef6\u64cd\u4f5c", en: "File actions" },
   openInVsCode: { zh: "\u5728 VS Code \u4e2d\u6253\u5f00", en: "Open in VS Code" },
+  previewResource: { zh: "\u9884\u89c8\u8d44\u6599", en: "Preview resource" },
+  emptyOpenHint: { zh: "\u9009\u4e2d\u8d44\u6599\u540e\u4f1a\u76f4\u63a5\u5728 VS Code \u4e2d\u6253\u5f00\u3002", en: "Select a resource to open it directly in VS Code." },
   openInBrowser: { zh: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00", en: "Open in browser" },
   openUnavailable: { zh: "\u6ca1\u6709\u53ef\u6253\u5f00\u7684\u6765\u6e90", en: "No openable source" },
   sandboxTitle: { zh: "\u53d7\u63a7\u6c99\u7bb1", en: "Guarded sandbox" },
@@ -429,6 +433,8 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Fuente sin confirmar",
     fileActionsTitle: "Acciones de archivo",
     openInVsCode: "Abrir en VS Code",
+    previewResource: "Vista previa del recurso",
+    emptyOpenHint: "Selecciona un recurso para abrirlo directamente en VS Code.",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponible",
     sandboxUnavailable: "Esperando conexion",
@@ -557,6 +563,8 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Source non v\u00e9rifi\u00e9e",
     fileActionsTitle: "Actions de fichier",
     openInVsCode: "Ouvrir dans VS Code",
+    previewResource: "Aperçu de la ressource",
+    emptyOpenHint: "Sélectionnez une ressource pour l'ouvrir directement dans VS Code.",
     sandboxTitle: "Sandbox protege",
     sandboxReady: "Sandbox disponible",
     sandboxUnavailable: "En attente de connexion",
@@ -685,6 +693,8 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Quelle unbest\u00e4tigt",
     fileActionsTitle: "Dateiaktionen",
     openInVsCode: "In VS Code oeffnen",
+    previewResource: "Materialvorschau",
+    emptyOpenHint: "Wähle ein Material aus, um es direkt in VS Code zu öffnen.",
     sandboxTitle: "Geschuetzte Sandbox",
     sandboxReady: "Sandbox verfuegbar",
     sandboxUnavailable: "Warte auf Verbindung",
@@ -813,6 +823,8 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "来源待确认",
     fileActionsTitle: "文件操作",
     openInVsCode: "VS Code で開く",
+    previewResource: "資料をプレビュー",
+    emptyOpenHint: "資料を選ぶと VS Code で直接開きます。",
     sandboxTitle: "保護されたサンドボックス",
     sandboxReady: "サンドボックスを利用できます",
     sandboxUnavailable: "接続待ち",
@@ -941,6 +953,8 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "출처 미확인",
     fileActionsTitle: "파일 작업",
     openInVsCode: "VS Code에서 열기",
+    previewResource: "자료 미리보기",
+    emptyOpenHint: "자료를 선택하면 VS Code에서 바로 열립니다.",
     sandboxTitle: "보호된 샌드박스",
     sandboxReady: "샌드박스를 사용할 수 있습니다",
     sandboxUnavailable: "연결 대기 중",
@@ -1069,6 +1083,8 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Fonte n\u00e3o verificada",
     fileActionsTitle: "A\u00e7\u00f5es de arquivo",
     openInVsCode: "Abrir no VS Code",
+    previewResource: "Prévia do recurso",
+    emptyOpenHint: "Selecione um recurso para abri-lo diretamente no VS Code.",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponivel",
     sandboxUnavailable: "Aguardando conexao",

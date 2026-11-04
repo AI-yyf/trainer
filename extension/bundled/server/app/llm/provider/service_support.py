@@ -116,3 +116,24 @@ def timeout_recovery_should_replace_content(content: str) -> bool:
     if not text:
         return True
     return len(text) < 120
+
+def has_successful_agent_tool_result(tool_events: list[dict[str, Any]] | None) -> bool:
+    """Whether this turn contains a real, successful tool outcome.
+
+    A short completion such as "已把资料导入资料库" is the result of work, not a
+    generic close. It must not be replaced by a re-anchor.
+    """
+    for event in tool_events or []:
+        if not isinstance(event, dict) or str(event.get("type") or "") != "tool_result":
+            continue
+        if event.get("ok") is False:
+            continue
+        result = event.get("result")
+        if isinstance(result, dict):
+            if result.get("ok") is False:
+                continue
+            if result.get("error") or result.get("blocked"):
+                continue
+        return True
+    return False
+

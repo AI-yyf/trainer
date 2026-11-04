@@ -981,7 +981,7 @@ test('mergeSessionMessage preserves structured suggested action ids and actions'
   assert.equal(result.patch.suggestedActions[1].action, 'retry_review');
 });
 
-test('mergeSessionMessage preserves context attachments from message metadata', () => {
+test('mergeSessionMessage keeps context metadata out of the user bubble', () => {
   const bootstrap = createBootstrap();
 
   const result = mergeSessionMessage(
@@ -1032,34 +1032,16 @@ test('mergeSessionMessage preserves context attachments from message metadata', 
     'Turn this into a task.',
   );
 
-  assert.equal(result.patch.conversation[0].attachments[0].label, 'Intent');
-  assert.equal(result.patch.conversation[0].attachments[0].value, 'task');
-  assert.equal(
-    result.patch.conversation[0].attachments.find((attachment) => attachment.label === 'Selection').value,
-    '10:1-20:4',
-  );
-  assert.equal(
-    result.patch.conversation[0].attachments.find((attachment) => attachment.label === 'File').value,
-    'routers.py',
-  );
-  assert.equal(
-    result.patch.conversation[0].attachments.find((attachment) => attachment.label === 'Strategy').value,
-    'selection-window',
-  );
+  // Copilot-style thread: the user turn stays exactly what the learner typed.
+  // Provenance metadata is still available on the raw snapshot but never
+  // becomes visible attachment chips under the bubble.
+  assert.equal(result.patch.conversation[0].attachments, undefined);
   assert.equal(result.patch.conversation[0].contextNote, 'Attached python file context');
-  assert.equal(
-    result.patch.conversation[0].attachments.find((attachment) => attachment.label === 'Related').value,
-    'prompts.py',
-  );
-  assert.equal(
-    result.patch.conversation[0].attachments.find((attachment) => attachment.label === 'Related count').value,
-    '1',
-  );
   assert.equal(result.patch.conversation[1].artifacts[0].title, 'Design an evaluator');
   assert.equal(result.patch.conversation[1].artifacts[0].bullets[0], 'Avoid direct answers');
 });
 
-test('mergeSessionMessage localizes context attachment labels for Chinese metadata', () => {
+test('mergeSessionMessage localizes context labels only when attachments exist', () => {
   const bootstrap = createBootstrap();
 
   const result = mergeSessionMessage(
@@ -1094,13 +1076,7 @@ test('mergeSessionMessage localizes context attachment labels for Chinese metada
     '帮我看下这个实现。',
   );
 
-  const attachments = result.patch.conversation[0].attachments;
-  assert.equal(attachments.find((attachment) => attachment.label === '意图').value, '评审');
-  assert.equal(attachments.find((attachment) => attachment.label === '方式').value, '引导');
-  assert.equal(attachments.find((attachment) => attachment.label === '文件').value, 'workbenchData.ts');
-  assert.equal(attachments.find((attachment) => attachment.label === '策略').value, '围绕选区');
-  assert.equal(attachments.find((attachment) => attachment.label === '诊断').value, '3');
-  assert.equal(attachments.find((attachment) => attachment.label === '相关文件').value, 'routers.py');
+  assert.equal(result.patch.conversation[0].attachments, undefined);
 });
 
 test('mergeSessionMessage preserves image delivery truth in support without adding extra attachment clutter', () => {

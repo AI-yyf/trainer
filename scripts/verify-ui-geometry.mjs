@@ -54,8 +54,8 @@ const budgetTimer = setTimeout(() => {
 budgetTimer.unref?.();
 
 /** A gap larger than this between the resume banner and the first message is a hole. */
-const MAX_RESUME_GAP = 24;
 /** Content shorter than the viewport must rest this close to the list bottom (anchor-bottom). */
+const MAX_FIRST_OFFSET = 24;
 const MAX_BOTTOM_GAP = 24;
 /** Palette may not extend past the composer it belongs to. */
 const PALETTE_WIDTH_TOLERANCE = 4;
@@ -258,10 +258,8 @@ async function main() {
   await page.locator("#coach-composer").fill("");
   const coach = await page.evaluate(() => {
     const list = document.querySelector(".coach-conversation-view__list");
-    // The resume line carries a data attribute (App.tsx renders
-    // data-coach-training-resume), not a class name. A ".coach-training-resume"
-    // class probe here returned null every run and, combined with the
-    // null-tolerant assertion below, kept this rule fake-green.
+    // The old resume banner was removed (product decision): the card itself is
+    // the only in-progress surface. Fail closed if any legacy banner returns.
     const resume = document.querySelector("[data-coach-training-resume]");
     const first = document.querySelector(".coach-conversation-view__item");
     if (!list) return { error: "no message list" };
@@ -270,30 +268,31 @@ async function main() {
     return {
       listHeight: Math.round(listBox.height),
       firstOffsetTop: first ? Math.round(first.getBoundingClientRect().top - listBox.top) : null,
-      gapAfterBanner: resume && first
-        ? Math.round(first.getBoundingClientRect().top - resume.getBoundingClientRect().bottom)
-        : null,
-      // Dead-zone probe: with content shorter than the viewport, the message
-      // block must rest against the bottom of the list (anchor-bottom), so no
-      // large empty band separates the thread from the composer.
+      legacyBanner: Boolean(resume),
+      // ZCode-style flow: the first turn starts at the top of the thread and
+      // later turns append downward. Empty room belongs below the last turn,
+      // not above the first one.
       bottomGap: last ? Math.round(listBox.bottom - last.getBoundingClientRect().bottom) : null,
     };
   });
   if (coach.error) {
     check(false, `coach: ${coach.error}`);
   } else {
-    // Fail closed: the ready scenario renders a live training card, so the
-    // resume banner must be present and measurable. A missing banner is a
-    // regression, never a pass.
+    // Product decision: the in-progress resume banner is gone; the Learning
+    // card is the sole owner. Fail closed if the legacy node comes back.
     check(
-      coach.gapAfterBanner !== null && coach.gapAfterBanner <= MAX_RESUME_GAP,
-      `coach: banner→first-message gap ${coach.gapAfterBanner}px (limit ${MAX_RESUME_GAP}px); first item offset ${coach.firstOffsetTop}px in a ${coach.listHeight}px list`,
+      coach.legacyBanner === false,
+      `coach: legacy resume banner must not render; first item offset ${coach.firstOffsetTop}px in a ${coach.listHeight}px list`,
     );
-    // The actual dead zone this rule exists for: the space below the last
-    // message before the composer must stay within budget.
+    // Messages fill from the top and continue downward; a short thread must
+    // not be pushed to the composer.
     check(
-      coach.bottomGap !== null && coach.bottomGap <= MAX_BOTTOM_GAP,
-      `coach: content sits ${coach.bottomGap}px above the list bottom (limit ${MAX_BOTTOM_GAP}px) in a ${coach.listHeight}px list`,
+      coach.firstOffsetTop !== null && coach.firstOffsetTop <= MAX_FIRST_OFFSET,
+      `coach: first turn starts ${coach.firstOffsetTop}px from the thread top (limit ${MAX_FIRST_OFFSET}px)`,
+    );
+    check(
+      coach.bottomGap !== null && coach.bottomGap >= 0,
+      `coach: thread does not overflow the list (bottom gap ${coach.bottomGap}px)`,
     );
   }
 

@@ -1708,8 +1708,12 @@ def test_tool_schema_hides_coach_only_tools_by_default() -> None:
     assert "recall_memory" in names
     assert "record_learning_note" not in names
     assert "generate_training_card" not in names
-    assert "import_resource_url" not in names
-    assert "organize_resources" not in names
+    assert "import_resource_url" in names
+    assert "organize_resources" in names
+    assert "list_resources" in names
+    assert "delete_resource" in names
+    assert "restore_resource" in names
+    assert "refresh_resource_index" in names
 
 
 def test_tool_schema_includes_coach_only_tools_when_allowed() -> None:
@@ -1722,8 +1726,8 @@ def test_tool_schema_includes_coach_only_tools_when_allowed() -> None:
     assert "record_learning_note" not in names
     assert "save_formal_plan" not in names
     assert "generate_training_card" not in names
-    assert "import_resource_url" not in names
-    assert "organize_resources" not in names
+    assert "import_resource_url" in names
+    assert "organize_resources" in names
 
 
 def test_tool_schema_exposes_record_learning_note_only_when_explicitly_requested() -> None:
@@ -1744,34 +1748,32 @@ def test_tool_schema_exposes_record_learning_note_only_when_explicitly_requested
     assert "record_learning_note" not in hidden
     assert "record_learning_note" in visible
     assert "save_formal_plan" not in visible
-    assert "import_resource_url" not in visible
+    assert "import_resource_url" in visible
 
 
-def test_tool_schema_exposes_resource_write_tools_only_on_explicit_resource_turns() -> None:
+def test_resource_management_tools_are_not_gated_by_legacy_resource_flags() -> None:
     registry = build_default_tool_registry()
-    hidden = _tool_schema_names(
+    baseline = _tool_schema_names(
         registry.as_protocol_schemas("openai_chat_completions", allow_coach_only=True)
     )
-    import_visible = _tool_schema_names(
+    legacy_flags = _tool_schema_names(
         registry.as_protocol_schemas(
             "openai_chat_completions",
             allow_coach_only=True,
             explicit_resource_import=True,
-        )
-    )
-    organize_visible = _tool_schema_names(
-        registry.as_protocol_schemas(
-            "openai_chat_completions",
-            allow_coach_only=True,
             explicit_resource_organize=True,
         )
     )
-    assert "import_resource_url" not in hidden
-    assert "organize_resources" not in hidden
-    assert "import_resource_url" in import_visible
-    assert "organize_resources" not in import_visible
-    assert "organize_resources" in organize_visible
-    assert "import_resource_url" not in organize_visible
+    for name in (
+        "import_resource_url",
+        "organize_resources",
+        "list_resources",
+        "delete_resource",
+        "restore_resource",
+        "refresh_resource_index",
+    ):
+        assert name in baseline
+        assert name in legacy_flags
 
 
 def test_tool_schema_exposes_save_formal_plan_only_on_formal_mutation() -> None:
@@ -3176,8 +3178,8 @@ async def test_agent_loop_exposes_coach_only_tools_when_context_opted_in() -> No
     assert "record_learning_note" not in names
     assert "generate_training_card" not in names
     assert "save_formal_plan" not in names
-    assert "import_resource_url" not in names
-    assert "organize_resources" not in names
+    assert "import_resource_url" in names
+    assert "organize_resources" in names
 
 
 async def test_agent_loop_exposes_record_learning_note_only_when_explicitly_requested() -> None:
@@ -3206,7 +3208,7 @@ async def test_agent_loop_exposes_record_learning_note_only_when_explicitly_requ
     names = _tool_schema_names(captured_tools)
     assert "record_learning_note" in names
     assert "generate_training_card" not in names
-    assert "import_resource_url" not in names
+    assert "import_resource_url" in names
 
 
 async def test_agent_loop_exposes_save_formal_plan_only_on_formal_mutation() -> None:

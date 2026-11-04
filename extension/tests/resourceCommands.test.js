@@ -1505,7 +1505,90 @@ test('uploadResourceCommand preserves earlier files when a later upload fails', 
   assert.equal(result.data[0].status, 'ready');
 });
 
-test('openResourceCommand opens the managed local copy in VS Code', async () => {
+test('openResourceCommand resolves a relative source against the workspace root and opens it', async () => {
+  const executedCommands = [];
+  const vscodeMock = {
+    Uri: {
+      file(value) {
+        return { fsPath: value, path: value, scheme: 'file' };
+      },
+    },
+    Range: class Range {
+      constructor(startLine, startCharacter, endLine, endCharacter) {
+        this.start = { line: startLine, character: startCharacter };
+        this.end = { line: endLine, character: endCharacter };
+      }
+    },
+    commands: {
+      async executeCommand(...args) {
+        executedCommands.push(args);
+      },
+    },
+    workspace: { workspaceFolders: [] },
+  };
+  const { openResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
+  const context = createContext();
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-resource-root-'));
+  const expectedPath = path.join(workspaceRoot, 'artifacts', 'pytest.txt');
+  fs.mkdirSync(path.dirname(expectedPath), { recursive: true });
+  fs.writeFileSync(expectedPath, '2 passed');
+  const resource = context.getHostState().bootstrap.resources[0];
+  const bootstrap = context.getHostState().bootstrap;
+  context.getHostState = () => ({ bootstrap, workspace: { workspaceFolder: workspaceRoot } });
+  resource.sandboxPath = undefined;
+  resource.source = 'artifacts/pytest.txt';
+
+  const result = await openResourceCommand(context, { resourceId: 'resource-1' });
+
+  assert.equal(result.ok, true);
+  assert.equal(executedCommands.length, 1);
+  assert.equal(executedCommands[0][0], 'vscode.open');
+  assert.equal(executedCommands[0][1].fsPath, expectedPath);
+  assert.equal(executedCommands[0][2].preview, false);
+  assert.equal(executedCommands[0][2].preserveFocus, false);
+  assert.equal(executedCommands[0][2].selection.start.line, 0);
+  assert.equal(executedCommands[0][2].selection.start.character, 0);
+  assert.equal(executedCommands[0][2].selection.end.line, 0);
+  assert.equal(executedCommands[0][2].selection.end.character, 0);
+});
+
+test('openResourceCommand opens an existing absolute source in VS Code', async () => {
+  const executedCommands = [];
+  const vscodeMock = {
+    Uri: {
+      file(value) {
+        return { fsPath: value, path: value, scheme: 'file' };
+      },
+    },
+    Range: class Range {
+      constructor(startLine, startCharacter, endLine, endCharacter) {
+        this.start = { line: startLine, character: startCharacter };
+        this.end = { line: endLine, character: endCharacter };
+      }
+    },
+    commands: {
+      async executeCommand(...args) {
+        executedCommands.push(args);
+      },
+    },
+    workspace: { workspaceFolders: [] },
+  };
+  const { openResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
+  const context = createContext();
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-resource-abs-'));
+  const expectedPath = path.join(tempDir, 'notes.md');
+  fs.writeFileSync(expectedPath, '# Notes');
+  const resource = context.getHostState().bootstrap.resources[0];
+  resource.source = expectedPath;
+  resource.sandboxPath = undefined;
+
+  const result = await openResourceCommand(context, { resourceId: 'resource-1' });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(executedCommands[0][1].fsPath, expectedPath);
+});
+
+test('openResourceCommand refuses a missing source instead of opening a broken tab', async () => {
   const executedCommands = [];
   const vscodeMock = {
     Uri: {
@@ -1518,24 +1601,22 @@ test('openResourceCommand opens the managed local copy in VS Code', async () => 
         executedCommands.push(args);
       },
     },
+    workspace: { workspaceFolders: [] },
   };
   const { openResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
   const context = createContext();
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-resource-missing-'));
+  const resource = context.getHostState().bootstrap.resources[0];
+  const bootstrap = context.getHostState().bootstrap;
+  context.getHostState = () => ({ bootstrap, workspace: { workspaceFolder: tempDir } });
+  resource.source = 'artifacts/missing.txt';
+  resource.sandboxPath = undefined;
 
   const result = await openResourceCommand(context, { resourceId: 'resource-1' });
 
-  assert.equal(result.ok, true);
-  assert.deepEqual(executedCommands, [
-    [
-      'vscode.open',
-      {
-        fsPath: 'F:\\trainer\\sandboxes\\workspace-a\\notes.md',
-        path: 'F:\\trainer\\sandboxes\\workspace-a\\notes.md',
-        scheme: 'file',
-      },
-      { preview: false, preserveFocus: false },
-    ],
-  ]);
+  assert.equal(result.ok, false);
+  assert.match(result.message ?? '', /not in the current workspace or library/i);
+  assert.deepEqual(executedCommands, []);
 });
 
 test('previewResourceCommand requests governed content and patches the workbench preview', async () => {

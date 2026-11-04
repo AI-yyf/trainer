@@ -425,7 +425,9 @@
 
 .coach-empty-state__starters {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 6px;
   width: 100%;
   max-width: 100%;
@@ -486,3 +488,28 @@
   max-width: none;
 }
 
+
+/* Fresh-session goal entry: a quiet text action outside the composer. The
+   goal itself is not a composer toolbar icon. */
+.coach-empty-state__goal-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--trainer-font-2xs);
+  cursor: pointer;
+}
+
+.coach-empty-state__goal-entry:hover {
+  color: var(--fg-0);
+}
+
+.coach-empty-state__goal-entry:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}

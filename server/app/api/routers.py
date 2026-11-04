@@ -2922,7 +2922,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         return (
             coaching_service.provider_failure_reply(
                 category,
-                None,
+                detail or None,
                 response_language,
             ),
             ensure_coach_turn_payload(

@@ -299,15 +299,13 @@ test('coach DiffRenderer escapes or sanitizes before dangerouslySetInnerHTML', (
   );
 });
 
-test('coach MermaidBlock Shiki Code Math MermaidRenderer route HTML through sanitizePreviewHtml', () => {
-  const roots = [
-    ['coach', 'MermaidBlock.tsx'],
-    ['coach', 'parts', 'ShikiCodeBlock.tsx'],
+test('model HTML renderers sanitize; trusted Shiki/Mermaid keep library styles', () => {
+  // Model-provided HTML still goes through the sanitizer.
+  for (const parts of [
     ['parts', 'CodeRenderer.tsx'],
     ['parts', 'MathRenderer.tsx'],
     ['parts', 'MermaidRenderer.tsx'],
-  ];
-  for (const parts of roots) {
+  ]) {
     const source = fs.readFileSync(
       path.resolve(__dirname, '..', 'webview', 'src', 'components', ...parts),
       'utf8',
@@ -315,6 +313,21 @@ test('coach MermaidBlock Shiki Code Math MermaidRenderer route HTML through sani
     assert.match(source, /sanitizePreviewHtml/, parts.join('/'));
     assert.doesNotMatch(source, /securityLevel:\s*["']loose["']/, parts.join('/'));
   }
+
+  // Shiki escapes code itself; Mermaid runs strict. Their inline styles are
+  // the syntax/diagram theme, so the model-HTML sanitizer must not strip them.
+  const mermaid = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'MermaidBlock.tsx'),
+    'utf8',
+  );
+  const shiki = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'parts', 'ShikiCodeBlock.tsx'),
+    'utf8',
+  );
+  assert.doesNotMatch(mermaid, /sanitizePreviewHtml/);
+  assert.match(mermaid, /securityLevel:\s*["']strict["']/);
+  assert.doesNotMatch(shiki, /sanitizePreviewHtml/);
+  assert.match(shiki, /import\(["']shiki["']\)/);
 });
 
 test('docx-unrelated XSS-shaped fixture: assigned innerHTML must be sanitized output', () => {

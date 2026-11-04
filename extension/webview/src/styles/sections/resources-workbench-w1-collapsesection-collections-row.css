@@ -37,7 +37,7 @@
 
 .resources-knowledge__tree .collapse-section__header:hover {
   background: color-mix(in srgb, var(--bg-1) 72%, transparent);
-  border-left-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  border-left-color: color-mix(in srgb, var(--line) 62%, transparent);
 }
 
 .resources-knowledge__tree .collapse-section__actions {
@@ -78,23 +78,23 @@
 }
 
 .resources-row:hover {
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-  border-left-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  border-color: color-mix(in srgb, var(--line) 58%, transparent);
+  border-left-color: transparent;
   background: var(--surface-1);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
 }
 
 .resources-row.is-marked:hover {
-  border-color: transparent;
-  border-left-color: color-mix(in srgb, var(--accent) 56%, transparent);
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg-0));
+  border-color: color-mix(in srgb, var(--line) 48%, transparent);
+  border-left-color: transparent;
+  background: var(--bg-1);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
 }
 
 .resources-row.is-selected:hover {
-  border-color: transparent;
-  border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-0));
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  border-left-color: transparent;
+  background: var(--bg-2);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
 }
 
@@ -373,12 +373,12 @@
 
 .resources-knowledge__folder-toggle:hover,
 .resources-knowledge__folder-toggle:focus-visible {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 50%, transparent);
   color: var(--fg-1);
 }
 
 .resources-knowledge__folder-toggle.is-selected {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: var(--bg-2);
   color: var(--fg-1);
 }
 
@@ -537,4 +537,233 @@
   .resources-knowledge__folder-prompt-field input:focus-visible {
     outline: none;
   }
+}
+
+/* Crafted library empty state: icon tile + one explanation + the direct-open
+   promise. The toolbar keeps the single import action. */
+.resources-empty-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: var(--space-2) 0;
+  padding: 14px 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-1) 76%, var(--bg-0));
+}
+
+.resources-empty-state__icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--fg-muted);
+}
+
+.resources-empty-state__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resources-empty-state__copy strong {
+  color: var(--fg-0);
+  font-size: var(--trainer-font-xs);
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.resources-empty-state__copy p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+}
+
+.resources-empty-state__copy .resources-empty-state__hint {
+  color: var(--fg-1);
+}
+
+/* ---------------------------------------------------------------------------
+   Native Explorer tree (2026-11): the library is a file tree, not a card
+   grid. Compact rows, folder chevrons, no count chips, no row action icons.
+   A file row click opens the real file in VS Code; Space previews it.
+   --------------------------------------------------------------------------- */
+.resources-pane .template-library {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.resources-knowledge__tree {
+  border-top: 0;
+  padding: 2px 0;
+}
+
+.resources-library-tree__item > .collapse-section {
+  margin-block-end: 0;
+}
+
+.resources-knowledge__tree .collapse-section__header {
+  min-height: 22px;
+  padding: 0 8px;
+  gap: 4px;
+  border: 0;
+  border-left: 0;
+  background: transparent;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.resources-knowledge__tree .collapse-section__header:hover {
+  border: 0;
+  border-left: 0;
+  background: var(--vscode-list-hoverBackground, color-mix(in srgb, var(--bg-2) 56%, transparent));
+}
+
+.resources-knowledge__tree .collapse-section__chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--fg-muted);
+}
+
+.resources-library-tree__collection-label {
+  gap: 4px;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.resources-library-tree__collection-label svg {
+  width: 12px;
+  height: 12px;
+  color: var(--fg-muted);
+}
+
+.resources-library-tree__node {
+  /* File rows sit under the folder row's icon, not one indent deeper per
+     nesting level. A single fixed inset keeps every file title on the same
+     optical line and removes the dead gutter between siblings. */
+  grid-template-columns: 20px minmax(0, 1fr);
+  min-height: 24px;
+  padding: 0 8px 0 24px;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.resources-library-tree__node:hover {
+  color: var(--fg-0);
+  border: 0;
+  background: var(--vscode-list-hoverBackground, color-mix(in srgb, var(--bg-2) 56%, transparent));
+  box-shadow: none;
+}
+
+.resources-library-tree__node:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+.resources-library-tree__node.is-selected,
+.resources-library-tree__node.is-marked {
+  border: 0;
+  background: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--accent) 24%, transparent));
+  color: var(--vscode-list-activeSelectionForeground, var(--fg-0));
+}
+
+.resources-library-tree__node.is-marked:not(.is-selected) {
+  background: color-mix(in srgb, var(--bg-2) 54%, transparent);
+}
+
+.resources-library-tree__copy {
+  grid-column: 2;
+  gap: 0;
+}
+
+.resources-library-tree__node strong {
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 400;
+}
+
+.resources-library-tree__kind {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+}
+
+.resources-library-tree__kind svg {
+  width: 12px;
+  height: 12px;
+}
+
+.resources-library-tree__count,
+.resources-library-tree__actions,
+.resources-library-tree__meta {
+  display: none;
+}
+
+.resources-knowledge__folders {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top-color: color-mix(in srgb, var(--line) 32%, transparent);
+}
+
+.resources-knowledge__folders > summary {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.resources-knowledge__toolbar {
+  gap: 4px;
+}
+
+.resources-knowledge__search {
+  min-height: 26px;
+  border-color: color-mix(in srgb, var(--line) 46%, transparent);
+  border-radius: 4px;
+  background: var(--bg-1);
+}
+
+.resources-knowledge__search input {
+  min-height: 24px;
+  font-size: 12px;
+}
+
+.resources-knowledge__add-resource {
+  min-height: 26px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+/* Keep the clicked file visibly selected like the native Explorer without
+   switching the sidebar to the Reader (row click opens the editor tab). */
+.resources-library-tree__node:focus {
+  background: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--accent) 24%, transparent));
+  color: var(--vscode-list-activeSelectionForeground, var(--fg-0));
+}
+
+/* Material Icon Theme glyphs carry their own colour; only sizing lives here. */
+.resources-library-tree__file-icon,
+.resources-library-tree__folder-icon {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.resources-library-tree__collection-label img {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }

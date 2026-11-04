@@ -1,4 +1,4 @@
-import { memo, Profiler, useState, type ReactNode } from "react";
+import { memo, Profiler, useEffect, useState, type ReactNode } from "react";
 import type { ActiveWorkbenchView } from "../lib/types";
 import { recordSurfaceRender, surfaceProfiler } from './surfaceRuntimeMetrics';
 
@@ -19,6 +19,11 @@ const SurfaceContent = memo(function SurfaceContent({ view, hidden, render }: {
   return previous.hidden === next.hidden && previous.render === next.render;
 });
 
+/** Resources is the first surface a learner opens from Coach after a turn.
+ *  Mount it during the first idle window so the click is a reveal, not a
+ *  cold 4000-line component mount. */
+const PRELOAD_VIEWS: ActiveWorkbenchView[] = ["resources"];
+
 /** Retain visited surfaces so navigation does not discard readers or form state. */
 export function WorkbenchSurfaces({ activeView, render }: {
   activeView: ActiveWorkbenchView;
@@ -26,6 +31,24 @@ export function WorkbenchSurfaces({ activeView, render }: {
 }) {
   const [visited, setVisited] = useState<ActiveWorkbenchView[]>([activeView]);
   if (!visited.includes(activeView)) setVisited([...visited, activeView]);
+  useEffect(() => {
+    const addPreloaded = () => {
+      setVisited((current) => {
+        const next = [...current];
+        for (const view of PRELOAD_VIEWS) {
+          if (!next.includes(view)) next.push(view);
+        }
+        return next;
+      });
+    };
+    const idle = window.requestIdleCallback;
+    if (typeof idle === "function") {
+      const handle = idle(addPreloaded, { timeout: 800 });
+      return () => window.cancelIdleCallback?.(handle);
+    }
+    const timer = window.setTimeout(addPreloaded, 400);
+    return () => window.clearTimeout(timer);
+  }, []);
   return <>{visited.map((view) => (
     <div key={view} className="template-surface" data-surface={view} hidden={view !== activeView}>
       <SurfaceContent view={view} hidden={view !== activeView} render={render} />

@@ -163,6 +163,7 @@ import {
   providerSetupSummary,
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
+import { CoachGoalBar } from "../components/coach/CoachGoalBar";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
 import { UtilityOverlay } from "../templates/UtilityOverlay";
 import { templateCopy } from "../templates/templateCopy";
@@ -257,6 +258,8 @@ import {
   LinkIcon,
   RefreshIcon,
   ResourcesIcon,
+  SkillCubeIcon,
+  TargetIcon,
   UploadIcon,
   WarningIcon,
 } from "../components/icons";
@@ -265,6 +268,7 @@ import { applyWorkbenchTheme } from "../lib/theme";
 import { I18nProvider } from "../lib/i18n/context";
 import { resolveCopy as resolveWorkbenchCopy, type Copy } from "../lib/i18n/copy";
 import { resolvePlanComposerCopy } from "../lib/i18n/planComposerCopy";
+import { GOAL_MODE_COPY } from "../lib/i18n/segments/coachInlineText";
 import { resolveResourceComposerCopy } from "../lib/i18n/resourceComposerCopy";
 import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
 import { resolveTextDirection, type TextDirection } from "../lib/i18n/direction";
@@ -461,7 +465,12 @@ import {
   waitForResourceInSnapshot,
 } from "./appHelpers";
 
+const injectedBootstrapAvailable = Boolean(getInjectedBootstrapState());
+
 export function App() {
+  useEffect(() => {
+    performance.mark("trainer:app-mounted");
+  }, []);
   // §三 R3: App subscribes to a shallow summary of the store. Per-chunk
   // streaming content is deliberately NOT selected — CoachConversationView
   // subscribes to it itself — so a streaming reply no longer re-renders the
@@ -504,7 +513,6 @@ export function App() {
     streamingReliabilityPhase,
     streamingReliabilityOutcome,
     streamingCompletionNextStepRequiresConfirmation,
-    streamingHasAgentActivity,
     streamingContentBucket,
   } = useWorkbenchState(
     useShallow((state) => ({
@@ -547,7 +555,6 @@ export function App() {
       streamingCompletionNextStepRequiresConfirmation:
         state.streaming.completionNextStepRequiresConfirmation === true,
       // Activity presence is a per-tool-event boolean, not per-chunk content.
-      streamingHasAgentActivity: state.streaming.agentActivity.length > 0,
       // Coarse progress for the preview surfaces (context ring, view rail,
       // per-view reply banner). The full text subscribes in the conversation.
       streamingContentBucket: Math.floor((state.streaming.streamedContent?.length ?? 0) / 256),
@@ -581,6 +588,7 @@ export function App() {
   const {
     operationMessage,
     operationMessageVisible,
+    operationMessageSurface,
     setOperationMessage,
     dismissOperationMessage,
   } = useOperationStatusController();
@@ -627,6 +635,19 @@ export function App() {
     (action: "continue_step" | "clear_blocker") => void
   >(() => undefined);
   const [composerAttachments, setComposerAttachments] = useState<MessageAttachment[]>([]);
+  // Goal mode: one small goal; the learner attempts first, the coach corrects.
+  // Store-backed so a pane remount never drops the mode mid-conversation.
+  const goalMode = useWorkbenchState((state) => state.goalMode);
+  const goalText = useWorkbenchState((state) => state.goalText);
+  const goalStartedAt = useWorkbenchState((state) => state.goalStartedAt);
+  const goalPaused = useWorkbenchState((state) => state.goalPaused);
+  const goalPausedAt = useWorkbenchState((state) => state.goalPausedAt);
+  const startGoal = useWorkbenchState((state) => state.startGoal);
+  const pauseGoal = useWorkbenchState((state) => state.pauseGoal);
+  const resumeGoal = useWorkbenchState((state) => state.resumeGoal);
+  const clearGoal = useWorkbenchState((state) => state.clearGoal);
+  const restoreGoalForSession = useWorkbenchState((state) => state.restoreGoalForSession);
+  const goalModeCopy = GOAL_MODE_COPY[layout.composerLanguage] ?? GOAL_MODE_COPY["en-US"];
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
   const [settingsActionState, updateSettingsActionState] = useState<SettingsActionState>();
@@ -725,7 +746,10 @@ export function App() {
       clearOptimisticTurns();
     }
     coachSessionIdentityRef.current = nextSessionId;
-  }, [clearOptimisticTurns, syncCursor.sessionId]);
+    if (nextSessionId) {
+      restoreGoalForSession(nextSessionId);
+    }
+  }, [clearOptimisticTurns, restoreGoalForSession, syncCursor.sessionId]);
   // §三: the plan-composer domain owns its composer mode/context/draft state.
   const {
     planComposerMode,
@@ -969,6 +993,32 @@ export function App() {
   );
   const handleCoachMessageAction = useCallback(
     async (action: CoachMessageAction, message: ConversationMessage) => {
+      if (action === "set-goal") {
+        // The learner's preceding turn is the goal; the assistant reply is the
+        // evidence/answer, not the thing to pursue. Fall back to the reply only
+        // when the thread has no prior user turn.
+        const conversation = useWorkbenchState.getState().data.conversation;
+        const index = conversation.findIndex((item) => item.id === message.id);
+        let source = message.body ?? "";
+        for (let i = index - 1; i >= 0; i -= 1) {
+          const candidate = conversation[i];
+          if (candidate?.role === "user" && candidate.body.trim()) {
+            source = candidate.body;
+            break;
+          }
+        }
+        const title =
+          source
+            .split("\n")
+            .map((line) => line.trim())
+            .find(Boolean)
+            ?.replace(/^[#>*\-\s]+/, "")
+            .slice(0, 80) ?? "";
+        startGoal(title);
+        setActiveView("coach");
+        requestCoachComposerFocus();
+        return;
+      }
       if (action === "retry") {
         // Regenerate: re-send the user prompt that produced this reply.
         const conversation = useWorkbenchState.getState().data.conversation;
@@ -2599,12 +2649,6 @@ export function App() {
     });
   }, []);
 
-  const streamingPlaceholderBody = useMemo(() => {
-    if (streamingHasAgentActivity) {
-      return appUiCopy(layout.composerLanguage, "正在整理当前步骤，然后给出第一段可见回复。");
-    }
-    return appUiCopy(layout.composerLanguage, "正在梳理你的问题，然后给出第一段可见回复。");
-  }, [layout.composerLanguage, streamingHasAgentActivity]);
   const hasFormalPlan = data.hasFormalPlan;
   const activePlanStage = hasFormalPlan
     ? (data.plan.currentStageId
@@ -5576,6 +5620,7 @@ export function App() {
     planRuntimeRecovery,
     resourceComposerIntent,
     attachments,
+    goalMode: turnGoalMode,
   }: {
     text: string;
     intent: "coach" | "next_task" | "review" | "plan" | "task";
@@ -5590,6 +5635,7 @@ export function App() {
     planRuntimeRecovery?: RecoveredPlanResumeTurn;
     resourceComposerIntent?: ResourceComposerIntent;
     attachments?: MessageAttachment[];
+    goalMode?: boolean;
   }) => {
     if (workspaceSessionBlocked) {
       openWorkspaceAdmission();
@@ -5671,6 +5717,7 @@ export function App() {
       contextDetail: contextDetail ?? layout.contextDetail,
       responseLanguage: layout.composerLanguage,
       answerMode: layout.composerAnswerMode,
+      goalMode: turnGoalMode === true,
       teachingStyle: layout.teachingStyle,
       coachDefaults: layout.coachDefaults,
       activeView: turnActiveView,
@@ -7167,6 +7214,9 @@ export function App() {
         ? buildGenericImageReviewPrompt(layout.composerLanguage, normalizedDraft)
         : defaultPromptText(intent, layout.composerLanguage));
     const messageText = appendDockAnchor(rawMessageText, dockAnchor);
+    if (goalMode && !goalText.trim() && normalizedDraft && intent === "coach") {
+      startGoal(normalizedDraft);
+    }
 
     sendTurn({
       text: messageText,
@@ -7186,6 +7236,7 @@ export function App() {
       includeDiagnostics: intent === "review" ? true : undefined,
       contextDetail: intent === "review" ? "full" : undefined,
       attachments: composerAttachments,
+      goalMode: intent === "coach" ? goalMode && !goalPaused : undefined,
     });
     if (activeView === "plan" || activeView === "resources") {
       if (dockSendNavigation(dockSendPreference, activeView) === "jump_to_coach") {
@@ -8895,13 +8946,18 @@ export function App() {
     if (dismissedComposerDeck === "skill" || !normalizedDraft.startsWith("$")) return null;
     const draftTriggerToken = trainerSkillTriggerToken(normalizedDraft) ?? "$";
     const creatableTrigger = draftTriggerToken.length > 1 && !availableSkillCatalog.some((skill) => skill.trigger.toLowerCase() === draftTriggerToken.toLowerCase()) ? draftTriggerToken : undefined;
+    const customSkillIds = new Set(customSkills.map((skill) => skill.id));
     return <CommandPalette containerRef={composerDeckRef} label={appUiCopy(layout.composerLanguage, "技能")}
-      hint={appUiCopy(layout.composerLanguage, "继续输入可收窄范围，删除 $ 就会按普通消息发送。")}
+      groupLabel={appUiCopy(layout.composerLanguage, "技能")}
       empty={appUiCopy(layout.composerLanguage, "没有匹配到 skill。继续输入，或者直接当作普通消息发送。")}
       moreLabel={appUiCopy(layout.composerLanguage, "↓ 还有 {n} 条")}
       selectedIndex={selectedCommandIndex} onHighlight={setSelectedCommandIndex}
       entries={matchingLocalSkills.map((skill) => ({ id: skill.id, trigger: skill.trigger,
-        title: resolveTrainerSkillText(skill.title, layout.composerLanguage), detail: resolveTrainerSkillText(skill.detail, layout.composerLanguage), onSelect: () => selectSkillSuggestion(skill) }))}
+        title: resolveTrainerSkillText(skill.title, layout.composerLanguage),
+        detail: resolveTrainerSkillText(skill.detail, layout.composerLanguage),
+        icon: <SkillCubeIcon size={16} />,
+        tag: customSkillIds.has(skill.id) ? appUiCopy(layout.composerLanguage, "个人") : undefined,
+        onSelect: () => selectSkillSuggestion(skill) }))}
       footer={<><button type="button" className="template-back" onClick={() => openSkillSettings(creatableTrigger)}>{creatableTrigger ? appUiCopy(layout.composerLanguage, "创建技能 {v}").replace("{v}", creatableTrigger) : appUiCopy(layout.composerLanguage, "管理技能")}</button></>} />;
   };
 
@@ -9244,6 +9300,18 @@ export function App() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="coach-empty-state__goal-entry"
+            data-goal-entry="true"
+            onClick={() => {
+              startGoal("");
+              requestCoachComposerFocus();
+            }}
+          >
+            <TargetIcon size={14} />
+            {goalModeCopy.setGoal}
+          </button>
         </div>
       );
     }
@@ -9318,7 +9386,6 @@ export function App() {
       systemLabel={appUiCopy(layout.composerLanguage, "\u7cfb\u7edf")}
       language={layout.composerLanguage}
       emptyState={embedded || workspaceSessionBlocked ? null : coachSuperEntryContent(false)}
-      listHead={embedded ? undefined : coachTrainingResumeLine}
       streamingMessage={
         streaming.isStreaming
           ? {
@@ -9333,7 +9400,6 @@ export function App() {
           : null
       }
       liveContentFromStore
-      streamingPlaceholder={streamingPlaceholderBody}
       onArtifactOpen={stableHandleCoachArtifactOpen}
       onMessageAction={handleCoachMessageAction}
       pendingMessageAction={pendingMessageAction}
@@ -9436,8 +9502,8 @@ export function App() {
     // (scheduled by the coarse bucket) is exact for what this line shows.
     const liveValue = streaming.isStreaming
       ? truncateInlineText(streaming.streamMessageId?.startsWith("training_")
-          ? streamingPlaceholderBody
-          : useWorkbenchState.getState().streaming.streamedContent || streamingPlaceholderBody, textLimit)
+          ? ""
+          : useWorkbenchState.getState().streaming.streamedContent || "", textLimit)
       : undefined;
     const activitySource = liveValue ?? blockerValue ?? resultValue;
     const activityValue =
@@ -9536,8 +9602,8 @@ export function App() {
           // Same coarse-bucket read as the view rail: the banner summary
           // truncates from the start, so the latest content is exact here.
           body: streaming.streamMessageId?.startsWith("training_")
-            ? streamingPlaceholderBody
-            : useWorkbenchState.getState().streaming.streamedContent || streamingPlaceholderBody,
+            ? ""
+            : useWorkbenchState.getState().streaming.streamedContent || "",
           timestamp: t.streaming,
         }
       : latestReply;
@@ -9607,33 +9673,6 @@ export function App() {
     );
   };
 
-  // §十一: one quiet context line, not a module — the card itself stays the
-  // primary surface for the in-progress training card. r3: it renders as the
-  // list's first entry (listHead) instead of a floating banner above the pane,
-  // so on a short thread it anchors with the conversation instead of opening a
-  // dead zone. The data attribute stays for the UI-geometry gate.
-  const coachTrainingResumeLine = (() => {
-    const ts = data.workspaceTrainingState;
-    const cardId = ts?.selectedCardId?.trim();
-    const cardTitle = ts?.selectedCardTitle?.trim();
-    if (!cardId || !cardTitle) return null;
-    return (
-      <p className="muted" data-coach-training-resume="true">
-        {appUiCopy(layout.composerLanguage, "正在进行：{v}").replace("{v}", () => cardTitle)}
-        {/* r2 first-screen affordance: a bordered quiet button (existing
-            .button--ghost) reads as the next step; the bare .template-back
-            text link rendered as part of the sentence. */}
-        <button
-          type="button"
-          className="button button--ghost"
-          onClick={() => setActiveView("training")}
-        >
-          <span className="button__icon" aria-hidden="true"><ChevronRightIcon size={14} /></span>
-          <span>{appUiCopy(layout.composerLanguage, "继续")}</span>
-        </button>
-      </p>
-    );
-  })();
 
   const renderCoachRootView = () => (
     <section className="coach-view">
@@ -11361,13 +11400,16 @@ export function App() {
               statusMessage={coachSessionsMessage}
               onActivate={activateCoachSession}
               onRefresh={requestCoachSessions}
-              onNewChat={startNewCoachChat}
+              onNewChat={() => {
+                clearGoal();
+                startNewCoachChat();
+              }}
               onClose={() => setOpenMenu(undefined)}
             />
         </UtilityOverlay>
       ) : null}
 
-      {operationMessage && operationMessageVisible ? (
+      {operationMessage && operationMessageVisible && !(operationMessageSurface === "global" && operationMessage.tone === "success" && activeView !== "coach") ? (
         <div className="template-global-state">
           <SystemState kind={operationMessage.tone === "error" ? "recoverable-error" : operationMessage.tone === "success" ? "success" : "information"}
             title={sanitizeErrorSurfaceText(operationStatusMessageText(operationMessage, layout.composerLanguage), layout.composerLanguage)}>
@@ -11380,7 +11422,7 @@ export function App() {
         className={`view-content${activeView === "coach" ? "" : " view-content--docked"}`}
         ref={viewContentRef}
       >
-        {hasReceivedHostState || isBrowserPreview ? (
+        {hasReceivedHostState || isBrowserPreview || injectedBootstrapAvailable ? (
           <WorkbenchSurfaces key={surfaceInstanceKey} activeView={activeView} render={renderWorkbenchSurface} />
         ) : (
           <SystemState kind="loading" title={appUiCopy(layout.composerLanguage, "正在加载{v}…").replace("{v}", "Trainer")} />
@@ -11488,6 +11530,18 @@ export function App() {
               </div>
             ) : null}
 
+            {goalMode && activeView === "coach" ? (
+              <CoachGoalBar
+                language={layout.composerLanguage}
+                title={goalText}
+                startedAt={goalStartedAt}
+                paused={goalPaused}
+                pausedAt={goalPausedAt}
+                onPause={pauseGoal}
+                onResume={resumeGoal}
+                onClear={clearGoal}
+              />
+            ) : null}
             {coachPlanContext ? <div className="template-context" role="group">
               <span>{resolvePlanComposerCopy(layout.composerLanguage).modes[coachPlanContext].label}</span>
               <button type="button" className="template-back" onClick={() => setCoachPlanContext(undefined)}>{appUiCopy(layout.composerLanguage, "清除")}</button>
@@ -11510,7 +11564,9 @@ export function App() {
                   ? workspaceSessionBlockMessage ?? ""
                   : activeView !== "coach" && !normalizedDraft
                     ? resolvedCompactUtilityComposerPlaceholder
-                    : blockedComposerFallback
+                    : goalMode && activeView === "coach" && !normalizedDraft && providerCanCoachNow && !providerBlockReason
+                      ? goalModeCopy.placeholder
+                      : blockedComposerFallback
               }
               disabled={workspaceSessionBlocked && !canCaptureGoalBeforeWorkspaceSetup}
               submitDisabled={

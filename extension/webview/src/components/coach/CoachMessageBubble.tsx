@@ -44,6 +44,12 @@ const GLYPH_RETRY = (
   </>
 );
 const GLYPH_NEXT = <path d="M5 12h14" />;
+const GLYPH_TARGET = (
+  <>
+    <circle cx="12" cy="12" r="7" />
+    <circle cx="12" cy="12" r="3" />
+  </>
+);
 
 import {
   deriveTrainerToolActivity,
@@ -60,9 +66,16 @@ import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifact
 import { artifactBlockCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
 import { coachMessageBubbleCopy, COACH_MESSAGE_ACTION_LABELS } from "../../lib/i18n/segments/coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
+import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
+import { currentTrainerStage } from "../../lib/trainerStage";
+import { TOOL_LABELS } from "../../lib/i18n/segments/agentActivityStripCopy";
+import {
+  resolveCoachToolResultCopy,
+  summarizeSafeCoachToolResult,
+} from "./coachToolResultCopy";
 import { MessageRichContent } from "./MessageRichContent";
 
-export type CoachMessageAction = "copy" | "share" | "save-resource" | "training-card" | "retry";
+export type CoachMessageAction = "copy" | "share" | "save-resource" | "training-card" | "set-goal" | "retry";
 
 export interface CoachMessageBubbleProps {
   message: ConversationMessage;
@@ -195,7 +208,9 @@ function toolTrailSummary(
   activities: Array<{ status: string }>,
   language: ComposerLanguage,
 ): string {
-  const failed = activities.filter((activity) => activity.status === "failed").length;
+  const failed = activities.filter(
+    (activity) => activity.status === "failed" || activity.status === "running",
+  ).length;
   const base = coachMessageBubbleCopy(language, "已核对 {n} 项上下文")
     .replace("{n}", String(activities.length))
     .replace("{s}", activities.length === 1 ? "" : "s");
@@ -208,6 +223,31 @@ function toolTrailSummary(
     );
   }
   return base;
+}
+
+function humanizeToolName(name: string): string {
+  const normalized = name.replace(/_/g, " ").trim();
+  return normalized.length > 0 ? normalized : name;
+}
+
+function toolTrailLabel(name: string, language: ComposerLanguage): string {
+  return TOOL_LABELS[name]?.[language] ?? humanizeToolName(name);
+}
+
+function toolTrailHint(
+  activity: { status: string; result?: unknown },
+  language: ComposerLanguage,
+): string {
+  const copy = resolveCoachToolResultCopy(language);
+  if (activity.status === "failed") {
+    return copy.needsRetry;
+  }
+  if (activity.status === "running") {
+    // The trail only renders on a finished message, so a running row is an
+    // interrupted step, not a live one.
+    return copy.needsRetry;
+  }
+  return summarizeSafeCoachToolResult(activity.result, language) ?? copy.completed;
 }
 
 function CoachMessageBubbleImpl({
@@ -248,12 +288,12 @@ function CoachMessageBubbleImpl({
     .join(" ");
   const attachmentCount = message.attachments?.length ?? 0;
   const artifactCount = message.artifacts?.length ?? 0;
-  const hasSupportDetails =
-    attachmentCount > 0 || Boolean(message.contextNote) || Boolean(message.support?.preview) || Boolean(message.support?.lines?.length);
   const showAuthor = message.role !== "assistant" && message.author.trim() !== resolvedRoleLabel.trim();
   const timestamp = compactTimestamp(message.timestamp);
   const showTimestampInline = !streaming && message.role !== "assistant" && timestamp.length > 0;
   const supportDetails = supportDetailLines(message, language);
+  const hasSupportDetails =
+    supportDetails.length > 0 || Boolean(message.support?.preview);
   const detailBlocks: ReactNode[] = [];
   const messageHasArtifacts = artifactCount > 0;
   const visibleBody = message.body;
@@ -299,7 +339,7 @@ function CoachMessageBubbleImpl({
   // The grounding downgrade must still be visible (DESIGN.md §2.5), so when
   // the artifact surface owns the allocation the note renders as one quiet
   // inline line instead of living inside a disclosure.
-  if (hasSupportDetails && message.role !== "assistant") {
+  if (supportDetails.length > 0 && message.role !== "assistant") {
     detailBlocks.push(
       <div key="support" className="message-support-list message-support-list--compact">
         {supportDetails.map((line) => (
@@ -344,7 +384,11 @@ function CoachMessageBubbleImpl({
   // muted line that expands to the per-step strip. Nothing disappears.
   const toolTrailActivities =
     message.role === "assistant" && !streaming
-      ? deriveTrainerToolActivity(message.parts)
+      ? deriveTrainerToolActivity(message.parts).filter((activity) =>
+          /(read|search|grep|find|list|fetch|diagnostic|context|inspect|open)/i.test(
+            activity.name,
+          ),
+        )
       : [];
   // Degraded turns may carry only a status part with no readable body; keep a
   // quiet one-line summary so the bubble never renders as an empty card.
@@ -390,13 +434,26 @@ function CoachMessageBubbleImpl({
             ) : null}
           </div>
         ) : null}
-        {hasRunningActivities ? (
-          // §四十八: the orb is the only loading idiom here — real thinking
-          // detail comes from the AgentActivityStrip (headNote), never from a
-          // generic text annotation.
-          <div className="coach-streaming-dots" role="status" aria-live="polite">
-            <span className="coach-streaming-orb" aria-hidden="true" />
-          </div>
+        {hasRunningActivities && !children ? (
+          // §四十八: one loading idiom per bubble. The conversation view owns
+          // the working label for the live turn (children); this fallback is
+          // only for bubbles rendered outside that list.
+          <CoachWorkingIndicator language={language} messageId={message.id} stage={currentTrainerStage(toolTrailActivities, language)} />
+        ) : null}
+        {!streaming && toolTrailActivities.length > 0 ? (
+          <details className="coach-work-trail">
+            <summary>{toolTrailSummary(toolTrailActivities, language)}</summary>
+            <ul className="coach-work-trail__rows">
+              {toolTrailActivities.map((activity) => (
+                <li key={activity.id} className="coach-work-trail__row">
+                  <span>{toolTrailLabel(activity.name, language)}</span>
+                  <span className="coach-work-trail__hint">
+                    {toolTrailHint(activity, language)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
         ) : null}
         {!hasBody && fallbackStatusSummary ? (
           <p className="message-bubble__agent-status-summary">
@@ -433,11 +490,10 @@ function CoachMessageBubbleImpl({
         {streaming ? (
           hasBody || hasParts ? (
             <span className="coach-cursor" aria-hidden="true" />
-          ) : children ? null : (
-            // §四十八: one loading idiom per bubble. When the caller supplies
-            // children (`.coach-streaming-dots`), the pending skeleton stays
-            // off so the dots are the only idiom; the dots CSS carries the
-            // `prefers-reduced-motion` fallback.
+          ) : children || headNote ? null : (
+            // §四十八: one loading idiom per bubble. A supplied working line
+            // or the live stage strip already carries the state, so the
+            // pending skeleton stays off.
             <div className="coach-msg-pending" aria-hidden="true">
               <div className="skeleton coach-msg-pending__line coach-msg-pending__line--long" />
               <div className="skeleton coach-msg-pending__line coach-msg-pending__line--mid" />
@@ -504,6 +560,19 @@ function CoachMessageBubbleImpl({
               >
                 <ActionGlyph glyphs={GLYPH_LIBRARY} />
               </button>
+              {isLatestAssistant ? (
+                <button
+                  type="button"
+                  className="message-bubble__icon-action"
+                  data-message-quick-action="set-goal"
+                  data-action-label={messageActionLabels["set-goal"]}
+                  aria-label={messageActionLabels["set-goal"]}
+                  disabled={Boolean(pendingAssistantAction)}
+                  onClick={() => onMessageAction?.("set-goal", message)}
+                >
+                  <ActionGlyph glyphs={GLYPH_TARGET} />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="message-bubble__icon-action"

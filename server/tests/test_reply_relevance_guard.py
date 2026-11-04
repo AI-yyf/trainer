@@ -118,3 +118,96 @@ def test_explicit_foreign_workflow_still_reanchors_without_a_current_code_symbol
         current_file={"path": "lesson.py", "content": "def append_item(value): return value"},
         coach_context={"active_view": "coach"},
     ) is True
+
+def test_successful_tool_result_keeps_a_short_completion_reply() -> None:
+    from app.llm.coaching_replies import _reply_needs_current_request_reanchor
+
+    reply = "已把 Example Domain 导入资料库，并完成 Markdown 索引。"
+    message = "TEST_TOOL_IMPORT 把 https://example.com 加入资料库"
+    assert _reply_needs_current_request_reanchor(
+        reply,
+        message=message,
+        current_file=None,
+        coach_context=None,
+    ) is True
+    assert _reply_needs_current_request_reanchor(
+        reply,
+        message=message,
+        current_file=None,
+        coach_context=None,
+        grounded_completion=True,
+    ) is False
+
+
+def test_agent_final_event_with_a_successful_tool_result_is_not_reanchored() -> None:
+    service = ProviderService(api_key="sk-test-key")
+    final_event = service._visible_agentic_final_event(
+        {
+            "type": "final",
+            "content": "已把 Example Domain 导入资料库，并完成 Markdown 索引。",
+            "summary": "资料已入库。",
+            "next_step": "打开资料库确认内容。",
+            "stop_reason": "completed",
+        },
+        profile=_profile(),
+        message="TEST_TOOL_IMPORT 把 https://example.com 加入资料库",
+        current_file=None,
+        response_language="zh-CN",
+        answer_mode="direct",
+        coach_context=None,
+        tool_events=[
+            {
+                "type": "tool_result",
+                "name": "import_resource_url",
+                "result": {"ok": True, "resource_id": "resource-example"},
+            }
+        ],
+    )
+    assert final_event["content"] == "已把 Example Domain 导入资料库，并完成 Markdown 索引。"
+
+def test_guided_mode_keeps_a_successful_tool_completion_reply() -> None:
+    """The real default is guided/balanced, not direct: the normal sanitizer
+    branch must also honor a successful tool result instead of replacing the
+    completion with a generic re-anchor."""
+    service = ProviderService(api_key="sk-test-key")
+    final_event = service._visible_agentic_final_event(
+        {
+            "type": "final",
+            "content": "已把 Example Domain 导入资料库，并完成 Markdown 索引。",
+            "summary": "资料已入库。",
+            "next_step": "打开资料库确认内容。",
+            "stop_reason": "completed",
+        },
+        profile=_profile(),
+        message="TEST_TOOL_IMPORT 把 https://example.com 加入资料库",
+        current_file=None,
+        response_language="zh-CN",
+        answer_mode="guided",
+        coach_context=None,
+        tool_events=[
+            {
+                "type": "tool_result",
+                "id": "call_import_1",
+                "name": "import_resource_url",
+                "ok": True,
+                "result": {"ok": True, "resource_id": "resource-example"},
+            }
+        ],
+    )
+    assert final_event["content"] == "已把 Example Domain 导入资料库，并完成 Markdown 索引。"
+
+def test_finalize_coaching_reply_honors_grounded_tool_completion() -> None:
+    service = ProviderService(api_key="sk-test-key")
+    reply = service.finalize_coaching_reply(
+        "已把 Example Domain 导入资料库，并完成 Markdown 索引。",
+        profile=_profile(),
+        message="TEST_TOOL_IMPORT 把 https://example.com 加入资料库",
+        current_file=None,
+        response_language="zh-CN",
+        answer_mode="guided",
+        coach_context=None,
+        grounded_completion=True,
+    )
+    assert "已把 Example Domain 导入资料库" in reply
+    assert "我先回到你刚才问的" not in reply
+

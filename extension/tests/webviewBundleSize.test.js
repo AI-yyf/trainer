@@ -85,7 +85,7 @@ test('Shiki is loaded lazily, not pulled in at module scope', () => {
   );
   assert.match(
     source,
-    /await import\(["']shiki["']\)/,
+    /import\(["']shiki["']\)/,
     'ShikiCodeBlock should load shiki through the lazy loader',
   );
 });

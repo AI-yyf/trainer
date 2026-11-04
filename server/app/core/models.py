@@ -748,7 +748,19 @@ class SourceIntakeGovernance(BaseModel):
 
 class ResourceRecord(BaseModel):
     id: str
-    kind: Literal["pdf", "epub", "image", "text", "markdown", "code", "url", "video"]
+    kind: Literal[
+        "pdf",
+        "epub",
+        "docx",
+        "pptx",
+        "html",
+        "image",
+        "text",
+        "markdown",
+        "code",
+        "url",
+        "video",
+    ]
     name: str
     source: str
     tags: list[str] = Field(default_factory=list)
@@ -781,6 +793,15 @@ class ResourceRecord(BaseModel):
     # TR-059: SHA-256 of the uploaded content, pinned at upload time so
     # evidence records can cite the exact content version they were built on.
     content_hash: str | None = None
+    # Canonical Markdown digest of this resource (workspace-relative POSIX
+    # path). Search, the reader, training cards and agent context read this
+    # document; the original file stays untouched next to it in the library.
+    canonical_markdown_path: str | None = None
+    canonical_original_path: str | None = None
+    parser: str = ""
+    parser_version: str = ""
+    page_count: int | None = None
+    slide_count: int | None = None
     # Trainer Library bookkeeping: workspace-relative POSIX paths of downloaded
     # copies of this resource's source (see ``app.resources.library``). Empty
     # for captures that were never downloaded into a library folder; kept in
@@ -2719,6 +2740,9 @@ class SessionMessageRequest(BaseModel):
     )
     response_language: str | None = Field(default=None, alias="responseLanguage")
     answer_mode: CoachRequestAnswerMode | None = None
+    # Goal mode: one small learning goal, learner does the work. The flag only
+    # changes the coaching contract; explicit plan/card actions stay separate.
+    goal_mode: bool = Field(default=False, alias="goalMode")
     teaching_style: str | None = None
     coach_defaults: CoachDefaults | None = None
     attachments: list[MessageAttachment] = Field(default_factory=list, max_length=MAX_IMAGE_COUNT)

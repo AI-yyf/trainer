@@ -569,16 +569,32 @@ async def test_organize_resources_delete_is_confirmed_and_trash_restorable(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_import_resource_url_uses_runtime_post_index_closure() -> None:
+async def test_import_resource_url_uses_runtime_post_index_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from unittest.mock import Mock
 
     from app.core.models import ResourceRecord
+    from app.resources.capture import CapturedSource
 
+    monkeypatch.setattr(
+        "app.llm.tools.capture_source",
+        lambda *args, **kwargs: CapturedSource(
+            kind="web",
+            source_url="https://example.com/source",
+            title="Imported source",
+            content="# Imported source\n\nBody.\n",
+            content_encoding=None,
+            upload_kind="markdown",
+            tags=("trainer-capture:web",),
+            captured_at="2026-07-30T00:00:00+00:00",
+        ),
+    )
     uploaded = ResourceRecord(
         id="resource-url-closure",
-        kind="url",
+        kind="markdown",
         name="Imported source",
-        source="https://example.com/source",
+        source="/library/imported-source.md",
     )
     indexed = uploaded.model_copy(
         update={

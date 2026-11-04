@@ -70,7 +70,6 @@ import type {
   TrainingSkillEvidenceRowView,
   BootstrapData,
   CapabilityFlags,
-  ConversationAttachmentView,
   ConversationArtifactView,
   ConversationMessageView,
   EvaluationReportView,
@@ -6688,7 +6687,10 @@ function mapConversation(
       timestamp: formatTimestamp(asString(record?.timestamp)),
       sourceView: normalizeConversationSourceView(metadata?.active_view),
       parts: mapConversationParts(metadata),
-      attachments: mapConversationAttachments(metadata),
+      // Context provenance (intent / mode / strategy / selection / file) stays
+      // in the raw metadata for diagnostics, but the thread no longer prints
+      // it under every user turn: Copilot-style chat keeps the user bubble to
+      // what the learner actually said.
       artifacts: mapConversationArtifacts(metadata),
       contextNote: asString(metadata?.context_note),
       support: mapConversationSupport(metadata),
@@ -6800,55 +6802,6 @@ function createConversationMessage(
   };
 }
 
-function mapConversationAttachments(
-  metadata: UnknownRecord | undefined,
-): ConversationAttachmentView[] | undefined {
-  if (!metadata) {
-    return undefined;
-  }
-
-  const language = asString(metadata.response_language);
-  const attachments: ConversationAttachmentView[] = [];
-  const intent = asString(metadata.intent);
-  const answerMode = asString(metadata.answer_mode);
-  const strategy = asString(metadata.content_strategy);
-
-  pushAttachment(attachments, attachmentLabel('intent', language), attachmentValue('intent', intent, language));
-  pushAttachment(attachments, attachmentLabel('mode', language), attachmentValue('mode', answerMode, language));
-  pushAttachment(attachments, attachmentLabel('strategy', language), attachmentValue('strategy', strategy, language));
-  pushAttachment(attachments, attachmentLabel('selection', language), asString(metadata.selection_range));
-
-  const currentFile = asString(metadata.current_file);
-  if (currentFile) {
-    pushAttachment(
-      attachments,
-      attachmentLabel('file', language),
-      path.posix.basename(currentFile.replace(/\\/g, '/')),
-    );
-  }
-
-  const diagnosticsCount = asNumber(metadata.diagnostics_count);
-  if (typeof diagnosticsCount === 'number' && diagnosticsCount > 0) {
-    pushAttachment(attachments, attachmentLabel('diagnostics', language), String(diagnosticsCount));
-  }
-
-  const relatedFiles = Array.isArray(metadata.related_files) ? metadata.related_files : [];
-  const relatedTitles = relatedFiles
-    .map((item) => asRecord(item))
-    .map((item) => asString(item?.path))
-    .filter((value): value is string => Boolean(value));
-  if (relatedTitles.length > 0) {
-    pushAttachment(
-      attachments,
-      attachmentLabel('related', language),
-      relatedTitles.slice(0, 2).map(toBaseName).join(', '),
-    );
-    pushAttachment(attachments, attachmentLabel('relatedCount', language), String(relatedFiles.length));
-  }
-
-  return attachments.length > 0 ? attachments : undefined;
-}
-
 function mapConversationArtifacts(
   metadata: UnknownRecord | undefined,
 ): ConversationArtifactView[] | undefined {
@@ -6922,116 +6875,6 @@ function mapSuggestedActionTypes(value: unknown): SuggestedActionView['action'][
     return undefined;
   }
   return value.map((item) => toSuggestedAction(asString(item))).filter(Boolean) as SuggestedActionView['action'][];
-}
-
-function pushAttachment(
-  attachments: ConversationAttachmentView[],
-  label: string,
-  value: string | undefined,
-): void {
-  const normalized = truncateText(value, 48);
-  if (!normalized) {
-    return;
-  }
-  attachments.push({ label, value: normalized });
-}
-
-function attachmentLabel(
-  key:
-    | 'intent'
-    | 'mode'
-    | 'language'
-    | 'strategy'
-    | 'window'
-    | 'file'
-    | 'selection'
-    | 'diagnostics'
-    | 'recentEdits'
-    | 'recentFiles'
-    | 'related'
-    | 'relatedCount'
-    | 'artifacts',
-  responseLanguage: string | undefined,
-): string {
-  if (!prefersChinese(responseLanguage)) {
-    return {
-      intent: 'Intent',
-      mode: 'Mode',
-      language: 'Lang',
-      strategy: 'Strategy',
-      window: 'Window',
-      file: 'File',
-      selection: 'Selection',
-      diagnostics: 'Diagnostics',
-      recentEdits: 'Recent edits',
-      recentFiles: 'Recent files',
-      related: 'Related',
-      relatedCount: 'Related count',
-      artifacts: 'Artifacts',
-    }[key];
-  }
-
-  return {
-    intent: '意图',
-    mode: '方式',
-    language: '语言',
-    strategy: '策略',
-    window: '范围',
-    file: '文件',
-    selection: '选区',
-    diagnostics: '诊断',
-    recentEdits: '最近修改',
-    recentFiles: '最近打开',
-    related: '相关文件',
-    relatedCount: '相关数量',
-    artifacts: '产物',
-  }[key];
-}
-
-function attachmentValue(
-  key: 'intent' | 'mode' | 'strategy',
-  value: string | undefined,
-  responseLanguage: string | undefined,
-): string | undefined {
-  if (!value || !prefersChinese(responseLanguage)) {
-    return value;
-  }
-
-  if (key === 'intent') {
-    return {
-      coach: '教练',
-      plan: '计划',
-      task: '任务',
-      review: '评审',
-      next_task: '下一题',
-    }[value] ?? value;
-  }
-
-  if (key === 'mode') {
-    return {
-      auto: '自动',
-      'coach-first': '引导',
-      balanced: '平衡',
-      direct: '直接',
-      guided: '引导',
-    }[value] ?? value;
-  }
-
-  return {
-    'selection-window': '围绕选区',
-    'head-window': '文件开头',
-    'wide-window': '较大窗口',
-    'full-file': '完整文件',
-  }[value] ?? value;
-}
-
-function prefersChinese(responseLanguage: string | undefined): boolean {
-  return Boolean(responseLanguage && responseLanguage.toLowerCase().startsWith('zh'));
-}
-
-function toBaseName(value: string): string {
-  const normalized = value.replace(/\\/g, '/');
-  return path.posix.basename(normalized) || value;
 }
 
 function toArtifactKind(value: string | undefined): ConversationArtifactView['kind'] {

@@ -75,7 +75,7 @@ test('async surfaces use the spinner instead of bare text ellipses', () => {
   assert.match(drawer, /composer-history-loading/);
   assert.doesNotMatch(drawer, /copy\.loading\)\.\.\./);
 
-  // The streaming orb keeps its own reduced-motion fallback.
+  // The streaming working label keeps its own reduced-motion fallback.
   const dots = fs.readFileSync(
     path.join(
       webviewRoot,
@@ -86,5 +86,5 @@ test('async surfaces use the spinner instead of bare text ellipses', () => {
     'utf8',
   );
   const dotsReduced = dots.slice(dots.indexOf('@media (prefers-reduced-motion: reduce)'));
-  assert.match(dotsReduced, /\.coach-streaming-orb \{[\s\S]*?animation: none;/);
+  assert.match(dotsReduced, /\.coach-working__label::after \{[\s\S]*?animation: none;/);
 });

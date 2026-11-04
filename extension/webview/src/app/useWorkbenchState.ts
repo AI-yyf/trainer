@@ -339,6 +339,12 @@ export interface WorkbenchStore {
    * surface ("View reply" follows the answer into Coach). Transient.
    */
   dockReturnNotice: "plan" | "resources" | null;
+  /** Goal mode: one small active-learning goal. UI-only, never persisted. */
+  goalMode: boolean;
+  goalText: string;
+  goalStartedAt: number | null;
+  goalPaused: boolean;
+  goalPausedAt: number | null;
   resourceOrganizationPending?: { pending: true; operationCount?: number };
   resourceRestoreContext?: ResourceRestoreContext;
   trainingRestoreContext?: TrainingRestoreContext;
@@ -371,6 +377,11 @@ export interface WorkbenchStore {
   setComposerSendPreference: (preference: "jump" | "stay") => void;
   markDockStaySend: (surface: "plan" | "resources") => void;
   clearDockReturnNotice: () => void;
+  startGoal: (text: string) => void;
+  pauseGoal: () => void;
+  resumeGoal: () => void;
+  clearGoal: () => void;
+  restoreGoalForSession: (sessionId: string) => void;
   rememberSurfaceScroll: (key: string, position: number) => void;
   setActivityDraft: (key: string, draft: string) => void;
   setOperationMessage: (message?: OperationMessage, surface?: OperationMessageSurface) => void;
@@ -749,6 +760,73 @@ const initialOperationBanner = operationBannerState(
   deriveRecoveredStreamingOperationMessage(initialUi.composerLanguage, initialStreamingState),
 );
 
+const GOAL_STORAGE_KEY = "trainer.goal.v1";
+type PersistedGoal = { text: string; paused: boolean };
+
+function readGoalStore(): Record<string, PersistedGoal> {
+  if (typeof localStorage === "undefined") {
+    return {};
+  }
+  try {
+    const raw = localStorage.getItem(GOAL_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const entries = Object.entries(parsed as Record<string, unknown>)
+      .filter(
+        (entry): entry is [string, PersistedGoal] => {
+          const value = entry[1] as { text?: unknown; paused?: unknown } | undefined;
+          return Boolean(value && typeof value.text === "string" && value.text.trim());
+        },
+      )
+      .map(([sessionId, value]) => [sessionId, { text: value.text, paused: value.paused === true }]);
+    return Object.fromEntries(entries.slice(-24));
+  } catch {
+    return {};
+  }
+}
+
+function writeGoalStore(store: Record<string, PersistedGoal>): void {
+  if (typeof localStorage === "undefined") {
+    return;
+  }
+  try {
+    localStorage.setItem(GOAL_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // Storage can be unavailable in restricted webviews; goal mode still works
+    // for the current session.
+  }
+}
+
+function persistGoalState(
+  sessionId: string | undefined,
+  snapshot: { goalMode: boolean; goalText: string; goalPaused: boolean },
+): void {
+  const resolvedSessionId = sessionId?.trim();
+  if (!resolvedSessionId) {
+    return;
+  }
+  const store = readGoalStore();
+  if (!snapshot.goalMode || !snapshot.goalText.trim()) {
+    if (!store[resolvedSessionId]) {
+      return;
+    }
+    delete store[resolvedSessionId];
+  } else {
+    store[resolvedSessionId] = { text: snapshot.goalText, paused: snapshot.goalPaused };
+  }
+  writeGoalStore(store);
+}
+
+function readGoalState(sessionId: string | undefined): PersistedGoal | undefined {
+  const resolvedSessionId = sessionId?.trim();
+  return resolvedSessionId ? readGoalStore()[resolvedSessionId] : undefined;
+}
+
 export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   trainingReviewQueueRequested: false,
   // Both review entries are authoritative view moves: keep liveActiveView in
@@ -778,6 +856,11 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   streaming: initialStreamingState,
   dockStaySendSurface: null,
   dockReturnNotice: null,
+  goalMode: false,
+  goalText: "",
+  goalStartedAt: null,
+  goalPaused: false,
+  goalPausedAt: null,
   resourceOrganizationPending: undefined,
   resourceRestoreContext: undefined,
   trainingRestoreContext: undefined,
@@ -938,6 +1021,97 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     })),
   markDockStaySend: (surface) => set({ dockStaySendSurface: surface, dockReturnNotice: null }),
   clearDockReturnNotice: () => set({ dockReturnNotice: null }),
+  startGoal: (goalText) =>
+    set((state) => {
+      persistGoalState(state.syncCursor.sessionId, {
+        goalMode: true,
+        goalText,
+        goalPaused: false,
+      });
+      return {
+        goalMode: true,
+        goalText,
+        goalStartedAt: Date.now(),
+        goalPaused: false,
+        goalPausedAt: null,
+      };
+    }),
+  pauseGoal: () =>
+    set((state) => {
+      if (!state.goalMode || state.goalPaused || state.goalStartedAt === null) {
+        return {};
+      }
+      persistGoalState(state.syncCursor.sessionId, {
+        goalMode: state.goalMode,
+        goalText: state.goalText,
+        goalPaused: true,
+      });
+      return { goalPaused: true, goalPausedAt: Date.now() };
+    }),
+  resumeGoal: () =>
+    set((state) => {
+      if (!state.goalMode || !state.goalPaused) {
+        return {};
+      }
+      persistGoalState(state.syncCursor.sessionId, {
+        goalMode: state.goalMode,
+        goalText: state.goalText,
+        goalPaused: false,
+      });
+      const now = Date.now();
+      const pausedAt = state.goalPausedAt ?? now;
+      return {
+        goalStartedAt: (state.goalStartedAt ?? now) + Math.max(0, now - pausedAt),
+        goalPaused: false,
+        goalPausedAt: null,
+      };
+    }),
+  clearGoal: () =>
+    set((state) => {
+      persistGoalState(state.syncCursor.sessionId, {
+        goalMode: false,
+        goalText: "",
+        goalPaused: false,
+      });
+      return {
+        goalMode: false,
+        goalText: "",
+        goalStartedAt: null,
+        goalPaused: false,
+        goalPausedAt: null,
+      };
+    }),
+  restoreGoalForSession: (sessionId) =>
+    set((state) => {
+      const stored = readGoalState(sessionId);
+      if (!stored) {
+        if (!state.goalMode && !state.goalText) {
+          return {};
+        }
+        return {
+          goalMode: false,
+          goalText: "",
+          goalStartedAt: null,
+          goalPaused: false,
+          goalPausedAt: null,
+        };
+      }
+      if (
+        state.goalMode &&
+        state.goalText === stored.text &&
+        state.goalPaused === stored.paused
+      ) {
+        return {};
+      }
+      const now = Date.now();
+      return {
+        goalMode: true,
+        goalText: stored.text,
+        goalStartedAt: now,
+        goalPaused: stored.paused,
+        goalPausedAt: stored.paused ? now : null,
+      };
+    }),
   rememberSurfaceScroll: (key, position) => set((state) => ({
     layout: persistLayout({ ...state.layout, surfaceScrollPositions: { ...state.layout.surfaceScrollPositions, [key]: position } }),
   })),
@@ -973,6 +1147,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       };
     }),
   applyHostMessage: (message, options) => {
+    performance.mark("trainer:host-state-message");
     const versionedState = (message.type === "bootstrap" || message.type === "state/patch") ? message.sync : undefined;
     const current = get();
     if (message.scope && current.syncCursor.generation > 0 &&
