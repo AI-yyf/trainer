@@ -226,6 +226,7 @@ import {
 import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
 import {
   CoachComposer,
+  ComposerContextMenu,
   ComposerIconButton,
   ComposerModelMenu,
   ComposerResourcesMenu,
@@ -370,8 +371,6 @@ import {
   LIBRARY_FOLDER_OPERATION_TIMEOUT_MS,
   LocalCommandSuggestion,
   LocalSkillSuggestion,
-  MenuList,
-  MenuToggleRow,
   OPEN_RESOURCE_SYNC_TIMEOUT_MS,
   ORGANIZE_CONFIRMATION_TIMEOUT_MS,
   PendingResourceOperation,
@@ -8285,57 +8284,17 @@ export function App() {
     }
 
     return (
-      <section className="composer-menu-panel">
-        <div className="composer-menu-panel__header">
-          <span className="eyebrow">{t.currentContext}</span>
-          {sendContextShortSummary(data, layout, t) ? (
-            <strong>{sendContextShortSummary(data, layout, t)}</strong>
-          ) : null}
-        </div>
-        <div className="composer-menu-panel__section">
-          <MenuToggleRow
-            label={t.relatedFiles}
-            value={
-              layout.includeRelatedFiles
-                ? data.liveContext.relatedFiles.length > 0
-                  ? String(data.liveContext.relatedFiles.length)
-                  : t.on
-                : t.off
-            }
-            active={layout.includeRelatedFiles}
-            onClick={() => setIncludeRelatedFiles(!layout.includeRelatedFiles)}
-          />
-          <MenuToggleRow
-            label={t.follow}
-            value={layout.followCurrentFile ? t.on : t.off}
-            active={layout.followCurrentFile}
-            onClick={() => setFollowCurrentFile(!layout.followCurrentFile)}
-          />
-        </div>
-        <div className="composer-menu-panel__section">
-          <span className="eyebrow">{t.contextDetail}</span>
-          <MenuList
-            items={[
-              {
-                label: t.detailFocused,
-                active: layout.contextDetail === "focused",
-                onClick: () => setContextDetail("focused"),
-              },
-              {
-                label: t.detailBalanced,
-                active: layout.contextDetail === "balanced",
-                onClick: () => setContextDetail("balanced"),
-              },
-              {
-                label: t.detailFull,
-                active: layout.contextDetail === "full",
-                onClick: () => setContextDetail("full"),
-              },
-            ]}
-          />
-        </div>
-        <p className="composer-menu-panel__hint">{t.contextAutoNote}</p>
-      </section>
+      <ComposerContextMenu
+        copy={t}
+        contextSummary={sendContextShortSummary(data, layout, t) ?? ""}
+        relatedFilesCount={data.liveContext.relatedFiles.length}
+        includeRelatedFiles={layout.includeRelatedFiles}
+        followCurrentFile={layout.followCurrentFile}
+        contextDetail={layout.contextDetail}
+        onToggleRelatedFiles={() => setIncludeRelatedFiles(!layout.includeRelatedFiles)}
+        onToggleFollowCurrentFile={() => setFollowCurrentFile(!layout.followCurrentFile)}
+        onContextDetailChange={setContextDetail}
+      />
     );
   };
 
