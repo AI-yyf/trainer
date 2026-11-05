@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -181,6 +182,20 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
                 "resource_content_hash": current_version.get("content_hash"),
                 "resource_location": location if isinstance(location, dict) else {},
             }
+            # Git SHA→Evidence (P2 深化): when the cited resource is an
+            # imported project, the pinned commit comes from its symbol-index
+            # artifact — resolved server-side, never client-declared.
+            try:
+                from ...project.overview import resolve_resource_git_sha
+
+                data_root = getattr(runtime.resource_service, "data_root", None)
+                if data_root is not None:
+                    resource_fields["resource_git_sha"] = resolve_resource_git_sha(
+                        Path(str(data_root)) / "project-artifacts",
+                        requested_resource_id,
+                    )
+            except (OSError, ValueError, RuntimeError, TypeError):
+                resource_fields.setdefault("resource_git_sha", None)
         evidence = store.record_evidence(
             attempt_id=request.attempt_id,
             artifact_hash=request.artifact_hash,

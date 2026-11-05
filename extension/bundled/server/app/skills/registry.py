@@ -76,6 +76,31 @@ def parse_skill_md(path: Path) -> tuple[dict[str, str], str]:
     return front, body
 
 
+# Supply-chain security review (P3 深化): external SKILL.md content is
+# scanned for destructive / exfiltration / credential-access patterns before
+# registration. Flagged skills are clamped to reviewed=False — the review
+# gate then blocks activation of action skills until a human approves.
+_DANGEROUS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("shell_destructive", re.compile(r"\brm\s+-rf\b|\bdel\s+/[sq]\b", re.IGNORECASE)),
+    ("remote_execution", re.compile(r"\b(curl|wget)\b[^;\n|]*\|\s*(?:ba|z|da)?sh\b", re.IGNORECASE)),
+    ("eval_execution", re.compile(r"\beval\s*\(|\bexec\s*\(|new\s+Function\s*\(", re.IGNORECASE)),
+    ("credential_access", re.compile(r"\.ssh/|\.aws/|id_rsa\b|\.netrc\b|secret[_-]?key\b|api[_-]?key\b", re.IGNORECASE)),
+    ("reverse_shell", re.compile(r"\bnc\s+-e\b|/dev/tcp/|\bncat\s+-e\b", re.IGNORECASE)),
+    ("env_harvest", re.compile(r"\bprintenv\b|\benv\b[^|\n]*\|\s*(?:curl|wget)\b", re.IGNORECASE)),
+)
+
+
+def scan_skill_security(*texts: str) -> list[str]:
+    """Deterministic supply-chain scan; returns sorted unique flag names."""
+
+    flags: set[str] = set()
+    for text in texts:
+        for flag, pattern in _DANGEROUS_PATTERNS:
+            if pattern.search(text or ""):
+                flags.add(flag)
+    return sorted(flags)
+
+
 class SkillRegistry:
     """In-memory skill registry with file-backed SKILL.md progressive loading.
 
@@ -160,9 +185,15 @@ class SkillRegistry:
         kind: str = "knowledge",
         reviewed: bool = False,
     ) -> SkillRecord:
-        """Register a skill from a SKILL.md file (progressive loading)."""
+        """Register a skill from a SKILL.md file (progressive loading).
 
-        front, _body = parse_skill_md(path)
+        External supply chain: the front matter + body pass through the
+        deterministic security scan first; any flag clamps ``reviewed`` to
+        False so the human review gate cannot be skipped by the importer.
+        """
+
+        front, body = parse_skill_md(path)
+        security_flags = scan_skill_security(json.dumps(front, ensure_ascii=False), body)
         skill_id = self._make_id(front.get("name") or path.stem)
         permissions = [
             p.strip()
@@ -173,12 +204,24 @@ class SkillRegistry:
             skill_id=skill_id,
             kind=kind,
             name=front.get("name") or path.stem,
-            description=front.get("description") or front.get("description", ""),
+            description=front.get("description") or "",
             permissions=permissions,
             source_path=str(path),
-            reviewed=reviewed,
-            metadata={"front_matter": front, "skill_md_path": str(path)},
+            reviewed=reviewed and not security_flags,
+            metadata={
+                "front_matter": front,
+                "skill_md_path": str(path),
+                "security_flags": security_flags,
+            },
         )
+
+    def mark_reviewed(self, skill_id: str, *, reviewed: bool = True) -> SkillRecord:
+        """Human review decision (审核) — the only path to review a skill."""
+
+        record = self._require(skill_id)
+        record.reviewed = reviewed
+        self._persist()
+        return record
 
     def activate(self, skill_id: str) -> SkillRecord:
         record = self._require(skill_id)

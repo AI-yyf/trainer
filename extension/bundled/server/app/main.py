@@ -17,6 +17,7 @@ from .api.admission import browse_only_rejection
 from .api.routers import build_router
 from .api.routes.insights import build_insights_router
 from .api.routes.research import build_research_router
+from .api.routes.skills import build_skills_router
 from .api.routes.telemetry import build_telemetry_router
 from .api.routes.training_attempts import build_training_attempts_router
 from .api.routes.training_handoff import build_training_handoff_router
@@ -221,6 +222,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     app.include_router(build_research_router(runtime.research_service, runtime.provider_service))
     app.include_router(build_training_handoff_router(runtime))
     app.include_router(build_training_attempts_router(runtime))
+    app.include_router(build_skills_router(runtime))
     app.include_router(build_insights_router(runtime))
     app.include_router(build_telemetry_router(runtime))
     app.state.runtime = runtime

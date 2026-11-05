@@ -234,7 +234,7 @@ def import_repository(
     elif hasattr(upload, "id"):
         resource_id = str(getattr(upload, "id", ""))
 
-    artifact_rel = Path("project-artifacts") / f"{resource_id or resource_name}.symbol-index.json"
+    artifact_rel = Path(f"{resource_id or resource_name}.symbol-index.json")
     artifact_path = artifact_root / artifact_rel
     write_symbol_artifact(
         artifact_path,

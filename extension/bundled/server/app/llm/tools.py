@@ -758,6 +758,193 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
     }
 
 
+# --- project Q&A (P2 深化): list_project_modules / read_project_symbol ---
+
+
+def _project_artifact_root(resource_service: Any) -> Any:
+    data_root = getattr(resource_service, "data_root", None)
+    if data_root is None:
+        return None
+    return data_root / "project-artifacts"
+
+
+def _load_project_symbol_payload(resource_service: Any, resource_id: str) -> dict[str, Any] | None:
+    """Cached deterministic symbol index for an imported project (P2 artifact)."""
+
+    artifact_root = _project_artifact_root(resource_service)
+    if artifact_root is None:
+        return None
+    artifact_path = artifact_root / f"{resource_id}.symbol-index.json"
+    try:
+        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _resolve_project_resource(
+    context: ToolContext,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    """Pick the imported project: explicit resource_id, else latest kind=code folder."""
+
+    runtime = context.runtime
+    resource_service = getattr(runtime, "resource_service", None)
+    if resource_service is None:
+        return {"ok": False, "error": "service_unavailable", "detail": "The resource library is not attached to this run."}
+    repository = getattr(resource_service, "repository", None)
+    candidates: list[Any] = []
+    if repository is not None:
+        try:
+            candidates = [
+                item
+                for item in repository.list_resources(context.workspace_id)
+                if str(getattr(item, "kind", "")) == "code"
+                and Path(str(getattr(item, "source", "") or "")).is_dir()
+            ]
+        except Exception:  # pragma: no cover - repository variants
+            candidates = []
+    candidates.reverse()  # newest first
+    requested_id = str(args.get("resource_id") or "").strip()
+    requested_name = str(args.get("project") or "").strip().lower()
+    resource = None
+    if requested_id:
+        resource = next((item for item in candidates if str(item.id) == requested_id), None)
+        if resource is None:
+            return {"ok": False, "error": "project_not_found", "detail": f"No imported project resource {requested_id!r} in this workspace."}
+    elif requested_name:
+        resource = next((item for item in candidates if requested_name in str(item.name).lower()), None)
+        if resource is None:
+            return {"ok": False, "error": "project_not_found", "detail": f"No imported project name matching {requested_name!r}."}
+    elif candidates:
+        resource = candidates[0]
+    if resource is None:
+        return {
+            "ok": False,
+            "error": "no_project_imported",
+            "detail": (
+                "No imported project in this workspace yet. Import one first via "
+                "/project/import/github or /project/import/local."
+            ),
+        }
+    payload = _load_project_symbol_payload(resource_service, str(resource.id))
+    if payload is None:
+        source = str(getattr(resource, "source", "") or "")
+        try:
+            from ..project.symbols import build_repo_index
+
+            repo_index = build_repo_index(Path(source))
+            payload = repo_index.to_payload()
+        except (OSError, ValueError, RuntimeError):
+            return {"ok": False, "error": "artifact_missing", "detail": "Symbol index is unavailable and the repo source cannot be re-analyzed."}
+    return {"ok": True, "resource": resource, "payload": payload}
+
+
+async def _handle_list_project_modules(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """项目问答: module map of the imported project (deterministic artifact)."""
+
+    resolved = _resolve_project_resource(context, args)
+    if not resolved.get("ok"):
+        return resolved
+    resource = resolved["resource"]
+    payload = resolved["payload"]
+    files: list[str] = [str(f) for f in payload.get("files", [])]
+    symbols: list[dict[str, Any]] = payload.get("symbols", []) or []
+
+    module_names = sorted({f.split("/", 1)[0] if "/" in f else "." for f in files})
+    modules = []
+    for module in module_names:
+        module_files = [f for f in files if (f.split("/", 1)[0] if "/" in f else ".") == module]
+        module_symbol_count = sum(1 for s in symbols if (str(s.get("path", "")).split("/", 1)[0] if "/" in str(s.get("path", "")) else ".") == module)
+        languages = sorted({str(Path(f).suffix).lower() for f in module_files if Path(f).suffix})
+        modules.append(
+            {
+                "module": module,
+                "file_count": len(module_files),
+                "symbol_count": module_symbol_count,
+                "languages": languages,
+                "top_files": module_files[:8],
+            }
+        )
+    return {
+        "ok": True,
+        "project": str(getattr(resource, "name", "") or ""),
+        "resource_id": str(resource.id),
+        "commit_sha": str(payload.get("commit_sha") or "") or None,
+        "file_count": int(payload.get("file_count") or len(files)),
+        "symbol_count": int(payload.get("symbol_count") or len(symbols)),
+        "modules": modules[:20],
+        "summary": (
+            f"Project {getattr(resource, 'name', '')}: {payload.get('file_count')} files, "
+            f"{payload.get('symbol_count')} symbols across {len(modules)} top-level modules."
+        ),
+    }
+
+
+async def _handle_read_project_symbol(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """项目问答: locate one symbol in the imported repo and return its source excerpt."""
+
+    name = str(args.get("name") or args.get("symbol") or "").strip()
+    if not name:
+        return {"ok": False, "error": "missing_name", "detail": "read_project_symbol requires the symbol name."}
+    file_hint = str(args.get("file") or "").strip().lower()
+    resolved = _resolve_project_resource(context, args)
+    if not resolved.get("ok"):
+        return resolved
+    resource = resolved["resource"]
+    payload = resolved["payload"]
+    symbols = [s for s in (payload.get("symbols", []) or []) if isinstance(s, dict)]
+
+    matches = [s for s in symbols if str(s.get("name", "")) == name]
+    if not matches:
+        matches = [s for s in symbols if str(s.get("name", "")).startswith(name)]
+    if file_hint:
+        matches = [s for s in matches if file_hint in str(s.get("path", "")).lower()]
+    if not matches:
+        close = sorted(
+            {
+                str(s.get("name", ""))
+                for s in symbols
+                if name.lower() in str(s.get("name", "")).lower()
+            }
+        )[:5]
+        return {
+            "ok": False,
+            "error": "symbol_not_found",
+            "detail": f"Symbol {name!r} not found in {getattr(resource, 'name', 'project')}.",
+            "suggestions": close,
+        }
+
+    match = matches[0]
+    source = Path(str(getattr(resource, "source", "") or ""))
+    symbol_path = source / str(match.get("path", ""))
+    line = int(match.get("line", 1) or 1)
+    excerpt = ""
+    try:
+        text = symbol_path.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
+        start = max(0, line - 9)
+        end = min(len(lines), line + 31)
+        excerpt = "\n".join(lines[start:end])[:2000]
+    except OSError:
+        excerpt = ""
+    return {
+        "ok": True,
+        "symbol": str(match.get("name", name)),
+        "kind": str(match.get("kind", "")),
+        "path": str(match.get("path", "")),
+        "line": line,
+        "excerpt": excerpt or None,
+        "excerpt_available": bool(excerpt),
+        "commit_sha": str(payload.get("commit_sha") or "") or None,
+        "resource_id": str(resource.id),
+        "additional_matches": [
+            {"path": s.get("path"), "line": s.get("line"), "kind": s.get("kind")}
+            for s in matches[1:4]
+        ],
+    }
+
+
 # --- search_learning_materials -----------------------------------------
 
 
@@ -5634,6 +5821,51 @@ def build_default_tool_registry(
                 "required": ["query"],
             },
             handler=_handle_search_resources,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="list_project_modules",
+            description=(
+                "List the top-level modules of an imported project (GitHub or "
+                "local repo) with file/symbol counts and languages, from the "
+                "deterministic symbol-index artifact pinned to the repo commit. "
+                "Use this first to answer 'what does this project look like' "
+                "before reading any source file."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "resource_id": _string(
+                        "Optional imported-project resource id; defaults to the most recently imported project."
+                    ),
+                    "project": _string("Optional project name substring to disambiguate."),
+                },
+            },
+            handler=_handle_list_project_modules,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="read_project_symbol",
+            description=(
+                "Locate one symbol (function/class/method) in an imported "
+                "project and return its real source excerpt with file:line "
+                "and the pinned commit SHA. Use after list_project_modules "
+                "to ground architecture answers in actual code."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": _string("Symbol name to locate (exact match first, then prefix)."),
+                    "file": _string("Optional path substring filter when the name is ambiguous."),
+                    "resource_id": _string("Optional imported-project resource id."),
+                },
+                "required": ["name"],
+            },
+            handler=_handle_read_project_symbol,
         )
     )
 

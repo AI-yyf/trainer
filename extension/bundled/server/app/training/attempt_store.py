@@ -312,6 +312,7 @@ class AttemptStore:
         resource_version_id: str | None = None,
         resource_content_hash: str | None = None,
         resource_location: dict[str, Any] | None = None,
+        resource_git_sha: str | None = None,
         skip_if: Callable[[list[dict[str, Any]]], bool] | None = None,
     ) -> dict[str, Any] | None:
         # Identity derives from the stored attempt — the client cannot forge
@@ -345,6 +346,9 @@ class AttemptStore:
             "resource_version_id": resource_version_id,
             "resource_content_hash": resource_content_hash,
             "resource_location": resource_location or {},
+            # Git SHA→Evidence: resolved server-side from the project's pinned
+            # symbol-index artifact — the client cannot declare it.
+            "resource_git_sha": resource_git_sha or None,
             "runner_version": runner_version,
             "execution_location": execution_location,
             "trust_level": trust_level,

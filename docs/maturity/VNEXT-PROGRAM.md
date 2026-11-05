@@ -163,6 +163,6 @@ P1–P3 追加基准（立项时定义输入/输出/阈值）：
 2. P3 深化 ✅ — `/skill/*` runtime API：register（内联）/ import（SKILL.md 外部导入 + `scan_skill_security` 供应链扫描，命中即强制 reviewed=False）/ review（人工审核唯一入口 `mark_reviewed`）/ activate（action 未审核 403 `skill_not_reviewed`；body 仅激活时加载）/ deactivate / list / status；注册表持久化于 `data_root/skills`，跨工作区共享、跨重启保留。测试 `tests/test_skill_api.py`（3 例，含重启持久化）。
 
 **下一轮入口（按序）：**
-1. P4：真实 Provider key 验证 + 教学体验打磨（需要用户提供 key）。
-2. P5：发布 tag + VSIX 发布 + 安全审计 + 多平台发布证据。
+1. P4 ✅（2026-11-06，证据 `docs/maturity/2026-11-06-p4-real-provider.md`）：真实 Provider（MiniMax-M3，OpenAI 兼容网关）回归 5 PASS + 1 NOT_EXECUTED（空响应无法在健康网关强制）——连通 smoke、真实教学轮、长讲义（2068 字完整落沙箱 notes + 注册资源，无截断）、工具成功 grounding（真实读文件引用真实内容）、新会话首条消息。
+2. P5：发布 tag + VSIX 发布 + 安全审计 + 多平台发布证据（对外动作，需用户批准）。
 3. bench:incremental/provenance 接入 CI 门禁（当前为可重复 pytest 基准）。
