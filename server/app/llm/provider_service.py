@@ -101,7 +101,7 @@ from .coaching_scaffold import (
     _scaffold_diagnosis,
     _scaffold_teaching_note,
 )
-from .harness import extract_provider_usage
+from .harness import estimate_tokens, extract_provider_usage
 from .prompts import (
     build_coaching_messages,
     extract_coaching_context,
@@ -5520,6 +5520,16 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             "tool_events": tool_events,
             "fell_back": fell_back,
             "recovered_stop_reason": recovered_stop_reason,
+            # Cost ledger v1: Trainer-side estimates (chars/4), clearly labeled
+            # so the ledger never passes estimates off as provider truth.
+            "token_usage": {
+                "estimate": "chars/4",
+                "prompt_tokens_estimate": estimate_tokens(messages),
+                "reply_tokens_estimate": estimate_tokens(
+                    [{"role": "assistant", "content": final_text}]
+                ),
+                "tool_call_count": len(tool_events or []),
+            },
             **attachment_delivery,
         }
 

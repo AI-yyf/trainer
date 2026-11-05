@@ -4,8 +4,9 @@ import base64
 import logging
 import os
 import re
+import time
 from collections import defaultdict
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from hashlib import sha1, sha256
 from pathlib import Path, PurePosixPath
@@ -288,6 +289,13 @@ class ResourceService:
         # Canonicalize stages (analyze -> materialize -> index) reuse one parse
         # per resource so each HTTP stage does real work without parsing twice.
         self._prepared_canonical: dict[str, dict[str, Any]] = {}
+        # P1 检索复用: identical (workspace, query, filters, top_k) within the
+        # TTL window return the same response instead of re-running FTS5.
+        self._search_cache: dict[
+            tuple[str, str, int, tuple[tuple[str, Any], ...]],
+            tuple[float, SearchResponse],
+        ] = {}
+        self._search_cache_ttl_seconds = 120.0
         self._resource_restore_locks_guard = Lock()
 
     def set_workspace_path_resolver(
@@ -590,6 +598,7 @@ class ResourceService:
             resource.id,
             index_status=IndexStatus.FAILED if indexing_failed else IndexStatus.INDEXED,
         )
+        self.invalidate_search_cache(workspace_id)
 
         if indexing_failed:
             self.semantic_memory.delete_text(resource.id)
@@ -960,12 +969,23 @@ class ResourceService:
             kind=kind,
             index_state=index_state,
         )
+        cache_key = (
+            str(workspace_id),
+            query.strip().casefold(),
+            max(1, min(top_k, 50)),
+            tuple(sorted((k, v) for k, v in asdict(filters).items() if v)),
+        )
+        now = time.monotonic()
+        cached = self._search_cache.get(cache_key)
+        if cached is not None and now - cached[0] <= self._search_cache_ttl_seconds:
+            return cached[1]
         response = self._search_index(workspace_id).search(
             query,
             filters=filters,
             top_k=max(1, min(top_k, 50)),
         )
         self._enrich_search_locations(workspace_id, response, query)
+        self._search_cache[cache_key] = (now, response)
         return response
 
     def read_canonical_text(
@@ -991,6 +1011,15 @@ class ResourceService:
                 pass
         content = self._search_index(workspace_id).document_content(record.id)
         return content or None
+
+    def invalidate_search_cache(self, workspace_id: str | None = None) -> None:
+        """Drop cached search responses after the corpus changes (P1 检索复用)."""
+        if workspace_id is None:
+            self._search_cache.clear()
+            return
+        prefix = str(workspace_id)
+        for key in [k for k in self._search_cache if k[0] == prefix]:
+            self._search_cache.pop(key, None)
 
     def _enrich_search_locations(
         self,
@@ -1105,6 +1134,7 @@ class ResourceService:
 
         self.registry._resources.pop(resource_id, None)
         self.registry._chunks.pop(resource_id, None)
+        self.invalidate_search_cache(workspace_id)
 
         try:
             artifact_paths = self._archived_artifact_paths(removal_result)
@@ -1129,6 +1159,10 @@ class ResourceService:
             "deleted_at": deleted_at,
             **removal_result,
         }
+
+    def invalidate_corpus_search_cache(self) -> None:
+        """Alias kept explicit at delete/restore call sites (P1 检索复用)."""
+        self.invalidate_search_cache()
 
     def restore_resource(
         self,

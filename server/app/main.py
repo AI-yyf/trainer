@@ -29,6 +29,7 @@ from .db.repository import TrainerRepository
 from .db.research_repository import ResearchRepository
 from .evaluator.service import EvaluatorService
 from .ingest.service import IngestService
+from .llm.cost_ledger import CostLedger
 from .llm.provider_service import ProviderService
 from .memory.semantic import SemanticMemory
 from .memory.service import MemoryService
@@ -72,6 +73,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     event_ledger = EventLedgerService()
     provider_service = ProviderService()
     network_fetch_enabled = bool(getattr(settings, "enable_network_fetch", False))
+    cost_ledger = CostLedger(data_dir / "cost-ledger")
     resource_service = ResourceService(
         repository,
         IngestService(network_fetch_enabled=network_fetch_enabled),
@@ -93,6 +95,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         planner_service=PlannerService(repository=repository),
         memory_service=memory_service,
         resource_service=resource_service,
+        cost_ledger=cost_ledger,
         spec_service=SpecService(),
         evaluator_service=EvaluatorService(),
         pedagogy_service=PedagogyService(),

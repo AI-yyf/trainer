@@ -1694,6 +1694,41 @@ class TrainerRuntime:
     def deduped_resources(self, workspace_id: str):
         return self.resource_service.dedupe_resources(self.repository.list_resources(workspace_id))
 
+    def record_agentic_cost_entry(
+        self,
+        *,
+        workspace_id: str,
+        session_id: str | None,
+        outcome: dict[str, Any],
+        model: str | None = None,
+    ) -> None:
+        """Append one estimated cost entry for an agentic turn (P1 cost ledger).
+
+        Failure-tolerant by contract: the ledger must never break a turn.
+        """
+
+        ledger = self.cost_ledger
+        if ledger is None:
+            return
+        usage = outcome.get("token_usage")
+        if not isinstance(usage, dict):
+            return
+        try:
+            ledger.record(
+                workspace_id=workspace_id,
+                session_id=session_id,
+                kind="agentic_turn",
+                model=model,
+                prompt_tokens_estimate=int(usage.get("prompt_tokens_estimate") or 0),
+                reply_tokens_estimate=int(usage.get("reply_tokens_estimate") or 0),
+                tool_call_count=int(usage.get("tool_call_count") or 0),
+                stop_reason=str(outcome.get("stop_reason") or "") or None,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            logging.getLogger(__name__).warning(
+                "Cost ledger recording failed for %s: %s", workspace_id, exc
+            )
+
     def register_workspace_path(self, workspace_id: str, workspace_path: str | None) -> None:
         """Remember a workspace's filesystem root.
 
@@ -1775,6 +1810,7 @@ class TrainerRuntime:
         )
         return authority
 
+    cost_ledger: Any | None = None
     def register_workspace_sandbox_root(
         self, workspace_id: str, sandbox_root_path: str | None
     ) -> None:

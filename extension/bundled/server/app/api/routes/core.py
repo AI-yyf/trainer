@@ -931,6 +931,14 @@ def build_core_router(
                     str(agent_outcome.get("next_step") or "").strip(),
                     response_language=request.response_language,
                 )
+            runtime.record_agentic_cost_entry(
+                workspace_id=workspace_id,
+                session_id=str(state.session_id or "") or None,
+                outcome=agent_outcome,
+                model=getattr(coaching_service._config, "model", None)
+                if coaching_service._config
+                else None,
+            )
             agent_meta = {
                 "stop_reason": agent_outcome.get("stop_reason"),
                 "summary": agent_outcome.get("summary"),

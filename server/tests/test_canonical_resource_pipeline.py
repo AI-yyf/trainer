@@ -447,3 +447,62 @@ def test_analyze_reports_legacy_office_failure_without_writing(tmp_path: Path) -
         assert analyzed.json()["ok"] is False
         assert item["ok"] is False
         assert "save the file as .docx" in item["error"]
+
+
+def test_identical_search_within_ttl_reuses_cached_response(tmp_path: Path) -> None:
+    """P1 检索复用: the same query inside the TTL window must not re-run FTS5."""
+
+
+    workspace_root = tmp_path / "workspace"
+    workspace_id = "workspace-search-cache"
+    docx_path = workspace_root / "notes.docx"
+    docx_path.parent.mkdir(parents=True, exist_ok=True)
+    docx_path.write_bytes(_docx_bytes())
+
+    with build_client(tmp_path) as client:
+        start_session(client, workspace_root, workspace_id)
+        indexed = upload_and_index(
+            client,
+            workspace_id=workspace_id,
+            kind="docx",
+            name="Cache Probe",
+            source=docx_path,
+        )
+
+        runtime = client.app.state.runtime
+        service = runtime.resource_service
+        search_calls = {"count": 0}
+        original_search = service._search_index(workspace_id).search
+
+        def counting_search(*args, **kwargs):
+            search_calls["count"] += 1
+            return original_search(*args, **kwargs)
+
+        service._search_cache.clear()
+        probe_index = service._search_index(workspace_id)
+        probe_index.search = counting_search
+
+        first = client.post(
+            "/resource/search",
+            json={"workspace_id": workspace_id, "query": "quorum", "top_k": 5},
+        ).json()
+        assert first["hits"], first
+        calls_after_first = search_calls["count"]
+
+        second = client.post(
+            "/resource/search",
+            json={"workspace_id": workspace_id, "query": "quorum", "top_k": 5},
+        ).json()
+        assert second["hits"] == first["hits"] or second["total"] == first["total"]
+        assert search_calls["count"] == calls_after_first  # served from cache
+
+        # A corpus change invalidates the cache: indexing runs FTS5 again.
+        client.post(
+            "/resource/index",
+            json={"workspace_id": workspace_id, "resource_id": indexed["id"]},
+        )
+        client.post(
+            "/resource/search",
+            json={"workspace_id": workspace_id, "query": "quorum", "top_k": 5},
+        )
+        assert search_calls["count"] > calls_after_first
