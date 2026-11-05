@@ -13,9 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.project.incremental import (
-    current_commit,
     detect_changed_files,
-    update_symbol_index_incremental,
 )
 from app.project.symbols import build_repo_index
 

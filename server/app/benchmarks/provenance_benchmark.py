@@ -13,7 +13,6 @@ fixture workspace, making it repeatable in CI.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +20,6 @@ from fastapi.testclient import TestClient
 
 from app.core.settings import AppSettings
 from app.main import create_app
-from app.resources.canonical import read_front_matter
 
 
 def build_client(tmp_path: Path) -> TestClient:
@@ -66,7 +64,6 @@ def run_provenance_benchmark(
             },
         )
         assert session.status_code == 200, session.text
-        session_id = session.json()["session_id"]
 
         for doc in documents:
             doc_path = workspace_root / doc["filename"]
