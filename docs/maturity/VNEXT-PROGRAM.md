@@ -1,7 +1,7 @@
 # Trainer VNext — 工程审计与总控程序（冻结契约 v1）
 
 **日期：** 2026-11-05
-**基线提交：** `40dd120`（maturity/p1-final-convergence-2026-10-20）
+**基线提交：** `7a0584a`（maturity/p1-final-convergence-2026-10-20）
 **CI 全绿实证：** run 41975161211 + 41980840468 + 42005148779（连续三轮 9/9 jobs 全绿，含 Windows Server）
 **性质：** 共享契约冻结 + 分阶段执行程序。所有后续会话（A–J）以本文档为唯一契约来源；修改契约须总控批准并同步全体。
 
@@ -159,7 +159,7 @@ P1–P3 追加基准（立项时定义输入/输出/阈值）：
 **已完成（本轮，全部有实测证据）：** P0 三项修复（远程隔离/恢复契约/Ruff）、导入五阶段、200%×8 语言门禁、真实对话状态门禁、规范 Markdown 阅读/搜索/引用全链路。
 
 **下一轮入口（按序）：**
-1. P2 深化：项目概览 Artifact（架构图/模块依赖图）、可追溯引用（Git SHA + 行号 → Evidence 表）、项目问答 Agent 工具（read_project_symbol / list_project_modules）（D）。
-2. P2 增量更新：Git Diff → 失效 Artifact 检测 → 增量 symbol index（D）。
-3. P3 立项：Skill 注册表 + 权限模型 + SKILL.md 兼容适配（F）。
+1. P2 深化：项目概览 Artifact（架构图/模块依赖图）→ Evidence 表；项目问答 Agent 工具（read_project_symbol / list_project_modules）（D）。
+2. P3 Skill 生态深化：SKILL.md 外部 Skill 导入 + 供应链安全审查 + cross-workspace Skill 激活 runtime API（F）。
+3. P4：真实 Provider key 验证 + 教学体验打磨（需要用户提供 key）。
 3. P2 立项：GitHub 仓库导入（clone → Source 登记 → 符号索引）设计稿（D）。
