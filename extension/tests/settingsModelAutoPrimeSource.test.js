@@ -37,5 +37,7 @@ test('settings never auto-prime provider models; refresh stays an explicit actio
   assert.doesNotMatch(helpers, /export function composerModelAutoRefreshDecision/);
 
   // Model listing still exists as a local fact + explicit refresh affordance.
-  assert.match(source, /appUiCopy\(layout\.composerLanguage, "刷新模型"\)/);
+  // P2 modularization: the refresh affordance lives in ComposerModelMenu.tsx.
+  assert.match(source, /onRefreshModels=\{refreshComposerProviderModels\}/);
+  assert.match(source, /localize\(composerLanguage, "刷新模型"\)/);
 });

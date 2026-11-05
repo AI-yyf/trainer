@@ -227,6 +227,7 @@ import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirma
 import {
   CoachComposer,
   ComposerIconButton,
+  ComposerModelMenu,
   ComposerResourcesMenu,
   DockReturnToSurfaceBar,
 } from "../components/composer";
@@ -259,7 +260,6 @@ import {
   CheckMarkIcon,
   ChevronRightIcon,
   ContextLayersIcon,
-  RefreshIcon,
   ResourcesIcon,
   SkillCubeIcon,
   TargetIcon,
@@ -8260,337 +8260,27 @@ export function App() {
     }
 
     if (openMenu === "model") {
-      const providerApplied = data.providerConfig.configured;
-      const visibleSelections = filteredComposerProviderMenuItems;
-      const visibleModels = visibleSelections.filter(
-        (profile) => profile.selectionKind === "model",
-      );
-      const visibleProfiles = visibleSelections.filter(
-        (profile) => profile.selectionKind === "profile" && !profile.isActive,
-      );
-      const savedProfiles = composerProviderMenuItems.filter(
-        (profile) => profile.selectionKind === "profile" && !profile.isActive,
-      );
-      const hasModelQuery = composerModelQuery.trim().length > 0;
-      const activeModelItem = composerProviderMenuItems.find(
-        (item) => item.selectionKind === "model" && item.isActive,
-      );
-      const activeModelPolicyHint = composerModelPolicyHint(
-        layout.composerLanguage,
-        activeModelItem?.policyReason,
-      );
-      const retainedBlockedActiveModel =
-        activeModelItem && activeModelPolicyHint ? activeModelItem : undefined;
-      const defaultVisibleModels = composerProviderMenuItems
-        .filter((profile) => profile.selectionKind === "model" && !profile.isActive)
-        .slice(0, COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT);
-      const displayedModels = hasModelQuery
-        ? [
-            ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
-            ...visibleModels.filter((item) => item.id !== retainedBlockedActiveModel?.id),
-          ]
-        : [
-            ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
-            ...defaultVisibleModels,
-          ];
-      const nonActiveModelCount = composerProviderMenuItems.filter(
-        (item) => item.selectionKind === "model" && !item.isActive,
-      ).length;
-      const hasOnlyCurrentModel =
-        Boolean(activeModelItem) && nonActiveModelCount === 0 && savedProfiles.length === 0;
-      const showModelSection =
-        hasModelQuery || defaultVisibleModels.length > 0 || hasOnlyCurrentModel;
-      const searchLabel =
-        appUiCopy(layout.composerLanguage, "搜索模型或已保存连接");
-      const emptyStateLabel = hasModelQuery
-        ? appUiCopy(layout.composerLanguage, "没有匹配的模型或已保存连接。")
-        : hasOnlyCurrentModel
-          ? composerProviderCopy.modelPicker.onlyCurrentModel
-          : composerHasSavedProfiles
-            ? appUiCopy(layout.composerLanguage, "可从下方展开已保存连接。")
-            : appUiCopy(layout.composerLanguage, "还没有可切换的模型。请到“设置”保存连接。");
-
-      const visibleSelectionCount = displayedModels.length + (hasModelQuery ? visibleProfiles.length : 0);
-      const showSearch = nonActiveModelCount > COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT;
-      const modelSectionLabel =
-        hasModelQuery
-          ? appUiCopy(layout.composerLanguage, "匹配的模型")
-          : appUiCopy(layout.composerLanguage, "可切换模型");
-      const profileSectionLabel =
-        appUiCopy(layout.composerLanguage, "已保存连接");
-      const refreshModelsDisabled =
-        !providerApplied ||
-        !data.providerConfig.apiKeyConfigured ||
-        data.providerConfig.modelListStatus === "loading";
-      const refreshModelsLabel =
-        appUiCopy(layout.composerLanguage, "刷新模型");
-      const refreshModelsTitle = !providerApplied
-        ? appUiCopy(layout.composerLanguage, "先保存连接，再更新模型列表")
-        : !data.providerConfig.apiKeyConfigured
-          ? appUiCopy(layout.composerLanguage, "先在“设置”填写访问密钥，再更新模型列表")
-          : data.providerConfig.modelListStatus === "loading"
-            ? appUiCopy(layout.composerLanguage, "正在更新模型列表")
-            : appUiCopy(layout.composerLanguage, "更新模型列表");
-
       return (
-        <section className="composer-menu-panel composer-menu-panel--provider">
-          <div className="composer-menu-panel__header">
-            <span className="eyebrow">{t.chatModel}</span>
-            <div className="composer-menu-panel__header-actions">
-              <ComposerIconButton
-                icon={<RefreshIcon size={14} />}
-                label={refreshModelsLabel}
-                ariaLabel={refreshModelsLabel}
-                title={refreshModelsTitle}
-                active={data.providerConfig.modelListStatus === "loading"}
-                disabled={refreshModelsDisabled}
-                onClick={refreshComposerProviderModels}
-              />
-            </div>
-          </div>
-
-          {showSearch || hasModelQuery ? (
-            <label className="resources-search resources-search--hero composer-menu-panel__search">
-              <span className="sr-only">{searchLabel}</span>
-              <input
-                ref={composerModelSearchRef}
-                type="search"
-                value={composerModelQuery}
-                onChange={(event) => setComposerModelQuery(event.target.value)}
-                placeholder={searchLabel}
-              />
-            </label>
-          ) : null}
-
-          {composerThinkingDescriptor ? (
-            <div className="composer-menu-panel__section composer-thinking">
-              <div className="composer-thinking__header">
-                <span className="eyebrow">
-                  {appUiCopy(layout.composerLanguage, "思考强度")}
-                </span>
-                {composerThinkingDescriptor.disabled ? (
-                  <span className="composer-thinking__state">
-                    {appUiCopy(layout.composerLanguage, "已关闭")}
-                  </span>
-                ) : null}
-              </div>
-              <div className="composer-thinking__modes" role="group" aria-label={appUiAltCopy(layout.composerLanguage, "思考强度")}>
-                {(
-                  [
-                    { value: "auto", label: appUiCopy(layout.composerLanguage, "自动") },
-                    { value: "disabled", label: appUiCopy(layout.composerLanguage, "关闭") },
-                    { value: "enabled", label: appUiCopy(layout.composerLanguage, "开启") },
-                  ] as const
-                ).map((option) => {
-                  const active = composerThinkingDescriptor.config.mode === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`composer-thinking__mode ${active ? "is-active" : ""}`}
-                      aria-pressed={active}
-                      onClick={() =>
-                        setComposerThinking({
-                          ...composerThinkingDescriptor.config,
-                          mode: option.value,
-                          // "On" must carry a concrete effort or nothing is
-                          // emitted and the toggle falls back to "auto".
-                          ...(option.value === "enabled" &&
-                          composerThinkingDescriptor.kind === "reasoning_effort" &&
-                          !composerThinkingDescriptor.config.reasoningEffort
-                            ? { reasoningEffort: "medium" as const }
-                            : {}),
-                        })
-                      }
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-              {composerThinkingDescriptor.config.mode === "enabled" &&
-              composerThinkingDescriptor.kind === "reasoning_effort" &&
-              composerThinkingDescriptor.effortOptions ? (
-                <div className="composer-thinking__modes composer-thinking__modes--effort" role="group" aria-label={appUiCopy(layout.composerLanguage, "推理力度")}>
-                  {composerThinkingDescriptor.effortOptions.map((option) => {
-                    const active =
-                      (composerThinkingDescriptor.config.reasoningEffort ?? "medium") === option;
-                    return (
-                      <button
-                        key={option}
-                        type="button"
-                        className={`composer-thinking__mode ${active ? "is-active" : ""}`}
-                        aria-pressed={active}
-                        onClick={() =>
-                          setComposerThinking({
-                            ...composerThinkingDescriptor.config,
-                            mode: "enabled",
-                            reasoningEffort: option,
-                          })
-                        }
-                      >
-                        {option === "low"
-                          ? appUiCopy(layout.composerLanguage, "低")
-                          : option === "high"
-                            ? appUiCopy(layout.composerLanguage, "高")
-                            : appUiCopy(layout.composerLanguage, "中")}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-              {composerThinkingDescriptor.config.mode === "enabled" &&
-              (composerThinkingDescriptor.kind === "thinking_budget" ||
-                composerThinkingDescriptor.kind === "gemini_thinking") ? (
-                <p className="composer-menu-panel__hint">
-                  {appUiCopy(
-                    layout.composerLanguage,
-                    typeof composerThinkingDescriptor.config.budgetTokens === "number"
-                      ? "思考预算 {n}，可在“设置”里调整。"
-                      : "思考预算 自动，可在“设置”里调整。",
-                  ).replace(
-                    "{n}",
-                    typeof composerThinkingDescriptor.config.budgetTokens === "number"
-                      ? String(composerThinkingDescriptor.config.budgetTokens)
-                      : "",
-                  )}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {showModelSection ? (
-            <div className="composer-menu-panel__section">
-              {visibleSelectionCount > 0 ? (
-                <div className="composer-provider-groups">
-                  {displayedModels.length > 0 ? (
-                    <div
-                      className="composer-provider-list"
-                      role="list"
-                      aria-label={modelSectionLabel}
-                    >
-                        {displayedModels.map((profile) => {
-                          const policyHint = composerModelPolicyHint(
-                            layout.composerLanguage,
-                            profile.policyReason,
-                          );
-                          const modelDisabled = profile.isActive || profile.isSelectable === false;
-                          const modelContextTokens =
-                            data.providerConfig.modelTokenLimits?.[profile.model]
-                              ?.contextWindowTokens ?? data.providerConfig.contextWindowTokens;
-                          const modelContextHint = modelContextTokens
-                            ? appUiCopy(layout.composerLanguage, "上下文 {n}").replace(
-                                "{n}",
-                                formatTokenCount(modelContextTokens),
-                              )
-                            : undefined;
-                          return (
-                            <button
-                              key={profile.id}
-                              className={`composer-provider-list__item ${profile.isActive ? "is-active" : ""}`}
-                              type="button"
-                              disabled={modelDisabled}
-                              aria-current={profile.isActive ? "true" : undefined}
-                              title={
-                                [policyHint, modelContextHint].filter(Boolean).join(" · ") ||
-                                profile.model
-                              }
-                              onClick={() => switchComposerProviderModel(profile.model)}
-                            >
-                              <div className="composer-provider-list__row">
-                                <span className="composer-provider-list__stack">
-                                  <span className="composer-provider-list__model">{profile.model}</span>
-                                  {modelContextHint || policyHint ? (
-                                    <span className="composer-provider-list__label">
-                                      {[modelContextHint, policyHint].filter(Boolean).join(" · ")}
-                                    </span>
-                                  ) : null}
-                                </span>
-                                {profile.isActive ? (
-                                  <span className="composer-provider-list__state">
-                                    <CheckMarkIcon size={12} />
-                                    <span className="sr-only">{composerProviderCopy.modelPicker.currentModel}</span>
-                                  </span>
-                                ) : null}
-                              </div>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  ) : null}
-
-                  {hasModelQuery && visibleProfiles.length > 0 ? (
-                    <section className="composer-provider-group">
-                      <div className="composer-provider-group__header">
-                        <span className="eyebrow">{profileSectionLabel}</span>
-                      </div>
-                      <div
-                        className="composer-provider-list"
-                        role="list"
-                        aria-label={appUiCopy(layout.composerLanguage, "已保存连接")}
-                      >
-                        {visibleProfiles.map((profile) => (
-                          <button
-                            key={profile.id}
-                            className="composer-provider-list__item"
-                            type="button"
-                            title={profile.model}
-                            onClick={() => switchComposerProviderProfile(profile.id)}
-                          >
-                            <div className="composer-provider-list__row">
-                              <span className="composer-provider-list__stack">
-                                <span className="composer-provider-list__model">{profile.label}</span>
-                                <span className="composer-provider-list__label">{profile.model}</span>
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
-
-                </div>
-              ) : (
-                <p className="composer-menu-panel__hint">{emptyStateLabel}</p>
-              )}
-            </div>
-          ) : null}
-
-          {!hasModelQuery && savedProfiles.length > 0 ? (
-            <details className="composer-provider-group">
-              <summary className="composer-provider-group__header">
-                <span className="eyebrow">{profileSectionLabel}</span>
-              </summary>
-              <div
-                className="composer-provider-list"
-                role="list"
-                aria-label={appUiCopy(layout.composerLanguage, "已保存连接")}
-              >
-                {savedProfiles.map((profile) => (
-                  <button
-                    key={profile.id}
-                    className="composer-provider-list__item"
-                    type="button"
-                    title={profile.model}
-                    onClick={() => switchComposerProviderProfile(profile.id)}
-                  >
-                    <div className="composer-provider-list__row">
-                      <span className="composer-provider-list__stack">
-                        <span className="composer-provider-list__model">{profile.label}</span>
-                        <span className="composer-provider-list__label">{profile.model}</span>
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </details>
-          ) : null}
-
-          {!hasModelQuery && !showSearch && !providerApplied && savedProfiles.length === 0 ? (
-            <p className="composer-menu-panel__hint">{emptyStateLabel}</p>
-          ) : null}
-
-        </section>
+        <ComposerModelMenu
+          copy={t}
+          providerCopy={composerProviderCopy}
+          composerLanguage={layout.composerLanguage}
+          localize={appUiCopy}
+          localizeAlt={appUiAltCopy}
+          providerConfig={data.providerConfig}
+          menuItems={composerProviderMenuItems}
+          filteredMenuItems={filteredComposerProviderMenuItems}
+          hasSavedProfiles={composerHasSavedProfiles}
+          modelQuery={composerModelQuery}
+          onModelQueryChange={setComposerModelQuery}
+          modelSearchRef={composerModelSearchRef}
+          thinkingDescriptor={composerThinkingDescriptor}
+          onThinkingChange={setComposerThinking}
+          onRefreshModels={refreshComposerProviderModels}
+          onSwitchModel={switchComposerProviderModel}
+          onSwitchProfile={switchComposerProviderProfile}
+          initialOptionLimit={COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT}
+        />
       );
     }
 

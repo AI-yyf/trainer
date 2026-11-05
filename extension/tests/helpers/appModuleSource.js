@@ -32,20 +32,12 @@ const APP_HELPERS_PATH = path.resolve(
 function readAppModuleSource() {
   // P2 modularization: composer menu panels moved to components/composer/,
   // so the logical module includes the extracted slice.
-  const composerMenuPath = path.resolve(
-    __dirname,
-    '..',
-    '..',
-    'webview',
-    'src',
-    'components',
-    'composer',
-    'ComposerResourcesMenu.tsx',
-  );
+  const composerDir = path.resolve(__dirname, '..', '..', 'webview', 'src', 'components', 'composer');
+  const composerSlices = ['ComposerResourcesMenu.tsx', 'ComposerModelMenu.tsx'];
   return [
     fs.readFileSync(APP_SOURCE_PATH, 'utf8'),
     fs.readFileSync(APP_HELPERS_PATH, 'utf8'),
-    fs.readFileSync(composerMenuPath, 'utf8'),
+    ...composerSlices.map((name) => fs.readFileSync(path.join(composerDir, name), 'utf8')),
   ].join('\n');
 }
 

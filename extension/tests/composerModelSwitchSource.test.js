@@ -97,29 +97,38 @@ test('Coach composer keeps model selection focused while setup stays in Settings
     /if \(!data\.providerConfig\.configured && !composerHasSavedProfiles\) \{\s*openComposerModelSettings\(\);\s*return;/,
   );
   assert.match(source, /toggleComposerModelMenu/);
+  // P2 modularization: the model menu panel is a component; App must wire the
+  // real menu items, callbacks and option limit into it.
+  assert.match(source, /<ComposerModelMenu/);
+  assert.match(source, /menuItems=\{composerProviderMenuItems\}/);
+  assert.match(source, /filteredMenuItems=\{filteredComposerProviderMenuItems\}/);
+  assert.match(source, /onSwitchModel=\{switchComposerProviderModel\}/);
+  assert.match(source, /onSwitchProfile=\{switchComposerProviderProfile\}/);
+  assert.match(source, /onThinkingChange=\{setComposerThinking\}/);
+  assert.match(source, /initialOptionLimit=\{COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT\}/);
   assert.match(source, /id: "model-switch",/);
   assert.match(source, /label: composerContextUsage\.used[\s\S]*?: composerModelButtonDisplayLabel,/);
   assert.match(source, /onClick: toggleComposerModelMenu,/);
-  assert.match(source, /onClick=\{\(\) => switchComposerProviderModel\(profile\.model\)\}/);
-  assert.match(source, /onClick=\{\(\) => switchComposerProviderProfile\(profile\.id\)\}/);
-  assert.match(source, /const hasModelQuery = composerModelQuery\.trim\(\)\.length > 0;/);
+  assert.match(source, /onClick=\{\(\) => onSwitchModel\(profile\.model\)\}/);
+  assert.match(source, /onClick=\{\(\) => onSwitchProfile\(profile\.id\)\}/);
+  assert.match(source, /const hasModelQuery = modelQuery\.trim\(\)\.length > 0;/);
   assert.match(
     source,
     /const visibleModels = visibleSelections\.filter\(\s*\(profile\) => profile\.selectionKind === "model",\s*\);/,
   );
-  assert.match(source, /const defaultVisibleModels = composerProviderMenuItems/);
+  assert.match(source, /const defaultVisibleModels = menuItems/);
   assert.match(source, /const COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT = 6;/);
-  assert.match(source, /\.slice\(0, COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT\);/);
+  assert.match(source, /\.slice\(0, initialOptionLimit\);/);
   assert.match(source, /const retainedBlockedActiveModel =/);
   assert.match(source, /const displayedModels = hasModelQuery/);
   assert.match(source, /retainedBlockedActiveModel \? \[retainedBlockedActiveModel\] : \[\]/);
-  assert.match(source, /const nonActiveModelCount = composerProviderMenuItems\.filter\(/);
+  assert.match(source, /const nonActiveModelCount = menuItems\.filter\(/);
   assert.match(
     source,
     /\(item\) => item\.selectionKind === "model" && !item\.isActive,/,
   );
-  assert.match(source, /const showSearch = nonActiveModelCount > COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT;/);
-  assert.match(source, /const activeModelItem = composerProviderMenuItems\.find\(/);
+  assert.match(source, /const showSearch = nonActiveModelCount > initialOptionLimit;/);
+  assert.match(source, /const activeModelItem = menuItems\.find\(/);
   assert.match(source, /const hasOnlyCurrentModel =/);
   assert.match(
     source,
@@ -127,10 +136,10 @@ test('Coach composer keeps model selection focused while setup stays in Settings
   );
   assert.match(source, /const showModelSection =/);
   assert.match(source, /hasModelQuery \|\| defaultVisibleModels\.length > 0 \|\| hasOnlyCurrentModel/);
-  assert.match(source, /composerProviderCopy\.modelPicker\.onlyCurrentModel/);
-  assert.match(source, /composerProviderCopy\.modelPicker\.currentModel/);
+  assert.match(source, /providerCopy\.modelPicker\.onlyCurrentModel/);
+  assert.match(source, /providerCopy\.modelPicker\.currentModel/);
   assert.match(source, /\{showSearch \|\| hasModelQuery \? \(/);
-  assert.match(source, /appUiCopy\(layout\.composerLanguage, "刷新模型"\)/);
+  assert.match(source, /localize\(composerLanguage, "刷新模型"\)/);
   assert.match(source, /\{showModelSection \? \(/);
   assert.doesNotMatch(source, /searchMoreModelsHint/);
   assert.match(source, /!hasModelQuery && savedProfiles\.length > 0/);
