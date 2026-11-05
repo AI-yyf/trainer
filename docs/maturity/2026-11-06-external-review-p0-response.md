@@ -50,7 +50,7 @@
 | P1 完整 GitHub 项目理解 | ✅ clone→Source→符号索引→FTS 代码定位→概览 Artifact（模块表/依赖图/mermaid 架构图/入口/热点）→Git SHA→Evidence→问答工具 + **函数级调用链 + git-diff 改动影响面（removed 符号破坏调用方检出）**（2026-11-06） | `test_project_import/overview/callgraph.py` + bench:token/incremental |
 | P1 真实 Skills 体系 | ✅ 注册表/权限/审核 gate/供应链扫描/SKILL.md 渐进加载/跨工作区持久化 ✅ + **Agent 运行时条件触发自动选择 + 权限约束注入 + 执行结果回流记忆** ✅（2026-11-06） | `test_skill_api.py` + `test_skill_runtime.py`（6 例）+ 真实模型端到端 |
 | P1 真实 VS Code 全流程 | 🟡 安装版 36 步 E2E/恢复契约/重启会话恢复有；**Remote-SSH L2 真窗口验收未闭环**（评估属实） | closeout §5 风险 #4 |
-| P2 大组件模块化 | ❌ 未开始（App.tsx 万行级属实） | — |
+| P2 持续模块化与性能治理 | 🟡 已启动（第一块完成，2026-11-06）：ComposerResourcesMenu 迁出 + 守卫契约更新 + 全部不回退门禁绿；大组件余量逐块迁移中 | commit f01c452 + geometry 477/477 + recovery ok:true |
 | 发布对齐 | ⏸ 分支未合 main、无新 Release（评估属实）；P5 待用户批准 | — |
 
 ## 三、真实学习旅程验收（今日重跑，真实模型）— PASS
@@ -101,5 +101,10 @@
      removed 符号破坏调用方（render→legacy_render 检出 broken）、深度裁剪、
      干净树空影响、路由治理（403/404/400）、Agent 工具（含 project_not_found）。
 3. Remote-SSH L2 真窗口验收闭环（需要远端环境）。
-4. App.tsx / ResourcesWorkbenchView / CoachSettingsView 模块化拆解（P2，保持行为不变逐块迁移）。
+4. 🟡 **App.tsx 模块化拆解已启动**（P2 第一块，2026-11-06）：composer resources 菜单面板
+   （~110 行自包含展示切片）自 App.tsx（11857 行）迁出为
+   `components/composer/ComposerResourcesMenu.tsx`，行为逐项一致；源码守卫按迁移契约更新
+   （断言组件接线 + 限流提示行为）；不回退门禁全绿：tsc · extension tests ·
+   verify-ui-geometry 477/477 · verify:webview-recovery ok:true。后续切片
+   （composer model 菜单 ~230 行、ResourcesWorkbenchView、CoachSettingsView）逐块迁移。
 5. 分支合 main + 统一提交发布（v1.3.4 发布早于全部新能力；P5 待批准）。

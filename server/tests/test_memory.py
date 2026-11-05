@@ -51,6 +51,26 @@ class MemoryServiceTests(unittest.TestCase):
         finally:
             service.close()
 
+    def test_hashing_embedder_is_seed_stable(self) -> None:
+        """HashingEmbedder must not use builtin hash(): str hashing is
+        randomized per process (PYTHONHASHSEED), which flipped semantic
+        search ordering between CI runners (flaky '2' != '1')."""
+
+        import hashlib
+
+        from app.memory.embedder import HashingEmbedder
+
+        embedder = HashingEmbedder(dimensions=64)
+        vector = embedder.embed(["dependency injection"])[0]
+        expected_index = int.from_bytes(
+            hashlib.sha1(b"dependency").digest()[:4], "big"
+        ) % 64
+        non_zero = [i for i, component in enumerate(vector) if component > 0]
+        self.assertIn(expected_index, non_zero)
+        # Instance-independent: a fresh embedder produces identical vectors.
+        again = HashingEmbedder(dimensions=64).embed(["dependency injection"])[0]
+        self.assertEqual(vector, again)
+
     def test_structured_snapshot_contains_recent_state(self) -> None:
         memory = StructuredMemoryService()
         memory.update_profile(goal="learn fastapi")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 from importlib import import_module
@@ -14,7 +15,13 @@ class EmbeddingProvider:
 
 
 class HashingEmbedder(EmbeddingProvider):
-    """Fallback embedder using simple hashing (no external dependencies)."""
+    """Fallback embedder using simple hashing (no external dependencies).
+
+    Tokens are hashed with SHA-1, NOT the builtin ``hash()``: str hashing is
+    randomized per process (PYTHONHASHSEED), which made embeddings — and
+    therefore semantic search ordering — non-reproducible across runs and
+    runners (flaky top-k on CI).
+    """
 
     def __init__(self, *, dimensions: int = 64) -> None:
         self.dimensions = dimensions
@@ -28,7 +35,8 @@ class HashingEmbedder(EmbeddingProvider):
         if not tokens:
             return vector
         for token in tokens:
-            vector[hash(token) % self.dimensions] += 1.0
+            digest = hashlib.sha1(token.encode("utf-8")).digest()
+            vector[int.from_bytes(digest[:4], "big") % self.dimensions] += 1.0
         magnitude = math.sqrt(sum(component * component for component in vector))
         return [component / magnitude for component in vector] if magnitude else vector
 
