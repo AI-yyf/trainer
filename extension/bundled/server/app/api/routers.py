@@ -203,6 +203,7 @@ from .routes.learning import build_learning_router
 from .routes.mcp import build_mcp_router
 from .routes.memory import build_memory_router
 from .routes.plan import build_plan_router
+from .routes.project import build_project_router
 from .routes.provider import build_provider_router
 from .routes.resources import build_resources_router
 from .routes.sandbox import build_sandbox_router
@@ -14164,6 +14165,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     )
     router.include_router(build_core_router(runtime, deps, core_route_seed))
     router.include_router(build_workspace_router(runtime, deps))
+    router.include_router(build_project_router(runtime, deps))
     router.include_router(build_memory_router(runtime, deps))
     router.include_router(build_learning_router(runtime, deps))
     router.include_router(build_resources_router(runtime, deps))
