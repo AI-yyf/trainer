@@ -101,10 +101,12 @@
      removed 符号破坏调用方（render→legacy_render 检出 broken）、深度裁剪、
      干净树空影响、路由治理（403/404/400）、Agent 工具（含 project_not_found）。
 3. Remote-SSH L2 真窗口验收闭环（需要远端环境）。
-4. 🟡 **App.tsx 模块化拆解已启动**（P2 第一块，2026-11-06）：composer resources 菜单面板
-   （~110 行自包含展示切片）自 App.tsx（11857 行）迁出为
-   `components/composer/ComposerResourcesMenu.tsx`，行为逐项一致；源码守卫按迁移契约更新
-   （断言组件接线 + 限流提示行为）；不回退门禁全绿：tsc · extension tests ·
-   verify-ui-geometry 477/477 · verify:webview-recovery ok:true。后续切片
-   （composer model 菜单 ~230 行、ResourcesWorkbenchView、CoachSettingsView）逐块迁移。
+4. 🟡 **App.tsx 模块化拆解进行中**（P2，2026-11-06）：
+   - 第一块：composer resources 菜单面板（~110 行）→ `ComposerResourcesMenu.tsx`（f01c452）；
+   - 第二块：composer model 菜单面板（~333 行：模型搜索/思考强度/模型列表/已保存连接）→
+     `ComposerModelMenu.tsx`（eeadb3b）；App.tsx 11857 → 11122 行（累计 -735）；
+   - 两块均保持行为逐项一致，源码守卫按迁移契约更新（App 接线断言 + 组件行为模式）；
+   - 每块不回退门禁全绿：tsc · extension tests · verify-ui-geometry 477/477 ·
+     verify:webview-recovery ok:true · 凭据扫描 0 泄漏；
+   - 后续切片：current-context 菜单、ResourcesWorkbenchView、CoachSettingsView 逐块迁移。
 5. 分支合 main + 统一提交发布（v1.3.4 发布早于全部新能力；P5 待批准）。
