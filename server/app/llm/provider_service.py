@@ -170,10 +170,10 @@ from .provider.service_support import (
     agent_tool_events as _agent_tool_events,
 )
 from .provider.service_support import (
-    has_successful_agent_tool_result as _has_successful_agent_tool_result,
+    agentic_recoverable_grounded_stop_reason as _agentic_recoverable_grounded_stop_reason,
 )
 from .provider.service_support import (
-    agentic_recoverable_grounded_stop_reason as _agentic_recoverable_grounded_stop_reason,
+    has_successful_agent_tool_result as _has_successful_agent_tool_result,
 )
 from .provider.service_support import (
     optional_text as _optional_text,

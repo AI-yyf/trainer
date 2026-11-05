@@ -237,30 +237,22 @@ async function verifyInProgressBootstrapCoachRecovery(page, previewUrl) {
     "Checking the workspace context...",
     "Streaming recovery should keep the current streamed coach text visible.",
   );
+  // Restrained strip contract: one live stage line, no step numbers, no tool
+  // pill stacks. Completed tool details collapse into the work-trail instead.
   assertIncludes(
     surface.activityText,
-    "Step 2",
-    "Streaming recovery should restore the current agent step.",
+    "Searching resources",
+    "Streaming recovery should restore the current stage line for the running tool.",
   );
-  assertIncludes(
+  assertDoesNotInclude(
     surface.activityText,
-    "Inspect plan",
-    "Streaming recovery should restore completed tool labels.",
+    "Step",
+    "The restrained strip must not surface step numbers.",
   );
-  assertIncludes(
-    surface.activityText,
-    "Recall memory",
-    "Streaming recovery should restore running tool labels.",
-  );
-  assertIncludes(
+  assertDoesNotInclude(
     surface.activityText,
     "Plan anchor found.",
-    "Streaming recovery should restore completed tool hints.",
-  );
-  assertIncludes(
-    surface.activityText,
-    "Checking context...",
-    "Streaming recovery should keep the running-status footer attached to the coach stream.",
+    "The restrained strip must not stack completed tool hints.",
   );
   return {
     id: "bootstrap-in-progress-coach-recovery",
@@ -332,33 +324,18 @@ async function verifyInProgressPatchRefresh(page, previewUrl) {
   );
   assertIncludes(
     after.activityText,
-    "Step 3",
-    "Streaming state patches should refresh the visible agent step.",
+    "Searching resources",
+    "Streaming state patches should refresh the stage line to the newest running tool.",
   );
-  assertIncludes(
+  assertDoesNotInclude(
     after.activityText,
-    "Inspect plan",
-    "Streaming state patches should preserve prior tool pills.",
+    "Step",
+    "Patched strips must not surface step numbers.",
   );
-  assertIncludes(
-    after.activityText,
-    "Recall memory",
-    "Streaming state patches should add newly completed tool pills.",
-  );
-  assertIncludes(
-    after.activityText,
-    "Search resources",
-    "Streaming state patches should show newly running tool pills.",
-  );
-  assertIncludes(
+  assertDoesNotInclude(
     after.activityText,
     "Weak spot: recovery truth.",
-    "Streaming state patches should refresh completed tool hints from host truth.",
-  );
-  assertIncludes(
-    after.activityText,
-    "Checking context...",
-    "Streaming state patches should keep the running footer while work is still active.",
+    "Patched strips must not stack completed tool hints.",
   );
   assertEqual(
     notice.text,
@@ -409,18 +386,13 @@ async function verifyInteractiveCoachLoopProgression(page, previewUrl) {
   );
   assertIncludes(
     runningSurface.activityText,
-    "Step 1",
-    "A live coach loop should surface the current tool step.",
+    "Searching resources",
+    "A live coach loop should surface the current stage line while a tool runs.",
   );
-  assertIncludes(
+  assertDoesNotInclude(
     runningSurface.activityText,
-    "Inspect plan",
-    "A live coach loop should surface running tool labels.",
-  );
-  assertIncludes(
-    runningSurface.activityText,
-    "Checking context...",
-    "A live coach loop should show the running footer while work is active.",
+    "Step",
+    "A live coach loop must not surface step numbers in the stage line.",
   );
 
   await injectPreviewHostMessage(page, {
@@ -454,13 +426,13 @@ async function verifyInteractiveCoachLoopProgression(page, previewUrl) {
   );
   assertIncludes(
     progressedSurface.activityText,
-    "Plan anchor found.",
-    "A live coach loop should surface completed tool hints after tool results arrive.",
+    "Searching resources",
+    "A live coach loop should keep the stage line on the newest running tool.",
   );
-  assertIncludes(
+  assertDoesNotInclude(
     progressedSurface.activityText,
-    "Recall memory",
-    "A live coach loop should append later tool calls into the same activity strip.",
+    "Plan anchor found.",
+    "Completed tool hints stay out of the restrained stage line.",
   );
 
   await injectPreviewHostMessage(page, {
@@ -490,12 +462,31 @@ async function verifyInteractiveCoachLoopProgression(page, previewUrl) {
     "success",
     "Completing the coach loop should surface a success notice.",
   );
+  const leftoverStrip = await page.evaluate(() => {
+    return {
+      stripCount: document.querySelectorAll(".agent-activity-strip").length,
+      stepNumbers: Array.from(
+        document.querySelectorAll(".agent-activity-strip, .coach-working"),
+      ).filter((element) => /step/i.test(element.textContent || "")).length,
+    };
+  });
+  assertEqual(
+    leftoverStrip.stripCount,
+    0,
+    "Completing the coach loop should remove the live stage line.",
+  );
+  assertEqual(
+    leftoverStrip.stepNumbers,
+    0,
+    "No leftover stage chrome may surface step numbers after completion.",
+  );
   return {
     id: "interactive-coach-loop-progression",
     runningSurface,
     progressedSurface,
     after,
     notice,
+    leftoverStrip,
   };
 }
 
@@ -1004,6 +995,13 @@ function assertEqual(actual, expected, message) {
     throw new Error(
       `${message}\nExpected: ${JSON.stringify(expected)}\nReceived: ${JSON.stringify(actual)}`,
     );
+  }
+}
+
+function assertDoesNotInclude(actual, forbidden, message) {
+  const normalized = (actual ?? "").replace(/\s+/g, " ");
+  if (normalized.includes(forbidden)) {
+    throw new Error(`${message}\nExpected NOT to include: ${forbidden}\nReceived: ${normalized}`);
   }
 }
 

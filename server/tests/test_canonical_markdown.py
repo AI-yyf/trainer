@@ -162,7 +162,7 @@ def _pptx_bytes() -> bytes:
 def _pdf_bytes(pages: list[str]) -> bytes:
     pymupdf = pytest.importorskip("pymupdf")
     document = pymupdf.open()
-    for index, text in enumerate(pages, start=1):
+    for _index, text in enumerate(pages, start=1):
         page = document.new_page()
         page.insert_text((72, 72), text or " ", fontsize=12)
     data = document.tobytes()

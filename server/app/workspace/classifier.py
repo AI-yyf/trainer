@@ -1575,9 +1575,10 @@ def classify_heuristic(
     )
     raw = str(folder_path or "").strip()
     local_dir = False
-    if raw and "://" not in raw:
-        # expanduser() raises only non-OSError (which must propagate), so bind
-        # `path` outside the guarded calls to keep it statically bound below.
+    if raw and "://" not in raw and not remote:
+        # Remote workspace roots are never sidecar-local — not even when a
+        # drive-relative reinterpretation (Windows: "/mnt/x" -> "D:/mnt/x")
+        # happens to exist. The host snapshot is the only classification truth.
         path = Path(raw).expanduser()
         try:
             local_dir = path.exists() and path.is_dir()

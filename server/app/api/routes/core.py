@@ -57,11 +57,11 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
+from ...llm.provider.service_support import has_successful_agent_tool_result
 from ...llm.provider_service import (
     ProviderService,
     redact_provider_error,
 )
-from ...llm.provider.service_support import has_successful_agent_tool_result
 from ...llm.stream_agent_metadata import merge_stream_agent_metadata
 from ...memory.workspace_recovery import (
     PLAN_RUNTIME_KEY,

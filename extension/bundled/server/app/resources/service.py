@@ -25,16 +25,7 @@ from ..db.repository import TrainerRepository
 from ..ingest.models import IngestionRequest, IngestionResult, IngestionSummary
 from ..ingest.service import IngestService, ResourceIngestor
 from ..memory.semantic import SemanticMemory
-from .models import (
-    IndexStatus,
-    IngestStatus,
-    ResourceChunk,
-    ResourceKind,
-    ResourceRecord,
-    utc_now,
-)
 from .canonical import (
-    PARSER_BY_SOURCE_TYPE,
     CanonicalParseError,
     build_canonical_document,
     build_canonical_from_text,
@@ -43,6 +34,14 @@ from .canonical import (
     strip_front_matter,
 )
 from .canonical_store import write_canonical_artifact
+from .models import (
+    IndexStatus,
+    IngestStatus,
+    ResourceChunk,
+    ResourceKind,
+    ResourceRecord,
+    utc_now,
+)
 from .search import SearchFilters, SearchIndex, SearchResponse
 from .source_governance import (
     commercial_reuse_eligibility_reason_codes,
@@ -55,6 +54,7 @@ from .source_governance import (
     is_commercial_reuse_eligible as source_is_commercial_reuse_eligible,
 )
 from .versioning import ResourceVersionStore, provenance_payload
+
 
 def _count_markdown_tables(body: str) -> int:
     """Count Markdown table blocks (header row + separator row)."""
@@ -1397,7 +1397,7 @@ class ResourceService:
         """Stage 3-4: write the canonical Markdown, original and assets."""
 
         results: list[dict[str, Any]] = []
-        workspace_root = self._resolved_workspace_path(workspace_id)
+        workspace_root = self._canonical_writable_root(workspace_id)
         for resource_id in self._normalized_resource_ids(resource_ids):
             item: dict[str, Any] = {"resource_id": resource_id, "ok": False}
             try:
@@ -1476,6 +1476,24 @@ class ResourceService:
             )
             results.append(item)
         return results
+
+    def _canonical_writable_root(self, workspace_id: str) -> Path | None:
+        """Return the workspace root only when it is a real local directory.
+
+        Remote SSH roots are registered by path but never exist on the sidecar
+        disk. Writing canonical artifacts under a drive-relative reinterpretation
+        of such a path would fabricate local state for a remote workspace.
+        """
+
+        resolved = self._resolved_workspace_path(workspace_id)
+        if resolved is None:
+            return None
+        try:
+            if resolved.exists() and resolved.is_dir():
+                return resolved
+        except OSError:
+            return None
+        return None
 
     def _normalized_resource_ids(self, resource_ids: list[str]) -> list[str]:
         normalized: list[str] = []
@@ -1603,7 +1621,7 @@ class ResourceService:
                 version_id=version_id,
                 content_hash=f"sha256:{content_hash}" if content_hash else "",
             )
-        except CanonicalParseError as exc:
+        except CanonicalParseError:
             return None
         return self._canonical_result(
             workspace_id,
