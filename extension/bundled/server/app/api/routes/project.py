@@ -126,15 +126,23 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         return _run_import(payload, repo_url="")
 
     def _resolve_project_repo_root(
-        workspace_id: str, payload: dict[str, Any]
+        workspace_id: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        resource_id: str = "",
+        path: str = "",
     ) -> Any:
         """Locate an imported repo root from resource_id (preferred) or path.
 
         Governance: a bare ``path`` is only honored inside the workspace's
         managed sandbox lane — never an arbitrary user directory.
+        Accepts either a payload dict (POST) or explicit strings (GET query).
         """
 
-        resource_id = str(payload.get("resource_id") or "").strip()
+        if payload is not None:
+            resource_id = str(payload.get("resource_id") or "").strip()
+            path = str(payload.get("path") or "").strip()
+        resource_id = str(resource_id or "").strip()
         if resource_id:
             repository = getattr(runtime.resource_service, "repository", None)
             resource = None
@@ -149,7 +157,7 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             if not source:
                 raise HTTPException(status_code=422, detail="Project resource has no source path.")
             return Path(source)
-        local_path = str(payload.get("path") or "").strip()
+        local_path = str(path or "").strip()
         if not local_path:
             raise HTTPException(status_code=400, detail="resource_id or path is required.")
         root = Path(local_path)
@@ -159,7 +167,7 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         except (OSError, ValueError) as exc:
             raise HTTPException(
                 status_code=403,
-                detail="Overview for a bare path is only available inside Trainer's managed project lane.",
+                detail="Project analysis for a bare path is only available inside Trainer's managed project lane.",
             ) from exc
         return root
 
@@ -227,6 +235,46 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             "resource_id": resource_id,
             "artifact_path": artifact_path.as_posix(),
             "content": artifact_path.read_text(encoding="utf-8"),
+        }
+
+    @router.get("/project/impact")
+    def project_impact(
+        workspace_id: str,
+        resource_id: str = "",
+        path: str = "",
+        since: str = "",
+        depth: int = 2,
+    ) -> dict[str, object]:
+        """调用链/改动影响面 — deterministic caller→callee edges + git-diff blast radius."""
+
+        from ...project.callgraph import build_call_graph, compute_change_impact
+        from ...project.symbols import build_repo_index
+
+        if not workspace_id.strip():
+            raise HTTPException(status_code=400, detail="workspace_id is required.")
+        repo_root = _resolve_project_repo_root(
+            workspace_id.strip(),
+            resource_id=resource_id,
+            path=path,
+        )
+        if not repo_root.is_dir():
+            raise HTTPException(status_code=422, detail=f"Project directory is missing: {repo_root}")
+        if not resource_id.strip() and not path.strip():
+            raise HTTPException(status_code=400, detail="resource_id or path is required.")
+
+        repo_index = build_repo_index(repo_root)
+        graph = build_call_graph(repo_root, repo_index)
+        impact = compute_change_impact(repo_root, repo_index, graph, since=since, depth=depth)
+        payload = impact.to_payload()
+        return {
+            "ok": True,
+            "workspace_id": workspace_id.strip(),
+            "resource_id": resource_id.strip() or None,
+            "repo_root": str(repo_root),
+            "file_count": len(repo_index.files),
+            "symbol_count": len(repo_index.symbols),
+            "callgraph": graph.to_payload(limit=80),
+            **payload,
         }
 
     @router.get("/project/import/status")

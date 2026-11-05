@@ -945,6 +945,41 @@ async def _handle_read_project_symbol(context: ToolContext, args: dict[str, Any]
     }
 
 
+async def _handle_analyze_project_impact(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """项目问答: 改动影响面 — changed symbols → affected callers (deterministic)."""
+
+    resolved = _resolve_project_resource(context, args)
+    if not resolved.get("ok"):
+        return resolved
+    resource = resolved["resource"]
+    source = Path(str(getattr(resource, "source", "") or ""))
+    if not source.is_dir():
+        return {"ok": False, "error": "repo_missing", "detail": f"Project directory is missing: {source}"}
+    since = str(args.get("since") or "").strip()
+    depth_raw = args.get("depth", 2)
+    try:
+        depth = max(1, min(int(depth_raw), 3))
+    except Exception:
+        depth = 2
+    try:
+        from ..project.callgraph import build_call_graph, compute_change_impact
+        from ..project.symbols import build_repo_index
+
+        repo_index = build_repo_index(source)
+        graph = build_call_graph(source, repo_index)
+        impact = compute_change_impact(source, repo_index, graph, since=since, depth=depth)
+    except (OSError, ValueError, RuntimeError) as exc:
+        return {"ok": False, "error": "impact_failed", "detail": str(exc)}
+    payload = impact.to_payload()
+    return {
+        "ok": True,
+        "project": str(getattr(resource, "name", "") or ""),
+        "resource_id": str(resource.id),
+        "callgraph": graph.to_payload(limit=40),
+        **payload,
+    }
+
+
 # --- search_learning_materials -----------------------------------------
 
 
@@ -5866,6 +5901,37 @@ def build_default_tool_registry(
                 "required": ["name"],
             },
             handler=_handle_read_project_symbol,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="analyze_project_impact",
+            description=(
+                "Compute the change impact of an imported project: git diff "
+                "(working tree, or a since-commit) → changed symbols → affected "
+                "callers with hop distance, including removed symbols and their "
+                "broken callers. Use to answer 'what does changing X break' with "
+                "deterministic file:line evidence."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "since": _string(
+                        "Optional git ref to diff against (default: working tree vs HEAD)."
+                    ),
+                    "depth": {
+                        "type": "integer",
+                        "description": "Caller-closure depth (1-3, default 2).",
+                        "minimum": 1,
+                        "maximum": 3,
+                        "default": 2,
+                    },
+                    "resource_id": _string("Optional imported-project resource id."),
+                    "project": _string("Optional project name substring to disambiguate."),
+                },
+            },
+            handler=_handle_analyze_project_impact,
         )
     )
 
