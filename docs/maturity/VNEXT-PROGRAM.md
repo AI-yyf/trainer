@@ -156,10 +156,13 @@ P1–P3 追加基准（立项时定义输入/输出/阈值）：
 
 ## 九、本轮已完成 vs 下一轮入口
 
-**已完成（本轮，全部有实测证据）：** P0 三项修复（远程隔离/恢复契约/Ruff）、导入五阶段、200%×8 语言门禁、真实对话状态门禁、规范 Markdown 阅读/搜索/引用全链路。
+**已完成（本轮，全部有实测证据）：** P0 三项修复（远程隔离/恢复契约/Ruff）、导入五阶段、200%×8 语言门禁、真实对话状态门禁、规范 Markdown 阅读/搜索/引用全链路；bench:token（分层 80×↓）、bench:incremental（二次 ≤20%）、bench:provenance（可验证率 ≥95%）。
+
+**上一轮已完成（P2/P3 深化，server 3817 passed 实测）：**
+1. P2 深化 ✅ — `project/overview.py`：确定性项目概览 Artifact（模块表 + import 依赖图 + mermaid 架构图 + 入口/热点），`POST/GET /project/overview`；Git SHA→Evidence：evidence 经 `resolve_resource_git_sha` 服务端从 symbol-index artifact 取 commit（`resource_git_sha`），客户端不可伪造；项目问答 Agent 工具 `list_project_modules` / `read_project_symbol`（读缓存 artifact，优先零解析）。测试 `tests/test_project_overview.py`（5 例）。
+2. P3 深化 ✅ — `/skill/*` runtime API：register（内联）/ import（SKILL.md 外部导入 + `scan_skill_security` 供应链扫描，命中即强制 reviewed=False）/ review（人工审核唯一入口 `mark_reviewed`）/ activate（action 未审核 403 `skill_not_reviewed`；body 仅激活时加载）/ deactivate / list / status；注册表持久化于 `data_root/skills`，跨工作区共享、跨重启保留。测试 `tests/test_skill_api.py`（3 例，含重启持久化）。
 
 **下一轮入口（按序）：**
-1. P2 深化：项目概览 Artifact（架构图/模块依赖图）→ Evidence 表；项目问答 Agent 工具（read_project_symbol / list_project_modules）（D）。
-2. P3 Skill 生态深化：SKILL.md 外部 Skill 导入 + 供应链安全审查 + cross-workspace Skill 激活 runtime API（F）。
-3. P4：真实 Provider key 验证 + 教学体验打磨（需要用户提供 key）。
-3. P2 立项：GitHub 仓库导入（clone → Source 登记 → 符号索引）设计稿（D）。
+1. P4：真实 Provider key 验证 + 教学体验打磨（需要用户提供 key）。
+2. P5：发布 tag + VSIX 发布 + 安全审计 + 多平台发布证据。
+3. bench:incremental/provenance 接入 CI 门禁（当前为可重复 pytest 基准）。

@@ -1811,6 +1811,9 @@ class TrainerRuntime:
         return authority
 
     cost_ledger: Any | None = None
+    # P3 Skill 生态: lazily created cross-workspace SkillRegistry
+    # (routes/skills.py); persisted under data_root/skills.
+    skill_registry: Any | None = None
     def register_workspace_sandbox_root(
         self, workspace_id: str, sandbox_root_path: str | None
     ) -> None:
