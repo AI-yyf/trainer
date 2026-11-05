@@ -56,7 +56,10 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportFiles\?: \(\) => void;/);
   assert.match(viewSource, /onImportFolder\?: \(\) => void;/);
   assert.match(viewSource, /onImportUrl\?: \(\) => void;/);
-  assert.match(viewSource, /onOpenResource\?: \(resourceId: string\) => void;/);
+  assert.match(
+    viewSource,
+    /onOpenResource\?: \(resourceId: string, options\?: \{ openOriginal\?: boolean; line\?: number \}\) => void;/,
+  );
   assert.match(viewSource, /onRefreshResources\?: \(\) => void \| Promise<void>;/);
   assert.match(inlineCopy, /pendingIndex: \{ zh: "\\u5f85\\u7d22\\u5f15", en: "Waiting to be indexed" \}/);
   assert.match(viewSource, /resource\.indexState === "pending"/);
@@ -73,8 +76,11 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportFiles/);
   assert.match(viewSource, /onImportFolder/);
   assert.match(viewSource, /onImportUrl/);
-  assert.match(viewSource, /const openResourceInVsCode = \(resource: ResourceRecord\) =>/);
-  assert.match(viewSource, /onOpenResource\?\.\(resource\.id\)/);
+  assert.match(
+    viewSource,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; line\?: number \},\s*\) =>/,
+  );
+  assert.match(viewSource, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
   assert.match(viewSource, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
   assert.match(viewSource, /function buildResourceTree\(/);
   assert.match(viewSource, /sandboxState\?\.nodes/);
@@ -240,7 +246,7 @@ test('Resources makes library writes visibly unavailable without blocking search
   assert.match(viewSource, /function chooseWorkspaceRootLabel\(/);
 
   assert.match(viewSource, /onSearchResources\(\{ query: trimmedQuery, requestId \}\)/);
-  assert.match(viewSource, /onOpenResource\?\.\(resource\.id\)/);
+  assert.match(viewSource, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
   assert.match(appSource, /const resourceWriteAccess = trainerWorkspaceAdmission\s*\?/);
   assert.match(appSource, /allowed: trainerWorkspaceAdmission\.status === "managed"/);
   assert.match(appSource, /trainerWorkspaceAdmission\.status === "root-missing"\s*\? t\.workspaceAdmissionRootMissingDetail/);

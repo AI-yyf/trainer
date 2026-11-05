@@ -120,20 +120,39 @@ function createThemeFixture() {
   return { body, observers, root, theme: module.exports };
 }
 
-test('theme bridge preserves host variable indirection instead of freezing computed colors', () => {
+test('theme bridge preserves host variable indirection and writes no colours', () => {
   const themeSource = readSource(themeSourcePath);
   const stylesSource = readSource(stylesSourcePath);
 
-  assert.match(themeSource, /--trainer-fallback-bg-0/);
+  // The bridge only mirrors theme kind; colours stay live CSS indirection.
+  assert.match(themeSource, /root\.dataset\.theme = resolvedTheme/);
+  assert.match(themeSource, /root\.style\.colorScheme = resolvedTheme/);
+  assert.doesNotMatch(themeSource, /--trainer-fallback-/);
   assert.doesNotMatch(themeSource, /getComputedStyle/);
+
   assert.match(stylesSource, /:root,\s*body\s*\{/);
   assert.match(stylesSource, /--bg-0:\s*var\(--vscode-sideBar-background,/);
-  assert.match(stylesSource, /--accent:\s*var\(--vscode-button-background,/);
-  assert.match(stylesSource, /--focus-ring:\s*var\(--vscode-focusBorder,/);
+  // Accent/focus derive from theme colours, never from the editor's blue
+  // button/link tokens and never from a hardcoded hue.
+  assert.match(stylesSource, /--accent:\s*color-mix\([\s\S]*?var\(--vscode-foreground/);
+  assert.match(stylesSource, /--focus-ring:\s*var\(--vscode-focusBorder/);
+  assert.doesNotMatch(stylesSource, /--accent:\s*var\(--vscode-button-background/);
+  assert.doesNotMatch(stylesSource, /--bg-3:\s*var\(--vscode-list-activeSelectionBackground/);
   assert.match(stylesSource, /--success:\s*var\(--vscode-testing-iconPassed,/);
   assert.match(stylesSource, /--warning:\s*var\(--vscode-editorWarning-foreground,/);
   assert.match(stylesSource, /--danger:\s*var\(--vscode-errorForeground,/);
   assert.doesNotMatch(stylesSource, /--accent:\s*#/);
+  // No hardcoded hex colours anywhere in the design-token section.
+  assert.doesNotMatch(stylesSource, /#[0-9a-fA-F]{3,8}\b/);
+  // Primary CTAs are the editor's own buttons, not a palette fill.
+  assert.match(
+    stylesSource,
+    /\.button--accent,\s*\n\.button--primary\s*\{[^}]*background:\s*var\(--vscode-button-secondaryBackground/,
+  );
+  assert.doesNotMatch(
+    stylesSource,
+    /\.button--accent,\s*\n\.button--primary\s*\{[^}]*var\(--vscode-button-background/,
+  );
 });
 
 test('host-themed interactive states avoid fixed white and retain visible keyboard focus', () => {
@@ -181,8 +200,8 @@ test('startup installs host theme observation for VS Code family theme changes',
   assert.match(themeSource, /vscode-high-contrast-light/);
   assert.match(themeSource, /data-vscode-theme-kind/);
   assert.match(themeSource, /followHostTheme\s*\? resolveHostThemeName\(activeFallbackTheme\)\s*: activeFallbackTheme/);
-  assert.match(themeSource, /applyFallbackTheme\(resolvedTheme\)/);
   assert.match(themeSource, /root\.dataset\.theme = resolvedTheme/);
+  assert.match(themeSource, /root\.style\.colorScheme = resolvedTheme/);
   assert.match(mainSource, /installWorkbenchHostThemeBridge\(\)/);
 });
 
@@ -195,13 +214,12 @@ test('host light classes and theme kinds switch missing-token fallbacks to light
 
     theme.applyWorkbenchTheme('dark');
     theme.installWorkbenchHostThemeBridge();
-    assert.equal(root.style.values['--trainer-fallback-bg-1'], 'dark-bg1');
+    assert.equal(root.dataset.theme, 'dark');
+    assert.equal(root.style.colorScheme, 'dark');
 
     body.attributes[attribute] = value;
     observers.at(-1).callback();
 
-    assert.equal(root.style.values['--trainer-fallback-bg-0'], 'light-bg0');
-    assert.equal(root.style.values['--trainer-fallback-bg-1'], 'light-bg1');
     assert.equal(root.dataset.theme, 'light');
     assert.equal(root.style.colorScheme, 'light');
   }
@@ -212,9 +230,13 @@ test('selected fallback remains in effect when no host theme category is present
 
   theme.applyWorkbenchTheme('light');
 
-  assert.equal(root.style.values['--trainer-fallback-bg-0'], 'light-bg0');
   assert.equal(root.dataset.theme, 'light');
   assert.equal(root.style.colorScheme, 'light');
+  assert.deepEqual(
+    Object.keys(root.style.values).filter((name) => name.startsWith('--trainer-fallback-')),
+    [],
+    'the bridge must not write colour values',
+  );
 });
 
 test('explicit themes override semantic tokens on root and body without changing host variables', () => {
@@ -225,8 +247,8 @@ test('explicit themes override semantic tokens on root and body without changing
     theme.applyWorkbenchTheme(selected, false);
     theme.installWorkbenchHostThemeBridge();
     for (const element of [root, body]) {
-      assert.equal(element.style.values['--bg-0'], `${selected}-bg0`);
-      assert.equal(element.style.values['--fg-0'], `${selected}-fg0`);
+      assert.equal(element.style.values['--bg-0'], undefined);
+      assert.equal(element.style.values['--fg-0'], undefined);
     }
     body.attributes.class = host === 'vscode-dark' ? 'vscode-light' : 'vscode-dark';
     observers.at(-1).callback();

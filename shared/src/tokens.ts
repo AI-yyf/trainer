@@ -1,63 +1,16 @@
-const lightTheme = {
-  bg0: "#ffffff",
-  bg1: "#f6f6f6",
-  bg2: "#ededed",
-  bg3: "#dcdcdc",
-  fg0: "#1f1f1f",
-  fg1: "#3b3b3b",
-  fgMuted: "#6a6a6a",
-  line: "#d2d2d2",
-  accent: "#7b6f5d",
-  accentSoft: "rgba(123, 111, 93, 0.08)",
-  success: "#107c41",
-  warning: "#8a6d1f",
-  danger: "#c42b1c",
-  focusRing: "rgba(123, 111, 93, 0.24)",
-  overlay: "rgba(0, 0, 0, 0.22)",
-  shadowSoft: "none",
-  colorScheme: "light",
-} as const;
-
-const darkTheme = {
-  bg0: "#121212",
-  bg1: "#1a1a1a",
-  bg2: "#222222",
-  bg3: "#292929",
-  fg0: "#efefef",
-  fg1: "#cdcdcd",
-  fgMuted: "#a0a0a0",
-  line: "#343434",
-  accent: "#9d907a",
-  accentSoft: "rgba(157, 144, 122, 0.1)",
-  success: "#4ec9b0",
-  warning: "#d7ba7d",
-  danger: "#f48771",
-  focusRing: "rgba(157, 144, 122, 0.28)",
-  overlay: "rgba(7, 7, 7, 0.58)",
-  shadowSoft: "none",
-  colorScheme: "dark",
-} as const;
-
+/**
+ * Trainer design tokens.
+ *
+ * Colour is intentionally absent here. Every surface, text, border, accent and
+ * semantic colour resolves from the active VS Code theme (`--vscode-*`), with
+ * CSS system colours (`Canvas`, `CanvasText`, `GrayText`, …) as the fallback
+ * for the standalone browser preview. Nothing in the product hardcodes a hue,
+ * so Trainer follows any VS Code theme — light, dark, high contrast or custom.
+ *
+ * Only geometry, spacing and typography scale live in TypeScript, because
+ * those values are layout decisions rather than theme decisions.
+ */
 export const workbenchTokens = {
-  color: {
-    bg0: darkTheme.bg0,
-    bg1: darkTheme.bg1,
-    bg2: darkTheme.bg2,
-    bg3: darkTheme.bg3,
-    fg0: darkTheme.fg0,
-    fg1: darkTheme.fg1,
-    fgMuted: darkTheme.fgMuted,
-    line: darkTheme.line,
-    accent: darkTheme.accent,
-    success: darkTheme.success,
-    warning: darkTheme.warning,
-    danger: darkTheme.danger,
-    focusRing: darkTheme.focusRing,
-  },
-  themes: {
-    light: lightTheme,
-    dark: darkTheme,
-  },
   radius: {
     s: "4px",
     m: "6px",
@@ -83,5 +36,4 @@ export const workbenchTokens = {
 } as const;
 
 export type WorkbenchTokens = typeof workbenchTokens;
-export type WorkbenchThemeName = keyof typeof workbenchTokens.themes;
-export type WorkbenchThemeTokens = (typeof workbenchTokens.themes)[WorkbenchThemeName];
+export type WorkbenchThemeName = "light" | "dark";

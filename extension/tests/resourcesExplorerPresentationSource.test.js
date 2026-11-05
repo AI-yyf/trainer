@@ -37,7 +37,8 @@ test('resource row click opens VS Code and does not switch the sidebar to the Re
   const end = view.indexOf('const focusFirstImportMenuItem', start);
   assert.ok(start >= 0 && end > start, 'expected the openResourceInVsCode handler');
   const handler = view.slice(start, end);
-  assert.match(handler, /onOpenResource\?\.\(resource\.id\)/);
+  assert.match(handler, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
+  assert.match(handler, /resource\.location\?\.line_start/);
   assert.doesNotMatch(handler, /setSelectedResourceId/);
   assert.doesNotMatch(handler, /setResourceDetail/);
   assert.match(view, /onClick=\{\(\) => onOpen\(node\.resource!\)\}/);
@@ -70,7 +71,10 @@ test('resource tree uses the vendored Material Icon Theme assets', () => {
 
 test('opening a resource editor tab resets the cursor to the top of the file', () => {
   const commands = fs.readFileSync(commandPath, 'utf8');
-  assert.match(commands, /selection: new vscode\.Range\(0, 0, 0, 0\)/);
+  assert.match(
+    commands,
+    /selection: new vscode\.Range\(requestedLine \? requestedLine - 1 : 0, 0, requestedLine \? requestedLine - 1 : 0, 0\)/,
+  );
   assert.match(commands, /preview: false/);
   assert.match(commands, /preserveFocus: false/);
 });

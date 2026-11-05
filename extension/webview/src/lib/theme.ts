@@ -1,9 +1,14 @@
-import {
-  workbenchTokens,
-  type WorkbenchThemeName,
-  type WorkbenchThemeTokens,
-} from "../../../../shared/src/tokens";
+import { workbenchTokens, type WorkbenchThemeName } from "../../../../shared/src/tokens";
 
+/**
+ * Trainer follows the host theme.
+ *
+ * Colour always comes from the VS Code theme variables (`--vscode-*`) declared
+ * in `styles/sections/trainer-design-tokens-base-styles.css`; for the browser
+ * preview those resolve to CSS system colours (`Canvas`, `CanvasText`, …).
+ * This bridge only mirrors which theme kind is active (light/dark) and keeps
+ * the layout tokens installed. It never writes colour values.
+ */
 const rootVariableEntries = [
   ["--radius-s", workbenchTokens.radius.s],
   ["--radius-m", workbenchTokens.radius.m],
@@ -16,24 +21,6 @@ const rootVariableEntries = [
   ["--space-6", workbenchTokens.space[6]],
   ["--line-height-body", workbenchTokens.type.lineHeight],
 ] as const;
-
-const fallbackVariableEntries = [
-  ["--trainer-fallback-bg-0", "bg0"],
-  ["--trainer-fallback-bg-1", "bg1"],
-  ["--trainer-fallback-bg-2", "bg2"],
-  ["--trainer-fallback-bg-3", "bg3"],
-  ["--trainer-fallback-fg-0", "fg0"],
-  ["--trainer-fallback-fg-1", "fg1"],
-  ["--trainer-fallback-fg-muted", "fgMuted"],
-  ["--trainer-fallback-line", "line"],
-  ["--trainer-fallback-accent", "accent"],
-  ["--trainer-fallback-success", "success"],
-  ["--trainer-fallback-warning", "warning"],
-  ["--trainer-fallback-danger", "danger"],
-  ["--trainer-fallback-focus-ring", "focusRing"],
-  ["--trainer-fallback-overlay", "overlay"],
-  ["--trainer-fallback-shadow-soft", "shadowSoft"],
-] as const satisfies ReadonlyArray<readonly [string, keyof WorkbenchThemeTokens]>;
 
 let activeFallbackTheme: WorkbenchThemeName = "dark";
 let followHostTheme = true;
@@ -89,32 +76,6 @@ function resolveHostThemeName(fallbackTheme: WorkbenchThemeName): WorkbenchTheme
   return fallbackTheme;
 }
 
-function applyFallbackTheme(themeName: WorkbenchThemeName): void {
-  const fallback = workbenchTokens.themes[themeName];
-  const root = document.documentElement;
-
-  for (const [name, tokenName] of fallbackVariableEntries) {
-    setStyleProperty(root.style, name, fallback[tokenName]);
-  }
-}
-
-function applySemanticTheme(themeName: WorkbenchThemeName): void {
-  const tokens = workbenchTokens.themes[themeName];
-  // Both elements declare semantic variables in CSS. Override only Trainer's
-  // variables for an explicit choice; auto keeps VS Code's live indirection.
-  for (const element of [document.documentElement, document.body]) {
-    if (!element) continue;
-    for (const [fallbackName, tokenName] of fallbackVariableEntries) {
-      const name = fallbackName.replace("--trainer-fallback-", "--");
-      if (followHostTheme) {
-        element.style.removeProperty(name);
-      } else {
-        setStyleProperty(element.style, name, tokens[tokenName]);
-      }
-    }
-  }
-}
-
 function syncHostTheme(): void {
   const resolvedTheme = followHostTheme
     ? resolveHostThemeName(activeFallbackTheme)
@@ -122,9 +83,9 @@ function syncHostTheme(): void {
   const root = document.documentElement;
 
   root.dataset.theme = resolvedTheme;
+  // `color-scheme` is what makes the CSS system-colour fallbacks follow the
+  // chosen theme in the standalone preview; inside VS Code the host sets it.
   root.style.colorScheme = resolvedTheme;
-  applyFallbackTheme(resolvedTheme);
-  applySemanticTheme(resolvedTheme);
 }
 
 export function applyWorkbenchTheme(themeName: WorkbenchThemeName, followHost = true): void {

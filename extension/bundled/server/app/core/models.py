@@ -3148,6 +3148,14 @@ class ResourceIndexRequest(BaseModel):
     enable_network: bool | None = None
 
 
+class ResourceCanonicalizeRequest(BaseModel):
+    """Batch canonical-document stages for imported library resources."""
+
+    session_id: str | None = None
+    workspace_id: str | None = None
+    resource_ids: list[str] = Field(default_factory=list)
+
+
 class ResourceDigestRequest(BaseModel):
     """One-resource teaching digestion (总结/预备题目/直观案例/常见误区)."""
 

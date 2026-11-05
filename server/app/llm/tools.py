@@ -3778,7 +3778,7 @@ async def _resolve_excerpt_resource(context: ToolContext, args: dict[str, Any]) 
         return None, "registry_unavailable"
     resource_id = str(args.get("resource_id") or "").strip()
     if resource_id:
-        record = registry.get(resource_id)
+        record = registry.get(resource_id) or _repository_resource(context, resource_id)
         if record is None:
             return None, "resource_not_found"
         return record, None
@@ -3806,10 +3806,101 @@ async def _resolve_excerpt_resource(context: ToolContext, args: dict[str, Any]) 
         if candidate_id is None and isinstance(first, dict):
             candidate_id = first.get("resource_id") or first.get("id")
         if candidate_id:
-            record = registry.get(str(candidate_id))
+            record = registry.get(str(candidate_id)) or _repository_resource(
+                context, str(candidate_id)
+            )
     if record is None:
         return None, "no_resource_match"
     return record, None
+
+
+def _canonical_excerpt_fallback(
+    context: ToolContext,
+    record: Any,
+    args: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Read excerpts from the durable canonical Markdown after a restart.
+
+    The in-process chunk registry is empty on a fresh sidecar, but the Markdown
+    digest on disk (and the persisted search index) still holds the text.
+    """
+
+    service = getattr(context.runtime, "resource_service", None)
+    reader = getattr(service, "read_canonical_text", None)
+    if not callable(reader):
+        return None
+    try:
+        text = reader(context.workspace_id, str(getattr(record, "id", "") or ""))
+    except Exception:
+        return None
+    if not isinstance(text, str) or not text.strip():
+        return None
+    try:
+        max_chars = max(200, min(int(args.get("chars", 1600) or 1600), 4000))
+    except Exception:
+        max_chars = 1600
+    anchor = str(args.get("anchor_id") or "").strip()
+    excerpt = text.strip()
+    start_line = 1
+    page_match = re.search(r"page(\d+)@", anchor)
+    if page_match:
+        page = page_match.group(1)
+        marker = f"<!-- page: {page} -->"
+        position = excerpt.find(marker)
+        if position >= 0:
+            start_line = excerpt.count("\n", 0, position) + 1
+            following = excerpt.find("<!-- page:", position + len(marker))
+            excerpt = excerpt[position + len(marker) : following if following > 0 else None]
+    else:
+        line_match = re.search(r"@(\d+)$", anchor)
+        if line_match:
+            start_line = max(1, int(line_match.group(1)))
+            lines = excerpt.splitlines()
+            excerpt = "\n".join(lines[start_line - 1 :])
+    excerpt = excerpt.strip()
+    if len(excerpt) > max_chars:
+        excerpt = excerpt[:max_chars] + "…"
+    return {
+        "ok": True,
+        "tool": "read_resource_excerpt",
+        "read_only": True,
+        "resource": _resource_display(record),
+        "excerpts": [
+            {
+                "anchor_id": anchor or f"¶chunk:0@{start_line}",
+                "paragraph_anchor": anchor or None,
+                "text": excerpt,
+                "start_line": start_line,
+                "end_line": None,
+                "citation_id": None,
+            }
+        ],
+        "note": (
+            "Excerpts come from the canonical Markdown document; the chunk "
+            "registry was empty (for example after a sidecar restart)."
+        ),
+    }
+
+
+def _repository_resource(context: ToolContext, resource_id: str) -> Any | None:
+    """Look up a resource in durable storage when the in-memory registry is cold.
+
+    A restarted sidecar starts with an empty registry; the repository still has
+    every resource record, so read-only tools keep working.
+    """
+
+    repository = getattr(context.runtime, "repository", None)
+    lister = getattr(repository, "list_resources", None)
+    if not callable(lister):
+        return None
+    try:
+        records = lister(context.workspace_id)
+    except Exception:
+        return None
+    for item in records or []:
+        if str(getattr(item, "id", "") or "") == resource_id:
+            return item
+    return None
 
 
 def _resource_fragments(resource: Any) -> list[dict[str, Any]]:
@@ -3903,6 +3994,9 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
     registry = getattr(resource_service, "registry", None)
     chunks = registry.list_chunks(record.id) if registry is not None else []
     if not chunks:
+        fallback_text = _canonical_excerpt_fallback(context, record, args)
+        if fallback_text:
+            return fallback_text
         return {
             "ok": False,
             "error": "index_missing",

@@ -2687,7 +2687,7 @@ export function App() {
   const leftoverTrainingHandoffChromeNotLive = leftoverTrainingHandoffChromeIsNotLive(
     leftoverChromeIdentity,
   ) && !independentTrainingSelectionLive;
-  const leftoverSandboxPreviewNotLive = leftoverResourceSandboxPreviewIsNotLive(
+  const leftoverSandboxPreviewNotLive = !data.liveResourceFocus && leftoverResourceSandboxPreviewIsNotLive(
     leftoverChromeIdentity,
   );
   const leftoverResourceSelectedDetailNotLive = leftoverResourceSelectedDetailIsNotLive(
@@ -10133,6 +10133,7 @@ export function App() {
           deletedResources={data.deletedResources}
           sandboxState={liveSandboxState}
           sandboxPreview={leftoverSandboxPreviewNotLive ? undefined : data.memory.sandboxPreview}
+          resourceDocument={data.resourceDocument}
           resourceWriteAccess={resourceWriteAccess}
           onChooseWorkspaceRoot={
             trainerWorkspaceAdmission?.status === "root-missing"
@@ -10244,10 +10245,10 @@ export function App() {
           isLiveBrowserPreview={isBrowserPreview && !browserPreviewFixture}
           onExpandToEditor={canOpenInEditor ? () => openViewInEditor("resources") : undefined}
           expandToEditorLabel={expandToEditorLabel}
-          onOpenResource={(resourceId) =>
+          onOpenResource={(resourceId, options) =>
             postMessage({
               type: "resource/open",
-              payload: { resourceId },
+              payload: { resourceId, ...options },
             })
           }
           onPreviewResource={

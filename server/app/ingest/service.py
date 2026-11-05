@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from importlib import import_module
 from pathlib import Path
 from typing import Protocol
 
@@ -503,7 +504,13 @@ def _extract_url(
             {"status": "failed", "reason_code": exc.code},
         )
     raw_text = response.body.decode("utf-8", errors="ignore")
-    extracted = _html_to_text(raw_text)
+    # Prefer a real Markdown projection (headings, lists, tables, links); the
+    # shared converter falls back to a block-aware extractor when the optional
+    # trafilatura pass concatenates blocks or is unavailable.
+    from app.resources.canonical import html_to_markdown
+
+    markdown_text, _html_warnings = html_to_markdown(raw_text, response.final_url)
+    extracted = markdown_text.strip() or _html_to_text(raw_text)
     return (
         extracted or raw_text,
         [],
@@ -517,7 +524,7 @@ def _extract_url(
 
 
 def _html_to_text(raw: str) -> str:
-    without_script = re.sub(r"<(script|style)[^>]*>.*?</\\1>", " ", raw, flags=re.IGNORECASE | re.DOTALL)
+    without_script = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", raw, flags=re.IGNORECASE | re.DOTALL)
     no_tags = re.sub(r"<[^>]+>", " ", without_script)
     compact = re.sub(r"\\s+", " ", no_tags).strip()
     return compact[:8000]

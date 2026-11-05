@@ -37,7 +37,11 @@
     "verify:server-pyright": "node ./scripts/run-server-pyright.mjs",
     "test:browser-focus-e2e": "node ./scripts/run-browser-focus-e2e.mjs",
     "test:structural-journey": "node ./scripts/run-structural-journey.mjs",
-    "test:real-teaching-journey": "node ./scripts/run-real-teaching-journey.mjs"
+    "test:real-teaching-journey": "node ./scripts/run-real-teaching-journey.mjs",
+    "verify:canonical-gui": "node ./scripts/verify-canonical-gui.mjs",
+    "verify:coach-gui": "node ./scripts/verify-coach-gui.mjs",
+    "verify:ui-geometry": "node ./scripts/verify-ui-geometry.mjs",
+    "verify:i18n-zoom": "node ./scripts/verify-i18n-zoom-gui.mjs"
   },
   "repository": {
     "type": "git",

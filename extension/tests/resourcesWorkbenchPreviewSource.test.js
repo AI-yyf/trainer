@@ -32,8 +32,11 @@ test('resource detail shows a governed indexed preview while delegating full ren
   const resourcesEnd = appSource.indexOf('/>', resourcesStart);
   const resourcesView = appSource.slice(resourcesStart, resourcesEnd);
 
-  assert.match(source, /const openResourceInVsCode = \(resource: ResourceRecord\) =>/);
-  assert.match(source, /onOpenResource\?\.\(resource\.id\)/);
+  assert.match(
+    source,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; line\?: number \},\s*\) =>/,
+  );
+  assert.match(source, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
   assert.match(source, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
   assert.match(source, /openInVsCode/);
   assert.match(source, /<dl className="resources-knowledge__facts">/);
@@ -45,13 +48,21 @@ test('resource detail shows a governed indexed preview while delegating full ren
   assert.match(source, /resources-knowledge__preview-summary/);
   assert.match(source, /sandboxPreview\?: SandboxPreview/);
   assert.match(source, /onPreviewResource\?: \(resourceId: string\)/);
+  // Canonical documents render their Markdown as soon as the reader opens;
+  // the explicit Preview action stays available for a manual refresh.
+  assert.match(source, /autoPreviewedResourceRef/);
+  assert.match(source, /onPreviewResource\(selectedResource\.id\)/);
+  // The reader renders the canonical Markdown document the host just read,
+  // keyed to the selected resource, even across snapshot refreshes.
+  assert.match(source, /selectedResourceDocument/);
+  assert.match(source, /resourceDocument\.resourceId === selectedResource\.id/);
   assert.match(source, /resources-knowledge__content-preview/);
   assert.match(source, /sandboxPreview\.content/);
   assert.match(source, /sandboxPreview\.html/);
 
   assert.ok(resourcesStart >= 0, 'expected the Resources render call');
   assert.ok(resourcesEnd > resourcesStart, 'expected the Resources render call to close');
-  assert.match(resourcesView, /onOpenResource=\{\(resourceId\) =>/);
+  assert.match(resourcesView, /onOpenResource=\{\(resourceId, options\) =>/);
   assert.match(resourcesView, /sandboxPreview=\{leftoverSandboxPreviewNotLive \? undefined : data\.memory\.sandboxPreview\}/);
   assert.match(resourcesView, /onPreviewResource=/);
   assert.match(appSource, /type: "resource\/open",/);

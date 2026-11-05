@@ -51,7 +51,7 @@ export function AppShell({ language, direction, activeView, context, historyOpen
         </div>
         <nav className="app-shell-nav" aria-label={NAV_LABEL[language]}>
           {PRIMARY_DESTINATIONS.map((view) => (
-            <button key={view} type="button" className="app-shell-nav__item" data-testid={`trainer-view-nav-${view}`} aria-label={viewLabels[language][view]} aria-pressed={selected === view} aria-current={selected === view ? "page" : undefined} onClick={() => onNavigate(view)}>
+            <button key={view} type="button" className="app-shell-nav__item" data-testid={`trainer-view-nav-${view}`} aria-label={viewLabels[language][view]} title={viewLabels[language][view]} aria-pressed={selected === view} aria-current={selected === view ? "page" : undefined} onClick={() => onNavigate(view)}>
               <span>{viewLabels[language][view]}</span>
             </button>
           ))}

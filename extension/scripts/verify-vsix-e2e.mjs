@@ -1982,7 +1982,7 @@ writeProgress();
               data.nextHopVisible === true &&
               typeof data.nextHopTitle === "string" &&
               data.nextHopTitle.length > 0 &&
-                ["created", "surfaced", "accepted", "continued_in_chat", "dismissed", "deferred", "blocked", "expired", "archived", "verification_required"].includes(
+                ["created", "surfaced", "accepted", "continued_in_chat", "dismissed", "deferred", "blocked", "expired", "archived", "verification_required", "reflection_required"].includes(
                 String(data.nextHopStatus || ""),
               ) &&
               String(data.nextHopStatus || "") === String(data.expectedStatus || "") &&

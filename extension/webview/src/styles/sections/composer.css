@@ -226,7 +226,7 @@
   overflow: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  box-shadow: 0 -8px 28px -12px rgb(0 0 0 / 55%);
+  box-shadow: 0 -8px 28px -12px var(--vscode-widget-shadow, transparent);
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--line) 70%, transparent) transparent;
 }

@@ -650,11 +650,11 @@
   height: 18px;
   border-radius: 5px;
   background: color-mix(in srgb, var(--accent) 9%, transparent);
-  color: var(--vscode-symbolIcon-classForeground, var(--accent));
+  color: var(--vscode-icon-foreground, var(--accent));
 }
 
 .coach-working--download .coach-working__stage-icon {
-  color: var(--vscode-textLink-foreground, var(--accent));
+  color: var(--accent);
 }
 
 .coach-working--organize .coach-working__stage-icon {

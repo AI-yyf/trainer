@@ -2,9 +2,9 @@
 
 Layout (relative to the Trainer Library root)::
 
-    resources/originals/<resource_id>/<original filename>
-    resources/markdown/<resource_id>.md
-    resources/markdown/assets/<resource_id>/<asset filename>
+    <Trainer Library>/.trainer-resources/originals/<resource_id>/<original filename>
+    <Trainer Library>/.trainer-resources/markdown/<resource_id>.md
+    <Trainer Library>/.trainer-resources/markdown/assets/<resource_id>/<asset filename>
 
 The original file is copied once and never modified; the Markdown document is
 rewritten when the source, the parser version or the content hash changes.
@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .canonical import CanonicalDocument
 
-CANONICAL_DIRNAME = "resources"
+CANONICAL_DIRNAME = ".trainer-resources"
 LIBRARY_DIRNAME = "Trainer Library"
 ORIGINALS_DIRNAME = "originals"
 MARKDOWN_DIRNAME = "markdown"

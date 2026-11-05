@@ -3,20 +3,27 @@
    ========================================================================== */
 
 :root {
-  --trainer-fallback-bg-0: #101010;
-  --trainer-fallback-bg-1: #171717;
-  --trainer-fallback-bg-2: #1f1f1f;
-  --trainer-fallback-bg-3: #262626;
-  --trainer-fallback-fg-0: #efefef;
-  --trainer-fallback-fg-1: #c8c8c8;
-  --trainer-fallback-fg-muted: #969696;
-  --trainer-fallback-line: #303030;
-  --trainer-fallback-accent: #9d907a;
-  --trainer-fallback-success: #4ec9b0;
-  --trainer-fallback-warning: #d7ba7d;
-  --trainer-fallback-danger: #f48771;
-  --trainer-fallback-focus-ring: rgba(157, 144, 122, 0.28);
-  --trainer-fallback-overlay: rgba(7, 7, 7, 0.58);
+  /* There are no hardcoded hues in Trainer. Inside VS Code every token below
+     resolves from the active theme's `--vscode-*` variables. The
+     `--trainer-fallback-*` values are CSS system colours, used only when the
+     workbench runs outside VS Code (browser preview); they follow the
+     `color-scheme` (light/dark) instead of pinning a palette. */
+  --trainer-fallback-bg-0: Canvas;
+  --trainer-fallback-bg-1: color-mix(in srgb, Canvas 94%, CanvasText);
+  --trainer-fallback-bg-2: color-mix(in srgb, Canvas 88%, CanvasText);
+  --trainer-fallback-bg-3: color-mix(in srgb, Canvas 80%, CanvasText);
+  --trainer-fallback-fg-0: CanvasText;
+  --trainer-fallback-fg-1: color-mix(in srgb, CanvasText 88%, Canvas);
+  --trainer-fallback-fg-muted: GrayText;
+  --trainer-fallback-line: color-mix(in srgb, CanvasText 20%, Canvas);
+  --trainer-fallback-border: var(--trainer-fallback-line);
+  --trainer-fallback-accent: color-mix(in srgb, CanvasText 70%, GrayText);
+  --trainer-fallback-success: var(--vscode-charts-green, CanvasText);
+  --trainer-fallback-warning: var(--vscode-charts-yellow, CanvasText);
+  --trainer-fallback-danger: var(--vscode-charts-red, CanvasText);
+  --trainer-fallback-focus-ring: color-mix(in srgb, Highlight 60%, transparent);
+  --trainer-fallback-link: LinkText;
+  --trainer-fallback-overlay: color-mix(in srgb, Canvas 60%, transparent);
   --trainer-fallback-shadow-soft: none;
 
   --trainer-font-ui: 13px;
@@ -81,17 +88,31 @@ body {
   --bg-0: var(--vscode-sideBar-background, var(--vscode-editor-background, var(--trainer-fallback-bg-0)));
   --bg-1: var(--vscode-editorWidget-background, var(--vscode-input-background, var(--vscode-sideBarSectionHeader-background, var(--trainer-fallback-bg-1))));
   --bg-2: var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background, var(--trainer-fallback-bg-2)));
-  --bg-3: var(--vscode-list-activeSelectionBackground, var(--vscode-button-secondaryBackground, var(--trainer-fallback-bg-3)));
+  /* Raised surface: never inherit the list selection colour (editors paint
+     it blue); the raised surface is a graphite step, selection is warm. */
+  --bg-3: var(--vscode-button-secondaryBackground, var(--trainer-fallback-bg-3));
   --fg-0: var(--vscode-sideBar-foreground, var(--vscode-foreground, var(--trainer-fallback-fg-0)));
   --fg-1: var(--vscode-foreground, var(--vscode-descriptionForeground, var(--trainer-fallback-fg-1)));
   --fg-muted: var(--vscode-descriptionForeground, var(--vscode-disabledForeground, var(--trainer-fallback-fg-muted)));
   --line: var(--vscode-sideBar-border, var(--vscode-input-border, var(--vscode-widget-border, var(--trainer-fallback-line))));
-  --accent: var(--vscode-button-background, var(--vscode-textLink-foreground, var(--vscode-focusBorder, var(--trainer-fallback-accent))));
+  /* Brand accent is a warm-neutral derivation of the theme's own foreground
+     (most themes provide a warm chart colour to tint it), never the editor's
+     blue button/link colour. Blue stays a rare "this is a link" hint. */
+  --accent: color-mix(
+    in srgb,
+    var(--vscode-foreground, CanvasText) 78%,
+    var(--vscode-charts-orange, var(--vscode-descriptionForeground, GrayText))
+  );
+  --accent-strong: color-mix(in srgb, var(--accent) 74%, var(--fg-0));
+  --link: var(--vscode-textLink-foreground, var(--trainer-fallback-link));
+  --selection-bg: color-mix(in srgb, var(--accent) 18%, var(--bg-1));
+  --selection-fg: var(--fg-0);
+  --selection-border: color-mix(in srgb, var(--accent) 44%, transparent);
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
   --success: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen, var(--trainer-fallback-success)));
   --warning: var(--vscode-editorWarning-foreground, var(--vscode-testing-iconQueued, var(--vscode-terminal-ansiYellow, var(--trainer-fallback-warning))));
   --danger: var(--vscode-errorForeground, var(--vscode-testing-iconFailed, var(--vscode-terminal-ansiRed, var(--trainer-fallback-danger))));
-  --focus-ring: var(--vscode-focusBorder, var(--vscode-button-focusBorder, var(--accent, var(--trainer-fallback-focus-ring))));
+  --focus-ring: var(--vscode-focusBorder, var(--trainer-fallback-focus-ring));
   --overlay: var(--vscode-editorWidget-background, var(--vscode-quickInput-background, var(--trainer-fallback-overlay)));
   --shadow-soft: var(--vscode-widget-shadow, var(--trainer-fallback-shadow-soft));
 
@@ -124,7 +145,7 @@ body {
   vertical-align: -0.125em;
 }
 .trainer-icon.is-active {
-  color: var(--vscode-focusBorder, var(--accent));
+  color: var(--accent);
 }
 
 

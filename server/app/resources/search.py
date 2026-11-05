@@ -346,6 +346,26 @@ class SearchIndex:
         finally:
             conn.close()
 
+    def document_metadata(self, resource_id: str) -> dict[str, Any]:
+        """Return the stored search metadata payload for a resource."""
+
+        lookup_id = str(resource_id or "").strip()
+        if not lookup_id:
+            return {}
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT metadata_json FROM search_metadata WHERE resource_id = ?",
+                (lookup_id,),
+            ).fetchone()
+        except sqlite3.Error:
+            return {}
+        finally:
+            conn.close()
+        if row is None:
+            return {}
+        return self._parse_json_metadata(row["metadata_json"])
+
     def index_from_manifest(
         self,
         manifest: ResourceSearchManifest,

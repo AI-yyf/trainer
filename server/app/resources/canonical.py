@@ -1084,13 +1084,17 @@ def _normalize_pdf_text(text: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def _parse_html(
-    raw: bytes,
-    source_url: str,
-) -> tuple[str, list[str], list[CanonicalAsset], int | None, int | None]:
+def html_to_markdown(raw: str, source_url: str = "") -> tuple[str, list[str]]:
+    """Convert an HTML page to block-structured Markdown.
+
+    trafilatura gives the best content selection, but it sometimes joins
+    adjacent blocks without any separator ("MITLast updated: ..."), so a
+    Markdown result without block structure falls back to the built-in
+    block-aware extractor. Both paths drop scripts, styles and chrome.
+    """
+
+    cleaned = _strip_html_noise(raw)
     warnings: list[str] = []
-    decoded = raw.decode("utf-8", errors="replace")
-    cleaned = _strip_html_noise(decoded)
     markdown = ""
     try:
         import trafilatura  # type: ignore[import-not-found]
@@ -1107,6 +1111,10 @@ def _parse_html(
             markdown = extracted.strip()
     except Exception:
         markdown = ""
+    if markdown and "\n" not in markdown and len(markdown) > 120:
+        # One long line means blocks were concatenated; the built-in extractor
+        # preserves paragraph/heading boundaries, which citations rely on.
+        markdown = ""
     if not markdown:
         converter = _HTMLExtractor()
         try:
@@ -1116,7 +1124,18 @@ def _parse_html(
             pass
         markdown = converter.markdown().strip()
         if markdown:
-            warnings.append("HTML was converted with the built-in extractor; scripts and navigation were dropped.")
+            warnings.append(
+                "HTML was converted with the built-in extractor; scripts and navigation were dropped."
+            )
+    return markdown, warnings
+
+
+def _parse_html(
+    raw: bytes,
+    source_url: str,
+) -> tuple[str, list[str], list[CanonicalAsset], int | None, int | None]:
+    decoded = raw.decode("utf-8", errors="replace")
+    markdown, warnings = html_to_markdown(decoded, source_url)
     if not markdown:
         raise CanonicalParseError("No readable body text was found in the HTML source.")
     title = _first_markdown_heading(markdown)
@@ -1304,6 +1323,33 @@ def _count_lines(blocks: Iterable[str]) -> int:
     return text.count("\n") + 1 if text else 0
 
 
+def plain_text_preview(markdown: str, max_chars: int = 200) -> str:
+    """A readable one-paragraph preview of a Markdown body.
+
+    Resource summaries are rendered as prose in the library; raw Markdown
+    control characters and anchor comments would look like source code there.
+    """
+
+    text = strip_front_matter(markdown)
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s{0,3}[>*-]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"`+", "", text)
+    text = re.sub(r"\*\*|__", "", text)
+    # Footnote definitions would otherwise leave a bare ":" in the preview.
+    text = re.sub(r"^\s*\[\^[^\]]+\]:\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\[\^[^\]]+\]", "", text)
+    # Markdown table separators and pipes are syntax, not prose.
+    text = re.sub(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*$", "", text, flags=re.MULTILINE)
+    text = text.replace("|", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rstrip() + "…"
+
+
 def anchors_for_body(body: str, source_type: str) -> list[DocumentAnchor]:
     """Derive citable anchors from the assembled Markdown body.
 
@@ -1419,6 +1465,7 @@ def _decode_text(raw: bytes) -> str:
 def _safe_original_name(name: str) -> str:
     cleaned = Path(str(name or "")).name.strip()
     cleaned = re.sub(r"[\x00-\x1f\x7f]", "", cleaned)
+    cleaned = re.sub(r'[<>:"|?*]', "-", cleaned)
     cleaned = cleaned.replace("/", "-").replace("\\", "-")
     if not cleaned or cleaned in {".", ".."}:
         cleaned = "source"

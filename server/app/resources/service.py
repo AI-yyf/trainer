@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from hashlib import sha1
+from hashlib import sha1, sha256
 from pathlib import Path, PurePosixPath
 from threading import Lock, RLock
 from typing import Any, Callable, Iterable, Literal, Mapping
@@ -39,6 +39,8 @@ from .canonical import (
     build_canonical_document,
     build_canonical_from_text,
     canonicalizable,
+    plain_text_preview,
+    strip_front_matter,
 )
 from .canonical_store import write_canonical_artifact
 from .search import SearchFilters, SearchIndex, SearchResponse
@@ -53,6 +55,115 @@ from .source_governance import (
     is_commercial_reuse_eligible as source_is_commercial_reuse_eligible,
 )
 from .versioning import ResourceVersionStore, provenance_payload
+
+def _count_markdown_tables(body: str) -> int:
+    """Count Markdown table blocks (header row + separator row)."""
+
+    return len(
+        re.findall(
+            r"(?m)^\|[^\n]*\|\s*\n\|[\s:|-]+\|\s*$",
+            body or "",
+        )
+    )
+
+
+def _original_filename_for(resource: Any, source_path: Path) -> str:
+    """Prefer the resource's display name over the internal materialized name."""
+
+    suffix = source_path.suffix
+    display = str(getattr(resource, "name", "") or "").strip()
+    if not display:
+        return source_path.name
+    display_name = Path(display).name
+    if Path(display_name).suffix.lower() == suffix.lower():
+        return display_name
+    return f"{Path(display_name).stem}{suffix}" if Path(display_name).suffix else f"{display_name}{suffix}"
+
+
+def _resolve_document_location(
+    anchors: list[dict[str, Any]],
+    line: int,
+) -> dict[str, Any]:
+    """Resolve a Markdown line to the nearest page/slide/heading anchor."""
+
+    resolved: dict[str, Any] = {}
+    for kind in ("page", "slide", "heading"):
+        best: dict[str, Any] | None = None
+        for anchor in anchors:
+            if str(anchor.get("kind") or "") != kind:
+                continue
+            try:
+                anchor_line = int(anchor.get("line") or 0)
+            except (TypeError, ValueError):
+                continue
+            if anchor_line <= line:
+                best = anchor
+            else:
+                break
+        if best is None:
+            continue
+        if kind == "page":
+            resolved["page"] = best.get("index")
+            resolved["anchor_id"] = f"¶page{best.get('index')}@{line}"
+        elif kind == "slide":
+            resolved["slide"] = best.get("index")
+            if best.get("label"):
+                resolved["slide_title"] = best.get("label")
+            resolved.setdefault("anchor_id", f"¶slide{best.get('index')}@{line}")
+        else:
+            resolved["heading"] = best.get("label") or ""
+            resolved.setdefault("anchor_id", f"¶h{best.get('index')}@{line}")
+        resolved["line_start"] = line
+    return resolved
+
+
+class _AnchorView:
+    """Read-only view over an anchor payload stored in search metadata."""
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._payload = payload
+        try:
+            self.line_start = int(payload.get("line_start") or 0)
+        except (TypeError, ValueError):
+            self.line_start = 0
+        try:
+            self.line_end = int(payload.get("line_end") or 0)
+        except (TypeError, ValueError):
+            self.line_end = 0
+        self.line = self.line_start
+        self.index = int(payload.get("page") or payload.get("slide") or 0) or 0
+        self.label = str(payload.get("heading") or payload.get("slide_title") or "")
+        self.payload: dict[str, Any] = {}
+        for key in ("anchor_id", "page", "slide", "slide_title", "heading", "markdown_path"):
+            value = payload.get(key)
+            if value not in {None, ""}:
+                self.payload[key] = value
+
+
+def _compact_anchors(chunks: list[ResourceChunk]) -> list[dict[str, Any]]:
+    anchors: list[dict[str, Any]] = []
+    for chunk in chunks:
+        metadata = chunk.metadata if isinstance(chunk.metadata, dict) else {}
+        if not metadata:
+            continue
+        compact = {
+            key: metadata[key]
+            for key in (
+                "anchor_id",
+                "page",
+                "slide",
+                "slide_title",
+                "heading",
+                "markdown_path",
+                "line_start",
+                "line_end",
+            )
+            if metadata.get(key) not in {None, ""}
+        }
+        if compact:
+            anchors.append(compact)
+    return anchors
+
 
 def _last_anchor_before(anchors: list[Any], line: int) -> Any | None:
     match = None
@@ -173,6 +284,9 @@ class ResourceService:
         self._workspace_path_resolver: Callable[[str], str | None] | None = None
         self._search_indexes: dict[str, SearchIndex] = {}
         self._resource_restore_locks: dict[tuple[str, str], Any] = {}
+        # Canonicalize stages (analyze -> materialize -> index) reuse one parse
+        # per resource so each HTTP stage does real work without parsing twice.
+        self._prepared_canonical: dict[str, dict[str, Any]] = {}
         self._resource_restore_locks_guard = Lock()
 
     def set_workspace_path_resolver(
@@ -524,11 +638,17 @@ class ResourceService:
             )
         self.repository.save_resource(workspace_id, updated)
         if updated.index_status == "indexed":
+            document_anchors = source_provenance.get("document_anchors")
             self._index_search_resource(
                 workspace_id,
                 updated,
                 combined_text=combined_text,
                 chunks=normalized_chunks,
+                document_anchors=(
+                    list(document_anchors)
+                    if isinstance(document_anchors, list)
+                    else None
+                ),
             )
         else:
             self._search_index(workspace_id).delete_document(updated.id)
@@ -839,11 +959,91 @@ class ResourceService:
             kind=kind,
             index_state=index_state,
         )
-        return self._search_index(workspace_id).search(
+        response = self._search_index(workspace_id).search(
             query,
             filters=filters,
             top_k=max(1, min(top_k, 50)),
         )
+        self._enrich_search_locations(workspace_id, response, query)
+        return response
+
+    def read_canonical_text(
+        self,
+        workspace_id: str,
+        resource_id: str,
+    ) -> str | None:
+        """Return the persisted Markdown body for a resource.
+
+        Chunk lists live in the process registry and disappear on restart; the
+        canonical Markdown (and the search index as a fallback) is durable, so
+        agents can still read the library after a sidecar restart.
+        """
+
+        record = self._require_workspace_resource(workspace_id, resource_id)
+        markdown_relative = str(record.canonical_markdown_path or "").strip()
+        workspace_root = self._resolved_workspace_path(workspace_id)
+        if markdown_relative and workspace_root is not None:
+            path = workspace_root / markdown_relative
+            try:
+                return strip_front_matter(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                pass
+        content = self._search_index(workspace_id).document_content(record.id)
+        return content or None
+
+    def _enrich_search_locations(
+        self,
+        workspace_id: str,
+        response: SearchResponse,
+        query: str,
+    ) -> None:
+        """Point each hit at the page/slide/heading that matched.
+
+        Search indexes the whole canonical Markdown body; the first occurrence
+        of a query term is mapped back to the anchor table recorded at index
+        time so the reader can open the exact location instead of the file top.
+        """
+
+        terms = [
+            term.lower()
+            for term in re.split(r"\W+", str(query or ""))
+            if len(term) >= 2
+        ][:8]
+        if not terms:
+            return
+        index = self._search_index(workspace_id)
+        for hit in response.results:
+            metadata = index.document_metadata(hit.resource_id)
+            document_anchors = metadata.get("document_anchors")
+            anchors = (
+                document_anchors
+                if isinstance(document_anchors, list) and document_anchors
+                else metadata.get("canonical_anchors")
+            )
+            if not isinstance(anchors, list) or not anchors:
+                continue
+            content_length = metadata.get("content_length")
+            content = index.document_content(hit.resource_id)
+            if isinstance(content_length, int) and content_length > 0:
+                content = content[:content_length]
+            lowered = content.lower()
+            position = -1
+            for term in terms:
+                found = lowered.find(term)
+                if found >= 0 and (position < 0 or found < position):
+                    position = found
+            if position < 0:
+                continue
+            line = content.count("\n", 0, position) + 1
+            resolved = _resolve_document_location(
+                [item for item in anchors if isinstance(item, dict)],
+                line,
+            )
+            if not resolved:
+                continue
+            location = dict(hit.location or {})
+            location.update(resolved)
+            hit.location = location
 
     def delete_resource(
         self,
@@ -1111,6 +1311,185 @@ class ResourceService:
 
     # ------------------------------------------------------------- canonical md
 
+    def analyze_canonical(
+        self,
+        workspace_id: str,
+        resource_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        """Stage 1-2: recognise the document type and parse its structure.
+
+        Parses each source, reports real counts (pages/slides/images/tables)
+        and caches the parsed document for :meth:`materialize_canonical`.
+        Nothing is written to the library until materialize runs.
+        """
+
+        results: list[dict[str, Any]] = []
+        for resource_id in self._normalized_resource_ids(resource_ids):
+            item: dict[str, Any] = {"resource_id": resource_id, "ok": False}
+            try:
+                resource = self._require_workspace_resource(workspace_id, resource_id)
+            except KeyError:
+                item["error"] = "resource_not_found"
+                results.append(item)
+                continue
+            try:
+                source_path = self._local_source_path(resource.source)
+                if source_path is None or not source_path.is_file():
+                    item["error"] = "source_not_local"
+                    results.append(item)
+                    continue
+                if source_path.suffix.lower() in {".doc", ".ppt", ".xls"}:
+                    replacement = {".doc": ".docx", ".ppt": ".pptx", ".xls": ".xlsx"}[
+                        source_path.suffix.lower()
+                    ]
+                    item["error"] = (
+                        f"Legacy {source_path.suffix.lower()} files are not supported; "
+                        f"save the file as {replacement} and import it again."
+                    )
+                    results.append(item)
+                    continue
+                if not canonicalizable(source_path):
+                    item["error"] = "unsupported_type"
+                    results.append(item)
+                    continue
+                raw = source_path.read_bytes()
+                content_hash = sha256(raw).hexdigest()
+                document = build_canonical_document(
+                    source_path,
+                    resource_id=resource.id,
+                    content_hash=f"sha256:{content_hash}",
+                    original_name=_original_filename_for(resource, source_path),
+                )
+            except (OSError, CanonicalParseError) as exc:
+                item["error"] = str(exc)
+                if isinstance(exc, CanonicalParseError):
+                    item["warnings"] = list(exc.warnings)
+                results.append(item)
+                continue
+            table_count = _count_markdown_tables(document.body)
+            self._prepared_canonical[resource.id] = {
+                "hash": content_hash,
+                "document": document,
+                "table_count": table_count,
+                "materialized": False,
+            }
+            item.update(
+                {
+                    "ok": True,
+                    "source_type": document.source_type,
+                    "parser": document.parser,
+                    "page_count": document.page_count,
+                    "slide_count": document.slide_count,
+                    "image_count": len(document.assets),
+                    "table_count": table_count,
+                    "warning_count": len(document.warnings),
+                    "warnings": list(document.warnings[:3]),
+                }
+            )
+            results.append(item)
+        return results
+
+    def materialize_canonical(
+        self,
+        workspace_id: str,
+        resource_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        """Stage 3-4: write the canonical Markdown, original and assets."""
+
+        results: list[dict[str, Any]] = []
+        workspace_root = self._resolved_workspace_path(workspace_id)
+        for resource_id in self._normalized_resource_ids(resource_ids):
+            item: dict[str, Any] = {"resource_id": resource_id, "ok": False}
+            try:
+                resource = self._require_workspace_resource(workspace_id, resource_id)
+            except KeyError:
+                item["error"] = "resource_not_found"
+                results.append(item)
+                continue
+            source_path = self._local_source_path(resource.source)
+            if source_path is None or not source_path.is_file():
+                item["error"] = "source_not_local"
+                results.append(item)
+                continue
+            try:
+                raw = source_path.read_bytes()
+            except OSError as exc:
+                item["error"] = f"Could not read the source file: {exc}"
+                results.append(item)
+                continue
+            content_hash = sha256(raw).hexdigest()
+            prepared = self._prepared_canonical.get(resource.id)
+            document = prepared.get("document") if isinstance(prepared, dict) else None
+            if (
+                document is None
+                or not isinstance(prepared, dict)
+                or str(prepared.get("hash") or "") != content_hash
+            ):
+                try:
+                    document = build_canonical_document(
+                        source_path,
+                        resource_id=resource.id,
+                        content_hash=f"sha256:{content_hash}",
+                        original_name=_original_filename_for(resource, source_path),
+                    )
+                except (OSError, CanonicalParseError) as exc:
+                    item["error"] = str(exc)
+                    results.append(item)
+                    continue
+            current_version = self._record_resource_version(workspace_id, resource, raw)
+            version_id = str((current_version or {}).get("version_id") or "")
+            document.version_id = version_id
+            if workspace_root is None:
+                item["error"] = "workspace_root_unavailable"
+                results.append(item)
+                continue
+            try:
+                artifact = write_canonical_artifact(
+                    workspace_root,
+                    document,
+                    original_bytes=raw,
+                    original_filename=_original_filename_for(resource, source_path),
+                )
+            except OSError as exc:
+                item["error"] = f"Canonical Markdown could not be written: {exc}"
+                results.append(item)
+                continue
+            table_count = _count_markdown_tables(document.body)
+            self._prepared_canonical[resource.id] = {
+                "hash": content_hash,
+                "document": document,
+                "table_count": table_count,
+                "materialized": True,
+                "canonical_markdown_path": artifact.markdown_relative,
+                "canonical_original_path": artifact.original_relative or "",
+                "asset_count": len(document.assets),
+            }
+            item.update(
+                {
+                    "ok": True,
+                    "markdown_path": artifact.markdown_relative,
+                    "original_path": artifact.original_relative or "",
+                    "asset_count": len(document.assets),
+                    "table_count": table_count,
+                    "warnings": list(document.warnings[:3]),
+                }
+            )
+            results.append(item)
+        return results
+
+    def _normalized_resource_ids(self, resource_ids: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in resource_ids or []:
+            key = str(value or "").strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            normalized.append(key)
+            if len(normalized) >= 100:
+                break
+        return normalized
+
     def _canonical_local_ingest(
         self,
         workspace_id: str,
@@ -1145,22 +1524,44 @@ class ResourceService:
         current_version = self._record_resource_version(workspace_id, resource, raw)
         version_id = str((current_version or {}).get("version_id") or "")
         content_hash = str((current_version or {}).get("content_hash") or "")
-        try:
-            document = build_canonical_document(
-                source_path,
-                resource_id=resource.id,
-                version_id=version_id,
-                content_hash=f"sha256:{content_hash}" if content_hash else "",
-                original_name=source_path.name,
-            )
-        except CanonicalParseError as exc:
-            return self._canonical_failure(resource, [str(exc), *exc.warnings]), {}
+        prepared = self._prepared_canonical.get(resource.id)
+        prepared_document = prepared.get("document") if isinstance(prepared, dict) else None
+        reusable = (
+            prepared_document is not None
+            and isinstance(prepared, dict)
+            and str(prepared.get("hash") or "") == content_hash
+        )
+        if reusable:
+            document = prepared_document
+            document.version_id = version_id
+            if prepared.get("materialized") is True:
+                # analyze + materialize already parsed and wrote this exact
+                # content; indexing must not repeat either.
+                return self._canonical_result(
+                    workspace_id,
+                    resource,
+                    document,
+                    original_bytes=raw,
+                    original_filename=_original_filename_for(resource, source_path),
+                    prewritten=prepared,
+                )
+        else:
+            try:
+                document = build_canonical_document(
+                    source_path,
+                    resource_id=resource.id,
+                    version_id=version_id,
+                    content_hash=f"sha256:{content_hash}" if content_hash else "",
+                    original_name=_original_filename_for(resource, source_path),
+                )
+            except CanonicalParseError as exc:
+                return self._canonical_failure(resource, [str(exc), *exc.warnings]), {}
         return self._canonical_result(
             workspace_id,
             resource,
             document,
             original_bytes=raw,
-            original_filename=source_path.name,
+            original_filename=_original_filename_for(resource, source_path),
         )
 
     def _canonicalize_url_ingest(
@@ -1184,7 +1585,14 @@ class ResourceService:
         current_version = self._record_resource_version(workspace_id, resource, text)
         version_id = str((current_version or {}).get("version_id") or "")
         content_hash = str((current_version or {}).get("content_hash") or "")
-        filename = f"{self._safe_slug(resource.name) or 'capture'}.md"
+        display_name = re.sub(
+            r'[<>:"/\\|?*\x00-\x1f]',
+            "-",
+            str(resource.name or "").strip(),
+        ).strip() or "capture"
+        if not display_name.lower().endswith(".md"):
+            display_name = f"{display_name}.md"
+        filename = display_name[:120]
         try:
             document = build_canonical_from_text(
                 text,
@@ -1203,6 +1611,7 @@ class ResourceService:
             document,
             original_bytes=text.encode("utf-8"),
             original_filename=filename,
+            extra_provenance=dict(ingest_result.source_provenance or {}),
         )
 
     def _canonical_result(
@@ -1213,6 +1622,8 @@ class ResourceService:
         *,
         original_bytes: bytes,
         original_filename: str,
+        extra_provenance: dict[str, Any] | None = None,
+        prewritten: dict[str, Any] | None = None,
     ) -> tuple[IngestionResult, dict[str, Any]]:
         store_warnings: list[str] = []
         canonical_meta: dict[str, Any] = {
@@ -1224,12 +1635,23 @@ class ResourceService:
             "slide_count": document.slide_count,
             "source_type": document.source_type,
         }
-        workspace_root = self._resolved_workspace_path(workspace_id)
-        if workspace_root is None:
+        if prewritten is not None:
+            canonical_meta.update(
+                {
+                    "canonical_markdown_path": str(
+                        prewritten.get("canonical_markdown_path") or ""
+                    ),
+                    "canonical_original_path": str(
+                        prewritten.get("canonical_original_path") or ""
+                    ),
+                }
+            )
+        workspace_root = None if prewritten is not None else self._resolved_workspace_path(workspace_id)
+        if prewritten is None and workspace_root is None:
             store_warnings.append(
                 "Canonical Markdown was generated but no workspace root is available to store it."
             )
-        else:
+        elif prewritten is None and workspace_root is not None:
             try:
                 artifact = write_canonical_artifact(
                     workspace_root,
@@ -1250,20 +1672,25 @@ class ResourceService:
             markdown_path=str(canonical_meta["canonical_markdown_path"] or ""),
         )
         summary = IngestionSummary(
-            text_preview=document.body[:240],
+            text_preview=plain_text_preview(document.body, max_chars=240),
             detected_kind=ResourceKind(resource.kind),
             extracted_characters=len(document.body),
             chunk_count=len(chunks),
         )
-        source_provenance: dict[str, Any] = {
+        source_provenance: dict[str, Any] = dict(extra_provenance or {})
+        source_provenance.update({
             "paragraph_anchors": paragraph_anchors,
+            "document_anchors": [
+                {**anchor.as_payload(), "label": anchor.label}
+                for anchor in document.anchors
+            ],
             "source_type": document.source_type,
             "parser": document.parser,
             "parser_version": document.parser_version,
             "page_count": document.page_count,
             "slide_count": document.slide_count,
             "canonical": canonical_meta,
-        }
+        })
         result = IngestionResult(
             record=self.registry.clone_resource(resource.id),
             chunks=chunks,
@@ -1721,6 +2148,7 @@ class ResourceService:
         *,
         combined_text: str,
         chunks: list[ResourceChunk],
+        document_anchors: list[dict[str, Any]] | None = None,
     ) -> None:
         preview_tier, preview_kind, source_extension = self._search_preview_metadata(resource)
         content = (
@@ -1761,7 +2189,16 @@ class ResourceService:
                 "resource_source_extension": source_extension,
                 "version_id": current_version.get("version_id") if current_version else "",
                 "content_hash": resource.content_hash or "",
-                "location": {"path": search_path},
+                "content_length": len(content),
+                "canonical_anchors": _compact_anchors(chunks),
+                "document_anchors": list(document_anchors or []),
+                "location": {
+                    "path": search_path,
+                    "resource_id": resource.id,
+                    "markdown_path": resource.canonical_markdown_path or "",
+                    "version_id": current_version.get("version_id") if current_version else "",
+                    "content_hash": resource.content_hash or "",
+                },
             },
         )
 
@@ -2365,7 +2802,20 @@ class ResourceService:
                 "line_end": chunk.end_line,
                 "paragraph_anchor": paragraph_anchor,
             }
-            for key in ("page", "paragraph_index", "char_offset", "char_length", "spine_index", "spine_id", "element_path", "href"):
+            for key in (
+                "page",
+                "slide",
+                "slide_title",
+                "heading",
+                "markdown_path",
+                "paragraph_index",
+                "char_offset",
+                "char_length",
+                "spine_index",
+                "spine_id",
+                "element_path",
+                "href",
+            ):
                 if key in anchor_meta and anchor_meta[key] is not None:
                     loc_dict[key] = anchor_meta[key]
             fragment_payload = {

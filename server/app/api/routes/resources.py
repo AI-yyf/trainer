@@ -18,6 +18,7 @@ from ...core.models import (
     LibraryAssetUpsertRequest,
     LibraryGroupNode,
     LibraryGroupsResponse,
+    ResourceCanonicalizeRequest,
     ResourceCaptureRequest,
     ResourceCaptureResponse,
     ResourceDeleteRequest,
@@ -488,6 +489,22 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return indexed
+
+    @router.post("/resource/canonicalize/analyze")
+    def resource_canonicalize_analyze(request: ResourceCanonicalizeRequest) -> dict[str, object]:
+        """Stage: recognise source types and parse document structure."""
+
+        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        items = runtime.resource_service.analyze_canonical(workspace_id, request.resource_ids)
+        return {"ok": all(item.get("ok") for item in items) if items else True, "items": items}
+
+    @router.post("/resource/canonicalize/materialize")
+    def resource_canonicalize_materialize(request: ResourceCanonicalizeRequest) -> dict[str, object]:
+        """Stage: write canonical Markdown, originals and extracted assets."""
+
+        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        items = runtime.resource_service.materialize_canonical(workspace_id, request.resource_ids)
+        return {"ok": all(item.get("ok") for item in items) if items else True, "items": items}
 
     @router.post("/resource/course/import")
     def resource_course_import(request: CourseImportRequest) -> dict[str, object]:

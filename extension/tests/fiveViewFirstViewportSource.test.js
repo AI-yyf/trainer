@@ -38,11 +38,15 @@ test('production workbench views consume CSS variables rather than hardcoded hex
   const settings = read('components/settings/CoachSettingsView.tsx');
   const composer = read('components/composer/CoachComposer.tsx');
 
-  assert.match(tokens, /bg0:/);
-  assert.match(tokens, /accent:/);
+  // Colour lives only in CSS as live theme indirection; the shared token
+  // module owns geometry/typography, not hues.
+  assert.match(tokens, /radius:/);
+  assert.match(tokens, /space:/);
+  assert.match(tokens, /type:/);
+  assert.doesNotMatch(tokens, /#[0-9a-fA-F]{3,8}\b/);
   assert.match(styles, /--bg-0:/);
   assert.match(styles, /--accent:/);
-  assert.match(styles, /--trainer-fallback-bg-0:\s*#/);
+  assert.match(styles, /--trainer-fallback-bg-0:\s*Canvas/);
 
   for (const [name, source] of [
     ['resources', resources],
@@ -54,15 +58,17 @@ test('production workbench views consume CSS variables rather than hardcoded hex
     assert.doesNotMatch(source, /rgb\(/, `${name} hardcoded rgb`);
   }
 
-  const withoutFallbacks = styles.replace(/--trainer-fallback-[^;]+;/g, '');
-  const hexInRules = withoutFallbacks.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
-  const allowedFallbackCount = (styles.match(/--trainer-fallback-[^:]+:\s*#/g) || []).length;
-  assert.ok(allowedFallbackCount >= 8, 'expected :root token fallbacks');
+  // Absolute VS Code compatibility: no stylesheet may pin a hue. Theme
+  // colours come from --vscode-*; the preview fallback uses CSS system
+  // colours, which follow the color-scheme instead of a fixed palette.
+  const hexColors = styles.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
   assert.equal(
-    hexInRules.length,
+    hexColors.length,
     0,
-    `hex colors must stay in :root token fallbacks: ${hexInRules.join(',')}`,
+    `hardcoded hex colors must not appear in styles: ${hexColors.join(',')}`,
   );
+  assert.match(styles, /--trainer-fallback-bg-1:\s*color-mix\(in srgb, Canvas/);
+  assert.match(styles, /--vscode-icon-foreground/);
 });
 
 test('plan first viewport keeps a work-surface object without a governance dump', () => {

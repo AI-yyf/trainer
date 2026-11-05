@@ -49,14 +49,19 @@ test('only previewResourceCommand posts /sandbox/preview and opts invent via con
   );
 
   const attachCalls = [...source.matchAll(/attachPreviewAssetUris\(/g)];
-  assert.equal(attachCalls.length, 6, 'expected six attachPreviewAssetUris call sites');
+  assert.equal(attachCalls.length, 7, 'expected seven attachPreviewAssetUris call sites');
 
-  const conversationOptIns = [
-    ...source.matchAll(/conversation:\s*current\.conversation/g),
-  ];
+  // Two live preview paths opt into inventing a conversation file_preview:
+  // the sandbox preview and the canonical Markdown digest of a library
+  // document. Both live inside previewResourceCommand; no other command may
+  // pass conversation.
+  const previewStart = source.indexOf('export async function previewResourceCommand');
+  assert.ok(previewStart >= 0, 'missing previewResourceCommand');
+  const previewEnd = source.indexOf('\nexport ', previewStart + 1);
+  const previewSlice = source.slice(previewStart, previewEnd > previewStart ? previewEnd : source.length);
   assert.equal(
-    conversationOptIns.length,
-    1,
+    (previewSlice.match(/conversation:\s*current\.conversation/g) ?? []).length,
+    2,
     'only the live preview path may pass conversation to invent',
   );
 

@@ -45,7 +45,7 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
   assert.match(source, /sandboxPreview\s*\?\s*\(/);
 
   const treeIndex = source.indexOf('className="resources-knowledge__tree"');
-  const sandboxPreviewIndex = source.indexOf('{sandboxPreview ? (');
+  const sandboxPreviewIndex = source.indexOf('sandboxPreview ? (');
   assert.ok(treeIndex >= 0, 'expected a knowledge-resource tree');
   assert.ok(sandboxPreviewIndex > treeIndex, 'sandbox preview must remain after the knowledge tree');
 });

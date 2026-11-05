@@ -140,6 +140,12 @@ function createUploadCommandContext() {
             source: 'C:\\temp\\inline-proof.md',
           };
         }
+        if (requestPath === '/resource/canonicalize/analyze') {
+          return { ok: true, items: [{ resource_id: 'resource-inline-1', ok: true }] };
+        }
+        if (requestPath === '/resource/canonicalize/materialize') {
+          return { ok: true, items: [{ resource_id: 'resource-inline-1', ok: true, asset_count: 0, table_count: 0 }] };
+        }
         if (requestPath === '/resource/index') {
           return {
             id: 'resource-inline-1',
@@ -276,6 +282,24 @@ test('registerCommands forwards uploadResource payload into the registered comma
         tags: ['vsix-e2e', 'inline'],
         source_type: 'file',
         source_items: [],
+      },
+    },
+    {
+      port: 34891,
+      requestPath: '/resource/canonicalize/analyze',
+      body: {
+        session_id: 'session-1',
+        workspace_id: 'F:\\trainer\\workspace-a',
+        resource_ids: ['resource-inline-1'],
+      },
+    },
+    {
+      port: 34891,
+      requestPath: '/resource/canonicalize/materialize',
+      body: {
+        session_id: 'session-1',
+        workspace_id: 'F:\\trainer\\workspace-a',
+        resource_ids: ['resource-inline-1'],
       },
     },
     {

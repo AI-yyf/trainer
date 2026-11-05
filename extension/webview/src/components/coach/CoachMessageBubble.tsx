@@ -414,7 +414,6 @@ function CoachMessageBubbleImpl({
             ) : null}
             {showSystemMeta ? <span className="message-bubble__role">{resolvedRoleLabel}</span> : null}
             {showAuthor ? <strong>{message.author}</strong> : null}
-            {streaming ? <span className="message-bubble__status">…</span> : null}
             {showTimestampInline ? <span className="message-bubble__timestamp">{timestamp}</span> : null}
           </div>
         </div>
@@ -427,9 +426,7 @@ function CoachMessageBubbleImpl({
           <div className="message-bubble__assistant-rail">
             <span className="message-bubble__assistant-label">{resolvedRoleLabel}</span>
             {headNote}
-            {streaming ? (
-              <span className="message-bubble__assistant-time">…</span>
-            ) : timestamp ? (
+            {!streaming && timestamp ? (
               <span className="message-bubble__assistant-time">{timestamp}</span>
             ) : null}
           </div>

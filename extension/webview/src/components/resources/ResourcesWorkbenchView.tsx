@@ -82,6 +82,8 @@ export interface ResourcesWorkbenchViewProps {
   deletedResources?: DeletedResource[];
   sandboxState?: SandboxState;
   sandboxPreview?: SandboxPreview;
+  /** Canonical Markdown document the learner is reading, keyed to its resource. */
+  resourceDocument?: import("../../lib/types").ResourceDocumentView | null;
   restoreContext?: ResourceRestoreContext;
   isBrowserPreview?: boolean;
   isLiveBrowserPreview?: boolean;
@@ -120,7 +122,7 @@ export interface ResourcesWorkbenchViewProps {
   onDeleteLibraryFolder?: (path: string) => Promise<ResourceMutationOutcome>;
   /** Reveal a downloaded file path through the host's existing file-manager action. */
   onRevealSavedPath?: (path: string) => void;
-  onOpenResource?: (resourceId: string) => void;
+  onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; line?: number }) => void;
   onPreviewResource?: (resourceId: string) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
@@ -1219,14 +1221,17 @@ function visibleTreeItemIds(nodes: ResourceTreeNode[], expandedIds: Set<string>)
 }
 
 function ResourceKindIcon({ resource }: { resource: ResourceRecord }) {
+  // The glyph is an alpha mask painted with the theme's icon colour; the SVG
+  // only supplies the shape, so no resource icon pins a hue.
   return (
-    <img
+    <span
       className="resources-library-tree__file-icon"
-      src={resourceIconUrl(resource)}
-      alt=""
-      width={18}
-      height={18}
-      draggable={false}
+      style={
+        {
+          "--resource-icon-url": `url("${resourceIconUrl(resource)}")`,
+        } as React.CSSProperties
+      }
+      aria-hidden="true"
       data-resource-icon={resourceIconKey(resource)}
     />
   );
@@ -1356,13 +1361,14 @@ function ResourceTreeItem({
         persistenceKey={resourceCollectionPersistenceKey(node.id)}
         title={
           <span className="resources-library-tree__collection-label" title={collectionDescription}>
-            <img
+            {/* Folder glyphs are an alpha mask so they inherit the theme's
+                icon colour instead of shipping a fixed hue. */}
+            <span
               className="resources-library-tree__folder-icon"
-              src={isExpanded ? resourceFolderOpenIconUrl : resourceFolderIconUrl}
-              alt=""
-              width={18}
-              height={18}
-              draggable={false}
+              style={{
+                "--folder-icon-url": `url("${isExpanded ? resourceFolderOpenIconUrl : resourceFolderIconUrl}")`,
+              } as React.CSSProperties}
+              aria-hidden="true"
             />
             <span>{node.label}</span>
           </span>
@@ -1466,6 +1472,7 @@ export function ResourcesWorkbenchView({
   deletedResources,
   sandboxState,
   sandboxPreview: sandboxPreviewInput,
+  resourceDocument,
   restoreContext,
   isBrowserPreview = false,
   isLiveBrowserPreview = false,
@@ -1668,6 +1675,10 @@ export function ResourcesWorkbenchView({
     () => resources.find((resource) => resource.id === selectedResourceId),
     [resources, selectedResourceId],
   );
+  const selectedResourceDocument =
+    resourceDocument && selectedResource && resourceDocument.resourceId === selectedResource.id
+      ? resourceDocument
+      : undefined;
   const selectedResourceCanStartTraining = Boolean(
     selectedResource &&
       resourceCanStartTraining(selectedResource) &&
@@ -2050,6 +2061,23 @@ export function ResourcesWorkbenchView({
     setResourceDetail(resource.id);
   };
 
+  /**
+   * Opening a library document renders its canonical Markdown immediately —
+   * reading is the default, not a second click. The explicit Preview action
+   * stays available for a manual refresh.
+   */
+  const autoPreviewedResourceRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedResource?.id || !selectedResource.canonicalMarkdownPath || !onPreviewResource) {
+      return;
+    }
+    if (autoPreviewedResourceRef.current === selectedResource.id) {
+      return;
+    }
+    autoPreviewedResourceRef.current = selectedResource.id;
+    onPreviewResource(selectedResource.id);
+  }, [onPreviewResource, selectedResource?.id, selectedResource?.canonicalMarkdownPath]);
+
   const reportMutationFailure = (kind: ResourceMutationKind, resourceIds: string[]) => {
     if (kind === "delete") {
       setPendingDeletedResourceIds([]);
@@ -2113,10 +2141,18 @@ export function ResourcesWorkbenchView({
     }
   };
 
-  const openResourceInVsCode = (resource: ResourceRecord) => {
+  const openResourceInVsCode = (
+    resource: ResourceRecord,
+    options?: { openOriginal?: boolean; line?: number },
+  ) => {
     // Row click is a native "open file" action: keep the tree visible and let
     // VS Code own the editor. The Reader remains available from Space.
-    onOpenResource?.(resource.id);
+    const anchorLine = resource.location?.line_start;
+    const line =
+      options?.openOriginal || (typeof anchorLine !== "number" || !Number.isFinite(anchorLine))
+        ? options?.line
+        : anchorLine;
+    onOpenResource?.(resource.id, { ...options, ...(line ? { line } : {}) });
   };
 
   const focusFirstImportMenuItem = () => {
@@ -3699,8 +3735,24 @@ export function ResourcesWorkbenchView({
             busy: selectedResourceTrainingState?.phase === "loading",
           } : undefined}
         >
-          <section className="resources-knowledge__detail-object" aria-label={selectedResource.title}>
-          {sandboxPreview ? (
+          <section
+            className="resources-knowledge__detail-object"
+            aria-label={selectedResource.title}
+            data-canonical-markdown={selectedResource.canonicalMarkdownPath ? "true" : "false"}
+          >
+          {selectedResourceDocument ? (
+            <div className="resources-knowledge__content-preview" aria-label={resourcePreviewHeading(language)}>
+              <div className="resources-knowledge__content-preview-body resources-knowledge__content-preview-body--markdown">
+                <MessageRichContent
+                  body={previewBodyWithoutDuplicateTitle(
+                    selectedResourceDocument.content,
+                    selectedResource.title,
+                  )}
+                  language={language}
+                />
+              </div>
+            </div>
+          ) : sandboxPreview ? (
             <div className="resources-knowledge__content-preview" aria-label={resourcePreviewHeading(language)}>
               {sandboxPreview.previewKind === "markdown" ||
               /\.md(?:own|own)?$/i.test(sandboxPreview.path ?? sandboxPreview.relativePath ?? "") ? (
@@ -3771,12 +3823,11 @@ export function ResourcesWorkbenchView({
           ) : null}
           </>
           ) : null}
-          {!sandboxPreview ? (
           <>
             {/* The obvious "read this" action stays visible; everything that
                 manages the file hides behind one clearly-owned section, so
                 the reader shows a single primary row plus collapsed groups. */}
-            {onPreviewResource && selectedResource.sandboxPath ? (
+            {onPreviewResource && (selectedResource.sandboxPath || selectedResource.canonicalMarkdownPath) ? (
               <div className="resources-knowledge__detail-actions resources-knowledge__detail-actions--preview">
                 <button
                   className="button button--primary button--compact"
@@ -3821,6 +3872,17 @@ export function ResourcesWorkbenchView({
               <ArrowRightIcon size={12} />
               <span>{selectedResourceOpenLabel}</span>
             </button>
+            {selectedResource.canonicalOriginalPath ? (
+              <button
+                className="button button--ghost button--compact resources-knowledge__open-original-action"
+                type="button"
+                onClick={() => openResourceInVsCode(selectedResource, { openOriginal: true })}
+                title={localize(language, "openOriginal")}
+              >
+                <FileIcon size={12} />
+                <span>{localize(language, "openOriginal")}</span>
+              </button>
+            ) : null}
             {onExportResource && canWriteResources ? (
               <button
                 className="button button--ghost button--compact resources-knowledge__export-action"
@@ -3877,9 +3939,8 @@ export function ResourcesWorkbenchView({
             </div>
           </details>
           </>
-          ) : null}
 
-          {!sandboxPreview && onOrganizeResource && canWriteResources ? (
+          {onOrganizeResource && canWriteResources ? (
             <details className="resources-knowledge__organize" data-resource-organize="true">
               <summary>
                 <strong>{localize(language, "organizeTitle")}</strong>

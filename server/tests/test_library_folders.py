@@ -447,13 +447,28 @@ def test_github_download_is_refused_while_network_fetch_is_disabled(tmp_path, mo
         # while a deduped capture that only needs the download is refused with
         # the download-specific message — and creates nothing.
         client.app.state.runtime.resource_service.enable_network_fetch = False
+        library_root = project / LIBRARY_DIRECTORY_NAME
+        before_refusal = (
+            sorted(path.relative_to(library_root).as_posix() for path in library_root.rglob("*"))
+            if library_root.exists()
+            else []
+        )
         response = client.post(
             "/resources/capture",
             json={"workspace_id": workspace_id, "url": repo_url, "kind": "github_repo", "download": True},
         )
         assert response.status_code == 409, response.text
         assert response.json()["detail"]["code"] == "download_network_disabled"
-        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
+        after_refusal = (
+            sorted(path.relative_to(library_root).as_posix() for path in library_root.rglob("*"))
+            if library_root.exists()
+            else []
+        )
+        # The refused download must not add library content. A canonical
+        # Markdown digest from the earlier successful capture may already have
+        # created the library root, so compare the tree instead of requiring
+        # the directory to be absent.
+        assert after_refusal == before_refusal
 
 
 # ------------------------------------------------------------ target governance

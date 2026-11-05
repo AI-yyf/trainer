@@ -2967,3 +2967,11 @@
 
 /* Reading-focused training card: content first, one footer action. */
 
+/* 200% zoom / ~170 CSS px: the long search placeholder would be clipped to a
+   single glyph. The wrapping <label> keeps the accessible name, so the
+   placeholder goes quiet and the field reads as an icon search box. */
+@container trainer (max-width: 240px) {
+  .resources-search input::placeholder {
+    color: transparent;
+  }
+}

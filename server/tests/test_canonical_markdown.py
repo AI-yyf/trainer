@@ -337,10 +337,29 @@ def test_store_writes_originals_markdown_and_assets(tmp_path: Path) -> None:
     assert expected_original.is_file()
     assert (artifact.assets_dir / "docx-image-001.png").is_file()
     assert read_text(expected_markdown).startswith("---\n")
-    assert artifact.markdown_relative.startswith("Trainer Library/resources/markdown/")
+    assert artifact.markdown_relative.startswith("Trainer Library/.trainer-resources/markdown/")
     assert artifact.original_relative is not None
-    assert artifact.original_relative.startswith("Trainer Library/resources/originals/")
+    assert artifact.original_relative.startswith("Trainer Library/.trainer-resources/originals/")
 
 
 def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def test_plain_text_preview_strips_markdown_syntax() -> None:
+    from app.resources.canonical import plain_text_preview
+
+    body = (
+        "# Notes\n\n## Quorum\n\nSee the [paper](https://example.org).\n\n"
+        "<!-- page: 2 -->\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n"
+        "![chart](assets/x.png) Read after write.[^1]\n"
+    )
+    preview = plain_text_preview(body, max_chars=120)
+    assert "#" not in preview
+    assert "[" not in preview
+    assert "<!--" not in preview
+    assert "Notes" in preview
+    assert "Quorum" in preview
+    assert "Read after write." in preview
+    assert "|" not in preview
+    assert " : " not in preview

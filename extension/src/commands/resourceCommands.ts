@@ -8,7 +8,11 @@ import {
   normalizeResourceSearchMode,
   resourceSearchModeRequest,
 } from '../../../shared/src/resourceSearch';
-import { resolveResourceLocalCandidates, resolveResourceOpenTarget } from '../../../shared/src/resourceOpen';
+import {
+  resolveResourceLocalCandidates,
+  resolveResourceOpenTarget,
+  resolveResourceOriginalCandidates,
+} from '../../../shared/src/resourceOpen';
 import type { CommandContext } from '../core/commandContext';
 import { attachPreviewAssetUris } from '../core/previewAssetUris';
 import type {
@@ -95,9 +99,32 @@ const RESOURCE_FILTER_EXTENSIONS = [
   'sql',
 ];
 const SUPPORTED_RESOURCE_EXTENSIONS = new Set(RESOURCE_FILTER_EXTENSIONS.map((extension) => `.${extension}`));
-const RESOURCE_UPLOAD_KINDS = new Set(['pdf', 'image', 'text', 'markdown', 'code', 'url', 'video'] as const);
+const RESOURCE_UPLOAD_KINDS = new Set([
+  'pdf',
+  'epub',
+  'docx',
+  'pptx',
+  'html',
+  'image',
+  'text',
+  'markdown',
+  'code',
+  'url',
+  'video',
+] as const);
 
-type ResourceUploadKind = 'pdf' | 'image' | 'text' | 'markdown' | 'code' | 'url' | 'video';
+type ResourceUploadKind =
+  | 'pdf'
+  | 'epub'
+  | 'docx'
+  | 'pptx'
+  | 'html'
+  | 'image'
+  | 'text'
+  | 'markdown'
+  | 'code'
+  | 'url'
+  | 'video';
 type ResourceDeletionFailureReason = 'request_failed' | 'not_confirmed';
 type ResourceRestorationFailureReason = 'request_failed' | 'not_confirmed';
 
@@ -310,6 +337,30 @@ export async function uploadResourceCommand(
       mergeResourceRecords(context.getHostState().bootstrap, records),
     );
   };
+  // One visible stage line that advances with the real import work. Each
+  // stage is only reported when that work actually starts; failures still
+  // surface through the final per-resource result.
+  let importStageHandle: { dispose?: () => void } | undefined;
+  let lastImportStageAt = 0;
+  const showImportStage = async (zh: string, en: string) => {
+    // Keep each real stage visible long enough to be read; the work itself is
+    // already done (or about to start), this only paces the disclosure.
+    const elapsed = Date.now() - lastImportStageAt;
+    if (lastImportStageAt > 0 && elapsed < 450) {
+      await new Promise((resolve) => setTimeout(resolve, 450 - elapsed));
+    }
+    lastImportStageAt = Date.now();
+    importStageHandle?.dispose?.();
+    if (typeof vscode.window.setStatusBarMessage !== "function") {
+      return;
+    }
+    importStageHandle = vscode.window.setStatusBarMessage(
+      resourceResponseLanguage(context) === 'zh-CN' ? zh : en,
+      180_000,
+    );
+  };
+  await showImportStage('正在识别资料类型…', 'Identifying resource types…');
+
   const recordUploaded = async (upload: unknown) => {
     uploads.push(upload);
     await patchResourceRecords([upload]);
@@ -461,15 +512,89 @@ export async function uploadResourceCommand(
     };
   }
 
-  const indexResult = await indexUploadedResources(
-    context,
-    status.port,
-    workspaceId,
-    uploads,
-    recordIndexed,
-  );
+  const sidecarPort = status.port;
+  const uploadedResourceIds = uploads
+    .map((upload) => asString(asRecord(upload)?.id))
+    .filter((value): value is string => Boolean(value));
+  if (uploadedResourceIds.length > 0) {
+    const stageRequest = {
+      session_id: context.getSessionId(),
+      workspace_id: workspaceId,
+      resource_ids: uploadedResourceIds,
+    };
+    await showImportStage('正在解析文档结构…', 'Parsing document structure…');
+    try {
+      await context.sidecarClient.postJson<unknown>(
+        sidecarPort,
+        '/resource/canonicalize/analyze',
+        stageRequest,
+        { timeoutMs: RESOURCE_INDEX_TIMEOUT_MS },
+      );
+    } catch {
+      // Older sidecars without the staged endpoints still index normally.
+    }
+    await showImportStage('正在生成 Markdown…', 'Generating canonical Markdown…');
+    let materializedItems: Record<string, unknown>[] = [];
+    try {
+      const materialized = await context.sidecarClient.postJson<unknown>(
+        sidecarPort,
+        '/resource/canonicalize/materialize',
+        stageRequest,
+        { timeoutMs: RESOURCE_INDEX_TIMEOUT_MS },
+      );
+      materializedItems = Array.isArray(asRecord(materialized)?.items)
+        ? (asRecord(materialized)?.items as unknown[])
+            .map((item) => asRecord(item))
+            .filter((item): item is Record<string, unknown> => Boolean(item))
+        : [];
+    } catch {
+      // Fallback: indexing builds the canonical document itself.
+    }
+    const imageCount = materializedItems.reduce(
+      (total, item) => total + (asNumber(item.asset_count) ?? 0),
+      0,
+    );
+    const tableCount = materializedItems.reduce(
+      (total, item) => total + (asNumber(item.table_count) ?? 0),
+      0,
+    );
+    if (imageCount > 0 || tableCount > 0) {
+      await showImportStage(
+        `已生成 Markdown；已抽取 ${imageCount} 张图片、${tableCount} 个表格`,
+        `Markdown ready; extracted ${imageCount} image(s) and ${tableCount} table(s)`,
+      );
+    }
+  }
+  await showImportStage('正在建立索引…', 'Building the search index…');
+  // Parsing Word/PowerPoint/PDF sources into Markdown and indexing them can
+  // take tens of seconds; keep one honest visible stage instead of a silent
+  // wait. The final command message still reports the real per-resource result.
+  const runIndex = () =>
+    indexUploadedResources(
+      context,
+      sidecarPort,
+      workspaceId,
+      uploads,
+      recordIndexed,
+    );
+  const indexResult =
+    typeof vscode.window.withProgress === 'function' &&
+    vscode.ProgressLocation?.Notification !== undefined
+      ? await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title:
+              resourceResponseLanguage(context) === 'zh-CN'
+                ? 'Trainer：正在解析并生成 Markdown、建立索引…'
+                : 'Trainer: parsing documents into Markdown and indexing…',
+            cancellable: false,
+          },
+          runIndex,
+        )
+      : await runIndex();
   const indexed = indexResult.indexed;
   let summaryRefreshed = true;
+  await showImportStage('正在刷新资料库…', 'Refreshing the library…');
   try {
     const summary = await context.sidecarClient.getJson<unknown>(
       status.port,
@@ -486,6 +611,7 @@ export async function uploadResourceCommand(
     summaryRefreshed = false;
   }
 
+  importStageHandle?.dispose?.();
   const completed = failedUploads === 0 && indexResult.failedCount === 0 && summaryRefreshed;
   return {
     ok: completed,
@@ -918,9 +1044,12 @@ export async function openResourceCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
-  const resourceId =
-    payload && typeof payload === 'object' && 'resourceId' in payload
-      ? (payload as { resourceId?: unknown }).resourceId
+  const payloadRecord = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
+  const resourceId = payloadRecord?.resourceId;
+  const openOriginal = payloadRecord?.openOriginal === true;
+  const requestedLine =
+    typeof payloadRecord?.line === 'number' && Number.isFinite(payloadRecord.line)
+      ? Math.max(1, Math.floor(payloadRecord.line))
       : undefined;
   const language = resourceResponseLanguage(context);
 
@@ -954,7 +1083,9 @@ export async function openResourceCommand(
 
   const targetUri = await resolveExistingResourceUri(
     context,
-    resolveResourceLocalCandidates(resource),
+    openOriginal
+      ? resolveResourceOriginalCandidates(resource)
+      : resolveResourceLocalCandidates(resource),
   );
   if (!targetUri) {
     const urlFallback = [resource.source, resource.canonicalSource]
@@ -984,9 +1115,10 @@ export async function openResourceCommand(
     await vscode.commands.executeCommand('vscode.open', targetUri, {
       preview: false,
       preserveFocus: false,
-      // Open at the start: a library row click should reveal the file, not a
-      // stale scroll position or selection from an earlier visit.
-      selection: new vscode.Range(0, 0, 0, 0),
+      // Open at the requested line when a search hit names one; otherwise at
+      // the start — a library row click should reveal the file, not a stale
+      // scroll position or selection from an earlier visit.
+      selection: new vscode.Range(requestedLine ? requestedLine - 1 : 0, 0, requestedLine ? requestedLine - 1 : 0, 0),
     });
   }
   return {
@@ -1846,6 +1978,94 @@ export async function previewResourceCommand(
       : undefined;
   const requestedPath = typeof explicitPath === 'string' ? explicitPath.trim() : undefined;
   const source = resource?.source?.trim();
+
+  // Library documents render their canonical Markdown digest. It lives inside
+  // the workspace library (not the sandbox), so the sandbox containment check
+  // below does not apply; the resource record is the authority for the path.
+  // A preview may name an explicit sandbox/artifact path. Only fall back to
+  // the canonical reader document when no explicit path was requested (or the
+  // request is for that document itself); otherwise the explicit path wins.
+  const canonicalPath = resource?.canonicalMarkdownPath?.trim();
+  // A sandbox copy that actually lives inside the governed sandbox is what
+  // the sandbox preview lane exists to render. Library documents whose stale
+  // "sandboxPath" points elsewhere read their canonical digest instead.
+  const currentSandboxRoot = resolveSandboxRootPath(context);
+  const sandboxCopyInGovernedSandbox = Boolean(
+    resource?.sandboxPath?.trim() &&
+      currentSandboxRoot &&
+      isPathWithinRoot(resource.sandboxPath!, currentSandboxRoot),
+  );
+  const wantsCanonicalDocument = Boolean(canonicalPath) &&
+    !sandboxCopyInGovernedSandbox &&
+    (!requestedPath || requestedPath === canonicalPath);
+  if (canonicalPath && wantsCanonicalDocument) {
+    const canonicalUri = await resolveExistingResourceUri(context, [canonicalPath]);
+    if (canonicalUri) {
+      try {
+        const raw = await fs.readFile(canonicalUri.fsPath);
+        const body = rewriteCanonicalAssetUris(
+          stripCanonicalFrontMatter(raw.toString('utf8')),
+          canonicalUri.fsPath,
+          (filePath) => normalizeWorkbenchAssetUri(context.workbench.resolveWebviewUriForPath?.(filePath)),
+        );
+        const preview = normalizeSandboxPreview({
+          path: canonicalUri.fsPath,
+          relative_path: canonicalPath,
+          title: resource?.title,
+          file_kind: 'markdown',
+          preview_kind: 'markdown',
+          preview_tier: 'rich',
+          content: body,
+          is_binary: false,
+          can_native_open: true,
+        });
+        const current = context.getHostState().bootstrap;
+        await context.patchWorkbenchData(
+          attachPreviewAssetUris(
+            {
+              conversation: current.conversation,
+              liveResourceFocus: true,
+              resourceDocument: {
+                resourceId: resource?.id ?? '',
+                title: resource?.title,
+                path: canonicalUri.fsPath,
+                relativePath: canonicalPath,
+                content: body,
+                previewKind: 'markdown',
+                pageCount: resource?.pageCount ?? null,
+                slideCount: resource?.slideCount ?? null,
+              },
+              memory: {
+                ...current.memory,
+                sandboxPreview: preview,
+                selectedResourceDetail: resource
+                  ? normalizeResourceDetailRecord(resource)
+                  : current.memory.selectedResourceDetail,
+              },
+            } as Partial<BootstrapData>,
+            (filePath) => normalizeWorkbenchAssetUri(context.workbench.resolveWebviewUriForPath?.(filePath)),
+          ),
+        );
+        return {
+          ok: true,
+          message: language === 'zh-CN'
+            ? `已打开：${resource?.title ?? basenameFs(canonicalPath)}`
+            : `Opened ${resource?.title ?? basenameFs(canonicalPath)}.`,
+          data: preview,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          message: libraryCopy(
+            'previewUnavailable',
+            language,
+            error instanceof Error ? error.message : String(error),
+          ),
+        };
+      }
+    }
+  }
+
   const previewPath = resource?.sandboxPath?.trim() ??
     (requestedPath && !/^https?:\/\//i.test(requestedPath) ? requestedPath : undefined);
 
@@ -1903,6 +2123,11 @@ export async function previewResourceCommand(
           // Pass conversation so host can invent file_preview for document+.docx
           // (sidecar never emits Coach parts; omit conversation elsewhere = fail-closed).
           conversation: current.conversation,
+          // A sandbox preview is a live learner action, not recovered-plan
+          // chrome; snapshot refreshes must keep it. It also replaces any
+          // canonical reader document that was open before.
+          liveResourceFocus: true,
+          resourceDocument: null,
           memory: {
             ...current.memory,
             sandboxPreview: preview,
@@ -2712,6 +2937,18 @@ function detectResourceKind(filePath: string): ResourceUploadKind {
   if (extension === '.pdf') {
     return 'pdf';
   }
+  if (extension === '.epub') {
+    return 'epub';
+  }
+  if (['.docx', '.docm'].includes(extension)) {
+    return 'docx';
+  }
+  if (['.pptx', '.pptm'].includes(extension)) {
+    return 'pptx';
+  }
+  if (['.html', '.htm', '.xhtml'].includes(extension)) {
+    return 'html';
+  }
   if (['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'].includes(extension)) {
     return 'image';
   }
@@ -2966,11 +3203,45 @@ function normalizeResourceDetailRecord(value: unknown): ResourceDetailRecordView
     sandboxDirty: asBoolean(record.sandbox_dirty) ?? asBoolean(record.sandboxDirty),
     extractedArtifactPath:
       asString(record.extracted_artifact_path) ?? asString(record.extractedArtifactPath),
+    canonicalMarkdownPath:
+      asString(record.canonical_markdown_path) ?? asString(record.canonicalMarkdownPath),
+    canonicalOriginalPath:
+      asString(record.canonical_original_path) ?? asString(record.canonicalOriginalPath),
+    parser: asString(record.parser),
+    parserVersion: asString(record.parser_version) ?? asString(record.parserVersion),
+    pageCount: asNumber(record.page_count) ?? asNumber(record.pageCount),
+    slideCount: asNumber(record.slide_count) ?? asNumber(record.slideCount),
+    location: asRecord(record.location),
     updatedAt: asString(record.updated_at) ?? asString(record.updatedAt),
     sourceItems: asStringArray(record.source_items ?? record.sourceItems),
     tags: asStringArray(record.tags),
     warnings: asStringArray(record.warnings),
   };
+}
+
+function stripCanonicalFrontMatter(markdown: string): string {
+  return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n)*/, '');
+}
+
+/**
+ * Canonical Markdown keeps extracted images on relative paths
+ * (`assets/<resource-id>/image.png`). The webview cannot resolve those against
+ * the markdown file, so rewrite local image targets to webview URIs.
+ */
+function rewriteCanonicalAssetUris(
+  markdown: string,
+  markdownPath: string,
+  resolveUri: (filePath: string) => string | undefined,
+): string {
+  const baseDirectory = path.dirname(markdownPath);
+  return markdown.replace(
+    /(!\[[^\]]*\]\()(?![a-z][a-z0-9+.-]*:|\/\/)([^)\s]+)(\))/gi,
+    (match, prefix: string, target: string, suffix: string) => {
+      const absolute = path.resolve(baseDirectory, target);
+      const uri = resolveUri(absolute);
+      return uri ? `${prefix}${uri}${suffix}` : match;
+    },
+  );
 }
 
 function normalizeSandboxPreview(value: unknown): Record<string, unknown> & { path: string } {
@@ -3644,11 +3915,16 @@ function normalizeWorkbenchAssetUri(value: unknown): string | undefined {
 function normalizeResourceKind(value: string | undefined): ResourceDetailRecordView['kind'] {
   if (
     value === 'pdf' ||
+    value === 'epub' ||
+    value === 'docx' ||
+    value === 'pptx' ||
+    value === 'html' ||
     value === 'image' ||
     value === 'markdown' ||
     value === 'text' ||
     value === 'code' ||
-    value === 'url'
+    value === 'url' ||
+    value === 'video'
   ) {
     return value;
   }

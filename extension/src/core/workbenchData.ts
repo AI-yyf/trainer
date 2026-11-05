@@ -650,6 +650,8 @@ export function mergeSessionMessage(
     snapshot?.sessionHistoryRestored === true ||
     (!workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) && current.sessionHistoryRestored === true);
   patch.sessionHistoryRestored = preserveHistory;
+  patch.liveResourceFocus = current.liveResourceFocus === true;
+  patch.resourceDocument = current.resourceDocument;
   return { sessionId, patch: applyLeftoverBoundPlanFiveViewOmit(current,
     applyLeftoverNotLiveTaskGuideFocus(patch, preserveHistory)) };
 }
@@ -1165,6 +1167,10 @@ export function mergeMemorySummary(
     snapshot?.sessionHistoryRestored === true ||
     (!workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) && current.sessionHistoryRestored === true);
   mapped.sessionHistoryRestored = preserveHistory;
+  // A live library focus survives snapshot refreshes; it is content the
+  // learner opened, not plan chrome.
+  mapped.liveResourceFocus = current.liveResourceFocus === true;
+  mapped.resourceDocument = current.resourceDocument;
   return applyLeftoverBoundPlanFiveViewOmit(current,
     applyLeftoverNotLiveTaskGuideFocus(mapped, preserveHistory));
 }
@@ -2406,6 +2412,10 @@ function applyLeftoverNotLiveTaskGuideFocus<
   },
 >(patch: T, preserveSessionHistory = false): T {
   if (patch.planRuntimeStatus?.recovered !== true) {
+    return patch;
+  }
+  if ((patch as { liveResourceFocus?: boolean }).liveResourceFocus === true) {
+    // An explicit resource focus is live user work, not recovered plan chrome.
     return patch;
   }
   const chrome = preferRecoveredCoachTaskChrome({
@@ -6626,6 +6636,7 @@ function mapResource(value: unknown): ResourceRecordView | undefined {
     sandboxDirty: asBoolean(record.sandbox_dirty) ?? asBoolean(record.sandboxDirty),
     extractedArtifactPath:
       asText(record.extracted_artifact_path) ?? asText(record.extractedArtifactPath),
+    ...canonicalResourceFields(record),
     updatedAt: asText(record.updated_at) ?? asText(record.updatedAt),
   };
 }
@@ -7251,15 +7262,46 @@ function asRecordArray(value: unknown): UnknownRecord[] | undefined {
 function asResourceKind(value: string | undefined): ResourceDetailRecordView['kind'] | undefined {
   if (
     value === 'pdf' ||
+    value === 'epub' ||
+    value === 'docx' ||
+    value === 'pptx' ||
+    value === 'html' ||
     value === 'image' ||
     value === 'markdown' ||
     value === 'text' ||
     value === 'code' ||
-    value === 'url'
+    value === 'url' ||
+    value === 'video'
   ) {
     return value;
   }
   return undefined;
+}
+
+/**
+ * Canonical Markdown fields are projected only when the host actually sends
+ * them, so records captured before the canonical pipeline keep their exact
+ * shape (and legacy workbench fixtures stay comparable).
+ */
+function canonicalResourceFields(
+  record: Record<string, unknown>,
+): Partial<ResourceDetailRecordView> {
+  const fields: Partial<ResourceDetailRecordView> = {};
+  const markdownPath =
+    asText(record.canonical_markdown_path) ?? asText(record.canonicalMarkdownPath);
+  const originalPath =
+    asText(record.canonical_original_path) ?? asText(record.canonicalOriginalPath);
+  const parser = asText(record.parser);
+  const parserVersion = asText(record.parser_version) ?? asText(record.parserVersion);
+  const pageCount = asNumber(record.page_count) ?? asNumber(record.pageCount);
+  const slideCount = asNumber(record.slide_count) ?? asNumber(record.slideCount);
+  if (markdownPath) fields.canonicalMarkdownPath = markdownPath;
+  if (originalPath) fields.canonicalOriginalPath = originalPath;
+  if (parser) fields.parser = parser;
+  if (parserVersion) fields.parserVersion = parserVersion;
+  if (pageCount !== undefined) fields.pageCount = pageCount;
+  if (slideCount !== undefined) fields.slideCount = slideCount;
+  return fields;
 }
 
 function asResourceStatus(value: string | undefined): ResourceDetailRecordView['status'] | undefined {

@@ -203,11 +203,11 @@
   height: 20px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent) 9%, transparent);
-  color: var(--vscode-symbolIcon-classForeground, var(--accent));
+  color: var(--vscode-icon-foreground, var(--accent));
 }
 
 .agent-activity-strip__stage--download {
-  color: var(--vscode-textLink-foreground, var(--accent));
+  color: var(--accent);
 }
 
 .agent-activity-strip__stage--organize {

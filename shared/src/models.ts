@@ -279,7 +279,18 @@ export type PlanRuntimeStatus = {
 
 export type ResourceRecord = {
   id: string;
-  kind: "pdf" | "epub" | "image" | "text" | "markdown" | "code" | "url" | "video";
+  kind:
+    | "pdf"
+    | "epub"
+    | "docx"
+    | "pptx"
+    | "html"
+    | "image"
+    | "text"
+    | "markdown"
+    | "code"
+    | "url"
+    | "video";
   name: string;
   source: string;
   tags: string[];
@@ -302,6 +313,18 @@ export type ResourceRecord = {
   sandboxSyncedAt?: string;
   sandboxDirty?: boolean;
   extractedArtifactPath?: string;
+  /**
+   * Canonical Markdown digest of this resource (workspace-relative). Reading,
+   * search and citations use this document; the original stays untouched.
+   */
+  canonicalMarkdownPath?: string | null;
+  /** Workspace-relative path of the untouched original inside the library. */
+  canonicalOriginalPath?: string | null;
+  /** Parser that produced the canonical document, e.g. `docx-v1`. */
+  parser?: string;
+  parserVersion?: string;
+  pageCount?: number | null;
+  slideCount?: number | null;
   /** TR-059: SHA-256 of the uploaded content, pinned at upload time. */
   contentHash?: string | null;
   /** Content version that produced this resource projection. */

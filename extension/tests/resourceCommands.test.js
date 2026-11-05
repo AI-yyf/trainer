@@ -1340,6 +1340,12 @@ test('uploadResourceCommand accepts inline uploads without opening picker UI', a
     if (requestPath === '/resource/index') {
       indexTimeouts.push(options?.timeoutMs);
     }
+    if (requestPath === '/resource/canonicalize/analyze') {
+      return { ok: true, items: [{ resource_id: 'resource-inline-1', ok: true, image_count: 0, table_count: 0 }] };
+    }
+    if (requestPath === '/resource/canonicalize/materialize') {
+      return { ok: true, items: [{ resource_id: 'resource-inline-1', ok: true, asset_count: 0, table_count: 0 }] };
+    }
     if (requestPath === '/resource/upload') {
       return {
         id: 'resource-inline-1',
@@ -1407,6 +1413,24 @@ test('uploadResourceCommand accepts inline uploads without opening picker UI', a
     },
     {
       port: 34891,
+      requestPath: '/resource/canonicalize/analyze',
+      body: {
+        session_id: 'session-1',
+        workspace_id: 'F:\\trainer\\workspace-a',
+        resource_ids: ['resource-inline-1'],
+      },
+    },
+    {
+      port: 34891,
+      requestPath: '/resource/canonicalize/materialize',
+      body: {
+        session_id: 'session-1',
+        workspace_id: 'F:\\trainer\\workspace-a',
+        resource_ids: ['resource-inline-1'],
+      },
+    },
+    {
+      port: 34891,
       requestPath: '/resource/index',
       body: {
         session_id: 'session-1',
@@ -1455,6 +1479,12 @@ test('uploadResourceCommand preserves earlier files when a later upload fails', 
     if (requestPath === '/resource/upload' && body.name === 'second.md') {
       throw new Error('Sidecar request failed (500): C:\\private\\trainer-resource-error');
     }
+    if (requestPath === '/resource/canonicalize/analyze') {
+      return { ok: true, items: [{ resource_id: 'resource-first', ok: true }] };
+    }
+    if (requestPath === '/resource/canonicalize/materialize') {
+      return { ok: true, items: [{ resource_id: 'resource-first', ok: true, asset_count: 0, table_count: 0 }] };
+    }
     if (requestPath === '/resource/index' && body.resource_id === 'resource-first') {
       return {
         id: 'resource-first',
@@ -1486,6 +1516,8 @@ test('uploadResourceCommand preserves earlier files when a later upload fails', 
     [
       ['/resource/upload', 'first.md'],
       ['/resource/upload', 'second.md'],
+      ['/resource/canonicalize/analyze', undefined],
+      ['/resource/canonicalize/materialize', undefined],
       ['/resource/index', 'resource-first'],
     ],
   );

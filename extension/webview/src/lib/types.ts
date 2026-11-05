@@ -660,7 +660,18 @@ export interface ResourceRecord {
   library_paths?: string[];
   id: string;
   title: string;
-  kind: "pdf" | "epub" | "image" | "markdown" | "text" | "code" | "url" | "video";
+  kind:
+    | "pdf"
+    | "epub"
+    | "docx"
+    | "pptx"
+    | "html"
+    | "image"
+    | "markdown"
+    | "text"
+    | "code"
+    | "url"
+    | "video";
   status: "ready" | "indexing" | "attention";
   summary: string;
   source?: string;
@@ -693,6 +704,12 @@ export interface ResourceRecord {
   sandboxSyncedAt?: string;
   sandboxDirty?: boolean;
   extractedArtifactPath?: string;
+  canonicalMarkdownPath?: string | null;
+  canonicalOriginalPath?: string | null;
+  parser?: string;
+  parserVersion?: string;
+  pageCount?: number | null;
+  slideCount?: number | null;
   updatedAt?: string;
 }
 
@@ -1789,11 +1806,26 @@ export interface ConnectionStatus {
   provider: ProviderSummary;
 }
 
+export interface ResourceDocumentView {
+  resourceId: string;
+  title?: string;
+  path: string;
+  relativePath?: string;
+  content: string;
+  previewKind: "markdown";
+  pageCount?: number | null;
+  slideCount?: number | null;
+  anchors?: Array<Record<string, unknown>>;
+}
+
 export interface BootstrapData {
   /** Host generation changes when the runtime database is replaced or switched. */
   runtimeDataGeneration?: string;
   /** History confirmed for the current workspace by a server session snapshot. */
   sessionHistoryRestored?: boolean;
+  liveResourceFocus?: boolean;
+  /** Canonical Markdown document the learner is reading (host-owned). */
+  resourceDocument?: ResourceDocumentView | null;
   /**
    * Opt-in anonymous telemetry consent as answered by the sidecar; undefined
    * means "not asked yet", the server default is off (fail-closed display).

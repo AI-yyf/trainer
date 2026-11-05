@@ -9,20 +9,33 @@ type ResourceOpenRecord = {
   canonicalSource?: string;
   sandboxPath?: string;
   extractedArtifactPath?: string;
+  canonicalMarkdownPath?: string | null;
+  canonicalOriginalPath?: string | null;
 };
 
 const URL_PATTERN = /^https?:\/\//i;
 
+function localOrEmpty(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed && !URL_PATTERN.test(trimmed) ? trimmed : "";
+}
+
 /**
- * Local sources in priority order: the managed snapshot first, then the
- * extracted artifact, then the declared source and its canonical alias.
+ * Local read targets in priority order: the canonical Markdown document first
+ * (reading, search and citations all use it), then the managed sandbox
+ * snapshot or extracted artifact, then the declared source and its canonical
+ * alias.
  *
  * The values are not resolved against the filesystem here — this module is
  * shared with the webview. The extension host resolves relative paths against
  * the real workspace/admission roots and verifies that the file exists before
  * it opens an editor tab.
  */
-export function resolveResourceLocalCandidates(resource: ResourceOpenRecord): string[] {
+export function resolveResourceReadCandidates(resource: ResourceOpenRecord): string[] {
+  const markdown = localOrEmpty(resource.canonicalMarkdownPath);
+  if (markdown) {
+    return [markdown];
+  }
   const snapshots = [resource.sandboxPath?.trim(), resource.extractedArtifactPath?.trim()].filter(
     (value): value is string => Boolean(value) && !URL_PATTERN.test(value!),
   );
@@ -38,6 +51,44 @@ export function resolveResourceLocalCandidates(resource: ResourceOpenRecord): st
   return [resource.source?.trim(), resource.canonicalSource?.trim()].filter(
     (value): value is string => Boolean(value) && !URL_PATTERN.test(value!),
   );
+}
+
+/**
+ * "Open the original" targets: the untouched copy kept in the library first,
+ * then the sandbox snapshot/artifact, then the declared local source.
+ */
+export function resolveResourceOriginalCandidates(resource: ResourceOpenRecord): string[] {
+  const original = localOrEmpty(resource.canonicalOriginalPath);
+  if (original) {
+    return [original];
+  }
+  const snapshots = [resource.sandboxPath?.trim(), resource.extractedArtifactPath?.trim()].filter(
+    (value): value is string => Boolean(value) && !URL_PATTERN.test(value!),
+  );
+  if (snapshots.length > 0) {
+    return snapshots;
+  }
+  if (resource.kind === "url") {
+    return [];
+  }
+  return [resource.source?.trim(), resource.canonicalSource?.trim()].filter(
+    (value): value is string => Boolean(value) && !URL_PATTERN.test(value!),
+  );
+}
+
+/** True when "open original" points somewhere other than the Markdown digest. */
+export function hasDistinctOriginal(resource: ResourceOpenRecord): boolean {
+  const read = resolveResourceReadCandidates(resource)[0]?.trim();
+  const original = resolveResourceOriginalCandidates(resource)[0]?.trim();
+  return Boolean(original) && original !== read;
+}
+
+/**
+ * Backwards-compatible alias used by the open command: a row click opens the
+ * canonical Markdown document, not the binary original.
+ */
+export function resolveResourceLocalCandidates(resource: ResourceOpenRecord): string[] {
+  return resolveResourceReadCandidates(resource);
 }
 
 export function resolveResourceOpenTarget(resource: ResourceOpenRecord): ResourceOpenTarget {

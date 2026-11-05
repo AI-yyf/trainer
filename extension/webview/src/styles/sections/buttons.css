@@ -41,18 +41,25 @@
   cursor: not-allowed;
 }
 
-.button--accent {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--vscode-button-foreground, var(--bg-0));
+/* Primary actions use the editor's neutral secondary-button surface (the same
+   quiet outlined treatment VS Code uses for "Settings"): graphite background,
+   hairline border, theme foreground. No blue fill and no palette hue of its
+   own. Hierarchy comes from placement and weight, not colour. */
+.button--accent,
+.button--primary {
+  background: var(--vscode-button-secondaryBackground, var(--bg-2));
+  border-color: var(--vscode-button-border, color-mix(in srgb, var(--line) 72%, transparent));
+  color: var(--vscode-button-secondaryForeground, var(--fg-0));
 }
 
-.button--accent:hover {
-  background: color-mix(in srgb, var(--accent) 86%, var(--bg-0));
+.button--accent:hover,
+.button--primary:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--bg-3));
 }
 
-.button--accent:active:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 78%, var(--bg-0));
+.button--accent:active:not(:disabled),
+.button--primary:active:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground, var(--bg-3));
 }
 
 .button--ghost {
@@ -296,13 +303,13 @@
 }
 
 .action-button--accent {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--vscode-button-foreground, var(--bg-0));
+  border-color: var(--vscode-button-border, color-mix(in srgb, var(--line) 72%, transparent));
+  background: var(--vscode-button-secondaryBackground, var(--bg-2));
+  color: var(--vscode-button-secondaryForeground, var(--fg-0));
 }
 
 .action-button--accent:hover {
-  background: color-mix(in srgb, var(--accent) 86%, var(--bg-0));
+  background: var(--vscode-button-secondaryHoverBackground, var(--bg-3));
 }
 
 .action-button--ghost {

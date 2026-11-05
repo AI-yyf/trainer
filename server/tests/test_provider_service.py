@@ -4175,6 +4175,10 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
         "generate_training_card",
         "save_formal_plan",
         "record_learning_note",
+        # Library write tools stay unavailable unless the learner is working
+        # in the library or asks for the import/organize action explicitly.
+        "import_resource_url",
+        "organize_resources",
         "run_rubric_review",
         "specify_task",
         "next_task",

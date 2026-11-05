@@ -107,3 +107,49 @@ class ResourceIngestorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HtmlExtractionNoiseTests(unittest.TestCase):
+    def test_script_and_style_bodies_never_reach_extracted_text(self) -> None:
+        from app.ingest.service import _html_to_text
+
+        raw = (
+            "<html><head><title>Notes</title>"
+            "<style>html{color-scheme:light dark}body{margin:0}</style>"
+            "<script>window.secret='x'</script></head>"
+            "<body><h1>Quorum</h1><p>Read after write.</p></body></html>"
+        )
+        text = _html_to_text(raw)
+        self.assertNotIn("color-scheme", text)
+        self.assertNotIn("window.secret", text)
+        self.assertIn("Quorum", text)
+        self.assertIn("Read after write.", text)
+
+
+class UrlIngestMarkdownTests(unittest.TestCase):
+    def test_fetched_url_keeps_markdown_structure(self) -> None:
+        response = ControlledFetchResponse(
+            body=(
+                b"<html><body><h1>Lesson</h1><ul><li>Point A</li></ul>"
+                b"<table><tr><th>Key</th><th>Value</th></tr>"
+                b"<tr><td>R</td><td>3</td></tr></table></body></html>"
+            ),
+            final_url="https://example.org/lesson",
+            status=200,
+            headers={"content-type": "text/html"},
+            fetched_at="2026-01-01T00:00:00+00:00",
+        )
+        with patch("app.ingest.service.fetch_url", return_value=response):
+            text, warnings, provenance = IngestService(network_fetch_enabled=True)._extract_text_for_request(
+                IngestionRequest(
+                    source_uri="https://example.org/lesson",
+                    kind=ResourceKind.URL,
+                    enable_network=True,
+                ),
+                vision_enabled=False,
+            )
+        self.assertEqual(provenance["status"], "fetched")
+        self.assertEqual(warnings, [])
+        self.assertIn("Lesson", text)
+        self.assertIn("Point A", text)
+        self.assertTrue("|" in text or "Point A" in text)

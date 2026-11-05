@@ -68,6 +68,56 @@ body,
 }
 
 
+/* Row 2 — primary nav: three even columns, single line each. At very narrow
+   sidebars (e.g. 200% zoom) labels truncate with an ellipsis instead of
+   wrapping mid-word; the full label stays in title/aria-label. */
+.app-shell-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 0 var(--trainer-gutter) var(--space-2);
+}
+
+.app-shell-nav__item {
+  min-width: 0;
+  padding: 6px 4px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--trainer-font-sm);
+  line-height: 1.35;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.app-shell-nav__item > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-shell-nav__item:hover {
+  color: var(--fg-0);
+}
+
+.app-shell-nav__item[aria-current="page"] {
+  color: var(--fg-0);
+  border-bottom-color: var(--accent);
+}
+
+@container trainer (max-width: 220px) {
+  .app-shell-nav__item {
+    font-size: 11px;
+    padding-inline: 2px;
+  }
+}
+
 /* Utility-layer buttons are content-sized icon hits, not stretching tabs —
    the base .header-switcher__item grid contract (width: 100%; min-width: 0)
    collapses them to invisibility inside this flex row. */
@@ -79,4 +129,12 @@ body,
 .trainer-preview-sidebar {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* At 200% zoom the sidebar is ~170 CSS px: the add-resource label cannot fit,
+   so it collapses to its icon (full text stays in aria-label/title). */
+@container trainer (max-width: 240px) {
+  .resources-knowledge__add-resource > span {
+    display: none;
+  }
 }

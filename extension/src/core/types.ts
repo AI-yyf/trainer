@@ -795,7 +795,18 @@ export interface CoachFocusView {
 export interface ResourceRecordView {
   id: string;
   title: string;
-  kind: 'pdf' | 'image' | 'markdown' | 'text' | 'code' | 'url';
+  kind:
+    | 'pdf'
+    | 'epub'
+    | 'docx'
+    | 'pptx'
+    | 'html'
+    | 'image'
+    | 'markdown'
+    | 'text'
+    | 'code'
+    | 'url'
+    | 'video';
   status: 'ready' | 'indexing' | 'attention';
   summary: string;
   source?: string;
@@ -825,6 +836,14 @@ export interface ResourceRecordView {
   sandboxSyncedAt?: string;
   sandboxDirty?: boolean;
   extractedArtifactPath?: string;
+  canonicalMarkdownPath?: string | null;
+  canonicalOriginalPath?: string | null;
+  parser?: string;
+  parserVersion?: string;
+  pageCount?: number | null;
+  slideCount?: number | null;
+  /** Structured provenance of a search hit (page/slide/heading/line). */
+  location?: Record<string, unknown>;
   updatedAt?: string;
 }
 
@@ -1532,11 +1551,30 @@ export interface StageMaterialItem {
   createdAt?: string;
 }
 
+export interface ResourceDocumentView {
+  resourceId: string;
+  title?: string;
+  path: string;
+  relativePath?: string;
+  content: string;
+  previewKind: "markdown";
+  pageCount?: number | null;
+  slideCount?: number | null;
+  anchors?: Array<Record<string, unknown>>;
+}
+
 export interface BootstrapData {
   /** Host generation changes when the runtime database is replaced or switched. */
   runtimeDataGeneration?: string;
   /** History confirmed for the current workspace by a server session snapshot. */
   sessionHistoryRestored?: boolean;
+  /**
+   * The learner explicitly focused a library document. Recovered-plan cleanup
+   * must keep this live preview instead of treating it as leftover chrome.
+   */
+  liveResourceFocus?: boolean;
+  /** Canonical Markdown document the learner is reading (host-owned). */
+  resourceDocument?: ResourceDocumentView | null;
   /**
    * Opt-in anonymous telemetry consent (P2 #18), as answered by the sidecar
    * (/telemetry/consent + /telemetry/status). Machine-scoped, never
@@ -1841,7 +1879,10 @@ type TrainerWebviewMessageBody =
         __trainerResourceOperationId?: string;
       };
     }
-  | { type: 'resource/open'; payload: { resourceId: string } }
+  | {
+      type: 'resource/open';
+      payload: { resourceId: string; openOriginal?: boolean; line?: number };
+    }
   | { type: 'ui/focus'; payload: { target: 'conversation' | 'task' | 'evaluation' } }
   /**
    * Compatibility-only research traffic.

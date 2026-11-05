@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { TrainerSpinner } from "../common/TrainerSpinner";
 
 import WaveSurfer from "wavesurfer.js";
-import { workbenchTokens, type WorkbenchThemeName } from "../../../../../shared/src/tokens";
 
 export interface AudioPreviewContentProps {
   src: string;
@@ -20,20 +19,32 @@ interface AudioPalette {
 
 type AudioPreviewStatus = "idle" | "loading" | "ready" | "error";
 
-function resolveWorkbenchThemeName(): WorkbenchThemeName {
-  const themeName = document.documentElement.dataset.theme;
-  if (themeName === "light" || themeName === "dark") {
-    return themeName;
+/**
+ * Resolve a theme colour to a concrete `rgb()` string.
+ *
+ * The waveform is drawn on a canvas, which cannot consume CSS variables
+ * directly, so the value is resolved once through the document's computed
+ * style. The palette therefore follows the active VS Code theme instead of a
+ * hardcoded accent.
+ */
+function resolveThemeColor(name: string, fallback: string): string {
+  if (typeof document === "undefined" || !document.body) {
+    return fallback;
   }
-  return "dark";
+  const probe = document.createElement("span");
+  probe.style.color = `var(${name})`;
+  probe.style.display = "none";
+  document.body.appendChild(probe);
+  const resolved = getComputedStyle(probe).color.trim();
+  probe.remove();
+  return resolved || fallback;
 }
 
 function readAudioPalette(): AudioPalette {
-  const theme = workbenchTokens.themes[resolveWorkbenchThemeName()];
   return {
-    waveColor: theme.fgMuted,
-    progressColor: theme.accent,
-    cursorColor: theme.accent,
+    waveColor: resolveThemeColor("--fg-muted", "gray"),
+    progressColor: resolveThemeColor("--accent", "gray"),
+    cursorColor: resolveThemeColor("--accent", "gray"),
   };
 }
 

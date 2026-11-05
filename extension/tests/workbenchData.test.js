@@ -6907,3 +6907,27 @@ test('mergeSessionMessage repairs a current turn when the reply id matches even 
   assert.equal(conversation.at(-2)?.body, '服务端重写后的用户文本。');
   assert.equal(conversation.at(-1)?.body, '当前轮的安全回复。');
 });
+
+test('a live library preview survives recovered-plan cleanup; a leftover one does not', () => {
+  const makeBootstrap = (live) => {
+    const bootstrap = createBootstrap();
+    bootstrap.planRuntimeStatus = { recovered: true, currentStep: '' };
+    if (live) {
+      bootstrap.liveResourceFocus = true;
+    }
+    bootstrap.memory.sandboxPreview = {
+      path: '/workspace/Trainer Library/.trainer-resources/markdown/resource-a.md',
+      previewKind: 'markdown',
+      content: '# Notes\n\nBody.',
+    };
+    return bootstrap;
+  };
+
+  const livePatch = mergeMemorySummary(makeBootstrap(true), { context_id: 'workspace-a' });
+  assert.equal(livePatch.memory.sandboxPreview?.previewKind, 'markdown');
+  assert.match(livePatch.memory.sandboxPreview?.content ?? '', /# Notes/);
+  assert.equal(livePatch.liveResourceFocus, true);
+
+  const leftoverPatch = mergeMemorySummary(makeBootstrap(false), { context_id: 'workspace-a' });
+  assert.equal(leftoverPatch.memory.sandboxPreview, undefined);
+});

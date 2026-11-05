@@ -345,6 +345,10 @@ def test_legacy_url_helper_supports_trafilatura_document_results(monkeypatch) ->
         ),
     )
     monkeypatch.setattr(
+        "app.resources.ingest.trafilatura.extract",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         "app.resources.ingest.trafilatura.bare_extraction",
         lambda *_args, **_kwargs: document,
     )
@@ -368,6 +372,10 @@ def test_legacy_url_helper_supports_trafilatura_dict_results(monkeypatch) -> Non
             headers={"content-type": "text/html"},
             fetched_at="2026-07-13T00:00:00+00:00",
         ),
+    )
+    monkeypatch.setattr(
+        "app.resources.ingest.trafilatura.extract",
+        lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
         "app.resources.ingest.trafilatura.bare_extraction",

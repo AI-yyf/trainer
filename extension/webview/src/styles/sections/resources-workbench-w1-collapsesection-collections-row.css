@@ -208,6 +208,31 @@
 
 /* The reader's file actions group: same collapsed-section rhythm as the
    organize section so the reader reads as one primary row plus groups. */
+/* One framed reading surface: identity, source facts, actions and the
+   Markdown body share a single card instead of a loose vertical stack. */
+[data-template="ResourceReader"] {
+  margin: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+}
+
+.resources-knowledge__detail-object {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.resources-knowledge__detail-object > * {
+  margin: 0;
+}
+
+.resources-knowledge__facts {
+  margin: 0;
+}
+
 .resources-knowledge__file-actions {
   margin-top: var(--space-2);
   border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
@@ -594,13 +619,6 @@
    grid. Compact rows, folder chevrons, no count chips, no row action icons.
    A file row click opens the real file in VS Code; Space previews it.
    --------------------------------------------------------------------------- */
-.resources-pane .template-library {
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
 .resources-knowledge__tree {
   border-top: 0;
   padding: 2px 0;
@@ -674,8 +692,8 @@
 .resources-library-tree__node.is-selected,
 .resources-library-tree__node.is-marked {
   border: 0;
-  background: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--accent) 24%, transparent));
-  color: var(--vscode-list-activeSelectionForeground, var(--fg-0));
+  background: var(--selection-bg);
+  color: var(--selection-fg);
 }
 
 .resources-library-tree__node.is-marked:not(.is-selected) {
@@ -746,14 +764,28 @@
 /* Keep the clicked file visibly selected like the native Explorer without
    switching the sidebar to the Reader (row click opens the editor tab). */
 .resources-library-tree__node:focus {
-  background: var(--vscode-list-activeSelectionBackground, color-mix(in srgb, var(--accent) 24%, transparent));
-  color: var(--vscode-list-activeSelectionForeground, var(--fg-0));
+  background: var(--selection-bg);
+  color: var(--selection-fg);
 }
 
-/* Material Icon Theme glyphs carry their own colour; only sizing lives here. */
-.resources-library-tree__file-icon,
+/* Folder glyphs are theme-coloured via a mask: the vendored SVG only supplies
+   the shape, so the icon follows --vscode-icon-foreground in every theme. */
 .resources-library-tree__folder-icon {
+  inline-size: 18px;
+  block-size: 18px;
+  flex: none;
+  background-color: var(--vscode-icon-foreground, var(--vscode-foreground, CanvasText));
+  -webkit-mask: var(--folder-icon-url) center / contain no-repeat;
+  mask: var(--folder-icon-url) center / contain no-repeat;
+}
+
+/* File glyphs are theme-coloured masks as well: the icon follows
+   --vscode-icon-foreground in every theme. */
+.resources-library-tree__file-icon {
   display: block;
+  background-color: var(--vscode-icon-foreground, var(--vscode-foreground, CanvasText));
+  -webkit-mask: var(--resource-icon-url) center / contain no-repeat;
+  mask: var(--resource-icon-url) center / contain no-repeat;
   flex: none;
   width: 18px;
   height: 18px;
