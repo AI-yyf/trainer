@@ -2146,47 +2146,71 @@ def _xlsx_preview_summary(file_path: str) -> tuple[str | None, dict[str, Any]]:
         return None, {}
     try:
         with zipfile.ZipFile(path) as archive:
-            workbook_sheet = _xlsx_first_sheet(archive)
-            if workbook_sheet is None:
+            sheet_entries = _xlsx_all_sheets(archive)
+            if not sheet_entries:
                 return None, {}
-            sheet_name, sheet_path, sheet_count = workbook_sheet
-            row_count, max_column, sample_row_maps, needed_shared_string_indices = _xlsx_collect_sheet_preview(
-                archive,
-                sheet_path,
-                max_preview_rows=STRUCTURED_XLSX_PREVIEW_ROWS,
-            )
-            shared_strings = _xlsx_load_shared_strings(archive, needed_shared_string_indices)
+            sections: list[str] = []
+            structured_sheets: list[dict[str, Any]] = []
+            for sheet_name, sheet_path in sheet_entries:
+                row_count, max_column, sample_row_maps, needed_shared_string_indices = (
+                    _xlsx_collect_sheet_preview(
+                        archive,
+                        sheet_path,
+                        max_preview_rows=STRUCTURED_XLSX_PREVIEW_ROWS,
+                    )
+                )
+                shared_strings = _xlsx_load_shared_strings(archive, needed_shared_string_indices)
+                if row_count == 0 or not sample_row_maps:
+                    continue
+                resolved_rows = _xlsx_resolve_preview_rows(
+                    sample_row_maps,
+                    shared_strings,
+                    column_count=max_column,
+                )
+                if not resolved_rows:
+                    continue
+                headers = [str(cell).strip() for cell in resolved_rows[0]]
+                data_rows = [list(row) for row in resolved_rows[1:]]
+                if not headers:
+                    continue
+                section_markdown = _xlsx_rows_to_markdown(sheet_name, headers, data_rows)
+                if section_markdown:
+                    sections.append(section_markdown)
+                structured_sheets.append(
+                    {
+                        "sheetName": sheet_name,
+                        "columns": headers,
+                        "rows": data_rows,
+                        "headers": headers,
+                        "rowCount": max(0, row_count - 1),
+                        "columnCount": max(max_column, len(headers)),
+                        "sampleRows": data_rows,
+                        "truncated": row_count - 1 > len(data_rows),
+                    }
+                )
     except Exception:
         return None, {}
 
-    if row_count == 0 or not sample_row_maps:
+    if not sections or not structured_sheets:
         return None, {}
-
-    resolved_rows = _xlsx_resolve_preview_rows(
-        sample_row_maps,
-        shared_strings,
-        column_count=max_column,
-    )
-    if not resolved_rows:
-        return None, {}
-    headers = [str(cell).strip() for cell in resolved_rows[0]]
-    data_rows = [list(row) for row in resolved_rows[1:]]
-    if not headers:
-        return None, {}
-    preview_markdown = _xlsx_rows_to_markdown(sheet_name, headers, data_rows)
-    return preview_markdown, {
+    preview_markdown = "\n\n".join(sections)
+    first_sheet = structured_sheets[0]
+    structured = {
         "kind": "table",
         "format": "xlsx",
-        "sheetName": sheet_name,
-        "sheetCount": sheet_count,
-        "columns": headers,
-        "rows": data_rows,
-        "headers": headers,
-        "rowCount": max(0, row_count - 1),
-        "columnCount": max(max_column, len(headers)),
-        "sampleRows": data_rows,
-        "truncated": row_count - 1 > len(data_rows),
+        "fileName": path.name,
+        "sheetName": first_sheet["sheetName"],
+        "sheetNames": [sheet["sheetName"] for sheet in structured_sheets],
+        "sheetCount": len(sheet_entries),
+        "columns": first_sheet["columns"],
+        "rows": first_sheet["rows"],
+        "headers": first_sheet["headers"],
+        "rowCount": first_sheet["rowCount"],
+        "columnCount": first_sheet["columnCount"],
+        "sampleRows": first_sheet["sampleRows"],
+        "truncated": any(sheet["truncated"] for sheet in structured_sheets),
     }
+    return preview_markdown, structured
 
 
 def _odf_preview_summary(file_path: str) -> tuple[str | None, dict[str, Any]]:
@@ -2201,11 +2225,25 @@ def _odf_preview_summary(file_path: str) -> tuple[str | None, dict[str, Any]]:
 
 
 def _xlsx_first_sheet(archive: zipfile.ZipFile) -> tuple[str, str, int] | None:
+    sheets = _xlsx_all_sheets(archive)
+    if not sheets:
+        return None
+    name, target = sheets[0]
+    return name, target, len(sheets)
+
+
+def _xlsx_all_sheets(archive: zipfile.ZipFile) -> list[tuple[str, str]]:
+    """All (sheet_name, sheet_xml_path) entries in workbook order.
+
+    The index/preview conversion must cover every sheet — a first-sheet-only
+    fallback silently dropped the rest of the workbook from search.
+    """
+
     try:
         workbook_root = ET.fromstring(archive.read("xl/workbook.xml"))
         rels_root = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     except Exception:
-        return None
+        return []
     rel_namespace = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
     rels = {
         str(rel.attrib.get("Id") or ""): str(rel.attrib.get("Target") or "")
@@ -2215,17 +2253,18 @@ def _xlsx_first_sheet(archive: zipfile.ZipFile) -> tuple[str, str, int] | None:
     }
     sheets = workbook_root.findall("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheets/{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheet")
     if not sheets:
-        return None
-    first_sheet = sheets[0]
-    sheet_name = str(first_sheet.attrib.get("name") or "Sheet1")
-    rel_id = str(first_sheet.attrib.get(f"{rel_namespace}id") or "")
-    if not rel_id:
-        return None
-    target = rels.get(rel_id, "")
-    if not target:
-        return None
-    normalized_target = _xlsx_normalize_target_path(target)
-    return sheet_name, normalized_target, len(sheets)
+        return []
+    entries: list[tuple[str, str]] = []
+    for sheet in sheets:
+        sheet_name = str(sheet.attrib.get("name") or f"Sheet{len(entries) + 1}")
+        rel_id = str(sheet.attrib.get(f"{rel_namespace}id") or "")
+        if not rel_id:
+            continue
+        target = rels.get(rel_id, "")
+        if not target:
+            continue
+        entries.append((sheet_name, _xlsx_normalize_target_path(target)))
+    return entries
 
 
 def _xlsx_normalize_target_path(target: str) -> str:

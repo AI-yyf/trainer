@@ -79,6 +79,12 @@ class IngestService:
             return text, warnings, provenance
         if kind in {ResourceKind.DOCX, ResourceKind.PPTX, ResourceKind.HTML}:
             return _extract_canonical_text(request)
+        source_suffix = Path(request.source_uri).suffix.lower()
+        # 预览与索引同一条通路: spreadsheets have rich preview conversion
+        # (MarkItDown + structured fallback); the index path must reuse it —
+        # a strict UTF-8 read on a binary workbook is guaranteed mojibake.
+        if source_suffix in {".xlsx", ".xlsm", ".ods"}:
+            return _extract_spreadsheet_text(request)
         if kind is ResourceKind.IMAGE:
             text, warnings = _extract_image_stub(request, vision_enabled=vision_enabled)
             return text, warnings, {}
@@ -430,6 +436,56 @@ def _extract_canonical_text(
     if document.slide_count is not None:
         provenance["slide_count"] = document.slide_count
     return document.body, list(document.warnings), provenance
+
+
+def _extract_spreadsheet_text(
+    request: IngestionRequest,
+) -> tuple[str, list[str], dict[str, object]]:
+    """Read an XLSX/XLSM/ODS workbook through the same conversion as preview.
+
+    Reuses ``preview.get_structured_preview_markdown`` so a workbook that
+    previews correctly also indexes correctly — one conversion path, with
+    sheet-heading anchors (char-offset) for citation locating.
+    """
+
+    from app.resources.preview import get_structured_preview_markdown
+
+    path = Path(request.source_uri)
+    if not path.is_file():
+        return "", [f"Source file is missing: {request.source_uri}"], {}
+    markdown = get_structured_preview_markdown(str(path))
+    if not markdown or not markdown.strip():
+        return "", [f"Spreadsheet extraction produced no text: {path.name}"], {}
+    warnings: list[str] = []
+    provenance: dict[str, object] = {
+        "source_type": path.suffix.lower().lstrip("."),
+        "parser": "preview-spreadsheet-v1",
+        "paragraph_anchors": _spreadsheet_heading_anchors(markdown),
+    }
+    return markdown, warnings, provenance
+
+
+def _spreadsheet_heading_anchors(markdown: str) -> list[dict[str, object]]:
+    """Sheet-heading anchors for workbooks (kind=table, char-offset like PDF)."""
+
+    anchors: list[dict[str, object]] = []
+    for index, match in enumerate(
+        re.finditer(r"^#{1,6}[ \t]+(.+)$", markdown, flags=re.MULTILINE),
+        start=1,
+    ):
+        label = match.group(1).strip()
+        anchors.append(
+            {
+                "anchor_id": f"¶sheet{index}@{match.start()}",
+                "kind": "table",
+                "page": index,
+                "paragraph_index": index,
+                "char_offset": match.start(),
+                "char_length": len(label),
+                "heading": label,
+            }
+        )
+    return anchors
 
 
 def _extract_image_stub(request: IngestionRequest, *, vision_enabled: bool) -> tuple[str, list[str]]:

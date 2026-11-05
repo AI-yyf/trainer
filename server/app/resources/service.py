@@ -201,6 +201,11 @@ _REFERENCE_STOPWORDS = {
 
 logger = logging.getLogger(__name__)
 
+# Loud, never-silent folder index cap (评估 P0 问题 B): a folder larger than
+# this is processed up to the cap and the truncation is recorded in metadata
+# (`folder_item_truncated`) plus a returned warning — never dropped silently.
+MAX_FOLDER_INGEST_ITEMS = 2000
+
 
 class ResourceRegistry:
     """Owned resource aggregate used by the richer ingest path and tests."""
@@ -421,7 +426,11 @@ class ResourceService:
             )
         self._validate_source(resource.source, source_type=effective_source_type)
         if self._is_folder_resource(resource):
-            self._validate_folder_source_items(resource.source, resource.source_items)
+            self._validate_folder_source_items(
+                resource.source,
+                resource.source_items,
+                allow_missing=True,
+            )
         network_allowed = self._network_fetch_enabled(request.enable_network)
         canonical_meta: dict[str, Any] = {}
         canonical_ingest = self._canonical_local_ingest(workspace_id, resource)
@@ -1860,19 +1869,66 @@ class ResourceService:
             enable_network=network_allowed,
         )
         if self._is_folder_resource(resource):
+            declared_items = list(resource.source_items)
+            items = declared_items
+            folder_truncated = False
+            if len(items) > MAX_FOLDER_INGEST_ITEMS:
+                items = items[:MAX_FOLDER_INGEST_ITEMS]
+                folder_truncated = True
+
+            # 增量续接: chunks of items whose file mtime is unchanged are
+            # reused verbatim; only new/changed items are re-extracted.
+            previous_chunks = self.registry.list_chunks(resource.id)
+            reused_by_item: dict[str, list[ResourceChunk]] = {}
+            for chunk in previous_chunks:
+                item_path = str(chunk.metadata.get("folder_item") or "")
+                if item_path:
+                    reused_by_item.setdefault(item_path, []).append(chunk)
+            registry_record = self.registry.get(resource.id)
+            previous_metadata = dict(getattr(registry_record, "metadata", {}) or {})
+            stored_mtimes: dict[str, Any] = dict(previous_metadata.get("folder_item_mtimes") or {})
+
             folder_chunks: list[ResourceChunk] = []
             folder_warnings: list[str] = []
-            folder_summary_texts: list[str] = []
-            for index, source_item in enumerate(resource.source_items[:100]):
-                child_request = IngestionRequest(
-                    source_uri=source_item,
-                    display_name=Path(source_item).name or source_item,
-                    kind=self.ingestor._detect_kind(source_item),
-                    metadata={"folder": resource.source, "folder_item_index": index},
-                    enable_network=network_allowed,
+            if folder_truncated:
+                folder_warnings.append(
+                    f"Folder index processed the first {MAX_FOLDER_INGEST_ITEMS} of "
+                    f"{len(declared_items)} items; re-index to continue with the rest."
                 )
-                text, warnings = self.ingest_service.describe_source(child_request, vision_enabled=False)
-                folder_warnings.extend(warnings)
+            folder_summary_texts: list[str] = []
+            folder_failures: list[dict[str, str]] = []
+            indexed_count = 0
+            current_mtimes: dict[str, Any] = {}
+            for index, source_item in enumerate(items):
+                try:
+                    item_stat = Path(source_item).stat()
+                except OSError as exc:
+                    folder_failures.append({"item": source_item, "error": str(exc)})
+                    folder_warnings.append(f"Folder item unavailable: {source_item} ({exc})")
+                    continue
+                item_key = str(source_item)
+                current_mtime = item_stat.st_mtime_ns
+                current_mtimes[item_key] = current_mtime
+                if stored_mtimes.get(item_key) == current_mtime and reused_by_item.get(item_key):
+                    folder_chunks.extend(reused_by_item[item_key])
+                    indexed_count += 1
+                    continue
+                try:
+                    child_request = IngestionRequest(
+                        source_uri=source_item,
+                        display_name=Path(source_item).name or source_item,
+                        kind=self.ingestor._detect_kind(source_item),
+                        metadata={"folder": resource.source, "folder_item_index": index},
+                        enable_network=network_allowed,
+                    )
+                    text, item_warnings = self.ingest_service.describe_source(
+                        child_request, vision_enabled=False
+                    )
+                except Exception as exc:  # noqa: BLE001 - one bad item must not kill the folder
+                    folder_failures.append({"item": source_item, "error": f"{exc.__class__.__name__}: {exc}"})
+                    folder_warnings.append(f"Folder item failed: {source_item} ({exc.__class__.__name__})")
+                    continue
+                folder_warnings.extend(item_warnings)
                 folder_summary_texts.append(text[:240])
                 child_chunks = self.ingestor._chunk_text(
                     resource.id,
@@ -1895,6 +1951,8 @@ class ResourceService:
                         for chunk in child_chunks
                     ]
                 )
+                indexed_count += 1
+
             summary = IngestionSummary(
                 text_preview=" | ".join(folder_summary_texts[:3])[:240],
                 detected_kind=ResourceKind(resource.kind),
@@ -1904,9 +1962,15 @@ class ResourceService:
             metadata_updates = {
                 "character_count": sum(len(chunk.text) for chunk in folder_chunks),
                 "chunk_count": len(folder_chunks),
-                "folder_item_count": len(resource.source_items),
-                "folder_item_preview": list(resource.source_items[:4]),
+                "folder_item_count": len(declared_items),
+                "folder_item_indexed": indexed_count,
+                "folder_item_preview": list(declared_items[:4]),
+                "folder_item_mtimes": current_mtimes,
+                "folder_item_failed": folder_failures[:20],
+                "folder_item_failed_count": len(folder_failures),
             }
+            if folder_truncated:
+                metadata_updates["folder_item_truncated"] = True
             self.registry.attach_chunks(
                 resource.id,
                 folder_chunks,
@@ -1960,7 +2024,11 @@ class ResourceService:
                 missing_resource_ids.append(resource_id)
                 continue
             if self._is_folder_resource(resource):
-                self._validate_folder_source_items(resource.source, resource.source_items)
+                self._validate_folder_source_items(
+                    resource.source,
+                    resource.source_items,
+                    allow_missing=True,
+                )
             duplicate_key = resource.duplicate_key.strip()
             if duplicate_key and duplicate_key in seen_duplicate_keys:
                 continue
@@ -2405,7 +2473,13 @@ class ResourceService:
         if source_type == "folder" and not local_path.is_dir():
             raise NotADirectoryError(f"Local resource source must point to a folder: {local_path}")
 
-    def _validate_folder_source_items(self, source: str, source_items: list[str] | None) -> None:
+    def _validate_folder_source_items(
+        self,
+        source: str,
+        source_items: list[str] | None,
+        *,
+        allow_missing: bool = False,
+    ) -> None:
         folder_path = self._local_source_path(source)
         if folder_path is None:
             raise ValueError("Folder resource source must be a local filesystem path.")
@@ -2421,6 +2495,11 @@ class ResourceService:
             if item_path is None:
                 raise ValueError("Folder resource source items must be local filesystem paths.")
             if not item_path.exists():
+                if allow_missing:
+                    # 增量/失败隔离: a file deleted after upload must not block
+                    # the whole folder index — the item falls through to the
+                    # per-item failure record instead of a hard 400.
+                    continue
                 raise FileNotFoundError(f"Folder resource source item does not exist: {item_path}")
 
             resolved_item = item_path.resolve(strict=True)
@@ -2636,7 +2715,7 @@ class ResourceService:
                 continue
             seen.add(cleaned)
             normalized.append(cleaned)
-            if len(normalized) >= 100:
+            if len(normalized) >= MAX_FOLDER_INGEST_ITEMS:
                 break
         return normalized
 
