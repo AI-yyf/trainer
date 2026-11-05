@@ -5086,6 +5086,22 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         runtime_obj = (coach_context or {}).get("__runtime__") if coach_context else None
         workspace_id = str((coach_context or {}).get("workspace_id") or "workspace-default")
         session_id = str((coach_context or {}).get("session_id") or "")
+        # P1 Skills 深化: condition-triggered injection of activated skills.
+        # The guidance block never expands tool authority; usage flows back
+        # to memory after the loop completes (record_skill_usage).
+        selected_skills: list[Any] = []
+        skill_guidance = ""
+        try:
+            from ..skills.runtime import build_skill_guidance_block, select_active_skills
+
+            skill_registry = getattr(runtime_obj, "skill_registry", None)
+            if skill_registry is not None and str(message or "").strip():
+                selected_skills = select_active_skills(skill_registry, str(message))
+                skill_guidance = build_skill_guidance_block(selected_skills)
+        except Exception:
+            logger.warning("skill_guidance_selection_failed", exc_info=True)
+        if skill_guidance:
+            messages = [{"role": "system", "content": skill_guidance}, *messages]
         registry = build_default_tool_registry(
             extra_tools=await build_coach_mcp_tools(runtime_obj, workspace_id)
         )
@@ -5150,6 +5166,21 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 "fell_back": True,
                 **attachment_delivery,
             }
+        if selected_skills:
+            # 执行结果回流: skill usage facts → registry stats + memory highlight.
+            try:
+                from ..skills.runtime import record_skill_usage
+
+                record_skill_usage(
+                    runtime_obj,
+                    workspace_id,
+                    session_id,
+                    selected_skills,
+                    stop_reason=str(getattr(result, "stop_reason", "") or ""),
+                    final_content=str(getattr(result, "final_content", "") or ""),
+                )
+            except Exception:
+                logger.warning("skill_usage_record_failed", exc_info=True)
         if self._agent_provider_context_budget_exhausted(provider_obj):
             return self._context_budget_agentic_result(
                 response_language=response_language,
@@ -5621,6 +5652,22 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         runtime_obj = (coach_context or {}).get("__runtime__") if coach_context else None
         workspace_id = str((coach_context or {}).get("workspace_id") or "workspace-default")
         session_id = str((coach_context or {}).get("session_id") or "")
+        # P1 Skills 深化: condition-triggered injection of activated skills.
+        # The guidance block never expands tool authority; usage flows back
+        # to memory after the loop completes (record_skill_usage).
+        selected_skills: list[Any] = []
+        skill_guidance = ""
+        try:
+            from ..skills.runtime import build_skill_guidance_block, select_active_skills
+
+            skill_registry = getattr(runtime_obj, "skill_registry", None)
+            if skill_registry is not None and str(message or "").strip():
+                selected_skills = select_active_skills(skill_registry, str(message))
+                skill_guidance = build_skill_guidance_block(selected_skills)
+        except Exception:
+            logger.warning("skill_guidance_selection_failed", exc_info=True)
+        if skill_guidance:
+            messages = [{"role": "system", "content": skill_guidance}, *messages]
         registry = build_default_tool_registry(
             extra_tools=await build_coach_mcp_tools(runtime_obj, workspace_id)
         )
@@ -5781,6 +5828,22 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                         }
                     continue
                 if event_type == "final":
+                    if selected_skills:
+                        # 执行结果回流 (streaming path): usage facts → registry
+                        # stats + memory highlight, exactly like the buffered path.
+                        try:
+                            from ..skills.runtime import record_skill_usage
+
+                            record_skill_usage(
+                                runtime_obj,
+                                workspace_id,
+                                session_id,
+                                selected_skills,
+                                stop_reason=str(event.get("stop_reason") or ""),
+                                final_content=str(event.get("content") or ""),
+                            )
+                        except Exception:
+                            logger.warning("skill_usage_record_failed", exc_info=True)
                     if event.get("stop_reason") == "provider_error":
                         transport_failure = self._agent_provider_failure_result(
                             provider_obj,

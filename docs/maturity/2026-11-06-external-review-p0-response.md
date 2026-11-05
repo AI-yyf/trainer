@@ -48,7 +48,7 @@
 | P0 重新真实学习旅程验收 | ✅ 今日重跑 11 步全 PASS（真实 MiniMax 双模型，含重启/切工作区/切模型中断恢复、锚点引用验证、跨工作区隔离）；主观教学质量留人工 | `docs/maturity/p4-journey-2026-11-06/` + 本文件 §三 |
 | P1 统一 Markdown 知识资产 | ✅ 分支已完成（原文件不可变保留 + front matter + 页/slide/标题/行锚点 + 重索引复用物化文档 + bench:provenance ≥95% + 搜索缓存） | closeout §4 逐项表 + P1 管线测试 |
 | P1 完整 GitHub 项目理解 | 🟡 大部分完成：clone→Source→符号索引→FTS 代码定位→概览 Artifact（模块表/依赖图/mermaid 架构图/入口/热点）→Git SHA→Evidence→问答工具；**调用链/改动影响分析未做** | `test_project_import/overview.py` + bench:token/incremental |
-| P1 真实 Skills 体系 | 🟡 注册表/权限/审核 gate/供应链扫描/SKILL.md 渐进加载/跨工作区持久化 ✅；**Agent 运行时按条件自动选技能 + 执行结果回流**未做 | `test_skill_api.py`（HTTP e2e 含重启持久化） |
+| P1 真实 Skills 体系 | ✅ 注册表/权限/审核 gate/供应链扫描/SKILL.md 渐进加载/跨工作区持久化 ✅ + **Agent 运行时条件触发自动选择 + 权限约束注入 + 执行结果回流记忆** ✅（2026-11-06） | `test_skill_api.py` + `test_skill_runtime.py`（6 例）+ 真实模型端到端 |
 | P1 真实 VS Code 全流程 | 🟡 安装版 36 步 E2E/恢复契约/重启会话恢复有；**Remote-SSH L2 真窗口验收未闭环**（评估属实） | closeout §5 风险 #4 |
 | P2 大组件模块化 | ❌ 未开始（App.tsx 万行级属实） | — |
 | 发布对齐 | ⏸ 分支未合 main、无新 Release（评估属实）；P5 待用户批准 | — |
@@ -77,7 +77,17 @@
 
 ## 四、下一步（按评估优先级剩余项）
 
-1. Agent 运行时自动选择已激活 Skill（条件触发）+ 执行结果回流记忆（P1 Skills 剩余面）。
+1. ✅ **Agent 运行时自动选择已激活 Skill + 执行结果回流**（原 P1 Skills 剩余面，2026-11-06 完成）：
+   - `skills/runtime.py` 条件触发选择器：SKILL.md front-matter `trigger`/`triggers`/`keywords` 匹配 +
+     description 词元重叠兜底，仅 ACTIVE 技能、渐进加载 body、触发命中优先排序、上限 2 条；
+   - 注入点：provider_service 两条 agentic 路径（常规 + 流式）把技能指引作为 system 消息前置；
+     **权限约束**：指引块明确"技能权限不扩权"——工具集与 workspace 写规则保持原样；
+   - **执行结果回流**：回合结束后 `record_usage` 持久化 registry 统计（usage_count/applied_count/
+     last_used_workspace/last_applied）+ `add_session_highlight` 写入记忆会话高亮；
+     Skill 使用成功 ≠ 掌握：只记使用事实，不记掌握度；
+   - 测试 `test_skill_runtime.py` 6 例（选择/排序/空匹配/约束块/回流两分支/agentic e2e）+
+     真实 MiniMax-M3.1-Flash 端到端：触发词命中 → 回复按技能探索顺序讲解并真实调用
+     `list_project_modules`（无项目时诚实报阻塞）→ `/skill/list` 实测 `usage_count:1, last_applied:true`。
 2. 调用链/改动影响分析（P1 项目理解剩余面）。
 3. Remote-SSH L2 真窗口验收闭环（需要远端环境）。
 4. App.tsx / ResourcesWorkbenchView / CoachSettingsView 模块化拆解（P2，保持行为不变逐块迁移）。

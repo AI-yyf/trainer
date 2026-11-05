@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -220,6 +221,30 @@ class SkillRegistry:
 
         record = self._require(skill_id)
         record.reviewed = reviewed
+        self._persist()
+        return record
+
+    def record_usage(
+        self,
+        skill_id: str,
+        *,
+        applied: bool,
+        workspace_id: str = "",
+        session_id: str = "",
+    ) -> SkillRecord:
+        """Persist one usage fact (执行结果回流). Skill 使用成功 ≠ 掌握."""
+
+        record = self._require(skill_id)
+        metadata = record.metadata
+        metadata["usage_count"] = int(metadata.get("usage_count") or 0) + 1
+        if applied:
+            metadata["applied_count"] = int(metadata.get("applied_count") or 0) + 1
+        metadata["last_used_at"] = datetime.now(UTC).isoformat()
+        if workspace_id:
+            metadata["last_used_workspace"] = workspace_id
+        if session_id:
+            metadata["last_used_session"] = session_id
+        metadata["last_applied"] = bool(applied)
         self._persist()
         return record
 
