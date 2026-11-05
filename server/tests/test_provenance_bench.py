@@ -36,7 +36,7 @@ def test_provenance_verifiability(tmp_path: Path) -> None:
     workspace.mkdir(parents=True, exist_ok=True)
 
     with TestClient(create_app(settings)) as client:
-        session = client.post(
+        client.post(
             "/session/start",
             json={"workspace_id": "ws-prov", "workspace_name": "prov", "workspace_path": str(workspace)},
         ).json()
