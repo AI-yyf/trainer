@@ -1,7 +1,8 @@
 # Trainer VNext — 工程审计与总控程序（冻结契约 v1）
 
 **日期：** 2026-11-05
-**基线提交：** `2832f17`（maturity/p1-final-convergence-2026-10-20，CI run 41975161211 全绿）
+**基线提交：** `40dd120`（maturity/p1-final-convergence-2026-10-20）
+**CI 全绿实证：** run 41975161211 + 41980840468 + 42005148779（连续三轮 9/9 jobs 全绿，含 Windows Server）
 **性质：** 共享契约冻结 + 分阶段执行程序。所有后续会话（A–J）以本文档为唯一契约来源；修改契约须总控批准并同步全体。
 
 ---
@@ -102,7 +103,7 @@ P1 增量（在 harness 上加，不另起炉灶）：
 | --- | --- | --- | --- |
 | **P0** 工程可靠性 | 远程隔离、恢复契约、Ruff、CI | Windows/macOS/Linux CI 全绿 | **完成**：run 41975161211 九个 job 全部通过（含首次 Windows Server 全绿） |
 | **P1** 知识底座 | 六对象契约落库、哈希缓存、分层读取、成本账本 | 重启/更新/恢复后资料与引用仍正确 | **主体完成**：成本账本（`llm/cost_ledger.py`，agentic turn 记录 estimated tokens）、检索复用缓存（TTL 120s + index/delete 失效）、Source/Artifact/Evidence 契约已冻结 |
-| **P2** GitHub 项目理解 | 仓库导入、源码索引、结构分析、增量更新、可追溯问答 | 真实项目持续追问 + 引用可验证 | 未开始 |
+| **P2** GitHub 项目理解 | 仓库导入、源码索引、结构分析、增量更新、可追溯问答 | 真实项目持续追问 + 引用可验证 | **核心导入+索引+搜索已实现**：`app/project/importer.py`（clone→Source→symbol index）、`/project/import/github` + `/local` 路由、真实 psf/requests 验证通过；增量更新和项目导学待 P3 |
 | **P3** 分析器与 Skill 生态 | Analysis Adapter 契约、SKILL.md 兼容、权限 | 外部分析可替换、Skill 跨任务复用 | 未开始 |
 | **P4** 教学与体验深度 | 项目导学、练习验证、信息流、模板 | 完整真实学习旅程 | 主体已有，深度打磨中 |
 | **P5** 发布治理 | 三平台 + Remote + 真实 Provider + 发布证据 | 同一提交同一安装包完整证据 | 门禁已部分自动化 |
@@ -158,6 +159,7 @@ P1–P3 追加基准（立项时定义输入/输出/阈值）：
 **已完成（本轮，全部有实测证据）：** P0 三项修复（远程隔离/恢复契约/Ruff）、导入五阶段、200%×8 语言门禁、真实对话状态门禁、规范 Markdown 阅读/搜索/引用全链路。
 
 **下一轮入口（按序）：**
-1. P1 验收：`bench:token` 基准脚本（三模式 Token 对比）落地（C）。
-2. P2 立项：GitHub 仓库导入（clone → Source 登记 → 符号索引）设计稿（D）。
+1. P2 深化：项目概览 Artifact（架构图/模块依赖图）、可追溯引用（Git SHA + 行号 → Evidence 表）、项目问答 Agent 工具（read_project_symbol / list_project_modules）（D）。
+2. P2 增量更新：Git Diff → 失效 Artifact 检测 → 增量 symbol index（D）。
+3. P3 立项：Skill 注册表 + 权限模型 + SKILL.md 兼容适配（F）。
 3. P2 立项：GitHub 仓库导入（clone → Source 登记 → 符号索引）设计稿（D）。
