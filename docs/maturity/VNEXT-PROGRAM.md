@@ -1,7 +1,7 @@
 # Trainer VNext — 工程审计与总控程序（冻结契约 v1）
 
 **日期：** 2026-11-05
-**基线提交：** `a7a1941`（maturity/p1-final-convergence-2026-10-20）
+**基线提交：** `2832f17`（maturity/p1-final-convergence-2026-10-20，CI run 41975161211 全绿）
 **性质：** 共享契约冻结 + 分阶段执行程序。所有后续会话（A–J）以本文档为唯一契约来源；修改契约须总控批准并同步全体。
 
 ---
@@ -27,7 +27,7 @@
 
 ### 本轮已修复的 P0（以提交 `a7a1941` 进入主干）
 
-1. **远程路径隔离**：classifier 对 remote 身份跳过本地目录探测；canonical materialize 只写真实本地根（`_canonical_writable_root`）。根因：Windows 将 `/mnt/x` 解释为 `D:\mnt\x`，导致远程工作区被本地创建/误分类（classifier、RAP、sandbox 共 6 个 Windows CI 失败）。
+1. **远程路径隔离**：classifier 对 remote 身份跳过本地目录探测；canonical 写入点全部收敛到 `_canonical_writable_root`（真实本地根才写）。根因（Path.mkdir 栈追踪实证）：`import_workspace_file → index → canonical store` 在 Windows 将 `/mnt/x` 解释为 `D:/mnt/x` 并创建目录，污染同进程内的 classifier/RAP/sandbox 测试（6 个 Windows 失败）＋ Pyright 5 错误。
 2. **恢复契约与新文案对齐**：webview-recovery 校验改为“克制单行阶段”契约（无步骤号、无工具胶囊堆叠、阶段线跟随最新运行工具、完成后移除）。
 3. **Ruff**：7 处全部修复，CI Ruff 门禁恢复。
 
@@ -35,7 +35,7 @@
 
 | 缺口 | 证据 | 归属 |
 | --- | --- | --- |
-| 跨平台 CI 仍有红（Windows server/UI 待本轮验证） | run 41947140466 | J（本轮修复后由 CI 复验） |
+| ~~跨平台 CI 全红~~ | run 41975161211 九 job 全绿 | 已关闭 |
 | 真实 Provider 长讲义 `truncated_or_empty` | handoff 记录 | G |
 | 导入阶段基于 host 调用边界，非 sidecar 推送 | `resourceCommands.ts` 轮询阶段 | C/B |
 | URL 抓取仅限公网（SSRF 防护） | `network_fetch.py` 私网拒绝 | B |
@@ -100,7 +100,7 @@ P1 增量（在 harness 上加，不另起炉灶）：
 
 | 阶段 | 内容 | 完成门槛 | 状态 |
 | --- | --- | --- | --- |
-| **P0** 工程可靠性 | 远程隔离、恢复契约、Ruff、CI | Windows/macOS/Linux CI 全绿 | **本轮修复，CI 验证中**（run 41971108061） |
+| **P0** 工程可靠性 | 远程隔离、恢复契约、Ruff、CI | Windows/macOS/Linux CI 全绿 | **完成**：run 41975161211 九个 job 全部通过（含首次 Windows Server 全绿） |
 | **P1** 知识底座 | 六对象契约落库、哈希缓存、分层读取、成本账本 | 重启/更新/恢复后资料与引用仍正确 | 部分（本轮已完成 Source/Artifact/Evidence 主体） |
 | **P2** GitHub 项目理解 | 仓库导入、源码索引、结构分析、增量更新、可追溯问答 | 真实项目持续追问 + 引用可验证 | 未开始 |
 | **P3** 分析器与 Skill 生态 | Analysis Adapter 契约、SKILL.md 兼容、权限 | 外部分析可替换、Skill 跨任务复用 | 未开始 |
@@ -158,6 +158,6 @@ P1–P3 追加基准（立项时定义输入/输出/阈值）：
 **已完成（本轮，全部有实测证据）：** P0 三项修复（远程隔离/恢复契约/Ruff）、导入五阶段、200%×8 语言门禁、真实对话状态门禁、规范 Markdown 阅读/搜索/引用全链路。
 
 **下一轮入口（按序）：**
-1. 等待 CI run 41971108061 三平台结果；如有残留 Windows 失败继续修（J）。
-2. P1 收尾：成本账本落盘 + 检索复用缓存（C）。
+1. P1 收尾：成本账本落盘 + 检索复用缓存（C）。
+2. P2 立项：GitHub 仓库导入（clone → Source 登记 → 符号索引）设计稿（D）。
 3. P2 立项：GitHub 仓库导入（clone → Source 登记 → 符号索引）设计稿（D）。
