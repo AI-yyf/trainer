@@ -26,6 +26,7 @@ from ..ingest.models import IngestionRequest, IngestionResult, IngestionSummary
 from ..ingest.service import IngestService, ResourceIngestor
 from ..memory.semantic import SemanticMemory
 from .canonical import (
+    CanonicalDocument,
     CanonicalParseError,
     build_canonical_document,
     build_canonical_from_text,
@@ -1543,13 +1544,14 @@ class ResourceService:
         version_id = str((current_version or {}).get("version_id") or "")
         content_hash = str((current_version or {}).get("content_hash") or "")
         prepared = self._prepared_canonical.get(resource.id)
-        prepared_document = prepared.get("document") if isinstance(prepared, dict) else None
-        reusable = (
-            prepared_document is not None
-            and isinstance(prepared, dict)
-            and str(prepared.get("hash") or "") == content_hash
+        prepared_document = (
+            prepared.get("document") if isinstance(prepared, dict) else None
         )
-        if reusable:
+        if (
+            isinstance(prepared, dict)
+            and isinstance(prepared_document, CanonicalDocument)
+            and str(prepared.get("hash") or "") == content_hash
+        ):
             document = prepared_document
             document.version_id = version_id
             if prepared.get("materialized") is True:
@@ -1665,6 +1667,11 @@ class ResourceService:
                 }
             )
         workspace_root = None if prewritten is not None else self._resolved_workspace_path(workspace_id)
+        if prewritten is None:
+            # Guard here too: index() reaches this helper on every path, and a
+            # remote workspace root must never be materialized locally even
+            # when a drive-relative reinterpretation of it happens to exist.
+            workspace_root = self._canonical_writable_root(workspace_id)
         if prewritten is None and workspace_root is None:
             store_warnings.append(
                 "Canonical Markdown was generated but no workspace root is available to store it."

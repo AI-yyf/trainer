@@ -1702,8 +1702,9 @@ async def _handle_list_resources(context: ToolContext, args: dict[str, Any]) -> 
 
     query = str(args.get("query") or "").strip().casefold()
     raw_limit = args.get("limit")
+    limit_value = raw_limit if isinstance(raw_limit, (int, str)) else 40
     try:
-        limit = max(1, min(int(raw_limit), 100))
+        limit = max(1, min(int(limit_value), 100))
     except (TypeError, ValueError):
         limit = 40
     rows: list[dict[str, Any]] = []
@@ -3894,10 +3895,12 @@ def _repository_resource(context: ToolContext, resource_id: str) -> Any | None:
     if not callable(lister):
         return None
     try:
-        records = lister(context.workspace_id)
+        returned = lister(context.workspace_id)
     except Exception:
         return None
-    for item in records or []:
+    if not isinstance(returned, list):
+        return None
+    for item in returned:
         if str(getattr(item, "id", "") or "") == resource_id:
             return item
     return None
