@@ -29,12 +29,18 @@ test('view rails keep an active stream visible after switching away from its sou
 });
 
 test('resource limit copy is shown only when the library reaches its upload limit', () => {
+  // P2 modularization: the menu panel lives in ComposerResourcesMenu.tsx;
+  // the guard asserts App wires the real limit + resources through, and the
+  // component keeps the limit-gated hint behavior.
   const source = readAppModuleSource();
 
   assert.match(source, /const RESOURCE_UPLOAD_LIMIT = 100;/);
+  assert.match(source, /<ComposerResourcesMenu/);
+  assert.match(source, /resources=\{data\.resources\}/);
+  assert.match(source, /uploadLimit=\{RESOURCE_UPLOAD_LIMIT\}/);
   assert.match(
     source,
-    /data\.resources\.length >= RESOURCE_UPLOAD_LIMIT \? \([\s\S]*?t\.maxFilesHint[\s\S]*?\) : null/,
+    /resources\.length >= uploadLimit \? \([\s\S]*?copy\.maxFilesHint[\s\S]*?\) : null/,
   );
 });
 

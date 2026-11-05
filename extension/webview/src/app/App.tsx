@@ -224,7 +224,12 @@ import {
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
 import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
-import { CoachComposer, ComposerIconButton, DockReturnToSurfaceBar } from "../components/composer";
+import {
+  CoachComposer,
+  ComposerIconButton,
+  ComposerResourcesMenu,
+  DockReturnToSurfaceBar,
+} from "../components/composer";
 import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
 import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
@@ -254,8 +259,6 @@ import {
   CheckMarkIcon,
   ChevronRightIcon,
   ContextLayersIcon,
-  FolderIcon,
-  LinkIcon,
   RefreshIcon,
   ResourcesIcon,
   SkillCubeIcon,
@@ -8243,112 +8246,16 @@ export function App() {
 
     if (openMenu === "resources") {
       return (
-        <section className="composer-menu-panel composer-menu-panel--resources">
-          <div className="composer-menu-panel__header">
-            <span className="eyebrow">{t.resourcesMenu}</span>
-            <strong>
-              {data.resources.length > 0
-                ? appUiCopy(layout.composerLanguage, "这次会附带 {n} 份资料")
-                    .replace("{n}", String(data.resources.length))
-                    .replace("{s}", data.resources.length === 1 ? "" : "s")
-                : t.resourcesEmpty}
-            </strong>
-          </div>
-          <div className="composer-menu-panel__section">
-            <div className="menu-list is-compact">
-              <button
-                className="menu-list__item"
-                type="button"
-                onClick={() =>
-                  triggerResourceUpload({
-                    browserPreview: isBrowserPreview,
-                    payloadMode: "files",
-                    filesInputRef: uploadFilesInputRef,
-                    folderInputRef: uploadFolderInputRef,
-                  })
-                }
-              >
-                <span className="menu-list__icon" aria-hidden="true">
-                  <UploadIcon size={14} />
-                </span>
-                <span className="menu-list__body">
-                  <strong>{t.addFiles}</strong>
-                </span>
-              </button>
-              <button
-                className="menu-list__item"
-                type="button"
-                onClick={() =>
-                  triggerResourceUpload({
-                    browserPreview: isBrowserPreview,
-                    payloadMode: "folder",
-                    folder: true,
-                    filesInputRef: uploadFilesInputRef,
-                    folderInputRef: uploadFolderInputRef,
-                  })
-                }
-              >
-                <span className="menu-list__icon" aria-hidden="true">
-                  <FolderIcon size={14} />
-                </span>
-                <span className="menu-list__body">
-                  <strong>{t.addFolder}</strong>
-                </span>
-              </button>
-              {!isBrowserPreview ? (
-                <button
-                  className="menu-list__item"
-                  type="button"
-                  onClick={() =>
-                    triggerResourceUpload({
-                      browserPreview: isBrowserPreview,
-                      payloadMode: "url",
-                      filesInputRef: uploadFilesInputRef,
-                      folderInputRef: uploadFolderInputRef,
-                    })
-                  }
-                >
-                  <span className="menu-list__icon" aria-hidden="true">
-                    <LinkIcon size={14} />
-                  </span>
-                  <span className="menu-list__body">
-                    <strong>{t.addUrl}</strong>
-                  </span>
-                </button>
-              ) : null}
-            </div>
-            {data.resources.length >= RESOURCE_UPLOAD_LIMIT ? (
-              <p className="composer-menu-panel__hint">{t.maxFilesHint}</p>
-            ) : null}
-          </div>
-          {data.resources.length > 0 ? (
-            <div className="composer-menu-panel__section">
-              <p className="composer-menu-panel__hint">
-                {appUiCopy(layout.composerLanguage, "这些资料会和当前消息一起发给教练参考。")}
-              </p>
-              <div className="composer-resource-list">
-                {data.resources.slice(0, 6).map((resource) => (
-                  <div
-                    key={resource.id}
-                    className="composer-resource-chip"
-                    title={[resource.title, resource.status].filter(Boolean).join(" · ")}
-                  >
-                    <strong>{resource.title}</strong>
-                    <span>{resource.status}</span>
-                  </div>
-                ))}
-              </div>
-              {data.resources.length > 6 ? (
-                <p className="composer-menu-panel__hint">
-                  {appUiCopy(layout.composerLanguage, "另外还有 {n} 份资料会一起带上。").replace(
-                    "{n}",
-                    String(data.resources.length - 6),
-                  )}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
+        <ComposerResourcesMenu
+          copy={t}
+          composerLanguage={layout.composerLanguage}
+          localize={appUiCopy}
+          resources={data.resources}
+          isBrowserPreview={isBrowserPreview}
+          uploadInputRefs={{ filesInputRef: uploadFilesInputRef, folderInputRef: uploadFolderInputRef }}
+          uploadLimit={RESOURCE_UPLOAD_LIMIT}
+          onTriggerUpload={triggerResourceUpload}
+        />
       );
     }
 
