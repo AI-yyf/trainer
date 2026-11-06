@@ -236,3 +236,76 @@ def test_project_summary_route_is_single_bounded_call(tmp_path: Path) -> None:
             "/project/summary", params={"workspace_id": "ws-summary", "path": str(repo)}
         )
         assert forbidden.status_code == 403
+
+
+def test_lsp_python_provider_resolves_real_references(tmp_path: Path) -> None:
+    import importlib.util
+
+    if importlib.util.find_spec("pylsp") is None:
+        pytest.skip("python-lsp-server not installed")
+
+    from app.project.analysis_adapter import LspPythonProvider
+
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    index = build_repo_index(repo)
+    report = LspPythonProvider().run(repo, index)
+    assert report.available is True
+    assert report.confidence == "lsp_reference"
+    pairs = {(edge.caller_file, edge.callee_symbol, edge.confidence) for edge in report.edges}
+    assert ("service.py", "format_name", "lsp_reference") in pairs
+    assert report.limitations, "real LSP must state its bounds"
+
+
+def test_lsp_python_provider_reports_unavailable_without_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.project.analysis_adapter import LspPythonProvider
+
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    index = build_repo_index(repo)
+    provider = LspPythonProvider()
+    monkeypatch.setattr(provider, "_server_available", lambda: (False, "python-lsp-server is not installed"))
+    report = provider.run(repo, index)
+    assert report.available is False
+    assert report.reason == "python-lsp-server is not installed"
+    assert report.edges == []
+
+
+def test_merge_prefers_lsp_reference_over_other_evidence(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    index = build_repo_index(repo)
+
+    class LspOnly:
+        name = "fake-lsp"
+
+        def run(self, repo_root: Path, repo_index) -> AdapterReport:  # type: ignore[no-untyped-def]
+            return AdapterReport(
+                name=self.name,
+                available=True,
+                confidence="lsp_reference",
+                edges=[
+                    AdapterEdge(
+                        caller_file="service.py",
+                        caller_symbol="handle",
+                        callee_symbol="format_name",
+                        callee_file="utils.py",
+                        confidence="lsp_reference",
+                        provider=self.name,
+                    )
+                ],
+            )
+
+    merged = run_analysis_adapters(
+        repo, index, providers=(RegexCallGraphProvider(), LspOnly())
+    )
+    match = [
+        edge
+        for edge in merged["merged_edges"]
+        if edge["caller_file"] == "service.py" and edge["callee_symbol"] == "format_name"
+    ]
+    assert len(match) == 1
+    assert match[0]["confidence"] == "lsp_reference"
+    assert match[0]["provider"] == "fake-lsp"
