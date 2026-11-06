@@ -110,5 +110,9 @@
      verify:webview-recovery ok:true · 凭据扫描 0 泄漏；
    - 第三块：current-context 菜单面板（~54 行）→ `ComposerContextMenu.tsx`（19e88ad）；
      **composer 三菜单全部组件化完成，renderComposerAccessory 成为纯分发器**；
-   - 后续切片：ResourcesWorkbenchView、CoachSettingsView 逐块迁移。
+   - 第四块（评估点名大文件第一个切片）：资料库「回收站」面板（~90 行）→
+     `ResourcesTrashPanel.tsx`（14cdf8b）；恢复派发仍由宿主承担（pending/搜索
+     刷新/失败上报），面板纯展示；`deletedResourceId`/`isDeletedResourceRecoverable`
+     随迁导出，主文件单向导入；ResourcesWorkbenchView 4095 → 4030 行；
+   - 后续切片：回收站之外其余 resources 面板、CoachSettingsView 逐块迁移。
 5. 分支合 main + 统一提交发布（v1.3.4 发布早于全部新能力；P5 待批准）。
