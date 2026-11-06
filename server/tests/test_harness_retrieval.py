@@ -13,9 +13,9 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
+from app.db.repository import TrainerRepository
 from app.llm.tools import ToolContext, _handle_search_resources, _retrieval_plan, _trim_hit_text
 from app.resources.service import ResourceService
-from app.db.repository import TrainerRepository
 
 
 def test_retrieval_plan_budgets_are_layered() -> None:
