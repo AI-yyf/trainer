@@ -68,6 +68,7 @@ import {
   libraryFoldersRenameCommand,
   libraryFoldersDeleteCommand,
 } from './libraryFolderCommands';
+import { projectStructureCommand } from './projectStructureCommands';
 import {
   createGlobalPlanCommand,
   generatePlanCommand,
@@ -297,6 +298,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.searchResources, register: (ctx, payload) => searchResourcesCommand(ctx, payload) },
     { commandId: COMMAND_IDS.deleteResource, register: (ctx, payload) => deleteResourceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.libraryFoldersList, register: (ctx, payload) => libraryFoldersListCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.projectStructure, register: (ctx, payload) => projectStructureCommand(ctx, payload) },
     { commandId: COMMAND_IDS.libraryFoldersCreate, register: (ctx, payload) => libraryFoldersCreateCommand(ctx, payload) },
     { commandId: COMMAND_IDS.libraryFoldersRename, register: (ctx, payload) => libraryFoldersRenameCommand(ctx, payload) },
     { commandId: COMMAND_IDS.libraryFoldersDelete, register: (ctx, payload) => libraryFoldersDeleteCommand(ctx, payload) },

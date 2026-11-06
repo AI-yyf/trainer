@@ -278,6 +278,77 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             **payload,
         }
 
+    @router.get("/project/summary")
+    def project_summary(
+        workspace_id: str,
+        resource_id: str = "",
+        path: str = "",
+    ) -> dict[str, object]:
+        """项目详情单次取数: 结构/入口/调用边/分析提供者 — 有界且诚实标注局限。"""
+
+        from ...project.analysis_adapter import run_analysis_adapters
+        from ...project.callgraph import build_call_graph
+        from ...project.overview import build_project_overview, evidence_git_snapshot
+        from ...project.symbols import build_repo_index
+
+        if not workspace_id.strip():
+            raise HTTPException(status_code=400, detail="workspace_id is required.")
+        if not resource_id.strip() and not path.strip():
+            raise HTTPException(status_code=400, detail="resource_id or path is required.")
+        repo_root = _resolve_project_repo_root(
+            workspace_id.strip(), resource_id=resource_id, path=path
+        )
+        if not repo_root.is_dir():
+            raise HTTPException(status_code=422, detail=f"Project directory is missing: {repo_root}")
+
+        repo_index = build_repo_index(repo_root)
+        snapshot = evidence_git_snapshot(repo_root)
+        overview = build_project_overview(
+            repo_root,
+            repo_index,
+            commit_sha=str(snapshot.get("commit_sha") or ""),
+            branch=str(snapshot.get("branch") or ""),
+        )
+        graph = build_call_graph(repo_root, repo_index)
+        analysis = run_analysis_adapters(repo_root, repo_index)
+        top_modules = sorted(
+            overview.modules, key=lambda item: (-item["symbol_count"], item["module"])
+        )[:8]
+        limitations: list[str] = []
+        if graph.truncated:
+            limitations.append("Call graph truncated at the provider edge cap.")
+        if repo_index.truncated_files:
+            limitations.append("Repository walk hit the file cap; counts are partial.")
+        limitations.extend(str(line) for line in analysis.get("limitation_summary", [])[:6])
+        return {
+            "ok": True,
+            "resource_id": resource_id.strip() or None,
+            "commit_sha": snapshot.get("commit_sha") or None,
+            "branch": snapshot.get("branch") or None,
+            "file_count": len(repo_index.files),
+            "symbol_count": len(repo_index.symbols),
+            "module_count": len(overview.modules),
+            "modules": top_modules,
+            "entry_points": overview.entry_points[:8],
+            "callgraph": {
+                "edge_count": len(graph.edges),
+                "unresolved_caller_count": sum(
+                    len(entries) for entries in graph.unresolved_by_symbol.values()
+                ),
+            },
+            "analysis": [
+                {
+                    "provider": item["provider"],
+                    "available": item["available"],
+                    "reason": item["reason"],
+                    "confidence": item["confidence"],
+                    "edge_count": item["edge_count"],
+                }
+                for item in analysis.get("providers", [])
+            ],
+            "limitations": limitations,
+        }
+
     @router.get("/project/analysis")
     def project_analysis(
         workspace_id: str,

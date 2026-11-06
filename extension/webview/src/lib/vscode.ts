@@ -89,6 +89,47 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     prepared: z.boolean(), paired: z.boolean(),
     capturedCount: z.number().nullable().optional(), version: z.string().optional(),
   }) }),
+  z.object({
+    type: z.literal("resource/projectStructure"),
+    payload: z.object({
+      requestId: z.string(),
+      ok: z.boolean(),
+      message: z.string().optional(),
+      structure: z
+        .object({
+          resource_id: z.string().nullable().optional(),
+          commit_sha: z.string().nullable().optional(),
+          branch: z.string().nullable().optional(),
+          file_count: z.number().int(),
+          symbol_count: z.number().int(),
+          module_count: z.number().int(),
+          modules: z.array(
+            z.object({
+              module: z.string(),
+              file_count: z.number().int(),
+              symbol_count: z.number().int(),
+              languages: z.array(z.string()).optional(),
+            }),
+          ),
+          entry_points: z.array(z.string()),
+          callgraph: z.object({
+            edge_count: z.number().int(),
+            unresolved_caller_count: z.number().int(),
+          }),
+          analysis: z.array(
+            z.object({
+              provider: z.string(),
+              available: z.boolean(),
+              reason: z.string(),
+              confidence: z.string(),
+              edge_count: z.number().int(),
+            }),
+          ),
+          limitations: z.array(z.string()),
+        })
+        .optional(),
+    }),
+  }),
   z.object({ type: z.literal("insights/localUsageResult"), payload: z.object({
     requestId: z.string(), ok: z.boolean(), message: z.string().optional(),
     insights: z.object({
@@ -563,6 +604,76 @@ export function requestLocalUsageInsights(windowDays: number): Promise<LocalUsag
       postMessage({ type: "command/execute", payload: {
         commandId: trainerCommands.refreshLocalUsage, payload: { requestId, windowDays },
       } });
+    } catch (error) {
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+      reject(error);
+    }
+  });
+}
+
+
+
+/** Types for the Resources project-details graph panel (GET /project/summary). */
+export interface ProjectStructureModule {
+  module: string;
+  file_count: number;
+  symbol_count: number;
+  languages?: string[];
+}
+
+export interface ProjectStructureAnalysis {
+  provider: string;
+  available: boolean;
+  reason: string;
+  confidence: string;
+  edge_count: number;
+}
+
+export interface ProjectStructure {
+  resource_id?: string | null;
+  commit_sha?: string | null;
+  branch?: string | null;
+  file_count: number;
+  symbol_count: number;
+  module_count: number;
+  modules: ProjectStructureModule[];
+  entry_points: string[];
+  callgraph: { edge_count: number; unresolved_caller_count: number };
+  analysis: ProjectStructureAnalysis[];
+  limitations: string[];
+}
+
+/**
+ * Ask the host for one imported project's structure (module map, entry
+ * points, call-graph counts, analysis providers). Read-only; the host
+ * proxies GET /project/summary and the sidecar does the analysis.
+ */
+export function requestProjectStructure(
+  workspaceId: string,
+  resourceId: string,
+): Promise<ProjectStructure> {
+  const requestId = `project-structure-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return new Promise((resolve, reject) => {
+    const unsubscribe = subscribeToHostMessages((message) => {
+      if (message.type !== "resource/projectStructure" || message.payload.requestId !== requestId) return;
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+      if (message.payload.ok && message.payload.structure) resolve(message.payload.structure as ProjectStructure);
+      else reject(new Error(message.payload.message ?? "Project structure is unavailable."));
+    });
+    const timeoutId = window.setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Project structure timed out. Please retry."));
+    }, 20_000);
+    try {
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: trainerCommands.projectStructure,
+          payload: { requestId, workspaceId, resourceId },
+        },
+      });
     } catch (error) {
       window.clearTimeout(timeoutId);
       unsubscribe();

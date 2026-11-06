@@ -301,6 +301,8 @@ class ResourceService:
             tuple[float, SearchResponse],
         ] = {}
         self._search_cache_ttl_seconds = 120.0
+        self._search_cache_hits = 0
+        self._search_cache_misses = 0
         self._resource_restore_locks_guard = Lock()
 
     def set_workspace_path_resolver(
@@ -987,7 +989,9 @@ class ResourceService:
         now = time.monotonic()
         cached = self._search_cache.get(cache_key)
         if cached is not None and now - cached[0] <= self._search_cache_ttl_seconds:
+            self._search_cache_hits += 1
             return cached[1]
+        self._search_cache_misses += 1
         response = self._search_index(workspace_id).search(
             query,
             filters=filters,
@@ -1020,6 +1024,17 @@ class ResourceService:
                 pass
         content = self._search_index(workspace_id).document_content(record.id)
         return content or None
+
+    def search_cache_stats(self) -> dict[str, Any]:
+        """Cache evidence for the agent: hits/misses/TTL (token-cost transparency)."""
+
+        total = self._search_cache_hits + self._search_cache_misses
+        return {
+            "hits": self._search_cache_hits,
+            "misses": self._search_cache_misses,
+            "hit_rate": round(self._search_cache_hits / total, 3) if total else 0.0,
+            "ttl_seconds": int(self._search_cache_ttl_seconds),
+        }
 
     def invalidate_search_cache(self, workspace_id: str | None = None) -> None:
         """Drop cached search responses after the corpus changes (P1 检索复用)."""

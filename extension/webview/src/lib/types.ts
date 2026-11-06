@@ -2248,6 +2248,10 @@ type HostMessageBody =
       type: "library/folders";
       payload: { operationId?: string; ok: boolean; folders?: unknown; message?: string };
     }
+  | {
+      type: "resource/projectStructure";
+      payload: { requestId: string; ok: boolean; message?: string; structure?: unknown };
+    }
   // Streaming messages
   | { type: "stream/start"; payload: { messageId: string } }
   | { type: "stream/chunk"; payload: StreamChunkEvent }

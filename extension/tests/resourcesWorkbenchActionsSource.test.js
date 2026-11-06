@@ -528,3 +528,39 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   assert.match(appSource, /onOpenTraining=\{\(\) => setActiveView\("training"\)\}/);
   assert.match(appSource, /message\.type === "training\/resourceHandoff"/);
 });
+
+test('project detail graph panel is lazy, honest about limits, and stays inside Resources', () => {
+  const viewSource = readResourcesViewSource();
+  const inlineCopy = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'segments', 'resourcesInlineText.ts'),
+    'utf8',
+  );
+
+  // Progressive disclosure: a <details> per code resource, fetched only on open.
+  assert.match(viewSource, /resources-knowledge__project-structure/);
+  assert.match(viewSource, /onToggle=\{/);
+  assert.match(viewSource, /requestProjectStructure\(/);
+  assert.match(viewSource, /projectStructureCopy\[language\]\.title/);
+  assert.match(viewSource, /kind === "code"/);
+  // Honest failure + limitations surfaced, never a fake graph.
+  assert.match(viewSource, /projectStructureCopy\[language\]\.error/);
+  assert.match(viewSource, /projectStructureCopy\[language\]\.limitations/);
+  assert.match(viewSource, /provider\.reason \|\| "unavailable"/);
+  // The command is the same host bridge the Library uses (posted from
+  // lib/vscode.ts, consumed by the panel through requestProjectStructure).
+  const bridgeSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'vscode.ts'),
+    'utf8',
+  );
+  assert.match(bridgeSource, /commandId: trainerCommands\.projectStructure/);
+  assert.match(bridgeSource, /resource\/projectStructure/);
+
+  const languages = ["zh-CN", "en-US", "es-ES", "fr-FR", "de-DE", "ja-JP", "ko-KR", "pt-BR"];
+  for (const language of languages) {
+    assert.match(
+      inlineCopy,
+      new RegExp(`"${language}": \\{\\s*title: [^\\n]+,\\s*loading:`),
+      `projectStructureCopy must localize ${language}`,
+    );
+  }
+});

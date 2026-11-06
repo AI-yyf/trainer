@@ -734,6 +734,15 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
 
     normalized = _normalize_search_response(search_result, fallback_query=query)
     visible_hits = _apply_search_mode(normalized["hits"], mode=mode)
+    plan = _retrieval_plan(mode, limit)
+    visible_hits = [_trim_hit_text(hit, plan["excerpt_budget"]) for hit in visible_hits]
+    cache_stats = None
+    cache_reader = getattr(resource_service, "search_cache_stats", None)
+    if callable(cache_reader):
+        try:
+            cache_stats = cache_reader()
+        except Exception:  # pragma: no cover - defensive
+            cache_stats = None
     verification_ready_count = sum(1 for hit in normalized["hits"] if _is_verification_ready_hit(hit))
     verification_warning = mode == "verify" and verification_ready_count == 0 and bool(normalized["hits"])
     summary = _build_search_summary(
@@ -754,6 +763,8 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
         "verification_ready_count": verification_ready_count,
         "verification_warning": verification_warning,
         "summary": summary,
+        "retrieval_plan": plan,
+        **({"cache": cache_stats} if cache_stats else {}),
         "hits": visible_hits[:limit],
     }
 
@@ -2970,6 +2981,34 @@ def _normalize_search_hits(raw: list[Any]) -> list[dict[str, Any]]:
         else:
             hits.append({"value": str(entry)})
     return hits
+
+
+_RETRIEVAL_EXCERPT_BUDGETS = {"broad": 180, "narrow": 300, "verify": 420}
+_HIT_TEXT_FIELDS = ("excerpt", "summary", "snippet", "text")
+
+
+def _retrieval_plan(mode: str, limit: int) -> dict[str, Any]:
+    """分层检索预算: metadata hit → bounded excerpt → anchor read on demand."""
+
+    return {
+        "mode": mode,
+        "visible_limit": limit,
+        "excerpt_budget": _RETRIEVAL_EXCERPT_BUDGETS.get(mode, 300),
+        "read_more": "read_resource_excerpt(anchor_id) for the exact passage",
+    }
+
+
+def _trim_hit_text(hit: dict[str, Any], budget: int) -> dict[str, Any]:
+    trimmed = dict(hit)
+    truncated = False
+    for name in _HIT_TEXT_FIELDS:
+        value = trimmed.get(name)
+        if isinstance(value, str) and len(value) > budget:
+            trimmed[name] = value[:budget].rstrip() + "…"
+            truncated = True
+    if truncated:
+        trimmed["truncated"] = True
+    return trimmed
 
 
 def _apply_search_mode(hits: list[dict[str, Any]], *, mode: str) -> list[dict[str, Any]]:

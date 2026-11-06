@@ -62,6 +62,7 @@ export const COMMAND_IDS = {
   libraryFoldersCreate: trainerCommands.libraryFoldersCreate,
   libraryFoldersRename: trainerCommands.libraryFoldersRename,
   libraryFoldersDelete: trainerCommands.libraryFoldersDelete,
+  projectStructure: trainerCommands.projectStructure,
   indexResources: trainerCommands.indexResources,
   searchResources: trainerCommands.searchResources,
   deleteResource: trainerCommands.deleteResource,

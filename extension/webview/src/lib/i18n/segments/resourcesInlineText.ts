@@ -1191,3 +1191,95 @@ export const resourceTextLocaleOverrides: Record<
     folderMoveToNew: "Nova pasta e mover",
   },
 };
+
+export const projectStructureCopy: Record<ComposerLanguage, {
+  title: string;
+  loading: string;
+  error: string;
+  modules: string;
+  entryPoints: string;
+  callgraph: string;
+  providers: string;
+  limitations: string;
+}> = {
+  "zh-CN": {
+    title: "项目结构",
+    loading: "正在分析项目结构…",
+    error: "暂时无法读取项目结构。",
+    modules: "模块",
+    entryPoints: "入口",
+    callgraph: "调用边",
+    providers: "分析能力",
+    limitations: "局限",
+  },
+  "en-US": {
+    title: "Project structure",
+    loading: "Analyzing project structure…",
+    error: "Project structure is unavailable right now.",
+    modules: "Modules",
+    entryPoints: "Entry points",
+    callgraph: "Call edges",
+    providers: "Analysis",
+    limitations: "Limitations",
+  },
+  "es-ES": {
+    title: "Estructura del proyecto",
+    loading: "Analizando la estructura del proyecto…",
+    error: "La estructura del proyecto no está disponible ahora.",
+    modules: "Módulos",
+    entryPoints: "Puntos de entrada",
+    callgraph: "Aristas de llamada",
+    providers: "Análisis",
+    limitations: "Limitaciones",
+  },
+  "fr-FR": {
+    title: "Structure du projet",
+    loading: "Analyse de la structure du projet…",
+    error: "La structure du projet est indisponible pour le moment.",
+    modules: "Modules",
+    entryPoints: "Points d'entrée",
+    callgraph: "Arcs d'appel",
+    providers: "Analyse",
+    limitations: "Limites",
+  },
+  "de-DE": {
+    title: "Projektstruktur",
+    loading: "Projektstruktur wird analysiert…",
+    error: "Die Projektstruktur ist derzeit nicht verfügbar.",
+    modules: "Module",
+    entryPoints: "Einstiegspunkte",
+    callgraph: "Aufrufkanten",
+    providers: "Analyse",
+    limitations: "Grenzen",
+  },
+  "ja-JP": {
+    title: "プロジェクト構造",
+    loading: "プロジェクト構造を分析しています…",
+    error: "現在、プロジェクト構造を取得できません。",
+    modules: "モジュール",
+    entryPoints: "エントリーポイント",
+    callgraph: "呼び出しエッジ",
+    providers: "分析",
+    limitations: "制限",
+  },
+  "ko-KR": {
+    title: "프로젝트 구조",
+    loading: "프로젝트 구조를 분석하는 중…",
+    error: "지금은 프로젝트 구조를 읽을 수 없습니다.",
+    modules: "모듈",
+    entryPoints: "진입점",
+    callgraph: "호출 간선",
+    providers: "분석",
+    limitations: "한계",
+  },
+  "pt-BR": {
+    title: "Estrutura do projeto",
+    loading: "Analisando a estrutura do projeto…",
+    error: "A estrutura do projeto não está disponível agora.",
+    modules: "Módulos",
+    entryPoints: "Pontos de entrada",
+    callgraph: "Arestas de chamada",
+    providers: "Análise",
+    limitations: "Limitações",
+  },
+};

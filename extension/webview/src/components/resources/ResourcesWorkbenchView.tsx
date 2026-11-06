@@ -63,11 +63,13 @@ import {
 import {
   compactResourceSearchPlaceholder,
   englishSingularResourceMutationText,
+  projectStructureCopy,
   resourceText,
   resourceTextLocaleOverrides,
   resourceTrainingReadinessCopy,
   type ResourceTextKey,
 } from "../../lib/i18n/segments/resourcesInlineText";
+import { requestProjectStructure, type ProjectStructure } from "../../lib/vscode";
 export type { DeletedResource } from "../../lib/types";
 import {
   deletedResourceId,
@@ -1518,6 +1520,12 @@ export function ResourcesWorkbenchView({
   const importMenuRef = useRef<HTMLDivElement>(null);
   const importMenuId = useId();
   const [query, setQuery] = useState("");
+  const [projectStructureState, setProjectStructureState] = useState<{
+    resourceId?: string;
+    status: "idle" | "loading" | "ready" | "error";
+    data?: ProjectStructure;
+    message?: string;
+  }>({ status: "idle" });
   useEffect(() => { onSearchQueryChange?.(query); }, [onSearchQueryChange, query]);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [urlImportOpen, setUrlImportOpen] = useState(false);
@@ -1672,6 +1680,19 @@ export function ResourcesWorkbenchView({
     () => resources.find((resource) => resource.id === selectedResourceId),
     [resources, selectedResourceId],
   );
+
+  const loadProjectStructure = (resourceId: string) => {
+    setProjectStructureState({ resourceId, status: "loading" });
+    void requestProjectStructure("", resourceId)
+      .then((structure) => setProjectStructureState({ resourceId, status: "ready", data: structure }))
+      // Host failure details stay out of ordinary UI copy (same policy as
+      // search feedback): the panel shows the localized generic message.
+      .catch(() => setProjectStructureState({ resourceId, status: "error" }));
+  };
+  const projectStructureForSelected =
+    selectedResource && projectStructureState.resourceId === selectedResource.id
+      ? projectStructureState
+      : undefined;
   const selectedResourceDocument =
     resourceDocument && selectedResource && resourceDocument.resourceId === selectedResource.id
       ? resourceDocument
@@ -3746,6 +3767,94 @@ export function ResourcesWorkbenchView({
                 </div>
               ) : null}
             </dl>
+          {!sandboxPreview && selectedResource?.kind === "code" ? (
+            <details
+              className="resources-knowledge__project-structure"
+              onToggle={(event) => {
+                if (!event.currentTarget.open || !selectedResource) return;
+                const state =
+                  projectStructureState.resourceId === selectedResource.id
+                    ? projectStructureState
+                    : undefined;
+                if (!state || state.status === "error") {
+                  loadProjectStructure(selectedResource.id);
+                }
+              }}
+            >
+              <summary><strong>{projectStructureCopy[language].title}</strong></summary>
+              {!projectStructureForSelected ? (
+                <p className="resources-knowledge__hint">{projectStructureCopy[language].loading}</p>
+              ) : projectStructureForSelected.status === "loading" ? (
+                <p className="resources-knowledge__hint">{projectStructureCopy[language].loading}</p>
+              ) : projectStructureForSelected.status === "error" ? (
+                <p className="resources-knowledge__hint">{projectStructureCopy[language].error}</p>
+              ) : projectStructureForSelected.data ? (
+                <div className="resources-knowledge__project-structure-body">
+                  <p className="resources-knowledge__hint">
+                    {projectStructureForSelected.data.file_count} files ·{" "}
+                    {projectStructureForSelected.data.symbol_count} symbols ·{" "}
+                    {projectStructureForSelected.data.module_count} modules
+                    {projectStructureForSelected.data.commit_sha
+                      ? ` · ${projectStructureForSelected.data.commit_sha.slice(0, 10)}`
+                      : ""}
+                  </p>
+                  {projectStructureForSelected.data.modules.length > 0 ? (
+                    <div className="resources-knowledge__project-structure-section">
+                      <span className="eyebrow">{projectStructureCopy[language].modules}</span>
+                      <ul className="resources-knowledge__project-modules">
+                        {projectStructureForSelected.data.modules.slice(0, 5).map((module) => (
+                          <li key={module.module}>
+                            <code>{module.module}</code>
+                            <span>
+                              {module.file_count} · {module.symbol_count}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {projectStructureForSelected.data.entry_points.length > 0 ? (
+                    <div className="resources-knowledge__project-structure-section">
+                      <span className="eyebrow">{projectStructureCopy[language].entryPoints}</span>
+                      <p>
+                        {projectStructureForSelected.data.entry_points.slice(0, 4).map((entry) => (
+                          <code key={entry}>{entry}</code>
+                        ))}
+                      </p>
+                    </div>
+                  ) : null}
+                  <p className="resources-knowledge__hint">
+                    {projectStructureCopy[language].callgraph}:{" "}
+                    {projectStructureForSelected.data.callgraph.edge_count}
+                    {" · "}
+                    {projectStructureForSelected.data.callgraph.unresolved_caller_count}
+                  </p>
+                  <div className="resources-knowledge__project-structure-section">
+                    <span className="eyebrow">{projectStructureCopy[language].providers}</span>
+                    <ul className="resources-knowledge__project-providers">
+                      {projectStructureForSelected.data.analysis.map((provider) => (
+                        <li key={provider.provider}>
+                          <code>{provider.provider}</code>
+                          <span>
+                            {provider.available
+                              ? `${provider.confidence || "approximate"} · ${provider.edge_count}`
+                              : provider.reason || "unavailable"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {projectStructureForSelected.data.limitations.length > 0 ? (
+                    <p className="resources-knowledge__hint">
+                      {projectStructureCopy[language].limitations}:{" "}
+                      {projectStructureForSelected.data.limitations.join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </details>
+          ) : null}
+
           {selectedResourceReuseSummary ? (
             <p className="resources-knowledge__reuse-summary">{selectedResourceReuseSummary}</p>
           ) : null}

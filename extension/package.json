@@ -341,6 +341,10 @@
       {
         "command": "trainer.library.folders.delete",
         "title": "Trainer: Delete Library Folder (to Trash)"
+      },
+      {
+        "command": "trainer.project.structure",
+        "title": "Trainer: Project Structure"
       }
     ],
     "viewsContainers": {

@@ -60,6 +60,7 @@ export const trainerCommands = {
   libraryFoldersCreate: "trainer.library.folders.create",
   libraryFoldersRename: "trainer.library.folders.rename",
   libraryFoldersDelete: "trainer.library.folders.delete",
+  projectStructure: "trainer.project.structure",
   indexResources: "trainer.resource.index",
   searchResources: "trainer.resource.search",
   deleteResource: "trainer.resource.delete",
