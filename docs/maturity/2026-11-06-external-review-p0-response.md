@@ -108,5 +108,7 @@
    - 两块均保持行为逐项一致，源码守卫按迁移契约更新（App 接线断言 + 组件行为模式）；
    - 每块不回退门禁全绿：tsc · extension tests · verify-ui-geometry 477/477 ·
      verify:webview-recovery ok:true · 凭据扫描 0 泄漏；
-   - 后续切片：current-context 菜单、ResourcesWorkbenchView、CoachSettingsView 逐块迁移。
+   - 第三块：current-context 菜单面板（~54 行）→ `ComposerContextMenu.tsx`（19e88ad）；
+     **composer 三菜单全部组件化完成，renderComposerAccessory 成为纯分发器**；
+   - 后续切片：ResourcesWorkbenchView、CoachSettingsView 逐块迁移。
 5. 分支合 main + 统一提交发布（v1.3.4 发布早于全部新能力；P5 待批准）。
