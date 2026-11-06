@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import router_support as routers
-from app.api.routers import (
+from app.api.router_support import (
     looks_like_schemeless_provider_host,
     reset_provider_scheme_cache,
     resolve_provider_url_scheme,
