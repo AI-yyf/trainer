@@ -132,6 +132,9 @@ def select_active_skills(
         if registry.review_is_stale(record):
             # 审核版本不一致: the approved guidance no longer matches the file.
             continue
+        if record.quarantined:
+            # 失败恢复: 连续失败达阈值的技能暂停注入, /skill/retry 后恢复.
+            continue
         matched_terms: list[str] = []
         for term in _front_matter_terms(record):
             if term and term in message:
@@ -266,6 +269,8 @@ def record_skill_usage(
     if not selected:
         return []
     registry: SkillRegistry | None = getattr(runtime, "skill_registry", None)
+    failure_reasons = {"provider_error", "timeout"}
+    is_failure = str(stop_reason or "") in failure_reasons
     content = str(final_content or "")
     tool_names = [
         str(event.get("name") or "")
@@ -280,6 +285,27 @@ def record_skill_usage(
         if registry is not None:
             record = registry.list_skills()
             record = next((r for r in record if r.skill_id == skill.skill_id), None)
+        if is_failure:
+            # 执行失败恢复: record the failure streak; a later success clears it.
+            failure_payload = {
+                "skill_id": skill.skill_id,
+                "failed": True,
+                "stop_reason": stop_reason,
+                "recorded_at": now,
+            }
+            usages.append(failure_payload)
+            if registry is not None:
+                try:
+                    registry.record_failure(
+                        skill.skill_id,
+                        error=f"turn failed: {stop_reason}",
+                        workspace_id=workspace_id,
+                        session_id=session_id,
+                    )
+                except KeyError:
+                    continue
+            highlights.append(f"Skill failed: {skill.name} ({skill.skill_id})")
+            continue
         evidence = _skill_evidence(record, skill, content, tool_names)
         applied = bool(evidence["applied"])
         usage = {

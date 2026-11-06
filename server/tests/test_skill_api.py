@@ -195,3 +195,31 @@ def test_skill_register_rejects_invalid_kind(tmp_path: Path) -> None:
 
         unknown = client.post("/skill/activate", json={"skill_id": "ghost"})
         assert unknown.status_code == 404
+
+def test_skill_list_and_retry_share_registry_state(tmp_path: Path) -> None:
+    with build_client(tmp_path) as client:
+        registered = client.post(
+            "/skill/register",
+            json={"skill_id": "retryable", "kind": "knowledge", "name": "Retryable"},
+        )
+        assert registered.status_code == 200, registered.text
+        activated = client.post("/skill/activate", json={"skill_id": "retryable"})
+        assert activated.status_code == 200, activated.text
+
+        registry = client.app.state.runtime.skill_registry
+        assert registry is not None
+        for _ in range(3):
+            registry.record_failure("retryable", error="turn failed: provider_error")
+
+        listing = client.get("/skill/list").json()["skills"]
+        entry = next(item for item in listing if item["skill_id"] == "retryable")
+        assert entry["status"] == "quarantined"
+        assert entry["version"] == 1
+        assert entry["retryable"] is False
+
+        retried = client.post("/skill/retry", json={"skill_id": "retryable"})
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["skill"]["status"] == "ready"
+
+        missing = client.post("/skill/retry", json={"skill_id": "ghost"})
+        assert missing.status_code == 404

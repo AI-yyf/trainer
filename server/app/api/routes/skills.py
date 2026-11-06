@@ -127,6 +127,19 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return {"ok": True, "skill": record.to_payload()}
 
+    @router.post("/skill/retry")
+    def skill_retry(payload: dict) -> dict[str, Any]:
+        """可重试恢复: 清除失败 streak, 技能重新参与自动选择."""
+
+        skill_id = str(payload.get("skill_id") or "").strip()
+        if not skill_id:
+            raise HTTPException(status_code=400, detail="skill_id is required.")
+        try:
+            record = _registry().retry(skill_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {"ok": True, "skill": record.to_payload()}
+
     @router.post("/skill/review")
     def skill_review(payload: dict) -> dict[str, Any]:
         """审核 flow: record the human decision for one skill."""

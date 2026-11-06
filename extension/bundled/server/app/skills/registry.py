@@ -28,6 +28,9 @@ _SKILL_FRONT_MATTER = re.compile(
 _SAFE_NAME = re.compile(r"[^a-z0-9_-]+")
 
 
+MAX_CONSECUTIVE_FAILURES = 3
+
+
 @dataclass(slots=True)
 class SkillRecord:
     skill_id: str
@@ -40,8 +43,31 @@ class SkillRecord:
     reviewed: bool = False  # has the user approved this skill?
     body: str = ""  # only populated when activated
     metadata: dict[str, Any] = field(default_factory=dict)
+    version: int = 1  # increments whenever the skill's content changes
 
-    def to_payload(self, *, include_body: bool = False) -> dict[str, Any]:
+    @property
+    def failure_streak(self) -> int:
+        return int(self.metadata.get("consecutive_failures") or 0)
+
+    @property
+    def quarantined(self) -> bool:
+        """A skill that failed MAX_CONSECUTIVE_FAILURES times in a row."""
+        return self.failure_streak >= MAX_CONSECUTIVE_FAILURES
+
+    def status(self, *, review_stale: bool = False) -> str:
+        if review_stale:
+            return "review_stale"
+        if not self.active:
+            return "disabled"
+        if self.quarantined:
+            return "quarantined"
+        if self.failure_streak:
+            return "failing"
+        return "ready"
+
+    def to_payload(
+        self, *, include_body: bool = False, review_stale: bool = False
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "skill_id": self.skill_id,
             "kind": self.kind,
@@ -51,6 +77,12 @@ class SkillRecord:
             "active": self.active,
             "reviewed": self.reviewed,
             "source_path": self.source_path,
+            "version": self.version,
+            "status": self.status(review_stale=review_stale),
+            "retryable": bool(self.failure_streak) and not self.quarantined,
+            "failure_count": self.failure_streak,
+            "last_failure_at": self.metadata.get("last_failure_at"),
+            "last_error": self.metadata.get("last_error"),
             "metadata": dict(self.metadata),
         }
         if include_body:
@@ -192,6 +224,7 @@ class SkillRegistry:
                     reviewed=bool(data.get("reviewed")),
                     body=str(data.get("body") or ""),
                     metadata=dict(data.get("metadata") or {}),
+                    version=int(data.get("version") or 1),
                 )
 
     @staticmethod
@@ -217,6 +250,12 @@ class SkillRegistry:
         # records who/when/what-hash. First-party builtin seeding constructs
         # its record directly and is not affected.
         effective_reviewed = reviewed and kind != "action"
+        previous = self._skills.get(skill_id)
+        content_changed = previous is not None and (
+            previous.description != description
+            or previous.name != name
+            or list(previous.permissions) != list(permissions or [])
+        )
         record = SkillRecord(
             skill_id=skill_id,
             kind=kind,
@@ -227,6 +266,7 @@ class SkillRegistry:
             active=False,
             reviewed=effective_reviewed,
             metadata=dict(metadata or {}),
+            version=((previous.version + 1) if previous is not None and content_changed else 1),
         )
         self._skills[skill_id] = record
         self._persist()
@@ -312,6 +352,38 @@ class SkillRegistry:
             return False
         return self._content_hash(record) != pinned
 
+    def record_failure(
+        self,
+        skill_id: str,
+        *,
+        error: str,
+        workspace_id: str = "",
+        session_id: str = "",
+    ) -> SkillRecord:
+        """执行失败记录: consecutive streak drives failing/quarantined state."""
+
+        record = self._require(skill_id)
+        record.metadata["consecutive_failures"] = record.failure_streak + 1
+        record.metadata["last_failure_at"] = datetime.now(UTC).isoformat()
+        record.metadata["last_error"] = str(error or "")[:240]
+        if workspace_id:
+            record.metadata["last_failed_workspace"] = workspace_id
+        if session_id:
+            record.metadata["last_failed_session"] = session_id
+        self._persist()
+        return record
+
+    def retry(self, skill_id: str) -> SkillRecord:
+        """可重试: clear the failure streak so the skill can be selected again."""
+
+        record = self._require(skill_id)
+        record.metadata["consecutive_failures"] = 0
+        record.metadata.pop("last_error", None)
+        record.metadata.pop("last_failure_at", None)
+        record.metadata["last_retry_at"] = datetime.now(UTC).isoformat()
+        self._persist()
+        return record
+
     def record_usage(
         self,
         skill_id: str,
@@ -336,6 +408,10 @@ class SkillRegistry:
         metadata["last_applied"] = bool(applied)
         if evidence:
             metadata["last_evidence"] = dict(evidence)
+        # A successful execution clears the failure streak (recovered).
+        metadata["consecutive_failures"] = 0
+        metadata.pop("last_error", None)
+        metadata.pop("last_failure_at", None)
         self._persist()
         return record
 
@@ -392,6 +468,9 @@ class SkillRegistry:
 
     def to_payload(self, *, include_body: bool = False) -> list[dict[str, Any]]:
         return [
-            record.to_payload(include_body=include_body)
+            record.to_payload(
+                include_body=include_body,
+                review_stale=self.review_is_stale(record),
+            )
             for record in self._skills.values()
         ]
