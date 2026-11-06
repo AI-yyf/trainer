@@ -109,10 +109,20 @@ class RegexCallGraphProvider:
         )
 
 
+def _load_tree_sitter() -> tuple[Any, Any]:
+    """Dynamic import: the grammar is an optional integration, and a static
+    import would make every no-deps Pyright run fail on the missing package."""
+
+    import importlib
+
+    tree_sitter = importlib.import_module("tree_sitter")
+    grammar = importlib.import_module("tree_sitter_python")
+    return tree_sitter, grammar
+
+
 def _tree_sitter_available() -> tuple[bool, str]:
     try:
-        import tree_sitter  # noqa: F401
-        import tree_sitter_python  # noqa: F401
+        _load_tree_sitter()
     except Exception as exc:  # pragma: no cover - depends on install extras
         return False, f"tree-sitter grammar not installed ({exc.__class__.__name__})"
     return True, ""
