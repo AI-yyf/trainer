@@ -13,6 +13,14 @@ v1.4.0 一致（engine ^1.96.0）。
 仅有 bundled-binary 一条启动路径（源码侧车仅 Development 模式）。已把 release/
 cross-platform 的 linux 构建基座改为 ubuntu-22.04（glibc 2.35），旧 release 资产
 在 22.04/Debian 12 主机不可用，需随下一版发布替换。
+
+**22.04 修复验证（真实主机）**：Cross-Platform 42257669713 产出的
+`trainer-extension-1.4.0-linux-x64.vsix`（sha256 `63c9e433e35bc9e0…`）已装到 141s，
+`bundled/bin/linux-x64/trainer-sidecar --help` 正常输出 usage（exit 0），
+`trainer-sidecar --host 127.0.0.1 --port 34999` 启动后 `/health` 返回
+`{"status":"ok","initialized":true,...}` —— glibc 阻断在 22.04 构建上消失。
+注意：GitHub Release v1.4.0 的三平台资产仍是 24.04 构建（含此 bug），
+正式对外需以 v1.4.1 重新发布 linux 构件。
 配合清单：`docs/verification/p1-final-remote-ssh-l2-checklist.md`。
 
 ## 验收机与预置（全部自动化执行，PASS）
