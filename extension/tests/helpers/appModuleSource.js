@@ -34,10 +34,14 @@ function readAppModuleSource() {
   // so the logical module includes the extracted slice.
   const composerDir = path.resolve(__dirname, '..', '..', 'webview', 'src', 'components', 'composer');
   const composerSlices = ['ComposerResourcesMenu.tsx', 'ComposerModelMenu.tsx'];
+  const trashPanelPath = path.resolve(
+    __dirname, '..', '..', 'webview', 'src', 'components', 'resources', 'ResourcesTrashPanel.tsx',
+  );
   return [
     fs.readFileSync(APP_SOURCE_PATH, 'utf8'),
     fs.readFileSync(APP_HELPERS_PATH, 'utf8'),
     ...composerSlices.map((name) => fs.readFileSync(path.join(composerDir, name), 'utf8')),
+    fs.readFileSync(trashPanelPath, 'utf8'),
   ].join('\n');
 }
 

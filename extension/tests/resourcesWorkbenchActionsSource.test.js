@@ -30,6 +30,23 @@ const resourcesWorkbenchPath = path.resolve(
   'resources',
   'ResourcesWorkbenchView.tsx',
 );
+;
+
+const trashPanelPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'components',
+  'resources',
+  'ResourcesTrashPanel.tsx',
+);
+
+function readResourcesViewSource() {
+  // P2 modularization: the trash panel moved to ResourcesTrashPanel.tsx;
+  // guards assert the logical resources view (view + panel).
+  return `${fs.readFileSync(resourcesWorkbenchPath, 'utf8')}\n${fs.readFileSync(trashPanelPath, 'utf8')}`;
+}
 const resourcesInlineTextPath = path.resolve(
   __dirname,
   '..',
@@ -45,7 +62,7 @@ const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css')
 const typesPath = path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'types.ts');
 
 test('Resources uses real knowledge records and opens them through the existing native VS Code action', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   // §十五: the zh/en base resource copy record moved verbatim into the i18n
   // segment file; its content assertions slice there.
   const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
@@ -132,7 +149,7 @@ test('Resources uses real knowledge records and opens them through the existing 
 });
 
 test('Resources opens in VS Code from one click, previews from Space or the row action, and has no row double-click handler', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const treeItemStart = viewSource.indexOf('function ResourceTreeItem(');
   const treeItemEnd = viewSource.indexOf('export function ResourcesWorkbenchView', treeItemStart);
 
@@ -154,7 +171,7 @@ test('Resources opens in VS Code from one click, previews from Space or the row 
 });
 
 test('Resources does not expose a project file manager or destructive sandbox controls', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
 
   assert.doesNotMatch(viewSource, /onCreateSandboxDirectory/);
   assert.doesNotMatch(viewSource, /onRenameSandboxPath/);
@@ -165,7 +182,7 @@ test('Resources does not expose a project file manager or destructive sandbox co
 });
 
 test('Resources collapses imports into one named, keyboard-accessible menu while refresh stays secondary', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
   const stylesSource = readStylesSource();
 
@@ -199,7 +216,7 @@ test('Resources collapses imports into one named, keyboard-accessible menu while
 });
 
 test('Resources keeps the first screen focused and folds secondary governance actions', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const stylesSource = readStylesSource();
 
   assert.match(viewSource, /resources-knowledge__search/);
@@ -218,7 +235,7 @@ test('Resources keeps the first screen focused and folds secondary governance ac
 });
 
 test('Resources makes library writes visibly unavailable without blocking search or opening', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
   const appSource = readAppModuleSource();
 
@@ -258,7 +275,7 @@ test('Resources makes library writes visibly unavailable without blocking search
 });
 
 test('Resources keeps a slow index refresh single-flight across rapid clicks', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const appSource = readAppModuleSource();
   const refreshStart = viewSource.indexOf('const refreshResources = () => {');
   const refreshEnd = viewSource.indexOf('const toggleCollection =', refreshStart);
@@ -287,7 +304,7 @@ test('Resources keeps a slow index refresh single-flight across rapid clicks', (
 });
 
 test('Resources treats URL material as webpage snapshots without restoring status filters', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const stylesSource = readStylesSource();
 
   assert.match(viewSource, /captureWebSnapshot/);
@@ -305,7 +322,7 @@ test('Resources treats URL material as webpage snapshots without restoring statu
 });
 
 test('Resources keeps folder counts recursive and moves deletion into the reader detail', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const treeItemStart = viewSource.indexOf('function ResourceTreeItem(');
   const treeItemEnd = viewSource.indexOf('export function ResourcesWorkbenchView', treeItemStart);
   const deleteRequestStart = viewSource.indexOf('const requestResourceDelete =');
@@ -372,7 +389,7 @@ test('Resources keeps search-result folders visibly collapsible', () => {
 });
 
 test('Resources derives compact Trash and mutation feedback from persistent host state', () => {
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const stylesSource = readStylesSource();
 
   assert.match(viewSource, /const trashSnapshotAvailable = deletedResources !== undefined;/);
@@ -408,7 +425,7 @@ test('Resources derives compact Trash and mutation feedback from persistent host
 
 test('Resources correlates host mutation results so failed delete or restore clears its pending state', () => {
   const appSource = readAppModuleSource();
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
 
   assert.match(appSource, /RESOURCE_OPERATION_STATUS_PATTERN/);
   assert.match(appSource, /parseResourceOperationStatus/);
@@ -430,7 +447,7 @@ test('Resources correlates host mutation results so failed delete or restore cle
 
 test('Resources preserves an explicit selection across views and records unmount separately', () => {
   const appSource = readAppModuleSource();
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
 
   assert.match(
     viewSource,
@@ -454,7 +471,7 @@ test('Resources preserves an explicit selection across views and records unmount
 
 test('Resources starts a review card only from fresh, trusted, indexed material in a managed workspace', () => {
   const appSource = readAppModuleSource();
-  const viewSource = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   // §十五: the review-card handoff copy record moved verbatim into the i18n
   // segment file; its content assertion slices there.
   const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');

@@ -16,10 +16,27 @@ const viewPath = path.resolve(
   'resources',
   'ResourcesWorkbenchView.tsx',
 );
+;
+
+const trashPanelPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'components',
+  'resources',
+  'ResourcesTrashPanel.tsx',
+);
+
+function readResourcesViewSource() {
+  // P2 modularization: the trash panel moved to ResourcesTrashPanel.tsx;
+  // guards assert the logical resources view (view + panel).
+  return `${fs.readFileSync(viewPath, 'utf8')}\n${fs.readFileSync(trashPanelPath, 'utf8')}`;
+}
 
 test('Resources view renders snapshot-backed orientation instead of inferred readiness', () => {
   const source = readAppModuleSource();
-  const viewSource = fs.readFileSync(viewPath, 'utf8');
+  const viewSource = readResourcesViewSource();
   const viewStart = source.indexOf('const renderResourcesView = () =>');
   const viewEnd = source.indexOf('const renderTrainingView', viewStart);
   assert.ok(viewStart >= 0 && viewEnd > viewStart, 'expected Resources view render');

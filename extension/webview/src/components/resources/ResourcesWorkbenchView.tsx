@@ -69,6 +69,11 @@ import {
   type ResourceTextKey,
 } from "../../lib/i18n/segments/resourcesInlineText";
 export type { DeletedResource } from "../../lib/types";
+import {
+  deletedResourceId,
+  isDeletedResourceRecoverable,
+  ResourcesTrashPanel,
+} from "./ResourcesTrashPanel";
 
 export interface ResourceWriteAccess {
   allowed: boolean;
@@ -739,14 +744,6 @@ function resourceReuseSummary(language: ComposerLanguage): string {
   };
 
   return labels[language];
-}
-
-function deletedResourceId(resource: DeletedResource): string | undefined {
-  return resource.resourceId.trim() || undefined;
-}
-
-function isDeletedResourceRecoverable(resource: DeletedResource): boolean {
-  return Boolean(deletedResourceId(resource)) && resource.recoverable;
 }
 
 type ResourceTreeNode = {
@@ -3462,84 +3459,22 @@ export function ResourcesWorkbenchView({
       ) : null}
 
       {omitLeftoverLibrary || trashedResources.length === 0 ? null : (
-      <details
-        className="resources-knowledge__trash resources-library-tree__trash"
-        open={trashOpen}
-        onToggle={(event) => setTrashOpen(event.currentTarget.open)}
-        aria-busy={isRestorePending}
-      >
-        <summary>
-          <span>
-            <TrashIcon size={14} aria-hidden="true" />
-            {/* r1-g2-1: one expression — "回收站 (1)" — instead of a title row
-                plus a second count sentence on the far edge. */}
-            <strong>
-              {localize(language, "trashTitle")}
-              {trashSnapshotAvailable ? ` (${trashedResources.length})` : ""}
-            </strong>
-          </span>
-        </summary>
-        <div className="resources-knowledge__trash-body">
-          {!trashSnapshotAvailable ? (
-            <p className="resources-empty resources-empty--compact">
-              {localize(language, "trashLoading")}
-            </p>
-          ) : null}
-          {trashSnapshotAvailable && trashedResources.length === 0 ? (
-            <p className="resources-empty resources-empty--compact">
-              {localize(language, "trashEmpty")}
-            </p>
-          ) : null}
-          {trashSnapshotAvailable && trashedResources.length > 0 ? (
-            <ul className="resources-knowledge__trash-list">
-              {trashedResources.map((resource, index) => {
-                const resourceId = deletedResourceId(resource);
-                const canRestore = isDeletedResourceRecoverable(resource);
-                const restorePendingForItem =
-                  resourceId !== undefined && pendingRestoredResourceIds.includes(resourceId);
-                const restoreLabel = localize(language, "restoreResource");
-                const restoreTitle = `${restoreLabel}: ${resource.title}`;
-                const restoreDisabledReason = !canWriteResources
-                  ? resourceWriteBlockedReason ?? resourceReadOnlyNotice(language)
-                  : isBrowserPreview
-                    ? localize(language, "browserPreviewMutationNotice")
-                    : restoreUnavailableReason;
-                return (
-                  <li key={resourceId ?? `unknown-deleted-resource-${index}`}>
-                    <span className="resources-knowledge__trash-item-title" title={resource.title}>
-                      {resource.title}
-                    </span>
-                    {resource.collectionPath ? (
-                      <span className="resources-knowledge__trash-item-path" title={resource.collectionPath}>
-                        {resource.collectionPath}
-                      </span>
-                    ) : null}
-                    {!canRestore ? (
-                      <span className="resources-knowledge__trash-item-status">
-                        {localize(language, "notRestorable")}
-                      </span>
-                    ) : null}
-                    {canRestore && onRestoreResources && resourceId ? (
-                      <button
-                        className="button button--compact resources-knowledge__restore-action"
-                        type="button"
-                        onClick={() => restoreDeletedResource(resourceId)}
-                        disabled={!canWriteResources || isBrowserPreview || !onRestoreResources || isDeletePending || isRestorePending}
-                        aria-busy={restorePendingForItem}
-                        aria-label={restoreTitle}
-                        title={restoreDisabledReason ?? restoreTitle}
-                      >
-                        <RefreshIcon size={12} />
-                        <span>{restoreLabel}</span>
-                      </button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-        </div>
-      </details>
+        <ResourcesTrashPanel
+          language={language}
+          deletedResources={trashedResources}
+          snapshotAvailable={trashSnapshotAvailable}
+          open={trashOpen}
+          onOpenChange={setTrashOpen}
+          isRestorePending={isRestorePending}
+          isDeletePending={isDeletePending}
+          pendingRestoredResourceIds={pendingRestoredResourceIds}
+          canWriteResources={canWriteResources}
+          writeBlockedReason={resourceWriteBlockedReason}
+          isBrowserPreview={isBrowserPreview}
+          restoreUnavailableReason={restoreUnavailableReason}
+          restoreAvailable={Boolean(onRestoreResources)}
+          onRestore={restoreDeletedResource}
+        />
       )}
       </div>
       </div>

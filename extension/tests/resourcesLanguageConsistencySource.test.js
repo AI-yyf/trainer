@@ -16,6 +16,22 @@ const resourcesSourcePath = path.resolve(
   'ResourcesWorkbenchView.tsx',
 );
 
+const resourcesTrashPanelPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'components',
+  'resources',
+  'ResourcesTrashPanel.tsx',
+);
+
+function readResourcesSource() {
+  // P2 modularization: the trash panel moved to ResourcesTrashPanel.tsx;
+  // guards assert the logical resources view (view + panel).
+  return `${fs.readFileSync(resourcesSourcePath, 'utf8')}\n${fs.readFileSync(resourcesTrashPanelPath, 'utf8')}`;
+}
+
 const resourcesInlineTextPath = path.resolve(
   __dirname,
   '..',
@@ -37,7 +53,7 @@ function readResourcesInlineCopy() {
 }
 
 test('Resources owns fallback-safe library copy without retired cross-view labels', () => {
-  const source = fs.readFileSync(resourcesSourcePath, 'utf8');
+  const source = readResourcesSource();
   const inlineCopy = readResourcesInlineCopy();
 
   assert.match(inlineCopy, /const resourceText: Record<ResourceTextKey, \{ zh: string; en: string \}>/);
@@ -64,7 +80,7 @@ test('Resources owns fallback-safe library copy without retired cross-view label
 });
 
 test('Resources localizes read-only, preview-mutation, and generic search failures in every supported language', () => {
-  const source = fs.readFileSync(resourcesSourcePath, 'utf8');
+  const source = readResourcesSource();
   const inlineCopy = readResourcesInlineCopy();
   const baseCopyStart = inlineCopy.indexOf('const resourceText:');
   const baseCopyEnd = inlineCopy.indexOf('const resourceTextLocaleOverrides:', baseCopyStart);
@@ -93,7 +109,7 @@ test('Resources localizes read-only, preview-mutation, and generic search failur
 });
 
 test('Resources localizes review-card handoff actions and replaces duplicate generation with the current training', () => {
-  const source = fs.readFileSync(resourcesSourcePath, 'utf8');
+  const source = readResourcesSource();
   const inlineCopy = readResourcesInlineCopy();
 
   assert.match(inlineCopy, /createReviewCard: \{ zh: "\\u751f\\u6210\\u590d\\u4e60\\u5361", en: "Create review card" \}/);
@@ -129,7 +145,7 @@ test('Resources localizes review-card handoff actions and replaces duplicate gen
 });
 
 test('Resources keeps host failure details out of ordinary search feedback', () => {
-  const source = fs.readFileSync(resourcesSourcePath, 'utf8');
+  const source = readResourcesSource();
   const inlineCopy = readResourcesInlineCopy();
 
   assert.match(inlineCopy, /searchFailed: \{ zh: "\\u6682\\u65f6\\u65e0\\u6cd5\\u641c\\u7d22\\u8d44\\u6599\\uff0c\\u8bf7\\u7a0d\\u540e\\u91cd\\u8bd5\\u3002", en: "Couldn't search resources\. Try again\." \}/);
