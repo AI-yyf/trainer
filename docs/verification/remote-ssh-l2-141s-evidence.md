@@ -1,6 +1,18 @@
 # Remote-SSH L2 验收证据 — 验收机 141s（2026-11-06）
 
-**结论：前置条件与预置全 PASS；6 步真窗口清单 PENDING-HUMAN（验收包已就位）。**
+**结论：前置条件 PASS；第 1 步（服务端安装）已自动化执行并 PASS；第 2–6 步 PENDING-HUMAN。**
+
+**2026-11-07 更新（真实执行记录）**：用远端 VS Code Server CLI
+`code-server --install-extension ~/trainer-extension-1.4.0-linux-x64.vsix --force`
+真实安装成功，`--list-extensions --show-versions` 返回 `local.trainer-extension@1.4.0`，
+`~/.vscode-server/extensions/local.trainer-extension-1.4.0/package.json` 版本/发布者与
+v1.4.0 一致（engine ^1.96.0）。
+
+**同时发现真实阻断（已修，待新构件）**：v1.4.0 的 linux sidecar 依赖 GLIBC_2.38，
+141s（Ubuntu 22.04）启动即失败（`libm.so.6: version GLIBC_2.38 not found`）；打包模式
+仅有 bundled-binary 一条启动路径（源码侧车仅 Development 模式）。已把 release/
+cross-platform 的 linux 构建基座改为 ubuntu-22.04（glibc 2.35），旧 release 资产
+在 22.04/Debian 12 主机不可用，需随下一版发布替换。
 配合清单：`docs/verification/p1-final-remote-ssh-l2-checklist.md`。
 
 ## 验收机与预置（全部自动化执行，PASS）
@@ -24,7 +36,7 @@
 
 | # | 步骤 | 状态 |
 | --- | --- | --- |
-| 1 | Remote-SSH 窗口安装 VSIX（Extensions → … → Install from VSIX… → `~/trainer-extension-1.4.0-linux-x64.vsix`） | PENDING-HUMAN |
+| 1 | Remote-SSH 窗口安装 VSIX（Extensions → … → Install from VSIX… → `~/trainer-extension-1.4.0-linux-x64.vsix`） | ✅ PASS（自动化：远端 VS Code Server CLI 安装 + 版本/发布者核验；窗口内重载即生效） |
 | 2 | 活动栏 Trainer 图标打开侧边栏（应进入 Coach 视图） | PENDING-HUMAN |
 | 3 | 五视图切换 Coach / Plan / Resources / Training / Settings | PENDING-HUMAN |
 | 4 | Coach 发一条关于远程项目的消息，流式完整回复 | PENDING-HUMAN |
