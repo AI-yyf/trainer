@@ -156,10 +156,13 @@ test('workflow dispatch diagnostic scope selects one actual-host package without
     `return (${value.match(/\$\{\{\s*([\s\S]*?)\s*\}\}/)[1]});`)(github, inputs, JSON.parse,
       (template, value) => template.replace('{0}', value));
   const group = (github, inputs) => source.match(/^  group: (.*)$/m)[1].replace(/\$\{\{.*?\}\}/g, (value) => expression(value, github, inputs));
+  // The linux package runner is ubuntu-22.04 so the PyInstaller sidecar keeps
+  // glibc 2.35 compatibility with real Remote-SSH hosts (22.04/Debian 12).
+  const packageRunners = ['ubuntu-22.04', 'macos-latest', 'windows-latest'];
   const cases = [
     ['push', 'none', 9], ['pull_request', 'none', 9], ['workflow_dispatch', 'none', 9],
-    ['push', 'ubuntu-latest', 9], ['pull_request', 'windows-latest', 9],
-    ...['ubuntu-latest', 'macos-latest', 'windows-latest'].map((runner) => ['workflow_dispatch', runner, 1]),
+    ['push', 'ubuntu-22.04', 9], ['pull_request', 'windows-latest', 9],
+    ...packageRunners.map((runner) => ['workflow_dispatch', runner, 1]),
   ];
   for (const [event, diagnostic, expectedCount] of cases) {
     const github = { event_name: event, ref: 'refs/heads/main' };
@@ -174,7 +177,7 @@ test('workflow dispatch diagnostic scope selects one actual-host package without
     }
     const block = job('package');
     const runners = expression(block.match(/^        os: (.*)$/m)[1], github, inputs);
-    assert.deepEqual(runners, expectedCount === 1 ? [diagnostic] : ['ubuntu-latest', 'macos-latest', 'windows-latest']);
+    assert.deepEqual(runners, expectedCount === 1 ? [diagnostic] : packageRunners);
     count += runners.length;
     assert.equal(count, expectedCount, `${event}/${diagnostic}`);
     const requireHost = block.split('- name: Require actual host acceptance')[1].match(/^        if: (.*)$/m)[1];
@@ -182,7 +185,7 @@ test('workflow dispatch diagnostic scope selects one actual-host package without
     assert.match(block, /partial diagnostic scope[\s\S]*cannot establish full acceptance/i);
   }
   const github = { event_name: 'workflow_dispatch', ref: 'refs/heads/main' };
-  assert.notEqual(group(github, { diagnostic_package_platform: 'none' }), group(github, { diagnostic_package_platform: 'ubuntu-latest' }));
+  assert.notEqual(group(github, { diagnostic_package_platform: 'none' }), group(github, { diagnostic_package_platform: 'ubuntu-22.04' }));
   assert.equal(group({ ...github, event_name: 'push' }, {}), group(github, { diagnostic_package_platform: 'none' }));
   assert.match(job('package'), /Diagnostic package/);
 });

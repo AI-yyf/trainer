@@ -183,3 +183,56 @@ def test_analysis_route_reports_provider_availability(tmp_path: Path) -> None:
         assert forbidden.status_code == 403
         missing = client.get("/project/analysis", params={"workspace_id": "ws-analysis"})
         assert missing.status_code == 400
+
+
+def test_project_summary_route_is_single_bounded_call(tmp_path: Path) -> None:
+    settings = AppSettings(
+        app_name="Trainer Project Summary",
+        host="127.0.0.1",
+        port=8765,
+        data_dir=tmp_path / "data",
+        database_name="trainer-summary.db",
+        default_session_stage="intake",
+        summary_message_limit=6,
+        enable_network_fetch=False,
+    )
+    repo = tmp_path / "repos" / "summary-repo"
+    _init_repo(repo)
+
+    with TestClient(create_app(settings)) as client:
+        (tmp_path / "workspace").mkdir()
+        client.post(
+            "/session/start",
+            json={
+                "workspace_id": "ws-summary",
+                "workspace_name": "ws-summary",
+                "workspace_path": str(tmp_path / "workspace"),
+            },
+        )
+        imported = client.post(
+            "/project/import/local", json={"workspace_id": "ws-summary", "path": str(repo)}
+        )
+        assert imported.status_code == 200, imported.text
+        resource_id = imported.json()["resource_id"]
+
+        summary = client.get(
+            "/project/summary", params={"workspace_id": "ws-summary", "resource_id": resource_id}
+        )
+        assert summary.status_code == 200, summary.text
+        payload = summary.json()
+        assert payload["ok"] is True
+        assert payload["file_count"] == 2
+        assert payload["symbol_count"] >= 2
+        assert payload["modules"], "module map must be present"
+        assert len(payload["modules"]) <= 8
+        assert payload["callgraph"]["edge_count"] >= 1
+        providers = {item["provider"]: item for item in payload["analysis"]}
+        assert "regex-callgraph" in providers
+        assert providers["lsp-scip"]["available"] is False
+        assert providers["lsp-scip"]["reason"]
+        assert isinstance(payload["limitations"], list)
+
+        forbidden = client.get(
+            "/project/summary", params={"workspace_id": "ws-summary", "path": str(repo)}
+        )
+        assert forbidden.status_code == 403
