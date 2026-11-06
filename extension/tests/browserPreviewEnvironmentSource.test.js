@@ -25,6 +25,22 @@ const settingsViewPath = path.resolve(
   'CoachSettingsView.tsx',
 );
 
+const settingsControlsPath = path.resolve(
+  __dirname,
+  '..',
+  'webview',
+  'src',
+  'components',
+  'settings',
+  'SettingsControls.tsx',
+);
+
+function readSettingsViewSource() {
+  // P2 modularization: the settings form controls moved to SettingsControls.tsx;
+  // guards assert the logical settings view (view + controls).
+  return `${fs.readFileSync(settingsViewPath, 'utf8')}\n${fs.readFileSync(settingsControlsPath, 'utf8')}`;
+}
+
 test('browser preview detection honors the preview flag even when the VS Code shim exists', () => {
   const source = readAppModuleSource();
 
@@ -37,7 +53,7 @@ test('browser preview detection honors the preview flag even when the VS Code sh
 test('production workbench does not treat mockData or browserSidecar fixtures as host truth', () => {
   const app = readAppModuleSource();
   const sidecar = fs.readFileSync(browserSidecarPath, 'utf8');
-  const settings = fs.readFileSync(settingsViewPath, 'utf8');
+  const settings = readSettingsViewSource();
 
   assert.doesNotMatch(app, /from ["'].*mockData["']/);
   assert.match(app, /isBrowserPreviewFixtureMode/);
@@ -50,7 +66,7 @@ test('production workbench does not treat mockData or browserSidecar fixtures as
 
 test('browserSidecar protocol defaults stay fail-closed for VS Code webview', () => {
   const sidecar = fs.readFileSync(browserSidecarPath, 'utf8');
-  const settings = fs.readFileSync(settingsViewPath, 'utf8');
+  const settings = readSettingsViewSource();
   const app = readAppModuleSource();
 
   assert.match(sidecar, /function browserPreviewMayUseProtocolCapabilityDefaults\(\)/);
@@ -71,7 +87,7 @@ test('browserSidecar protocol defaults stay fail-closed for VS Code webview', ()
 
 test('browser preview language URL overrides are applied once and choice buttons use one click path', () => {
   const app = readAppModuleSource();
-  const settings = fs.readFileSync(settingsViewPath, 'utf8');
+  const settings = readSettingsViewSource();
 
   assert.match(app, /browserPreviewLocationOverridesAppliedRef = useRef\(false\)/);
   assert.match(
