@@ -138,10 +138,8 @@ class TreeSitterPythonProvider:
         if not available:
             return AdapterReport(name=self.name, available=False, reason=reason)
 
-        import tree_sitter_python
-        from tree_sitter import Language, Parser
-
-        parser = Parser(Language(tree_sitter_python.language()))
+        tree_sitter, grammar = _load_tree_sitter()
+        parser = tree_sitter.Parser(tree_sitter.Language(grammar.language()))
         definitions: set[str] = {symbol.name for symbol in repo_index.symbols}
         symbol_path = {symbol.name: symbol.path for symbol in repo_index.symbols}
         edges: list[AdapterEdge] = []
