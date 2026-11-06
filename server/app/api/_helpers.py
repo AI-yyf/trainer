@@ -70,3 +70,10 @@ def supported_response_language(value: object | None) -> ResponseLanguage | None
         return cast(ResponseLanguage, candidate)
     return None
 
+
+def normalized_object_mapping(value: object | None) -> dict[str, object] | None:
+    """Copy JSON-like mappings into the router's string-keyed payload shape."""
+
+    if not isinstance(value, dict):
+        return None
+    return {key: item for key, item in value.items() if isinstance(key, str)}
