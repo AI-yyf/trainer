@@ -59,3 +59,12 @@ Trainer 通道日志一并记录。
 - 步骤 1–6 依赖真实的人在 Remote-SSH VS Code Server 窗口内操作，无法机器人化断言
   （清单文件自身声明 §十 Layer 2 边界）；本文件把该步骤的人工成本降到零预置成本。
 - 自动化回归层 ≠ 真窗口层：两层证据分开记录，不互相冒充。
+
+
+## v1.4.1 官方资产验收（2026-11-07，替代此前 run 内构件）
+
+- Release v1.4.1 linux-x64 资产 sha256 `149bbb92…` 与 build manifest `vsix.sha256` 完全一致
+- 141s 服务端安装成功 → `local.trainer-extension@1.4.1`
+- `bundled/bin/linux-x64/trainer-sidecar --help` exit 0；`--host 127.0.0.1 --port 34998`
+  启动后 `/health` 返回 `{"status":"ok","initialized":true,...}`
+- 结论：glibc 2.35 基座修复进入正式发布通道；2–6 步真窗口仍 PENDING-HUMAN
