@@ -31,6 +31,16 @@ const RESOURCE_OPERATION_REQUEST_ID_KEY = '__trainerResourceOperationId';
 const RESOURCE_SEARCH_REQUEST_ID_KEY = 'requestId';
 const RESOURCE_TRAINING_HANDOFF_REQUEST_ID_KEY = '__trainerResourceTrainingHandoffId';
 const TRAINING_PERSISTENCE_REQUEST_ID_KEY = '__trainerTrainingPersistenceId';
+// Chat-stream commands report through the stream itself; a success banner
+// would leak internal command copy ("Stream message completed.") into Coach.
+const SILENT_SUCCESS_COMMAND_IDS = new Set<string>([
+  COMMAND_IDS.sendMessage,
+  COMMAND_IDS.sendStreamMessage,
+  COMMAND_IDS.cancelStreamMessage,
+  COMMAND_IDS.resumeLatestCoachCheckpoint,
+  COMMAND_IDS.replayLatestCoachCheckpoint,
+]);
+
 const TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
   COMMAND_IDS.trainingFlashcardAnswer,
   COMMAND_IDS.trainingTheoryDrillAnswer,
@@ -75,6 +85,21 @@ function resourceOperationStatusMessage(commandId: string, payload: unknown, mes
     return message;
   }
   return `[[trainer-resource-operation:${kind}:${normalizedRequestId}]] ${message}`;
+}
+
+function shouldDeliverOperationStatus(
+  commandId: string,
+  result: { ok?: boolean; cancelled?: boolean },
+): boolean {
+  if (result.cancelled || commandId === COMMAND_IDS.primeProviderModels) {
+    return false;
+  }
+  // Successful chat-stream commands stay silent (the stream is the feedback);
+  // failures still surface so the learner sees what went wrong.
+  if (result.ok && SILENT_SUCCESS_COMMAND_IDS.has(commandId)) {
+    return false;
+  }
+  return true;
 }
 
 function readNonEmptyString(value: unknown): string | undefined {
@@ -643,7 +668,7 @@ export class WorkbenchSidebarController
               payload: { activeView: 'settings', focusProviderApiKey: true },
             });
           }
-          if (!result.cancelled && command.commandId !== COMMAND_IDS.primeProviderModels) {
+          if (shouldDeliverOperationStatus(command.commandId, result)) {
             await this.postMessage(
               toOperationStatus(
                 result.ok,
@@ -664,7 +689,7 @@ export class WorkbenchSidebarController
             type: 'ui/restoreView',
             payload: { activeView: 'settings', focusProviderApiKey: true },
           });
-          if (!result.cancelled && command.commandId !== COMMAND_IDS.primeProviderModels) {
+          if (shouldDeliverOperationStatus(command.commandId, result)) {
             await this.postMessage(
               toOperationStatus(
                 result.ok,
@@ -679,7 +704,7 @@ export class WorkbenchSidebarController
           }
           return;
         }
-        if (!result.cancelled && command.commandId !== COMMAND_IDS.primeProviderModels) {
+        if (shouldDeliverOperationStatus(command.commandId, result)) {
           await this.postMessage(
             toOperationStatus(
               result.ok,

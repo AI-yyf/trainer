@@ -238,16 +238,14 @@ test('trainer message parts normalize into the typed registry contract', () => {
       message: "Coach loop completed after 2 tool steps.",
     },
   );
-  assert.deepEqual(
+  assert.equal(
     deriveTrainerStreamingOperationMessage("en-US", {
       isStreaming: false,
       streamedContent: "Answer ready.",
       streamMessageId: "msg-stream-4",
     }),
-    {
-      tone: "success",
-      message: "Coach reply completed.",
-    },
+    undefined,
+    "a plain successful reply is its own confirmation; no redundant banner",
   );
   assert.deepEqual(
     deriveTrainerStreamingOperationMessage(
