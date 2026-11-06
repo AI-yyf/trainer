@@ -220,6 +220,16 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
             persist_skill_projection(workspace_id, request.attempt_id)
         return {"ok": True, "evidence": evidence}
 
+    @router.get("/teaching/quality")
+    def teaching_quality(workspace_id: str) -> dict:
+        """真实教学质量评估 — 仅用持久化学习证据, 样本不足如实标注."""
+
+        from ...pedagogy.quality import evaluate_teaching_quality
+
+        store = require_store()
+        report = evaluate_teaching_quality(store, workspace_id)
+        return {"ok": True, **report.as_payload()}
+
     @router.get("/training/attempt/{attempt_id}")
     def get_attempt(attempt_id: str, workspace_id: str | None = None) -> dict:
         store = require_store()
