@@ -24,7 +24,9 @@ jobs:
           - os: macos-latest
             target: darwin-arm64
             py: "3.12"
-          - os: ubuntu-latest
+          # Ubuntu 22.04 keeps the PyInstaller sidecar within glibc 2.35,
+          # which real Remote-SSH hosts (22.04/Debian 12) actually provide.
+          - os: ubuntu-22.04
             target: linux-x64
             py: "3.12"
     defaults:

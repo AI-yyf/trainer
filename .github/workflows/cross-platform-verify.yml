@@ -188,7 +188,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.diagnostic_package_platform != 'none' && format('["{0}"]', inputs.diagnostic_package_platform) || '["ubuntu-latest","macos-latest","windows-latest"]') }}
+        # linux-x64 sidecar builds on 22.04: glibc 2.35 is what real
+        # Remote-SSH hosts (22.04/Debian 12) provide; ubuntu-latest (24.04)
+        # produced a binary that failed with GLIBC_2.38 on such hosts.
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.diagnostic_package_platform != 'none' && format('["{0}"]', inputs.diagnostic_package_platform) || '["ubuntu-22.04","macos-latest","windows-latest"]') }}
     env:
       OPENAI_API_KEY: ""
       TRAINER_PROVIDER_SMOKE_API_KEY: ${{ secrets.TRAINER_PROVIDER_SMOKE_API_KEY }}
