@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.project.symbols import build_repo_index
+from app.project.symbols import MAX_FILES, build_repo_index
 
 _GITHUB_URL = re.compile(
     r"^(?:https?://)?github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?"
@@ -66,6 +66,7 @@ class RepoImportResult:
     branch: str
     file_count: int
     symbol_count: int
+    source_item_count: int
     symbol_artifact_path: Path | None
     warnings: list[str] = field(default_factory=list)
 
@@ -218,7 +219,10 @@ def import_repository(
             "name": resource_name,
             "source": str(repo_root_path),
             "source_type": "folder",
-            "source_items": [str(repo_root_path / relative) for relative in index_payload["files"][:100]],
+            # v1.5 P0: register every discovered file. The library service
+            # normalizes loudly (MAX_FOLDER_INGEST_ITEMS); truncating here to
+            # 100 silently made files past the cut unindexable and unsearchable.
+            "source_items": [str(repo_root_path / relative) for relative in index_payload["files"]],
             "summary": (
                 f"Imported repository {repo_url or repo_root_path.name} "
                 f"@ {commit_sha[:10] if commit_sha else 'no-commit'} "
@@ -245,6 +249,12 @@ def import_repository(
     )
     if not commit_sha:
         warnings.append("Directory is not a git repository; no commit SHA pinned.")
+    source_item_count = int(index_payload["file_count"])
+    if source_item_count >= MAX_FILES:
+        warnings.append(
+            f"Repository walked to the {MAX_FILES}-file analysis cap; "
+            "files beyond it are not indexed."
+        )
 
     return RepoImportResult(
         resource_id=resource_id,
@@ -254,6 +264,7 @@ def import_repository(
         branch=branch,
         file_count=int(index_payload["file_count"]),
         symbol_count=int(index_payload["symbol_count"]),
+        source_item_count=source_item_count,
         symbol_artifact_path=artifact_path,
         warnings=warnings,
     )

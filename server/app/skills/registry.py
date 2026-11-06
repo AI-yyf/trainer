@@ -14,6 +14,7 @@ the body is only loaded when the skill is activated.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -211,6 +212,11 @@ class SkillRegistry:
     ) -> SkillRecord:
         if kind not in {"tutor", "knowledge", "action"}:
             raise ValueError(f"Invalid skill kind: {kind!r}. Must be tutor, knowledge, or action.")
+        # 审核绕过修复 (v1.5 P0): an action skill may never arrive pre-approved
+        # through registration — the only review path is mark_reviewed(), which
+        # records who/when/what-hash. First-party builtin seeding constructs
+        # its record directly and is not affected.
+        effective_reviewed = reviewed and kind != "action"
         record = SkillRecord(
             skill_id=skill_id,
             kind=kind,
@@ -219,7 +225,7 @@ class SkillRegistry:
             permissions=list(permissions or []),
             source_path=source_path,
             active=False,
-            reviewed=reviewed,
+            reviewed=effective_reviewed,
             metadata=dict(metadata or {}),
         )
         self._skills[skill_id] = record
@@ -263,13 +269,48 @@ class SkillRegistry:
             },
         )
 
-    def mark_reviewed(self, skill_id: str, *, reviewed: bool = True) -> SkillRecord:
-        """Human review decision (审核) — the only path to review a skill."""
+    def mark_reviewed(
+        self,
+        skill_id: str,
+        *,
+        reviewed: bool = True,
+        note: str = "",
+    ) -> SkillRecord:
+        """Human review decision (审核) — the only path to review a skill.
+
+        Persists the note (previously written post-persist and lost on
+        restart) and pins the reviewed SKILL.md content hash so a later file
+        change is detected as stale instead of silently staying approved.
+        """
 
         record = self._require(skill_id)
         record.reviewed = reviewed
+        if note:
+            record.metadata["review_note"] = note
+        if reviewed:
+            record.metadata["reviewed_content_hash"] = self._content_hash(record)
+            record.metadata["reviewed_at"] = datetime.now(UTC).isoformat()
+        else:
+            record.metadata.pop("reviewed_content_hash", None)
+            record.metadata.pop("reviewed_at", None)
         self._persist()
         return record
+
+    def _content_hash(self, record: SkillRecord) -> str:
+        if record.source_path:
+            try:
+                return hashlib.sha256(Path(record.source_path).read_bytes()).hexdigest()
+            except OSError:
+                return ""
+        return hashlib.sha256(record.body.encode("utf-8")).hexdigest()
+
+    def review_is_stale(self, record: SkillRecord) -> bool:
+        """True when the reviewed file/body changed after the review."""
+
+        pinned = str(record.metadata.get("reviewed_content_hash") or "")
+        if not pinned:
+            return False
+        return self._content_hash(record) != pinned
 
     def record_usage(
         self,
@@ -300,10 +341,16 @@ class SkillRegistry:
 
     def activate(self, skill_id: str) -> SkillRecord:
         record = self._require(skill_id)
-        if not record.reviewed and record.kind == "action":
+        if record.kind == "action" and (
+            not record.reviewed or self.review_is_stale(record)
+        ):
+            reason = (
+                "changed on disk after review; review it again"
+                if record.reviewed
+                else "not been reviewed by the user. Review it first"
+            )
             raise ValueError(
-                f"Action skill {skill_id!r} has not been reviewed by the user. "
-                "Review it first before activation."
+                f"Action skill {skill_id!r} has {reason} before activation."
             )
         record.active = True
         record.body = self._load_body(record)

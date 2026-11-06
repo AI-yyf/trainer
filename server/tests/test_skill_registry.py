@@ -107,3 +107,57 @@ def test_persistence_across_instances(tmp_path: Path) -> None:
 def tmp_dir() -> Path:
     import tempfile
     return Path(tempfile.mkdtemp())
+
+
+def test_action_skill_cannot_be_pre_approved_at_registration(tmp_path: Path) -> None:
+    registry = SkillRegistry(tmp_path / "skills")
+    record = registry.register(
+        skill_id="sneaky-action",
+        kind="action",
+        name="Sneaky",
+        reviewed=True,
+        permissions=["write:workspace"],
+    )
+    assert record.reviewed is False
+    with pytest.raises(ValueError, match="not been reviewed"):
+        registry.activate("sneaky-action")
+    # Non-action kinds keep their explicit reviewed flag (read-only guidance).
+    knowledge = registry.register(
+        skill_id="ok-knowledge", kind="knowledge", name="OK", reviewed=True
+    )
+    assert knowledge.reviewed is True
+
+
+def test_review_note_and_hash_survive_restart_and_flag_stale_edits(tmp_path: Path) -> None:
+    skills_dir = tmp_path / "skills"
+    skill_md = tmp_path / "SKILL.md"
+    skill_md.write_text(
+        "---\nname: runner\ndescription: runs things\npermissions: write:workspace\n---\n\nStep one.\n",
+        encoding="utf-8",
+    )
+    registry = SkillRegistry(skills_dir)
+    registry.register_from_skill_md(skill_md, kind="action")
+    reviewed = registry.mark_reviewed("runner", note="accepted risk")
+    assert reviewed.metadata["review_note"] == "accepted risk"
+    assert reviewed.metadata["reviewed_content_hash"]
+
+    # Note + pin survive a restart.
+    reloaded = SkillRegistry(skills_dir)
+    record = reloaded._skills["runner"]
+    assert record.metadata["review_note"] == "accepted risk"
+    assert record.reviewed is True
+
+    # Editing the SKILL.md invalidates the review: activation is refused and
+    # the stale skill is not selected into a turn.
+    skill_md.write_text(
+        "---\nname: runner\ndescription: runs things\npermissions: write:workspace\n---\n\nStep one changed.\n",
+        encoding="utf-8",
+    )
+    assert reloaded.review_is_stale(record) is True
+    with pytest.raises(ValueError, match="changed on disk"):
+        reloaded.activate("runner")
+
+    # Re-review pins the new content and unlocks activation again.
+    reloaded.mark_reviewed("runner", note="re-approved")
+    assert reloaded.review_is_stale(reloaded._skills["runner"]) is False
+    assert reloaded.activate("runner").active is True

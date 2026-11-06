@@ -108,6 +108,7 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             "branch": result.branch,
             "file_count": result.file_count,
             "symbol_count": result.symbol_count,
+            "source_item_count": result.source_item_count,
             "symbol_artifact_path": (
                 result.symbol_artifact_path.as_posix()
                 if result.symbol_artifact_path

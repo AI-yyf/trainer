@@ -19,16 +19,38 @@ from app.project.symbols import (
 
 _MAX_DIFF_FILES = 500
 
+# `git pull` on a branch without a configured remote is a normal state for
+# local/imported repositories, not an update failure.
+_NO_UPSTREAM_MARKERS = (
+    "no tracking information",
+    "has no upstream branch",
+    "no remote",
+    "there is no tracking information",
+    "couldn't find remote ref",
+)
+
+
+class IncrementalUpdateError(RuntimeError):
+    """Git or index failure — must never be reported as "no changes"."""
+
+
+def _git_run(args: list[str], cwd: Path) -> tuple[int, str, str]:
+    try:
+        completed = subprocess.run(  # noqa: S404 - git is invoked with an argv list, no shell
+            ["git", "-C", str(cwd), *args],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        raise IncrementalUpdateError(f"git {args[0]} could not run: {exc}") from exc
+    return completed.returncode, completed.stdout.strip(), completed.stderr.strip()
+
 
 def _git(args: list[str], cwd: Path) -> str:
-    completed = subprocess.run(
-        ["git", "-C", str(cwd), *args],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    return completed.stdout.strip() if completed.returncode == 0 else ""
+    code, stdout, _stderr = _git_run(args, cwd)
+    return stdout if code == 0 else ""
 
 
 def current_commit(repo_root: Path) -> str:
@@ -40,14 +62,23 @@ def detect_changed_files(
     old_commit: str,
     new_commit: str,
 ) -> list[str]:
-    """Return POSIX-relative paths changed between two commits."""
+    """Return POSIX-relative paths changed between two commits.
+
+    A git failure raises :class:`IncrementalUpdateError`; it is never
+    conflated with "no files changed" (v1.5 P0: a stale index must never be
+    presented as up to date).
+    """
 
     if old_commit == new_commit:
         return []
-    raw = _git(
+    code, raw, stderr = _git_run(
         ["diff", "--name-only", f"{old_commit}..{new_commit}"],
         repo_root,
     )
+    if code != 0:
+        raise IncrementalUpdateError(
+            f"git diff {old_commit}..{new_commit} failed (exit {code}): {stderr or 'no stderr'}"
+        )
     if not raw:
         return []
     paths: list[str] = []
@@ -116,14 +147,41 @@ def refresh_project(
     a summary of what changed for reporting.
     """
 
-    _git(["pull", "--ff-only"], repo_root)
+    pull_code, _pull_stdout, pull_stderr = _git_run(["pull", "--ff-only"], repo_root)
+    pull_state = "pulled"
+    if pull_code != 0:
+        lowered = pull_stderr.lower()
+        if any(marker in lowered for marker in _NO_UPSTREAM_MARKERS):
+            # Local/imported repos legitimately have no upstream; there is
+            # nothing to pull, but the diff between commits is still valid.
+            pull_state = "skipped_no_upstream"
+        else:
+            # Any other pull failure leaves the checkout untouched; report it
+            # explicitly so callers keep the last reliable index.
+            return {
+                "ok": False,
+                "error": "git_pull_failed",
+                "detail": pull_stderr or f"git pull exited {pull_code}",
+                "old_commit": old_commit,
+                "new_commit": current_commit(repo_root),
+            }
     new_commit = current_commit(repo_root)
     if not new_commit:
         return {"ok": False, "error": "Could not resolve the new HEAD commit."}
-    changed = detect_changed_files(repo_root, old_commit, new_commit)
+    try:
+        changed = detect_changed_files(repo_root, old_commit, new_commit)
+    except IncrementalUpdateError as exc:
+        return {
+            "ok": False,
+            "error": "diff_failed",
+            "detail": str(exc),
+            "old_commit": old_commit,
+            "new_commit": new_commit,
+        }
     if not changed:
         return {
             "ok": True,
+            "pull": pull_state,
             "old_commit": old_commit,
             "new_commit": new_commit,
             "changed_files": [],
@@ -137,11 +195,15 @@ def refresh_project(
     )
     return {
         "ok": True,
+        "pull": pull_state,
         "old_commit": old_commit,
         "new_commit": new_commit,
         "changed_files": changed,
         "symbols_added": updated_index["added"],
         "symbols_removed": updated_index["removed"],
         "symbol_count": len(updated_index["symbols"]),
+        # Only a successful run exposes the new symbol table; callers write it
+        # atomically and keep the previous artifact otherwise.
+        "symbols": updated_index["symbols"],
         "updated": True,
     }

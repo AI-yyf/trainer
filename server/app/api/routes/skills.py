@@ -137,12 +137,16 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
         reviewed = bool(payload.get("approved", payload.get("reviewed", True)))
         note = str(payload.get("note") or "").strip()
         try:
-            record = _registry().mark_reviewed(skill_id, reviewed=reviewed)
+            # The note is persisted inside mark_reviewed (writing it afterwards
+            # was lost on restart); a stale SKILL.md change also surfaces here.
+            record = _registry().mark_reviewed(skill_id, reviewed=reviewed, note=note)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        if note:
-            record.metadata["review_note"] = note
-        return {"ok": True, "skill": record.to_payload()}
+        return {
+            "ok": True,
+            "skill": record.to_payload(),
+            "review_stale": _registry().review_is_stale(record),
+        }
 
     @router.get("/skill/status")
     def skill_status() -> dict[str, Any]:
