@@ -99,8 +99,22 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             except (KeyError, ValueError, PermissionError, RuntimeError):
                 index_status = "failed"
 
+        knowledge_skill: dict[str, object] | None = None
+        if result.resource_id and index_status == "indexed":
+            try:
+                from ...project.knowledge_distill import distill_project_knowledge
+
+                knowledge_skill = distill_project_knowledge(
+                    runtime, workspace_id, result.resource_id
+                )
+            except (KeyError, ValueError, RuntimeError, OSError):
+                # Distillation is additive: an import never fails because the
+                # derived skill could not be built (the explicit endpoint retries).
+                knowledge_skill = None
+
         return {
             "ok": True,
+            "knowledge_skill": knowledge_skill,
             "resource_id": result.resource_id,
             "resource_name": result.resource_name,
             "repo_root": str(result.repo_root),
@@ -379,6 +393,23 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             "symbol_count": len(repo_index.symbols),
             **report,
         }
+
+    @router.post("/project/distill")
+    def project_distill(payload: dict) -> dict[str, object]:
+        """项目分析知识 → Knowledge Skill 沉淀 (幂等, 关联资料库/Coach/计划)."""
+
+        from ...project.knowledge_distill import distill_project_knowledge
+
+        workspace_id = str(payload.get("workspace_id") or "").strip()
+        resource_id = str(payload.get("resource_id") or "").strip()
+        if not workspace_id or not resource_id:
+            raise HTTPException(status_code=400, detail="workspace_id and resource_id are required.")
+        try:
+            return distill_project_knowledge(runtime, workspace_id, resource_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.get("/project/import/status")
     def project_import_status() -> dict[str, object]:

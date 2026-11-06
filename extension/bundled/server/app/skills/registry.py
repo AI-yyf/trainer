@@ -352,6 +352,59 @@ class SkillRegistry:
             return False
         return self._content_hash(record) != pinned
 
+    def upsert_knowledge_skill(
+        self,
+        *,
+        skill_id: str,
+        name: str,
+        description: str,
+        body: str,
+        metadata: dict[str, Any],
+        permissions: list[str] | None = None,
+    ) -> tuple[SkillRecord, bool]:
+        """Register/refresh a derived project Knowledge Skill idempotently.
+
+        Same body+commit metadata → no-op (version unchanged). Content change
+        (new commit, new structure) → version +1, activation preserved. Derived
+        knowledge skills are first-party and auto-reviewed (read-only kind).
+        """
+
+        existing = self._skills.get(skill_id)
+        if existing is None:
+            record = SkillRecord(
+                skill_id=skill_id,
+                kind="knowledge",
+                name=name,
+                description=description,
+                permissions=list(permissions or []),
+                source_path=None,
+                active=True,
+                reviewed=True,
+                body=body,
+                metadata=dict(metadata),
+                version=1,
+            )
+            self._skills[skill_id] = record
+            self._persist()
+            return record, True
+        unchanged = (
+            existing.body == body
+            and str(existing.metadata.get("commit_sha") or "")
+            == str(metadata.get("commit_sha") or "")
+        )
+        if unchanged:
+            return existing, False
+        existing.name = name
+        existing.description = description
+        existing.permissions = list(permissions or existing.permissions)
+        existing.body = body
+        existing.metadata.update(metadata)
+        existing.version += 1
+        existing.active = True
+        existing.reviewed = True
+        self._persist()
+        return existing, False
+
     def record_failure(
         self,
         skill_id: str,
