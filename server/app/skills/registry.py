@@ -113,11 +113,57 @@ class SkillRegistry:
         self._storage_dir = Path(storage_dir)
         self._skills: dict[str, SkillRecord] = {}
         self._load_persisted()
+        self._seed_builtin_skills()
+
+    def _seed_builtin_skills(self) -> None:
+        """Install first-party tutor skills once; never override user records."""
+
+        from .builtin import BUILTIN_TUTOR_SKILLS, builtin_front_matter
+
+        for skill in BUILTIN_TUTOR_SKILLS:
+            skill_id = str(skill["skill_id"])
+            if skill_id in self._skills:
+                existing = self._skills[skill_id]
+                # A persisted builtin from an older registry version may have
+                # lost its inline body; refresh only that field, never a user
+                # override (non-empty body or non-builtin origin wins).
+                if (
+                    existing.metadata.get("origin") == "builtin"
+                    and not existing.body
+                    and skill.get("body")
+                ):
+                    existing.body = str(skill["body"])
+                    existing.active = True
+                    existing.reviewed = True
+                    self._persist()
+                continue
+            self._skills[skill_id] = SkillRecord(
+                skill_id=skill_id,
+                kind=str(skill["kind"]),
+                name=str(skill["name"]),
+                description=str(skill.get("description") or ""),
+                permissions=["read:workspace", "search:resources"],
+                source_path=None,
+                active=True,
+                reviewed=True,
+                body=str(skill.get("body") or ""),
+                metadata={
+                    "front_matter": builtin_front_matter(skill),
+                    "origin": "builtin",
+                    "origin_note": str(skill.get("origin_note") or ""),
+                },
+            )
+            self._persist()
 
     def _persist(self) -> None:
         self._storage_dir.mkdir(parents=True, exist_ok=True)
         payload = {
-            sid: record.to_payload()
+            sid: record.to_payload(
+                # Inline/builtin skills have no SKILL.md to re-read on load, so
+                # their body must live in the registry file itself; file-backed
+                # skills stay progressive (body loaded from disk at activation).
+                include_body=record.source_path is None,
+            )
             for sid, record in self._skills.items()
         }
         (self._storage_dir / "skill-registry.json").write_text(
@@ -143,6 +189,7 @@ class SkillRegistry:
                     source_path=data.get("source_path"),
                     active=bool(data.get("active")),
                     reviewed=bool(data.get("reviewed")),
+                    body=str(data.get("body") or ""),
                     metadata=dict(data.get("metadata") or {}),
                 )
 
@@ -231,6 +278,7 @@ class SkillRegistry:
         applied: bool,
         workspace_id: str = "",
         session_id: str = "",
+        evidence: dict[str, Any] | None = None,
     ) -> SkillRecord:
         """Persist one usage fact (执行结果回流). Skill 使用成功 ≠ 掌握."""
 
@@ -245,6 +293,8 @@ class SkillRegistry:
         if session_id:
             metadata["last_used_session"] = session_id
         metadata["last_applied"] = bool(applied)
+        if evidence:
+            metadata["last_evidence"] = dict(evidence)
         self._persist()
         return record
 

@@ -39,7 +39,7 @@ def test_register_and_list() -> None:
         name="Test Tutor",
         description="A tutor skill for testing.",
     )
-    skills = registry.list_skills()
+    skills = [s for s in registry.list_skills() if s.skill_id == "test-tutor"]
     assert len(skills) == 1
     assert skills[0].kind == "tutor"
     assert skills[0].name == "Test Tutor"

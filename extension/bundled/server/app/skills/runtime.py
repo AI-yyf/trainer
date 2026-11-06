@@ -53,6 +53,30 @@ class SelectedSkill:
     matched_terms: list[str] = field(default_factory=list)
 
 
+def runtime_skill_registry(runtime: Any) -> SkillRegistry | None:
+    """The runtime's skill registry, created lazily when missing.
+
+    The agentic turn path and the /skill routes must see the SAME registry:
+    routes used to create it lazily while the agentic injection silently read
+    None on a fresh sidecar (builtin teaching skill never selected, no usage
+    fed back). Creating it here keeps one source of truth under data_root.
+    """
+
+    registry = getattr(runtime, "skill_registry", None)
+    if registry is not None:
+        return registry
+    resource_service = getattr(runtime, "resource_service", None)
+    data_root = getattr(resource_service, "data_root", None)
+    if data_root is None:
+        return None
+    try:
+        registry = SkillRegistry(Path(str(data_root)) / "skills")
+    except (OSError, ValueError):
+        return None
+    runtime.skill_registry = registry
+    return registry
+
+
 def _front_matter_terms(record: Any) -> list[str]:
     front_matter = record.metadata.get("front_matter")
     if not isinstance(front_matter, dict):
@@ -164,6 +188,61 @@ def build_skill_guidance_block(selected: list[SelectedSkill]) -> str:
     return "\n".join(lines)
 
 
+def _skill_evidence(
+    record: Any,
+    skill: SelectedSkill,
+    content: str,
+    tool_names: list[str],
+) -> dict[str, Any]:
+    """Evidence-driven applied verdict (v1.5) — never a display-name substring.
+
+    Order of proof:
+    1. Declared tools: an action skill counts as applied only when one of the
+       tools it declares actually ran this turn (execution evidence).
+    2. Declared evidence markers (contract vocabulary from front matter):
+       enough markers hit in the final content → the reply followed the
+       skill's contract even without naming it.
+    3. Citation of the skill id (not the display name) as a weak fallback.
+    """
+
+    front_matter = {}
+    if isinstance(getattr(record, "metadata", None), dict):
+        front_matter = record.metadata.get("front_matter") or {}
+    declared_tools = [
+        token.strip()
+        for token in str(front_matter.get("tools") or "").split(",")
+        if token.strip()
+    ]
+    markers = [
+        token.strip()
+        for token in str(front_matter.get("evidence_markers") or "").split(",")
+        if token.strip()
+    ]
+    markers_hit = [marker for marker in markers if marker in content]
+    tools_hit = [name for name in tool_names if name in declared_tools]
+    cited = skill.skill_id in content
+
+    basis = "none"
+    applied = False
+    if declared_tools:
+        basis = "tool_execution"
+        applied = bool(tools_hit)
+    elif markers:
+        basis = "contract_markers"
+        thresholds = max(2, (len(markers) + 1) // 2)
+        applied = len(markers_hit) >= min(thresholds, len(markers))
+    elif cited:
+        basis = "id_citation"
+        applied = True
+    return {
+        "basis": basis,
+        "applied": applied,
+        "markers_hit": markers_hit[:8],
+        "tools_hit": tools_hit[:8],
+        "cited": cited,
+    }
+
+
 def record_skill_usage(
     runtime: Any,
     workspace_id: str,
@@ -172,24 +251,38 @@ def record_skill_usage(
     *,
     stop_reason: str = "",
     final_content: str = "",
+    tool_events: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Persist usage facts: registry stats + one memory session highlight.
 
-    Returns per-skill usage payloads for the turn's diagnostics.
+    ``applied`` is evidence-driven (execution tools / contract markers /
+    skill-id citation), not a display-name substring match. Returns per-skill
+    usage payloads for the turn's diagnostics.
     """
 
     if not selected:
         return []
     registry: SkillRegistry | None = getattr(runtime, "skill_registry", None)
-    content_lower = str(final_content or "").lower()
+    content = str(final_content or "")
+    tool_names = [
+        str(event.get("name") or "")
+        for event in (tool_events or [])
+        if isinstance(event, dict)
+    ]
     now = datetime.now(UTC).isoformat()
     usages: list[dict[str, Any]] = []
     highlights: list[str] = []
     for skill in selected:
-        applied = bool(skill.name) and skill.name.lower() in content_lower
+        record = None
+        if registry is not None:
+            record = registry.list_skills()
+            record = next((r for r in record if r.skill_id == skill.skill_id), None)
+        evidence = _skill_evidence(record, skill, content, tool_names)
+        applied = bool(evidence["applied"])
         usage = {
             "skill_id": skill.skill_id,
             "applied": applied,
+            "evidence": evidence,
             "stop_reason": stop_reason or None,
             "workspace_id": workspace_id,
             "recorded_at": now,
@@ -202,6 +295,7 @@ def record_skill_usage(
                     applied=applied,
                     workspace_id=workspace_id,
                     session_id=session_id,
+                    evidence=evidence,
                 )
             except KeyError:
                 continue

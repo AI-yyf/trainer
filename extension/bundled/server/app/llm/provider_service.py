@@ -5092,9 +5092,13 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         selected_skills: list[Any] = []
         skill_guidance = ""
         try:
-            from ..skills.runtime import build_skill_guidance_block, select_active_skills
+            from ..skills.runtime import (
+                build_skill_guidance_block,
+                runtime_skill_registry,
+                select_active_skills,
+            )
 
-            skill_registry = getattr(runtime_obj, "skill_registry", None)
+            skill_registry = runtime_skill_registry(runtime_obj)
             if skill_registry is not None and str(message or "").strip():
                 selected_skills = select_active_skills(skill_registry, str(message))
                 skill_guidance = build_skill_guidance_block(selected_skills)
@@ -5178,6 +5182,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     selected_skills,
                     stop_reason=str(getattr(result, "stop_reason", "") or ""),
                     final_content=str(getattr(result, "final_content", "") or ""),
+                    tool_events=[
+                        dict(event)
+                        for step in getattr(result, "steps", []) or []
+                        for event in getattr(step, "tool_results", []) or []
+                        if isinstance(event, dict)
+                    ],
                 )
             except Exception:
                 logger.warning("skill_usage_record_failed", exc_info=True)
@@ -5658,9 +5668,13 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         selected_skills: list[Any] = []
         skill_guidance = ""
         try:
-            from ..skills.runtime import build_skill_guidance_block, select_active_skills
+            from ..skills.runtime import (
+                build_skill_guidance_block,
+                runtime_skill_registry,
+                select_active_skills,
+            )
 
-            skill_registry = getattr(runtime_obj, "skill_registry", None)
+            skill_registry = runtime_skill_registry(runtime_obj)
             if skill_registry is not None and str(message or "").strip():
                 selected_skills = select_active_skills(skill_registry, str(message))
                 skill_guidance = build_skill_guidance_block(selected_skills)
@@ -5841,6 +5855,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                                 selected_skills,
                                 stop_reason=str(event.get("stop_reason") or ""),
                                 final_content=str(event.get("content") or ""),
+                                tool_events=tool_events,
                             )
                         except Exception:
                             logger.warning("skill_usage_record_failed", exc_info=True)
