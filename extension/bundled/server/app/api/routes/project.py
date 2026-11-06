@@ -278,6 +278,37 @@ def build_project_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             **payload,
         }
 
+    @router.get("/project/analysis")
+    def project_analysis(
+        workspace_id: str,
+        resource_id: str = "",
+        path: str = "",
+    ) -> dict[str, object]:
+        """Analysis Adapter 报告 — 每个 provider 的可用性/证据等级/局限，绝不虚构。"""
+
+        from ...project.analysis_adapter import run_analysis_adapters
+        from ...project.symbols import build_repo_index
+
+        if not workspace_id.strip():
+            raise HTTPException(status_code=400, detail="workspace_id is required.")
+        if not resource_id.strip() and not path.strip():
+            raise HTTPException(status_code=400, detail="resource_id or path is required.")
+        repo_root = _resolve_project_repo_root(
+            workspace_id.strip(), resource_id=resource_id, path=path
+        )
+        if not repo_root.is_dir():
+            raise HTTPException(status_code=422, detail=f"Project directory is missing: {repo_root}")
+        repo_index = build_repo_index(repo_root)
+        report = run_analysis_adapters(repo_root, repo_index)
+        return {
+            "ok": True,
+            "workspace_id": workspace_id.strip(),
+            "resource_id": resource_id.strip() or None,
+            "file_count": len(repo_index.files),
+            "symbol_count": len(repo_index.symbols),
+            **report,
+        }
+
     @router.get("/project/import/status")
     def project_import_status() -> dict[str, object]:
         return {
