@@ -12,7 +12,7 @@
 | 远端 git | ✅ | git 2.34.1 |
 | VS Code Server | ✅ | Stable `110a328ea54b…` 已存在（用户此前连接过），`code-server` CLI 可用 |
 | 测试工作区 | ✅ | `~/trainer-e2e/`（含 `src/queue_lock.py`，一个真实可读的小模块） |
-| **linux-x64 VSIX 预置** | ✅ | `~/trainer-extension-1.4.0-linux-x64.vsix`（170,286,390 字节）；SHA-256 前 16 位本地/远端一致 `0d694830e345b5b5` |
+| **linux-x64 VSIX 预置** | ✅ | `~/trainer-extension-1.4.0-linux-x64.vsix` = **官方 Release 资产**（170,287,950 字节，SHA-256 `4d6aa3bc…` 与 release manifest 完全一致；早期预置的 run 内构件 `0d6948…` 因 PyInstaller 字节级不可复现而替换） |
 
 ## 自动化回归层（区别于人工窗口层）
 
