@@ -15,7 +15,12 @@
 | 表格单元格内的 `$a^2$` | 与 GFM 表格共存 | 单元格内公式 |
 | `$ x + y $` | remark-math 允许定界符内空白 | 行内公式 |
 | 裸 `\begin{aligned}...\end{aligned}` | remark-math 直接识别环境 | 块级公式 |
+| 紧邻标点 `$x^2$。` | 无空格也能解析 | 行内公式 |
+| 加粗/列表/引用/表格内的公式 | 段落内节点共存 | 全部排版 |
+| `~~~math` 围栏 | 与 ```math 同一路径 | 块级公式 |
+| `$\text{中文}$` | KaTeX text 模式 | 中文公式标签 |
 | `\$5` / `\$10` | 转义美元符号 | 保留货币文本，不误判公式 |
+| `\textcolor{red}{x}` / `\color{blue}` | 只在数学片段内剥离颜色命令 | 中性排版，不引入第二个色相 |
 | 非法公式 `$\frac{1}{$` | `throwOnError:false` + 中性 errorColor | 可读的错误片段，整条回复不崩 |
 
 ## 字符与块级格式
@@ -41,7 +46,7 @@
 
 - `output/ui-replica-2026-11-07/formats-dark.png`：同一条回复内同时出现粗体/斜体/删除线/行内代码/链接/换行/标题/引用/列表/任务/分隔线/脚注/三种公式/表格/Mermaid。
 - `output/ui-replica-2026-11-07/rich-light.png`：浅色主题下反引号公式已升级为 KaTeX。
-- 浏览器实测计数（`playwright`）：`strong 1 / em 1 / del 1 / inlineCode 1 / link 3（含脚注回链）/ br 1 / katex 6 / table 1 / h2 2 / blockquote 1 / li 4 / checkbox 1 / hr 1 / footnotes 1`；非法公式 `pageerror=[]`、`.katex-error=1`。
+- 浏览器实测计数（`playwright`）：`strong 3 / em 2 / del 1 / inlineCode 1 / link 3（含脚注回链）/ br 1 / katex 13 / table 1 / h2 2 / blockquote 2 / li 5 / checkbox 1 / hr 1 / footnotes 1`；非法公式 `pageerror=[]`、`.katex-error=1`。
 
 ## 门禁
 
@@ -54,5 +59,6 @@
 ## 边界（如实）
 
 - 未启用 `rehype-raw`：原始 HTML 仍按文本显示，这是安全边界，不为了“格式全”放开。
+- `\textcolor`/`\color` 等颜色命令只在数学片段内剥离；代码与围栏字节不变。
 - 公式提升只覆盖可判定的强信号；`foo_bar = 1` 这类代码不会被误判成公式。
 - 非法公式显示 KaTeX 的错误片段而不是静默删除，便于发现模型输出问题。

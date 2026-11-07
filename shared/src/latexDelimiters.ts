@@ -41,11 +41,88 @@ function looksLikeInlineFormula(content: string): boolean {
   return hasShortSubscript && operatorCount >= 2;
 }
 
+const LATEX_COLOR_COMMAND = /\\(?:textcolor|fcolorbox|colorbox|pagecolor|color|cellcolor|rowcolor|columncolor)(?:\[[^\]]*\])?\{[^{}]*\}/g;
+const LATEX_DEFINE_COLOR = /\\(?:definecolor|providecolor)(?:\[[^\]]*\])?\{[^{}]*\}(?:\{[^{}]*\}){0,2}/g;
+
+function stripColorCommands(expression: string): string {
+  return expression
+    .replace(LATEX_DEFINE_COLOR, "")
+    .replace(LATEX_COLOR_COMMAND, "");
+}
+
+/**
+ * Math can carry \textcolor/\color, which would paint a second hue inside an
+ * otherwise monochrome surface. Strip only inside math spans, leaving code
+ * spans and fences byte-identical.
+ */
+function stripMathColors(markdown: string): string {
+  if (!markdown.includes("\\color") && !markdown.includes("\\textcolor")) {
+    return markdown;
+  }
+  let out = "";
+  let index = 0;
+  let inFence = false;
+  let fenceMarker = "";
+  while (index < markdown.length) {
+    const atLineStart = index === 0 || markdown[index - 1] === "\n";
+    if (atLineStart) {
+      const fence = /^(```|~~~)/.exec(markdown.slice(index, index + 3));
+      if (fence) {
+        if (!inFence) {
+          inFence = true;
+          fenceMarker = fence[1];
+        } else if (markdown.startsWith(fenceMarker, index)) {
+          inFence = false;
+        }
+        out += fence[1];
+        index += fence[1].length;
+        continue;
+      }
+    }
+    if (!inFence && markdown[index] === "`") {
+      let runLength = 0;
+      while (markdown[index + runLength] === "`") runLength += 1;
+      const closer = "`".repeat(runLength);
+      const closing = markdown.indexOf(closer, index + runLength);
+      if (closing === -1) {
+        out += markdown.slice(index, index + runLength);
+        index += runLength;
+      } else {
+        out += markdown.slice(index, closing + runLength);
+        index = closing + runLength;
+      }
+      continue;
+    }
+    if (!inFence && markdown[index] === "$" && markdown[index - 1] !== "\\") {
+      const display = markdown.startsWith("$$", index);
+      const delimiter = display ? "$$" : "$";
+      const closing = markdown.indexOf(delimiter, index + delimiter.length);
+      if (closing === -1) {
+        out += markdown[index];
+        index += 1;
+        continue;
+      }
+      out += delimiter + stripColorCommands(markdown.slice(index + delimiter.length, closing)) + delimiter;
+      index = closing + delimiter.length;
+      continue;
+    }
+    out += markdown[index];
+    index += 1;
+  }
+  return out;
+}
+
 export function normalizeLatexDelimiters(markdown: string): string {
   if (!markdown) {
     return markdown;
   }
-  if (!markdown.includes("\\[") && !markdown.includes("\\(") && !markdown.includes("`")) {
+  if (
+    !markdown.includes("\\[") &&
+    !markdown.includes("\\(") &&
+    !markdown.includes("`") &&
+    !markdown.includes("\\color") &&
+    !markdown.includes("\\textcolor")
+  ) {
     return markdown;
   }
   // Models commonly fence display math as ```math / ```latex. Turn that fence
@@ -124,5 +201,5 @@ export function normalizeLatexDelimiters(markdown: string): string {
     out += markdown[index];
     index += 1;
   }
-  return out;
+  return stripMathColors(out);
 }

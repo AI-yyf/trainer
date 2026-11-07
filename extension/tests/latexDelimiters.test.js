@@ -87,6 +87,15 @@ test('turns a math fence into a display-math block', () => {
   assert.equal(normalizeLatexDelimiters(python), python);
 });
 
+test('strips colour commands inside math but not inside code', () => {
+  assert.equal(
+    normalizeLatexDelimiters('颜色 $' + '\\textcolor{red}{x} + \\color{blue} y' + '$ 结束。'),
+    '颜色 ${x} +  y$ 结束。',
+  );
+  const code = '代码 `' + '\\textcolor{red}{x}' + '` 不变。';
+  assert.equal(normalizeLatexDelimiters(code), code);
+});
+
 test('returns the input when no delimiters are present', () => {
   const markdown = '纯文本，没有公式。';
   assert.equal(normalizeLatexDelimiters(markdown), markdown);
