@@ -48,7 +48,7 @@ cross-platform 的 linux 构建基座改为 ubuntu-22.04（glibc 2.35），旧 r
 | 1 | Remote-SSH 窗口安装 VSIX（Extensions → … → Install from VSIX… → `~/trainer-extension-1.4.0-linux-x64.vsix`） | ✅ PASS（自动化：远端 VS Code Server CLI 安装 + 版本/发布者核验；窗口内重载即生效） |
 | 2 | 活动栏 Trainer 图标打开侧边栏（应进入 Coach 视图） | ✅ PASS（自动化真窗口） |
 | 3 | 五视图切换 Coach / Plan / Resources / Training / Settings | ✅ PASS（自动化真窗口；Training 入口在 Learning 内） |
-| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | ❌ FAIL（provider 返回“服务正忙，请稍等再试”，三次探测均失败；外部可用性） |
+| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | ❌ BLOCKED（provider 返回 HTTP 429 / code 2056「Token Plan 用量上限」，三次探测均失败；额度问题，非窗口流程） |
 | 5 | 设置中 attach 远程工作区（`~/trainer-e2e`）并确认信任状态 | ✅ PASS（项目 URI + 非 Restricted Mode） |
 | 6 | Companion capability 握手显示 verified（file/search/hash/verify） | ✅ PASS（“远程支持已就绪”） |
 
@@ -59,7 +59,11 @@ Trainer 通道日志一并记录。
 
 - 2–6 已由 `scripts/run-real-remote-ssh-l2.mjs` 在真实 VS Code Electron + `ssh-remote+141s`
   窗口中执行；第 4 步的 provider 失败没有被标记为 PASS。
-- 真实自动化证据：`output/remote-ssh-l2/2026-11-07-final6/report.json`（2/3/5/6 PASS，4 FAIL）。
+- 真实自动化证据：`output/remote-ssh-l2/2026-11-07-final6/report.json`（2/3/5/6 PASS，4 FAIL）；
+  `2026-11-07-final11/report.json` 记录第 4 步 provider 429。
+- 2026-11-08：直连 provider 复核为 HTTP 429 `2056 Token Plan 用量上限`；已把该结构化数值码
+  归类为 `quota_exhausted`，界面会提示恢复额度或切换连接，而不是“服务正忙”。
+  六步验收仍缺第 4 步的真实回复，需 provider 额度恢复后重跑。
 - 自动化回归层 ≠ 真窗口层：两层证据分开记录，不互相冒充。
 
 

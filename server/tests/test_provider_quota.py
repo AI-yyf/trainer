@@ -9,7 +9,11 @@ from openai import APIStatusError
 
 from app.core.models import ProviderConfig, UserProfile
 from app.llm.agent_loop import AgentProvider
-from app.llm.provider.errors import ProviderRuntimeResponseError, provider_http_failure
+from app.llm.provider.errors import (
+    ProviderRuntimeResponseError,
+    provider_http_failure,
+    provider_quota_exhausted,
+)
 from app.llm.provider.quota_copy import provider_quota_reply
 from app.llm.provider_service import ProviderService
 
@@ -27,9 +31,10 @@ class UpstreamError(Exception):
     (402, "billing_hard_limit_reached", "quota_exhausted", False),
     (403, "invalid_api_key", "invalid_key_or_permission", False),
     (429, "rate_limit_exceeded", "rate_limit", True),
+    (429, 2056, "quota_exhausted", False),
 ])
 def test_billing_codes_override_status_without_reclassifying_auth_or_throttling(
-    status: int, code: str, expected: str, retryable: bool,
+    status: int, code: object, expected: str, retryable: bool,
 ) -> None:
     service = ProviderService()
     error = UpstreamError(status, {"error": {"code": code, "message": "PRIVATE API KEY"}})
@@ -106,6 +111,7 @@ def test_coach_and_test_details_share_localized_quota_recovery(language: str) ->
     (403, "insufficient_user_quota", "quota_exhausted", False),
     (403, "invalid_api_key", "invalid_key_or_permission", False),
     (429, "rate_limit_exceeded", "rate_limit", True),
+    (429, 2056, "quota_exhausted", False),
 ])
 async def test_agent_transport_failure_survives_child_task_without_teaching_or_attestation(
     monkeypatch: pytest.MonkeyPatch,
@@ -178,3 +184,16 @@ async def test_agent_transport_failure_survives_child_task_without_teaching_or_a
     if category == "quota_exhausted":
         assert result["content"] == provider_quota_reply("zh-CN")
         assert "API key" not in result["content"]
+
+
+def test_numeric_token_plan_limit_is_quota_not_generic_rate_limit() -> None:
+    payload = {
+        "error": {
+            "code": 2056,
+            "type": "rate_limit_error",
+            "message": "已达到 Token Plan 用量上限",
+        }
+    }
+    assert provider_quota_exhausted(payload) is True
+    assert provider_quota_exhausted({"error": {"code": "2056"}}) is True
+    assert provider_quota_exhausted({"error": {"code": "rate_limit_exceeded"}}) is False

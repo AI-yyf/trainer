@@ -11,6 +11,9 @@ _QUOTA_ERROR_CODES = frozenset({
     "insufficient_quota", "insufficient_user_quota", "billing_hard_limit_reached",
     "credit_balance_too_low", "insufficient_balance",
 })
+# Provider-specific plan limits that arrive as numeric structured codes rather
+# than OpenAI's string enums (MiniMax Token Plan returns code 2056 with HTTP 429).
+_QUOTA_ERROR_NUMERIC_CODES = frozenset({2056})
 
 
 def provider_quota_exhausted(payload: object) -> bool:
@@ -19,10 +22,15 @@ def provider_quota_exhausted(payload: object) -> bool:
         return False
     nested = payload.get("error")
     error = nested if isinstance(nested, dict) else payload
-    return any(
-        isinstance(error.get(key), str) and error[key].strip().lower() in _QUOTA_ERROR_CODES
-        for key in ("code", "type")
-    )
+    for key in ("code", "type"):
+        value = error.get(key)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in _QUOTA_ERROR_CODES or normalized in {"2056"}:
+                return True
+        elif isinstance(value, int) and value in _QUOTA_ERROR_NUMERIC_CODES:
+            return True
+    return False
 
 
 def provider_error_quota_exhausted(error: Exception) -> bool:
