@@ -5491,7 +5491,7 @@ function CoachSettingsViewSheet({
               action:
                 id === "workspace" && workspaceRootMissing && onChooseTrainerWorkspaceRoot
                   ? {
-                      label: settingsPhrase(language, "workspaceChooseFolder"),
+                      label: settingsText(language, "选择", "Choose"),
                       onClick: onChooseTrainerWorkspaceRoot,
                       icon: <DataFolderIcon size={12} />,
                     }

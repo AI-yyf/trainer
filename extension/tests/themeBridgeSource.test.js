@@ -141,9 +141,9 @@ test('theme bridge preserves host variable indirection and writes no colours', (
   assert.doesNotMatch(stylesSource, /charts-orange|vscode-focusBorder/);
   assert.doesNotMatch(stylesSource, /--accent:\s*var\(--vscode-button-background/);
   assert.doesNotMatch(stylesSource, /--bg-3:\s*var\(--vscode-list-activeSelectionBackground/);
-  assert.match(stylesSource, /--success:\s*var\(--vscode-testing-iconPassed,/);
-  assert.match(stylesSource, /--warning:\s*var\(--vscode-editorWarning-foreground,/);
-  assert.match(stylesSource, /--danger:\s*var\(--vscode-errorForeground,/);
+  assert.match(stylesSource, /--success:\s*var\(--fg-0\);/);
+  assert.match(stylesSource, /--warning:\s*var\(--fg-1\);/);
+  assert.match(stylesSource, /--danger:\s*var\(--fg-0\);/);
   assert.doesNotMatch(stylesSource, /--accent:\s*#/);
   // No hardcoded hex colours anywhere in the design-token section.
   assert.doesNotMatch(stylesSource, /#[0-9a-fA-F]{3,8}\b/);

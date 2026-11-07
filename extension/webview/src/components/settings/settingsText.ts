@@ -9,6 +9,15 @@ import type { ComposerLanguage } from "../../lib/types";
 
 
 export const SETTINGS_TEXT: Record<string, Partial<Record<ComposerLanguage, string>>> = {
+  "选择\u0000Choose": {
+    "en-US": "Choose",
+    "es-ES": "Elegir",
+    "fr-FR": "Choisir",
+    "de-DE": "Auswählen",
+    "ja-JP": "選択",
+    "ko-KR": "선택",
+    "pt-BR": "Escolher",
+  },
   "先选择协议，再填写服务根地址。未知网关不会被默认成 OpenAI 兼容。\u0000Select a protocol before entering the service root. Unknown gateways are not assumed OpenAI-compatible.": {
     "en-US": "Select a protocol before entering the service root. Unknown gateways are not assumed OpenAI-compatible.",
     "es-ES": "Elige un protocolo antes de escribir la raíz del servicio. Los gateways desconocidos no se asumen OpenAI-compatible.",

@@ -48,7 +48,7 @@
 .button--accent,
 .button--primary {
   background: var(--vscode-button-secondaryBackground, var(--bg-2));
-  border-color: var(--vscode-button-border, color-mix(in srgb, var(--line) 72%, transparent));
+  border-color: color-mix(in srgb, var(--line) 72%, transparent);
   color: var(--vscode-button-secondaryForeground, var(--fg-0));
 }
 
@@ -303,7 +303,7 @@
 }
 
 .action-button--accent {
-  border-color: var(--vscode-button-border, color-mix(in srgb, var(--line) 72%, transparent));
+  border-color: color-mix(in srgb, var(--line) 72%, transparent);
   background: var(--vscode-button-secondaryBackground, var(--bg-2));
   color: var(--vscode-button-secondaryForeground, var(--fg-0));
 }

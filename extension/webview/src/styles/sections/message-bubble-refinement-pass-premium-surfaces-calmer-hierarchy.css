@@ -579,7 +579,7 @@
 
 .onboarding-setup__marker {
   flex: none;
-  color: var(--vscode-testing-iconPassed, var(--accent));
+  color: var(--fg-0);
 }
 
 .onboarding-setup__name {

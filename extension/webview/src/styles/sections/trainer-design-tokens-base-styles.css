@@ -18,9 +18,9 @@
   --trainer-fallback-line: color-mix(in srgb, CanvasText 20%, Canvas);
   --trainer-fallback-border: var(--trainer-fallback-line);
   --trainer-fallback-accent: color-mix(in srgb, CanvasText 70%, GrayText);
-  --trainer-fallback-success: var(--vscode-charts-green, CanvasText);
-  --trainer-fallback-warning: var(--vscode-charts-yellow, CanvasText);
-  --trainer-fallback-danger: var(--vscode-charts-red, CanvasText);
+  --trainer-fallback-success: CanvasText;
+  --trainer-fallback-warning: CanvasText;
+  --trainer-fallback-danger: CanvasText;
   --trainer-fallback-focus-ring: color-mix(in srgb, CanvasText 70%, transparent);
   --trainer-fallback-link: CanvasText;
   --trainer-fallback-overlay: color-mix(in srgb, Canvas 60%, transparent);
@@ -104,9 +104,10 @@ body {
   --selection-fg: var(--fg-0);
   --selection-border: color-mix(in srgb, var(--fg-0) 34%, transparent);
   --accent-soft: color-mix(in srgb, var(--fg-0) 9%, transparent);
-  --success: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen, var(--trainer-fallback-success)));
-  --warning: var(--vscode-editorWarning-foreground, var(--vscode-testing-iconQueued, var(--vscode-terminal-ansiYellow, var(--trainer-fallback-warning))));
-  --danger: var(--vscode-errorForeground, var(--vscode-testing-iconFailed, var(--vscode-terminal-ansiRed, var(--trainer-fallback-danger))));
+  /* Status is monochrome too: text and icon carry the meaning, never a hue. */
+  --success: var(--fg-0);
+  --warning: var(--fg-1);
+  --danger: var(--fg-0);
   --focus-ring: color-mix(in srgb, var(--fg-0) 72%, transparent);
   --overlay: var(--vscode-editorWidget-background, var(--vscode-quickInput-background, var(--trainer-fallback-overlay)));
   --shadow-soft: var(--vscode-widget-shadow, var(--trainer-fallback-shadow-soft));

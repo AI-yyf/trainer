@@ -20,6 +20,10 @@
 | BoardUI 设置分页：事实摘要而非解释句 | Settings 索引「连接」在未配置时显示「未配置」，不再塞入整句要求；行距收紧（10px/2px），四行一屏可扫完 | `CoachSettingsView.tsx`、`templates.css` |
 | BoardUI 渐进披露：默认只留当前任务 | 空资料库且方向卡已持有唯一导入 CTA 时，隐藏搜索/展开工具栏（死掉的 chrome），只保留一张卡与一个主操作 | `ResourcesWorkbenchView.tsx` |
 | 统一分隔符，不用 ASCII 箭头 | 「总计划 -> 尚未建立」改为「总计划 · 尚未建立」 | `CoachPlanView.tsx` |
+| 无强调色：只用前景/字重/间距表达层级 | `--accent` 与 `--link` 收敛为中性前景；焦点环不再借主题彩色 `focusBorder`；所有 `color-mix` 只混合中性 token | `trainer-design-tokens-base-styles.css` |
+| 无硬编码颜色 | 新增守卫扫描 webview/shared 源码：禁止 hex、rgb()、hsl()、命名色；token 层禁止 `charts-orange`/`focusBorder`/`textLink-foreground` | `colorLiteralGuard.test.js`、`themeBridgeSource.test.js` |
+| 空回复不再留白卡 | 已结束的 assistant 消息若无 body/parts/status，显示八语言的一句话兜底，而不是空白卡片 | `CoachMessageBubble.tsx`、`coachMessageBubbleCopy.ts` |
+| 公式不再被反引号降级 | 模型把公式写成反引号时，只有强公式信号（单字母下标/上标/LaTeX 宏 + 运算符）才提升为 `$...$`；snake_case 与普通代码保持原样；提示契约禁止反引号包公式 | `shared/src/latexDelimiters.ts`、`prompts.py` |
 
 ## 刻意不复制
 
@@ -42,7 +46,12 @@
 - `npm run test:extension` exit 0
 - `npm run verify:ui-geometry` **477/477**
 - 真实旅程 `2026-11-07m`：全步骤 `ok:true`（含 02/03/04/04b/04c）
-- 最终带进度条的 VSIX 旅程：`output/real-vscode-gui/2026-11-07n/`（见提交说明）
+- 最终带进度条/中性色的 VSIX 旅程：`output/real-vscode-gui/2026-11-07o/`（见提交说明）
+- `npm run verify:local-latency`：五条本地导航/检查动作 **43–384ms**，全部 <1000ms
+  （`output/local-action-latency.json`）；Provider 网络测试只测量派发，不把公网延迟算进本地预算
+- 公式：`scenario=rich-content` 的 `` `E = p * c_retry + ...` `` 已渲染为 KaTeX 行内公式
+  （`output/ui-replica-2026-11-07/rich-light.png`）
+- 中性色：历史抽屉/搜索/新对话均为中性前景与边框（`history-neutral.png`）
 
 ## 限制（如实）
 
