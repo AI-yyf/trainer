@@ -1,30 +1,30 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`1b53a23`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`ee74ed2`，代码基线 `4e8554f`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `1b53a23`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 39 个 |
-| 代码差异（v1.4.0..HEAD） | 129 files, +9386 / −1604 |
-| 最新 ci 工作流 | run 42368882911 **success** |
-| 最新 Cross-Platform Verify | run 42368882917 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 代码与 CI 基线 | `4e8554f`（HEAD `ee74ed2` 为 L2 证据/脚本；v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 48 个 |
+| 代码差异（v1.4.0..HEAD） | 147 files, +14852 / −6570（含一次测试文件换行规范化） |
+| 最新 ci 工作流 | run 42385984789 **success** |
+| 最新 Cross-Platform Verify | run 42385984696 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 39 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 48 个见 `git log v1.4.0..main`）：
 
 ```
+ee74ed2 test(remote): 真实 L2 结果如实回填（2/3/5/6 PASS，4 FAIL）
+4e8554f refactor(resources): 抽出 libraryPaths 纯路径责任
+bdb8986 design(resources): + 图标靠搜索、回收站页脚化
+c77e6e5 design(learning): 保留环形日进度
+3d43bf6 fix(ui): 空学习态收成两层 + L2 脚本隔离状态
+199e244 test(preview): 修正旧准入文案断言
+e758ec5 fix(ui): 学习头部单行 + 工作区准入说明
 1b53a23 feat(chat): ^sup^ / ~sub~ 字符上下标
-fecf7a5 feat(chat): KaTeX mhchem 化学式
-a3c9949 fix(chat): 移除工具步数完成横幅 + 公式边界
-9b64437 fix(chat): 数学颜色命令剥离 + 边界覆盖
-fd3bab5 fix(chat): 全量公式 + Markdown 字符格式
-1aa2e05 fix(ui): 移除剩余主题强调色 + 缩短工作区动作
-273c7cd test(remote): Remote-SSH L2 真窗口脚本
-85d1226 feat(ui): 中性色 + 空回复兜底 + BoardUI/Bencho 克制模式
 ```
 
 ## 2. 修复清单（按目标阶段）
@@ -58,7 +58,7 @@ fd3bab5 fix(chat): 全量公式 + Markdown 字符格式
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3887 passed / 0 failed**（28 subtests） |
+| server pytest | **3890 passed / 0 failed**（28 subtests；含流空闲超时 3 条） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
@@ -117,19 +117,19 @@ fd3bab5 fix(chat): 全量公式 + Markdown 字符格式
 | P0（已修） | importer 100 项截断；incremental git 失败误判；skill 审核绕过/备注丢失/版本漂移；applied 假判定；linux glibc 阻断；PYTHONHASHSEED flake；agentic 注入竞态 | ✅ 已修 + 测试 |
 | P1（未完成） | **Remote-SSH 真窗口 2–6 步**：证据文件仍 PENDING-HUMAN（第 1 步自动化 PASS、后端 /health 实测 PASS） | ⏳ 需人工窗口 |
 | P1（部分完成） | 阶段四逐屏真实 VS Code 审计：Coach ✅（314432a）、Learning ✅（fa26203）、Resources ✅（0af9b19）、Settings ✅（`docs/verification/2026-11-07-settings-screen-audit.md`） | ✅ 四屏完成 |
-| P1（部分完成） | **巨型模块按职责拆分**（App/API Router/Provider/Memory/Resources）；禁止并行状态源 | 🟡 已拆 `coach_language_alignment`、`provider_payload`；App/Provider/Memory/Resources 未拆 |
+| P1（部分完成） | **巨型模块按职责拆分**（App/API Router/Provider/Memory/Resources）；禁止并行状态源 | 🟡 已拆 `coach_language_alignment`、`provider_payload`、`resources/libraryPaths`；App/Provider/Memory 未拆 |
 | P2（部分完成） | **LSP 已接入**（`pylsp` 真实 JSON-RPC references，证据级 `lsp_reference`，可选依赖，失败时如实 unavailable）；SCIP 索引解析仍未接入（占位 + reason） | ✅ LSP / ⏳ SCIP |
 | P2（已完成） | 项目分析知识自动沉淀为 Knowledge Skill 并关联资料库/Coach/计划（15c8088；`distill_project_knowledge` + 行为测试） | ✅ |
 | P2（未完成） | 按需多模态（扫描 PDF/图表） | ⏳ 未开展 |
 | P3（已完成） | `verify:delivery` 在本轮 HEAD 上的完整矩阵 | ✅ exit 0（verify + experience matrix + 打包，1.4.1 VSIX 产出） |
 | P3（已知限制，已记录） | 教学质量报告仅学习证据维度，文字准确性留人工；难度带为产品策略非个体校准 | 文档明示 |
 | P3（已知限制，已记录） | provider_error/timeout 计入技能失败 streak（可用性信号，非质量判断） | 文档明示 |
-| P3（已知限制，已记录） | L2 六步中 2–6 依赖真实 VS Code 窗口；自动化层（安装/sidecar/health）已 PASS | 证据文件 |
+| P3（已知限制，已记录） | L2 六步中 2/3/5/6 已自动化 PASS，第 4 步真实回复 provider 失败 | 证据文件 |
 
 ## 9. 未完成项（如实）
 
-1. Remote-SSH L2 第 2–6 步（真窗口切换五视图、真实对话、attach 信任、Companion 握手）——需要人在 VS Code 窗口执行；141s 已零成本预置（官方 v1.4.1 资产已装）。
-2. 阶段四剩余：App/Provider/Memory/Resources 巨型模块拆分、按需多模态理解；四屏真实 VS Code 审计已完成。
+1. Remote-SSH L2：真实窗口自动化已跑；2/3/5/6 PASS，第 4 步真实回复遇到 provider 失败（未标 PASS）。六步验收仍未整体通过。
+2. 阶段四剩余：App/Provider/Memory 巨型模块拆分、按需多模态理解；Resources 已抽出 `libraryPaths` 纯责任，四屏真实 VS Code 审计已完成。
 3. SCIP 索引解析接入（LSP 已接入）；Understand Anything 适配。
 4. 最终人工教学验收（主观质量）——自动化维度已给出，主观评审仍留人工。
 
