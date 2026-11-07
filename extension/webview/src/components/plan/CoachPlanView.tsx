@@ -31,9 +31,7 @@ import {
   ArrowRightIcon,
   LinkIcon,
   PlanIcon,
-  TrophyIcon,
 } from "../icons";
-import { TrainingNavIcon } from "../icons/navigation/coreNav";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import { resolvePlanViewCopy } from "../../lib/i18n/planViewCopy";
 import { resolveLearningTodayCopy } from "../../lib/i18n/segments/learningTodayCopy";
@@ -867,12 +865,10 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
         <div className="template-secondary-links template-secondary-links--learning" data-learning-navigation="practice-growth">
           <button type="button" className="template-learning-route" data-learning-link="training" onClick={() => props.onNavigateToView?.("training")}>
-            <TrainingNavIcon size={14} />
-            <span>{trainingViewLabel(language)}</span>
+            {trainingViewLabel(language)}
           </button>
           <button type="button" className="template-learning-route" data-learning-link="progress" onClick={() => props.onNavigateToView?.("progress")}>
-            <TrophyIcon size={14} />
-            <span>{templateCopy[language].growth}</span>
+            {templateCopy[language].growth}
           </button>
         </div>
         {liveEvidenceDecisionRow}
@@ -895,8 +891,21 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           ))}
         </details>
         {renderComposerDraftReplacement("stage")}
-        {actions?.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{actions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
-        {globalPlanContext}
+        {actions?.length || shouldShowGlobalPlanContext ? (
+          <details className="template-disclosure" data-learning-section="more">
+            <summary>{planViewText.detailsSummaryLabel}</summary>
+            <div className="template-learning-more">
+              {actions?.length ? (
+                <div className="template-learning-more__actions">
+                  {actions.map((action) => (
+                    <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />
+                  ))}
+                </div>
+              ) : null}
+              {globalPlanContext}
+            </div>
+          </details>
+        ) : null}
       </section>
     );
   }

@@ -124,6 +124,52 @@ function seedLearningFolder() {
   }
 }
 
+function seedLearningRoot() {
+  const root = path.join(profileRoot, `learning-l2-${Date.now()}`);
+  const directories = [
+    "Projects", "Knowledge", "Skills", "Agents", "Assets", ".trainer",
+    path.join(".trainer", "memory"), path.join(".trainer", "plans"),
+    path.join(".trainer", "indexes"), path.join(".trainer", "checkpoints"),
+    path.join(".trainer", "logs"), path.join(".trainer", "cache"),
+  ];
+  for (const directory of directories) fs.mkdirSync(path.join(root, directory), { recursive: true });
+  const now = new Date().toISOString();
+  fs.writeFileSync(
+    path.join(root, ".trainer", "workspace.json"),
+    `${JSON.stringify({
+      schemaVersion: 2, kind: "trainer-workspace", rootPath: root,
+      canonicalRootPath: root, legacyRootPaths: [], manifestRevision: 1,
+      pathRevision: 0, identityStatus: "pending", createdAt: now, updatedAt: now,
+      directories, projects: {},
+    }, null, 2)}\n`,
+  );
+  const globalStorageDir = path.join(userDataDir, "User", "globalStorage");
+  fs.mkdirSync(globalStorageDir, { recursive: true });
+  const database = new DatabaseSync(path.join(globalStorageDir, "state.vscdb"));
+  try {
+    database.exec("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)");
+    const extensionId = "local.trainer-extension";
+    const extensionState = readMementoObject(
+      database.prepare("SELECT value FROM ItemTable WHERE key = ?").get(extensionId)?.value,
+    );
+    extensionState["trainer.workspace.root.v1"] = root;
+    database.prepare("INSERT INTO ItemTable (key, value) VALUES (?, ?)").run(
+      extensionId, JSON.stringify(extensionState),
+    );
+    const keyIndex = `extensionKeys/${extensionId}@${packageJson.version}`;
+    const mementoKeys = readMementoKeys(
+      database.prepare("SELECT value FROM ItemTable WHERE key = ?").get(keyIndex)?.value,
+    );
+    if (!mementoKeys.includes("trainer.workspace.root.v1")) mementoKeys.push("trainer.workspace.root.v1");
+    database.prepare("INSERT INTO ItemTable (key, value) VALUES (?, ?)").run(
+      keyIndex, JSON.stringify(mementoKeys),
+    );
+  } finally {
+    database.close();
+  }
+  return root;
+}
+
 function webviewFrame(page) {
   const frame = page
     .frames()
@@ -157,6 +203,16 @@ async function waitForBody(frame, pattern, timeout = 120_000) {
   }
   throw new Error(`Timed out waiting for ${pattern}; body=${last.slice(0, 700)}`);
 }
+async function waitForRestored(frame, timeout = 120_000) {
+  const start = Date.now();
+  let last = "";
+  while (Date.now() - start < timeout) {
+    last = await bodyText(frame);
+    if (!/正在准备中|正在加载设置/.test(last)) return last;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
+  throw new Error(`Settings/session did not restore; body=${last.slice(0, 700)}`);
+}
 async function waitForAssistantReply(frame, timeout = 300_000) {
   const start = Date.now();
   let lastText = "";
@@ -187,6 +243,19 @@ async function waitForAssistantReply(frame, timeout = 300_000) {
   }
   throw new Error(`Assistant reply did not finish; last=${lastText.slice(0, 600)}`);
 }
+async function readLastAssistantText(frame) {
+  const bodies = frame
+    .locator(".message-bubble__body")
+    .filter({ has: frame.locator(".message-bubble__assistant-rail") });
+  for (let index = (await bodies.count()) - 1; index >= 0; index -= 1) {
+    const text = (await bodies.nth(index).innerText()).replace(/\s+/g, " ").trim();
+    if (text.length > 20 && !/^正在|第一段可见回复|教练正在思考/.test(text)) {
+      return text;
+    }
+  }
+  return "";
+}
+
 async function acceptTrust(page) {
   const trust = page.getByRole("button", { name: /Trust Folder & Continue|Yes, I trust|信任/i }).first();
   if (await trust.count().catch(() => 0)) {
@@ -219,7 +288,7 @@ async function runProviderTest(page, frame, attempts = 3) {
   return { ok: false, attempts, text: lastText };
 }
 
-seedLearningFolder();
+seedLearningRoot();
 
 const app = await _electron.launch({
   executablePath: electronicBinary,
@@ -251,6 +320,12 @@ try {
   }
   await page.waitForTimeout(5000);
   frame = await openCoach(page);
+  await waitForRestored(frame);
+  const coachNav = frame.getByRole("button", { name: "对话", exact: true }).first();
+  if (await coachNav.count()) {
+    await coachNav.click();
+    await page.waitForTimeout(1500);
+  }
 
   // Step 2 — activity bar / Coach sidebar.
   const step2Text = await bodyText(frame);
@@ -262,12 +337,21 @@ try {
   });
 
   // Step 3 — five views.
+  await frame.getByRole("button", { name: "学习", exact: true }).first().waitFor({ timeout: 30_000 });
   await frame.getByRole("button", { name: "学习", exact: true }).first().click();
   await page.waitForTimeout(2500);
   const planText = await bodyText(frame);
   await pageScreenshot(page, "03-plan");
   // Training lives inside Learning; open it before leaving the destination.
-  await frame.getByRole("button", { name: "训练", exact: true }).first().click();
+  const trainingLink = frame.locator('button[data-learning-link="training"]').first();
+  if (await trainingLink.count()) {
+    await trainingLink.click();
+  } else {
+    const practice = frame.locator('[data-primary-action="true"]').first();
+    if (await practice.count()) {
+      await practice.click();
+    }
+  }
   await page.waitForTimeout(2500);
   const trainingText = await bodyText(frame);
   await pageScreenshot(page, "03-training");
@@ -326,11 +410,20 @@ try {
     throw new Error("Provider form did not render");
   }
   await serviceRoot.fill(baseUrl);
-  await frame.locator('input[placeholder="连接已保存，还需要 API key。"]').first().fill(apiKey);
-  await frame.locator('input[placeholder="例如 kimi-k3"]').first().fill(model);
+  const apiKeyInput = frame.locator('input[placeholder="连接已保存，还需要 API key。"]').first();
+  if (await apiKeyInput.count()) {
+    await apiKeyInput.fill(apiKey);
+  }
+  const modelInput = frame.locator('input[placeholder="例如 kimi-k3"]').first();
+  if (await modelInput.count()) {
+    await modelInput.fill(model);
+  }
   await page.waitForTimeout(1000);
-  await frame.locator("button:visible", { hasText: "保存并使用此连接" }).last().click();
-  await page.waitForTimeout(5000);
+  const saveProvider = frame.locator("button:visible", { hasText: "保存并使用此连接" }).last();
+  if ((await saveProvider.count()) && (await saveProvider.isEnabled())) {
+    await saveProvider.click();
+    await page.waitForTimeout(5000);
+  }
   const savedText = await bodyText(frame);
   record("l2-provider-saved", {
     ok: savedText.includes(model),
@@ -357,28 +450,46 @@ try {
     attached = true;
   }
   const composer = frame.locator('textarea, input[placeholder*="消息"], [contenteditable="true"]').first();
-  await composer.click();
-  await composer.fill("这个远程项目的 Queue.pop 在什么情况下会抛 IndexError？请结合 src/queue_lock.py 讲清楚。");
-  await page.waitForTimeout(600);
-  await frame.getByRole("button", { name: /发送/ }).first().click();
   let reply = "";
-  try {
-    reply = await waitForAssistantReply(frame, 240_000);
-  } catch (error) {
-    reply = (await bodyText(frame)).slice(-800);
-    record("l2-04-remote-reply-partial", {
-      ok: false, attached, reason: String(error).slice(0, 260), text: reply,
-      screenshot: await pageScreenshot(page, "04-remote-reply-partial"),
-    });
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    await composer.click();
+    await composer.fill("这个远程项目的 Queue.pop 在什么情况下会抛 IndexError？请结合 src/queue_lock.py 讲清楚。");
+    await page.waitForTimeout(600);
+    await frame.getByRole("button", { name: /发送/ }).first().click();
+    try {
+      reply = await waitForAssistantReply(frame, 180_000);
+    } catch (error) {
+      reply = await readLastAssistantText(frame);
+      record("l2-04-remote-reply-attempt", {
+        ok: false,
+        attempt,
+        attached,
+        reason: String(error).slice(0, 220),
+        text: reply.slice(0, 600),
+      });
+    }
+    if (reply && !/暂时没完成|再试一次|连接暂时|\/failed|request failed/i.test(reply)) {
+      break;
+    }
+    const retry = frame.getByRole("button", { name: /重新生成|再试一次/ }).last();
+    if ((await retry.count()) && (await retry.isEnabled())) {
+      await retry.click();
+      await page.waitForTimeout(2000);
+    }
   }
-  if (reply) {
-    record("l2-04-remote-reply", {
-      ok: reply.length > 80 && /IndexError|None|_lock|queue_lock/.test(reply),
-      attached,
-      chars: reply.length,
-      text: reply.slice(0, 1200),
-      screenshot: await pageScreenshot(page, "04-remote-reply"),
-    });
+  const replyIsAnswer =
+    reply.length > 80 &&
+    /IndexError|None|_lock|queue_lock/.test(reply) &&
+    !/暂时没完成|再试一次|连接暂时/i.test(reply);
+  record(replyIsAnswer ? "l2-04-remote-reply" : "l2-04-remote-reply-failed", {
+    ok: replyIsAnswer,
+    attached,
+    chars: reply.length,
+    text: reply.slice(0, 1200),
+    screenshot: await pageScreenshot(page, replyIsAnswer ? "04-remote-reply" : "04-remote-reply-failed"),
+  });
+  if (!replyIsAnswer) {
+    throw new Error("Remote coaching reply was not a usable answer");
   }
 
   // Step 5 — attach the remote workspace + trust state in Settings.
