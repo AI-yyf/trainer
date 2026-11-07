@@ -8497,3 +8497,22 @@ def test_timeout_recovery_content_guard_preserves_substantive_progress() -> None
     )
     assert len(substantive) >= 120
     assert not _timeout_recovery_should_replace_content(substantive)
+
+
+def test_coach_cleanup_strips_process_narration_and_self_check_lines() -> None:
+    """Learning-screen audit: the visible reply must not narrate tool usage or
+    append an unverified-claim disclaimer. Fenced code is untouched."""
+
+    code = "```python\nprint('lock protects the invariant')\n```"
+    original = (
+        "已核对 2 项上下文\n\n"
+        "读取 src/queue_lock.py（Queue 类），据此确定讲解重点与可验证的最小实验。\n\n"
+        "锁保护的是 Queue._items 的不变量。\n\n"
+        f"{code}\n\n"
+        "这一步还没在刚才的回复或代码里得到印证，先确认再动手。"
+    )
+    cleaned = _strip_internal_coach_meta(original)
+    assert code in cleaned
+    assert "据此确定讲解重点" not in cleaned
+    assert "先确认再动手" not in cleaned
+    assert "锁保护的是 Queue._items 的不变量。" in cleaned

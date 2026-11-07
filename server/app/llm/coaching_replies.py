@@ -57,6 +57,17 @@ _INTERNAL_COACH_META_MARKERS = (
     "\u5f53\u524d\u805a\u7126\u70b9\uff1a",
     "\u590d\u4e60\u8282\u594f\uff1a",
     "\u8bb0\u5fc6\u8303\u56f4\u662f",
+    # Process narration / self-check lines the model sometimes writes into the
+    # visible reply (Learning audit 2026-11-07): the UI already shows tool
+    # activity, and an unverified-claim disclaimer belongs in an action, not
+    # in the teaching prose.
+    "\u636e\u6b64\u786e\u5b9a\u8bb2\u89e3\u91cd\u70b9",
+    "\u636e\u6b64\u786e\u5b9a\u8bb2\u89e3",
+    "\u8fd8\u6ca1\u6709\u5728\u521a\u624d\u7684\u56de\u590d\u6216\u4ee3\u7801\u91cc\u5f97\u5230\u5370\u8bc1",
+    "\u8fd8\u6ca1\u5728\u521a\u624d\u7684\u56de\u590d\u6216\u4ee3\u7801\u91cc\u5f97\u5230\u5370\u8bc1",
+    "\u5148\u786e\u8ba4\u518d\u52a8\u624b",
+    "this step has not been verified in the reply or code",
+    "so i focused the explanation",
 )
 
 

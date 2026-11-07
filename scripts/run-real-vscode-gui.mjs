@@ -28,7 +28,14 @@ import { DatabaseSync } from "node:sqlite";
 import { execFileSync } from "node:child_process";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const vsixPath = path.join(repoRoot, "extension", "trainer-extension-1.3.4-darwin-arm64.vsix");
+const packageJson = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "extension", "package.json"), "utf8"),
+);
+const vsixPath = path.join(
+  repoRoot,
+  "extension",
+  `trainer-extension-${packageJson.version}-darwin-arm64.vsix`,
+);
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
 const electronBinary = "/Applications/Visual Studio Code.app/Contents/MacOS/Electron";
 
@@ -446,6 +453,26 @@ try {
   if (!firstTest.ok) {
     throw new Error("Provider connection test failed after retries");
   }
+
+  // Learning screen audit (Phase 4): open 学习 and capture the real
+  // destination before the coach flow, with structural assertions.
+  await frame.getByRole("button", { name: "学习", exact: true }).first().click();
+  await page.waitForTimeout(1800);
+  const learningText = await bodyText(frame);
+  const learningButtons = await frame.getByRole("button").allTextContents();
+  const learningTitles = (learningText.match(/学习/g) || []).length;
+  record("04b-learning-screen", {
+    ok:
+      learningText.includes("学习") &&
+      !/undefined|NaN|Infinity/.test(learningText) &&
+      learningTitles <= 3,
+    text: learningText.slice(0, 1200),
+    visibleButtons: learningButtons.slice(0, 24),
+    titleOccurrences: learningTitles,
+    note:
+      "titleOccurrences counts the nav label plus the destination heading; more than 3 means duplicated titles.",
+    screenshot: await screenshot(page, "04b-learning-screen"),
+  });
 
   // Back to Coach and send a real first message.
   await frame.getByRole("button", { name: "对话", exact: true }).first().click();

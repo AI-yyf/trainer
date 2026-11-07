@@ -114,7 +114,7 @@ b0af3ff fix(analysis): 动态导入 (CI Pyright 无依赖)
 | --- | --- | --- |
 | P0（已修） | importer 100 项截断；incremental git 失败误判；skill 审核绕过/备注丢失/版本漂移；applied 假判定；linux glibc 阻断；PYTHONHASHSEED flake；agentic 注入竞态 | ✅ 已修 + 测试 |
 | P1（未完成） | **Remote-SSH 真窗口 2–6 步**：证据文件仍 PENDING-HUMAN（第 1 步自动化 PASS、后端 /health 实测 PASS） | ⏳ 需人工窗口 |
-| P1（未完成） | **阶段四逐屏真实 VS Code 操作审计**（Coach/Learning/Resources/Settings） | ⏳ 未开展 |
+| P1（部分完成） | 阶段四逐屏真实 VS Code 审计：Coach ✅（314432a）、Learning ✅（2026-11-07-learning-screen-audit）、Resources/Settings ⏳ | 🟡 |
 | P1（未完成） | **巨型模块按职责拆分**（App/API Router/Provider/Memory/Resources）；禁止并行状态源 | ⏳ 未开展（App.tsx 11122 行、routers.py 仍 ~25k 行） |
 | P2（部分完成） | **LSP 已接入**（`pylsp` 真实 JSON-RPC references，证据级 `lsp_reference`，可选依赖，失败时如实 unavailable）；SCIP 索引解析仍未接入（占位 + reason） | ✅ LSP / ⏳ SCIP |
 | P2（未完成） | 项目分析知识自动沉淀为 Knowledge Skill 并关联资料库/Coach/计划 | ⏳ 未实现 |
