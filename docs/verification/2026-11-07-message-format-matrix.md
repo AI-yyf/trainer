@@ -13,6 +13,8 @@
 | 反引号包 `\( E = mc^2 \)` | 含运算符时剥离反引号并提升 | 行内公式 |
 | ` ```math ` / ` ```latex ` / ` ```tex ` 围栏 | 归一化为 `$$` 块 | 块级公式 |
 | 表格单元格内的 `$a^2$` | 与 GFM 表格共存 | 单元格内公式 |
+| `$ x + y $` | remark-math 允许定界符内空白 | 行内公式 |
+| 裸 `\begin{aligned}...\end{aligned}` | remark-math 直接识别环境 | 块级公式 |
 | `\$5` / `\$10` | 转义美元符号 | 保留货币文本，不误判公式 |
 | 非法公式 `$\frac{1}{$` | `throwOnError:false` + 中性 errorColor | 可读的错误片段，整条回复不崩 |
 
@@ -39,7 +41,7 @@
 
 - `output/ui-replica-2026-11-07/formats-dark.png`：同一条回复内同时出现粗体/斜体/删除线/行内代码/链接/换行/标题/引用/列表/任务/分隔线/脚注/三种公式/表格/Mermaid。
 - `output/ui-replica-2026-11-07/rich-light.png`：浅色主题下反引号公式已升级为 KaTeX。
-- 浏览器实测计数（`playwright`）：`strong 1 / em 1 / del 1 / inlineCode 1 / link 1 / br 1 / katex 5 / table 1 / h2 1 / blockquote 1 / li 3 / checkbox 1 / hr 1 / footnotes 1`；非法公式 `pageerror=[]`、`.katex-error=1`。
+- 浏览器实测计数（`playwright`）：`strong 1 / em 1 / del 1 / inlineCode 1 / link 3（含脚注回链）/ br 1 / katex 6 / table 1 / h2 2 / blockquote 1 / li 4 / checkbox 1 / hr 1 / footnotes 1`；非法公式 `pageerror=[]`、`.katex-error=1`。
 
 ## 门禁
 
