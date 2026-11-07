@@ -1,6 +1,7 @@
 # Remote-SSH L2 验收证据 — 验收机 141s（2026-11-06）
 
-**结论：前置条件 PASS；第 1 步（服务端安装）已自动化执行并 PASS；第 2–6 步 PENDING-HUMAN。**
+**结论：前置条件 PASS；第 1 步（服务端安装）PASS；第 2–6 步已用真实 Remote-SSH 窗口自动化执行过一次，`
+`2/3/5/6 PASS，第 4 步真实回复遇到 provider 失败，未整体 PASS。**
 
 **2026-11-07 更新（真实执行记录）**：用远端 VS Code Server CLI
 `code-server --install-extension ~/trainer-extension-1.4.0-linux-x64.vsix --force`
@@ -45,19 +46,20 @@ cross-platform 的 linux 构建基座改为 ubuntu-22.04（glibc 2.35），旧 r
 | # | 步骤 | 状态 |
 | --- | --- | --- |
 | 1 | Remote-SSH 窗口安装 VSIX（Extensions → … → Install from VSIX… → `~/trainer-extension-1.4.0-linux-x64.vsix`） | ✅ PASS（自动化：远端 VS Code Server CLI 安装 + 版本/发布者核验；窗口内重载即生效） |
-| 2 | 活动栏 Trainer 图标打开侧边栏（应进入 Coach 视图） | PENDING-HUMAN |
-| 3 | 五视图切换 Coach / Plan / Resources / Training / Settings | PENDING-HUMAN |
-| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | PENDING-HUMAN |
-| 5 | 设置中 attach 远程工作区（`~/trainer-e2e`）并确认信任状态 | PENDING-HUMAN |
-| 6 | Companion capability 握手显示 verified（file/search/hash/verify） | PENDING-HUMAN |
+| 2 | 活动栏 Trainer 图标打开侧边栏（应进入 Coach 视图） | ✅ PASS（自动化真窗口） |
+| 3 | 五视图切换 Coach / Plan / Resources / Training / Settings | ✅ PASS（自动化真窗口；Training 入口在 Learning 内） |
+| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | ❌ FAIL（provider 返回“这一步暂时没完成”，不是教学回复） |
+| 5 | 设置中 attach 远程工作区（`~/trainer-e2e`）并确认信任状态 | ✅ PASS（项目 URI + 非 Restricted Mode） |
+| 6 | Companion capability 握手显示 verified（file/search/hash/verify） | ✅ PASS（“远程支持已就绪”） |
 
 执行完成后把结果回填本文件（或截图）即闭环；任何一步失败保留 VS Code 输出面板
 Trainer 通道日志一并记录。
 
 ## 边界（如实）
 
-- 步骤 1–6 依赖真实的人在 Remote-SSH VS Code Server 窗口内操作，无法机器人化断言
-  （清单文件自身声明 §十 Layer 2 边界）；本文件把该步骤的人工成本降到零预置成本。
+- 2–6 已由 `scripts/run-real-remote-ssh-l2.mjs` 在真实 VS Code Electron + `ssh-remote+141s`
+  窗口中执行；第 4 步的 provider 失败没有被标记为 PASS。
+- 真实自动化证据：`output/remote-ssh-l2/2026-11-07-final6/report.json`（2/3/5/6 PASS，4 FAIL）。
 - 自动化回归层 ≠ 真窗口层：两层证据分开记录，不互相冒充。
 
 

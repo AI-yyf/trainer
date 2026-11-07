@@ -203,6 +203,24 @@ async function waitForBody(frame, pattern, timeout = 120_000) {
   }
   throw new Error(`Timed out waiting for ${pattern}; body=${last.slice(0, 700)}`);
 }
+async function clickNav(frame, page, label, expected, timeout = 20_000) {
+  const started = Date.now();
+  let last = "";
+  while (Date.now() - started < timeout) {
+    const button = frame.getByRole("button", { name: label, exact: true }).first();
+    if ((await button.count()) && (await button.isEnabled().catch(() => false))) {
+      await button.click().catch(() => {});
+      await page.waitForTimeout(1500);
+      last = await bodyText(frame);
+      if (expected.test(last)) return last;
+    } else {
+      last = await bodyText(frame);
+      if (expected.test(last)) return last;
+    }
+    await page.waitForTimeout(800);
+  }
+  throw new Error(`Navigation to ${label} did not settle; body=${last.slice(0, 600)}`);
+}
 async function waitForRestored(frame, timeout = 120_000) {
   const start = Date.now();
   let last = "";
@@ -321,10 +339,8 @@ try {
   await page.waitForTimeout(5000);
   frame = await openCoach(page);
   await waitForRestored(frame);
-  const coachNav = frame.getByRole("button", { name: "对话", exact: true }).first();
-  if (await coachNav.count()) {
-    await coachNav.click();
-    await page.waitForTimeout(1500);
+  if (await frame.getByRole("button", { name: "对话", exact: true }).first().count()) {
+    await clickNav(frame, page, "对话", /说说|消息输入框|发现项目/);
   }
 
   // Step 2 — activity bar / Coach sidebar.
@@ -337,10 +353,7 @@ try {
   });
 
   // Step 3 — five views.
-  await frame.getByRole("button", { name: "学习", exact: true }).first().waitFor({ timeout: 30_000 });
-  await frame.getByRole("button", { name: "学习", exact: true }).first().click();
-  await page.waitForTimeout(2500);
-  const planText = await bodyText(frame);
+  const planText = await clickNav(frame, page, "学习", /当前学习|今日学习/);
   await pageScreenshot(page, "03-plan");
   // Training lives inside Learning; open it before leaving the destination.
   const trainingLink = frame.locator('button[data-learning-link="training"]').first();
@@ -355,11 +368,9 @@ try {
   await page.waitForTimeout(2500);
   const trainingText = await bodyText(frame);
   await pageScreenshot(page, "03-training");
-  await frame.getByRole("button", { name: "资料", exact: true }).first().click();
-  await page.waitForTimeout(2500);
-  const resourcesText = await bodyText(frame);
+  const resourcesText = await clickNav(frame, page, "资料", /资料库/);
   await pageScreenshot(page, "03-resources");
-  await frame.getByRole("button", { name: "对话", exact: true }).first().click();
+  await clickNav(frame, page, "对话", /说说|消息输入框|发现项目/);
   await page.waitForTimeout(2000);
   const coachText = await bodyText(frame);
   await frame.locator("button[title*='设置'], button[aria-label*='设置']").first().click().catch(async () => {
