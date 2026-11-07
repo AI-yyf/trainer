@@ -233,14 +233,20 @@ test('Settings never lets per-model limits bypass the connection model policy', 
   assert.match(source, /if \(modelLimitBlockedByPolicy\) \{\s*return;/);
 });
 
-test('Settings clears a model filter when the picker closes or the saved connection changes', () => {
+test('Settings opens the model picker only for an empty draft and collapses it after hydration', () => {
   const source = fs.readFileSync(settingsSourcePath, 'utf8');
 
-  assert.match(source, /const \[modelPickerOpen, setModelPickerOpen\] = useState\(\(\) => !providerDraft\.model\.trim\(\)\);/);
+  assert.match(source, /const modelPickerAutoOpenRef = useRef\(!providerDraft\.model\.trim\(\)\);/);
+  assert.match(source, /const \[modelPickerOpen, setModelPickerOpen\] = useState\(modelPickerAutoOpenRef\.current\);/);
+  assert.match(
+    source,
+    /if \(!modelPickerAutoOpenRef\.current \|\| !providerDraft\.model\.trim\(\)\) \{\s*return;\s*\}\s*modelPickerAutoOpenRef\.current = false;\s*setModelPickerOpen\(false\);\s*\}, \[providerDraft\.model\]\);/,
+  );
   assert.match(
     source,
     /useEffect\(\(\) => \{\s*setModelSearchQuery\(""\);\s*setManualModelEntryOpen\(false\);\s*\}, \[provider\.profileId\]\);/,
   );
+  assert.match(source, /modelPickerAutoOpenRef\.current = false;\s*setModelPickerOpen\(picker\.open\);/);
   assert.match(source, /if \(!picker\.open\) \{\s*resetModelPickerSearch\(\);\s*return;/);
   assert.match(
     source,

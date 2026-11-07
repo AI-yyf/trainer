@@ -114,10 +114,10 @@ b0af3ff fix(analysis): 动态导入 (CI Pyright 无依赖)
 | --- | --- | --- |
 | P0（已修） | importer 100 项截断；incremental git 失败误判；skill 审核绕过/备注丢失/版本漂移；applied 假判定；linux glibc 阻断；PYTHONHASHSEED flake；agentic 注入竞态 | ✅ 已修 + 测试 |
 | P1（未完成） | **Remote-SSH 真窗口 2–6 步**：证据文件仍 PENDING-HUMAN（第 1 步自动化 PASS、后端 /health 实测 PASS） | ⏳ 需人工窗口 |
-| P1（部分完成） | 阶段四逐屏真实 VS Code 审计：Coach ✅（314432a）、Learning ✅（fa26203）、Resources ✅（2026-11-07-resources-screen-audit）、Settings ⏳ | 🟡 |
-| P1（未完成） | **巨型模块按职责拆分**（App/API Router/Provider/Memory/Resources）；禁止并行状态源 | ⏳ 未开展（App.tsx 11122 行、routers.py 仍 ~25k 行） |
+| P1（部分完成） | 阶段四逐屏真实 VS Code 审计：Coach ✅（314432a）、Learning ✅（fa26203）、Resources ✅（0af9b19）、Settings ✅（`docs/verification/2026-11-07-settings-screen-audit.md`） | ✅ 四屏完成 |
+| P1（部分完成） | **巨型模块按职责拆分**（App/API Router/Provider/Memory/Resources）；禁止并行状态源 | 🟡 已拆 `coach_language_alignment`、`provider_payload`；App/Provider/Memory/Resources 未拆 |
 | P2（部分完成） | **LSP 已接入**（`pylsp` 真实 JSON-RPC references，证据级 `lsp_reference`，可选依赖，失败时如实 unavailable）；SCIP 索引解析仍未接入（占位 + reason） | ✅ LSP / ⏳ SCIP |
-| P2（未完成） | 项目分析知识自动沉淀为 Knowledge Skill 并关联资料库/Coach/计划 | ⏳ 未实现 |
+| P2（已完成） | 项目分析知识自动沉淀为 Knowledge Skill 并关联资料库/Coach/计划（15c8088；`distill_project_knowledge` + 行为测试） | ✅ |
 | P2（未完成） | 按需多模态（扫描 PDF/图表） | ⏳ 未开展 |
 | P3（已完成） | `verify:delivery` 在本轮 HEAD 上的完整矩阵 | ✅ exit 0（verify + experience matrix + 打包，1.4.1 VSIX 产出） |
 | P3（已知限制，已记录） | 教学质量报告仅学习证据维度，文字准确性留人工；难度带为产品策略非个体校准 | 文档明示 |
@@ -127,10 +127,9 @@ b0af3ff fix(analysis): 动态导入 (CI Pyright 无依赖)
 ## 9. 未完成项（如实）
 
 1. Remote-SSH L2 第 2–6 步（真窗口切换五视图、真实对话、attach 信任、Companion 握手）——需要人在 VS Code 窗口执行；141s 已零成本预置（官方 v1.4.1 资产已装）。
-2. 阶段四全部：逐屏 VS Code 操作审计、巨型模块按职责拆分、多模态理解。
+2. 阶段四剩余：App/Provider/Memory/Resources 巨型模块拆分、按需多模态理解；四屏真实 VS Code 审计已完成。
 3. SCIP 索引解析接入（LSP 已接入）；Understand Anything 适配。
-4. 项目分析知识 → Knowledge Skill 的自动沉淀与三处关联。
-5. 最终人工教学验收（主观质量）——自动化维度已给出，主观评审仍留人工。
+4. 最终人工教学验收（主观质量）——自动化维度已给出，主观评审仍留人工。
 
 ## 10. 完成标准说明
 

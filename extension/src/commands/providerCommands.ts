@@ -2016,7 +2016,10 @@ function formatProviderTestMessage(
   const copy = (key: ProviderHostCopyKey) => providerHostCopy(language, key, { name: providerName });
 
   if (response.status === 'connected' || response.success) {
-    return sanitizeErrorSurfaceText(`${copy('testConnected')} ${detail ?? copy('testConnectedReady')}`);
+    // One short sentence only: toasts render on a single line, so any appended
+    // probe detail ("… 虽然 …") is cut mid-sentence. The Settings panel already
+    // carries the full readiness state.
+    return sanitizeErrorSurfaceText(copy('testConnected'));
   }
 
   if (response.status === 'missing_api_key' || response.status === 'scaffold') {

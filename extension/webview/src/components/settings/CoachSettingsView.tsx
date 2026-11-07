@@ -2185,7 +2185,19 @@ function CoachSettingsViewSheet({
   const workspaceAnchorRef = useRef<HTMLDivElement | null>(null);
   const preferencesAnchorRef = useRef<HTMLDivElement | null>(null);
   const sectionFlashTimerRef = useRef<number | null>(null);
-  const [modelPickerOpen, setModelPickerOpen] = useState(() => !providerDraft.model.trim());
+  // Open the picker only for a genuinely empty draft. The first render can
+  // precede provider hydration (model still ""), so remember whether the open
+  // state was auto-derived and collapse it once a saved/injected model arrives;
+  // otherwise the summary and the inner select both show the same model.
+  const modelPickerAutoOpenRef = useRef(!providerDraft.model.trim());
+  const [modelPickerOpen, setModelPickerOpen] = useState(modelPickerAutoOpenRef.current);
+  useEffect(() => {
+    if (!modelPickerAutoOpenRef.current || !providerDraft.model.trim()) {
+      return;
+    }
+    modelPickerAutoOpenRef.current = false;
+    setModelPickerOpen(false);
+  }, [providerDraft.model]);
   type SettingsCategory = SettingsSectionId;
   // Always land on the settings overview; explicit deep links (API-key focus,
   // sectionRequest, settingsCategoryRequest) still open their category.
@@ -5705,6 +5717,7 @@ function CoachSettingsViewSheet({
                       if (!picker) {
                         return;
                       }
+                      modelPickerAutoOpenRef.current = false;
                       setModelPickerOpen(picker.open);
                       if (!picker.open) {
                         resetModelPickerSearch();

@@ -280,16 +280,6 @@ async function readLastAssistantText(frame) {
   }
   return "";
 }
-async function waitForBodyGone(frame, needle, timeout = 90_000) {
-  const start = Date.now();
-  let last = "";
-  while (Date.now() - start < timeout) {
-    last = await bodyText(frame);
-    if (!last.includes(needle)) return last;
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-  }
-  throw new Error(`Timed out waiting for "${needle}" to clear; body=${last.slice(0, 700)}`);
-}
 async function waitForBody(frame, pattern, timeout = 120_000) {
   const start = Date.now();
   let last = "";
@@ -385,19 +375,30 @@ try {
     text: firstRunText.slice(0, 500),
   });
 
-  // Settings: configure the real provider through the form.
-  await frame.getByRole("button", { name: "设置", exact: true }).first().click();
+  // Settings: configure the real provider through the form. Wait for session
+  // restore first — asserting the index while a loading placeholder is up
+  // tested the placeholder, not the restored settings screen.
   await page.waitForTimeout(2500);
-  const indexText = await bodyText(frame);
+  await frame.getByRole("button", { name: "设置", exact: true }).first().click();
+  const settingsIndexDeadline = Date.now() + 120_000;
+  let indexText = "";
+  while (Date.now() < settingsIndexDeadline) {
+    indexText = await bodyText(frame);
+    if (!/正在准备中|正在加载设置/.test(indexText)) break;
+    await page.waitForTimeout(1200);
+  }
+  const learningFolderName = path.basename(learningDir);
   record("02-settings-index", {
-    ok: indexText.includes("选择学习文件夹") === false && indexText.includes(learningDir),
-    learningFolderShown: indexText.includes(learningDir),
+    ok:
+      !/正在准备中|正在加载设置/.test(indexText) &&
+      indexText.includes("工作区") &&
+      indexText.includes(learningFolderName),
+    learningFolderShown: indexText.includes(learningFolderName),
     text: indexText.slice(0, 600),
     screenshot: await screenshot(page, "02-settings-index"),
   });
 
   // Wait for the sidecar so the settings form renders against a live host.
-  await waitForBodyGone(frame, "正在准备中", 120_000);
   if (await frame.locator("[data-settings-category=connection]").count()) {
     await frame.locator("[data-settings-category=connection]").first().click();
     await page.waitForTimeout(2500);
@@ -434,8 +435,15 @@ try {
   await frame.locator("button:visible", { hasText: "保存并使用此连接" }).last().click();
   await page.waitForTimeout(5000);
   const savedText = await bodyText(frame);
+  const savedOpenModelPickers = await frame.locator("details.settings-model-picker[open]").count();
   record("03-provider-saved", {
-    ok: savedText.includes(model) && !savedText.includes("有未保存更改"),
+    ok:
+      savedText.includes(model) &&
+      !savedText.includes("有未保存更改") &&
+      savedOpenModelPickers === 0,
+    modelPickerExpanded: savedOpenModelPickers > 0,
+    note:
+      "The model picker must stay collapsed once hydration supplies a saved model; an auto-open summary plus the inner select would duplicate the same value.",
     text: savedText.slice(0, 900),
     screenshot: await screenshot(page, "03-provider-saved"),
   });
@@ -444,13 +452,14 @@ try {
     count: await frame.locator("button:visible").filter({ hasText: /测试连接|重新测试/ }).count(),
   });
   const firstTest = await runProviderTest(page, frame, 3);
+  const testedOpenModelPickers = await frame.locator("details.settings-model-picker[open]").count();
   record("04-provider-test", {
-    ok: firstTest.ok,
+    ok: firstTest.ok && testedOpenModelPickers === 0,
     attempt: firstTest.attempt,
+    modelPickerExpanded: testedOpenModelPickers > 0,
     text: firstTest.text.slice(-900),
     screenshot: await screenshot(page, "04-provider-test"),
-  });
-  if (!firstTest.ok) {
+  });  if (!firstTest.ok) {
     throw new Error("Provider connection test failed after retries");
   }
 

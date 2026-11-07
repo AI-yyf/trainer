@@ -31,10 +31,8 @@ test('settings stores context and output limits at the model level', () => {
   assert.doesNotMatch(source, /MODEL_PICKER_RECENT_OPTION_LIMIT|MODEL_PICKER_SEARCH_OPTION_LIMIT/);
   assert.match(source, /const matchingModelOptions = useMemo\(/);
   assert.match(source, /const visibleModelOptions = useMemo\(/);
-  assert.match(
-    source,
-    /const \[modelPickerOpen, setModelPickerOpen\] = useState\(\(\) => !providerDraft\.model\.trim\(\)\);/,
-  );
+  assert.match(source, /const modelPickerAutoOpenRef = useRef\(!providerDraft\.model\.trim\(\)\);/);
+  assert.match(source, /const \[modelPickerOpen, setModelPickerOpen\] = useState\(modelPickerAutoOpenRef\.current\);/);
   assert.match(
     source,
     /<details\b(?=[^>]*className="settings-model-picker")(?=[^>]*open=\{modelPickerOpen\})[^>]*>/,
