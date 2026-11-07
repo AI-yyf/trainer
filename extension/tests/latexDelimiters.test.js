@@ -62,9 +62,29 @@ test('promotes an inline formula that was wrapped in backticks', () => {
   );
 });
 
+test('promotes code-wrapped latex delimiters only when they carry math', () => {
+  assert.equal(
+    normalizeLatexDelimiters('代码 `\\( E = mc^2 \\)` 与 `\\[ a = b \\]`。'),
+    '代码 $E = mc^2$ 与 $$\na = b\n$$。',
+  );
+  assert.equal(
+    normalizeLatexDelimiters('正则 `\\[x\\]` 匹配方括号。'),
+    '正则 `\\[x\\]` 匹配方括号。',
+  );
+});
+
 test('keeps snake_case and plain code spans byte-identical', () => {
   const markdown = '代码 `foo_bar = baz + 1`、`x = y + 1`、`c_retry = compute()`。';
   assert.equal(normalizeLatexDelimiters(markdown), markdown);
+});
+
+test('turns a math fence into a display-math block', () => {
+  assert.equal(
+    normalizeLatexDelimiters('推导：\n```math\nE = mc^2\n```\n结束。'),
+    '推导：\n$$\nE = mc^2\n$$\n结束。',
+  );
+  const python = '```python\nx = 1\n```';
+  assert.equal(normalizeLatexDelimiters(python), python);
 });
 
 test('returns the input when no delimiters are present', () => {

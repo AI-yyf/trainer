@@ -13,6 +13,10 @@
  * or a LaTeX macro, plus an operator. Snake_case identifiers (`foo_bar = 1`)
  * and code keywords stay untouched.
  */
+function hasMathOperator(text: string): boolean {
+  return /[=+*/^_\\-]/.test(text);
+}
+
 function looksLikeInlineFormula(content: string): boolean {
   const text = content.trim();
   if (!text || text.length > 160 || text.includes("$") || text.includes("`")) {
@@ -44,6 +48,12 @@ export function normalizeLatexDelimiters(markdown: string): string {
   if (!markdown.includes("\\[") && !markdown.includes("\\(") && !markdown.includes("`")) {
     return markdown;
   }
+  // Models commonly fence display math as ```math / ```latex. Turn that fence
+  // into remark-math's $$ block before the character scan.
+  markdown = markdown.replace(
+    /^(```|~~~)[ \t]*(math|latex|tex)[ \t]*\n([\s\S]*?)^\1[ \t]*$/gim,
+    (_match, _fence, _language, body: string) => `$$\n${body.trimEnd()}\n$$`,
+  );
   let out = "";
   let index = 0;
   let inFence = false;
@@ -76,7 +86,13 @@ export function normalizeLatexDelimiters(markdown: string): string {
         index += runLength;
       } else {
         const content = markdown.slice(index + runLength, closingIndex);
-        if (looksLikeInlineFormula(content)) {
+        const wrappedInline = /^\\\(([\s\S]+)\\\)$/.exec(content.trim());
+        const wrappedDisplay = /^\\\[([\s\S]+)\\\]$/.exec(content.trim());
+        if (wrappedInline && hasMathOperator(wrappedInline[1])) {
+          out += `$${wrappedInline[1].trim()}$`;
+        } else if (wrappedDisplay && hasMathOperator(wrappedDisplay[1])) {
+          out += `$$\n${wrappedDisplay[1].trim()}\n$$`;
+        } else if (looksLikeInlineFormula(content)) {
           out += `$${content.trim()}$`;
         } else {
           out += markdown.slice(index, closingIndex + runLength);
