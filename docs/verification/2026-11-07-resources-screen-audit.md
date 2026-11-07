@@ -27,6 +27,13 @@
 | 真实模型回复再现过程叙事变体（「已读取…确认」「教学顺序：」「教学重点：」「当前阻塞：」） | 过滤族扩充至已观测变体（中英），提示规则 22 仍为主控制；代码围栏不受影响 | `coaching_replies.py`、`prompts.py` |
 | 旅程脚本无 Resources 步骤 | 新增 `04c-resources-screen`（真实点击 + 截图 + `importAffordanceCount` 断言） | `scripts/run-real-vscode-gui.mjs` |
 
+## 2026-11-07 追加：添加动作与回收站
+
+- 工具栏导入从文字按钮改为搜索框右侧的 **+ 图标**；菜单同时承载「添加文件 / 添加文件夹 / 导入网页快照 / 新建文件夹」。
+- 没有真实文件夹时不再渲染空的「文件夹」行；新建文件夹仍可从 + 菜单进入。
+- 回收站改为资料库页脚：只在有内容时出现，去掉重复的底边，与文件夹行同一视觉层级。
+- 预览证据：`output/ui-replica-2026-11-07/resources-loaded.png`（+ 图标在搜索右侧，回收站为页脚行）。
+
 ## 门禁
 
 - `verify:canonical-gui` exit 0（真实 DOCX/PPTX/PDF 导入/阅读/搜索）

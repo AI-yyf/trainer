@@ -567,10 +567,12 @@ test('project detail graph panel is lazy, honest about limits, and stays inside 
 
 test('empty library shows exactly one import action (orientation card owns it)', () => {
   const viewSource = readResourcesViewSource();
-  // The toolbar import menu must be suppressed when the orientation card is
-  // present, otherwise the first viewport shows two primary import buttons.
+  // The toolbar add icon is suppressed only when the orientation card itself
+  // renders the import CTA; a ready library keeps the icon beside search.
   assert.match(
     viewSource,
-    /\{orientationState \? null : \(\s*<div className="resources-knowledge__import-menu-wrap">/,
+    /\{orientationOwnsImportCta \? null : \(\s*<div className="resources-knowledge__import-menu-wrap">/,
   );
+  assert.match(viewSource, /resources-knowledge__add-resource--icon/);
+  assert.match(viewSource, /localize\(language, "foldersNew"\)/);
 });

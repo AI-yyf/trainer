@@ -2873,8 +2873,8 @@ export function ResourcesWorkbenchView({
   // The folder section is part of the live Library, so a leftover-only
   // placeholder does not render it.
   const showLibraryFolders = !omitLeftoverLibrary
-    && (resources.length > 0
-      || (libraryFolders?.length ?? 0) > 0
+    && ((libraryFolders?.length ?? 0) > 0
+      || libraryFolderEntries.length > 0
       || libraryFoldersState.phase === "loading");
   const orientationTone = orientation ? coachOrientationTone(orientation.state) : undefined;
   const orientationState = orientation
@@ -2887,6 +2887,13 @@ export function ResourcesWorkbenchView({
       orientation.primaryAction !== "wait" &&
       orientation.primaryAction !== "wait_index" &&
       orientation.primaryAction !== "select_resource",
+  );
+  // The orientation card owns the import CTA only in the states where it
+  // actually renders that card; a ready library keeps the toolbar add icon.
+  const orientationOwnsImportCta = Boolean(orientationState) && (
+    orientation?.state === "needs_setup" ||
+    orientationTone === "blocker" ||
+    !canWriteResources
   );
 
   useEffect(() => {
@@ -2948,20 +2955,13 @@ export function ResourcesWorkbenchView({
         </label>
 
         <div className="resources-knowledge__actions" aria-label={localize(language, "title")}>
-          {onExpandToEditor && expandToEditorLabel ? (
-            <WorkbenchSurfaceButton
-              mode="expand"
-              label={expandToEditorLabel}
-              onClick={onExpandToEditor}
-            />
-          ) : null}
           {/* One primary action per viewport: when the empty-state orientation
               card already carries the import CTA, the toolbar repeats it. */}
-          {orientationState ? null : (
+          {orientationOwnsImportCta ? null : (
           <div className="resources-knowledge__import-menu-wrap">
             <button
               ref={importMenuTriggerRef}
-              className={`button ${orientationCanAct ? "button--ghost" : "button--accent"} button--compact resources-knowledge__add-resource${canWriteResources && isImportMenuOpen ? " is-open" : ""}`}
+              className={`button ${orientationCanAct ? "button--ghost" : "button--accent"} button--compact resources-knowledge__add-resource resources-knowledge__add-resource--icon${canWriteResources && isImportMenuOpen ? " is-open" : ""}`}
               type="button"
               aria-haspopup="menu"
               aria-expanded={canWriteResources && isImportMenuOpen}
@@ -2980,12 +2980,17 @@ export function ResourcesWorkbenchView({
                 }
               }}
             >
-              <UploadIcon size={14} aria-hidden="true" />
-              <span>{localize(language, "addResource")}</span>
-              <ChevronDownIcon size={12} aria-hidden="true" />
+              <PlusIcon size={14} aria-hidden="true" />
             </button>
           </div>
           )}
+          {onExpandToEditor && expandToEditorLabel ? (
+            <WorkbenchSurfaceButton
+              mode="expand"
+              label={expandToEditorLabel}
+              onClick={onExpandToEditor}
+            />
+          ) : null}
         </div>
       </div>
       )}>
@@ -3047,6 +3052,24 @@ export function ResourcesWorkbenchView({
               <strong>{t("addFolder")}</strong>
             </span>
           </button>
+          {canWriteResources && onCreateLibraryFolder ? (
+            <button
+              className="menu-list__item"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeImportMenu();
+                openFolderCreatePrompt();
+              }}
+            >
+              <span className="menu-list__icon" aria-hidden="true">
+                <FolderIcon size={14} />
+              </span>
+              <span className="menu-list__body">
+                <strong>{localize(language, "foldersNew")}</strong>
+              </span>
+            </button>
+          ) : null}
           <button
             className="menu-list__item"
             type="button"

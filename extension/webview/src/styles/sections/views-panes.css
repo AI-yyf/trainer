@@ -2975,3 +2975,26 @@
     color: transparent;
   }
 }
+
+/* The add affordance sits immediately beside search; the menu carries
+   file/folder/URL and new-folder actions. */
+.resources-knowledge__add-resource--icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.resources-knowledge__add-resource--icon svg {
+  margin: 0;
+}
+
+/* Trash is the library footer, not a second card. */
+.resources-knowledge__trash {
+  border-bottom: 0;
+}
+
+.resources-knowledge__trash > summary {
+  min-height: 32px;
+}
