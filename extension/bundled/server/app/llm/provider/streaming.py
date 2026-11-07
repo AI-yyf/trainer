@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Upstreams occasionally send finish_reason and then keep the HTTP stream open
+# (observed with MiniMax M3.1). Without an idle bound the UI stays in
+# "streaming" forever even though the visible answer is complete.
+STREAM_IDLE_TIMEOUT_SECONDS = 30.0
 
 
 def _stream_cancel_event(value: object | None) -> asyncio.Event | None:
@@ -13,8 +21,13 @@ def _stream_cancel_event(value: object | None) -> asyncio.Event | None:
 async def _iterate_provider_stream_with_cancellation(
     stream: object,
     cancel_event: asyncio.Event | None,
+    idle_timeout: float | None = STREAM_IDLE_TIMEOUT_SECONDS,
 ):
-    """Iterate an upstream async stream while promptly closing it on cancel."""
+    """Iterate an upstream async stream while promptly closing it on cancel.
+
+    A stream that stops producing chunks for ``idle_timeout`` seconds is
+    treated as ended, so a missing [DONE] cannot pin the turn in streaming.
+    """
 
     iterator = stream.__aiter__()  # type: ignore[attr-defined]
     iterator_closed = False
@@ -37,10 +50,23 @@ async def _iterate_provider_stream_with_cancellation(
         while True:
             if cancel_event is None:
                 try:
-                    yield await iterator.__anext__()
+                    if idle_timeout is None:
+                        item = await iterator.__anext__()
+                    else:
+                        item = await asyncio.wait_for(
+                            iterator.__anext__(), timeout=idle_timeout
+                        )
                 except StopAsyncIteration:
                     iterator_exhausted = True
                     return
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "[provider] stream idle for %ss without closing; treating as end",
+                        idle_timeout,
+                    )
+                    await close_iterator()
+                    return
+                yield item
                 continue
             if cancel_event.is_set():
                 await close_iterator()
@@ -51,8 +77,18 @@ async def _iterate_provider_stream_with_cancellation(
             try:
                 done, _ = await asyncio.wait(
                     {next_item, cancellation},
+                    timeout=idle_timeout,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
+                if not done:
+                    logger.warning(
+                        "[provider] stream idle for %ss without closing; treating as end",
+                        idle_timeout,
+                    )
+                    next_item.cancel()
+                    await asyncio.gather(next_item, return_exceptions=True)
+                    await close_iterator()
+                    return
                 if cancellation in done and cancel_event.is_set():
                     next_item.cancel()
                     await asyncio.gather(next_item, return_exceptions=True)
