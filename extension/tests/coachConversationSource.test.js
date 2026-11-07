@@ -266,7 +266,7 @@ test('coach rich content keeps markdown code blocks on the highlighted renderer 
   assert.match(source, /import \{ RichCodeBlock \} from "\.\/RichCodeBlock"/);
   assert.match(source, /languageId === "mermaid"/);
   assert.match(source, /<RichCodeBlock/);
-  assert.match(source, /remarkPlugins=\{\[plugins\.remarkGfm, remarkChatBreaks, plugins\.remarkMath\]\}/);
+  assert.match(source, /remarkPlugins=\{\[\[plugins\.remarkGfm, \{ singleTilde: false \}\], remarkChatBreaks, plugins\.remarkMath\]\}/);
   assert.match(source, /rehypePlugins=\{\[[\s\S]*?plugins\.rehypeKatex,[\s\S]*?throwOnError: false/);
   assert.match(source, /errorColor: "var\(--fg-1\)"/);
   assert.match(styles, /\.message-markdown__code-block--shiki/);

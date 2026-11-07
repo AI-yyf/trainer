@@ -8,6 +8,7 @@ import { RichCodeBlock } from "./RichCodeBlock";
 import { resolveCodeBlockCopy } from "./codeBlockCopy";
 import { normalizeLatexDelimiters } from "../../../../../shared/src/latexDelimiters";
 import { remarkChatBreaks } from "../../lib/remarkChatBreaks";
+import { rehypeChatScripts } from "../../lib/rehypeChatScripts";
 
 const ReactMarkdown = lazy(async () => {
   const module = await import("react-markdown");
@@ -189,8 +190,9 @@ function RichMarkdownRenderer({
             errorColor: "var(--fg-1)",
           },
         ],
+        rehypeChatScripts,
       ]}
-      remarkPlugins={[plugins.remarkGfm, remarkChatBreaks, plugins.remarkMath]}
+      remarkPlugins={[[plugins.remarkGfm, { singleTilde: false }], remarkChatBreaks, plugins.remarkMath]}
       components={{
         // 处理代码元素 - 区分行内代码和代码块
         code({ node, className, children, ...props }) {

@@ -4217,6 +4217,8 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
             "",
             "化学式 $\\ce{H2O}$ 也应在同一渲染链里。",
             "",
+            "字符上下标：H~2~O 与 x^2^。",
+            "",
             "坏公式 $\\frac{1}{$ 不应让整条回复崩掉。",
             "",
             "如果把一次 debug 的成本写成期望值，可以先看内联公式 `E = p * c_retry + (1 - p) * c_success`。",
