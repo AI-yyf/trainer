@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import asdict, dataclass, fields, is_dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Literal, cast
 from uuid import uuid4
@@ -350,6 +350,26 @@ class StructuredMemoryService:
     def update_profile(self, **profile: Any) -> dict[str, Any]:
         self._profile.update({key: value for key, value in profile.items() if value is not None})
         return dict(self._profile)
+
+    def schedule_mastery_review(
+        self,
+        concept: str,
+        *,
+        next_review_at: datetime,
+        due_date: datetime | None = None,
+    ) -> MasteryRecord | None:
+        """Attach a scheduler's next due date to an existing mastery record.
+
+        Memory retention (FSRS) and capability evidence stay separate: this
+        never changes the score and never creates a mastery record.
+        """
+        current = self._mastery.get(concept)
+        if current is None:
+            return None
+        current.next_review_at = next_review_at
+        current.due_date = due_date or next_review_at
+        current.updated_at = utc_now()
+        return current
 
     def update_workspace(self, **workspace: Any) -> dict[str, Any]:
         self._workspace.update({key: value for key, value in workspace.items() if value is not None})
@@ -4711,12 +4731,12 @@ class MemoryService(
             existing_state = card_state_from_payload(existing_payload)
             if existing_state is not None:
                 scheduler.load_card_states([existing_state])
+        concept = str(
+            getattr(card, "target_skill", "")
+            or getattr(card, "focus_area", "")
+            or cleaned_card_id
+        ).strip()
         if scheduler.get_card_state(cleaned_card_id) is None:
-            concept = str(
-                getattr(card, "target_skill", "")
-                or getattr(card, "focus_area", "")
-                or cleaned_card_id
-            ).strip()
             created = scheduler.create_card(
                 cleaned_card_id,
                 concept or cleaned_card_id,
@@ -4782,6 +4802,13 @@ class MemoryService(
                 }
             ),
         )
+        scheduled_mastery = None
+        if result.next_due is not None:
+            scheduled_mastery = structured.schedule_mastery_review(
+                concept,
+                next_review_at=result.next_due,
+                due_date=result.next_due,
+            )
         self._persist_structured(workspace_id)
         return {
             "card_id": cleaned_card_id,
@@ -4795,6 +4822,11 @@ class MemoryService(
             "fsrs_difficulty": payload.get("difficulty"),
             "global_promoted": False,
             "minted_card": False,
+            "mastery_review_at": (
+                scheduled_mastery.next_review_at.isoformat()
+                if scheduled_mastery and scheduled_mastery.next_review_at
+                else None
+            ),
         }
 
     def _refresh_training_next_challenge_after_runtime_advance(

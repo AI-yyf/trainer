@@ -461,10 +461,12 @@ class SkillRegistry:
         metadata["last_applied"] = bool(applied)
         if evidence:
             metadata["last_evidence"] = dict(evidence)
-        # A successful execution clears the failure streak (recovered).
-        metadata["consecutive_failures"] = 0
-        metadata.pop("last_error", None)
-        metadata.pop("last_failure_at", None)
+        # Only an actually applied skill clears the failure streak. Being
+        # selected but unused is neither success nor a new failure.
+        if applied:
+            metadata["consecutive_failures"] = 0
+            metadata.pop("last_error", None)
+            metadata.pop("last_failure_at", None)
         self._persist()
         return record
 

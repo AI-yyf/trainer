@@ -241,9 +241,6 @@ function inferNaturalLanguageIntent(draft: string): SendIntent | undefined {
     return "plan";
   }
 
-  if (matchesAny(normalized, REVIEW_PATTERNS)) {
-    return "review";
-  }
   // Next-task language stays in Coach until the learner uses /next or the
   // explicit Next task action. Casual "next" / "continue" must not mint a TaskSpec.
   return undefined;
@@ -263,12 +260,6 @@ function normalizeDraftText(value: string): string {
 function matchesAny(value: string, patterns: Array<RegExp>): boolean {
   return patterns.some((pattern) => pattern.test(value));
 }
-
-const REVIEW_PATTERNS = [
-  /\b(review|inspect|check|audit|critique|analyze|analyse)\b/i,
-  /\blook\s+at\b/i,
-  /看看|检查|审查|评审|复盘|帮我看|帮我检查|帮我审查/,
-];
 
 const EXPLICIT_CURRENT_FILE_PATTERNS = [
   /\b(?:current|active|this)\s+(?:file|code|implementation)\b/i,

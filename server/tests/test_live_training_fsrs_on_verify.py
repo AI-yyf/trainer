@@ -218,3 +218,49 @@ def test_training_verify_skips_fsrs_when_selected_card_mismatches(tmp_path: Path
         assert other_id not in fsrs_states
         assert live_id not in fsrs_states
         assert str(workspace.get("selected_card_id") or "").strip() == live_id
+
+
+def test_failed_verify_records_again_without_changing_mastery_score(
+    tmp_path: Path,
+) -> None:
+    workspace_id = "ws-live-fsrs-failure"
+    card_id = "card-live-fsrs-failure"
+    app = create_app(_settings(tmp_path / "data"))
+
+    with TestClient(app) as client:
+        runtime = app.state.runtime
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "FSRS failure"},
+        )
+        assert started.status_code == 200
+
+        card = TrainingCardCandidateSnapshot(
+            card_id=card_id,
+            card_type="practice",
+            title="Expiry failure",
+            status="active",
+            focus_area="token expiry",
+            target_skill="auth expiry",
+        )
+        runtime.memory_service.upsert_card(workspace_id, card)
+        _select(runtime, workspace_id, card)
+        structured = runtime.memory_service._structured_for(workspace_id)
+        structured.update_mastery("auth expiry", delta=0.2)
+        before_score = structured._mastery["auth expiry"].score
+
+        result = runtime.memory_service.schedule_live_training_card_fsrs_after_verify(
+            workspace_id,
+            training_card_id=card_id,
+            passed=False,
+        )
+        assert result is not None
+        assert result["rating"] == "again"
+        assert result["lapses"] >= 1
+        assert result["mastery_review_at"]
+
+        mastery = structured._mastery["auth expiry"]
+        assert mastery.score == before_score
+        assert mastery.next_review_at is not None
+        states = structured._workspace["latest_training_fsrs_states"]
+        assert int(states[card_id]["fail_streak"]) >= 1

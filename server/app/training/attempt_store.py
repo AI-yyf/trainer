@@ -490,7 +490,8 @@ class AttemptStore:
                 payload = json.loads(row["payload"])
                 if payload.get("source_deleted"):
                     continue
-                if payload.get("artifact_hash") != content_hash:
+                cited_hash = payload.get("resource_content_hash") or payload.get("artifact_hash")
+                if cited_hash != content_hash:
                     continue
                 recorded_resource_id = payload.get("resource_id")
                 if resource_id and recorded_resource_id and recorded_resource_id != resource_id:
@@ -526,7 +527,8 @@ class AttemptStore:
                 payload = json.loads(row["payload"])
                 if not payload.get("source_deleted"):
                     continue
-                if payload.get("artifact_hash") != content_hash:
+                cited_hash = payload.get("resource_content_hash") or payload.get("artifact_hash")
+                if cited_hash != content_hash:
                     continue
                 recorded_resource_id = payload.get("resource_id")
                 deleted_resource_id = payload.get("source_deleted_resource_id")

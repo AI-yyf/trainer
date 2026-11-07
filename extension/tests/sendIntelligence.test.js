@@ -58,7 +58,7 @@ test('analyzeSendIntent keeps remote review slash command as trainer intent', ()
   assert.equal(result.draftBody, 'focus on naming');
 });
 
-test('analyzeSendIntent recognizes natural-language review requests', () => {
+test('ordinary prose that mentions review stays in free chat', () => {
   const result = analyzeSendIntent(
     createInput({
       draft: 'Please review this change and tell me what is off.',
@@ -66,7 +66,7 @@ test('analyzeSendIntent recognizes natural-language review requests', () => {
   );
 
   assert.equal(result.target, 'trainer');
-  assert.equal(result.intent, 'review');
+  assert.equal(result.intent, 'coach');
 });
 
 test('analyzeSendIntent keeps natural-language next-step prompts in coach', () => {

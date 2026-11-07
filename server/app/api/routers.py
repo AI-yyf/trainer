@@ -12472,6 +12472,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             record_executed_training_evidence(
                 runtime, workspace_id=workspace_id, request=request, report=report
             )
+        # Try and Verify share this endpoint without a phase field; a failed
+        # attempt must not be treated as a failed review. Only a passed
+        # verification advances FSRS until the request carries an explicit
+        # training phase.
         if bool(report.passed):
             runtime.memory_service.schedule_live_training_card_fsrs_after_verify(
                 workspace_id,

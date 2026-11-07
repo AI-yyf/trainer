@@ -42,6 +42,27 @@ def test_version_increments_on_content_change_and_survives_restart(tmp_path: Pat
     assert record.to_payload()["version"] == 2
 
 
+def test_selection_without_application_does_not_clear_failure_streak(
+    tmp_path: Path,
+) -> None:
+    registry = SkillRegistry(tmp_path / "skills")
+    registry.register(
+        skill_id="unused", kind="knowledge", name="Unused", description="state flow"
+    )
+    registry.activate("unused")
+    registry.record_failure("unused", error="turn failed: provider_error")
+    registry.record_failure("unused", error="turn failed: provider_error")
+
+    record = registry.record_usage("unused", applied=False)
+    metadata = record.to_payload()["metadata"]
+    assert metadata["consecutive_failures"] == 2
+    assert record.to_payload()["status"] == "failing"
+
+    recovered = registry.record_usage("unused", applied=True)
+    assert recovered.to_payload()["metadata"]["consecutive_failures"] == 0
+    assert recovered.to_payload()["status"] == "ready"
+
+
 def test_failures_quarantine_then_retry_recovers(tmp_path: Path) -> None:
     registry = SkillRegistry(tmp_path / "skills")
     registry.register(

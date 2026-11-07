@@ -125,6 +125,40 @@ def test_resource_delete_flags_evidence_citing_deleted_content(tmp_path: Path) -
         assert "source deleted" in evidence["limitations"]
 
 
+def test_resource_delete_uses_cited_resource_hash_not_learner_artifact_hash(
+    tmp_path: Path,
+) -> None:
+    workspace_id = "workspace-evidence-resource-hash"
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        content = "# Cited source\nDelete must match the resource hash.\n"
+        record = upload_resource(client, workspace_id=workspace_id, content=content)
+
+        attempt = start_attempt(client, workspace_id=workspace_id, card_id="card-resource-hash")
+        evidence_resp = client.post(
+            "/training/attempt/evidence",
+            json={
+                "attempt_id": attempt["attempt_id"],
+                "artifact_hash": hashlib.sha256(b"learner-code").hexdigest(),
+                "resource_id": record["id"],
+                "result": "passed",
+            },
+        )
+        assert evidence_resp.status_code == 200, evidence_resp.text
+        evidence_id = evidence_resp.json()["evidence"]["evidence_id"]
+
+        deleted = client.post(
+            "/resource/delete",
+            json={"workspace_id": workspace_id, "resource_id": record["id"]},
+        )
+        assert deleted.status_code == 200, deleted.text
+
+        evidence = find_evidence(runtime, attempt["attempt_id"], evidence_id)
+        assert evidence["source_deleted"] is True
+        assert evidence["resource_content_hash"] == record["content_hash"]
+        assert evidence["artifact_hash"] != record["content_hash"]
+
+
 def test_resource_delete_leaves_unrelated_evidence_untouched(tmp_path: Path) -> None:
     workspace_id = "workspace-evidence-unrelated"
     with build_client(tmp_path) as client:
