@@ -1,22 +1,26 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`cdbda43`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`dae8952`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `cdbda43`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 49 个 |
-| 代码差异（v1.4.0..HEAD） | 147 files, +14852 / −6570（含一次测试文件换行规范化） |
-| 最新 ci 工作流 | run 42390200261 **success** |
-| 最新 Cross-Platform Verify | run 42390200244 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 代码与 CI 基线 | `dae8952`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 55 个 |
+| 代码差异（v1.4.0..HEAD） | 159 files, +15171 / −6607（含一次测试文件换行规范化） |
+| 最新 ci 工作流 | run 42414697027 **success** |
+| 最新 Cross-Platform Verify | run 42414697029 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 49 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 55 个见 `git log v1.4.0..main`）：
 
 ```
+dae8952 ci: 触发 V4 复核
+dcd122e chore(build): V4 VSIX manifest
+601c09d fix(v4): 自由聊天/证据失效/技能恢复/FSRS due
+ef95beb fix(provider): 数字 Token Plan 限额归为额度耗尽
 cdbda43 test(remote): provider 忙时继续跑完 L2
 ee74ed2 test(remote): 真实 L2 结果如实回填（2/3/5/6 PASS，4 FAIL）
 4e8554f refactor(resources): 抽出 libraryPaths 纯路径责任
@@ -27,6 +31,8 @@ c77e6e5 design(learning): 保留环形日进度
 e758ec5 fix(ui): 学习头部单行 + 工作区准入说明
 1b53a23 feat(chat): ^sup^ / ~sub~ 字符上下标
 ```
+
+V4 审计与首轮修复：`docs/maturity/2026-11-08-v4-audit.md`（自由聊天不再被 review 字样劫持；资料删除按资源哈希失效证据；Skill 未被应用不清零失败；FSRS due 回写 MasteryRecord）。
 
 ## 2. 修复清单（按目标阶段）
 
@@ -59,7 +65,7 @@ e758ec5 fix(ui): 学习头部单行 + 工作区准入说明
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3890 passed / 0 failed**（28 subtests；含流空闲超时 3 条） |
+| server pytest | **3897 passed / 0 failed**（28 subtests；含流空闲超时、FSRS/证据/技能回归） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
