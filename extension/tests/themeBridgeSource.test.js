@@ -134,8 +134,11 @@ test('theme bridge preserves host variable indirection and writes no colours', (
   assert.match(stylesSource, /--bg-0:\s*var\(--vscode-sideBar-background,/);
   // Accent/focus derive from theme colours, never from the editor's blue
   // button/link tokens and never from a hardcoded hue.
-  assert.match(stylesSource, /--accent:\s*color-mix\([\s\S]*?var\(--vscode-foreground/);
-  assert.match(stylesSource, /--focus-ring:\s*var\(--vscode-focusBorder/);
+  // No accent hue at all: emphasis is neutral foreground, and the focus ring
+  // never borrows the theme's coloured focus border.
+  assert.match(stylesSource, /--accent:\s*var\(--fg-0\);/);
+  assert.match(stylesSource, /--focus-ring:\s*color-mix\(in srgb, var\(--fg-0\)/);
+  assert.doesNotMatch(stylesSource, /charts-orange|vscode-focusBorder/);
   assert.doesNotMatch(stylesSource, /--accent:\s*var\(--vscode-button-background/);
   assert.doesNotMatch(stylesSource, /--bg-3:\s*var\(--vscode-list-activeSelectionBackground/);
   assert.match(stylesSource, /--success:\s*var\(--vscode-testing-iconPassed,/);

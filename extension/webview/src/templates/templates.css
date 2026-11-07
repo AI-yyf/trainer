@@ -82,12 +82,14 @@
    pressed option lifts out of the muted text color. */
 .template-context [aria-pressed="true"] { color: var(--fg-0); font-weight: 600; }
 .template-secondary-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.template-secondary-links--learning { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-.template-learning-route { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--line) 52%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--bg-1) 78%, transparent); color: var(--fg-1); font: inherit; font-size: var(--trainer-font-xs); line-height: 1.3; text-align: start; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
-.template-learning-route:hover { border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--fg-0); }
+.template-secondary-links--learning { display: flex; gap: 4px; margin-top: 10px; padding-top: 4px; border-top: 1px solid color-mix(in srgb, var(--line) 64%, transparent); }
+.template-learning-route { display: flex; flex: 1; align-items: center; gap: 6px; min-height: 34px; padding: 7px 4px; border: 0; border-radius: 6px; background: transparent; color: var(--fg-1); font: inherit; font-size: var(--trainer-font-xs); line-height: 1.3; text-align: start; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.template-learning-route:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); color: var(--fg-0); }
 .template-learning-route:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .template-learning-route svg { flex: none; color: var(--fg-muted); }
 .template-learning-route span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.template-learning-route::after { content: "›"; margin-left: auto; color: var(--fg-muted); font-size: var(--trainer-font-sm); line-height: 1; }
+.template-learning-route:hover svg, .template-learning-route:hover::after { color: var(--accent); }
 .template-learning-home > header .eyebrow { margin: 0; }
 .template-practice-response { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding-block: 16px; }
 .template-practice-response label { font-size: var(--trainer-font-sm); font-weight: 600; }
@@ -104,10 +106,10 @@
 .app-shell-overlay[data-overlay="history"] .app-shell-overlay__close { position: absolute; top: 8px; right: 8px; z-index: 2; margin: 0; }
 .app-shell-overlay[data-overlay="history"] .composer-menu-panel__header { padding-right: 30px; }
 .app-shell-overlay[data-overlay="history"] .app-shell-overlay__backdrop { background: color-mix(in srgb, var(--bg-0) 26%, transparent); }
-.template-settings-index { padding-block: 16px; }
-.template-settings-index h2 { margin: 0 0 16px; font-size: var(--trainer-font-lg); font-weight: 600; }
+.template-settings-index { padding-block: 12px; }
+.template-settings-index h2 { margin: 0 0 12px; font-size: var(--trainer-font-lg); font-weight: 600; }
 .template-settings-index ul { margin: 0; padding: 0; list-style: none; }
-.template-settings-index li + li { margin-top: 8px; }
+.template-settings-index li + li { margin-top: 2px; }
 .template-settings-index__row { display: flex; align-items: center; gap: 8px; }
 .template-settings-index__row > button:first-child { flex: 1; }
 .template-settings-index__action { flex: none; display: inline-flex; align-items: center; gap: 4px; width: auto !important; min-height: 28px; padding: 6px 10px !important; border: 1px solid var(--line) !important; border-radius: 8px; font-size: var(--trainer-font-xs) !important; color: var(--accent) !important; }
@@ -115,7 +117,7 @@
 .template-settings-index__action:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .template-settings-index__action-icon { display: inline-flex; }
 .template-settings-index__chevron { display: inline-flex; flex: none; color: var(--fg-muted); }
-.template-settings-index button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; border: 0; background: transparent; color: var(--fg-0); text-align: start; font: inherit; cursor: pointer; }
+.template-settings-index button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 6px; border: 0; background: transparent; color: var(--fg-0); text-align: start; font: inherit; cursor: pointer; }
 .template-settings-index button:hover { background: var(--bg-1); border-radius: 8px; }
 .template-settings-index button > span:nth-last-child(2) { flex: 1; min-width: 0; }
 .template-settings-index strong { display: block; font-size: var(--trainer-font-md); font-weight: 500; }

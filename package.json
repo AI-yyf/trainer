@@ -41,6 +41,7 @@
     "verify:canonical-gui": "node ./scripts/verify-canonical-gui.mjs",
     "verify:coach-gui": "node ./scripts/verify-coach-gui.mjs",
     "verify:ui-geometry": "node ./scripts/verify-ui-geometry.mjs",
+    "verify:local-latency": "npm run build:preview --prefix extension/webview && node ./scripts/verify-local-latency.mjs",
     "verify:i18n-zoom": "node ./scripts/verify-i18n-zoom-gui.mjs"
   },
   "repository": {

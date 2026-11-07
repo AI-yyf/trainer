@@ -47,6 +47,15 @@ export const COACH_MESSAGE_BUBBLE_TEXT: Record<string, Record<string, string>> =
     "ko-KR": ", 이 중 {f}단계는 재시도 필요",
     "pt-BR": ", {f} precisando de nova tentativa",
   },
+  "这一轮没有返回可显示的回复。可以重试或换一种问法。": {
+    "en-US": "This turn returned no visible reply. Retry or rephrase the question.",
+    "es-ES": "Este turno no devolvió una respuesta visible. Reintenta o reformula la pregunta.",
+    "fr-FR": "Ce tour n’a renvoyé aucune réponse visible. Réessayez ou reformulez la question.",
+    "de-DE": "Dieser Zug hat keine sichtbare Antwort geliefert. Versuche es erneut oder formuliere die Frage anders.",
+    "ja-JP": "このターンは表示できる回答を返しませんでした。再試行するか、質問を言い換えてください。",
+    "ko-KR": "이번 턴에는 표시할 수 있는 답변이 없습니다. 다시 시도하거나 질문을 바꿔 주세요.",
+    "pt-BR": "Este turno não retornou uma resposta visível. Tente novamente ou reformule a pergunta.",
+  },
   "这条回复的快捷操作": {
     "en-US": "Quick actions for this reply",
     "es-ES": "Acciones rápidas para esta respuesta",

@@ -713,9 +713,7 @@
   padding: 14px 16px;
   border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 88% 16%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 44%),
-    linear-gradient(135deg, color-mix(in srgb, var(--bg-1) 92%, var(--accent)), var(--bg-1));
+  background: var(--bg-1);
 }
 
 .learning-today__copy {
@@ -761,35 +759,33 @@
   font-variant-numeric: tabular-nums;
 }
 
-.learning-today__ring {
-  --learning-progress: 0%;
-  position: relative;
-  display: grid;
+.learning-today__progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.learning-today__progress {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 58%, transparent);
+  overflow: hidden;
+}
+
+.learning-today__progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--motion-base) var(--ease-out);
+}
+
+.learning-today__progress-label {
   flex: none;
-  place-items: center;
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  background: conic-gradient(
-    var(--accent) var(--learning-progress),
-    color-mix(in srgb, var(--line) 48%, transparent) 0
-  );
-  transition: background var(--motion-base) var(--ease-out);
-}
-
-.learning-today__ring::before {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border-radius: 50%;
-  background: var(--bg-1);
-}
-
-.learning-today__ring span {
-  position: relative;
-  color: var(--fg-0);
-  font-size: var(--trainer-font-xs);
-  font-weight: 400;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
@@ -799,15 +795,10 @@
     align-items: flex-start;
     padding: 12px;
   }
-
-  .learning-today__ring {
-    width: 58px;
-    height: 58px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .learning-today__ring {
+  .learning-today__progress span {
     transition: none;
   }
 }

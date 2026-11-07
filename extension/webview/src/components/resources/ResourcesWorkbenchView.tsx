@@ -2932,7 +2932,9 @@ export function ResourcesWorkbenchView({
       <div className="workbench-pane__heading resources-knowledge__heading sr-only">
         <h2>{localize(language, "title")}</h2>
       </div>
-      <Library hidden={Boolean(selectedResource || standaloneSandboxPreview)} toolbar={omitLeftoverLibrary ? null : (
+      {/* The orientation card owns the only import CTA on an empty library, so
+          the search/expand toolbar would be dead chrome until content exists. */}
+      <Library hidden={Boolean(selectedResource || standaloneSandboxPreview)} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && (orientation?.state === "needs_setup" || orientationTone === "blocker" || !canWriteResources)) ? null : (
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>

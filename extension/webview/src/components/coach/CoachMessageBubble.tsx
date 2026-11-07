@@ -396,6 +396,17 @@ function CoachMessageBubbleImpl({
     message.role === "assistant" && !hasBody && !hasParts && !hasRunningActivities
       ? findCoachVisibleStatusPart(message.parts)?.summary?.trim()
       : undefined;
+  // A finished turn can arrive with no body, parts, or status (empty provider
+  // completion). Never leave an empty card: the learner gets one honest line
+  // they can act on instead of a blank reply area.
+  const emptyReplyFallback =
+    message.role === "assistant" &&
+    !streaming &&
+    !hasBody &&
+    !hasParts &&
+    !hasRunningActivities &&
+    !fallbackStatusSummary &&
+    !children;
 
   return (
     <article
@@ -455,6 +466,14 @@ function CoachMessageBubbleImpl({
         {!hasBody && fallbackStatusSummary ? (
           <p className="message-bubble__agent-status-summary">
             {sanitizeErrorSurfaceText(fallbackStatusSummary, language)}
+          </p>
+        ) : null}
+        {emptyReplyFallback ? (
+          <p className="message-bubble__agent-status-summary" data-empty-reply-fallback="true">
+            {coachMessageBubbleCopy(
+              language,
+              "这一轮没有返回可显示的回复。可以重试或换一种问法。",
+            )}
           </p>
         ) : null}
         {hasBody ? (

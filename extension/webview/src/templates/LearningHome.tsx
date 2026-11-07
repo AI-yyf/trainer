@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { NextAction, type NextActionProps } from "./NextAction";
 
 export interface LearningHomeSlot {
@@ -125,13 +125,16 @@ export function LearningHome({
               <span><strong>{today.due}</strong>{today.dueLabel}</span>
               <span><strong>{today.remaining}</strong>{today.remainingLabel}</span>
             </div>
-          </div>
-          <div
-            className="learning-today__ring"
-            style={{ "--learning-progress": `${today.progress}%` } as CSSProperties}
-            aria-label={`${today.done}/${today.total}`}
-          >
-            <span>{today.done}/{today.total}</span>
+            <div className="learning-today__progress-row">
+              <div
+                className="learning-today__progress"
+                role="img"
+                aria-label={`${today.done}/${today.total}`}
+              >
+                <span style={{ width: `${today.progress}%` }} />
+              </div>
+              <span className="learning-today__progress-label">{today.done}/{today.total}</span>
+            </div>
           </div>
         </section>
       ) : (

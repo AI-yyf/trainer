@@ -21,8 +21,8 @@
   --trainer-fallback-success: var(--vscode-charts-green, CanvasText);
   --trainer-fallback-warning: var(--vscode-charts-yellow, CanvasText);
   --trainer-fallback-danger: var(--vscode-charts-red, CanvasText);
-  --trainer-fallback-focus-ring: color-mix(in srgb, Highlight 60%, transparent);
-  --trainer-fallback-link: LinkText;
+  --trainer-fallback-focus-ring: color-mix(in srgb, CanvasText 70%, transparent);
+  --trainer-fallback-link: CanvasText;
   --trainer-fallback-overlay: color-mix(in srgb, Canvas 60%, transparent);
   --trainer-fallback-shadow-soft: none;
 
@@ -95,24 +95,19 @@ body {
   --fg-1: var(--vscode-foreground, var(--vscode-descriptionForeground, var(--trainer-fallback-fg-1)));
   --fg-muted: var(--vscode-descriptionForeground, var(--vscode-disabledForeground, var(--trainer-fallback-fg-muted)));
   --line: var(--vscode-sideBar-border, var(--vscode-input-border, var(--vscode-widget-border, var(--trainer-fallback-line))));
-  /* Brand accent is a warm-neutral derivation of the theme's own foreground
-     (most themes provide a warm chart colour to tint it), never the editor's
-     blue button/link colour. Blue stays a rare "this is a link" hint. */
-  --accent: color-mix(
-    in srgb,
-    var(--vscode-foreground, CanvasText) 78%,
-    var(--vscode-charts-orange, var(--vscode-descriptionForeground, GrayText))
-  );
-  --accent-strong: color-mix(in srgb, var(--accent) 74%, var(--fg-0));
-  --link: var(--vscode-textLink-foreground, var(--trainer-fallback-link));
-  --selection-bg: color-mix(in srgb, var(--accent) 18%, var(--bg-1));
+  /* No brand accent: emphasis is carried by weight, spacing and the neutral
+     foreground. Interactive states must not paint a second hue. */
+  --accent: var(--fg-0);
+  --accent-strong: var(--fg-0);
+  --link: var(--fg-0);
+  --selection-bg: color-mix(in srgb, var(--fg-0) 12%, var(--bg-1));
   --selection-fg: var(--fg-0);
-  --selection-border: color-mix(in srgb, var(--accent) 44%, transparent);
-  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --selection-border: color-mix(in srgb, var(--fg-0) 34%, transparent);
+  --accent-soft: color-mix(in srgb, var(--fg-0) 9%, transparent);
   --success: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen, var(--trainer-fallback-success)));
   --warning: var(--vscode-editorWarning-foreground, var(--vscode-testing-iconQueued, var(--vscode-terminal-ansiYellow, var(--trainer-fallback-warning))));
   --danger: var(--vscode-errorForeground, var(--vscode-testing-iconFailed, var(--vscode-terminal-ansiRed, var(--trainer-fallback-danger))));
-  --focus-ring: var(--vscode-focusBorder, var(--trainer-fallback-focus-ring));
+  --focus-ring: color-mix(in srgb, var(--fg-0) 72%, transparent);
   --overlay: var(--vscode-editorWidget-background, var(--vscode-quickInput-background, var(--trainer-fallback-overlay)));
   --shadow-soft: var(--vscode-widget-shadow, var(--trainer-fallback-shadow-soft));
 

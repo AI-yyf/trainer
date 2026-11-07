@@ -681,10 +681,10 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           ? t("globalPlanLinkUnavailable")
           : t("globalPlanNotLinked");
   const globalPlanRelationshipSummary = !globalPlan
-    ? `${t("globalPlanLabel")} -> ${t("globalPlanNotCreated")}`
+    ? `${t("globalPlanLabel")} · ${t("globalPlanNotCreated")}`
     : hasCurrentProjectPlanLink
-      ? `${globalPlanTitle} -> ${plan?.title ?? t("globalPlanLabel")}`
-      : `${globalPlanTitle} -> ${t("globalPlanNotLinked")}`;
+      ? `${globalPlanTitle} · ${plan?.title ?? t("globalPlanLabel")}`
+      : `${globalPlanTitle} · ${t("globalPlanNotLinked")}`;
   const globalPlanAction: PlanActionItem | undefined = !globalPlan
     ? props.onCreateGlobalPlan
       ? {
@@ -863,6 +863,16 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         {learningSystemState ?? <NextAction {...props.primaryAction} />}
         {props.dockReturnNotice}
         {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
+        <div className="template-secondary-links template-secondary-links--learning" data-learning-navigation="practice-growth">
+          <button type="button" className="template-learning-route" data-learning-link="training" onClick={() => props.onNavigateToView?.("training")}>
+            <TrainingNavIcon size={14} />
+            <span>{trainingViewLabel(language)}</span>
+          </button>
+          <button type="button" className="template-learning-route" data-learning-link="progress" onClick={() => props.onNavigateToView?.("progress")}>
+            <TrophyIcon size={14} />
+            <span>{templateCopy[language].growth}</span>
+          </button>
+        </div>
         {liveEvidenceDecisionRow}
         {verifiedReturns.length ? (
           <details className="template-disclosure" data-learning-section="evidence">
@@ -885,16 +895,6 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         {renderComposerDraftReplacement("stage")}
         {actions?.length ? <details className="template-disclosure"><summary>{resolvedActionsLabel}</summary><div>{actions.map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} disabled={action.disabled} onClick={action.onClick} />)}</div></details> : null}
         {globalPlanContext}
-        <div className="template-secondary-links template-secondary-links--learning" data-learning-navigation="practice-growth">
-          <button type="button" className="template-learning-route" data-learning-link="training" onClick={() => props.onNavigateToView?.("training")}>
-            <TrainingNavIcon size={14} />
-            <span>{trainingViewLabel(language)}</span>
-          </button>
-          <button type="button" className="template-learning-route" data-learning-link="progress" onClick={() => props.onNavigateToView?.("progress")}>
-            <TrophyIcon size={14} />
-            <span>{templateCopy[language].growth}</span>
-          </button>
-        </div>
       </section>
     );
   }

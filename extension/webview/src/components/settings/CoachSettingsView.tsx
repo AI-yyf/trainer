@@ -5469,7 +5469,7 @@ function CoachSettingsViewSheet({
               ...item,
               summary: (id === "connection"
                 ? connectionModelSummary === copy.notConfigured
-                  ? providerRequirementNote
+                  ? connectionSummaryStatusLabel
                   : connectionModelSummary
                 : id === "workspace"
                   ? remoteWorkspaceName ||
