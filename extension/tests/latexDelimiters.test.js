@@ -55,6 +55,18 @@ test('leaves inline code spans byte-identical', () => {
   assert.equal(normalizeLatexDelimiters(markdown), markdown);
 });
 
+test('promotes an inline formula that was wrapped in backticks', () => {
+  assert.equal(
+    normalizeLatexDelimiters('成本期望 `E = p * c_retry + (1 - p) * c_success`。'),
+    '成本期望 $E = p * c_retry + (1 - p) * c_success$。',
+  );
+});
+
+test('keeps snake_case and plain code spans byte-identical', () => {
+  const markdown = '代码 `foo_bar = baz + 1`、`x = y + 1`、`c_retry = compute()`。';
+  assert.equal(normalizeLatexDelimiters(markdown), markdown);
+});
+
 test('returns the input when no delimiters are present', () => {
   const markdown = '纯文本，没有公式。';
   assert.equal(normalizeLatexDelimiters(markdown), markdown);

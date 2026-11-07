@@ -3871,6 +3871,48 @@ def test_direct_answer_mode_keeps_a_substantive_first_reply_intact() -> None:
     assert reply == direct_answer
 
 
+def test_grounded_remote_reply_is_not_replaced_by_lane_reanchor() -> None:
+    """A successful tool run outranks incidental foreign-lane vocabulary.
+
+    Real 141s run: the model read src/queue_lock.py via tools and finalized a
+    correct answer, but the visible reply used the ordinary word "调用点"
+    (a function-guidance marker), so the fresh-lane guard replaced the whole
+    answer with remote-boundary boilerplate. Grounded completions must keep
+    their evidence-backed answer.
+    """
+    service = ProviderService(api_key="sk-test")
+    question = "这个远程项目的 Queue.pop 在什么情况下会抛 IndexError？请结合 src/queue_lock.py 讲清楚。"
+    grounded_answer = (
+        "`pop()` 的判空与 `self._items.pop()` 都在 `with self._lock` 内，空队列会提前返回 None，"
+        "因此这个调用点不会抛 IndexError。\n\n"
+        "真正的 IndexError 只会出现在绕过判空、直接对空列表调用 pop 的调用点。"
+    )
+    context = {"scenario": "remote_workspace", "history_mode": "fresh_lane"}
+
+    preserved = service.finalize_coaching_reply(
+        grounded_answer,
+        profile=_make_profile(),
+        message=question,
+        response_language="zh-CN",
+        answer_mode="auto",
+        coach_context=context,
+        grounded_completion=True,
+    )
+    assert preserved == grounded_answer
+
+    reanchored = service.finalize_coaching_reply(
+        grounded_answer,
+        profile=_make_profile(),
+        message=question,
+        response_language="zh-CN",
+        answer_mode="auto",
+        coach_context=context,
+        grounded_completion=False,
+    )
+    assert reanchored != grounded_answer
+    assert "调用点不会抛 IndexError" not in reanchored
+
+
 def test_clear_auto_mode_reply_is_not_replaced_with_intake_copy() -> None:
     service = ProviderService(api_key="sk-test")
     question = "Explain Python closures in three sentences without asking a question first."

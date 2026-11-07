@@ -3724,7 +3724,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             scenario in _GUIDED_DOMAIN_SCENARIOS
             and not _fresh_lane_comparison_requested(message)
         )
-        if should_strip_cross_lane:
+        if should_strip_cross_lane and not grounded_completion:
             reply = _strip_fresh_lane_cross_lane_carryover(
                 reply,
                 scenario=scenario,
@@ -3734,6 +3734,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if (
                 scenario in _GUIDED_DOMAIN_SCENARIOS
                 and not _fresh_lane_comparison_requested(message)
+                and not grounded_completion
                 and _reply_mentions_other_guided_lane(
                 reply,
                 scenario=scenario,
@@ -3954,7 +3955,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             scenario in _GUIDED_DOMAIN_SCENARIOS
             and not _fresh_lane_comparison_requested(message)
         )
-        if should_strip_cross_lane:
+        if should_strip_cross_lane and not grounded_completion:
             reply = _strip_fresh_lane_cross_lane_carryover(
                 reply,
                 scenario=scenario,
@@ -3964,6 +3965,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if (
                 scenario in _GUIDED_DOMAIN_SCENARIOS
                 and not _fresh_lane_comparison_requested(message)
+                and not grounded_completion
                 and _reply_mentions_other_guided_lane(
                 reply,
                 scenario=scenario,

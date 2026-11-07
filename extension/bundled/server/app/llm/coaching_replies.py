@@ -933,7 +933,10 @@ def _strip_fresh_lane_cross_lane_carryover(
     sentence_filtered: list[str] = []
     sentence_removed = False
     for part in filtered:
-        if "```" in part:
+        # Never sentence-split code-bearing text: a period inside `self._lock`
+        # or a fenced block is not a sentence boundary, and dropping the tail
+        # would cut a grounded answer mid-identifier.
+        if "```" in part or "`" in part:
             sentence_filtered.append(part)
             continue
         kept_sentences: list[str] = []

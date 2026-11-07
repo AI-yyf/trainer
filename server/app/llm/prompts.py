@@ -363,7 +363,8 @@ def _guided_mode_requirements(response_language: str | None) -> str:
             "- 不用“显然”“其实很简单”这类空话：每个判断都给出可检验的依据。"
             "\n"
             "- 数学公式用 $...$（行内）或 $$...$$（独立一行）包裹，不要用 \\( \\) 或 \\[ \\]，"
-            "客户端只渲染前一种写法。"
+            "也不要用反引号代码包公式（反引号会按代码原样显示，下划线不会排成下标）；"
+            "客户端只渲染 $ / $$ 写法。"
         )
     return (
         "- State before solution: open the reply with one or two sentences naming the learner's current state and the "
@@ -384,7 +385,8 @@ def _guided_mode_requirements(response_language: str | None) -> str:
         "- No filler such as \"obviously\" or \"this is simple\": every judgment carries a checkable reason."
         "\n"
         "- Wrap math in $...$ (inline) or $$...$$ (display, on its own line); never \\( \\) or \\[ \\], "
-        "the client renders only the former."
+        "and never wrap a formula in backticks (it would render as literal code and underscores would not "
+        "become subscripts); the client renders only the $ / $$ forms."
     )
 
 
