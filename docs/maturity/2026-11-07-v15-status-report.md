@@ -1,38 +1,30 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`c15fc19`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`bd27145`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| main HEAD | `c15fc19`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 14 个 |
-| 代码差异（v1.4.0..HEAD） | 65 files, +3882 / −114 |
-| 最新 ci 工作流 | run 42286219525 **success** |
-| 最新 Cross-Platform Verify | run 42286219526 **success（9/9，linux 构建 ubuntu-22.04）** |
+| main HEAD | `bd27145`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 26 个 |
+| 代码差异（v1.4.0..HEAD） | 100 files, +7865 / −1478 |
+| 最新 ci 工作流 | run 42331337114 **success** |
+| 最新 Cross-Platform Verify | run 42331337121 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-本轮提交：
+最近提交（最新在前；完整 26 个见 `git log v1.4.0..main`）：
 
 ```
+bd27145 fix(settings): 模型选择器水合后收起 + 单句连通通知 + Settings 审计
+0af9b19 fix(resources): 单一导入主操作 + Resources 真实 VS Code 审计
+fa26203 fix(coach): 可见回复剥离过程叙事/自检句 + Learning 审计
+314432a fix(coach): 移除成功完成横幅 + Coach 审计
+6ed097b feat(analysis): 真实 LSP references（pylsp）
+59fd174 refactor(api): Phase 4 — provider payload 解析拆分
+70f8787 refactor(api): Phase 4 — coach language alignment 拆分
 c15fc19 feat(skills): 统一生命周期 (version/失败恢复/单一状态源)
-793266a docs(verification): v1.4.1 对账 + 141s 官方资产验收
-bdf150d feat(pedagogy): 教学质量五维报告 GET /teaching/quality
-adbf93a chore(release): v1.4.1 (linux sidecar ubuntu-22.04)
-e6991e2 docs(verification): 22.04 sidecar 在 141s --help + /health
-2b1f947 style(tests): ruff import order
-ef900f6 docs(verification): L2 第 1 步 PASS + glibc 发现
-8af573b feat(v15): Resources 图谱面板 + 分层检索
-167c4dd test(ci): package runner guard 对齐 22.04
-1d27bbf fix(ci): linux sidecar 构建改 ubuntu-22.04
-6b47077 fix(analysis): 补全动态 tree-sitter 导入
-b0af3ff fix(analysis): 动态导入 (CI Pyright 无依赖)
-4204559 feat(v15): Analysis Adapter (tree-sitter AST + 诚实降级)
-1eb9099 docs(verification): v1.4.0 对账 + 141s 重铺
-0f441bf fix(v15): P0（importer/incremental/skills 审核）
-5b93f9f feat(skills): 内化 RethinkFun 状态流教学法 (内置 tutor skill)
 ```
 
 ## 2. 修复清单（按目标阶段）
@@ -66,9 +58,9 @@ b0af3ff fix(analysis): 动态导入 (CI Pyright 无依赖)
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3862 passed / 0 failed**（28 subtests） |
+| server pytest | **3886 passed / 0 failed**（28 subtests） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
-| extension（node:test） | exit 0，0 断言失败（含新增图谱面板守卫） |
+| extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
 | verify-ui-geometry | **477/477** |
 | verify:webview-recovery | `ok:true` |
@@ -81,8 +73,8 @@ b0af3ff fix(analysis): 动态导入 (CI Pyright 无依赖)
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `c15fc19`） | 42286219525 | success |
-| Cross-Platform Verify（main `c15fc19`，linux 构建 ubuntu-22.04） | 42286219526 | **success（9/9）** |
+| ci（main `bd27145`） | 42331337114 | success |
+| Cross-Platform Verify（main `bd27145`，linux 构建 ubuntu-22.04） | 42331337121 | **success（9/9）** |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
 ## 5. 跨平台安装证据
@@ -97,6 +89,10 @@ b0af3ff fix(analysis): 动态导入 (CI Pyright 无依赖)
 - **11 步真实模型旅程**（`docs/maturity/p4-journey-2026-11-06/`）：理解轮 3154 字并引用真实锚点 `¶chunk:0@1`；sidecar 重启会话还原；切工作区零泄漏；M3.1-Flash↔M2.7 热切换；记忆摘要。
 - **真实 Provider 回归**（`docs/maturity/2026-11-06-p4-real-provider.md`）：连通、完整教学轮、长讲义（2068 字完整落库）、工具成功 grounding、新会话首条 = **5 PASS + 1 NOT_EXECUTED**（空响应无法在健康网关强制；脚本化测试覆盖）。
 - **RethinkFun 教学法真实模型**（MainMiniMax-M3）：4635 字状态流讲稿（旧方案失败先行、缺口推进、零空话）；`/skill/list` 证据 `applied=true, basis=contract_markers, markers=[缺口,失败,旧方案,为什么,状态], cited=false`。
+- **四屏真实 VS Code 审计**（真实 Electron + v1.4.1 VSIX + 真实 MiniMax）：
+  Coach（完成横幅移除）、Learning（过程叙事/自检句过滤）、Resources（单一导入主操作）、
+  Settings（模型选择器水合后收起、单句连通通知）；每屏均以真实截图 + 结构断言取证，
+  证据见 `docs/verification/2026-11-07-{coach,learning,resources,settings}-screen-audit.md`。
 
 ## 7. Token 与性能基准
 
