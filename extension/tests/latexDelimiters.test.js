@@ -73,6 +73,17 @@ test('promotes code-wrapped latex delimiters only when they carry math', () => {
   );
 });
 
+test('promotes macro-only and simple subscript formulas', () => {
+  assert.equal(
+    normalizeLatexDelimiters('分数 `\\frac{1}{2}` 与定义 `c_t = 1`。'),
+    '分数 $\\frac{1}{2}$ 与定义 $c_t = 1$。',
+  );
+  assert.equal(
+    normalizeLatexDelimiters('正则 `\\d+` 仍为代码。'),
+    '正则 `\\d+` 仍为代码。',
+  );
+});
+
 test('keeps snake_case and plain code spans byte-identical', () => {
   const markdown = '代码 `foo_bar = baz + 1`、`x = y + 1`、`c_retry = compute()`。';
   assert.equal(normalizeLatexDelimiters(markdown), markdown);

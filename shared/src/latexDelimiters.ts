@@ -33,10 +33,21 @@ function looksLikeInlineFormula(content: string): boolean {
   }
   const hasShortSubscript = /(^|[^A-Za-z0-9])[A-Za-z]_[A-Za-z0-9{]/.test(text);
   const hasCaret = /\^/.test(text);
-  const hasMacro = /\\[A-Za-z]+/.test(text);
+  const hasMacro =
+    /\\(?:frac|sqrt|sum|prod|int|lim|alpha|beta|gamma|delta|theta|lambda|mu|sigma|pi|infty|partial|nabla|cdot|times|div|pm|le|ge|neq|approx|equiv|to|rightarrow|left|right|begin|end|text|mathrm|mathbf|mathbb|mathcal|overline|hat|vec|dot|bar|binom|log|ln|sin|cos|tan|exp|max|min|arg|det|dim|ker|deg|gcd|bmod|pmod|quad|qquad)\b/.test(
+      text,
+    );
   const operatorCount = (text.match(/[=+\-*/]/g) ?? []).length;
-  if (hasCaret || hasMacro) {
+  if (hasMacro) {
+    // \frac, \sqrt, \sum, \alpha are unambiguous math even without an operator.
+    return true;
+  }
+  if (hasCaret) {
     return operatorCount >= 1;
+  }
+  if (hasShortSubscript && operatorCount <= 1) {
+    // A bare definition like c_t = 1 is still a formula; reject call syntax.
+    return /^[A-Za-z]_[A-Za-z0-9]+\s*=\s*[^;{}()"'`]+$/.test(text);
   }
   return hasShortSubscript && operatorCount >= 2;
 }

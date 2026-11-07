@@ -224,7 +224,7 @@ test('trainer message parts normalize into the typed registry contract', () => {
       message: "Checked the workspace context first. Next: Apply the smallest verified patch.",
     },
   );
-  assert.deepEqual(
+  assert.equal(
     deriveTrainerStreamingOperationMessage("en-US", {
       isStreaming: false,
       streamedContent: "Done.",
@@ -233,10 +233,7 @@ test('trainer message parts normalize into the typed registry contract', () => {
       toolCount: 2,
       agentic: true,
     }),
-    {
-      tone: "success",
-      message: "Coach loop completed after 2 tool steps.",
-    },
+    undefined,
   );
   assert.equal(
     deriveTrainerStreamingOperationMessage("en-US", {

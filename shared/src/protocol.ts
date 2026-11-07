@@ -1160,12 +1160,12 @@ export function deriveTrainerStreamingOperationMessage(
   const stopReason = describeTrainerStopReason(state.completionStopReason, language);
   // A plain successful reply is its own confirmation. A top banner repeating
   // "reply completed" is redundant chrome (Coach audit 2026-11-07); keep the
-  // notice only when it carries real information: summary/next step, tool
-  // steps, token counts, or a non-nominal stop reason.
+  // notice only when it carries real information: summary/next step, token
+  // counts, or a non-nominal stop reason. Tool steps are already inspectable
+  // inside the reply's own work-trail disclosure.
   const carriesCompletionDetail =
     Boolean(state.completionSummary?.trim()) ||
     Boolean(state.completionNextStep?.trim()) ||
-    (typeof state.toolCount === "number" && state.toolCount > 0) ||
     typeof options?.completionTokens === "number" ||
     Boolean(stopReason);
   const reliabilityLooksFailed =
