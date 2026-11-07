@@ -294,11 +294,12 @@ test('workspace admission copy makes the choice and its persistence boundary cle
   const chineseCopy = resolveCopy('zh-CN');
   const englishCopy = resolveCopy('en-US');
 
-  assert.match(chineseCopy.workspaceAdmissionProjectFoundDetail, /加入 Trainer.*仅浏览.*忽略/);
+  assert.match(chineseCopy.workspaceAdmissionProjectFoundDetail, /读取项目结构.*不会修改文件/);
+  assert.match(chineseCopy.onboardingProjectDiscoveryNote, /连接模型后.*当前项目.*不会修改文件/);
   assert.match(chineseCopy.workspaceAdmissionBrowseDetail, /不会启动项目对话.*不会保存学习记录/);
   assert.match(chineseCopy.workspaceAdmissionIgnoredDetail, /不会读取或管理/);
   assert.match(chineseCopy.workspaceAdmissionDelete, /删除项目/);
-  assert.match(englishCopy.workspaceAdmissionProjectFoundDetail, /add it to Trainer, browse it, or ignore it/i);
+  assert.match(englishCopy.workspaceAdmissionProjectFoundDetail, /read the project structure.*never modifies files/i);
   assert.match(englishCopy.workspaceAdmissionBrowseDetail, /coaching and saved learning records stay off/i);
   assert.match(englishCopy.workspaceAdmissionDelete, /Delete project/i);
   assert.notEqual(englishCopy.workspaceAdmissionDelete, englishCopy.workspaceAdmissionIgnore);

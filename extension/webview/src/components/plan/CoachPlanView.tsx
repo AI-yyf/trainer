@@ -856,9 +856,11 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       .filter(isVerifiedTrainingReturn).map(item => [item.id, item])).values()];
     return (
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
-        {expandToEditorControl ? <div className="coach-plan-view__surface-control">{expandToEditorControl}</div> : null}
-        <header className="template-learning-home__header">
+        <header className="template-learning-home__header template-learning-home__header--row">
           <p className="eyebrow">{templateCopy[language].currentLearning}</p>
+          {expandToEditorControl ? (
+            <div className="coach-plan-view__surface-control">{expandToEditorControl}</div>
+          ) : null}
         </header>
         {learningSystemState ?? <NextAction {...props.primaryAction} />}
         {props.dockReturnNotice}

@@ -72,6 +72,7 @@ export type CopyKey =
   | "onboardingRootAction"
   | "onboardingRootDetail"
   | "onboardingSetupCaption"
+  | "onboardingProjectDiscoveryNote"
   | "onboardingSetupInvite"
   | "onboardingSetupModelAction"
   | "onboardingSetupModelDone"

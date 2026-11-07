@@ -142,6 +142,7 @@ export function OnboardingWizard({
     <div className="onboarding-setup" role="group" aria-label={t("onboardingTitle")}>
       <p className="onboarding-setup__invite">{t("onboardingSetupInvite")}</p>
       <p className="onboarding-setup__hint">{t("onboardingSetupCaption")}</p>
+      <p className="onboarding-setup__hint">{t("onboardingProjectDiscoveryNote")}</p>
 
       <div className="onboarding-setup__rows">
         <div
