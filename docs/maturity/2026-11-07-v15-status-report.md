@@ -1,22 +1,23 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`ee74ed2`，代码基线 `4e8554f`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`cdbda43`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `4e8554f`（HEAD `ee74ed2` 为 L2 证据/脚本；v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 48 个 |
+| 代码与 CI 基线 | `cdbda43`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 49 个 |
 | 代码差异（v1.4.0..HEAD） | 147 files, +14852 / −6570（含一次测试文件换行规范化） |
-| 最新 ci 工作流 | run 42385984789 **success** |
-| 最新 Cross-Platform Verify | run 42385984696 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 最新 ci 工作流 | run 42390200261 **success** |
+| 最新 Cross-Platform Verify | run 42390200244 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 48 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 49 个见 `git log v1.4.0..main`）：
 
 ```
+cdbda43 test(remote): provider 忙时继续跑完 L2
 ee74ed2 test(remote): 真实 L2 结果如实回填（2/3/5/6 PASS，4 FAIL）
 4e8554f refactor(resources): 抽出 libraryPaths 纯路径责任
 bdb8986 design(resources): + 图标靠搜索、回收站页脚化
