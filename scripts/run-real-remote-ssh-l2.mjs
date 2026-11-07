@@ -295,10 +295,16 @@ async function runProviderTest(page, frame, attempts = 3) {
   let lastText = "";
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const button = frame.locator("button:visible").filter({ hasText: /测试连接|重新测试/ }).last();
-    if (!(await button.count())) throw new Error("Provider test button is not visible");
+    if (!(await button.count())) {
+      return { ok: false, attempts, text: "Provider test button is not visible" };
+    }
     await button.click();
     await page.waitForTimeout(2500);
-    lastText = await waitForBody(frame, /模型已就绪|最近测试 通过|暂时出错|连接需要检查|测试失败|未通过/, 180_000);
+    try {
+      lastText = await waitForBody(frame, /模型已就绪|最近测试 通过|暂时出错|连接需要检查|测试失败|未通过/, 180_000);
+    } catch {
+      lastText = await bodyText(frame);
+    }
     if (/模型已就绪|最近测试 通过/.test(lastText)) return { ok: true, attempt, text: lastText };
     record("provider-test-retry", { ok: false, attempt, text: lastText.slice(-500) });
     await page.waitForTimeout(2000);
@@ -393,7 +399,10 @@ try {
     screenshot: await pageScreenshot(page, "03-five-views"),
   });
 
-  // Provider setup inside the remote window's local UI host.
+  // A saved profile may already be ready; re-filling the form can drift
+  // the view. Only run setup when the connection is not ready.
+  if (!/模型已就绪/.test(await bodyText(frame))) {
+    // Provider setup inside the remote window's local UI host.
   const category = frame.locator("[data-settings-category=connection]");
   if (await category.count()) {
     await category.first().click();
@@ -441,6 +450,9 @@ try {
     text: savedText.slice(0, 700),
     screenshot: await pageScreenshot(page, "04-provider-saved"),
   });
+
+  }
+
   const test = await runProviderTest(page, frame, 3);
   record("l2-provider-test", {
     ok: test.ok,
@@ -448,10 +460,9 @@ try {
     text: test.text.slice(-700),
     screenshot: await pageScreenshot(page, "04-provider-test"),
   });
-  if (!test.ok) throw new Error("Provider test failed in remote window");
-
-  // Step 4 — real message about the remote project.
-  await frame.getByRole("button", { name: "对话", exact: true }).first().click();
+  // A failed connectivity probe is recorded, but it does not skip the actual
+  // six-step check: step 4 either produces a usable reply or fails honestly.
+  await clickNav(frame, page, "对话", /说说|消息输入框|发现项目/);
   await page.waitForTimeout(2500);
   const discovery = frame.getByRole("button", { name: "加入 Trainer", exact: true }).first();
   let attached = false;

@@ -48,7 +48,7 @@ cross-platform 的 linux 构建基座改为 ubuntu-22.04（glibc 2.35），旧 r
 | 1 | Remote-SSH 窗口安装 VSIX（Extensions → … → Install from VSIX… → `~/trainer-extension-1.4.0-linux-x64.vsix`） | ✅ PASS（自动化：远端 VS Code Server CLI 安装 + 版本/发布者核验；窗口内重载即生效） |
 | 2 | 活动栏 Trainer 图标打开侧边栏（应进入 Coach 视图） | ✅ PASS（自动化真窗口） |
 | 3 | 五视图切换 Coach / Plan / Resources / Training / Settings | ✅ PASS（自动化真窗口；Training 入口在 Learning 内） |
-| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | ❌ FAIL（provider 返回“这一步暂时没完成”，不是教学回复） |
+| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | ❌ FAIL（provider 返回“服务正忙，请稍等再试”，三次探测均失败；外部可用性） |
 | 5 | 设置中 attach 远程工作区（`~/trainer-e2e`）并确认信任状态 | ✅ PASS（项目 URI + 非 Restricted Mode） |
 | 6 | Companion capability 握手显示 verified（file/search/hash/verify） | ✅ PASS（“远程支持已就绪”） |
 
