@@ -28,10 +28,11 @@ let markdownPluginsPromise:
 
 async function loadMarkdownPlugins() {
   markdownPluginsPromise ??= Promise.all([
+    import("katex/contrib/mhchem"),
     import("rehype-katex"),
     import("remark-gfm"),
     import("remark-math"),
-  ]).then(([rehypeKatex, remarkGfm, remarkMath]) => ({
+  ]).then(([, rehypeKatex, remarkGfm, remarkMath]) => ({
     rehypeKatex: rehypeKatex.default,
     remarkGfm: remarkGfm.default,
     remarkMath: remarkMath.default,

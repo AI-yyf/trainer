@@ -22,6 +22,7 @@
 | `~~~math` 围栏 | 与 ```math 同一路径 | 块级公式 |
 | `$\text{中文}$` | KaTeX text 模式 | 中文公式标签 |
 | `\$5` / `\$10` | 转义美元符号 | 保留货币文本，不误判公式 |
+| `\ce{H2O}` | 载入 KaTeX mhchem 扩展 | 化学式 |
 | `\textcolor{red}{x}` / `\color{blue}` | 只在数学片段内剥离颜色命令 | 中性排版，不引入第二个色相 |
 | 非法公式 `$\frac{1}{$` | `throwOnError:false` + 中性 errorColor | 可读的错误片段，整条回复不崩 |
 
@@ -48,7 +49,7 @@
 
 - `output/ui-replica-2026-11-07/formats-dark.png`：同一条回复内同时出现粗体/斜体/删除线/行内代码/链接/换行/标题/引用/列表/任务/分隔线/脚注/三种公式/表格/Mermaid。
 - `output/ui-replica-2026-11-07/rich-light.png`：浅色主题下反引号公式已升级为 KaTeX。
-- 浏览器实测计数（`playwright`）：`strong 3 / em 2 / del 1 / inlineCode 1 / link 3（含脚注回链）/ br 1 / katex 13 / table 1 / h2 2 / blockquote 2 / li 5 / checkbox 1 / hr 1 / footnotes 1`；非法公式 `pageerror=[]`、`.katex-error=1`。
+- 浏览器实测计数（`playwright`）：`strong 3 / em 2 / del 1 / inlineCode 1 / link 3（含脚注回链）/ br 1 / katex 13 / table 1 / h2 2 / blockquote 2 / li 5 / checkbox 1 / hr 1 / footnotes 1`；非法公式 `pageerror=[]`、`.katex-error=1`，错误片段计算色为标准前景（无彩色）。
 
 ## 门禁
 
