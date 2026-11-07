@@ -1,30 +1,30 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`a278373`，代码基线 `fd3bab5`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`1b53a23`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `fd3bab5`（HEAD `a278373` 仅补预览夹具与文档；v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 34 个 |
-| 代码差异（v1.4.0..HEAD） | 126 files, +9080 / −1597 |
-| 最新 ci 工作流 | run 42353789383 **success** |
-| 最新 Cross-Platform Verify | run 42353789398 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 代码与 CI 基线 | `1b53a23`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 39 个 |
+| 代码差异（v1.4.0..HEAD） | 129 files, +9386 / −1604 |
+| 最新 ci 工作流 | run 42368882911 **success** |
+| 最新 Cross-Platform Verify | run 42368882917 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 34 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 39 个见 `git log v1.4.0..main`）：
 
 ```
-a278373 test(preview): 空格公式与裸 aligned 环境
+1b53a23 feat(chat): ^sup^ / ~sub~ 字符上下标
+fecf7a5 feat(chat): KaTeX mhchem 化学式
+a3c9949 fix(chat): 移除工具步数完成横幅 + 公式边界
+9b64437 fix(chat): 数学颜色命令剥离 + 边界覆盖
 fd3bab5 fix(chat): 全量公式 + Markdown 字符格式
 1aa2e05 fix(ui): 移除剩余主题强调色 + 缩短工作区动作
 273c7cd test(remote): Remote-SSH L2 真窗口脚本
 85d1226 feat(ui): 中性色 + 空回复兜底 + BoardUI/Bencho 克制模式
-1448ffb fix(coach): 保留有工具证据的回复 + 反引号公式
-c23012e docs(status): 基线措辞
-da8d5a3 docs(status): 回填 bd27145 状态
 ```
 
 ## 2. 修复清单（按目标阶段）
@@ -92,7 +92,7 @@ da8d5a3 docs(status): 回填 bd27145 状态
 - **回复格式矩阵**（`docs/verification/2026-11-07-message-format-matrix.md`）：
   行内/块级/`\(...\)`/`\[...\]`/反引号公式/```math/表格内公式/裸 aligned/转义美元/非法公式
   均有确定路径；粗体、斜体、删除线、行内代码、链接、单换行、标题、引用、列表、任务、分隔线、
-  脚注、表格、Mermaid 同条回复共存（`formats-dark.png`）。
+  脚注、上下标、化学式、表格、Mermaid 同条回复共存（`formats-dark.png`）。
 - **单色与 1 秒门禁**：`--accent`/`--link`/焦点环/状态色全部中性；`verify:local-latency`
   实测五条本地动作 34–384ms。
 - **四屏真实 VS Code 审计**（真实 Electron + v1.4.1 VSIX + 真实 MiniMax）：
