@@ -2953,6 +2953,9 @@ export function ResourcesWorkbenchView({
               onClick={onExpandToEditor}
             />
           ) : null}
+          {/* One primary action per viewport: when the empty-state orientation
+              card already carries the import CTA, the toolbar repeats it. */}
+          {orientationState ? null : (
           <div className="resources-knowledge__import-menu-wrap">
             <button
               ref={importMenuTriggerRef}
@@ -2980,6 +2983,7 @@ export function ResourcesWorkbenchView({
               <ChevronDownIcon size={12} aria-hidden="true" />
             </button>
           </div>
+          )}
         </div>
       </div>
       )}>

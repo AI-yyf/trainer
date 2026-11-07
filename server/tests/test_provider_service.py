@@ -8507,12 +8507,20 @@ def test_coach_cleanup_strips_process_narration_and_self_check_lines() -> None:
     original = (
         "已核对 2 项上下文\n\n"
         "读取 src/queue_lock.py（Queue 类），据此确定讲解重点与可验证的最小实验。\n\n"
+        "已读取 src/queue_lock.py 与 README.md，确认锁的唯一作用是保护 _items。\n\n"
         "锁保护的是 Queue._items 的不变量。\n\n"
         f"{code}\n\n"
+        "教学顺序：先看入口，再看锁。\n\n"
+        "教学重点：锁保护的是不变量。\n\n"
+        "当前阻塞：尚无并发测试文件。\n\n"
         "这一步还没在刚才的回复或代码里得到印证，先确认再动手。"
     )
     cleaned = _strip_internal_coach_meta(original)
     assert code in cleaned
     assert "据此确定讲解重点" not in cleaned
+    assert "已读取" not in cleaned
+    assert "教学顺序" not in cleaned
+    assert "教学重点" not in cleaned
+    assert "当前阻塞" not in cleaned
     assert "先确认再动手" not in cleaned
     assert "锁保护的是 Queue._items 的不变量。" in cleaned

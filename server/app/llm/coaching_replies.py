@@ -68,6 +68,16 @@ _INTERNAL_COACH_META_MARKERS = (
     "\u5148\u786e\u8ba4\u518d\u52a8\u624b",
     "this step has not been verified in the reply or code",
     "so i focused the explanation",
+    # Variants observed on the real provider (2026-11-07): the model narrates
+    # which files it read and announces a teaching order instead of teaching.
+    "\u5df2\u8bfb\u53d6",
+    "\u6211\u5df2\u8bfb\u53d6",
+    "\u6559\u5b66\u987a\u5e8f\uff1a",
+    "\u6559\u5b66\u987a\u5e8f:",
+    "\u6559\u5b66\u91cd\u70b9\uff1a",
+    "\u6559\u5b66\u91cd\u70b9:",
+    "\u5f53\u524d\u963b\u585e\uff1a",
+    "\u5f53\u524d\u963b\u585e:",
 )
 
 

@@ -474,6 +474,32 @@ try {
     screenshot: await screenshot(page, "04b-learning-screen"),
   });
 
+  // Resources screen audit (Phase 4): the real 资料 destination in an empty
+  // library — single import affordance, honest empty state, no duplicate
+  // titles, search reachable.
+  await frame.getByRole("button", { name: "资料", exact: true }).first().click();
+  await page.waitForTimeout(1800);
+  const resourcesText = await bodyText(frame);
+  const resourcesButtons = await frame.getByRole("button").allTextContents();
+  const resourcesSearchVisible = await frame
+    .locator('input[type="search"]:visible, input[placeholder*="搜索"]:visible')
+    .count()
+    .catch(() => 0);
+  const importAffordanceCount = resourcesButtons.filter((label) =>
+    /添加资料|导入资料/.test(label),
+  ).length;
+  record("04c-resources-screen", {
+    ok:
+      /资料/.test(resourcesText) &&
+      !/undefined|NaN|Infinity/.test(resourcesText) &&
+      importAffordanceCount === 1,
+    text: resourcesText.slice(0, 1200),
+    visibleButtons: resourcesButtons.slice(0, 24),
+    importAffordanceCount,
+    searchInputCount: resourcesSearchVisible,
+    screenshot: await screenshot(page, "04c-resources-screen"),
+  });
+
   // Back to Coach and send a real first message.
   await frame.getByRole("button", { name: "对话", exact: true }).first().click();
   await page.waitForTimeout(2500);
