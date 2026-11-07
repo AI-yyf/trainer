@@ -53,6 +53,26 @@ def _passed_report() -> EvaluationReport:
     )
 
 
+def _failed_report() -> EvaluationReport:
+    return EvaluationReport(
+        task_spec_id="",
+        summary="Live training card verify failed.",
+        static_checks=[],
+        dynamic_checks=[
+            EvaluationCheck(
+                id="dynamic-fail",
+                label="dynamic-fail",
+                status="failed",
+                detail="Verifier rejected.",
+            )
+        ],
+        semantic_checks=[],
+        next_step="Return through training handoff.",
+        reflection="",
+        passed=False,
+    )
+
+
 def _select(runtime: object, workspace_id: str, card: TrainingCardCandidateSnapshot) -> None:
     runtime.memory_service.persist_active_card_selection(
         workspace_id,
@@ -262,5 +282,80 @@ def test_failed_verify_records_again_without_changing_mastery_score(
         mastery = structured._mastery["auth expiry"]
         assert mastery.score == before_score
         assert mastery.next_review_at is not None
+
+        summary = client.get(f"/memory/summary?workspace_id={workspace_id}").json()
+        memory = summary.get("memory") or summary
+        due = memory.get("due_reviews") or memory.get("dueReviews") or []
+        concepts = {
+            str(item.get("concept") or "").strip()
+            for item in due
+            if isinstance(item, dict)
+        }
+        assert "auth expiry" in concepts
         states = structured._workspace["latest_training_fsrs_states"]
         assert int(states[card_id]["fail_streak"]) >= 1
+
+
+def test_explicit_verify_phase_records_fsrs_again_on_failure(tmp_path: Path) -> None:
+    workspace_id = "ws-live-fsrs-explicit-fail"
+    card_id = "card-live-fsrs-explicit-fail"
+    app = create_app(_settings(tmp_path / "data"))
+
+    with TestClient(app) as client:
+        runtime = app.state.runtime
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "FSRS explicit fail"},
+        )
+        assert started.status_code == 200
+        session_id = str(started.json().get("session_id") or "")
+
+        card = TrainingCardCandidateSnapshot(
+            card_id=card_id,
+            card_type="practice",
+            title="Explicit verify failure",
+            status="active",
+            focus_area="token expiry",
+            target_skill="auth expiry",
+        )
+        runtime.memory_service.upsert_card(workspace_id, card)
+        _select(runtime, workspace_id, card)
+        structured = runtime.memory_service._structured_for(workspace_id)
+        structured.update_mastery("auth expiry", delta=0.2)
+        before_score = structured._mastery["auth expiry"].score
+
+        runtime.evaluator_service.evaluate_current_file = MagicMock(return_value=_failed_report())
+        response = client.post(
+            "/evaluate/current-file",
+            json={
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "file_path": str(tmp_path / "explicit_fail.py"),
+                "language_id": "python",
+                "content": "x = 1\n",
+                "diagnostics": [],
+                "evaluation_source": "training",
+                "training_card_id": card_id,
+                "training_card_title": "Explicit verify failure",
+                "training_phase": "verify",
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json().get("passed") is False
+
+        states = structured._workspace["latest_training_fsrs_states"]
+        assert card_id in states
+        assert int(states[card_id].get("lapses") or 0) >= 1
+        mastery = structured._mastery["auth expiry"]
+        assert mastery.score == before_score
+        assert mastery.next_review_at is not None
+
+        summary = client.get(f"/memory/summary?workspace_id={workspace_id}").json()
+        memory = summary.get("memory") or summary
+        due = memory.get("due_reviews") or memory.get("dueReviews") or []
+        concepts = {
+            str(item.get("concept") or "").strip()
+            for item in due
+            if isinstance(item, dict)
+        }
+        assert "auth expiry" in concepts

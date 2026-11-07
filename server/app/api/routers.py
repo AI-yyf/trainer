@@ -12472,15 +12472,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             record_executed_training_evidence(
                 runtime, workspace_id=workspace_id, request=request, report=report
             )
-        # Try and Verify share this endpoint without a phase field; a failed
-        # attempt must not be treated as a failed review. Only a passed
-        # verification advances FSRS until the request carries an explicit
-        # training phase.
-        if bool(report.passed):
+        phase = str(getattr(request, "training_phase", "") or "").strip().lower()
+        # Explicit Verify may record AGAIN on failure; without a phase, keep
+        # the legacy pass-only rule because Try shares this endpoint.
+        if phase == "verify" or (not phase and bool(report.passed)):
             runtime.memory_service.schedule_live_training_card_fsrs_after_verify(
                 workspace_id,
                 training_card_id=training_card_id,
-                passed=True,
+                passed=bool(report.passed),
             )
         persist_training_card_to_sandbox(workspace_id, training_card, mark_current=True)
         persist_training_evaluation_note_to_sandbox(

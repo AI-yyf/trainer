@@ -7559,6 +7559,7 @@ export function App() {
         commandId: trainerCommands.evaluateCurrentFile,
         payload: {
           source: "training",
+          trainingPhase: "verify",
           cardId: activeTrainingCardId,
           cardTitle: readTrainingCardText(boundTrainingCardFacts, "title", () => visibleTrainingCardTitle),
           acceptanceCriteria: boundTrainingCardFacts

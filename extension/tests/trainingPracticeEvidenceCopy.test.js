@@ -324,7 +324,7 @@ test('training practice verification sends expected symbols while flash stays lo
   assert.match(appSource, /const handleVerifyTrainingFromIde = useCallback\(\(\) => \{/);
   assert.match(
     appSource,
-    /postMessage\(\{\s*type: "command\/execute",\s*payload: \{\s*commandId: trainerCommands\.evaluateCurrentFile,\s*payload: \{\s*source: "training",\s*cardId: activeTrainingCardId,/,
+    /postMessage\(\{\s*type: "command\/execute",\s*payload: \{\s*commandId: trainerCommands\.evaluateCurrentFile,\s*payload: \{\s*source: "training",\s*trainingPhase: "verify",\s*cardId: activeTrainingCardId,/,
   );
   assert.match(appSource, /if \(trainingComposerUsesAnswerMode\) \{[\s\S]*?await requestTrainingPersistence\([\s\S]*?sendTrainingFeedback\(/);
 

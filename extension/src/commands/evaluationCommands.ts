@@ -106,7 +106,7 @@ export async function evaluatePublishedFileCommand(context: CommandContext, uri:
   const livePractice = cardId && training?.selectedCardType === 'practice'
     && !['fed_back', 'archived', 'reviewed', 'skipped'].includes(training.selectedCardStatus ?? '') && matches;
   const result = await evaluateDocument(context, document, document.getText(), '/evaluate/current-file',
-    livePractice ? { source: 'training', cardId, cardTitle: card?.title,
+    livePractice ? { source: 'training', trainingPhase: 'verify', cardId, cardTitle: card?.title,
       acceptanceCriteria: card?.acceptanceCriteria?.length ? card.acceptanceCriteria : card?.verificationSteps,
       learnerDeliverables: card?.learnerDeliverables,
       expectedSymbols: card?.expectedSymbols, filesToTouch: files } : undefined);
@@ -193,6 +193,9 @@ async function evaluateDocument(
       evaluation_source: evaluationPayload.source,
       training_card_id: evaluationPayload.cardId,
       training_card_title: evaluationPayload.cardTitle,
+      ...(evaluationPayload.trainingPhase
+        ? { training_phase: evaluationPayload.trainingPhase }
+        : {}),
       ...(evaluationPayload.acceptanceCriteria.length > 0
         ? { acceptance_criteria: evaluationPayload.acceptanceCriteria }
         : {}),
@@ -262,6 +265,7 @@ function extractEvaluationPayload(payload: unknown): {
   cardId?: string;
   cardTitle?: string;
   taskSpecId?: string;
+  trainingPhase?: string;
   acceptanceCriteria: string[];
   learnerDeliverables: string[];
   expectedSymbols: string[];
@@ -281,6 +285,10 @@ function extractEvaluationPayload(payload: unknown): {
     cardId: typeof record.cardId === 'string' ? record.cardId : undefined,
     cardTitle: typeof record.cardTitle === 'string' ? record.cardTitle : undefined,
     taskSpecId: typeof record.taskSpecId === 'string' ? record.taskSpecId : undefined,
+    trainingPhase:
+      typeof (record.trainingPhase ?? record.training_phase) === 'string'
+        ? String(record.trainingPhase ?? record.training_phase)
+        : undefined,
     acceptanceCriteria: extractStringArray(record.acceptanceCriteria ?? record.acceptance_criteria),
     learnerDeliverables: extractStringArray(record.learnerDeliverables ?? record.learner_deliverables),
     expectedSymbols: extractStringArray(record.expectedSymbols ?? record.expected_symbols),

@@ -243,6 +243,7 @@ export function useTrainingCommands(
   const onVerifyCurrentFile = useCallback((request: PracticeFileVerificationRequestInput) => {
     sendTrainingCommand(trainerCommands.evaluateCurrentFile, {
       source: "training",
+      trainingPhase: "verify",
       filesToTouch: request.filesToTouch,
       expectedSymbols: request.expectedSymbols,
       cardId: request.cardId,

@@ -3303,6 +3303,9 @@ class EvaluateCurrentFileRequest(BaseModel):
     evaluation_source: str | None = None
     training_card_id: str | None = None
     training_card_title: str | None = None
+    # Explicit phase lets a failed Verify record FSRS AGAIN; without it the
+    # legacy pass-only behavior is retained (Try and Verify share this route).
+    training_phase: TrainingLearningPhase | None = None
     acceptance_criteria: list[str] = Field(default_factory=list)
     learner_deliverables: list[str] = Field(default_factory=list)
     expected_symbols: list[str] = Field(default_factory=list)
