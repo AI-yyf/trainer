@@ -496,12 +496,14 @@ test('evaluateCurrentFileCommand prefers filesToTouch over an unrelated editor',
 
   const result = await evaluateCurrentFileCommand(context, {
     source: 'training',
+    trainingPhase: 'verify',
     cardId: 'card-practice-1',
     cardTitle: 'Refactor the async boundary',
     filesToTouch: ['src/exercise.ts'],
   });
 
   assert.equal(result.ok, true);
+  assert.equal(context.__posts[0].body.training_phase, 'verify');
   assert.equal(context.__posts[0].body.file_path, targetDocument.uri.fsPath);
   assert.equal(context.__posts[0].body.content, 'export function debounceSearch() {}\n');
   assert.notEqual(context.__posts[0].body.content, editorDocument.getText());
@@ -558,6 +560,7 @@ test('Testing file reruns read current document content and bind only the matchi
   await evaluatePublishedFileCommand(context, document.uri);
   assert.equal(context.__posts[0].body.content, document.getText());
   assert.equal(context.__posts[0].body.training_card_id, 'card-bound');
+  assert.equal(context.__posts[0].body.training_phase, 'verify');
   assert.deepEqual(context.__posts[0].body.expected_symbols, ['retry']);
   assert.equal(context.__posts[0].body.task_spec_id, undefined);
   document.uri.fsPath = 'F:/trainer/workspace-a/other/retry.py';
