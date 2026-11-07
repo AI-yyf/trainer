@@ -1245,7 +1245,7 @@ test('browser preview can move through workspace admission states without touchi
   assert.equal(selectedRoot.patch.memory.workspace.trainerWorkspace.status, 'project-found');
   assert.match(
     selectedRoot.patch.memory.workspaceUnderstanding.firstLookSummary.recommendedNextStep,
-    /Choose one: add it to Trainer/i,
+    /read the project structure/i,
   );
   const projectFound = withPatch(bootstrap, selectedRoot.patch);
 
@@ -1255,7 +1255,7 @@ test('browser preview can move through workspace admission states without touchi
     'en-US',
   );
   assert.equal(blockedProjectPlan.patch, undefined);
-  assert.match(blockedProjectPlan.message, /Choose one: add it to Trainer/i);
+  assert.match(blockedProjectPlan.message, /read the project structure/i);
 
   const adopted = module.runBrowserPreviewAction(
     command('trainer.workspace.adoptProject'),
