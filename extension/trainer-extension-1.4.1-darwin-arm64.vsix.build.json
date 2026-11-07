@@ -2,20 +2,20 @@
   "schemaVersion": 1,
   "productVersion": "1.4.1",
   "targetPlatform": "darwin-arm64",
-  "sourceCommit": "bdb8986539b31259bfb4fa2eae30e3ae090978ab",
-  "sourceDirty": true,
+  "sourceCommit": "601c09d07b015c7f30c8af7471d6c375cb0bd738",
+  "sourceDirty": false,
   "sourceSnapshot": {
     "fileCount": 212,
-    "sha256": "56463d37fb4b6e104b1356c6d5f27befb23ea8b2fb10fb8f2b6e4544ceb78c8b"
+    "sha256": "0ec867537e416c795704ac5bc0d70a4bacabe8c413fa5c8e59e7402de66a7c55"
   },
   "sidecarBuild": {
     "manifestVersion": 1,
     "platform": "darwin-arm64",
     "entryName": "trainer-sidecar",
-    "generatedAt": "2026-11-07T15:05:14.245Z",
+    "generatedAt": "2026-11-07T20:55:33.593Z",
     "sourceSnapshot": {
       "fileCount": 212,
-      "sha256": "56463d37fb4b6e104b1356c6d5f27befb23ea8b2fb10fb8f2b6e4544ceb78c8b"
+      "sha256": "0ec867537e416c795704ac5bc0d70a4bacabe8c413fa5c8e59e7402de66a7c55"
     },
     "buildEnvironment": {
       "python": "3.12.2",
@@ -126,8 +126,8 @@
   },
   "vsix": {
     "file": "trainer-extension-1.4.1-darwin-arm64.vsix",
-    "bytes": 136704471,
-    "sha256": "69d9f500d612e5c276d21ec2c247fb46e18233874f3b650c84de42abc9e62253"
+    "bytes": 136702997,
+    "sha256": "f636eb28d9cc0a8a5124b92c805554afd20fd26fd940aaba9dffab68bd206979"
   },
   "tools": {
     "node": "v26.8.2",
