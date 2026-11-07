@@ -1,30 +1,30 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`bd27145`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`a278373`，代码基线 `fd3bab5`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `bd27145`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`；本文档提交在其后，不改变代码） |
-| 本轮提交（v1.4.0..HEAD） | 26 个 |
-| 代码差异（v1.4.0..HEAD） | 100 files, +7865 / −1478 |
-| 最新 ci 工作流 | run 42331337114 **success** |
-| 最新 Cross-Platform Verify | run 42331337121 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 代码与 CI 基线 | `fd3bab5`（HEAD `a278373` 仅补预览夹具与文档；v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 34 个 |
+| 代码差异（v1.4.0..HEAD） | 126 files, +9080 / −1597 |
+| 最新 ci 工作流 | run 42353789383 **success** |
+| 最新 Cross-Platform Verify | run 42353789398 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 26 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 34 个见 `git log v1.4.0..main`）：
 
 ```
-bd27145 fix(settings): 模型选择器水合后收起 + 单句连通通知 + Settings 审计
-0af9b19 fix(resources): 单一导入主操作 + Resources 真实 VS Code 审计
-fa26203 fix(coach): 可见回复剥离过程叙事/自检句 + Learning 审计
-314432a fix(coach): 移除成功完成横幅 + Coach 审计
-6ed097b feat(analysis): 真实 LSP references（pylsp）
-59fd174 refactor(api): Phase 4 — provider payload 解析拆分
-70f8787 refactor(api): Phase 4 — coach language alignment 拆分
-c15fc19 feat(skills): 统一生命周期 (version/失败恢复/单一状态源)
+a278373 test(preview): 空格公式与裸 aligned 环境
+fd3bab5 fix(chat): 全量公式 + Markdown 字符格式
+1aa2e05 fix(ui): 移除剩余主题强调色 + 缩短工作区动作
+273c7cd test(remote): Remote-SSH L2 真窗口脚本
+85d1226 feat(ui): 中性色 + 空回复兜底 + BoardUI/Bencho 克制模式
+1448ffb fix(coach): 保留有工具证据的回复 + 反引号公式
+c23012e docs(status): 基线措辞
+da8d5a3 docs(status): 回填 bd27145 状态
 ```
 
 ## 2. 修复清单（按目标阶段）
@@ -58,7 +58,7 @@ c15fc19 feat(skills): 统一生命周期 (version/失败恢复/单一状态源)
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3886 passed / 0 failed**（28 subtests） |
+| server pytest | **3887 passed / 0 failed**（28 subtests） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
@@ -73,8 +73,8 @@ c15fc19 feat(skills): 统一生命周期 (version/失败恢复/单一状态源)
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `bd27145`） | 42331337114 | success |
-| Cross-Platform Verify（main `bd27145`，linux 构建 ubuntu-22.04） | 42331337121 | **success（9/9）** |
+| ci（main `fd3bab5`） | 42353789383 | success |
+| Cross-Platform Verify（main `fd3bab5`，linux 构建 ubuntu-22.04） | 42353789398 | **success（9/9）** |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
 ## 5. 跨平台安装证据
@@ -89,6 +89,12 @@ c15fc19 feat(skills): 统一生命周期 (version/失败恢复/单一状态源)
 - **11 步真实模型旅程**（`docs/maturity/p4-journey-2026-11-06/`）：理解轮 3154 字并引用真实锚点 `¶chunk:0@1`；sidecar 重启会话还原；切工作区零泄漏；M3.1-Flash↔M2.7 热切换；记忆摘要。
 - **真实 Provider 回归**（`docs/maturity/2026-11-06-p4-real-provider.md`）：连通、完整教学轮、长讲义（2068 字完整落库）、工具成功 grounding、新会话首条 = **5 PASS + 1 NOT_EXECUTED**（空响应无法在健康网关强制；脚本化测试覆盖）。
 - **RethinkFun 教学法真实模型**（MainMiniMax-M3）：4635 字状态流讲稿（旧方案失败先行、缺口推进、零空话）；`/skill/list` 证据 `applied=true, basis=contract_markers, markers=[缺口,失败,旧方案,为什么,状态], cited=false`。
+- **回复格式矩阵**（`docs/verification/2026-11-07-message-format-matrix.md`）：
+  行内/块级/`\(...\)`/`\[...\]`/反引号公式/```math/表格内公式/裸 aligned/转义美元/非法公式
+  均有确定路径；粗体、斜体、删除线、行内代码、链接、单换行、标题、引用、列表、任务、分隔线、
+  脚注、表格、Mermaid 同条回复共存（`formats-dark.png`）。
+- **单色与 1 秒门禁**：`--accent`/`--link`/焦点环/状态色全部中性；`verify:local-latency`
+  实测五条本地动作 34–384ms。
 - **四屏真实 VS Code 审计**（真实 Electron + v1.4.1 VSIX + 真实 MiniMax）：
   Coach（完成横幅移除）、Learning（过程叙事/自检句过滤）、Resources（单一导入主操作）、
   Settings（模型选择器水合后收起、单句连通通知）；每屏均以真实截图 + 结构断言取证，
