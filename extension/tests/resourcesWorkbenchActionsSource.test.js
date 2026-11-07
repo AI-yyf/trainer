@@ -101,8 +101,12 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
   assert.match(viewSource, /function buildResourceTree\(/);
   assert.match(viewSource, /sandboxState\?\.nodes/);
-  assert.match(viewSource, /function isRelativeFilePath\(/);
-  assert.match(viewSource, /function trimHiddenCollectionRoots\(/);
+  const libraryPathsSource = fs.readFileSync(
+    path.join(__dirname, '..', 'webview', 'src', 'components', 'resources', 'libraryPaths.ts'),
+    'utf8',
+  );
+  assert.match(libraryPathsSource, /export function isRelativeFilePath\(/);
+  assert.match(libraryPathsSource, /export function trimHiddenCollectionRoots\(/);
   assert.match(viewSource, /function filterResourceTree\(/);
   assert.match(viewSource, /function findResourceAncestorCollectionIds\(/);
   assert.match(viewSource, /const visibleResourceTree = useMemo/);

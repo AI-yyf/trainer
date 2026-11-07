@@ -33,11 +33,15 @@ const stylesPath = path.resolve(__dirname, '..', 'webview', 'src', 'styles.css')
 
 test('Resources prioritizes case-preserving logical collection paths', () => {
   const source = fs.readFileSync(resourcesSourcePath, 'utf8');
+  const librarySource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'resources', 'libraryPaths.ts'),
+    'utf8',
+  );
 
-  assert.match(source, /function collectionPathSegments\([\s\S]*?collectionRoot: string \| undefined/);
-  assert.match(source, /const logicalCollectionSegments = collectionPathSegments\([\s\S]*?resource\.collectionPath,[\s\S]*?resource\.collectionRoot/);
-  assert.match(source, /!String\(collectionRoot \?\? ""\)\.trim\(\)/);
-  assert.match(source, /return logicalCollectionSegments\.slice\(0, -1\);/);
+  assert.match(librarySource, /export function collectionPathSegments\([\s\S]*?collectionRoot: string \| undefined/);
+  assert.match(librarySource, /const logicalCollectionSegments = collectionPathSegments\([\s\S]*?resource\.collectionPath,[\s\S]*?resource\.collectionRoot/);
+  assert.match(librarySource, /!String\(collectionRoot \?\? ""\)\.trim\(\)/);
+  assert.match(librarySource, /return logicalCollectionSegments\.slice\(0, -1\);/);
   assert.match(source, /idSegments\.push\(encodeURIComponent\(collectionSegment\)\);/);
   assert.doesNotMatch(source, /idSegments\.push\(normalizedSegment\)/);
 });

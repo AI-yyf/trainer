@@ -36,8 +36,12 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
   assert.match(source, /const selectedResourceFreshness = selectedResource\?\.freshness/);
   assert.match(source, /function resourceIndexNotice\(/);
   assert.match(source, /resource\.indexState/);
-  assert.match(source, /function toSandboxNodePaths\(/);
-  assert.match(source, /function resourceTreeSegments\(/);
+  const librarySource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'resources', 'libraryPaths.ts'),
+    'utf8',
+  );
+  assert.match(librarySource, /export function toSandboxNodePaths\(/);
+  assert.match(librarySource, /export function resourceTreeSegments\(/);
   assert.match(source, /function buildResourceTree\(/);
   assert.match(source, /const resourceTree = useMemo/);
   assert.match(source, /role="tree"/);
@@ -52,6 +56,10 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
 
 test('the sandbox copy keeps the project-workspace boundary explicit', () => {
   const source = fs.readFileSync(resourcesPath, 'utf8');
+  const librarySource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'resources', 'libraryPaths.ts'),
+    'utf8',
+  );
   // §十五: the sandboxBoundary copy key moved verbatim into the i18n segment
   // file; the copy assertion slices there, the sandbox-structure assertions
   // keep reading the view.
@@ -61,7 +69,7 @@ test('the sandbox copy keeps the project-workspace boundary explicit', () => {
   assert.match(source, /sandboxRootPath \?\? sandboxState\?\.rootPath/);
   assert.match(source, /linkedResourceCount/);
   assert.match(source, /totalFiles/);
-  assert.match(source, /nodeKind === "directory"/);
+  assert.match(librarySource, /nodeKind === "directory"/);
   assert.doesNotMatch(source, /onOpenSandboxNode/);
   assert.doesNotMatch(source, /managedRoots/);
 });
