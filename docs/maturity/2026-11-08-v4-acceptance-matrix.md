@@ -67,6 +67,7 @@
 | P1 | App/Provider/Memory 巨型模块拆分 | 先锁定行为测试，再按单一职责迁移 |
 | P2 | SCIP 索引解析 | ✅ JSON + 二进制 protobuf（`.scip`）解析；`test_scip_adapter` 6 项行为测试 |
 | P2 | 按需多模态（扫描 PDF/图表） | 🟡 扫描 PDF / 图片本地 Tesseract OCR 已接入（`app/resources/ocr.py`）；图表理解仍依赖 provider vision，未做真实 P 证据 |
+| P0 | 三平台 VSIX / 安装矩阵 | ✅ 三平台 package + installed host E2E 9/9；`v4-release-matrix-2026-11-08.md` |
 
 ## 4. 已有真实证据索引
 
@@ -77,6 +78,7 @@
 - 完整性旅程：`docs/verification/v4-integrity-journeys.md`（真实 sidecar；版本冲突 409、记忆撤销、provider 故障不伪造）。
 - 性能门禁：`docs/verification/v4-perf-probe-2026-11-08.json`（streaming longtask 0 ≤ 0；warm nav p90 63ms < 100ms）。
 - Remote-SSH 重连：`docs/verification/v4-remote-ssh-reconnect-2026-11-08.md`（CI Layer 1，11/11 steps，含 reconnect）。
+- 三平台发布矩阵：`docs/verification/v4-release-matrix-2026-11-08.md`（commit 485e25e，9/9 jobs；三平台 VSIX + installed host E2E）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。
 - 行为测试：server 3930 passed（含 FSRS/Goal/Evidence/Skill workspace）；extension suite 0 失败；Settings e2e 8 passed。
 - 长期时间/持久化：`test_live_training_fsrs_on_verify.py`、`test_review_scheduler_fsrs.py`、session/plan revision 回归。
