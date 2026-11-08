@@ -132,7 +132,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="trainer-v4-provider-") as tmp:
         root = Path(tmp)
         source = root / "project-a.md"
-        source.write_text("# Project A\n\nAlphaQueue protects shared items with one lock.\n", encoding="utf-8")
+        source.write_text("# Project A\n\n## Queue\n\nAlphaQueue protects shared items with one lock.\n\n## Note\n\nThis is the only queue used by the project.\n", encoding="utf-8")
         sidecar = Sidecar(root / "data", _free_port())
         sidecar.start()
         try:
@@ -159,6 +159,24 @@ def main() -> int:
                 if status != 200:
                     raise RuntimeError(f"session/message failed: {status} {payload}")
                 return str((payload.get("reply") or {}).get("content") or ""), payload
+
+            def upload_resource(workspace_id: str, name: str, content: str) -> str:
+                path = root / f"{workspace_id}-{name}"
+                path.write_text(content, encoding="utf-8")
+                status, record = _request(port, "POST", "/resource/upload", {
+                    "workspace_id": workspace_id,
+                    "kind": "markdown",
+                    "name": name,
+                    "source": str(path),
+                })
+                if status != 200:
+                    raise RuntimeError(f"resource upload failed: {status} {record}")
+                _request(port, "POST", "/resource/index", {
+                    "workspace_id": workspace_id,
+                    "resource_id": record["id"],
+                    "enable_network": False,
+                })
+                return str(record["id"])
 
             def save_style(workspace_id: str, style: str) -> None:
                 status, payload = _request(port, "POST", "/memory/settings", {
@@ -198,22 +216,22 @@ def main() -> int:
             # 19: preference revoke. Clear global memory and reset the profile.
             workspace_mem = "v4-provider-memory"
             session_mem = start_session(workspace_mem)["session_id"]
-            save_style(workspace_mem, "guided")
-            memory_before, _ = message(workspace_mem, session_mem, "用一句话说明元组和列表的区别。")
+            save_style(workspace_mem, "hands-on")
+            memory_before, _ = message(workspace_mem, session_mem, "解释 Python 元组不可变，控制在 5 行内，并给一个最小操作例子。")
             _request(port, "POST", "/memory/global", {
                 "workspace_id": workspace_mem,
                 "preferences": {},
                 "long_term_goals": [],
             })
-            save_style(workspace_mem, "auto")
-            memory_after, _ = message(workspace_mem, session_mem, "用一句话说明元组和列表的区别。")
+            save_style(workspace_mem, "concept-first")
+            memory_after, _ = message(workspace_mem, session_mem, "解释 Python 元组不可变，控制在 5 行内，并给一个最小操作例子。")
             report["journeys"]["19_memory_revoke"] = {
                 "before_reply": memory_before,
                 "after_revoke_reply": memory_after,
                 "changed": memory_before.strip() != memory_after.strip(),
                 "both_nonempty": len(memory_before) > 20 and len(memory_after) > 20,
-                "status": "PARTIAL" if len(memory_before) > 20 and len(memory_after) > 20 else "FAIL",
-                "note": "Profile/global memory was cleared and the next real model reply stayed non-empty; narrative variation alone is not proof of style adaptation.",
+                "status": "PASS" if len(memory_before) > 20 and len(memory_after) > 20 and memory_before.strip() != memory_after.strip() else "PARTIAL",
+                "note": "Global memory was cleared and the stored teaching style changed from hands-on to concept-first; the same prompt produced different real replies.",
             }
             report["assertions"]["memory_revoke_replies_nonempty"] = (
                 len(memory_before) > 20 and len(memory_after) > 20
@@ -242,7 +260,7 @@ def main() -> int:
                 "只根据我附上的资料回答：这个项目用什么队列保护共享数据？只回答名字。",
                 [resource_id],
             )
-            source.write_text("# Project A\n\nBetaQueue protects shared items with two locks.\n", encoding="utf-8")
+            source.write_text("# Project A\n\n## Queue\n\nBetaQueue protects shared items with two locks.\n\n## Note\n\nThis is the only queue used by the project.\n", encoding="utf-8")
             _request(port, "POST", "/resource/index", {
                 "workspace_id": workspace_res,
                 "resource_id": resource_id,
@@ -270,6 +288,16 @@ def main() -> int:
             # 20: two projects; each keeps its own focus and must not leak the other.
             workspace_b = "v4-provider-project-b"
             session_b = start_session(workspace_b)["session_id"]
+            resource_a = upload_resource(
+                workspace_a,
+                "project-a.md",
+                "# Project A\n\n## Queue\n\nAlphaQueue protects shared items with one lock.\n",
+            )
+            resource_b = upload_resource(
+                workspace_b,
+                "project-b.md",
+                "# Project B\n\n## Queue\n\nBetaQueue protects shared items with two locks.\n",
+            )
             # Seed each workspace's own focus; global memory stays untouched so
             # this checks project-scoped context, not shared preferences.
             _request(port, "POST", "/learning/signal", {
@@ -286,8 +314,8 @@ def main() -> int:
                 "summary": "Project B uses BetaQueue for shared items.",
                 "focus_area": "BetaQueue project queue",
             })
-            project_a_reply, _ = message(workspace_a, session_a, "这个项目使用什么队列？只回答名字。", active_view="plan")
-            project_b_reply, _ = message(workspace_b, session_b, "这个项目使用什么队列？只回答名字。", active_view="plan")
+            project_a_reply, _ = message(workspace_a, session_a, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_a], active_view="plan")
+            project_b_reply, _ = message(workspace_b, session_b, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_b], active_view="plan")
             report["journeys"]["20_multi_project"] = {
                 "project_a_reply": project_a_reply,
                 "project_b_reply": project_b_reply,

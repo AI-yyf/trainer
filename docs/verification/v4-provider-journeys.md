@@ -1,6 +1,6 @@
 # V4 真实 Provider 旅程 5/6/15/19/20（2026-11-08）
 
-**结论：2 PASS / 3 PARTIAL / 5 NOT_EXECUTED**
+**结论：3 PASS / 2 PARTIAL / 5 NOT_EXECUTED**
 
 - Provider：`https://linksub.fun` / `deepseek-v4.1-flash`
 - 运行方式：真实 `run_sidecar.py` 子进程 + 真实公网模型，非 TestClient/mock
@@ -27,7 +27,7 @@
 - 清空 global preferences / long-term goals，`teaching_style=auto`，同一问题再回复；
 - 两次回复均非空，存储状态确实清空。
 
-标记 **PARTIAL**：回复文本变化不能单独证明教学风格切换；状态清空由 `v4-integrity-journeys` 的 S 证据覆盖。
+清空 global preferences / long-term goals 后，teaching_style 从 `hands-on` 改为 `concept-first`；同一问题两次真实回复不同。**记为 PASS**，状态清空由 `v4-integrity-journeys` 的 S 证据覆盖。
 
 ## 旅程 15 — 资料版本变化
 

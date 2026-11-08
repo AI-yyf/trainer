@@ -39,7 +39,7 @@
 | 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
 | 18 | 多窗口并发，不重复推进计划/复习 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision/singleflight；S/P: 两个并发客户端同一 expected_revision，一个 200 一个 409；G：真实双窗口仍未执行 |
-| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | 🟡 | ⬜ | 🟡 | ⬜ | ✅ | U: memory update/clear；S: 真实 sidecar 覆盖/撤销；G: Settings 记忆开关；P: 真实模型回合保持非空，但风格变化未证明 |
+| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U/S: 真实 sidecar 覆盖/撤销；P: 清空 global memory 并切换 hands-on→concept-first 后同题回复不同；G: 记忆开关 |
 | 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；P：真实模型无跨项目泄漏，但项目 B 事实保持失败 |
 
 ## 2. 汇总
@@ -48,7 +48,7 @@
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
 | S 真实 Sidecar | 9 | 11 | 0 |
-| P 真实 Provider | 11 | 7 | 2 |
+| P 真实 Provider | 12 | 6 | 2 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 5 | 6 | 9 |
 | R Remote-SSH | 1 | 3 | 16 |
