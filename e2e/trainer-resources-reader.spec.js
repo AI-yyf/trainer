@@ -24,18 +24,23 @@ test('the reading library opens one file directly and removes management panels'
   await expect(page.locator('.resources-knowledge')).toBeVisible();
   expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === 'command/execute' && action.payload.commandId === 'trainer.resource.refreshTrash'))).toEqual([]);
-  await page.getByRole("group", { name: "已导入", exact: true }).locator(".collapse-section__header").first().click();
+  await page.getByRole("group", { name: "导入的资料", exact: true }).locator(".collapse-section__header").first().click();
   await expect(page.locator('[data-template=Library] [role="treeitem"]')).toHaveCount(2);
   await expect(page.locator('[data-template=ResourceReader]')).toHaveCount(0);
   await expect(page.locator('.resources-knowledge__trash')).not.toHaveAttribute('open', '');
   await expect(page.getByText('HIDDEN_MANAGEMENT_SUMMARY', { exact: true }).filter({ visible: true })).toHaveCount(0);
   const note = page.getByRole('treeitem', { name: '边界验证.md', exact: true });
-  // Enter opens the reader now (VS Code opens moved to the reader's Open
-  // action; a raw row double-click cannot fire because the first click already
-  // opens the reader and hides the tree).
+  // Enter opens the file through the host; Space selects the row for its
+  // metadata and open actions. Neither path renders resource content.
   await note.focus(); await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
+    .filter(action => action.type === 'resource/open')
+    .map(action => action.payload?.resourceId))).toContain('reader-note');
+  await note.press(' ');
   const reader = page.locator('[data-template=ResourceReader]');
   await expect(reader).toBeVisible();
+  await expect(reader.locator('.resources-knowledge__content-preview')).toHaveCount(0);
+  await expect(reader.locator("[data-reader-open='editor']")).toBeVisible();
   await reader.locator('.template-activity-header > button').click();
   await expect(page.getByRole('treeitem', { name: '边界验证.md', exact: true })).toBeVisible();
   await expect(page.locator('.resources-knowledge')).toBeVisible();
@@ -74,7 +79,7 @@ test('nested folders stay distinct, support keyboard navigation and open their f
       { id: 'loose-note', title: '随手笔记.md', kind: 'markdown', status: 'ready', summary: '', source: '/tmp/loose.md' },
     ], conversation: [], sessionHistoryRestored: true,
   });
-  const looseFolder = page.getByRole('group', { name: '参考资料 / Tmp', exact: true });
+  const looseFolder = page.getByRole('group', { name: 'Tmp', exact: true });
   await looseFolder.locator('.collapse-section__header').first().click();
   await expect(page.getByRole('treeitem', { name: '随手笔记.md', exact: true })).toBeVisible();
   const python = page.getByRole('group', { name: 'Python', exact: true });
@@ -89,12 +94,16 @@ test('nested folders stay distinct, support keyboard navigation and open their f
   await expect(folderButton).toHaveAttribute('aria-expanded', 'true');
   const file = page.getByRole('treeitem', { name: '边界验证.md', exact: true });
   await expect(file).toBeVisible();
-  // Enter opens the reader now (VS Code opens moved to the reader's Open
-  // action; a raw row double-click cannot fire because the first click already
-  // opens the reader and hides the tree).
+  // Enter opens the file through the host; Space selects the row for its
+  // metadata and open actions. Neither path renders resource content.
   await file.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
+    .filter(action => action.type === 'resource/open')
+    .map(action => action.payload?.resourceId))).toContain('nested-note');
+  await file.press(' ');
   const reader = page.locator('[data-template=ResourceReader]');
   await expect(reader).toBeVisible();
+  await expect(reader.locator('.resources-knowledge__content-preview')).toHaveCount(0);
   await reader.locator('.template-activity-header > button').click();
   await expect(page.getByRole('treeitem', { name: '边界验证.md', exact: true })).toBeVisible();
   for (const width of [300, 360, 800]) {

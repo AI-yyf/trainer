@@ -106,10 +106,10 @@ test('bindings do not invent plan or training links', () => {
     resourceStatus: 'ready',
     trustState: 'trusted',
     freshness: 'fresh',
-    hasPreview: true,
+    canOpenResource: true,
     language: 'en-US',
   });
-  assert.equal(orientation.primaryAction, 'preview_resource');
+  assert.equal(orientation.primaryAction, 'open_resource');
   assert.notEqual(orientation.primaryAction, 'open_training');
   assert.notEqual(orientation.primaryAction, 'open_plan');
   assert.doesNotMatch(orientation.why, /Bound to/);

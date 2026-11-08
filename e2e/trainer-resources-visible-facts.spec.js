@@ -35,7 +35,6 @@ async function restoreSandboxReader(page, mode) {
       previewPath,
     } }, location.origin);
   }, { bootstrap, mode, previewPath, previewBody });
-  await expect(page.locator('[data-template=ResourceReader]')).toBeVisible();
   await expect.poll(() => latestFacts(page).then(facts => facts?.activeSurface)).toBe('sandbox');
 }
 
@@ -45,34 +44,27 @@ function latestFacts(page) {
     .at(-1)?.payload.resources);
 }
 
-for (const mode of ['missing', 'wrong-path']) {
-  test(`sandbox restore intent with ${mode} preview reports the actual reader only`, async ({ page }) => {
+for (const mode of ['missing', 'wrong-path', 'embedded', 'standalone']) {
+  test(`sandbox restore intent with ${mode} preview never renders resource content`, async ({ page }) => {
     await restoreSandboxReader(page, mode);
     const reader = page.locator('[data-template=ResourceReader]');
-    await expect(reader).not.toContainText(previewBody);
+    await expect(page.locator('.resources-knowledge__content-preview')).toHaveCount(0);
+    await expect(page.locator('[data-template=ResourceReader] iframe')).toHaveCount(0);
+    await expect(page.locator('text=' + previewBody)).toHaveCount(0);
+
     const facts = await latestFacts(page);
     expect(facts.activeSurface).toBe('sandbox'); // Logical restore scope remains supported.
-    expect(facts.detailPaneVisible).toBe(true);
-    expect(facts.sandboxPreviewVisible).toBe(false);
-    expect(facts.sandboxPreviewEmbedded).toBe(false);
+    expect(facts.sandboxPaneVisible).toBe(false);
+    expect(facts.previewPaneVisible).toBe(false);
+    expect(facts.sandboxPreviewVisible).toBeUndefined();
+    expect(facts.sandboxPreviewEmbedded).toBeUndefined();
     expect(facts.sandboxPreviewPath).toBeUndefined();
-    expect(facts.sandboxPaneVisible).toBe(false);
-    expect(facts.previewPaneVisible).toBe(false);
-  });
-}
-
-for (const mode of ['embedded', 'standalone']) {
-  test(`matched ${mode} preview binds reported path to visible reader content`, async ({ page }) => {
-    await restoreSandboxReader(page, mode);
-    await expect(page.locator('[data-template=ResourceReader]')).toContainText(previewBody);
-    const facts = await latestFacts(page);
-    expect(facts.activeSurface).toBe('sandbox');
-    expect(facts.detailPaneVisible).toBe(true);
-    expect(facts.sandboxPreviewVisible).toBe(true);
-    expect(facts.sandboxPreviewEmbedded).toBe(true);
-    expect(facts.sandboxPreviewPath).toBe(previewPath);
-    expect(facts.sandboxPaneVisible).toBe(false);
-    expect(facts.previewPaneVisible).toBe(false);
-    expect(facts.resourceDetailVisible).toBe(mode === 'embedded');
+    if (mode === 'standalone') {
+      await expect(reader).toHaveCount(0);
+      await expect(page.locator('.resources-inline-context')).toBeVisible();
+    } else {
+      await expect(reader).toBeVisible();
+      await expect(reader.getByRole('button', { name: 'Open in VS Code', exact: true })).toBeVisible();
+    }
   });
 }

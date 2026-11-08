@@ -1808,17 +1808,6 @@ export interface ConnectionStatus {
   provider: ProviderSummary;
 }
 
-export interface ResourceDocumentView {
-  resourceId: string;
-  title?: string;
-  path: string;
-  relativePath?: string;
-  content: string;
-  previewKind: "markdown";
-  pageCount?: number | null;
-  slideCount?: number | null;
-  anchors?: Array<Record<string, unknown>>;
-}
 
 export interface BootstrapData {
   /** Host generation changes when the runtime database is replaced or switched. */
@@ -1826,8 +1815,6 @@ export interface BootstrapData {
   /** History confirmed for the current workspace by a server session snapshot. */
   sessionHistoryRestored?: boolean;
   liveResourceFocus?: boolean;
-  /** Canonical Markdown document the learner is reading (host-owned). */
-  resourceDocument?: ResourceDocumentView | null;
   /**
    * Opt-in anonymous telemetry consent as answered by the sidecar; undefined
    * means "not asked yet", the server default is off (fail-closed display).
@@ -2108,9 +2095,6 @@ export interface DebugVisibleResourcesFacts {
   resourceDetailId?: string;
   resourceDetailTitle?: string;
   selectedResourceId?: string;
-  sandboxPreviewEmbedded?: boolean;
-  sandboxPreviewVisible?: boolean;
-  sandboxPreviewPath?: string;
   selectedSandboxPath?: string;
   previewPath?: string;
   capabilityHeadline?: string;

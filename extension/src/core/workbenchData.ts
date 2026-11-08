@@ -659,7 +659,6 @@ export function mergeSessionMessage(
     (!workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) && current.sessionHistoryRestored === true);
   patch.sessionHistoryRestored = preserveHistory;
   patch.liveResourceFocus = current.liveResourceFocus === true;
-  patch.resourceDocument = current.resourceDocument;
   return { sessionId, patch: applyLeftoverBoundPlanFiveViewOmit(current,
     applyLeftoverNotLiveTaskGuideFocus(patch, preserveHistory)) };
 }
@@ -1178,7 +1177,6 @@ export function mergeMemorySummary(
   // A live library focus survives snapshot refreshes; it is content the
   // learner opened, not plan chrome.
   mapped.liveResourceFocus = current.liveResourceFocus === true;
-  mapped.resourceDocument = current.resourceDocument;
   return applyLeftoverBoundPlanFiveViewOmit(current,
     applyLeftoverNotLiveTaskGuideFocus(mapped, preserveHistory));
 }

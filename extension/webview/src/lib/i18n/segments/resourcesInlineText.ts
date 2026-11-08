@@ -104,7 +104,6 @@ export type ResourceTextKey =
   | "emptyBody"
   | "noMatches"
   | "searching"
-  | "searchPreview"
   | "searchFailed"
   | "searchIncomplete"
   | "readOnlyNotice"
@@ -116,7 +115,6 @@ export type ResourceTextKey =
   | "openInVsCode"
   | "openOriginal"
   | "openWithDefaultApp"
-  | "previewResource"
   | "emptyOpenHint"
   | "openInBrowser"
   | "openUnavailable"
@@ -241,7 +239,6 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   emptyBody: { zh: "\u5bfc\u5165\u6587\u4ef6\u3001\u6587\u4ef6\u5939\u6216\u7f51\u9875\u5feb\u7167\uff0c\u5b83\u4eec\u4f1a\u51fa\u73b0\u5728\u8fd9\u91cc\u4f9b\u641c\u7d22\u548c\u590d\u7528\u3002", en: "Add a file, folder, or webpage snapshot to make it available for search and reuse." },
   noMatches: { zh: "\u6ca1\u6709\u5339\u914d\u7684\u8d44\u6599", en: "No matching resources" },
   searching: { zh: "\u6b63\u5728\u641c\u7d22\u8d44\u6599...", en: "Searching resources..." },
-  searchPreview: { zh: "\u4ec5\u5728\u5f53\u524d\u9884\u89c8\u4e2d\u7b5b\u9009\u3002", en: "Filtering preview resources only." },
   searchFailed: { zh: "\u6682\u65f6\u65e0\u6cd5\u641c\u7d22\u8d44\u6599\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002", en: "Couldn't search resources. Try again." },
   searchIncomplete: { zh: "\u641c\u7d22\u6ca1\u6709\u5b8c\u6210\u3002", en: "Search did not complete." },
   readOnlyNotice: { zh: "\u5f53\u524d\u9879\u76ee\u4e3a\u53ea\u8bfb\u72b6\u6001\uff1a\u53ef\u641c\u7d22\u548c\u6253\u5f00\u8d44\u6599\u3002", en: "This project is read-only. You can search and open resources." },
@@ -259,7 +256,6 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   openInVsCode: { zh: "\u5728 VS Code \u4e2d\u6253\u5f00", en: "Open in VS Code" },
   openOriginal: { zh: "\u6253\u5f00\u539f\u59cb\u6587\u4ef6", en: "Open original file" },
   openWithDefaultApp: { zh: "\u7528\u9ed8\u8ba4\u5e94\u7528\u6253\u5f00", en: "Open with default app" },
-  previewResource: { zh: "\u9884\u89c8\u8d44\u6599", en: "Preview resource" },
   emptyOpenHint: { zh: "\u9009\u4e2d\u8d44\u6599\u540e\u4f1a\u76f4\u63a5\u5728 VS Code \u4e2d\u6253\u5f00\u3002", en: "Select a resource to open it directly in VS Code." },
   openInBrowser: { zh: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00", en: "Open in browser" },
   openUnavailable: { zh: "\u6ca1\u6709\u53ef\u6253\u5f00\u7684\u6765\u6e90", en: "No openable source" },
@@ -421,7 +417,6 @@ export const resourceTextLocaleOverrides: Record<
     emptyBody: "Agrega un archivo, carpeta o instantanea web para buscar y reutilizar.",
     noMatches: "No hay recursos coincidentes",
     searching: "Buscando recursos...",
-    searchPreview: "Solo se filtran recursos de la vista previa.",
     searchFailed: "No se pudieron buscar los recursos. Int\u00e9ntalo de nuevo.",
     searchIncomplete: "La busqueda no se completo.",
     readOnlyNotice: "Este proyecto es de solo lectura. Puedes buscar y abrir recursos.",
@@ -439,7 +434,6 @@ export const resourceTextLocaleOverrides: Record<
     openInVsCode: "Abrir en VS Code",
     openOriginal: "Abrir archivo original",
     openWithDefaultApp: "Abrir con la app predeterminada",
-    previewResource: "Vista previa del recurso",
     emptyOpenHint: "Selecciona un recurso para abrirlo directamente en VS Code.",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponible",
@@ -553,7 +547,6 @@ export const resourceTextLocaleOverrides: Record<
     emptyBody: "Ajoutez un fichier, dossier ou une capture web pour rechercher et reutiliser.",
     noMatches: "Aucune ressource correspondante",
     searching: "Recherche des ressources...",
-    searchPreview: "Filtrage des ressources de l'apercu uniquement.",
     searchFailed: "Impossible de rechercher les ressources. R\u00e9essayez.",
     searchIncomplete: "La recherche n'a pas abouti.",
     readOnlyNotice: "Ce projet est en lecture seule. Vous pouvez rechercher et ouvrir des ressources.",
@@ -571,7 +564,6 @@ export const resourceTextLocaleOverrides: Record<
     openInVsCode: "Ouvrir dans VS Code",
     openOriginal: "Ouvrir le fichier original",
     openWithDefaultApp: "Ouvrir avec l'application par défaut",
-    previewResource: "Aperçu de la ressource",
     emptyOpenHint: "Sélectionnez une ressource pour l'ouvrir directement dans VS Code.",
     sandboxTitle: "Sandbox protege",
     sandboxReady: "Sandbox disponible",
@@ -685,7 +677,6 @@ export const resourceTextLocaleOverrides: Record<
     emptyBody: "Datei, Ordner oder Web-Schnappschuss hinzufuegen, um sie zu suchen und wiederzuverwenden.",
     noMatches: "Keine passenden Materialien",
     searching: "Materialien werden gesucht...",
-    searchPreview: "Nur Vorschau-Materialien werden gefiltert.",
     searchFailed: "Materialien konnten nicht gesucht werden. Versuchen Sie es erneut.",
     searchIncomplete: "Die Suche wurde nicht abgeschlossen.",
     readOnlyNotice: "Dieses Projekt ist schreibgeschuetzt. Sie koennen Materialien suchen und oeffnen.",
@@ -703,7 +694,6 @@ export const resourceTextLocaleOverrides: Record<
     openInVsCode: "In VS Code oeffnen",
     openOriginal: "Originaldatei oeffnen",
     openWithDefaultApp: "Mit Standard-App oeffnen",
-    previewResource: "Materialvorschau",
     emptyOpenHint: "Wähle ein Material aus, um es direkt in VS Code zu öffnen.",
     sandboxTitle: "Geschuetzte Sandbox",
     sandboxReady: "Sandbox verfuegbar",
@@ -817,7 +807,6 @@ export const resourceTextLocaleOverrides: Record<
     emptyBody: "ファイル、フォルダー、または Web スナップショットを追加すると、検索と再利用に使えます。",
     noMatches: "一致する資料はありません",
     searching: "資料を検索中...",
-    searchPreview: "プレビュー内の資料のみ絞り込みます。",
     searchFailed: "\u8cc7\u6599\u3092\u691c\u7d22\u3067\u304d\u307e\u305b\u3093\u3002\u3082\u3046\u4e00\u5ea6\u8a66\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     searchIncomplete: "検索が完了しませんでした。",
     readOnlyNotice: "このプロジェクトは読み取り専用です。資料の検索と閲覧はできます。",
@@ -835,7 +824,6 @@ export const resourceTextLocaleOverrides: Record<
     openInVsCode: "VS Code で開く",
     openOriginal: "元のファイルを開く",
     openWithDefaultApp: "既定のアプリで開く",
-    previewResource: "資料をプレビュー",
     emptyOpenHint: "資料を選ぶと VS Code で直接開きます。",
     sandboxTitle: "保護されたサンドボックス",
     sandboxReady: "サンドボックスを利用できます",
@@ -949,7 +937,6 @@ export const resourceTextLocaleOverrides: Record<
     emptyBody: "파일, 폴더 또는 웹 스냅샷을 추가하면 검색하고 재사용할 수 있습니다.",
     noMatches: "일치하는 자료가 없습니다",
     searching: "자료를 검색 중...",
-    searchPreview: "미리 보기의 자료만 필터링합니다.",
     searchFailed: "\uc790\ub8cc\ub97c \uac80\uc0c9\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4. \ub2e4\uc2dc \uc2dc\ub3c4\ud558\uc138\uc694.",
     searchIncomplete: "검색을 완료하지 못했습니다.",
     readOnlyNotice: "이 프로젝트는 읽기 전용입니다. 자료를 검색하고 열 수 있습니다.",
@@ -967,7 +954,6 @@ export const resourceTextLocaleOverrides: Record<
     openInVsCode: "VS Code에서 열기",
     openOriginal: "원본 파일 열기",
     openWithDefaultApp: "기본 앱으로 열기",
-    previewResource: "자료 미리보기",
     emptyOpenHint: "자료를 선택하면 VS Code에서 바로 열립니다.",
     sandboxTitle: "보호된 샌드박스",
     sandboxReady: "샌드박스를 사용할 수 있습니다",
@@ -1081,7 +1067,6 @@ export const resourceTextLocaleOverrides: Record<
     emptyBody: "Adicione um arquivo, pasta ou captura da web para pesquisar e reutilizar.",
     noMatches: "Nenhum recurso correspondente",
     searching: "Pesquisando recursos...",
-    searchPreview: "Filtrando somente os recursos da visualizacao.",
     searchFailed: "N\u00e3o foi poss\u00edvel pesquisar os recursos. Tente novamente.",
     searchIncomplete: "A pesquisa nao foi concluida.",
     readOnlyNotice: "Este projeto esta somente para leitura. Voce pode pesquisar e abrir recursos.",
@@ -1099,7 +1084,6 @@ export const resourceTextLocaleOverrides: Record<
     openInVsCode: "Abrir no VS Code",
     openOriginal: "Abrir arquivo original",
     openWithDefaultApp: "Abrir com o app padrão",
-    previewResource: "Prévia do recurso",
     emptyOpenHint: "Selecione um recurso para abri-lo diretamente no VS Code.",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponivel",

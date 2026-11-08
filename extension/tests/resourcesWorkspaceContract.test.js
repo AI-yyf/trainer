@@ -178,13 +178,14 @@ test('Resources restores one requested surface and keeps it through ordinary vie
   assert.match(viewSource, /const path = restoreContext.previewPath \?\? restoreContext.sandboxPath/);
   assert.match(viewSource, /resources.find\(\(item\) => item.sandboxPath === path\)/);
   assert.match(viewSource, /setSelectedResourceId\(resource\?\.id \?\? null\)/);
-  assert.match(viewSource, /standaloneSandboxPreview/);
+  assert.doesNotMatch(viewSource, /standaloneSandboxPreview/);
   assert.match(viewSource, /onDebugVisibleFacts\?: \(facts: DebugVisibleResourcesFacts\) => void;/);
   assert.match(viewSource, /activeSurface,/);
   assert.match(viewSource, /resourceDetailVisible: Boolean\(selectedResource\)/);
   assert.match(viewSource, /singleWorkbenchSurface: true,/);
   assert.match(viewSource, /sandboxPaneVisible: false,/);
-  assert.match(viewSource, /sandboxPreviewPath: \(sandboxPreview \?\? standaloneSandboxPreview\)\?\.path,/);
+  assert.doesNotMatch(viewSource, /sandboxPreviewPath:/);
+  assert.doesNotMatch(viewSource, /sandboxPreview/);
   assert.match(stateSource, /resourceSurface === "detail"/);
   assert.match(stateSource, /resourceId: payload\.resourceDetailId \?\? payload\.resourceId,/);
   assert.match(stateSource, /setResourceRestoreContext: \(context\?: ResourceRestoreContext\) => void;/);

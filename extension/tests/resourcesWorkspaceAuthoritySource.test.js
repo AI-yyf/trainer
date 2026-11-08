@@ -25,7 +25,7 @@ const resourcesInlineTextPath = path.resolve(
   'resourcesInlineText.ts',
 );
 
-test('Resources puts searchable knowledge records in a resource-only navigation tree before guarded sandbox state', () => {
+test('Resources puts searchable knowledge records in a resource-only navigation tree with guarded restore context', () => {
   const source = fs.readFileSync(resourcesPath, 'utf8');
 
   assert.match(source, /resources-pane--library resources-knowledge/);
@@ -46,12 +46,14 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
   assert.match(source, /const resourceTree = useMemo/);
   assert.match(source, /role="tree"/);
   assert.match(source, /hasSearchQuery/);
-  assert.match(source, /sandboxPreview\s*\?\s*\(/);
+  // No in-Trainer content preview survives: the library is navigation only.
+  assert.doesNotMatch(source, /sandboxPreview/);
+  assert.doesNotMatch(source, /MessageRichContent/);
 
   const treeIndex = source.indexOf('className="resources-knowledge__tree"');
-  const sandboxPreviewIndex = source.indexOf('sandboxPreview ? (');
+  const restoreContextIndex = source.indexOf('className="resources-inline-context"');
   assert.ok(treeIndex >= 0, 'expected a knowledge-resource tree');
-  assert.ok(sandboxPreviewIndex > treeIndex, 'sandbox preview must remain after the knowledge tree');
+  assert.ok(restoreContextIndex >= 0, 'expected guarded sandbox restore context');
 });
 
 test('the sandbox copy keeps the project-workspace boundary explicit', () => {

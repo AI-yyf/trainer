@@ -651,10 +651,7 @@ type LibraryCopyKey =
   | 'exportSaveCancelled'
   | 'exportSaveFailed'
   | 'exportSucceeded'
-  | 'previewNoSandboxCopy'
-  | 'previewOutsideSandbox'
-  | 'previewUnavailable'
-  | 'previewSandboxLoadFailed'
+  | 'serviceUnavailable'
   | 'openMissingSource'
   | 'openMissingFile'
   | 'openInvalidSource';
@@ -703,26 +700,14 @@ function libraryCopy(key: LibraryCopyKey, language?: string, detail?: string): s
       return failure(`导出没有成功${detail ? `（${detail}）` : ''}。换一个保存位置再试一次。`, `The export did not finish${detail ? ` (${detail})` : ''}. Pick a different save location and try again.`);
     case 'exportSucceeded':
       return isChinese ? `已导出：${detail ?? ''}` : `Exported: ${detail ?? ''}`;
-    case 'previewNoSandboxCopy':
-      return failure(
-        '这份资料还没有受管沙箱副本，可先用「在 VS Code 中打开」看原文。',
-        'This resource has no governed sandbox copy yet. Use native open to view the original.',
-      );
-    case 'previewOutsideSandbox':
-      return failure(
-        '这份资料的路径不在受管资料区内，暂不能预览。',
-        'The requested preview path is outside the governed Trainer sandbox.',
-      );
-    case 'previewUnavailable':
-      return failure('预览服务暂时不可用。稍后再试，或先用「在 VS Code 中打开」。', 'The preview service is unavailable right now. Try again shortly, or open the original natively.');
-    case 'previewSandboxLoadFailed':
-      return failure(`受管资料区暂时没能加载（${detail ?? 'unknown'}）。稍后重试预览。`, `The governed library area could not be loaded (${detail ?? 'unknown'}). Retry the preview shortly.`);
+    case 'serviceUnavailable':
+      return failure('资料服务暂时不可用。稍后再试。', 'The resource service is unavailable right now. Try again shortly.');
     case 'openMissingSource':
       return failure('这份资料没有可打开的原文。', 'This resource has no source to open.');
     case 'openMissingFile':
       return failure(
-        '这份资料的原文不在当前工作区或资料库里，暂时不能打开。可在资料库中预览，或重新导入原文。',
-        "This resource's source file is not in the current workspace or library, so it cannot be opened. Preview it in the library, or import the original again.",
+        '这份资料的原文不在当前工作区或资料库里，暂时不能打开。请重新导入原文后再打开。',
+        "This resource's source file is not in the current workspace or library, so it cannot be opened. Import the original again before opening it.",
       );
     case 'openInvalidSource':
       return failure('这份资料的原文地址无效，无法打开。', 'This resource has an invalid source and cannot be opened.');
@@ -852,7 +837,7 @@ export async function organizeResourceCommand(
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: libraryCopy('previewUnavailable', language) };
+    return { ok: false, message: libraryCopy('serviceUnavailable', language) };
   }
 
   const tags = asStringArray(request.tags)?.map((tag) => tag.trim()).filter(Boolean);
@@ -881,7 +866,7 @@ export async function organizeResourceCommand(
     if (statusCode === 422) {
       return { ok: false, message: libraryCopy('organizeInvalid', language) };
     }
-    return { ok: false, message: libraryCopy('previewUnavailable', language) };
+    return { ok: false, message: libraryCopy('serviceUnavailable', language) };
   }
 }
 
@@ -906,7 +891,7 @@ export async function exportResourceCommand(
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: libraryCopy('previewUnavailable', language) };
+    return { ok: false, message: libraryCopy('serviceUnavailable', language) };
   }
 
   const workspaceId = getRuntimeWorkspaceId(context);
@@ -1958,205 +1943,6 @@ export async function searchResourcesCommand(
     message: buildResourceSearchMessage(normalized),
     data: normalized,
   };
-}
-
-export async function previewResourceCommand(
-  context: CommandContext,
-  payload?: unknown,
-): Promise<CommandExecutionResult> {
-  if (!(await context.trustGuard.ensureTrusted('preview training resources'))) {
-    return { ok: false, message: 'Workspace trust is required to preview resources.' };
-  }
-
-  const language = resourceResponseLanguage(context);
-  const resourceId =
-    payload && typeof payload === 'object' && 'resourceId' in payload
-      ? (payload as { resourceId?: unknown }).resourceId
-      : undefined;
-  const explicitPath =
-    payload && typeof payload === 'object' && 'path' in payload
-      ? (payload as { path?: unknown }).path
-      : undefined;
-  const resource =
-    typeof resourceId === 'string'
-      ? context.getHostState().bootstrap.resources.find((item) => item.id === resourceId)
-      : undefined;
-  const requestedPath = typeof explicitPath === 'string' ? explicitPath.trim() : undefined;
-  const source = resource?.source?.trim();
-
-  // Library documents render their canonical Markdown digest. It lives inside
-  // the workspace library (not the sandbox), so the sandbox containment check
-  // below does not apply; the resource record is the authority for the path.
-  // A preview may name an explicit sandbox/artifact path. Only fall back to
-  // the canonical reader document when no explicit path was requested (or the
-  // request is for that document itself); otherwise the explicit path wins.
-  const canonicalPath = resource?.canonicalMarkdownPath?.trim();
-  // A sandbox copy that actually lives inside the governed sandbox is what
-  // the sandbox preview lane exists to render. Library documents whose stale
-  // "sandboxPath" points elsewhere read their canonical digest instead.
-  const currentSandboxRoot = resolveSandboxRootPath(context);
-  const sandboxCopyInGovernedSandbox = Boolean(
-    resource?.sandboxPath?.trim() &&
-      currentSandboxRoot &&
-      isPathWithinRoot(resource.sandboxPath!, currentSandboxRoot),
-  );
-  const wantsCanonicalDocument = Boolean(canonicalPath) &&
-    !sandboxCopyInGovernedSandbox &&
-    (!requestedPath || requestedPath === canonicalPath);
-  if (canonicalPath && wantsCanonicalDocument) {
-    const canonicalUri = await resolveExistingResourceUri(context, [canonicalPath]);
-    if (canonicalUri) {
-      try {
-        const raw = await fs.readFile(canonicalUri.fsPath);
-        const body = rewriteCanonicalAssetUris(
-          stripCanonicalFrontMatter(raw.toString('utf8')),
-          canonicalUri.fsPath,
-          (filePath) => normalizeWorkbenchAssetUri(context.workbench.resolveWebviewUriForPath?.(filePath)),
-        );
-        const preview = normalizeSandboxPreview({
-          path: canonicalUri.fsPath,
-          relative_path: canonicalPath,
-          title: resource?.title,
-          file_kind: 'markdown',
-          preview_kind: 'markdown',
-          preview_tier: 'rich',
-          content: body,
-          is_binary: false,
-          can_native_open: true,
-        });
-        const current = context.getHostState().bootstrap;
-        await context.patchWorkbenchData(
-          attachPreviewAssetUris(
-            {
-              conversation: current.conversation,
-              liveResourceFocus: true,
-              resourceDocument: {
-                resourceId: resource?.id ?? '',
-                title: resource?.title,
-                path: canonicalUri.fsPath,
-                relativePath: canonicalPath,
-                content: body,
-                previewKind: 'markdown',
-                pageCount: resource?.pageCount ?? null,
-                slideCount: resource?.slideCount ?? null,
-              },
-              memory: {
-                ...current.memory,
-                sandboxPreview: preview,
-                selectedResourceDetail: resource
-                  ? normalizeResourceDetailRecord(resource)
-                  : current.memory.selectedResourceDetail,
-              },
-            } as Partial<BootstrapData>,
-            (filePath) => normalizeWorkbenchAssetUri(context.workbench.resolveWebviewUriForPath?.(filePath)),
-          ),
-        );
-        return {
-          ok: true,
-          message: language === 'zh-CN'
-            ? `已打开：${resource?.title ?? basenameFs(canonicalPath)}`
-            : `Opened ${resource?.title ?? basenameFs(canonicalPath)}.`,
-          data: preview,
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          message: libraryCopy(
-            'previewUnavailable',
-            language,
-            error instanceof Error ? error.message : String(error),
-          ),
-        };
-      }
-    }
-  }
-
-  const previewPath = resource?.sandboxPath?.trim() ??
-    (requestedPath && !/^https?:\/\//i.test(requestedPath) ? requestedPath : undefined);
-
-  if (!previewPath) {
-    return {
-      ok: false,
-      message: libraryCopy('previewNoSandboxCopy', language),
-      data: { capability: 'native-open-only', source },
-    };
-  }
-
-  let sandboxRoot = resolveSandboxRootPath(context);
-  if (!sandboxRoot) {
-    // A restored session or newly imported resource may arrive before the
-    // sandbox browser has been opened. Obtain the authoritative root before
-    // checking containment; the resource path itself is never authority.
-    try {
-      const refreshed = await refreshSandboxCommand(context);
-      if (!refreshed.ok) {
-        return refreshed;
-      }
-      sandboxRoot = asString(asRecord(refreshed.data)?.sandboxRootPath) ??
-        asString(asRecord(refreshed.data)?.rootPath) ?? resolveSandboxRootPath(context);
-    } catch (error) {
-      return {
-        ok: false,
-        message: libraryCopy(
-          'previewSandboxLoadFailed',
-          language,
-          error instanceof Error ? error.message : String(error),
-        ),
-      };
-    }
-  }
-  if (!sandboxRoot || !isPathWithinRoot(previewPath, sandboxRoot)) {
-    return { ok: false, message: libraryCopy('previewOutsideSandbox', language) };
-  }
-
-  const status = await context.sidecarManager.ensureRunning();
-  if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: libraryCopy('previewUnavailable', language, status.detail) };
-  }
-
-  try {
-    const response = await context.sidecarClient.postJson<unknown>(status.port, '/sandbox/preview', {
-      session_id: context.getSessionId(),
-      workspace_id: getRuntimeWorkspaceId(context),
-      path: previewPath,
-    });
-    const preview = normalizeSandboxPreview(response);
-    const current = context.getHostState().bootstrap;
-    await context.patchWorkbenchData(
-      attachPreviewAssetUris(
-        {
-          // Pass conversation so host can invent file_preview for document+.docx
-          // (sidecar never emits Coach parts; omit conversation elsewhere = fail-closed).
-          conversation: current.conversation,
-          // A sandbox preview is a live learner action, not recovered-plan
-          // chrome; snapshot refreshes must keep it. It also replaces any
-          // canonical reader document that was open before.
-          liveResourceFocus: true,
-          resourceDocument: null,
-          memory: {
-            ...current.memory,
-            sandboxPreview: preview,
-            selectedResourceDetail: resource
-              ? normalizeResourceDetailRecord(resource)
-              : current.memory.selectedResourceDetail,
-          },
-        } as Partial<BootstrapData>,
-        (filePath) => normalizeWorkbenchAssetUri(context.workbench.resolveWebviewUriForPath?.(filePath)),
-      ),
-    );
-    return {
-      ok: true,
-      message: language === 'zh-CN'
-        ? `已打开预览：${resource?.title ?? basenameFs(previewPath)}`
-        : `Previewed ${resource?.title ?? basenameFs(previewPath)}.`,
-      data: preview,
-    };
-  } catch {
-    return {
-      ok: false,
-      message: libraryCopy('previewUnavailable', language),
-    };
-  }
 }
 
 function resolveSandboxRootPath(context: CommandContext): string | undefined {

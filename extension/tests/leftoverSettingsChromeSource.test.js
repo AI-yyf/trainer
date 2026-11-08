@@ -122,7 +122,7 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
 
   assert.match(appSource, /leftoverSettingsProfileRhythmIsNotLive\(/);
   assert.match(appSource, /leftoverSettingsLearnerProjectOnboardingIsNotLive\(/);
-  assert.match(appSource, /leftoverResourceSandboxPreviewIsNotLive\(/);
+  assert.doesNotMatch(appSource, /leftoverResourceSandboxPreviewIsNotLive\(/);
   assert.match(appSource, /leftoverResourceSandboxStateIsNotLive\(/);
   assert.match(appSource, /leftoverResourceLibraryListIsNotLive\(/);
   assert.match(appSource, /primaryAction: "open_coach"/);
@@ -172,18 +172,10 @@ test('leftover Settings profile/rhythm is not live Settings identity when recove
   );
   assert.match(settingsShellSource, /workspaceAuthority=\{liveSandboxState\?\.authority\}/);
   assert.match(appSource, /readWorkspaceTrustStateFromCapabilitySummary\(/);
-  assert.match(
-    appSource,
-    /leftoverSandboxPreviewNotLive \? undefined : data\.memory\.sandboxPreview/,
-  );
-  assert.match(
-    appSource,
-    /const liveSandboxPreview = leftoverSandboxPreviewNotLive/,
-  );
-  assert.match(
-    appSource,
-    /const liveSelectedResourceDetail = leftoverResourceSelectedDetailNotLive/,
-  );
+  assert.doesNotMatch(appSource, /leftoverSandboxPreviewNotLive/);
+  assert.doesNotMatch(appSource, /const liveSandboxPreview = leftoverSandboxPreviewNotLive/);
+  assert.doesNotMatch(appSource, /sandboxPreview=\{leftoverSandboxPreviewNotLive/);
+  assert.doesNotMatch(appSource, /const liveSelectedResourceDetail = leftoverResourceSelectedDetailNotLive/);
   assert.match(
     appSource,
     /const liveResources = leftoverResourceLibraryListNotLive\s*\? data\.resources\.filter\(resourceRecordIsAcknowledgedUpload\)\s*: data\.resources/,

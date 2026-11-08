@@ -49,7 +49,6 @@ import {
   refreshResourceTrashCommand,
   indexResourcesCommand,
   openResourceCommand,
-  previewResourceCommand,
   refreshSandboxCommand,
   revealSandboxPathCommand,
   renameSandboxPathCommand,
@@ -311,7 +310,6 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.restoreResource, register: (ctx, payload) => restoreResourceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.refreshResourceTrash, register: (ctx) => refreshResourceTrashCommand(ctx) },
     { commandId: COMMAND_IDS.openResource, register: (ctx, payload) => openResourceCommand(ctx, payload) },
-    { commandId: COMMAND_IDS.previewSandbox, register: (ctx, payload) => previewResourceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.createSandboxFile, register: (ctx, payload) => createSandboxFileCommand(ctx, payload) },
     {
       commandId: COMMAND_IDS.createSandboxDirectory,

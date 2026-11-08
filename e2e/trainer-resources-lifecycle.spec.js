@@ -170,7 +170,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     const library = page.getByRole("region", { name: "Unified library", exact: true });
     const tree = library.getByRole("tree", { name: "Unified library", exact: true });
     await expect(library).toBeVisible();
-    await expect(library).toContainText("The library is empty");
+    await expect(library).toContainText("No resources yet");
     await expect(library.getByRole("treeitem")).toHaveCount(0);
     await expect(tree.getByRole("treeitem")).toHaveCount(0);
 
@@ -205,13 +205,16 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     });
     await expect(resourceTreeItem.locator(".resources-library-tree__status")).toHaveCount(0);
 
-    await resourceTreeItem.click();
+    // Space selects the row for its metadata/open actions; click/Enter opens
+    // the file directly and never renders resource content in Trainer.
+    await resourceTreeItem.press(" ");
     await expect(resourceTreeItem).toHaveAttribute("aria-current", "true");
     const detail = page.locator('[data-template=ResourceReader]');
     await expect(detail).toBeVisible();
+    await expect(detail.locator(".resources-knowledge__content-preview")).toHaveCount(0);
 
     const openStart = await actionCount(page);
-    await detail.getByRole("button", { name: `Open in VS Code: ${RESOURCE_TITLE}`, exact: true }).click();
+    await detail.getByRole("button", { name: "Open in VS Code", exact: true }).click();
     const openAction = await waitForHostAction(
       page,
       openStart,
@@ -221,7 +224,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
 
     await detail.locator(".template-back").first().click();
     // Delete moved into the reader detail actions; it keeps the confirm dialog.
-    await resourceTreeItem.click();
+    await resourceTreeItem.press(" ");
     await expect(detail).toBeVisible();
     const deleteResourceButton = detail.locator(".resources-knowledge__delete-action");
     await expect(deleteResourceButton).toHaveAttribute(

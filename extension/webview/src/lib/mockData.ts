@@ -296,9 +296,9 @@ export const mockBootstrapData: BootstrapData = {
       deferred: [
         {
           id: "evidence-plan-3",
-          summary: "Sandbox resource preview is ready but still waiting for the stable plan thread",
+          summary: "Sandbox resource is ready but still waiting for the stable plan thread",
           source: "resource_import",
-          concepts: ["sandbox", "resource preview"],
+          concepts: ["sandbox", "resource access"],
           outcome: "observation",
           confidence: 0.57,
           timestamp: "2026-04-30T09:25:00Z",

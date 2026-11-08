@@ -658,8 +658,9 @@ test.describe("Trainer three-destination shell", () => {
       });
       await expect(primaryTreeItem).toBeVisible();
       await expect(primaryTreeItem.locator("strong")).toHaveText(copy.primaryResource);
+      // The kind glyph is an alpha-mask span, not an inline SVG.
       await expect(
-        primaryTreeItem.locator(".resources-library-tree__kind svg"),
+        primaryTreeItem.locator(".resources-library-tree__kind[data-resource-kind]"),
       ).toHaveCount(1);
 
       await search.fill(copy.indexingResource);
@@ -677,10 +678,15 @@ test.describe("Trainer three-destination shell", () => {
       await search.fill("");
       await expect(primaryTreeItem).toBeVisible();
 
-      // Enter opens the reader directly — no selection step in between.
+      // Enter opens the file in VS Code (the browser harness records the
+      // action); Space selects the row for its metadata and open actions.
       await primaryTreeItem.press("Enter");
       const detail = page.locator("[data-template=ResourceReader]");
+      await expect(detail).toHaveCount(0);
+      await primaryTreeItem.press(" ");
       await expect(detail.getByRole("heading", { name: copy.primaryResource, exact: true })).toBeVisible();
+      await expect(detail.locator(".resources-knowledge__content-preview")).toHaveCount(0);
+      await expect(detail.locator("[data-reader-open='editor']")).toBeVisible();
       await detail.locator(".template-back").first().click();
       await expect(library).toBeVisible();
 
@@ -714,7 +720,7 @@ test.describe("Trainer three-destination shell", () => {
     });
 
     const library = page.getByRole("region", { name: copy.library, exact: true });
-    await library.getByRole("treeitem", { name: copy.primaryResource, exact: true }).click();
+    await library.getByRole("treeitem", { name: copy.primaryResource, exact: true }).press(" ");
     const detail = page.locator("[data-template=ResourceReader]");
     await expect(detail.getByRole("heading", { name: copy.primaryResource, exact: true })).toBeVisible();
     await expect(detail).toBeVisible();
@@ -746,7 +752,7 @@ test.describe("Trainer three-destination shell", () => {
 
     await expect(page.locator("body")).toHaveClass(/vscode-dark/);
     const library = page.getByRole("region", { name: labels.library, exact: true });
-    await library.getByRole("treeitem", { name: labels.resource, exact: true }).click();
+    await library.getByRole("treeitem", { name: labels.resource, exact: true }).press(" ");
     const detail = page.locator("[data-template=ResourceReader]");
     await expect(detail.getByRole("heading", { name: labels.resource, exact: true })).toBeVisible();
     await expect(detail).toBeVisible();
@@ -1471,7 +1477,7 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    await page.getByRole("treeitem", { name: copy.primaryResource, exact: true }).click();
+    await page.getByRole("treeitem", { name: copy.primaryResource, exact: true }).press(" ");
     await expect(page.locator("[data-template=ResourceReader] .template-activity-header h2")).toHaveText(copy.primaryResource);
     await expect(page.locator("main")).not.toContainText("write authority has not been verified");
     await page.locator("[data-template=ResourceReader] .template-activity-header > button").click();

@@ -8,7 +8,7 @@ export type ResourcesOrientationAction =
   | "import_resource"
   | "wait_index"
   | "retry_index"
-  | "preview_resource"
+  | "open_resource"
   | "select_resource"
   | "open_plan"
   | "open_training"
@@ -28,7 +28,7 @@ export interface ResourcesOrientationInput {
   searchHitCount?: number;
   searchWorkspaceId?: string;
   currentWorkspaceId?: string;
-  hasPreview?: boolean;
+  canOpenResource?: boolean;
   boundPlanId?: string;
   boundTrainingCardId?: string;
   language?: string;
@@ -54,7 +54,7 @@ const ACTIONS = new Set<ResourcesOrientationAction>([
   "import_resource",
   "wait_index",
   "retry_index",
-  "preview_resource",
+  "open_resource",
   "select_resource",
   "open_plan",
   "open_training",
@@ -341,12 +341,12 @@ export function deriveResourcesOrientation(input: ResourcesOrientationInput): Re
     });
   }
 
-  if (!input.hasPreview) {
+  if (!input.canOpenResource) {
     return emit({
       objectLabel: selectedTitle || selectedId,
       state: "waiting",
       why: copy.indexedNoPreview,
-      primaryAction: "preview_resource",
+      primaryAction: "open_resource",
       primaryActionLabel: copy.preview,
       nextStep: copy.previewBeforeBind,
       advancedWhere: copy.resourcesPreview,
@@ -357,7 +357,7 @@ export function deriveResourcesOrientation(input: ResourcesOrientationInput): Re
     objectLabel: selectedTitle || selectedId,
     state: "ready",
     why: copy.indexedReadable,
-    primaryAction: "preview_resource",
+    primaryAction: "open_resource",
     primaryActionLabel: copy.keepReading,
     nextStep: copy.readThenBindWhenLinked,
     advancedWhere: copy.resourcesCurrentItem,

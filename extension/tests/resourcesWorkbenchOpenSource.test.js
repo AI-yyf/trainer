@@ -15,7 +15,6 @@ const resourcesWorkbenchPath = path.resolve(
   'resources',
   'ResourcesWorkbenchView.tsx',
 );
-const appPath = path.resolve(__dirname, '..', 'webview', 'src', 'app', 'App.tsx');
 const browserPreviewHarnessPath = path.resolve(
   __dirname,
   '..',
@@ -25,7 +24,7 @@ const browserPreviewHarnessPath = path.resolve(
   'browserPreviewHarness.ts',
 );
 
-test('resource detail shows a governed indexed preview while delegating full rendering to VS Code', () => {
+test('Resources opens library files in VS Code or the default app without an in-Trainer content pane', () => {
   const source = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   const appSource = readAppModuleSource();
   const resourcesStart = appSource.indexOf('<ResourcesWorkbenchView');
@@ -39,34 +38,33 @@ test('resource detail shows a governed indexed preview while delegating full ren
   assert.match(source, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
   assert.match(source, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
   assert.match(source, /openInVsCode/);
+  assert.match(source, /openWithDefaultApp/);
   assert.match(source, /<dl className="resources-knowledge__facts">/);
-  assert.match(source, /function resourcePreviewMode\(resource: ResourceRecord, language: ComposerLanguage\)/);
-  assert.match(source, /function resourcePreviewSummary\(resource: ResourceRecord\)/);
   assert.match(source, /resource\.status === "attention"/);
-  assert.match(source, /selectedResourcePreviewMode/);
-  assert.match(source, /selectedResourcePreviewSummary/);
-  assert.match(source, /resources-knowledge__preview-summary/);
-  assert.match(source, /sandboxPreview\?: SandboxPreview/);
-  assert.match(source, /onPreviewResource\?: \(resourceId: string\)/);
-  // Canonical documents render their Markdown as soon as the reader opens;
-  // the explicit Preview action stays available for a manual refresh.
-  assert.match(source, /autoPreviewedResourceRef/);
-  assert.match(source, /onPreviewResource\(selectedResource\.id\)/);
-  // The reader renders the canonical Markdown document the host just read,
-  // keyed to the selected resource, even across snapshot refreshes.
-  assert.match(source, /selectedResourceDocument/);
-  assert.match(source, /resourceDocument\.resourceId === selectedResource\.id/);
-  assert.match(source, /resources-knowledge__content-preview/);
-  assert.match(source, /sandboxPreview\.content/);
-  assert.match(source, /sandboxPreview\.html/);
+  assert.match(source, /<ResourceReader/);
+  assert.match(source, /openInEditor=\{/);
+  assert.match(source, /openExternally=\{/);
+
+  // No Trainer-owned content preview lives in the library surface: no reader
+  // document, no sandbox HTML/Markdown body, no automatic preview request.
+  assert.doesNotMatch(source, /onPreviewResource/);
+  assert.doesNotMatch(source, /selectedResourceDocument/);
+  assert.doesNotMatch(source, /selectedResourcePreviewMode/);
+  assert.doesNotMatch(source, /selectedResourcePreviewSummary/);
+  assert.doesNotMatch(source, /autoPreviewedResourceRef/);
+  assert.doesNotMatch(source, /sandboxPreview/);
+  assert.doesNotMatch(source, /MessageRichContent/);
+  assert.doesNotMatch(source, /resources-knowledge__content-preview/);
+  assert.doesNotMatch(source, /resourcePreviewMode|resourcePreviewSummary/);
 
   assert.ok(resourcesStart >= 0, 'expected the Resources render call');
   assert.ok(resourcesEnd > resourcesStart, 'expected the Resources render call to close');
   assert.match(resourcesView, /onOpenResource=\{\(resourceId, options\) =>/);
-  assert.match(resourcesView, /sandboxPreview=\{leftoverSandboxPreviewNotLive \? undefined : data\.memory\.sandboxPreview\}/);
-  assert.match(resourcesView, /onPreviewResource=/);
+  assert.doesNotMatch(resourcesView, /onPreviewResource=/);
+  assert.doesNotMatch(resourcesView, /sandboxPreview=/);
+  assert.doesNotMatch(resourcesView, /resourceDocument=/);
   assert.match(appSource, /type: "resource\/open",/);
-  assert.match(appSource, /trainerCommands\.previewSandbox/);
+  assert.doesNotMatch(appSource, /trainerCommands\.previewSandbox/);
 });
 
 test('resource detail does not revive any Trainer-owned document or media preview surface', () => {
@@ -75,15 +73,16 @@ test('resource detail does not revive any Trainer-owned document or media previe
   assert.doesNotMatch(source, /resources-preview-workbench/);
   assert.doesNotMatch(source, /resource-preview-pane__/);
   assert.doesNotMatch(source, /AudioPreview|PdfPreview|DocxPreview|resourcePreviewBody/);
+  assert.doesNotMatch(source, /resourceDocument/);
 });
 
-test('loaded resource preview keeps the legacy trusted-score fixture for readiness compatibility', () => {
+test('loaded resource fixture keeps readiness compatibility without a Reader body', () => {
   const harnessSource = fs.readFileSync(browserPreviewHarnessPath, 'utf8');
   const scenarioStart = harnessSource.indexOf('if (scenario === "resource-preview-loaded")');
   const scenarioEnd = harnessSource.indexOf('\n  if (scenario ===', scenarioStart + 1);
   const scenarioSource = harnessSource.slice(scenarioStart, scenarioEnd);
 
-  assert.ok(scenarioStart >= 0, 'expected the loaded-resource preview fixture');
+  assert.ok(scenarioStart >= 0, 'expected the loaded-resource fixture');
   assert.match(scenarioSource, /status: "ready",[\s\S]*?trustScore: 0\.92,[\s\S]*?freshness: "fresh",[\s\S]*?indexState: "indexed"/);
   assert.doesNotMatch(scenarioSource, /trustState:/);
 });

@@ -1329,7 +1329,6 @@ async function runBrowserPreviewLiveAction(
   const isResourceUpload = commandId === trainerCommands.uploadResource;
   const isResourceTrashRefresh = commandId === trainerCommands.refreshResourceTrash;
   const isResourceOpen = action.type === "resource/open";
-  const isSandboxPreview = commandId === trainerCommands.previewSandbox;
   const isUnsupportedCommand = action.type === "command/execute";
   if (
     !isPlanFreeze &&
@@ -1344,7 +1343,6 @@ async function runBrowserPreviewLiveAction(
     !isResourceUpload &&
     !isResourceTrashRefresh &&
     !isResourceOpen &&
-    !isSandboxPreview &&
     !isUnsupportedCommand
   ) {
     return;
@@ -1829,95 +1827,6 @@ async function runBrowserPreviewLiveAction(
           `已从真实 Sidecar 刷新 ${deletedResources.length} 条可恢复资料。`,
           `Loaded ${deletedResources.length} recoverable resource${deletedResources.length === 1 ? "" : "s"} from the real Sidecar.`,
         ),
-      );
-      return;
-    }
-
-    if (isSandboxPreview) {
-      // Mirror previewResourceCommand: resolve the resource's governed sandbox copy,
-      // then ask the real sidecar for the preview and patch it into the bootstrap so
-      // the resources detail pane re-renders with the content.
-      // NB: resolve against the live bootstrap (not window.__TRAINER_BOOTSTRAP__,
-      // which is unset in live mode and would fall back to mock data).
-      const resourceId = browserPreviewString(payload?.resourceId);
-      const explicitPath = browserPreviewString(payload?.path);
-      const resolvePreviewPath = (snapshot: BootstrapData | BrowserPreviewBootstrap): string => {
-        const resource = resourceId
-          ? snapshot.resources?.find((item) => item.id === resourceId)
-          : undefined;
-        return (
-          resource?.sandboxPath?.trim() ||
-          (explicitPath && !/^https?:\/\//i.test(explicitPath) ? explicitPath : "")
-        );
-      };
-      let snapshot = livePreviewBootstrap ?? currentBrowserPreviewBootstrap();
-      let previewPath = resolvePreviewPath(snapshot);
-      if (!previewPath && resourceId) {
-        // The cached live bootstrap is stale: uploads/searches patch the Zustand
-        // store directly and never reach this module-level snapshot. Refresh from
-        // the real sidecar once so newly uploaded resources resolve here.
-        try {
-          snapshot = await refreshLiveBrowserPreviewBootstrap();
-          previewPath = resolvePreviewPath(snapshot);
-        } catch {
-          // Fall through to the governed-copy error below.
-        }
-      }
-      if (!previewPath) {
-        emitLivePreviewOperationStatus(
-          action,
-          "error",
-          previewText(
-            language,
-            "这份资料没有可预览的沙箱副本。",
-            "This resource has no governed sandbox copy to preview.",
-          ),
-        );
-        return;
-      }
-      const response = await fetch(`${sidecarBaseUrl}/sandbox/preview`, {
-        method: "POST",
-        headers: requestHeaders,
-        body: JSON.stringify({ workspace_id: workspaceId, path: previewPath }),
-      });
-      if (!response.ok) {
-        const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").trim();
-        emitLivePreviewOperationStatus(
-          action,
-          "error",
-          previewText(
-            language,
-            `资料预览被真实 Sidecar 拒绝。${detail ? ` ${detail}` : ""}`,
-            `The resource preview was rejected by the real Sidecar.${detail ? ` ${detail}` : ""}`,
-          ),
-        );
-        return;
-      }
-      const record = await response.json().catch(() => undefined);
-      const sandboxPreview = mapSandboxPreview(record);
-      if (!sandboxPreview) {
-        emitLivePreviewOperationStatus(
-          action,
-          "error",
-          previewText(
-            language,
-            "真实 Sidecar 没有返回可渲染的预览内容。",
-            "The real Sidecar did not return renderable preview content.",
-          ),
-        );
-        return;
-      }
-      const bootstrap = livePreviewBootstrap ?? currentBrowserPreviewBootstrap();
-      const patch: BrowserPreviewPatch = {
-        memory: { ...bootstrap.memory, sandboxPreview } as BootstrapData["memory"],
-      };
-      livePreviewBootstrap = mergeBrowserPreviewPatch(bootstrap, patch);
-      window.__TRAINER_BOOTSTRAP__ = livePreviewBootstrap;
-      emitBrowserPreviewHostMessage({ type: "state/patch", payload: patch });
-      emitLivePreviewOperationStatus(
-        action,
-        "success",
-        previewText(language, "资料预览已从真实 Sidecar 载入。", "Resource preview loaded from the real Sidecar."),
       );
       return;
     }
@@ -5462,13 +5371,13 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
       ...bootstrap.coachFocus,
       currentFocus: previewText(
         language,
-        "资料预览正在显示真实已读取内容。",
-        "Resource preview is showing real loaded content.",
+        "资料库只显示元数据，文件在 VS Code 或默认应用中打开。",
+        "Resources show metadata only; files open in VS Code or the default app.",
       ),
       nextStep: previewText(
         language,
-        "在预览里切换资料，确认正文、结构化内容和未读取状态分得清。",
-        "Switch resources in Preview and verify loaded, structured, and pending states are distinct.",
+        "打开资料，确认文件在外部编辑器中打开，且 Trainer 内不渲染正文。",
+        "Open a resource and verify the external editor owns the content while Trainer renders no body.",
       ),
     };
     return;

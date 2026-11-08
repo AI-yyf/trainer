@@ -72,7 +72,6 @@ export const COMMAND_IDS = {
   restoreResource: trainerCommands.restoreResource,
   refreshResourceTrash: trainerCommands.refreshResourceTrash,
   openResource: trainerCommands.openResource,
-  previewSandbox: trainerCommands.previewSandbox,
   createSandboxFile: trainerCommands.createSandboxFile,
   createSandboxDirectory: trainerCommands.createSandboxDirectory,
   renameSandboxPath: trainerCommands.renameSandboxPath,

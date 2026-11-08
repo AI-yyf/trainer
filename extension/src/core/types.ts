@@ -1552,17 +1552,6 @@ export interface StageMaterialItem {
   createdAt?: string;
 }
 
-export interface ResourceDocumentView {
-  resourceId: string;
-  title?: string;
-  path: string;
-  relativePath?: string;
-  content: string;
-  previewKind: "markdown";
-  pageCount?: number | null;
-  slideCount?: number | null;
-  anchors?: Array<Record<string, unknown>>;
-}
 
 export interface BootstrapData {
   /** Host generation changes when the runtime database is replaced or switched. */
@@ -1574,8 +1563,6 @@ export interface BootstrapData {
    * must keep this live preview instead of treating it as leftover chrome.
    */
   liveResourceFocus?: boolean;
-  /** Canonical Markdown document the learner is reading (host-owned). */
-  resourceDocument?: ResourceDocumentView | null;
   /**
    * Opt-in anonymous telemetry consent (P2 #18), as answered by the sidecar
    * (/telemetry/consent + /telemetry/status). Machine-scoped, never
@@ -2023,9 +2010,6 @@ export interface DebugVisibleResourcesFacts {
   resourceDetailId?: string;
   resourceDetailTitle?: string;
   selectedResourceId?: string;
-  sandboxPreviewEmbedded?: boolean;
-  sandboxPreviewVisible?: boolean;
-  sandboxPreviewPath?: string;
   selectedSandboxPath?: string;
   previewPath?: string;
   capabilityHeadline?: string;

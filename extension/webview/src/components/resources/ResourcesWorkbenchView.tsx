@@ -20,7 +20,6 @@ import type {
   ResourceRecord,
   ResourceSearchState,
   ResourceTrainingHandoffResult,
-  SandboxPreview,
   SandboxState,
 } from "../../lib/types";
 import {
@@ -61,7 +60,6 @@ import {
 } from "./resourceIconAssets";
 import { CollapseSection } from "../common/CollapseSection";
 import { WorkbenchSurfaceButton } from "../common/WorkbenchSurfaceButton";
-import { MessageRichContent } from "../coach/MessageRichContent";
 import {
   addLibraryFolderPath,
   flattenLibraryFolders,
@@ -105,9 +103,6 @@ export interface ResourcesWorkbenchViewProps {
   resourceSearch?: ResourceSearchState;
   deletedResources?: DeletedResource[];
   sandboxState?: SandboxState;
-  sandboxPreview?: SandboxPreview;
-  /** Canonical Markdown document the learner is reading, keyed to its resource. */
-  resourceDocument?: import("../../lib/types").ResourceDocumentView | null;
   restoreContext?: ResourceRestoreContext;
   isBrowserPreview?: boolean;
   isLiveBrowserPreview?: boolean;
@@ -147,7 +142,6 @@ export interface ResourcesWorkbenchViewProps {
   /** Reveal a downloaded file path through the host's existing file-manager action. */
   onRevealSavedPath?: (path: string) => void;
   onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; openExternal?: boolean; line?: number }) => void;
-  onPreviewResource?: (resourceId: string) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
   onAskCoach?: (resourceIds: string[]) => void;
@@ -295,14 +289,14 @@ function chooseWorkspaceRootLabel(language: ComposerLanguage): string {
 
 function restoredSandboxContextTitle(language: ComposerLanguage): string {
   const labels: Record<ComposerLanguage, string> = {
-    "zh-CN": "\u6c99\u7bb1\u9884\u89c8\u5df2\u6062\u590d",
-    "en-US": "Sandbox preview restored",
-    "es-ES": "Vista previa del sandbox restaurada",
-    "fr-FR": "Apercu du sandbox restaure",
-    "de-DE": "Sandbox-Vorschau wiederhergestellt",
-    "ja-JP": "\u30b5\u30f3\u30c9\u30dc\u30c3\u30af\u30b9\u306e\u30d7\u30ec\u30d3\u30e5\u30fc\u3092\u5fa9\u5143",
-    "ko-KR": "\uc0cc\ub4dc\ubc15\uc2a4 \ubbf8\ub9ac \ubcf4\uae30\uac00 \ubcf5\uc6d0\ub428",
-    "pt-BR": "Previa do sandbox restaurada",
+    "zh-CN": "\u6c99\u7bb1\u4e0a\u4e0b\u6587\u5df2\u6062\u590d",
+    "en-US": "Sandbox context restored",
+    "es-ES": "Contexto del sandbox restaurado",
+    "fr-FR": "Contexte du sandbox restaure",
+    "de-DE": "Sandbox-Kontext wiederhergestellt",
+    "ja-JP": "\u30b5\u30f3\u30c9\u30dc\u30c3\u30af\u30b9\u306e\u30b3\u30f3\u30c6\u30ad\u30b9\u30c8\u3092\u5fa9\u5143",
+    "ko-KR": "\uc0cc\ub4dc\ubc15\uc2a4 \ucee8\ud14d\uc2a4\ud2b8\uac00 \ubcf5\uc6d0\ub428",
+    "pt-BR": "Contexto do sandbox restaurado",
   };
   return labels[language];
 }
@@ -665,86 +659,6 @@ function resourceTrainingStartCopy(
     return localize(language, "createReviewCard");
   }
   return copy[language][phase];
-}
-
-function resourcePreviewHeading(language: ComposerLanguage): string {
-  const labels: Record<ComposerLanguage, string> = {
-    "zh-CN": "\u9884\u89c8",
-    "en-US": "Preview",
-    "es-ES": "Vista previa",
-    "fr-FR": "Apercu",
-    "de-DE": "Vorschau",
-    "ja-JP": "\u30d7\u30ec\u30d3\u30e5\u30fc",
-    "ko-KR": "\ubbf8\ub9ac \ubcf4\uae30",
-    "pt-BR": "Previa",
-  };
-  return labels[language];
-}
-
-function resourcePreviewTierLabel(
-  tier: NonNullable<ResourceRecord["previewTier"]>,
-  language: ComposerLanguage,
-): string {
-  const labels: Record<ComposerLanguage, Record<NonNullable<ResourceRecord["previewTier"]>, string>> = {
-    "zh-CN": {
-      rich: "Tier A \u00b7 \u5bcc\u9884\u89c8",
-      converted: "Tier B \u00b7 \u8f6c\u6362\u9884\u89c8",
-      metadata: "Tier C \u00b7 \u5143\u6570\u636e\u56de\u9000",
-    },
-    "en-US": {
-      rich: "Tier A \u00b7 Rich preview",
-      converted: "Tier B \u00b7 Converted preview",
-      metadata: "Tier C \u00b7 Metadata fallback",
-    },
-    "es-ES": {
-      rich: "Nivel A \u00b7 Vista enriquecida",
-      converted: "Nivel B \u00b7 Vista convertida",
-      metadata: "Nivel C \u00b7 Metadatos",
-    },
-    "fr-FR": {
-      rich: "Niveau A \u00b7 Apercu enrichi",
-      converted: "Niveau B \u00b7 Apercu converti",
-      metadata: "Niveau C \u00b7 Metadonnees",
-    },
-    "de-DE": {
-      rich: "Stufe A \u00b7 Umfangreiche Vorschau",
-      converted: "Stufe B \u00b7 Konvertierte Vorschau",
-      metadata: "Stufe C \u00b7 Metadaten",
-    },
-    "ja-JP": {
-      rich: "Tier A \u00b7 \u30ea\u30c3\u30c1\u30d7\u30ec\u30d3\u30e5\u30fc",
-      converted: "Tier B \u00b7 \u5909\u63db\u30d7\u30ec\u30d3\u30e5\u30fc",
-      metadata: "Tier C \u00b7 \u30e1\u30bf\u30c7\u30fc\u30bf",
-    },
-    "ko-KR": {
-      rich: "Tier A \u00b7 \ud48d\ubd80\ud55c \ubbf8\ub9ac \ubcf4\uae30",
-      converted: "Tier B \u00b7 \ubcc0\ud658 \ubbf8\ub9ac \ubcf4\uae30",
-      metadata: "Tier C \u00b7 \uba54\ud0c0\ub370\uc774\ud130",
-    },
-    "pt-BR": {
-      rich: "Nivel A \u00b7 Previa rica",
-      converted: "Nivel B \u00b7 Previa convertida",
-      metadata: "Nivel C \u00b7 Metadados",
-    },
-  };
-  return labels[language][tier];
-}
-
-function resourcePreviewMode(resource: ResourceRecord, language: ComposerLanguage): string | undefined {
-  const tier = resource.previewTier ? resourcePreviewTierLabel(resource.previewTier, language) : undefined;
-  const kind = resource.previewKind?.trim();
-  const details = [tier, kind].filter((value): value is string => Boolean(value));
-  return details.length > 0 ? details.join(" \u00b7 ") : undefined;
-}
-
-function resourcePreviewSummary(resource: ResourceRecord): string | undefined {
-  const source = resource.status === "attention"
-    ? resource.summary?.trim() || resource.matchSummary?.trim()
-    : resource.matchSummary?.trim() || resource.summary?.trim();
-  if (!source) {
-    return undefined;
-  }
-  return source.replace(/\s+/g, " ").slice(0, 480);
 }
 
 function resourceReuseSummary(language: ComposerLanguage): string {
@@ -1176,50 +1090,6 @@ function ResourceTreeItem({
   );
 }
 
-/**
- * A captured snapshot stores its metadata as YAML-style front matter; the
- * reader renders the body, and the envelope belongs to the source line.
- */
-function previewBodyWithoutCaptureFrontmatter(body: string): string {
-  const lines = body.replace(/^\uFEFF/, "").split(/\r?\n/);
-  let index = 0;
-  while (index < lines.length && !lines[index]?.trim()) {
-    index += 1;
-  }
-  if (lines[index]?.trim() !== "---") {
-    return body;
-  }
-  const openFence = index;
-  for (let cursor = openFence + 1; cursor < Math.min(lines.length, openFence + 64); cursor += 1) {
-    if (lines[cursor]?.trim() === "---") {
-      return lines.slice(cursor + 1).join("\n").replace(/^\r?\n+/, "");
-    }
-  }
-  return body;
-}
-
-function previewBodyWithoutDuplicateTitle(body: string, title: string): string {
-  const withoutFrontmatter = previewBodyWithoutCaptureFrontmatter(body);
-  const trimmed = withoutFrontmatter.trim();
-  const heading = trimmed.match(/^#\s+(.+?)(?:\r?\n|$)/);
-  if (!heading) {
-    return withoutFrontmatter;
-  }
-  if (heading[1].trim() !== title.trim()) {
-    return withoutFrontmatter;
-  }
-  return trimmed.slice(heading[0].length).trimStart();
-}
-
-function pickInitialResourceId(
-  resources: ResourceRecord[],
-  initialIds: string[],
-  _sandboxPreview?: SandboxPreview,
-): string | null {
-  const known = new Set(resources.map((resource) => resource.id));
-  return initialIds.find((id) => known.has(id)) ?? null;
-}
-
 function orientationStateLabel(state: CoachOrientationState, language: ComposerLanguage): string {
   const copy = resolveCopy(language);
   switch (state) {
@@ -1246,8 +1116,6 @@ export function ResourcesWorkbenchView({
   resourceSearch,
   deletedResources,
   sandboxState,
-  sandboxPreview: sandboxPreviewInput,
-  resourceDocument,
   restoreContext,
   isBrowserPreview = false,
   isLiveBrowserPreview = false,
@@ -1266,7 +1134,6 @@ export function ResourcesWorkbenchView({
   onDeleteLibraryFolder,
   onRevealSavedPath,
   onOpenResource,
-  onPreviewResource,
   onStartTrainingFromResource,
   onOpenTraining,
   onRefreshResources,
@@ -1468,10 +1335,6 @@ export function ResourcesWorkbenchView({
   const projectStructureForSelected =
     selectedResource && projectStructureState.resourceId === selectedResource.id
       ? projectStructureState
-      : undefined;
-  const selectedResourceDocument =
-    resourceDocument && selectedResource && resourceDocument.resourceId === selectedResource.id
-      ? resourceDocument
       : undefined;
   const selectedResourceCanStartTraining = Boolean(
     selectedResource &&
@@ -1854,23 +1717,6 @@ export function ResourcesWorkbenchView({
   const selectResource = (resource: ResourceRecord) => {
     setResourceDetail(resource.id);
   };
-
-  /**
-   * Opening a library document renders its canonical Markdown immediately —
-   * reading is the default, not a second click. The explicit Preview action
-   * stays available for a manual refresh.
-   */
-  const autoPreviewedResourceRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!selectedResource?.id || !selectedResource.canonicalMarkdownPath || !onPreviewResource) {
-      return;
-    }
-    if (autoPreviewedResourceRef.current === selectedResource.id) {
-      return;
-    }
-    autoPreviewedResourceRef.current = selectedResource.id;
-    onPreviewResource(selectedResource.id);
-  }, [onPreviewResource, selectedResource?.id, selectedResource?.canonicalMarkdownPath]);
 
   const reportMutationFailure = (kind: ResourceMutationKind, resourceIds: string[]) => {
     if (kind === "delete") {
@@ -2590,9 +2436,6 @@ export function ResourcesWorkbenchView({
     : undefined;
   const selectedResourceTrust = selectedResource ? resourceTrust(selectedResource, language) : undefined;
   const selectedResourceFreshness = selectedResource?.freshness;
-  const selectedResourcePreviewMode = selectedResource
-    ? resourcePreviewMode(selectedResource, language)
-    : undefined;
   // Facts trim: one Source line plus ONE merged status line (index · trust ·
   // freshness · preview). Unindexed resources surface the index notice (or
   // "not indexed") and the reader keeps the existing refresh action.
@@ -2607,19 +2450,8 @@ export function ResourcesWorkbenchView({
         selectedResourceFreshness && selectedResourceFreshness !== "unknown"
           ? describeFreshness(selectedResourceFreshness, language)
           : undefined,
-        selectedResourcePreviewMode,
       ].filter((value): value is string => Boolean(value))
     : [];
-  const selectedResourcePreviewSummary = selectedResource
-    ? resourcePreviewSummary(selectedResource)
-    : undefined;
-  const sandboxPreview =
-    selectedResource && sandboxPreviewInput?.path === selectedResource.sandboxPath
-      ? sandboxPreviewInput
-      : undefined;
-  const standaloneSandboxPreview = !selectedResource && restoreContext?.surface === "sandbox" &&
-    sandboxPreviewInput?.path === (restoreContext.previewPath ?? restoreContext.sandboxPath)
-      ? sandboxPreviewInput : undefined;
   const selectedResourceReuseSummary = selectedResource ? resourceReuseSummary(language) : undefined;
   const hasSelectedResourceFacts = Boolean(
     selectedResourceSource.length || selectedResourceStatusSegments.length || selectedResourceTrainingReadiness,
@@ -2633,8 +2465,7 @@ export function ResourcesWorkbenchView({
   const selectedResourceWhy =
     selectedResourceIndexNotice
       ? selectedResourceIndexNotice.label
-      : selectedResourcePreviewSummary
-        ?? (selectedResourceSourceLabel || undefined);
+      : (selectedResourceSourceLabel || undefined);
   const restoreContextPath = restoreContext?.sandboxPath?.trim() || undefined;
   const restoreContextPreviewPath = restoreContext?.previewPath?.trim() || undefined;
   const restoreContextMeta = restoreContext
@@ -2664,13 +2495,10 @@ export function ResourcesWorkbenchView({
       orientation.primaryAction !== "wait_index" &&
       orientation.primaryAction !== "select_resource",
   );
-  // The orientation card owns the import CTA only in the states where it
-  // actually renders that card; a ready library keeps the toolbar add icon.
-  const orientationOwnsImportCta = Boolean(orientationState) && (
-    orientation?.state === "needs_setup" ||
-    orientationTone === "blocker" ||
-    !canWriteResources
-  );
+  // The orientation card owns the import CTA only when the library is
+  // read-only; a writable library keeps the toolbar add icon so there is
+  // exactly one primary action.
+  const orientationOwnsImportCta = Boolean(orientationState) && !canWriteResources;
 
   useEffect(() => {
     const activeSurface =
@@ -2689,21 +2517,17 @@ export function ResourcesWorkbenchView({
       resourceDetailId: selectedResource?.id,
       resourceDetailTitle: selectedResource?.title,
       selectedResourceId: selectedResource?.id,
-      sandboxPreviewEmbedded: Boolean(sandboxPreview || standaloneSandboxPreview),
-      sandboxPreviewVisible: Boolean(sandboxPreview || standaloneSandboxPreview),
-      sandboxPreviewPath: (sandboxPreview ?? standaloneSandboxPreview)?.path,
       selectedSandboxPath: restoreContext?.sandboxPath ?? sandboxRoot,
       previewPath: restoreContext?.previewPath,
       singleWorkbenchSurface: true,
       compactMode: true,
       modebarHiddenInCompact: true,
-      detailPaneVisible: Boolean(selectedResource || standaloneSandboxPreview),
-      // Sandbox restore is a logical scope; its content uses ResourceReader.
-      // No separate sandbox pane is rendered by this template.
+      detailPaneVisible: Boolean(selectedResource),
+      // Sandbox restore is a logical scope; no sandbox content pane exists.
       sandboxPaneVisible: false,
       previewPaneVisible: false,
     });
-  }, [language, onDebugVisibleFacts, orientation, restoreContext, sandboxRoot, selectedResource, sandboxPreview, standaloneSandboxPreview]);
+  }, [language, onDebugVisibleFacts, orientation, restoreContext, sandboxRoot, selectedResource]);
 
   return (
     <section
@@ -2717,7 +2541,7 @@ export function ResourcesWorkbenchView({
       </div>
       {/* The orientation card owns the only import CTA on an empty library, so
           the search/expand toolbar would be dead chrome until content exists. */}
-      <Library hidden={Boolean(selectedResource || standaloneSandboxPreview)} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && (orientation?.state === "needs_setup" || orientationTone === "blocker" || !canWriteResources)) ? null : (
+      <Library hidden={Boolean(selectedResource)} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && !canWriteResources) ? null : (
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
@@ -3031,8 +2855,6 @@ export function ResourcesWorkbenchView({
           </div>
         </form>
       ) : null}
-
-      {null}
 
       {omitLeftoverLibrary ? null : restoreContext?.surface === "sandbox" ? (
         <div className="resources-inline-context" role="status">
@@ -3474,12 +3296,6 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {standaloneSandboxPreview ? (
-        <ResourceReader parent={localize(language, "title")} title={(standaloneSandboxPreview.relativePath ?? standaloneSandboxPreview.path ?? "").split(/[\\/]/).pop() ?? resourcePreviewHeading(language)} source={standaloneSandboxPreview.path} onBack={() => { setResourceDetail(null); onRestoreContextChange?.(undefined); }}>
-          {standaloneSandboxPreview.previewKind === "markdown" ? <MessageRichContent body={previewBodyWithoutCaptureFrontmatter(standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? "")} language={language} /> : <pre className="resources-knowledge__content-preview-body">{standaloneSandboxPreview.content ?? standaloneSandboxPreview.excerpt ?? standaloneSandboxPreview.html ?? ""}</pre>}
-        </ResourceReader>
-      ) : null}
-
       {selectedResource ? (
         <ResourceReader
           parent={localize(language, "title")}
@@ -3509,7 +3325,7 @@ export function ResourcesWorkbenchView({
               : undefined
           }
           joinLearning={onJoinLearning ? { label: templateCopy[language].joinLearning, onClick: () => onJoinLearning([selectedResource.id]) } : undefined}
-          generatePractice={!sandboxPreview && selectedResourceCanStartTraining ? {
+          generatePractice={selectedResourceCanStartTraining ? {
             label: selectedResourceTrainingIsAvailable ? localize(language, "openCurrentTraining") : templateCopy[language].generatePractice,
             onClick: selectedResourceTrainingIsAvailable ? () => onOpenTraining?.() : startTrainingFromSelectedResource,
             disabled: selectedResourceTrainingIsAvailable ? !onOpenTraining : !onStartTrainingFromResource,
@@ -3521,54 +3337,13 @@ export function ResourcesWorkbenchView({
             aria-label={selectedResource.title}
             data-canonical-markdown={selectedResource.canonicalMarkdownPath ? "true" : "false"}
           >
-          {selectedResourceDocument ? (
-            <div className="resources-knowledge__content-preview" aria-label={resourcePreviewHeading(language)}>
-              <div className="resources-knowledge__content-preview-body resources-knowledge__content-preview-body--markdown">
-                <MessageRichContent
-                  body={previewBodyWithoutDuplicateTitle(
-                    selectedResourceDocument.content,
-                    selectedResource.title,
-                  )}
-                  language={language}
-                />
-              </div>
-            </div>
-          ) : sandboxPreview ? (
-            <div className="resources-knowledge__content-preview" aria-label={resourcePreviewHeading(language)}>
-              {sandboxPreview.previewKind === "markdown" ||
-              /\.md(?:own|own)?$/i.test(sandboxPreview.path ?? sandboxPreview.relativePath ?? "") ? (
-                <div className="resources-knowledge__content-preview-body resources-knowledge__content-preview-body--markdown">
-                  <MessageRichContent
-                    body={previewBodyWithoutDuplicateTitle(
-                      sandboxPreview.content ?? sandboxPreview.excerpt ?? "",
-                      selectedResource.title,
-                    )}
-                    language={language}
-                  />
-                </div>
-              ) : sandboxPreview.html ? (
-                <pre className="resources-knowledge__content-preview-body">{sandboxPreview.html}</pre>
-              ) : sandboxPreview.content || sandboxPreview.excerpt ? (
-                <pre className="resources-knowledge__content-preview-body">
-                  {sandboxPreview.content ?? sandboxPreview.excerpt}
-                </pre>
-              ) : (
-                <div className="resources-knowledge__content-preview-empty">
-                  {selectedResourcePreviewMode ?? resourcePreviewHeading(language)}
-                </div>
-              )}
-            </div>
-          ) : selectedResourceWhy || selectedResourcePreviewSummary ? (
+          {selectedResourceWhy ? (
             <div className="resources-knowledge__sentence">
-              {selectedResourceWhy ? (
-                <p className="resources-knowledge__why">{selectedResourceWhy}</p>
-              ) : (
-                <p className="resources-knowledge__preview-summary">{selectedResourcePreviewSummary}</p>
-              )}
+              <p className="resources-knowledge__why">{selectedResourceWhy}</p>
             </div>
           ) : null}
 
-          {!sandboxPreview && (hasSelectedResourceFacts || selectedResourceTrainingState || selectedResourceCanStartTraining) ? (
+          {(hasSelectedResourceFacts || selectedResourceTrainingState || selectedResourceCanStartTraining) ? (
             <>
             <dl className="resources-knowledge__facts">
               {selectedResourceSource.length > 0 ? (
@@ -3592,7 +3367,7 @@ export function ResourcesWorkbenchView({
                 </div>
               ) : null}
             </dl>
-          {!sandboxPreview && selectedResource?.kind === "code" ? (
+          {selectedResource?.kind === "code" ? (
             <details
               className="resources-knowledge__project-structure"
               onToggle={(event) => {
@@ -3696,19 +3471,6 @@ export function ResourcesWorkbenchView({
             {/* The obvious "read this" action stays visible; everything that
                 manages the file hides behind one clearly-owned section, so
                 the reader shows a single primary row plus collapsed groups. */}
-            {onPreviewResource && (selectedResource.sandboxPath || selectedResource.canonicalMarkdownPath) ? (
-              <div className="resources-knowledge__detail-actions resources-knowledge__detail-actions--preview">
-                <button
-                  className="button button--primary button--compact"
-                  type="button"
-                  onClick={() => onPreviewResource(selectedResource.id)}
-                  disabled={isBrowserPreview && !isLiveBrowserPreview}
-                >
-                  <ArrowRightIcon size={12} />
-                  <span>{resourcePreviewHeading(language)}</span>
-                </button>
-              </div>
-            ) : null}
           <details
             className="resources-knowledge__file-actions"
             open={fileActionsOpen || Boolean(exportState?.message)}

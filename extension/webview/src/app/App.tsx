@@ -111,7 +111,6 @@ import {
   leftoverTrainingHandoffChromeIsNotLive,
   independentTrainingSelectionIsLive,
   leftoverResourceSelectedDetailIsNotLive,
-  leftoverResourceSandboxPreviewIsNotLive,
   leftoverResourceSandboxStateIsNotLive,
   leftoverResourceLibraryListIsNotLive,
   leftoverSettingsProfileRhythmIsNotLive,
@@ -145,6 +144,7 @@ import {
   resolveResourcesBindingIds,
   type ResourcesOrientationAction,
 } from "../../../../shared/src/resourcesOrientationGovernance";
+import { resolveResourceOpenTarget } from "../../../../shared/src/resourceOpen";
 import {
   sanitizeErrorSurfaceText,
   waitingComposerEnqueueFailureText,
@@ -2701,9 +2701,6 @@ export function App() {
   const leftoverTrainingHandoffChromeNotLive = leftoverTrainingHandoffChromeIsNotLive(
     leftoverChromeIdentity,
   ) && !independentTrainingSelectionLive;
-  const leftoverSandboxPreviewNotLive = !data.liveResourceFocus && leftoverResourceSandboxPreviewIsNotLive(
-    leftoverChromeIdentity,
-  );
   const leftoverResourceSelectedDetailNotLive = leftoverResourceSelectedDetailIsNotLive(
     leftoverChromeIdentity,
   );
@@ -3670,14 +3667,14 @@ export function App() {
         void requestResourceIndex();
         return;
       }
-      if (action === "preview_resource") {
+      if (action === "open_resource") {
         const resourceId = resourceConversationContextIds.find((id) =>
           data.resources.some((resource) => resource.id === id),
         );
         if (resourceId && !isBrowserPreview) {
           postMessage({
-            type: "command/execute",
-            payload: { commandId: trainerCommands.previewSandbox, payload: { resourceId } },
+            type: "resource/open",
+            payload: { resourceId },
           });
         }
         return;
@@ -3864,18 +3861,6 @@ export function App() {
     const searchWorkspaceId = data.resourceSearch?.workspaceId;
     const currentWorkspaceId =
       data.memory.workspace?.workspaceId ?? data.workspaceTrainingState?.workspaceId;
-    const liveSelectedResourceDetail = leftoverResourceSelectedDetailNotLive
-      ? undefined
-      : data.memory.selectedResourceDetail;
-    const liveSandboxPreview = leftoverSandboxPreviewNotLive
-      ? undefined
-      : data.memory.sandboxPreview;
-    const previewMatchesSelected = Boolean(
-      selectedResource &&
-        (liveSelectedResourceDetail?.id === selectedResource.id ||
-          (selectedResource.sandboxPath &&
-            liveSandboxPreview?.path === selectedResource.sandboxPath)),
-    );
     const bindings = resolveResourcesBindingIds({
       selectedResourceId: selectedResource?.id,
       selectedCitationId: selectedResource?.citationId,
@@ -3904,7 +3889,9 @@ export function App() {
       searchHitCount: data.resourceSearch?.hits.length ?? data.resourceSearch?.total,
       searchWorkspaceId,
       currentWorkspaceId,
-      hasPreview: previewMatchesSelected,
+      canOpenResource: Boolean(
+        selectedResource && resolveResourceOpenTarget(selectedResource).kind !== "unavailable",
+      ),
       boundPlanId: bindings.boundPlanId,
       boundTrainingCardId: bindings.boundTrainingCardId,
       language: layout.composerLanguage,
@@ -3915,13 +3902,9 @@ export function App() {
   }, [
     data.memory.coachingAdaptation?.materialRecommendation,
     data.memory.coachingAdaptation?.transferSceneCount,
-    leftoverResourceSelectedDetailNotLive,
     leftoverResourceLibraryListNotLive,
     leftoverResourceSandboxStateNotLive,
-    leftoverSandboxPreviewNotLive,
     liveResources,
-    data.memory.sandboxPreview?.path,
-    data.memory.selectedResourceDetail?.id,
     data.memory.workspace?.latestPlanRuntime?.evidenceBinding,
     leftoverTransferSkillNotLive,
     liveTransferState?.state,
@@ -7869,20 +7852,16 @@ export function App() {
     [setComposerDraft],
   );
 
-  const liveSandboxPreview = leftoverSandboxPreviewNotLive
-    ? undefined
-    : data.memory.sandboxPreview;
   const selectedResourceNavigationLabel = leftoverResourceSelectedDetailNotLive
     ? undefined
     : truncateInlineText(
-        liveSandboxPreview?.relativePath ??
-          data.memory.selectedResourceDetail?.title ??
+        data.memory.selectedResourceDetail?.title ??
           data.memory.selectedResourceDetail?.sandboxPath ??
           liveSandboxState?.selectedPath,
         layout.composerLanguage === "zh-CN" ? 22 : 46,
       ) ??
       truncateInlineText(
-        data.memory.selectedResourceDetail?.source ?? liveSandboxPreview?.path,
+        data.memory.selectedResourceDetail?.source,
         layout.composerLanguage === "zh-CN" ? 22 : 46,
       );
   const dockStageProgressLabel = hasFormalPlan && activePlanStage
@@ -9710,8 +9689,6 @@ export function App() {
           onOrientationAction={handleResourcesOrientationAction}
           deletedResources={data.deletedResources}
           sandboxState={liveSandboxState}
-          sandboxPreview={leftoverSandboxPreviewNotLive ? undefined : data.memory.sandboxPreview}
-          resourceDocument={data.resourceDocument}
           resourceWriteAccess={resourceWriteAccess}
           onChooseWorkspaceRoot={
             trainerWorkspaceAdmission?.status === "root-missing"
@@ -9828,15 +9805,6 @@ export function App() {
               type: "resource/open",
               payload: { resourceId, ...options },
             })
-          }
-          onPreviewResource={
-            isBrowserPreview && browserPreviewFixture
-              ? undefined
-              : (resourceId) =>
-                  postMessage({
-                    type: "command/execute",
-                    payload: { commandId: trainerCommands.previewSandbox, payload: { resourceId } },
-                  })
           }
           onRefreshResources={
             isBrowserPreview

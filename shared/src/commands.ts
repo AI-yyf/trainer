@@ -70,7 +70,6 @@ export const trainerCommands = {
   restoreResource: "trainer.resource.restore",
   refreshResourceTrash: "trainer.resource.refreshTrash",
   openResource: "trainer.resource.open",
-  previewSandbox: "trainer.sandbox.preview",
   createSandboxFile: "trainer.sandbox.write",
   createSandboxDirectory: "trainer.sandbox.mkdir",
   renameSandboxPath: "trainer.sandbox.rename",

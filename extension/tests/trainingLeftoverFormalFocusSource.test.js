@@ -82,8 +82,8 @@ test('Training first screen gates leftover handoff card chrome', () => {
   );
   assert.match(source, /leftoverResourceSelectedDetailIsNotLive\(/);
   assert.match(source, /leftoverResourceSelectedDetailNotLive/);
-  assert.match(source, /leftoverResourceSandboxPreviewIsNotLive\(/);
-  assert.match(source, /leftoverSandboxPreviewNotLive/);
+  assert.doesNotMatch(source, /leftoverResourceSandboxPreviewIsNotLive\(/);
+  assert.doesNotMatch(source, /leftoverSandboxPreviewNotLive/);
   assert.match(source, /leftoverResourceSandboxStateIsNotLive\(/);
   assert.match(source, /leftoverResourceSandboxStateNotLive/);
   assert.match(source, /leftoverResourceLibraryListIsNotLive\(/);
