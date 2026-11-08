@@ -104,7 +104,7 @@ def test_workspace_language_keeps_review_rhythm_in_en_us_even_when_turn_context_
 
 def test_generic_plan_next_after_localizes_for_chinese_workspace() -> None:
     from app.core.models import LearningPlan
-    from app.memory.service import (
+    from app.memory.snapshot_builder import (
         _GENERIC_NEXT_AFTER_CURRENT_EN,
         _GENERIC_NEXT_AFTER_CURRENT_ZH,
         _localize_plan_runtime_next_after,
