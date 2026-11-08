@@ -64,7 +64,7 @@
 | P0 | 旅程 3/5/6/9/10/11/12 的真实 Provider/GUI 闭环 | 5/6 已完成真实模型；9/10/11/12 仍缺真实 due queue/长离线；时钟 harness 见 `v4-clock-harness.md` |
 | P0 | 旅程 15/18/19/20 的真实版本变化、双窗口、记忆撤销、多项目长跑 | 真实 VS Code GUI + 双窗口 + 资料变更脚本 |
 | P1 | 20 条旅程尚未形成逐条截图/日志归档 | 用本矩阵作为清单，逐条补 `docs/verification/v4-journey-*`；GUI 20 旅程与 Remote-SSH 重连已归档 |
-| P1 | App/Provider/Memory 巨型模块拆分 | Provider 已拆出 15 个 `llm/provider/*` 模块（约 3.8k 行）；Memory snapshot 与 App render 仍偏大，继续迁移 |
+| P1 | App/Provider/Memory 巨型模块拆分 | Provider 已拆出 15 个 `llm/provider/*` 模块（约 3.8k 行）；Memory snapshot 已迁到 `memory/snapshot_builder.py`（989 行，service 减约 970 行）；App render 仍偏大 |
 | P2 | SCIP 索引解析 | ✅ JSON + 二进制 protobuf（`.scip`）解析；`test_scip_adapter` 6 项行为测试 |
 | P2 | 按需多模态（扫描 PDF/图表） | 🟡 扫描 PDF / 图片本地 Tesseract OCR 已接入（`app/resources/ocr.py`）；图表理解仍依赖 provider vision，未做真实 P 证据 |
 | P0 | 三平台 VSIX / 安装矩阵 | ✅ 三平台 package + installed host E2E 9/9；`v4-release-matrix-2026-11-08.md` |
