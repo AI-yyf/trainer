@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from ..core.clock import utc_now as _system_utc_now
 from ..core.models import TeachingKnowledgeAsset
 
 _last_utc_now: datetime | None = None
@@ -14,7 +15,7 @@ def utc_now() -> datetime:
     # fall back to insertion order when sorted by updated_at. Keep the clock
     # strictly monotonic so the last write always orders first.
     global _last_utc_now
-    now = datetime.now(timezone.utc)
+    now = _system_utc_now()
     if _last_utc_now is not None and now <= _last_utc_now:
         now = _last_utc_now + timedelta(microseconds=1)
     _last_utc_now = now
