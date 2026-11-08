@@ -328,8 +328,18 @@ def main() -> int:
                 "summary": "Project B uses BetaQueue for shared items.",
                 "focus_area": "BetaQueue project queue",
             })
-            project_a_reply, _ = turn(workspace_a, session_a, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_a], active_view="plan")
-            project_b_reply, _ = turn(workspace_b, session_b, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_b], active_view="plan")
+            file_a = {
+                "path": "/tmp/project-a/queue.py",
+                "language_id": "python",
+                "content": "# Project A\nALPHA_QUEUE = \"AlphaQueue\"\n\ndef protect(item):\n    return ALPHA_QUEUE, item\n",
+            }
+            project_a_reply, _ = message(workspace_a, session_a, "只根据当前文件回答：这个项目使用什么队列？只回答名字。", current_file=file_a, include_current_file=True)
+            file_b = {
+                "path": "/tmp/project-b/queue.py",
+                "language_id": "python",
+                "content": "# Project B\nBETA_QUEUE = \"BetaQueue\"\n\ndef protect(item):\n    return BETA_QUEUE, item\n",
+            }
+            project_b_reply, _ = message(workspace_b, session_b, "只根据当前文件回答：这个项目使用什么队列？只回答名字。", current_file=file_b, include_current_file=True)
             report["journeys"]["20_multi_project"] = {
                 "project_a_reply": project_a_reply,
                 "project_b_reply": project_b_reply,
