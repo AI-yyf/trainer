@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..core.models import UserProfile
@@ -1726,8 +1727,61 @@ def build_coaching_messages(
         )
         messages[0]["content"] = system_prompt
 
-    messages.append({"role": "user", "content": message})
+    # The system prompt carries the same material under Runtime Context, but
+    # learners explicitly attach a file/resource to *this* request. Put the
+    # bounded source next to the request as well so instruction-following
+    # models cannot treat it as unrelated background.
+    attached_material = _attached_material_grounding(coaching_context, current_file, message)
+    user_message = message
+    if attached_material:
+        user_message = (
+            f"{message}\n\n## Attached material for this request\n"
+            "This is the source of truth for the answer; quote or use it before general recall.\n\n"
+            f"{attached_material}"
+        )
+    messages.append({"role": "user", "content": user_message})
     return messages
+
+
+def _attached_material_grounding(
+    context: dict[str, Any],
+    current_file: dict[str, object] | None,
+    message: str,
+) -> str:
+    parts: list[str] = []
+    # Auto-grounded library hits already live in the system prompt; only an
+    # explicit resource/current-file attachment belongs next to the request.
+    if context.get("auto_resource_lookup") is True:
+        return ""
+    raw_resources = context.get("requested_resources")
+    if isinstance(raw_resources, list):
+        for item in raw_resources[:4]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or item.get("id") or "resource").strip()
+            summary = str(item.get("summary") or item.get("evidence_summary") or "").strip()
+            if summary:
+                parts.append(f"- {title}: {summary[:1200]}")
+    requested_summary = str(context.get("requested_resource_summary") or "").strip()
+    if requested_summary and not any(requested_summary in part for part in parts):
+        parts.append(f"- Requested grounding: {requested_summary[:1600]}")
+    explicit_file_request = bool(
+        re.search(
+            r"只?根据|参考|引用|资料|附件|文件|attached|attachment|current file|this file|the file",
+            message,
+            re.IGNORECASE,
+        )
+    )
+    if current_file and (parts or explicit_file_request):
+        path = str(current_file.get("path") or "current file").strip()
+        language = str(current_file.get("language_id") or "").strip()
+        content = str(
+            current_file.get("content_excerpt") or current_file.get("content") or ""
+        ).strip()
+        if content:
+            fence = f"```{language}\n" if language else "```\n"
+            parts.append(f"- {path}\n{fence}{content[:6000]}\n```")
+    return "\n\n".join(parts)
 
 
 def _looks_like_first_turn(context: dict[str, Any]) -> bool:

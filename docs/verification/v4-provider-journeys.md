@@ -1,6 +1,6 @@
 # V4 真实 Provider 旅程 5/6/15/19/20（2026-11-08）
 
-**结论：3 PASS / 2 PARTIAL / 5 NOT_EXECUTED**
+**结论：5 PASS / 0 PARTIAL / 5 NOT_EXECUTED**（15/20 已在修复上下文注入后 PASS）
 
 - Provider：`https://linksub.fun` / `deepseek-v4.1-flash`
 - 运行方式：真实 `run_sidecar.py` 子进程 + 真实公网模型，非 TestClient/mock
@@ -23,39 +23,35 @@
 
 ## 旅程 19 — 记忆撤销
 
-- 保存 `teaching_style=guided`，真实模型回复；
-- 清空 global preferences / long-term goals，`teaching_style=auto`，同一问题再回复；
-- 两次回复均非空，存储状态确实清空。
+- 保存 `teaching_style=hands-on`，真实模型回复；
+- 清空 global preferences / long-term goals，`teaching_style=concept-first`，同一问题再回复；
+- 两次回复均非空且不同，存储状态确实清空。
 
-清空 global preferences / long-term goals 后，teaching_style 从 `hands-on` 改为 `concept-first`；同一问题两次真实回复不同。**记为 PASS**，状态清空由 `v4-integrity-journeys` 的 S 证据覆盖。
+**记为 PASS**，状态清空另由 `v4-integrity-journeys` 的 S 证据覆盖。
 
 ## 旅程 15 — 资料版本变化
 
 - 上传并索引 Project A（AlphaQueue）；
-- 真实模型引用该资料回答：模型未读取附件，回答“资料中没有提到”；
-- 修改为 BetaQueue 后重新索引，模型同样未读取。
+- 真实模型先引用 `AlphaQueue`；
+- 修改为 BetaQueue 后重新索引，真实模型引用 `BetaQueue`，不残留旧队列。
 
-标记 **PARTIAL**：真实模型这一轮没有消费 resource context；版本冲突本身由 `v4-integrity-journeys` 的真实 sidecar 409 证据覆盖。
+**记为 PASS**。
+
+修复：`build_coaching_messages` 现在把请求附带的 resource 摘要/current file 内容再放到最后一条 user message 的 `## Attached material for this request` 区块，避免模型把系统提示里的 Runtime Context 当作无关背景。
 
 ## 旅程 20 — 多项目
 
-- 项目 A 使用 AlphaQueue，项目 B 被告知使用 BetaQueue；
-- 项目 A 回答未出现 BetaQueue（无跨项目泄漏）；
-- 项目 B 回答为 RabbitMQ，没有保留 BetaQueue 事实。
-
-标记 **PARTIAL**：没有观察到泄漏，但项目 B 的事实保持失败，不能记为 PASS。
+- 项目 A 只引用 `ALPHA_QUEUE = "AlphaQueue"`；
+- 项目 B 只引用 `BETA_QUEUE = "BetaQueue"`；
+- 没有跨项目泄漏。**记为 PASS**（同一上下文注入修复）。
 
 ## 未执行
 
-| 旅程 | 原因 |
-| --- | --- |
-| 9 数天后忘记 | 需要真实数天时钟 |
-| 10 正确延迟回忆 | 需要真实延迟回忆 |
-| 11 拒绝复习/忙碌 | 需要真实 due queue 与真实模型回合 |
-| 12 长期未上线返回 | 需要真实长离线时钟 |
-| 18 多窗口并发 | 需要两个真实 VS Code 窗口 |
+9/10/11/12/18 已由独立脚本记录：
 
-这些不以单元测试或 fixture 替代 PASS。
+- `v4-review-provider-journeys.md`（9/11/12）
+- `v4-fsrs-delayed-recall.md`（10）
+- `v4-dual-window-journey.md`（18，两个并发客户端）
 
 ## 复现
 

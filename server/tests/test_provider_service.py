@@ -3975,9 +3975,11 @@ def test_build_coaching_messages_skips_first_turn_priority_for_execution_ready_r
             "first_turn_priority": "orient, reassure, clarify learner goal and choose one coaching lane",
         },
     )
-    assert messages[1]["content"] == (
+    assert messages[1]["content"].startswith(
         "Based on the current file and my goal, give me one very small next step with strong teaching value."
     )
+    assert "## Attached material for this request" in messages[1]["content"]
+    assert "def add(a, b)" in messages[1]["content"]
 
 
 def test_build_coaching_messages_skips_first_turn_priority_for_remote_learn_first_verification_request() -> None:

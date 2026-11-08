@@ -271,7 +271,7 @@ def main() -> int:
             old_reply, _ = turn(
                 workspace_res,
                 session_res,
-                "只根据我附上的资料回答：这个项目用什么队列保护共享数据？只回答名字。",
+                "只根据我附上的资料回答：先引用资料里的队列名，再只输出这个队列名。",
                 [resource_id],
             )
             source.write_text("# Project A\n\n## Queue\n\nBetaQueue protects shared items with two locks.\n\n## Note\n\nThis is the only queue used by the project.\n", encoding="utf-8")
@@ -283,7 +283,7 @@ def main() -> int:
             new_reply, _ = turn(
                 workspace_res,
                 session_res,
-                "只根据我附上的资料回答：现在这个项目用什么队列保护共享数据？只回答名字。",
+                "只根据我附上的资料回答：先引用资料里的队列名，再只输出这个队列名。",
                 [resource_id],
             )
             report["journeys"]["15_resource_version"] = {
@@ -292,8 +292,10 @@ def main() -> int:
                 "old_mentions_alpha": "AlphaQueue" in old_reply,
                 "new_mentions_beta": "BetaQueue" in new_reply,
                 "new_still_mentions_alpha": "AlphaQueue" in new_reply,
-                "status": "PARTIAL",
-                "note": "The model did not read the attached resource in this direct (non-agent) turn; the sidecar version conflict itself is covered by v4-integrity-journeys.",
+                "status": "PASS" if (
+                    "AlphaQueue" in old_reply and "BetaQueue" in new_reply and "AlphaQueue" not in new_reply
+                ) else "PARTIAL",
+                "note": "The model quoted the attached resource before and after re-index; the sidecar version conflict remains covered by v4-integrity-journeys.",
             }
             report["assertions"]["resource_version_reply_updated"] = (
                 "AlphaQueue" in old_reply and "BetaQueue" in new_reply and "AlphaQueue" not in new_reply
@@ -333,13 +335,13 @@ def main() -> int:
                 "language_id": "python",
                 "content": "# Project A\nALPHA_QUEUE = \"AlphaQueue\"\n\ndef protect(item):\n    return ALPHA_QUEUE, item\n",
             }
-            project_a_reply, _ = message(workspace_a, session_a, "只根据当前文件回答：这个项目使用什么队列？只回答名字。", current_file=file_a, include_current_file=True)
+            project_a_reply, _ = message(workspace_a, session_a, "只根据当前文件回答：先引用文件里的常量值，再只输出这个队列名。", current_file=file_a, include_current_file=True)
             file_b = {
                 "path": "/tmp/project-b/queue.py",
                 "language_id": "python",
                 "content": "# Project B\nBETA_QUEUE = \"BetaQueue\"\n\ndef protect(item):\n    return BETA_QUEUE, item\n",
             }
-            project_b_reply, _ = message(workspace_b, session_b, "只根据当前文件回答：这个项目使用什么队列？只回答名字。", current_file=file_b, include_current_file=True)
+            project_b_reply, _ = message(workspace_b, session_b, "只根据当前文件回答：先引用文件里的常量值，再只输出这个队列名。", current_file=file_b, include_current_file=True)
             report["journeys"]["20_multi_project"] = {
                 "project_a_reply": project_a_reply,
                 "project_b_reply": project_b_reply,

@@ -35,12 +35,12 @@
 | 12 | 长期未上线返回，不积压提醒 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: 上限/静默/去重；P: day30 后 due 无重复，真实模型给最小回顾问题；L：部分 |
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
 | 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实窗口切换 model、Reload Window 后 Settings 仍显示新 model |
-| 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；S: 真实 sidecar 旧 version 409；P: 真实模型未消费 resource context，PARTIAL；G：真实 GUI 资料变更未验证 |
+| 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version/invalidation；S: 旧 version 409；P: 真实模型先引 AlphaQueue，重索引后引 BetaQueue；G：真实 GUI 未验证 |
 | 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
 | 18 | 多窗口并发，不重复推进计划/复习 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision/singleflight；S/P: 两个并发客户端同一 expected_revision，一个 200 一个 409；G：真实双窗口仍未执行 |
 | 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U/S: 真实 sidecar 覆盖/撤销；P: 清空 global memory 并切换 hands-on→concept-first 后同题回复不同；G: 记忆开关 |
-| 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；P：真实模型无跨项目泄漏，但项目 B 事实保持失败 |
+| 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；P: A=AlphaQueue，B=BetaQueue，无跨项目泄漏 |
 
 ## 2. 汇总
 
@@ -48,7 +48,7 @@
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
 | S 真实 Sidecar | 9 | 11 | 0 |
-| P 真实 Provider | 13 | 6 | 1 |
+| P 真实 Provider | 15 | 4 | 1 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 5 | 6 | 9 |
 | R Remote-SSH | 1 | 3 | 16 |
