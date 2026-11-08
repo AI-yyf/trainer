@@ -247,6 +247,7 @@ export type PlanRuntimeReviewPoint = {
   linkedContext?: string[];
   intervalDays?: number;
   masteryScore?: number;
+  evidenceBasis?: "fsrs_recall" | "no_recall_evidence";
 };
 
 export type PlanRuntimeCoachJudgment = {
@@ -386,6 +387,7 @@ export type ReviewQueueItem = {
   linkedContext?: string[];
   intervalDays?: number;
   masteryScore?: number;
+  evidenceBasis?: "fsrs_recall" | "no_recall_evidence";
 };
 
 export type ReviewQueueActionSnapshot = {

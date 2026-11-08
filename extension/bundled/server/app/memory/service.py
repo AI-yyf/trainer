@@ -357,6 +357,11 @@ class StructuredMemoryService:
         *,
         next_review_at: datetime,
         due_date: datetime | None = None,
+        fsrs_state: str | None = None,
+        stability: float | None = None,
+        difficulty: float | None = None,
+        reps: int | None = None,
+        lapses: int | None = None,
     ) -> MasteryRecord | None:
         """Attach a scheduler's next due date to an existing mastery record.
 
@@ -369,6 +374,16 @@ class StructuredMemoryService:
         current.next_review_at = next_review_at
         current.due_date = due_date or next_review_at
         current.review_source = "fsrs"
+        if fsrs_state:
+            current.fsrs_state = fsrs_state
+        if stability is not None:
+            current.fsrs_stability = stability
+        if difficulty is not None:
+            current.fsrs_difficulty = difficulty
+        if reps is not None:
+            current.fsrs_reps = reps
+        if lapses is not None:
+            current.fsrs_lapses = lapses
         current.updated_at = utc_now()
         return current
 
@@ -404,6 +419,11 @@ class StructuredMemoryService:
             updated_at=now,
             next_review_at=next_review_at,
             review_source=current.review_source if fsrs_owns_schedule else "heuristic",
+            fsrs_stability=current.fsrs_stability,
+            fsrs_difficulty=current.fsrs_difficulty,
+            fsrs_reps=current.fsrs_reps,
+            fsrs_lapses=current.fsrs_lapses,
+            fsrs_state=current.fsrs_state,
         )
         self._mastery[concept] = updated
         return updated
@@ -4822,6 +4842,11 @@ class MemoryService(
                 concept,
                 next_review_at=result.next_due,
                 due_date=result.next_due,
+                fsrs_state=updated_state.state,
+                stability=result.new_stability,
+                difficulty=result.new_difficulty,
+                reps=result.reps,
+                lapses=result.lapses,
             )
         self._persist_structured(workspace_id)
         return {

@@ -938,6 +938,7 @@ export type TrainingWorkbenchTextKey =
   | "followUpReview"
   | "fsrsInterval"
   | "fsrsMastery"
+  | "noRecallEvidence"
   | "reviewDayUnit"
   | "reviewActions"
   | "reviewAccept"
@@ -1023,6 +1024,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "后续和回看",
     fsrsInterval: "间隔",
     fsrsMastery: "掌握度",
+    noRecallEvidence: "无回忆证据",
     reviewDayUnit: "天",
     reviewActions: "复习操作",
     reviewAccept: "开始复习",
@@ -1104,6 +1106,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "Follow-up and review",
     fsrsInterval: "Interval",
     fsrsMastery: "Mastery",
+    noRecallEvidence: "No recall evidence",
     reviewDayUnit: "days",
     reviewActions: "Review actions",
     reviewAccept: "Start review",
@@ -1185,6 +1188,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "Seguimiento y repaso",
     fsrsInterval: "Intervalo",
     fsrsMastery: "Dominio",
+    noRecallEvidence: "Sin evidencia de recuerdo",
     reviewDayUnit: "días",
     reviewActions: "Acciones de repaso",
     reviewAccept: "Comenzar repaso",
@@ -1266,6 +1270,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "Suivi et révision",
     fsrsInterval: "Intervalle",
     fsrsMastery: "Maîtrise",
+    noRecallEvidence: "Aucune preuve de rappel",
     reviewDayUnit: "jours",
     reviewActions: "Actions de révision",
     reviewAccept: "Commencer la révision",
@@ -1347,6 +1352,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "Anschluss und Wiederholung",
     fsrsInterval: "Abstand",
     fsrsMastery: "Beherrschung",
+    noRecallEvidence: "Kein Erinnerungsnachweis",
     reviewDayUnit: "Tage",
     reviewActions: "Wiederholungsaktionen",
     reviewAccept: "Wiederholung starten",
@@ -1428,6 +1434,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "フォローアップと復習",
     fsrsInterval: "間隔",
     fsrsMastery: "習熟度",
+    noRecallEvidence: "想起の証拠なし",
     reviewDayUnit: "日",
     reviewActions: "復習アクション",
     reviewAccept: "復習を開始",
@@ -1509,6 +1516,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "후속 조치와 복습",
     fsrsInterval: "간격",
     fsrsMastery: "숙달도",
+    noRecallEvidence: "회상 근거 없음",
     reviewDayUnit: "일",
     reviewActions: "복습 작업",
     reviewAccept: "복습 시작",
@@ -1590,6 +1598,7 @@ export const trainingWorkbenchTextCopy: Record<
     followUpReview: "Acompanhamento e revisão",
     fsrsInterval: "Intervalo",
     fsrsMastery: "Domínio",
+    noRecallEvidence: "Sem evidência de recordação",
     reviewDayUnit: "dias",
     reviewActions: "Ações de revisão",
     reviewAccept: "Iniciar revisão",

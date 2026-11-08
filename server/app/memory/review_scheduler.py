@@ -55,28 +55,45 @@ class ReviewScheduler:
         mastery: MasteryRecord,
         rating: ReviewRating | str,
     ) -> MasteryRecord:
+        from ..training.fsrs_scheduler import FSRSTrainerCardScheduler, TrainingRating
+
         normalized_rating = self._normalize_rating(rating)
         now = utc_now()
+        scheduler = FSRSTrainerCardScheduler(deck_id=f"memory:{mastery.concept}")
+        card_id = f"concept:{mastery.concept}"
+        state = scheduler.create_card(card_id, mastery.concept)
+        state.stability = mastery.fsrs_stability
+        state.difficulty = mastery.fsrs_difficulty or scheduler.DEFAULT_EASE_FACTOR
+        state.state = mastery.fsrs_state or "new"
+        state.reps = mastery.fsrs_reps
+        state.lapses = mastery.fsrs_lapses
+        result = scheduler.process_review(
+            card_id,
+            getattr(TrainingRating, normalized_rating.name),
+        )
         next_score = self._next_score(mastery.score, normalized_rating)
         next_confidence = self._next_confidence(mastery.confidence, normalized_rating)
-        state = self._next_state(mastery, normalized_rating)
-        interval_days = self._next_interval_days(normalized_rating, next_score)
-        next_review_at = now + timedelta(days=interval_days)
         retrievability = self._estimate_retrievability(
             score=next_score,
             confidence=next_confidence,
-            interval_days=interval_days,
+            interval_days=result.new_interval,
             rating=normalized_rating,
         )
         return MasteryRecord(
             concept=mastery.concept,
             score=next_score,
             confidence=next_confidence,
-            state=state,
+            state=state.state,
             retrievability=retrievability,
-            due_date=next_review_at,
+            due_date=result.next_due,
             updated_at=now,
-            next_review_at=next_review_at,
+            next_review_at=result.next_due,
+            review_source="fsrs",
+            fsrs_stability=result.new_stability,
+            fsrs_difficulty=result.new_difficulty,
+            fsrs_reps=result.reps,
+            fsrs_lapses=result.lapses,
+            fsrs_state=state.state,
         )
 
     def derive_due_reviews(
@@ -234,6 +251,7 @@ class ReviewScheduler:
                     linked_context=linked_context,
                     interval_days=interval_days,
                     mastery_score=mastery.score,
+                    evidence_basis="fsrs_recall",
                 )
             )
 
@@ -677,6 +695,7 @@ class ReviewScheduler:
         linked_context: str,
         interval_days: int | None,
         mastery_score: float | None = None,
+        evidence_basis: Literal["fsrs_recall", "no_recall_evidence"] = "no_recall_evidence",
         force_surface_mode: ReviewQueueSurfaceMode | None = None,
     ) -> ReviewQueueItem:
         surface_mode = force_surface_mode or self._surface_mode(
@@ -698,6 +717,7 @@ class ReviewScheduler:
             linked_context=linked_context,
             interval_days=interval_days,
             mastery_score=round(mastery_score, 3) if mastery_score is not None else None,
+            evidence_basis=evidence_basis,
         )
 
     def _dedupe_items(

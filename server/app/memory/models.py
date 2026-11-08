@@ -56,6 +56,11 @@ class MasteryRecord:
     # "fsrs" dates are owned by the retention scheduler; "heuristic" records
     # have no recall evidence and must not masquerade as scheduled reviews.
     review_source: str = "heuristic"
+    fsrs_stability: float = 0.0
+    fsrs_difficulty: float = 0.0
+    fsrs_reps: int = 0
+    fsrs_lapses: int = 0
+    fsrs_state: str = "new"
 
 
 @dataclass(slots=True)

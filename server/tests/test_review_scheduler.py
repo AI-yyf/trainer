@@ -362,3 +362,32 @@ def test_later_score_update_preserves_the_fsrs_owned_due_date() -> None:
     assert updated.review_source == "fsrs"
     assert updated.next_review_at == due
     assert updated.score == scheduled.score + 0.1
+
+
+def test_due_items_mark_fsrs_recall_vs_no_recall_evidence() -> None:
+    scheduler = ReviewScheduler()
+    reviews = scheduler.derive_due_reviews(
+        plan=build_plan(),
+        lane_snapshot=build_lane_snapshot(),
+        weakness_records=[
+            WeaknessRecord(
+                concept="startup wiring",
+                reason="The config branch still fails before boot completes.",
+                severity=3,
+                recurrence_count=2,
+                latest_example="Patch the config branch and rerun the focused check.",
+                last_seen_context="server/app/bootstrap.py",
+                updated_at=utc_now(),
+                next_review_at=utc_now() + timedelta(hours=12),
+            )
+        ],
+    )
+
+    mastery_items = [item for item in reviews if item.source == "mastery"]
+    assert mastery_items
+    assert all(item.evidence_basis == "fsrs_recall" for item in mastery_items)
+    assert all(
+        item.evidence_basis == "no_recall_evidence"
+        for item in reviews
+        if item.source != "mastery"
+    )

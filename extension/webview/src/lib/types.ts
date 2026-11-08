@@ -396,6 +396,7 @@ export interface ReviewQueueItem {
   linkedContext?: string[];
   intervalDays?: number;
   masteryScore?: number;
+  evidenceBasis?: "fsrs_recall" | "no_recall_evidence";
 }
 
 export interface CoachingState {

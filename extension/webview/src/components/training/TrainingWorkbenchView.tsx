@@ -55,6 +55,7 @@ export interface TrainingReviewItem {
     intervalDays?: number;
     masteryScore?: number;
   };
+  evidenceBasis?: "fsrs_recall" | "no_recall_evidence";
   detail?: string;
   meta?: string;
 }
@@ -1198,6 +1199,10 @@ export function TrainingWorkbenchView({
                               {item.fsrs.masteryScore !== undefined
                                 ? `${trainingWorkbenchText(language, "fsrsMastery")} ${item.fsrs.masteryScore}`
                                 : null}
+                            </p>
+                          ) : item.evidenceBasis === "no_recall_evidence" ? (
+                            <p className="training-review-row__memory muted">
+                              {trainingWorkbenchText(language, "noRecallEvidence")}
                             </p>
                           ) : null}
                           <details className="training-review-row__actions-details">

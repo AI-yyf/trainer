@@ -4362,7 +4362,11 @@ export function App() {
         focusArea: item.focusArea ?? item.concept,
         taskHint: pickFirstText(item.taskHint, item.reason) ?? item.reason,
         due: item.dueAt,
-        fsrs: { intervalDays: item.intervalDays, masteryScore: item.masteryScore },
+        evidenceBasis: item.evidenceBasis,
+        fsrs:
+          item.evidenceBasis === "fsrs_recall"
+            ? { intervalDays: item.intervalDays, masteryScore: item.masteryScore }
+            : undefined,
         detail: pickFirstText(item.taskHint, item.reason),
         meta: joinInlineMeta(
           pickLanguageAlignedTrainingList(layout.composerLanguage, [item.focusArea, item.severity, item.dueAt]),

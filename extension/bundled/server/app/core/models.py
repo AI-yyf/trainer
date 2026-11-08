@@ -1269,6 +1269,7 @@ class ReviewQueueItem(BaseModel):
     linked_context: str = ""
     interval_days: int | None = None
     mastery_score: float | None = None
+    evidence_basis: Literal["fsrs_recall", "no_recall_evidence"] = "no_recall_evidence"
 
 
 class TrainingPlanBinding(BaseModel):
