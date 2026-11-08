@@ -34,7 +34,7 @@ test('resource detail shows a governed indexed preview while delegating full ren
 
   assert.match(
     source,
-    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; line\?: number \},\s*\) =>/,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number \},\s*\) =>/,
   );
   assert.match(source, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
   assert.match(source, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);

@@ -2453,3 +2453,48 @@ test('browse and ignored admissions keep resource search available as a read-onl
     ]);
   }
 });
+
+test('openResourceCommand opens a text file with the OS default app when requested', async () => {
+  const executedCommands = [];
+  const openedExternally = [];
+  const vscodeMock = {
+    Uri: {
+      file(value) {
+        return { fsPath: value, path: value, scheme: 'file' };
+      },
+    },
+    Range: class Range {},
+    commands: {
+      async executeCommand(...args) {
+        executedCommands.push(args);
+      },
+    },
+    env: {
+      async openExternal(uri) {
+        openedExternally.push(uri);
+      },
+    },
+    workspace: { workspaceFolders: [] },
+  };
+  const { openResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
+  const context = createContext();
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-resource-external-'));
+  const expectedPath = path.join(workspaceRoot, 'notes', 'guide.md');
+  fs.mkdirSync(path.dirname(expectedPath), { recursive: true });
+  fs.writeFileSync(expectedPath, '# Guide');
+  const resource = context.getHostState().bootstrap.resources[0];
+  const bootstrap = context.getHostState().bootstrap;
+  context.getHostState = () => ({ bootstrap, workspace: { workspaceFolder: workspaceRoot } });
+  resource.sandboxPath = undefined;
+  resource.source = 'notes/guide.md';
+
+  const result = await openResourceCommand(context, {
+    resourceId: 'resource-1',
+    openExternal: true,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(executedCommands.length, 0);
+  assert.equal(openedExternally.length, 1);
+  assert.equal(openedExternally[0].fsPath, expectedPath);
+});

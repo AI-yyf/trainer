@@ -146,7 +146,7 @@ export interface ResourcesWorkbenchViewProps {
   onDeleteLibraryFolder?: (path: string) => Promise<ResourceMutationOutcome>;
   /** Reveal a downloaded file path through the host's existing file-manager action. */
   onRevealSavedPath?: (path: string) => void;
-  onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; line?: number }) => void;
+  onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; openExternal?: boolean; line?: number }) => void;
   onPreviewResource?: (resourceId: string) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
@@ -1937,7 +1937,7 @@ export function ResourcesWorkbenchView({
 
   const openResourceInVsCode = (
     resource: ResourceRecord,
-    options?: { openOriginal?: boolean; line?: number },
+    options?: { openOriginal?: boolean; openExternal?: boolean; line?: number },
   ) => {
     // Row click is a native "open file" action: keep the tree visible and let
     // VS Code own the editor. The Reader remains available from Space.
@@ -3488,6 +3488,26 @@ export function ResourcesWorkbenchView({
           updatedAt={selectedResource.updatedAt}
           onBack={() => setResourceDetail(null)}
           askCoach={onAskCoach ? { label: templateCopy[language].askCoach, onClick: () => onAskCoach([selectedResource.id]) } : undefined}
+          openInEditor={
+            selectedResourceOpenTarget.kind === "vscode" && onOpenResource
+              ? {
+                  label: localize(language, "openInVsCode"),
+                  onClick: () => openResourceInVsCode(selectedResource),
+                }
+              : undefined
+          }
+          openExternally={
+            selectedResourceOpenTarget.kind !== "unavailable" && onOpenResource
+              ? {
+                  label:
+                    selectedResourceOpenTarget.kind === "browser"
+                      ? localize(language, "openInBrowser")
+                      : localize(language, "openWithDefaultApp"),
+                  onClick: () =>
+                    openResourceInVsCode(selectedResource, { openExternal: true }),
+                }
+              : undefined
+          }
           joinLearning={onJoinLearning ? { label: templateCopy[language].joinLearning, onClick: () => onJoinLearning([selectedResource.id]) } : undefined}
           generatePractice={!sandboxPreview && selectedResourceCanStartTraining ? {
             label: selectedResourceTrainingIsAvailable ? localize(language, "openCurrentTraining") : templateCopy[language].generatePractice,

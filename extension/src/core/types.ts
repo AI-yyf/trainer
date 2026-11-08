@@ -1885,7 +1885,7 @@ type TrainerWebviewMessageBody =
     }
   | {
       type: 'resource/open';
-      payload: { resourceId: string; openOriginal?: boolean; line?: number };
+      payload: { resourceId: string; openOriginal?: boolean; openExternal?: boolean; line?: number };
     }
   | { type: 'ui/focus'; payload: { target: 'conversation' | 'task' | 'evaluation' } }
   /**

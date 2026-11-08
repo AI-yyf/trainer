@@ -799,3 +799,14 @@
   height: 18px;
   object-fit: contain;
 }
+
+.template-reader-open-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+
+.template-reader-open-actions .button {
+  min-height: 26px;
+}

@@ -115,6 +115,7 @@ export type ResourceTextKey =
   | "unknown"
   | "openInVsCode"
   | "openOriginal"
+  | "openWithDefaultApp"
   | "previewResource"
   | "emptyOpenHint"
   | "openInBrowser"
@@ -257,6 +258,7 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   fileActionsTitle: { zh: "\u6587\u4ef6\u64cd\u4f5c", en: "File actions" },
   openInVsCode: { zh: "\u5728 VS Code \u4e2d\u6253\u5f00", en: "Open in VS Code" },
   openOriginal: { zh: "\u6253\u5f00\u539f\u59cb\u6587\u4ef6", en: "Open original file" },
+  openWithDefaultApp: { zh: "\u7528\u9ed8\u8ba4\u5e94\u7528\u6253\u5f00", en: "Open with default app" },
   previewResource: { zh: "\u9884\u89c8\u8d44\u6599", en: "Preview resource" },
   emptyOpenHint: { zh: "\u9009\u4e2d\u8d44\u6599\u540e\u4f1a\u76f4\u63a5\u5728 VS Code \u4e2d\u6253\u5f00\u3002", en: "Select a resource to open it directly in VS Code." },
   openInBrowser: { zh: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00", en: "Open in browser" },
@@ -436,6 +438,7 @@ export const resourceTextLocaleOverrides: Record<
     fileActionsTitle: "Acciones de archivo",
     openInVsCode: "Abrir en VS Code",
     openOriginal: "Abrir archivo original",
+    openWithDefaultApp: "Abrir con la app predeterminada",
     previewResource: "Vista previa del recurso",
     emptyOpenHint: "Selecciona un recurso para abrirlo directamente en VS Code.",
     sandboxTitle: "Sandbox protegido",
@@ -567,6 +570,7 @@ export const resourceTextLocaleOverrides: Record<
     fileActionsTitle: "Actions de fichier",
     openInVsCode: "Ouvrir dans VS Code",
     openOriginal: "Ouvrir le fichier original",
+    openWithDefaultApp: "Ouvrir avec l'application par défaut",
     previewResource: "Aperçu de la ressource",
     emptyOpenHint: "Sélectionnez une ressource pour l'ouvrir directement dans VS Code.",
     sandboxTitle: "Sandbox protege",
@@ -698,6 +702,7 @@ export const resourceTextLocaleOverrides: Record<
     fileActionsTitle: "Dateiaktionen",
     openInVsCode: "In VS Code oeffnen",
     openOriginal: "Originaldatei oeffnen",
+    openWithDefaultApp: "Mit Standard-App oeffnen",
     previewResource: "Materialvorschau",
     emptyOpenHint: "Wähle ein Material aus, um es direkt in VS Code zu öffnen.",
     sandboxTitle: "Geschuetzte Sandbox",
@@ -829,6 +834,7 @@ export const resourceTextLocaleOverrides: Record<
     fileActionsTitle: "文件操作",
     openInVsCode: "VS Code で開く",
     openOriginal: "元のファイルを開く",
+    openWithDefaultApp: "既定のアプリで開く",
     previewResource: "資料をプレビュー",
     emptyOpenHint: "資料を選ぶと VS Code で直接開きます。",
     sandboxTitle: "保護されたサンドボックス",
@@ -960,6 +966,7 @@ export const resourceTextLocaleOverrides: Record<
     fileActionsTitle: "파일 작업",
     openInVsCode: "VS Code에서 열기",
     openOriginal: "원본 파일 열기",
+    openWithDefaultApp: "기본 앱으로 열기",
     previewResource: "자료 미리보기",
     emptyOpenHint: "자료를 선택하면 VS Code에서 바로 열립니다.",
     sandboxTitle: "보호된 샌드박스",
@@ -1091,6 +1098,7 @@ export const resourceTextLocaleOverrides: Record<
     fileActionsTitle: "A\u00e7\u00f5es de arquivo",
     openInVsCode: "Abrir no VS Code",
     openOriginal: "Abrir arquivo original",
+    openWithDefaultApp: "Abrir com o app padrão",
     previewResource: "Prévia do recurso",
     emptyOpenHint: "Selecione um recurso para abri-lo diretamente no VS Code.",
     sandboxTitle: "Sandbox protegido",

@@ -1047,6 +1047,7 @@ export async function openResourceCommand(
   const payloadRecord = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
   const resourceId = payloadRecord?.resourceId;
   const openOriginal = payloadRecord?.openOriginal === true;
+  const openExternal = payloadRecord?.openExternal === true;
   const requestedLine =
     typeof payloadRecord?.line === 'number' && Number.isFinite(payloadRecord.line)
       ? Math.max(1, Math.floor(payloadRecord.line))
@@ -1107,9 +1108,13 @@ export async function openResourceCommand(
   }
 
   const extension = path.extname(targetUri.path).toLowerCase();
-  if (isNativeOpenExtension(extension) && targetUri.scheme === 'file') {
-    // PDF/Office/archive/media binaries render as garbage walls in a text
-    // editor; the OS default app is the honest "open the original" path.
+  if (
+    targetUri.scheme === 'file' &&
+    (openExternal || isNativeOpenExtension(extension))
+  ) {
+    // Explicit "open with default app" plus PDF/Office/archive/media binaries:
+    // the OS default app is the honest path; text files stay in VS Code
+    // unless the learner explicitly asked for the external app.
     await vscode.env.openExternal(targetUri);
   } else {
     await vscode.commands.executeCommand('vscode.open', targetUri, {

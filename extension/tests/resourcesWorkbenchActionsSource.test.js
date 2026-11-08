@@ -75,7 +75,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl\?: \(\) => void;/);
   assert.match(
     viewSource,
-    /onOpenResource\?: \(resourceId: string, options\?: \{ openOriginal\?: boolean; line\?: number \}\) => void;/,
+    /onOpenResource\?: \(resourceId: string, options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number \}\) => void;/,
   );
   assert.match(viewSource, /onRefreshResources\?: \(\) => void \| Promise<void>;/);
   assert.match(inlineCopy, /pendingIndex: \{ zh: "\\u5f85\\u7d22\\u5f15", en: "Waiting to be indexed" \}/);
@@ -95,7 +95,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl/);
   assert.match(
     viewSource,
-    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; line\?: number \},\s*\) =>/,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number \},\s*\) =>/,
   );
   assert.match(viewSource, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
   assert.match(viewSource, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
