@@ -1,22 +1,24 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`458440f`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`586fa93`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `458440f`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 62 个 |
-| 代码差异（v1.4.0..HEAD） | 175 files, +18407 / −9462（含两次 CRLF→LF 规范化） |
-| 最新 ci 工作流 | run 42440125873 **success** |
-| 最新 Cross-Platform Verify | run 42440125890 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 代码与 CI 基线 | `586fa93`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 64 个 |
+| 代码差异（v1.4.0..HEAD） | 178 files, +29988 / −21018（含两次 CRLF→LF 规范化） |
+| 最新 ci 工作流 | run 42447502632 **success** |
+| 最新 Cross-Platform Verify | run 42447502755 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 62 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 64 个见 `git log v1.4.0..main`）：
 
 ```
+586fa93 fix(training): 字符串匹配通过不再升级为 mastery
+2f7eb47 docs(status): 刷新到 458440f/62 提交 + 3902 测试
 458440f feat(review): 队列评分走 FSRS + 无回忆证据标记
 b50e90d fix(review): mastery 调度带来源、ReviewScheduler 只读 FSRS
 6c181c7 test(eval): host 断言 training_phase=verify
@@ -25,8 +27,6 @@ dae8952 ci: 触发 V4 复核
 dcd122e chore(build): V4 VSIX manifest
 601c09d fix(v4): 自由聊天/证据失效/技能恢复/FSRS due
 ef95beb fix(provider): 数字 Token Plan 限额归为额度耗尽
-cdbda43 test(remote): provider 忙时继续跑完 L2
-ee74ed2 test(remote): 真实 L2 结果如实回填（2/3/5/6 PASS，4 FAIL）
 4e8554f refactor(resources): 抽出 libraryPaths 纯路径责任
 bdb8986 design(resources): + 图标靠搜索、回收站页脚化
 c77e6e5 design(learning): 保留环形日进度
@@ -37,6 +37,8 @@ e758ec5 fix(ui): 学习头部单行 + 工作区准入说明
 ```
 
 V4 审计与首轮修复：`docs/maturity/2026-11-08-v4-audit.md`（自由聊天不再被 review 字样劫持；资料删除按资源哈希失效证据；Skill 未被应用不清零失败；FSRS due 回写 MasteryRecord）。
+
+FSRS 单一调度已落地（96da02c..586fa93）：`/evaluate/current-file` 显式 `training_phase`，失败 Verify 写 AGAIN；`MasteryRecord.review_source` 区分 `fsrs`/`heuristic`，`update_mastery` 不再覆盖 FSRS 到期；`ReviewScheduler.process_mastery_review` 走 FSRS 评分；weakness/reflection/plan 到期项标 `no_recall_evidence`；字符串/验收匹配即使“通过”也不再记为 `verified_by_evaluator`，必须有真实动态检查通过才升级 mastery。
 
 ## 2. 修复清单（按目标阶段）
 
@@ -84,8 +86,8 @@ V4 审计与首轮修复：`docs/maturity/2026-11-08-v4-audit.md`（自由聊天
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `fd3bab5`） | 42353789383 | success |
-| Cross-Platform Verify（main `fd3bab5`，linux 构建 ubuntu-22.04） | 42353789398 | **success（9/9）** |
+| ci（main `586fa93`） | 42447502632 | success |
+| Cross-Platform Verify（main `586fa93`，linux 构建 ubuntu-22.04） | 42447502755 | **success（9/9）** |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
 ## 5. 跨平台安装证据
