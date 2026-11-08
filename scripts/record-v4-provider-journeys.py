@@ -178,6 +178,20 @@ def main() -> int:
                 })
                 return str(record["id"])
 
+            def turn(workspace_id: str, session_id: str, text: str, resource_ids: list[str] | None = None, **extra: object) -> tuple[str, dict]:
+                status, payload = _request(port, "POST", "/turn", {
+                    **provider,
+                    "workspace_id": workspace_id,
+                    "session_id": session_id,
+                    "message": text,
+                    "intent": "coach",
+                    "resource_ids": resource_ids or [],
+                    **extra,
+                })
+                if status != 200:
+                    raise RuntimeError(f"turn failed: {status} {payload}")
+                return str((payload.get("reply") or {}).get("content") or ""), payload
+
             def save_style(workspace_id: str, style: str) -> None:
                 status, payload = _request(port, "POST", "/memory/settings", {
                     "workspace_id": workspace_id,
@@ -254,7 +268,7 @@ def main() -> int:
                 "resource_id": resource_id,
                 "enable_network": False,
             })
-            old_reply, _ = message(
+            old_reply, _ = turn(
                 workspace_res,
                 session_res,
                 "只根据我附上的资料回答：这个项目用什么队列保护共享数据？只回答名字。",
@@ -266,7 +280,7 @@ def main() -> int:
                 "resource_id": resource_id,
                 "enable_network": False,
             })
-            new_reply, _ = message(
+            new_reply, _ = turn(
                 workspace_res,
                 session_res,
                 "只根据我附上的资料回答：现在这个项目用什么队列保护共享数据？只回答名字。",
@@ -314,8 +328,8 @@ def main() -> int:
                 "summary": "Project B uses BetaQueue for shared items.",
                 "focus_area": "BetaQueue project queue",
             })
-            project_a_reply, _ = message(workspace_a, session_a, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_a], active_view="plan")
-            project_b_reply, _ = message(workspace_b, session_b, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_b], active_view="plan")
+            project_a_reply, _ = turn(workspace_a, session_a, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_a], active_view="plan")
+            project_b_reply, _ = turn(workspace_b, session_b, "只根据附上的资料回答：这个项目使用什么队列？只回答名字。", [resource_b], active_view="plan")
             report["journeys"]["20_multi_project"] = {
                 "project_a_reply": project_a_reply,
                 "project_b_reply": project_b_reply,

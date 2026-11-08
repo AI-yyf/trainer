@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_at": "2026-11-08T21:33:17.496949+00:00",
+  "recorded_at": "2026-11-08T21:37:59.851822+00:00",
   "provider": {
     "base_url": "https://linksub.fun",
     "model": "deepseek-v4.1-flash"
@@ -8,26 +8,26 @@
   "journeys": {
     "5_preference_adaptation": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "元组只保证**自身直接引用不变**，不递归冻结内部对象；列表是可变对象，通过元组持有其引用仍可原地修改。\n元组不可变指“不能改元组元素指向”，但 `t[0]` 指向的列表本身可 `append`/赋值。\n若想真正不可变，用 `tuple` 包住内部序列或选不可变类型（如字符串/元组）。\n\n```python\nt = ([1, 2],)\nt[0].append(3)\nprint(t)  # ([1, 2, 3],)\n```",
-      "concept_first_reply": "元组不可变指元组保存的**元素引用**不能换，不是递归冻结引用指向的对象。\n列表本身可变，所以可通过 `t[0]` 原地修改其内容，元组仍指向同一个列表。\n若要真正不可变，内部也用元组/字符串等不可变对象。\n\n```python\nt = ([1, 2],)\nt[0].append(3)\nprint(t)  # ([1, 2, 3],)\n```",
-      "hands_on_chars": 212,
-      "concept_first_chars": 172,
+      "hands_on_reply": "元组只保证其**直接元素引用**不可变，不递归冻结内部对象；列表是可变对象，通过元组保存的引用仍可原地修改。\n最小例子：\n\n```python\nt = (1, [2])\nt[1].append(3)\nprint(t)  # (1, [2, 3])\n```",
+      "concept_first_reply": "元组只固定元素的引用，不冻结引用指向的对象；列表是可变对象，原地修改不改变引用。\n\n```python\nt = (1, [2])\nt[1].append(3)\nprint(t)      # (1, [2, 3])\nt[1] = [9]    # TypeError: 元组元素不可重新赋值\n```",
+      "hands_on_chars": 127,
+      "concept_first_chars": 149,
       "different": true,
       "status": "PASS"
     },
     "6_preference_change": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "元组只保证**自身直接引用不变**，不递归冻结内部对象；列表是可变对象，通过元组持有其引用仍可原地修改。\n元组不可变指“不能改元组元素指向”，但 `t[0]` 指向的列表本身可 `append`/赋值。\n若想真正不可变，用 `tuple` 包住内部序列或选不可变类型（如字符串/元组）。\n\n```python\nt = ([1, 2],)\nt[0].append(3)\nprint(t)  # ([1, 2, 3],)\n```",
-      "concept_first_reply": "元组不可变指元组保存的**元素引用**不能换，不是递归冻结引用指向的对象。\n列表本身可变，所以可通过 `t[0]` 原地修改其内容，元组仍指向同一个列表。\n若要真正不可变，内部也用元组/字符串等不可变对象。\n\n```python\nt = ([1, 2],)\nt[0].append(3)\nprint(t)  # ([1, 2, 3],)\n```",
-      "hands_on_chars": 212,
-      "concept_first_chars": 172,
+      "hands_on_reply": "元组只保证其**直接元素引用**不可变，不递归冻结内部对象；列表是可变对象，通过元组保存的引用仍可原地修改。\n最小例子：\n\n```python\nt = (1, [2])\nt[1].append(3)\nprint(t)  # (1, [2, 3])\n```",
+      "concept_first_reply": "元组只固定元素的引用，不冻结引用指向的对象；列表是可变对象，原地修改不改变引用。\n\n```python\nt = (1, [2])\nt[1].append(3)\nprint(t)      # (1, [2, 3])\nt[1] = [9]    # TypeError: 元组元素不可重新赋值\n```",
+      "hands_on_chars": 127,
+      "concept_first_chars": 149,
       "different": true,
       "status": "PASS",
       "note": "Same prompt after the stored teaching_style changed from hands-on to concept-first."
     },
     "19_memory_revoke": {
-      "before_reply": "元组不可变指创建后不能修改元素（增删改），但可包含可变对象。最小例子：`t = (1, [2]); t[1].append(3)` 合法（列表可变），`t[0] = 9` 报错（元组本身不可变）。",
-      "after_revoke_reply": "元组不可变指创建后不能增删改元素，其内部引用固定，任何修改操作都会报错或生成新对象。\n元组只保证“引用不变”，若元素本身是可变对象（如列表），其内部内容仍可修改。\n最小例子：\n\n```python\nt = (1, [2])\nt[1].append(3)  # 合法，t 变为 (1, [2, 3])\nt[0] = 9        # TypeError: 'tuple' object does not support item assignment\n```",
+      "before_reply": "元组创建后其元素引用不可修改（不能增删改元素、不能重新赋值），因此可哈希、可安全共享。\n但元组内若含可变对象（如 list），该对象本身仍可被修改。\n最小例子：`t=(1,[2]); t[1].append(3)` 合法，`t[0]=9` 报错。",
+      "after_revoke_reply": "元组不可变指创建后不能修改其元素（不能增删改），因此可安全用作字典键和共享数据。\n但元组内若含可变对象（如列表），该对象本身仍可被修改。\n最小例子：`t = (1, [2]); t[1].append(3)` 合法，`t[0] = 9` 报错。",
       "changed": true,
       "both_nonempty": true,
       "status": "PASS",
@@ -35,7 +35,7 @@
     },
     "15_resource_version": {
       "old_reply": "资料中没有提到任何队列或共享数据保护机制，因此无法回答。",
-      "new_reply": "未提供相关资料，无法回答。",
+      "new_reply": "资料中没有提到任何队列或共享数据保护机制，因此无法回答。",
       "old_mentions_alpha": false,
       "new_mentions_beta": false,
       "new_still_mentions_alpha": false,
@@ -43,8 +43,8 @@
       "note": "The model did not read the attached resource in this direct (non-agent) turn; the sidecar version conflict itself is covered by v4-integrity-journeys."
     },
     "20_multi_project": {
-      "project_a_reply": "资料中没有提到任何队列信息。",
-      "project_b_reply": "资料中没有提到任何队列的名字。",
+      "project_a_reply": "资料中没有提到任何项目或队列信息，无法回答。",
+      "project_b_reply": "资料中没有提到任何队列的信息。",
       "a_leaks_b": false,
       "b_mentions_beta": false,
       "status": "PARTIAL",
@@ -80,6 +80,6 @@
       "note": "需要两个真实 VS Code 窗口；本次未执行"
     }
   },
-  "elapsed_ms": 41563,
+  "elapsed_ms": 35744,
   "ok": true
 }
