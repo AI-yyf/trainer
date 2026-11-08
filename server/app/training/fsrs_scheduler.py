@@ -18,7 +18,6 @@ from typing import Any
 from fsrs import Card, Rating, Scheduler, State
 
 from ..core.clock import utc_now as _clock_now
-
 from ..pedagogy.evidence_controls import apply_review_frequency_bias
 
 
