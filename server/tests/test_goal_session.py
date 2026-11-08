@@ -188,6 +188,34 @@ def test_new_explicit_goal_pauses_but_preserves_the_previous_focus(tmp_path: Pat
         assert by_id[first["goalId"]]["title"] == "实现 PPO"
 
 
+def test_restarting_a_paused_goal_reuses_it_instead_of_duplicating(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path / "data"))
+    with TestClient(app) as client:
+        session_id = _start_session(client)
+        first = client.post(
+            "/goal/action",
+            json={"session_id": session_id, "workspace_id": "w-goal", "action": "start", "title": "实现 PPO"},
+        ).json()["goal"]
+        second = client.post(
+            "/goal/action",
+            json={"session_id": session_id, "workspace_id": "w-goal", "action": "start", "title": "掌握 RAG 检索"},
+        ).json()["goal"]
+        assert second["status"] == "active"
+
+        restarted = client.post(
+            "/goal/action",
+            json={"session_id": session_id, "workspace_id": "w-goal", "action": "start", "title": "实现 PPO"},
+        ).json()["goal"]
+
+        assert restarted["goalId"] == first["goalId"]
+        assert restarted["status"] == "active"
+        goals = client.get("/goal/list", params={"workspace_id": "w-goal"}).json()["goals"]
+        assert len(goals) == 2
+        by_id = {goal["goalId"]: goal for goal in goals}
+        assert by_id[first["goalId"]]["status"] == "active"
+        assert by_id[second["goalId"]]["status"] == "paused"
+
+
 def test_evaluation_activity_is_attributed_once_per_artifact(tmp_path: Path) -> None:
     app = create_app(_settings(tmp_path / "data"))
     with TestClient(app) as client:

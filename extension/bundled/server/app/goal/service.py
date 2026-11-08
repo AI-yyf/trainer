@@ -147,13 +147,23 @@ class GoalService:
 
         plan_id, stage_id, position = _active_plan_position(plan)
         existing = self.current(scope)
-        if existing is not None and self._same_title(existing.title, normalized):
-            if existing.status == "active":
-                return existing
+        same_title = next(
+            (
+                goal
+                for goal in self.list(scope)
+                if goal.status != "completed" and self._same_title(goal.title, normalized)
+            ),
+            None,
+        )
+        if same_title is not None:
+            if same_title.status == "active":
+                return same_title
             if source == "coach_detected":
-                return existing
+                return same_title
+            if existing is not None and existing.goal_id != same_title.goal_id:
+                self._mutate(existing, lambda goal: self._set_status(goal, "paused"))
             return self._mutate(
-                existing,
+                same_title,
                 lambda goal: self._refresh_identity(
                     goal,
                     session_id=session_id,
@@ -162,7 +172,7 @@ class GoalService:
                     position=position,
                     status="active",
                 ),
-            ) or existing
+            ) or same_title
         if existing is not None and existing.status == "active":
             if source == "coach_detected":
                 # Observed learning intent never replaces an explicit focus.
