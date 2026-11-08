@@ -263,11 +263,11 @@ test('Settings keeps the long model list searchable and defers inner save or tes
   // instead of repeating the model string (it already shows in chip + picker).
   assert.match(source, /saveAndUseConnection: string;/);
   assert.match(source, /const saveProviderConnectionLabel = modelPickerCopy\.saveAndUseConnection/);
-  assert.match(source, /label=\{saveProviderConnectionLabel\}/);
+  assert.match(source, /ariaLabel=\{saveProviderConnectionLabel\}/);
   assert.match(source, /const modelDiscoveryGuidanceActive = canFindDraftModels \|\| hasDiscoveredDraftModels;/);
   assert.match(source, /const showProviderDetailActions =\s*!modelDiscoveryGuidanceActive \|\| showSecondaryModelDiscoveryAction;/);
   assert.match(source, /\{!modelDiscoveryGuidanceActive \? \(\s*<ActionButton/);
-  assert.match(source, /\{!modelDiscoveryGuidanceActive && showProviderDetailTestAction \? \(/);
+  assert.match(source, /className="settings-api-key-test"/);
 });
 
 test('Settings clears stale model state when the provider transport changes', () => {
@@ -309,4 +309,13 @@ test('Settings clears stale model state when the provider transport changes', ()
   assert.match(transportReset[1], /modelTokenLimits: undefined,/);
   assert.match(transportReset[1], /catalogModels: \[\],/);
   assert.doesNotMatch(transportReset[1], /resolveProviderModelTokenState|apiKey:/);
+});
+
+test('smart paste auto-discovers and preselects a real model', () => {
+  const source = fs.readFileSync(settingsSourcePath, "utf8");
+  assert.match(source, /setAutoDiscoverAfterPaste\(true\)/);
+  assert.match(source, /if \(!\(draftModelListingMatches && availableModels\.length > 0\)\)/);
+  assert.match(source, /setModelPickerOpen\(true\)/);
+  assert.doesNotMatch(source, /onProviderDraftChange\(\{ model: availableModels\[0\]/);
+  assert.match(source, /protocol: "openai_chat_completions_compatible" as const/);
 });

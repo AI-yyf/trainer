@@ -180,6 +180,8 @@ export interface ProviderConnectionController {
   providerSavePayload: Record<string, unknown>;
   /** Acknowledged save/clear: the draft matches the host again. */
   markProviderDraftSaved: () => void;
+  /** Discard local edits and return to the host-owned connection facts. */
+  resetProviderDraft: () => void;
   providerSpeedTestResults: ProviderEndpointSpeedTestResult[];
   providerSpeedTestPending: boolean;
   runProviderSpeedTest: (urls: string[]) => void;
@@ -245,6 +247,11 @@ export function useProviderConnectionController({
     providerDraftIsDirtyRef.current = false;
     setDraftState((current) => (current.apiKey ? { ...current, apiKey: "" } : current));
   }, []);
+
+  const resetProviderDraft = useCallback(() => {
+    providerDraftIsDirtyRef.current = false;
+    setDraftState(providerDraftSource);
+  }, [providerDraftSource]);
 
   const providerDraftHasUnsavedApiKey = providerDraft.apiKey.trim().length > 0;
   const providerDraftHasChanges = useMemo(
@@ -317,6 +324,7 @@ export function useProviderConnectionController({
     providerDraftHasUnsavedApiKey,
     providerSavePayload,
     markProviderDraftSaved,
+    resetProviderDraft,
     providerSpeedTestResults,
     providerSpeedTestPending,
     runProviderSpeedTest,

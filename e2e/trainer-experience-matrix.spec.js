@@ -275,35 +275,17 @@ async function exerciseTraining(page, scenario) {
 
 async function openConnectionDetails(page) {
   await openSettingsCategory(page, "connection");
-  // Connected state shows the compact summary card — enter the edit level,
-  // then drill into the advanced "Connection details" level through the
-  // collapsible entry row.
   const editButton = page.getByRole("button", { name: /Edit configuration|编辑配置/ });
   const detail = page.locator(".coach-settings-view__provider-detail");
-  await expect(editButton.or(detail).first()).toBeVisible();
   if (await editButton.count()) {
     await editButton.click();
   }
   await expectSingleVisible(detail);
-  const sectionHeader = detail.locator(".collapse-section__header");
-  await expectSingleVisible(sectionHeader);
-  if ((await sectionHeader.getAttribute("aria-expanded")) !== "true") {
-    await sectionHeader.click();
-  }
-  await expect(sectionHeader).toHaveAttribute("aria-expanded", "true");
   return detail;
 }
 
 async function openProviderConnectionFields(page) {
-  // Editable fields (including the API key) live in the edit level's form —
-  // when the advanced details level is showing, step back first.
   const fields = page.locator('form.settings-sheet__minor-body:has(input[type="password"])');
-  if ((await fields.count()) === 0) {
-    await page
-      .locator(".coach-settings-view__provider-detail .collapse-section__header")
-      .first()
-      .click();
-  }
   await expectSingleVisible(fields);
   return fields;
 }
@@ -503,13 +485,6 @@ async function assertPersistenceContract(page, scenario, actionResult) {
       return;
     case "settings_detail":
       await expectSingleVisible(page.locator(".coach-settings-view__provider-detail"));
-      await expect
-        .poll(() =>
-          page
-            .locator(".coach-settings-view__provider-detail .collapse-section__header")
-            .getAttribute("aria-expanded"),
-        )
-        .toBe("true");
       return;
     case "preview_active_view":
       await expect.poll(() =>

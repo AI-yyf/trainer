@@ -56,7 +56,7 @@ test('operation message surface union and banner gate localize scoped messages t
   // The global banner renders only when the message is visible on the active view.
   assert.match(
     source,
-    /\{operationMessage && operationMessageVisible && !\(operationMessageSurface === "global" && operationMessage\.tone === "success" && activeView !== "coach"\) \? \(/,
+    /\{operationMessage && operationMessageVisible && !\(operationMessageSurface === "global" && operationMessage\.tone === "success" && activeView !== "coach" && activeView !== "settings"\) \? \(/,
   );
   assert.doesNotMatch(
     source,

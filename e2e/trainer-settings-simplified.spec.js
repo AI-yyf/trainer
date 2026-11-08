@@ -1,34 +1,29 @@
 const { openSettingsCategory, openSettingsIndex } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 
-test("connection editing exposes required fields first and keeps optional tools in details", async ({ page }) => {
+test("connection editing is one complete surface", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=simplified-settings");
   await openSettingsCategory(page, "connection");
-  await page.locator('[data-settings-detail="connection"] .settings-sheet__pane').getByRole("button", { name: "Edit configuration", exact: true }).click();
+  await page.locator('[data-settings-detail="connection"]').getByRole("button", { name: "Edit configuration", exact: true }).click();
   await expect(page.getByLabel("Service root")).toBeVisible();
   await expect(page.getByLabel("API Key", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Connection name (optional)", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".settings-endpoint-speed")).toHaveCount(0);
-  const details = page.locator(".coach-settings-view__provider-detail .collapse-section__header").first();
-  await details.click();
   await expect(page.getByLabel("Connection name (optional)", { exact: true })).toBeVisible();
+  await expect(page.locator(".settings-advanced-card")).toBeVisible();
   await expect(page.locator(".settings-endpoint-speed")).toBeVisible();
-  await expect(page.getByLabel("Service root")).toHaveCount(0);
-  await details.click();
   await expect(page.getByLabel("Service root")).toBeVisible();
 });
 
 test("settings index names the learning folder, not the managed data path", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=zh-CN&scenario=workspace-admission&workspaceAdmission=project-found&connection=connected&run=settings-workspace-summary");
   await openSettingsIndex(page);
-  const workspaceRow = page.locator('[data-template=SettingsIndex] li').nth(2);
+  const workspaceRow = page.locator('[data-template=SettingsIndex][data-settings-variant=page] li').nth(2);
   await expect(workspaceRow).toContainText("D:\\TrainerWorkspace");
-  await expect(page.locator('[data-template=SettingsIndex]')).not.toContainText("globalStorage");
-  await expect(page.locator('[data-template=SettingsIndex]')).not.toContainText("sidecar");
+  await expect(page.locator('[data-template=SettingsIndex][data-settings-variant=page]')).not.toContainText("globalStorage");
+  await expect(page.locator('[data-template=SettingsIndex][data-settings-variant=page]')).not.toContainText("sidecar");
 
   await page.goto("/vscode-preview.html?view=settings&lang=zh-CN&scenario=workspace-admission&workspaceAdmission=root-missing&connection=connected&run=settings-workspace-missing");
   await openSettingsIndex(page);
-  const missingRow = page.locator('[data-template=SettingsIndex] li').nth(2);
+  const missingRow = page.locator('[data-template=SettingsIndex][data-settings-variant=page] li').nth(2);
   await expect(missingRow).toContainText("未选择学习文件夹");
   await expect(missingRow.getByRole("button", { name: "选择学习文件夹", exact: true })).toBeVisible();
 });
@@ -52,7 +47,7 @@ test('remote support uses the host window identity and is absent in a local wind
 test("settings keyboard navigation cycles only through visible destinations", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=settings&lang=en-US&connection=connected&run=settings-keyboard");
   await openSettingsIndex(page);
-  const entries = page.locator('[data-template=SettingsIndex] button');
+  const entries = page.locator('[data-template=SettingsIndex][data-settings-variant=page] button');
   await expect(entries).toHaveCount(4);
   await entries.first().focus();
   await page.keyboard.press("Tab");

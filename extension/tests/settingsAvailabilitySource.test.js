@@ -191,10 +191,10 @@ test('settings keeps availability as the compact source of provider truth', () =
   // banner so trust is never stated twice.
   assert.match(
     source,
-    /const showAvailabilityStrip =\s*!showConnectionSummary &&\s*providerSetupReason !== "workspace_untrusted" &&\s*\(Boolean\(backendRecovery\) \|\|\s*\(showConnectionForm && connectionView !== "advanced"\)\);/,
+    /const showAvailabilityStrip =\s*!showConnectionSummary &&\s*providerSetupReason !== "workspace_untrusted" &&\s*\(Boolean\(backendRecovery\) \|\|\s*\(\(!providerCoachReady \|\| Boolean\(lastTestFailure\) \|\| providerTestTransportFailed\) && showConnectionForm\)\);/,
   );
   assert.match(source, /\{showAvailabilityStrip \? availabilityState : null\}/);
-  assert.match(source, /\{connectionView === "advanced" \? \(/);
+  assert.doesNotMatch(source, /\{connectionView === "advanced" \? \(/);
   assert.doesNotMatch(source, /providerDetailRequested/);
   assert.doesNotMatch(source, /const providerDetailOpen =/);
   assert.doesNotMatch(source, /settings-sheet__setup-card/);
@@ -390,7 +390,7 @@ test('settings blocks a draft model that conflicts with its connection policy be
   assert.match(cta, /shouldRepairDraftModelPolicy\s*\? currentDraftModelPolicyMessage \?\? modelDiscoveryBlockedReason/);
   assert.match(cta, /shouldRepairDraftModelPolicy\s*\? focusDraftModelPicker/);
   assert.match(source, /currentDraftModelPolicyMessage \?\?\s*settingsPhrase\(language, "saveConnectionDetail"\)/);
-  assert.match(source, /currentDraftModelPolicyMessage \?\?\s*settingsPhrase\(language, "verifyConnectionDetail"\)/);
+  assert.match(source, /className="settings-api-key-test"[\s\S]*?disabled=\{!canRetestProvider\}/);
 });
 
 test('settings takes rejected credentials directly to the API key field', () => {
@@ -416,10 +416,7 @@ test('settings takes rejected credentials directly to the API key field', () => 
   assert.match(source, /apiKeyInput\?\.scrollIntoView\(\{ block: "center" \}\);/);
   assert.match(source, /apiKeyInput\?\.focus\(\{ preventScroll: true \}\);/);
   assert.match(source, /setProviderApiKeyFocusRequested\(false\);/);
-  assert.match(
-    source,
-    /const openProviderDetails = \(\) => \{\s*setAdvancedReturnView\(connectionView === "edit" \? "edit" : "auto"\);\s*setConnectionView\("advanced"\);/,
-  );
+  assert.match(source, /shouldOpenProviderDetails\s*\? \(\) => setConnectionView\("edit"\)/);
   assert.match(source, /shouldRepairProviderCredentials\s*\? openProviderApiKey/);
 });
 
@@ -507,7 +504,7 @@ test('availability exposes only non-secret provider facts', () => {
   assert.doesNotMatch(card, /providerDraft\.apiKey|apiKey\b/);
   assert.match(
     source,
-    /<input\s+ref=\{apiKeyInputRef\}\s+type="password"\s+value=\{providerDraft\.apiKey\}/,
+    /<input\s+ref=\{apiKeyInputRef\}\s+type=\{apiKeyVisible \? "text" : "password"\}\s+aria-label=\{copy\.apiKey\}\s+value=\{providerDraft\.apiKey\}/,
   );
 });
 
@@ -541,11 +538,11 @@ test('settings keeps connection fields in a semantic form with a guarded Enter a
 
   assert.match(
     source,
-    /<form\s+className="settings-sheet__minor-body"\s+onSubmit=\{\(event\) => \{\s*event\.preventDefault\(\);\s*if \(canSaveProviderConnection\) \{\s*onSaveProvider\?\.\(\);\s*\}\s*\}\}/,
+    /<form\s+className="settings-sheet__minor-body settings-model-editor"\s+onSubmit=\{\(event\) => \{\s*event\.preventDefault\(\);\s*if \(canSaveProviderConnection\) \{\s*onSaveProvider\?\.\(\);\s*\}\s*\}\}/,
   );
   assert.match(
     source,
-    /<input\s+ref=\{apiKeyInputRef\}\s+type="password"\s+value=\{providerDraft\.apiKey\}/,
+    /<input\s+ref=\{apiKeyInputRef\}\s+type=\{apiKeyVisible \? "text" : "password"\}\s+aria-label=\{copy\.apiKey\}\s+value=\{providerDraft\.apiKey\}/,
   );
 });
 

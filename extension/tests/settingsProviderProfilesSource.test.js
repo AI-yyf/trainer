@@ -67,7 +67,7 @@ test('settings provider profile actions are wired through App and rendered in Se
     settingsSource,
     /const saveProviderConnectionLabel = modelPickerCopy\.saveAndUseConnection;/,
   );
-  assert.match(settingsSource, /label=\{saveProviderConnectionLabel\}/);
+  assert.match(settingsSource, /ariaLabel=\{saveProviderConnectionLabel\}/);
   assert.match(settingsSource, /title=\{saveProviderConnectionTitle\}/);
   assert.match(settingsSource, /onClick=\{onSaveProvider\}/);
   assert.match(settingsSource, /localizedSaveProfileLabel/);

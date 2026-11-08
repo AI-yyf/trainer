@@ -11002,7 +11002,7 @@ export function App() {
         </UtilityOverlay>
       ) : null}
 
-      {operationMessage && operationMessageVisible && !(operationMessageSurface === "global" && operationMessage.tone === "success" && activeView !== "coach") ? (
+      {operationMessage && operationMessageVisible && !(operationMessageSurface === "global" && operationMessage.tone === "success" && activeView !== "coach" && activeView !== "settings") ? (
         <div className="template-global-state">
           <SystemState kind={operationMessage.tone === "error" ? "recoverable-error" : operationMessage.tone === "success" ? "success" : "information"}
             title={sanitizeErrorSurfaceText(operationStatusMessageText(operationMessage, layout.composerLanguage), layout.composerLanguage)}>

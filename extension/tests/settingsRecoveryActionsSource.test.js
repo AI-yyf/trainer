@@ -40,7 +40,7 @@ test('Settings offers a direct sidecar restart and avoids duplicate model discov
   assert.match(source, /canRestartSidecar\s*\? \{\s*\.\.\.sidecarRestartCopy\(language\),/);
   assert.match(source, /action: onRestartSidecar,/);
   assert.match(source, /const showSecondaryModelDiscoveryAction = !canFindDraftModels;/);
-  assert.match(source, /\{showSecondaryModelDiscoveryAction \? \(/);
+  assert.match(source, /\{providerSaved && !providerHasDraftChanges && onRefreshProviderModels \? \(/);
 });
 
 test('Settings routes the sidecar recovery action through the existing extension command', () => {

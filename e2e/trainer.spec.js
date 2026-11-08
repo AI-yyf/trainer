@@ -1288,22 +1288,15 @@ test.describe("Trainer three-destination shell", () => {
     });
 
     await expectActiveView(page, "en-US", "settings");
-    // The connected state shows the compact summary card — enter edit mode,
-    // then expand the collapsed "Connection details" section.
+    // The connected state shows the compact summary card — edit mode is the
+    // single complete configuration surface.
     await openSettingsCategory(page, "connection");
     const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
     await expect(editButton).toBeVisible();
     await editButton.click();
-    const detailHeader = page
-      .locator(".coach-settings-view__provider-detail")
-      .locator(".collapse-section__header")
-      .first();
-    if ((await detailHeader.getAttribute("aria-expanded")) !== "true") {
-      await detailHeader.click();
-    }
     await expect(page.locator("main")).toContainText("Protocol");
-    await expect(page.locator("main")).toContainText("Connection check");
-    await expect(page.locator("main")).toContainText("Profiles");
+    await expect(page.locator("main")).toContainText("Connection diagnostics");
+    await expect(page.locator("main")).toContainText("Saved connections");
     await expect(page.locator("main")).toContainText("Model ready");
     await expect(page.getByText("Connection needs test", { exact: true })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);

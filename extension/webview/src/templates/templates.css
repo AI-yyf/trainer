@@ -130,6 +130,37 @@
 .template-settings-index strong { display: block; font-size: var(--trainer-font-md); font-weight: 500; }
 .template-settings-index small { display: block; margin-top: 4px; color: var(--fg-muted); font-size: var(--trainer-font-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .template-settings-index__icon { display: inline-flex; color: var(--fg-muted); }
+
+/* Wide Settings: a persistent destination rail beside the detail pane. The
+   index page remains the narrow-screen contract, so no category is ever
+   reachable only through a horizontal scroll or a hidden overflow menu. */
+.template-settings-detail--split {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.template-settings-detail__content { min-width: 0; }
+.template-settings-detail__nav { position: sticky; top: 0; min-width: 0; padding-top: 2px; }
+.template-settings-index--rail { padding-block: 0; }
+.template-settings-index--rail ul { display: flex; flex-direction: column; gap: 2px; }
+.template-settings-index--rail button {
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.template-settings-index--rail button:hover { border-color: color-mix(in srgb, var(--line) 30%, transparent); }
+.template-settings-index--rail button[data-settings-active="true"] {
+  border-color: color-mix(in srgb, var(--line) 42%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 62%, transparent);
+}
+.template-settings-index--rail strong { font-size: var(--trainer-font-xs); font-weight: 500; }
+.template-settings-index--rail .template-settings-index__icon { flex: none; }
+@media (max-width: 719px) {
+  .template-settings-detail--split { display: block; }
+  .template-settings-detail__nav { display: none; }
+}
 .template-overflow { position: relative; width: fit-content; margin-top: 6px; }
 .template-overflow > summary { display: grid; place-items: center; width: 24px; height: 24px; list-style: none; border-radius: 6px; color: var(--fg-muted); cursor: pointer; }
 .template-overflow > summary::-webkit-details-marker { display: none; }

@@ -98,7 +98,7 @@ import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
 import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
 import { CollapseSection } from "../common/CollapseSection";
 import { StatusPill } from "../StatusPill";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ComposeIcon, FileIcon, PlayIcon, PlusIcon, RefreshIcon, TrashIcon, UploadIcon } from "../icons";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ComposeIcon, EyeIcon, FileIcon, PlayIcon, PlusIcon, RefreshIcon, TrashIcon, UploadIcon } from "../icons";
 import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
 import { RemoteIcon } from "../icons/brand/trainerBrand";
 import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
@@ -968,6 +968,7 @@ interface CoachSettingsViewSheetProps {
   className?: string;
   labels?: Partial<CoachSettingsLabels>;
   onProviderDraftChange: (patch: Partial<ProviderDraft>) => void;
+  onResetProviderDraft?: () => void;
   providerStatus?: SettingsSectionStatus;
   coachDefaultsStatus?: SettingsSectionStatus;
   workspaceControlStatus?: SettingsSectionStatus;
@@ -1930,6 +1931,7 @@ export function CoachSettingsView({
   const {
     providerDraft,
     setProviderDraft,
+    resetProviderDraft,
     providerApiKeyFocusRequest,
     providerSpeedTestResults,
     providerSpeedTestPending,
@@ -1980,6 +1982,7 @@ export function CoachSettingsView({
       providerSpeedTestResults={providerSpeedTestResults}
       providerSpeedTestPending={providerSpeedTestPending}
       onSpeedTestEndpoints={runProviderSpeedTest}
+      onResetProviderDraft={resetProviderDraft}
       onProviderDraftChange={(patch) => {
         setProviderDraft((current) => {
           const hasProtocol = Object.prototype.hasOwnProperty.call(patch, "protocol");
@@ -2061,6 +2064,7 @@ function CoachSettingsViewSheet({
   className,
   labels,
   onProviderDraftChange,
+  onResetProviderDraft,
   providerStatus,
   coachDefaultsStatus,
   workspaceControlStatus,
@@ -2173,8 +2177,7 @@ function CoachSettingsViewSheet({
   const classes = ["settings-sheet", "coach-settings-view", className].filter(Boolean).join(" ");
   const providerDirectoryRef = useRef<HTMLDivElement | null>(null);
   const providerTemplatesRef = useRef<HTMLDivElement | null>(null);
-  const [connectionView, setConnectionView] = useState<"auto" | "edit" | "add" | "advanced">("auto");
-  const [advancedReturnView, setAdvancedReturnView] = useState<"auto" | "edit">("auto");
+  const [connectionView, setConnectionView] = useState<"auto" | "edit" | "add">("auto");
   const apiKeyInputRef = useRef<HTMLInputElement | null>(null);
   const modelPickerRef = useRef<HTMLDetailsElement | null>(null);
 
@@ -2191,6 +2194,11 @@ function CoachSettingsViewSheet({
   // otherwise the summary and the inner select both show the same model.
   const modelPickerAutoOpenRef = useRef(!providerDraft.model.trim());
   const [modelPickerOpen, setModelPickerOpen] = useState(modelPickerAutoOpenRef.current);
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  // A pasted relay blob fills URL + key; the next render fetches that
+  // connection's real model catalog automatically instead of asking the
+  // learner to find a separate "refresh" button.
+  const [autoDiscoverAfterPaste, setAutoDiscoverAfterPaste] = useState(false);
   useEffect(() => {
     if (!modelPickerAutoOpenRef.current || !providerDraft.model.trim()) {
       return;
@@ -3588,10 +3596,16 @@ function CoachSettingsViewSheet({
       onProviderDraftChange({
         baseUrl: paste.baseUrl,
         apiKey: paste.apiKey,
+        // New API advertises an OpenAI-compatible /v1 surface; the protocol is
+        // still verified by the live probe before any capability is credited.
+        ...(isNewApiConnectionType(paste.connectionType)
+          ? { protocol: "openai_chat_completions_compatible" as const }
+          : {}),
         ...(providerDraft.name.trim() || providerDraft.baseUrl.trim()
           ? {}
           : { name: providerConnectionLabelFromPaste(paste) }),
       });
+      setAutoDiscoverAfterPaste(true);
       return "blob";
     }
     if (field === "apiKey" && looksLikeProviderServiceAddress(text)) {
@@ -3606,7 +3620,7 @@ function CoachSettingsViewSheet({
   };
   const providerPasteHintCopy = (outcome: ReturnType<typeof applyProviderSmartPaste>): string => {
     if (outcome === "blob") {
-      return settingsText(language, "已识别连接信息:服务地址和密钥已自动填入。接下来点「获取模型」选一个模型,然后保存即可。", "Recognized the connection info: base URL and API key are filled in. Next, fetch models, pick one, and save.");
+      return settingsText(language, "已识别连接信息:地址和密钥已填入,正在获取模型;保存前可以换一个。", "Connection recognized: address and key filled. Fetching models now; you can switch before saving.");
     }
     if (outcome === "moved-url") {
       return settingsText(language, "这里粘贴的是服务地址,已帮你移到「服务根地址」。密钥请粘到「API 密钥」。", "That looks like a service address — moved it to Base URL. Paste the key into API key.");
@@ -3655,6 +3669,39 @@ function CoachSettingsViewSheet({
           ? copy.modelFetchLoading
           : modelDiscoveryActionLabel);
   const canRefreshModels = providerDraftReadyForModelDiscovery && modelListStatus !== "loading";
+  useEffect(() => {
+    if (!autoDiscoverAfterPaste || !providerDraftReadyForModelDiscovery) {
+      return;
+    }
+    if (modelListStatus === "loading") {
+      return;
+    }
+    setAutoDiscoverAfterPaste(false);
+    if (!(draftModelListingMatches && availableModels.length > 0)) {
+      onRefreshProviderModels?.();
+    }
+  }, [
+    autoDiscoverAfterPaste,
+    availableModels.length,
+    draftModelListingMatches,
+    modelListStatus,
+    onRefreshProviderModels,
+    providerDraftReadyForModelDiscovery,
+  ]);
+  // A fetched catalog with no current choice opens the picker for an explicit
+  // selection. We never silently pick an arbitrary model on the learner's
+  // behalf; the list is one click away and the default stays unset.
+  useEffect(() => {
+    if (
+      currentDraftModel ||
+      modelListStatus !== "ready" ||
+      availableModels.length === 0 ||
+      modelPickerOpen
+    ) {
+      return;
+    }
+    setModelPickerOpen(true);
+  }, [availableModels.length, currentDraftModel, modelListStatus, modelPickerOpen]);
   const canSaveProviderConnection = Boolean(
     onSaveProvider &&
     !providerSaveBusy &&
@@ -3699,6 +3746,12 @@ function CoachSettingsViewSheet({
         : savedProviderProfilesAvailable
           ? settingsText(language, "先应用一个保存的连接。", "Apply a saved profile first.")
           : settingsText(language, "填写 provider、protocol、模型和 API key。", "Fill provider, protocol, base URL, model, and API key.");
+  const draftConnectionFactsChanged =
+    providerHasDraftChanges &&
+    (draftProtocol !== savedProtocol ||
+      normalizedDraftBaseUrl !== normalizedSavedBaseUrl ||
+      providerDraft.model.trim() !== provider.model.trim() ||
+      providerDraftHasApiKey);
   const providerSetupChecks = [
     {
       id: "provider",
@@ -3715,8 +3768,16 @@ function CoachSettingsViewSheet({
     {
       id: "model",
       label: copy.model,
-      value: provider.model || providerDraft.model || copy.notConfigured,
-      state: provider.model || providerDraft.model ? "ok" : "missing",
+      value: providerHasDraftChanges
+        ? providerDraft.model || copy.notConfigured
+        : provider.model || copy.notConfigured,
+      state: providerHasDraftChanges
+        ? providerDraft.model
+          ? "ok"
+          : "missing"
+        : provider.model
+          ? "ok"
+          : "missing",
     },
     {
       id: "key",
@@ -3727,8 +3788,10 @@ function CoachSettingsViewSheet({
     {
       id: "test",
       label: copy.lastTest,
-      value: lastTestLabel,
-      state: providerTestPending ? "warn" : providerTestPassed ? "ok" : provider.configured ? "warn" : "missing",
+      value: draftConnectionFactsChanged
+        ? settingsText(language, "草稿尚未测试", "Draft not tested")
+        : lastTestLabel,
+      state: providerTestPending ? "warn" : draftConnectionFactsChanged ? "warn" : providerTestPassed ? "ok" : provider.configured ? "warn" : "missing",
     },
   ];
   const coachCapabilityLabel = providerCoachReady
@@ -4116,10 +4179,6 @@ function CoachSettingsViewSheet({
     return () => window.cancelAnimationFrame(frameId);
   }, [providerApiKeyFocusRequested]);
 
-  const openProviderDetails = () => {
-    setAdvancedReturnView(connectionView === "edit" ? "edit" : "auto");
-    setConnectionView("advanced");
-  };
   const openProviderApiKey = () => {
     setConnectionView("edit");
     setProviderApiKeyFocusRequested(true);
@@ -4149,7 +4208,7 @@ function CoachSettingsViewSheet({
     !showConnectionSummary &&
     providerSetupReason !== "workspace_untrusted" &&
     (Boolean(backendRecovery) ||
-      (showConnectionForm && connectionView !== "advanced"));
+      ((!providerCoachReady || Boolean(lastTestFailure) || providerTestTransportFailed) && showConnectionForm));
   const connectionHost = (provider.baseUrl || providerDraft.baseUrl || "")
     .replace(/^https?:\/\//i, "")
     .split("/")[0];
@@ -4290,7 +4349,7 @@ function CoachSettingsViewSheet({
               : canRetestProvider
                 ? onTestProvider
                 : shouldOpenProviderDetails
-                  ? () => openProviderDetails()
+                  ? () => setConnectionView("edit")
                   : onSaveProvider;
   const effectiveAvailabilityPrimaryCta: {
     label: string;
@@ -4343,6 +4402,12 @@ function CoachSettingsViewSheet({
     Boolean(provider.apiKeyConfigured) &&
     !connectionTestFailed;
   const connectionModelFull = provider.model || providerDraft.model || copy.notConfigured;
+  const connectionModelLimitSummary = [
+    provider.contextWindowTokens ? `ctx ${formatTokenValue(provider.contextWindowTokens)}` : null,
+    provider.maxOutputTokens ? `out ${formatTokenValue(provider.maxOutputTokens)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const connectionModelSummary =
     (provider.model || providerDraft.model || "").replace(/^MiniMax-/i, "") || copy.notConfigured;
   const connectionSummaryStatusLabel = providerTestPending
@@ -4368,6 +4433,12 @@ function CoachSettingsViewSheet({
   const connectionSummaryCard = showConnectionSummary ? (
     <div className="settings-connection-summary">
       <div className="settings-connection-summary__main">
+        <div className="settings-connection-summary__eyebrow">
+          <span className="settings-connection-summary__provider">
+            {provider.profileLabel?.trim() || provider.name?.trim() || copy.provider}
+          </span>
+          <StatusPill tone={resolvedAvailabilityTone}>{connectionSummaryStatusLabel}</StatusPill>
+        </div>
         <div className="settings-connection-summary__identity">
           <span
             className="settings-connection-summary__dot"
@@ -4379,19 +4450,16 @@ function CoachSettingsViewSheet({
           </strong>
         </div>
         <div className="settings-connection-summary__meta">
-          <StatusPill tone={resolvedAvailabilityTone}>{connectionSummaryStatusLabel}</StatusPill>
           {connectionHost ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="settings-connection-summary__host" title={provider.baseUrl}>
-                {connectionHost}
-              </span>
-            </>
+            <span className="settings-connection-summary__host" title={provider.baseUrl}>
+              {connectionHost}
+            </span>
+          ) : null}
+          {connectionHost && connectionSummaryNote ? <span aria-hidden="true">·</span> : null}
+          {connectionSummaryNote ? (
+            <span className="settings-connection-summary__note-inline">{connectionSummaryNote}</span>
           ) : null}
         </div>
-        {connectionSummaryNote ? (
-          <p className="settings-sheet__note settings-sheet__note--compact">{connectionSummaryNote}</p>
-        ) : null}
       </div>
       <div className="settings-actions settings-actions--compact">
         {connectionReadyForUse && onNavigateToView ? (
@@ -4427,6 +4495,26 @@ function CoachSettingsViewSheet({
           detail={settingsPhrase(language, "editConfigurationDetail")}
           onClick={() => setConnectionView("edit")}
         />
+      </div>
+      <div className="settings-connection-model">
+        <div className="settings-connection-model__copy">
+          <span className="settings-connection-model__label">
+            {settingsText(language, "聊天模型", "Chat model")}
+          </span>
+          <strong className="settings-connection-model__value" title={connectionModelFull}>
+            {connectionModelFull}
+          </strong>
+          {connectionModelLimitSummary ? (
+            <span className="settings-connection-model__limits">{connectionModelLimitSummary}</span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="settings-connection-model__change"
+          onClick={focusDraftModelPicker}
+        >
+          {settingsText(language, "更换模型", "Change model")}
+        </button>
       </div>
       {providerSaved &&
       (onTestProvider || onSaveProviderProfile || onUseProviderTemplateLabel) ? (
@@ -4499,11 +4587,6 @@ function CoachSettingsViewSheet({
     ),
     44,
   );
-  // A configured connection always shows its summary card in the detail —
-  // returning users must see name/model/state at a glance, not an empty pane
-  // between tests.
-  const shouldShowProviderConnectionSummary =
-    providerSaved || providerHasDraftChanges || (provider.configured && Boolean(provider.baseUrl.trim()));
   const showAvailabilityChecklist =
     providerHasDraftChanges || (!providerCoachReady && !shouldRoutePrimaryToSavedProfiles);
   const renderProviderSetupChecks = (className: string) => (
@@ -4650,6 +4733,14 @@ function CoachSettingsViewSheet({
     !settingsIndexOpen &&
     !backendRecovery &&
     settingsStatusIssues.some((issue) => issue.target === "connection");
+  // A section only shows the blockers that belong to it. Trust lives in
+  // Workspace, so a healthy model connection no longer opens under a wall of
+  // workspace-permission copy.
+  const visibleSettingsStatusIssues = settingsStatusIssues.filter(
+    (issue) =>
+      issue.target === activeSettingsCategory &&
+      !(issue.id === "unsaved" && connectionView === "edit"),
+  );
   const showProviderDetailTestAction =
     availabilityStripReduced ||
     !canRetestProvider ||
@@ -5199,7 +5290,7 @@ function CoachSettingsViewSheet({
           ))}
           </div>
           <div className="settings-provider-bar__actions">
-            {providerSaved && !showConnectionSummary ? (
+            {providerSaved && !showConnectionSummary && !showConnectionForm ? (
               <button
                 type="button"
                 className="settings-provider-bar__icon-button"
@@ -5313,49 +5404,18 @@ function CoachSettingsViewSheet({
       />
     </div>
   );
-  const showProviderDetailStatePill =
-    shouldShowProviderConnectionSummary &&
-    (providerHasDraftChanges || !providerCoachReady || providerNeedsRetest);
-  // r1-g2-4: the duplicate "连接" eyebrow and the mid-level "‹ 连接" back were
-  // removed — SettingsDetail already owns the section title and the single
-  // back affordance, and the provider bar row carries the identity summary.
-  const providerAdvancedEntry = (
-    <div className="settings-sheet__support coach-settings-view__provider-detail collapse-section collapse-section--level-2">
-      <div className="collapse-section__header-row">
-        <button
-          type="button"
-          className="collapse-section__header"
-          aria-expanded="false"
-          onClick={openProviderDetails}
-        >
-          <ChevronRightIcon size={12} aria-hidden />
-          <span className="collapse-section__title">
-            <span className="eyebrow">{settingsGlobalCopy.settingsConnectionDetails}</span>
-          </span>
-          {showProviderDetailStatePill ? (
-            <span className="collapse-section__badge">
-              <StatusPill tone={resolvedAvailabilityTone}>
-                {localizedResolvedAvailabilityStatusLabel}
-              </StatusPill>
-            </span>
-          ) : null}
-          {shouldShowProviderConnectionSummary ? (
-            <span className="collapse-section__subtitle">
-              <span
-                className="settings-sheet__defaults-preview"
-                title={providerConnectionSummary}
-                data-full-value={providerConnectionSummary}
-              >
-                {providerPreviewSummaryText}
-              </span>
-            </span>
-          ) : null}
-        </button>
-      </div>
-    </div>
-  );
   const providerPrimaryActions = showProviderDetailActions ? (
-    <div className="settings-actions settings-actions--compact settings-actions--primary">
+    <div className="settings-actions settings-actions--compact settings-actions--primary settings-model-editor__footer">
+      <button
+        type="button"
+        className="settings-model-editor__cancel"
+        onClick={() => {
+          onResetProviderDraft?.();
+          setConnectionView("auto");
+        }}
+      >
+        {settingsText(language, "取消", "Cancel")}
+      </button>
       {!modelDiscoveryGuidanceActive ? (
         <ActionButton
           fullWidth={false}
@@ -5366,7 +5426,7 @@ function CoachSettingsViewSheet({
               <DoneIcon size={14} />
             )
           }
-          label={saveProviderConnectionLabel}
+          label={settingsText(language, "保存", "Save")}
           ariaLabel={saveProviderConnectionLabel}
           // r1-g2-4: 保存并使用 is this screen's single solid primary; retest
           // and model-list refresh stay quiet secondary actions below it.
@@ -5380,48 +5440,6 @@ function CoachSettingsViewSheet({
           disabled={!canSaveProviderConnection}
           onClick={onSaveProvider}
           title={saveProviderConnectionTitle}
-        />
-      ) : null}
-      {showSecondaryModelDiscoveryAction ? (
-        <ActionButton
-          fullWidth={false}
-          icon={<ReloadIcon size={14} />}
-          label={modelDiscoveryActionLabel}
-          detail={modelDiscoveryActionDetail}
-          disabled={!canRefreshModels}
-          onClick={onRefreshProviderModels}
-          title={canRefreshModels ? modelDiscoveryActionLabel : modelDiscoveryBlockedReason}
-        />
-      ) : null}
-      {!modelDiscoveryGuidanceActive && showProviderDetailTestAction ? (
-        <ActionButton
-          fullWidth={false}
-          icon={<AlertTriangleIcon size={14} />}
-          label={copy.test}
-          ariaLabel={copy.test}
-          detail={
-            currentDraftModelPolicyMessage ??
-            settingsPhrase(language, "verifyConnectionDetail")
-          }
-          disabled={!canRetestProvider}
-          onClick={onTestProvider}
-          title={
-            canRetestProvider
-              ? providerHasDraftChanges
-                ? settingsPhrase(language, "testDraftConnectionDetail")
-                : copy.test
-              : currentDraftModelPolicyMessage
-                ? currentDraftModelPolicyMessage
-              : !providerDraftFieldsReady
-                ? settingsText(language, "先完成 provider、base URL 和 model，再测试连接。", "Finish the provider, base URL, and model before testing the connection.")
-                : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
-                  ? settingsText(language, "先补上 API key，再测试这组连接。", "Add an API key before testing this connection.")
-                  : providerSaved
-                    ? settingsText(language, "先保存当前草稿，再测试这组连接。", "Save the current draft before testing this connection.")
-                    : savedProviderProfilesAvailable
-                      ? settingsText(language, "先启用一个已保存的 profile，再测试当前连接。", "Apply a saved profile before testing the current connection.")
-                      : settingsText(language, "先完成 provider 配置，再测试连接。", "Finish the provider setup before testing the connection.")
-          }
         />
       ) : null}
     </div>
@@ -5452,6 +5470,41 @@ function CoachSettingsViewSheet({
       actionTone={effectiveAvailabilityPrimaryTone}
     />
   </div>;
+  const settingsIndexItems = (["connection", "teaching", "workspace", "preferences"] as const).map((id) => {
+    const item = settingsNavItems.find((entry) => entry.id === id)!;
+    return {
+      ...item,
+      summary: (id === "connection"
+        ? connectionModelSummary === copy.notConfigured
+          ? connectionSummaryStatusLabel
+          : connectionModelSummary
+        : id === "workspace"
+          ? remoteWorkspaceName ||
+            (() => {
+              const rootPath = trainerWorkspace?.rootPath?.replace(/[\\/]+$/, "");
+              if (workspaceRootMissing || !rootPath) {
+                return settingsPhrase(language, "workspaceNotSelected");
+              }
+              return rootPath;
+            })()
+          : id === "teaching"
+            ? teachingStyleItems.find((entry) => entry.value === teachingStyle)?.label ?? copy.auto
+            : LANGUAGE_LABELS[language]) ?? undefined,
+      summaryTitle: (id === "workspace"
+        ? remoteWorkspaceName || trainerWorkspace?.rootPath
+        : id === "connection"
+          ? [provider.model || providerDraft.model, lastTestLabel].filter(Boolean).join(" · ")
+          : undefined) ?? undefined,
+      action:
+        id === "workspace" && workspaceRootMissing && onChooseTrainerWorkspaceRoot
+          ? {
+              label: settingsText(language, "选择学习文件夹", "Choose folder"),
+              onClick: onChooseTrainerWorkspaceRoot,
+              icon: <DataFolderIcon size={12} />,
+            }
+          : undefined,
+    };
+  });
 
   return (
     <section className={classes} aria-labelledby="coach-settings-view-title">
@@ -5463,41 +5516,7 @@ function CoachSettingsViewSheet({
       {settingsIndexOpen ? (
         <SettingsIndex
           title={copy.title}
-          items={(["connection", "teaching", "workspace", "preferences"] as const).map((id) => {
-            const item = settingsNavItems.find((item) => item.id === id)!;
-            return {
-              ...item,
-              summary: (id === "connection"
-                ? connectionModelSummary === copy.notConfigured
-                  ? connectionSummaryStatusLabel
-                  : connectionModelSummary
-                : id === "workspace"
-                  ? remoteWorkspaceName ||
-                    (() => {
-                      const rootPath = trainerWorkspace?.rootPath?.replace(/[\\/]+$/, "");
-                      if (workspaceRootMissing || !rootPath) {
-                        return settingsPhrase(language, "workspaceNotSelected");
-                      }
-                      return rootPath.split(/[\\/]/).pop() || rootPath;
-                    })()
-                  : id === "teaching"
-                    ? teachingStyleItems.find((item) => item.value === teachingStyle)?.label ?? copy.auto
-                    : LANGUAGE_LABELS[language]) ?? undefined,
-              summaryTitle: (id === "workspace"
-                ? remoteWorkspaceName || trainerWorkspace?.rootPath
-                : id === "connection"
-                  ? [provider.model || providerDraft.model, lastTestLabel].filter(Boolean).join(" · ")
-                  : undefined) ?? undefined,
-              action:
-                id === "workspace" && workspaceRootMissing && onChooseTrainerWorkspaceRoot
-                  ? {
-                      label: settingsText(language, "选择", "Choose"),
-                      onClick: onChooseTrainerWorkspaceRoot,
-                      icon: <DataFolderIcon size={12} />,
-                    }
-                  : undefined,
-            };
-          })}
+          items={settingsIndexItems}
           onSelect={openSettingsCategorySection}
         />
       ) : null}
@@ -5507,9 +5526,18 @@ function CoachSettingsViewSheet({
         section={activeSettingsCategory}
         title={settingsNavItems.find((item) => item.id === activeSettingsCategory)?.label ?? copy.title}
         onBack={() => setSettingsIndexOpen(true)}
+        nav={
+          <SettingsIndex
+            title={copy.title}
+            items={settingsIndexItems}
+            onSelect={openSettingsCategorySection}
+            variant="rail"
+            activeId={activeSettingsCategory}
+          />
+        }
       >
       <div className="settings-sheet__body settings-sheet__body--hierarchical">
-        {settingsStatusIssues.length > 0 ? (
+        {visibleSettingsStatusIssues.length > 0 ? (
         <div
           className="settings-status-bar settings-status-bar--blockers"
           role="region"
@@ -5517,7 +5545,7 @@ function CoachSettingsViewSheet({
           data-settings-status-bar="true"
           data-settings-status-connection={settingsStatusConnectionReady ? "ready" : "setup"}
         >
-          {settingsStatusIssues.map((issue) => (
+          {visibleSettingsStatusIssues.map((issue) => (
             <div
               key={issue.id}
               className={`settings-status-bar__row is-${issue.id}`}
@@ -5629,10 +5657,10 @@ function CoachSettingsViewSheet({
 
             {providerDirectory}
 
-            {showConnectionForm && connectionView !== "advanced" ? (
+            {showConnectionForm ? (
             <>
             <form
-              className="settings-sheet__minor-body"
+              className="settings-sheet__minor-body settings-model-editor"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (canSaveProviderConnection) {
@@ -5640,7 +5668,51 @@ function CoachSettingsViewSheet({
                 }
               }}
             >
+              <header className="settings-model-editor__header">
+                <div className="settings-model-editor__title">
+                  <span className="settings-model-editor__eyebrow">
+                    {providerSaved
+                      ? settingsText(language, "连接", "Connection")
+                      : settingsText(language, "新连接", "New connection")}
+                  </span>
+                  <strong>
+                    {providerSaved
+                      ? settingsText(language, "编辑模型配置", "Edit model setup")
+                      : settingsText(language, "添加模型", "Add model")}
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  className="settings-model-editor__close"
+                  aria-label={settingsText(language, "关闭", "Close")}
+                  onClick={() => {
+                    onResetProviderDraft?.();
+                    setConnectionView("auto");
+                  }}
+                >
+                  <CloseIcon size={16} />
+                </button>
+              </header>
+              <label className="settings-field">
+                <span>{providerConnectionNameLabel(language)}</span>
+                <input
+                  value={providerDraft.name}
+                  placeholder={settingsText(language, "给这组连接起个名字(可不填)", "Name this connection (optional)")}
+                  onChange={(event) => onProviderDraftChange({ name: event.target.value })}
+                />
+              </label>
               <div className="settings-grid settings-grid--form">
+                <div className="settings-form-group-label">
+                  <strong>{settingsText(language, "服务", "Service")}</strong>
+                  <span>
+                    {settingsText(
+                      language,
+                      "地址与密钥只保存在本机。",
+                      "Address and key stay on this machine.",
+                    )}
+                  </span>
+                </div>
+                <div className="settings-form-row">
                 <label className="settings-field">
                   <span>{providerBaseUrlLabel}</span>
                   <input
@@ -5667,25 +5739,70 @@ function CoachSettingsViewSheet({
                   </p>
                 </label>
 
-                <label className="settings-field">
+                <div className="settings-field">
                   <span>{copy.apiKey}</span>
-                  <input
-                    ref={apiKeyInputRef}
-                    type="password"
-                    value={providerDraft.apiKey}
-                    placeholder={
-                      providerDraftCanReuseSavedApiKey ? copy.apiKeySaved : settingsStatusPhrase(language, "connectionSavedApiKeyMissing")
-                    }
-                    onChange={(event) => {
-                      const smartPaste = applyProviderSmartPaste(event.target.value, "apiKey");
-                      setProviderPasteHint(smartPaste ? providerPasteHintCopy(smartPaste) : null);
-                      if (smartPaste) {
-                        return;
-                      }
-                      onProviderDraftChange({ apiKey: event.target.value });
-                    }}
-                  />
-                </label>
+                  <div className="settings-api-key-row">
+                    <div className="settings-api-key-input">
+                      <input
+                        ref={apiKeyInputRef}
+                        type={apiKeyVisible ? "text" : "password"}
+                        aria-label={copy.apiKey}
+                        value={providerDraft.apiKey}
+                        placeholder={
+                          providerDraftCanReuseSavedApiKey ? copy.apiKeySaved : settingsStatusPhrase(language, "connectionSavedApiKeyMissing")
+                        }
+                        onChange={(event) => {
+                          const smartPaste = applyProviderSmartPaste(event.target.value, "apiKey");
+                          setProviderPasteHint(smartPaste ? providerPasteHintCopy(smartPaste) : null);
+                          if (smartPaste) {
+                            return;
+                          }
+                          onProviderDraftChange({ apiKey: event.target.value });
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="settings-api-key-visibility"
+                        aria-label={
+                          apiKeyVisible
+                            ? settingsText(language, "隐藏密钥", "Hide key")
+                            : settingsText(language, "显示密钥", "Show key")
+                        }
+                        title={
+                          apiKeyVisible
+                            ? settingsText(language, "隐藏密钥", "Hide key")
+                            : settingsText(language, "显示密钥", "Show key")
+                        }
+                        onClick={() => setApiKeyVisible((visible) => !visible)}
+                      >
+                        <EyeIcon size={14} />
+                      </button>
+                    </div>
+                    {onTestProvider ? (
+                      <button
+                        type="button"
+                        className="settings-api-key-test"
+                        disabled={!canRetestProvider}
+                        onClick={onTestProvider}
+                        title={
+                          canRetestProvider
+                            ? copy.test
+                            : settingsText(
+                                language,
+                                "先补全接口地址、密钥和模型，再测试连接。",
+                                "Complete the endpoint, key, and model before testing.",
+                              )
+                        }
+                      >
+                        {providerTestPending ? (
+                          <span className="trainer-spinner trainer-spinner--sm" aria-hidden="true" />
+                        ) : null}
+                        {copy.test}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                </div>
 
                 {providerPasteHint ? (
                   <p className="settings-sheet__note settings-sheet__note--compact settings-sheet__note--warning">
@@ -5693,6 +5810,16 @@ function CoachSettingsViewSheet({
                   </p>
                 ) : null}
 
+                <div className="settings-form-group-label">
+                  <strong>{settingsText(language, "模型", "Model")}</strong>
+                  <span>
+                    {settingsText(
+                      language,
+                      "这组连接默认使用的聊天模型。",
+                      "The chat model this connection uses by default.",
+                    )}
+                  </span>
+                </div>
                 {modelCatalogIsEmpty ? (
                   <label className="settings-field">
                     <span>{copy.model}</span>
@@ -5702,7 +5829,13 @@ function CoachSettingsViewSheet({
                       onChange={(event) => onProviderDraftChange({ model: event.target.value })}
                     />
                     <p className="settings-sheet__note settings-sheet__note--compact">
-                      {modelPickerCopy.directModelHint}
+                      {providerDraftReadyForModelDiscovery
+                        ? modelPickerCopy.directModelHint
+                        : settingsText(
+                            language,
+                            "直接输入服务商支持的完整模型名。",
+                            "Enter the exact model name supported by the provider.",
+                          )}
                     </p>
                   </label>
                 ) : (
@@ -5835,82 +5968,39 @@ function CoachSettingsViewSheet({
                   </div>
                 </div>
                 )}
+                {providerSaved && !providerHasDraftChanges && onRefreshProviderModels ? (
+                  <button
+                    type="button"
+                    className="settings-model-refresh"
+                    disabled={!canRefreshModels}
+                    onClick={onRefreshProviderModels}
+                    title={canRefreshModels ? modelDiscoveryActionLabel : modelDiscoveryBlockedReason}
+                  >
+                    <ReloadIcon size={12} aria-hidden="true" />
+                    {modelDiscoveryActionLabel}
+                  </button>
+                ) : null}
               </div>
 
-            </form>
-
-            {providerPrimaryActions}
-            {!providerCoachReady ? (
-              <p className="settings-sheet__note settings-sheet__note--warning">
-                {providerDetailRequirementNote}
-              </p>
-            ) : null}
-            {showAvailabilityChecklist ? renderProviderSetupChecks("settings-setup-checks--availability") : null}
-            {providerAdvancedEntry}
-            </>
-            ) : null}
-          </div>
-
-          {connectionView === "advanced" ? (
-          <div className="settings-sheet__support coach-settings-view__provider-detail collapse-section collapse-section--level-2 is-open">
-            <div className="collapse-section__header-row">
-              <button
-                type="button"
-                className="collapse-section__header"
-                aria-expanded="true"
-                onClick={() => setConnectionView(advancedReturnView)}
-              >
-                <ChevronLeftIcon size={12} aria-hidden />
-                <span className="collapse-section__title">
-                  <span className="eyebrow">{settingsGlobalCopy.settingsConnectionDetails}</span>
-                </span>
-                {showProviderDetailStatePill ? (
-                  <span className="collapse-section__badge">
-                    <StatusPill tone={resolvedAvailabilityTone}>
-                      {localizedResolvedAvailabilityStatusLabel}
-                    </StatusPill>
-                  </span>
-                ) : null}
-                <span className="collapse-section__subtitle">
-                  {displayAvailabilityHeadline}
-                </span>
-              </button>
-            </div>
-            <div className="collapse-section__body-wrap">
-              <div className="collapse-section__body">
-              <div className="coach-settings-view__provider-detail-body">
-                <div className="settings-grid settings-grid--form">
-                  <label className="settings-field">
-                    <span>{providerConnectionNameLabel(language)}</span>
-                    <input
-                      value={providerDraft.name}
-                      placeholder={settingsText(language, "给这组连接起个名字(可不填)", "Name this connection (optional)")}
-                      onChange={(event) => onProviderDraftChange({ name: event.target.value })}
-                    />
-                  </label>
-                  <div className="settings-field">
-                    <span>{settingsSupportPhrase(language, "protocol")}</span>
-                    <ChoiceList
-                      active={draftProtocol}
-                      items={protocolItems}
-                      onChange={(value) => {
-                        const protocol = normalizeProviderProtocol(value);
-                        if (protocol) {
-                          onProviderDraftChange({ protocol });
-                        }
-                      }}
-                    />
-                    <div className="settings-sheet__stack settings-sheet__stack--tight">
-                      <p className="settings-sheet__note settings-sheet__note--compact">
-                        {settingsPhrase(language, "defaultEndpoint")}: <strong>{selectedProtocolEndpoint}</strong>
-                      </p>
-                      <p className="settings-sheet__note settings-sheet__note--compact settings-capability-status">
-                        {settingsPhrase(language, "capabilitiesFromLiveTest")}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="settings-advanced-card coach-settings-view__provider-detail">
+                <label className="settings-field">
+                  <span>{settingsSupportPhrase(language, "protocol")}</span>
+                  <select
+                    value={draftProtocol}
+                    onChange={(event) => {
+                      const protocol = normalizeProviderProtocol(event.target.value);
+                      if (protocol) {
+                        onProviderDraftChange({ protocol });
+                      }
+                    }}
+                  >
+                    {protocolItems.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <ProviderEndpointSpeedTest
                   language={language}
                   baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
@@ -5919,224 +6009,217 @@ function CoachSettingsViewSheet({
                   onRun={(urls) => onSpeedTestEndpoints?.(urls)}
                   onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
                 />
-
-                {providerSecondaryActions}
-
-                {!canNestModelLimitsInCatalog ? providerModelLimitsPanel : null}
-
-              <details className="settings-sheet__minor-panel">
-                <summary>
-                  {settingsPhrase(language, "modelAndTestDetail")}
-                </summary>
-                <div className="settings-sheet__minor-body">
-                  <div className="settings-sheet__summary-grid">
-                    <SummaryCard
-                      label={copy.apiKey}
-                      value={providerApiKeyDraftStatus.value}
-                    />
-                    <SummaryCard
-                      label={settingsPhrase(language, "contextWindow")}
-                      value={formatTokenValue(providerHasDraftChanges ? draftContextWindowTokens : liveContextWindowTokens)}
-                    />
-                    <SummaryCard
-                      label={settingsPhrase(language, "maxOutput")}
-                      value={formatTokenValue(providerHasDraftChanges ? draftMaxOutputTokens : liveMaxOutputTokens)}
-                    />
-                    <SummaryCard
-                      label={copy.modelCache}
-                      value={
-                        <span className="settings-sheet__summary-inline">
-                          <StatusPill tone={modelCacheTone}>{modelCacheStatusLabel}</StatusPill>
-                        </span>
-                      }
-                      detail={`${copy.modelCacheSource}: ${cacheSourceLabel}`}
-                    />
-                    <SummaryCard
-                      label={copy.lastTest}
-                      value={lastTestLabel}
-                      detail={localizedLastTestDetailText}
-                    />
-                  </div>
-                  <div className="settings-sheet__summary-grid">
-                    <SummaryCard
-                      label={providerTruthCopy.protocol}
-                      value={protocolFactValue}
-                      detail={protocolFactDetail}
-                    />
-                    <SummaryCard
-                      label={providerTruthCopy.capabilities}
-                      value={
-                        capabilityChipsAllowed ? (
-                        <span className="settings-sheet__summary-inline">
-                          <span>{toolsCopy.label}</span>
-                          <span data-settings-capability-chip="tools">
-                            <StatusPill tone={toolsVerificationFact.tone}>
-                              {toolsVerificationFact.value}
-                            </StatusPill>
-                          </span>
-                          <span>{streamingCopy.label}</span>
-                          <span data-settings-capability-chip="streaming">
-                            <StatusPill tone={streamingVerificationFact.tone}>
-                              {streamingVerificationFact.value}
-                            </StatusPill>
-                          </span>
-                          <span>{thinkingCopy.label}</span>
-                          <span data-settings-capability-chip="thinking">
-                            <StatusPill tone={thinkingVerificationFact.tone}>
-                              {thinkingVerificationFact.value}
-                            </StatusPill>
-                          </span>
-                          <span>{visionCopy.label}</span>
-                          <span data-settings-capability-chip="vision">
-                            <StatusPill tone={visionVerificationFact.tone}>
-                              {visionVerificationFact.value}
-                            </StatusPill>
-                          </span>
-                        </span>
-                        ) : (
-                          <span
-                            className="settings-capability-status"
-                            data-settings-capability-status={
-                              providerHasDraftChanges ? "draft" : capabilitySurfaceStatus
-                            }
-                          >
-                            {capabilityHonestyStatus}
-                          </span>
-                        )
-                      }
-                      detail={capabilityChipsAllowed ? capabilitySummaryDetail : undefined}
-                    />
-                    <SummaryCard
-                      label={settingsPhrase(language, "finalCapabilities")}
-                      value={
-                        capabilityChipsAllowed ? (
-                        <span className="settings-sheet__summary-inline">
-                          {([
-                            ["chat", capabilityVerdict.chat],
-                            ["streaming", capabilityVerdict.streaming],
-                            ["tools", capabilityVerdict.verifiedTools],
-                            ["image-input", capabilityVerdict.imageInput],
-                            ["formal-plan", capabilityVerdict.formalPlan],
-                            ["resource-write", capabilityVerdict.resourceWrite],
-                          ] as const).map(([name, enabled]) => (
-                            <span key={name} data-capability-verdict={name}>
-                              <span>{name}</span>{" "}
-                              <StatusPill tone={enabled ? "connected" : "warn"}>
-                                {enabled
-                                  ? settingsStatusPhrase(language, "ready")
-                                  : settingsStatusPhrase(language, "unavailable")}
-                              </StatusPill>
-                            </span>
-                          ))}
-                        </span>
-                        ) : (
-                          <span
-                            className="settings-capability-status"
-                            data-settings-capability-status={
-                              providerHasDraftChanges ? "draft" : capabilitySurfaceStatus
-                            }
-                            data-capability-verdict-status={
-                              providerHasDraftChanges ? "draft" : capabilitySurfaceStatus
-                            }
-                          >
-                            {capabilityHonestyStatus}
-                          </span>
-                        )
-                      }
-                      detail={
-                        capabilityChipsAllowed
-                          ? `${capabilityVerdict.reason} · ${
-                        settingsText(
-                          language,
-                          `图片：${capabilityVerdict.imageInput ? "已通过 vision probe 和协议附件支持验证" : imageInputState.detail ?? imageInputState.reason ?? "尚未验证"}`,
-                          `Images: ${capabilityVerdict.imageInput ? "vision probe and protocol attachment support verified" : imageInputState.detail ?? imageInputState.reason ?? "not verified yet"}`,
-                        )} · ${
-                        workspaceAuthority?.authorityScope === "trainer_sandbox"
-                          ? settingsText(language, "Trainer 沙箱 artifact 写入", "Trainer sandbox artifact writes")
-                          : settingsText(language, "用户源码工作区只读", "User source workspace is read-only")
-                      } · ${workspaceAuthority?.resourceWriteEvidence?.reason ?? (settingsText(language, "等待真实写入证据", "Awaiting verified write evidence"))}`
-                          : undefined
+                <div className="settings-advanced-card__capabilities">
+                  <label className="settings-advanced-toggle">
+                    <input type="checkbox" checked={!providerHasDraftChanges && capabilityVerdict.verifiedTools} disabled readOnly />
+                    <span>{toolsCopy.label}</span>
+                  </label>
+                  <label className="settings-advanced-toggle">
+                    <input type="checkbox" checked={!providerHasDraftChanges && capabilityVerdict.imageInput} disabled readOnly />
+                    <span>{visionCopy.label}</span>
+                  </label>
+                  <label className="settings-advanced-toggle">
+                    <input
+                      type="checkbox"
+                      checked={(draftThinkingConfig?.mode ?? "disabled") !== "disabled"}
+                      onChange={(event) =>
+                        updateThinkingConfig({
+                          ...(draftThinkingConfig ?? { mode: "auto" }),
+                          mode: event.target.checked ? "enabled" : "disabled",
+                          ...(event.target.checked &&
+                          thinkingDescriptor?.kind === "reasoning_effort" &&
+                          !draftThinkingConfig?.reasoningEffort
+                            ? { reasoningEffort: "medium" as const }
+                            : {}),
+                        })
                       }
                     />
-                    <SummaryCard
-                      label={providerTruthCopy.diagnostics}
-                      value={diagnosticsFactValue}
-                      detail={diagnosticsFactDetail}
-                    />
-                    <SummaryCard
-                      label={providerTruthCopy.profiles}
-                      value={profileVerdict.status}
-                      detail={profileVerdict.detail || providerTruthCopy.profileDetail(providerProfileCount)}
-                    />
-                  </div>
-
-                  {blockedTaskBindingCount > 0 || blockedModelCount > 0 ? (
-                    <div className="settings-sheet__stack settings-sheet__stack--tight">
-                      {blockedTaskBindingCount > 0 ? (
-                        <SimpleInfoRow
-                          label={providerTruthCopy.blockedTaskBindings}
-                          value={String(blockedTaskBindingCount)}
-                        />
-                      ) : null}
-                      {blockedModelCount > 0 ? (
-                        <SimpleInfoRow
-                          label={providerTruthCopy.blockedModels}
-                          value={String(blockedModelCount)}
-                        />
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {modelCapabilityRows.length > 0 ? (
-                    <div className="settings-sheet__stack settings-sheet__stack--tight">
-                      <p className="settings-sheet__note settings-sheet__note--compact">
-                        {providerTruthCopy.modelHints}
-                      </p>
-                      {modelCapabilityRows.map((row) => (
-                        <SimpleInfoRow key={row.label} label={row.label} value={row.value} />
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {diagnosticNotes.length > 0 ? (
-                    <div className="settings-sheet__stack settings-sheet__stack--tight">
-                      <p className="settings-sheet__note settings-sheet__note--compact">
-                        {providerTruthCopy.diagnosticNotes}
-                      </p>
-                      {diagnosticNotes.map((note, index) => (
-                        <p key={`${index}-${note}`} className="settings-sheet__note settings-sheet__note--compact">
-                          {note}
-                        </p>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {warningNotes.length > 0 ? (
-                    <div className="settings-sheet__stack settings-sheet__stack--tight">
-                      <p className="settings-sheet__note settings-sheet__note--compact">
-                        {providerTruthCopy.warnings}
-                      </p>
-                      {warningNotes.map((note, index) => (
-                        <p
-                          key={`${index}-${note}`}
-                          className="settings-sheet__note settings-sheet__note--warning"
-                        >
-                          {note}
-                        </p>
-                      ))}
-                    </div>
-                  ) : null}
+                    <span>{settingsText(language, "思考模式", "Thinking")}</span>
+                  </label>
                 </div>
-              </details>
-
-              {thinkingControl}
-              {providerCatalogPanel}
-            </div>
-            {providerPrimaryActions}
+                {thinkingDescriptor?.kind === "reasoning_effort" && !thinkingDescriptor.disabled ? (
+                  <label className="settings-field">
+                    <span>{settingsText(language, "默认思考强度", "Default thinking effort")}</span>
+                    <select
+                      value={draftThinkingConfig?.reasoningEffort ?? "auto"}
+                      onChange={(event) =>
+                        updateThinkingConfig({
+                          ...(draftThinkingConfig ?? { mode: "enabled" }),
+                          mode:
+                            (draftThinkingConfig?.mode ?? "enabled") === "disabled"
+                              ? "enabled"
+                              : draftThinkingConfig?.mode ?? "enabled",
+                          reasoningEffort:
+                            event.target.value === "auto"
+                              ? undefined
+                              : (event.target.value as "low" | "medium" | "high"),
+                        })
+                      }
+                    >
+                      <option value="auto">
+                        {settingsText(language, "自动（使用请求层默认值）", "Auto (request default)")}
+                      </option>
+                      <option value="low">{settingsText(language, "低", "Low")}</option>
+                      <option value="medium">{settingsText(language, "中", "Medium")}</option>
+                      <option value="high">{settingsText(language, "高", "High")}</option>
+                    </select>
+                  </label>
+                ) : null}
+                <p className="settings-sheet__note settings-sheet__note--compact">
+                  {settingsPhrase(language, "capabilitiesFromLiveTest")}
+                </p>
+                <div className="settings-advanced-limits">
+                  <label className="settings-field">
+                    <span>{settingsPhrase(language, "contextWindow")}</span>
+                    <input
+                      inputMode="numeric"
+                      value={draftContextWindowTokens ?? ""}
+                      placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
+                      onChange={(event) =>
+                        onProviderDraftChange({
+                          contextWindowTokens: parsePositiveIntegerInput(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="settings-advanced-presets">
+                    {[32768, 65536, 131072, 262144].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => onProviderDraftChange({ contextWindowTokens: value })}
+                      >
+                        {value / 1024}K
+                      </button>
+                    ))}
+                  </div>
+                  <label className="settings-field">
+                    <span>{settingsPhrase(language, "maxOutput")}</span>
+                    <input
+                      inputMode="numeric"
+                      value={draftMaxOutputTokens ?? ""}
+                      placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
+                      onChange={(event) =>
+                        onProviderDraftChange({
+                          maxOutputTokens: parsePositiveIntegerInput(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="settings-advanced-presets">
+                    {[8192, 16384, 32768, 65536].map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => onProviderDraftChange({ maxOutputTokens: value })}
+                      >
+                        {value / 1024}K
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {thinkingDescriptor?.kind === "reasoning_effort" ? null : thinkingControl}
+                {!canNestModelLimitsInCatalog ? providerModelLimitsPanel : null}
+                {providerCatalogPanel}
+                <details className="settings-sheet__minor-panel settings-connection-diagnostics">
+                  <summary>{settingsText(language, "连接诊断", "Connection diagnostics")}</summary>
+                  <div className="settings-sheet__minor-body settings-sheet__stack settings-sheet__stack--tight">
+                    <div className="settings-sheet__summary-grid">
+                      <SummaryCard
+                        label={copy.modelCache}
+                        value={<StatusPill tone={modelCacheTone}>{modelCacheStatusLabel}</StatusPill>}
+                        detail={`${copy.modelCacheSource}: ${cacheSourceLabel}`}
+                      />
+                      <SummaryCard label={copy.lastTest} value={lastTestLabel} detail={localizedLastTestDetailText} />
+                      <SummaryCard
+                        label={providerTruthCopy.capabilities}
+                        value={
+                          capabilityChipsAllowed ? (
+                            <span className="settings-sheet__summary-inline">
+                              <span>{toolsCopy.label}</span>
+                              <span data-settings-capability-chip="tools"><StatusPill tone={toolsVerificationFact.tone}>{toolsVerificationFact.value}</StatusPill></span>
+                              <span>{streamingCopy.label}</span>
+                              <span data-settings-capability-chip="streaming"><StatusPill tone={streamingVerificationFact.tone}>{streamingVerificationFact.value}</StatusPill></span>
+                              <span>{thinkingCopy.label}</span>
+                              <span data-settings-capability-chip="thinking"><StatusPill tone={thinkingVerificationFact.tone}>{thinkingVerificationFact.value}</StatusPill></span>
+                              <span>{visionCopy.label}</span>
+                              <span data-settings-capability-chip="vision"><StatusPill tone={visionVerificationFact.tone}>{visionVerificationFact.value}</StatusPill></span>
+                            </span>
+                          ) : (
+                            <span
+                              className="settings-capability-status"
+                              data-settings-capability-status={providerHasDraftChanges ? "draft" : capabilitySurfaceStatus}
+                            >
+                              {capabilityHonestyStatus}
+                            </span>
+                          )
+                        }
+                      />
+                      <SummaryCard
+                        label={settingsText(language, "写入权限", "Writes")}
+                        value={
+                          workspaceAuthority?.authorityScope === "trainer_sandbox"
+                            ? settingsText(language, "Trainer 沙箱 artifact 写入", "Trainer sandbox artifact writes")
+                            : settingsText(language, "用户源码工作区只读", "User source workspace is read-only")
+                        }
+                        detail={
+                          workspaceAuthority?.resourceWriteEvidence?.reason ??
+                          settingsText(language, "等待真实写入证据", "Awaiting verified write evidence")
+                        }
+                      />
+                      <SummaryCard
+                        label={settingsPhrase(language, "finalCapabilities")}
+                        value={
+                          capabilityChipsAllowed ? (
+                            <span className="settings-sheet__summary-inline">
+                              {([
+                                ["chat", capabilityVerdict.chat],
+                                ["streaming", capabilityVerdict.streaming],
+                                ["tools", capabilityVerdict.verifiedTools],
+                                ["image-input", capabilityVerdict.imageInput],
+                                ["formal-plan", capabilityVerdict.formalPlan],
+                                ["resource-write", capabilityVerdict.resourceWrite],
+                              ] as const).map(([name, enabled]) => (
+                                <span key={name} data-capability-verdict={name}>
+                                  <span>{name}</span>{" "}
+                                  <StatusPill tone={enabled ? "connected" : "warn"}>
+                                    {enabled
+                                      ? settingsStatusPhrase(language, "ready")
+                                      : settingsStatusPhrase(language, "unavailable")}
+                                  </StatusPill>
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            <span
+                              className="settings-capability-status"
+                              data-settings-capability-status={providerHasDraftChanges ? "draft" : capabilitySurfaceStatus}
+                              data-capability-verdict-status={providerHasDraftChanges ? "draft" : capabilitySurfaceStatus}
+                            >
+                              {capabilityHonestyStatus}
+                            </span>
+                          )
+                        }
+                      />
+                    </div>
+                    {providerSecondaryActions}
+                  </div>
+                </details>
               </div>
-            </div>
+
+              {providerPrimaryActions}
+            </form>
+
+            {!providerCoachReady ||
+            (providerHasDraftChanges && !canSaveProviderConnection) ? (
+              <p className="settings-sheet__note settings-sheet__note--warning">
+                {providerDetailRequirementNote}
+              </p>
+            ) : null}
+            {showAvailabilityChecklist ? renderProviderSetupChecks("settings-setup-checks--availability") : null}
+            </>
+            ) : null}
           </div>
-          ) : null}
 
         </section>
         ) : null}

@@ -81,9 +81,7 @@ async function openProviderDetails(page) {
 }
 
 async function setProviderConnectionName(page, name) {
-  await openProviderAdvanced(page);
   await page.getByLabel("Connection name (optional)", { exact: true }).fill(name);
-  await page.locator(".coach-settings-view__provider-detail .collapse-section__header").first().click();
 }
 
 async function openProviderProfiles(page) {
@@ -160,21 +158,7 @@ async function setProviderModel(detail, model) {
 }
 
 async function openProviderAdvanced(page) {
-  // Advanced configuration lives one level below the connection form — the
-  // drill-in row looks like a collapsed section header. Clicking it swaps the
-  // form for the details level (and clicking again returns).
-  const entry = page
-    .locator(".coach-settings-view__provider-detail .collapse-section__header")
-    .first();
-  await expect(entry).toBeVisible();
-  if ((await entry.getAttribute("aria-expanded")) !== "true") {
-    await entry.click();
-  }
-  await expect(
-    page.locator(
-      '.coach-settings-view__provider-detail .collapse-section__header[aria-expanded="true"]',
-    ),
-  ).toBeVisible();
+  await expect(page.locator(".settings-advanced-card")).toBeVisible();
 }
 
 async function openProviderModelLimits(detail) {
@@ -312,9 +296,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
     const editButton = page.getByRole("button", { name: "Edit configuration", exact: true });
     await expect(editButton).toBeVisible();
     await editButton.click();
-    const collapsedProviderDetail = page.locator(".coach-settings-view__provider-detail");
-    await expect(collapsedProviderDetail).toBeVisible();
-    expect(await isDisclosureOpen(collapsedProviderDetail)).toBe(false);
+    await expect(page.locator(".settings-advanced-card")).toBeVisible();
 
     const detail = await openProviderDetails(page);
     await setProviderConnectionName(page, providerName);
@@ -354,7 +336,6 @@ test.describe("Trainer Settings provider lifecycle", () => {
     const reloadedDetail = await openProviderDetails(page);
     await openProviderAdvanced(page);
     await expect(page.getByLabel("Connection name (optional)", { exact: true })).toHaveValue(providerName);
-    await page.locator(".coach-settings-view__provider-detail .collapse-section__header").first().click();
     await expect(
       providerConnectionFields(reloadedDetail).getByLabel("Service root"),
     ).toHaveValue(providerBaseUrl);
@@ -371,11 +352,6 @@ test.describe("Trainer Settings provider lifecycle", () => {
     const reloadedModelLimits = await openProviderModelLimits(reloadedDetail);
     await expect(providerContextWindowInput(reloadedModelLimits)).toHaveValue("24000");
     await expect(providerMaxOutputInput(reloadedModelLimits)).toHaveValue("2048");
-    // Back to the edit level for the API key field.
-    await page
-      .locator(".coach-settings-view__provider-detail .collapse-section__header")
-      .first()
-      .click();
     await expect(providerConnectionFields(reloadedDetail).getByLabel("API Key", { exact: true })).toHaveValue("");
 
     await page.goto(buildPreviewUrl({ live: true }));
@@ -448,10 +424,8 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await secondTestButton.click();
     await secondTestRequest;
     await expect(page.locator(".template-global-state [data-system-state=success]")).toBeVisible();
-    await expect(page.locator("[data-settings-availability=true]")).toContainText(
-      "use this connection",
-    );
-    await expect(page.locator("[data-settings-availability=true]")).not.toContainText(
+    await expect(page.locator(".settings-model-editor")).toBeVisible();
+    await expect(page.locator(".settings-model-editor")).not.toContainText(
       "No model is available right now",
     );
 
@@ -463,7 +437,7 @@ test.describe("Trainer Settings provider lifecycle", () => {
     await providerTestButton(page).click();
     await repeatedTestRequest;
     await expect(providerTestButton(page)).toBeEnabled();
-    await expect(page.locator("[data-settings-availability=true]")).toContainText("use this connection");
+    await expect(page.locator(".settings-model-editor")).toBeVisible();
     expect(providerTestPayloads).toHaveLength(3);
 
     const correctedPayload = providerTestPayloads[1];

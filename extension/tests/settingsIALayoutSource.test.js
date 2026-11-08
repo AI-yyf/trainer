@@ -38,7 +38,7 @@ test('settings opens on a blocker banner that only renders when something is wro
   assert.ok(barStart > bodyStart, 'expected the banner inside the settings body');
   assert.ok(stripStart > barStart, 'expected the banner before the availability strip');
   // Healthy Settings opens straight on content: the banner is gated on issues.
-  assert.match(source, /\{settingsStatusIssues\.length > 0 \? \(\s*<div\s+className="settings-status-bar settings-status-bar--blockers"/);
+  assert.match(source, /\{visibleSettingsStatusIssues\.length > 0 \? \(\s*<div\s+className="settings-status-bar settings-status-bar--blockers"/);
   assert.match(source, /role="region"\s+aria-label=\{settingsGlobalCopy\.settingsStatusRegionLabel\}/);
   assert.match(source, /settingsStatusConnectionReady\s*=\s*providerCoachReady && !providerHasDraftChanges/);
   // No always-on "connected · language · memory" line any more.
@@ -148,7 +148,7 @@ test('settings navigation has four categories with matching keyboard order and s
   );
   assert.doesNotMatch(source, /id: "memory",/);
   require('./templateAssertions').settings();
-  const order = source.match(/items=\{\(\[([^\]]+)\] as const\)\.map/)[1];
+  const order = source.match(/const settingsIndexItems = \(\[([^\]]+)\] as const\)\.map/)[1];
   assert.deepEqual([...order.matchAll(/"([^"]+)"/g)].map((match) => match[1]),
     ['connection', 'teaching', 'workspace', 'preferences']);
   assert.doesNotMatch(source, /id: "skills",|id: "advanced",/);
@@ -187,27 +187,24 @@ test('settings navigation has four categories with matching keyboard order and s
   assert.match(app, /persistCoachSettingsRef\.current\(\);/);
 });
 
-test('connection details live behind an explicit advanced level', () => {
+test('model editor keeps protocol, limits and diagnostics on one surface', () => {
   const source = readSettingsSource();
 
-  // The drill-in entry stays collapsed in the edit level; the advanced level
-  // header is the expanded counterpart that returns to the previous level.
-  assert.match(source, /aria-expanded="false"/);
-  assert.match(source, /onClick=\{openProviderDetails\}/);
-  assert.match(source, /aria-expanded="true"/);
-  assert.match(source, /onClick=\{\(\) => setConnectionView\(advancedReturnView\)\}/);
-  assert.doesNotMatch(source, /providerDetailRequested/);
+  // One complete editor: no second advanced level or drill-in page.
+  assert.doesNotMatch(source, /connectionView === "advanced"/);
+  assert.doesNotMatch(source, /openProviderDetails/);
+  const formStart = source.indexOf('settings-sheet__minor-body settings-model-editor');
+  const formEnd = source.indexOf('</form>', formStart);
+  assert.ok(formStart >= 0 && formEnd > formStart, 'expected the single model editor form');
+  const form = source.slice(formStart, formEnd);
+  assert.match(form, /settingsSupportPhrase\(language, "protocol"\)/);
+  assert.match(form, /canNestModelLimitsInCatalog/);
+  assert.match(form, /settings-advanced-card/);
+  assert.match(form, /settings-connection-diagnostics/);
+  assert.match(form, /providerPrimaryActions/);
+  assert.match(form, /\{providerPrimaryActions\}/);
+  assert.match(source, /settings-model-editor__footer/);
   assert.match(source, /data-settings-section="connection"/);
-  // The advanced level holds protocol plus the read-only truth tables.
-  const detailsStart = source.indexOf('connectionView === "advanced" ? (');
-  const detailsEnd = source.indexOf('{providerPrimaryActions}', detailsStart);
-  const details = source.slice(detailsStart, detailsEnd);
-  assert.match(details, /settingsSupportPhrase\(language, "protocol"\)/);
-  assert.match(details, /\{!canNestModelLimitsInCatalog \? providerModelLimitsPanel : null\}/);
-  assert.match(details, /modelAndTestDetail/);
-  // Saved profiles + templates live in the top provider bar and the add-level
-  // directory, not inside the advanced level.
-  assert.doesNotMatch(details, /settings-provider-profile/);
   const connectionStart = source.indexOf('data-settings-section="connection"');
   const connectionEnd = source.indexOf('<form', connectionStart);
   const connection = source.slice(connectionStart, connectionEnd);

@@ -2,14 +2,14 @@ const { expect } = require("playwright/test");
 
 // Follow the same index/detail controls as a learner; do not patch UI state.
 async function waitForSettingsSurface(page) {
-  await expect(page.locator('[data-template=SettingsIndex]:visible, [data-template=SettingsDetail]:visible').first()).toBeVisible();
+  await expect(page.locator('[data-template=SettingsIndex][data-settings-variant=page]:visible, [data-template=SettingsDetail]:visible').first()).toBeVisible();
 }
 
 async function openSettingsIndex(page) {
   await waitForSettingsSurface(page);
   const anyDetail = page.locator('[data-template=SettingsDetail]:visible');
   if (await anyDetail.count()) await anyDetail.locator('.template-back').first().click();
-  await expect(page.locator('[data-template=SettingsIndex]')).toBeVisible();
+  await expect(page.locator('[data-template=SettingsIndex][data-settings-variant=page]')).toBeVisible();
 }
 
 async function openSettingsCategory(page, category) {
