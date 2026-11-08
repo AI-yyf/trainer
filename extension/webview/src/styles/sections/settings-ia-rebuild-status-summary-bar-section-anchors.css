@@ -353,3 +353,47 @@
   margin: 0;
 }
 
+
+/* --------------------------------------------------------------------------
+   All Settings categories share the model editor's surface:
+   one bordered panel per coherent section, one panel heading, grouped rows.
+   -------------------------------------------------------------------------- */
+.settings-section--flat {
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 22%, transparent);
+}
+
+.settings-section--flat > .settings-section-head {
+  padding: 0 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+}
+
+.settings-section--flat > .settings-sheet__minor-body,
+.settings-section--flat > .settings-sheet__defaults-body {
+  padding-top: 2px;
+}
+
+/* Blockers are a compact inline row, not a second page hero. */
+.settings-status-bar--blockers .template-system-state {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+}
+
+.settings-status-bar--blockers .template-system-state h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--trainer-font-2xs);
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.settings-status-bar--blockers .template-system-state .action-button {
+  flex: none;
+}
