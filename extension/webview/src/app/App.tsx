@@ -643,9 +643,7 @@ export function App() {
   // Store-backed so a pane remount never drops the mode mid-conversation.
   const goalMode = useWorkbenchState((state) => state.goalMode);
   const goalText = useWorkbenchState((state) => state.goalText);
-  const goalStartedAt = useWorkbenchState((state) => state.goalStartedAt);
   const goalPaused = useWorkbenchState((state) => state.goalPaused);
-  const goalPausedAt = useWorkbenchState((state) => state.goalPausedAt);
   const startGoal = useWorkbenchState((state) => state.startGoal);
   const pauseGoal = useWorkbenchState((state) => state.pauseGoal);
   const resumeGoal = useWorkbenchState((state) => state.resumeGoal);
@@ -11081,9 +11079,7 @@ export function App() {
               <CoachGoalBar
                 language={layout.composerLanguage}
                 title={goalText}
-                startedAt={goalStartedAt}
                 paused={goalPaused}
-                pausedAt={goalPausedAt}
                 onPause={() => {
                   pauseGoal();
                   requestGoalControl("pause");

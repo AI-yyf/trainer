@@ -1633,12 +1633,7 @@
   color: var(--fg-0);
 }
 
-.coach-goal-bar__elapsed {
-  flex: none;
-  font-size: var(--trainer-font-2xs);
-  color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
-}
+
 
 .coach-goal-bar__paused {
   flex: none;

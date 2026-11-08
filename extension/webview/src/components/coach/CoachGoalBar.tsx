@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { GOAL_MODE_COPY } from "../../lib/i18n/segments/coachInlineText";
 import type { ComposerLanguage } from "../../lib/types";
@@ -27,24 +27,10 @@ function GoalGlyph({ kind }: { kind: "pause" | "play" | "trash" | "chevron" }) {
   );
 }
 
-function elapsedLabel(seconds: number, language: ComposerLanguage): string {
-  switch (language) {
-    case "zh-CN":
-    case "ja-JP":
-      return `${seconds} 秒`;
-    case "ko-KR":
-      return `${seconds}초`;
-    default:
-      return `${seconds}s`;
-  }
-}
-
 export interface CoachGoalBarProps {
   language: ComposerLanguage;
   title: string;
-  startedAt: number | null;
   paused: boolean;
-  pausedAt: number | null;
   onPause: () => void;
   onResume: () => void;
   onClear: () => void;
@@ -52,33 +38,18 @@ export interface CoachGoalBarProps {
 
 /**
  * One in-progress goal, read as a single quiet strip above the composer.
- * Elapsed time is frozen while paused; the next turn runs as normal coaching.
+ * The next turn runs as normal coaching; the strip keeps only title and state.
  */
 export function CoachGoalBar({
   language,
   title,
-  startedAt,
   paused,
-  pausedAt,
   onPause,
   onResume,
   onClear,
 }: CoachGoalBarProps) {
   const copy = GOAL_MODE_COPY[language] ?? GOAL_MODE_COPY["en-US"];
   const [open, setOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (paused || startedAt === null) {
-      return;
-    }
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [paused, startedAt]);
-
-  const end = paused ? pausedAt ?? now : now;
-  const elapsedSeconds =
-    startedAt === null ? 0 : Math.max(0, Math.floor((end - startedAt) / 1000));
 
   return (
     <section
@@ -94,11 +65,6 @@ export function CoachGoalBar({
         <strong className="coach-goal-bar__title" title={title || copy.waiting}>
           {title || copy.waiting}
         </strong>
-        {startedAt !== null ? (
-          <span className="coach-goal-bar__elapsed" aria-hidden="true">
-            {elapsedLabel(elapsedSeconds, language)}
-          </span>
-        ) : null}
         {paused ? <span className="coach-goal-bar__paused">{copy.paused}</span> : null}
         <div className="coach-goal-bar__actions">
           <button

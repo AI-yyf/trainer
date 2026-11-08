@@ -343,9 +343,7 @@ export interface WorkbenchStore {
   /** Goal mode: one small active-learning goal. UI-only, never persisted. */
   goalMode: boolean;
   goalText: string;
-  goalStartedAt: number | null;
   goalPaused: boolean;
-  goalPausedAt: number | null;
   resourceOrganizationPending?: { pending: true; operationCount?: number };
   resourceRestoreContext?: ResourceRestoreContext;
   trainingRestoreContext?: TrainingRestoreContext;
@@ -861,9 +859,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   dockReturnNotice: null,
   goalMode: false,
   goalText: "",
-  goalStartedAt: null,
   goalPaused: false,
-  goalPausedAt: null,
   resourceOrganizationPending: undefined,
   resourceRestoreContext: undefined,
   trainingRestoreContext: undefined,
@@ -1034,14 +1030,12 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       return {
         goalMode: true,
         goalText,
-        goalStartedAt: Date.now(),
         goalPaused: false,
-        goalPausedAt: null,
       };
     }),
   pauseGoal: () =>
     set((state) => {
-      if (!state.goalMode || state.goalPaused || state.goalStartedAt === null) {
+      if (!state.goalMode || state.goalPaused) {
         return {};
       }
       persistGoalState(state.syncCursor.sessionId, {
@@ -1049,7 +1043,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         goalText: state.goalText,
         goalPaused: true,
       });
-      return { goalPaused: true, goalPausedAt: Date.now() };
+      return { goalPaused: true };
     }),
   resumeGoal: () =>
     set((state) => {
@@ -1061,12 +1055,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         goalText: state.goalText,
         goalPaused: false,
       });
-      const now = Date.now();
-      const pausedAt = state.goalPausedAt ?? now;
       return {
-        goalStartedAt: (state.goalStartedAt ?? now) + Math.max(0, now - pausedAt),
         goalPaused: false,
-        goalPausedAt: null,
       };
     }),
   clearGoal: () =>
@@ -1079,9 +1069,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       return {
         goalMode: false,
         goalText: "",
-        goalStartedAt: null,
         goalPaused: false,
-        goalPausedAt: null,
       };
     }),
   restoreGoalForSession: (sessionId) =>
@@ -1094,9 +1082,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         return {
           goalMode: false,
           goalText: "",
-          goalStartedAt: null,
           goalPaused: false,
-          goalPausedAt: null,
         };
       }
       if (
@@ -1106,13 +1092,10 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       ) {
         return {};
       }
-      const now = Date.now();
       return {
         goalMode: true,
         goalText: stored.text,
-        goalStartedAt: now,
         goalPaused: stored.paused,
-        goalPausedAt: stored.paused ? now : null,
       };
     }),
   applyServerGoal: (goal) =>
@@ -1120,18 +1103,6 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       const activeGoal = goal && goal.status !== "completed" ? goal : undefined;
       const paused = activeGoal?.status === "paused";
       const title = activeGoal?.title ?? "";
-      const startedAtMs = activeGoal ? Date.parse(activeGoal.startedAt) : Number.NaN;
-      const startedAt = activeGoal
-        ? Number.isFinite(startedAtMs)
-          ? startedAtMs
-          : Date.now()
-        : null;
-      const pausedAtMs = paused ? Date.parse(goal?.updatedAt ?? "") : Number.NaN;
-      const pausedAt = paused
-        ? Number.isFinite(pausedAtMs)
-          ? pausedAtMs
-          : Date.now()
-        : null;
       if (
         state.goalMode === Boolean(activeGoal) &&
         state.goalText === title &&
@@ -1142,9 +1113,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       return {
         goalMode: Boolean(activeGoal),
         goalText: title,
-        goalStartedAt: startedAt,
         goalPaused: paused,
-        goalPausedAt: pausedAt,
       };
     }),
   rememberSurfaceScroll: (key, position) => set((state) => ({
