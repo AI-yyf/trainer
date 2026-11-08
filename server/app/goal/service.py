@@ -46,8 +46,16 @@ def normalize_goal_title(value: str) -> str:
     return cleaned[:160]
 
 
+_TITLE_REQUEST_CLAUSE = re.compile(
+    r"[，,。;；]\s*(?=(?:请|先|帮我|给我|告诉我|并|然后|再|以及|please\b|and\b))",
+    re.IGNORECASE,
+)
+
+
 def _clean_candidate_title(value: str) -> str:
     title = normalize_goal_title(value)
+    # "实现 PPO Clip，请先判断我该从哪里开始" -> "实现 PPO Clip"
+    title = _TITLE_REQUEST_CLAUSE.split(title, maxsplit=1)[0]
     previous = None
     while title and title != previous:
         previous = title

@@ -22,8 +22,8 @@
 | # | 旅程 | U | S | P | V | G | R | L | 主要证据 / 缺口 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 第一次安装 Trainer，自然开始交流 | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | — | U: first-run/e2e；S: experience matrix；V: v1.4.1 安装；R: 141s 安装；P/G：真实模型首条自然交流未单独归档 |
-| 2 | 随口提问，不产生不必要长期目标 | ✅ | 🟡 | 🟡 | ⬜ | 🟡 | ⬜ | — | U: `test_goal_session` 识别边界 + `sendIntelligence`；P：真实闲聊未做 Goal 断言 |
-| 3 | 明确能力目标，Goal 自动建立并持续追踪 | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: 17 项 Goal 行为测试；S: API/持久化；P/G：真实对话自动建 Goal 未执行 |
+| 2 | 随口提问，不产生不必要长期目标 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | — | U: `test_goal_session` + `sendIntelligence`；S/P：`docs/verification/v4-journey-2-3-goal-real.md`（deepseek-v4.1-flash，无 Goal/plan/card） |
+| 3 | 明确能力目标，Goal 自动建立并持续追踪 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: 18 项 Goal 行为测试；S/P：真实对话自动建 Goal + 重启同 id + 续接；G: 真实 GUI 未录 |
 | 4 | 多次会话继续同一任务，不复述背景 | ✅ | ✅ | ✅ | 🟡 | 🟡 | 🟡 | ✅ | U: recovery；S/P: P4 11 步旅程；R: L2 第 4 步；G：跨会话真实窗口未单独归档 |
 | 5 | 表达教学偏好，后续自动适配 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | 🟡 | U: memory/settings；G: Settings 四屏审计；P：真实偏好适配未验证 |
 | 6 | 改变偏好，系统修正旧习惯 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | 🟡 | U: preference overwrite；P/G：跨轮真实修正未验证 |
@@ -47,8 +47,8 @@
 | 等级 | PASS | PARTIAL | GAP |
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
-| S 真实 Sidecar | 6 | 14 | 0 |
-| P 真实 Provider | 3 | 5 | 12 |
+| S 真实 Sidecar | 7 | 13 | 0 |
+| P 真实 Provider | 5 | 4 | 11 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 0 | 9 | 11 |
 | R Remote-SSH | 1 | 3 | 16 |
