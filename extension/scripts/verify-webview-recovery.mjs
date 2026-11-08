@@ -618,7 +618,7 @@ async function verifyRestoreResourcesSandboxPreview(page, previewUrl) {
   );
   assertEqual(
     surface.cardTitle,
-    "Sandbox preview restored",
+    "Sandbox context restored",
     "Restoring a sandbox preview should surface the restored sandbox title.",
   );
   assertEqual(

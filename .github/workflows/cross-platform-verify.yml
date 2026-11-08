@@ -263,7 +263,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && runner.os == 'Linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y xvfb xauth dbus dbus-x11 gnome-keyring libsecret-1-0 libsecret-tools libglib2.0-bin libgtk-3-0 libgbm1 libnss3 libasound2t64
+          sudo apt-get install --no-install-recommends -y xvfb xauth dbus dbus-x11 gnome-keyring libsecret-1-0 libsecret-tools libglib2.0-bin libgtk-3-0 libgbm1 libnss3 libasound2
 
       - name: Detect native VSIX install and host-E2E capability
         id: vsix-capability

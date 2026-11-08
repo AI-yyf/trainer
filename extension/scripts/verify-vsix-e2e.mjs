@@ -2127,7 +2127,7 @@ writeProgress();
           "Installed-state resource detail screenshot capture failed: " + JSON.stringify(data),
       });
 
-      const sandboxNativeOpenTruth = await record("assert-resources-embedded-preview-webview-debug-state", async () => {
+      const sandboxNativeOpenTruth = await record("assert-resources-no-in-trainer-preview", async () => {
         const uploadResult = await vscode.commands.executeCommand("trainer.resource.upload", {
           mode: "files",
           uploads: [
@@ -2135,7 +2135,7 @@ writeProgress();
               name: "vsix-sandbox-preview-proof.md",
               kind: "markdown",
               source: path.join(smokeWorkspaceDir, "vsix-sandbox-preview-proof.md"),
-              tags: ["vsix-e2e", "sandbox-preview"],
+              tags: ["vsix-e2e", "sandbox-context"],
             },
           ],
         });
@@ -2147,11 +2147,13 @@ writeProgress();
             ? resourceItem.sandbox_path || resourceItem.sandboxPath
             : null;
         if (!sandboxPath) {
-          throw new Error("Sandbox preview smoke did not return a sandbox path.");
+          throw new Error("Sandbox context smoke did not return a sandbox path.");
         }
-
-        const previewResult = await vscode.commands.executeCommand("trainer.sandbox.preview", { path: sandboxPath });
-        await sleep(500);
+        const allCommands = await vscode.commands.getCommands(true);
+        const previewCommandAbsent = !allCommands.includes("trainer.sandbox.preview");
+        if (!previewCommandAbsent) {
+          throw new Error("trainer.sandbox.preview is still registered; no in-Trainer preview may exist.");
+        }
         const restoreResult = await vscode.commands.executeCommand("trainer.debug.restoreView", {
           workspaceId: managedContextId,
           activeView: "resources",
@@ -2159,8 +2161,8 @@ writeProgress();
           sandboxPath,
           previewPath: sandboxPath,
           workspaceLabel: "trainer-vsix-e2e",
-          resumeReason: "Show the installed sandbox preview state.",
-          focusArea: "sandbox preview",
+          resumeReason: "Restore the resource sandbox context.",
+          focusArea: "resource sandbox",
         });
         if (!restoreResult || restoreResult.ok !== true) {
           throw new Error("Sandbox restore command did not succeed: " + JSON.stringify(restoreResult));
@@ -2175,31 +2177,18 @@ writeProgress();
                 facts.activeSurface === "sandbox" &&
                 facts.selectedSandboxPath === sandboxPath &&
                 facts.singleWorkbenchSurface === true &&
-                facts.sandboxPreviewVisible === true &&
-                facts.sandboxPreviewEmbedded === true &&
-                facts.sandboxPreviewPath === sandboxPath &&
-                facts.sandboxPaneVisible === false &&
-                // The detail pane opens whenever a resource is selected
-                // (ResourcesWorkbenchView: detailPaneVisible = Boolean(selectedResource)).
                 facts.detailPaneVisible === true &&
+                facts.sandboxPaneVisible === false &&
                 facts.previewPaneVisible === false,
             ),
         );
         return {
           sandboxPath,
-          // The product contract for trainer.sandbox.preview is a governed
-          // in-workbench preview (optionally with a canNativeOpen capability
-          // flag) — it does not open a text editor, so assert the preview
-          // result plus the reported embedded reader preview state below.
-          previewSucceeded: previewResult?.ok === true,
-          previewCanNativeOpen: previewResult?.data?.canNativeOpen === true,
+          previewCommandAbsent,
           restoreSucceeded: restoreResult.ok === true,
           hasVisibleFacts: Boolean(visible),
           activeSurface: visible ? visible.activeSurface || null : null,
           selectedSandboxPath: visible ? visible.selectedSandboxPath || null : null,
-          sandboxPreviewVisible: visible ? visible.sandboxPreviewVisible === true : false,
-          sandboxPreviewEmbedded: visible ? visible.sandboxPreviewEmbedded === true : false,
-          sandboxPreviewPath: visible ? visible.sandboxPreviewPath || null : null,
           singleWorkbenchSurface: visible ? visible.singleWorkbenchSurface === true : false,
           detailPaneVisible: visible ? visible.detailPaneVisible === true : false,
           sandboxPaneVisible: visible ? visible.sandboxPaneVisible === true : false,
@@ -2209,26 +2198,23 @@ writeProgress();
         ok: (data) =>
           Boolean(
             data &&
-              data.previewSucceeded === true &&
+              data.previewCommandAbsent === true &&
               data.restoreSucceeded === true &&
               data.hasVisibleFacts === true &&
               data.activeSurface === "sandbox" &&
               data.selectedSandboxPath === data.sandboxPath &&
-              data.sandboxPreviewVisible === true &&
-              data.sandboxPreviewEmbedded === true &&
-              data.sandboxPreviewPath === data.sandboxPath &&
               data.singleWorkbenchSurface === true &&
               data.detailPaneVisible === true &&
               data.sandboxPaneVisible === false &&
               data.previewPaneVisible === false
           ),
         errorMessage: (data) =>
-          "Installed-state embedded preview webview debug-state mismatch: " + JSON.stringify(data),
+          "Installed-state no-preview/restore debug-state mismatch: " + JSON.stringify(data),
       });
 
-      await record("capture-owned-workbench-after-embedded-preview-restore", async () => {
+      await record("capture-owned-workbench-after-sandbox-context-restore", async () => {
         const captured = captureVsCodeWindowArtifacts({
-          label: "after-embedded-preview-restore",
+          label: "after-sandbox-context-restore",
           artifactsDir,
           sideBarRatio: 0.36,
           userDataDir: smokeUserDataDir,
@@ -2244,7 +2230,7 @@ writeProgress();
       }, {
         ok: isWindowCaptureVerified,
         errorMessage: (data) =>
-          "Installed-state sandbox preview screenshot capture failed: " + JSON.stringify(data),
+          "Installed-state sandbox context screenshot capture failed: " + JSON.stringify(data),
       });
 
       await record("assert-resources-sandbox-restore-webview-debug-state", async () => {

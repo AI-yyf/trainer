@@ -385,20 +385,24 @@ test('VSIX E2E checks the public sandbox skill capability contract instead of an
   assert.match(source, /trainer\.resource_sandbox\.skill_runtime\.v1/);
 });
 
-test('VSIX E2E checks the governed preview and reported reader state without claiming a separate pane', () => {
+test('VSIX E2E asserts no in-Trainer preview command and the sandbox context reader', () => {
   const source = fs.readFileSync(e2eScriptPath, 'utf8');
-  const sandboxStart = source.indexOf('await record("assert-resources-embedded-preview-webview-debug-state"');
+  const sandboxStart = source.indexOf('await record("assert-resources-no-in-trainer-preview"');
   const sandboxEnd = source.indexOf('await record("capture-owned-workbench-after-sandbox-restore"', sandboxStart);
   const sandboxSource = source.slice(sandboxStart, sandboxEnd);
 
   assert.ok(sandboxStart >= 0 && sandboxEnd > sandboxStart, 'the sandbox truth flow must exist');
-  // The preview command returns a governed in-workbench preview with an
-  // optional canNativeOpen capability flag; it does not open a text editor,
-  // so the driver must not assert editor state or a nativeOpen field.
+  // The product has no in-workbench resource preview: the old command must be
+  // absent, and restore only proves the resource context + metadata surface.
   assert.match(sandboxSource, /trainer\.sandbox\.preview/);
+  assert.match(sandboxSource, /previewCommandAbsent/);
+  assert.match(sandboxSource, /getCommands\(true\)/);
+  assert.doesNotMatch(sandboxSource, /executeCommand\(\s*"trainer\.sandbox\.preview"/);
+  assert.doesNotMatch(sandboxSource, /sandboxPreviewVisible/);
+  assert.doesNotMatch(sandboxSource, /sandboxPreviewEmbedded/);
+  assert.doesNotMatch(sandboxSource, /sandboxPreviewPath/);
   assert.doesNotMatch(sandboxSource, /nativeOpen/);
   assert.doesNotMatch(sandboxSource, /activeTextEditor/);
-  assert.match(sandboxSource, /previewSucceeded: previewResult\?\.ok === true/);
   assert.match(sandboxSource, /selectedSandboxPath: facts \? facts\.selectedSandboxPath \|\| null : null,/);
   assert.match(sandboxSource, /workspaceId: managedContextId/);
   assert.doesNotMatch(sandboxSource, /sessionId,\s*workspaceId: managedContextId/);
@@ -407,13 +411,8 @@ test('VSIX E2E checks the governed preview and reported reader state without cla
   assert.match(sandboxSource, /data\.restoreSucceeded === true/);
   assert.match(sandboxSource, /data\.activeSurface === "sandbox"/);
   assert.match(sandboxSource, /data\.selectedSandboxPath === data\.sandboxPath/);
-  // The detail pane opens whenever a resource is selected
-  // (ResourcesWorkbenchView: detailPaneVisible = Boolean(selectedResource)).
   assert.match(sandboxSource, /data\.detailPaneVisible === true/);
   assert.match(sandboxSource, /data\.sandboxPaneVisible === false/);
-  assert.match(sandboxSource, /data\.sandboxPreviewVisible === true/);
-  assert.match(sandboxSource, /data\.sandboxPreviewEmbedded === true/);
-  assert.match(sandboxSource, /data\.sandboxPreviewPath === data\.sandboxPath/);
   assert.match(sandboxSource, /data\.previewPaneVisible === false/);
   assert.doesNotMatch(sandboxSource, /data\.activeSurface === "detail"/);
   assert.doesNotMatch(sandboxSource, /data\.permissionState === "coach_only"/);
