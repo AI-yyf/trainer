@@ -7,7 +7,12 @@ from datetime import UTC, datetime
 import pytest
 
 from app.core.clock import utc_now
-from app.training.fsrs_scheduler import FSRSTrainerCardScheduler, TrainingRating
+from app.training.fsrs_scheduler import (
+    FSRSTrainerCardScheduler,
+    TrainingRating,
+    card_state_from_payload,
+    card_state_to_payload,
+)
 
 
 def test_test_clock_reads_iso_and_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -41,3 +46,21 @@ def test_fsrs_due_and_interval_advance_across_simulated_days(monkeypatch: pytest
     again = scheduler.process_review("clock-card", TrainingRating.AGAIN)
     assert again.lapses == 1
     assert again.new_interval <= second.new_interval
+
+
+def test_learning_step_survives_persistence_and_graduates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TRAINER_TEST_NOW", "2026-11-01T09:00:00Z")
+    scheduler = FSRSTrainerCardScheduler()
+    scheduler.create_card("persisted-step", "remote boundary")
+    first = scheduler.process_review("persisted-step", TrainingRating.GOOD)
+    payload = card_state_to_payload(scheduler.get_card_state("persisted-step"))
+
+    restored = FSRSTrainerCardScheduler()
+    restored_state = card_state_from_payload(payload)
+    assert restored_state is not None
+    assert restored_state.step == 1
+    restored.load_card_states([restored_state])
+    monkeypatch.setenv("TRAINER_TEST_NOW", first.next_due.isoformat())
+    second = restored.process_review("persisted-step", TrainingRating.GOOD)
+    assert second.new_interval >= 1
+    assert restored.get_card_state("persisted-step").state == "review"

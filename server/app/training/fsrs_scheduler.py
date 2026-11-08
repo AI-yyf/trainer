@@ -47,6 +47,9 @@ class TrainingCardState:
     stability: float = 0.0  # Retainability R in FSRS
     difficulty: float = 2.5  # Initial difficulty D
     state: str = "new"  # new, learning, review, relearning
+    # py-fsrs learning step index. Persisting it is required for graduation
+    # from minute-scale learning steps to a day-scale review interval.
+    step: int = 0
     due: datetime | None = None
     interval: int = 0  # days
     ease_factor: float = 2.5  # Initial ease factor
@@ -190,6 +193,7 @@ class FSRSTrainerCardScheduler:
             next_card.difficulty if next_card.difficulty is not None else self.DEFAULT_EASE_FACTOR
         )
         card_state.state = self._fsrs_state_name(next_card.state)
+        card_state.step = max(0, int(next_card.step or 0))
         card_state.due = next_card.due
         card_state.next_due_at = next_card.due
         raw_interval = max(0, int(round((next_card.due - now).total_seconds() / 86400))) if next_card.due else 0
@@ -340,6 +344,7 @@ class FSRSTrainerCardScheduler:
         difficulty = card_state.difficulty if card_state.difficulty > 0 else None
         return Card(
             state=state,
+            step=max(0, int(card_state.step or 0)),
             stability=stability,
             difficulty=difficulty,
             due=card_state.due,
@@ -372,6 +377,7 @@ def card_state_to_payload(state: TrainingCardState) -> dict[str, Any]:
         "stability": state.stability,
         "difficulty": state.difficulty,
         "state": state.state,
+        "step": max(0, int(state.step or 0)),
         "due": state.due.isoformat() if state.due else None,
         "interval": state.interval,
         "ease_factor": state.ease_factor,
@@ -415,6 +421,7 @@ def card_state_from_payload(payload: dict[str, Any]) -> TrainingCardState | None
         stability=float(payload.get("stability") or 0.0),
         difficulty=float(payload.get("difficulty") or 2.5),
         state=str(payload.get("state") or "new").strip() or "new",
+        step=max(0, int(payload.get("step") or 0)),
         due=_parse_fsrs_datetime(payload.get("due")),
         interval=int(payload.get("interval") or 0),
         ease_factor=float(payload.get("ease_factor") or payload.get("easeFactor") or 2.5),

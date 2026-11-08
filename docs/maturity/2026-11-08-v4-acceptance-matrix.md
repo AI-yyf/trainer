@@ -30,7 +30,7 @@
 | 7 | 提示帮助下完成，不误判独立掌握 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | ⬜ | — | U: false-mastery 闸门 + skill projection；P：真实受助任务未做掌握断言 |
 | 8 | 独立完成，真实证据自动同步 Learning | ✅ | ✅ | 🟡 | ⬜ | 🟡 | ⬜ | ✅ | U: attempt/evidence/skill projection；S: sidecar matrix；G/P：真实独立完成→Learning 未归档 |
 | 9 | 数天后忘记，自然安排复习 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS due/AGAIN/时间推进；P: 时钟 day0→day3 后真实模型按 due review 回应；G：真实 GUI 未录 |
-| 10 | 正确延迟回忆，间隔延长 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS GOOD/EASY 间隔；真实延迟回忆未执行 |
+| 10 | 正确延迟回忆，间隔延长 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS GOOD/EASY；S/P: guided-pack 卡 + Day0→Day2 时钟，第二次 Good interval 2 天，真实模型延迟回忆 200 |
 | 11 | 拒绝复习或忙碌，不被打扰 | ✅ | 🟡 | ✅ | ⬜ | 🟡 | ⬜ | — | U: review queue governance；P: skip 后次日再复习，忙碌回合不强行拉回；G：真实 GUI 未录 |
 | 12 | 长期未上线返回，不积压提醒 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: 上限/静默/去重；P: day30 后 due 无重复，真实模型给最小回顾问题；L：部分 |
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
@@ -48,7 +48,7 @@
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
 | S 真实 Sidecar | 9 | 11 | 0 |
-| P 真实 Provider | 12 | 6 | 2 |
+| P 真实 Provider | 13 | 6 | 1 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 5 | 6 | 9 |
 | R Remote-SSH | 1 | 3 | 16 |
@@ -80,7 +80,8 @@
 - Remote-SSH 重连：`docs/verification/v4-remote-ssh-reconnect-2026-11-08.md`（CI Layer 1，11/11 steps，含 reconnect）。
 - 三平台发布矩阵：`docs/verification/v4-release-matrix-2026-11-08.md`（commit 485e25e，9/9 jobs；三平台 VSIX + installed host E2E）。
 - 真实 Provider 旅程：`docs/verification/v4-provider-journeys.md`（deepseek-v4.1-flash；5/6 PASS，15/19/20 PARTIAL，9/10/11/12/18 未执行）。
-- 时钟 harness：`docs/verification/v4-clock-harness.md`（FSRS 数天跨度，2 tests；不替代真实数天 GUI/Provider 证据）。
+- 时钟 harness：`docs/verification/v4-clock-harness.md`（FSRS 数天跨度；另见 `v4-fsrs-delayed-recall.md`）。
+- FSRS 延迟回忆：`docs/verification/v4-fsrs-delayed-recall.md`（Day0→Day2，interval 2 天，真实模型延迟回忆）。
 - 复习 Provider 旅程：`docs/verification/v4-review-provider-journeys.md`（9/11/12 PASS；10 未执行）。
 - 双客户端并发：`docs/verification/v4-dual-window-journey.md`（PASS：200 + 409，revision 只前进一次；不是双 GUI 窗口）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。

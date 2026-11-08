@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-08T22:03:50.980265+00:00",
+  "provider": {
+    "base_url": "https://linksub.fun",
+    "model": "deepseek-v4.1-flash"
+  },
+  "clock": {
+    "day0": "2026-11-01T09:00:00Z",
+    "day1": "2026-11-02T09:00:00Z",
+    "day4": "2026-11-05T09:00:00Z"
+  },
+  "reviews": [
+    {
+      "now": "2026-11-01T09:00:00Z",
+      "passed": true,
+      "summary": "Executable checks passed: ruff, pyright, python-script. Training acceptance signals matched.",
+      "interval": 0,
+      "due": "2026-11-01T09:10:00+00:00",
+      "stability": 2.3065,
+      "reps": 1,
+      "lapses": 0
+    },
+    {
+      "now": "2026-11-01T09:10:00+00:00",
+      "passed": true,
+      "summary": "Executable checks passed: ruff, pyright, python-script. Training acceptance signals matched.",
+      "interval": 2,
+      "due": "2026-11-03T09:10:00+00:00",
+      "stability": 2.3065,
+      "reps": 2,
+      "lapses": 0
+    }
+  ],
+  "delayed_recall": {
+    "status": 200,
+    "reply": "你远程工作区的边界，是只允许你本人访问，还是也允许其他同事/外部人员访问？",
+    "reply_chars": 37,
+    "at_due": "2026-11-03T09:10:00+00:00",
+    "detail": null
+  },
+  "assertions": {
+    "first_review_passed": true,
+    "first_due_is_ten_minutes": true,
+    "all_reviews_passed": true,
+    "reaches_day_interval": true,
+    "delayed_recall_nonempty": true
+  },
+  "elapsed_ms": 50627,
+  "ok": true
+}
