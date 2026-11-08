@@ -1,22 +1,28 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`586fa93`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`76a17e3`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `586fa93`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 64 个 |
-| 代码差异（v1.4.0..HEAD） | 178 files, +29988 / −21018（含两次 CRLF→LF 规范化） |
-| 最新 ci 工作流 | run 42447502632 **success** |
-| 最新 Cross-Platform Verify | run 42447502755 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 代码与 CI 基线 | `76a17e3`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..`76a17e3`，不含本报告提交） | 70 个 |
+| 代码差异（v1.4.0..HEAD） | 200 files, +32412 / −21024（含两次 CRLF→LF 规范化） |
+| 最新 ci 工作流 | run 42453428224 **success** |
+| 最新 Cross-Platform Verify | run 42453428226 **success（9/9）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 64 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 70 个见 `git log v1.4.0..main`）：
 
 ```
+76a17e3 test(goal): 跨平台工作区断言
+eca6e4f test(goal): 证明 start/summary 快照恢复与清除 goal
+01f0153 fix(goal): 评估进度发布到所有 live session
+6ea1a98 fix(goal): 重启暂停目标时复用而非重复创建
+e84577e feat(goal): GoalSession 服务端持久化 + 真实活动进度
+1ef996c docs(status): 刷新到 586fa93/64 提交 + CI 9/9
 586fa93 fix(training): 字符串匹配通过不再升级为 mastery
 2f7eb47 docs(status): 刷新到 458440f/62 提交 + 3902 测试
 458440f feat(review): 队列评分走 FSRS + 无回忆证据标记
@@ -29,10 +35,6 @@ dcd122e chore(build): V4 VSIX manifest
 ef95beb fix(provider): 数字 Token Plan 限额归为额度耗尽
 4e8554f refactor(resources): 抽出 libraryPaths 纯路径责任
 bdb8986 design(resources): + 图标靠搜索、回收站页脚化
-c77e6e5 design(learning): 保留环形日进度
-3d43bf6 fix(ui): 空学习态收成两层 + L2 脚本隔离状态
-199e244 test(preview): 修正旧准入文案断言
-e758ec5 fix(ui): 学习头部单行 + 工作区准入说明
 1b53a23 feat(chat): ^sup^ / ~sub~ 字符上下标
 ```
 
@@ -73,7 +75,7 @@ Goal 服务端实体化已落地：SQLite `goal_sessions` + `GoalService` 是唯
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3918 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、证据、技能回归） |
+| server pytest | **3919 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、证据、技能回归） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
@@ -88,8 +90,8 @@ Goal 服务端实体化已落地：SQLite `goal_sessions` + `GoalService` 是唯
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `586fa93`） | 42447502632 | success |
-| Cross-Platform Verify（main `586fa93`，linux 构建 ubuntu-22.04） | 42447502755 | **success（9/9）** |
+| ci（main `76a17e3`） | 42453428224 | success |
+| Cross-Platform Verify（main `76a17e3`，linux 构建 ubuntu-22.04） | 42453428226 | **success（9/9）** |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
 ## 5. 跨平台安装证据
