@@ -1,6 +1,6 @@
 # V4 真实 Provider 旅程 5/6/15/19/20（2026-11-08）
 
-**结论：5 PASS / 0 PARTIAL / 5 NOT_EXECUTED**（15/20 已在修复上下文注入后 PASS）
+**结论：本文件覆盖的 5/6/15/19/20 全部 PASS**（9/10/11/12/18 见独立证据文件）
 
 - Provider：`https://linksub.fun` / `deepseek-v4.1-flash`
 - 运行方式：真实 `run_sidecar.py` 子进程 + 真实公网模型，非 TestClient/mock
