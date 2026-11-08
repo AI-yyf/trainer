@@ -25,8 +25,8 @@
 | 2 | 随口提问，不产生不必要长期目标 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | — | U: `test_goal_session` + `sendIntelligence`；S/P：`docs/verification/v4-journey-2-3-goal-real.md`；G：真实窗口发送随口问题后无 Goal 条 |
 | 3 | 明确能力目标，Goal 自动建立并持续追踪 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | 🟡 | U: 18 项 Goal 行为测试；S/P：真实对话自动建 Goal + 重启同 id + 续接；G：真实窗口自动出现 Goal 条，Reload Window 后仍恢复 |
 | 4 | 多次会话继续同一任务，不复述背景 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U: recovery；S/P: P4 11 步旅程；R: L2 第 4 步；G：真实窗口继续同一 Goal 并保留上下文 |
-| 5 | 表达教学偏好，后续自动适配 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | 🟡 | U: memory/settings；G: Settings 四屏审计；P：真实偏好适配未验证 |
-| 6 | 改变偏好，系统修正旧习惯 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | 🟡 | U: preference overwrite；P/G：跨轮真实修正未验证 |
+| 5 | 表达教学偏好，后续自动适配 | ✅ | 🟡 | ✅ | ⬜ | 🟡 | ⬜ | 🟡 | U: memory/settings；G: Settings 四屏审计；P: 真实模型在 hands-on / concept-first 下同一问题回复不同 |
+| 6 | 改变偏好，系统修正旧习惯 | ✅ | 🟡 | ✅ | ⬜ | 🟡 | ⬜ | 🟡 | U: preference overwrite；P: 存储偏好从 hands-on 改为 concept-first 后同题真实回复不同 |
 | 7 | 提示帮助下完成，不误判独立掌握 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | ⬜ | — | U: false-mastery 闸门 + skill projection；P：真实受助任务未做掌握断言 |
 | 8 | 独立完成，真实证据自动同步 Learning | ✅ | ✅ | 🟡 | ⬜ | 🟡 | ⬜ | ✅ | U: attempt/evidence/skill projection；S: sidecar matrix；G/P：真实独立完成→Learning 未归档 |
 | 9 | 数天后忘记，自然安排复习 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS due/AGAIN/时间推进；P/G：真实数天遗忘旅程未执行 |
@@ -35,12 +35,12 @@
 | 12 | 长期未上线返回，不积压提醒 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: 上限/静默/去重；L：时间模拟部分；真实长离线未执行 |
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
 | 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实窗口切换 model、Reload Window 后 Settings 仍显示新 model |
-| 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；S: `docs/verification/v4-integrity-journeys.md`（真实 sidecar，旧 version 409）；P/G：真实 GUI 资料变更未验证 |
+| 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；S: 真实 sidecar 旧 version 409；P: 真实模型未消费 resource context，PARTIAL；G：真实 GUI 资料变更未验证 |
 | 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
 | 18 | 多窗口并发，不重复推进计划/复习 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision、singleflight、SQLite 写锁；真实双窗口未执行 |
-| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | ⬜ | ⬜ | 🟡 | ⬜ | ✅ | U: memory update/clear；S: 真实 sidecar profile 覆盖 + global memory 撤销；G: Settings 记忆开关；P：真实模型下一轮教学变化未验证 |
-| 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；真实多项目长跑未执行 |
+| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | 🟡 | ⬜ | 🟡 | ⬜ | ✅ | U: memory update/clear；S: 真实 sidecar 覆盖/撤销；G: Settings 记忆开关；P: 真实模型回合保持非空，但风格变化未证明 |
+| 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；P：真实模型无跨项目泄漏，但项目 B 事实保持失败 |
 
 ## 2. 汇总
 
@@ -48,7 +48,7 @@
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
 | S 真实 Sidecar | 9 | 11 | 0 |
-| P 真实 Provider | 5 | 4 | 11 |
+| P 真实 Provider | 7 | 7 | 6 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 5 | 6 | 9 |
 | R Remote-SSH | 1 | 3 | 16 |
@@ -79,6 +79,7 @@
 - 性能门禁：`docs/verification/v4-perf-probe-2026-11-08.json`（streaming longtask 0 ≤ 0；warm nav p90 63ms < 100ms）。
 - Remote-SSH 重连：`docs/verification/v4-remote-ssh-reconnect-2026-11-08.md`（CI Layer 1，11/11 steps，含 reconnect）。
 - 三平台发布矩阵：`docs/verification/v4-release-matrix-2026-11-08.md`（commit 485e25e，9/9 jobs；三平台 VSIX + installed host E2E）。
+- 真实 Provider 旅程：`docs/verification/v4-provider-journeys.md`（deepseek-v4.1-flash；5/6 PASS，15/19/20 PARTIAL，9/10/11/12/18 未执行）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。
 - 行为测试：server 3930 passed（含 FSRS/Goal/Evidence/Skill workspace）；extension suite 0 失败；Settings e2e 8 passed。
 - 长期时间/持久化：`test_live_training_fsrs_on_verify.py`、`test_review_scheduler_fsrs.py`、session/plan revision 回归。

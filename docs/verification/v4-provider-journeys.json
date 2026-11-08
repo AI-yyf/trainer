@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-08T18:38:00.803254+00:00",
+  "provider": {
+    "base_url": "https://linksub.fun",
+    "model": "deepseek-v4.1-flash"
+  },
+  "journeys": {
+    "5_preference_adaptation": {
+      "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
+      "hands_on_reply": "元组只保证**引用不可变**，不保证引用指向的对象本身不可变。列表是可变对象，元组保存的是它的引用，所以能原地修改列表内容。\n最小例子：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 修改的是列表对象本身\nprint(t)         # (1, [2, 3, 4])\n```",
+      "concept_first_reply": "元组只冻结**元素引用**，不冻结被引用对象。列表本身可变，因此可原地修改。\n最小例子：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 改的是列表内容\nprint(t)         # (1, [2, 3, 4])\n# t[1] = []      # 会报错：不能替换元组元素\n```",
+      "hands_on_chars": 163,
+      "concept_first_chars": 168,
+      "different": true,
+      "status": "PASS"
+    },
+    "6_preference_change": {
+      "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
+      "hands_on_reply": "元组只保证**引用不可变**，不保证引用指向的对象本身不可变。列表是可变对象，元组保存的是它的引用，所以能原地修改列表内容。\n最小例子：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 修改的是列表对象本身\nprint(t)         # (1, [2, 3, 4])\n```",
+      "concept_first_reply": "元组只冻结**元素引用**，不冻结被引用对象。列表本身可变，因此可原地修改。\n最小例子：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 改的是列表内容\nprint(t)         # (1, [2, 3, 4])\n# t[1] = []      # 会报错：不能替换元组元素\n```",
+      "hands_on_chars": 163,
+      "concept_first_chars": 168,
+      "different": true,
+      "status": "PASS",
+      "note": "Same prompt after the stored teaching_style changed from hands-on to concept-first."
+    },
+    "19_memory_revoke": {
+      "before_reply": "元组是不可变的（创建后不能修改），列表是可变的（可以增删改元素）。",
+      "after_revoke_reply": "元组是不可变的（创建后不能修改），而列表是可变的（可以增删改元素）。",
+      "changed": true,
+      "both_nonempty": true,
+      "status": "PARTIAL",
+      "note": "Profile/global memory was cleared and the next real model reply stayed non-empty; narrative variation alone is not proof of style adaptation."
+    },
+    "15_resource_version": {
+      "old_reply": "资料中没有提到任何队列或共享数据保护机制，因此无法回答。",
+      "new_reply": "我附上的资料中没有提到任何项目或队列相关信息，因此无法回答。",
+      "old_mentions_alpha": false,
+      "new_mentions_beta": false,
+      "new_still_mentions_alpha": false,
+      "status": "PARTIAL",
+      "note": "The model did not read the attached resource in this direct (non-agent) turn; the sidecar version conflict itself is covered by v4-integrity-journeys."
+    },
+    "20_multi_project": {
+      "project_a_reply": "未提供项目信息，无法判断。",
+      "project_b_reply": "未提及",
+      "a_leaks_b": false,
+      "b_mentions_beta": false,
+      "status": "PARTIAL",
+      "note": "No cross-project leak was observed, but project B did not retain its queued fact; the model answered a generic queue, so this is not a PASS."
+    }
+  },
+  "assertions": {
+    "preference_replies_differ": true,
+    "preference_replies_nonempty": true,
+    "memory_revoke_replies_nonempty": true,
+    "resource_version_reply_updated": false,
+    "projects_do_not_cross_leak": false
+  },
+  "not_executed": {
+    "9_forgetting_days": {
+      "title": "数天后忘记，自然安排复习",
+      "note": "需要真实数天时钟；本次未执行，不以单元测试替代"
+    },
+    "10_delayed_recall": {
+      "title": "正确延迟回忆，间隔延长",
+      "note": "需要真实延迟回忆；本次未执行"
+    },
+    "11_refuse_review": {
+      "title": "拒绝复习或忙碌，不被打扰",
+      "note": "需要真实 due queue 与真实模型回合；本次未执行"
+    },
+    "12_long_absence": {
+      "title": "长期未上线返回，不积压提醒",
+      "note": "需要真实长离线时钟；本次未执行"
+    },
+    "18_multi_window": {
+      "title": "多窗口并发",
+      "note": "需要两个真实 VS Code 窗口；本次未执行"
+    }
+  },
+  "elapsed_ms": 65263,
+  "ok": true
+}
