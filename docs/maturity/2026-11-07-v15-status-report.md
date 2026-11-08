@@ -54,6 +54,10 @@ Evidence 三套存储已统一：新增 `UnifiedEvidence`（schema 1）与三个
 
 项目蒸馏 Skill 已加 workspace 作用域：`SkillRecord.workspace_id` 随 registry 持久化；同名项目在不同 workspace 生成独立 id，不互相覆盖；注册、审核、激活、重试、失败/用量记录均校验 workspace；选择与注入只读取“全局 + 当前 workspace”，缺少 workspace 时只选全局；`/skill/list`、`/skill/status` 支持 workspace 过滤，`/skill/review` 跨 workspace 返回 404。行为测试 `test_skill_workspace_scope.py` 7 项；server 全套 **3930 passed**。
 
+已建立唯一验收矩阵 `docs/maturity/2026-11-08-v4-acceptance-matrix.md`：20 条旅程 × 7 类证据逐条标 PASS/PARTIAL/GAP。矩阵明确：U 全 20 通过；S 6 通过；P 仅 3 通过；V/G/R 多数仍为 PARTIAL/GAP；L 9 通过。真实 GUI 没有一条旅程达到 PASS，不能用户单元测试冒充。缺口优先级与下一步已写入矩阵 §3。
+
+模块拆分与 SCIP 推进：Provider 失败文案提取到 `llm/provider/failure_copy.py`；Memory 证据队列投影提取到 `memory/evidence_view.py`；App Goal 标题推导提取到 `lib/coachGoalTitle.ts`；`LspScipProvider` 从占位改为读取 `scip print --json` 导出，生成 `scip_reference` 边并诚实处理缺失/二进制/非法 JSON。新增 14 项行为测试（Provider 3、Memory 2、SCIP 5、App 4）。
+
 ## 2. 修复清单（按目标阶段）
 
 ### 阶段一 P0 可靠性
@@ -85,7 +89,7 @@ Evidence 三套存储已统一：新增 `UnifiedEvidence`（schema 1）与三个
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3930 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、Evidence 统一、Skill workspace 隔离） |
+| server pytest | **3940 passed / 0 failed**（28 subtests；含 FSRS、Goal、Evidence、Skill workspace、SCIP、模块拆分回归） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |

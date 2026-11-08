@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { reviewConceptLabel } from "../lib/reviewLabel";
+import { goalTitleFromConversation } from "../lib/coachGoalTitle";
 import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
@@ -1025,22 +1026,7 @@ export function App() {
         // evidence/answer, not the thing to pursue. Fall back to the reply only
         // when the thread has no prior user turn.
         const conversation = useWorkbenchState.getState().data.conversation;
-        const index = conversation.findIndex((item) => item.id === message.id);
-        let source = message.body ?? "";
-        for (let i = index - 1; i >= 0; i -= 1) {
-          const candidate = conversation[i];
-          if (candidate?.role === "user" && candidate.body.trim()) {
-            source = candidate.body;
-            break;
-          }
-        }
-        const title =
-          source
-            .split("\n")
-            .map((line) => line.trim())
-            .find(Boolean)
-            ?.replace(/^[#>*\-\s]+/, "")
-            .slice(0, 80) ?? "";
+        const title = goalTitleFromConversation(conversation, message.id);
         startGoal(title);
         requestGoalControl("start", title);
         setActiveView("coach");

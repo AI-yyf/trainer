@@ -86,7 +86,7 @@ def test_unavailable_providers_never_fabricate_edges(
 
     lsp = LspScipProvider().run(repo, index)
     assert lsp.available is False
-    assert "No LSP" in lsp.reason
+    assert "No SCIP JSON index" in lsp.reason
     assert lsp.edges == []
 
 

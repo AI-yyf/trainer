@@ -178,8 +178,6 @@ from .workspace_recovery import (
     normalize_provider_capability_recovery,
     normalize_streaming_checkpoint,
     recover_streaming_checkpoint_after_restart,
-    scope_evidence_items_to_workspace,
-    scope_evidence_queue_to_runtime_step,
     select_latest_adaptation_guide,
     select_latest_affect_state,
     select_latest_coach_focus,
@@ -5936,44 +5934,20 @@ class MemoryService(
         return handoff.handoff_id, list(handoff.evidence)
 
     def evidence_queue(self, workspace_id: str) -> EvidenceQueueSnapshot:
+        from .evidence_view import build_evidence_queue_snapshot
+
         structured = self._structured_for(workspace_id)
         items = list(structured._evidence_items.values())
-        pending = [
-            item
-            for item in items
-            if not item.adopted and not item.rejected_at and not item.deferred_at
-        ]
-        deferred = [
-            item
-            for item in items
-            if not item.adopted and not item.rejected_at and bool(item.deferred_at)
-        ]
-        adopted = [item for item in items if item.adopted]
-        rejected = [item for item in items if item.rejected_at]
         recovered = normalize_plan_runtime_recovery(structured._workspace.get(PLAN_RUNTIME_KEY))
         recovered_runtime = bool(recovered) and is_current_for_workspace(recovered, workspace_id)
-        pending = scope_evidence_items_to_workspace(pending, workspace_id)
-        deferred = scope_evidence_items_to_workspace(deferred, workspace_id)
-        adopted = scope_evidence_items_to_workspace(adopted, workspace_id)
-        rejected = scope_evidence_items_to_workspace(rejected, workspace_id)
-        scoped = scope_evidence_queue_to_runtime_step(
-            pending=pending,
-            deferred=deferred,
-            adopted=adopted,
-            rejected=rejected,
-            current_step=str((recovered or {}).get("current_step") or ""),
-            recovered=recovered_runtime,
+        return build_evidence_queue_snapshot(
+            items=items,
+            workspace_id=workspace_id,
+            recovered=recovered,
+            recovered_runtime=recovered_runtime,
             current_plan_id=str((recovered or {}).get("plan_id") or ""),
             current_stage_id=str((recovered or {}).get("current_stage_id") or ""),
-        )
-        return EvidenceQueueSnapshot(
-            pending=list(scoped["pending"]),
-            deferred=list(scoped["deferred"]),
-            adopted=list(scoped["adopted"]),
-            rejected=list(scoped["rejected"]),
-            history=list(scoped["history"]),
-            unscoped=list(scoped.get("unscoped", [])),
-            total_count=len(items),
+            current_step=str((recovered or {}).get("current_step") or ""),
         )
 
     def _adopted_return_transfer_concepts(

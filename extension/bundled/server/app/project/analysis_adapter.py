@@ -6,7 +6,8 @@ labels each edge with its evidence level:
 - ``syntax_exact``   — call site located by an AST (tree-sitter). The *site* is
   exact; resolving the callee across files is still by name.
 - ``approximate``    — the indentation/file-level heuristic (regex callgraph).
-- ``name_resolution``— plain name→definition matching (shared by AST paths).
+- ``lsp_reference``  — a live LSP references response.
+- ``scip_reference`` — a compiler-index (SCIP) reference from JSON export.
 
 Limitations are reported per provider, never hidden behind a merged graph
 (v1.5: 对于不支持或只能近似推断的关系必须诚实标注). LSP/SCIP is declared as a
@@ -16,6 +17,7 @@ edges.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -470,16 +472,178 @@ class LspPythonProvider:
 
 
 class LspScipProvider:
-    """Placeholder: no LSP/SCIP index is configured yet — reported, not faked."""
+    """SCIP compiler-index references (JSON export), never a fake LSP claim.
+
+    Binary ``.scip`` protobuf files need a SCIP toolchain, so this adapter reads
+    the deterministic JSON produced by ``scip print --json``. It reports honest
+    unavailability when no JSON index exists or the export is invalid.
+    """
 
     name = "lsp-scip"
+    _JSON_CANDIDATES = (
+        (".trainer", "scip", "index.json"),
+        ("index.scip.json",),
+        ("scip-index.json",),
+    )
+
+    @staticmethod
+    def _roles(value: Any) -> int:
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                return 0
+        if isinstance(value, list):
+            total = 0
+            for item in value:
+                if isinstance(item, int):
+                    total |= item
+                elif isinstance(item, str):
+                    try:
+                        total |= int(item)
+                    except ValueError:
+                        continue
+            return total
+        return 0
+
+    @classmethod
+    def _index_path(cls, repo_root: Path) -> Path | None:
+        for parts in cls._JSON_CANDIDATES:
+            candidate = repo_root.joinpath(*parts)
+            if candidate.is_file():
+                return candidate
+        return None
 
     def run(self, repo_root: Path, repo_index: RepoIndex) -> AdapterReport:
-        _ = (repo_root, repo_index)
+        _ = repo_index
+        index_path = self._index_path(repo_root)
+        if index_path is None:
+            binary = next(iter(sorted(repo_root.glob("*.scip"))), None)
+            if binary is not None:
+                reason = (
+                    f"Found binary SCIP index {binary.name}; export JSON with "
+                    "`scip print --json` and place it at .trainer/scip/index.json."
+                )
+            else:
+                reason = (
+                    "No SCIP JSON index is configured for this workspace "
+                    "(.trainer/scip/index.json, index.scip.json, or scip-index.json)."
+                )
+            return AdapterReport(name=self.name, available=False, reason=reason)
+        try:
+            payload = json.loads(index_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return AdapterReport(
+                name=self.name,
+                available=False,
+                reason=f"SCIP JSON index could not be read: {exc}",
+            )
+        if not isinstance(payload, dict):
+            return AdapterReport(
+                name=self.name,
+                available=False,
+                reason="SCIP JSON index must contain an object with documents.",
+            )
+        documents = payload.get("documents")
+        if not isinstance(documents, list):
+            return AdapterReport(
+                name=self.name,
+                available=False,
+                reason="SCIP JSON index has no documents array.",
+            )
+
+        definitions: dict[str, tuple[str, str]] = {}
+        normalized_documents: list[tuple[str, list[dict[str, Any]]]] = []
+        for document in documents:
+            if not isinstance(document, dict):
+                continue
+            path = str(
+                document.get("relativePath")
+                or document.get("relative_path")
+                or ""
+            ).replace("\\", "/").lstrip("./")
+            if not path:
+                continue
+            symbols = document.get("symbols")
+            if isinstance(symbols, list):
+                for symbol in symbols:
+                    if not isinstance(symbol, dict):
+                        continue
+                    symbol_id = str(symbol.get("symbol") or "").strip()
+                    if not symbol_id:
+                        continue
+                    display = str(
+                        symbol.get("displayName")
+                        or symbol.get("display_name")
+                        or symbol_id
+                    ).strip() or symbol_id
+                    definitions[symbol_id] = (path, display)
+            occurrences = document.get("occurrences")
+            normalized_documents.append(
+                (path, occurrences if isinstance(occurrences, list) else [])
+            )
+        for path, occurrences in normalized_documents:
+            for occurrence in occurrences:
+                if not isinstance(occurrence, dict):
+                    continue
+                symbol_id = str(occurrence.get("symbol") or "").strip()
+                if not symbol_id or symbol_id in definitions:
+                    continue
+                if self._roles(occurrence.get("symbolRoles", occurrence.get("symbol_roles"))) & 1:
+                    display = symbol_id.rsplit("/", 1)[-1] or symbol_id
+                    definitions[symbol_id] = (path, display)
+
+        edges: list[AdapterEdge] = []
+        seen: set[tuple[str, str, str]] = set()
+        for path, occurrences in normalized_documents:
+            for occurrence in occurrences:
+                if not isinstance(occurrence, dict):
+                    continue
+                symbol_id = str(occurrence.get("symbol") or "").strip()
+                definition = definitions.get(symbol_id)
+                if not symbol_id or definition is None:
+                    continue
+                roles = self._roles(
+                    occurrence.get("symbolRoles", occurrence.get("symbol_roles"))
+                )
+                if roles & 1:
+                    continue
+                callee_file, callee_symbol = definition
+                if callee_file == path:
+                    continue
+                key = (path, path, callee_symbol)
+                if key in seen:
+                    continue
+                seen.add(key)
+                edges.append(
+                    AdapterEdge(
+                        caller_file=path,
+                        caller_symbol=path,
+                        callee_symbol=callee_symbol,
+                        callee_file=callee_file,
+                        confidence="scip_reference",
+                        provider=self.name,
+                    )
+                )
+                if len(edges) >= MAX_EDGES_PER_PROVIDER:
+                    break
+            if len(edges) >= MAX_EDGES_PER_PROVIDER:
+                break
+        limitations = [
+            "Reads SCIP JSON (`scip print --json`); binary .scip protobuf is not parsed.",
+            "Callers are file-level because occurrences report positions, not enclosing definitions.",
+            "References without a definition entry in the same index are skipped.",
+        ]
+        if len(edges) >= MAX_EDGES_PER_PROVIDER:
+            limitations.append(f"Edge list truncated at {MAX_EDGES_PER_PROVIDER}.")
         return AdapterReport(
             name=self.name,
-            available=False,
-            reason="No LSP client or SCIP index is configured for this workspace.",
+            available=True,
+            confidence="scip_reference",
+            edges=edges,
+            limitations=limitations,
         )
 
 
@@ -499,7 +663,7 @@ def run_analysis_adapters(
     """Run every provider; merge edges preferring the highest evidence level."""
 
     reports = [provider.run(repo_root, repo_index) for provider in providers]
-    rank = {"lsp_reference": 3, "syntax_exact": 2, "approximate": 1}
+    rank = {"scip_reference": 4, "lsp_reference": 3, "syntax_exact": 2, "approximate": 1}
     merged: dict[tuple[str, str, str], AdapterEdge] = {}
     for report in reports:
         if not report.available:
