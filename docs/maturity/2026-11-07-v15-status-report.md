@@ -1,22 +1,23 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`2003806`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`1c016ab`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `2003806`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..`2003806`，不含本报告提交） | 74 个 |
-| 代码差异（v1.4.0..HEAD） | 218 files, +33698 / −21628（含两次 CRLF→LF 规范化） |
-| 最新 ci 工作流 | run 42468290283 **success** |
-| 最新 Cross-Platform Verify | run 42468290213 **success（9/9）** |
+| 代码与 CI 基线 | `1c016ab`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..`1c016ab`，不含本报告提交） | 76 个 |
+| 代码差异（v1.4.0..HEAD） | 227 files, +34948 / −21630（含两次 CRLF→LF 规范化） |
+| 最新 ci 工作流 | run 42472040506 **success** |
+| 最新 Cross-Platform Verify | run 42472040443 **success（9/9）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
 最近提交（最新在前；完整 72 个见 `git log v1.4.0..main`）：
 
 ```
+1c016ab feat(evidence): 三套 Evidence 统一契约与读取流
 2003806 design(settings): 教练/工作区/偏好统一为同一卡片表面
 a158614 design(settings): 模型配置收敛为单一完整界面
 76a17e3 test(goal): 跨平台工作区断言
@@ -47,6 +48,8 @@ FSRS 单一调度已落地（96da02c..586fa93）：`/evaluate/current-file` 显�
 Goal 服务端实体化已落地：SQLite `goal_sessions` + `GoalService` 是唯一真源，`WorkbenchSnapshot.goal` 回传；`/goal/action` 支持 start/pause/resume/complete，显式新目标暂停旧焦点但保留历史；自动识别只接受明确能力学习表达，普通提问/闲聊不建目标；evaluation / training attempt evidence / host attestation 才记活动，按内容哈希或 `idempotency_key` 幂等。测试：`test_goal_session.py` 16 项 + `goalCommands.test.js` 5 项。真实 GUI 复核仍待 provider 额度，未标 PASS。
 
 Settings 模型配置已收敛为单一完整界面：连接名称、服务地址、访问密钥（显示/隐藏 + 行内测试）、聊天模型、协议、思考模式/强度、输入/输出上限与连接诊断在同一张卡片内，底部只有取消/保存；删除了独立的“高级配置”二级页面。教练、工作区、偏好也统一为同样的卡片表面：每个分类内的连贯区块一张卡、一个标题、分组行，不再使用裸分隔线和平铺列表。模型目录拉取后自动打开选择器但**不静默替用户选模型**；粘贴 NewAPI 连接 JSON 会自动填入地址/密钥、设为 OpenAI-compatible 并自动发现模型。真实连接 `linksub.fun` 验证：模型列表 8 个、`/provider/test` connected、Remote-SSH L2 第 4 步真实回复 259 字，六步 6/6 PASS。
+
+Evidence 三套存储已统一：新增 `UnifiedEvidence`（schema 1）与三个适配器（AttemptStore / handoff / memory），统一 `trust_level`、`result`、artifact/resource 版本字段和 fingerprint；新增 `GET /evidence/records` 只读统一流，按工作区隔离、时间倒序并标记 `duplicate_of`。handoff 证据序列化升为 version 3，重启不丢字段；AttemptStore 新增工作区级证据读取；memory 入队按 verified 写 trust_level。行为测试 `test_evidence_unification.py` 4 项；server 全套 **3923 passed**。原始存储保留各自生命周期，没有新增第四套数据库或第二套掌握评分。
 
 ## 2. 修复清单（按目标阶段）
 
@@ -79,7 +82,7 @@ Settings 模型配置已收敛为单一完整界面：连接名称、服务地�
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3919 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、证据、技能回归） |
+| server pytest | **3923 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、Evidence 统一、技能回归） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
@@ -94,8 +97,8 @@ Settings 模型配置已收敛为单一完整界面：连接名称、服务地�
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `2003806`） | 42468290283 | success |
-| Cross-Platform Verify（main `2003806`，linux 构建 ubuntu-22.04） | 42468290213 | **success（9/9）** |
+| ci（main `1c016ab`） | 42472040506 | success |
+| Cross-Platform Verify（main `1c016ab`，linux 构建 ubuntu-22.04） | 42472040443 | **success（9/9）** |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
 ## 5. 跨平台安装证据
