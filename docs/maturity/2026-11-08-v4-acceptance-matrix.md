@@ -75,6 +75,7 @@
 - 四屏真实 GUI：`docs/verification/2026-11-07-{coach,learning,resources,settings}-screen-audit.md`。
 - 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（9 PASS / 6 PARTIAL / 5 BLOCKED，fixture provider 仅作 GUI 证据）。
 - 完整性旅程：`docs/verification/v4-integrity-journeys.md`（真实 sidecar；版本冲突 409、记忆撤销、provider 故障不伪造）。
+- 性能门禁：`docs/verification/v4-perf-probe-2026-11-08.json`（streaming longtask 0 ≤ 0；warm nav p90 63ms < 100ms）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。
 - 行为测试：server 3930 passed（含 FSRS/Goal/Evidence/Skill workspace）；extension suite 0 失败；Settings e2e 8 passed。
 - 长期时间/持久化：`test_live_training_fsrs_on_verify.py`、`test_review_scheduler_fsrs.py`、session/plan revision 回归。
