@@ -38,7 +38,7 @@
 | 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；S: 真实 sidecar 旧 version 409；P: 真实模型未消费 resource context，PARTIAL；G：真实 GUI 资料变更未验证 |
 | 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
-| 18 | 多窗口并发，不重复推进计划/复习 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision、singleflight、SQLite 写锁；真实双窗口未执行 |
+| 18 | 多窗口并发，不重复推进计划/复习 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision/singleflight；S/P: 两个并发客户端同一 expected_revision，一个 200 一个 409；G：真实双窗口仍未执行 |
 | 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | 🟡 | ⬜ | 🟡 | ⬜ | ✅ | U: memory update/clear；S: 真实 sidecar 覆盖/撤销；G: Settings 记忆开关；P: 真实模型回合保持非空，但风格变化未证明 |
 | 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；P：真实模型无跨项目泄漏，但项目 B 事实保持失败 |
 
@@ -48,7 +48,7 @@
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
 | S 真实 Sidecar | 9 | 11 | 0 |
-| P 真实 Provider | 10 | 7 | 3 |
+| P 真实 Provider | 11 | 7 | 2 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 5 | 6 | 9 |
 | R Remote-SSH | 1 | 3 | 16 |
@@ -82,6 +82,7 @@
 - 真实 Provider 旅程：`docs/verification/v4-provider-journeys.md`（deepseek-v4.1-flash；5/6 PASS，15/19/20 PARTIAL，9/10/11/12/18 未执行）。
 - 时钟 harness：`docs/verification/v4-clock-harness.md`（FSRS 数天跨度，2 tests；不替代真实数天 GUI/Provider 证据）。
 - 复习 Provider 旅程：`docs/verification/v4-review-provider-journeys.md`（9/11/12 PASS；10 未执行）。
+- 双客户端并发：`docs/verification/v4-dual-window-journey.md`（PASS：200 + 409，revision 只前进一次；不是双 GUI 窗口）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。
 - 行为测试：server 3930 passed（含 FSRS/Goal/Evidence/Skill workspace）；extension suite 0 失败；Settings e2e 8 passed。
 - 长期时间/持久化：`test_live_training_fsrs_on_verify.py`、`test_review_scheduler_fsrs.py`、session/plan revision 回归。
