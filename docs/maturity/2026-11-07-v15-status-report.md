@@ -1,22 +1,23 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`76a17e3`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`a158614`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `76a17e3`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..`76a17e3`，不含本报告提交） | 70 个 |
-| 代码差异（v1.4.0..HEAD） | 200 files, +32412 / −21024（含两次 CRLF→LF 规范化） |
-| 最新 ci 工作流 | run 42453428224 **success** |
-| 最新 Cross-Platform Verify | run 42453428226 **success（9/9）** |
+| 代码与 CI 基线 | `a158614`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..`a158614`，不含本报告提交） | 72 个 |
+| 代码差异（v1.4.0..HEAD） | 218 files, +33626 / −21628（含两次 CRLF→LF 规范化） |
+| 最新 ci 工作流 | run 42465045624 **success** |
+| 最新 Cross-Platform Verify | run 42465045628 **success（9/9）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 70 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 72 个见 `git log v1.4.0..main`）：
 
 ```
+a158614 design(settings): 模型配置收敛为单一完整界面
 76a17e3 test(goal): 跨平台工作区断言
 eca6e4f test(goal): 证明 start/summary 快照恢复与清除 goal
 01f0153 fix(goal): 评估进度发布到所有 live session
@@ -43,6 +44,8 @@ V4 审计与首轮修复：`docs/maturity/2026-11-08-v4-audit.md`（自由聊天
 FSRS 单一调度已落地（96da02c..586fa93）：`/evaluate/current-file` 显式 `training_phase`，失败 Verify 写 AGAIN；`MasteryRecord.review_source` 区分 `fsrs`/`heuristic`，`update_mastery` 不再覆盖 FSRS 到期；`ReviewScheduler.process_mastery_review` 走 FSRS 评分；weakness/reflection/plan 到期项标 `no_recall_evidence`；字符串/验收匹配即使“通过”也不再记为 `verified_by_evaluator`，必须有真实动态检查通过才升级 mastery。
 
 Goal 服务端实体化已落地：SQLite `goal_sessions` + `GoalService` 是唯一真源，`WorkbenchSnapshot.goal` 回传；`/goal/action` 支持 start/pause/resume/complete，显式新目标暂停旧焦点但保留历史；自动识别只接受明确能力学习表达，普通提问/闲聊不建目标；evaluation / training attempt evidence / host attestation 才记活动，按内容哈希或 `idempotency_key` 幂等。测试：`test_goal_session.py` 16 项 + `goalCommands.test.js` 5 项。真实 GUI 复核仍待 provider 额度，未标 PASS。
+
+Settings 模型配置已收敛为单一完整界面：连接名称、服务地址、访问密钥（显示/隐藏 + 行内测试）、聊天模型、协议、思考模式/强度、输入/输出上限与连接诊断在同一张卡片内，底部只有取消/保存；删除了独立的“高级配置”二级页面。模型目录拉取后自动打开选择器但**不静默替用户选模型**；粘贴 NewAPI 连接 JSON 会自动填入地址/密钥、设为 OpenAI-compatible 并自动发现模型。真实连接 `linksub.fun` 验证：模型列表 8 个、`/provider/test` connected、Remote-SSH L2 第 4 步真实回复 259 字，六步 6/6 PASS。
 
 ## 2. 修复清单（按目标阶段）
 
@@ -90,8 +93,8 @@ Goal 服务端实体化已落地：SQLite `goal_sessions` + `GoalService` 是唯
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `76a17e3`） | 42453428224 | success |
-| Cross-Platform Verify（main `76a17e3`，linux 构建 ubuntu-22.04） | 42453428226 | **success（9/9）** |
+| ci（main `a158614`） | 42465045624 | success |
+| Cross-Platform Verify（main `a158614`，linux 构建 ubuntu-22.04） | 42465045628 | **success（9/9）** |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
 ## 5. 跨平台安装证据
@@ -141,11 +144,11 @@ Goal 服务端实体化已落地：SQLite `goal_sessions` + `GoalService` 是唯
 | P3（已完成） | `verify:delivery` 在本轮 HEAD 上的完整矩阵 | ✅ exit 0（verify + experience matrix + 打包，1.4.1 VSIX 产出） |
 | P3（已知限制，已记录） | 教学质量报告仅学习证据维度，文字准确性留人工；难度带为产品策略非个体校准 | 文档明示 |
 | P3（已知限制，已记录） | provider_error/timeout 计入技能失败 streak（可用性信号，非质量判断） | 文档明示 |
-| P3（已知限制，已记录） | L2 六步中 2/3/5/6 已自动化 PASS，第 4 步真实回复 provider 失败 | 证据文件 |
+| P3（已闭环） | L2 六步 **6/6 PASS**（2026-11-08 新连接 minimax-m3，第 4 步真实回复 259 字）；辅助“测试连接”按钮自动化仍未观测 verified，单独记录 | `docs/verification/remote-ssh-l2-141s-evidence.md` |
 
 ## 9. 未完成项（如实）
 
-1. Remote-SSH L2：真实窗口自动化已跑；2/3/5/6 PASS，第 4 步真实回复遇到 provider 失败（未标 PASS）。六步验收仍未整体通过。
+1. Remote-SSH L2：六步 6/6 PASS（2026-11-08 新连接、真实窗口、第 4 步 259 字真实回复）；旧 provider 429 记录保留为历史。辅助 provider 测试按钮的自动化观测问题仍待修，不作为六步替代证据。
 2. 阶段四剩余：App/Provider/Memory 巨型模块拆分、按需多模态理解；Resources 已抽出 `libraryPaths` 纯责任，四屏真实 VS Code 审计已完成。
 3. SCIP 索引解析接入（LSP 已接入）；Understand Anything 适配。
 4. 最终人工教学验收（主观质量）——自动化维度已给出，主观评审仍留人工。

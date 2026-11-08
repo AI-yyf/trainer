@@ -1,7 +1,9 @@
 # Remote-SSH L2 验收证据 — 验收机 141s（2026-11-06）
 
-**结论：前置条件 PASS；第 1 步（服务端安装）PASS；第 2–6 步已用真实 Remote-SSH 窗口自动化执行过一次，`
-`2/3/5/6 PASS，第 4 步真实回复遇到 provider 失败，未整体 PASS。**
+**结论（2026-11-08 更新）：前置条件 PASS；第 1 步（服务端安装）PASS；第 2–6 步在真实 Remote-SSH
+窗口自动化执行，**6/6 PASS**。第 4 步已用新 provider 连接（minimax-m3）拿到 259 字真实流式回复。
+辅助“测试连接”按钮自动化仍未能观察到 verified，但直连 `/provider/test` 返回 connected，且第 4 步
+真实回复已证明连接可用；两者分开记录，不互相冒充。**
 
 **2026-11-07 更新（真实执行记录）**：用远端 VS Code Server CLI
 `code-server --install-extension ~/trainer-extension-1.4.0-linux-x64.vsix --force`
@@ -48,7 +50,7 @@ cross-platform 的 linux 构建基座改为 ubuntu-22.04（glibc 2.35），旧 r
 | 1 | Remote-SSH 窗口安装 VSIX（Extensions → … → Install from VSIX… → `~/trainer-extension-1.4.0-linux-x64.vsix`） | ✅ PASS（自动化：远端 VS Code Server CLI 安装 + 版本/发布者核验；窗口内重载即生效） |
 | 2 | 活动栏 Trainer 图标打开侧边栏（应进入 Coach 视图） | ✅ PASS（自动化真窗口） |
 | 3 | 五视图切换 Coach / Plan / Resources / Training / Settings | ✅ PASS（自动化真窗口；Training 入口在 Learning 内） |
-| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | ❌ BLOCKED（provider 返回 HTTP 429 / code 2056「Token Plan 用量上限」，三次探测均失败；额度问题，非窗口流程） |
+| 4 | Coach 发一条关于远程项目的消息，流式完整回复 | ✅ PASS（2026-11-08 真实窗口：minimax-m3，259 字完整回复，读取并索引 `src/queue_lock.py`） |
 | 5 | 设置中 attach 远程工作区（`~/trainer-e2e`）并确认信任状态 | ✅ PASS（项目 URI + 非 Restricted Mode） |
 | 6 | Companion capability 握手显示 verified（file/search/hash/verify） | ✅ PASS（“远程支持已就绪”） |
 
@@ -57,13 +59,13 @@ Trainer 通道日志一并记录。
 
 ## 边界（如实）
 
-- 2–6 已由 `scripts/run-real-remote-ssh-l2.mjs` 在真实 VS Code Electron + `ssh-remote+141s`
-  窗口中执行；第 4 步的 provider 失败没有被标记为 PASS。
-- 真实自动化证据：`output/remote-ssh-l2/2026-11-07-final6/report.json`（2/3/5/6 PASS，4 FAIL）；
+- 2026-11-07 的 2–6 自动化在真实 VS Code Electron + `ssh-remote+141s` 窗口中执行，当时第 4 步
+  因 provider 429 未通过：`output/remote-ssh-l2/2026-11-07-final6/report.json`（2/3/5/6 PASS，4 FAIL）；
   `2026-11-07-final11/report.json` 记录第 4 步 provider 429。
-- 2026-11-08：直连 provider 复核为 HTTP 429 `2056 Token Plan 用量上限`；已把该结构化数值码
+- 2026-11-08 直连旧 provider 复核为 HTTP 429 `2056 Token Plan 用量上限`；已把该结构化数值码
   归类为 `quota_exhausted`，界面会提示恢复额度或切换连接，而不是“服务正忙”。
-  六步验收仍缺第 4 步的真实回复，需 provider 额度恢复后重跑。
+- 2026-11-08 换用新连接后重跑：六步 6/6 PASS（见下方专节）；旧的第 4 步 FAIL 保留为历史记录，
+  不被新的 PASS 覆盖或删除。
 - 自动化回归层 ≠ 真窗口层：两层证据分开记录，不互相冒充。
 
 
@@ -74,3 +76,26 @@ Trainer 通道日志一并记录。
 - `bundled/bin/linux-x64/trainer-sidecar --help` exit 0；`--host 127.0.0.1 --port 34998`
   启动后 `/health` 返回 `{"status":"ok","initialized":true,...}`
 - 结论：glibc 2.35 基座修复进入正式发布通道；2–6 步真窗口仍 PENDING-HUMAN
+
+
+## 2026-11-08 额度恢复后的真实重跑（6/6 PASS）
+
+- 连接：`https://linksub.fun`，OpenAI-compatible，模型 `minimax-m3`；key 仅通过进程环境注入，
+  未写入仓库/文档。
+- 直连验证：
+  - `GET /v1/models` HTTP 200，8 个模型：`minimax-m3`、`cn:hy4free`、`glm-5.3`、
+    `glm-5.3-flash`、`deepseek-v4.1-flash`、`deepseek-v4-pro`、`deepseek-v4-flash`、`kimi-k3.1-pro`。
+  - 应用 `/provider/models` HTTP 200，`listed=true`，8 个模型。
+  - 应用 `/provider/test` HTTP 200，`ok=true/status=connected`；chat/tools/streaming/thinking/
+    model_listing 均 verified，vision/responses/json_schema disabled。
+- 真实 Remote-SSH 窗口（`scripts/run-real-remote-ssh-l2.mjs`，141s）：
+  - 第 2 步 Coach 侧边栏：PASS
+  - 第 3 步 五视图：PASS
+  - 第 4 步 真实回复：PASS，259 字，引用远端 `src/queue_lock.py`，说明读取/索引/流式回复链路可用
+  - 第 5 步 工作区信任：PASS
+  - 第 6 步 Companion 握手：PASS（“远程支持已就绪”）
+  - 辅助 `l2-provider-test` 步骤仍记录 `ok=false`（界面未在重试窗口内显示 verified），但同一连接
+    的 `/provider/test` 与第 4 步真实回复均成功；该自动化步骤不作为六步验收的替代证据。
+- 证据：`output/remote-ssh-l2/2026-11-08-post-quota/report.json` 与同目录截图。
+- 结论：六步清单 **6/6 PASS**；“测试连接”按钮的自动化观测问题留作后续 UI 自动化修复，不影响
+  本轮真实回复验收。
