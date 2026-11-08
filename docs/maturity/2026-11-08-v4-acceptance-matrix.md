@@ -35,11 +35,11 @@
 | 12 | 长期未上线返回，不积压提醒 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: 上限/静默/去重；L：时间模拟部分；真实长离线未执行 |
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
 | 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | 🟡 | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实重启未单独归档 |
-| 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；P/G：真实资料变更未验证 |
+| 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；S: `docs/verification/v4-integrity-journeys.md`（真实 sidecar，旧 version 409）；P/G：真实 GUI 资料变更未验证 |
 | 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
-| 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；P：真实超时无法在健康网关强制，保持部分 |
+| 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
 | 18 | 多窗口并发，不重复推进计划/复习 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision、singleflight、SQLite 写锁；真实双窗口未执行 |
-| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | ✅ | U: memory update/clear；G: Settings 记忆面板；P：真实撤销后教学变化未验证 |
+| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | ⬜ | ⬜ | 🟡 | ⬜ | ✅ | U: memory update/clear；S: 真实 sidecar profile 覆盖 + global memory 撤销；G: Settings 记忆开关；P：真实模型下一轮教学变化未验证 |
 | 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；真实多项目长跑未执行 |
 
 ## 2. 汇总
@@ -47,7 +47,7 @@
 | 等级 | PASS | PARTIAL | GAP |
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
-| S 真实 Sidecar | 7 | 13 | 0 |
+| S 真实 Sidecar | 9 | 11 | 0 |
 | P 真实 Provider | 5 | 4 | 11 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 4 | 6 | 10 |
@@ -74,6 +74,7 @@
 - Remote-SSH L2：`docs/verification/remote-ssh-l2-141s-evidence.md`（2026-11-08 六步 6/6 PASS）。
 - 四屏真实 GUI：`docs/verification/2026-11-07-{coach,learning,resources,settings}-screen-audit.md`。
 - 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（9 PASS / 6 PARTIAL / 5 BLOCKED，fixture provider 仅作 GUI 证据）。
+- 完整性旅程：`docs/verification/v4-integrity-journeys.md`（真实 sidecar；版本冲突 409、记忆撤销、provider 故障不伪造）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。
 - 行为测试：server 3930 passed（含 FSRS/Goal/Evidence/Skill workspace）；extension suite 0 失败；Settings e2e 8 passed。
 - 长期时间/持久化：`test_live_training_fsrs_on_verify.py`、`test_review_scheduler_fsrs.py`、session/plan revision 回归。

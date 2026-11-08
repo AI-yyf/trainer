@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-08T17:00:44.636419+00:00",
+  "journeys": {
+    "15_resource_version": {
+      "resource_id": "resource-5b660a2369",
+      "initial_hash": "09fe431be6706674fb15ecc92f4dfcb103fe8c1e2e7e4623ae31e56de84cd679",
+      "initial_version_id": "rv-9584cd7ebfcc41e78d495576859e1a58",
+      "reindexed_hash": "3e254a54b289a01257c4abd18f7505a469437fdaf71b78f296115763a95b371b",
+      "current_version_id": "rv-89376e59a2ff40e3b2c382ca427149a2",
+      "stale_evidence_status": 409,
+      "stale_evidence_detail": {
+        "code": "resource_version_conflict",
+        "resource_id": "resource-5b660a2369",
+        "expected_version_id": "rv-9584cd7ebfcc41e78d495576859e1a58",
+        "current_version_id": "rv-89376e59a2ff40e3b2c382ca427149a2"
+      }
+    },
+    "19_memory_revoke": {
+      "first_teaching_style": "hands-on",
+      "second_teaching_style": "concept-first",
+      "global_preferences_set": {
+        "tone": "direct"
+      },
+      "global_goals_set": [
+        "ship the queue lock fix"
+      ],
+      "global_preferences_cleared": {},
+      "global_goals_cleared": []
+    },
+    "17_provider_fault": {
+      "http_status": 200,
+      "elapsed_ms": 10733,
+      "reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
+      "reply_chars": 169
+    }
+  },
+  "assertions": {
+    "version_hash_changed": true,
+    "stale_version_rejected": true,
+    "preference_overwritten": true,
+    "memory_revoked": true,
+    "fault_returned_honest_reply": true,
+    "fault_did_not_fabricate_training_answer": true,
+    "fault_within_timeout_budget": true
+  },
+  "workspace_id": "v4-integrity-20261108170046",
+  "elapsed_ms": 13416,
+  "ok": true
+}
