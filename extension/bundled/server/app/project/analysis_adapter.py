@@ -7,7 +7,7 @@ labels each edge with its evidence level:
   exact; resolving the callee across files is still by name.
 - ``approximate``    — the indentation/file-level heuristic (regex callgraph).
 - ``lsp_reference``  — a live LSP references response.
-- ``scip_reference`` — a compiler-index (SCIP) reference from JSON export.
+- ``scip_reference`` — a compiler-index (SCIP) reference from JSON or binary export.
 
 Limitations are reported per provider, never hidden behind a merged graph
 (v1.5: 对于不支持或只能近似推断的关系必须诚实标注). LSP/SCIP is declared as a
@@ -472,11 +472,11 @@ class LspPythonProvider:
 
 
 class LspScipProvider:
-    """SCIP compiler-index references (JSON export), never a fake LSP claim.
+    """SCIP compiler-index references from JSON or binary protobuf export.
 
-    Binary ``.scip`` protobuf files need a SCIP toolchain, so this adapter reads
-    the deterministic JSON produced by ``scip print --json``. It reports honest
-    unavailability when no JSON index exists or the export is invalid.
+    Binary ``.scip`` indexes are decoded with the small protobuf reader below
+    (Index/Document/Occurrence/SymbolInformation). Invalid or unreadable
+    indexes are reported honestly; no edge is fabricated.
     """
 
     name = "lsp-scip"
@@ -484,6 +484,11 @@ class LspScipProvider:
         (".trainer", "scip", "index.json"),
         ("index.scip.json",),
         ("scip-index.json",),
+    )
+    _BINARY_CANDIDATES = (
+        (".trainer", "scip", "index.scip"),
+        ("index.scip",),
+        ("scip-index.scip",),
     )
 
     @staticmethod
@@ -516,42 +521,165 @@ class LspScipProvider:
                 return candidate
         return None
 
+    @classmethod
+    def _binary_path(cls, repo_root: Path) -> Path | None:
+        for parts in cls._BINARY_CANDIDATES:
+            candidate = repo_root.joinpath(*parts)
+            if candidate.is_file():
+                return candidate
+        return next(iter(sorted(repo_root.glob("*.scip"))), None)
+
+    @staticmethod
+    def _read_varint(data: bytes, pos: int) -> tuple[int, int]:
+        value = 0
+        shift = 0
+        while pos < len(data):
+            byte = data[pos]
+            pos += 1
+            value |= (byte & 0x7F) << shift
+            if not byte & 0x80:
+                return value, pos
+            shift += 7
+            if shift > 63:
+                raise ValueError("SCIP protobuf varint is too long")
+        raise ValueError("SCIP protobuf varint is truncated")
+
+    @classmethod
+    def _fields(cls, data: bytes):
+        pos = 0
+        while pos < len(data):
+            key, pos = cls._read_varint(data, pos)
+            field_number = key >> 3
+            wire_type = key & 0x7
+            if wire_type == 0:
+                value, pos = cls._read_varint(data, pos)
+            elif wire_type == 2:
+                length, pos = cls._read_varint(data, pos)
+                end = pos + length
+                if end > len(data):
+                    raise ValueError("SCIP protobuf length-delimited field is truncated")
+                value = data[pos:end]
+                pos = end
+            elif wire_type == 1:
+                if pos + 8 > len(data):
+                    raise ValueError("SCIP protobuf fixed64 field is truncated")
+                value = data[pos : pos + 8]
+                pos += 8
+            elif wire_type == 5:
+                if pos + 4 > len(data):
+                    raise ValueError("SCIP protobuf fixed32 field is truncated")
+                value = data[pos : pos + 4]
+                pos += 4
+            else:
+                raise ValueError(f"Unsupported SCIP protobuf wire type {wire_type}")
+            yield field_number, wire_type, value
+
+    @classmethod
+    def _packed_ints(cls, wire_type: int, value: Any) -> list[int]:
+        if wire_type == 0:
+            return [int(value)]
+        if wire_type != 2 or not isinstance(value, (bytes, bytearray)):
+            return []
+        numbers: list[int] = []
+        pos = 0
+        while pos < len(value):
+            number, pos = cls._read_varint(bytes(value), pos)
+            numbers.append(number)
+        return numbers
+
+    @classmethod
+    def _decode_binary_document(cls, data: bytes) -> dict[str, Any]:
+        relative_path = ""
+        occurrences: list[dict[str, Any]] = []
+        symbols: list[dict[str, Any]] = []
+        for field_number, wire_type, value in cls._fields(data):
+            if field_number == 1 and wire_type == 2:
+                relative_path = bytes(value).decode("utf-8", "replace")
+            elif field_number == 2 and wire_type == 2:
+                symbol_id = ""
+                roles = 0
+                for occ_field, occ_wire, occ_value in cls._fields(bytes(value)):
+                    if occ_field == 2 and occ_wire == 2:
+                        symbol_id = bytes(occ_value).decode("utf-8", "replace")
+                    elif occ_field == 3 and occ_wire == 0:
+                        roles = int(occ_value)
+                if symbol_id:
+                    occurrences.append({"symbol": symbol_id, "symbolRoles": roles})
+            elif field_number == 3 and wire_type == 2:
+                symbol_id = ""
+                display_name = ""
+                for sym_field, sym_wire, sym_value in cls._fields(bytes(value)):
+                    if sym_field == 1 and sym_wire == 2:
+                        symbol_id = bytes(sym_value).decode("utf-8", "replace")
+                    elif sym_field == 5 and sym_wire == 2:
+                        display_name = bytes(sym_value).decode("utf-8", "replace")
+                if symbol_id:
+                    symbols.append(
+                        {"symbol": symbol_id, "displayName": display_name or symbol_id}
+                    )
+        return {
+            "relativePath": relative_path,
+            "occurrences": occurrences,
+            "symbols": symbols,
+        }
+
+    @classmethod
+    def _decode_binary_index(cls, data: bytes) -> dict[str, Any]:
+        documents: list[dict[str, Any]] = []
+        for field_number, wire_type, value in cls._fields(data):
+            if field_number == 2 and wire_type == 2:
+                document = cls._decode_binary_document(bytes(value))
+                if document["relativePath"]:
+                    documents.append(document)
+        return {"documents": documents}
+
     def run(self, repo_root: Path, repo_index: RepoIndex) -> AdapterReport:
         _ = repo_index
         index_path = self._index_path(repo_root)
-        if index_path is None:
-            binary = next(iter(sorted(repo_root.glob("*.scip"))), None)
-            if binary is not None:
-                reason = (
-                    f"Found binary SCIP index {binary.name}; export JSON with "
-                    "`scip print --json` and place it at .trainer/scip/index.json."
-                )
-            else:
-                reason = (
-                    "No SCIP JSON index is configured for this workspace "
-                    "(.trainer/scip/index.json, index.scip.json, or scip-index.json)."
-                )
-            return AdapterReport(name=self.name, available=False, reason=reason)
-        try:
-            payload = json.loads(index_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        binary_path = self._binary_path(repo_root)
+        if index_path is None and binary_path is None:
             return AdapterReport(
                 name=self.name,
                 available=False,
-                reason=f"SCIP JSON index could not be read: {exc}",
+                reason=(
+                    "No SCIP index is configured for this workspace "
+                    "(.trainer/scip/index.json, index.scip.json, "
+                    ".trainer/scip/index.scip, or a root *.scip file)."
+                ),
             )
+        if index_path is not None:
+            try:
+                payload = json.loads(index_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                return AdapterReport(
+                    name=self.name,
+                    available=False,
+                    reason=f"SCIP JSON index could not be read: {exc}",
+                )
+            source_label = index_path.name
+        else:
+            assert binary_path is not None
+            try:
+                payload = self._decode_binary_index(binary_path.read_bytes())
+            except (OSError, ValueError) as exc:
+                return AdapterReport(
+                    name=self.name,
+                    available=False,
+                    reason=f"SCIP binary index could not be decoded: {exc}",
+                )
+            source_label = binary_path.name
         if not isinstance(payload, dict):
             return AdapterReport(
                 name=self.name,
                 available=False,
-                reason="SCIP JSON index must contain an object with documents.",
+                reason="SCIP index must contain an object with documents.",
             )
         documents = payload.get("documents")
         if not isinstance(documents, list):
             return AdapterReport(
                 name=self.name,
                 available=False,
-                reason="SCIP JSON index has no documents array.",
+                reason=f"SCIP index {source_label} has no documents array.",
             )
 
         definitions: dict[str, tuple[str, str]] = {}
@@ -632,7 +760,7 @@ class LspScipProvider:
             if len(edges) >= MAX_EDGES_PER_PROVIDER:
                 break
         limitations = [
-            "Reads SCIP JSON (`scip print --json`); binary .scip protobuf is not parsed.",
+            f"Reads SCIP {source_label} (JSON export or binary protobuf).",
             "Callers are file-level because occurrences report positions, not enclosing definitions.",
             "References without a definition entry in the same index are skipped.",
         ]

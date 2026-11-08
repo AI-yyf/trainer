@@ -6,6 +6,7 @@ from typing import Protocol
 
 from app.network_fetch import ControlledFetchError, fetch_url
 from app.resources.models import IndexStatus, ResourceChunk, ResourceKind, ResourceRecord
+from app.resources.ocr import ocr_image_bytes
 
 from .models import IngestionRequest, IngestionResult, IngestionSummary, VisionPayload
 
@@ -489,14 +490,36 @@ def _spreadsheet_heading_anchors(markdown: str) -> list[dict[str, object]]:
 
 
 def _extract_image_stub(request: IngestionRequest, *, vision_enabled: bool) -> tuple[str, list[str]]:
+    raw: bytes | None = None
+    if isinstance(request.content, bytes):
+        raw = request.content
+    elif request.content is None:
+        try:
+            raw = Path(request.source_uri).read_bytes()
+        except OSError:
+            raw = None
+    if raw:
+        ocr = ocr_image_bytes(raw)
+        if ocr.text.strip():
+            transcript = ocr.text.strip()
+            warnings = [
+                "Image text was transcribed with local Tesseract OCR; verify against the image.",
+                *ocr.warnings,
+            ]
+            if vision_enabled:
+                warnings.append("Provider vision can inspect the original image in a later multimodal step.")
+            return (
+                f"Image resource for {request.source_uri}.\n\nOCR text:\n{transcript}",
+                warnings,
+            )
     if vision_enabled:
         return (
             f"Image resource placeholder for {request.source_uri}. The provider can inspect this asset in a later multimodal step.",
             [],
         )
     return (
-        f"Image resource metadata only for {request.source_uri}. Vision is disabled, so OCR and multimodal analysis were skipped.",
-        ["Vision capability disabled; stored only image metadata and a placeholder summary."],
+        f"Image resource metadata only for {request.source_uri}. Local OCR produced no text and provider vision is disabled.",
+        ["No image text was extracted; only image metadata and a placeholder summary are available."],
     )
 
 

@@ -25,6 +25,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterable
 
+from .ocr import ocr_image_bytes
+
 CANONICAL_PARSER_VERSION = "1"
 
 SOURCE_TYPE_BY_SUFFIX: dict[str, str] = {
@@ -1015,12 +1017,32 @@ def _parse_pdf(
 ) -> tuple[str, list[str], list[CanonicalAsset], int | None, int | None]:
     warnings: list[str] = []
     pages: list[str] = []
+    ocr_used = False
     try:
         import pymupdf  # type: ignore[import-not-found]
 
         with pymupdf.open(source) as document:
             for page_index in range(document.page_count):
                 pages.append(str(document.load_page(page_index).get_text("text")))
+            if not any(page.strip() for page in pages):
+                # Scanned PDF: render a bounded number of pages and OCR them.
+                ocr_pages: list[str] = []
+                ocr_limit = min(document.page_count, 20)
+                for page_index in range(ocr_limit):
+                    page = document.load_page(page_index)
+                    pixmap = page.get_pixmap(dpi=200)
+                    result = ocr_image_bytes(pixmap.tobytes("png"))
+                    warnings.extend(result.warnings)
+                    ocr_pages.append(result.text)
+                    if result.text.strip():
+                        ocr_used = True
+                if ocr_used:
+                    pages = ocr_pages
+                    if document.page_count > ocr_limit:
+                        warnings.append(
+                            f"OCR covered the first {ocr_limit} pages of {document.page_count}; "
+                            "later pages remain untranscribed."
+                        )
     except Exception:
         pages = []
     if not pages:
@@ -1029,11 +1051,12 @@ def _parse_pdf(
             warnings.append("PDF text was recovered with the byte-scan fallback; layout may be approximate.")
     if not pages:
         raise CanonicalParseError(
-            "Could not read a text layer from this PDF; it may be a scanned document (no OCR was performed)."
+            "Could not read a text layer from this PDF, and OCR did not produce text; "
+            "the document may be a scan or Tesseract may be unavailable."
         )
-    if not any(page.strip() for page in pages):
+    if not ocr_used and not any(page.strip() for page in pages):
         raise CanonicalParseError(
-            "This PDF has no text layer (it looks like a scan); no OCR was performed, so no Markdown was generated."
+            "This PDF has no text layer (it looks like a scan), and OCR did not produce text."
         )
 
     blocks: list[str] = []
@@ -1042,12 +1065,14 @@ def _parse_pdf(
         stripped = page_text.strip()
         if not stripped:
             warnings.append(
-                f"Page {page_number}: no text layer found (the page may be scanned; no OCR was performed)."
+                f"Page {page_number}: no text layer or OCR text was found."
             )
             blocks.append("")
             continue
         blocks.append(_normalize_pdf_text(stripped))
         blocks.append("")
+    if ocr_used:
+        warnings.insert(0, "Scanned PDF text was transcribed with Tesseract OCR; verify against the page image.")
     return _join_blocks(blocks), _dedupe(warnings), [], len(pages), None
 
 
@@ -1283,12 +1308,21 @@ def _parse_image(
         source_part="source",
         media_type=MIME_BY_SUFFIX.get(Path(filename).suffix.lower(), ""),
     )
-    body = (
-        f"# {Path(filename).stem}\n\n"
-        f"![{Path(filename).stem}](assets/{asset.filename})\n\n"
-        "> This image was stored as a resource. No OCR was performed, so it has no transcribed text."
-    )
-    return body, ["Image resources have no OCR text; only the image itself is available."], [asset], None, None
+    ocr = ocr_image_bytes(raw)
+    title = Path(filename).stem
+    body = f"# {title}\n\n![{title}](assets/{asset.filename})"
+    warnings = list(ocr.warnings)
+    if ocr.text.strip():
+        body += f"\n\n## OCR text\n\n{ocr.text.strip()}"
+        warnings.insert(0, "Image text was transcribed with Tesseract OCR; verify against the image.")
+    else:
+        body += (
+            "\n\n> This image was stored as a resource. No OCR text was extracted, "
+            "so it has no transcribed text."
+        )
+        if ocr.available:
+            warnings.append("Image resources have no OCR text; only the image itself is available.")
+    return body, _dedupe(warnings), [asset], None, None
 
 
 # --------------------------------------------------------------------------- #

@@ -34,7 +34,7 @@
 | 11 | 拒绝复习或忙碌，不被打扰 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | — | U: review queue governance；G：preview；P：真实打断/拒绝未验证 |
 | 12 | 长期未上线返回，不积压提醒 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: 上限/静默/去重；L：时间模拟部分；真实长离线未执行 |
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
-| 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | 🟡 | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实重启未单独归档 |
+| 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实窗口切换 model、Reload Window 后 Settings 仍显示新 model |
 | 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；S: `docs/verification/v4-integrity-journeys.md`（真实 sidecar，旧 version 409）；P/G：真实 GUI 资料变更未验证 |
 | 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
@@ -50,11 +50,11 @@
 | S 真实 Sidecar | 9 | 11 | 0 |
 | P 真实 Provider | 5 | 4 | 11 |
 | V 已安装 VSIX | 1 | 2 | 17 |
-| G 真实 GUI | 4 | 6 | 10 |
+| G 真实 GUI | 5 | 6 | 9 |
 | R Remote-SSH | 1 | 3 | 16 |
 | L 长期/持久化 | 9 | 6 | 0（5 项不适用） |
 
-> G 列已有 4 条 PASS：旅程 1/2/3/4 在真实 VS Code Electron + 当前 VSIX 中逐条断言。其余 GUI 证据为 PARTIAL/GAP：fixture provider 不能替代真实模型，训练卡、数天时钟、双窗口、资料导入仍未在 GUI 中闭环。
+> G 列已有 5 条 PASS：旅程 1/2/3/4/14 在真实 VS Code Electron + 当前 VSIX 中逐条断言。其余 GUI 证据为 PARTIAL/GAP：fixture provider 不能替代真实模型，训练卡、数天时钟、双窗口、资料导入仍未在 GUI 中闭环。
 > P 列只有 P4 旅程/L2 第 4 步等少数真实模型证据；不得把 3930 个单元测试当作真实模型验收。
 
 ## 3. 缺口优先级
@@ -73,7 +73,7 @@
 - P4 真实 Provider：`docs/maturity/2026-11-06-p4-real-provider.md`（5 PASS + 1 NOT_EXECUTED）。
 - Remote-SSH L2：`docs/verification/remote-ssh-l2-141s-evidence.md`（2026-11-08 六步 6/6 PASS）。
 - 四屏真实 GUI：`docs/verification/2026-11-07-{coach,learning,resources,settings}-screen-audit.md`。
-- 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（9 PASS / 6 PARTIAL / 5 BLOCKED，fixture provider 仅作 GUI 证据）。
+- 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（10 PASS / 5 PARTIAL / 5 BLOCKED，fixture provider 仅作 GUI 证据）。
 - 完整性旅程：`docs/verification/v4-integrity-journeys.md`（真实 sidecar；版本冲突 409、记忆撤销、provider 故障不伪造）。
 - 性能门禁：`docs/verification/v4-perf-probe-2026-11-08.json`（streaming longtask 0 ≤ 0；warm nav p90 63ms < 100ms）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。

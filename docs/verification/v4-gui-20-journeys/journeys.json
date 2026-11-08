@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-11-08T16:51:06.524Z",
+  "recordedAt": "2026-11-08T17:18:27.830Z",
   "vsix": "extension/trainer-extension-1.4.1-darwin-arm64.vsix",
   "vsixVersion": "1.4.1",
   "provider": {
@@ -9,16 +9,16 @@
     "altModel": "fixture-v4-gui-alt"
   },
   "environment": {
-    "root": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-XNl8An",
-    "userDataDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-XNl8An/user-data",
-    "extensionsDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-XNl8An/extensions",
-    "workspaceDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-XNl8An/workspace",
-    "learningDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-XNl8An/learning",
+    "root": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-1cjIQG",
+    "userDataDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-1cjIQG/user-data",
+    "extensionsDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-1cjIQG/extensions",
+    "workspaceDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-1cjIQG/workspace",
+    "learningDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-v4-gui-1cjIQG/learning",
     "vscode": "/Applications/Visual Studio Code.app/Contents/MacOS/Electron"
   },
   "summary": {
-    "pass": 9,
-    "partial": 6,
+    "pass": 10,
+    "partial": 5,
     "blocked": 5,
     "fail": 0
   },
@@ -27,7 +27,7 @@
       "id": 1,
       "title": "第一次安装 Trainer，自然开始交流",
       "status": "PASS",
-      "at": "2026-11-08T16:47:40.910Z",
+      "at": "2026-11-08T17:14:57.448Z",
       "ok": true,
       "nav": [
         "对话",
@@ -41,9 +41,9 @@
       "id": 2,
       "title": "随口提问，不产生不必要长期目标",
       "status": "PASS",
-      "at": "2026-11-08T16:49:44.595Z",
+      "at": "2026-11-08T17:17:01.070Z",
       "ok": true,
-      "reply": "教练00:47PPO 是近端策略优化：用裁剪的目标函数限制每次策略更新幅度，在实现简单的同时保持训练稳定。它不是“更快的 SGD”，而是对策略变化加了可信区间。",
+      "reply": "PPO 是近端策略优化：用裁剪的目标函数限制每次策略更新幅度，在实现简单的同时保持训练稳定。它不是“更快的 SGD”，而是对策略变化加了可信区间。",
       "goalBar": 0,
       "screenshot": "docs/verification/v4-gui-20-journeys/j02-casual.png"
     },
@@ -51,9 +51,9 @@
       "id": 3,
       "title": "明确能力目标，Goal 自动建立并持续追踪",
       "status": "PASS",
-      "at": "2026-11-08T16:50:08.334Z",
+      "at": "2026-11-08T17:17:24.931Z",
       "ok": true,
-      "goal": "进行中的目标\n实现 PPO Clip\n5 秒",
+      "goal": "进行中的目标\n实现 PPO Clip",
       "restored": 1,
       "screenshot": "docs/verification/v4-gui-20-journeys/j03-goal-restart.png"
     },
@@ -61,7 +61,7 @@
       "id": 4,
       "title": "多次会话继续同一任务，不复述背景",
       "status": "PASS",
-      "at": "2026-11-08T16:50:14.969Z",
+      "at": "2026-11-08T17:17:31.548Z",
       "ok": true,
       "reply": "第一步：在 notes 里写出 ratio = π_new(a|s) / π_old(a|s)，再标出 clip 的上下界。把 1.2 和 0.8 两组数值代进去，解释目标函数为什么被截断。完成后把结果带回对话。",
       "goalBar": 1,
@@ -71,7 +71,7 @@
       "id": 5,
       "title": "表达教学偏好，后续自动适配",
       "status": "PASS",
-      "at": "2026-11-08T16:50:19.325Z",
+      "at": "2026-11-08T17:17:35.987Z",
       "ok": true,
       "before": "自适应",
       "after": "引导式",
@@ -82,7 +82,7 @@
       "id": 6,
       "title": "改变偏好，系统修正旧习惯",
       "status": "PASS",
-      "at": "2026-11-08T16:50:22.164Z",
+      "at": "2026-11-08T17:17:38.808Z",
       "ok": true,
       "before": "引导式",
       "after": "原理先行",
@@ -93,7 +93,7 @@
       "id": 7,
       "title": "提示帮助下完成，不误判独立掌握",
       "status": "BLOCKED",
-      "at": "2026-11-08T16:50:22.164Z",
+      "at": "2026-11-08T17:17:38.808Z",
       "ok": false,
       "note": "Needs a generated training card plus assisted verification; fixture provider cannot mint a tool-bound card in this harness"
     },
@@ -101,7 +101,7 @@
       "id": 8,
       "title": "独立完成，真实证据自动同步 Learning",
       "status": "BLOCKED",
-      "at": "2026-11-08T16:50:22.165Z",
+      "at": "2026-11-08T17:17:38.808Z",
       "ok": false,
       "note": "Needs a real training card and host verification; covered by training/evidence P journeys"
     },
@@ -109,7 +109,7 @@
       "id": 9,
       "title": "数天后忘记，自然安排复习",
       "status": "BLOCKED",
-      "at": "2026-11-08T16:50:22.165Z",
+      "at": "2026-11-08T17:17:38.808Z",
       "ok": false,
       "note": "Real elapsed-day clock is not available in this GUI harness; FSRS time advance is covered by L evidence"
     },
@@ -117,7 +117,7 @@
       "id": 10,
       "title": "正确延迟回忆，间隔延长",
       "status": "BLOCKED",
-      "at": "2026-11-08T16:50:22.165Z",
+      "at": "2026-11-08T17:17:38.809Z",
       "ok": false,
       "note": "Requires a real delayed recall over days; not simulated as GUI PASS"
     },
@@ -125,7 +125,7 @@
       "id": 11,
       "title": "拒绝复习或忙碌，不被打扰",
       "status": "PASS",
-      "at": "2026-11-08T16:50:26.960Z",
+      "at": "2026-11-08T17:17:43.557Z",
       "ok": true,
       "text": "复习策略\n提醒强度\n标准\n提醒策略\n到期时",
       "note": "GUI exposes review reminder controls; real refusal behavior still needs a due queue",
@@ -135,7 +135,7 @@
       "id": 12,
       "title": "长期未上线返回，不积压提醒",
       "status": "PARTIAL",
-      "at": "2026-11-08T16:50:26.960Z",
+      "at": "2026-11-08T17:17:43.558Z",
       "ok": false,
       "note": "Settings review controls render, but no real long-offline state exists in this run"
     },
@@ -143,24 +143,25 @@
       "id": 13,
       "title": "跨项目同概念复用但不泄漏代码",
       "status": "PARTIAL",
-      "at": "2026-11-08T16:50:26.960Z",
+      "at": "2026-11-08T17:17:43.558Z",
       "ok": false,
       "note": "Single workspace window in this run; cross-project isolation is covered by skill workspace unit tests and needs a second window"
     },
     {
       "id": 14,
       "title": "切换模型和重启 VS Code，状态恢复",
-      "status": "PARTIAL",
-      "at": "2026-11-08T16:50:57.426Z",
-      "ok": false,
+      "status": "PASS",
+      "at": "2026-11-08T17:18:17.469Z",
+      "ok": true,
       "model": "fixture-v4-gui-alt",
+      "text": "workspace 对话 学习 资料 Trainer 设置 Trainer 设置 连接 custom-openai-compatible 未实测 fixture-v4-gui-alt 127.0.0.1:64340 · 可直接使用；测试可选。 去对话 编辑配置 聊天模型 fixture-v4-gui-alt 更换模型 管理连接",
       "screenshot": "docs/verification/v4-gui-20-journeys/j14-model-restart.png"
     },
     {
       "id": 15,
       "title": "资料版本变化，旧引用/知识关系更新",
       "status": "PARTIAL",
-      "at": "2026-11-08T16:50:57.426Z",
+      "at": "2026-11-08T17:18:17.469Z",
       "ok": false,
       "note": "Native file import dialog is not automatable; resource version invalidation is covered by U/S evidence"
     },
@@ -168,7 +169,7 @@
       "id": 16,
       "title": "Skill 自动选择/执行/记录/失败隔离",
       "status": "PASS",
-      "at": "2026-11-08T16:51:00.967Z",
+      "at": "2026-11-08T17:18:22.258Z",
       "ok": true,
       "chars": 82,
       "note": "Built-in skill catalog renders; real selection/execution remains covered by P journeys",
@@ -178,7 +179,7 @@
       "id": 17,
       "title": "Provider 超时/中断，不制造虚假结果",
       "status": "PARTIAL",
-      "at": "2026-11-08T16:51:00.968Z",
+      "at": "2026-11-08T17:18:22.258Z",
       "ok": false,
       "note": "Fixture provider does not fail; real timeout/interruption is covered by failure tests and needs a fault-injection run"
     },
@@ -186,7 +187,7 @@
       "id": 18,
       "title": "多窗口并发，不重复推进计划/复习",
       "status": "BLOCKED",
-      "at": "2026-11-08T16:51:00.968Z",
+      "at": "2026-11-08T17:18:22.258Z",
       "ok": false,
       "note": "Second window is not launched in this harness; plan revision/singleflight evidence is U/L only"
     },
@@ -194,7 +195,7 @@
       "id": 19,
       "title": "修改/撤销记忆，教学行为同步变化",
       "status": "PASS",
-      "at": "2026-11-08T16:51:06.523Z",
+      "at": "2026-11-08T17:18:27.830Z",
       "ok": true,
       "before": "架构决策\n开启",
       "after": "架构决策\n关闭",
@@ -205,7 +206,7 @@
       "id": 20,
       "title": "连续多个项目/主题，仍理解当前重点",
       "status": "PARTIAL",
-      "at": "2026-11-08T16:51:06.524Z",
+      "at": "2026-11-08T17:18:27.830Z",
       "ok": false,
       "note": "Single project in this run; project switching and long-run focus need a multi-project harness"
     }
@@ -213,18 +214,18 @@
   "steps": [
     {
       "name": "fixture-provider",
-      "at": "2026-11-08T16:46:42.681Z",
-      "baseUrl": "http://127.0.0.1:55024/v1"
+      "at": "2026-11-08T17:14:20.398Z",
+      "baseUrl": "http://127.0.0.1:64340/v1"
     },
     {
       "name": "first-screen",
-      "at": "2026-11-08T16:47:01.171Z",
+      "at": "2026-11-08T17:14:38.808Z",
       "text": "workspace 对话 学习 资料 先说说你想学什么——内容会保留在下面的输入框里。 完成两项设置即可使用完整能力： 连接模型后，Trainer 会发现当前项目并询问是否加入；加入不会修改文件。 ○ 连接模型 设置 ✓ 选择学习文件夹 已选择 消息输入框"
     },
     {
       "name": "assistant-reply-settled-without-idle",
-      "at": "2026-11-08T16:49:44.449Z",
-      "chars": 80
+      "at": "2026-11-08T17:17:00.889Z",
+      "chars": 73
     }
   ]
 }

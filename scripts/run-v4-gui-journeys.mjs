@@ -485,8 +485,9 @@ try {
     await page.waitForTimeout(6000);
     frame = await openSidebar(page);
     currentFrame = frame;
+    await openSettingsCategory(page, frame, "connection", "连接");
     const text = await bodyText(frame);
-    return { ok: text.includes(altModel), model: altModel, screenshot: await screenshot(page, "j14-model-restart") };
+    return { ok: text.includes(altModel), model: altModel, text: text.slice(0, 500), screenshot: await screenshot(page, "j14-model-restart") };
   });
   await runJourney(15, "资料版本变化，旧引用/知识关系更新", async () => ({
     ok: false, status: "PARTIAL", note: "Native file import dialog is not automatable; resource version invalidation is covered by U/S evidence",
