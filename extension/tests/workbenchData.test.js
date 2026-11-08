@@ -6931,3 +6931,91 @@ test('a live library preview survives recovered-plan cleanup; a leftover one doe
   const leftoverPatch = mergeMemorySummary(makeBootstrap(false), { context_id: 'workspace-a' });
   assert.equal(leftoverPatch.memory.sandboxPreview, undefined);
 });
+
+test('mergeSessionStartSnapshot restores and clears the server-owned goal', () => {
+  const current = createDefaultBootstrapData(createWorkspaceSnapshot());
+  const restored = mergeSessionStartSnapshot(
+    current,
+    {
+      contextId: 'workspace-goal',
+      goal: {
+        goalId: 'goal-1',
+        workspaceId: 'workspace-goal',
+        sessionId: 'session-1',
+        title: '实现 PPO',
+        concept: '实现 PPO',
+        capability: '',
+        planId: null,
+        stageId: null,
+        status: 'active',
+        source: 'user_explicit',
+        currentPosition: '',
+        latestActivity: null,
+        activities: [],
+        activityCount: 0,
+        evidenceCount: 0,
+        startedAt: '2026-11-08T05:00:00+00:00',
+        updatedAt: '2026-11-08T05:00:00+00:00',
+        lastActivityAt: null,
+        completedAt: null,
+      },
+    },
+    'workspace-goal',
+  );
+  assert.equal(restored.goal.goalId, 'goal-1');
+  assert.equal(restored.goal.title, '实现 PPO');
+  assert.equal(restored.goal.status, 'active');
+
+  const cleared = mergeSessionStartSnapshot(
+    { ...current, goal: restored.goal },
+    { contextId: 'workspace-goal', goal: null },
+    'workspace-goal',
+  );
+  assert.equal(cleared.goal, undefined);
+});
+
+test('mergeSessionStartSnapshot accepts the snake_case goal shape and activity refs', () => {
+  const current = createDefaultBootstrapData(createWorkspaceSnapshot());
+  const restored = mergeSessionStartSnapshot(
+    current,
+    {
+      context_id: 'workspace-goal',
+      goal: {
+        goal_id: 'goal-2',
+        workspace_id: 'workspace-goal',
+        session_id: 'session-1',
+        title: '掌握 RAG 检索',
+        concept: '掌握 RAG 检索',
+        capability: '',
+        plan_id: 'plan-1',
+        stage_id: 'stage-1',
+        status: 'paused',
+        source: 'coach_detected',
+        current_position: '检索重排练习',
+        latest_activity: {
+          activity_id: 'activity-1',
+          kind: 'evaluation',
+          summary: 'Rerank check failed.',
+          result: 'failed',
+          concept: 'rerank',
+          occurred_at: '2026-11-08T05:05:00+00:00',
+          evidence_refs: ['evaluation:abc'],
+          event_key: 'evaluation:abc',
+        },
+        activities: [],
+        activity_count: 1,
+        evidence_count: 1,
+        started_at: '2026-11-08T05:00:00+00:00',
+        updated_at: '2026-11-08T05:05:00+00:00',
+        last_activity_at: '2026-11-08T05:05:00+00:00',
+        completed_at: null,
+      },
+    },
+    'workspace-goal',
+  );
+  assert.equal(restored.goal.goalId, 'goal-2');
+  assert.equal(restored.goal.status, 'paused');
+  assert.equal(restored.goal.planId, 'plan-1');
+  assert.equal(restored.goal.latestActivity.kind, 'evaluation');
+  assert.deepEqual(restored.goal.latestActivity.evidenceRefs, ['evaluation:abc']);
+});

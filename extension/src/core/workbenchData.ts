@@ -1378,7 +1378,11 @@ function mergeWorkspaceStampedSnapshot(
     delete stamped.currentTask;
     delete stamped.task;
   }
-  return mergeMemorySummary(current, stamped);
+  const merged = mergeMemorySummary(current, stamped);
+  if (Object.prototype.hasOwnProperty.call(record, 'goal')) {
+    merged.goal = normalizeGoalSession(record.goal);
+  }
+  return merged;
 }
 
 export function mergeSessionStartSnapshot(
