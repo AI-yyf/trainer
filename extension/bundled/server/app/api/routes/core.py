@@ -321,7 +321,6 @@ def build_core_router(
 
     def record_goal_evaluation(
         workspace_id: str,
-        state: Any,
         request: EvaluateCurrentFileRequest | EvaluateSnippetRequest,
         report: Any,
     ) -> None:
@@ -348,7 +347,7 @@ def build_core_router(
             evidence_refs=evidence_refs,
             event_key=f"{target}:{content_hash}:{bool(getattr(report, 'passed', False))}",
         )
-        state.snapshot.goal = runtime.goals().current(workspace_id)
+        runtime.publish_goal(workspace_id)
 
     @router.get("/snapshot")
     def get_snapshot(
@@ -4146,7 +4145,7 @@ def build_core_router(
             report=report,
             evidence_source="ide_current_file",
         )
-        record_goal_evaluation(workspace_id, state, request, report)
+        record_goal_evaluation(workspace_id, request, report)
         state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
         runtime.save_session_state(state.session_id)
         return report
@@ -4186,7 +4185,7 @@ def build_core_router(
                 report=report,
                 evidence_source="snippet_or_selection",
             )
-            record_goal_evaluation(workspace_id, state, request, report)
+            record_goal_evaluation(workspace_id, request, report)
             state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
             runtime.save_session_state(state.session_id)
             return report
@@ -4216,7 +4215,7 @@ def build_core_router(
             state=state,
             report=report,
         )
-        record_goal_evaluation(workspace_id, state, request, report)
+        record_goal_evaluation(workspace_id, request, report)
         state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
         runtime.save_session_state(state.session_id)
         return report
