@@ -21,10 +21,10 @@
 
 | # | 旅程 | U | S | P | V | G | R | L | 主要证据 / 缺口 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 第一次安装 Trainer，自然开始交流 | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | — | U: first-run/e2e；S: experience matrix；V: v1.4.1 安装；R: 141s 安装；P/G：真实模型首条自然交流未单独归档 |
-| 2 | 随口提问，不产生不必要长期目标 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | — | U: `test_goal_session` + `sendIntelligence`；S/P：`docs/verification/v4-journey-2-3-goal-real.md`（deepseek-v4.1-flash，无 Goal/plan/card） |
-| 3 | 明确能力目标，Goal 自动建立并持续追踪 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: 18 项 Goal 行为测试；S/P：真实对话自动建 Goal + 重启同 id + 续接；G: 真实 GUI 未录 |
-| 4 | 多次会话继续同一任务，不复述背景 | ✅ | ✅ | ✅ | 🟡 | 🟡 | 🟡 | ✅ | U: recovery；S/P: P4 11 步旅程；R: L2 第 4 步；G：跨会话真实窗口未单独归档 |
+| 1 | 第一次安装 Trainer，自然开始交流 | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ | — | U: first-run/e2e；S: experience matrix；V: v1.4.1 安装；R: 141s 安装；G: `docs/verification/v4-gui-20-journeys/`（真实窗口三目的地与输入框）；P：真实模型首条自然交流未单独归档 |
+| 2 | 随口提问，不产生不必要长期目标 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | — | U: `test_goal_session` + `sendIntelligence`；S/P：`docs/verification/v4-journey-2-3-goal-real.md`；G：真实窗口发送随口问题后无 Goal 条 |
+| 3 | 明确能力目标，Goal 自动建立并持续追踪 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | 🟡 | U: 18 项 Goal 行为测试；S/P：真实对话自动建 Goal + 重启同 id + 续接；G：真实窗口自动出现 Goal 条，Reload Window 后仍恢复 |
+| 4 | 多次会话继续同一任务，不复述背景 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U: recovery；S/P: P4 11 步旅程；R: L2 第 4 步；G：真实窗口继续同一 Goal 并保留上下文 |
 | 5 | 表达教学偏好，后续自动适配 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | 🟡 | U: memory/settings；G: Settings 四屏审计；P：真实偏好适配未验证 |
 | 6 | 改变偏好，系统修正旧习惯 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | 🟡 | U: preference overwrite；P/G：跨轮真实修正未验证 |
 | 7 | 提示帮助下完成，不误判独立掌握 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | ⬜ | — | U: false-mastery 闸门 + skill projection；P：真实受助任务未做掌握断言 |
@@ -36,7 +36,7 @@
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
 | 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | 🟡 | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实重启未单独归档 |
 | 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version + evidence invalidation；P/G：真实资料变更未验证 |
-| 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实 Skill UI 未归档 |
+| 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；P：真实超时无法在健康网关强制，保持部分 |
 | 18 | 多窗口并发，不重复推进计划/复习 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision、singleflight、SQLite 写锁；真实双窗口未执行 |
 | 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | 🟡 | ⬜ | ⬜ | 🟡 | ⬜ | ✅ | U: memory update/clear；G: Settings 记忆面板；P：真实撤销后教学变化未验证 |
@@ -50,11 +50,11 @@
 | S 真实 Sidecar | 7 | 13 | 0 |
 | P 真实 Provider | 5 | 4 | 11 |
 | V 已安装 VSIX | 1 | 2 | 17 |
-| G 真实 GUI | 0 | 9 | 11 |
+| G 真实 GUI | 4 | 6 | 10 |
 | R Remote-SSH | 1 | 3 | 16 |
 | L 长期/持久化 | 9 | 6 | 0（5 项不适用） |
 
-> G 列全部为 PARTIAL 或 GAP：已有 Settings 四屏真实审计与 L2 窗口，但没有把 20 条旅程逐条在真实 GUI 中归档。
+> G 列已有 4 条 PASS：旅程 1/2/3/4 在真实 VS Code Electron + 当前 VSIX 中逐条断言。其余 GUI 证据为 PARTIAL/GAP：fixture provider 不能替代真实模型，训练卡、数天时钟、双窗口、资料导入仍未在 GUI 中闭环。
 > P 列只有 P4 旅程/L2 第 4 步等少数真实模型证据；不得把 3930 个单元测试当作真实模型验收。
 
 ## 3. 缺口优先级
@@ -73,6 +73,7 @@
 - P4 真实 Provider：`docs/maturity/2026-11-06-p4-real-provider.md`（5 PASS + 1 NOT_EXECUTED）。
 - Remote-SSH L2：`docs/verification/remote-ssh-l2-141s-evidence.md`（2026-11-08 六步 6/6 PASS）。
 - 四屏真实 GUI：`docs/verification/2026-11-07-{coach,learning,resources,settings}-screen-audit.md`。
+- 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（9 PASS / 6 PARTIAL / 5 BLOCKED，fixture provider 仅作 GUI 证据）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。
 - 行为测试：server 3930 passed（含 FSRS/Goal/Evidence/Skill workspace）；extension suite 0 失败；Settings e2e 8 passed。
 - 长期时间/持久化：`test_live_training_fsrs_on_verify.py`、`test_review_scheduler_fsrs.py`、session/plan revision 回归。
