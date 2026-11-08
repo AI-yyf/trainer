@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-08T19:45:26.221975+00:00",
+  "provider": {
+    "base_url": "https://linksub.fun",
+    "model": "deepseek-v4.1-flash"
+  },
+  "clock": {
+    "day0": "2026-11-01T09:00:00Z",
+    "day3": "2026-11-04T09:00:00Z",
+    "day30": "2026-12-01T09:00:00Z"
+  },
+  "journeys": {
+    "9_forgetting_days": {
+      "status": "PASS",
+      "due_count": 4,
+      "due_concepts": [
+        "tuple mutability",
+        "dict key hashing",
+        "list aliasing",
+        "closure capture"
+      ],
+      "reply": "好，只复习 tuple mutability。\n\n问题：在 Python 里，下面这段代码能正常运行吗？如果能，输出是什么？\n\n```python\nt = (1, 2, [3, 4])\nt[2].append(5)\nprint(t)\n```",
+      "reply_chars": 120
+    },
+    "11_refuse_review": {
+      "status": "PASS",
+      "dismissed_concept": "tuple mutability",
+      "action": {
+        "entry_id": "review-action-64f6520514",
+        "concept": "tuple mutability",
+        "action": "skip",
+        "outcome": "dismissed",
+        "focus_area": "",
+        "task_hint": "",
+        "note": "busy; review later",
+        "scope": "single",
+        "created_at": "2026-11-04T09:00:00.000156+00:00",
+        "next_review_at": "2026-11-05T09:00:00.000156+00:00"
+      },
+      "due_concepts_after": [
+        "dict key hashing",
+        "list aliasing",
+        "closure capture",
+        "iterator exhaustion"
+      ],
+      "next_review_at": "2026-11-05T09:00:00.000156+00:00",
+      "reply": "tuple 不可变是因为它一旦创建就固定了元素引用和顺序，无法增删改，从而保证可哈希、线程安全和可作字典键。"
+    },
+    "12_long_absence": {
+      "status": "PASS",
+      "due_count": 4,
+      "unique_due_count": 4,
+      "due_concepts": [
+        "dict key hashing",
+        "list aliasing",
+        "closure capture",
+        "iterator exhaustion"
+      ],
+      "reply": "当然。最小回顾问题：\n\n**请用一句话说出：这个项目/任务的核心目标是什么？**\n\n（不用展开，先确认你还记得“为什么要做它”。）"
+    }
+  },
+  "assertions": {
+    "review_queue_due_after_days": true,
+    "review_turn_nonempty": true,
+    "dismissed_review_not_due_same_day": true,
+    "busy_turn_nonempty": true,
+    "long_absence_no_duplicate_reviews": true,
+    "long_absence_reply_nonempty": true
+  },
+  "not_executed": {
+    "10_delayed_recall": {
+      "title": "正确延迟回忆，间隔延长",
+      "note": "The weakness/review path clears in 10 minutes; a real FSRS card interval needs card generation, which this run did not produce."
+    }
+  },
+  "elapsed_ms": 68841,
+  "ok": true
+}
