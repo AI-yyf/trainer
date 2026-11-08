@@ -17,6 +17,8 @@ from typing import Any
 
 from fsrs import Card, Rating, Scheduler, State
 
+from ..core.clock import utc_now as _clock_now
+
 from ..pedagogy.evidence_controls import apply_review_frequency_bias
 
 
@@ -59,7 +61,7 @@ class TrainingCardState:
     mastery_score: float = 0.0
     
     # Timestamps
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=_clock_now)
     last_reviewed_at: datetime | None = None
     next_due_at: datetime | None = None
 
@@ -118,7 +120,7 @@ class FSRSTrainerCardScheduler:
     
     def create_card(self, card_id: str, concept_id: str, **kwargs) -> TrainingCardState:
         """Create a new training card with initial FSRS state"""
-        now = datetime.now(timezone.utc)
+        now = _clock_now()
         state = TrainingCardState(
             card_id=card_id,
             concept_id=concept_id,
@@ -138,7 +140,7 @@ class FSRSTrainerCardScheduler:
     
     def get_due_cards(self, limit: int = 20) -> list[TrainingCardState]:
         """Get cards that are due for review"""
-        now = datetime.now(timezone.utc)
+        now = _clock_now()
         due_cards = []
         
         for card_state in self._card_states.values():
@@ -173,7 +175,7 @@ class FSRSTrainerCardScheduler:
         if not card_state:
             raise ValueError(f"Card {card_id} not found")
         
-        now = datetime.now(timezone.utc)
+        now = _clock_now()
         fsrs_card = self._create_fsrs_card(card_state)
         next_card, _ = self._scheduler.review_card(
             fsrs_card,
@@ -256,7 +258,7 @@ class FSRSTrainerCardScheduler:
             return {}
         
         # Calculate retrievability (probability of recall)
-        now = datetime.now(timezone.utc)
+        now = _clock_now()
         if card_state.last_reviewed_at:
             elapsed = (now - card_state.last_reviewed_at).total_seconds() / 86400
             retrievability = self._calculate_retrievability(card_state.stability, elapsed)
@@ -293,7 +295,7 @@ class FSRSTrainerCardScheduler:
     
     def get_deck_statistics(self) -> dict[str, Any]:
         """Get overall deck statistics"""
-        now = datetime.now(timezone.utc)
+        now = _clock_now()
         
         total = len(self._card_states)
         new_cards = sum(1 for c in self._card_states.values() if c.state == "new")
@@ -424,7 +426,7 @@ def card_state_from_payload(payload: dict[str, Any]) -> TrainingCardState | None
         knowledge_type=str(payload.get("knowledge_type") or payload.get("knowledgeType") or "").strip() or None,
         mastery_score=float(payload.get("mastery_score") or payload.get("masteryScore") or 0.0),
         created_at=_parse_fsrs_datetime(payload.get("created_at") or payload.get("createdAt"))
-        or datetime.now(timezone.utc),
+        or _clock_now(),
         last_reviewed_at=_parse_fsrs_datetime(
             payload.get("last_reviewed_at") or payload.get("lastReviewedAt")
         ),
