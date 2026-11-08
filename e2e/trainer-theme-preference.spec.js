@@ -38,8 +38,9 @@ test('explicit Light and Dark choices change actual colors while Auto follows li
   const light = await colors(page);
   expect(light.background).not.toBe('rgb(24, 33, 43)');
   expect(light.foreground).not.toBe('rgb(204, 221, 238)');
-  expect(light.bg).toBe(light.bodyOverride);
-  expect(light.rootOverride).toBe(light.bodyOverride);
+  expect(light.bg).not.toBe('');
+  expect(light.rootOverride).toBe('');
+  expect(light.bodyOverride).toBe('');
   expect(light.hostBackground).toBe('#18212b');
   await hostTheme(page, 'light', '#f1f2f3', '#212223');
   await expect.poll(async () => (await colors(page)).background).toBe(light.background);
@@ -97,7 +98,7 @@ for (const language of ['zh-CN', 'en-US']) {
       const labels = language === 'zh-CN' ? ['浅色', '深色', '跟随系统'] : ['Light', 'Dark', 'System'];
       await hostTheme(page, 'dark', '#18212b', '#ccddee');
       await chooseTheme(page, labels[0]);
-      await expect.poll(async () => (await actualInk(page)).foreground).toBe(rgb('#1f1f1f'));
+      await expect.poll(async () => (await actualInk(page)).foreground).toBe(rgb('#000000'));
       let ink = await actualInk(page);
       expect(ink.background).toBe(rgb('#ffffff'));
       expect(ink.consumerForeground).toBe(ink.foreground);
@@ -107,7 +108,7 @@ for (const language of ['zh-CN', 'en-US']) {
       await hostTheme(page, 'light', '#f1f2f3', '#212223');
       expect((await actualInk(page)).foreground).toBe(ink.foreground);
       await chooseTheme(page, labels[1]);
-      await expect.poll(async () => (await actualInk(page)).foreground).toBe(rgb('#efefef'));
+      await expect.poll(async () => (await actualInk(page)).foreground).toBe(rgb('#ffffff'));
       ink = await actualInk(page);
       expect(ink.background).toBe(rgb('#121212'));
       expect(ink.consumerForeground).toBe(ink.foreground);

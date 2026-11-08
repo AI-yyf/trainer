@@ -18,10 +18,10 @@ test("Coach keeps the actual recall reply without displaying review records or g
     } });
   });
   await expect(page.getByText('这个概念解释准确。', { exact: true })).toBeVisible();
+  // Review/evaluation artifacts never become a card or a raw identity in the
+  // Coach bubble; the reply itself is the only visible result.
   await expect(page.locator('.coach-artifact-card').filter({ visible: true })).toHaveCount(0);
-  await page.locator('.template-reply-evidence > summary').click();
-  await expect(page.locator('.coach-artifact-card')).toHaveCount(3);
-  await page.locator('.template-reply-evidence > summary').click();
+  await expect(page.locator('.template-reply-evidence')).toHaveCount(0);
   expect(await page.locator('.message-bubble').innerText()).not.toContain('trainer-python:next-step');
   expect(await page.locator('.message-bubble').innerText()).not.toContain('我自己的复习标题');
 });
@@ -64,7 +64,7 @@ test("Learning keeps historical and independent records out of the current actio
   await expect(page.locator('.coach-plan-view__evidence-row, [data-plan-governance-disclosure][open]').filter({ visible: true })).toHaveCount(0);
   await expect(page.getByText('旧阶段的文件检查', { exact: true }).filter({ visible: true })).toHaveCount(0);
   await expect(page.getByText('未绑定计划的独立检查', { exact: true }).filter({ visible: true })).toHaveCount(0);
-  await expect(page.locator('#coach-composer')).toHaveCount(0);
+  await expect(page.locator('#coach-composer')).toHaveCount(1);
 });
 
 test("long historical records cannot overflow or take over the current Learning view", async ({ page }) => {

@@ -1,5 +1,14 @@
 const { test, expect } = require("playwright/test");
 
+async function clickPracticeAction(page) {
+  const action = page.getByRole('button', { name: '下一步：设为练习', exact: true });
+  if ((await action.count()) === 0) {
+    // The latest reply tucks its primary next action behind the icon toggle.
+    await page.getByRole('button', { name: '下一步', exact: true }).click();
+  }
+  await action.click();
+}
+
 test("Set as practice binds a live plan step after Return without minting a parallel task", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=coach&lang=zh-CN&connection=connected&run=plan-practice-action");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
@@ -35,7 +44,7 @@ test("Set as practice binds a live plan step after Return without minting a para
     await page.evaluate(data => window.postMessage({ type: "bootstrap", payload: data }, window.location.origin), payload);
   }
   await apply();
-  await page.getByRole('button', { name: "下一步：设为练习", exact: true }).click();
+  await clickPracticeAction(page);
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === "command/execute" && action.payload.commandId === "trainer.training.generateCard").length)).toBe(1);
   const generated = await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
@@ -50,7 +59,7 @@ test("Set as practice binds a live plan step after Return without minting a para
       ["trainer.task.specify", "trainer.task.next"].includes(action.payload?.commandId)))).toEqual([]);
   payload.plan.frozen = true;
   await apply();
-  await page.getByRole('button', { name: "下一步：设为练习", exact: true }).click();
+  await clickPracticeAction(page);
   await expect(page.locator('#coach-composer')).toHaveValue("先继续当前复习项，不要新开正式任务。");
   expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === "command/execute" && action.payload.commandId === "trainer.training.generateCard").length)).toBe(1);
@@ -58,7 +67,7 @@ test("Set as practice binds a live plan step after Return without minting a para
   payload.planRuntimeStatus = { recovered: true, currentStep: "" };
   payload.memory.workspace.latestPlanRuntime = { recovered: true, currentStep: "" };
   await apply();
-  await page.getByRole('button', { name: "下一步：设为练习", exact: true }).click();
+  await clickPracticeAction(page);
   await expect(page.locator('#coach-composer')).toHaveValue("先继续当前复习项，不要新开正式任务。");
   expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === "command/execute" && action.payload.commandId === "trainer.training.generateCard").length)).toBe(1);

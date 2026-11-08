@@ -33,7 +33,7 @@ for (const [language, title] of [['zh-CN', '确认这次验证结果'], ['en-US'
     const primary = page.locator('[data-surface=plan] [data-template=NextAction]');
     await expect(primary.locator('h3')).toHaveText(title);
     await expect(primary.getByRole('button')).toHaveAttribute('data-action-intent', 'adopt_evidence');
-    const evidence = page.locator('[data-learning-section=reviews]');
+    const evidence = page.locator('[data-learning-section=evidence]');
     await expect(evidence.getByText(rawSummary, { exact: true })).not.toBeVisible();
     await evidence.locator(':scope > summary').click();
     await expect(evidence.getByText(rawSummary, { exact: true })).toBeVisible();
@@ -50,7 +50,7 @@ for (const [language, title] of [['zh-CN', '确认这次验证结果'], ['en-US'
       payload: { ...payload, memory: { ...payload.memory, evidenceQueue: {
         pending: [], adopted: [{ ...record, adopted: true }], deferred: [], rejected: [], totalCount: 1,
       } } } }, location.origin), { payload, record });
-    await expect(primary.locator('h3')).not.toHaveText(title);
+    await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
     await expect(evidence).toContainText(rawSummary);
     await expect(evidence.locator('[data-plan-evidence-id]')).toHaveAttribute('data-plan-evidence-id', 'verified-result-exact');
   });

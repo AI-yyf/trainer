@@ -52,6 +52,12 @@ function createThemeFixture() {
     getAttribute(name) {
       return this.attributes[name] ?? null;
     },
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    },
+    removeAttribute(name) {
+      delete this.attributes[name];
+    },
   });
   const root = createElement();
   const body = createElement();
@@ -225,6 +231,7 @@ test('host light classes and theme kinds switch missing-token fallbacks to light
 
     assert.equal(root.dataset.theme, 'light');
     assert.equal(root.style.colorScheme, 'light');
+    assert.equal(root.attributes['data-theme-explicit'], undefined);
   }
 });
 
@@ -249,6 +256,7 @@ test('explicit themes override semantic tokens on root and body without changing
     body.style.setProperty('--vscode-sideBar-background', 'host-background');
     theme.applyWorkbenchTheme(selected, false);
     theme.installWorkbenchHostThemeBridge();
+    assert.equal(root.attributes['data-theme-explicit'], 'true');
     for (const element of [root, body]) {
       assert.equal(element.style.values['--bg-0'], undefined);
       assert.equal(element.style.values['--fg-0'], undefined);
@@ -258,6 +266,7 @@ test('explicit themes override semantic tokens on root and body without changing
     assert.equal(root.dataset.theme, selected, 'host changes must not undo an explicit choice');
     assert.equal(body.style.values['--vscode-sideBar-background'], 'host-background');
     theme.applyWorkbenchTheme(selected, true);
+    assert.equal(root.attributes['data-theme-explicit'], undefined);
     for (const element of [root, body]) {
       assert.equal(element.style.values['--bg-0'], undefined);
       assert.equal(element.style.values['--fg-0'], undefined);

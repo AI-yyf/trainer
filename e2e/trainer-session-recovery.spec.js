@@ -2,6 +2,17 @@ const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 const { planOnlyFixture } = require('./learning-fixtures');
 
+async function openLearningMore(page) {
+  const more = page.locator('[data-learning-focus-more]').first();
+  if ((await more.count()) === 0) {
+    await more.waitFor({ state: 'visible' });
+  }
+  await expect(more).toBeVisible();
+  if ((await more.getAttribute('open')) === null) {
+    await more.locator(':scope > summary').click();
+  }
+}
+
 test("an English recovery step does not hide its matching formal plan in Chinese", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=plan-identity-language");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
@@ -19,6 +30,7 @@ test("an English recovery step does not hide its matching formal plan in Chinese
     } });
   });
   await expect(page.getByText("这是此工作区里存下的旧痕迹，不是当前正式计划。", { exact: true })).toHaveCount(0);
+  await openLearningMore(page);
   await expect(page.locator('[data-learning-section=route]')).toBeVisible();
 });
 
@@ -39,10 +51,13 @@ test("compact Plan keeps its stages reachable from a dedicated disclosure", asyn
       planRuntimeStatus: { recovered: false, currentStep: "运行可变性验证", reviewPoints: [] },
     } });
   });
+  await openLearningMore(page);
   const stages = page.locator('[data-learning-section=route]');
   await expect(stages).toBeVisible();
   await stages.locator(':scope > summary').click();
   await expect(stages.getByText('验证元组内列表', { exact: true })).toBeVisible();
+  const moreStages = stages.locator('[data-learning-section=more-route-stages]');
+  await moreStages.locator(':scope > summary').click();
   await expect(stages.getByText('实现嵌套求和', { exact: true })).toBeVisible();
   await expect(stages.getByText('覆盖异常边界', { exact: true })).toBeVisible();
   await expect(stages.locator('[data-stage-status]')).toHaveCount(3);
@@ -199,7 +214,7 @@ test("empty Plan honors an explicit Generate plan action", async ({ page }) => {
     } });
   });
   await expect(page.getByText(/先启用一组可用连接/)).toHaveCount(0);
-  await page.locator('[data-surface=plan] details > summary').filter({ hasText: /^动作$/ }).click();
+  await page.locator('[data-learning-section=more] > summary').click();
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
   await expect(page.locator(".template-context")).toContainText("生成计划");
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
@@ -291,7 +306,7 @@ test("Plan generate keeps an unsent Coach draft instead of overwriting it", asyn
   await page.getByTestId("trainer-view-nav-coach").click();
   await page.getByRole("textbox").fill("我的教练草稿");
   await page.getByTestId("trainer-view-nav-plan").click();
-  await page.locator('[data-surface=plan] details > summary').filter({ hasText: /^动作$/ }).click();
+  await page.locator('[data-learning-section=more] > summary').click();
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("textbox")).toHaveValue("我的教练草稿");
@@ -306,7 +321,7 @@ test("training generation keeps raw card JSON out of the conversation surface", 
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'stream/chunk', payload: { messageId: 'training_raw_card', chunk: '{"title":"INTERNAL_CARD_JSON_123"' } });
   });
   await expect(page.getByText(/INTERNAL_CARD_JSON_123/)).toHaveCount(0);
-  await expect(page.getByText(/Thinking through your prompt/).first()).toBeVisible();
+  await expect(page.locator('.coach-working__label')).toHaveText('Thinking');
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
     type: 'stream/cancelled', payload: { messageId: 'training_raw_card' },
   }));
@@ -332,21 +347,27 @@ test("stage materials live inside per-stage disclosures and old plan materials c
       })) },
     } });
   });
+  await openLearningMore(page);
   const stages = page.locator('[data-learning-section=route]');
   await stages.locator(':scope > summary').click();
   // The roadmap is quiet text rows: the progress ring and material badges are gone.
-  await expect(stages.locator('[data-plan-stage]')).toHaveCount(2);
+  await expect(stages.locator('[data-plan-stage]')).toHaveCount(1);
   await expect(stages.getByRole('img', { name: /阶段完成度/ })).toHaveCount(0);
   await expect(stages.locator('[title^="已生成资料"]')).toHaveCount(0);
   const active = stages.locator('[data-plan-stage="stage-1"]');
-  const done = stages.locator('[data-plan-stage="stage-2"]');
   await expect(active).toHaveAttribute('data-stage-status', 'active');
+  const completedStages = page.locator('[data-learning-section=completed-stages]');
+  await completedStages.locator(':scope > summary').click();
+  const done = completedStages.locator('[data-plan-stage="stage-2"]');
   await expect(done).toHaveAttribute('data-stage-status', 'done');
-  // The active stage starts open (it holds the objective, the 生成资料 action
-  // and the generated materials); non-active stages stay closed until opened.
+  // Stage details are user-controlled now: open the active stage to reach its
+  // objective, 生成资料 action and generated materials.
   const activeDetails = active.locator('details');
-  await expect(activeDetails).toHaveAttribute('open', '');
-  await expect(done.locator('details')).not.toHaveAttribute('open', '');
+  if (!(await activeDetails.evaluate(el => el.open))) {
+    await activeDetails.locator(':scope > summary').click();
+  }
+  await expect(activeDetails).toHaveJSProperty('open', true);
+  await expect(done.locator('details')).toHaveJSProperty('open', false);
   // CSS locator on purpose: role queries skip content inside a closed details.
   await expect(activeDetails.locator('button:has-text("生成资料0")')).toHaveCount(1);
   // Old plan materials clear when the formal plan is replaced.
@@ -476,7 +497,7 @@ test('same-context backups isolate growth evidence and unsent drafts by database
   await switchDatabase('/original/data', 'original-one', true);
   await input.fill('原目录草稿，尚未发送。');
   await page.getByTestId('trainer-view-nav-plan').click();
-  await page.locator('[data-learning-section=growth] > summary').click();
+  await openLearningMore(page);
   await page.locator('[data-learning-section=growth] .template-back').first().click();
   await expect(page.getByRole('button', { name: '实现 有辅助完成 1 次验证通过', exact: true })).toBeVisible();
   await switchDatabase('/backup/data', 'backup-one', false);
@@ -540,7 +561,7 @@ test('Start review opens the due queue while preserving the current practice car
       },
     } });
   });
-  await page.locator('[data-learning-section=reviews] > summary').click();
+  await openLearningMore(page);
   await page.getByRole('button', { name: '开始复习', exact: true }).click();
   await expect(page.getByRole('heading', { name: '保留当前元组练习', exact: true })).toBeVisible();
   const queue = page.locator('[data-training-review-queue="true"]');

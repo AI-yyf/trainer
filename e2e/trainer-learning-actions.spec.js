@@ -93,7 +93,7 @@ test('a bound evidence gate approves the visible candidate; blocker and frozen s
   payload.memory.workspace.latestPlanRuntime = { ...payload.planRuntimeStatus, evidenceBinding: 'e1' };
   await apply(page, payload);
   const surface = page.locator('[data-surface=plan]');
-  const next = surface.locator('[data-template=NextAction]');
+  const next = surface.locator('[data-template=NextAction]').filter({ visible: true });
   await expect(next.locator('h3')).toHaveText('Actual result to inspect');
   await expect(next.getByRole('button')).toHaveText('Approve this evidence');
   await expect(surface.locator('[data-plan-evidence-decision=defer]')).toBeVisible();
@@ -107,12 +107,14 @@ test('a bound evidence gate approves the visible candidate; blocker and frozen s
   payload.planRuntimeStatus.blockedReason = 'The project test runner is missing';
   payload.memory.workspace.latestPlanRuntime = { ...payload.planRuntimeStatus, evidenceBinding: 'e1' };
   await apply(page, payload);
-  await expect(next.getByRole('button')).toHaveText('Resolve with coach');
-  await expect(next).toContainText('The project test runner is missing');
+  const blocker = page.locator('[data-surface=plan] [role=alert]');
+  await expect(blocker.getByRole('heading', { name: 'Resolve the current blocker', exact: true })).toBeVisible();
+  await expect(blocker.getByRole('button', { name: 'Resolve with coach', exact: true })).toBeVisible();
+  await expect(blocker).toContainText('The project test runner is missing');
   payload.plan.frozen = true;
   await apply(page, payload);
-  await expect(next.getByRole('button')).toHaveText('Resume plan');
-  await expect(next.locator('h3')).toHaveText('The plan is paused');
+  await expect(page.locator('[data-surface=plan]').getByRole('button', { name: 'Resume plan', exact: true })).toBeVisible();
+  await expect(page.locator('[data-surface=plan]').getByRole('heading', { name: 'The plan is paused', exact: true })).toBeVisible();
 });
 
 test('stale Learning cannot start work and offers a full state refresh', async ({ page }) => {
@@ -181,6 +183,13 @@ test('a new host scope clears an unfinished Settings action and retains the conn
     generation: 2, revision: 3, baseRevision: 0, messageId: 'settings-new-scope',
     workspaceId: 'workspace-actions', sessionId: 'actions-new-session',
   }, payload: next }, location.origin), next);
+  // A new host scope returns Settings to its index; reopening the connection
+  // editor must still hold the unsent draft.
+  await openSettingsCategory(page, 'connection');
+  const edit = detail.getByRole('button', { name: 'Edit configuration', exact: true });
+  if (await edit.isVisible()) {
+    await edit.click();
+  }
   await expect(detail.getByRole('button', { name: 'Save and use this connection', exact: true })).toBeEnabled();
   await expect(detail.getByLabel('Service root')).toHaveValue('https://draft.invalid/v1');
   await expect(detail.getByLabel('API Key', { exact: true })).toHaveValue('scope-draft-key');

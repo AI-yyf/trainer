@@ -9,11 +9,11 @@ for (const language of ['zh-CN', 'en-US', 'de-DE']) {
       await page.setViewportSize({ width, height: 820 });
       await page.goto(`/vscode-preview.html?view=settings&lang=${language}&connection=connected&run=provider-bar-${language}-${width}`);
       await openSettingsCategory(page, 'connection');
-      const bar = page.locator('.settings-provider-bar');
+      const bar = page.locator('.settings-connection-summary');
       await expect(bar).toBeVisible();
       const bounds = await bar.evaluate(element => {
         const rect = element.getBoundingClientRect();
-        const model = element.querySelector('.settings-provider-profile__model');
+        const model = element.querySelector('.settings-connection-summary__model');
         const modelRect = model.getBoundingClientRect();
         return { width: rect.width, modelWidth: modelRect.width, modelHeight: modelRect.height,
           lineHeight: parseFloat(getComputedStyle(model).lineHeight),

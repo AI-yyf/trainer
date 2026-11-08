@@ -1,13 +1,14 @@
 import { workbenchTokens, type WorkbenchThemeName } from "../../../../shared/src/tokens";
 
 /**
- * Trainer follows the host theme.
+ * Trainer follows the host theme unless the learner explicitly chooses Light
+ * or Dark.
  *
- * Colour always comes from the VS Code theme variables (`--vscode-*`) declared
- * in `styles/sections/trainer-design-tokens-base-styles.css`; for the browser
- * preview those resolve to CSS system colours (`Canvas`, `CanvasText`, …).
- * This bridge only mirrors which theme kind is active (light/dark) and keeps
- * the layout tokens installed. It never writes colour values.
+ * With no explicit choice the colour tokens resolve from the host's
+ * `--vscode-*` variables. An explicit choice sets `data-theme-explicit` so the
+ * base stylesheet swaps those tokens for the neutral system palette
+ * (`Canvas`, `CanvasText`, …), which then follows `color-scheme`. This module
+ * never writes colour values itself.
  */
 const rootVariableEntries = [
   ["--radius-s", workbenchTokens.radius.s],
@@ -83,6 +84,11 @@ function syncHostTheme(): void {
   const root = document.documentElement;
 
   root.dataset.theme = resolvedTheme;
+  if (followHostTheme) {
+    root.removeAttribute("data-theme-explicit");
+  } else {
+    root.setAttribute("data-theme-explicit", "true");
+  }
   // `color-scheme` is what makes the CSS system-colour fallbacks follow the
   // chosen theme in the standalone preview; inside VS Code the host sets it.
   root.style.colorScheme = resolvedTheme;

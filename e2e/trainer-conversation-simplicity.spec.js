@@ -25,7 +25,7 @@ test('Coach shows the reply and usable next actions without duplicate explanatio
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
     await expect(page.locator('.message-bubble strong').filter({ hasText: '边界检查' })).toHaveCount(1);
-    await expect(page.getByRole('button', { name: '下一步：设为练习', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '下一步', exact: true })).toBeVisible();
     await expect(page.getByText(/HIDDEN_/).filter({ visible: true })).toHaveCount(0);
     await expect(page.locator('.message-bubble__tool-trail, .skill-projection-strip')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -107,6 +107,10 @@ test('long stage titles wrap without generation buttons or empty material panels
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }),
     { ...current, plan: { ...current.plan, stages: [{ id: 'long-stage', title, status: 'active' },
       { id: 'later-stage', title: '实现 sum_nested', status: 'queued' }] } });
+  const focusMore = page.locator('[data-learning-focus-more]').first();
+  if ((await focusMore.count()) > 0 && (await focusMore.getAttribute('open')) === null) {
+    await focusMore.locator(':scope > summary').click();
+  }
   await page.locator('[data-learning-section=route] > summary').click();
   await expect(page.locator('.stage-row')).toHaveCount(2);
   await expect(page.locator('.stage-row').getByText(title, { exact: true })).toBeVisible();

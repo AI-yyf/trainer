@@ -34,7 +34,7 @@ test("Settings recovers an offline backend before provider setup and stops offer
     .filter(action => action.type === "command/execute" && action.payload.commandId === "trainer.sidecar.restart").length)).toBe(1);
   await page.getByRole('button', { name: "学习", exact: true }).click();
   // Learning owns one canonical NextAction for recovery.
-  const planRecovery = page.locator('[data-plan-primary="true"] [data-template="NextAction"]');
+  const planRecovery = page.locator('[data-plan-primary="true"] [data-template="SystemState"]');
   await expect(planRecovery).toHaveCount(1);
   await expect(planRecovery).toContainText("Trainer 暂时还不能继续");
   await expect(planRecovery).toContainText("检查连接");
@@ -47,5 +47,6 @@ test("Settings recovers an offline backend before provider setup and stops offer
   await expect(strip.getByRole('button', { name: "重新启动 Trainer", exact: true })).toHaveCount(0);
   await update("connected", { ...bootstrap.providerConfig, lastTestResult: undefined });
   await expect(page.getByRole('button', { name: "重新启动 Trainer", exact: true })).toHaveCount(0);
-  await expect(page.locator('[data-settings-availability=true]:visible')).not.toContainText("Trainer 暂时还不能继续");
+  await expect(page.locator('[data-settings-availability=true]:visible')).toHaveCount(0);
+  await expect(page.getByText("Trainer 暂时还不能继续", { exact: true }).filter({ visible: true })).toHaveCount(0);
 });

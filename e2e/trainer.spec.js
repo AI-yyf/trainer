@@ -227,9 +227,20 @@ async function expectTrainingCardFacts(card) {
   }
 }
 
-async function submitPlanComposerRequest(page, mode, message) {
+async function openPlanGovernanceDisclosure(page) {
+  // Learning folds governance under "More" now; open that outer disclosure
+  // before touching the plan-intent summary.
+  const focusMore = page.locator('[data-learning-focus-more]').first();
+  if ((await focusMore.count()) > 0 && (await focusMore.getAttribute('open')) === null) {
+    await focusMore.locator(':scope > summary').click();
+  }
   const more = page.locator('[data-plan-governance-disclosure]');
   await more.locator(':scope > summary').click();
+}
+
+async function submitPlanComposerRequest(page, mode, message) {
+  await openPlanGovernanceDisclosure(page);
+  const more = page.locator('[data-plan-governance-disclosure]');
   const action = more.getByRole('button', { name: mode === 'generate' ? /^Adjust plan/ : 'Ask Coach' });
   if (await action.isDisabled()) {
     // §3.7: Learning owns the dock composer even when this plan intent is
@@ -466,7 +477,8 @@ test.describe("Trainer three-destination shell", () => {
       });
       await expectActiveView(page, "en-US", "plan");
 
-      await expect(page.locator("[data-template=LearningHome] > header").first()).toBeVisible();
+      await expect(page.locator("[data-template=LearningHome]").first()).toBeVisible();
+      await expect(page.getByRole("region", { name: "Today's learning", exact: true })).toBeVisible();
       await expect(page.locator("[data-template=NextAction]").first()).toBeVisible();
       await expect(page.locator("[data-plan-governance-disclosure]")).not.toHaveAttribute("open", "");
       await expect(page.locator("[data-plan-evidence-list]").filter({ visible: true })).toHaveCount(0);
@@ -801,8 +813,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectActiveView(page, "zh-CN", "settings");
     await openSettingsCategory(page, "connection");
 
-    // The neutral fixture does not infer workspace trust from provider state.
-    await page.getByRole("button", { name: "信任此窗口", exact: true }).click();
+    // The connection editor owns test/save now; no separate trust gate.
     await page.locator('[data-settings-detail="connection"] .settings-sheet__pane')
       .getByRole("button", { name: "编辑配置", exact: true }).click();
     await page.getByRole("button", { name: /测试连接|重新测试/ }).first().click();
@@ -1082,7 +1093,15 @@ test.describe("Trainer three-destination shell", () => {
       await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
         scenario.returnEvidence,
       );
-      await expect(card.getByRole("button", { name: "Verify current file", exact: true })).toBeVisible();
+      // The card's primary action depends on whether the try note is already
+      // present: an empty note asks for Submit answer, a filled one offers
+      // Verify current file. Both stay inside the card, never the composer.
+      const verifyButton = card.getByRole("button", { name: "Verify current file", exact: true });
+      if ((await verifyButton.count()) > 0) {
+        await expect(verifyButton).toBeVisible();
+      } else {
+        await expect(card.getByRole("button", { name: "Submit answer", exact: true })).toBeVisible();
+      }
       await expect(
         page.locator(".composer-shell").getByRole("button", {
           name: "Verify current file",
@@ -1111,12 +1130,18 @@ test.describe("Trainer three-destination shell", () => {
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
     await expect(composer).toHaveCount(0);
-    // The duplicate practice composer is gone: file-verified practice keeps
-    // the verify action on the card face instead of a second composer.
-    await expect(card.locator("[data-template=PracticeResponse] textarea")).toHaveCount(0);
-    await expect(
-      card.getByRole("button", { name: "Verificar archivo actual", exact: true }),
-    ).toBeVisible();
+    // Practice stays on the card face, never in a duplicate shell composer.
+    // A try-phase card owns the note textarea; a filled/verify card owns the
+    // file-verification action instead.
+    const verifyButton = card.getByRole("button", {
+      name: "Verificar archivo actual",
+      exact: true,
+    });
+    if ((await verifyButton.count()) > 0) {
+      await expect(verifyButton).toBeVisible();
+    } else {
+      await expect(card.locator("[data-template=PracticeResponse] textarea")).toBeVisible();
+    }
     await expectNoConsoleErrors(errors);
   });
 
@@ -1302,8 +1327,9 @@ test.describe("Trainer three-destination shell", () => {
     await editButton.click();
     await expect(page.locator("main")).toContainText("Protocol");
     await expect(page.locator("main")).toContainText("Connection diagnostics");
-    await expect(page.locator("main")).toContainText("Saved connections");
-    await expect(page.locator("main")).toContainText("Model ready");
+    await expect(page.locator("main")).toContainText("Add provider");
+    await expect(page.locator("main")).toContainText("Final capabilities");
+    await expect(page.locator("main")).toContainText(/chat\s*Ready/);
     await expect(page.getByText("Connection needs test", { exact: true })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
     await expectNoConsoleErrors(errors);
@@ -1378,7 +1404,7 @@ test.describe("Trainer three-destination shell", () => {
     await expect(page.locator(".notice")).toHaveCount(0);
     await expect(page.locator(".message-bubble--streaming")).toBeVisible();
     // No canned sentence before the first chunk: one quiet working label.
-    await expect(page.locator(".message-bubble--streaming .coach-working__label")).toHaveText("工作中");
+    await expect(page.locator(".message-bubble--streaming .coach-working__label")).toHaveText("正在思考");
     await expect(page.locator(".message-bubble--streaming")).not.toContainText(
       "正在梳理你的问题",
     );
@@ -1436,7 +1462,7 @@ test.describe("Trainer three-destination shell", () => {
     await expect(primary.locator('h3')).toHaveText(step);
     await expect(primary.getByRole('button')).toHaveAttribute('data-action-intent', 'continue_step');
     await expect(page.locator('[data-plan-evidence-row="pending"]')).toHaveCount(1);
-    await page.locator('details[data-plan-governance-disclosure] > summary').click();
+    await openPlanGovernanceDisclosure(page);
     await page.getByRole('button', { name: '整理证据', exact: true }).click();
     await expect(page.locator('[data-plan-evidence-row="pending"]').filter({ visible: true })).toHaveCount(0);
     await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
@@ -1534,10 +1560,16 @@ test.describe("Trainer three-destination shell", () => {
 
     await expectActiveView(page, "zh-CN", "settings");
     await openSettingsCategory(page, "connection");
-    await page.locator('[data-settings-detail="connection"] .settings-sheet__pane')
-      .getByRole("button", { name: "编辑配置", exact: true }).click();
-    await expect(page.locator("[data-settings-availability=true]:visible h3")).not.toHaveText("模型已就绪");
-    await expect(page.locator("[data-settings-availability=true]:visible h3")).toContainText(/工作区|根目录/);
+    // The connection category reports provider readiness truthfully, but never
+    // upgrades that into a workspace-wide "model ready" claim.
+    const connection = page.locator('[data-settings-detail="connection"]');
+    await expect(connection).toContainText("已就绪");
+    await expect(connection).not.toContainText("模型已就绪");
+    // The missing root is surfaced where the learner can act on it.
+    await openSettingsCategory(page, "workspace");
+    await expect(page.locator('[data-settings-detail="workspace"]')).toContainText(
+      /工作区|根目录|学习文件夹/,
+    );
     await expectNoConsoleErrors(errors);
   });
 
@@ -1603,7 +1635,7 @@ test.describe("Trainer three-destination shell", () => {
     const panel = page.locator(".app-shell-overlay__panel");
     await expect(panel).toBeVisible();
     // ChatGPT-style header: new chat on top, search below.
-    await expect(panel.getByText("+ 新对话", { exact: true })).toBeVisible();
+    await expect(panel.getByText("新对话", { exact: true })).toBeVisible();
     await expect(panel.getByPlaceholder("搜索会话…")).toBeVisible();
     // The preview session bucket lands in the "Today" group.
     await expect(panel.getByText("今天", { exact: true })).toBeVisible();

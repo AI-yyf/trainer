@@ -1363,6 +1363,11 @@ export interface ScenarioLabSummary {
   title?: string;
   summary?: string;
   focusArea?: string;
+  learningPhase?: "learn" | "try" | "verify" | "return" | "reflect";
+  learningFamily?: "code" | "theory";
+  learningSubtype?: string;
+  filesToTouch?: string[];
+  expectedSymbols?: string[];
   status?: string;
   successSignal?: string;
   reviewOutcome?: string;

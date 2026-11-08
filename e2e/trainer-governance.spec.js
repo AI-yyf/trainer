@@ -96,7 +96,8 @@ test.describe("Trainer preview plan governance", () => {
     // reachable recovery path. No controls pretend a formal plan exists.
     await expect(plan.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Freeze plan", exact: true })).toHaveCount(0);
-    await expect(composer).toHaveCount(0);
+    // The dock composer stays mounted on Learning; it does not pretend a plan exists.
+    await expect(composer).toHaveCount(1);
 
     await settingsGear.click();
     await expect(settingsGear).toHaveAttribute("aria-current", "page");

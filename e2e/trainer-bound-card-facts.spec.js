@@ -65,12 +65,12 @@ for (const language of ['zh-CN', 'en-US']) {
       await expect(details).toContainText(author.problemStatement);
       await expect(details.locator('[data-training-card-fact=deliverable]')).toHaveText(author.deliverable);
       await expect(details.locator('[data-training-card-fact=verify]')).toContainText(author.validationMethod.replace(/`/g, ''));
-      await expect(card.locator('[data-template=NextAction]')).toContainText(author.deliverable);
+      await expect(card).toContainText(author.deliverable);
       await expect(card).not.toContainText('OLD_FORMAL_TASK_TITLE');
       const screenshot = test.info().outputPath('actual-mixed-author-card.png');
       await page.screenshot({ path: screenshot, animations: 'disabled' });
       await test.info().attach('actual-mixed-author-card', { path: screenshot, contentType: 'image/png' });
-      await page.getByRole('button', { name: language === 'zh-CN' ? '学习' : 'Learning', exact: true }).click();
+      await page.locator('.app-shell-nav').getByRole('button', { name: language === 'zh-CN' ? '学习' : 'Learning', exact: true }).click();
       const primary = page.locator('[data-template=NextAction]').filter({ has: page.locator('[data-action-intent=resume_training]') });
       await expect(primary).toContainText(author.title);
       await primary.locator('[data-action-intent=resume_training]').click();
@@ -115,11 +115,11 @@ for (const status of ['recovering', 'stale']) {
 // Reconstruct the installed Windows restore mismatch: the restored scenario
 // supplies its own title/problem, while selected routing still points to Flash.
 const scenarioSummary = '读取 FastAPI 收据并验证其请求边界。';
-async function seedRestoredScenario(page, language, nativeHost = false, verificationSteps, summary = scenarioSummary) {
+async function seedRestoredScenario(page, language, nativeHost = false, verificationSteps, summary = scenarioSummary, learningPhase = 'try') {
   await page.goto(`/vscode-preview.html?view=training&lang=${language}&connection=connected&run=missing-bound-${language}`);
   await expect(page.locator('#root[data-trainer-app-ready=true]')).toBeVisible();
   const foreignAction = language === 'zh-CN' ? '描述一次请求及其原始 workspace_id。' : 'Describe a request and its original workspace_id.';
-  const bootstrap = await page.evaluate(({ foreignAction, nativeHost, verificationSteps, summary }) => {
+  const bootstrap = await page.evaluate(({ foreignAction, nativeHost, verificationSteps, summary, learningPhase }) => {
     const current = /** @type {import('../extension/webview/src/lib/types').BootstrapData} */ (window.__TRAINER_BOOTSTRAP__);
     const workspaceId = 'workspace-restored-scenario';
     const oldFlash = { cardId: 'foreign-flash', type: 'flash', status: 'active', learningPhase: 'try',
@@ -140,11 +140,12 @@ async function seedRestoredScenario(page, language, nativeHost = false, verifica
         selectedCardType: 'flash', selectedCardStatus: 'active', trainingCardCandidates: [oldFlash],
         activeTrainingCardRouting: { selectedCardId: oldFlash.cardId, selectedCard: oldFlash },
         scenarioLab: { id: 'restored-scenario', title: 'Scenario lab: FastAPI receipt', status: 'ready',
+          learningPhase, learningFamily: 'code', filesToTouch: ['receipt.py'],
           lastAction: 'restore_history', reviewOutcome: 'CONTROL_REVIEW_OUTCOME', ...(summary === null ? {} : { summary }), focusArea: 'FastAPI receipt', verificationSteps } },
     };
     if (!nativeHost) window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: next });
     return next;
-  }, { foreignAction, nativeHost, verificationSteps, summary });
+  }, { foreignAction, nativeHost, verificationSteps, summary, learningPhase });
   if (nativeHost) {
     await page.addInitScript(({ bootstrap, language }) => {
       window.__TRAINER_BOOTSTRAP__ = bootstrap;
@@ -189,7 +190,7 @@ for (const language of ['zh-CN', 'en-US']) {
     await expect(card).not.toContainText('foreign_workspace_id');
     await expect(details.locator('[data-training-card-fact=deliverable]')).toHaveText(scenarioSummary);
     await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('FastAPI receipt');
-    await page.getByRole('button', { name: language === 'zh-CN' ? '学习' : 'Learning', exact: true }).click();
+    await page.locator('.app-shell-nav').getByRole('button', { name: language === 'zh-CN' ? '学习' : 'Learning', exact: true }).click();
     const next = page.locator('[data-template=NextAction]').filter({ has: page.locator('[data-action-intent=resume_training]') });
     await expect(next).toContainText('Scenario lab: FastAPI receipt');
     await next.locator('[data-action-intent=resume_training]').click();
@@ -211,7 +212,7 @@ for (const language of ['zh-CN', 'en-US']) {
   });
   for (const verificationSteps of [undefined, ['verify_FastAPI_receipt']]) {
     test(`bound local verification payload rejects foreign fields ${language}, ownChecks=${!!verificationSteps}`, async ({ page }) => {
-      const foreignAction = await seedRestoredScenario(page, language, true, verificationSteps);
+      const foreignAction = await seedRestoredScenario(page, language, true, verificationSteps, scenarioSummary, 'verify');
       const card = page.locator('[data-training-card-id]');
       await expect(card).toHaveAttribute('data-training-card-id', 'restored-scenario');
       await card.getByRole('button', { name: language === 'zh-CN' ? '验证当前文件' : 'Verify current file', exact: true }).click();
@@ -221,7 +222,7 @@ for (const language of ['zh-CN', 'en-US']) {
         message.type === 'command/execute' && message.payload.commandId === 'trainer.evaluate.currentFile'));
       expect(posted.payload.payload).toMatchObject({ source: 'training', cardId: 'restored-scenario',
         cardTitle: 'Scenario lab: FastAPI receipt', acceptanceCriteria: verificationSteps ?? [],
-        learnerDeliverables: [], expectedSymbols: [], filesToTouch: [] });
+        learnerDeliverables: [], expectedSymbols: [], filesToTouch: ['receipt.py'] });
       expect(JSON.stringify(posted)).not.toContain(foreignAction);
       expect(JSON.stringify(posted)).not.toContain('foreign_workspace_id');
       await expect(card).toHaveAttribute('data-training-card-id', 'restored-scenario');
@@ -332,7 +333,8 @@ async function seedRemoteScenario(page, language) {
         selectedCardTitle: oldFlash.title, selectedCardType: 'flash', selectedCardStatus: 'active',
         trainingCardCandidates: [oldFlash], activeTrainingCardRouting: { selectedCardId: oldFlash.cardId, selectedCard: oldFlash },
         scenarioLab: { id: 'restored-scenario', title: 'Scenario lab: FastAPI receipt', summary,
-          status: 'ready', lastAction: 'restore_history', focusArea: 'FastAPI receipt' } } };
+          status: 'ready', learningFamily: 'code', filesToTouch: ['receipt.py'],
+          lastAction: 'restore_history', focusArea: 'FastAPI receipt' } } };
     window.__TRAINER_E2E_REMOTE_BOOTSTRAP__ = next;
     window.postMessage({ type: 'bootstrap', sync: scope, payload: next }, location.origin);
     window.postMessage({ type: 'ui/restoreView', payload: { activeView: 'training',
@@ -431,7 +433,8 @@ test('remote A-B-A ignores old same-card events and failure without cancelling a
       const original = window.__TRAINER_E2E_REMOTE_BOOTSTRAP__;
       window.postMessage({ type: 'bootstrap', sync: { ...scope, revision, baseRevision: 0, messageId: `remote-fixture-${revision}` },
         payload: { ...original, workspaceTrainingState: { ...original.workspaceTrainingState,
-          scenarioLab: { id: cardId, title: `Scenario ${cardId}`, summary, status: 'ready', focusArea: 'FastAPI receipt' } } } }, location.origin);
+          scenarioLab: { id: cardId, title: `Scenario ${cardId}`, summary, status: 'ready',
+            learningFamily: 'code', filesToTouch: ['receipt.py'], focusArea: 'FastAPI receipt' } } } }, location.origin);
       window.postMessage({ type: 'ui/restoreView', payload: { activeView: 'training', trainingRestoreTarget: 'scenario_lab', scenarioLabId: cardId } }, location.origin);
     }, { revision, cardId, scope: remoteScope, summary: scenarioSummary });
     await expect(page.locator('[data-training-card-id]')).toHaveAttribute('data-training-card-id', cardId);
