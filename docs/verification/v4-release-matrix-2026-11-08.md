@@ -3,8 +3,8 @@
 **结论：PASS（9/9 jobs；三平台 package + installed host E2E）**
 
 - 工作流：`Trainer Cross-Platform Verify`（workflow_dispatch，`run_vsix_host_e2e=true`）
-- Run：<https://github.com/AI-yyf/trainer/actions/runs/42506461999>
-- Commit：`485e25e63e136f32861a209728e848fd930e464f`
+- Run：<https://github.com/AI-yyf/trainer/actions/runs/42519220166>
+- Commit：`201b8be7c37ecc0fe78655e3b1b0664513d2a6b0`
 - 结论：`success`，9/9 jobs
 - 平台：macOS / Ubuntu 22.04 / Windows
 
@@ -12,14 +12,14 @@
 
 | 平台 | 文件 | Bytes | SHA-256 |
 | --- | --- | --- | --- |
-| macOS arm64 | `trainer-extension-1.4.1-darwin-arm64.vsix` | 134,009,884 | `21a008bfc56320de51a739ac32f26726933d32c24790de32324d81ccddebda70` |
-| Linux x64 | `trainer-extension-1.4.1-linux-x64.vsix` | 168,944,187 | `7259776f3d4941868852e2b603116cbbe645a275f756bc6c252d83590a9205f6` |
-| Windows x64 | `trainer-extension-1.4.1-win32-x64.vsix` | 104,763,576 | `3bf365671bc0b45e7bc9409bb0a5dd6f2647d988d992d20572b72b91a8a3aa80` |
+| macOS arm64 | `trainer-extension-1.4.1-darwin-arm64.vsix` | 134,014,331 | `b20a0baecd6b92fb4c1fd6cf3a98a487005414ead486d92c87dd4147fddb62b5` |
+| Linux x64 | `trainer-extension-1.4.1-linux-x64.vsix` | 168,950,294 | `c5ae68aea0835b02b99b7d52fdc8b2bb265f0819f4203caf9a430cc391bf4bb4` |
+| Windows x64 | `trainer-extension-1.4.1-win32-x64.vsix` | 104,768,878 | `4ea0901c0125fa8f36a1af1ff734aaf7db91ac009d0c320c8a7d0803e50cf592` |
 
 三个 manifest 均为：
 
 - `productVersion`: `1.4.1`
-- `sourceCommit`: `485e25e…`
+- `sourceCommit`: `201b8be…`
 - `sourceDirty`: `false`
 
 ## 安装后主机 E2E
