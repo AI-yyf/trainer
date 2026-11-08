@@ -147,13 +147,14 @@ def main() -> int:
                     raise RuntimeError(f"session/start failed for {workspace_id}: {status} {payload}")
                 return payload
 
-            def message(workspace_id: str, session_id: str, text: str, resource_ids: list[str] | None = None) -> tuple[str, dict]:
+            def message(workspace_id: str, session_id: str, text: str, resource_ids: list[str] | None = None, **extra: object) -> tuple[str, dict]:
                 status, payload = _request(port, "POST", "/session/message", {
                     **provider,
                     "workspace_id": workspace_id,
                     "session_id": session_id,
                     "message": text,
                     "resource_ids": resource_ids or [],
+                    **extra,
                 })
                 if status != 200:
                     raise RuntimeError(f"session/message failed: {status} {payload}")
@@ -269,9 +270,24 @@ def main() -> int:
             # 20: two projects; each keeps its own focus and must not leak the other.
             workspace_b = "v4-provider-project-b"
             session_b = start_session(workspace_b)["session_id"]
-            message(workspace_b, session_b, "这个项目只使用 BetaQueue。请只回复：记住。")
-            project_a_reply, _ = message(workspace_a, session_a, "这个项目使用什么队列？只回答名字。")
-            project_b_reply, _ = message(workspace_b, session_b, "我刚才告诉你这个项目使用什么队列？只回答名字。")
+            # Seed each workspace's own focus; global memory stays untouched so
+            # this checks project-scoped context, not shared preferences.
+            _request(port, "POST", "/learning/signal", {
+                "workspace_id": workspace_a,
+                "concepts": ["queue boundary"],
+                "outcome": "tests_passed",
+                "summary": "Project A uses AlphaQueue for shared items.",
+                "focus_area": "AlphaQueue project queue",
+            })
+            _request(port, "POST", "/learning/signal", {
+                "workspace_id": workspace_b,
+                "concepts": ["queue boundary"],
+                "outcome": "tests_passed",
+                "summary": "Project B uses BetaQueue for shared items.",
+                "focus_area": "BetaQueue project queue",
+            })
+            project_a_reply, _ = message(workspace_a, session_a, "这个项目使用什么队列？只回答名字。", active_view="plan")
+            project_b_reply, _ = message(workspace_b, session_b, "这个项目使用什么队列？只回答名字。", active_view="plan")
             report["journeys"]["20_multi_project"] = {
                 "project_a_reply": project_a_reply,
                 "project_b_reply": project_b_reply,

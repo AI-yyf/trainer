@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_at": "2026-11-08T19:48:15.898939+00:00",
+  "recorded_at": "2026-11-08T21:18:10.751756+00:00",
   "provider": {
     "base_url": "https://linksub.fun",
     "model": "deepseek-v4.1-flash"
@@ -8,19 +8,19 @@
   "journeys": {
     "5_preference_adaptation": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "因为元组只保证**自身引用**不可变：元组存的是列表的引用，引用不能换，但引用的列表本身可变。\n所以 `t[0] =...` 报错，但 `t[0].append(...)` 合法。\n\n```python\nt = ([1],)\nt[0].append(2)\nprint(t)  # ([1, 2],)\n```",
-      "concept_first_reply": "因为元组只锁定**引用**，不锁定被引用对象：元组里的元素指向列表，引用不能换，但列表自身可变。\n\n```python\nt = ([1],)\nt[0].append(2)   # 合法：改的是列表\nprint(t)         # ([1, 2],)\n# t[0] = [9]     # 报错：不能改元组的引用\n```",
-      "hands_on_chars": 153,
-      "concept_first_chars": 162,
+      "hands_on_reply": "元组只保证其**直接元素引用**不可变，不递归冻结内部对象；列表是可变对象，元组保存的是它的引用，所以能改列表内容。\n示例：`t = ([1], 2); t[0].append(3); print(t)  # ([1, 3], 2)`。",
+      "concept_first_reply": "元组不可变指其元素引用不能重新绑定，而非递归冻结内部对象。列表是可变对象，元组存放的是它的引用，因此可原地修改列表内容。示例：\n\n```python\nt = ([1], 2)\nt[0].append(3)\nprint(t)  # ([1, 3], 2)\n```",
+      "hands_on_chars": 118,
+      "concept_first_chars": 130,
       "different": true,
       "status": "PASS"
     },
     "6_preference_change": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "因为元组只保证**自身引用**不可变：元组存的是列表的引用，引用不能换，但引用的列表本身可变。\n所以 `t[0] =...` 报错，但 `t[0].append(...)` 合法。\n\n```python\nt = ([1],)\nt[0].append(2)\nprint(t)  # ([1, 2],)\n```",
-      "concept_first_reply": "因为元组只锁定**引用**，不锁定被引用对象：元组里的元素指向列表，引用不能换，但列表自身可变。\n\n```python\nt = ([1],)\nt[0].append(2)   # 合法：改的是列表\nprint(t)         # ([1, 2],)\n# t[0] = [9]     # 报错：不能改元组的引用\n```",
-      "hands_on_chars": 153,
-      "concept_first_chars": 162,
+      "hands_on_reply": "元组只保证其**直接元素引用**不可变，不递归冻结内部对象；列表是可变对象，元组保存的是它的引用，所以能改列表内容。\n示例：`t = ([1], 2); t[0].append(3); print(t)  # ([1, 3], 2)`。",
+      "concept_first_reply": "元组不可变指其元素引用不能重新绑定，而非递归冻结内部对象。列表是可变对象，元组存放的是它的引用，因此可原地修改列表内容。示例：\n\n```python\nt = ([1], 2)\nt[0].append(3)\nprint(t)  # ([1, 3], 2)\n```",
+      "hands_on_chars": 118,
+      "concept_first_chars": 130,
       "different": true,
       "status": "PASS",
       "note": "Same prompt after the stored teaching_style changed from hands-on to concept-first."
@@ -35,7 +35,7 @@
     },
     "15_resource_version": {
       "old_reply": "资料中没有提到任何队列或共享数据保护机制，因此无法回答。",
-      "new_reply": "你的消息里没有附上任何资料，我无法据此回答。请把相关资料粘贴或上传后再问。",
+      "new_reply": "资料中没有提到任何队列或共享数据保护机制，因此无法回答。",
       "old_mentions_alpha": false,
       "new_mentions_beta": false,
       "new_still_mentions_alpha": false,
@@ -43,8 +43,8 @@
       "note": "The model did not read the attached resource in this direct (non-agent) turn; the sidecar version conflict itself is covered by v4-integrity-journeys."
     },
     "20_multi_project": {
-      "project_a_reply": "队列",
-      "project_b_reply": "你还没有告诉我这个项目使用什么队列。",
+      "project_a_reply": "RabbitMQ",
+      "project_b_reply": "没有提供项目信息，无法判断。请把项目仓库或依赖文件发来。",
       "a_leaks_b": false,
       "b_mentions_beta": false,
       "status": "PARTIAL",
@@ -80,6 +80,6 @@
       "note": "需要两个真实 VS Code 窗口；本次未执行"
     }
   },
-  "elapsed_ms": 60332,
+  "elapsed_ms": 39723,
   "ok": true
 }
