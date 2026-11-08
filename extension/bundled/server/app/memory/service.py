@@ -368,6 +368,7 @@ class StructuredMemoryService:
             return None
         current.next_review_at = next_review_at
         current.due_date = due_date or next_review_at
+        current.review_source = "fsrs"
         current.updated_at = utc_now()
         return current
 
@@ -384,12 +385,25 @@ class StructuredMemoryService:
         review_after_days: int = 3,
     ) -> MasteryRecord:
         current = self._mastery.get(concept, MasteryRecord(concept=concept, score=0.0, confidence=confidence))
+        now = utc_now()
+        fsrs_owns_schedule = (
+            current.review_source == "fsrs" and current.next_review_at is not None
+        )
+        next_review_at = (
+            current.next_review_at
+            if fsrs_owns_schedule
+            else now + timedelta(days=review_after_days)
+        )
         updated = MasteryRecord(
             concept=concept,
             score=min(max(current.score + delta, 0.0), 1.0),
             confidence=confidence,
-            updated_at=utc_now(),
-            next_review_at=utc_now() + timedelta(days=review_after_days),
+            state=current.state,
+            retrievability=current.retrievability,
+            due_date=current.due_date if fsrs_owns_schedule else next_review_at,
+            updated_at=now,
+            next_review_at=next_review_at,
+            review_source=current.review_source if fsrs_owns_schedule else "heuristic",
         )
         self._mastery[concept] = updated
         return updated

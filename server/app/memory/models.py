@@ -53,6 +53,9 @@ class MasteryRecord:
     due_date: datetime | None = None
     updated_at: datetime = field(default_factory=utc_now)
     next_review_at: datetime | None = None
+    # "fsrs" dates are owned by the retention scheduler; "heuristic" records
+    # have no recall evidence and must not masquerade as scheduled reviews.
+    review_source: str = "heuristic"
 
 
 @dataclass(slots=True)

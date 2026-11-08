@@ -172,7 +172,9 @@ class ReviewScheduler:
             )
 
         for mastery in lane_snapshot.mastery:
-            if mastery.score >= 0.75 and mastery.next_review_at is None:
+            # Only FSRS owns due dates. Heuristic mastery has no recall
+            # evidence and must not be presented as a scheduled review.
+            if mastery.review_source != "fsrs" or mastery.next_review_at is None:
                 continue
             if mastery.next_review_at and not self._within_horizon(
                 mastery.next_review_at,

@@ -37,6 +37,12 @@ def build_lane_snapshot(
     )
     structured.update_mastery(latest_turn_focus_area, delta=0.15, confidence=0.7, review_after_days=1)
     structured.update_mastery("config validation", delta=0.05, confidence=0.6, review_after_days=3)
+    structured.schedule_mastery_review(
+        latest_turn_focus_area, next_review_at=utc_now() + timedelta(days=1)
+    )
+    structured.schedule_mastery_review(
+        "config validation", next_review_at=utc_now() + timedelta(days=3)
+    )
     structured.record_weakness(
         latest_turn_focus_area,
         "The config branch still fails before boot completes.",
@@ -325,3 +331,34 @@ def test_language_safe_dynamic_value_falls_back_for_english_prose_in_chinese() -
         fallback_english="the current next step",
         fallback_chinese="当前这一步",
     ) == "当前这一步"
+
+
+def test_review_scheduler_skips_heuristic_mastery_without_recall_evidence() -> None:
+    scheduler = ReviewScheduler()
+    structured = StructuredMemoryService()
+    structured.update_mastery("unrecalled concept", delta=0.2, review_after_days=1)
+    snapshot = structured.snapshot()
+
+    reviews = scheduler.derive_due_reviews(
+        plan=build_plan(),
+        lane_snapshot=snapshot,
+        weakness_records=[],
+    )
+
+    assert all(item.concept != "unrecalled concept" for item in reviews)
+
+
+def test_later_score_update_preserves_the_fsrs_owned_due_date() -> None:
+    structured = StructuredMemoryService()
+    structured.update_mastery("fsrs concept", delta=0.2, review_after_days=1)
+    due = utc_now() + timedelta(days=9)
+    structured.schedule_mastery_review("fsrs concept", next_review_at=due)
+    scheduled = structured._mastery["fsrs concept"]
+    assert scheduled.review_source == "fsrs"
+    assert scheduled.next_review_at == due
+
+    structured.update_mastery("fsrs concept", delta=0.1, review_after_days=2)
+    updated = structured._mastery["fsrs concept"]
+    assert updated.review_source == "fsrs"
+    assert updated.next_review_at == due
+    assert updated.score == scheduled.score + 0.1
