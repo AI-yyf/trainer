@@ -29,6 +29,7 @@ from ..core.models import (
 )
 from ..db.repository import TrainerRepository
 from ..evaluator.service import EvaluatorService
+from ..goal.service import GoalService
 from ..llm.provider_protocols import normalize_provider_protocol
 from ..llm.provider_service import ProviderService
 from ..llm.vision_challenge import VISION_PROBE_VERSION
@@ -297,6 +298,7 @@ class TrainerRuntime:
     evaluator_service: EvaluatorService
     pedagogy_service: PedagogyService = field(default_factory=PedagogyService)
     affect_service: AffectService = field(default_factory=AffectService)
+    goal_service: GoalService | None = None
     attempt_store: AttemptStore | None = None
     plan_revision_store: PlanRevisionStore | None = None
     resource_version_store: ResourceVersionStore | None = None
@@ -403,6 +405,8 @@ class TrainerRuntime:
         return [str(item).strip() for item in queued if str(item).strip()]
 
     def __post_init__(self) -> None:
+        if self.goal_service is None:
+            self.goal_service = GoalService(self.repository)
         if self.provider_config is not None or self.provider_api_key is not None:
             self.provider_service = ProviderService(
                 config=self.provider_config,
@@ -421,6 +425,21 @@ class TrainerRuntime:
             )
         if self.project_adoption_index_service is None:
             self.project_adoption_index_service = ProjectAdoptionIndexService()
+
+    def goals(self) -> GoalService:
+        """GoalService is always available after construction."""
+        if self.goal_service is None:
+            self.goal_service = GoalService(self.repository)
+        return self.goal_service
+
+    def publish_goal(self, workspace_id: str) -> None:
+        """Push the workspace's current goal into every live session snapshot."""
+        goal = self.goals().current(workspace_id)
+        for state in self.sessions.values():
+            if state.workspace_id != workspace_id:
+                continue
+            state.snapshot.goal = deepcopy(goal)
+            self.save_session_state(state.session_id)
 
     def _persist_session(self, state: SessionState) -> None:
         self.repository.save_session(
@@ -452,6 +471,7 @@ class TrainerRuntime:
         snapshot.memory = self.memory_service.snapshot(workspace_id)
         snapshot.profile = self.repository.get_profile(workspace_id)
         self.hydrate_plan_context(snapshot, workspace_id)
+        snapshot.goal = self.goals().current(workspace_id)
         provisioning = self.repository.get_project_provisioning(workspace_id)
         if provisioning is not None and provisioning.agent_session_id == session_id:
             self.register_workspace_path(workspace_id, provisioning.project_path)
@@ -468,6 +488,7 @@ class TrainerRuntime:
         snapshot = WorkbenchSnapshot(
             contextId=workspace_id,
             memory=self.memory_service.snapshot(workspace_id),
+            goal=self.goals().current(workspace_id),
         )
         self.hydrate_plan_context(snapshot, workspace_id)
         state = SessionState(
@@ -513,6 +534,7 @@ class TrainerRuntime:
             contextId=resolved_workspace_id,
             memory=memory,
             profile=profile,
+            goal=self.goals().current(resolved_workspace_id),
         )
         self.hydrate_plan_context(workspace_snapshot, resolved_workspace_id)
 
@@ -521,6 +543,7 @@ class TrainerRuntime:
             state.snapshot.memory = deepcopy(workspace_snapshot.memory)
             state.snapshot.profile = deepcopy(workspace_snapshot.profile)
             state.snapshot.plan = deepcopy(workspace_snapshot.plan)
+            state.snapshot.goal = deepcopy(workspace_snapshot.goal)
             state.snapshot.global_plan = deepcopy(workspace_snapshot.global_plan)
             state.snapshot.project_plan_link = deepcopy(workspace_snapshot.project_plan_link)
             self.save_session_state(state.session_id)

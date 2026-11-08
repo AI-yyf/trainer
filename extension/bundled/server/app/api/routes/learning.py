@@ -314,6 +314,21 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                     persist_skill_projection(runtime, resolved_workspace_id, attempt["attempt_id"])
                     evidence_recorded = True
 
+        runtime.goals().record_activity(
+            workspace_id=resolved_workspace_id,
+            kind="verification",
+            summary=str(payload.get("summary") or tests_output or "Host verification attested."),
+            result="passed" if passed else "failed",
+            concept=str(payload.get("card_title") or card_id),
+            evidence_refs=[f"training_card:{card_id}"],
+            event_key=(
+                f"{card_id}:{idempotency_key}"
+                if idempotency_key
+                else f"{card_id}:{passed}:{tests_output[:120]}"
+            ),
+        )
+        runtime.publish_goal(resolved_workspace_id)
+
         if evidence_recorded:
             # The response must carry the growth state this run produced, so a
             # replay of the same attestation returns an identical workspace.

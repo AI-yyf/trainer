@@ -4,6 +4,7 @@ import json
 import re
 import sqlite3
 import threading
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from ..core.models import (
     GlobalMemory,
     GlobalPlan,
     GlobalPlanProjectLink,
+    GoalSession,
     LearningPlan,
     LibraryAsset,
     LocalOwner,
@@ -109,6 +111,15 @@ class TrainerRepository:
                     workspace_id TEXT NOT NULL,
                     payload TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS goal_sessions (
+                    goal_id TEXT PRIMARY KEY,
+                    workspace_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_goal_sessions_workspace_status
+                ON goal_sessions(workspace_id, status, updated_at DESC);
                 CREATE TABLE IF NOT EXISTS subplans (
                     subplan_id TEXT PRIMARY KEY,
                     parent_plan_id TEXT NOT NULL,
@@ -360,6 +371,112 @@ class TrainerRepository:
                 (workspace_id,),
             ).fetchone()
         return UserProfile.model_validate_json(row["payload"]) if row else None
+
+    def save_goal(self, workspace_id: str, goal: GoalSession) -> None:
+        """Upsert a server-owned goal session."""
+        scope = (workspace_id or goal.workspace_id or "").strip()
+        goal.workspace_id = scope
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO goal_sessions (goal_id, workspace_id, status, updated_at, payload)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(goal_id) DO UPDATE SET
+                  workspace_id = excluded.workspace_id,
+                  status = excluded.status,
+                  updated_at = excluded.updated_at,
+                  payload = excluded.payload
+                """,
+                (
+                    goal.goal_id,
+                    scope,
+                    goal.status,
+                    goal.updated_at,
+                    goal.model_dump_json(),
+                ),
+            )
+
+    def get_goal(self, workspace_id: str, goal_id: str) -> GoalSession | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM goal_sessions WHERE workspace_id = ? AND goal_id = ?",
+                (workspace_id, goal_id),
+            ).fetchone()
+        return GoalSession.model_validate_json(row["payload"]) if row else None
+
+    def get_current_goal(self, workspace_id: str) -> GoalSession | None:
+        """Return the active focus first, else the most recently paused goal.
+
+        Completed goals stay readable through ``list_goals`` but never surface
+        as the learner's current focus.
+        """
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT payload FROM goal_sessions
+                WHERE workspace_id = ? AND status IN ('active', 'paused')
+                ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,
+                         updated_at DESC
+                LIMIT 1
+                """,
+                (workspace_id,),
+            ).fetchone()
+        return GoalSession.model_validate_json(row["payload"]) if row else None
+
+    def list_goals(self, workspace_id: str) -> list[GoalSession]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload FROM goal_sessions
+                WHERE workspace_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (workspace_id,),
+            ).fetchall()
+        return [GoalSession.model_validate_json(row["payload"]) for row in rows]
+
+    def mutate_goal(
+        self,
+        workspace_id: str,
+        goal_id: str,
+        mutate: Callable[[GoalSession], bool],
+    ) -> GoalSession | None:
+        """Atomically read-modify-write one goal.
+
+        ``mutate`` returns True when it changed the record. SQLite's write
+        lock makes activity appends and status transitions safe across
+        concurrent windows.
+        """
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT payload FROM goal_sessions WHERE workspace_id = ? AND goal_id = ?",
+                (workspace_id, goal_id),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            goal = GoalSession.model_validate_json(row["payload"])
+            if not mutate(goal):
+                connection.rollback()
+                return goal
+            goal.workspace_id = workspace_id
+            connection.execute(
+                """
+                UPDATE goal_sessions
+                SET status = ?, updated_at = ?, payload = ?
+                WHERE workspace_id = ? AND goal_id = ?
+                """,
+                (
+                    goal.status,
+                    goal.updated_at,
+                    goal.model_dump_json(),
+                    workspace_id,
+                    goal_id,
+                ),
+            )
+            connection.commit()
+        return goal
 
     @staticmethod
     def _stamp_plan_revision(plan: LearningPlan, revision: int) -> None:

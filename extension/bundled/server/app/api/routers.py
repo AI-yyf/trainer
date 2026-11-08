@@ -191,6 +191,7 @@ from .router_support import (
 from .routes._deps import RouterDeps
 from .routes.browser import build_browser_router
 from .routes.core import CoreRouteDeps, build_core_router
+from .routes.goal import build_goal_router
 from .routes.learning import build_learning_router
 from .routes.mcp import build_mcp_router
 from .routes.memory import build_memory_router
@@ -13542,6 +13543,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     router.include_router(build_project_router(runtime, deps))
     router.include_router(build_memory_router(runtime, deps))
     router.include_router(build_learning_router(runtime, deps))
+    router.include_router(build_goal_router(runtime, deps))
     router.include_router(build_resources_router(runtime, deps))
     router.include_router(build_browser_router(runtime, deps))
     router.include_router(build_provider_router(runtime, deps))

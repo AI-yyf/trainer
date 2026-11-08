@@ -39,6 +39,7 @@ const SILENT_SUCCESS_COMMAND_IDS = new Set<string>([
   COMMAND_IDS.cancelStreamMessage,
   COMMAND_IDS.resumeLatestCoachCheckpoint,
   COMMAND_IDS.replayLatestCoachCheckpoint,
+  COMMAND_IDS.goalControl,
 ]);
 
 const TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([

@@ -18,6 +18,7 @@ export const trainerCommands = {
   refreshProviderProfiles: "trainer.provider.refreshProfiles",
   startProviderTrial: "trainer.provider.startTrial",
   setPersonalAccountTrust: "trainer.memory.setPersonalAccountTrust",
+  goalControl: "trainer.goal.control",
   setTelemetryOptIn: "trainer.telemetry.setOptIn",
   refreshTelemetryStatus: "trainer.telemetry.refreshStatus",
   openWorkspaceConfig: "trainer.config.openWorkspace",

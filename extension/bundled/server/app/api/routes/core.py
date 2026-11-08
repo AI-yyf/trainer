@@ -8,6 +8,7 @@ every former build_router helper from ``CoreRouteDeps``.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -296,6 +297,59 @@ def build_core_router(
 ) -> APIRouter:
     router = APIRouter()
     core = seed
+
+    def observe_goal_for_request(request: Any, workspace_id: str) -> Any:
+        """Persist an explicit goal (or a conservative detection) for this turn."""
+        state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        if not request.session_id:
+            # Later ensure_session(None) calls must land on this same session.
+            request.session_id = state.session_id
+        goal = runtime.goals().observe_turn(
+            workspace_id=workspace_id,
+            message=str(getattr(request, "message", "") or ""),
+            intent=str(getattr(request, "intent", "coach") or "coach"),
+            active_view=getattr(request, "active_view", None),
+            goal_mode=bool(getattr(request, "goal_mode", False)),
+            goal_text=getattr(request, "goal_text", None),
+            session_id=state.session_id,
+            plan=state.snapshot.plan,
+        )
+        if state.snapshot.goal != goal:
+            state.snapshot.goal = goal
+            runtime.save_session_state(state.session_id)
+        return goal
+
+    def record_goal_evaluation(
+        workspace_id: str,
+        state: Any,
+        request: EvaluateCurrentFileRequest | EvaluateSnippetRequest,
+        report: Any,
+    ) -> None:
+        """Attribute one real evaluation to the active goal, idempotently."""
+        content_hash = hashlib.sha256(
+            str(getattr(request, "content", "") or "").encode("utf-8")
+        ).hexdigest()[:16]
+        card_id = str(getattr(request, "training_card_id", "") or "").strip()
+        target = (
+            card_id
+            or str(getattr(request, "file_path", "") or "").strip()
+            or str(getattr(request, "language_id", "") or "").strip()
+            or "snippet"
+        )
+        evidence_refs = [f"evaluation:{content_hash}"]
+        if card_id:
+            evidence_refs.insert(0, f"training_card:{card_id}")
+        runtime.goals().record_activity(
+            workspace_id=workspace_id,
+            kind="evaluation",
+            summary=str(getattr(report, "summary", "") or getattr(report, "next_step", "") or ""),
+            result="passed" if bool(getattr(report, "passed", False)) else "failed",
+            concept=str(getattr(request, "training_card_title", "") or "").strip(),
+            evidence_refs=evidence_refs,
+            event_key=f"{target}:{content_hash}:{bool(getattr(report, 'passed', False))}",
+        )
+        state.snapshot.goal = runtime.goals().current(workspace_id)
+
     @router.get("/snapshot")
     def get_snapshot(
         session_id: str | None = None,
@@ -579,6 +633,7 @@ def build_core_router(
         workspace_id = core.current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         # Mid-session host re-attest so trust flips apply before authority/capability.
         core.apply_host_workspace_trust_attestation(workspace_id, payload)
+        observe_goal_for_request(request, workspace_id)
         request_id = str(request.request_id or "").strip()
         request_key = (workspace_id, str(request.session_id or "").strip(), request_id)
         owner_future: asyncio.Future | None = None
@@ -1478,6 +1533,7 @@ def build_core_router(
         workspace_id = core.current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         # Mid-session host re-attest so trust flips apply before authority/capability.
         core.apply_host_workspace_trust_attestation(workspace_id, payload)
+        observe_goal_for_request(request, workspace_id)
         # Fail-closed: claim before execute/unusable honesty so same request_id
         # cannot double-append. Waiters get shared result + honesty overlay.
         request_id = str(request.request_id or "").strip()
@@ -1663,6 +1719,7 @@ def build_core_router(
         )
         # Mid-session host re-attest so trust flips apply before authority/capability.
         core.apply_host_workspace_trust_attestation(workspace_id, payload)
+        observe_goal_for_request(request, workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
         profile = core.resolved_profile(state.workspace_id)
         raw_requested_answer_mode = str(
@@ -2597,6 +2654,7 @@ def build_core_router(
         )
         # Mid-session host re-attest so trust flips apply before authority/capability.
         core.apply_host_workspace_trust_attestation(workspace_id, payload)
+        observe_goal_for_request(request, workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
         profile = core.resolved_profile(state.workspace_id)
         raw_requested_answer_mode = str(
@@ -4088,6 +4146,7 @@ def build_core_router(
             report=report,
             evidence_source="ide_current_file",
         )
+        record_goal_evaluation(workspace_id, state, request, report)
         state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
         runtime.save_session_state(state.session_id)
         return report
@@ -4127,6 +4186,7 @@ def build_core_router(
                 report=report,
                 evidence_source="snippet_or_selection",
             )
+            record_goal_evaluation(workspace_id, state, request, report)
             state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
             runtime.save_session_state(state.session_id)
             return report
@@ -4156,6 +4216,7 @@ def build_core_router(
             state=state,
             report=report,
         )
+        record_goal_evaluation(workspace_id, state, request, report)
         state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
         runtime.save_session_state(state.session_id)
         return report

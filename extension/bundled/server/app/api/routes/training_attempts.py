@@ -218,6 +218,27 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
             raise HTTPException(status_code=404, detail="Training attempt not found.")
         if workspace_id:
             persist_skill_projection(workspace_id, request.attempt_id)
+            evidence_result = str(evidence.get("result") or "").strip().lower()
+            goal_result = (
+                "passed"
+                if evidence_result in {"passed", "success", "ok", "completed"}
+                else "failed"
+                if evidence_result in {"failed", "failure", "error"}
+                else "unknown"
+            )
+            runtime.goals().record_activity(
+                workspace_id=workspace_id,
+                kind="training_attempt",
+                summary=(
+                    str(evidence.get("failure_reason") or "").strip()
+                    or f"Training attempt recorded: {evidence_result or 'unknown'}."
+                ),
+                result=goal_result,
+                concept=str(evidence.get("card_id") or "").strip(),
+                evidence_refs=[f"attempt:{request.attempt_id}"],
+                event_key=f"{request.attempt_id}:{request.artifact_hash}",
+            )
+            runtime.publish_goal(workspace_id)
         return {"ok": True, "evidence": evidence}
 
     @router.get("/teaching/quality")

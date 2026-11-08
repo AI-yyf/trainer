@@ -40,6 +40,8 @@ V4 审计与首轮修复：`docs/maturity/2026-11-08-v4-audit.md`（自由聊天
 
 FSRS 单一调度已落地（96da02c..586fa93）：`/evaluate/current-file` 显式 `training_phase`，失败 Verify 写 AGAIN；`MasteryRecord.review_source` 区分 `fsrs`/`heuristic`，`update_mastery` 不再覆盖 FSRS 到期；`ReviewScheduler.process_mastery_review` 走 FSRS 评分；weakness/reflection/plan 到期项标 `no_recall_evidence`；字符串/验收匹配即使“通过”也不再记为 `verified_by_evaluator`，必须有真实动态检查通过才升级 mastery。
 
+Goal 服务端实体化已落地：SQLite `goal_sessions` + `GoalService` 是唯一真源，`WorkbenchSnapshot.goal` 回传；`/goal/action` 支持 start/pause/resume/complete，显式新目标暂停旧焦点但保留历史；自动识别只接受明确能力学习表达，普通提问/闲聊不建目标；evaluation / training attempt evidence / host attestation 才记活动，按内容哈希或 `idempotency_key` 幂等。测试：`test_goal_session.py` 16 项 + `goalCommands.test.js` 5 项。真实 GUI 复核仍待 provider 额度，未标 PASS。
+
 ## 2. 修复清单（按目标阶段）
 
 ### 阶段一 P0 可靠性
@@ -71,7 +73,7 @@ FSRS 单一调度已落地（96da02c..586fa93）：`/evaluate/current-file` 显�
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3902 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、证据、技能回归） |
+| server pytest | **3918 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、证据、技能回归） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |

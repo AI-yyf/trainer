@@ -18,6 +18,7 @@ import {
   switchProviderModelCommand,
 } from './providerWebviewCommands';
 import { evaluateCurrentFileCommand, evaluateSelectionCommand } from './evaluationCommands';
+import { goalControlCommand } from './goalCommands';
 import {
   debugRestoreViewCommand,
   grantMemoryShareCommand,
@@ -381,6 +382,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
       commandId: COMMAND_IDS.refreshMemory,
       register: (ctx, payload) => refreshMemoryCommand(ctx, payload),
     },
+    { commandId: COMMAND_IDS.goalControl, register: (ctx, payload) => goalControlCommand(ctx, payload) },
     { commandId: COMMAND_IDS.generateSkillDraft, register: (ctx, payload) => generateSkillDraftCommand(ctx, payload) },
     { commandId: COMMAND_IDS.recordUserFeedback, register: (ctx, payload) => recordUserFeedbackCommand(ctx, payload) },
     { commandId: COMMAND_IDS.refreshWorkspaceAuthority, register: (ctx) => refreshWorkspaceAuthorityCommand(ctx) },

@@ -811,3 +811,40 @@ export interface TrainingPlanBinding {
   step: string;
   revision?: number;
 }
+
+/** Server-owned continuous capability goal (GoalBar renders, never owns). */
+export type GoalActivityKind = "evaluation" | "training_attempt" | "verification" | "review";
+export type GoalActivityResult = "passed" | "failed" | "pending" | "completed" | "unknown";
+
+export interface GoalActivity {
+  activityId: string;
+  kind: GoalActivityKind;
+  summary: string;
+  result: GoalActivityResult;
+  concept: string;
+  occurredAt: string;
+  evidenceRefs: string[];
+  eventKey?: string;
+}
+
+export interface GoalSession {
+  goalId: string;
+  workspaceId?: string;
+  sessionId?: string | null;
+  title: string;
+  concept: string;
+  capability: string;
+  planId?: string | null;
+  stageId?: string | null;
+  status: "active" | "paused" | "completed";
+  source: "user_explicit" | "coach_detected" | "plan_stage";
+  currentPosition: string;
+  latestActivity?: GoalActivity | null;
+  activities: GoalActivity[];
+  activityCount: number;
+  evidenceCount: number;
+  startedAt: string;
+  updatedAt: string;
+  lastActivityAt?: string | null;
+  completedAt?: string | null;
+}

@@ -3,6 +3,7 @@ import type { TrainerCommandCatalogItem } from '../../../shared/src/commands';
 import type {
   CoachingAdaptationProfile,
   FirstLookSummary as SharedFirstLookSummary,
+  GoalSession,
   ProviderProtocol,
   ProjectSourceSuggestion,
   WorkspaceUnderstandingSnapshot as SharedWorkspaceUnderstandingSnapshot,
@@ -1597,6 +1598,7 @@ export interface BootstrapData {
   liveContext: LiveContextView;
   profile: UserProfileView;
   plan: LearningPlanView;
+  goal?: GoalSession;
   globalPlan?: GlobalPlanView;
   projectPlanLink?: GlobalPlanProjectLinkView;
   task: TaskSpecView;
@@ -1776,6 +1778,8 @@ export interface SessionMessagePayload {
   answerMode?: 'auto' | 'coach-first' | 'balanced' | 'direct';
   /** One small goal, learner does the work (no plan/evidence minting). */
   goalMode?: boolean;
+  /** GoalBar title; the sidecar persists it as the server-owned GoalSession. */
+  goalText?: string;
   teachingStyle?: 'auto' | 'guided' | 'concept-first' | 'hands-on' | 'challenging';
   coachDefaults?: {
     memoryScope?: 'project' | 'personal' | 'session';

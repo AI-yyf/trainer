@@ -24,6 +24,7 @@ export const COMMAND_IDS = {
   refreshProviderProfiles: trainerCommands.refreshProviderProfiles,
   startProviderTrial: trainerCommands.startProviderTrial,
   setPersonalAccountTrust: trainerCommands.setPersonalAccountTrust,
+  goalControl: trainerCommands.goalControl,
   setTelemetryOptIn: trainerCommands.setTelemetryOptIn,
   refreshTelemetryStatus: trainerCommands.refreshTelemetryStatus,
   openWorkspaceConfig: trainerCommands.openWorkspaceConfig,

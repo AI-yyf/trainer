@@ -46,6 +46,7 @@ import {
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
 import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { normalizeTransferSkillStateRecord } from '../../../shared/src/transferSkillGovernance';
+import type { GoalActivity, GoalSession } from '../../../shared/src/models';
 import {
   normalizePlanRuntimeRecovery,
   normalizePlanRuntimeResumeState,
@@ -482,6 +483,13 @@ export function mergeSessionMessage(
     plan: snapshot
       ? mapPlan(snapshot.plan, current.plan, incomingWorkspaceId, currentWorkspaceId)
       : current.plan,
+    goal: snapshot
+      ? Object.prototype.hasOwnProperty.call(snapshot, 'goal')
+        ? normalizeGoalSession(snapshot.goal)
+        : workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId)
+          ? undefined
+          : current.goal
+      : current.goal,
     globalPlan: snapshot
       ? mapGlobalPlan(
           firstPresentRecordValue(snapshot, ['global_plan', 'globalPlan']),
@@ -7449,4 +7457,85 @@ function toTrainingReturnMode(
     return value;
   }
   return undefined;
+}
+
+function normalizeGoalActivity(value: unknown): GoalActivity | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const activityId = asString(record.activity_id) ?? asString(record.activityId);
+  if (!activityId?.trim()) return undefined;
+  const kindValue = asString(record.kind)?.trim();
+  const kind: GoalActivity['kind'] =
+    kindValue === 'training_attempt' || kindValue === 'verification' || kindValue === 'review'
+      ? kindValue
+      : 'evaluation';
+  const resultValue = asString(record.result)?.trim();
+  const result: GoalActivity['result'] =
+    resultValue === 'passed' ||
+    resultValue === 'failed' ||
+    resultValue === 'pending' ||
+    resultValue === 'completed'
+      ? resultValue
+      : 'unknown';
+  return {
+    activityId,
+    kind,
+    summary: asString(record.summary) ?? '',
+    result,
+    concept: asString(record.concept) ?? '',
+    occurredAt: asString(record.occurred_at) ?? asString(record.occurredAt) ?? '',
+    evidenceRefs: asStringArray(record.evidence_refs ?? record.evidenceRefs) ?? [],
+    ...(asString(record.event_key ?? record.eventKey)
+      ? { eventKey: asString(record.event_key ?? record.eventKey) }
+      : {}),
+  };
+}
+
+/**
+ * Normalize the server-owned GoalSession from either alias shape:
+ * `/session/start` emits camelCase, `/snapshot` emits snake_case.
+ */
+export function normalizeGoalSession(value: unknown): GoalSession | undefined {
+  const record = asRecord(value);
+  if (!record) return undefined;
+  const goalId = (asString(record.goal_id) ?? asString(record.goalId))?.trim();
+  const title = asString(record.title)?.trim();
+  if (!goalId || !title) return undefined;
+  const statusValue = asString(record.status)?.trim();
+  const status: GoalSession['status'] =
+    statusValue === 'paused' || statusValue === 'completed' ? statusValue : 'active';
+  const sourceValue = asString(record.source)?.trim();
+  const source: GoalSession['source'] =
+    sourceValue === 'coach_detected' || sourceValue === 'plan_stage' ? sourceValue : 'user_explicit';
+  const activities = (asRecordArray(record.activities) ?? [])
+    .map(normalizeGoalActivity)
+    .filter((item): item is GoalActivity => Boolean(item));
+  const latestValue = record.latest_activity ?? record.latestActivity;
+  const latestActivity = latestValue === null ? undefined : normalizeGoalActivity(latestValue);
+  const planId = asString(record.plan_id) ?? asString(record.planId);
+  const stageId = asString(record.stage_id) ?? asString(record.stageId);
+  const sessionId = asString(record.session_id) ?? asString(record.sessionId);
+  const lastActivityAt = asString(record.last_activity_at) ?? asString(record.lastActivityAt);
+  const completedAt = asString(record.completed_at) ?? asString(record.completedAt);
+  return {
+    goalId,
+    workspaceId: asString(record.workspace_id) ?? asString(record.workspaceId) ?? '',
+    sessionId: sessionId ?? null,
+    title,
+    concept: asString(record.concept) ?? '',
+    capability: asString(record.capability) ?? '',
+    planId: planId ?? null,
+    stageId: stageId ?? null,
+    status,
+    source,
+    currentPosition: asString(record.current_position) ?? asString(record.currentPosition) ?? '',
+    latestActivity,
+    activities,
+    activityCount: asNumber(record.activity_count ?? record.activityCount) ?? activities.length,
+    evidenceCount: asNumber(record.evidence_count ?? record.evidenceCount) ?? 0,
+    startedAt: asString(record.started_at) ?? asString(record.startedAt) ?? '',
+    updatedAt: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
+    lastActivityAt: lastActivityAt ?? null,
+    completedAt: completedAt ?? null,
+  };
 }

@@ -6,6 +6,7 @@ import {
 } from "../../../../shared/src/webviewSync";
 
 import { trainerCommands } from "../../../../shared/src/commands";
+import type { GoalSession } from "../../../../shared/src/models";
 import { isCurrentStreamEvent } from "../../../../shared/src/streamEventScope";
 import { sanitizeErrorSurfaceText } from "../../../../shared/src/errorSurfaceSanitizer";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
@@ -382,6 +383,8 @@ export interface WorkbenchStore {
   resumeGoal: () => void;
   clearGoal: () => void;
   restoreGoalForSession: (sessionId: string) => void;
+  /** Server snapshot is authoritative; local goal state only mirrors it. */
+  applyServerGoal: (goal: GoalSession | undefined) => void;
   rememberSurfaceScroll: (key: string, position: number) => void;
   setActivityDraft: (key: string, draft: string) => void;
   setOperationMessage: (message?: OperationMessage, surface?: OperationMessageSurface) => void;
@@ -1110,6 +1113,38 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         goalStartedAt: now,
         goalPaused: stored.paused,
         goalPausedAt: stored.paused ? now : null,
+      };
+    }),
+  applyServerGoal: (goal) =>
+    set((state) => {
+      const activeGoal = goal && goal.status !== "completed" ? goal : undefined;
+      const paused = activeGoal?.status === "paused";
+      const title = activeGoal?.title ?? "";
+      const startedAtMs = activeGoal ? Date.parse(activeGoal.startedAt) : Number.NaN;
+      const startedAt = activeGoal
+        ? Number.isFinite(startedAtMs)
+          ? startedAtMs
+          : Date.now()
+        : null;
+      const pausedAtMs = paused ? Date.parse(goal?.updatedAt ?? "") : Number.NaN;
+      const pausedAt = paused
+        ? Number.isFinite(pausedAtMs)
+          ? pausedAtMs
+          : Date.now()
+        : null;
+      if (
+        state.goalMode === Boolean(activeGoal) &&
+        state.goalText === title &&
+        state.goalPaused === paused
+      ) {
+        return {};
+      }
+      return {
+        goalMode: Boolean(activeGoal),
+        goalText: title,
+        goalStartedAt: startedAt,
+        goalPaused: paused,
+        goalPausedAt: pausedAt,
       };
     }),
   rememberSurfaceScroll: (key, position) => set((state) => ({

@@ -327,6 +327,7 @@ import {
   requestCollapseToSidebar,
   subscribeToHostMessages,
   requestNativeSkillDraft,
+  inVsCodeWebview,
 } from "../lib/vscode";
 import {
   buildGenericImageReviewPrompt,
@@ -649,6 +650,7 @@ export function App() {
   const resumeGoal = useWorkbenchState((state) => state.resumeGoal);
   const clearGoal = useWorkbenchState((state) => state.clearGoal);
   const restoreGoalForSession = useWorkbenchState((state) => state.restoreGoalForSession);
+  const applyServerGoal = useWorkbenchState((state) => state.applyServerGoal);
   const goalModeCopy = GOAL_MODE_COPY[layout.composerLanguage] ?? GOAL_MODE_COPY["en-US"];
   const [composerModelActionDensity, setComposerModelActionDensity] =
     useState<ComposerModelActionDensity>("default");
@@ -749,9 +751,32 @@ export function App() {
     }
     coachSessionIdentityRef.current = nextSessionId;
     if (nextSessionId) {
-      restoreGoalForSession(nextSessionId);
+      if (inVsCodeWebview()) {
+        applyServerGoal(undefined);
+      } else {
+        restoreGoalForSession(nextSessionId);
+      }
     }
-  }, [clearOptimisticTurns, restoreGoalForSession, syncCursor.sessionId]);
+  }, [applyServerGoal, clearOptimisticTurns, restoreGoalForSession, syncCursor.sessionId]);
+  // The server snapshot owns goal truth in VS Code. Browser preview keeps its
+  // local fixture goal because no sidecar snapshot exists there.
+  useEffect(() => {
+    if (inVsCodeWebview()) {
+      applyServerGoal(data.goal);
+    }
+  }, [applyServerGoal, data.goal]);
+  const requestGoalControl = useCallback(
+    (action: "start" | "pause" | "resume" | "complete", title?: string) => {
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: trainerCommands.goalControl,
+          payload: { action, ...(title ? { title } : {}) },
+        },
+      });
+    },
+    [],
+  );
   // §三: the plan-composer domain owns its composer mode/context/draft state.
   const {
     planComposerMode,
@@ -1017,6 +1042,7 @@ export function App() {
             ?.replace(/^[#>*\-\s]+/, "")
             .slice(0, 80) ?? "";
         startGoal(title);
+        requestGoalControl("start", title);
         setActiveView("coach");
         requestCoachComposerFocus();
         return;
@@ -5724,6 +5750,10 @@ export function App() {
       responseLanguage: layout.composerLanguage,
       answerMode: layout.composerAnswerMode,
       goalMode: turnGoalMode === true,
+      goalText:
+        turnGoalMode === true
+          ? goalText.trim() || normalizedDraft.trim() || undefined
+          : undefined,
       teachingStyle: layout.teachingStyle,
       coachDefaults: layout.coachDefaults,
       activeView: turnActiveView,
@@ -7222,6 +7252,7 @@ export function App() {
     const messageText = appendDockAnchor(rawMessageText, dockAnchor);
     if (goalMode && !goalText.trim() && normalizedDraft && intent === "coach") {
       startGoal(normalizedDraft);
+      requestGoalControl("start", normalizedDraft);
     }
 
     sendTurn({
@@ -11099,9 +11130,18 @@ export function App() {
                 startedAt={goalStartedAt}
                 paused={goalPaused}
                 pausedAt={goalPausedAt}
-                onPause={pauseGoal}
-                onResume={resumeGoal}
-                onClear={clearGoal}
+                onPause={() => {
+                  pauseGoal();
+                  requestGoalControl("pause");
+                }}
+                onResume={() => {
+                  resumeGoal();
+                  requestGoalControl("resume");
+                }}
+                onClear={() => {
+                  clearGoal();
+                  requestGoalControl("complete");
+                }}
               />
             ) : null}
             {coachPlanContext ? <div className="template-context" role="group">

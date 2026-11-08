@@ -1900,6 +1900,7 @@ export async function sendMessageCommand(
     response_language: sessionPayload?.responseLanguage,
     answer_mode: normalizeAnswerMode(sessionPayload?.answerMode),
     goal_mode: sessionPayload?.goalMode === true,
+    goal_text: sessionPayload?.goalText?.trim() || undefined,
     teaching_style: sessionPayload?.teachingStyle,
     coach_defaults: sessionPayload?.coachDefaults,
     attachments: normalizeAttachments(sessionPayload?.attachments),
@@ -2164,6 +2165,7 @@ export async function sendStreamMessageCommand(
       response_language: streamPayload.responseLanguage,
       answer_mode: normalizeAnswerMode(streamPayload.answerMode),
       goal_mode: streamPayload.goalMode === true,
+      goal_text: streamPayload.goalText?.trim() || undefined,
       teaching_style: streamPayload.teachingStyle,
       coach_defaults: streamPayload.coachDefaults,
       attachments: normalizeAttachments(streamPayload.attachments),
@@ -3688,6 +3690,10 @@ function extractSessionPayload(payload: unknown): ResourceComposerSessionMessage
         ? asRecord.answerMode
         : undefined,
     goalMode: asRecord.goalMode === true ? true : undefined,
+    goalText:
+      typeof asRecord.goalText === 'string' && asRecord.goalText.trim()
+        ? asRecord.goalText.trim()
+        : undefined,
     coachDefaults: coachDefaultsRecord
       ? {
           memoryScope:

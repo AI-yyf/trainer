@@ -2521,6 +2521,56 @@ class StageMaterialItem(BaseModel):
     generation_source: Literal["model", "template"] = Field(alias="generationSource")
 
 
+class GoalActivity(BaseModel):
+    """One real learning activity attributed to a goal.
+
+    Only evidence-bearing surfaces (evaluation, training attempt, host
+    attestation, review) create activities; ordinary chat never does.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    activity_id: str = Field(alias="activityId")
+    kind: Literal["evaluation", "training_attempt", "verification", "review"] = "evaluation"
+    summary: str = ""
+    result: Literal["passed", "failed", "pending", "completed", "unknown"] = "unknown"
+    concept: str = ""
+    occurred_at: str = Field(default_factory=utc_now_iso, alias="occurredAt")
+    evidence_refs: list[str] = Field(default_factory=list, alias="evidenceRefs")
+    event_key: str = Field(default="", alias="eventKey")
+
+
+class GoalSession(BaseModel):
+    """Server-owned continuous capability goal.
+
+    ``GoalBar`` renders and operates this record but never owns its truth.
+    A goal is not mastery: completing or pausing it only ends the focus, it
+    never promotes competency or rewrites history.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    goal_id: str = Field(alias="goalId")
+    workspace_id: str = Field(default="", alias="workspaceId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+    title: str
+    concept: str = ""
+    capability: str = ""
+    plan_id: str | None = Field(default=None, alias="planId")
+    stage_id: str | None = Field(default=None, alias="stageId")
+    status: Literal["active", "paused", "completed"] = "active"
+    source: Literal["user_explicit", "coach_detected", "plan_stage"] = "user_explicit"
+    current_position: str = Field(default="", alias="currentPosition")
+    latest_activity: GoalActivity | None = Field(default=None, alias="latestActivity")
+    activities: list[GoalActivity] = Field(default_factory=list)
+    activity_count: int = Field(default=0, alias="activityCount")
+    evidence_count: int = Field(default=0, alias="evidenceCount")
+    started_at: str = Field(default_factory=utc_now_iso, alias="startedAt")
+    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
+    last_activity_at: str | None = Field(default=None, alias="lastActivityAt")
+    completed_at: str | None = Field(default=None, alias="completedAt")
+
+
 class WorkbenchSnapshot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -2533,6 +2583,7 @@ class WorkbenchSnapshot(BaseModel):
     session_history_restored: bool = Field(default=False, alias="sessionHistoryRestored")
     profile: UserProfile | None = None
     plan: LearningPlan | None = None
+    goal: GoalSession | None = None
     global_plan: GlobalPlan | None = None
     project_plan_link: GlobalPlanProjectLink | None = None
     current_task: TaskSpec | None = None
@@ -2744,6 +2795,9 @@ class SessionMessageRequest(BaseModel):
     # Goal mode: one small learning goal, learner does the work. The flag only
     # changes the coaching contract; explicit plan/card actions stay separate.
     goal_mode: bool = Field(default=False, alias="goalMode")
+    # The title shown in GoalBar. Persisted as the server-owned GoalSession;
+    # the webview no longer owns goal truth across restarts.
+    goal_text: str | None = Field(default=None, alias="goalText", max_length=240)
     teaching_style: str | None = None
     coach_defaults: CoachDefaults | None = None
     attachments: list[MessageAttachment] = Field(default_factory=list, max_length=MAX_IMAGE_COUNT)
@@ -2765,6 +2819,16 @@ class SessionMessageRequest(BaseModel):
         if sum(item.byte_size or 0 for item in self.attachments if item.kind == "image") > MAX_TOTAL_IMAGE_BYTES:
             raise ValueError("attachment_image_total_size_exceeded")
         return self
+
+
+class GoalControlRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    session_id: str | None = None
+    workspace_id: str | None = None
+    action: Literal["start", "pause", "resume", "complete"]
+    title: str | None = Field(default=None, max_length=240)
+    goal_id: str | None = Field(default=None, alias="goalId")
 
 
 class CoachSettingsRequest(BaseModel):

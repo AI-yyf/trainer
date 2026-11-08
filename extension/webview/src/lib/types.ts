@@ -4,6 +4,7 @@ import type { CompanionInstallState } from "../../../../shared/src/companionInst
 import type { TrainerMessagePart, TrainerStreamingState } from "../../../../shared/src/protocol";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
+import type { GoalSession } from "../../../../shared/src/models";
 import type { ComposerLanguage as SharedComposerLanguage } from "../../../../shared/src/types";
 import type {
   ProviderCapabilityEvidence,
@@ -1844,6 +1845,8 @@ export interface BootstrapData {
   liveContext: LiveContext;
   profile: UserProfile;
   plan: LearningPlan;
+  /** Server-owned continuous capability goal; GoalBar mirrors it. */
+  goal?: GoalSession;
   globalPlan?: GlobalPlan;
   projectPlanLink?: GlobalPlanProjectLink;
   task: TaskSpec;
