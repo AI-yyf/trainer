@@ -39,6 +39,7 @@ const readBundledApiSource = () =>
     .join('\n');
 
 const servicePath = path.resolve(__dirname, '..', '..', 'server', 'app', 'memory', 'service.py');
+const snapshotBuilderPath = path.resolve(__dirname, '..', '..', 'server', 'app', 'memory', 'snapshot_builder.py');
 const orientationPath = path.resolve(
   __dirname,
   '..',
@@ -93,6 +94,15 @@ const bundledServicePath = path.resolve(
   'memory',
   'service.py',
 );
+const bundledSnapshotBuilderPath = path.resolve(
+  __dirname,
+  '..',
+  'bundled',
+  'server',
+  'app',
+  'memory',
+  'snapshot_builder.py',
+);
 const bundledOrientationPath = path.resolve(
   __dirname,
   '..',
@@ -116,6 +126,7 @@ test('leftover bound plan competing identity is omitted after generate on five v
   const recovery = fs.readFileSync(recoveryPath, 'utf8');
   const routers = readApiSource();
   const service = fs.readFileSync(servicePath, 'utf8');
+  const snapshotBuilder = fs.readFileSync(snapshotBuilderPath, 'utf8');
   const orientation = fs.readFileSync(orientationPath, 'utf8');
   const repository = fs.readFileSync(repositoryPath, 'utf8');
   const workbenchData = fs.readFileSync(workbenchDataPath, 'utf8');
@@ -124,6 +135,7 @@ test('leftover bound plan competing identity is omitted after generate on five v
   const bundledRecovery = fs.readFileSync(bundledRecoveryPath, 'utf8');
   const bundledRouters = readBundledApiSource();
   const bundledService = fs.readFileSync(bundledServicePath, 'utf8');
+  const bundledSnapshotBuilder = fs.readFileSync(bundledSnapshotBuilderPath, 'utf8');
   const bundledOrientation = fs.readFileSync(bundledOrientationPath, 'utf8');
   const bundledRepository = fs.readFileSync(bundledRepositoryPath, 'utf8');
 
@@ -135,7 +147,7 @@ test('leftover bound plan competing identity is omitted after generate on five v
   assert.match(repository, /def list_plans\(/);
   assert.match(service, /leftover_bound_plan_competing_identity_labels\(/);
   assert.match(service, /bound_plan_leftover_training_live_identity_updates\(/);
-  assert.match(service, /competing_identity = leftover_bound_plan_competing_identity_labels\(/);
+  assert.match(snapshotBuilder, /competing_identity = leftover_bound_plan_competing_identity_labels\(/);
   assert.match(routers, /leftover_bound_plan_competing_identity_labels\(/);
   assert.match(routers, /leftover_plan_for_chrome/);
   assert.match(routers, /generated_plan_five_view_payload\(/);
@@ -154,7 +166,7 @@ test('leftover bound plan competing identity is omitted after generate on five v
   assert.match(bundledRecovery, /def leftover_bound_plan_competing_identity_labels\(/);
   assert.match(bundledRecovery, /leftover_plans/);
   assert.match(bundledService, /leftover_bound_plan_competing_identity_labels\(/);
-  assert.match(bundledService, /competing_identity = leftover_bound_plan_competing_identity_labels\(/);
+  assert.match(bundledSnapshotBuilder, /competing_identity = leftover_bound_plan_competing_identity_labels\(/);
   assert.match(bundledRouters, /leftover_plan_for_chrome/);
   assert.match(bundledRouters, /generated_plan_five_view_payload\(/);
   assert.match(bundledRouters, /hydrate_snapshot\(\s*(?:core\.)?coach_support_deps,\s*response\.snapshot,/);
