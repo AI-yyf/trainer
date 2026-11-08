@@ -304,8 +304,45 @@ def test_image_source_never_fabricates_text(tmp_path: Path) -> None:
     path = tmp_path / "diagram.png"
     path.write_bytes(_TINY_PNG)
     document = build_canonical_document(path, resource_id="res_img")
-    assert "No OCR was performed" in document.body
+    assert "No OCR text was extracted" in document.body
     assert document.assets[0].filename.startswith("original-diagram")
+
+
+def test_scanned_pdf_uses_ocr_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pymupdf = pytest.importorskip("pymupdf")
+    from app.resources import canonical as canonical_module
+    from app.resources.ocr import OcrResult
+
+    document = pymupdf.open()
+    document.new_page()
+    path = tmp_path / "scan.pdf"
+    path.write_bytes(document.tobytes())
+    document.close()
+    monkeypatch.setattr(
+        canonical_module,
+        "ocr_image_bytes",
+        lambda _data, **_kwargs: OcrResult(text="OCR fallback page text", available=True),
+    )
+    built = build_canonical_document(path, resource_id="res_scan_ocr")
+    assert "OCR fallback page text" in built.body
+    assert any("Tesseract OCR" in warning for warning in built.warnings)
+
+
+def test_image_uses_ocr_text_when_available(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.resources import canonical as canonical_module
+    from app.resources.ocr import OcrResult
+
+    path = tmp_path / "diagram.png"
+    path.write_bytes(_TINY_PNG)
+    monkeypatch.setattr(
+        canonical_module,
+        "ocr_image_bytes",
+        lambda _data, **_kwargs: OcrResult(text="Queue lock diagram", available=True),
+    )
+    built = build_canonical_document(path, resource_id="res_img_ocr")
+    assert "## OCR text" in built.body
+    assert "Queue lock diagram" in built.body
+    assert any("Tesseract OCR" in warning for warning in built.warnings)
 
 
 def test_html_text_builder_keeps_source_url() -> None:
