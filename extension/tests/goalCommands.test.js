@@ -104,7 +104,7 @@ test('goal start posts the server action and hydrates the host snapshot', async 
   assert.equal(context.__posts[0].requestPath, '/goal/action');
   assert.deepEqual(context.__posts[0].body, {
     session_id: 'session-goal',
-    workspace_id: '/tmp/trainer-goal-workspace',
+    workspace_id: path.resolve('/tmp/trainer-goal-workspace'),
     action: 'start',
     title: '实现 PPO',
   });
