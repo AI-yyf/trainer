@@ -29,10 +29,10 @@
 | 6 | 改变偏好，系统修正旧习惯 | ✅ | 🟡 | ✅ | ⬜ | 🟡 | ⬜ | 🟡 | U: preference overwrite；P: 存储偏好从 hands-on 改为 concept-first 后同题真实回复不同 |
 | 7 | 提示帮助下完成，不误判独立掌握 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | ⬜ | — | U: false-mastery 闸门 + skill projection；P：真实受助任务未做掌握断言 |
 | 8 | 独立完成，真实证据自动同步 Learning | ✅ | ✅ | 🟡 | ⬜ | 🟡 | ⬜ | ✅ | U: attempt/evidence/skill projection；S: sidecar matrix；G/P：真实独立完成→Learning 未归档 |
-| 9 | 数天后忘记，自然安排复习 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS due/AGAIN/时间推进；P: 时钟 day0→day3 后真实模型按 due review 回应；G：真实 GUI 未录 |
+| 9 | 数天后忘记，自然安排复习 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS due/AGAIN；S/P: day0→day3 due queue + 真实模型复习回合；G：真实 GUI 未录 |
 | 10 | 正确延迟回忆，间隔延长 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS GOOD/EASY；S/P: guided-pack 卡 + Day0→Day2 时钟，第二次 Good interval 2 天，真实模型延迟回忆 200 |
-| 11 | 拒绝复习或忙碌，不被打扰 | ✅ | 🟡 | ✅ | ⬜ | 🟡 | ⬜ | — | U: review queue governance；P: skip 后次日再复习，忙碌回合不强行拉回；G：真实 GUI 未录 |
-| 12 | 长期未上线返回，不积压提醒 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: 上限/静默/去重；P: day30 后 due 无重复，真实模型给最小回顾问题；L：部分 |
+| 11 | 拒绝复习或忙碌，不被打扰 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | — | U/S/P: skip 真实延后，忙碌回合不强行拉回 |
+| 12 | 长期未上线返回，不积压提醒 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U/S/P: day30 due 无重复，真实模型给最小回顾问题 |
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
 | 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实窗口切换 model、Reload Window 后 Settings 仍显示新 model |
 | 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version/invalidation；S: 旧 version 409；P: 真实模型先引 AlphaQueue，重索引后引 BetaQueue；G：真实 GUI 未验证 |
@@ -47,7 +47,7 @@
 | 等级 | PASS | PARTIAL | GAP |
 | --- | --- | --- | --- |
 | U 单元/行为 | 20 | 0 | 0 |
-| S 真实 Sidecar | 9 | 11 | 0 |
+| S 真实 Sidecar | 12 | 8 | 0 |
 | P 真实 Provider | 15 | 4 | 1 |
 | V 已安装 VSIX | 1 | 2 | 17 |
 | G 真实 GUI | 5 | 6 | 9 |
