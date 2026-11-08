@@ -37,10 +37,14 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
         kind: str | None = None,
         active_only: bool = False,
         include_body: bool = False,
+        workspace_id: str | None = None,
     ) -> dict[str, Any]:
         skills = [
             skill
-            for skill in _registry().to_payload(include_body=include_body)
+            for skill in _registry().to_payload(
+                include_body=include_body,
+                workspace_id=workspace_id,
+            )
             if (kind is None or skill.get("kind") == kind)
             and (not active_only or skill.get("active"))
         ]
@@ -66,6 +70,7 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
                 permissions=[str(p).strip() for p in payload.get("permissions") or [] if str(p).strip()],
                 reviewed=bool(payload.get("reviewed", False)),
                 metadata={"origin": "inline"},
+                workspace_id=str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip(),
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -87,6 +92,7 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
                 skill_md,
                 kind=kind,
                 reviewed=bool(payload.get("reviewed", False)),
+                workspace_id=str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip(),
             )
         except OSError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -105,7 +111,10 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
         if not skill_id:
             raise HTTPException(status_code=400, detail="skill_id is required.")
         try:
-            record = _registry().activate(skill_id)
+            record = _registry().activate(
+                skill_id,
+                workspace_id=str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip(),
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
@@ -122,7 +131,10 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
         if not skill_id:
             raise HTTPException(status_code=400, detail="skill_id is required.")
         try:
-            record = _registry().deactivate(skill_id)
+            record = _registry().deactivate(
+                skill_id,
+                workspace_id=str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip(),
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return {"ok": True, "skill": record.to_payload()}
@@ -135,7 +147,10 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
         if not skill_id:
             raise HTTPException(status_code=400, detail="skill_id is required.")
         try:
-            record = _registry().retry(skill_id)
+            record = _registry().retry(
+                skill_id,
+                workspace_id=str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip(),
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return {"ok": True, "skill": record.to_payload()}
@@ -152,7 +167,12 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
         try:
             # The note is persisted inside mark_reviewed (writing it afterwards
             # was lost on restart); a stale SKILL.md change also surfaces here.
-            record = _registry().mark_reviewed(skill_id, reviewed=reviewed, note=note)
+            record = _registry().mark_reviewed(
+                skill_id,
+                reviewed=reviewed,
+                note=note,
+                workspace_id=str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip(),
+            )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return {
@@ -162,9 +182,9 @@ def build_skills_router(runtime: TrainerRuntime) -> APIRouter:
         }
 
     @router.get("/skill/status")
-    def skill_status() -> dict[str, Any]:
+    def skill_status(workspace_id: str | None = None) -> dict[str, Any]:
         registry = _registry()
-        skills = registry.to_payload()
+        skills = registry.to_payload(workspace_id=workspace_id)
         return {
             "ok": True,
             "total": len(skills),

@@ -184,8 +184,9 @@ def distill_project_knowledge(
         name=f"{project_name} 项目知识",
         description=description,
         body=body,
-        metadata=metadata,
+        metadata={**metadata, "workspace_id": workspace_id},
         permissions=["read:workspace", "search:resources"],
+        workspace_id=workspace_id,
     )
 
     teaching_asset_id = ""

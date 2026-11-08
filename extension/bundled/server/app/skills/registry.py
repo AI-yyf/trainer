@@ -44,6 +44,9 @@ class SkillRecord:
     body: str = ""  # only populated when activated
     metadata: dict[str, Any] = field(default_factory=dict)
     version: int = 1  # increments whenever the skill's content changes
+    # Empty = global/first-party. Project-distilled knowledge skills carry the
+    # workspace that produced them and are never visible to another workspace.
+    workspace_id: str = ""
 
     @property
     def failure_streak(self) -> int:
@@ -78,6 +81,7 @@ class SkillRecord:
             "reviewed": self.reviewed,
             "source_path": self.source_path,
             "version": self.version,
+            "workspace_id": self.workspace_id,
             "status": self.status(review_stale=review_stale),
             "retryable": bool(self.failure_streak) and not self.quarantined,
             "failure_count": self.failure_streak,
@@ -225,6 +229,7 @@ class SkillRegistry:
                     body=str(data.get("body") or ""),
                     metadata=dict(data.get("metadata") or {}),
                     version=int(data.get("version") or 1),
+                    workspace_id=str(data.get("workspace_id") or ""),
                 )
 
     @staticmethod
@@ -242,7 +247,9 @@ class SkillRegistry:
         source_path: str | None = None,
         reviewed: bool = False,
         metadata: dict[str, Any] | None = None,
+        workspace_id: str = "",
     ) -> SkillRecord:
+        scope = str(workspace_id or "").strip()
         if kind not in {"tutor", "knowledge", "action"}:
             raise ValueError(f"Invalid skill kind: {kind!r}. Must be tutor, knowledge, or action.")
         # 审核绕过修复 (v1.5 P0): an action skill may never arrive pre-approved
@@ -251,6 +258,10 @@ class SkillRegistry:
         # its record directly and is not affected.
         effective_reviewed = reviewed and kind != "action"
         previous = self._skills.get(skill_id)
+        if previous is not None and previous.workspace_id != scope:
+            raise ValueError(
+                f"Skill id {skill_id!r} is already owned by another workspace."
+            )
         content_changed = previous is not None and (
             previous.description != description
             or previous.name != name
@@ -267,6 +278,7 @@ class SkillRegistry:
             reviewed=effective_reviewed,
             metadata=dict(metadata or {}),
             version=((previous.version + 1) if previous is not None and content_changed else 1),
+            workspace_id=scope,
         )
         self._skills[skill_id] = record
         self._persist()
@@ -278,6 +290,7 @@ class SkillRegistry:
         *,
         kind: str = "knowledge",
         reviewed: bool = False,
+        workspace_id: str = "",
     ) -> SkillRecord:
         """Register a skill from a SKILL.md file (progressive loading).
 
@@ -302,6 +315,7 @@ class SkillRegistry:
             permissions=permissions,
             source_path=str(path),
             reviewed=reviewed and not security_flags,
+            workspace_id=workspace_id,
             metadata={
                 "front_matter": front,
                 "skill_md_path": str(path),
@@ -315,6 +329,7 @@ class SkillRegistry:
         *,
         reviewed: bool = True,
         note: str = "",
+        workspace_id: str = "",
     ) -> SkillRecord:
         """Human review decision (审核) — the only path to review a skill.
 
@@ -323,7 +338,7 @@ class SkillRegistry:
         change is detected as stale instead of silently staying approved.
         """
 
-        record = self._require(skill_id)
+        record = self._require_for_workspace(skill_id, workspace_id)
         record.reviewed = reviewed
         if note:
             record.metadata["review_note"] = note
@@ -361,6 +376,7 @@ class SkillRegistry:
         body: str,
         metadata: dict[str, Any],
         permissions: list[str] | None = None,
+        workspace_id: str = "",
     ) -> tuple[SkillRecord, bool]:
         """Register/refresh a derived project Knowledge Skill idempotently.
 
@@ -369,10 +385,21 @@ class SkillRegistry:
         knowledge skills are first-party and auto-reviewed (read-only kind).
         """
 
-        existing = self._skills.get(skill_id)
+        scope = str(workspace_id or "").strip()
+        scoped_skill_id = skill_id
+        existing = self._skills.get(scoped_skill_id)
+        if existing is not None and existing.workspace_id not in {"", scope}:
+            if not scope:
+                raise ValueError(
+                    f"Skill id {skill_id!r} is workspace-scoped; workspace_id is required."
+                )
+            # Same project name in another workspace: keep both records.
+            suffix = hashlib.sha256(scope.encode("utf-8")).hexdigest()[:8]
+            scoped_skill_id = f"{skill_id}--{suffix}"
+            existing = self._skills.get(scoped_skill_id)
         if existing is None:
             record = SkillRecord(
-                skill_id=skill_id,
+                skill_id=scoped_skill_id,
                 kind="knowledge",
                 name=name,
                 description=description,
@@ -383,22 +410,30 @@ class SkillRegistry:
                 body=body,
                 metadata=dict(metadata),
                 version=1,
+                workspace_id=scope,
             )
-            self._skills[skill_id] = record
+            self._skills[scoped_skill_id] = record
             self._persist()
             return record, True
+        if not existing.workspace_id and scope:
+            # Legacy distilled skills were global before workspace scoping;
+            # the first workspace that refreshes one claims it.
+            existing.workspace_id = scope
         unchanged = (
             existing.body == body
             and str(existing.metadata.get("commit_sha") or "")
             == str(metadata.get("commit_sha") or "")
         )
         if unchanged:
+            existing.workspace_id = scope or existing.workspace_id
+            self._persist()
             return existing, False
         existing.name = name
         existing.description = description
         existing.permissions = list(permissions or existing.permissions)
         existing.body = body
         existing.metadata.update(metadata)
+        existing.workspace_id = scope or existing.workspace_id
         existing.version += 1
         existing.active = True
         existing.reviewed = True
@@ -415,7 +450,7 @@ class SkillRegistry:
     ) -> SkillRecord:
         """执行失败记录: consecutive streak drives failing/quarantined state."""
 
-        record = self._require(skill_id)
+        record = self._require_for_workspace(skill_id, workspace_id)
         record.metadata["consecutive_failures"] = record.failure_streak + 1
         record.metadata["last_failure_at"] = datetime.now(UTC).isoformat()
         record.metadata["last_error"] = str(error or "")[:240]
@@ -426,10 +461,10 @@ class SkillRegistry:
         self._persist()
         return record
 
-    def retry(self, skill_id: str) -> SkillRecord:
+    def retry(self, skill_id: str, *, workspace_id: str = "") -> SkillRecord:
         """可重试: clear the failure streak so the skill can be selected again."""
 
-        record = self._require(skill_id)
+        record = self._require_for_workspace(skill_id, workspace_id)
         record.metadata["consecutive_failures"] = 0
         record.metadata.pop("last_error", None)
         record.metadata.pop("last_failure_at", None)
@@ -448,7 +483,7 @@ class SkillRegistry:
     ) -> SkillRecord:
         """Persist one usage fact (执行结果回流). Skill 使用成功 ≠ 掌握."""
 
-        record = self._require(skill_id)
+        record = self._require_for_workspace(skill_id, workspace_id)
         metadata = record.metadata
         metadata["usage_count"] = int(metadata.get("usage_count") or 0) + 1
         if applied:
@@ -470,8 +505,8 @@ class SkillRegistry:
         self._persist()
         return record
 
-    def activate(self, skill_id: str) -> SkillRecord:
-        record = self._require(skill_id)
+    def activate(self, skill_id: str, *, workspace_id: str = "") -> SkillRecord:
+        record = self._require_for_workspace(skill_id, workspace_id)
         if record.kind == "action" and (
             not record.reviewed or self.review_is_stale(record)
         ):
@@ -488,8 +523,8 @@ class SkillRegistry:
         self._persist()
         return record
 
-    def deactivate(self, skill_id: str) -> SkillRecord:
-        record = self._require(skill_id)
+    def deactivate(self, skill_id: str, *, workspace_id: str = "") -> SkillRecord:
+        record = self._require_for_workspace(skill_id, workspace_id)
         record.active = False
         record.body = ""
         self._persist()
@@ -507,12 +542,36 @@ class SkillRegistry:
             raise KeyError(f"Skill not found: {skill_id!r}")
         return record
 
-    def list_skills(self, *, kind: str | None = None, active_only: bool = False) -> list[SkillRecord]:
+    def _require_for_workspace(self, skill_id: str, workspace_id: str = "") -> SkillRecord:
+        """Reject a workspace-scoped skill from another workspace.
+
+        An empty request scope keeps internal/global callers working, but a
+        scoped skill is never returned for a different explicit workspace.
+        """
+        record = self._require(skill_id)
+        scope = str(workspace_id or "").strip()
+        if record.workspace_id and record.workspace_id != scope:
+            raise KeyError(f"Skill not found in workspace {scope!r}: {skill_id!r}")
+        return record
+
+    def list_skills(
+        self,
+        *,
+        kind: str | None = None,
+        active_only: bool = False,
+        workspace_id: str | None = None,
+    ) -> list[SkillRecord]:
+        scope = str(workspace_id or "").strip()
         return [
             record
             for record in self._skills.values()
             if (kind is None or record.kind == kind)
             and (not active_only or record.active)
+            and (
+                workspace_id is None
+                or not record.workspace_id
+                or record.workspace_id == scope
+            )
         ]
 
     def has_permission(self, skill_id: str, permission: str) -> bool:
@@ -521,11 +580,16 @@ class SkillRegistry:
             return False
         return permission in record.permissions or "*" in record.permissions
 
-    def to_payload(self, *, include_body: bool = False) -> list[dict[str, Any]]:
+    def to_payload(
+        self,
+        *,
+        include_body: bool = False,
+        workspace_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         return [
             record.to_payload(
                 include_body=include_body,
                 review_stale=self.review_is_stale(record),
             )
-            for record in self._skills.values()
+            for record in self.list_skills(workspace_id=workspace_id)
         ]

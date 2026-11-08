@@ -51,6 +51,7 @@ class SelectedSkill:
     permissions: list[str]
     body: str
     matched_terms: list[str] = field(default_factory=list)
+    workspace_id: str = ""
 
 
 def runtime_skill_registry(runtime: Any) -> SkillRegistry | None:
@@ -119,6 +120,7 @@ def select_active_skills(
     registry: SkillRegistry,
     user_message: str,
     *,
+    workspace_id: str = "",
     limit: int = MAX_SELECTED_SKILLS,
 ) -> list[SelectedSkill]:
     """Deterministic condition-trigger matching over ACTIVE skills only."""
@@ -127,8 +129,9 @@ def select_active_skills(
     if not message:
         return []
     message_tokens = {t for t in _TOKEN_SPLIT.split(message) if len(t) >= 4}
+    scope = str(workspace_id or "").strip()
     scored: list[tuple[int, int, str, SelectedSkill]] = []
-    for record in registry.list_skills(active_only=True):
+    for record in registry.list_skills(active_only=True, workspace_id=scope):
         if registry.review_is_stale(record):
             # 审核版本不一致: the approved guidance no longer matches the file.
             continue
@@ -159,6 +162,7 @@ def select_active_skills(
                     permissions=list(record.permissions),
                     body=_load_body(record),
                     matched_terms=matched_terms[:6],
+                    workspace_id=str(getattr(record, "workspace_id", "") or ""),
                 ),
             )
         )
@@ -166,9 +170,19 @@ def select_active_skills(
     return [item[3] for item in scored[: max(1, limit)]]
 
 
-def build_skill_guidance_block(selected: list[SelectedSkill]) -> str:
-    """System-prompt block for the selected skills (authority-neutral)."""
+def build_skill_guidance_block(
+    selected: list[SelectedSkill],
+    *,
+    workspace_id: str = "",
+) -> str:
+    """System-prompt block for skills that belong to this workspace."""
 
+    scope = str(workspace_id or "").strip()
+    selected = [
+        skill
+        for skill in selected
+        if not skill.workspace_id or (scope and skill.workspace_id == scope)
+    ]
     if not selected:
         return ""
     lines = [

@@ -99,7 +99,11 @@ def test_import_auto_distills_knowledge_skill_linked_three_ways(tmp_path: Path) 
         assert record.version == 1
 
         # Coach linkage: the selection path picks it up for a structure question.
-        selected = select_active_skills(registry, "帮我理解这个项目的架构与模块入口")
+        selected = select_active_skills(
+            registry,
+            "帮我理解这个项目的架构与模块入口",
+            workspace_id="ws-distill",
+        )
         assert any(skill.skill_id == distilled["skill_id"] for skill in selected)
 
         # Learning plan linkage: a study_guide teaching asset carries the links.

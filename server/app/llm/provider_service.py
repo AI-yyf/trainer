@@ -5102,8 +5102,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
             skill_registry = runtime_skill_registry(runtime_obj)
             if skill_registry is not None and str(message or "").strip():
-                selected_skills = select_active_skills(skill_registry, str(message))
-                skill_guidance = build_skill_guidance_block(selected_skills)
+                selected_skills = select_active_skills(
+                    skill_registry, str(message), workspace_id=workspace_id
+                )
+                skill_guidance = build_skill_guidance_block(
+                    selected_skills, workspace_id=workspace_id
+                )
         except Exception:
             logger.warning("skill_guidance_selection_failed", exc_info=True)
         if skill_guidance:
@@ -5678,8 +5682,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
             skill_registry = runtime_skill_registry(runtime_obj)
             if skill_registry is not None and str(message or "").strip():
-                selected_skills = select_active_skills(skill_registry, str(message))
-                skill_guidance = build_skill_guidance_block(selected_skills)
+                selected_skills = select_active_skills(
+                    skill_registry, str(message), workspace_id=workspace_id
+                )
+                skill_guidance = build_skill_guidance_block(
+                    selected_skills, workspace_id=workspace_id
+                )
         except Exception:
             logger.warning("skill_guidance_selection_failed", exc_info=True)
         if skill_guidance:
