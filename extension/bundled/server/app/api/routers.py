@@ -12427,6 +12427,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             passed=False,
         )
 
+    def report_has_executed_pass(report: EvaluationReport) -> bool:
+        return any(
+            str(getattr(check, "status", "") or "").strip().lower() == "passed"
+            for check in report.dynamic_checks
+        )
+
     def record_training_practice_evaluation(
         *,
         workspace_id: str,
@@ -12466,7 +12472,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             failed_checks=failed_checks,
             missing_requirements=missing_requirements,
             evidence_source=evidence_source,
-            verified_by_evaluator=bool(report.passed),
+            verified_by_evaluator=bool(report.passed) and report_has_executed_pass(report),
         )
         if isinstance(request, EvaluateCurrentFileRequest):
             record_executed_training_evidence(
@@ -12645,7 +12651,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             blocked_reason=report.next_step if not report.passed else "",
             selected_teaching_asset_ids=selected_teaching_asset_ids,
             teaching_strategy_context=teaching_strategy_context_from_snapshot(state.snapshot),
-            verified_by_evaluator=bool(report.passed),
+            verified_by_evaluator=bool(report.passed) and report_has_executed_pass(report),
             bind_evidence_to_current_plan=bound_to_task,
         )
 

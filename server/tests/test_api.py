@@ -3568,7 +3568,14 @@ def test_training_current_file_evaluation_projects_practice_handoff(tmp_path: Pa
                 task_spec_id="task-practice-api",
                 summary="The current file passed practice verification.",
                 static_checks=[],
-                dynamic_checks=[],
+                dynamic_checks=[
+                    EvaluationCheck(
+                        id="dynamic-practice-api",
+                        label="dynamic-practice-api",
+                        status="passed",
+                        detail="Controlled check executed.",
+                    )
+                ],
                 semantic_checks=[
                     EvaluationCheck(
                         id="semantic-review",

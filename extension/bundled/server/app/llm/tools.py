@@ -4516,7 +4516,9 @@ def _persist_practice_verification_result(
             failed_checks=failed_checks,
             missing_requirements=missing_requirements,
             evidence_source=str(payload.get("evidence_source") or "ide_current_file"),
-            verified_by_evaluator=True,
+            # This lane matches acceptance strings and diagnostics; it has no
+            # executed controlled check, so it must stay self-reported/unverified.
+            verified_by_evaluator=False,
         )
     except Exception as exc:
         return {

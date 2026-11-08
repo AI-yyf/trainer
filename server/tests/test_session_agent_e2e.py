@@ -1153,9 +1153,9 @@ def test_session_message_surfaces_practice_verification_as_coach_visible_status(
     assert workspace_memory["selected_card_id"] == "card-practice-search"
     assert workspace_memory["selected_card_status"] == "active"
     assert not workspace_memory["latest_learning_verified_result"]
-    assert workspace_memory["latest_training_handoff"]["handoff_status"] == "needs_reflection"
-    assert workspace_memory["latest_training_handoff"]["learning_phase"] == "verify"
-    assert workspace_memory["latest_training_next_hop"]["status"] == "reflection_required"
+    assert workspace_memory["latest_training_handoff"]["handoff_status"] == "needs_verification"
+    assert workspace_memory["latest_training_handoff"]["learning_phase"] == "try"
+    assert workspace_memory["latest_training_next_hop"]["status"] == "verification_required"
     assert any(
         card["card_id"] == "card-practice-search" and card["status"] == "active"
         for card in memory["training_card_candidates"]
@@ -1266,12 +1266,13 @@ def test_session_message_surfaces_practice_verification_needs_review(
     memory = body["snapshot"]["memory"]
     workspace_memory = memory["workspace"]
     assert workspace_memory["selected_card_id"] == "card-practice-request-queue"
-    assert workspace_memory["selected_card_status"] == "blocked"
-    assert workspace_memory["latest_learning_blocker"]
-    assert workspace_memory["latest_training_handoff"]["handoff_status"] == "needs_revision"
-    assert workspace_memory["latest_training_next_hop"]["status"] == "blocked"
+    # A string/acceptance mismatch is not a controlled verification; the card
+    # stays active and the handoff asks for real verification.
+    assert workspace_memory["selected_card_status"] == "active"
+    assert workspace_memory["latest_training_handoff"]["handoff_status"] == "needs_verification"
+    assert workspace_memory["latest_training_next_hop"]["status"] == "verification_required"
     assert any(
-        card["card_id"] == "card-practice-request-queue" and card["status"] == "blocked"
+        card["card_id"] == "card-practice-request-queue" and card["status"] == "active"
         for card in memory["training_card_candidates"]
     )
     assert memory["training_event_ledger"][-1]["event_type"] == "practice_evaluation_recorded"

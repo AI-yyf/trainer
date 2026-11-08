@@ -2778,9 +2778,9 @@ async def test_verify_practice_current_file_persists_training_evidence_before_re
     assert updated.status == "active"
     snapshot = memory_service.snapshot("workspace-test")
     assert snapshot.workspace["selected_card_status"] == "active"
-    assert snapshot.workspace["latest_training_handoff"]["handoff_status"] == "needs_reflection"
-    assert snapshot.workspace["latest_training_handoff"]["learning_phase"] == "verify"
-    assert snapshot.workspace["latest_training_next_hop"]["status"] == "reflection_required"
+    assert snapshot.workspace["latest_training_handoff"]["handoff_status"] == "needs_verification"
+    assert snapshot.workspace["latest_training_handoff"]["learning_phase"] == "try"
+    assert snapshot.workspace["latest_training_next_hop"]["status"] == "verification_required"
     assert snapshot.training_event_ledger[-1]["event_type"] == "practice_evaluation_recorded"
     assert snapshot.training_event_ledger[-1]["selected_card_id"] == "practice-persist-1"
 
