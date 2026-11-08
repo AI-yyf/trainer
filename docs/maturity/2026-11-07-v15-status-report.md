@@ -1,22 +1,23 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`1c016ab`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`9c87695`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `1c016ab`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..`1c016ab`，不含本报告提交） | 76 个 |
-| 代码差异（v1.4.0..HEAD） | 227 files, +34948 / −21630（含两次 CRLF→LF 规范化） |
-| 最新 ci 工作流 | run 42472040506 **success** |
-| 最新 Cross-Platform Verify | run 42472040443 **success（9/9）** |
+| 代码与 CI 基线 | `9c87695`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..`9c87695`，不含本报告提交） | 78 个 |
+| 代码差异（v1.4.0..HEAD） | 228 files, +35452 / −21672（含两次 CRLF→LF 规范化） |
+| 最新 ci 工作流 | run 42476480583 **success** |
+| 最新 Cross-Platform Verify | run 42476480513 **success（9/9）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
 最近提交（最新在前；完整 72 个见 `git log v1.4.0..main`）：
 
 ```
+9c87695 feat(skills): 项目蒸馏 Skill 按 workspace 隔离
 1c016ab feat(evidence): 三套 Evidence 统一契约与读取流
 2003806 design(settings): 教练/工作区/偏好统一为同一卡片表面
 a158614 design(settings): 模型配置收敛为单一完整界面
@@ -51,6 +52,8 @@ Settings 模型配置已收敛为单一完整界面：连接名称、服务地�
 
 Evidence 三套存储已统一：新增 `UnifiedEvidence`（schema 1）与三个适配器（AttemptStore / handoff / memory），统一 `trust_level`、`result`、artifact/resource 版本字段和 fingerprint；新增 `GET /evidence/records` 只读统一流，按工作区隔离、时间倒序并标记 `duplicate_of`。handoff 证据序列化升为 version 3，重启不丢字段；AttemptStore 新增工作区级证据读取；memory 入队按 verified 写 trust_level。行为测试 `test_evidence_unification.py` 4 项；server 全套 **3923 passed**。原始存储保留各自生命周期，没有新增第四套数据库或第二套掌握评分。
 
+项目蒸馏 Skill 已加 workspace 作用域：`SkillRecord.workspace_id` 随 registry 持久化；同名项目在不同 workspace 生成独立 id，不互相覆盖；注册、审核、激活、重试、失败/用量记录均校验 workspace；选择与注入只读取“全局 + 当前 workspace”，缺少 workspace 时只选全局；`/skill/list`、`/skill/status` 支持 workspace 过滤，`/skill/review` 跨 workspace 返回 404。行为测试 `test_skill_workspace_scope.py` 7 项；server 全套 **3930 passed**。
+
 ## 2. 修复清单（按目标阶段）
 
 ### 阶段一 P0 可靠性
@@ -82,7 +85,7 @@ Evidence 三套存储已统一：新增 `UnifiedEvidence`（schema 1）与三个
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3923 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、Evidence 统一、技能回归） |
+| server pytest | **3930 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、Goal 会话、Evidence 统一、Skill workspace 隔离） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
@@ -97,8 +100,9 @@ Evidence 三套存储已统一：新增 `UnifiedEvidence`（schema 1）与三个
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `1c016ab`） | 42472040506 | success |
-| Cross-Platform Verify（main `1c016ab`，linux 构建 ubuntu-22.04） | 42472040443 | **success（9/9）** |
+| ci（main `9c87695`） | 42476480583 | success |
+| Cross-Platform Verify（main `9c87695`，linux 构建 ubuntu-22.04） | 42476480513 | **success（9/9）** |
+| Trainer Nightly Remote-SSH E2E（`2a45b00`） | 42474532862 | success |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
 ## 5. 跨平台安装证据
