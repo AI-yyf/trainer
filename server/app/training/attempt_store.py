@@ -337,6 +337,7 @@ class AttemptStore:
 
         payload = {
             "evidence_id": evidence_id,
+            "schema_version": 1,
             "attempt_id": attempt_id,
             "workspace_id": workspace_id,
             "card_id": card_id,
@@ -568,6 +569,36 @@ class AttemptStore:
                 and item.get("artifact_hash") == current_hash
             )
         return items
+
+    def list_workspace_evidence(
+        self,
+        workspace_id: str,
+        *,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Most-recent evidence for one workspace, newest first.
+
+        Workspace scoping is enforced in SQL so the unified evidence view can
+        never leak another workspace's artifacts.
+        """
+        scope = (workspace_id or "").strip()
+        if not scope:
+            return []
+        safe_limit = max(1, min(int(limit), 200))
+        connection = self._connect()
+        try:
+            rows = connection.execute(
+                """
+                SELECT payload FROM training_evidence
+                WHERE workspace_id = ?
+                ORDER BY created_at DESC, rowid DESC
+                LIMIT ?
+                """,
+                (scope, safe_limit),
+            ).fetchall()
+        finally:
+            connection.close()
+        return [json.loads(row["payload"]) for row in rows]
 
     # -- internals ----------------------------------------------------------
 

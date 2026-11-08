@@ -1679,6 +1679,19 @@ class EvidenceItem(BaseModel):
     deferral_reason: str = ""
     rejected_at: str | None = None
     rejection_reason: str = ""
+    # Unified Evidence contract (schema 1): the adoption queue keeps its
+    # lifecycle fields, while trust/version facts share one vocabulary with
+    # AttemptStore and handoff evidence.
+    schema_version: int = 1
+    source_store: Literal["memory"] = "memory"
+    trust_level: str = "self_reported"
+    artifact_hash: str = ""
+    resource_id: str = ""
+    resource_version_id: str = ""
+    resource_content_hash: str = ""
+    resource_location: dict[str, Any] = Field(default_factory=dict)
+    resource_git_sha: str | None = None
+    canonical_evidence_id: str = ""
 
     @model_validator(mode="after")
     def sync_evidence_defaults(self) -> "EvidenceItem":

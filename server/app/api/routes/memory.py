@@ -16,6 +16,12 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
+from ...evidence.contract import (
+    evidence_from_attempt,
+    evidence_from_handoff,
+    evidence_from_memory,
+    finalize_unified_evidence,
+)
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -144,6 +150,65 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     def evidence_queue(session_id: str | None = None, workspace_id: str | None = None) -> EvidenceQueueSnapshot:
         resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
         return runtime.memory_service.evidence_queue(resolved_workspace_id)
+
+    @router.get("/evidence/records")
+    def evidence_records(
+        session_id: str | None = None,
+        workspace_id: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, object]:
+        """One normalized evidence stream across attempt/handoff/memory stores.
+
+        The stores keep their own lifecycle and persistence. This route is the
+        read contract that normalizes trust, result, resource version facts and
+        duplicate identity so Coach/Learning never parse three shapes.
+        """
+        resolved_workspace_id = current_workspace_id(
+            session_id=session_id,
+            workspace_id=workspace_id,
+        )
+        safe_limit = max(1, min(limit, 200))
+        records = []
+        store = getattr(runtime, "attempt_store", None)
+        if store is not None:
+            for item in store.list_workspace_evidence(
+                resolved_workspace_id,
+                limit=max(safe_limit * 2, 50),
+            ):
+                records.append(
+                    evidence_from_attempt(item, workspace_id=resolved_workspace_id)
+                )
+        handoff_id, handoff_records = runtime.memory_service.latest_handoff_evidence(
+            resolved_workspace_id
+        )
+        for item in handoff_records:
+            records.append(
+                evidence_from_handoff(
+                    item,
+                    workspace_id=resolved_workspace_id,
+                    handoff_id=handoff_id,
+                )
+            )
+        queue = runtime.memory_service.evidence_queue(resolved_workspace_id)
+        seen_memory_ids: set[str] = set()
+        for item in (
+            *queue.pending,
+            *queue.deferred,
+            *queue.adopted,
+            *queue.rejected,
+            *queue.history,
+        ):
+            if item.id in seen_memory_ids:
+                continue
+            seen_memory_ids.add(item.id)
+            records.append(evidence_from_memory(item))
+        unified = finalize_unified_evidence(records, limit=safe_limit)
+        return {
+            "workspace_id": resolved_workspace_id,
+            "schema_version": 1,
+            "total": len(unified),
+            "evidence": [item.model_dump(by_alias=True) for item in unified],
+        }
 
     @router.post("/evidence/enqueue", response_model=EvidenceItem)
     def evidence_enqueue(payload: dict) -> EvidenceItem:

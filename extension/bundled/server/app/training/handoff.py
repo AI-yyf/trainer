@@ -105,6 +105,18 @@ class EvidenceRecord:
     verified: bool = False
     verification_source: str = ""
     verified_at: datetime | None = None
+    # Unified Evidence contract (schema 1). Optional with defaults so every
+    # existing constructor remains valid.
+    schema_version: int = 1
+    trust_level: str = ""
+    result: str = ""
+    artifact_hash: str = ""
+    resource_id: str = ""
+    resource_version_id: str = ""
+    resource_content_hash: str = ""
+    resource_location: dict[str, Any] = field(default_factory=dict)
+    resource_git_sha: str | None = None
+    attempt_evidence_id: str = ""
 
 
 @dataclass
@@ -796,7 +808,7 @@ class TrainingHandoffGenerator:
     def _handoff_payload(handoff: ProjectHandoff) -> dict[str, Any]:
         content = handoff.handoff_content
         return {
-            "version": 2,
+            "version": 3,
             "handoff_id": handoff.handoff_id,
             "card_id": handoff.card_id,
             "card_title": handoff.card_title,
@@ -851,6 +863,17 @@ class TrainingHandoffGenerator:
                     "verified": record.verified,
                     "verification_source": record.verification_source,
                     "verified_at": record.verified_at.isoformat() if record.verified_at else None,
+                    "schema_version": record.schema_version,
+                    "trust_level": record.trust_level
+                    or ("controlled_check" if record.verified else "self_reported"),
+                    "result": record.result or ("passed" if record.verified else "unknown"),
+                    "artifact_hash": record.artifact_hash,
+                    "resource_id": record.resource_id,
+                    "resource_version_id": record.resource_version_id,
+                    "resource_content_hash": record.resource_content_hash,
+                    "resource_location": record.resource_location,
+                    "resource_git_sha": record.resource_git_sha,
+                    "attempt_evidence_id": record.attempt_evidence_id,
                 }
                 for record in handoff.evidence
             ],
@@ -982,6 +1005,24 @@ class TrainingHandoffGenerator:
                     verified=bool(item.get("verified")),
                     verification_source=str(item.get("verification_source") or ""),
                     verified_at=cls._parse_datetime(item.get("verified_at")),
+                    schema_version=int(item.get("schema_version") or 1),
+                    trust_level=str(item.get("trust_level") or ""),
+                    result=str(item.get("result") or ""),
+                    artifact_hash=str(item.get("artifact_hash") or ""),
+                    resource_id=str(item.get("resource_id") or ""),
+                    resource_version_id=str(item.get("resource_version_id") or ""),
+                    resource_content_hash=str(item.get("resource_content_hash") or ""),
+                    resource_location=(
+                        dict(item["resource_location"])
+                        if isinstance(item.get("resource_location"), dict)
+                        else {}
+                    ),
+                    resource_git_sha=(
+                        str(item.get("resource_git_sha"))
+                        if item.get("resource_git_sha")
+                        else None
+                    ),
+                    attempt_evidence_id=str(item.get("attempt_evidence_id") or ""),
                 )
                 for item in payload.get("evidence", [])
                 if isinstance(item, dict)

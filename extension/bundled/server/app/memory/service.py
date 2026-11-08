@@ -5884,6 +5884,7 @@ class MemoryService(
                     if verified or verification_source.strip() == "self_reported"
                     else ""
                 ),
+                "trust_level": "controlled_check" if verified else "self_reported",
                 "target_plan_step": bound_plan_step.strip(),
             }
         )
@@ -5913,6 +5914,26 @@ class MemoryService(
             structured._evidence_items.pop(normalized.id, None)
             raise
         return normalized
+
+    def latest_handoff_evidence(
+        self,
+        workspace_id: str,
+    ) -> tuple[str, list[Any]]:
+        """The latest persisted handoff's evidence records, workspace-scoped.
+
+        Handoff evidence is serialized inside ``latest_training_handoff``; this
+        accessor lets the unified evidence view read it without a second store.
+        """
+        scope = self._resolve_workspace_for_write(workspace_id)
+        structured = self._structured_for(scope)
+        payload = structured._workspace.get("latest_training_handoff")
+        if not isinstance(payload, dict):
+            return "", []
+        generator = self._training_handoff_generator(scope)
+        handoff = generator.hydrate_handoff(payload)
+        if handoff is None:
+            return "", []
+        return handoff.handoff_id, list(handoff.evidence)
 
     def evidence_queue(self, workspace_id: str) -> EvidenceQueueSnapshot:
         structured = self._structured_for(workspace_id)
