@@ -1,22 +1,23 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`b50e90d`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`458440f`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `b50e90d`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..HEAD） | 60 个 |
-| 代码差异（v1.4.0..HEAD） | 171 files, +18230 / −9461（含两次 CRLF→LF 规范化） |
-| 最新 ci 工作流 | run 42434591613 **success** |
-| 最新 Cross-Platform Verify | run 42434591622 **success（9/9，linux 构建 ubuntu-22.04）** |
+| 代码与 CI 基线 | `458440f`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..HEAD） | 62 个 |
+| 代码差异（v1.4.0..HEAD） | 175 files, +18407 / −9462（含两次 CRLF→LF 规范化） |
+| 最新 ci 工作流 | run 42440125873 **success** |
+| 最新 Cross-Platform Verify | run 42440125890 **success（9/9，linux 构建 ubuntu-22.04）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
-最近提交（最新在前；完整 60 个见 `git log v1.4.0..main`）：
+最近提交（最新在前；完整 62 个见 `git log v1.4.0..main`）：
 
 ```
+458440f feat(review): 队列评分走 FSRS + 无回忆证据标记
 b50e90d fix(review): mastery 调度带来源、ReviewScheduler 只读 FSRS
 6c181c7 test(eval): host 断言 training_phase=verify
 96da02c feat(review): 显式 training_phase + 失败 Verify 写 FSRS AGAIN
@@ -68,7 +69,7 @@ V4 审计与首轮修复：`docs/maturity/2026-11-08-v4-audit.md`（自由聊天
 
 | 套件 | 结果 |
 | --- | --- |
-| server pytest | **3900 passed / 0 failed**（28 subtests；含 FSRS 来源/phase、证据、技能回归） |
+| server pytest | **3902 passed / 0 failed**（28 subtests；含 FSRS 评分/来源、证据、技能回归） |
 | 新增行为测试 | `test_v15_reliability` 3、`test_project_analysis` 5、`test_harness_retrieval` 5、`test_teaching_quality` 3、`test_skill_lifecycle` 5、`test_skill_api` +1、`test_builtin_teaching_skill` 7 |
 | extension（node:test） | exit 0，0 断言失败（含图谱面板守卫、Settings 模型选择器水合状态守卫） |
 | tsc（extension+webview） | clean |
