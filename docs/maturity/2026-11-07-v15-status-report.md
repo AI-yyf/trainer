@@ -1,22 +1,23 @@
 # Trainer v1.5 统一状态报告（2026-11-07）
 
-> 唯一状态报告。所有数值来自本仓库当前 `main`（`9c87695`）的真实命令输出、
+> 唯一状态报告。所有数值来自本仓库当前 `main`（`4407d96`）的真实命令输出、
 > 真实主机（141s）与真实 Release；未执行项显式标注，不做 PASS 冒充。
 
 ## 1. 现状
 
 | 项 | 值 |
 | --- | --- |
-| 代码与 CI 基线 | `9c87695`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
-| 本轮提交（v1.4.0..`9c87695`，不含本报告提交） | 78 个 |
-| 代码差异（v1.4.0..HEAD） | 228 files, +35452 / −21672（含两次 CRLF→LF 规范化） |
-| 最新 ci 工作流 | run 42476480583 **success** |
-| 最新 Cross-Platform Verify | run 42476480513 **success（9/9）** |
+| 代码与 CI 基线 | `4407d96`（v1.4.1 tag = `adbf93a`，v1.4.0 tag = `2f1bb68`） |
+| 本轮提交（v1.4.0..`4407d96`，不含本报告提交） | 80 个 |
+| 代码差异（v1.4.0..HEAD） | 238 files, +36577 / −21966（含两次 CRLF→LF 规范化） |
+| 最新 ci 工作流 | run 42481015260 **success** |
+| 最新 Cross-Platform Verify | run 42481015243 **success（9/9）** |
 | Release | v1.4.1 已发布（三平台 VSIX + build manifest） |
 
 最近提交（最新在前；完整 72 个见 `git log v1.4.0..main`）：
 
 ```
+4407d96 docs(matrix): 20 旅程 × 7 证据 + Provider/Memory/App 拆分 + SCIP JSON
 9c87695 feat(skills): 项目蒸馏 Skill 按 workspace 隔离
 1c016ab feat(evidence): 三套 Evidence 统一契约与读取流
 2003806 design(settings): 教练/工作区/偏好统一为同一卡片表面
@@ -104,8 +105,8 @@ Evidence 三套存储已统一：新增 `UnifiedEvidence`（schema 1）与三个
 
 | 工作流 | run | 结论 |
 | --- | --- | --- |
-| ci（main `9c87695`） | 42476480583 | success |
-| Cross-Platform Verify（main `9c87695`，linux 构建 ubuntu-22.04） | 42476480513 | **success（9/9）** |
+| ci（main `4407d96`） | 42481015260 | success |
+| Cross-Platform Verify（main `4407d96`，linux 构建 ubuntu-22.04） | 42481015243 | **success（9/9）** |
 | Trainer Nightly Remote-SSH E2E（`2a45b00`） | 42474532862 | success |
 | release（v1.4.1） | 42270707628 | success（三平台 VSIX + Release 发布） |
 
