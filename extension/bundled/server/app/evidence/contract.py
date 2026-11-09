@@ -127,6 +127,8 @@ def _iso(value: object) -> str:
 def _optional_float(value: object) -> float | None:
     if value is None or isinstance(value, bool):
         return None
+    if not isinstance(value, (str, int, float)):
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
