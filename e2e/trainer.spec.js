@@ -1294,9 +1294,12 @@ test.describe("Trainer three-destination shell", () => {
         connection: "connected",
       });
 
-      const iconButtons = page.locator(".composer__leading-actions .icon-button");
-      await expect(iconButtons).toHaveCount(1);
-      await iconButtons.nth(0).click();
+      const resourcesButton = page.locator(
+        '.composer__leading-actions button[aria-label="资料"], .composer__leading-actions button[aria-label="Resources"]',
+      );
+      await expect(resourcesButton).toHaveCount(1);
+      await expect(resourcesButton).toBeVisible();
+      await resourcesButton.click();
       await expect(page.locator(".composer-menu-panel--resources")).toBeVisible();
       await expect(page.locator(".composer-menu-panel--resources .menu-list__item")).toHaveCount(2);
     }

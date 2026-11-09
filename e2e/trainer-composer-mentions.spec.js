@@ -48,3 +48,20 @@ test("composer stays editable while a reply is streaming", async ({ page }) => {
   await expect(composer).toHaveValue("等待回复时继续编辑下一条");
   await expect(page.locator(".composer__send")).toHaveAttribute("aria-label", /取消/);
 });
+
+test("@ menu closes on a click outside the composer", async ({ page }) => {
+  await page.goto("/?scenario=ready&lang=zh-CN");
+  const composer = page.locator("#coach-composer");
+  await composer.fill("请参考 @");
+  await expect(page.getByRole("listbox", { name: "关联资料或文件" })).toBeVisible();
+  await page.locator("body").click({ position: { x: 20, y: 20 } });
+  await expect(page.getByRole("listbox", { name: "关联资料或文件" })).toHaveCount(0);
+});
+
+test("resource menu closes on an outside click", async ({ page }) => {
+  await page.goto("/?scenario=ready&lang=zh-CN");
+  await page.locator('.composer__leading-actions button[aria-label="资料"]').first().click();
+  await expect(page.locator(".composer-menu-panel")).toBeVisible();
+  await page.locator("body").click({ position: { x: 20, y: 20 } });
+  await expect(page.locator(".composer-menu-panel")).toHaveCount(0);
+});

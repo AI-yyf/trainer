@@ -2138,6 +2138,7 @@ type WebviewActionBody =
   | { type: "request/bootstrap" }
   | { type: "settings/primeProviderModels" }
   | { type: "command/execute"; payload: { commandId: string; payload?: unknown } }
+  | { type: "provider/cancelTest"; payload: { requestId: string } }
   | { type: "session/sendMessage"; payload: SessionMessageRequest }
   | { type: "session/sendStreamMessage"; payload: StreamMessageRequest }
   | { type: "session/cancelStreamMessage"; payload?: { messageId?: string } }

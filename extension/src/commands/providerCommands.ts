@@ -139,7 +139,22 @@ export type ProviderTestCommandPayload = {
   protocol?: string;
   responseLanguage?: ComposerLanguage;
   draft?: ProviderDraftTestInput;
+  /** Webview-issued id used by the explicit Cancel action. */
+  requestId?: string;
 };
+
+const activeProviderTests = new Map<string, AbortController>();
+
+export function cancelProviderTest(requestId: string): boolean {
+  const id = String(requestId || "").trim();
+  const controller = id ? activeProviderTests.get(id) : undefined;
+  if (!controller) {
+    return false;
+  }
+  controller.abort();
+  activeProviderTests.delete(id);
+  return true;
+}
 
 type ProviderTestResponse = {
   ok?: boolean;
@@ -805,16 +820,31 @@ export async function testProviderCommand(
   // Network boundary counter (P0): an explicit "test connection" is a real
   // upstream attempt — it is the only /provider/test entry on this path.
   const testRequestStartedAt = Date.now();
+  const requestId = String(payload?.requestId || "").trim();
+  const controller = requestId ? new AbortController() : undefined;
+  if (controller && requestId) {
+    activeProviderTests.set(requestId, controller);
+  }
   try {
     response = await context.sidecarClient.postJson<ProviderTestResponse>(
       status.port,
       '/provider/test',
       buildProviderTestRequestBody(context, testConfig, apiKey, responseLanguage),
-      { timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs },
+      {
+        timeoutMs: SIDECAR_DEFAULTS.providerRequestTimeoutMs,
+        ...(controller ? { signal: controller.signal } : {}),
+      },
     );
     recordProviderHttpRequest(Date.now() - testRequestStartedAt);
-  } catch {
+  } catch (error) {
     recordProviderHttpRequest(Date.now() - testRequestStartedAt);
+    if (controller?.signal.aborted) {
+      return {
+        ok: false,
+        cancelled: true,
+        message: 'Provider connection test cancelled. Your saved settings were not changed.',
+      };
+    }
     response = {
       ok: false,
       configured: true,
@@ -826,6 +856,10 @@ export async function testProviderCommand(
       error_category: 'sidecar_unavailable',
       retryable: true,
     };
+  } finally {
+    if (controller && requestId) {
+      activeProviderTests.delete(requestId);
+    }
   }
 
   const baseMessage = formatProviderTestMessage(response, testConfig.name, responseLanguage);

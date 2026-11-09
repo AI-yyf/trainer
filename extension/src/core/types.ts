@@ -1861,6 +1861,7 @@ type TrainerWebviewMessageBody =
       payload: { draftId: string };
     }
   | { type: 'command/execute'; payload: { commandId: string; payload?: unknown } }
+  | { type: 'provider/cancelTest'; payload: { requestId: string } }
   | { type: 'session/sendMessage'; payload: SessionMessagePayload }
   | { type: 'session/sendStreamMessage'; payload: StreamMessagePayload }
   | { type: 'session/cancelStreamMessage'; payload?: { messageId?: string } }

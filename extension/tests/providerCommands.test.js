@@ -3037,3 +3037,40 @@ test('createProviderProfileFromDraftCommand threads the draft thinkingConfig int
     reasoningEffort: 'medium',
   });
 });
+
+test('testProviderCommand can be cancelled by request id', async () => {
+  const vscodeMock = {
+    window: {
+      async showWarningMessage() {
+        return undefined;
+      },
+      async showInformationMessage() {
+        return undefined;
+      },
+      async showErrorMessage() {
+        return undefined;
+      },
+    },
+  };
+  const { testProviderCommand, cancelProviderTest } = loadWithVscodeMock(providerCommandsModulePath, vscodeMock);
+  const context = createContext();
+  context.sidecarClient = {
+    async postJson(_port, requestPath, _body, options) {
+      assert.equal(requestPath, '/provider/test');
+      assert.ok(options.signal);
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true,
+        });
+      });
+    },
+  };
+
+  const pending = testProviderCommand(context, { requestId: 'cancel-provider-test' });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(cancelProviderTest('cancel-provider-test'), true);
+  const result = await pending;
+
+  assert.equal(result.cancelled, true);
+  assert.match(result.message ?? '', /cancelled/i);
+});

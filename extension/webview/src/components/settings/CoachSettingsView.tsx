@@ -942,6 +942,7 @@ export interface CoachSettingsViewProps {
   onSwitchProviderProfile?: (profileId: string) => void;
   onRefreshProviderModels?: () => void;
   onTestProvider?: () => void;
+  onCancelProviderTest?: () => void;
   onRestartSidecar?: () => void;
   onClearProvider?: () => void;
   onOpenConfig?: () => void;
@@ -993,6 +994,7 @@ interface CoachSettingsViewSheetProps {
   onSwitchProviderProfile?: (profileId: string) => void;
   onRefreshProviderModels?: () => void;
   onTestProvider?: () => void;
+  onCancelProviderTest?: () => void;
   onRestartSidecar?: () => void;
   onClearProvider?: () => void;
   onOpenConfig?: () => void;
@@ -1921,6 +1923,7 @@ export function CoachSettingsView({
   onSwitchProviderProfile,
   onRefreshProviderModels,
   onTestProvider,
+  onCancelProviderTest,
   onRestartSidecar,
   onClearProvider,
   onOpenConfig,
@@ -1967,6 +1970,7 @@ export function CoachSettingsView({
       onSwitchProviderProfile={onSwitchProviderProfile}
       onRefreshProviderModels={onRefreshProviderModels}
       onTestProvider={onTestProvider}
+      onCancelProviderTest={onCancelProviderTest}
       onRestartSidecar={onRestartSidecar}
       onClearProvider={onClearProvider}
       onOpenConfig={onOpenConfig}
@@ -2085,6 +2089,7 @@ function CoachSettingsViewSheet({
   onSwitchProviderProfile,
   onRefreshProviderModels,
   onTestProvider,
+  onCancelProviderTest,
   onRestartSidecar,
   onClearProvider,
   onOpenConfig,
@@ -4524,6 +4529,15 @@ function CoachSettingsViewSheet({
             <ChevronDownIcon size={12} />
           </summary>
           <div className="settings-connection-summary__manage-actions">
+            {providerTestPending && onCancelProviderTest ? (
+              <button
+                type="button"
+                className="settings-connection-summary__link"
+                onClick={onCancelProviderTest}
+              >
+                {settingsText(language, "取消测试", "Cancel test")}
+              </button>
+            ) : null}
             {connectionReadyForUse && canRetestProvider && onTestProvider ? (
               <button
                 type="button"
@@ -5798,6 +5812,15 @@ function CoachSettingsViewSheet({
                           <span className="trainer-spinner trainer-spinner--sm" aria-hidden="true" />
                         ) : null}
                         {copy.test}
+                      </button>
+                    ) : null}
+                    {providerTestPending && onCancelProviderTest ? (
+                      <button
+                        type="button"
+                        className="settings-api-key-test settings-api-key-test--cancel"
+                        onClick={onCancelProviderTest}
+                      >
+                        {settingsText(language, "取消", "Cancel")}
                       </button>
                     ) : null}
                   </div>

@@ -1777,3 +1777,22 @@
   color: var(--fg-1);
   font-size: var(--trainer-font-xs);
 }
+
+/* One invisible click-catcher behind any open composer panel. It covers the
+   whole viewport (not just the composer strip), so clicking the conversation,
+   another destination, or empty space closes the menu on the first click. */
+.composer-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: transparent;
+}
+
+.composer__accessory > :not(.composer-menu-backdrop) {
+  position: relative;
+  z-index: 1;
+}
+
+.composer__mention-menu {
+  z-index: 2;
+}

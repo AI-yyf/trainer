@@ -693,6 +693,8 @@ export interface SettingsActionState {
   kind: SettingsActionKind;
   targets: SettingsFeedbackSlot[];
   baselineMessageKey?: string;
+  /** Correlates a long-running action with its explicit Cancel. */
+  requestId?: string;
 }
 
 export interface UtilityComposerPrompt {

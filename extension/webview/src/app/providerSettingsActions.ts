@@ -183,10 +183,12 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       });
     },
     onTestProvider: () => {
+      const requestId = `provider-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setSettingsActionState({
         kind: "test-provider",
         targets: ["provider"],
         baselineMessageKey: baselineMessageKey(),
+        requestId,
       });
       if (isBrowserPreview) {
         void runPreviewAction((browserPreview) =>
@@ -203,6 +205,7 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
           commandId: trainerCommands.testProvider,
           payload: {
             responseLanguage: language,
+            requestId,
             ...(providerDraftHasChanges ? { draft: providerSavePayload } : {}),
           },
         },

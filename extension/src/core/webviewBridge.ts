@@ -575,6 +575,12 @@ export class WorkbenchSidebarController
         return;
       }
 
+      if (message.type === 'provider/cancelTest') {
+        const { cancelProviderTest } = await import('../commands/providerCommands');
+        cancelProviderTest(message.payload.requestId);
+        return;
+      }
+
       if (message.type === 'request/bootstrap') {
         this.outputChannel.appendLine('[webview] lifecycle request/bootstrap');
         await this.refreshHostAndSync('request/bootstrap', { forceFull: true });

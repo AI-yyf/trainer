@@ -8308,6 +8308,20 @@ export function App() {
   }, [clearDockReturnNotice, setActiveView]);
   const handleDockReturnDismiss = useCallback(() => clearDockReturnNotice(), [clearDockReturnNotice]);
   useEffect(() => {
+    if (!openMenu) {
+      return;
+    }
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpenMenu(undefined);
+      }
+    };
+    document.addEventListener("keydown", dismiss, true);
+    return () => document.removeEventListener("keydown", dismiss, true);
+  }, [openMenu, setOpenMenu]);
+
+  useEffect(() => {
     const wasActive = streamWasActiveRef.current;
     streamWasActiveRef.current = streaming.isStreaming;
     if (wasActive && !streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
@@ -10661,6 +10675,17 @@ export function App() {
     defaultCoachDefaults,
   });
 
+  const cancelProviderTest = useCallback(() => {
+    const requestId = settingsActionState?.requestId;
+    if (requestId && !isBrowserPreview) {
+      postMessage({
+        type: "provider/cancelTest",
+        payload: { requestId },
+      });
+    }
+    setSettingsActionState(undefined);
+  }, [isBrowserPreview, settingsActionState?.requestId, setSettingsActionState]);
+
   const renderSettingsView = () => (
     <SettingsRoute
       language={layout.composerLanguage}
@@ -10682,6 +10707,7 @@ export function App() {
         onUseProviderTemplateLabel: useProviderTemplateByLabel,
         providerSaveBusy: settingsActionState?.kind === "save-provider",
         ...providerSettingsActions,
+        onCancelProviderTest: cancelProviderTest,
       }}
       contextualRail={renderContextualResultRail("settings")}
     />
@@ -11195,6 +11221,15 @@ export function App() {
                         },
                       },
                     ]),
+                {
+                  id: "create-skill",
+                  label: appUiCopy(layout.composerLanguage, "创建技能"),
+                  icon: <SkillCubeIcon size={16} />,
+                  onClick: () => {
+                    setOpenMenu(undefined);
+                    openSkillSettings();
+                  },
+                },
                 ...(showComposerTrainingVerify && !trainingVerifyFileVisible
                   ? [
                       {

@@ -218,6 +218,22 @@ export function CoachComposer({
     },
     [mentionItems.length],
   );
+  useEffect(() => {
+    if (!mentionMenu) {
+      return;
+    }
+    const handleOutside = (event: PointerEvent) => {
+      const frame = textareaRef.current?.closest(".composer__frame");
+      const target = event.target;
+      if (frame && target instanceof Node && frame.contains(target)) {
+        return;
+      }
+      setMentionMenu(null);
+    };
+    document.addEventListener("pointerdown", handleOutside, true);
+    return () => document.removeEventListener("pointerdown", handleOutside, true);
+  }, [mentionMenu]);
+
   const selectMention = useCallback(
     (item: ComposerMentionItem) => {
       if (!mentionMenu) {
