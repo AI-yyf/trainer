@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-09T00:06:09.986554+00:00",
+  "provider": {
+    "base_url": "https://linksub.fun",
+    "model": "deepseek-v4.1-flash"
+  },
+  "image": {
+    "kind": "synthetic bar chart",
+    "bytes": 4372
+  },
+  "journey": {
+    "status": "PASS",
+    "reply": "**Beta**（70）",
+    "reply_chars": 12
+  },
+  "assertions": {
+    "vision_reply_identifies_beta": true,
+    "vision_reply_compares_values": true
+  },
+  "elapsed_ms": 24887,
+  "ok": true
+}

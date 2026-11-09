@@ -66,7 +66,7 @@
 | P1 | 20 条旅程尚未形成逐条截图/日志归档 | 用本矩阵作为清单，逐条补 `docs/verification/v4-journey-*`；GUI 20 旅程与 Remote-SSH 重连已归档 |
 | P1 | App/Provider/Memory 巨型模块拆分 | Provider 已拆出 15 个 `llm/provider/*` 模块（约 3.8k 行）；Memory snapshot 已迁到 `memory/snapshot_builder.py`（989 行，service 减约 970 行）；App render 仍偏大 |
 | P2 | SCIP 索引解析 | ✅ JSON + 二进制 protobuf（`.scip`）解析；`test_scip_adapter` 6 项行为测试 |
-| P2 | 按需多模态（扫描 PDF/图表） | 🟡 扫描 PDF / 图片本地 Tesseract OCR 已接入（`app/resources/ocr.py`）；图表理解仍依赖 provider vision，未做真实 P 证据 |
+| P2 | 按需多模态（扫描 PDF/图表） | ✅ 扫描 PDF/图片本地 Tesseract OCR；图表走真实 provider vision（`v4-multimodal-journey.md`，Beta/70 PASS） |
 | P0 | 三平台 VSIX / 安装矩阵 | ✅ 三平台 package + installed host E2E 9/9；`v4-release-matrix-2026-11-08.md` |
 
 ## 4. 已有真实证据索引
@@ -82,6 +82,7 @@
 - 真实 Provider 旅程：`docs/verification/v4-provider-journeys.md`（deepseek-v4.1-flash；5/6 PASS，15/19/20 PARTIAL，9/10/11/12/18 未执行）。
 - 时钟 harness：`docs/verification/v4-clock-harness.md`（FSRS 数天跨度；另见 `v4-fsrs-delayed-recall.md`）。
 - FSRS 延迟回忆：`docs/verification/v4-fsrs-delayed-recall.md`（Day0→Day2，interval 2 天，真实模型延迟回忆）。
+- 多模态图表：`docs/verification/v4-multimodal-journey.md`（真实模型读取柱状图，Beta/70）。
 - 复习 Provider 旅程：`docs/verification/v4-review-provider-journeys.md`（9/11/12 PASS；10 未执行）。
 - 双客户端并发：`docs/verification/v4-dual-window-journey.md`（PASS：200 + 409，revision 只前进一次；不是双 GUI 窗口）。
 - Release/VSIX：`docs/verification/release-reconciliation-v1.4.1.md` + CI Cross-Platform 9/9。
