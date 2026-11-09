@@ -432,7 +432,7 @@ try {
   await page.waitForTimeout(1000);
   // Save first, then test the saved connection: the product persists a saved
   // connection's test result, while a draft test is intentionally transient.
-  await frame.locator("button:visible", { hasText: "保存并使用此连接" }).last().click();
+  await frame.getByRole("button", { name: "保存并使用此连接", exact: true }).last().click();
   await page.waitForTimeout(5000);
   const savedText = await bodyText(frame);
   const savedOpenModelPickers = await frame.locator("details.settings-model-picker[open]").count();
@@ -629,7 +629,7 @@ try {
     throw new Error("Model field did not render after reopening the connection");
   }
   await page.waitForTimeout(800);
-  await frame.locator("button:visible", { hasText: "保存并使用此连接" }).last().click();
+  await frame.getByRole("button", { name: "保存并使用此连接", exact: true }).last().click();
   await page.waitForTimeout(5000);
   const switchTest = await runProviderTest(page, frame, 3);
   const switchedText = await bodyText(frame);

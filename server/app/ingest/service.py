@@ -10,10 +10,21 @@ from app.resources.ocr import ocr_image_bytes
 
 from .models import IngestionRequest, IngestionResult, IngestionSummary, VisionPayload
 
-try:
-    import fitz  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    fitz = None
+_FITZ_UNSET = object()
+_fitz_module: object = _FITZ_UNSET
+
+
+def _fitz() -> object | None:
+    """Load PyMuPDF only when a PDF source is actually parsed."""
+    global _fitz_module
+    if _fitz_module is _FITZ_UNSET:
+        try:
+            import fitz  # type: ignore
+
+            _fitz_module = fitz
+        except Exception:  # pragma: no cover - optional dependency
+            _fitz_module = None
+    return _fitz_module
 
 
 class ResourceRegistryProtocol(Protocol):
@@ -263,6 +274,7 @@ def _build_pdf_paragraph_anchors(pages: list[str]) -> list[dict[str, object]]:
 
 def _extract_pdf_text(request: IngestionRequest) -> tuple[str, list[str], dict[str, object]]:
     warnings: list[str] = []
+    fitz = _fitz()
     if fitz is not None and Path(request.source_uri).exists():
         with fitz.open(request.source_uri) as doc:  # type: ignore[attr-defined]
             pages = [str(page.get_text()) for page in doc]

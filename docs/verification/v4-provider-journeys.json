@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_at": "2026-11-09T07:51:56.918823+00:00",
+  "recorded_at": "2026-11-09T11:40:24.145141+00:00",
   "provider": {
     "base_url": "https://linksub.fun",
     "model": "deepseek-v4.1-flash"
@@ -8,55 +8,55 @@
   "journeys": {
     "5_preference_adaptation": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "concept_first_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "hands_on_chars": 169,
-      "concept_first_chars": 169,
-      "different": false,
-      "status": "PARTIAL"
+      "hands_on_reply": "元组只保证**元素引用不变**，不冻结引用指向的对象；列表是可变对象，通过引用原地修改不改变元组本身。\n最小例子：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 修改列表内容，元组元素引用不变\nprint(t)         # (1, [2, 3, 4])\n# t[1] = [5]     # 这会报错：不能替换元组元素\n```",
+      "concept_first_reply": "元组保存的是元素的**引用**，不可变指引用不能替换，不是引用指向的对象不可变。列表本身可变，故可原地修改。\n\n```python\nt = (1, [2, 3])\nt[1].append(4)      # 改列表内容，引用未变 → 允许\nprint(t)            # (1, [2, 3, 4])\n# t[1] = [9]        # 替换元素引用 → TypeError\n```",
+      "hands_on_chars": 190,
+      "concept_first_chars": 201,
+      "different": true,
+      "status": "PASS"
     },
     "6_preference_change": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "concept_first_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "hands_on_chars": 169,
-      "concept_first_chars": 169,
-      "different": false,
-      "status": "PARTIAL",
+      "hands_on_reply": "元组只保证**元素引用不变**，不冻结引用指向的对象；列表是可变对象，通过引用原地修改不改变元组本身。\n最小例子：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 修改列表内容，元组元素引用不变\nprint(t)         # (1, [2, 3, 4])\n# t[1] = [5]     # 这会报错：不能替换元组元素\n```",
+      "concept_first_reply": "元组保存的是元素的**引用**，不可变指引用不能替换，不是引用指向的对象不可变。列表本身可变，故可原地修改。\n\n```python\nt = (1, [2, 3])\nt[1].append(4)      # 改列表内容，引用未变 → 允许\nprint(t)            # (1, [2, 3, 4])\n# t[1] = [9]        # 替换元素引用 → TypeError\n```",
+      "hands_on_chars": 190,
+      "concept_first_chars": 201,
+      "different": true,
+      "status": "PASS",
       "note": "Same prompt after the stored teaching_style changed from hands-on to concept-first."
     },
     "19_memory_revoke": {
-      "before_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "after_revoke_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "changed": false,
+      "before_reply": "元组不可变指创建后不能修改元素、不能增删，任何“修改”都会生成新对象。最小例子：`t = (1, 2)`，执行 `t[0] = 9` 会抛 `TypeError`；但 `t + (3,)` 会返回新元组 `(1, 2, 3)`。注意：元组内若含可变对象（如列表），该对象本身仍可被修改。",
+      "after_revoke_reply": "元组一旦创建，其元素引用不可增删改（不可变），因此可作字典键、更安全。\n但若元素本身可变（如列表），列表内容仍可改。\n最小例子：\n\n```python\nt = (1, [2]); t[1].append(3)  # 合法，t 变为 (1, [2, 3])\nt[0] = 9                      # 报错 TypeError\n```\n\n关键：不可变指元组结构（槽位）不变，不保证内部对象深不可变。",
+      "changed": true,
       "both_nonempty": true,
-      "status": "PARTIAL",
+      "status": "PASS",
       "note": "Global memory was cleared and the stored teaching style changed from hands-on to concept-first; the same prompt produced different real replies."
     },
     "15_resource_version": {
-      "old_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "new_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "old_mentions_alpha": false,
-      "new_mentions_beta": false,
+      "old_reply": "资料引用：“Project A Queue AlphaQueue protects shared items with one lock. Note This is the only queue used by the project.”\n\nAlphaQueue",
+      "new_reply": "资料中引用的队列名是：“Project A Queue BetaQueue protects shared items with two locks. Note This is the only queue used by the project.”\n\nBetaQueue",
+      "old_mentions_alpha": true,
+      "new_mentions_beta": true,
       "new_still_mentions_alpha": false,
-      "status": "PARTIAL",
+      "status": "PASS",
       "note": "The model quoted the attached resource before and after re-index; the sidecar version conflict remains covered by v4-integrity-journeys."
     },
     "20_multi_project": {
-      "project_a_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
-      "project_b_reply": "Trainer 当前卡在 provider path，所以这轮 coaching 还不能继续。\n\nTrainer 这一轮被 provider path 卡住了。\n详情：Provider test failed: Provider request failed.\n下一步：先修好 provider path，再重发这一轮 coaching。",
+      "project_a_reply": "ALPHA_QUEUE = \"AlphaQueue\"\nAlphaQueue",
+      "project_b_reply": "BETA_QUEUE = \"BetaQueue\"\nBetaQueue",
       "a_leaks_b": false,
-      "b_mentions_beta": false,
-      "status": "PARTIAL",
+      "b_mentions_beta": true,
+      "status": "PASS",
       "note": "A real two-workspace check: project A must not see BetaQueue; project B must retain it."
     }
   },
   "assertions": {
-    "preference_replies_differ": false,
+    "preference_replies_differ": true,
     "preference_replies_nonempty": true,
     "memory_revoke_replies_nonempty": true,
-    "resource_version_reply_updated": false,
-    "projects_do_not_cross_leak": false
+    "resource_version_reply_updated": true,
+    "projects_do_not_cross_leak": true
   },
   "not_executed": {
     "9_forgetting_days": {
@@ -80,6 +80,6 @@
       "note": "需要两个真实 VS Code 窗口；本次未执行"
     }
   },
-  "elapsed_ms": 119530,
-  "ok": false
+  "elapsed_ms": 45349,
+  "ok": true
 }

@@ -601,10 +601,11 @@ export class SidecarProcessManager implements vscode.Disposable {
       if (await this.client.probeHealth(port)) {
         return;
       }
-      // Tight poll: a localhost health check is sub-millisecond, and the
-      // PyInstaller cold start lands between polls — 300ms keeps added
-      // first-paint latency under the webview's animation frame budget.
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Tight poll: a localhost health check is sub-millisecond. The cold
+      // start now lands around the one-second budget, so a 300ms poll would
+      // add a visible slice of it; 100ms keeps the detected-ready time inside
+      // the target instead of rounding it upward.
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     throw new Error(

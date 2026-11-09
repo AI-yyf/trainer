@@ -6,12 +6,21 @@ from html import unescape
 from importlib import import_module
 from typing import Any
 
-try:
-    trafilatura: Any | None = import_module("trafilatura")
-except ImportError:  # pragma: no cover - optional extraction enhancement
-    trafilatura = None
-
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse, fetch_url
+
+_TRAFILATURA_UNSET = object()
+_trafilatura_module: Any = _TRAFILATURA_UNSET
+
+
+def _trafilatura() -> Any | None:
+    """Load the optional extractor only when a web source actually needs it."""
+    global _trafilatura_module
+    if _trafilatura_module is _TRAFILATURA_UNSET:
+        try:
+            _trafilatura_module = import_module("trafilatura")
+        except ImportError:  # pragma: no cover - optional extraction enhancement
+            _trafilatura_module = None
+    return _trafilatura_module
 
 
 @dataclass(slots=True)
@@ -71,6 +80,7 @@ def extract_from_url(url: str, *, network_enabled: bool = False) -> ExtractedCon
     # inline formatting; the plain-text pass remains the fallback when the
     # optional extractor is unavailable or produces nothing.
     markdown_text = ""
+    trafilatura = _trafilatura()
     if trafilatura is not None:
         try:
             markdown_text = (

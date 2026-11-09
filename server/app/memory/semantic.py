@@ -8,15 +8,6 @@ from typing import Any, Sequence, cast
 from .embedder import EmbeddingProvider, HashingEmbedder, cosine_similarity
 from .models import MemoryDocument, SearchHit, SemanticCollectionInfo
 
-try:
-    from qdrant_client import QdrantClient  # type: ignore
-    from qdrant_client.http.models import Distance, PointStruct, VectorParams  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    QdrantClient = None
-    Distance = None
-    PointStruct = None
-    VectorParams = None
-
 
 class SemanticMemory:
     def __init__(
@@ -32,28 +23,44 @@ class SemanticMemory:
         self.embedder = embedder or HashingEmbedder()
         self._documents: dict[str, MemoryDocument] = {}
         self._client = None
-        if QdrantClient is not None and Distance is not None and PointStruct is not None and VectorParams is not None:
-            try:
-                self._client = QdrantClient(path=str(storage_path))
-                self._ensure_collection()
-            except Exception:
-                self._client = None
+        self._client_initialized = False
+        self._point_struct = None
+        self._qdrant_enabled = True
 
-    def _ensure_collection(self) -> None:
+    def _ensure_client(self) -> None:
+        """Open Qdrant lazily so sidecar health does not wait on it."""
+        if self._client_initialized:
+            return
+        self._client_initialized = True
+        if not self._qdrant_enabled:
+            return
+        try:
+            from qdrant_client import QdrantClient  # type: ignore
+            from qdrant_client.http.models import (  # type: ignore
+                Distance,
+                PointStruct,
+                VectorParams,
+            )
+
+            self._client = QdrantClient(path=str(self.storage_path))
+            self._point_struct = PointStruct
+            self._ensure_collection(PointStruct, VectorParams, Distance)
+        except Exception:
+            self._client = None
+
+    def _ensure_collection(self, PointStruct: Any, VectorParams: Any, Distance: Any) -> None:
         if self._client is None:
             return
         client = cast(Any, self._client)
         collections = [item.name for item in client.get_collections().collections]
         if self.collection not in collections:
-            vector_params = cast(Any, VectorParams)
-            distance = cast(Any, Distance)
             # Get dimensions from embedder if available
             dimensions = getattr(self.embedder, "dimensions", 64)
             client.create_collection(
                 collection_name=self.collection,
-                vectors_config=vector_params(
+                vectors_config=VectorParams(
                     size=dimensions,
-                    distance=distance.COSINE,
+                    distance=Distance.COSINE,
                 ),
             )
 
@@ -62,6 +69,7 @@ class SemanticMemory:
         self.upsert_documents([document])
 
     def delete_text(self, record_id: str) -> bool:
+        self._ensure_client()
         removed = self._documents.pop(record_id, None) is not None
         if self._client is None:
             return removed
@@ -76,10 +84,11 @@ class SemanticMemory:
             return removed
 
     def upsert_documents(self, documents: Sequence[MemoryDocument]) -> None:
+        self._ensure_client()
         vectors = self.embedder.embed([document.text for document in documents])
         if self._client is not None:
             points = []
-            point_struct = cast(Any, PointStruct)
+            point_struct = cast(Any, self._point_struct)
             client = cast(Any, self._client)
             for document, vector in zip(documents, vectors, strict=False):
                 point_id = _normalize_point_id(document.id)
@@ -122,6 +131,7 @@ class SemanticMemory:
         top_k: int = 5,
         metadata_filter: dict[str, Any] | None = None,
     ) -> list[SearchHit]:
+        self._ensure_client()
         metadata_filter = metadata_filter or {}
         if self._client is not None:
             query_vector = self.embedder.embed([text])[0]
@@ -168,6 +178,7 @@ class SemanticMemory:
         return hits[:top_k]
 
     def info(self) -> SemanticCollectionInfo:
+        self._ensure_client()
         if self._client is not None:
             collection = cast(Any, self._client).get_collection(self.collection)
             return SemanticCollectionInfo(

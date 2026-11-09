@@ -230,4 +230,32 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     return app
 
 
-app = create_app()
+
+
+class _LazyApplication:
+    """Module-level ASGI proxy for ``uvicorn app.main:app`` and legacy tests.
+
+    Building the full FastAPI app at import time doubled sidecar cold start
+    (two runtimes, two route tables). The proxy creates it on first use, while
+    ``run_sidecar`` keeps the explicit ``create_app()`` factory path.
+    """
+
+    def __init__(self) -> None:
+        self._application = None
+        self._lock = __import__("threading").Lock()
+
+    def _get(self):
+        if self._application is None:
+            with self._lock:
+                if self._application is None:
+                    self._application = create_app()
+        return self._application
+
+    async def __call__(self, scope, receive, send):
+        await self._get()(scope, receive, send)
+
+    def __getattr__(self, name):
+        return getattr(self._get(), name)
+
+
+app = _LazyApplication()

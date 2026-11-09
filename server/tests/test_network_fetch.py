@@ -344,13 +344,14 @@ def test_legacy_url_helper_supports_trafilatura_document_results(monkeypatch) ->
             fetched_at="2026-07-13T00:00:00+00:00",
         ),
     )
+    import types
+
     monkeypatch.setattr(
-        "app.resources.ingest.trafilatura.extract",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "app.resources.ingest.trafilatura.bare_extraction",
-        lambda *_args, **_kwargs: document,
+        "app.resources.ingest._trafilatura_module",
+        types.SimpleNamespace(
+            extract=lambda *_args, **_kwargs: None,
+            bare_extraction=lambda *_args, **_kwargs: document,
+        ),
     )
 
     extracted = extract_from_url("https://origin.example/document-source", network_enabled=True)
@@ -373,19 +374,20 @@ def test_legacy_url_helper_supports_trafilatura_dict_results(monkeypatch) -> Non
             fetched_at="2026-07-13T00:00:00+00:00",
         ),
     )
+    import types
+
     monkeypatch.setattr(
-        "app.resources.ingest.trafilatura.extract",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        "app.resources.ingest.trafilatura.bare_extraction",
-        lambda *_args, **_kwargs: {
-            "title": "Dictionary extraction",
-            "text": "  Extracted from a dict result.  ",
-            "author": "Grace Hopper",
-            "date": "2026-07-13",
-            "url": "https://untrusted.example/dict-source",
-        },
+        "app.resources.ingest._trafilatura_module",
+        types.SimpleNamespace(
+            extract=lambda *_args, **_kwargs: None,
+            bare_extraction=lambda *_args, **_kwargs: {
+                "title": "Dictionary extraction",
+                "text": "  Extracted from a dict result.  ",
+                "author": "Grace Hopper",
+                "date": "2026-07-13",
+                "url": "https://untrusted.example/dict-source",
+            },
+        ),
     )
 
     extracted = extract_from_url("https://origin.example/dict-source", network_enabled=True)
@@ -408,9 +410,14 @@ def test_legacy_url_helper_rejects_empty_trafilatura_results(monkeypatch) -> Non
             fetched_at="2026-07-13T00:00:00+00:00",
         ),
     )
+    import types
+
     monkeypatch.setattr(
-        "app.resources.ingest.trafilatura.bare_extraction",
-        lambda *_args, **_kwargs: None,
+        "app.resources.ingest._trafilatura_module",
+        types.SimpleNamespace(
+            extract=lambda *_args, **_kwargs: "",
+            bare_extraction=lambda *_args, **_kwargs: None,
+        ),
     )
 
     with pytest.raises(ValueError, match="No extractable content"):

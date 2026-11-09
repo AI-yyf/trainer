@@ -264,6 +264,9 @@ class SemanticMemoryService(SemanticMemory):
         self.embedder = embedder or HashingEmbedder()
         self._documents = {}
         self._client = None
+        self._client_initialized = False
+        self._point_struct = None
+        self._qdrant_enabled = use_qdrant
         if use_qdrant:
             super().__init__(
                 storage_path=resolved_path,
