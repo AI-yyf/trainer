@@ -5610,6 +5610,7 @@ export function App() {
   const sendTurn = ({
     text,
     intent,
+    intentSource = "explicit",
     goals,
     stream = true,
     activeView: activeViewOverride,
@@ -5625,6 +5626,7 @@ export function App() {
   }: {
     text: string;
     intent: "coach" | "next_task" | "review" | "plan" | "task";
+    intentSource?: "explicit" | "inferred" | "none";
     goals?: string[];
     stream?: boolean;
     activeView?: ActiveWorkbenchView;
@@ -5708,6 +5710,7 @@ export function App() {
     const payload = {
       text,
       intent,
+      intentSource,
       goals,
       resourceIds,
       resourceComposerIntent: resolvedResourceComposerIntent,
@@ -7227,6 +7230,7 @@ export function App() {
     sendTurn({
       text: messageText,
       intent,
+      intentSource: formalPlanGeneration || planComposerSubmission ? "explicit" : sendAnalysis.intentSource,
       goals: formalPlanGeneration ? data.profile.goals : undefined,
       activeView: planComposerSubmission ? "plan" : activeView,
       stream: true,

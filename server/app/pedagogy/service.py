@@ -19,6 +19,7 @@ from .principle_explainer import PrincipleExplainerService, PrincipleNote
 from .project_adaptation_coach import ProjectAdaptationCoachService, ProjectAdaptationGuide
 from .project_idea_miner import ProjectIdea, ProjectIdeaMinerService
 from .project_source_scout import ProjectSourceScoutService, ProjectSourceSuggestion
+from .turn_decision import TurnFacts, decide_turn
 
 TeachingMode = Literal[
     "onboarding",
@@ -96,6 +97,14 @@ class TeachingDecision:
     depth_label: str = ""
     direct_answer_override: bool = False
     offer_light_practice: bool = False
+    turn_mode: str = "chat"
+    turn_source: str = "unknown"
+    turn_confidence: str = "unknown"
+    turn_allow_question: bool = False
+    turn_allow_formal_task: bool = False
+    turn_allow_formal_plan: bool = False
+    turn_allow_review: bool = False
+    turn_may_interrupt: bool = False
     evidence: list[str] = field(default_factory=list)
 
 
@@ -720,7 +729,31 @@ class PedagogyService:
             ),
             needs_rescue=learner_state.needs_rescue,
         )
-        if depth.direct_answer_override:
+        turn = decide_turn(
+            TurnFacts(
+                message=request.message,
+                requested_intent=getattr(request, "intent", "coach"),
+                intent_source=getattr(request, "intent_source", "explicit"),
+                answer_mode=profile.answer_policy if profile else None,
+                needs_rescue=learner_state.needs_rescue,
+                needs_review=learner_state.needs_review,
+                due_review_count=memory_snapshot.due_review_count if memory_snapshot else 0,
+                has_active_goal=bool(profile and profile.long_term_goals),
+                has_trusted_evidence=effective_skill_state
+                in {"assisted", "independent", "repeat_verified"},
+                activity_in_progress=bool(
+                    memory_snapshot
+                    and memory_snapshot.active_thread
+                    and memory_snapshot.active_thread.blocker
+                ),
+                intervention_allowed=not (
+                    affect_state is not None
+                    and affect_state.recovery_signal in {"fragile", "overloaded"}
+                ),
+                onboarding_needed=onboarding_needed,
+            )
+        )
+        if depth.direct_answer_override or turn.mode == "direct_answer":
             # One turn decision, one set of constraints: an explicit direct
             # answer request must not still carry a quiz, exercise or formal
             # plan artifact through the teaching-decision contract.
@@ -730,8 +763,30 @@ class PedagogyService:
             should_focus_on_implementation_steps = False
             exercise_shape = ""
             reason_parts.append("direct_answer_override")
-            reason = "; ".join(dict.fromkeys(reason_parts))
-        evidence = list(dict.fromkeys(reason_parts + depth.evidence))
+        elif turn.mode == "chat":
+            # Unknown or ordinary chat: keep the conversation open, but do not
+            # mint a formal task, plan or forced check.
+            should_end_with_question = False
+            should_generate_exercise = False
+            should_produce_plan_artifact = False
+            if mode == "review_reflection":
+                mode = "guided"
+                tone_profile = "steady"
+        elif turn.mode == "review":
+            mode = "review_reflection"
+            tone_profile = "review_loop"
+            should_produce_plan_artifact = False
+        elif turn.mode == "practice":
+            should_generate_exercise = True
+            should_produce_plan_artifact = False
+        elif turn.mode == "plan":
+            should_produce_plan_artifact = True
+            should_generate_exercise = False
+        if not turn.allow_question:
+            should_end_with_question = False
+        reason_parts.append(f"turn:{turn.mode}:{turn.source}")
+        reason = "; ".join(dict.fromkeys(reason_parts))
+        evidence = list(dict.fromkeys(reason_parts + depth.evidence + turn.evidence))
 
         return TeachingDecision(
             mode=mode,
@@ -755,6 +810,14 @@ class PedagogyService:
             depth_label=depth.label,
             direct_answer_override=depth.direct_answer_override,
             offer_light_practice=depth.offer_light_practice,
+            turn_mode=turn.mode,
+            turn_source=turn.source,
+            turn_confidence=turn.confidence,
+            turn_allow_question=turn.allow_question,
+            turn_allow_formal_task=turn.allow_formal_task,
+            turn_allow_formal_plan=turn.allow_formal_plan,
+            turn_allow_review=turn.allow_review,
+            turn_may_interrupt=turn.may_interrupt,
             evidence=evidence,
         )
 

@@ -1,6 +1,7 @@
 import { findSidebarControlCommand, type SidebarControlCommandId } from "./sidebarCommands";
 
 export type SendTarget = "idle" | "local_command" | "trainer";
+export type SendIntentSource = "explicit" | "inferred" | "none";
 export type SendIntent =
   | "coach"
   | "task"
@@ -51,6 +52,12 @@ export interface SendWarning {
 export interface SendIntelligence {
   target: SendTarget;
   intent: SendIntent;
+  /**
+   * Whether `intent` came from an explicit user action (slash command, skill
+   * button, view control) or natural-language inference. The server treats
+   * only explicit sources as permission to start formal practice/plan flows.
+   */
+  intentSource: SendIntentSource;
   isEmpty: boolean;
   localCommandId?: SidebarControlCommandId;
   draftBody?: string;
@@ -74,6 +81,7 @@ export function analyzeSendIntent(input: SendIntelligenceInput): SendIntelligenc
     return {
       target: "idle",
       intent: resolveIdleIntent(input),
+      intentSource: "none",
       isEmpty: true,
       requiresCurrentFile: false,
       hasActiveFile,
@@ -88,6 +96,7 @@ export function analyzeSendIntent(input: SendIntelligenceInput): SendIntelligenc
     return {
       target: "local_command",
       intent: "local_command",
+      intentSource: "explicit",
       isEmpty: false,
       localCommandId: localCommand.id,
       requiresCurrentFile: false,
@@ -100,8 +109,8 @@ export function analyzeSendIntent(input: SendIntelligenceInput): SendIntelligenc
   }
 
   const resolvedIntent = resolveTrainerIntent(normalizedDraft, input);
-  const draftBody = draftBodyForIntent(normalizedDraft, resolvedIntent);
-  const requiresCurrentFile = resolvedIntent === "review";
+  const draftBody = draftBodyForIntent(normalizedDraft, resolvedIntent.intent);
+  const requiresCurrentFile = resolvedIntent.intent === "review";
 
   const warnings: SendWarning[] = [];
   if (requiresCurrentFile && !hasActiveFile) {
@@ -125,13 +134,14 @@ export function analyzeSendIntent(input: SendIntelligenceInput): SendIntelligenc
   if (input.includeDiagnostics && !hasDiagnostics) {
     warnings.push({ id: "diagnostics-enabled-without-signals", severity: "info" });
   }
-  if (resolvedIntent === "review" && input.contextDetail !== "full") {
+  if (resolvedIntent.intent === "review" && input.contextDetail !== "full") {
     warnings.push({ id: "review-not-full-context", severity: "info" });
   }
 
   return {
     target: "trainer",
-    intent: resolvedIntent,
+    intent: resolvedIntent.intent,
+    intentSource: resolvedIntent.source,
     isEmpty: false,
     draftBody,
     requiresCurrentFile,
@@ -177,35 +187,38 @@ export function shouldAttachCurrentFile(text: string, intent?: SendIntent): bool
 function resolveTrainerIntent(
   draft: string,
   input: SendIntelligenceInput,
-): SendIntent {
+): { intent: SendIntent; source: SendIntentSource } {
   if (/^\/next\b/i.test(draft)) {
-    return "next_task";
+    return { intent: "next_task", source: "explicit" };
   }
   if (/^\/plan\b/i.test(draft)) {
-    return isExplicitFormalPlanSave(draft.replace(/^\/plan\b/i, "").trim()) ? "plan" : "coach";
+    return {
+      intent: isExplicitFormalPlanSave(draft.replace(/^\/plan\b/i, "").trim()) ? "plan" : "coach",
+      source: "explicit",
+    };
   }
   if (/^\/review\b/i.test(draft)) {
-    return "review";
+    return { intent: "review", source: "explicit" };
   }
   if (/^\/task\b/i.test(draft)) {
-    return "task";
+    return { intent: "task", source: "explicit" };
   }
   if (input.intentHint === "next_task") {
-    return "next_task";
+    return { intent: "next_task", source: "explicit" };
   }
   if (input.intentHint === "task") {
-    return "task";
+    return { intent: "task", source: "explicit" };
   }
   if (input.intentHint === "review") {
-    return "review";
+    return { intent: "review", source: "explicit" };
   }
   if (input.activeView === "coach") {
     const inferredIntent = inferNaturalLanguageIntent(draft);
     if (inferredIntent) {
-      return inferredIntent;
+      return { intent: inferredIntent, source: "inferred" };
     }
   }
-  return "coach";
+  return { intent: "coach", source: "none" };
 }
 
 function resolveIdleIntent(_input: SendIntelligenceInput): SendIntent {

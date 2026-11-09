@@ -1752,6 +1752,8 @@ export interface MessageAttachmentPayload {
 export interface SessionMessagePayload {
   text: string;
   intent?: 'coach' | 'next_task' | 'review' | 'plan' | 'task';
+  /** Explicit action vs natural-language inference; only explicit may start formal flows. */
+  intentSource?: 'explicit' | 'inferred' | 'none';
   goals?: string[];
   formalPlanMutation?: boolean;
   activeView?: 'coach' | 'plan' | 'resources' | 'training' | 'settings';

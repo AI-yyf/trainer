@@ -11745,6 +11745,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     "should_focus_on_implementation_steps": bool(
                         payload.get("should_focus_on_implementation_steps", True)
                     ),
+                    "turn_mode": str(payload.get("turn_mode", "") or ""),
+                    "turn_source": str(payload.get("turn_source", "") or ""),
+                    "turn_confidence": str(payload.get("turn_confidence", "") or ""),
+                    "turn_allow_question": bool(payload.get("turn_allow_question", True)),
+                    "turn_allow_formal_task": bool(payload.get("turn_allow_formal_task", False)),
+                    "turn_allow_formal_plan": bool(payload.get("turn_allow_formal_plan", False)),
+                    "turn_allow_review": bool(payload.get("turn_allow_review", False)),
+                    "turn_may_interrupt": bool(payload.get("turn_may_interrupt", False)),
                     "tone_profile": str(payload.get("tone_profile", "steady") or "steady"),
                     "focus_area": str(
                         payload.get("focus_area") or payload.get("focusArea") or ""

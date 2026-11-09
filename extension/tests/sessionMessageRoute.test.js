@@ -441,6 +441,31 @@ test('sendStreamMessageCommand routes default Coach turns through /session/messa
   assert.equal(options.signal.aborted, false);
 });
 
+test('sendStreamMessageCommand forwards the intent source fact to the sidecar', async () => {
+  const vscodeMock = {
+    window: {
+      activeTextEditor: undefined,
+    },
+  };
+  const { sendStreamMessageCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
+  const context = createContext();
+
+  const result = await sendStreamMessageCommand(context, {
+    text: '帮我看看这个函数为什么这么写。',
+    stream: true,
+    intent: 'task',
+    intentSource: 'inferred',
+    responseLanguage: 'zh-CN',
+    includeCurrentFile: false,
+    useAgentLoop: true,
+  });
+
+  assert.equal(result.ok, true);
+  const [, , body] = context.__streamCalls[0];
+  assert.equal(body.intent, 'task');
+  assert.equal(body.intent_source, 'inferred');
+});
+
 test('sendStreamMessageCommand sends unverified streaming probe providers to the sidecar instead of blocking locally', async () => {
   const vscodeMock = {
     window: {

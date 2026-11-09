@@ -1887,6 +1887,7 @@ export async function sendMessageCommand(
   const requestBody = {
     session_id: context.getSessionId(),
     intent: sessionPayload?.intent ?? 'coach',
+    intent_source: sessionPayload?.intentSource ?? 'explicit',
     formal_plan_mutation: sessionPayload?.formalPlanMutation === true,
     // Host-armed only — ignore any webview self-attestation.
     resource_organization_confirmed: consumeResourceOrganizationConfirmed(context),
@@ -2151,6 +2152,7 @@ export async function sendStreamMessageCommand(
       session_id: context.getSessionId(),
       stream_id: messageId,
       intent: streamPayload.intent ?? 'coach',
+      intent_source: streamPayload.intentSource ?? 'explicit',
       formal_plan_mutation: streamPayload.formalPlanMutation === true,
       // Host-armed only — ignore any webview self-attestation.
       resource_organization_confirmed: consumeResourceOrganizationConfirmed(context),
@@ -3650,6 +3652,12 @@ function extractSessionPayload(payload: unknown): ResourceComposerSessionMessage
       asRecord.intent === 'plan' ||
       asRecord.intent === 'task'
         ? (asRecord.intent as SessionMessagePayload['intent'])
+        : undefined,
+    intentSource:
+      asRecord.intentSource === 'explicit' ||
+      asRecord.intentSource === 'inferred' ||
+      asRecord.intentSource === 'none'
+        ? (asRecord.intentSource as SessionMessagePayload['intentSource'])
         : undefined,
     formalPlanMutation:
       asRecord.formalPlanMutation === true ? true : undefined,

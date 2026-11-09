@@ -58,6 +58,39 @@ test('analyzeSendIntent keeps remote review slash command as trainer intent', ()
   assert.equal(result.draftBody, 'focus on naming');
 });
 
+test('slash commands report an explicit intent source', () => {
+  const result = analyzeSendIntent(
+    createInput({
+      draft: '/review focus on naming',
+    }),
+  );
+
+  assert.equal(result.intent, 'review');
+  assert.equal(result.intentSource, 'explicit');
+});
+
+test('natural-language plan inference is reported as inferred, never explicit', () => {
+  const result = analyzeSendIntent(
+    createInput({
+      draft: '帮我生成学习计划并保存。',
+    }),
+  );
+
+  assert.equal(result.intent, 'plan');
+  assert.equal(result.intentSource, 'inferred');
+});
+
+test('ordinary chat reports no intent source instead of inventing one', () => {
+  const result = analyzeSendIntent(
+    createInput({
+      draft: '帮我看看这个函数为什么这么写。',
+    }),
+  );
+
+  assert.equal(result.intent, 'coach');
+  assert.equal(result.intentSource, 'none');
+});
+
 test('ordinary prose that mentions review stays in free chat', () => {
   const result = analyzeSendIntent(
     createInput({

@@ -2777,6 +2777,12 @@ class SessionMessageRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
     message: str
+    # The client reports whether its intent came from an explicit user action
+    # (slash command, skill button, review/task control) or from natural
+    # language inference. Only an explicit source may start formal flows.
+    intent_source: Literal["explicit", "inferred", "none"] = Field(
+        default="explicit", alias="intentSource"
+    )
     # Host-recorded live test evidence. The streaming route adopts it for this
     # exact provider when a project admission restarted the sidecar and the
     # in-process capability cache is empty. Snake case and the camelCase alias
