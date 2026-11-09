@@ -92,10 +92,16 @@ export function resolveResourceLocalCandidates(resource: ResourceOpenRecord): st
 }
 
 export function resolveResourceOpenTarget(resource: ResourceOpenRecord): ResourceOpenTarget {
+  // The library's uniform artifact is the complete canonical Markdown: text,
+  // structure, tables, images and notes all live there. Opening a row means
+  // reading that document, not a summary record.
+  const readCandidates = resolveResourceReadCandidates(resource);
+  if (readCandidates.length > 0) {
+    return { kind: "vscode", source: readCandidates[0] };
+  }
+
   const source = resource.source?.trim();
   const canonicalSource = resource.canonicalSource?.trim();
-  // A web source is opened where it lives. A captured snapshot or README is
-  // evidence for Trainer, not the file the learner asked to inspect.
   const urlSource = [source, canonicalSource].find(
     (value): value is string => Boolean(value) && URL_PATTERN.test(value!),
   );
@@ -103,7 +109,27 @@ export function resolveResourceOpenTarget(resource: ResourceOpenRecord): Resourc
     return { kind: "browser", source: urlSource };
   }
 
-  // Local resources open their original file, never the Markdown digest.
+  return {
+    kind: "unavailable",
+    reason: source || canonicalSource ? "invalid_url" : "missing_source",
+  };
+}
+
+/**
+ * The untouched source behind a library Markdown. This is a secondary action:
+ * a web source keeps its live URL, a local file opens its original bytes (or
+ * the managed sandbox copy when the original was not retained).
+ */
+export function resolveResourceOriginalTarget(resource: ResourceOpenRecord): ResourceOpenTarget {
+  const source = resource.source?.trim();
+  const canonicalSource = resource.canonicalSource?.trim();
+  const urlSource = [source, canonicalSource].find(
+    (value): value is string => Boolean(value) && URL_PATTERN.test(value!),
+  );
+  if (urlSource) {
+    return { kind: "browser", source: urlSource };
+  }
+
   const originalCandidates = resolveResourceOriginalCandidates(resource);
   if (originalCandidates.length > 0) {
     return { kind: "vscode", source: originalCandidates[0] };

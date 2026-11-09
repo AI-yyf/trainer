@@ -1,15 +1,18 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveResourceOpenTarget } = require('../dist/shared/src/resourceOpen.js');
+const { resolveResourceOpenTarget, resolveResourceOriginalTarget } = require('../dist/shared/src/resourceOpen.js');
 
 test('reading opens captured URL content in VS Code and preserves uncaptured external URLs', () => {
   // The /tmp/... values are opaque string fixtures for a pure mapping
   // function — resolveResourceOpenTarget never touches the filesystem — so
   // they stay platform-neutral and need no os.tmpdir() indirection.
-  // A URL keeps its live destination even when a captured snapshot exists;
-  // the snapshot is reading/indexing evidence, not the learner's source.
-  assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'https://example.com/guide', sandboxPath: '/tmp/captured-guide.md' }),
+  // A captured URL's library item is its complete Markdown; the live page is
+  // the explicit original action.
+  const captured = { kind: 'url', source: 'https://example.com/guide', sandboxPath: '/tmp/captured-guide.md' };
+  assert.deepEqual(resolveResourceOpenTarget(captured),
+    { kind: 'vscode', source: '/tmp/captured-guide.md' });
+  assert.deepEqual(resolveResourceOriginalTarget(captured),
     { kind: 'browser', source: 'https://example.com/guide' });
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'https://example.com/guide' }),
     { kind: 'browser', source: 'https://example.com/guide' });

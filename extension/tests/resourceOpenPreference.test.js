@@ -5,12 +5,13 @@ const assert = require('node:assert/strict');
 
 const {
   resolveResourceOpenTarget,
+  resolveResourceOriginalTarget,
   resolveResourceReadCandidates,
   resolveResourceOriginalCandidates,
   hasDistinctOriginal,
 } = require('../dist/shared/src/resourceOpen.js');
 
-test('document resources open the original file, not the Markdown digest', () => {
+test('document resources open the complete canonical Markdown by default', () => {
   const resource = {
     kind: 'docx',
     source: '/workspace/docs/notes.docx',
@@ -25,6 +26,10 @@ test('document resources open the original file, not the Markdown digest', () =>
     'Trainer Library/resources/originals/resource-1/notes.docx',
   ]);
   assert.deepEqual(resolveResourceOpenTarget(resource), {
+    kind: 'vscode',
+    source: 'Trainer Library/resources/markdown/resource-1.md',
+  });
+  assert.deepEqual(resolveResourceOriginalTarget(resource), {
     kind: 'vscode',
     source: 'Trainer Library/resources/originals/resource-1/notes.docx',
   });
@@ -43,7 +48,7 @@ test('resources without a canonical digest keep the previous local priority', ()
   assert.equal(hasDistinctOriginal(resource), false);
 });
 
-test('URL resources stay browser-openable and never claim a local file', () => {
+test('an uncaptured URL stays browser-openable and never claims a local file', () => {
   const resource = { kind: 'url', source: 'https://example.org/a', canonicalSource: 'https://example.org/a' };
   assert.deepEqual(resolveResourceReadCandidates(resource), []);
   assert.deepEqual(resolveResourceOriginalCandidates(resource), []);
@@ -51,9 +56,13 @@ test('URL resources stay browser-openable and never claim a local file', () => {
     kind: 'browser',
     source: 'https://example.org/a',
   });
+  assert.deepEqual(resolveResourceOriginalTarget(resource), {
+    kind: 'browser',
+    source: 'https://example.org/a',
+  });
 });
 
-test('a captured URL still opens the live web source, not the Markdown snapshot', () => {
+test('a captured URL opens its complete Markdown, with the live URL as the original', () => {
   const resource = {
     kind: 'url',
     source: 'https://example.org/a',
@@ -64,6 +73,10 @@ test('a captured URL still opens the live web source, not the Markdown snapshot'
     'Trainer Library/resources/markdown/resource-2.md',
   ]);
   assert.deepEqual(resolveResourceOpenTarget(resource), {
+    kind: 'vscode',
+    source: 'Trainer Library/resources/markdown/resource-2.md',
+  });
+  assert.deepEqual(resolveResourceOriginalTarget(resource), {
     kind: 'browser',
     source: 'https://example.org/a',
   });

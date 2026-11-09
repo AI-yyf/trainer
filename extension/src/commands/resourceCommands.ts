@@ -1031,7 +1031,7 @@ export async function openResourceCommand(
 ): Promise<CommandExecutionResult> {
   const payloadRecord = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
   const resourceId = payloadRecord?.resourceId;
-  void payloadRecord?.openOriginal;
+  const openOriginal = payloadRecord?.openOriginal === true;
   const openExternal = payloadRecord?.openExternal === true;
   const requestedLine =
     typeof payloadRecord?.line === 'number' && Number.isFinite(payloadRecord.line)
@@ -1046,6 +1046,21 @@ export async function openResourceCommand(
   const resource = context.getHostState().bootstrap.resources.find((item) => item.id === resourceId);
   if (!resource) {
     return { ok: false, message: 'The selected resource could not be found.' };
+  }
+
+  // An explicit external open goes to the live web source when one exists;
+  // otherwise it opens the original bytes with the OS default app.
+  if (openExternal) {
+    const liveUrl = [resource.source, resource.canonicalSource]
+      .map((value) => value?.trim())
+      .find((value): value is string => Boolean(value) && /^https?:\/\//i.test(value!));
+    if (liveUrl) {
+      await vscode.env.openExternal(vscode.Uri.parse(liveUrl));
+      return {
+        ok: true,
+        message: language === 'zh-CN' ? `已打开：${resource.title}` : `Opened ${resource.title}.`,
+      };
+    }
   }
 
   const target = resolveResourceOpenTarget(resource);
@@ -1067,11 +1082,13 @@ export async function openResourceCommand(
     };
   }
 
-  // The row opens the learner's source file. The canonical Markdown is an
-  // internal reading/search artifact, never the destination of an "open".
+  // The default is the complete canonical Markdown library artifact; the
+  // explicit "open original" action resolves the untouched source instead.
   const targetUri = await resolveExistingResourceUri(
     context,
-    resolveResourceOriginalCandidates(resource),
+    openOriginal
+      ? resolveResourceOriginalCandidates(resource)
+      : resolveResourceLocalCandidates(resource),
   );
   if (!targetUri) {
     const urlFallback = [resource.source, resource.canonicalSource]

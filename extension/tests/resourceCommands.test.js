@@ -1620,8 +1620,9 @@ test('openResourceCommand opens an existing absolute source in VS Code', async (
   assert.deepEqual(executedCommands[0][1].fsPath, expectedPath);
 });
 
-test('openResourceCommand opens the original document, never the canonical Markdown digest', async () => {
+test('openResourceCommand opens the canonical Markdown by default and the original on request', async () => {
   const openedExternal = [];
+  const executedCommands = [];
   const vscodeMock = {
     Uri: {
       file(value) {
@@ -1634,7 +1635,11 @@ test('openResourceCommand opens the original document, never the canonical Markd
         this.end = { line: endLine, character: endCharacter };
       }
     },
-    commands: { async executeCommand() {} },
+    commands: {
+      async executeCommand(...args) {
+        executedCommands.push(args);
+      },
+    },
     env: {
       async openExternal(uri) {
         openedExternal.push(uri);
@@ -1660,9 +1665,19 @@ test('openResourceCommand opens the original document, never the canonical Markd
   resource.canonicalMarkdownPath = markdownPath;
   resource.canonicalOriginalPath = originalPath;
 
-  const result = await openResourceCommand(context, { resourceId: 'resource-1' });
+  const defaultResult = await openResourceCommand(context, { resourceId: 'resource-1' });
 
-  assert.equal(result.ok, true);
+  assert.equal(defaultResult.ok, true);
+  assert.equal(openedExternal.length, 0);
+  assert.equal(executedCommands.length, 1);
+  assert.equal(executedCommands[0][0], 'vscode.open');
+  assert.equal(executedCommands[0][1].fsPath, markdownPath);
+
+  const originalResult = await openResourceCommand(context, {
+    resourceId: 'resource-1',
+    openOriginal: true,
+  });
+  assert.equal(originalResult.ok, true);
   assert.equal(openedExternal.length, 1);
   assert.equal(openedExternal[0].fsPath, originalPath);
   assert.notEqual(openedExternal[0].fsPath, markdownPath);

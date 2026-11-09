@@ -253,6 +253,9 @@ import pymupdf
 pdf=pymupdf.open()
 p1=pdf.new_page(); p1.insert_text((72,72),"Storage chapter one: the log.",fontsize=12)
 p2=pdf.new_page(); p2.insert_text((72,72),"Storage chapter two: quorum acknowledgement.",fontsize=12)
+pixmap=pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0,0,10,10), 0)
+pixmap.set_rect(pixmap.irect, (0,128,255))
+p2.insert_image(pymupdf.Rect(72,100,172,200), pixmap=pixmap)
 open(os.path.join(workspace_docs,"storage-paper.pdf"),"wb").write(pdf.tobytes()); pdf.close()
 print("fixtures ready")
 `,
@@ -580,21 +583,22 @@ try {
     throw new Error("The retired Reader detail page is still rendered.");
   }
 
-  // Proving direct source open: the Markdown resource opens in a real VS Code
-  // editor tab with its original content, not the generated .md digest.
-  const sourceNote = frame.getByRole("treeitem", { name: "Open Source Note", exact: true });
-  if (!(await sourceNote.isVisible())) {
-    throw new Error("The Markdown source row is not visible.");
+  // Proving the unified library item: a DOCX row opens its complete
+  // canonical Markdown in a real VS Code editor tab (front matter + body +
+  // table + image reference), never a Reader detail page.
+  const docxItem = frame.getByRole("treeitem", { name: "Distributed Systems Notes", exact: true });
+  if (!(await docxItem.isVisible())) {
+    throw new Error("The DOCX row is not visible.");
   }
-  await sourceNote.focus();
-  await sourceNote.press("Enter");
+  await docxItem.focus();
+  await docxItem.press("Enter");
   await page.waitForTimeout(2500);
   const editorText = await page.locator(".monaco-editor").innerText().catch(() => "");
   const tabs = await page.locator(".tab").allInnerTexts().catch(() => []);
-  record("source-open", {
-    ok: /OPEN_SOURCE_DIRECT/.test(editorText) || tabs.some((tab) => /open-source-note\.md/i.test(tab)),
-    screenshot: await screenshot(page, "source-open-dark"),
-    editorHead: editorText.slice(0, 300),
+  record("markdown-open", {
+    ok: /resource_id:/.test(editorText) && /source_type:\s*docx/.test(editorText),
+    screenshot: await screenshot(page, "markdown-open-dark"),
+    editorHead: editorText.slice(0, 400),
     tabs: tabs.slice(0, 8),
   });
   if ((await frame.locator("[data-template=ResourceReader]").count()) !== 0) {
@@ -686,12 +690,37 @@ function readCanonicalArtifacts(dir) {
   return texts;
 }
 const canonicalText = readCanonicalArtifacts(artifactDir).join("\n");
+function artifactFiles(dir) {
+  const files = [];
+  if (!fs.existsSync(dir)) return files;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...artifactFiles(full));
+    else files.push(entry.name);
+  }
+  return files;
+}
+const assetNames = artifactFiles(path.join(artifactDir, "markdown", "assets"));
 record("canonical-artifacts", {
   ok:
-    /Write Path/.test(canonicalText) &&
-    /Slide 1/.test(canonicalText) &&
-    /Storage chapter two/.test(canonicalText),
+    // DOCX: heading, hyperlink, footnote, table, image.
+    /\[paper\]\(https:\/\/example\.org\/storage\)/.test(canonicalText) &&
+    /\[\^2\]: Quorum acknowledgement/.test(canonicalText) &&
+    /\| Level \| Cost \|/.test(canonicalText) &&
+    /!\[docx-image-001\]\(assets\/docx-image-001\.png\)/.test(canonicalText) &&
+    // PPTX: table, image, speaker notes.
+    /\| State \| Meaning \|/.test(canonicalText) &&
+    /!\[slide-image-001\]\(assets\/slide-image-001\.png\)/.test(canonicalText) &&
+    /#### Speaker notes/.test(canonicalText) &&
+    // PDF: page anchor, text and embedded image.
+    /<!-- page: 2 -->/.test(canonicalText) &&
+    /Storage chapter two/.test(canonicalText) &&
+    /!\[page-002-image-001\.png\]\(assets\/page-002-image-001\.png\)/.test(canonicalText) &&
+    assetNames.includes("docx-image-001.png") &&
+    assetNames.includes("slide-image-001.png") &&
+    assetNames.includes("page-002-image-001.png"),
   bytes: canonicalText.length,
+  assets: assetNames.slice(0, 12),
 });
 
 const failures = results.filter((item) => item.ok === false);

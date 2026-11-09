@@ -7,7 +7,11 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import { resolveCopy } from "../../lib/i18n/copy";
 import { resolveResourceOrganizationConfirmCopy } from "../../lib/i18n/resourceComposerCopy";
-import { resolveResourceOpenTarget } from "../../../../../shared/src/resourceOpen";
+import {
+  hasDistinctOriginal,
+  resolveResourceOpenTarget,
+  resolveResourceOriginalTarget,
+} from "../../../../../shared/src/resourceOpen";
 import {
   coachOrientationTone,
   type CoachOrientationState,
@@ -3781,15 +3785,12 @@ export function ResourcesWorkbenchView({
       {rowMenu ? (() => {
         const resource = rowMenu.resource;
         const target = resolveResourceOpenTarget(resource);
-        const nativeSource =
-          target.kind === "vscode" &&
-          /\.(pdf|docx?|pptx?|xlsx?|epub|zip|mp3|wav|m4a|mp4|mov|webm)$/i.test(target.source);
+        const originalTarget = resolveResourceOriginalTarget(resource);
+        const distinctOriginal = hasDistinctOriginal(resource);
         const openLabel =
           target.kind === "browser"
             ? localize(language, "openInBrowser")
-            : nativeSource
-              ? localize(language, "openWithDefaultApp")
-              : localize(language, "openInVsCode");
+            : localize(language, "openInVsCode");
         return (
           <div
             className="menu-list is-compact resources-row-menu"
@@ -3808,7 +3809,7 @@ export function ResourcesWorkbenchView({
             >
               <span className="menu-list__body"><strong>{openLabel}</strong></span>
             </button>
-            {target.kind === "vscode" && !nativeSource ? (
+            {originalTarget.kind === "browser" && target.kind !== "browser" ? (
               <button
                 className="menu-list__item"
                 type="button"
@@ -3816,6 +3817,32 @@ export function ResourcesWorkbenchView({
                 onClick={() => {
                   closeResourceRowMenu();
                   openResourceInVsCode(resource, { openExternal: true });
+                }}
+              >
+                <span className="menu-list__body"><strong>{localize(language, "openInBrowser")}</strong></span>
+              </button>
+            ) : null}
+            {originalTarget.kind === "vscode" && distinctOriginal ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  openResourceInVsCode(resource, { openOriginal: true });
+                }}
+              >
+                <span className="menu-list__body"><strong>{localize(language, "openOriginal")}</strong></span>
+              </button>
+            ) : null}
+            {originalTarget.kind === "vscode" && distinctOriginal ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  openResourceInVsCode(resource, { openOriginal: true, openExternal: true });
                 }}
               >
                 <span className="menu-list__body"><strong>{localize(language, "openWithDefaultApp")}</strong></span>
