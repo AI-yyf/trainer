@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   useState,
   type ClipboardEvent,
   type DragEvent,
@@ -53,6 +54,20 @@ export interface ComposerModeControl {
   onChange: (value: string) => void;
 }
 
+
+export type ComposerMentionKind = "resource" | "file";
+
+export interface ComposerMentionItem {
+  id: string;
+  kind: ComposerMentionKind;
+  label: string;
+  detail?: string;
+  /** Text inserted after "@"; defaults to label. */
+  insertText?: string;
+  resourceId?: string;
+  path?: string;
+}
+
 export interface CoachComposerProps {
   value: string;
   onChange: (value: string) => void;
@@ -92,6 +107,9 @@ export interface CoachComposerProps {
   attachmentsAvailable?: boolean;
   attachmentsUnavailableReason?: string;
   submitBlockedReason?: string;
+  /** @-mention candidates: linked resources and workspace files. */
+  mentionItems?: ComposerMentionItem[];
+  onMentionSelect?: (item: ComposerMentionItem) => void;
 }
 
 export function CoachComposer({
@@ -132,6 +150,8 @@ export function CoachComposer({
   attachmentsAvailable = true,
   attachmentsUnavailableReason,
   submitBlockedReason,
+  mentionItems = [],
+  onMentionSelect,
 }: CoachComposerProps) {
   const localizedCopy = composerLocaleCopy[language] ?? composerLocaleCopy["en-US"];
   const resolvedPlaceholder = placeholder ?? localizedCopy.placeholder;
@@ -153,8 +173,76 @@ export function CoachComposer({
   const [isDragActive, setIsDragActive] = useState(false);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false);
+  const [mentionMenu, setMentionMenu] = useState<{
+    start: number;
+    query: string;
+    activeIndex: number;
+  } | null>(null);
+  const filteredMentionItems = useMemo(() => {
+    if (!mentionMenu) {
+      return [];
+    }
+    const query = mentionMenu.query.trim().toLowerCase();
+    return mentionItems
+      .filter((item) => {
+        if (!query) {
+          return true;
+        }
+        return `${item.label} ${item.detail ?? ""} ${item.path ?? ""}`
+          .toLowerCase()
+          .includes(query);
+      })
+      .slice(0, 8);
+  }, [mentionItems, mentionMenu]);
+  const updateMentionFromCaret = useCallback(
+    (nextValue: string, caret: number) => {
+      if (mentionItems.length === 0) {
+        setMentionMenu(null);
+        return;
+      }
+      const beforeCaret = nextValue.slice(0, caret);
+      const match = /(^|[\s\n])@([^\s@]*)$/.exec(beforeCaret);
+      if (!match) {
+        setMentionMenu(null);
+        return;
+      }
+      setMentionMenu((current) => {
+        const query = match[2];
+        const start = caret - query.length - 1;
+        const activeIndex =
+          current && current.query === query && current.start === start
+            ? current.activeIndex
+            : 0;
+        return { start, query, activeIndex };
+      });
+    },
+    [mentionItems.length],
+  );
+  const selectMention = useCallback(
+    (item: ComposerMentionItem) => {
+      if (!mentionMenu) {
+        return;
+      }
+      const token = (item.insertText ?? item.label).trim();
+      if (!token) {
+        return;
+      }
+      const before = value.slice(0, mentionMenu.start);
+      const after = value.slice(mentionMenu.start + 1 + mentionMenu.query.length);
+      const inserted = `@${token} `;
+      onChange(`${before}${inserted}${after}`.slice(0, maxLength));
+      onMentionSelect?.(item);
+      setMentionMenu(null);
+      const nextCaret = before.length + inserted.length;
+      window.requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(nextCaret, nextCaret);
+      });
+    },
+    [maxLength, mentionMenu, onMentionSelect, onChange, value],
+  );
   const compactMode = density === "compact";
-  const isTextareaDisabled = disabled || busy;
+  const isTextareaDisabled = disabled;
   const attachmentsEnabled = Boolean(onAttachmentsChange) && !inputReadOnly;
   const attachmentsInteractive = attachmentsEnabled && attachmentsAvailable;
   const stagedAttachments = attachments ?? [];
@@ -273,7 +361,7 @@ export function CoachComposer({
   const hasSubmissionContent = trimmedValue.length > 0 || stagedAttachments.length > 0;
   const hasSubmissionPermission = allowEmptySubmit || hasSubmissionContent;
   const isSubmitDisabled = imageStaging.busy || submitDisabled || !hasSubmissionPermission;
-  const canSubmit = !isTextareaDisabled && !isSubmitDisabled;
+  const canSubmit = !disabled && !busy && !isSubmitDisabled;
   const sendState = busy ? "streaming" : submitDisabled ? "blocked" : hasSubmissionPermission ? "ready" : "idle";
   const resolvedSummary = summary?.trim() ? summary : undefined;
   const resolvedHintText = hintText?.trim() ? hintText : undefined;
@@ -585,6 +673,39 @@ export function CoachComposer({
         }
         return;
       }
+      if (mentionMenu) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setMentionMenu(null);
+          return;
+        }
+        if (filteredMentionItems.length > 0) {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const delta = event.key === "ArrowDown" ? 1 : -1;
+            setMentionMenu((current) =>
+              current
+                ? {
+                    ...current,
+                    activeIndex:
+                      (current.activeIndex + delta + filteredMentionItems.length) %
+                      filteredMentionItems.length,
+                  }
+                : current,
+            );
+            return;
+          }
+          if (event.key === "Enter" || event.key === "Tab") {
+            event.preventDefault();
+            selectMention(
+              filteredMentionItems[
+                Math.min(mentionMenu.activeIndex, filteredMentionItems.length - 1)
+              ],
+            );
+            return;
+          }
+        }
+      }
       if (
         event.defaultPrevented ||
         !onNavigateHistory ||
@@ -610,7 +731,13 @@ export function CoachComposer({
         event.preventDefault();
       }
     },
-    [onKeyDown, onNavigateHistory],
+    [
+      filteredMentionItems,
+      mentionMenu,
+      onKeyDown,
+      onNavigateHistory,
+      selectMention,
+    ],
   );
 
   const navigateWithSideButton = useCallback(
@@ -763,6 +890,48 @@ export function CoachComposer({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
+          {mentionMenu ? (
+            <div
+              className="composer__mention-menu"
+              role="listbox"
+              aria-label={localizedCopy.mentionMenu}
+            >
+              {filteredMentionItems.length > 0 ? (
+                filteredMentionItems.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={index === mentionMenu.activeIndex}
+                    className={`composer__mention-item${
+                      index === mentionMenu.activeIndex
+                        ? " composer__mention-item--active"
+                        : ""
+                    }`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() =>
+                      setMentionMenu((current) =>
+                        current ? { ...current, activeIndex: index } : current,
+                      )
+                    }
+                    onClick={() => selectMention(item)}
+                  >
+                    <span className="composer__mention-kind">
+                      {item.kind === "resource"
+                        ? localizedCopy.mentionResource
+                        : localizedCopy.mentionFile}
+                    </span>
+                    <span className="composer__mention-label">{item.label}</span>
+                    {item.detail ? (
+                      <span className="composer__mention-detail">{item.detail}</span>
+                    ) : null}
+                  </button>
+                ))
+              ) : (
+                <div className="composer__mention-empty">{localizedCopy.mentionEmpty}</div>
+              )}
+            </div>
+          ) : null}
           <textarea
             ref={textareaRef}
             id={textareaId}
@@ -778,7 +947,14 @@ export function CoachComposer({
               .filter(Boolean)
               .join(" ")}
             placeholder={resolvedPlaceholder}
-            onChange={(event) => onChange(event.target.value.slice(0, maxLength))}
+            onChange={(event) => {
+              const nextValue = event.target.value.slice(0, maxLength);
+              onChange(nextValue);
+              updateMentionFromCaret(
+                nextValue,
+                event.target.selectionStart ?? nextValue.length,
+              );
+            }}
             onKeyDown={handleTextareaKeyDown}
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}

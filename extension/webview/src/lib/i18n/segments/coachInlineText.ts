@@ -441,6 +441,10 @@ type ComposerLocaleCopy = {
   removeAttachment: string;
   clear: string;
   plusMenu: string;
+  mentionMenu: string;
+  mentionResource: string;
+  mentionFile: string;
+  mentionEmpty: string;
 };
 
 export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = {
@@ -460,6 +464,10 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "移除附件",
     clear: "清空",
     plusMenu: "给这一条加点东西",
+    mentionMenu: "关联资料或文件",
+    mentionResource: "资料",
+    mentionFile: "文件",
+    mentionEmpty: "没有匹配的资料或文件",
   },
   "en-US": {
     placeholder: "Ask the coach",
@@ -477,6 +485,10 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "Remove attachment",
     clear: "Clear",
     plusMenu: "Add to this message",
+    mentionMenu: "Link a resource or file",
+    mentionResource: "Resource",
+    mentionFile: "File",
+    mentionEmpty: "No matching resource or file",
   },
   "es-ES": {
     placeholder: "Dile al entrenador qué quieres construir o dónde te has atascado.",
@@ -494,6 +506,10 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "Quitar archivo adjunto",
     clear: "Limpiar",
     plusMenu: "Añadir a este mensaje",
+    mentionMenu: "Vincular recurso o archivo",
+    mentionResource: "Recurso",
+    mentionFile: "Archivo",
+    mentionEmpty: "No hay recursos ni archivos coincidentes",
   },
   "fr-FR": {
     placeholder: "Dites au coach ce que vous voulez créer ou où vous êtes bloqué.",
@@ -511,6 +527,10 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "Retirer la pièce jointe",
     clear: "Effacer",
     plusMenu: "Ajouter à ce message",
+    mentionMenu: "Lier une ressource ou un fichier",
+    mentionResource: "Ressource",
+    mentionFile: "Fichier",
+    mentionEmpty: "Aucune ressource ou fichier correspondant",
   },
   "de-DE": {
     placeholder: "Sag dem Coach, was du bauen möchtest oder wo du festhängst.",
@@ -528,6 +548,10 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "Anhang entfernen",
     clear: "Leeren",
     plusMenu: "Dieser Nachricht hinzufügen",
+    mentionMenu: "Ressource oder Datei verknüpfen",
+    mentionResource: "Ressource",
+    mentionFile: "Datei",
+    mentionEmpty: "Keine passende Ressource oder Datei",
   },
   "ja-JP": {
     placeholder: "作りたいものや、行き詰まっている箇所をコーチに伝えてください。",
@@ -545,6 +569,10 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "添付を削除",
     clear: "消去",
     plusMenu: "このメッセージに追加",
+    mentionMenu: "資料またはファイルを関連付け",
+    mentionResource: "資料",
+    mentionFile: "ファイル",
+    mentionEmpty: "一致する資料またはファイルがありません",
   },
   "ko-KR": {
     placeholder: "만들고 싶은 것 또는 막힌 지점을 코치에게 알려 주세요.",
@@ -562,6 +590,10 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "첨부 파일 제거",
     clear: "지우기",
     plusMenu: "이 메시지에 추가",
+    mentionMenu: "자료 또는 파일 연결",
+    mentionResource: "자료",
+    mentionFile: "파일",
+    mentionEmpty: "일치하는 자료나 파일이 없습니다",
   },
   "pt-BR": {
     placeholder: "Diga ao coach o que você quer criar ou onde está com dificuldade.",
@@ -579,5 +611,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     removeAttachment: "Remover anexo",
     clear: "Limpar",
     plusMenu: "Adicionar a esta mensagem",
+    mentionMenu: "Vincular recurso ou arquivo",
+    mentionResource: "Recurso",
+    mentionFile: "Arquivo",
+    mentionEmpty: "Nenhum recurso ou arquivo correspondente",
   },
 };

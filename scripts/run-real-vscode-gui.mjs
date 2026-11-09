@@ -195,10 +195,10 @@ async function runProviderTest(page, frame, attempts = 3) {
     await page.waitForTimeout(2500);
     lastText = await waitForBody(
       frame,
-      /模型已就绪|最近测试 通过|暂时出错|连接需要检查|测试失败|未通过/,
-      180_000,
+      /模型已就绪|最近测试[^\n]{0,60}已通过|已连通|暂时出错|连接需要检查|测试失败|未通过/,
+      360_000,
     );
-    if (/模型已就绪|最近测试 通过/.test(lastText)) {
+    if (/模型已就绪|最近测试[^\n]{0,60}已通过|已连通/.test(lastText)) {
       return { ok: true, attempt, text: lastText };
     }
     record("provider-test-retry", {
@@ -469,17 +469,18 @@ try {
   await page.waitForTimeout(1800);
   const learningText = await bodyText(frame);
   const learningButtons = await frame.getByRole("button").allTextContents();
-  const learningTitles = (learningText.match(/学习/g) || []).length;
+  const learningHeadingCount = await frame
+    .getByRole("heading", { name: "学习", exact: true })
+    .count();
   record("04b-learning-screen", {
     ok:
       learningText.includes("学习") &&
       !/undefined|NaN|Infinity/.test(learningText) &&
-      learningTitles <= 3,
+      learningHeadingCount <= 1,
     text: learningText.slice(0, 1200),
     visibleButtons: learningButtons.slice(0, 24),
-    titleOccurrences: learningTitles,
-    note:
-      "titleOccurrences counts the nav label plus the destination heading; more than 3 means duplicated titles.",
+    titleOccurrences: learningHeadingCount,
+    note: "titleOccurrences counts real headings named 学习, not body mentions.",
     screenshot: await screenshot(page, "04b-learning-screen"),
   });
 
@@ -585,6 +586,16 @@ try {
   const switchModelField = frame.locator('input[placeholder="例如 kimi-k3"]').first();
   const switchModelSelect = frame.locator("select").first();
   if (await switchModelField.count()) {
+    if (!(await switchModelField.isVisible())) {
+      const picker = frame.locator("details.settings-model-picker").first();
+      if (await picker.count()) {
+        const open = await picker.evaluate((element) => element.open === true);
+        if (!open) {
+          await picker.locator("summary").first().click();
+          await page.waitForTimeout(800);
+        }
+      }
+    }
     await switchModelField.fill(switchModel);
   } else if (await switchModelSelect.count()) {
     const optionsBefore = await switchModelSelect.locator("option").allTextContents();

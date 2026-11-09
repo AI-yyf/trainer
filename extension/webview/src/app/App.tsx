@@ -230,6 +230,7 @@ import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirma
 import {
   CoachComposer,
   ComposerContextMenu,
+  type ComposerMentionItem,
   ComposerIconButton,
   ComposerModelMenu,
   ComposerResourcesMenu,
@@ -2785,7 +2786,13 @@ export function App() {
       streamBaseLengthRef.current !== null &&
       list.length > streamBaseLengthRef.current
     ) {
-      list = list.slice(0, streamBaseLengthRef.current);
+      // Hide only the duplicate assistant reply that the live streaming slot
+      // already renders. The user's just-sent turn must stay visible even when
+      // it lands in the snapshot after the stream began.
+      list = list.filter(
+        (message, index) =>
+          index < (streamBaseLengthRef.current ?? 0) || message.role === "user",
+      );
     }
     const now = Date.now();
     const pendingTurns = optimisticTurns.filter((entry) => now - entry.createdAt <= 120_000);
@@ -4172,6 +4179,69 @@ export function App() {
   ]);
   const trainingFilesToTouch =
     selectedTrainingCardCandidate?.filesToTouch ?? selectedTrainingRouteCard?.filesToTouch ?? [];
+  const composerMentionItems = useMemo<ComposerMentionItem[]>(() => {
+    const items: ComposerMentionItem[] = [];
+    const seen = new Set<string>();
+    for (const resource of data.resources) {
+      const resourceId = resource.id?.trim();
+      const name = resource.title?.trim();
+      if (!resourceId || !name) {
+        continue;
+      }
+      const key = `resource:${resourceId}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      items.push({
+        id: key,
+        kind: "resource",
+        label: name,
+        detail: resource.kind,
+        insertText: name,
+        resourceId,
+      });
+    }
+    const fileCandidates = [
+      data.liveContext.activeFile,
+      ...(data.liveContext.recentFiles ?? []),
+      ...(data.liveContext.recentEditedFiles ?? []),
+      ...(data.liveContext.relatedFiles ?? []),
+      ...trainingFilesToTouch,
+    ];
+    for (const rawPath of fileCandidates) {
+      const filePath = rawPath?.trim();
+      if (!filePath) {
+        continue;
+      }
+      const key = `file:${filePath}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      items.push({
+        id: key,
+        kind: "file",
+        label: filePath.split(/[\\/]/).pop() || filePath,
+        detail: filePath,
+        insertText: filePath,
+        path: filePath,
+      });
+    }
+    return items;
+  }, [data.liveContext, data.resources, trainingFilesToTouch]);
+  const handleComposerMentionSelect = useCallback((item: ComposerMentionItem) => {
+    if (!item.resourceId) {
+      return;
+    }
+    const resourceId = item.resourceId;
+    const add = (current: string[]) =>
+      current.includes(resourceId)
+        ? current
+        : [...current, resourceId].slice(-RESOURCE_COMPOSER_MAX_IDS);
+    setSelectedResourceContextIds(add);
+    setResourceConversationContextIds(add);
+  }, []);
   const trainingHintLadder = pickLanguageAlignedTrainingList(layout.composerLanguage, [
     ...(selectedTrainingCardCandidate?.hintLadder ?? []),
     ...(selectedTrainingRouteCard?.hintLadder ?? []),
@@ -8216,14 +8286,16 @@ export function App() {
       return;
     }
     const resumeDraft = streamResumeDraftRef.current;
-    if (resumeDraft.trim()) {
+    if (resumeDraft.trim() && !draft.trim()) {
+      // Restore the sent text only when the learner has not already started
+      // editing a new draft while the reply was in flight.
       setComposerDraft(resumeDraft);
     }
     postMessage({
       type: "session/cancelStreamMessage",
       payload: streaming.streamMessageId ? { messageId: streaming.streamMessageId } : undefined,
     });
-  }, [setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
+  }, [draft, setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
 
   const streamWasActiveRef = useRef(streaming.isStreaming);
   // §3.7 red line 5 (stay mode): the store owns the stay-send marker and the
@@ -10861,6 +10933,8 @@ export function App() {
               onChange={handleComposerDraftChange}
               onSubmit={handleSubmit}
               onCancel={handleCancelStream}
+              mentionItems={composerMentionItems}
+              onMentionSelect={handleComposerMentionSelect}
               onNavigateHistory={navigateComposerHistory}
               density={composerModelActionDensity}
               placeholder={

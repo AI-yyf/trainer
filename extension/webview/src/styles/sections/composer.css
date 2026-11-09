@@ -1696,3 +1696,84 @@
 .coach-goal-bar__details p {
   margin: 0;
 }
+
+/* @-mention picker: resources + workspace files, attached above the frame. */
+.composer__mention-menu {
+  position: absolute;
+  z-index: 24;
+  inset-inline: 0;
+  bottom: calc(100% + var(--space-1));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-block-size: min(34vh, 260px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  box-shadow: 0 -8px 28px -12px var(--vscode-widget-shadow, transparent);
+  scrollbar-width: thin;
+}
+
+.composer__mention-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--space-2);
+  row-gap: 2px;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-0);
+  text-align: start;
+  cursor: pointer;
+}
+
+.composer__mention-item--active,
+.composer__mention-item:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.composer__mention-kind {
+  grid-row: 1 / span 2;
+  align-self: start;
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  color: var(--fg-1);
+  font-family: var(--font-ui);
+  font-size: var(--trainer-font-3xs);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.composer__mention-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-0);
+  font-family: var(--font-body);
+  font-size: var(--type-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__mention-detail {
+  grid-column: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-1);
+  font-family: var(--font-ui);
+  font-size: var(--trainer-font-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__mention-empty {
+  padding: var(--space-2);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-xs);
+}

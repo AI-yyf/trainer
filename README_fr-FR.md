@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · Français · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/source-v1.4.1-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Release](https://img.shields.io/badge/source-v1.4.2-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#installation)
 [![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#garanties-de-qualité)
@@ -590,7 +590,7 @@ Si Trainer a amélioré ton flux de travail, cite-le librement dans ton blog / p
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.4.1}
+  note   = {v1.4.2}
 }
 ```
 
@@ -600,6 +600,6 @@ Si Trainer a amélioré ton flux de travail, cite-le librement dans ton blog / p
 
 **// Entraîne ton IA · Grandis avec ton IA**
 
-`v1.4.1` · Fait avec du café, FSRS, 24 fonctions pures, 3 328 tests, et un cœur qui refuse d'écrire le code à ta place.
+`v1.4.2` · Fait avec du café, FSRS, 24 fonctions pures, 3 328 tests, et un cœur qui refuse d'écrire le code à ta place.
 
 </div>
