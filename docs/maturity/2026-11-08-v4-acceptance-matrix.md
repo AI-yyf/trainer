@@ -77,6 +77,7 @@
 - 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（11 PASS / 5 PARTIAL / 4 BLOCKED，fixture provider 仅作 GUI 证据）。
 - 双窗口 GUI 旅程 18：`docs/verification/v4-gui-dual-window-journey/`（同一 VS Code 实例两个真实窗口共享 live 计划；并发冻结 revision 1→2，两窗口均显示已暂停）。
 - 真实 Provider 目标旅程（2026-11-09 重跑）：`v4-provider-journeys.md`（5/6/15/19/20）、`v4-review-provider-journeys.md`（9/11/12）、`v4-fsrs-delayed-recall.md`（10），全部 PASS；`linksub.fun` / `deepseek-v4.1-flash`。
+- 2026-11-09 决策一致性修复后复跑：`v4-review-provider-journeys.json`（9/11/12）PASS；`v4-provider-journeys.json`（5/6/15/19/20）在网关 `linksub.fun` 的 SSL/503 中断下记录为 PARTIAL，最近一次成功证据见 commit `4e41e0c`。未把网关故障当作产品回归，待网关恢复后重跑。
 - 完整性旅程：`docs/verification/v4-integrity-journeys.md`（真实 sidecar；版本冲突 409、记忆撤销、provider 故障不伪造）。
 - 性能门禁：`docs/verification/v4-perf-probe-2026-11-08.json`（streaming longtask 0 ≤ 0；warm nav p90 63ms < 100ms）。
 - Remote-SSH 重连：`docs/verification/v4-remote-ssh-reconnect-2026-11-08.md`（CI Layer 1，11/11 steps，含 reconnect）。
