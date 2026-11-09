@@ -30,7 +30,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const serverDir = path.join(repoRoot, "server");
 const extensionDir = process.env.TRAINER_BROWSER_E2E_EXTENSION_DIR
   ? path.resolve(process.env.TRAINER_BROWSER_E2E_EXTENSION_DIR)
-  : path.join(repoRoot, "extension", "browser-capture");
+  : path.join(repoRoot, "browser-extension");
 const python = path.join(serverDir, ".venv", "bin", "python");
 const CAPTURE_URL = "https://example.com/";
 const PDF_URL = "https://pdfobject.com/pdf/sample.pdf";
@@ -205,6 +205,17 @@ async function main() {
     assert(session.contextId === WORKSPACE_ID, `Unexpected session context: ${session.contextId}`);
     ok("workspace-session", projectDir);
 
+    // Isolate this run from any other Trainer window on the machine: the
+    // extension ranks auto-pair by host focus, so make this sidecar the most
+    // recently focused one before the popup starts discovering.
+    const focusResponse = await fetch(`${baseUrl}/browser/host-focus`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workspace_id: session.contextId }),
+    });
+    assert(focusResponse.ok, `Host focus failed: HTTP ${focusResponse.status}`);
+    ok("host-focus", session.contextId);
+
     context = await chromium.launchPersistentContext(profileDir, {
       headless: process.env.TRAINER_BROWSER_E2E_HEADLESS === "1",
       channel: process.env.TRAINER_BROWSER_E2E_CHANNEL || undefined,
@@ -244,6 +255,31 @@ async function main() {
     }
     await popup.locator("#capture-panel").waitFor({ state: "visible", timeout: 30000 });
     ok("auto-paired");
+
+    // Compact-card contract: the popup stays a narrow, icon-led menu with one
+    // primary capture row, no horizontal overflow and no unlabeled controls.
+    const compact = await popup.evaluate(() => {
+      const root = document.documentElement;
+      const buttons = Array.from(document.querySelectorAll("button"));
+      const unlabeled = buttons.filter((button) => {
+        const hidden = button.querySelector(".visually-hidden");
+        return !(button.getAttribute("aria-label") || button.textContent.trim() || (hidden && hidden.textContent.trim()));
+      }).length;
+      const card = document.querySelector(".card");
+      const body = document.body;
+      return {
+        width: card ? card.getBoundingClientRect().width : body.getBoundingClientRect().width,
+        bodyWidth: body.getBoundingClientRect().width,
+        overflowX: body.scrollWidth > body.clientWidth + 1,
+        primaryRows: document.querySelectorAll(".row--action").length,
+        unlabeled,
+      };
+    });
+    assert(compact.width <= 320, `Popup card is wider than 320px: ${compact.width}`);
+    assert(!compact.overflowX, `Popup body overflows horizontally: ${compact.bodyWidth}`);
+    assert(compact.primaryRows === 1, `Popup must expose exactly one primary capture row, found ${compact.primaryRows}`);
+    assert(compact.unlabeled === 0, `Popup has ${compact.unlabeled} unlabeled buttons`);
+    ok("popup-compact", JSON.stringify(compact));
 
     let auth = {};
     const authDeadline = Date.now() + 15000;
@@ -316,8 +352,17 @@ async function main() {
     );
     ok("library-status", `count=${status.body.library_count}`);
 
-    const sendCapture = (payload) =>
-      popup.evaluate(
+    const refreshHostFocus = () =>
+      fetch(`${baseUrl}/browser/host-focus`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workspace_id: session.contextId }),
+      }).catch(() => undefined);
+    const sendCapture = async (payload) => {
+      // Every capture re-checks the focused Trainer window. Keep this run's
+      // sidecar ahead of any other VS Code window on the machine.
+      await refreshHostFocus();
+      return popup.evaluate(
         (body) =>
           new Promise((resolve) => {
             chrome.runtime.sendMessage(
@@ -327,6 +372,7 @@ async function main() {
           }),
         payload,
       );
+    };
 
     const captureLane = async (url, kind, title) => {
       const result = await sendCapture({ url, kind, title });
@@ -675,6 +721,9 @@ async function main() {
     const revokedStatus = await browserStatus(baseUrl, credential);
     assert(revokedStatus.status === 401, `Revoked credential still works: HTTP ${revokedStatus.status}`);
     ok("revoked-credential-rejected");
+  } catch (error) {
+    console.error("[sidecar-log-on-error]", sidecarLog.slice(-12000));
+    throw error;
   } finally {
     if (checks.some((check) => !check.ok)) {
       console.error("[sidecar-log]", sidecarLog.slice(-6000));

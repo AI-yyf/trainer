@@ -327,35 +327,12 @@ async function activate() {
     await sleep(2500);
     const data = Array.isArray(uploaded.data) ? uploaded.data : [];
     const firstId = data[0] && (data[0].id || data[0].resource_id);
-    if (firstId) {
-      const preview = await vscode.commands.executeCommand("trainer.sandbox.preview", {
-        resourceId: firstId,
-      });
-      report.steps.push({
-        step: "host-preview",
-        ok: Boolean(preview && preview.ok),
-        message: preview && preview.message ? preview.message : null,
-        previewKind: preview && preview.data ? preview.data.previewKind || preview.data.preview_kind : null,
-        contentHead: preview && preview.data && typeof preview.data.content === "string"
-          ? preview.data.content.slice(0, 120)
-          : null,
-      });
-      try {
-        const target2 = vscode.extensions.getExtension(targetId);
-        const exported = target2 && target2.isActive ? target2.exports : undefined;
-        const state = exported && typeof exported.getDebugState === "function" ? exported.getDebugState() : null;
-        const live = state && state.bootstrap && state.bootstrap.memory ? state.bootstrap.memory.sandboxPreview : null;
-        report.steps.push({
-          step: "host-preview-state",
-          ok: Boolean(live && live.previewKind === "markdown"),
-          previewKind: live ? live.previewKind || null : null,
-          path: live ? live.path || null : null,
-          contentHead: live && typeof live.content === "string" ? live.content.slice(0, 120) : null,
-        });
-      } catch (error) {
-        report.steps.push({ step: "host-preview-state", ok: false, message: String(error) });
-      }
-    }
+    report.steps.push({
+      step: "resource-ids",
+      ok: data.length >= fixtures.length,
+      count: data.length,
+      ids: data.map((item) => item && (item.id || item.resource_id)).filter(Boolean),
+    });
     await vscode.commands.executeCommand("trainer.openWorkbench");
     await sleep(2500);
     const pokePath = process.env.CANONICAL_GUI_POKE;
@@ -593,82 +570,53 @@ try {
     text: (await bodyText(frame)).slice(0, 600),
   });
 
-  await openReader(frame, "Distributed Systems Notes");
-  let text = await waitFor(frame, /Write Path/);
-  // Fallback probe: if the automatic render did not attach, exercise the
-  // explicit Preview action so the report distinguishes "effect missing" from
-  // "host preview broken".
-  let manualPreviewClick = false;
-  if (!(await frame.locator(".message-markdown").count())) {
-    const previewButton = frame.locator("button").filter({ hasText: /^预览/ }).first();
-    if (await previewButton.count()) {
-      await previewButton.click();
-      manualPreviewClick = true;
-      await page.waitForTimeout(3000);
-      text = await bodyText(frame);
+  const readerChecks = [
+    { title: "Distributed Systems Notes", key: "docx-reader" },
+    { title: "Consensus Deck", key: "pptx-reader" },
+    { title: "Storage Paper", key: "pdf-reader" },
+  ];
+  for (const check of readerChecks) {
+    await waitFor(frame, new RegExp(check.title));
+    await openReader(frame, check.title);
+    const readerText = await waitFor(frame, new RegExp(check.title));
+    // The shipped reader is metadata + external-open actions only. It must not
+    // resurrect the removed in-Trainer preview body, iframe or rich content.
+    const readerDebug = await frame.evaluate(() => ({
+      previewBody: document.querySelectorAll(
+        ".resources-knowledge__content-preview, .resources-knowledge__content-preview-body",
+      ).length,
+      iframe: document.querySelectorAll("[data-template=ResourceReader] iframe").length,
+      markdown: document.querySelectorAll(".message-markdown").length,
+      editorAction: Boolean(document.querySelector('[data-reader-open="editor"]')),
+      externalAction: Boolean(document.querySelector('[data-reader-open="external"]')),
+      canonicalFlag:
+        document.querySelector("[data-canonical-markdown]")?.getAttribute("data-canonical-markdown") ?? null,
+    }));
+    let editorOpened = false;
+    const editorAction = frame.locator('[data-reader-open="editor"]').first();
+    if (await editorAction.count()) {
+      await editorAction.click();
+      await page.waitForTimeout(2500);
+      const tabs = await page.locator(".tab").allInnerTexts().catch(() => []);
+      editorOpened = tabs.some(
+        (tab) => tab.includes(check.title) || /\.(md|markdown|txt)\b/i.test(tab),
+      );
     }
+    record(check.key, {
+      ok:
+        readerDebug.previewBody === 0 &&
+        readerDebug.iframe === 0 &&
+        readerDebug.markdown === 0 &&
+        readerDebug.editorAction === true &&
+        editorOpened === true &&
+        !/resource_id:/.test(readerText),
+      screenshot: await screenshot(page, `reader-${check.key}-dark`),
+      text: readerText.slice(0, 800),
+      readerDebug,
+      editorOpened,
+    });
+    await goBack(frame);
   }
-  let hostState = null;
-  try {
-    fs.writeFileSync(pokePath, "read");
-    const stateDeadline = Date.now() + 8000;
-    while (!fs.existsSync(stateOutPath) && Date.now() < stateDeadline) {
-      await page.waitForTimeout(300);
-    }
-    if (fs.existsSync(stateOutPath)) {
-      hostState = JSON.parse(fs.readFileSync(stateOutPath, "utf8"));
-      fs.unlinkSync(stateOutPath);
-    }
-  } catch {
-    hostState = null;
-  }
-  const previewDebug = await frame.evaluate(() => {
-    const body = document.querySelector(".resources-knowledge__content-preview-body");
-    return {
-      previewBodyClass: body ? body.className : null,
-      previewBodyTag: body ? body.tagName : null,
-      richContent: Boolean(document.querySelector(".message-markdown")),
-      headingCount: document.querySelectorAll(".message-markdown h1, .message-markdown h2").length,
-      canonicalFlag: document
-        .querySelector("[data-canonical-markdown]")
-        ?.getAttribute("data-canonical-markdown"),
-    };
-  });
-  record("docx-reader", {
-    ok:
-      /Write Path/.test(text) &&
-      /Quorum Ack/.test(text) &&
-      !/resource_id:/.test(text) &&
-      previewDebug.richContent === true,
-    screenshot: await screenshot(page, "02-docx-reader-dark"),
-    text: text.slice(0, 900),
-    previewDebug,
-    hostState,
-    manualPreviewClick,
-  });
-  await goBack(frame);
-
-  await waitFor(frame, /Consensus Deck/);
-  await openReader(frame, "Consensus Deck");
-  text = await waitFor(frame, /Slide 1/);
-  const pptxMarkdown = await frame.locator(".message-markdown h2").count();
-  record("pptx-reader", {
-    ok: /Slide 1 — Consensus/.test(text) && /Speaker notes/.test(text) && pptxMarkdown > 0,
-    screenshot: await screenshot(page, "03-pptx-reader-dark"),
-    text: text.slice(0, 900),
-  });
-  await goBack(frame);
-
-  await waitFor(frame, /Storage Paper/);
-  await openReader(frame, "Storage Paper");
-  text = await waitFor(frame, /Storage chapter two/);
-  const pdfMarkdown = await frame.locator(".message-markdown").count();
-  record("pdf-reader", {
-    ok: /Storage chapter one/.test(text) && /Storage chapter two/.test(text) && pdfMarkdown > 0,
-    screenshot: await screenshot(page, "04-pdf-reader-dark"),
-    text: text.slice(0, 900),
-  });
-  await goBack(frame);
 
   // Search across the library and open the hit at its cited Markdown line.
   const search = frame.locator('input[type="search"], input[placeholder*="搜索"], input[placeholder*="Search"]').first();
@@ -676,7 +624,7 @@ try {
     await search.click();
     await search.fill("quorum acknowledgement");
     await page.waitForTimeout(3500);
-    text = await bodyText(frame);
+    const text = await bodyText(frame);
     record("library-search", {
       ok: /Quorum Ack|Storage|Distributed Systems Notes/.test(text),
       screenshot: await screenshot(page, "05-search-dark"),
@@ -747,6 +695,27 @@ function copyTree(source, target) {
   }
 }
 copyTree(path.join(workspaceDir, "Trainer Library", ".trainer-resources"), artifactDir);
+
+function readCanonicalArtifacts(dir) {
+  const texts = [];
+  if (!fs.existsSync(dir)) return texts;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) texts.push(...readCanonicalArtifacts(full));
+    else if (/\.(md|markdown|txt)$/i.test(entry.name)) {
+      texts.push(fs.readFileSync(full, "utf8"));
+    }
+  }
+  return texts;
+}
+const canonicalText = readCanonicalArtifacts(artifactDir).join("\n");
+record("canonical-artifacts", {
+  ok:
+    /Write Path/.test(canonicalText) &&
+    /Slide 1/.test(canonicalText) &&
+    /Storage chapter two/.test(canonicalText),
+  bytes: canonicalText.length,
+});
 
 const failures = results.filter((item) => item.ok === false);
 const report = {
