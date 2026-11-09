@@ -95,6 +95,9 @@ def test_import_auto_distills_knowledge_skill_linked_three_ways(tmp_path: Path) 
         assert record.active is True and record.reviewed is True
         assert record.metadata["source_resource_id"] == resource_id
         assert record.metadata["commit_sha"] == commit
+        assert record.metadata["source_content_hash"] == (
+            runtime.resource_version_store.current_content_hash("ws-distill", resource_id)
+        )
         assert "项目身份" in record.body and "局限" in record.body
         assert record.version == 1
 

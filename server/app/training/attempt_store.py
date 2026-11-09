@@ -524,6 +524,101 @@ class AttemptStore:
         payload["is_current"] = True
         return payload
 
+    def mark_evidence_resource_version_stale(
+        self,
+        *,
+        workspace_id: str,
+        resource_id: str,
+        current_content_hash: str,
+    ) -> int:
+        """Flag evidence pinned to an older resource version as stale.
+
+        The resource itself is still present, so this is not ``source_deleted``:
+        old knowledge must stop counting until the learner verifies the new
+        version (or the same version returns).
+        """
+        scope = str(workspace_id or "").strip()
+        rid = str(resource_id or "").strip()
+        current = str(current_content_hash or "").strip()
+        if not scope or not rid or not current:
+            return 0
+        updated = 0
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                "SELECT evidence_id, payload FROM training_evidence WHERE workspace_id = ?",
+                (scope,),
+            ).fetchall()
+            now = utc_now()
+            for row in rows:
+                payload = json.loads(row["payload"])
+                if payload.get("source_deleted") or payload.get("source_stale"):
+                    continue
+                if str(payload.get("resource_id") or "") != rid:
+                    continue
+                recorded = str(payload.get("resource_content_hash") or "").strip()
+                if not recorded or recorded == current:
+                    continue
+                payload["source_stale"] = True
+                payload["source_stale_reason"] = "resource_version_changed"
+                payload["source_stale_at"] = now
+                payload["source_stale_resource_id"] = rid
+                payload["source_stale_content_hash"] = current
+                connection.execute(
+                    "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
+                    (json.dumps(payload, ensure_ascii=False), row["evidence_id"]),
+                )
+                updated += 1
+            connection.commit()
+        finally:
+            connection.close()
+        return updated
+
+    def clear_evidence_resource_version_stale(
+        self,
+        *,
+        workspace_id: str,
+        resource_id: str,
+        current_content_hash: str,
+    ) -> int:
+        """Clear staleness for evidence pinned to the current resource version."""
+        scope = str(workspace_id or "").strip()
+        rid = str(resource_id or "").strip()
+        current = str(current_content_hash or "").strip()
+        if not scope or not rid or not current:
+            return 0
+        updated = 0
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                "SELECT evidence_id, payload FROM training_evidence WHERE workspace_id = ?",
+                (scope,),
+            ).fetchall()
+            for row in rows:
+                payload = json.loads(row["payload"])
+                if not payload.get("source_stale"):
+                    continue
+                if str(payload.get("resource_id") or "") != rid:
+                    continue
+                if str(payload.get("resource_content_hash") or "").strip() != current:
+                    continue
+                payload["source_stale"] = False
+                payload.pop("source_stale_reason", None)
+                payload.pop("source_stale_at", None)
+                payload.pop("source_stale_resource_id", None)
+                payload.pop("source_stale_content_hash", None)
+                connection.execute(
+                    "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
+                    (json.dumps(payload, ensure_ascii=False), row["evidence_id"]),
+                )
+                updated += 1
+            connection.commit()
+        finally:
+            connection.close()
+        return updated
+
     def mark_evidence_source_deleted(
         self, *, workspace_id: str, content_hash: str, resource_id: str | None = None
     ) -> int:
@@ -621,6 +716,7 @@ class AttemptStore:
             item["is_current"] = bool(
                 item.get("superseded_by_evidence_id") is None
                 and not item.get("source_deleted")
+                and not item.get("source_stale")
                 and current_hash
                 and item.get("artifact_hash") == current_hash
             )

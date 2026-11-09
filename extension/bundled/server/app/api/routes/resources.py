@@ -469,16 +469,6 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         try:
             indexed = runtime.resource_service.index(workspace_id, request)
             indexed, _ = runtime.postprocess_indexed_resource(workspace_id, indexed)
-            attempt_store = getattr(runtime, "attempt_store", None)
-            version_store = getattr(runtime, "resource_version_store", None)
-            if not indexed.quality_flags and attempt_store is not None and version_store is not None:
-                content_hash = version_store.current_content_hash(workspace_id, request.resource_id)
-                if content_hash:
-                    attempt_store.clear_evidence_source_deleted(
-                        workspace_id=workspace_id,
-                        content_hash=content_hash,
-                        resource_id=request.resource_id,
-                    )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except PermissionError as exc:

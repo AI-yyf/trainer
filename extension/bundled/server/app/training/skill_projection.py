@@ -307,7 +307,7 @@ def project_skills(
     for index, rec in enumerate(evidence_records):
         if rec.get("superseded_by_evidence_id"):
             continue
-        if not rec.get("is_current") or rec.get("source_deleted"):
+        if not rec.get("is_current") or rec.get("source_deleted") or rec.get("source_stale"):
             continue
         result_str = normalize_evidence_result(
             rec.get("result"),

@@ -183,6 +183,40 @@ def record_executed_training_evidence(
     # a scenario/handoff. That is a real cross-context transfer fact; a normal
     # practice card is not.
     dimension = "transfer" if is_return_context else _card_capability_dimension(card)
+    resource_fields: dict[str, Any] = {}
+    evidence_limitations = [
+        f"{check.label}: {check.detail}"
+        for check in report.dynamic_checks
+        if check.status in {"skipped", "pending"}
+    ]
+    resource_id = str(getattr(card, "resource_id", "") or "").strip()
+    if resource_id:
+        repository = getattr(runtime, "repository", None)
+        resource_available = bool(
+            repository is not None
+            and any(
+                str(getattr(item, "id", "")) == resource_id
+                for item in repository.list_resources(workspace_id)
+            )
+        )
+        version_store = getattr(runtime, "resource_version_store", None)
+        current_version = (
+            version_store.current_version(workspace_id, resource_id)
+            if resource_available and version_store is not None
+            else None
+        )
+        if current_version:
+            location = current_version.get("location")
+            resource_fields = {
+                "resource_id": resource_id,
+                "resource_version_id": current_version.get("version_id"),
+                "resource_content_hash": current_version.get("content_hash"),
+                "resource_location": location if isinstance(location, dict) else {},
+            }
+        else:
+            evidence_limitations.append(
+                f"resource version unavailable for {resource_id}"
+            )
     store.record_evidence(
         attempt_id=attempt["attempt_id"],
         caller_workspace_id=workspace_id,
@@ -201,11 +235,8 @@ def record_executed_training_evidence(
         else None,
         environment={"phase": "return"} if is_return_context else None,
         transfer_metadata={"source": "training_return"} if is_return_context else None,
-        limitations=[
-            f"{check.label}: {check.detail}"
-            for check in report.dynamic_checks
-            if check.status in {"skipped", "pending"}
-        ],
+        limitations=evidence_limitations,
+        **resource_fields,
     )
     if is_return_context:
         store.close_attempt(attempt["attempt_id"], workspace_id=workspace_id)

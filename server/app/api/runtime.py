@@ -660,7 +660,52 @@ class TrainerRuntime:
 
         if refresh_sessions:
             summary["sessions_refreshed"] = self.refresh_workspace_sessions(resolved_workspace_id)
+        self._invalidate_stale_resource_artifacts(resolved_workspace_id, indexed)
         return indexed, summary
+
+    def _invalidate_stale_resource_artifacts(
+        self,
+        workspace_id: str,
+        indexed: ResourceRecord,
+    ) -> None:
+        """Version change → stale citations and project skills.
+
+        Shared by the HTTP index route and the agent/background organizer, so
+        one path cannot keep old citations "current" after a resource changes.
+        """
+        version_store = self.resource_version_store
+        if version_store is None:
+            return
+        content_hash = version_store.current_content_hash(workspace_id, indexed.id)
+        if not content_hash:
+            return
+        attempt_store = getattr(self, "attempt_store", None)
+        if attempt_store is not None:
+            attempt_store.mark_evidence_resource_version_stale(
+                workspace_id=workspace_id,
+                resource_id=indexed.id,
+                current_content_hash=content_hash,
+            )
+            if not indexed.quality_flags:
+                attempt_store.clear_evidence_source_deleted(
+                    workspace_id=workspace_id,
+                    content_hash=content_hash,
+                    resource_id=indexed.id,
+                )
+                attempt_store.clear_evidence_resource_version_stale(
+                    workspace_id=workspace_id,
+                    resource_id=indexed.id,
+                    current_content_hash=content_hash,
+                )
+        from ..skills.runtime import runtime_skill_registry
+
+        registry = runtime_skill_registry(self)
+        if registry is not None:
+            registry.mark_project_skill_stale_for_content(
+                workspace_id=workspace_id,
+                resource_id=indexed.id,
+                current_content_hash=content_hash,
+            )
 
     async def run_background_resource_organizer(self) -> None:
         """One bounded startup sweep, then the organizer goes quiet.

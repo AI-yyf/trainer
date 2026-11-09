@@ -157,10 +157,17 @@ def distill_project_knowledge(
         "understand the project",
         "call graph",
     ]
+    version_store = getattr(runtime, "resource_version_store", None)
+    source_content_hash = (
+        version_store.current_content_hash(workspace_id, resource_id)
+        if version_store is not None
+        else None
+    )
     metadata = {
         "origin": "project-analysis",
         "source_resource_id": resource_id,
         "library_resource_id": resource_id,
+        "source_content_hash": source_content_hash or "",
         "repo_root": str(repo_root),
         "commit_sha": commit_sha,
         "branch": branch,

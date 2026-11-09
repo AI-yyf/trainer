@@ -135,6 +135,9 @@ def select_active_skills(
         if registry.review_is_stale(record):
             # 审核版本不一致: the approved guidance no longer matches the file.
             continue
+        if record.metadata.get("stale"):
+            # Project source changed after distillation; re-distill before use.
+            continue
         if record.quarantined:
             # 失败恢复: 连续失败达阈值的技能暂停注入, /skill/retry 后恢复.
             continue

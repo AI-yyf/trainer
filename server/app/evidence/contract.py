@@ -90,6 +90,8 @@ class UnifiedEvidence(BaseModel):
     evidence_kind: str = ""
     recall_delay_days: float | None = None
     recall_rating: str = ""
+    source_stale: bool = False
+    source_stale_reason: str = ""
     limitations: list[str] = Field(default_factory=list)
     created_at: str = ""
     verified_at: str | None = None
@@ -152,6 +154,7 @@ def evidence_from_attempt(record: dict[str, Any], *, workspace_id: str | None = 
     card_id = _text(record.get("card_id"))
     trust = normalize_evidence_trust(record.get("trust_level"))
     source_deleted = bool(record.get("source_deleted"))
+    source_stale = bool(record.get("source_stale"))
     result = normalize_evidence_result(record.get("result"))
     summary = _text(record.get("failure_reason") or record.get("execution_status") or result)
     content = summary or f"{card_id}: {result}".strip()
@@ -159,7 +162,7 @@ def evidence_from_attempt(record: dict[str, Any], *, workspace_id: str | None = 
     created_at = _iso(record.get("created_at")) or utc_now_iso()
     location = record.get("resource_location")
     resource_location = location if isinstance(location, dict) else {}
-    verified = trust != "self_reported" and not source_deleted
+    verified = trust != "self_reported" and not source_deleted and not source_stale
     return UnifiedEvidence(
         evidence_id=_text(record.get("evidence_id")),
         source_store="attempt",
@@ -184,6 +187,8 @@ def evidence_from_attempt(record: dict[str, Any], *, workspace_id: str | None = 
         evidence_kind=_text(record.get("evidence_kind")),
         recall_delay_days=_optional_float(record.get("recall_delay_days")),
         recall_rating=_text(record.get("recall_rating")),
+        source_stale=source_stale,
+        source_stale_reason=_text(record.get("source_stale_reason")),
         limitations=[_text(item) for item in (record.get("limitations") or []) if _text(item)],
         created_at=created_at,
         verified_at=created_at if verified else None,

@@ -60,6 +60,8 @@ class SkillRecord:
     def status(self, *, review_stale: bool = False) -> str:
         if review_stale:
             return "review_stale"
+        if self.metadata.get("stale"):
+            return "stale"
         if not self.active:
             return "disabled"
         if self.quarantined:
@@ -426,6 +428,10 @@ class SkillRegistry:
         )
         if unchanged:
             existing.workspace_id = scope or existing.workspace_id
+            existing.metadata.update(metadata)
+            for key in ("stale", "stale_reason", "stale_at"):
+                existing.metadata.pop(key, None)
+            existing.active = True
             self._persist()
             return existing, False
         existing.name = name
@@ -437,8 +443,47 @@ class SkillRegistry:
         existing.version += 1
         existing.active = True
         existing.reviewed = True
+        for key in ("stale", "stale_reason", "stale_at"):
+            existing.metadata.pop(key, None)
         self._persist()
         return existing, False
+
+    def mark_project_skill_stale_for_content(
+        self,
+        *,
+        workspace_id: str,
+        resource_id: str,
+        current_content_hash: str,
+    ) -> int:
+        """Mark a distilled project skill stale only when its source content changed."""
+        scope = str(workspace_id or "").strip()
+        rid = str(resource_id or "").strip()
+        current = str(current_content_hash or "").strip()
+        if not rid or not current:
+            return 0
+        updated = 0
+        now = datetime.now(UTC).isoformat()
+        for record in self._skills.values():
+            if record.kind != "knowledge":
+                continue
+            if scope and record.workspace_id not in {"", scope}:
+                continue
+            metadata = record.metadata
+            if str(metadata.get("origin") or "") != "project-analysis":
+                continue
+            if str(metadata.get("source_resource_id") or "") != rid:
+                continue
+            distilled_hash = str(metadata.get("source_content_hash") or "").strip()
+            if not distilled_hash or distilled_hash == current or metadata.get("stale"):
+                continue
+            metadata["stale"] = True
+            metadata["stale_reason"] = "resource_version_changed"
+            metadata["stale_at"] = now
+            record.active = False
+            updated += 1
+        if updated:
+            self._persist()
+        return updated
 
     def record_failure(
         self,
