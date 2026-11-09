@@ -1427,7 +1427,13 @@ const BLOCKING_SYSTEM_STATE_KIND: Record<string, SystemStateKind> = {
 };
 
 /** Same dimension order as ProgressView; labels/states come from the shared segment. */
-const GROWTH_DIMENSION_KEYS: DimensionKey[] = ["comprehension", "implementation", "debugging", "transfer"];
+const GROWTH_DIMENSION_KEYS: DimensionKey[] = [
+  "comprehension",
+  "implementation",
+  "debugging",
+  "transfer",
+  "delayed_recall",
+];
 
 function PlanStageSection({
   stage,

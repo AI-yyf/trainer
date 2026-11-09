@@ -110,6 +110,17 @@ test('skill projection mirrors from snapshot workspace memory into training stat
             implementation: { state: 'independent', score: 3, verified_count: 2 },
             debugging: { state: 'assisted', score: 1, verified_count: 1 },
             transfer: { state: 'not_verified', score: 0, verified_count: 0 },
+            delayed_recall: {
+              state: 'independent',
+              score: 2,
+              verified_count: 1,
+              evidence: [{
+                evidence_id: 'evidence-recall',
+                evidence_kind: 'recall',
+                recall_delay_days: 2.5,
+                delayed_recall_qualified: true,
+              }],
+            },
           },
         },
       },
@@ -123,6 +134,14 @@ test('skill projection mirrors from snapshot workspace memory into training stat
   assert.equal(projection.dimensions.implementation.state, 'independent');
   assert.equal(projection.dimensions.implementation.verifiedCount, 2);
   assert.equal(projection.dimensions.debugging.state, 'assisted');
+  assert.equal(projection.dimensions.delayed_recall.state, 'independent');
+  assert.equal(projection.dimensions.delayed_recall.verifiedCount, 1);
+  assert.equal(projection.dimensions.delayed_recall.evidence[0].evidenceKind, 'recall');
+  assert.equal(projection.dimensions.delayed_recall.evidence[0].recallDelayDays, 2.5);
+  assert.equal(
+    projection.dimensions.delayed_recall.evidence[0].delayedRecallQualified,
+    true,
+  );
 });
 
 test('skill projection with an unknown workspace is not adopted', () => {

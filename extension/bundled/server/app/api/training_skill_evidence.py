@@ -36,6 +36,42 @@ def _card_subject_family(card: Any) -> str:
     return subject.family if str(subject.family) == "literature" else "code"
 
 
+def _card_capability_dimension(card: Any) -> str:
+    """Map a card's declared task shape to one capability dimension.
+
+    The dimension is task metadata, not mastery: the projection still requires
+    controlled evidence before any state can advance. A code task without an
+    implementation/debugging signal is an implementation check; a theory or
+    reading task is a comprehension check.
+    """
+    if card is None:
+        return "implementation"
+    subtype = str(getattr(card, "learning_subtype", "") or "").strip().lower()
+    family = str(getattr(card, "learning_family", "") or "").strip().lower()
+    if subtype in {"debug", "debugging", "bugfix", "bug_fix", "failure_diagnosis"}:
+        return "debugging"
+    if subtype in {"transfer", "migration", "cross_context"}:
+        return "transfer"
+    if (
+        getattr(card, "files_to_touch", None)
+        or getattr(card, "expected_symbols", None)
+        or str(getattr(card, "verification_method", "") or "").strip().lower()
+        in {"dynamic", "test", "pytest", "file", "evaluator"}
+    ):
+        return "implementation"
+    if family == "theory" or subtype in {
+        "concept",
+        "reading",
+        "explanation",
+        "derivation",
+        "memorization",
+        "orientation",
+        "project_orientation",
+    }:
+        return "comprehension"
+    return "implementation"
+
+
 def resolve_workspace_projection_scope(
     runtime: TrainerRuntime, workspace_id: str
 ) -> tuple[str, tuple[str, ...], str]:
@@ -103,11 +139,14 @@ def record_executed_training_evidence(
     workspace_id: str,
     request: EvaluateCurrentFileRequest,
     report: EvaluationReport,
+    returned_card: bool | None = None,
 ) -> None:
     """Called only after server evaluation and live-card/file identity checks.
 
     Bind the evidence to the exact evaluated content, never a success flag or
     the text of a summary. A static-only report cannot verify implementation.
+    ``returned_card`` is captured before the evaluation body advances the
+    card's phase; it identifies the same capability applied in a new context.
     """
     store = runtime.attempt_store
     if store is None:
@@ -117,9 +156,13 @@ def record_executed_training_evidence(
     artifact_hash = content_hash(request.content)
     card_id = str(request.training_card_id)
     card = runtime.memory_service.get_card(workspace_id, card_id)
-    returned_card = card is not None and card.learning_phase == "return"
+    is_return_context = (
+        returned_card
+        if returned_card is not None
+        else bool(card is not None and card.learning_phase == "return")
+    )
     attempt = store.find_active_attempt(workspace_id, card_id)
-    if attempt is None and returned_card:
+    if attempt is None and is_return_context:
         history = store.list_attempts(workspace_id=workspace_id, card_id=card_id)
         attempt = history[-1] if history else None
     if attempt is None:
@@ -136,6 +179,10 @@ def record_executed_training_evidence(
     result = "passed" if report.passed and dynamic_passed else "failed"
     if report.passed and not dynamic_passed:
         result = "partial"
+    # A returned card is the same capability applied back in the project after
+    # a scenario/handoff. That is a real cross-context transfer fact; a normal
+    # practice card is not.
+    dimension = "transfer" if is_return_context else _card_capability_dimension(card)
     store.record_evidence(
         attempt_id=attempt["attempt_id"],
         caller_workspace_id=workspace_id,
@@ -144,12 +191,22 @@ def record_executed_training_evidence(
         trust_level="controlled_check" if controlled else "static_analysis",
         runner_version="trainer-current-file-evaluator",
         execution_location="workspace",
+        dimension=dimension,
+        evidence_kind="controlled_evaluation",
+        scenario=(
+            str(getattr(card, "scenario", "") or getattr(card, "focus_area", "") or "").strip()
+            or None
+        )
+        if is_return_context
+        else None,
+        environment={"phase": "return"} if is_return_context else None,
+        transfer_metadata={"source": "training_return"} if is_return_context else None,
         limitations=[
             f"{check.label}: {check.detail}"
             for check in report.dynamic_checks
             if check.status in {"skipped", "pending"}
         ],
     )
-    if returned_card:
+    if is_return_context:
         store.close_attempt(attempt["attempt_id"], workspace_id=workspace_id)
     persist_skill_projection(runtime, workspace_id, attempt["attempt_id"])

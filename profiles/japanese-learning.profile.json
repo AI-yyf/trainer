@@ -8,56 +8,65 @@
     "comprehension",
     "expression",
     "appreciation",
-    "transfer"
+    "transfer",
+    "delayed_recall"
   ],
   "dimension_labels": {
     "zh-CN": {
       "comprehension": "日语理解",
       "expression": "日语表达",
       "appreciation": "文本鉴赏",
-      "transfer": "迁移"
+      "transfer": "迁移",
+      "delayed_recall": "延迟回忆"
     },
     "en-US": {
       "comprehension": "Japanese comprehension",
       "expression": "Japanese expression",
       "appreciation": "Text appreciation",
-      "transfer": "Transfer"
+      "transfer": "Transfer",
+      "delayed_recall": "Delayed recall"
     },
     "es-ES": {
       "comprehension": "Comprensión japonesa",
       "expression": "Expresión japonesa",
       "appreciation": "Apreciación del texto",
-      "transfer": "Transferencia"
+      "transfer": "Transferencia",
+      "delayed_recall": "Recuerdo diferido"
     },
     "fr-FR": {
       "comprehension": "Compréhension du japonais",
       "expression": "Expression japonaise",
       "appreciation": "Appréciation du texte",
-      "transfer": "Transfert"
+      "transfer": "Transfert",
+      "delayed_recall": "Rappel différé"
     },
     "de-DE": {
       "comprehension": "Japanisch-Verständnis",
       "expression": "Japanischer Ausdruck",
       "appreciation": "Textwürdigung",
-      "transfer": "Transfer"
+      "transfer": "Transfer",
+      "delayed_recall": "Verzögertes Erinnern"
     },
     "ja-JP": {
       "comprehension": "日本語理解",
       "expression": "日本語表現",
       "appreciation": "文章鑑賞",
-      "transfer": "転移"
+      "transfer": "転移",
+      "delayed_recall": "遅延想起"
     },
     "ko-KR": {
       "comprehension": "일본어 이해",
       "expression": "일본어 표현",
       "appreciation": "본문 감상",
-      "transfer": "전이"
+      "transfer": "전이",
+      "delayed_recall": "지연 회상"
     },
     "pt-BR": {
       "comprehension": "Compreensão de japonês",
       "expression": "Expressão em japonês",
       "appreciation": "Apreciação do texto",
-      "transfer": "Transferência"
+      "transfer": "Transferência",
+      "delayed_recall": "Recordação tardia"
     }
   },
   "deliverable_kinds": [

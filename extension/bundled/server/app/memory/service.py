@@ -3721,6 +3721,7 @@ class MemoryService(
         *,
         training_card_id: str,
         passed: bool,
+        require_live: bool = True,
     ) -> dict[str, Any] | None:
         """FSRS schedule for the live selected card only. Never mint. No global promote."""
         from ..training.fsrs_scheduler import (
@@ -3733,10 +3734,11 @@ class MemoryService(
         cleaned_card_id = str(training_card_id or "").strip()
         if not cleaned_card_id:
             return None
-        live_id = self.live_selected_training_card_id(workspace_id)
-        # Fail-closed: leftover-not-live / missing selectedCardId must not FSRS.
-        if not live_id or live_id != cleaned_card_id:
-            return None
+        if require_live:
+            live_id = self.live_selected_training_card_id(workspace_id)
+            # Fail-closed: leftover-not-live / missing selectedCardId must not FSRS.
+            if not live_id or live_id != cleaned_card_id:
+                return None
         card = self.get_card(workspace_id, cleaned_card_id)
         if card is None:
             return None
@@ -3849,6 +3851,7 @@ class MemoryService(
             "stability": result.new_stability,
             "reps": result.reps,
             "lapses": result.lapses,
+            "elapsed_days": result.elapsed_days,
             "difficulty": next_difficulty,
             "fsrs_difficulty": payload.get("difficulty"),
             "global_promoted": False,
@@ -3859,6 +3862,27 @@ class MemoryService(
                 else None
             ),
         }
+
+    def schedule_training_card_recall(
+        self,
+        workspace_id: str,
+        *,
+        training_card_id: str,
+        passed: bool,
+    ) -> dict[str, Any] | None:
+        """FSRS schedule for a recall answer.
+
+        Unlike Verify, recall is not tied to the selected practice card: a due
+        flashcard can be answered while another card is selected. The card must
+        still exist in this workspace, and the scheduler's ``elapsed_days`` is
+        what decides whether this answer is delayed-retention evidence.
+        """
+        return self.schedule_live_training_card_fsrs_after_verify(
+            workspace_id,
+            training_card_id=training_card_id,
+            passed=passed,
+            require_live=False,
+        )
 
     def _refresh_training_next_challenge_after_runtime_advance(
         self,
@@ -5724,20 +5748,15 @@ class MemoryService(
                         mastery, ReviewRating.AGAIN,
                     )
             elif action in {"snooze", "skip", "done"}:
+                deadline = now + timedelta(days=1)
                 mastery = structured._mastery.get(entry_concept)
-                if action == "done":
-                    reviewed = self._review_scheduler.process_mastery_review(
-                        mastery or MasteryRecord(concept=entry_concept, score=0.3, confidence=0.5),
-                        ReviewRating.GOOD,
+                # "Done" is self-reported completion, not a recall answer.
+                # It may defer the queue, but it must not update FSRS stability
+                # or mastery as if the learner had successfully recalled.
+                if mastery is not None:
+                    structured._mastery[entry_concept] = replace(
+                        mastery, next_review_at=deadline, due_date=deadline,
                     )
-                    structured._mastery[entry_concept] = reviewed
-                    deadline = reviewed.next_review_at
-                else:
-                    deadline = now + timedelta(days=1)
-                    if mastery is not None:
-                        structured._mastery[entry_concept] = replace(
-                            mastery, next_review_at=deadline, due_date=deadline,
-                        )
                 weakness = structured._weaknesses.get(entry_concept)
                 if weakness is not None:
                     structured._weaknesses[entry_concept] = replace(

@@ -4618,7 +4618,13 @@ function scopedLatestTransferState(
   return incoming.workspaceIds.includes(incomingWorkspaceId) ? incoming : undefined;
 }
 
-const SKILL_DIMENSION_KEYS = ['comprehension', 'implementation', 'debugging', 'transfer'] as const;
+const SKILL_DIMENSION_KEYS = [
+  'comprehension',
+  'implementation',
+  'debugging',
+  'transfer',
+  'delayed_recall',
+] as const;
 const SKILL_STATE_VALUES = new Set([
   'not_verified',
   'assisted',
@@ -4668,7 +4674,16 @@ function mapTrainingSkillProjection(
         result: asString(rowRecord.result),
         assistanceLevel: asString(rowRecord.assistance_level) ?? asString(rowRecord.assistanceLevel),
         trustLevel: asString(rowRecord.trust_level) ?? asString(rowRecord.trustLevel),
+        evidenceKind: asString(rowRecord.evidence_kind) ?? asString(rowRecord.evidenceKind),
         scenario: asString(rowRecord.scenario),
+        recallDelayDays:
+          typeof rowRecord.recall_delay_days === 'number'
+            ? rowRecord.recall_delay_days
+            : undefined,
+        delayedRecallQualified:
+          typeof rowRecord.delayed_recall_qualified === 'boolean'
+            ? rowRecord.delayed_recall_qualified
+            : undefined,
       });
     }
     const dimensionView: NonNullable<

@@ -1472,7 +1472,10 @@ export interface TrainingSkillEvidenceRowView {
   result?: string;
   assistanceLevel?: string;
   trustLevel?: string;
+  evidenceKind?: string;
   scenario?: string;
+  recallDelayDays?: number;
+  delayedRecallQualified?: boolean;
 }
 
 export interface TrainingSkillDimensionStateView {
@@ -1491,7 +1494,10 @@ export interface TrainingSkillProjectionView {
   cardId?: string;
   updatedAt?: string;
   dimensions: Partial<
-    Record<'comprehension' | 'implementation' | 'debugging' | 'transfer', TrainingSkillDimensionStateView>
+    Record<
+      'comprehension' | 'implementation' | 'debugging' | 'transfer' | 'delayed_recall',
+      TrainingSkillDimensionStateView
+    >
   >;
 }
 

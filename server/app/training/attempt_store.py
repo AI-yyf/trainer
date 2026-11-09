@@ -48,6 +48,8 @@ def utc_now() -> str:
 
 
 _ASSISTANCE_RANK: dict[str, int] = {
+    "unknown": 0,
+    "none": 0,
     "independent": 0,
     "hint_level_1": 1,
     "hint_level_2": 2,
@@ -92,7 +94,7 @@ class AttemptStore:
         file_path: str | None = None,
         file_hash: str | None = None,
         file_version: int | None = None,
-        assistance_level: str = "independent",
+        assistance_level: str = "none",
     ) -> dict[str, Any]:
         # Idempotent enter, concurrency-safe (T-0016): the check-then-insert
         # runs inside one BEGIN IMMEDIATE transaction, so two racing starts
@@ -130,6 +132,48 @@ class AttemptStore:
                 )
                 connection.commit()
                 return existing
+            connection.execute(
+                "INSERT INTO training_attempts (attempt_id, workspace_id, card_id, payload) VALUES (?, ?, ?, ?)",
+                (attempt_id, workspace_id, card_id, json.dumps(payload, ensure_ascii=False)),
+            )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        return payload
+
+    def start_recall_attempt(
+        self,
+        *,
+        workspace_id: str,
+        card_id: str,
+        assistance_level: str = "none",
+    ) -> dict[str, Any]:
+        """Create a one-shot attempt for a recall answer.
+
+        Recall is not a practice session: it must not resume or close an
+        active practice attempt for the same card. Each recall gets its own
+        attempt id so two delayed successes count as two distinct attempts.
+        """
+        attempt_id = f"attempt-recall-{uuid.uuid4().hex}"
+        now = utc_now()
+        payload = {
+            "attempt_id": attempt_id,
+            "workspace_id": workspace_id,
+            "card_id": card_id,
+            "status": "returned",
+            "answer_draft": "",
+            "assistance_level": assistance_level,
+            "file_path": None,
+            "file_hash": None,
+            "file_version": 1,
+            "created_at": now,
+            "updated_at": now,
+        }
+        connection = self._connect()
+        try:
             connection.execute(
                 "INSERT INTO training_attempts (attempt_id, workspace_id, card_id, payload) VALUES (?, ?, ?, ?)",
                 (attempt_id, workspace_id, card_id, json.dumps(payload, ensure_ascii=False)),
@@ -217,7 +261,7 @@ class AttemptStore:
             if assistance_level is not None:
                 # Assistance never regresses (T-0017): a racing older request
                 # must not lower a hint level the learner already reached.
-                current = str(payload.get("assistance_level") or "independent")
+                current = str(payload.get("assistance_level") or "unknown")
                 current_rank = _ASSISTANCE_RANK.get(current)
                 next_rank = _ASSISTANCE_RANK.get(assistance_level)
                 if current_rank is None or next_rank is None or next_rank >= current_rank:
@@ -308,6 +352,9 @@ class AttemptStore:
         environment: Any = None,
         constraints: Any = None,
         transfer_metadata: dict[str, Any] | None = None,
+        dimension: str | None = None,
+        evidence_kind: str | None = None,
+        recall_delay_days: float | None = None,
         resource_id: str | None = None,
         resource_version_id: str | None = None,
         resource_content_hash: str | None = None,
@@ -353,12 +400,18 @@ class AttemptStore:
             "runner_version": runner_version,
             "execution_location": execution_location,
             "trust_level": trust_level,
-            "assistance_level": attempt.get("assistance_level", "independent"),
+            "assistance_level": attempt.get("assistance_level") or "unknown",
             "result": canonical_result,
             "limitations": limitations or [],
             "created_at": now,
             "superseded_by_evidence_id": None,
         }
+        if dimension:
+            payload["dimension"] = dimension
+        if evidence_kind:
+            payload["evidence_kind"] = evidence_kind
+        if recall_delay_days is not None:
+            payload["recall_delay_days"] = float(recall_delay_days)
         if canonical_result != str(result or "").strip().lower().replace("-", "_").replace(" ", "_"):
             payload["original_result"] = result
         for key, value in (

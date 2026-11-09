@@ -86,6 +86,9 @@ class UnifiedEvidence(BaseModel):
     resource_location: dict[str, Any] = Field(default_factory=dict)
     resource_git_sha: str | None = None
     assistance_level: str = "unknown"
+    dimension: str = ""
+    evidence_kind: str = ""
+    recall_delay_days: float | None = None
     limitations: list[str] = Field(default_factory=list)
     created_at: str = ""
     verified_at: str | None = None
@@ -116,6 +119,15 @@ def _iso(value: object) -> str:
     if isinstance(value, datetime):
         return value.isoformat()
     return _text(value)
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _fingerprint(
@@ -167,6 +179,9 @@ def evidence_from_attempt(record: dict[str, Any], *, workspace_id: str | None = 
         resource_location=resource_location,
         resource_git_sha=_text(record.get("resource_git_sha")) or None,
         assistance_level=_text(record.get("assistance_level")) or "unknown",
+        dimension=_text(record.get("dimension")),
+        evidence_kind=_text(record.get("evidence_kind")),
+        recall_delay_days=_optional_float(record.get("recall_delay_days")),
         limitations=[_text(item) for item in (record.get("limitations") or []) if _text(item)],
         created_at=created_at,
         verified_at=created_at if verified else None,

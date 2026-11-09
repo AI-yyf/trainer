@@ -11,7 +11,7 @@ import type { ComposerLanguage, TrainingSkillDimensionKey, TrainingSkillDimensio
 export type DimensionKey = TrainingSkillDimensionKey;
 
 export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, string>> = {
-  "zh-CN": { comprehension: "理解", implementation: "实现", debugging: "调试", expression: "表达", appreciation: "鉴赏", transfer: "迁移" },
+  "zh-CN": { comprehension: "理解", implementation: "实现", debugging: "调试", expression: "表达", appreciation: "鉴赏", transfer: "迁移", delayed_recall: "延迟回忆" },
   "en-US": {
     comprehension: "Comprehension",
     implementation: "Implementation",
@@ -19,6 +19,7 @@ export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, str
     expression: "Expression",
     appreciation: "Appreciation",
     transfer: "Transfer",
+    delayed_recall: "Delayed recall",
   },
   "es-ES": {
     comprehension: "Comprensión",
@@ -27,6 +28,7 @@ export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, str
     expression: "Expresión",
     appreciation: "Apreciación",
     transfer: "Transferencia",
+    delayed_recall: "Recuerdo diferido",
   },
   "fr-FR": {
     comprehension: "Compréhension",
@@ -35,6 +37,7 @@ export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, str
     expression: "Expression",
     appreciation: "Appréciation",
     transfer: "Transfert",
+    delayed_recall: "Rappel différé",
   },
   "de-DE": {
     comprehension: "Verständnis",
@@ -43,6 +46,7 @@ export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, str
     expression: "Ausdruck",
     appreciation: "Würdigung",
     transfer: "Transfer",
+    delayed_recall: "Verzögertes Erinnern",
   },
   "ja-JP": {
     comprehension: "理解",
@@ -51,6 +55,7 @@ export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, str
     expression: "表現",
     appreciation: "鑑賞",
     transfer: "転移",
+    delayed_recall: "遅延想起",
   },
   "ko-KR": {
     comprehension: "이해",
@@ -59,6 +64,7 @@ export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, str
     expression: "표현",
     appreciation: "감상",
     transfer: "전이",
+    delayed_recall: "지연 회상",
   },
   "pt-BR": {
     comprehension: "Compreensão",
@@ -67,6 +73,7 @@ export const DIMENSION_LABELS: Record<ComposerLanguage, Record<DimensionKey, str
     expression: "Expressão",
     appreciation: "Apreciação",
     transfer: "Transferência",
+    delayed_recall: "Recordação tardia",
   },
 };
 
@@ -157,7 +164,7 @@ export const COPY: Record<
     noEvidence: "还没有验证记录",
     notVerified: "还未验证",
         transferAction: "验证迁移：做一道陌生练习",
-    empty: "完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。",
+    empty: "完成一次练习的验证后，这里会显示你在理解、实现、调试、迁移和延迟回忆上的真实成长。",
     startPracticing: "去练习",
     localeTag: "zh-CN",
     drilldownWhy: "为什么 Trainer 这样判断：",
@@ -175,7 +182,7 @@ export const COPY: Record<
     notVerified: "Not verified yet",
         transferAction: "Verify transfer: try an unfamiliar exercise",
     empty:
-      "Once you verify a practice card, your real growth in comprehension, implementation, debugging, and transfer shows up here.",
+      "Once you verify a practice card, your real growth in comprehension, implementation, debugging, transfer, and delayed recall shows up here.",
     startPracticing: "Start practicing",
     localeTag: "en-US",
     drilldownWhy: "Why Trainer judges it this way:",
@@ -193,7 +200,7 @@ export const COPY: Record<
     notVerified: "Aún sin verificar",
         transferAction: "Verificar la transferencia: prueba un ejercicio poco familiar",
     empty:
-      "Cuando verifiques una tarjeta de práctica, tu crecimiento real en comprensión, implementación, depuración y transferencia aparecerá aquí.",
+      "Cuando verifiques una tarjeta de práctica, tu crecimiento real en comprensión, implementación, depuración, transferencia y recuerdo diferido aparecerá aquí.",
     startPracticing: "Empezar a practicar",
     localeTag: "es-ES",
     drilldownWhy: "Por qué Trainer lo evalúa así:",
@@ -211,7 +218,7 @@ export const COPY: Record<
     notVerified: "Pas encore vérifié",
         transferAction: "Vérifier le transfert : essayez un exercice inhabituel",
     empty:
-      "Après la vérification d'une carte d'exercice, votre progression réelle en compréhension, implémentation, débogage et transfert apparaît ici.",
+      "Après la vérification d'une carte d'exercice, votre progression réelle en compréhension, implémentation, débogage, transfert et rappel différé apparaît ici.",
     startPracticing: "Commencer à pratiquer",
     localeTag: "fr-FR",
     drilldownWhy: "Pourquoi Trainer juge ainsi :",
@@ -229,7 +236,7 @@ export const COPY: Record<
     notVerified: "Noch nicht überprüft",
         transferAction: "Transfer überprüfen: eine ungewohnte Aufgabe versuchen",
     empty:
-      "Sobald du eine Übungskarte überprüfst, erscheint hier dein echtes Wachstum in Verständnis, Implementierung, Fehlersuche und Transfer.",
+      "Sobald du eine Übungskarte überprüfst, erscheint hier dein echtes Wachstum in Verständnis, Implementierung, Fehlersuche, Transfer und verzögertem Erinnern.",
     startPracticing: "Jetzt üben",
     localeTag: "de-DE",
     drilldownWhy: "Warum Trainer so urteilt:",
@@ -247,7 +254,7 @@ export const COPY: Record<
     notVerified: "まだ検証なし",
         transferAction: "転用を検証する：見慣れない練習をひとつ",
     empty:
-      "練習カードを検証すると、理解・実装・デバッグ・転用の本当の成長がここに表示されます。",
+      "練習カードを検証すると、理解・実装・デバッグ・転移・遅延想起の本当の成長がここに表示されます。",
     startPracticing: "練習を始める",
     localeTag: "ja-JP",
     drilldownWhy: "Trainer がこう判断した理由:",
@@ -265,7 +272,7 @@ export const COPY: Record<
     notVerified: "아직 검증 안 됨",
         transferAction: "전이 검증: 익숙하지 않은 연습 하나 하기",
     empty:
-      "연습 카드를 검증하면 이해·구현·디버깅·전이에 대한 실제 성장이 여기에 표시됩니다.",
+      "연습 카드를 검증하면 이해·구현·디버깅·전이·지연 회상에 대한 실제 성장이 여기에 표시됩니다.",
     startPracticing: "연습 시작",
     localeTag: "ko-KR",
     drilldownWhy: "Trainer가 이렇게 판단한 이유:",
@@ -283,7 +290,7 @@ export const COPY: Record<
     notVerified: "Ainda não verificado",
         transferAction: "Verificar transferência: tente um exercício pouco familiar",
     empty:
-      "Depois de verificar um cartão de prática, seu crescimento real em compreensão, implementação, depuração e transferência aparece aqui.",
+      "Depois de verificar um cartão de prática, seu crescimento real em compreensão, implementação, depuração, transferência e recordação tardia aparece aqui.",
     startPracticing: "Começar a praticar",
     localeTag: "pt-BR",
     drilldownWhy: "Por que o Trainer julga assim:",

@@ -501,7 +501,7 @@ test('same-context backups isolate growth evidence and unsent drafts by database
   await page.locator('[data-learning-section=growth] .template-back').first().click();
   await expect(page.getByRole('button', { name: '实现 有辅助完成 1 次验证通过', exact: true })).toBeVisible();
   await switchDatabase('/backup/data', 'backup-one', false);
-  await expect(page.getByText('完成一次练习的验证后，这里会显示你在理解、实现、调试和迁移上的真实成长。', { exact: true })).toBeVisible();
+  await expect(page.getByText('完成一次练习的验证后，这里会显示你在理解、实现、调试、迁移和延迟回忆上的真实成长。', { exact: true })).toBeVisible();
   await expect(page.getByText('1 次验证通过', { exact: true })).toHaveCount(0);
   await page.getByTestId('trainer-view-nav-coach').click();
   await expect(input).toHaveValue('');

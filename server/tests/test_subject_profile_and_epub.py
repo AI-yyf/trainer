@@ -79,11 +79,23 @@ def test_subject_profile_loads_builtin_code_and_literature() -> None:
     assert "code" in profiles
     assert "literature" in profiles
     code = get_subject_profile("code")
-    assert code.dimensions == ("comprehension", "implementation", "debugging", "transfer")
+    assert code.dimensions == (
+        "comprehension",
+        "implementation",
+        "debugging",
+        "transfer",
+        "delayed_recall",
+    )
     assert "file_based" in code.deliverable_kinds
 
     lit = get_subject_profile("literature")
-    assert lit.dimensions == ("comprehension", "expression", "appreciation", "transfer")
+    assert lit.dimensions == (
+        "comprehension",
+        "expression",
+        "appreciation",
+        "transfer",
+        "delayed_recall",
+    )
     assert lit.verifier_pack == "literature"
     assert "text_payload" in lit.deliverable_kinds
     assert set(lit.dimension_labels.keys()) == {

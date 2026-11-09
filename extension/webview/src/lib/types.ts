@@ -1437,7 +1437,10 @@ export interface TrainingSkillEvidenceRow {
   result?: string;
   assistanceLevel?: string;
   trustLevel?: string;
+  evidenceKind?: string;
   scenario?: string;
+  recallDelayDays?: number;
+  delayedRecallQualified?: boolean;
 }
 
 export interface TrainingSkillDimensionState {
@@ -1451,14 +1454,16 @@ export interface TrainingSkillDimensionState {
 
 /** Evidence → skill-state projection mirrored into workspace memory.
  * P2 #21: dimension keys are the subject-scoped registry — code adds
- * implementation/debugging; literature adds expression/appreciation. */
+ * implementation/debugging; literature adds expression/appreciation;
+ * delayed_recall is the shared retention dimension. */
 export type TrainingSkillDimensionKey =
   | "comprehension"
   | "implementation"
   | "debugging"
   | "expression"
   | "appreciation"
-  | "transfer";
+  | "transfer"
+  | "delayed_recall";
 
 export interface TrainingSkillProjection {
   workspaceId?: string;

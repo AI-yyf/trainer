@@ -8,56 +8,65 @@
     "comprehension",
     "implementation",
     "debugging",
-    "transfer"
+    "transfer",
+    "delayed_recall"
   ],
   "dimension_labels": {
     "zh-CN": {
       "comprehension": "概念理解",
       "implementation": "实现",
       "debugging": "调试",
-      "transfer": "迁移"
+      "transfer": "迁移",
+      "delayed_recall": "延迟回忆"
     },
     "en-US": {
       "comprehension": "Comprehension",
       "implementation": "Implementation",
       "debugging": "Debugging",
-      "transfer": "Transfer"
+      "transfer": "Transfer",
+      "delayed_recall": "Delayed recall"
     },
     "es-ES": {
       "comprehension": "Comprensión",
       "implementation": "Implementación",
       "debugging": "Depuración",
-      "transfer": "Transferencia"
+      "transfer": "Transferencia",
+      "delayed_recall": "Recuerdo diferido"
     },
     "fr-FR": {
       "comprehension": "Compréhension",
       "implementation": "Implémentation",
       "debugging": "Débogage",
-      "transfer": "Transfert"
+      "transfer": "Transfert",
+      "delayed_recall": "Rappel différé"
     },
     "de-DE": {
       "comprehension": "Verständnis",
       "implementation": "Implementierung",
       "debugging": "Fehlersuche",
-      "transfer": "Transfer"
+      "transfer": "Transfer",
+      "delayed_recall": "Verzögertes Erinnern"
     },
     "ja-JP": {
       "comprehension": "概念理解",
       "implementation": "実装",
       "debugging": "デバッグ",
-      "transfer": "応用・転移"
+      "transfer": "応用・転移",
+      "delayed_recall": "遅延想起"
     },
     "ko-KR": {
       "comprehension": "개념 이해",
       "implementation": "구현",
       "debugging": "디버깅",
-      "transfer": "전이"
+      "transfer": "전이",
+      "delayed_recall": "지연 회상"
     },
     "pt-BR": {
       "comprehension": "Compreensão",
       "implementation": "Implementação",
       "debugging": "Depuração",
-      "transfer": "Transferência"
+      "transfer": "Transferência",
+      "delayed_recall": "Recordação tardia"
     }
   },
   "deliverable_kinds": [

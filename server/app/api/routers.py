@@ -12459,6 +12459,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         training_card = runtime.memory_service.get_card(workspace_id, training_card_id)
         if training_card is None:
             return
+        # Capture the return context before the evaluation body advances the
+        # card phase: a returned card is cross-context transfer evidence.
+        return_context = (
+            str(getattr(training_card, "learning_phase", "") or "").strip().lower()
+            == "return"
+        )
         # Leftover-not-live still returns the evaluation report; do not FSRS or persist status.
         if not training_card_is_live_for_verify(workspace_id, training_card_id):
             return
@@ -12486,7 +12492,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         if isinstance(request, EvaluateCurrentFileRequest):
             record_executed_training_evidence(
-                runtime, workspace_id=workspace_id, request=request, report=report
+                runtime,
+                workspace_id=workspace_id,
+                request=request,
+                report=report,
+                returned_card=return_context,
             )
         phase = str(getattr(request, "training_phase", "") or "").strip().lower()
         # Explicit Verify may record AGAIN on failure; without a phase, keep

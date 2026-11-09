@@ -12,6 +12,7 @@ Skill dimensions follow the design:
 - implementation (实现)
 - debugging (调试)
 - transfer (迁移)
+- delayed_recall (延迟回忆)
 
 Skill state ladder: not_verified → assisted → independent → repeat_verified → needs_review
 """
@@ -20,18 +21,29 @@ from __future__ import annotations
 
 from typing import Any
 
-_DIMENSIONS = ("comprehension", "implementation", "debugging", "transfer")
+_DIMENSIONS = ("comprehension", "implementation", "debugging", "transfer", "delayed_recall")
 
 # P2 #21: the dimension vocabulary is subject-scoped. The projection ladder,
 # trust semantics and transfer rule stay globally uniform (P4); only the
 # dimension vocabulary follows the SubjectProfile registry. Unknown families
 # fall back fail-closed to the code vocabulary.
-LITERATURE_DIMENSIONS = ("comprehension", "expression", "appreciation", "transfer")
+LITERATURE_DIMENSIONS = (
+    "comprehension",
+    "expression",
+    "appreciation",
+    "transfer",
+    "delayed_recall",
+)
 DIMENSION_REGISTRY: dict[str, tuple[str, ...]] = {
     "code": _DIMENSIONS,
     "literature": LITERATURE_DIMENSIONS,
 }
 _KNOWN_DIMENSIONS = frozenset(_DIMENSIONS) | frozenset(LITERATURE_DIMENSIONS)
+
+# A recall answer is only "delayed recall" after a real retention interval.
+# Immediate answers stay practice/comprehension evidence and cannot advance
+# this dimension.
+DELAYED_RECALL_MIN_DAYS = 1.0
 
 # Evidence result → contribution to the skill state ladder.
 _RESULT_WEIGHT: dict[str, int] = {
@@ -52,6 +64,7 @@ _TRUST_BONUS: dict[str, int] = {
 
 _ASSISTANCE_PENALTY: dict[str, int] = {
     "independent": 0,
+    "none": 0,
     "hint_level_1": -1,
     "hint_level_2": -2,
     "hint_level_3": -3,
@@ -69,6 +82,7 @@ _ASSISTED_LEVELS = {
     "guided",
     "scaffolded",
 }
+_UNASSISTED_LEVELS = {"independent", "none"}
 
 # These are inconclusive execution outcomes.  They must never become a
 # learner failure merely because a transport/provider reported them using the
@@ -171,6 +185,29 @@ def _success_key(rec: dict[str, Any], index: int) -> tuple[str, str]:
     if evidence_id:
         return ("evidence", evidence_id)
     return ("legacy", str(index))
+
+
+def _recall_delay_days(rec: dict[str, Any]) -> float | None:
+    raw = rec.get("recall_delay_days", rec.get("recallDelayDays"))
+    if raw is None or isinstance(raw, bool):
+        return None
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _delayed_recall_qualified(rec: dict[str, Any]) -> bool:
+    """A delayed recall fact needs an actual recall answer after a real delay.
+
+    No answer, no prompt, an immediate answer, or a missing delay is
+    ``insufficient evidence``: it cannot move the delayed-recall ladder.
+    """
+    kind = _normalise_marker(rec.get("evidence_kind") or rec.get("evidenceKind"))
+    if kind and kind not in {"recall", "delayed_recall"}:
+        return False
+    delay = _recall_delay_days(rec)
+    return delay is not None and delay >= DELAYED_RECALL_MIN_DAYS
 
 
 def _state_from_evidence(
@@ -292,16 +329,29 @@ def project_skills(
         )
         score = weight + trust + assistance
 
-        # All evidence contributes to implementation; failed evidence
-        # contributes to debugging.  Preview/sandbox alone is not transfer.
+        # Explicit dimension metadata separates the five capabilities. Legacy
+        # records without it keep the historical implementation/debugging
+        # fallback so old evidence stays readable.
+        has_explicit_dimension = bool(str(rec.get("dimension") or "").strip())
         transfer_fact = _has_transfer_fact(rec)
         raw_dimension = str(rec.get("dimension") or fallback_dimension)
+        delayed_recall_dimension = raw_dimension == "delayed_recall"
+        recall_qualified = (
+            _delayed_recall_qualified(rec) if delayed_recall_dimension else True
+        )
+        if delayed_recall_dimension and not recall_qualified:
+            # An immediate answer or a missing delay is visible evidence, but
+            # it is not delayed retention and must not move the ladder.
+            weight = 0
+            trust = 0
+            assistance = 0
+            score = 0
         dims = set()
         if raw_dimension != "transfer" or transfer_fact:
             dims.add(raw_dimension)
-        if transfer_fact:
+        if transfer_fact and (not has_explicit_dimension or raw_dimension == "transfer"):
             dims.add("transfer")
-        if result_str == "failed":
+        if result_str == "failed" and not has_explicit_dimension:
             dims.add("debugging")
 
         for dim in dims:
@@ -321,14 +371,23 @@ def project_skills(
                         "result": result_str,
                         "assistance_level": assistance_level or "unknown",
                         "trust_level": str(rec.get("trust_level") or ""),
+                        "evidence_kind": str(rec.get("evidence_kind") or "") or None,
                         "scenario": str(rec.get("scenario") or "") or None,
+                        "recall_delay_days": _recall_delay_days(rec),
+                        "delayed_recall_qualified": recall_qualified
+                        if dim == "delayed_recall"
+                        else None,
                     }
                 )
                 # Self reports, model reviews and static checks remain visible
                 # in the drilldown, but cannot attest executable capability.
-                if result_str == "passed" and rec.get("trust_level") == "controlled_check":
+                if (
+                    result_str == "passed"
+                    and rec.get("trust_level") == "controlled_check"
+                    and recall_qualified
+                ):
                     result[dim]["verified_count"] += 1
-                    if assistance_level == "independent":
+                    if assistance_level in _UNASSISTED_LEVELS:
                         independent_success_keys[dim].add(_success_key(rec, index))
                         independent_evidence_keys[dim].add(evidence_id)
                         if dim == "transfer" and transfer_fact:
@@ -338,9 +397,9 @@ def project_skills(
                     # Unknown/missing assistance is not independent and not
                     # assisted; it stays visible in the drilldown but cannot
                     # advance the skill ladder.
-                elif result_str == "failed":
+                elif result_str == "failed" and recall_qualified:
                     failed_dimensions[dim] = True
-                elif result_str == "partial":
+                elif result_str == "partial" and recall_qualified:
                     partial_dimensions[dim] = True
 
     for dim in active_dimensions:

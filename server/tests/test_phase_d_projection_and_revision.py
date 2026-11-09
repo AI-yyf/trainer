@@ -400,13 +400,19 @@ def test_literature_dimension_set_projects_without_engineering_rows() -> None:
         dimensions=LITERATURE_DIMENSIONS,
         default_dimension="comprehension",
     )
-    assert set(projection) == {"comprehension", "expression", "appreciation", "transfer"}
+    assert set(projection) == {
+        "comprehension",
+        "expression",
+        "appreciation",
+        "transfer",
+        "delayed_recall",
+    }
     # No explicit dimension field → comprehension (the submission's first
     # obligation is the text response), and two distinct attempts make it
     # repeat_verified under the same governance ladder.
     assert projection["comprehension"]["state"] == "repeat_verified"
     assert projection["comprehension"]["verified_count"] == 2
-    for dim in ("expression", "appreciation", "transfer"):
+    for dim in ("expression", "appreciation", "transfer", "delayed_recall"):
         assert projection[dim]["state"] == "not_verified"
         assert projection[dim]["verified_count"] == 0
 
@@ -428,7 +434,13 @@ def test_explicit_literature_dimension_field_still_routs() -> None:
 
 def test_default_call_keeps_the_historical_code_vocabulary() -> None:
     projection = project_skills([_ev("h1")])
-    assert list(projection) == ["comprehension", "implementation", "debugging", "transfer"]
+    assert list(projection) == [
+        "comprehension",
+        "implementation",
+        "debugging",
+        "transfer",
+        "delayed_recall",
+    ]
     assert projection["implementation"]["verified_count"] == 1
 
 
@@ -505,7 +517,13 @@ def test_resolve_workspace_scope_votes_majority_and_ties_to_code() -> None:
     runtime = _RuntimeStub(store, _MemoryStub({"card-lit": lit_card, "card-code": code_card}))
     family, dimensions, default_dimension = resolve_workspace_projection_scope(runtime, "ws")
     assert family == "literature"
-    assert dimensions == ("comprehension", "expression", "appreciation", "transfer")
+    assert dimensions == (
+        "comprehension",
+        "expression",
+        "appreciation",
+        "transfer",
+        "delayed_recall",
+    )
     assert default_dimension == "comprehension"
 
     tie = _StoreStub(
@@ -519,5 +537,11 @@ def test_resolve_workspace_scope_votes_majority_and_ties_to_code() -> None:
         _RuntimeStub(tie, _MemoryStub({"card-lit": lit_card})), "ws2"
     )
     assert family2 == "code"
-    assert dimensions2 == ("comprehension", "implementation", "debugging", "transfer")
+    assert dimensions2 == (
+        "comprehension",
+        "implementation",
+        "debugging",
+        "transfer",
+        "delayed_recall",
+    )
     assert default2 == "implementation"

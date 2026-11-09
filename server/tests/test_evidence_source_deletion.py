@@ -319,7 +319,13 @@ def test_evidence_projection_flows_into_workspace_memory(tmp_path: Path) -> None
         assert isinstance(projection, dict)
         assert projection["attempt_id"] == attempt["attempt_id"]
         dimensions = projection["dimensions"]
-        assert set(dimensions) == {"comprehension", "implementation", "debugging", "transfer"}
+        assert set(dimensions) == {
+            "comprehension",
+            "implementation",
+            "debugging",
+            "transfer",
+            "delayed_recall",
+        }
         # The client cannot claim controlled_check on the self-report channel.
         assert evidence_resp.json()["evidence"]["trust_level"] == "self_reported"
         assert dimensions["implementation"]["state"] == "not_verified"

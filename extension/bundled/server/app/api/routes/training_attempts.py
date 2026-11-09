@@ -53,6 +53,7 @@ class AttemptEvidenceRequest(BaseModel):
     environment: Any = None
     constraints: Any = None
     transfer_metadata: dict[str, Any] | None = None
+    dimension: str | None = None
     # Optional citation anchor. The server, not the client, resolves the
     # version id / content hash / location so deletion propagation is
     # resource-scoped and cannot be forged onto another resource's version.
@@ -212,6 +213,8 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
             environment=request.environment,
             constraints=request.constraints,
             transfer_metadata=request.transfer_metadata,
+            dimension=request.dimension,
+            evidence_kind="self_report",
             **resource_fields,
         )
         if evidence is None:

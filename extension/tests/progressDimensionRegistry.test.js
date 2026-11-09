@@ -26,9 +26,9 @@ const progressDims = compileAndLoad(path.join(webviewRoot, 'lib', 'progressDimen
 const progressCopy = compileAndLoad(path.join(webviewRoot, 'lib', 'i18n', 'segments', 'progressInlineText.ts'));
 
 const LANGUAGES = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
-const REGISTRY_KEYS = ['comprehension', 'implementation', 'debugging', 'expression', 'appreciation', 'transfer'];
+const REGISTRY_KEYS = ['comprehension', 'implementation', 'debugging', 'expression', 'appreciation', 'transfer', 'delayed_recall'];
 
-test('registry order is the six subject-scoped dimensions', () => {
+test('registry order is the subject-scoped dimensions plus delayed recall', () => {
   assert.deepEqual(progressDims.REGISTRY_ORDER, REGISTRY_KEYS);
   assert.deepEqual(progressDims.LEGACY_CODE_ORDER, [
     'comprehension', 'implementation', 'debugging', 'transfer',
@@ -87,7 +87,7 @@ test('literature labels match the subject profile data (zh/en/anchor languages)'
   const labels = profile.dimension_labels;
   for (const language of LANGUAGES) {
     assert.ok(labels[language], `profile missing ${language} labels`);
-    for (const key of ['comprehension', 'expression', 'appreciation', 'transfer']) {
+    for (const key of ['comprehension', 'expression', 'appreciation', 'transfer', 'delayed_recall']) {
       assert.equal(
         progressCopy.DIMENSION_LABELS[language][key],
         labels[language][key],

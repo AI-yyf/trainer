@@ -4,6 +4,7 @@
  * The server projects evidence onto the dimensions declared by the
  * workspace's SubjectProfile (code: comprehension/implementation/debugging/
  * transfer; literature: comprehension/expression/appreciation/transfer).
+ * delayed_recall is shared by every subject family.
  * Growth rows follow the registry order, filtered to what the projection
  * actually carries; snapshots that predate the registry keep the historical
  * four-row layout. Pure data + pure function — no React, no VS Code.
@@ -22,6 +23,7 @@ export const REGISTRY_ORDER: DimensionKey[] = [
   "expression",
   "appreciation",
   "transfer",
+  "delayed_recall",
 ];
 
 export const LEGACY_CODE_ORDER: DimensionKey[] = [

@@ -76,6 +76,7 @@ from ...memory.workspace_recovery import (
 from ...training.card_generator import (
     CardGenerationProviderFailure,
 )
+from ...training.recall_evidence import record_recall_evidence
 from ...training.reliability import should_replay
 from .. import coach_support
 from .._helpers import (
@@ -4800,6 +4801,17 @@ def build_core_router(
         )
         core.refresh_workspace_sessions(request.workspace_id)
         card = runtime.memory_service.get_card(request.workspace_id, request.card_id)
+        recall_evidence = record_recall_evidence(
+            runtime,
+            workspace_id=request.workspace_id,
+            card_id=request.card_id,
+            correct=attempt.correct,
+            source="flashcard",
+            answer_mode=attempt.answer_mode,
+            detail=attempt.detail,
+            assistance_level="none",
+            immediate_dimension="delayed_recall",
+        )
         return {
             "correct": attempt.correct,
             "score": attempt.score,
@@ -4808,6 +4820,7 @@ def build_core_router(
             "card_status": card.status if card is not None else None,
             "retry_required": not attempt.correct,
             "attempt": attempt.model_dump(mode="json"),
+            "recall_evidence": recall_evidence,
         }
 
     @router.post("/training/theory-drill/answer")
@@ -4889,8 +4902,24 @@ def build_core_router(
                     status_code=409,
                     detail="This theory drill changed before the answer could be saved. Refresh Training and try again.",
                 )
+        recall_evidence = record_recall_evidence(
+            runtime,
+            workspace_id=request.workspace_id,
+            card_id=theory_drill.id,
+            correct=correct,
+            source="theory_drill",
+            answer_mode="text",
+            detail=detail,
+            immediate_dimension="comprehension",
+            allow_missing_card=True,
+        )
         core.refresh_workspace_sessions(request.workspace_id)
-        return {"ok": True, "detail": detail, "correct": correct}
+        return {
+            "ok": True,
+            "detail": detail,
+            "correct": correct,
+            "recall_evidence": recall_evidence,
+        }
 
     @router.post("/training/practice-return")
     def training_practice_return(request: PracticeReturnRequest) -> dict[str, object]:

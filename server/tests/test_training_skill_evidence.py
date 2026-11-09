@@ -67,6 +67,8 @@ def test_card_bound_file_evaluation_updates_growth_and_resumes_verified_attempt(
         assert projection["implementation"]["state"] == "assisted"
         assert projection["implementation"]["verified_count"] == 1
         assert projection["transfer"]["state"] == "not_verified"
+        assert projection["delayed_recall"]["state"] == "not_verified"
+        assert projection["delayed_recall"]["verified_count"] == 0
         reflected = client.post("/training/reflect", json={
             "workspace_id": workspace, "card_id": card.card_id,
             "reflection": "The focused test proved this boundary; transfer is not established.",
