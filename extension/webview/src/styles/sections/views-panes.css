@@ -1206,6 +1206,21 @@
   padding: 5px 7px;
 }
 
+.resources-row-menu {
+  min-width: 180px;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: var(--space-1);
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--bg-1);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--bg-0) 42%, transparent);
+}
+
+.resources-row-menu .menu-list__item {
+  min-height: 28px;
+  padding: 5px 7px;
+}
+
 .resources-knowledge__toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1596,6 +1611,13 @@
 .resources-library-tree__node:focus-within .resources-library-tree__open,
 .resources-library-tree__node.is-selected .resources-library-tree__open {
   opacity: 1;
+}
+
+.resources-library-tree__menu {
+  grid-column: 4;
+  font-size: var(--trainer-font-md);
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .resources-library-tree__preview:hover,

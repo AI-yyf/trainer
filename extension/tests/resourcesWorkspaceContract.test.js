@@ -181,7 +181,7 @@ test('Resources restores one requested surface and keeps it through ordinary vie
   assert.doesNotMatch(viewSource, /standaloneSandboxPreview/);
   assert.match(viewSource, /onDebugVisibleFacts\?: \(facts: DebugVisibleResourcesFacts\) => void;/);
   assert.match(viewSource, /activeSurface,/);
-  assert.match(viewSource, /resourceDetailVisible: Boolean\(selectedResource\)/);
+  assert.match(viewSource, /resourceDetailVisible: false/);
   assert.match(viewSource, /singleWorkbenchSurface: true,/);
   assert.match(viewSource, /sandboxPaneVisible: false,/);
   assert.doesNotMatch(viewSource, /sandboxPreviewPath:/);

@@ -1031,7 +1031,7 @@ export async function openResourceCommand(
 ): Promise<CommandExecutionResult> {
   const payloadRecord = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
   const resourceId = payloadRecord?.resourceId;
-  const openOriginal = payloadRecord?.openOriginal === true;
+  void payloadRecord?.openOriginal;
   const openExternal = payloadRecord?.openExternal === true;
   const requestedLine =
     typeof payloadRecord?.line === 'number' && Number.isFinite(payloadRecord.line)
@@ -1067,11 +1067,11 @@ export async function openResourceCommand(
     };
   }
 
+  // The row opens the learner's source file. The canonical Markdown is an
+  // internal reading/search artifact, never the destination of an "open".
   const targetUri = await resolveExistingResourceUri(
     context,
-    openOriginal
-      ? resolveResourceOriginalCandidates(resource)
-      : resolveResourceLocalCandidates(resource),
+    resolveResourceOriginalCandidates(resource),
   );
   if (!targetUri) {
     const urlFallback = [resource.source, resource.canonicalSource]

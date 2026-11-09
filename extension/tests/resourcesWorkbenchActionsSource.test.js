@@ -113,8 +113,8 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /const selectedResourceAncestorIds = useMemo/);
   assert.match(viewSource, /const renderedExpandedCollectionIds = useMemo/);
   assert.match(viewSource, /role="tree"/);
-  assert.match(viewSource, /onSelect=\{selectResource\}/);
   assert.match(viewSource, /onOpen=\{openResourceInVsCode\}/);
+  assert.match(viewSource, /onMenu=\{openResourceRowMenu\}/);
 
   assert.match(appSource, /<ResourcesWorkbenchView[\s\S]*?resources=\{liveResources\}/);
   assert.match(appSource, /<ResourcesWorkbenchView[\s\S]*?deletedResources=\{data\.deletedResources\}/);
@@ -152,7 +152,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(appUiCopySource, /"en-US": "Browser preview cannot restore real resources\. Use the VS Code sidebar\."/);
 });
 
-test('Resources opens in VS Code from one click, previews from Space or the row action, and has no row double-click handler', () => {
+test('Resources opens the original source from one click or Space and has no Reader row action', () => {
   const viewSource = readResourcesViewSource();
   const treeItemStart = viewSource.indexOf('function ResourceTreeItem(');
   const treeItemEnd = viewSource.indexOf('export function ResourcesWorkbenchView', treeItemStart);
@@ -166,12 +166,14 @@ test('Resources opens in VS Code from one click, previews from Space or the row 
   // A raw row double-click can never fire: the first click opens the editor.
   assert.doesNotMatch(treeItemSource, /onDoubleClick/);
   assert.match(treeItemSource, /event\.key === "Enter"[\s\S]*?onOpen\(node\.resource!\);/);
-  assert.match(treeItemSource, /event\.key === " "[\s\S]*?onSelect\(node\.resource!\);/);
+  assert.match(treeItemSource, /event\.key === " "[\s\S]*?onOpen\(node\.resource!\);/);
   assert.match(treeItemSource, /aria-keyshortcuts="Enter Space"/);
+  assert.match(treeItemSource, /onContextMenu=\{\(event\) =>/);
   // Reading-first tree: no per-row checkboxes, no batch-selection handlers.
   assert.doesNotMatch(treeItemSource, /type="checkbox"/);
   assert.doesNotMatch(treeItemSource, /onToggleSelection/);
-  assert.match(viewSource, /className="button button--ghost button--compact resources-knowledge__open-action"[\s\S]*?onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
+  assert.match(viewSource, /className="menu-list is-compact resources-row-menu"/);
+  assert.match(viewSource, /openResourceInVsCode\(resource\)/);
 });
 
 test('Resources does not expose a project file manager or destructive sandbox controls', () => {

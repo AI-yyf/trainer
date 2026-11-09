@@ -59,12 +59,14 @@ for (const mode of ['missing', 'wrong-path', 'embedded', 'standalone']) {
     expect(facts.sandboxPreviewVisible).toBeUndefined();
     expect(facts.sandboxPreviewEmbedded).toBeUndefined();
     expect(facts.sandboxPreviewPath).toBeUndefined();
+    // The shipped library has no Reader detail page at all; every mode keeps
+    // the logical restore scope without rendering resource content.
+    await expect(reader).toHaveCount(0);
     if (mode === 'standalone') {
-      await expect(reader).toHaveCount(0);
       await expect(page.locator('.resources-inline-context')).toBeVisible();
     } else {
-      await expect(reader).toBeVisible();
-      await expect(reader.getByRole('button', { name: 'Open in VS Code', exact: true })).toBeVisible();
+      await expect(page.locator('.resources-knowledge')).toBeVisible();
+      await expect(page.getByRole('treeitem', { name: 'preview-proof.md', exact: true })).toBeVisible();
     }
   });
 }

@@ -30,21 +30,19 @@ test('the reading library opens one file directly and removes management panels'
   await expect(page.locator('.resources-knowledge__trash')).not.toHaveAttribute('open', '');
   await expect(page.getByText('HIDDEN_MANAGEMENT_SUMMARY', { exact: true }).filter({ visible: true })).toHaveCount(0);
   const note = page.getByRole('treeitem', { name: '边界验证.md', exact: true });
-  // Enter opens the file through the host; Space selects the row for its
-  // metadata and open actions. Neither path renders resource content.
+  // Enter and Space both open the original file through the host. The
+  // library never swaps into a Reader detail page.
   await note.focus(); await page.keyboard.press('Enter');
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === 'resource/open')
     .map(action => action.payload?.resourceId))).toContain('reader-note');
   await note.press(' ');
-  const reader = page.locator('[data-template=ResourceReader]');
-  await expect(reader).toBeVisible();
-  await expect(reader.locator('.resources-knowledge__content-preview')).toHaveCount(0);
-  await expect(reader.locator("[data-reader-open='editor']")).toBeVisible();
-  await reader.locator('.template-activity-header > button').click();
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
+    .filter(action => action.type === 'resource/open' && action.payload?.resourceId === 'reader-note').length)).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('[data-template=ResourceReader]')).toHaveCount(0);
+  await expect(page.locator('.resources-knowledge__content-preview')).toHaveCount(0);
   await expect(page.getByRole('treeitem', { name: '边界验证.md', exact: true })).toBeVisible();
   await expect(page.locator('.resources-knowledge')).toBeVisible();
-  if (await page.locator('[data-template=ResourceReader]').isVisible()) await page.locator('[data-template=ResourceReader] .template-activity-header > button').click();
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
     const search = page.locator('.resources-knowledge__search input');
@@ -94,23 +92,20 @@ test('nested folders stay distinct, support keyboard navigation and open their f
   await expect(folderButton).toHaveAttribute('aria-expanded', 'true');
   const file = page.getByRole('treeitem', { name: '边界验证.md', exact: true });
   await expect(file).toBeVisible();
-  // Enter opens the file through the host; Space selects the row for its
-  // metadata and open actions. Neither path renders resource content.
+  // Enter/Space open the original file; no Reader detail page exists.
   await file.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
     .filter(action => action.type === 'resource/open')
     .map(action => action.payload?.resourceId))).toContain('nested-note');
   await file.press(' ');
-  const reader = page.locator('[data-template=ResourceReader]');
-  await expect(reader).toBeVisible();
-  await expect(reader.locator('.resources-knowledge__content-preview')).toHaveCount(0);
-  await reader.locator('.template-activity-header > button').click();
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
+    .filter(action => action.type === 'resource/open' && action.payload?.resourceId === 'nested-note').length)).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('[data-template=ResourceReader]')).toHaveCount(0);
   await expect(page.getByRole('treeitem', { name: '边界验证.md', exact: true })).toBeVisible();
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
-  if (await page.locator('[data-template=ResourceReader]').isVisible()) await page.locator('[data-template=ResourceReader] .template-activity-header > button').click();
   const add = page.getByRole('button', { name: '添加资料', exact: true });
   await add.click();
   await page.getByRole('menuitem', { name: '添加文件夹', exact: true }).click();

@@ -7,8 +7,10 @@ test('reading opens captured URL content in VS Code and preserves uncaptured ext
   // The /tmp/... values are opaque string fixtures for a pure mapping
   // function — resolveResourceOpenTarget never touches the filesystem — so
   // they stay platform-neutral and need no os.tmpdir() indirection.
+  // A URL keeps its live destination even when a captured snapshot exists;
+  // the snapshot is reading/indexing evidence, not the learner's source.
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'https://example.com/guide', sandboxPath: '/tmp/captured-guide.md' }),
-    { kind: 'vscode', source: '/tmp/captured-guide.md' });
+    { kind: 'browser', source: 'https://example.com/guide' });
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'https://example.com/guide' }),
     { kind: 'browser', source: 'https://example.com/guide' });
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'markdown', source: '/tmp/guide.md' }),

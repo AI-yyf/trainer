@@ -690,16 +690,13 @@ test.describe("Trainer three-destination shell", () => {
       await search.fill("");
       await expect(primaryTreeItem).toBeVisible();
 
-      // Enter opens the file in VS Code (the browser harness records the
-      // action); Space selects the row for its metadata and open actions.
+      // Enter and Space both open the original source through the host; the
+      // library never enters a Reader detail page.
       await primaryTreeItem.press("Enter");
-      const detail = page.locator("[data-template=ResourceReader]");
-      await expect(detail).toHaveCount(0);
+      await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
       await primaryTreeItem.press(" ");
-      await expect(detail.getByRole("heading", { name: copy.primaryResource, exact: true })).toBeVisible();
-      await expect(detail.locator(".resources-knowledge__content-preview")).toHaveCount(0);
-      await expect(detail.locator("[data-reader-open='editor']")).toBeVisible();
-      await detail.locator(".template-back").first().click();
+      await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
+      await expect(primaryTreeItem).toBeVisible();
       await expect(library).toBeVisible();
 
       // Trash stays collapsed with per-item restore actions only; the bulk
@@ -721,7 +718,7 @@ test.describe("Trainer three-destination shell", () => {
     });
   }
 
-  test("keeps a selected resource detail after an ordinary view round trip", async ({ page }) => {
+  test("opens a resource source directly and keeps the library through a view round trip", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
     const copy = RESOURCE_COPY["zh-CN"];
 
@@ -732,20 +729,19 @@ test.describe("Trainer three-destination shell", () => {
     });
 
     const library = page.getByRole("region", { name: copy.library, exact: true });
-    await library.getByRole("treeitem", { name: copy.primaryResource, exact: true }).press(" ");
-    const detail = page.locator("[data-template=ResourceReader]");
-    await expect(detail.getByRole("heading", { name: copy.primaryResource, exact: true })).toBeVisible();
-    await expect(detail).toBeVisible();
+    await library.getByRole("treeitem", { name: copy.primaryResource, exact: true }).press("Enter");
+    await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
+    await expect(library).toBeVisible();
 
     await page.getByRole("button", { name: "对话", exact: true }).click();
     await expectActiveView(page, "zh-CN", "coach");
     await page.getByTestId("trainer-view-nav-resources").click();
     await expectActiveView(page, "zh-CN", "resources");
-    await expect(detail).toBeVisible();
+    await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
     await expectNoConsoleErrors(errors);
   });
 
-  test("keeps a selected Chinese resource detail through Training and Settings", async ({ page }) => {
+  test("opens a Chinese resource source directly and keeps the library through Training and Settings", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
     const labels = {
       resources: "\u8d44\u6599",
@@ -764,10 +760,8 @@ test.describe("Trainer three-destination shell", () => {
 
     await expect(page.locator("body")).toHaveClass(/vscode-dark/);
     const library = page.getByRole("region", { name: labels.library, exact: true });
-    await library.getByRole("treeitem", { name: labels.resource, exact: true }).press(" ");
-    const detail = page.locator("[data-template=ResourceReader]");
-    await expect(detail.getByRole("heading", { name: labels.resource, exact: true })).toBeVisible();
-    await expect(detail).toBeVisible();
+    await library.getByRole("treeitem", { name: labels.resource, exact: true }).press("Enter");
+    await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
 
     for (const view of ["training", "settings", "resources"]) {
       if (view === "training") await openFocusedTraining(page, "zh-CN");
@@ -775,7 +769,8 @@ test.describe("Trainer three-destination shell", () => {
       await expectActiveView(page, "zh-CN", view);
     }
 
-    await expect(detail).toBeVisible();
+    await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
+    await expect(library).toBeVisible();
     await expectNoConsoleErrors(errors);
   });
 
@@ -1493,7 +1488,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("resources click shows the selected title without English write-authority leftover", async ({ page }) => {
+  test("resources row opens the source without a Reader title or English write-authority leftover", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
     const copy = RESOURCE_COPY["zh-CN"];
 
@@ -1503,10 +1498,9 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    await page.getByRole("treeitem", { name: copy.primaryResource, exact: true }).press(" ");
-    await expect(page.locator("[data-template=ResourceReader] .template-activity-header h2")).toHaveText(copy.primaryResource);
+    await page.getByRole("treeitem", { name: copy.primaryResource, exact: true }).press("Enter");
+    await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
     await expect(page.locator("main")).not.toContainText("write authority has not been verified");
-    await page.locator("[data-template=ResourceReader] .template-activity-header > button").click();
     await expect(page.getByRole("button", { name: "添加资料", exact: true })).toBeVisible();
     await expectNoConsoleErrors(errors);
   });

@@ -942,8 +942,8 @@ interface ResourceTreeItemProps {
   selectedResourceId: string | null;
   activeTreeItemId: string | null;
   onToggle: (id: string) => void;
-  onSelect: (resource: ResourceRecord) => void;
   onOpen: (resource: ResourceRecord) => void;
+  onMenu: (resource: ResourceRecord, event: React.MouseEvent<HTMLElement>) => void;
   onActiveTreeItemChange: (id: string) => void;
   onMoveTreeFocus: (id: string) => void;
 }
@@ -957,8 +957,8 @@ function ResourceTreeItem({
   selectedResourceId,
   activeTreeItemId,
   onToggle,
-  onSelect,
   onOpen,
+  onMenu,
   onActiveTreeItemChange,
   onMoveTreeFocus,
 }: ResourceTreeItemProps) {
@@ -979,14 +979,18 @@ function ResourceTreeItem({
         onFocus={() => onActiveTreeItemChange(node.id)}
         onMouseDown={(event) => event.currentTarget.focus()}
         onClick={() => onOpen(node.resource!)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onMenu(node.resource!, event);
+        }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") {
+          if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onOpen(node.resource!);
           }
-          if (event.key === " ") {
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
             event.preventDefault();
-            onSelect(node.resource!);
+            onMenu(node.resource!, event as unknown as React.MouseEvent<HTMLElement>);
           }
           if (event.key === "ArrowLeft" && parentId) {
             event.preventDefault();
@@ -1005,6 +1009,18 @@ function ResourceTreeItem({
         <span className="resources-library-tree__copy">
           <strong>{node.resource.title}</strong>
         </span>
+        <button
+          className="resources-library-tree__open resources-library-tree__menu"
+          type="button"
+          aria-label={`${localize(language, "fileActionsTitle")}: ${node.resource.title}`}
+          title={localize(language, "fileActionsTitle")}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMenu(node.resource!, event);
+          }}
+        >
+          <span aria-hidden="true">⋯</span>
+        </button>
       </div>
     );
   }
@@ -1078,8 +1094,8 @@ function ResourceTreeItem({
                 selectedResourceId={selectedResourceId}
                 activeTreeItemId={activeTreeItemId}
                 onToggle={onToggle}
-                onSelect={onSelect}
                 onOpen={onOpen}
+                onMenu={onMenu}
                 onActiveTreeItemChange={onActiveTreeItemChange}
                 onMoveTreeFocus={onMoveTreeFocus}
               />
@@ -1232,6 +1248,15 @@ export function ResourcesWorkbenchView({
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
     () => restoreContext?.surface === "detail" ? restoreContext.resourceId ?? null : null,
   );
+  // Retired: library rows open the source directly. Kept as a runtime-false
+  // constant while the old reader markup is removed in a follow-up.
+  const RESOURCE_READER_ENABLED: boolean = false;
+  const [rowMenu, setRowMenu] = useState<{
+    resource: ResourceRecord;
+    x: number;
+    y: number;
+  } | null>(null);
+
   const [deleteConfirmationResourceIds, setDeleteConfirmationResourceIds] = useState<string[] | null>(
     null,
   );
@@ -1714,10 +1739,6 @@ export function ResourcesWorkbenchView({
   }, [pendingTreeFocusId, renderedTreeItemIds]);
 
   /** One click opens the resource in the reader; the reader replaces the list. */
-  const selectResource = (resource: ResourceRecord) => {
-    setResourceDetail(resource.id);
-  };
-
   const reportMutationFailure = (kind: ResourceMutationKind, resourceIds: string[]) => {
     if (kind === "delete") {
       setPendingDeletedResourceIds([]);
@@ -1785,15 +1806,51 @@ export function ResourcesWorkbenchView({
     resource: ResourceRecord,
     options?: { openOriginal?: boolean; openExternal?: boolean; line?: number },
   ) => {
-    // Row click is a native "open file" action: keep the tree visible and let
-    // VS Code own the editor. The Reader remains available from Space.
-    const anchorLine = resource.location?.line_start;
-    const line =
-      options?.openOriginal || (typeof anchorLine !== "number" || !Number.isFinite(anchorLine))
-        ? options?.line
-        : anchorLine;
+    // A library row is a native "open the source" action. The host resolves
+    // the original file (or the live URL); canonical Markdown is internal.
+    const line = options?.line;
     onOpenResource?.(resource.id, { ...options, ...(line ? { line } : {}) });
   };
+
+  const openResourceRowMenu = (
+    resource: ResourceRecord,
+    event: React.MouseEvent<HTMLElement>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect?.();
+    const x = Math.min(
+      Math.max(8, event.clientX || rect?.left || 8),
+      Math.max(8, window.innerWidth - 240),
+    );
+    const y = Math.min(
+      Math.max(8, event.clientY || rect?.bottom || 8),
+      Math.max(8, window.innerHeight - 280),
+    );
+    setRowMenu({ resource, x, y });
+  };
+  const closeResourceRowMenu = () => setRowMenu(null);
+  useEffect(() => {
+    if (!rowMenu) {
+      return;
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".resources-row-menu")) {
+        return;
+      }
+      closeResourceRowMenu();
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeResourceRowMenu();
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [rowMenu]);
 
   const focusFirstImportMenuItem = () => {
     window.requestAnimationFrame(() => {
@@ -2285,7 +2342,7 @@ export function ResourcesWorkbenchView({
       });
   };
 
-  const exportSelectedResource = (resourceId: string) => {
+  const exportSelectedResource = (resourceId: string, title?: string) => {
     if (!onExportResource || exportState?.phase === "busy") {
       return;
     }
@@ -2301,7 +2358,7 @@ export function ResourcesWorkbenchView({
                 localizeValue(
                   language,
                   "exportRequested",
-                  selectedResource?.title ?? resourceId,
+                  title ?? selectedResource?.title ?? resourceId,
                 )
               : localizeValue(language, "exportSucceeded", outcome.message)
             : localizeValue(language, "exportFailed", outcome.message),
@@ -2513,16 +2570,16 @@ export function ResourcesWorkbenchView({
       activeSurface,
       visibleTitle: orientation?.objectLabel ?? selectedResource?.title ?? localize(language, "title"),
       visibleSummary: orientation?.why ?? selectedResource?.summary,
-      resourceDetailVisible: Boolean(selectedResource),
-      resourceDetailId: selectedResource?.id,
-      resourceDetailTitle: selectedResource?.title,
+      resourceDetailVisible: false,
+      resourceDetailId: undefined,
+      resourceDetailTitle: undefined,
       selectedResourceId: selectedResource?.id,
       selectedSandboxPath: restoreContext?.sandboxPath ?? sandboxRoot,
       previewPath: restoreContext?.previewPath,
       singleWorkbenchSurface: true,
       compactMode: true,
       modebarHiddenInCompact: true,
-      detailPaneVisible: Boolean(selectedResource),
+      detailPaneVisible: false,
       // Sandbox restore is a logical scope; no sandbox content pane exists.
       sandboxPaneVisible: false,
       previewPaneVisible: false,
@@ -2531,7 +2588,7 @@ export function ResourcesWorkbenchView({
 
   return (
     <section
-      className={`workbench-pane resources-pane resources-pane--library resources-knowledge resources-knowledge--workspace-tree${selectedResource ? " is-detail-open" : ""}`}
+      className="workbench-pane resources-pane resources-pane--library resources-knowledge resources-knowledge--workspace-tree"
       data-resource-library-container="true"
       aria-label={localize(language, "title")}
       data-resources-leftover-not-live={leftoverStoredNote ? "true" : undefined}
@@ -2541,7 +2598,7 @@ export function ResourcesWorkbenchView({
       </div>
       {/* The orientation card owns the only import CTA on an empty library, so
           the search/expand toolbar would be dead chrome until content exists. */}
-      <Library hidden={Boolean(selectedResource)} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && !canWriteResources) ? null : (
+      <Library hidden={false} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && !canWriteResources) ? null : (
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
@@ -2941,8 +2998,8 @@ export function ResourcesWorkbenchView({
                 selectedResourceId={selectedResourceId}
                 activeTreeItemId={resolvedActiveTreeItemId}
                 onToggle={toggleCollection}
-                onSelect={selectResource}
                 onOpen={openResourceInVsCode}
+                onMenu={openResourceRowMenu}
                 onActiveTreeItemChange={(id) => setActiveTreeItemId(id)}
                 onMoveTreeFocus={moveTreeFocus}
               />
@@ -3296,7 +3353,9 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {selectedResource ? (
+      {/* The library no longer opens a Reader page: a row opens the original
+          source directly, and the row menu owns secondary actions. */}
+      {RESOURCE_READER_ENABLED && selectedResource ? (
         <ResourceReader
           parent={localize(language, "title")}
           title={selectedResource.title}
@@ -3719,6 +3778,104 @@ export function ResourcesWorkbenchView({
           </section>
         </ResourceReader>
       ) : null}
+      {rowMenu ? (() => {
+        const resource = rowMenu.resource;
+        const target = resolveResourceOpenTarget(resource);
+        const nativeSource =
+          target.kind === "vscode" &&
+          /\.(pdf|docx?|pptx?|xlsx?|epub|zip|mp3|wav|m4a|mp4|mov|webm)$/i.test(target.source);
+        const openLabel =
+          target.kind === "browser"
+            ? localize(language, "openInBrowser")
+            : nativeSource
+              ? localize(language, "openWithDefaultApp")
+              : localize(language, "openInVsCode");
+        return (
+          <div
+            className="menu-list is-compact resources-row-menu"
+            role="menu"
+            aria-label={localize(language, "fileActionsTitle")}
+            style={{ position: "fixed", left: rowMenu.x, top: rowMenu.y, zIndex: 60 }}
+          >
+            <button
+              className="menu-list__item"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeResourceRowMenu();
+                openResourceInVsCode(resource);
+              }}
+            >
+              <span className="menu-list__body"><strong>{openLabel}</strong></span>
+            </button>
+            {target.kind === "vscode" && !nativeSource ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  openResourceInVsCode(resource, { openExternal: true });
+                }}
+              >
+                <span className="menu-list__body"><strong>{localize(language, "openWithDefaultApp")}</strong></span>
+              </button>
+            ) : null}
+            {onAskCoach ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  onAskCoach([resource.id]);
+                }}
+              >
+                <span className="menu-list__body"><strong>{templateCopy[language].askCoach}</strong></span>
+              </button>
+            ) : null}
+            {onStartTrainingFromResource && resourceCanStartTraining(resource) ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  void onStartTrainingFromResource(resource.id).catch(() => undefined);
+                }}
+              >
+                <span className="menu-list__body"><strong>{templateCopy[language].generatePractice}</strong></span>
+              </button>
+            ) : null}
+            {onExportResource && canWriteResources ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  exportSelectedResource(resource.id, resource.title);
+                }}
+              >
+                <span className="menu-list__body"><strong>{localize(language, "exportAction")}</strong></span>
+              </button>
+            ) : null}
+            {onDeleteResources && canWriteResources ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  requestResourceDelete(resource.id);
+                }}
+              >
+                <span className="menu-list__body"><strong>{localize(language, "deleteResource")}</strong></span>
+              </button>
+            ) : null}
+          </div>
+        );
+      })() : null}
     </section>
   );
 }

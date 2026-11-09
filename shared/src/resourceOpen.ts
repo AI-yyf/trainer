@@ -94,16 +94,19 @@ export function resolveResourceLocalCandidates(resource: ResourceOpenRecord): st
 export function resolveResourceOpenTarget(resource: ResourceOpenRecord): ResourceOpenTarget {
   const source = resource.source?.trim();
   const canonicalSource = resource.canonicalSource?.trim();
-  const localCandidates = resolveResourceLocalCandidates(resource);
-  if (localCandidates.length > 0) {
-    return { kind: "vscode", source: localCandidates[0] };
+  // A web source is opened where it lives. A captured snapshot or README is
+  // evidence for Trainer, not the file the learner asked to inspect.
+  const urlSource = [source, canonicalSource].find(
+    (value): value is string => Boolean(value) && URL_PATTERN.test(value!),
+  );
+  if (urlSource) {
+    return { kind: "browser", source: urlSource };
   }
 
-  if (resource.kind === "url") {
-    const urlSource = [source, canonicalSource].find((value) => value && URL_PATTERN.test(value));
-    return urlSource
-      ? { kind: "browser", source: urlSource }
-      : { kind: "unavailable", reason: source || canonicalSource ? "invalid_url" : "missing_source" };
+  // Local resources open their original file, never the Markdown digest.
+  const originalCandidates = resolveResourceOriginalCandidates(resource);
+  if (originalCandidates.length > 0) {
+    return { kind: "vscode", source: originalCandidates[0] };
   }
 
   return {

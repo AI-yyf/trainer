@@ -3,11 +3,12 @@
  * Real VS Code GUI journey for canonical library documents.
  *
  * Installs the packaged VSIX into an isolated user-data/extensions profile,
- * imports a real DOCX, PPTX and PDF through the extension's own
- * `trainer.resource.upload` command (the same handler the webview's import
+ * imports a real DOCX, PPTX, PDF and Markdown note through the extension's
+ * own `trainer.resource.upload` command (the same handler the webview's import
  * menu calls), then drives the installed webview with Playwright Electron:
- * open the library, preview each document, read the canonical Markdown,
- * search, and open a hit at the cited line. Screenshots are written to
+ * verify the library lists every file, prove a row opens the original source
+ * in a real editor tab (never a Reader detail page), verify the canonical
+ * Markdown artifacts on disk, and search. Screenshots are written to
  * `output/canonical-gui/<stamp>/`.
  *
  * No provider is required: everything here is local library work.
@@ -246,6 +247,8 @@ with zipfile.ZipFile(os.path.join(workspace_docs,"consensus-deck.pptx"),"w",zipf
     z.writestr('ppt/notesSlides/notesSlide1.xml',notes)
     z.writestr('ppt/media/image1.png',png)
 
+open(os.path.join(workspace_docs,"open-source-note.md"),"w",encoding="utf-8").write("# Direct source\n\nOPEN_SOURCE_DIRECT\n")
+
 import pymupdf
 pdf=pymupdf.open()
 p1=pdf.new_page(); p1.insert_text((72,72),"Storage chapter one: the log.",fontsize=12)
@@ -407,6 +410,11 @@ const fixtures = [
     name: "Storage Paper",
     path: path.join(workspaceDir, "docs", "storage-paper.pdf"),
   },
+  {
+    kind: "markdown",
+    name: "Open Source Note",
+    path: path.join(workspaceDir, "docs", "open-source-note.md"),
+  },
 ];
 
 const results = [];
@@ -499,22 +507,6 @@ async function selectDestination(frame, label) {
   }
   throw new Error(`Destination not found: ${label}`);
 }
-async function openReader(frame, title) {
-  const item = frame.locator('[role="treeitem"]').filter({ hasText: title }).first();
-  if (!(await item.count())) throw new Error(`Resource row not found: ${title}`);
-  await item.focus();
-  await item.press("Space");
-  await new Promise((resolve) => setTimeout(resolve, 1800));
-}
-async function goBack(frame) {
-  const back = frame.locator("button.template-back").first();
-  if (!(await back.count())) {
-    throw new Error("Reader back control not found");
-  }
-  await back.click();
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-}
-
 try {
   const page = await app.firstWindow({ timeout: 120_000 });
   await page.waitForTimeout(8000);
@@ -577,45 +569,36 @@ try {
   ];
   for (const check of readerChecks) {
     await waitFor(frame, new RegExp(check.title));
-    await openReader(frame, check.title);
-    const readerText = await waitFor(frame, new RegExp(check.title));
-    // The shipped reader is metadata + external-open actions only. It must not
-    // resurrect the removed in-Trainer preview body, iframe or rich content.
-    const readerDebug = await frame.evaluate(() => ({
-      previewBody: document.querySelectorAll(
-        ".resources-knowledge__content-preview, .resources-knowledge__content-preview-body",
-      ).length,
-      iframe: document.querySelectorAll("[data-template=ResourceReader] iframe").length,
-      markdown: document.querySelectorAll(".message-markdown").length,
-      editorAction: Boolean(document.querySelector('[data-reader-open="editor"]')),
-      externalAction: Boolean(document.querySelector('[data-reader-open="external"]')),
-      canonicalFlag:
-        document.querySelector("[data-canonical-markdown]")?.getAttribute("data-canonical-markdown") ?? null,
-    }));
-    let editorOpened = false;
-    const editorAction = frame.locator('[data-reader-open="editor"]').first();
-    if (await editorAction.count()) {
-      await editorAction.click();
-      await page.waitForTimeout(2500);
-      const tabs = await page.locator(".tab").allInnerTexts().catch(() => []);
-      editorOpened = tabs.some(
-        (tab) => tab.includes(check.title) || /\.(md|markdown|txt)\b/i.test(tab),
-      );
-    }
+    const item = frame.getByRole("treeitem", { name: check.title, exact: true });
     record(check.key, {
-      ok:
-        readerDebug.previewBody === 0 &&
-        readerDebug.iframe === 0 &&
-        readerDebug.markdown === 0 &&
-        readerDebug.editorAction === true &&
-        editorOpened === true &&
-        !/resource_id:/.test(readerText),
-      screenshot: await screenshot(page, `reader-${check.key}-dark`),
-      text: readerText.slice(0, 800),
-      readerDebug,
-      editorOpened,
+      ok: (await item.count()) > 0,
+      screenshot: await screenshot(page, `library-${check.key}-dark`),
+      note: "The library lists the file; opening is a native source-open action, not a Reader page.",
     });
-    await goBack(frame);
+  }
+  if ((await frame.locator("[data-template=ResourceReader]").count()) !== 0) {
+    throw new Error("The retired Reader detail page is still rendered.");
+  }
+
+  // Proving direct source open: the Markdown resource opens in a real VS Code
+  // editor tab with its original content, not the generated .md digest.
+  const sourceNote = frame.getByRole("treeitem", { name: "Open Source Note", exact: true });
+  if (!(await sourceNote.isVisible())) {
+    throw new Error("The Markdown source row is not visible.");
+  }
+  await sourceNote.focus();
+  await sourceNote.press("Enter");
+  await page.waitForTimeout(2500);
+  const editorText = await page.locator(".monaco-editor").innerText().catch(() => "");
+  const tabs = await page.locator(".tab").allInnerTexts().catch(() => []);
+  record("source-open", {
+    ok: /OPEN_SOURCE_DIRECT/.test(editorText) || tabs.some((tab) => /open-source-note\.md/i.test(tab)),
+    screenshot: await screenshot(page, "source-open-dark"),
+    editorHead: editorText.slice(0, 300),
+    tabs: tabs.slice(0, 8),
+  });
+  if ((await frame.locator("[data-template=ResourceReader]").count()) !== 0) {
+    throw new Error("The retired Reader detail page is still rendered.");
   }
 
   // Search across the library and open the hit at its cited Markdown line.
@@ -631,16 +614,10 @@ try {
       text: text.slice(0, 800),
     });
     const hit = frame.locator('[role="treeitem"]').filter({ hasText: /Distributed Systems Notes|Storage Paper/ }).first();
-    if (await hit.count()) {
-      await hit.click();
-      await page.waitForTimeout(2500);
-      record("search-hit-opens-markdown", {
-        ok: true,
-        screenshot: await screenshot(page, "06-search-hit-open-dark"),
-      });
-    } else {
-      record("search-hit-opens-markdown", { ok: false, reason: "no tree hit" });
-    }
+    record("search-hit-present", {
+      ok: (await hit.count()) > 0,
+      screenshot: await screenshot(page, "06-search-hit-present-dark"),
+    });
   } else {
     record("library-search", { ok: false, reason: "search input not found" });
   }

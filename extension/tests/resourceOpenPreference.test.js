@@ -10,7 +10,7 @@ const {
   hasDistinctOriginal,
 } = require('../dist/shared/src/resourceOpen.js');
 
-test('document resources read the canonical Markdown digest, not the binary original', () => {
+test('document resources open the original file, not the Markdown digest', () => {
   const resource = {
     kind: 'docx',
     source: '/workspace/docs/notes.docx',
@@ -26,7 +26,7 @@ test('document resources read the canonical Markdown digest, not the binary orig
   ]);
   assert.deepEqual(resolveResourceOpenTarget(resource), {
     kind: 'vscode',
-    source: 'Trainer Library/resources/markdown/resource-1.md',
+    source: 'Trainer Library/resources/originals/resource-1/notes.docx',
   });
   assert.equal(hasDistinctOriginal(resource), true);
 });
@@ -53,7 +53,7 @@ test('URL resources stay browser-openable and never claim a local file', () => {
   });
 });
 
-test('a captured URL with a Markdown snapshot reads the snapshot', () => {
+test('a captured URL still opens the live web source, not the Markdown snapshot', () => {
   const resource = {
     kind: 'url',
     source: 'https://example.org/a',
@@ -64,7 +64,7 @@ test('a captured URL with a Markdown snapshot reads the snapshot', () => {
     'Trainer Library/resources/markdown/resource-2.md',
   ]);
   assert.deepEqual(resolveResourceOpenTarget(resource), {
-    kind: 'vscode',
-    source: 'Trainer Library/resources/markdown/resource-2.md',
+    kind: 'browser',
+    source: 'https://example.org/a',
   });
 });

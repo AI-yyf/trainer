@@ -30,9 +30,9 @@ test('resources stay a searchable knowledge library with a controlled sandbox di
   // Product-level template contract replaces the previous layout grammar.
   const { read } = require('./templateAssertions');
   const source = read('components/resources/ResourcesWorkbenchView.tsx');
-  for (const marker of ['<Library', '<ResourceReader', 'type="search"', 'onSelect={selectResource}', 'onRestore', 'onStartTrainingFromResource', 'openResourceInVsCode']) assert.ok(source.includes(marker), marker);
+  for (const marker of ['<Library', 'type="search"', 'onOpen={openResourceInVsCode}', 'onMenu={openResourceRowMenu}', 'onStartTrainingFromResource', 'openResourceInVsCode', 'resources-row-menu']) assert.ok(source.includes(marker), marker);
   assert.ok(!source.includes('didAutoSelectResource'));
-  assert.ok(source.includes('onAskCoach([selectedResource.id])'));
+  assert.ok(source.includes('onAskCoach([resource.id])'));
 });
 
 test('training defaults to a five-stage single-card loop with one visible, state-driven next action', () => {

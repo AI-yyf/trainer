@@ -205,33 +205,29 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     });
     await expect(resourceTreeItem.locator(".resources-library-tree__status")).toHaveCount(0);
 
-    // Space selects the row for its metadata/open actions; click/Enter opens
-    // the file directly and never renders resource content in Trainer.
-    await resourceTreeItem.press(" ");
-    await expect(resourceTreeItem).toHaveAttribute("aria-current", "true");
-    const detail = page.locator('[data-template=ResourceReader]');
-    await expect(detail).toBeVisible();
-    await expect(detail.locator(".resources-knowledge__content-preview")).toHaveCount(0);
-
+    // Space and Enter both open the source file through the host. No Reader
+    // detail page is rendered, and the tree row stays in place.
     const openStart = await actionCount(page);
-    await detail.getByRole("button", { name: "Open in VS Code", exact: true }).click();
+    await resourceTreeItem.press(" ");
     const openAction = await waitForHostAction(
       page,
       openStart,
       (action) => action.type === "resource/open",
     );
     expect(openAction).toEqual({ type: "resource/open", payload: { resourceId: RESOURCE_ID } });
+    await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
+    await expect(resourceTreeItem).not.toHaveAttribute("aria-current", "true");
 
-    await detail.locator(".template-back").first().click();
-    // Delete moved into the reader detail actions; it keeps the confirm dialog.
-    await resourceTreeItem.press(" ");
-    await expect(detail).toBeVisible();
-    const deleteResourceButton = detail.locator(".resources-knowledge__delete-action");
-    await expect(deleteResourceButton).toHaveAttribute(
-      "aria-label",
-      `Delete resource: ${RESOURCE_TITLE}`,
-    );
-    await deleteResourceButton.click();
+    // Delete lives in the compact row menu next to the source-open action.
+    const deleteMenuTrigger = resourceTreeItem.getByRole("button", {
+      name: `File actions: ${RESOURCE_TITLE}`,
+      exact: true,
+    });
+    await expect(deleteMenuTrigger).toBeVisible();
+    await deleteMenuTrigger.click();
+    const fileActions = page.getByRole("menu", { name: "File actions", exact: true });
+    await expect(fileActions).toBeVisible();
+    await fileActions.getByRole("menuitem", { name: "Delete resource", exact: true }).click();
     const deleteConfirmation = library.getByRole("alertdialog");
     await expect(deleteConfirmation).toBeVisible();
 

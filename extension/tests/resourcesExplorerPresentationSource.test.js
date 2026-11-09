@@ -38,11 +38,11 @@ test('resource row click opens VS Code and does not switch the sidebar to the Re
   assert.ok(start >= 0 && end > start, 'expected the openResourceInVsCode handler');
   const handler = view.slice(start, end);
   assert.match(handler, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
-  assert.match(handler, /resource\.location\?\.line_start/);
+  assert.doesNotMatch(handler, /resource\.location\?\.line_start/);
   assert.doesNotMatch(handler, /setSelectedResourceId/);
   assert.doesNotMatch(handler, /setResourceDetail/);
   assert.match(view, /onClick=\{\(\) => onOpen\(node\.resource!\)\}/);
-  assert.match(view, /event\.key === " "[\s\S]*?onSelect\(node\.resource!\);/);
+  assert.match(view, /event\.key === " "[\s\S]*?onOpen\(node\.resource!\);/);
 });
 
 test('resource tree uses the vendored Material Icon Theme assets', () => {

@@ -1620,6 +1620,54 @@ test('openResourceCommand opens an existing absolute source in VS Code', async (
   assert.deepEqual(executedCommands[0][1].fsPath, expectedPath);
 });
 
+test('openResourceCommand opens the original document, never the canonical Markdown digest', async () => {
+  const openedExternal = [];
+  const vscodeMock = {
+    Uri: {
+      file(value) {
+        return { fsPath: value, path: value, scheme: 'file' };
+      },
+    },
+    Range: class Range {
+      constructor(startLine, startCharacter, endLine, endCharacter) {
+        this.start = { line: startLine, character: startCharacter };
+        this.end = { line: endLine, character: endCharacter };
+      }
+    },
+    commands: { async executeCommand() {} },
+    env: {
+      async openExternal(uri) {
+        openedExternal.push(uri);
+      },
+    },
+    workspace: { workspaceFolders: [] },
+  };
+  const { openResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
+  const context = createContext();
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-resource-original-'));
+  const originalPath = path.join(workspaceRoot, 'originals', 'notes.docx');
+  const markdownPath = path.join(workspaceRoot, 'markdown', 'notes.md');
+  fs.mkdirSync(path.dirname(originalPath), { recursive: true });
+  fs.mkdirSync(path.dirname(markdownPath), { recursive: true });
+  fs.writeFileSync(originalPath, 'docx bytes');
+  fs.writeFileSync(markdownPath, '# canonical digest');
+  const resource = context.getHostState().bootstrap.resources[0];
+  const bootstrap = context.getHostState().bootstrap;
+  context.getHostState = () => ({ bootstrap, workspace: { workspaceFolder: workspaceRoot } });
+  resource.kind = 'docx';
+  resource.source = originalPath;
+  resource.sandboxPath = undefined;
+  resource.canonicalMarkdownPath = markdownPath;
+  resource.canonicalOriginalPath = originalPath;
+
+  const result = await openResourceCommand(context, { resourceId: 'resource-1' });
+
+  assert.equal(result.ok, true);
+  assert.equal(openedExternal.length, 1);
+  assert.equal(openedExternal[0].fsPath, originalPath);
+  assert.notEqual(openedExternal[0].fsPath, markdownPath);
+});
+
 test('openResourceCommand refuses a missing source instead of opening a broken tab', async () => {
   const executedCommands = [];
   const vscodeMock = {
