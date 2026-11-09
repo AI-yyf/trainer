@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_at": "2026-11-08T22:48:21.100675+00:00",
+  "recorded_at": "2026-11-09T04:55:12.149341+00:00",
   "provider": {
     "base_url": "https://linksub.fun",
     "model": "deepseek-v4.1-flash"
@@ -8,34 +8,34 @@
   "journeys": {
     "5_preference_adaptation": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "元组只保证其**直接元素**的引用不变，不保证引用指向的对象内部不可变；列表本身可变，所以能改。\n示例：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 合法，修改的是列表内部\nprint(t)         # (1, [2, 3, 4])\n# t[1] = []      # 非法，会改变元组元素引用\n```",
-      "concept_first_reply": "元组只保证其**直接引用**不可变，不保证引用对象内部状态不可变。列表是可变对象，因此可修改其内容，但不能替换该元素。\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 合法：改列表内部\nprint(t)         # (1, [2, 3, 4])\n# t[1] = []      # 非法：改元组元素引用\n```",
-      "hands_on_chars": 180,
-      "concept_first_chars": 182,
+      "hands_on_reply": "元组只保证**引用不变**，不保证被引用对象内部不可变；列表是可变对象，故可原地修改。\n如果列表里含可变对象，`tuple` 的不可变性仅停留在“不能换绑元素”这一层。\n最小例子：`t = ([1],); t[0].append(2); print(t)` 输出 `([1, 2],)`。",
+      "concept_first_reply": "元组存的是对象的引用，不可变指引用不能换，不限制被引用对象内部修改。\n列表是可变对象，所以能原地 append/赋值，元组对此无能为力。\n例：`t = ([1],); t[0].append(2); print(t)` → 输出 `([1, 2],)`。",
+      "hands_on_chars": 144,
+      "concept_first_chars": 127,
       "different": true,
       "status": "PASS"
     },
     "6_preference_change": {
       "prompt": "解释 Python 元组里的列表为什么还能修改，控制在 6 行内，并给一个最小可运行例子。",
-      "hands_on_reply": "元组只保证其**直接元素**的引用不变，不保证引用指向的对象内部不可变；列表本身可变，所以能改。\n示例：\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 合法，修改的是列表内部\nprint(t)         # (1, [2, 3, 4])\n# t[1] = []      # 非法，会改变元组元素引用\n```",
-      "concept_first_reply": "元组只保证其**直接引用**不可变，不保证引用对象内部状态不可变。列表是可变对象，因此可修改其内容，但不能替换该元素。\n\n```python\nt = (1, [2, 3])\nt[1].append(4)   # 合法：改列表内部\nprint(t)         # (1, [2, 3, 4])\n# t[1] = []      # 非法：改元组元素引用\n```",
-      "hands_on_chars": 180,
-      "concept_first_chars": 182,
+      "hands_on_reply": "元组只保证**引用不变**，不保证被引用对象内部不可变；列表是可变对象，故可原地修改。\n如果列表里含可变对象，`tuple` 的不可变性仅停留在“不能换绑元素”这一层。\n最小例子：`t = ([1],); t[0].append(2); print(t)` 输出 `([1, 2],)`。",
+      "concept_first_reply": "元组存的是对象的引用，不可变指引用不能换，不限制被引用对象内部修改。\n列表是可变对象，所以能原地 append/赋值，元组对此无能为力。\n例：`t = ([1],); t[0].append(2); print(t)` → 输出 `([1, 2],)`。",
+      "hands_on_chars": 144,
+      "concept_first_chars": 127,
       "different": true,
       "status": "PASS",
       "note": "Same prompt after the stored teaching_style changed from hands-on to concept-first."
     },
     "19_memory_revoke": {
-      "before_reply": "元组不可变指创建后不能增删改元素，任何“修改”都会生成新对象。支持索引读取和拼接，但赋值如 `t[0]=1` 会报 TypeError。最小例子：`t=(1,2); t2=t+(3,)`，原 `t` 不变，`t2` 为新元组。",
-      "after_revoke_reply": "元组不可变指创建后不能增删改元素，任何\"修改\"都会生成新元组。最小例子：`t=(1,2); t2=t+(3,)`，`t` 仍为 `(1,2)`，`t2` 为 `(1,2,3)`。注意元组内若含可变对象（如列表），该对象内容仍可改。",
+      "before_reply": "元组不可变指创建后不能增删改元素，任何修改都会报错（如 `TypeError`），因此可安全用作字典键或共享数据。\n最小例子：`t = (1, 2); t[0] = 9` → 抛出 `TypeError`。\n注意：元组内若含可变对象（如列表），该对象本身仍可被修改。",
+      "after_revoke_reply": "元组不可变指创建后不能增删改元素，试图修改会抛 TypeError。\n可用 `tuple()` 创建，用下标/切片读取。\n最小例子：`t = (1, 2); t[0] = 9` → TypeError。\n注意：元组内若含可变对象（如列表），该对象本身仍可被修改。",
       "changed": true,
       "both_nonempty": true,
       "status": "PASS",
       "note": "Global memory was cleared and the stored teaching style changed from hands-on to concept-first; the same prompt produced different real replies."
     },
     "15_resource_version": {
-      "old_reply": "资料引用：Project A Queue AlphaQueue protects shared items with one lock. Note This is the only queue used by the project.\n\nAlphaQueue",
-      "new_reply": "资料中引用的队列名是：BetaQueue。",
+      "old_reply": "资料引用：“Project A Queue AlphaQueue protects shared items with one lock. Note This is the only queue used by the project.”\n\nAlphaQueue",
+      "new_reply": "引用：Project A Queue BetaQueue protects shared items with two locks. Note This is the only queue used by the project.\n\nBetaQueue",
       "old_mentions_alpha": true,
       "new_mentions_beta": true,
       "new_still_mentions_alpha": false,
@@ -43,8 +43,8 @@
       "note": "The model quoted the attached resource before and after re-index; the sidecar version conflict remains covered by v4-integrity-journeys."
     },
     "20_multi_project": {
-      "project_a_reply": "ALPHA_QUEUE = \"AlphaQueue\"\nAlphaQueue",
-      "project_b_reply": "文件里的常量值：`BETA_QUEUE = \"BetaQueue\"`\n\nBetaQueue",
+      "project_a_reply": "常量值：`\"AlphaQueue\"`\n\nAlphaQueue",
+      "project_b_reply": "BETA_QUEUE = \"BetaQueue\"\nBetaQueue",
       "a_leaks_b": false,
       "b_mentions_beta": true,
       "status": "PASS",
@@ -80,6 +80,6 @@
       "note": "需要两个真实 VS Code 窗口；本次未执行"
     }
   },
-  "elapsed_ms": 39363,
+  "elapsed_ms": 45792,
   "ok": true
 }
