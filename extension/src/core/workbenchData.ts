@@ -699,8 +699,13 @@ export function mergePlanResult(
       current.projectPlanLink,
     ),
     planRuntimeStatus: mapPlanRuntimeStatus(
-      record?.plan_runtime_status,
-      undefined,
+      // Slim stream frames carry the runtime status only inside the refetched
+      // snapshot; reading the top-level record alone kept the previous
+      // first-look runtime and made a freshly committed plan look leftover.
+      record?.plan_runtime_status ??
+        snapshot?.plan_runtime_status ??
+        snapshot?.planRuntimeStatus,
+      snapshot,
       current.planRuntimeStatus,
       incomingWorkspaceId,
       currentWorkspaceId,

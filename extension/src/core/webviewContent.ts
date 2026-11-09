@@ -30,57 +30,9 @@ export async function buildWorkbenchHtml(
       assetUriMap.set(path.relative(distDir, assetPath).replace(/\\/g, '/'), resourceUri.toString());
     }
 
-    // TEMP-DIAG: capture renderer errors before the app mounts (remove after debugging)
     html = html.replace(
       /<head>/i,
       `<head>
-    <script nonce="${nonce}">
-      (function () {
-        window.__TRAINER_ERRS__ = [];
-        function rec(entry) {
-          try { window.__TRAINER_ERRS__.push(entry); } catch (_) {}
-        }
-        window.addEventListener('error', function (ev) {
-          rec({
-            type: 'window-error',
-            message: (ev.message || '') + ' @ ' + (ev.filename || '') + ':' + (ev.lineno || '') + ':' + (ev.colno || ''),
-            stack: ev.error && ev.error.stack ? String(ev.error.stack).slice(0, 5000) : ''
-          });
-        }, true);
-        window.addEventListener('unhandledrejection', function (ev) {
-          var r = ev.reason;
-          rec({
-            type: 'unhandledrejection',
-            message: r && r.message ? r.message : String(r),
-            stack: r && r.stack ? String(r.stack).slice(0, 5000) : ''
-          });
-        }, true);
-        document.addEventListener('securitypolicyviolation', function (ev) {
-          rec({ type: 'csp-violation', message: ev.violatedDirective + ' blocked ' + ev.blockedURI, stack: '' });
-        }, true);
-        var origError = console.error;
-        console.error = function () {
-          try {
-            var msg = Array.prototype.map.call(arguments, function (a) {
-              if (a instanceof Error) return a.stack || a.message;
-              try { return JSON.stringify(a); } catch (_) { return String(a); }
-            }).join(' | ');
-            rec({ type: 'console-error', message: msg.slice(0, 6000), stack: '' });
-          } catch (_) {}
-          return origError.apply(console, arguments);
-        };
-        var origWarn = console.warn;
-        console.warn = function () {
-          try {
-            var m = Array.prototype.map.call(arguments, function (a) {
-              try { return JSON.stringify(a); } catch (_) { return String(a); }
-            }).join(' | ');
-            rec({ type: 'console-warn', message: m.slice(0, 3000), stack: '' });
-          } catch (_) {}
-          return origWarn.apply(console, arguments);
-        };
-      })();
-    </script>
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource} data:; script-src ${webview.cspSource} 'nonce-${nonce}'; worker-src blob:; form-action 'none'; connect-src https: http://127.0.0.1:* http://localhost:*;"

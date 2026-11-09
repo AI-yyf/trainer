@@ -785,6 +785,69 @@ test('mapPlanRuntimeStatus snake→camel preserves verify_plan_advance for Plan 
   assert.equal(patch.planRuntimeStatus?.verifyPlanAdvance?.planId, 'plan-verify-advance-1');
 });
 
+test('mergeSessionMessageSnapshot reads the live plan runtime from a slim snapshot', () => {
+  const bootstrap = createBootstrap();
+  const workspaceId =
+    bootstrap.workspaceTrainingState?.workspaceId ||
+    bootstrap.memory.workspace?.workspaceId ||
+    'F:\\trainer';
+  bootstrap.planRuntimeStatus = {
+    currentStep: '旧的第一步',
+    currentMainThread: { currentStep: '旧的第一步', summary: '旧状态' },
+  };
+  const result = mergeSessionMessageSnapshot(
+    {
+      ...bootstrap,
+      workspaceTrainingState: {
+        ...(bootstrap.workspaceTrainingState || {}),
+        workspaceId,
+      },
+      memory: {
+        ...bootstrap.memory,
+        workspace: {
+          ...(bootstrap.memory.workspace || {}),
+          workspaceId,
+        },
+      },
+    },
+    {
+      reply: { content: '正式计划已保存。' },
+      snapshot: {
+        context_id: workspaceId,
+        plan: {
+          id: 'plan-slim-1',
+          title: 'PPO Clip 实现计划',
+          current_step: '写出 ratio 与 clip 的公式',
+          stages: [{ id: 'stage-1', title: '基础', goal: '写出公式', status: 'active' }],
+          _plan_revision: 1,
+        },
+        plan_runtime_status: {
+          current_step: '写出 ratio 与 clip 的公式',
+          current_main_thread: {
+            current_step: '写出 ratio 与 clip 的公式',
+            summary: '正式计划已保存。',
+          },
+        },
+        memory: {
+          workspace: {
+            workspace_id: workspaceId,
+            latest_plan_runtime: {
+              planId: 'plan-slim-1',
+              currentStep: '写出 ratio 与 clip 的公式',
+              frozen: false,
+            },
+          },
+        },
+      },
+    },
+    '继续',
+    workspaceId,
+  );
+
+  assert.equal(result.patch.planRuntimeStatus?.currentStep, '写出 ratio 与 clip 的公式');
+  assert.equal(result.patch.planRuntimeStatus?.currentMainThread?.currentStep, '写出 ratio 与 clip 的公式');
+});
+
 test('mergeMemorySummary clears an explicitly removed global plan relationship', () => {
   const bootstrap = {
     ...createBootstrap(),
