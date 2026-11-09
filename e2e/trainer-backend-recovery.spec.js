@@ -42,8 +42,10 @@ test("Settings recovers an offline backend before provider setup and stops offer
   await planRecovery.getByRole('button', { name: "打开设置", exact: true }).click();
   await expect(strip.getByRole('button', { name: "重新启动 Trainer", exact: true })).toBeVisible();
   await update("starting");
-  await expect(strip).toContainText("Trainer 正在准备中");
-  await expect(strip.getByRole('button')).toHaveCount(0);
+  // Starting is not a user-visible preparation state: the saved settings stay
+  // usable and no waiting copy or restart action is surfaced.
+  await expect(page.getByText("Trainer 正在准备中", { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-settings-availability=true]:visible')).not.toContainText("准备");
   await expect(strip.getByRole('button', { name: "重新启动 Trainer", exact: true })).toHaveCount(0);
   await update("connected", { ...bootstrap.providerConfig, lastTestResult: undefined });
   await expect(page.getByRole('button', { name: "重新启动 Trainer", exact: true })).toHaveCount(0);

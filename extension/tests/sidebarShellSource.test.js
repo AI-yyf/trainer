@@ -109,24 +109,26 @@ test('Trainer uses one small-size-safe monochrome mark across extension surfaces
   assert.equal(fs.existsSync(marketplaceIconPath), true);
 });
 
-test('startup shell stays logo-free and uses text-only status copy', () => {
+test('startup has no waiting shell and keeps only the fatal-error surface', () => {
   const source = fs.readFileSync(mainSourcePath, 'utf8');
 
   assert.doesNotMatch(source, /trainerMarkUrl/);
   assert.doesNotMatch(source, /<img\s+src=/);
-  assert.match(source, /className="trainer-startup-shell"/);
+  assert.doesNotMatch(source, /trainer-startup-shell/);
+  assert.doesNotMatch(source, /renderStartupShell/);
   assert.match(source, /className="trainer-startup-error"/);
 });
 
-test('startup shell follows the saved coach language before the app bundle is ready', () => {
+test('startup error copy still follows the saved coach language', () => {
   const source = fs.readFileSync(mainSourcePath, 'utf8');
 
   assert.match(source, /const STARTUP_COPY: Record<ComposerLanguage, StartupCopy>/);
+  assert.doesNotMatch(source, /renderStartupShell/);
   for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
     assert.match(source, new RegExp(`"${language}"`));
   }
   assert.match(source, /injected\?\.memory\?\.workspace\?\.responseLanguage/);
-  assert.match(source, /renderStartupShell\(\s*copy,/);
+  assert.doesNotMatch(source, /renderStartupShell/);
   assert.doesNotMatch(source, /Loading the coach shell/);
 });
 

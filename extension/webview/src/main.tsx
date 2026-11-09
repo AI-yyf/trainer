@@ -268,23 +268,6 @@ function preferredTheme(): "light" | "dark" {
   return "dark";
 }
 
-function StartupShell({ copy, message }: { copy: StartupCopy; message: string }) {
-  return (
-    <div className="trainer-startup-shell">
-      <div className="trainer-startup-shell__eyebrow">
-        <span>{copy.coach}</span>
-        <span>{copy.starting}</span>
-      </div>
-      <div className="trainer-startup-shell__card">
-        <strong className="trainer-startup-shell__heading">{copy.loading}</strong>
-        <p className="trainer-startup-shell__message">
-          {message}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
@@ -314,10 +297,6 @@ function renderStartupFailure(error: unknown): void {
     stack: resolvedError.stack,
   });
   root.render(<FatalStartupError />);
-}
-
-function renderStartupShell(copy: StartupCopy, message: string): void {
-  root.render(<StartupShell copy={copy} message={message} />);
 }
 
 function requestBootstrapRecovery(reason: string): void {
@@ -375,15 +354,9 @@ async function bootstrap(): Promise<void> {
   }
 
   const injected = getInjectedBootstrapState<StartupBootstrap>();
-  const sessionLabel = sanitizeVisibleText(injected?.sessionLabel).trim();
-  const copy = startupCopy(injected);
-  renderStartupShell(
-    copy,
-    sessionLabel
-      ? `${copy.preparing} ${sessionLabel}`
-      : copy.preparingWorkspace,
-  );
-
+  // No preparation screen: render the real App as soon as its module is
+  // available. A cold module load may leave the root empty for a few frames,
+  // which is intentionally quieter than a "Trainer is getting ready" timer.
   const [{ App }, { applyWorkbenchTheme, installWorkbenchHostThemeBridge }] = await Promise.all([
     import("./app/App"),
     import("./lib/theme"),

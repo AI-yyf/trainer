@@ -259,13 +259,7 @@ export function buildTrainerRuntimeStatus(
 ): RuntimeStatusMessage {
   const language = resolveRuntimeLanguage(context);
   const copy = runtimeCopyByLanguage[language];
-  if (status.lifecycle !== 'ready') {
-    if (status.lifecycle === 'starting') {
-      return {
-        tone: 'info',
-        message: copy.starting,
-      };
-    }
+  if (status.lifecycle !== 'ready' && status.lifecycle !== 'starting') {
     if (status.lifecycle === 'stopped') {
       return {
         tone: 'info',

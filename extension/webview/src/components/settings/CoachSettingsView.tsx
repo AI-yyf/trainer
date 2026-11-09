@@ -2583,7 +2583,9 @@ function CoachSettingsViewSheet({
     (lastTestFailure?.status === "failed" ? "test_failed" : lastTestFailure?.status) ??
     provider.modelErrorCategory ??
     (providerTestTransportFailed ? "test_failed" : undefined);
-  const backendStarting = backendConnectionState === "starting";
+  // Starting is not a user-visible preparation state: Settings renders the
+  // saved connection immediately and the sidecar catches up underneath.
+  const backendStarting = false;
   const backendUnavailable = backendConnectionState === "offline" ||
     (backendConnectionState === undefined && providerFailureCategory === "sidecar_unavailable");
   const backendRecovery = backendStarting || backendUnavailable

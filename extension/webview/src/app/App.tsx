@@ -3708,11 +3708,9 @@ export function App() {
     const sidecarStatus =
       data.connection.state === "offline"
         ? "error"
-        : data.connection.state === "starting"
-          ? "starting"
-          : data.connection.state === "connected"
-            ? "ready"
-            : "unknown";
+        : data.connection.state === "connected" || data.connection.state === "starting"
+          ? "ready"
+          : "unknown";
     return deriveCoachOrientation({
       sidecarStatus,
       hasProviderModel: Boolean(data.providerConfig.model?.trim() && data.providerConfig.baseUrl?.trim()),
@@ -10248,8 +10246,9 @@ export function App() {
     freshness: syncStatus,
     // An idle sidecar starts on demand; a verified provider still permits work.
     connection: data.connection.state === "connected" ||
+      data.connection.state === "starting" ||
       (data.connection.state === "offline" && providerCanCoachNow)
-        ? "ready" : data.connection.state === "starting" ? "recovering" : "offline",
+        ? "ready" : "offline",
     connectionRecovery: {
       title: providerSetupState.title,
       label: t.openSettings,

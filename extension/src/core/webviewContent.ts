@@ -118,15 +118,7 @@ export async function buildWorkbenchHtml(
     );
     html = html.replace(
       /<div id="root"><\/div>/i,
-      `<div id="root">
-        <div class="trainer-webview-fallback" aria-label="Trainer loading">
-          <div class="trainer-webview-fallback__eyebrow">Trainer</div>
-          <div class="trainer-webview-fallback__card">
-            <strong>Loading the coach sidebar...</strong>
-            <p>Trainer is preparing the current workspace, provider state, and coach session.</p>
-          </div>
-        </div>
-      </div>`,
+      `<div id="root"><div class="trainer-webview-fallback" aria-hidden="true"></div></div>`,
     );
     return html;
   }

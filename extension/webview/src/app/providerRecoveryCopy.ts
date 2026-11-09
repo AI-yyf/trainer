@@ -45,13 +45,6 @@ function providerCoachBanner(
     };
   }
 
-  if (connectionState === "starting") {
-    return {
-      tone: "info",
-      message: blockedMessage ?? recovery.detail,
-    };
-  }
-
   const sendState = describeProviderSendState(provider, language);
   const lastCategory = provider.lastTestResult?.errorCategory ?? provider.modelErrorCategory;
 
@@ -112,8 +105,8 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
         actionLabel: "打开设置",
       },
       starting: {
-        title: "Trainer 正在准备中",
-        detail: "稍等片刻，当前对话会自动恢复。",
+        title: "Trainer",
+        detail: "当前对话会继续。",
         actionLabel: "查看连接",
       },
       saved_connection: {
@@ -144,7 +137,7 @@ const providerRecoveryCopy: Record<ComposerLanguage, ProviderRecoveryLocale> = {
     },
     status: {
       offline: "暂时不可用",
-      starting: "准备中",
+      starting: "就绪",
       saved_connection: "待选择",
       connection_setup: "待连接",
       missing_key: "缺少密钥",
@@ -533,9 +526,6 @@ function providerRecoveryScenario(
 ): ProviderRecoveryScenario {
   if (connectionState === "offline") {
     return "offline";
-  }
-  if (connectionState === "starting") {
-    return "starting";
   }
 
   const sendState = describeProviderSendState(provider, language);

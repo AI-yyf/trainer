@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · 한국어 · [Português](README_pt-BR.md)
 
-[![릴리스](https://img.shields.io/badge/source-v1.4.3-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![릴리스](https://img.shields.io/badge/source-v1.4.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![라이선스](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![플랫폼](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#설치)
 [![테스트](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#품질-게이트)
@@ -590,7 +590,7 @@ Trainer가 작업 흐름에 도움이 되었다면 블로그 / 논문 / 발표�
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.4.3}
+  note   = {v1.4.4}
 }
 ```
 
@@ -600,6 +600,6 @@ Trainer가 작업 흐름에 도움이 되었다면 블로그 / 논문 / 발표�
 
 **// AI를 가르치고 · AI와 함께 성장하세요**
 
-`v1.4.3` · 커피와 FSRS, 24개 순수 함수, 3,328개 테스트, 그리고 대신 코드를 쓰기를 거부하는 마음으로 만들었습니다.
+`v1.4.4` · 커피와 FSRS, 24개 순수 함수, 3,328개 테스트, 그리고 대신 코드를 쓰기를 거부하는 마음으로 만들었습니다.
 
 </div>

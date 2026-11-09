@@ -118,14 +118,14 @@ function providerFailureCopy(
       });
     case "sidecar_unavailable":
       return localized({
-        "zh-CN": { statusLabel: "正在准备", headline: "Trainer 正在启动，请稍后重试" },
-        "en-US": { statusLabel: "Getting ready", headline: "Trainer is starting. Try again shortly" },
-        "es-ES": { statusLabel: "Preparando", headline: "Trainer se está iniciando. Inténtalo de nuevo en un momento" },
-        "fr-FR": { statusLabel: "Préparation", headline: "Trainer démarre. Réessayez dans un instant" },
-        "de-DE": { statusLabel: "Wird vorbereitet", headline: "Trainer startet. Bitte gleich noch einmal versuchen" },
-        "ja-JP": { statusLabel: "準備中", headline: "Trainer を起動しています。少し待って再試行してください" },
-        "ko-KR": { statusLabel: "준비 중", headline: "Trainer를 시작하고 있습니다. 잠시 후 다시 시도하세요" },
-        "pt-BR": { statusLabel: "Preparando", headline: "O Trainer está iniciando. Tente novamente em instantes" },
+        "zh-CN": { statusLabel: "连接中断", headline: "重新发送这条消息即可继续" },
+        "en-US": { statusLabel: "Connection interrupted", headline: "Resend this message to continue" },
+        "es-ES": { statusLabel: "Conexión interrumpida", headline: "Vuelve a enviar este mensaje para continuar" },
+        "fr-FR": { statusLabel: "Connexion interrompue", headline: "Renvoyez ce message pour continuer" },
+        "de-DE": { statusLabel: "Verbindung unterbrochen", headline: "Senden Sie diese Nachricht erneut, um fortzufahren" },
+        "ja-JP": { statusLabel: "接続が中断されました", headline: "このメッセージを再送すると続行できます" },
+        "ko-KR": { statusLabel: "연결이 중단됨", headline: "이 메시지를 다시 보내면 계속할 수 있습니다" },
+        "pt-BR": { statusLabel: "Conexão interrompida", headline: "Reenvie esta mensagem para continuar" },
       });
     case "workspace_trust":
       return localized({
