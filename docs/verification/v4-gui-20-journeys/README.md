@@ -25,12 +25,12 @@
 | 15 | 资料版本变化，旧引用/知识关系更新 | PARTIAL | Native file import dialog is not automatable; resource version invalidation is covered by U/S evidence |
 | 16 | Skill 自动选择/执行/记录/失败隔离 | PASS | Built-in skill catalog renders; real selection/execution remains covered by P journeys |
 | 17 | Provider 超时/中断，不制造虚假结果 | PARTIAL | Fixture provider does not fail; real timeout/interruption is covered by failure tests and needs a fault-injection run |
-| 18 | 多窗口并发，不重复推进计划/复习 | BLOCKED | Second window is not launched in this harness; plan revision/singleflight evidence is U/L only |
+| 18 | 多窗口并发，不重复推进计划/复习 | PASS | Dedicated run: two real windows, one live plan; concurrent freeze committed exactly one revision (1→2), both windows painted frozen. Evidence: `docs/verification/v4-gui-dual-window-journey/` |
 | 19 | 修改/撤销记忆，教学行为同步变化 | PASS | Memory toggle changes in the real GUI; model behavior change needs a P journey |
 | 20 | 连续多个项目/主题，仍理解当前重点 | PARTIAL | Single project in this run; project switching and long-run focus need a multi-project harness |
 
 ## 汇总
 
-PASS 10 · PARTIAL 5 · BLOCKED 5 · FAIL 0
+PASS 11 · PARTIAL 5 · BLOCKED 4 · FAIL 0
 
 > 本文件只记录真实 VS Code 窗口中的 GUI 证据。Fixture provider 的回复不构成真实模型（P）证据；需要数天时钟、双窗口、真实训练卡或故障注入的旅程明确标为 PARTIAL/BLOCKED。

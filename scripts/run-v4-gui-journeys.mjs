@@ -501,9 +501,24 @@ try {
   await runJourney(17, "Provider 超时/中断，不制造虚假结果", async () => ({
     ok: false, status: "PARTIAL", note: "Fixture provider does not fail; real timeout/interruption is covered by failure tests and needs a fault-injection run",
   }));
-  await runJourney(18, "多窗口并发，不重复推进计划/复习", async () => ({
-    ok: false, status: "BLOCKED", note: "Second window is not launched in this harness; plan revision/singleflight evidence is U/L only",
-  }));
+  await runJourney(18, "多窗口并发，不重复推进计划/复习", async () => {
+    // This journey needs two real windows and a live formal plan; it runs in
+    // its own harness so the 20-journey fixture app stays single-window.
+    const evidencePath = path.join(repoRoot, "docs/verification/v4-gui-dual-window-journey/journey.json");
+    if (!fs.existsSync(evidencePath)) {
+      return { ok: false, status: "BLOCKED", note: "Run scripts/run-v4-dual-window-journey.mjs to produce the dual-window evidence first" };
+    }
+    const evidence = JSON.parse(fs.readFileSync(evidencePath, "utf8"));
+    if (evidence.status !== "PASS" || evidence.vsixVersion !== packageJson.version) {
+      return { ok: false, status: "BLOCKED", note: `Dual-window evidence is ${evidence.status ?? "unknown"} for VSIX ${evidence.vsixVersion ?? "?"}; rerun scripts/run-v4-dual-window-journey.mjs on this VSIX` };
+    }
+    return {
+      ok: true,
+      status: "PASS",
+      note: `Dedicated dual-window run: revision ${evidence.plan?.revisionBefore}→${evidence.plan?.revisionAfter}, both windows observed frozen; ${path.relative(repoRoot, evidencePath)}`,
+      evidence: path.relative(repoRoot, evidencePath),
+    };
+  });
   await runJourney(19, "修改/撤销记忆，教学行为同步变化", async () => {
     const detail = await openSettingsCategory(page, frame, "preferences", "偏好");
     const memory = detail.locator('[data-settings-subsection="memory"]');

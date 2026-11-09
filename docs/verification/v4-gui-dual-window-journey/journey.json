@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 1,
+  "journey": "G18",
+  "title": "多窗口并发，不重复推进计划/复习",
+  "recordedAt": "2026-11-09T04:51:24.043Z",
+  "vsix": "extension/trainer-extension-1.4.1-darwin-arm64.vsix",
+  "vsixVersion": "1.4.1",
+  "fixtureProvider": "http://127.0.0.1:53480/v1",
+  "environment": {
+    "root": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ",
+    "userDataDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/user-data",
+    "extensionsDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/extensions",
+    "workspaceDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/workspace",
+    "learningDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/learning",
+    "workspaceFilePath": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/dual-window.code-workspace",
+    "vscode": "/Applications/Visual Studio Code.app/Contents/MacOS/Electron"
+  },
+  "windows": [
+    {
+      "id": "window-1",
+      "openedAs": "folder",
+      "title": "workspace",
+      "trainerReady": true,
+      "screenshot": "docs/verification/v4-gui-dual-window-journey/window-1-learning.png",
+      "learningButtons": [
+        "对话",
+        "学习",
+        "资料",
+        "继续当前步骤",
+        "用训练卡练这一步",
+        "开始复习",
+        "查看成长",
+        "问教练",
+        "调整计划",
+        "生成计划",
+        "下一步",
+        "冻结计划",
+        "清除"
+      ],
+      "freezeVisible": true,
+      "syncReply": "先看当前这一步的最小可验证动作：打开当前文件，找到一个真实调用点，写出输入、输出和一个失败边界。完成后用一次真实运行收尾，再把结果带回对话。",
+      "screenshotAfterRace": "docs/verification/v4-gui-dual-window-journey/window-1-after-race.png"
+    },
+    {
+      "id": "window-2",
+      "openedAs": "code-workspace-file",
+      "title": "Welcome — dual-window (Workspace)",
+      "trainerReady": true,
+      "learningButtons": [
+        "对话",
+        "学习",
+        "资料",
+        "继续当前步骤",
+        "用训练卡练这一步",
+        "开始复习",
+        "查看成长",
+        "问教练",
+        "调整计划",
+        "生成计划",
+        "下一步",
+        "冻结计划",
+        "清除"
+      ],
+      "freezeVisible": true,
+      "screenshot": "docs/verification/v4-gui-dual-window-journey/window-2-learning.png",
+      "screenshotAfterRace": "docs/verification/v4-gui-dual-window-journey/window-2-after-race.png"
+    }
+  ],
+  "plan": {
+    "workspaceId": "context-dfaa0e39f9ff4c279b5256e97539f90c",
+    "id": "plan-5e592327e8154c5a8d2186863c3bfee9",
+    "title": "PPO Clip 实现计划",
+    "revisionBefore": 1,
+    "revisionAfter": 2,
+    "revisionAfterReload": 2,
+    "frozenAfterReload": true
+  },
+  "concurrency": {
+    "clickedAt": "2026-11-09T04:53:58.868Z",
+    "window1ConflictCopy": false,
+    "window2ConflictCopy": false,
+    "window1Body": "workspace 对话 学习 资料 这一步暂时没完成。再试一次。 × 今日学习 基础 第 1 / 2 段 2待复习 2待推进 0/2 下一步 计划已暂停 恢复后继续当前步骤，不会创建新的计划。 恢复计划 更多 待回顾 (2) 待回顾 (2) 把 clip 接入一个最小 PPO 训练步骤，并用真实运行验证。 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基于当前目标生成正式计划 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基础 补丁落地后，再说明它为什么仍然属于「基础」这一阶段。 · 理解并手算 PPO Clip 目标。 开始复习 后面还会练什么 2 成长 4 理解 · 还未验证实现 · 还未验证调试 · 还未验证迁移 · 还未验证 查看成长 从模板开始 更多计划 更多 当前先留在 Plan 这条主线上，先生成正式计划。 你现在主要在推进：基于当前目标生成正式计划 教学观察: 当前还在沿着「基于当前目标生成正式计划」这条主线推进，下一轮也应该继续接这一步：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 上一轮已经把范围压到「基于当前目标生成正式计划」，这一轮就沿着同一条主线继续：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 当前还在沿着「基于当前目标生成正式计划」这条主线推进，下一轮也应该继续接这一步：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 首轮建联里提到的",
+    "window2Body": "workspace 对话 学习 资料 今日学习 基础 第 1 / 2 段 2待复习 2待推进 0/2 下一步 计划已暂停 恢复后继续当前步骤，不会创建新的计划。 恢复计划 更多 待回顾 (2) 待回顾 (2) 把 clip 接入一个最小 PPO 训练步骤，并用真实运行验证。 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基于当前目标生成正式计划 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基础 补丁落地后，再说明它为什么仍然属于「基础」这一阶段。 · 理解并手算 PPO Clip 目标。 开始复习 后面还会练什么 2 成长 4 理解 · 还未验证实现 · 还未验证调试 · 还未验证迁移 · 还未验证 查看成长 从模板开始 更多计划 更多 当前先留在 Plan 这条主线上，先生成正式计划。 你现在主要在推进：基于当前目标生成正式计划 教学观察: 当前还在沿着「基于当前目标生成正式计划」这条主线推进，下一轮也应该继续接这一步：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 上一轮已经把范围压到「基于当前目标生成正式计划」，这一轮就沿着同一条主线继续：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 当前还在沿着「基于当前目标生成正式计划」这条主线推进，下一轮也应该继续接这一步：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 首轮建联里提到的关键锚点仍然重要：基于当前目标生成",
+    "revisionAfter": 2,
+    "frozenAfter": true,
+    "converged": [
+      {
+        "name": "window-1",
+        "body": "workspace 对话 学习 资料 这一步暂时没完成。再试一次。 × 今日学习 基础 第 1 / 2 段 2待复习 2待推进 0/2 下一步 计划已暂停 恢复后继续当前步骤，不会创建新的计划。 恢复计划 更多 待回顾 (2) 待回顾 (2) 把 clip 接入一个最小 PPO 训练步骤，并用真实运行验证。 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基于当前目标生成正式计划 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基础 补丁落地后，再说明它为什么仍然属于「基础」这一阶段。 · 理解并手算 PPO Clip 目标。 开始复习 后面还会练什么 2 成长 4 理解 · 还未验证实现 · 还未验证调试 · 还未验证迁移 · 还未验证 查看成长 从模板开始 更多计划 更多 当前先留在 Plan 这条主线上，先生成正式计"
+      },
+      {
+        "name": "window-2",
+        "body": "workspace 对话 学习 资料 今日学习 基础 第 1 / 2 段 2待复习 2待推进 0/2 下一步 计划已暂停 恢复后继续当前步骤，不会创建新的计划。 恢复计划 更多 待回顾 (2) 待回顾 (2) 把 clip 接入一个最小 PPO 训练步骤，并用真实运行验证。 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基于当前目标生成正式计划 把当前主线收成一个可见的小补丁或验证步骤：先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 · 先把目标压成正式计划，至少说清阶段、why now、verify method 和下一步。 基础 补丁落地后，再说明它为什么仍然属于「基础」这一阶段。 · 理解并手算 PPO Clip 目标。 开始复习 后面还会练什么 2 成长 4 理解 · 还未验证实现 · 还未验证调试 · 还未验证迁移 · 还未验证 查看成长 从模板开始 更多计划 更多 当前先留在 Plan 这条主线上，先生成正式计划。 你现在主要在推进：基于当前目"
+      }
+    ],
+    "conflictCopyObserved": false
+  },
+  "assertions": {
+    "twoRealWindows": true,
+    "sameManagedContext": true,
+    "bothWindowsRenderedPlan": true,
+    "exactlyOneCommittedRevision": true,
+    "noDoubleAdvance": true,
+    "bothWindowsObservedFrozen": true,
+    "frozenStatePersisted": true
+  },
+  "status": "PASS",
+  "steps": [
+    {
+      "name": "fixture-provider",
+      "at": "2026-11-09T04:51:21.235Z",
+      "baseUrl": "http://127.0.0.1:53480/v1"
+    },
+    {
+      "name": "profile-ready",
+      "at": "2026-11-09T04:51:24.042Z",
+      "root": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ",
+      "userDataDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/user-data",
+      "extensionsDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/extensions",
+      "workspaceDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/workspace",
+      "learningDir": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/learning",
+      "workspaceFilePath": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/dual-window.code-workspace"
+    },
+    {
+      "name": "window-1-sidebar",
+      "at": "2026-11-09T04:51:39.848Z",
+      "body": "workspace 对话 学习 资料 先说说你想学什么——内容会保留在下面的输入框里。 完成两项设置即可使用完整能力： 连接模型后，Trainer 会发现当前项目并询问是否加入；加入不会修改文件。 ○ 连接模型 设置 ✓ 选择学习文件夹 已选择 消息输入框"
+    },
+    {
+      "name": "pre-plan-learning-first-open",
+      "at": "2026-11-09T04:51:43.393Z",
+      "body": "workspace 对话 学习 资料 当前学习 先选择学习工作区 Trainer 会读取项目结构，把代码变成可引用的学习资料；不会修改文件。 选择工作区 训练 成长 从模板开始 更多 问教练 调整计划 生成计划 下一步 总计划 · 尚未建立 提交阶段解释或澄清请求"
+    },
+    {
+      "name": "window-1-provider-verified",
+      "at": "2026-11-09T04:52:35.258Z",
+      "reply": "PPO 是近端策略优化：用裁剪的目标函数限制每次策略更新幅度，在实现简单的同时保持训练稳定。"
+    },
+    {
+      "name": "shared-context",
+      "at": "2026-11-09T04:52:35.404Z",
+      "contextId": "context-dfaa0e39f9ff4c279b5256e97539f90c",
+      "projectPath": "/var/folders/k2/8v88bznj0_v6synd98blpf5m0000gn/T/trainer-dw-X2xokQ/workspace",
+      "projectId": "project-5940192077b54481bc974e2f6bda898f"
+    },
+    {
+      "name": "sidecar",
+      "at": "2026-11-09T04:52:35.447Z",
+      "pid": "99891",
+      "port": 34892
+    },
+    {
+      "name": "workspace-session",
+      "at": "2026-11-09T04:52:35.455Z",
+      "sessionId": "session-project-2c5040460be8470bad7d80fcd469163d"
+    },
+    {
+      "name": "provider-tested",
+      "at": "2026-11-09T04:52:52.789Z",
+      "body": "workspace 对话 学习 资料 Trainer 设置 Trainer 设置 连接 custom-openai-compatible fixture-v4-gui 另存为连接 添加供应商 连接 编辑模型配置 连接名称（可选） 服务 地址与密钥只保存在本机。 服务根地址 填写服务根地址，不要包含 /v1/chat/completions。Trainer 会自动补全请求路径。 访问密钥 测试连接 模型 这组连接默认使用的聊天模型。 聊天模型 fixture-v4-gui 刷新模型列表 连接方式 OpenAI 响应 OpenAI 聊天 Anthropic OpenAI 兼容 Gemini ⚡ 端点测速 工具 视觉 思考模式 默认思考强度 自动（使用请求层默认值） 低 中 高 能力只来自最近一次实测，不会用协议默认值冒充。 上下文长度 32K 64K 128K 256K 最大输出 8K 16K 32K 64K 模型目录 · 1 saved models 连接诊断 取消 保存"
+    },
+    {
+      "name": "plan-generated",
+      "at": "2026-11-09T04:53:00.475Z",
+      "prompt": "请基于当前目标生成正式计划，按阶段说明目标、为什么现在、验证方式和下一步。",
+      "reply": "正式计划已保存。先完成第一阶段：写出 ratio 与 clip 的公式，并手算一次更新。"
+    },
+    {
+      "name": "plan-stored",
+      "at": "2026-11-09T04:53:00.476Z",
+      "planId": "plan-5e592327e8154c5a8d2186863c3bfee9",
+      "revision": 1
+    },
+    {
+      "name": "window-1-plan-visible",
+      "at": "2026-11-09T04:53:08.623Z",
+      "freeze": true,
+      "buttons": [
+        "对话",
+        "学习",
+        "资料",
+        "继续当前步骤",
+        "用训练卡练这一步",
+        "开始复习",
+        "查看成长",
+        "问教练",
+        "调整计划",
+        "生成计划",
+        "下一步",
+        "冻结计划",
+        "清除"
+      ]
+    },
+    {
+      "name": "window-2-sidebar",
+      "at": "2026-11-09T04:53:46.178Z",
+      "body": "workspace 对话 学习 资料 PPO 是什么？请用两句话解释。 PPO 是近端策略优化：用裁剪的目标函数限制每次策略更新幅度，在实现简单的同时保持训练稳定。 请基于当前目标生成正式计划，按阶段说明目标、为什么现在、验证方式和下一步。 正式计划已保存。先完成第一阶段：写出 ratio 与 clip 的公式，并手算一次更新。 继续 先看当前这一步的最小可验证动作：打开当前文件，找到一个真实调用点，写出输入、输出和一个失败边界。完成后用一次真实运行收尾，再把结果带回对话。 "
+    },
+    {
+      "name": "window-2-plan-visible",
+      "at": "2026-11-09T04:53:50.808Z",
+      "freeze": true,
+      "buttons": [
+        "对话",
+        "学习",
+        "资料",
+        "继续当前步骤",
+        "用训练卡练这一步",
+        "开始复习",
+        "查看成长",
+        "问教练",
+        "调整计划",
+        "生成计划",
+        "下一步",
+        "冻结计划",
+        "清除"
+      ]
+    },
+    {
+      "name": "plan-race",
+      "at": "2026-11-09T04:53:58.867Z",
+      "conflict1": false,
+      "conflict2": false,
+      "revisionAfter": 2,
+      "frozen": true
+    },
+    {
+      "name": "assertions",
+      "at": "2026-11-09T04:53:59.122Z",
+      "twoRealWindows": true,
+      "sameManagedContext": true,
+      "bothWindowsRenderedPlan": true,
+      "exactlyOneCommittedRevision": true,
+      "noDoubleAdvance": true,
+      "bothWindowsObservedFrozen": true,
+      "frozenStatePersisted": true
+    }
+  ],
+  "finishedAt": "2026-11-09T04:53:59.122Z"
+}

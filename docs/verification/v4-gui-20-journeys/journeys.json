@@ -17,9 +17,9 @@
     "vscode": "/Applications/Visual Studio Code.app/Contents/MacOS/Electron"
   },
   "summary": {
-    "pass": 10,
+    "pass": 11,
     "partial": 5,
-    "blocked": 5,
+    "blocked": 4,
     "fail": 0
   },
   "journeys": [
@@ -186,10 +186,11 @@
     {
       "id": 18,
       "title": "多窗口并发，不重复推进计划/复习",
-      "status": "BLOCKED",
-      "at": "2026-11-08T17:18:22.258Z",
-      "ok": false,
-      "note": "Second window is not launched in this harness; plan revision/singleflight evidence is U/L only"
+      "status": "PASS",
+      "at": "2026-11-09T04:47:02.240Z",
+      "ok": true,
+      "note": "Executed in a dedicated run: two real VS Code windows (folder + .code-workspace) shared one live formal plan; concurrent freeze committed exactly one revision (1->2) and both windows painted the frozen plan. Evidence: docs/verification/v4-gui-dual-window-journey/.",
+      "evidence": "docs/verification/v4-gui-dual-window-journey/journey.json"
     },
     {
       "id": 19,

@@ -38,7 +38,7 @@
 | 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version/invalidation；S: 旧 version 409；P: 真实模型先引 AlphaQueue，重索引后引 BetaQueue；G：真实 GUI 未验证 |
 | 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G: 真实窗口技能目录可读 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
-| 18 | 多窗口并发，不重复推进计划/复习 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision/singleflight；S/P: 两个并发客户端同一 expected_revision，一个 200 一个 409；G：真实双窗口仍未执行 |
+| 18 | 多窗口并发，不重复推进计划/复习 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | 🟡 | U: plan revision/singleflight；S/P: 两个并发客户端同一 expected_revision，一个 200 一个 409；G: 同一 VS Code 实例两个真实窗口（folder + `.code-workspace`）并发冻结同一 live 计划，revision 1→2 仅一次提交，两窗口均显示已暂停；`docs/verification/v4-gui-dual-window-journey/` |
 | 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | ✅ | U/S: 真实 sidecar 覆盖/撤销；P: 清空 global memory 并切换 hands-on→concept-first 后同题回复不同；G: 真实窗口记忆开关 |
 | 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；P: A=AlphaQueue，B=BetaQueue，无跨项目泄漏 |
 
@@ -50,11 +50,11 @@
 | S 真实 Sidecar | 12 | 8 | 0 |
 | P 真实 Provider | 15 | 4 | 1 |
 | V 已安装 VSIX | 1 | 2 | 17 |
-| G 真实 GUI | 10 | 1 | 9 |
+| G 真实 GUI | 11 | 1 | 8 |
 | R Remote-SSH | 1 | 3 | 16 |
 | L 长期/持久化 | 9 | 6 | 0（5 项不适用） |
 
-> G 列已有 10 条 PASS：旅程 1/2/3/4/5/6/11/14/16/19 在真实 VS Code Electron + 当前 VSIX 中逐条断言。其余 GUI 证据为 PARTIAL/GAP：fixture provider 不能替代真实模型，训练卡、数天时钟、双窗口、资料导入仍未在 GUI 中闭环。
+> G 列已有 11 条 PASS：旅程 1/2/3/4/5/6/11/14/16/18/19 在真实 VS Code Electron + 当前 VSIX 中逐条断言。其余 GUI 证据为 PARTIAL/GAP：fixture provider 不能替代真实模型，训练卡、数天时钟、资料导入、跨项目仍未在 GUI 中闭环。
 > P 列只有 P4 旅程/L2 第 4 步等少数真实模型证据；不得把 3930 个单元测试当作真实模型验收。
 
 ## 3. 缺口优先级
@@ -62,7 +62,7 @@
 | 优先级 | 缺口 | 下一步 |
 | --- | --- | --- |
 | P0 | 旅程 3/5/6/9/10/11/12 的真实 Provider/GUI 闭环 | 5/6 已完成真实模型；9/10/11/12 仍缺真实 due queue/长离线；时钟 harness 见 `v4-clock-harness.md` |
-| P0 | 旅程 15/18/19/20 的真实版本变化、双窗口、记忆撤销、多项目长跑 | 真实 VS Code GUI + 双窗口 + 资料变更脚本 |
+| P0 | 旅程 15/19/20 的真实版本变化、记忆撤销、多项目长跑 | 18 已完成真实双窗口并发；15/19/20 仍需 GUI 级版本变更、记忆撤销、多项目长跑 |
 | P1 | 20 条旅程尚未形成逐条截图/日志归档 | 用本矩阵作为清单，逐条补 `docs/verification/v4-journey-*`；GUI 20 旅程与 Remote-SSH 重连已归档 |
 | P1 | App/Provider/Memory 巨型模块拆分 | Provider 已拆出 15 个 `llm/provider/*` 模块（约 3.8k 行）；Memory snapshot 已迁到 `memory/snapshot_builder.py`（989 行，service 减约 970 行）；App render 仍偏大 |
 | P2 | SCIP 索引解析 | ✅ JSON + 二进制 protobuf（`.scip`）解析；`test_scip_adapter` 6 项行为测试 |
@@ -74,7 +74,9 @@
 - P4 真实 Provider：`docs/maturity/2026-11-06-p4-real-provider.md`（5 PASS + 1 NOT_EXECUTED）。
 - Remote-SSH L2：`docs/verification/remote-ssh-l2-141s-evidence.md`（2026-11-08 六步 6/6 PASS）。
 - 四屏真实 GUI：`docs/verification/2026-11-07-{coach,learning,resources,settings}-screen-audit.md`。
-- 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（10 PASS / 5 PARTIAL / 5 BLOCKED，fixture provider 仅作 GUI 证据）。
+- 20 旅程真实 GUI 脚本：`scripts/run-v4-gui-journeys.mjs`；报告 `docs/verification/v4-gui-20-journeys/`（11 PASS / 5 PARTIAL / 4 BLOCKED，fixture provider 仅作 GUI 证据）。
+- 双窗口 GUI 旅程 18：`docs/verification/v4-gui-dual-window-journey/`（同一 VS Code 实例两个真实窗口共享 live 计划；并发冻结 revision 1→2，两窗口均显示已暂停）。
+- 真实 Provider 目标旅程（2026-11-09 重跑）：`v4-provider-journeys.md`（5/6/15/19/20）、`v4-review-provider-journeys.md`（9/11/12）、`v4-fsrs-delayed-recall.md`（10），全部 PASS；`linksub.fun` / `deepseek-v4.1-flash`。
 - 完整性旅程：`docs/verification/v4-integrity-journeys.md`（真实 sidecar；版本冲突 409、记忆撤销、provider 故障不伪造）。
 - 性能门禁：`docs/verification/v4-perf-probe-2026-11-08.json`（streaming longtask 0 ≤ 0；warm nav p90 63ms < 100ms）。
 - Remote-SSH 重连：`docs/verification/v4-remote-ssh-reconnect-2026-11-08.md`（CI Layer 1，11/11 steps，含 reconnect）。
