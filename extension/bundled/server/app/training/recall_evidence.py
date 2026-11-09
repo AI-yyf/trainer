@@ -31,6 +31,16 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def recall_rating_for(correct: bool, assistance_level: str) -> str:
+    """Map the observed recall to an FSRS grade, never to independent by default."""
+    if not correct:
+        return "again"
+    level = str(assistance_level or "").strip().lower().replace("-", "_")
+    if level in {"none", "independent"}:
+        return "good"
+    return "hard"
+
+
 def record_recall_evidence(
     runtime: "TrainerRuntime",
     *,
@@ -60,6 +70,7 @@ def record_recall_evidence(
         return None
     card_record = memory.get_card(workspace, card)
     scheduled: dict[str, Any] | None = None
+    rating = recall_rating_for(correct, assistance_level)
     if card_record is None:
         if not allow_missing_card:
             return None
@@ -73,6 +84,7 @@ def record_recall_evidence(
                 workspace,
                 training_card_id=card,
                 passed=correct,
+                rating=rating,
             )
         except (RuntimeError, TypeError, ValueError):
             # Scheduling is an input to the evidence, not the recall answer
@@ -106,6 +118,7 @@ def record_recall_evidence(
         dimension=dimension,
         evidence_kind=evidence_kind,
         recall_delay_days=delay_days if dimension == "delayed_recall" else None,
+        recall_rating=rating,
         failure_reason=None if correct else (detail or "The recall answer did not match the answer key."),
     )
     if evidence is None:
@@ -120,5 +133,6 @@ def record_recall_evidence(
         "dimension": dimension,
         "delay_days": round(delay_days, 4),
         "delayed_recall": delayed,
+        "rating": rating,
         "scheduled": scheduled,
     }

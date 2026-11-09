@@ -89,6 +89,7 @@ class UnifiedEvidence(BaseModel):
     dimension: str = ""
     evidence_kind: str = ""
     recall_delay_days: float | None = None
+    recall_rating: str = ""
     limitations: list[str] = Field(default_factory=list)
     created_at: str = ""
     verified_at: str | None = None
@@ -182,6 +183,7 @@ def evidence_from_attempt(record: dict[str, Any], *, workspace_id: str | None = 
         dimension=_text(record.get("dimension")),
         evidence_kind=_text(record.get("evidence_kind")),
         recall_delay_days=_optional_float(record.get("recall_delay_days")),
+        recall_rating=_text(record.get("recall_rating")),
         limitations=[_text(item) for item in (record.get("limitations") or []) if _text(item)],
         created_at=created_at,
         verified_at=created_at if verified else None,

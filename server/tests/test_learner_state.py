@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from app.core.models import (
@@ -200,6 +201,29 @@ def test_preference_correction_is_read_immediately_without_a_parallel_cache() ->
 
     assert after["profile"]["value"]["teaching_style"] == "concept-first"
     assert after["generated_at"] >= before["generated_at"]
+
+
+def test_review_projection_includes_the_intervention_budget() -> None:
+    memory = MemorySnapshot(
+        due_review_count=10,
+        workspace={
+            "last_active_at": (datetime.now(UTC) - timedelta(days=14)).isoformat(),
+        },
+    )
+    service = _service(
+        profiles={"ws-a": UserProfile(long_term_goal="Learn PPO")},
+        snapshots={"ws-a": memory},
+        goals={},
+        evidence={},
+    )
+
+    review = service.snapshot("ws-a").to_payload()["review"]
+
+    assert review["due_count"] == 10
+    intervention = review["intervention"]
+    assert intervention["reason"] == "long_offline_curated"
+    assert intervention["visible_limit"] == 1
+    assert intervention["deferred_count"] == 9
 
 
 def test_evidence_collection_is_the_same_workspace_scoped_list() -> None:

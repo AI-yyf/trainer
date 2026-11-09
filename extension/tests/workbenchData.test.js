@@ -118,6 +118,7 @@ test('skill projection mirrors from snapshot workspace memory into training stat
                 evidence_id: 'evidence-recall',
                 evidence_kind: 'recall',
                 recall_delay_days: 2.5,
+                recall_rating: 'good',
                 delayed_recall_qualified: true,
               }],
             },
@@ -138,6 +139,7 @@ test('skill projection mirrors from snapshot workspace memory into training stat
   assert.equal(projection.dimensions.delayed_recall.verifiedCount, 1);
   assert.equal(projection.dimensions.delayed_recall.evidence[0].evidenceKind, 'recall');
   assert.equal(projection.dimensions.delayed_recall.evidence[0].recallDelayDays, 2.5);
+  assert.equal(projection.dimensions.delayed_recall.evidence[0].recallRating, 'good');
   assert.equal(
     projection.dimensions.delayed_recall.evidence[0].delayedRecallQualified,
     true,

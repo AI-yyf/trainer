@@ -9,6 +9,7 @@ from typing import Literal
 from ..core.models import LearningPlan, ReviewQueueItem
 from .models import MasteryRecord, ProgressRecord, ReflectionRecord, WeaknessRecord, utc_now
 from .models import MemorySnapshot as LaneMemorySnapshot
+from .review_intervention import curate_review_items, derive_review_budget
 from .workspace_recovery import (
     PLAN_RUNTIME_KEY,
     live_coach_stage_label,
@@ -429,11 +430,20 @@ class ReviewScheduler:
                 )
 
         ranked = self._dedupe_items(due_items, active_thread_focus)
-        return self._finalize_items(
+        # Finalize the existing four-item head first so a plan checkpoint can
+        # take its reserved slot; the intervention budget then decides how much
+        # of that head may be surfaced this turn.
+        finalized = self._finalize_items(
             ranked,
             reminder_mode=reminder_mode,
             active_thread_focus=active_thread_focus,
         )
+        budget = derive_review_budget(
+            workspace,
+            due_count=len(ranked),
+            now=now,
+        )
+        return curate_review_items(finalized, budget)
 
     def derive_review_rhythm(
         self,

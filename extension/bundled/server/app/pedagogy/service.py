@@ -509,6 +509,8 @@ class PedagogyService:
         skill_state: str | None = None,
         skill_projection: dict[str, Any] | None = None,
         active_goal: bool | None = None,
+        intervention_allowed: bool | None = None,
+        intervention_reason: str = "",
     ) -> TeachingDecision:
         scenario, focus_area, scenario_evidence = self._classify_scenario(
             request=request,
@@ -730,6 +732,18 @@ class PedagogyService:
             ),
             needs_rescue=learner_state.needs_rescue,
         )
+        affect_allows_intervention = not (
+            affect_state is not None
+            and affect_state.recovery_signal in {"fragile", "overloaded"}
+        )
+        effective_intervention_allowed = affect_allows_intervention and (
+            intervention_allowed is not False
+        )
+        effective_intervention_reason = (
+            "affect_recovery"
+            if not affect_allows_intervention
+            else intervention_reason
+        )
         turn = decide_turn(
             TurnFacts(
                 message=request.message,
@@ -751,10 +765,8 @@ class PedagogyService:
                     and memory_snapshot.active_thread
                     and memory_snapshot.active_thread.blocker
                 ),
-                intervention_allowed=not (
-                    affect_state is not None
-                    and affect_state.recovery_signal in {"fragile", "overloaded"}
-                ),
+                intervention_allowed=effective_intervention_allowed,
+                intervention_reason=effective_intervention_reason,
                 onboarding_needed=onboarding_needed,
             )
         )

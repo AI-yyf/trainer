@@ -83,6 +83,7 @@ class TurnFacts:
     has_trusted_evidence: bool = False
     activity_in_progress: bool = False
     intervention_allowed: bool = True
+    intervention_reason: str = ""
     onboarding_needed: bool = False
 
 
@@ -229,6 +230,10 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
         )
 
     teach_cue = _matches(_TEACH_PATTERN, message)
+    if facts.due_review_count > 0 and not facts.intervention_allowed:
+        evidence.append(
+            f"intervention_blocked:{facts.intervention_reason or 'policy'}"
+        )
 
     # 5b. An unbuilt relationship/context needs one intake question before
     #     teaching or review; it must not mint a task or plan.

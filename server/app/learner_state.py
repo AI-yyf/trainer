@@ -17,9 +17,11 @@ explicit on every read, so a projection for A cannot contain B's facts.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from .core.models import GoalSession, MemorySnapshot, UserProfile, utc_now_iso
+from .memory.review_intervention import derive_review_budget
 
 if TYPE_CHECKING:
     from .db.repository import TrainerRepository
@@ -123,6 +125,7 @@ class LearnerStateSnapshot:
                 "due_count": review.get("due_count", 0),
                 "due_items": review.get("due_items", []),
                 "summary": review.get("summary", ""),
+                "intervention": review.get("intervention", {}),
             },
             "limitations": [
                 "Read-only projection: surfaces must not persist changes through this object.",
@@ -249,6 +252,11 @@ class LearnerStateService:
             "review_rhythm": memory_snapshot.review_rhythm,
             "due_review_count": memory_snapshot.due_review_count,
         }
+        review_intervention = derive_review_budget(
+            workspace,
+            due_count=memory_snapshot.due_review_count,
+            now=datetime.fromisoformat(now),
+        ).to_payload()
         return LearnerStateSnapshot(
             workspace_id=scope,
             generated_at=now,
@@ -296,6 +304,7 @@ class LearnerStateService:
                     "due_count": memory_snapshot.due_review_count,
                     "due_items": due_items,
                     "summary": memory_snapshot.review_rhythm,
+                    "intervention": review_intervention,
                 },
                 source="ReviewScheduler + FSRS",
                 confidence="known",

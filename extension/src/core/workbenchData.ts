@@ -4680,6 +4680,7 @@ function mapTrainingSkillProjection(
           typeof rowRecord.recall_delay_days === 'number'
             ? rowRecord.recall_delay_days
             : undefined,
+        recallRating: asString(rowRecord.recall_rating) ?? asString(rowRecord.recallRating),
         delayedRecallQualified:
           typeof rowRecord.delayed_recall_qualified === 'boolean'
             ? rowRecord.delayed_recall_qualified

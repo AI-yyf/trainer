@@ -97,6 +97,14 @@ from .models import (
 )
 from .onboarding_extraction import OnboardingExtractionMixin
 from .remote_artifact_recovery import restore_return_artifact
+from .review_intervention import (
+    REVIEW_INTERVENTION_KEY,
+    ReviewInterventionBudget,
+    derive_review_budget,
+    merge_review_engagement,
+    merge_review_offer,
+    merge_review_refusal,
+)
 from .review_scheduler import ReviewRating, ReviewScheduler
 from .semantic import HashingEmbedder, SemanticMemory
 from .snapshot_builder import build_memory_snapshot
@@ -3189,6 +3197,95 @@ class MemoryService(
         self._persist_structured(workspace_id)
         return updated
 
+    def review_intervention_budget(
+        self,
+        workspace_id: str,
+        *,
+        due_count: int | None = None,
+        session_id: str = "",
+        message: str = "",
+        now: datetime | None = None,
+    ) -> ReviewInterventionBudget:
+        """Read the current intervention budget for this workspace."""
+        structured = self._structured_for(workspace_id)
+        workspace = dict(structured._workspace)
+        if due_count is None:
+            due_count = len(self.snapshot(workspace_id).due_reviews)
+        return derive_review_budget(
+            workspace,
+            due_count=due_count,
+            now=now or utc_now(),
+            session_id=session_id,
+            message=message,
+        )
+
+    def mark_workspace_active(self, workspace_id: str, *, now: datetime | None = None) -> None:
+        structured = self._structured_for(workspace_id)
+        structured.update_workspace(last_active_at=(now or utc_now()).isoformat())
+        self._persist_structured(workspace_id)
+
+    def record_review_offer(
+        self,
+        workspace_id: str,
+        *,
+        session_id: str = "",
+        now: datetime | None = None,
+    ) -> None:
+        moment = now or utc_now()
+        structured = self._structured_for(workspace_id)
+        state = merge_review_offer(
+            structured._workspace.get(REVIEW_INTERVENTION_KEY),
+            now=moment,
+            session_id=session_id,
+        )
+        structured.update_workspace(
+            review_intervention=state,
+            last_active_at=moment.isoformat(),
+        )
+        self._persist_structured(workspace_id)
+
+    def record_review_refusal(
+        self,
+        workspace_id: str,
+        *,
+        reason: str = "decline",
+        session_id: str = "",
+        now: datetime | None = None,
+    ) -> None:
+        moment = now or utc_now()
+        structured = self._structured_for(workspace_id)
+        state = merge_review_refusal(
+            structured._workspace.get(REVIEW_INTERVENTION_KEY),
+            now=moment,
+            reason=reason,
+            session_id=session_id,
+        )
+        structured.update_workspace(
+            review_intervention=state,
+            last_active_at=moment.isoformat(),
+        )
+        self._persist_structured(workspace_id)
+
+    def record_review_engagement(
+        self,
+        workspace_id: str,
+        *,
+        session_id: str = "",
+        now: datetime | None = None,
+    ) -> None:
+        moment = now or utc_now()
+        structured = self._structured_for(workspace_id)
+        state = merge_review_engagement(
+            structured._workspace.get(REVIEW_INTERVENTION_KEY),
+            now=moment,
+            session_id=session_id,
+        )
+        structured.update_workspace(
+            review_intervention=state,
+            last_active_at=moment.isoformat(),
+        )
+        self._persist_structured(workspace_id)
+
     def persist_turn_context_pressure(
         self,
         workspace_id: str,
@@ -3722,6 +3819,7 @@ class MemoryService(
         training_card_id: str,
         passed: bool,
         require_live: bool = True,
+        rating: str | None = None,
     ) -> dict[str, Any] | None:
         """FSRS schedule for the live selected card only. Never mint. No global promote."""
         from ..training.fsrs_scheduler import (
@@ -3773,8 +3871,17 @@ class MemoryService(
             )
             created.project_scope = "current_project"
 
-        rating = TrainingRating.GOOD if passed else TrainingRating.AGAIN
-        result = scheduler.process_review(cleaned_card_id, rating)
+        rating_map = {
+            "again": TrainingRating.AGAIN,
+            "hard": TrainingRating.HARD,
+            "good": TrainingRating.GOOD,
+            "easy": TrainingRating.EASY,
+        }
+        requested_rating = rating_map.get(str(rating or "").strip().lower())
+        rating_enum = requested_rating or (
+            TrainingRating.GOOD if passed else TrainingRating.AGAIN
+        )
+        result = scheduler.process_review(cleaned_card_id, rating_enum)
         updated_state = scheduler.get_card_state(cleaned_card_id)
         if updated_state is None:
             return None
@@ -3845,7 +3952,7 @@ class MemoryService(
         self._persist_structured(workspace_id)
         return {
             "card_id": cleaned_card_id,
-            "rating": rating.name.lower(),
+            "rating": rating_enum.name.lower(),
             "interval_days": result.new_interval,
             "next_due": result.next_due.isoformat() if result.next_due else None,
             "stability": result.new_stability,
@@ -3869,6 +3976,7 @@ class MemoryService(
         *,
         training_card_id: str,
         passed: bool,
+        rating: str | None = None,
     ) -> dict[str, Any] | None:
         """FSRS schedule for a recall answer.
 
@@ -3882,6 +3990,7 @@ class MemoryService(
             training_card_id=training_card_id,
             passed=passed,
             require_live=False,
+            rating=rating,
         )
 
     def _refresh_training_next_challenge_after_runtime_advance(
@@ -5820,6 +5929,24 @@ class MemoryService(
                 before_snapshot=previous.model_dump(mode="json"),
                 after_snapshot=structured._review_artifact.model_dump(mode="json"),
             ))
+        if action in {"snooze", "skip"}:
+            intervention_state = merge_review_refusal(
+                structured._workspace.get(REVIEW_INTERVENTION_KEY),
+                now=now,
+                reason=f"queue_{action}",
+            )
+        elif action in {"accept", "reset", "done"}:
+            intervention_state = merge_review_engagement(
+                structured._workspace.get(REVIEW_INTERVENTION_KEY),
+                now=now,
+            )
+        else:
+            intervention_state = None
+        if intervention_state is not None:
+            structured.update_workspace(
+                review_intervention=intervention_state,
+                last_active_at=now.isoformat(),
+            )
         self._persist_structured(workspace_id)
         return created
 

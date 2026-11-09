@@ -51,6 +51,7 @@ from ..llm.turn_grounding import (
     sanitize_memory_anchor,
 )
 from ..memory.note_request import message_requests_explicit_learning_note
+from ..memory.review_intervention import derive_review_budget
 from ..memory.workspace_recovery import (
     PLAN_RUNTIME_KEY,
     accept_plan_runtime_resume_request,
@@ -5095,6 +5096,24 @@ def resolve_coach_turn(deps: CoachSupportDeps,
         if isinstance(getattr(decision_memory, "workspace", None), dict)
         else {}
     )
+    intervention_now = datetime.now(UTC)
+    intervention_session_id = str(
+        getattr(state, "session_id", "") or request.session_id or ""
+    )
+    review_budget = derive_review_budget(
+        memory_workspace_payload,
+        due_count=decision_memory.due_review_count,
+        now=intervention_now,
+        session_id=intervention_session_id,
+        message=request.message,
+    )
+    if review_budget.message_refusal and review_budget.total_due > 0:
+        deps.runtime.memory_service.record_review_refusal(
+            state.workspace_id,
+            reason=review_budget.message_refusal,
+            session_id=intervention_session_id,
+            now=intervention_now,
+        )
     pedagogy_decision_raw = deps.runtime.pedagogy_service.decide_teaching(
         request=pedagogy_request,
         learner_state=pedagogy_learner_state_raw,
@@ -5113,7 +5132,20 @@ def resolve_coach_turn(deps: CoachSupportDeps,
             if learner_state_projection is not None
             else None
         ),
+        intervention_allowed=review_budget.allowed,
+        intervention_reason=review_budget.reason,
     )
+    if getattr(pedagogy_decision_raw, "turn_may_interrupt", False):
+        deps.runtime.memory_service.record_review_offer(
+            state.workspace_id,
+            session_id=intervention_session_id,
+            now=intervention_now,
+        )
+    elif not (review_budget.message_refusal and review_budget.total_due > 0):
+        deps.runtime.memory_service.mark_workspace_active(
+            state.workspace_id,
+            now=intervention_now,
+        )
     lowered_message = request.message.lower()
     first_user_turn = sum(
         1

@@ -429,6 +429,7 @@ def test_unified_evidence_preserves_evidence_kind_and_delay() -> None:
             "dimension": "delayed_recall",
             "evidence_kind": "recall",
             "recall_delay_days": 2.5,
+            "recall_rating": "good",
             "artifact_hash": "hash",
             "created_at": "2026-11-04T09:00:00+00:00",
         },
@@ -438,6 +439,7 @@ def test_unified_evidence_preserves_evidence_kind_and_delay() -> None:
     assert item.dimension == "delayed_recall"
     assert item.evidence_kind == "recall"
     assert item.recall_delay_days == 2.5
+    assert item.recall_rating == "good"
     assert item.assistance_level == "none"
 
 

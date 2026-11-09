@@ -355,6 +355,7 @@ class AttemptStore:
         dimension: str | None = None,
         evidence_kind: str | None = None,
         recall_delay_days: float | None = None,
+        recall_rating: str | None = None,
         resource_id: str | None = None,
         resource_version_id: str | None = None,
         resource_content_hash: str | None = None,
@@ -412,6 +413,8 @@ class AttemptStore:
             payload["evidence_kind"] = evidence_kind
         if recall_delay_days is not None:
             payload["recall_delay_days"] = float(recall_delay_days)
+        if recall_rating:
+            payload["recall_rating"] = recall_rating
         if canonical_result != str(result or "").strip().lower().replace("-", "_").replace(" ", "_"):
             payload["original_result"] = result
         for key, value in (

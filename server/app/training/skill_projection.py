@@ -374,6 +374,7 @@ def project_skills(
                         "evidence_kind": str(rec.get("evidence_kind") or "") or None,
                         "scenario": str(rec.get("scenario") or "") or None,
                         "recall_delay_days": _recall_delay_days(rec),
+                        "recall_rating": str(rec.get("recall_rating") or "") or None,
                         "delayed_recall_qualified": recall_qualified
                         if dim == "delayed_recall"
                         else None,

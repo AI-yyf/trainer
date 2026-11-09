@@ -1475,6 +1475,7 @@ export interface TrainingSkillEvidenceRowView {
   evidenceKind?: string;
   scenario?: string;
   recallDelayDays?: number;
+  recallRating?: string;
   delayedRecallQualified?: boolean;
 }
 
