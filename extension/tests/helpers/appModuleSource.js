@@ -37,10 +37,13 @@ function readAppModuleSource() {
   const trashPanelPath = path.resolve(
     __dirname, '..', '..', 'webview', 'src', 'components', 'resources', 'ResourcesTrashPanel.tsx',
   );
+  const appDir = path.resolve(__dirname, '..', '..', 'webview', 'src', 'app');
+  const appSlices = ['providerSettingsActions.ts', 'SettingsRoute.tsx'];
   return [
     fs.readFileSync(APP_SOURCE_PATH, 'utf8'),
     fs.readFileSync(APP_HELPERS_PATH, 'utf8'),
     ...composerSlices.map((name) => fs.readFileSync(path.join(composerDir, name), 'utf8')),
+    ...appSlices.map((name) => fs.readFileSync(path.join(appDir, name), 'utf8')),
     fs.readFileSync(trashPanelPath, 'utf8'),
   ].join('\n');
 }

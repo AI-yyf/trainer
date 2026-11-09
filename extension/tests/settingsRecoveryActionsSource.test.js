@@ -46,7 +46,7 @@ test('Settings offers a direct sidecar restart and avoids duplicate model discov
 test('Settings routes the sidecar recovery action through the existing extension command', () => {
   const source = readAppModuleSource();
 
-  assert.match(source, /onRestartSidecar=\{\s*isBrowserPreview\s*\? undefined/);
+  assert.match(source, /onRestartSidecar: isBrowserPreview/);
   assert.match(source, /payload: \{ commandId: trainerCommands\.restartSidecar \}/);
 });
 
@@ -71,14 +71,15 @@ test('provider errors retain a safe, actionable recovery message in Settings', (
 
 test('browser preview keeps provider recovery context when actions resolve immediately', () => {
   const source = readAppModuleSource();
-  const testProviderStart = source.indexOf('onTestProvider={() => {');
-  const restartSidecarStart = source.indexOf('onRestartSidecar=', testProviderStart);
+  const testProviderStart = source.indexOf('onTestProvider: () => {');
+  const restartSidecarStart = source.indexOf('onRestartSidecar:', testProviderStart);
 
   assert.ok(testProviderStart >= 0, 'expected Settings provider-test handler');
   assert.ok(restartSidecarStart > testProviderStart, 'expected provider-test handler boundary');
 
   const testProviderHandler = source.slice(testProviderStart, restartSidecarStart);
-  assert.match(testProviderHandler, /applyPreviewHostMessages\(messages, true\)/);
+  assert.match(testProviderHandler, /runPreviewAction\(\(browserPreview\) =>/);
+  assert.match(source, /applyPreviewHostMessages\(result\.messages, true\)/);
   assert.match(
     source,
     /\(messages: HostMessage\[\], isProviderAction = false\) => \{[\s\S]*?applyHostMessage\(message, isProviderAction\);/,

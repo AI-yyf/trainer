@@ -18,6 +18,8 @@ import {
   type ReactNode,
 } from "react";
 import { reviewConceptLabel } from "../lib/reviewLabel";
+import { buildProviderSettingsActions } from "./providerSettingsActions";
+import { SettingsRoute } from "./SettingsRoute";
 import { goalTitleFromConversation } from "../lib/coachGoalTitle";
 import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 
@@ -10567,300 +10569,46 @@ export function App() {
     </section>
   );
 
-  const renderSettingsView = () => (
-    <section className="settings-view">
-      <Suspense fallback={<ViewFallback label={t.settings} language={layout.composerLanguage} />}>
-        <CoachSettingsView
-          sectionRequest={settingsSectionRequest}
-          skillSharing={renderSkillSharing()}
-        companionInstallState={companionInstallState}
+  const providerSettingsActions = buildProviderSettingsActions({
+    language: layout.composerLanguage,
+    isBrowserPreview,
+    previewSessionId,
+    providerSavePayload,
+    providerDraftHasChanges,
+    providerConfigured: data.providerConfig.configured,
+    operationMessage,
+    baselineConnectedMessage,
+    setSettingsActionState,
+    setPreviewSessionId,
+    applyPreviewHostMessages,
+    persistCoachSettings,
+    defaultCoachDefaults,
+  });
 
-        capabilityVerdict={capabilityVerdict}
-        providerImageInputState={providerImageInputState}
-        providerStatus={providerStatus}
-        coachDefaultsStatus={coachDefaultsStatus}
-        workspaceControlStatus={workspaceControlStatus}
-        coachStateSummary={resolvedCoachStateSummary}
-        reviewRhythmSummary={resolvedCoachReview}
-        onCoachSettingsMutated={queueCoachSettingsSave}
-        onSaveCoachSettings={() => persistCoachSettings()}
-        onSaveProvider={saveProviderDraft}
-        onSaveProviderProfile={() => {
-          setSettingsActionState({
-            kind: "save-provider",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.saveBrowserPreviewProviderProfile(providerSavePayload, previewSessionId),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.saveProviderProfile,
-              payload: providerSavePayload,
-            },
-          });
-        }}
-        onUseProviderTemplateLabel={useProviderTemplateByLabel}
-        onRefreshProviderProfiles={() => {
-          setSettingsActionState({
-            kind: "refresh-provider-models",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.refreshBrowserPreviewProviderProfiles(previewSessionId),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.refreshProviderProfiles,
-            },
-          });
-        }}
-        onSwitchProviderProfile={(profileId) => {
-          setSettingsActionState({
-            kind: "save-provider",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.switchBrowserPreviewProviderProfile(profileId, previewSessionId),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.switchProviderProfile,
-              payload: {
-                profileId,
-                reason: "settings_switch",
-              },
-            },
-          });
-        }}
-        providerSaveBusy={settingsActionState?.kind === "save-provider"}
-        onRefreshProviderModels={() => {
-          const shouldUseDraft = providerDraftHasChanges || !data.providerConfig.configured;
-          setSettingsActionState({
-            kind: "refresh-provider-models",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.refreshBrowserPreviewProviderModels(
-                  shouldUseDraft ? providerSavePayload : undefined,
-                  previewSessionId,
-                ),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.refreshProviderModels,
-              ...(shouldUseDraft ? { payload: { draft: providerSavePayload } } : {}),
-            },
-          });
-        }}
-        onTestProvider={() => {
-          setSettingsActionState({
-            kind: "test-provider",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.testBrowserPreviewProvider(
-                  providerDraftHasChanges ? providerSavePayload : undefined,
-                  previewSessionId,
-                ),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.testProvider,
-              payload: {
-                responseLanguage: layout.composerLanguage,
-                ...(providerDraftHasChanges ? { draft: providerSavePayload } : {}),
-              },
-            },
-          });
-        }}
-        onRestartSidecar={
-          isBrowserPreview
-            ? undefined
-            : () =>
-                postMessage({
-                  type: "command/execute",
-                  payload: { commandId: trainerCommands.restartSidecar },
-                })
-        }
-        onClearProvider={() => {
-          setSettingsActionState({
-            kind: "clear-provider",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            void loadBrowserPreviewModule()
-              .then((browserPreview) =>
-                browserPreview.clearBrowserPreviewProvider(previewSessionId),
-              )
-              .then(({ sessionId, messages }) => {
-                setPreviewSessionId(sessionId);
-                applyPreviewHostMessages(messages, true);
-              })
-              .catch(() => {
-                setOperationMessage({
-                  tone: "error",
-                  message: recoverableFailureMessage("provider", layout.composerLanguage),
-                });
-              });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: { commandId: "trainer.provider.clear" },
-          });
-        }}
-        onOpenConfig={() => {
-          setSettingsActionState({
-            kind: "open-config",
-            targets: ["provider"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          if (isBrowserPreview) {
-            setOperationMessage({
-              tone: "info",
-              message:
-                appUiCopy(layout.composerLanguage, "浏览器预览没有工作区配置文件入口。这个按钮只在 VS Code 侧栏里可用。"),
-            });
-            return;
-          }
-          postMessage({
-            type: "command/execute",
-            payload: { commandId: "trainer.config.openWorkspace" },
-          });
-        }}
-        onResetDefaults={() => {
-          const defaultLanguage =
-            typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("zh")
-              ? "zh-CN"
-              : "en-US";
-          setSettingsActionState({
-            kind: "reset-defaults",
-            targets: ["coachDefaults", "workspaceControl"],
-            baselineMessageKey:
-              normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-          });
-          setThemePreference("system");
-          setComposerLanguage(defaultLanguage);
-          setComposerAnswerMode(DEFAULT_ANSWER_MODE);
-          setTeachingStyle(DEFAULT_TEACHING_STYLE);
-          setFollowCurrentFile(true);
-          setContextDetail("balanced");
-          setIncludeCurrentFile(true);
-          setIncludeSelection(true);
-          setIncludeDiagnostics(true);
-          setIncludeRelatedFiles(true);
-          setCoachDefaults(defaultCoachDefaults);
-          persistCoachSettings({
-            responseLanguage: defaultLanguage,
-            answerMode: DEFAULT_ANSWER_MODE,
-            teachingStyle: DEFAULT_TEACHING_STYLE,
-            followCurrentFile: true,
-            contextDetail: "balanced",
-            includeCurrentFile: true,
-            includeSelection: true,
-            includeDiagnostics: true,
-            includeRelatedFiles: true,
-            coachDefaults: defaultCoachDefaults,
-          });
-          setOperationMessage({
-            tone: "success",
-            message:
-              appUiCopy(defaultLanguage, "已恢复教练默认设置。"),
-          });
-        }}
-        />
-      </Suspense>
-      {renderContextualResultRail("settings")}
-    </section>
+  const renderSettingsView = () => (
+    <SettingsRoute
+      language={layout.composerLanguage}
+      fallbackLabel={t.settings}
+      settingsProps={{
+        sectionRequest: settingsSectionRequest,
+        skillSharing: renderSkillSharing(),
+        companionInstallState,
+        capabilityVerdict,
+        providerImageInputState,
+        providerStatus,
+        coachDefaultsStatus,
+        workspaceControlStatus,
+        coachStateSummary: resolvedCoachStateSummary,
+        reviewRhythmSummary: resolvedCoachReview,
+        onCoachSettingsMutated: queueCoachSettingsSave,
+        onSaveCoachSettings: () => persistCoachSettings(),
+        onSaveProvider: saveProviderDraft,
+        onUseProviderTemplateLabel: useProviderTemplateByLabel,
+        providerSaveBusy: settingsActionState?.kind === "save-provider",
+        ...providerSettingsActions,
+      }}
+      contextualRail={renderContextualResultRail("settings")}
+    />
   );
 
   const renderProgressView = () => (

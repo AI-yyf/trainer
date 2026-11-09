@@ -37,7 +37,7 @@ test('image attachments keep staging separate from the verified send gate', () =
     appSource,
     /const requiresVerifiedAgentTools = Boolean\(resolvedFormalPlanMutation\);[\s\S]*if \(requiresVerifiedAgentTools && !providerSupportsFormalPlanTools\)/,
   );
-  assert.match(appSource, /providerImageInputState=\{providerImageInputState\}/);
+  assert.match(appSource, /providerImageInputState,/);
   assert.match(composerSource, /submitBlockedReason\?: string;/);
   assert.match(composerSource, /const resolvedSubmitBlockedReason = submitBlockedReason\?\.trim\(\) \|\| "";/);
   assert.match(composerSource, /stagedAttachments\.length > 0 && resolvedSubmitBlockedReason/);

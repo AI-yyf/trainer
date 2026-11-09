@@ -257,7 +257,7 @@ test('provider test action sends an unsaved draft to the isolated test path', ()
   );
   assert.match(
     source,
-    /commandId: trainerCommands\.testProvider,\s*payload: \{\s*responseLanguage: layout\.composerLanguage,\s*\.\.\.\(providerDraftHasChanges \? \{ draft: providerSavePayload \} : \{\}\),\s*\},/,
+    /commandId: trainerCommands\.testProvider,\s*payload: \{\s*responseLanguage: language,\s*\.\.\.\(providerDraftHasChanges \? \{ draft: providerSavePayload \} : \{\}\),\s*\},/,
   );
   assert.doesNotMatch(
     source.slice(source.indexOf('onTestProvider={() =>'), source.indexOf('onClearProvider={() =>')),

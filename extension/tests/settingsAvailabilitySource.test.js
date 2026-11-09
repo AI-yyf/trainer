@@ -100,7 +100,7 @@ test('settings receives and renders the final capability verdict without replaci
   const app = readAppSource();
 
   assert.match(app, /const capabilityVerdict = useMemo\(/);
-  assert.match(app, /<CoachSettingsView[\s\S]*capabilityVerdict=\{capabilityVerdict\}/);
+  assert.match(app, /SettingsRoute[\s\S]*capabilityVerdict,/);
   assert.match(settings, /capabilityVerdict: TrainerCapabilityVerdict;/);
   assert.match(settings, /settingsPhrase\(language, "finalCapabilities"\)/);
   assert.match(settingsInlineCopy, /finalCapabilities: "Final capabilities"/);

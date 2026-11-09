@@ -136,6 +136,6 @@ test('provider save and test commands use the language currently shown in Settin
   );
   assert.match(
     source,
-    /commandId: trainerCommands\.testProvider,\s*payload: \{\s*responseLanguage: layout\.composerLanguage,/,
+    /commandId: trainerCommands\.testProvider,\s*payload: \{\s*responseLanguage: language,/,
   );
 });

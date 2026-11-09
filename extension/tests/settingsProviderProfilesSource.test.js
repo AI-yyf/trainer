@@ -47,15 +47,15 @@ test('settings provider profile actions are wired through App and rendered in Se
   const settingsSource = fs.readFileSync(settingsViewPath, 'utf8');
   const providerProfilesPanel = extractProviderProfilesPanel(settingsSource);
 
-  assert.match(appSource, /onSaveProviderProfile=\{\(\) => \{/);
+  assert.match(appSource, /onSaveProviderProfile: \(\) => \{/);
   assert.match(appSource, /commandId:\s*trainerCommands\.saveProviderProfile/);
-  assert.match(appSource, /onUseProviderTemplateLabel=\{useProviderTemplateByLabel\}/);
+  assert.match(appSource, /onUseProviderTemplateLabel: useProviderTemplateByLabel,/);
   assert.match(appSource, /commandId:\s*trainerCommands\.useProviderTemplate/);
   assert.match(appSource, /templateLabel,/);
   assert.match(appSource, /skipPicker:\s*true/);
-  assert.match(appSource, /onRefreshProviderProfiles=\{\(\) => \{/);
+  assert.match(appSource, /onRefreshProviderProfiles: \(\) => \{/);
   assert.match(appSource, /commandId:\s*trainerCommands\.refreshProviderProfiles/);
-  assert.match(appSource, /onSwitchProviderProfile=\{\(profileId\) => \{/);
+  assert.match(appSource, /onSwitchProviderProfile: \(profileId: string\) => \{/);
   assert.match(appSource, /commandId:\s*trainerCommands\.switchProviderProfile/);
   assert.match(appSource, /reason:\s*"settings_switch"/);
 

@@ -160,7 +160,7 @@ test('settings navigation has four categories with matching keyboard order and s
   // wrappers moved into the selector hook (apply now, then queue App's
   // debounced persist), so App passes the trigger once and the hook composes
   // every knob with it.
-  assert.match(app, /onCoachSettingsMutated=\{queueCoachSettingsSave\}/);
+  assert.match(app, /onCoachSettingsMutated: queueCoachSettingsSave,/);
   const viewState = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'settings', 'useCoachSettingsViewState.ts'),
     'utf8',

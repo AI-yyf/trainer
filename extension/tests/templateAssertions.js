@@ -181,7 +181,7 @@ function palette() {
   assert.ok(html.includes('Read diagnostics'));
   const app=read('app/App.tsx');
   assert.ok(app.includes('triggerToken === "$" ? 6 : 10'));
-  assert.ok(app.includes('skillSharing={renderSkillSharing()}'));
+  assert.ok(app.includes('skillSharing: renderSkillSharing(),'));
   assert.ok(app.includes('setActiveView("settings")'));
 }
 module.exports={load,read,render,learningFacts,learningAction,learningPlan,navigation,practice,learning,reply,settings,palette};
