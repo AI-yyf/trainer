@@ -25,21 +25,21 @@
 | 2 | 随口提问，不产生不必要长期目标 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | — | U: `test_goal_session` + `sendIntelligence`；S/P：`docs/verification/v4-journey-2-3-goal-real.md`；G：真实窗口发送随口问题后无 Goal 条 |
 | 3 | 明确能力目标，Goal 自动建立并持续追踪 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | 🟡 | U: 18 项 Goal 行为测试；S/P：真实对话自动建 Goal + 重启同 id + 续接；G：真实窗口自动出现 Goal 条，Reload Window 后仍恢复 |
 | 4 | 多次会话继续同一任务，不复述背景 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U: recovery；S/P: P4 11 步旅程；R: L2 第 4 步；G：真实窗口继续同一 Goal 并保留上下文 |
-| 5 | 表达教学偏好，后续自动适配 | ✅ | 🟡 | ✅ | ⬜ | 🟡 | ⬜ | 🟡 | U: memory/settings；G: Settings 四屏审计；P: 真实模型在 hands-on / concept-first 下同一问题回复不同 |
-| 6 | 改变偏好，系统修正旧习惯 | ✅ | 🟡 | ✅ | ⬜ | 🟡 | ⬜ | 🟡 | U: preference overwrite；P: 存储偏好从 hands-on 改为 concept-first 后同题真实回复不同 |
+| 5 | 表达教学偏好，后续自动适配 | ✅ | 🟡 | ✅ | ⬜ | ✅ | ⬜ | 🟡 | U: memory/settings；G: 真实窗口写入偏好；P: hands-on / concept-first 同题回复不同 |
+| 6 | 改变偏好，系统修正旧习惯 | ✅ | 🟡 | ✅ | ⬜ | ✅ | ⬜ | 🟡 | U: preference overwrite；G/P: 真实窗口改偏好后同题回复不同 |
 | 7 | 提示帮助下完成，不误判独立掌握 | ✅ | 🟡 | 🟡 | ⬜ | ⬜ | ⬜ | — | U: false-mastery 闸门 + skill projection；P：真实受助任务未做掌握断言 |
 | 8 | 独立完成，真实证据自动同步 Learning | ✅ | ✅ | 🟡 | ⬜ | 🟡 | ⬜ | ✅ | U: attempt/evidence/skill projection；S: sidecar matrix；G/P：真实独立完成→Learning 未归档 |
 | 9 | 数天后忘记，自然安排复习 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS due/AGAIN；S/P: day0→day3 due queue + 真实模型复习回合；G：真实 GUI 未录 |
 | 10 | 正确延迟回忆，间隔延长 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U/L: FSRS GOOD/EASY；S/P: guided-pack 卡 + Day0→Day2 时钟，第二次 Good interval 2 天，真实模型延迟回忆 200 |
-| 11 | 拒绝复习或忙碌，不被打扰 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | — | U/S/P: skip 真实延后，忙碌回合不强行拉回 |
+| 11 | 拒绝复习或忙碌，不被打扰 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | — | U/S/P: skip 真实延后；G: 真实窗口复习控制；忙碌回合不强行拉回 |
 | 12 | 长期未上线返回，不积压提醒 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U/S/P: day30 due 无重复，真实模型给最小回顾问题 |
 | 13 | 跨项目同概念复用但不泄漏代码 | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | U: Skill workspace 7 项隔离 + memory share scope；P/G：真实双项目未验证 |
 | 14 | 切换模型和重启 VS Code，状态恢复 | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | U/S/P: recovery + P4 模型热切换；R: L2 重启/恢复；G：真实窗口切换 model、Reload Window 后 Settings 仍显示新 model |
 | 15 | 资料版本变化，旧引用/知识关系更新 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | U: resource version/invalidation；S: 旧 version 409；P: 真实模型先引 AlphaQueue，重索引后引 BetaQueue；G：真实 GUI 未验证 |
-| 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G：真实窗口 Settings 技能目录可读；自动执行/失败隔离未在 GUI 断言 |
+| 16 | Skill 自动选择/执行/记录/失败隔离 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | ✅ | U: lifecycle/runtime/workspace；P: P4 `applied=true,basis=contract_markers`；G: 真实窗口技能目录可读 |
 | 17 | Provider 超时/中断，不制造虚假结果 | ✅ | ✅ | 🟡 | ⬜ | ⬜ | ⬜ | — | U: recovery/stream idle timeout；S: 真实 sidecar + hanging endpoint 返回诚实失败、不伪造答案；P：公网网关真实中断仍保持部分 |
 | 18 | 多窗口并发，不重复推进计划/复习 | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | 🟡 | U: plan revision/singleflight；S/P: 两个并发客户端同一 expected_revision，一个 200 一个 409；G：真实双窗口仍未执行 |
-| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | ✅ | ⬜ | 🟡 | ⬜ | ✅ | U/S: 真实 sidecar 覆盖/撤销；P: 清空 global memory 并切换 hands-on→concept-first 后同题回复不同；G: 记忆开关 |
+| 19 | 修改/撤销记忆，教学行为同步变化 | ✅ | ✅ | ✅ | ⬜ | ✅ | ⬜ | ✅ | U/S: 真实 sidecar 覆盖/撤销；P: 清空 global memory 并切换 hands-on→concept-first 后同题回复不同；G: 真实窗口记忆开关 |
 | 20 | 连续多个项目/主题，仍理解当前重点 | ✅ | 🟡 | ✅ | ⬜ | ⬜ | 🟡 | 🟡 | U: workspace 隔离/恢复；R：L2 项目切换；P: A=AlphaQueue，B=BetaQueue，无跨项目泄漏 |
 
 ## 2. 汇总
@@ -50,11 +50,11 @@
 | S 真实 Sidecar | 12 | 8 | 0 |
 | P 真实 Provider | 15 | 4 | 1 |
 | V 已安装 VSIX | 1 | 2 | 17 |
-| G 真实 GUI | 5 | 6 | 9 |
+| G 真实 GUI | 10 | 1 | 9 |
 | R Remote-SSH | 1 | 3 | 16 |
 | L 长期/持久化 | 9 | 6 | 0（5 项不适用） |
 
-> G 列已有 5 条 PASS：旅程 1/2/3/4/14 在真实 VS Code Electron + 当前 VSIX 中逐条断言。其余 GUI 证据为 PARTIAL/GAP：fixture provider 不能替代真实模型，训练卡、数天时钟、双窗口、资料导入仍未在 GUI 中闭环。
+> G 列已有 10 条 PASS：旅程 1/2/3/4/5/6/11/14/16/19 在真实 VS Code Electron + 当前 VSIX 中逐条断言。其余 GUI 证据为 PARTIAL/GAP：fixture provider 不能替代真实模型，训练卡、数天时钟、双窗口、资料导入仍未在 GUI 中闭环。
 > P 列只有 P4 旅程/L2 第 4 步等少数真实模型证据；不得把 3930 个单元测试当作真实模型验收。
 
 ## 3. 缺口优先级
