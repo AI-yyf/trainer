@@ -522,6 +522,16 @@ def _fetch_github_readme(owner: str, name: str) -> tuple[str, str]:
                 f"Trainer could not find a README for {owner}/{name} (unknown repository or no README on the default branch).",
                 status_code=404,
             ) from exc
+        # Unauthenticated GitHub API reads are limited to 60 requests/hour per
+        # address. A 403/429 is not proof that the repo is unreadable: read the
+        # default-branch raw file instead, which is CDN-served and not subject
+        # to that API quota.
+        cause = exc.__cause__
+        status = _http_status_from_error(cause) if isinstance(cause, ControlledFetchError) else None
+        if status in {403, 429}:
+            raw_readme = _fetch_github_readme_raw(owner, name)
+            if raw_readme is not None:
+                return raw_readme
         raise
 
     try:
@@ -552,6 +562,26 @@ def _fetch_github_readme(owner: str, name: str) -> tuple[str, str]:
     if not text:
         raise CaptureError("empty_content", "The repository README is empty.", status_code=422)
     return text, str(payload.get("name") or "README.md")
+
+
+def _fetch_github_readme_raw(owner: str, name: str) -> tuple[str, str] | None:
+    """Read the default-branch README from the raw CDN when the API is limited.
+
+    ``raw.githubusercontent.com`` serves the same committed file without the
+    unauthenticated API's hourly quota. ``HEAD`` resolves to the repository's
+    default branch, so one ref covers every normal repository. The filename
+    probes keep the fallback honest for README variants.
+    """
+    for filename in ("README.md", "README.mdx", "README.rst", "README.txt"):
+        url = f"https://raw.githubusercontent.com/{owner}/{name}/HEAD/{filename}"
+        try:
+            response = _fetch(url, timeout_seconds=8)
+        except CaptureError:
+            continue
+        text = response.body.decode("utf-8", errors="replace").strip()
+        if text:
+            return text, filename
+    return None
 
 
 def _fetch_github_docs_listing(owner: str, name: str) -> str:

@@ -339,6 +339,38 @@ def test_github_rate_limits_are_not_reported_as_missing_readmes(tmp_path, monkey
     assert response.json()["detail"]["code"] == "fetch_failed"
 
 
+def test_github_rate_limit_falls_back_to_the_raw_readme(tmp_path, monkeypatch) -> None:
+    workspace_id = "workspace-capture-github-rate-limit-fallback"
+    repo_url = "https://github.com/example-org/session-tools"
+    raw_readme = "# Session Tools\n\nRaw README fallback.\n"
+    fetched: list[str] = []
+
+    def fake_fetch(url: str, **kwargs):
+        fetched.append(url)
+        if url.startswith("https://api.github.com/"):
+            raise ControlledFetchError("http_status", "URL request returned HTTP 403.")
+        return _readonly_response(raw_readme.encode("utf-8"), url, "text/plain")
+
+    monkeypatch.setattr("app.resources.capture.fetch_url", fake_fetch)
+
+    with build_client(tmp_path) as client:
+        session_id = _start_session(client, workspace_id)
+        response = client.post(
+            "/resources/capture",
+            json={
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "url": repo_url,
+                "kind": "github_repo",
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        assert fetched[0] == "https://api.github.com/repos/example-org/session-tools/readme"
+        assert fetched[1].startswith("https://raw.githubusercontent.com/example-org/session-tools/HEAD/README.md")
+        assert "Raw README fallback" in Path(response.json()["source"]).read_text(encoding="utf-8")
+
+
 def test_capture_is_refused_while_network_fetch_is_disabled(tmp_path, monkeypatch) -> None:
     workspace_id = "workspace-capture-network-off"
 
