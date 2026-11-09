@@ -12,6 +12,7 @@ from ..core.models import (
     SessionMessageRequest,
     TurnRequest,
 )
+from ..learner_state import learner_memory_snapshot
 from ..llm.provider_service import (
     ProviderService,
 )
@@ -163,7 +164,7 @@ def provider_recovery_resumed_next_step_text(
 def _pedagogy_controls_for_workspace(runtime: TrainerRuntime, workspace_id: str):
     from ..pedagogy.evidence_controls import controls_from_profile
 
-    memory = runtime.memory_service.snapshot(workspace_id)
+    memory = learner_memory_snapshot(runtime, workspace_id)
     return controls_from_profile(getattr(memory, "coaching_adaptation", None))
 
 
@@ -182,7 +183,7 @@ def _workspace_training_mint_overlay(
 
     repository = getattr(runtime, "repository", None)
     plan = repository.get_latest_plan(workspace_id) if repository is not None else None
-    memory = runtime.memory_service.snapshot(workspace_id)
+    memory = learner_memory_snapshot(runtime, workspace_id)
     workspace = memory.workspace if isinstance(memory.workspace, dict) else {}
     plan_runtime = select_plan_runtime_for_scope(
         workspace.get(PLAN_RUNTIME_KEY) or workspace.get("latestPlanRuntime"),

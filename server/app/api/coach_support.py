@@ -5059,31 +5059,58 @@ def resolve_coach_turn(deps: CoachSupportDeps,
                 workspace_understanding,
             )
             state.snapshot.memory = deps.runtime.memory_service.snapshot(state.workspace_id)
+    # One read projection for the turn. Goal/Profile/Memory/Mastery/Evidence/
+    # Review come from the same workspace-scoped LearnerState, not from
+    # separately re-derived snapshots inside the coach path.
+    learner_state_projection = None
+    learner_state_service = getattr(deps.runtime, "learner_state_service", None)
+    if learner_state_service is not None:
+        learner_state_projection = learner_state_service.snapshot(state.workspace_id)
+        if learner_state_projection.profile.value is not None:
+            profile = learner_state_projection.profile.value
+    decision_memory = (
+        learner_state_projection.memory_snapshot
+        if learner_state_projection is not None
+        else state.snapshot.memory
+    )
+    projection_mastery = (
+        learner_state_projection.mastery.value.get("dimensions")
+        if learner_state_projection is not None
+        and isinstance(learner_state_projection.mastery.value.get("dimensions"), dict)
+        else None
+    )
     pedagogy_learner_state_raw = deps.runtime.pedagogy_service.infer_learner_state(
         request=pedagogy_request,
         profile=profile,
-        memory_snapshot=state.snapshot.memory,
+        memory_snapshot=decision_memory,
     )
     modeled_learner_state = deps.model_learner_state(pedagogy_learner_state_raw)
     modeled_affect_state = deps.runtime.affect_service.infer_state(
         message=message,
         learner_state=modeled_learner_state or LearnerState(),
-        memory_snapshot=state.snapshot.memory,
+        memory_snapshot=decision_memory,
     )
     memory_workspace_payload = (
-        state.snapshot.memory.workspace
-        if isinstance(getattr(state.snapshot.memory, "workspace", None), dict)
+        decision_memory.workspace
+        if isinstance(getattr(decision_memory, "workspace", None), dict)
         else {}
     )
     pedagogy_decision_raw = deps.runtime.pedagogy_service.decide_teaching(
         request=pedagogy_request,
         learner_state=pedagogy_learner_state_raw,
         profile=profile,
-        memory_snapshot=state.snapshot.memory,
+        memory_snapshot=decision_memory,
         affect_state=modeled_affect_state,
         skill_projection=(
-            memory_workspace_payload.get("training_skill_projection")
+            projection_mastery
+            if projection_mastery is not None
+            else memory_workspace_payload.get("training_skill_projection")
             if isinstance(memory_workspace_payload, dict)
+            else None
+        ),
+        active_goal=(
+            learner_state_projection.goal.value is not None
+            if learner_state_projection is not None
             else None
         ),
     )
@@ -5230,9 +5257,9 @@ def resolve_coach_turn(deps: CoachSupportDeps,
             pedagogy_request,
             pedagogy_learner_state_raw,
             profile,
-            state.snapshot.memory,
+            decision_memory,
         )
-        adaptive_bias = deps.runtime.pedagogy_service._adaptive_bias(state.snapshot.memory)  # noqa: SLF001
+        adaptive_bias = deps.runtime.pedagogy_service._adaptive_bias(decision_memory)  # noqa: SLF001
         (
             lesson_shape,
             exercise_shape,
@@ -5244,7 +5271,7 @@ def resolve_coach_turn(deps: CoachSupportDeps,
             scenario="guided",
             focus_area=onboarding_focus or getattr(pedagogy_learner_state_raw, "active_focus", ""),
             learner_state=pedagogy_learner_state_raw,
-            memory_snapshot=state.snapshot.memory,
+            memory_snapshot=decision_memory,
             adaptive_bias=adaptive_bias,
             decision_should_generate_exercise=False,
             decision_should_produce_plan_artifact=False,
@@ -5317,7 +5344,7 @@ def resolve_coach_turn(deps: CoachSupportDeps,
         learner_state=pedagogy_learner_state_raw,
         decision=pedagogy_decision_raw,
         profile=profile,
-        memory_snapshot=state.snapshot.memory,
+        memory_snapshot=decision_memory,
         affect_state=modeled_affect_state,
         external_references=resolved_external_references,
     )

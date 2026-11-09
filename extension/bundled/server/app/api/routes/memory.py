@@ -16,12 +16,7 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
-from ...evidence.contract import (
-    evidence_from_attempt,
-    evidence_from_handoff,
-    evidence_from_memory,
-    finalize_unified_evidence,
-)
+from ...learner_state import collect_unified_evidence
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -121,6 +116,17 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     @router.get("/memory/reviews", response_model=list[str])
     def memory_reviews(session_id: str | None = None, workspace_id: str | None = None) -> list[str]:
         resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
+        # Review reads the same LearnerState projection as Coach/Plan/Training.
+        service = getattr(runtime, "learner_state_service", None)
+        if service is not None:
+            projection = service.snapshot(resolved_workspace_id)
+            due = projection.memory_snapshot.due_reviews
+            if due:
+                return [
+                    f"{item.concept}: {item.reason}"
+                    + (f" (due {item.due_at})" if item.due_at else "")
+                    for item in due[:4]
+                ]
         return runtime.memory_service.reviews(resolved_workspace_id)
 
     @router.get("/memory/teaching-assets")
@@ -168,47 +174,34 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             workspace_id=workspace_id,
         )
         safe_limit = max(1, min(limit, 200))
-        records = []
-        store = getattr(runtime, "attempt_store", None)
-        if store is not None:
-            for item in store.list_workspace_evidence(
-                resolved_workspace_id,
-                limit=max(safe_limit * 2, 50),
-            ):
-                records.append(
-                    evidence_from_attempt(item, workspace_id=resolved_workspace_id)
-                )
-        handoff_id, handoff_records = runtime.memory_service.latest_handoff_evidence(
-            resolved_workspace_id
+        unified = collect_unified_evidence(
+            memory_service=runtime.memory_service,
+            attempt_store=getattr(runtime, "attempt_store", None),
+            workspace_id=resolved_workspace_id,
+            limit=safe_limit,
         )
-        for item in handoff_records:
-            records.append(
-                evidence_from_handoff(
-                    item,
-                    workspace_id=resolved_workspace_id,
-                    handoff_id=handoff_id,
-                )
-            )
-        queue = runtime.memory_service.evidence_queue(resolved_workspace_id)
-        seen_memory_ids: set[str] = set()
-        for item in (
-            *queue.pending,
-            *queue.deferred,
-            *queue.adopted,
-            *queue.rejected,
-            *queue.history,
-        ):
-            if item.id in seen_memory_ids:
-                continue
-            seen_memory_ids.add(item.id)
-            records.append(evidence_from_memory(item))
-        unified = finalize_unified_evidence(records, limit=safe_limit)
         return {
             "workspace_id": resolved_workspace_id,
             "schema_version": 1,
             "total": len(unified),
             "evidence": [item.model_dump(by_alias=True) for item in unified],
         }
+
+    @router.get("/learner/state")
+    def learner_state(
+        workspace_id: str | None = None,
+        session_id: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, object]:
+        """The single read projection Coach, Plan, Training and Review consume."""
+        resolved_workspace_id = current_workspace_id(
+            session_id=session_id,
+            workspace_id=workspace_id,
+        )
+        service = getattr(runtime, "learner_state_service", None)
+        if service is None:
+            raise HTTPException(status_code=503, detail="Learner state projection is unavailable.")
+        return service.snapshot(resolved_workspace_id, evidence_limit=limit).to_payload()
 
     @router.post("/evidence/enqueue", response_model=EvidenceItem)
     def evidence_enqueue(payload: dict) -> EvidenceItem:

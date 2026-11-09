@@ -30,6 +30,7 @@ from ..core.models import (
 from ..db.repository import TrainerRepository
 from ..evaluator.service import EvaluatorService
 from ..goal.service import GoalService
+from ..learner_state import LearnerStateService
 from ..llm.provider_protocols import normalize_provider_protocol
 from ..llm.provider_service import ProviderService
 from ..llm.vision_challenge import VISION_PROBE_VERSION
@@ -299,6 +300,7 @@ class TrainerRuntime:
     pedagogy_service: PedagogyService = field(default_factory=PedagogyService)
     affect_service: AffectService = field(default_factory=AffectService)
     goal_service: GoalService | None = None
+    learner_state_service: LearnerStateService | None = None
     attempt_store: AttemptStore | None = None
     plan_revision_store: PlanRevisionStore | None = None
     resource_version_store: ResourceVersionStore | None = None
@@ -407,6 +409,13 @@ class TrainerRuntime:
     def __post_init__(self) -> None:
         if self.goal_service is None:
             self.goal_service = GoalService(self.repository)
+        if self.learner_state_service is None:
+            self.learner_state_service = LearnerStateService(
+                self.repository,
+                self.memory_service,
+                self.goal_service,
+                self.attempt_store,
+            )
         if self.provider_config is not None or self.provider_api_key is not None:
             self.provider_service = ProviderService(
                 config=self.provider_config,
@@ -430,6 +439,13 @@ class TrainerRuntime:
         """GoalService is always available after construction."""
         if self.goal_service is None:
             self.goal_service = GoalService(self.repository)
+        if self.learner_state_service is None:
+            self.learner_state_service = LearnerStateService(
+                self.repository,
+                self.memory_service,
+                self.goal_service,
+                self.attempt_store,
+            )
         return self.goal_service
 
     def publish_goal(self, workspace_id: str) -> None:

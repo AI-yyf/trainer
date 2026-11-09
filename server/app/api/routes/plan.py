@@ -17,6 +17,7 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
+from ...learner_state import learner_memory_snapshot, learner_profile
 from ...memory.models import utc_now
 from ...memory.workspace_recovery import (
     coach_focus_runtime_from_snapshot,
@@ -299,7 +300,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             workspace_id=workspace_id,
             project_plan_id=request.current_project_plan_id,
         )
-        profile = runtime.repository.get_profile(workspace_id) or UserProfile(long_term_goal="Trainer")
+        profile = learner_profile(runtime, workspace_id) or UserProfile(long_term_goal="Trainer")
         global_plan = global_plan_seed(profile, request)
         runtime.repository.save_global_plan(global_plan)
         existing_project_plan = runtime.repository.get_latest_plan(workspace_id)
@@ -500,7 +501,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             session_id = payload["session_id"]
             state = runtime.ensure_session(session_id)
             reject_frozen_plan_generation(state.workspace_id, payload)
-            profile = runtime.repository.get_profile(state.workspace_id) or UserProfile(long_term_goal="Trainer")
+            profile = learner_profile(runtime, state.workspace_id) or UserProfile(long_term_goal="Trainer")
             workspace_memory = (
                 state.snapshot.memory.workspace if isinstance(state.snapshot.memory.workspace, dict) else {}
             )
@@ -556,7 +557,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
                 project_plan=plan,
             )
             state.snapshot.profile = profile
-            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+            state.snapshot.memory = learner_memory_snapshot(runtime, state.workspace_id)
             runtime.hydrate_plan_context(state.snapshot, state.workspace_id)
             workspace_memory = (
                 state.snapshot.memory.workspace if isinstance(state.snapshot.memory.workspace, dict) else {}
@@ -639,7 +640,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         )
         snapshot = WorkbenchSnapshot(
             profile=request.profile,
-            memory=runtime.memory_service.snapshot(workspace_id),
+            memory=learner_memory_snapshot(runtime, workspace_id),
             plan=plan,
         )
         runtime.hydrate_plan_context(snapshot, workspace_id)
@@ -779,7 +780,7 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         if request.weekly_cadence:
             current.weekly_cadence = request.weekly_cadence
             current.cadence = request.weekly_cadence
-        workspace_snapshot = runtime.memory_service.snapshot(workspace_id)
+        workspace_snapshot = learner_memory_snapshot(runtime, workspace_id)
         workspace_memory = workspace_snapshot.workspace if isinstance(workspace_snapshot.workspace, dict) else {}
         workspace_response_language = (
             str(workspace_memory.get("response_language")).strip()

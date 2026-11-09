@@ -65,6 +65,7 @@ from ..core.models import (
     WorkbenchSnapshot,
     WorkspaceUnderstandingSnapshot,
 )
+from ..learner_state import learner_memory_snapshot
 from ..llm.prompts import infer_coaching_scenario as infer_message_coaching_scenario
 from ..llm.prompts import infer_learner_signal as infer_message_learner_signal
 from ..llm.provider_gateway import (
@@ -9843,7 +9844,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             }
         )
         if not request_payload.response_language:
-            memory_snapshot = runtime.memory_service.snapshot(request_payload.workspace_id)
+            memory_snapshot = learner_memory_snapshot(runtime, request_payload.workspace_id)
             saved_language = memory_snapshot.workspace.get("response_language")
             resolved_language = (
                 saved_language

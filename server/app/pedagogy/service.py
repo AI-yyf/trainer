@@ -508,6 +508,7 @@ class PedagogyService:
         affect_state: CoreAffectState | None = None,
         skill_state: str | None = None,
         skill_projection: dict[str, Any] | None = None,
+        active_goal: bool | None = None,
     ) -> TeachingDecision:
         scenario, focus_area, scenario_evidence = self._classify_scenario(
             request=request,
@@ -738,7 +739,11 @@ class PedagogyService:
                 needs_rescue=learner_state.needs_rescue,
                 needs_review=learner_state.needs_review,
                 due_review_count=memory_snapshot.due_review_count if memory_snapshot else 0,
-                has_active_goal=bool(profile and profile.long_term_goals),
+                has_active_goal=(
+                    bool(active_goal)
+                    if active_goal is not None
+                    else bool(profile and profile.long_term_goals)
+                ),
                 has_trusted_evidence=effective_skill_state
                 in {"assisted", "independent", "repeat_verified"},
                 activity_in_progress=bool(
@@ -769,7 +774,7 @@ class PedagogyService:
             should_end_with_question = False
             should_generate_exercise = False
             should_produce_plan_artifact = False
-            if mode == "review_reflection":
+            if mode == "review_reflection" and not should_embed_review_recovery:
                 mode = "guided"
                 tone_profile = "steady"
         elif turn.mode == "review":
