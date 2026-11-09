@@ -104,7 +104,7 @@ test('Settings commits an exact search with Enter and a list choice with its nat
   );
   assert.match(
     source,
-    /const selectedModel = event\.target\.value;[\s\S]*?onProviderDraftChange\(\{ model: selectedModel \}\);[\s\S]*?setModelPickerOpen\(false\);/,
+    /const selectedModel = event\.target\.value;[\s\S]*?applyModelAdaptation\(selectedModel\);[\s\S]*?setModelPickerOpen\(false\);/,
   );
 });
 

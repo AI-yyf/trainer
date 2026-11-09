@@ -2283,3 +2283,75 @@
   border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
   color: var(--fg-0);
 }
+
+/* Model fit guidance: distinct from verified capability chips below. */
+.settings-model-adaptation {
+  display: grid;
+  gap: var(--space-1);
+  margin-block: var(--space-2) 0;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 88%, var(--bg-0));
+}
+
+.settings-model-adaptation--unknown {
+  border-style: dashed;
+}
+
+.settings-model-adaptation__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+}
+
+.settings-model-adaptation__header strong {
+  color: var(--fg-0);
+  font-family: var(--font-ui);
+  font-size: var(--trainer-font-xs);
+  font-weight: var(--trainer-font-weight-medium);
+}
+
+.settings-model-adaptation__header span {
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: var(--leading-body);
+}
+
+.settings-model-adaptation__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.settings-model-adaptation__chips span {
+  padding: 1px var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--fg-0);
+  font-family: var(--font-ui);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.6;
+}
+
+.settings-advanced-card__section-heading {
+  display: grid;
+  gap: 2px;
+  margin-block-end: var(--space-1);
+}
+
+.settings-advanced-card__section-heading strong {
+  color: var(--fg-0);
+  font-family: var(--font-ui);
+  font-size: var(--trainer-font-xs);
+  font-weight: var(--trainer-font-weight-medium);
+}
+
+.settings-advanced-card__section-heading span {
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: var(--leading-body);
+}

@@ -11,6 +11,7 @@ import { SystemState } from "../../templates/SystemState";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import {
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -89,6 +90,11 @@ import {
   settingsCapabilitySurfaceStatus,
   settingsProtocolIsKnown,
 } from "../../../../../shared/src/settingsCapabilityGovernance";
+import {
+  inferProviderModelAdaptation,
+  recommendProviderModel,
+  type ProviderModelAdaptation,
+} from "../../../../../shared/src/providerModelAdaptation";
 import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 
 import { ActionButton } from "../common";
@@ -680,6 +686,7 @@ export interface ProviderDraft {
   cacheTtlSeconds?: number;
   requestDefaults?: Record<string, unknown>;
   thinkingConfig?: ProviderThinkingConfig;
+  capabilities?: CapabilityFlags;
   apiKey: string;
 }
 
@@ -2906,6 +2913,63 @@ function CoachSettingsViewSheet({
       : undefined;
   const currentDraftModel = providerDraft.model.trim();
   const currentLiveModel = canUseSavedModelMetadata ? provider.model.trim() : "";
+  const modelAdaptation: ProviderModelAdaptation = useMemo(
+    () =>
+      inferProviderModelAdaptation({
+        model: currentDraftModel,
+        protocol: draftProtocol,
+        baseUrl: normalizedDraftBaseUrl,
+        providerName: providerDraft.name,
+      }),
+    [currentDraftModel, draftProtocol, normalizedDraftBaseUrl, providerDraft.name],
+  );
+  const applyModelAdaptation = useCallback(
+    (modelName: string) => {
+      const nextAdaptation = inferProviderModelAdaptation({
+        model: modelName,
+        protocol: draftProtocol,
+        baseUrl: normalizedDraftBaseUrl,
+        providerName: providerDraft.name,
+      });
+      if (nextAdaptation.confidence === "unknown") {
+        onProviderDraftChange({ model: modelName });
+        return;
+      }
+      const currentCapabilities = providerDraft.capabilities ?? provider.capabilities;
+      const nextCapabilities = {
+        ...currentCapabilities,
+        chat: true,
+        streaming: true,
+        tools: nextAdaptation.supportsTools,
+        vision: nextAdaptation.supportsVision,
+        jsonSchema: nextAdaptation.supportsTools ? currentCapabilities.jsonSchema : false,
+        structuredOutput: nextAdaptation.supportsTools
+          ? currentCapabilities.structuredOutput
+          : false,
+      };
+      const nextThinking = nextAdaptation.supportsThinking
+        ? {
+            mode: "enabled" as const,
+            ...(nextAdaptation.suggestedEffort
+              ? { reasoningEffort: nextAdaptation.suggestedEffort }
+              : {}),
+          }
+        : { mode: "disabled" as const };
+      onProviderDraftChange({
+        model: modelName,
+        capabilities: nextCapabilities,
+        thinkingConfig: nextThinking,
+      });
+    },
+    [
+      draftProtocol,
+      normalizedDraftBaseUrl,
+      onProviderDraftChange,
+      provider.capabilities,
+      providerDraft.capabilities,
+      providerDraft.name,
+    ],
+  );
   const draftModelPolicy = {
     allowedModels: providerDraft.allowedModels ?? provider.allowedModels ?? [],
     deniedModels: providerDraft.deniedModels ?? provider.deniedModels ?? [],
@@ -3674,6 +3738,61 @@ function CoachSettingsViewSheet({
           ? copy.modelFetchLoading
           : modelDiscoveryActionLabel);
   const canRefreshModels = providerDraftReadyForModelDiscovery && modelListStatus !== "loading";
+  const autoModelDiscoveryAttemptRef = useRef("");
+  const previousAvailableModelCountRef = useRef(availableModels.length);
+  useEffect(() => {
+    const catalogMissing =
+      availableModels.length === 0 && draftCatalogModels.length === 0;
+    if (
+      !catalogMissing ||
+      !providerSaved ||
+      !provider.apiKeyConfigured ||
+      providerHasDraftChanges ||
+      modelListStatus === "loading" ||
+      !onRefreshProviderModels
+    ) {
+      return;
+    }
+    const key = [
+      provider.profileId ?? "",
+      provider.baseUrl,
+      provider.model,
+      lastTest?.checkedAt ?? "",
+    ].join("|");
+    if (autoModelDiscoveryAttemptRef.current === key) {
+      return;
+    }
+    autoModelDiscoveryAttemptRef.current = key;
+    onRefreshProviderModels();
+  }, [
+    availableModels.length,
+    draftCatalogModels.length,
+    lastTest?.checkedAt,
+    modelListStatus,
+    onRefreshProviderModels,
+    provider.apiKeyConfigured,
+    provider.baseUrl,
+    provider.model,
+    provider.profileId,
+    providerHasDraftChanges,
+    providerSaved,
+  ]);
+  useEffect(() => {
+    const previousCount = previousAvailableModelCountRef.current;
+    previousAvailableModelCountRef.current = availableModels.length;
+    if (
+      previousCount === 0 &&
+      availableModels.length > 0 &&
+      !currentDraftModel &&
+      !providerHasDraftChanges
+    ) {
+      // The list just arrived for an empty model field: show it instead of
+      // leaving the learner staring at a plain text input. Selection stays
+      // explicit; the first option is visible and keyboard reachable.
+      modelPickerAutoOpenRef.current = false;
+      setModelPickerOpen(true);
+    }
+  }, [availableModels.length, currentDraftModel, providerHasDraftChanges]);
   useEffect(() => {
     if (!autoDiscoverAfterPaste || !providerDraftReadyForModelDiscovery) {
       return;
@@ -4905,8 +5024,8 @@ function CoachSettingsViewSheet({
       ...(exactMatchingModel
         ? {}
         : { catalogModels: mergeDraftStringList(draftCatalogModels, model) }),
-      model,
     });
+    applyModelAdaptation(model);
     resetModelPickerSearch();
     setModelPickerOpen(false);
   };
@@ -5849,7 +5968,7 @@ function CoachSettingsViewSheet({
                     <input
                       value={currentDraftModel}
                       placeholder={modelPickerCopy.directModelPlaceholder}
-                      onChange={(event) => onProviderDraftChange({ model: event.target.value })}
+                      onChange={(event) => applyModelAdaptation(event.target.value)}
                     />
                     <p className="settings-sheet__note settings-sheet__note--compact">
                       {providerDraftReadyForModelDiscovery
@@ -5937,7 +6056,7 @@ function CoachSettingsViewSheet({
                           if (!evaluateProviderModelPolicy(selectedModel, draftModelPolicy).allowed) {
                             return;
                           }
-                          onProviderDraftChange({ model: selectedModel });
+                          applyModelAdaptation(selectedModel);
                           resetModelPickerSearch();
                           setModelPickerOpen(false);
                         }}
@@ -5991,6 +6110,56 @@ function CoachSettingsViewSheet({
                   </div>
                 </div>
                 )}
+                {currentDraftModel ? (
+                  <div
+                    className={`settings-model-adaptation settings-model-adaptation--${modelAdaptation.confidence}`}
+                    data-model-adaptation={modelAdaptation.confidence}
+                  >
+                    <div className="settings-model-adaptation__header">
+                      <strong>{settingsText(language, "模型适配", "Model fit")}</strong>
+                      <span>
+                        {modelAdaptation.confidence === "unknown"
+                          ? settingsText(
+                              language,
+                              "未识别模型 · 请测试确认",
+                              "Unknown model · test to confirm",
+                            )
+                          : settingsText(
+                              language,
+                              "按模型族推断 · 测试后以实测为准",
+                              "Inferred from the model family · a real test remains authoritative",
+                            )}
+                      </span>
+                    </div>
+                    <div className="settings-model-adaptation__chips">
+                      {modelAdaptation.supportsTools ? (
+                        <span>{toolsCopy.label}</span>
+                      ) : null}
+                      {modelAdaptation.supportsVision ? (
+                        <span>{visionCopy.label}</span>
+                      ) : null}
+                      {modelAdaptation.supportsThinking ? (
+                        <span>
+                          {settingsText(language, "思考", "Thinking")}
+                          {modelAdaptation.suggestedEffort
+                            ? ` · ${
+                                modelAdaptation.suggestedEffort === "low"
+                                  ? settingsText(language, "低", "Low")
+                                  : modelAdaptation.suggestedEffort === "high"
+                                    ? settingsText(language, "高", "High")
+                                    : settingsText(language, "中", "Medium")
+                              }`
+                            : ""}
+                        </span>
+                      ) : null}
+                      {!modelAdaptation.supportsTools &&
+                      !modelAdaptation.supportsVision &&
+                      !modelAdaptation.supportsThinking ? (
+                        <span>{settingsText(language, "基础对话", "Chat only")}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 {providerSaved && !providerHasDraftChanges && onRefreshProviderModels ? (
                   <button
                     type="button"
@@ -6033,6 +6202,16 @@ function CoachSettingsViewSheet({
                   onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
                 />
                 <div className="settings-advanced-card__capabilities">
+                  <div className="settings-advanced-card__section-heading">
+                    <strong>{settingsText(language, "模型能力", "Model capabilities")}</strong>
+                    <span>
+                      {settingsText(
+                        language,
+                        "实测结果优先；未实测时只作为建议。",
+                        "Observed results win; unverified items are suggestions only.",
+                      )}
+                    </span>
+                  </div>
                   <label className="settings-advanced-toggle">
                     <input type="checkbox" checked={!providerHasDraftChanges && capabilityVerdict.verifiedTools} disabled readOnly />
                     <span>{toolsCopy.label}</span>

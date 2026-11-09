@@ -55,7 +55,8 @@ test('provider draft sync only follows stable provider transport fields', () => 
   assert.deepEqual(fieldKeys, [
     'name', 'protocol', 'baseUrl', 'model', 'contextWindowTokens', 'maxOutputTokens',
     'modelTokenLimits', 'credentialMode', 'catalogModels', 'allowedModels', 'deniedModels',
-    'embeddingModel', 'catalogSource', 'cacheTtlSeconds', 'requestDefaults', 'thinkingConfig',
+    'embeddingModel', 'catalogSource', 'cacheTtlSeconds', 'requestDefaults', 'capabilities',
+    'thinkingConfig',
   ]);
   // The host's display fallback must never land in the editable draft.
   assert.match(source, /fromFacts: \(facts\) => \(facts\.configured \? facts\.name : ""\)/);
@@ -66,7 +67,7 @@ test('provider draft sync only follows stable provider transport fields', () => 
   );
   assert.match(
     source,
-    /const providerSavePayload = useMemo\(\(\) => \{[\s\S]*?catalogModels: providerDraft\.catalogModels \?\? \[\],[\s\S]*?requestDefaults: providerDraft\.requestDefaults \?\? \{\},[\s\S]*?capabilities: facts\.capabilities,[\s\S]*?\}, \[facts\.capabilities, providerDraft\]\);/,
+    /const providerSavePayload = useMemo\(\(\) => \{[\s\S]*?catalogModels: providerDraft\.catalogModels \?\? \[\],[\s\S]*?requestDefaults: providerDraft\.requestDefaults \?\? \{\},[\s\S]*?capabilities: providerDraft\.capabilities \?\? facts\.capabilities,[\s\S]*?\}, \[facts\.capabilities, providerDraft\]\);/,
   );
   // No second hydration path may reset the draft on raw fact changes.
   assert.doesNotMatch(

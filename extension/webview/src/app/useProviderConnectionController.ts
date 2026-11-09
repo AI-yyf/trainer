@@ -129,6 +129,12 @@ const DRAFT_FIELDS: readonly DraftFieldDescriptor[] = [
       providerRequestDefaultsKey(facts.requestDefaults),
   },
   {
+    key: "capabilities",
+    fromFacts: (facts) => facts.capabilities,
+    differs: (value, facts) =>
+      JSON.stringify(value ?? null) !== JSON.stringify(facts.capabilities ?? null),
+  },
+  {
     key: "thinkingConfig",
     fromFacts: (facts) => facts.thinkingConfig,
     // thinkingConfig is durable intent: a mode change can leave the wire
@@ -152,6 +158,7 @@ export function providerDraftFromFacts(facts: ProviderConfigView): ProviderDraft
     embeddingModel: "",
     catalogSource: "provider_live",
     requestDefaults: {},
+    capabilities: facts.capabilities,
     apiKey: "",
   };
   for (const field of DRAFT_FIELDS) {
@@ -281,7 +288,7 @@ export function useProviderConnectionController({
       requestDefaults: providerDraft.requestDefaults ?? {},
       ...(providerDraft.thinkingConfig ? { thinkingConfig: providerDraft.thinkingConfig } : {}),
       ...(trimmedApiKey ? { apiKey: trimmedApiKey, replaceApiKey: true } : {}),
-      capabilities: facts.capabilities,
+      capabilities: providerDraft.capabilities ?? facts.capabilities,
     };
   }, [facts.capabilities, providerDraft]);
 
