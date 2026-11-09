@@ -31,6 +31,15 @@ from typing import Any
 MIN_SAMPLE = 3
 _HEALTHY_PASS_RATE = (0.4, 0.85)
 MAX_ATTEMPTS = 200
+_ASSISTED_LEVELS = {
+    "hint",
+    "hint_level_1",
+    "hint_level_2",
+    "hint_level_3",
+    "assisted",
+    "guided",
+    "scaffolded",
+}
 
 
 @dataclass(slots=True)
@@ -96,6 +105,10 @@ def _is_passed(evidence: dict[str, Any]) -> bool:
     return str(evidence.get("result") or "").strip().lower() == "passed"
 
 
+def _assistance_level(evidence: dict[str, Any]) -> str:
+    return str(evidence.get("assistance_level") or "").strip().lower()
+
+
 def _is_transfer(evidence: dict[str, Any]) -> bool:
     metadata = evidence.get("transfer_metadata")
     return isinstance(metadata, dict) and bool(metadata)
@@ -117,16 +130,17 @@ def evaluate_teaching_quality(
                 current_evidence.append(item)
 
     passed = [item for item in current_evidence if _is_passed(item)]
-    independent = [
+    independent = [item for item in current_evidence if _assistance_level(item) == "independent"]
+    assisted = [item for item in current_evidence if _assistance_level(item) in _ASSISTED_LEVELS]
+    # A missing or unrecognized assistance level is unknown, not independent.
+    # It is excluded from the known-assistance denominator instead of silently
+    # inflating the independent-solving score.
+    unknown_assistance = [
         item
         for item in current_evidence
-        if str(item.get("assistance_level") or "independent") == "independent"
+        if _assistance_level(item) not in {"independent"} | _ASSISTED_LEVELS
     ]
-    assisted = [
-        item
-        for item in current_evidence
-        if str(item.get("assistance_level") or "independent") != "independent"
-    ]
+    known_assistance = independent + assisted
     assisted_passed = [item for item in assisted if _is_passed(item)]
     transfer_marked = [item for item in current_evidence if _is_transfer(item)]
     transfer_passed = [item for item in transfer_marked if _is_passed(item)]
@@ -142,14 +156,19 @@ def evaluate_teaching_quality(
     dimensions.append(
         QualityDimension(
             key="independent_solving",
-            score=ratio(len(independent), len(current_evidence)),
-            sample_size=len(current_evidence),
+            score=ratio(len(independent), len(known_assistance)),
+            sample_size=len(known_assistance),
             evidence={
                 "independent_evidence": len(independent),
+                "known_assistance_evidence": len(known_assistance),
+                "unknown_assistance_evidence": len(unknown_assistance),
                 "passed_evidence": len(passed),
                 "current_evidence": len(current_evidence),
             },
-            limitations=["Only attempts with current (non-superseded) evidence count."],
+            limitations=[
+                "Only attempts with current (non-superseded) evidence count.",
+                "Missing or unknown assistance_level is excluded; it is never treated as independent.",
+            ],
         )
     )
 
@@ -162,10 +181,12 @@ def evaluate_teaching_quality(
             evidence={
                 "assisted_evidence": len(assisted),
                 "assisted_passed": len(assisted_passed),
+                "unknown_assistance_evidence": len(unknown_assistance),
             },
             limitations=[
                 "Assistance level is recorded per attempt; fine-grained hint events "
                 "are not persisted separately, so this is a per-attempt proxy.",
+                "Unknown assistance is excluded, not counted as a hint or as independent.",
             ],
         )
     )

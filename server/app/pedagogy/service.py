@@ -416,7 +416,9 @@ class PedagogyService:
             frustration_level += 0.45
             evidence.append("message_signals_block")
         if any(token in message for token in ("urgent", "asap", "直接", "give me the code", "just tell me")):
-            frustration_level += 0.15
+            # An explicit request for a direct answer is a turn-decision
+            # signal, not evidence that the learner is frustrated. Keep the
+            # fact separate from affect inference.
             evidence.append("message_requests_rescue")
         if memory_snapshot and memory_snapshot.pace_signal in {"gentle", "fragile"}:
             frustration_level += 0.15
@@ -718,6 +720,17 @@ class PedagogyService:
             ),
             needs_rescue=learner_state.needs_rescue,
         )
+        if depth.direct_answer_override:
+            # One turn decision, one set of constraints: an explicit direct
+            # answer request must not still carry a quiz, exercise or formal
+            # plan artifact through the teaching-decision contract.
+            should_end_with_question = False
+            should_generate_exercise = False
+            should_produce_plan_artifact = False
+            should_focus_on_implementation_steps = False
+            exercise_shape = ""
+            reason_parts.append("direct_answer_override")
+            reason = "; ".join(dict.fromkeys(reason_parts))
         evidence = list(dict.fromkeys(reason_parts + depth.evidence))
 
         return TeachingDecision(

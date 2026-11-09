@@ -120,3 +120,44 @@ def test_hint_effectiveness_measured_once_sample_is_enough(tmp_path: Path) -> No
     }
     assert dims["hint_effectiveness"]["score"] == 1.0
     assert dims["hint_effectiveness"]["evidence"]["assisted_evidence"] == 3
+
+
+class _StubEvidenceStore:
+    def __init__(self, evidence: list[dict]) -> None:
+        self._evidence = evidence
+
+    def list_attempts(self, *, workspace_id: str) -> list[dict]:
+        return [{"attempt_id": f"a{index}"} for index in range(len(self._evidence))]
+
+    def list_evidence(self, attempt_id: str) -> list[dict]:
+        return [self._evidence[int(attempt_id[1:])]]
+
+
+def test_missing_assistance_is_unknown_not_independent() -> None:
+    evidence = [
+        {"evidence_id": "e-independent", "result": "passed", "is_current": True, "assistance_level": "independent"},
+        {"evidence_id": "e-guided-pass", "result": "passed", "is_current": True, "assistance_level": "guided"},
+        {"evidence_id": "e-guided-fail", "result": "failed", "is_current": True, "assistance_level": "guided"},
+        # Legacy/partial record: the field is absent. It must not be counted
+        # as an independent success or as a guided hint outcome.
+        {"evidence_id": "e-unknown", "result": "passed", "is_current": True},
+    ]
+    dims = {
+        dimension["key"]: dimension
+        for dimension in evaluate_teaching_quality(_StubEvidenceStore(evidence), "ws-unknown-assistance").as_payload()[
+            "dimensions"
+        ]
+    }
+
+    independent = dims["independent_solving"]
+    assert independent["sample_size"] == 3
+    assert independent["score"] == round(1 / 3, 3)
+    assert independent["evidence"]["independent_evidence"] == 1
+    assert independent["evidence"]["known_assistance_evidence"] == 3
+    assert independent["evidence"]["unknown_assistance_evidence"] == 1
+    assert independent["evidence"]["current_evidence"] == 4
+
+    hints = dims["hint_effectiveness"]
+    assert hints["evidence"]["assisted_evidence"] == 2
+    assert hints["evidence"]["unknown_assistance_evidence"] == 1
+    assert hints["score"] is None  # 2 known assisted samples < MIN_SAMPLE

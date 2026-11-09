@@ -116,3 +116,28 @@ def test_self_report_cannot_supersede_same_artifact_controlled_check(tmp_path: P
     projection = project_skills(evidence)["implementation"]
     assert projection["state"] == "independent"
     assert projection["verified_count"] == 1
+
+
+def test_missing_assistance_is_unknown_and_never_advances_the_skill_ladder() -> None:
+    dimension = project_skills([{
+        "evidence_id": "legacy-controlled-check",
+        "result": "passed",
+        "is_current": True,
+        "trust_level": "controlled_check",
+        # assistance_level is absent in legacy/partial records.
+    }])["implementation"]
+
+    assert dimension["state"] == "not_verified"
+    assert dimension["independent_attempt_count"] == 0
+    assert dimension["independent_evidence_count"] == 0
+    assert dimension["evidence"][0]["assistance_level"] == "unknown"
+
+    explicit = project_skills([{
+        "evidence_id": "independent-controlled-check",
+        "result": "passed",
+        "is_current": True,
+        "trust_level": "controlled_check",
+        "assistance_level": "independent",
+    }])["implementation"]
+    assert explicit["state"] == "independent"
+    assert explicit["independent_attempt_count"] == 1

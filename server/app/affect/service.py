@@ -121,13 +121,9 @@ class AffectService:
             confidence = max(confidence, 0.62)
             momentum = 0.7
 
-        if memory_snapshot.due_review_count >= 2:
-            frustration = max(frustration, 0.52)
-            momentum = min(momentum, 0.45)
-        if memory_snapshot.due_review_count >= 3:
-            frustration = max(frustration, 0.63)
-            confidence = min(confidence, 0.44)
-            momentum = min(momentum, 0.36)
+        # A due-review count is scheduling pressure, not evidence of the
+        # learner's emotional state. Never infer frustration, low confidence
+        # or urgency from backlog size alone.
         if active_thread and active_thread.blocker:
             frustration = min(1.0, frustration + 0.08)
             momentum = min(momentum, 0.4)
@@ -155,19 +151,17 @@ class AffectService:
         if (
             frustration >= 0.84
             or explicit_overload_signal
-            or (learner_state.needs_rescue and memory_snapshot.due_review_count >= 1)
+            or learner_state.needs_rescue
         ):
             recovery_signal = "overloaded"
         elif frustration >= 0.58 or (
-            active_thread is not None
-            and bool(active_thread.blocker)
-            and memory_snapshot.due_review_count > 0
+            active_thread is not None and bool(active_thread.blocker)
         ):
             recovery_signal = "fragile"
         elif isinstance(latest_outcome, dict) and str(latest_outcome.get("outcome", "") or "").strip().lower() in {
             "tests_passed",
             "code_landed",
-        } and memory_snapshot.due_review_count <= 1:
+        }:
             recovery_signal = "recovering"
         elif confidence >= 0.6 and (
             bool(memory_snapshot.recent_wins)

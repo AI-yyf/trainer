@@ -55,6 +55,19 @@ _ASSISTANCE_PENALTY: dict[str, int] = {
     "hint_level_1": -1,
     "hint_level_2": -2,
     "hint_level_3": -3,
+    "assisted": -1,
+    "guided": -1,
+    "scaffolded": -1,
+    "unknown": -1,
+}
+_ASSISTED_LEVELS = {
+    "hint",
+    "hint_level_1",
+    "hint_level_2",
+    "hint_level_3",
+    "assisted",
+    "guided",
+    "scaffolded",
 }
 
 # These are inconclusive execution outcomes.  They must never become a
@@ -271,8 +284,9 @@ def project_skills(
         # Trust bonus only amplifies positive results — a failed controlled
         # check should not score higher because the runner was trusted.
         trust = _TRUST_BONUS.get(str(rec.get("trust_level") or ""), 0) if weight > 0 else 0
+        assistance_level = _normalise_marker(rec.get("assistance_level"))
         assistance = (
-            _ASSISTANCE_PENALTY.get(str(rec.get("assistance_level") or ""), 0)
+            _ASSISTANCE_PENALTY.get(assistance_level, -1)
             if result_str == "passed"
             else 0
         )
@@ -305,7 +319,7 @@ def project_skills(
                         "attempt_id": str(rec.get("attempt_id") or "") or None,
                         "timestamp": str(rec.get("created_at") or rec.get("timestamp") or "") or None,
                         "result": result_str,
-                        "assistance_level": str(rec.get("assistance_level") or "independent"),
+                        "assistance_level": assistance_level or "unknown",
                         "trust_level": str(rec.get("trust_level") or ""),
                         "scenario": str(rec.get("scenario") or "") or None,
                     }
@@ -314,14 +328,16 @@ def project_skills(
                 # in the drilldown, but cannot attest executable capability.
                 if result_str == "passed" and rec.get("trust_level") == "controlled_check":
                     result[dim]["verified_count"] += 1
-                    assistance_level = str(rec.get("assistance_level") or "independent")
                     if assistance_level == "independent":
                         independent_success_keys[dim].add(_success_key(rec, index))
                         independent_evidence_keys[dim].add(evidence_id)
                         if dim == "transfer" and transfer_fact:
                             transfer_context_keys.add(_transfer_context_key(rec))
-                    else:
+                    elif assistance_level in _ASSISTED_LEVELS:
                         assisted_success_keys[dim].add(evidence_id)
+                    # Unknown/missing assistance is not independent and not
+                    # assisted; it stays visible in the drilldown but cannot
+                    # advance the skill ladder.
                 elif result_str == "failed":
                     failed_dimensions[dim] = True
                 elif result_str == "partial":
