@@ -1017,21 +1017,77 @@ def _parse_pdf(
 ) -> tuple[str, list[str], list[CanonicalAsset], int | None, int | None]:
     warnings: list[str] = []
     pages: list[str] = []
+    assets: list[CanonicalAsset] = []
+    page_asset_refs: dict[int, list[str]] = {}
     ocr_used = False
     try:
         import pymupdf  # type: ignore[import-not-found]
 
         with pymupdf.open(source) as document:
+            seen_xrefs: dict[int, str] = {}
             for page_index in range(document.page_count):
-                pages.append(str(document.load_page(page_index).get_text("text")))
+                page = document.load_page(page_index)
+                page_number = page_index + 1
+                pages.append(str(page.get_text("text")))
+                # Preserve embedded page images in the unified Markdown. Text
+                # alone is not the whole document: diagrams, charts and
+                # screenshots carry instructional meaning too.
+                refs: list[str] = []
+                for image_index, image in enumerate(page.get_images(full=True), start=1):
+                    xref = int(image[0])
+                    existing = seen_xrefs.get(xref)
+                    if existing:
+                        refs.append(existing)
+                        continue
+                    try:
+                        extracted = document.extract_image(xref)
+                    except Exception:
+                        warnings.append(f"Page {page_number}: an embedded image could not be extracted.")
+                        continue
+                    data = extracted.get("image")
+                    extension = str(extracted.get("ext") or "png").lower().lstrip(".")
+                    if not isinstance(data, bytes) or not data:
+                        warnings.append(f"Page {page_number}: an embedded image was empty.")
+                        continue
+                    if extension not in {"png", "jpg", "jpeg", "gif", "webp", "bmp"}:
+                        extension = "png"
+                    filename = f"page-{page_number:03d}-image-{image_index:03d}.{extension}"
+                    assets.append(
+                        CanonicalAsset(
+                            filename=filename,
+                            data=data,
+                            source_part=f"page {page_number}",
+                            media_type=MIME_BY_SUFFIX.get(f".{extension}", "image/png"),
+                        )
+                    )
+                    ref = f"![{filename}](assets/{filename})"
+                    seen_xrefs[xref] = ref
+                    refs.append(ref)
+                if refs:
+                    page_asset_refs[page_number] = refs
             if not any(page.strip() for page in pages):
                 # Scanned PDF: render a bounded number of pages and OCR them.
+                # The page image is kept as an asset so figures survive OCR.
                 ocr_pages: list[str] = []
                 ocr_limit = min(document.page_count, 20)
                 for page_index in range(ocr_limit):
                     page = document.load_page(page_index)
+                    page_number = page_index + 1
                     pixmap = page.get_pixmap(dpi=200)
-                    result = ocr_image_bytes(pixmap.tobytes("png"))
+                    image_bytes = pixmap.tobytes("png")
+                    filename = f"page-{page_number:03d}.png"
+                    assets.append(
+                        CanonicalAsset(
+                            filename=filename,
+                            data=image_bytes,
+                            source_part=f"page {page_number}",
+                            media_type="image/png",
+                        )
+                    )
+                    page_asset_refs.setdefault(page_number, []).insert(
+                        0, f"![page {page_number}](assets/{filename})"
+                    )
+                    result = ocr_image_bytes(image_bytes)
                     warnings.extend(result.warnings)
                     ocr_pages.append(result.text)
                     if result.text.strip():
@@ -1067,13 +1123,18 @@ def _parse_pdf(
             warnings.append(
                 f"Page {page_number}: no text layer or OCR text was found."
             )
-            blocks.append("")
+            for ref in page_asset_refs.get(page_number, []):
+                blocks.append(ref)
+                blocks.append("")
             continue
         blocks.append(_normalize_pdf_text(stripped))
+        for ref in page_asset_refs.get(page_number, []):
+            blocks.append("")
+            blocks.append(ref)
         blocks.append("")
     if ocr_used:
         warnings.insert(0, "Scanned PDF text was transcribed with Tesseract OCR; verify against the page image.")
-    return _join_blocks(blocks), _dedupe(warnings), [], len(pages), None
+    return _join_blocks(blocks), _dedupe(warnings), assets, len(pages), None
 
 
 def _pdf_text_from_bytes(raw: bytes) -> list[str]:

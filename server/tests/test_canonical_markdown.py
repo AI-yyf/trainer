@@ -263,6 +263,50 @@ def test_pdf_digest_marks_page_anchors(tmp_path: Path) -> None:
     assert document.parser == "pdf-v1"
 
 
+def test_pdf_digest_keeps_embedded_images_in_the_unified_markdown(tmp_path: Path) -> None:
+    pymupdf = pytest.importorskip("pymupdf")
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Figure page body", fontsize=12)
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 10, 10), 0)
+    pixmap.set_rect(pixmap.irect, (255, 0, 0))
+    page.insert_image(pymupdf.Rect(72, 100, 172, 200), pixmap=pixmap)
+    path = tmp_path / "figure.pdf"
+    path.write_bytes(document.tobytes())
+    document.close()
+
+    built = build_canonical_document(path, resource_id="res_pdf_image")
+
+    assert "Figure page body" in built.body
+    assert "![page-001-image-001.png](assets/page-001-image-001.png)" in built.body
+    assert built.assets[0].filename == "page-001-image-001.png"
+    assert built.assets[0].data.startswith(b"\x89PNG")
+
+
+def test_scanned_pdf_keeps_the_page_image_beside_ocr_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pymupdf = pytest.importorskip("pymupdf")
+    from app.resources import canonical as canonical_module
+    from app.resources.ocr import OcrResult
+
+    document = pymupdf.open()
+    document.new_page()
+    path = tmp_path / "scan-image.pdf"
+    path.write_bytes(document.tobytes())
+    document.close()
+    monkeypatch.setattr(
+        canonical_module,
+        "ocr_image_bytes",
+        lambda _data, **_kwargs: OcrResult(text="OCR fallback page text", available=True),
+    )
+
+    built = build_canonical_document(path, resource_id="res_scan_image")
+
+    assert "OCR fallback page text" in built.body
+    assert "![page 1](assets/page-001.png)" in built.body
+    assert built.assets[0].filename == "page-001.png"
+    assert built.assets[0].data.startswith(b"\x89PNG")
+
+
 def test_html_digest_drops_scripts_and_keeps_headings(tmp_path: Path) -> None:
     path = tmp_path / "page.html"
     path.write_bytes(
