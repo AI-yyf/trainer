@@ -15,19 +15,27 @@ import path from "node:path";
 
 const DARWIN_APP = "/Applications/Visual Studio Code.app/Contents/MacOS";
 const DARWIN_BINARIES = ["Electron", "Code"];
+// Build each platform's candidate with that platform's separator rules, not
+// the host's, so the same candidate list is produced on every OS (and can be
+// asserted in cross-platform CI).
+const darwinPath = path.posix;
+const windowsPath = path.win32;
 
 function darwinCandidates(home) {
-  const roots = [DARWIN_APP, path.join(home, "Applications/Visual Studio Code.app/Contents/MacOS")];
-  return roots.flatMap((root) => DARWIN_BINARIES.map((name) => path.join(root, name)));
+  const roots = [
+    DARWIN_APP,
+    darwinPath.join(home, "Applications/Visual Studio Code.app/Contents/MacOS"),
+  ];
+  return roots.flatMap((root) => DARWIN_BINARIES.map((name) => darwinPath.join(root, name)));
 }
 
 function windowsCandidates(env) {
   const localAppData = String(env.LOCALAPPDATA ?? "").trim();
   const roots = [
-    localAppData ? `${localAppData}\\Programs\\Microsoft VS Code` : "",
+    localAppData ? windowsPath.join(localAppData, "Programs", "Microsoft VS Code") : "",
     "C:\\Program Files\\Microsoft VS Code",
   ].filter(Boolean);
-  return roots.map((root) => `${root}\\Code.exe`);
+  return roots.map((root) => windowsPath.join(root, "Code.exe"));
 }
 
 const LINUX_BINARIES = ["/usr/share/code/code", "/usr/bin/code", "/snap/bin/code"];

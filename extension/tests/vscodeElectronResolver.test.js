@@ -15,6 +15,9 @@ test("darwin candidates cover both the legacy Electron and current Code binary",
   });
   assert.ok(candidates.includes("/Applications/Visual Studio Code.app/Contents/MacOS/Electron"));
   assert.ok(candidates.includes("/Applications/Visual Studio Code.app/Contents/MacOS/Code"));
+  // Candidate paths belong to the target platform, so a Windows CI host must
+  // still produce POSIX darwin paths (not backslash-joined ones).
+  assert.ok(candidates.every((candidate) => candidate.startsWith("/")));
 });
 
 test("darwin resolves Code when the legacy Electron binary is gone", () => {
@@ -52,6 +55,7 @@ test("win32 candidates come from LOCALAPPDATA and Program Files", () => {
   });
   assert.ok(candidates[0].endsWith("Microsoft VS Code\\Code.exe"));
   assert.ok(candidates[1].includes("Program Files"));
+  assert.ok(candidates.every((candidate) => !candidate.includes("/")));
 });
 
 test("no installation resolves to null instead of a dead path", () => {
