@@ -35,6 +35,7 @@ SOURCE_TYPE_BY_SUFFIX: dict[str, str] = {
     ".pptx": "pptx",
     ".pptm": "pptx",
     ".pdf": "pdf",
+    ".epub": "epub",
     ".html": "html",
     ".htm": "html",
     ".xhtml": "html",
@@ -95,6 +96,7 @@ PARSER_BY_SOURCE_TYPE: dict[str, str] = {
     "docx": "docx-v1",
     "pptx": "pptx-v1",
     "pdf": "pdf-v1",
+    "epub": "epub-v1",
     "html": "html-v1",
     "markdown": "markdown-v1",
     "text": "text-v1",
@@ -108,6 +110,7 @@ MIME_BY_SUFFIX: dict[str, str] = {
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".pptm": "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
     ".pdf": "application/pdf",
+    ".epub": "application/epub+zip",
     ".html": "text/html",
     ".htm": "text/html",
     ".xhtml": "application/xhtml+xml",
@@ -459,6 +462,8 @@ def build_canonical_document(
         body, warnings, assets, page_count, slide_count = _parse_pptx(raw)
     elif source_type == "pdf":
         body, warnings, assets, page_count, slide_count = _parse_pdf(source, raw)
+    elif source_type == "epub":
+        body, warnings, assets, page_count, slide_count = _parse_epub(raw)
     elif source_type == "html":
         body, warnings, assets, page_count, slide_count = _parse_html(raw, source_url or source.as_uri())
     elif source_type == "image":
@@ -468,6 +473,7 @@ def build_canonical_document(
     else:
         body, warnings, assets, page_count, slide_count = _parse_text_like(raw, filename, markdown=False)
 
+    body = _qualify_asset_refs(body, resource_id)
     anchors = anchors_for_body(body, source_type)
 
     if not body.strip():
@@ -1137,6 +1143,180 @@ def _parse_pdf(
     return _join_blocks(blocks), _dedupe(warnings), assets, len(pages), None
 
 
+def _parse_epub(
+    raw: bytes,
+) -> tuple[str, list[str], list[CanonicalAsset], int | None, int | None]:
+    """Project an EPUB spine into canonical Markdown with tables and images."""
+
+    import io
+    import posixpath
+    import zipfile
+    from urllib.parse import unquote
+
+    from bs4 import BeautifulSoup
+
+    warnings: list[str] = []
+    blocks: list[str] = []
+    assets: list[CanonicalAsset] = []
+    seen_images: dict[str, str] = {}
+    chapter_count = 0
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            container_raw = _read_zip_part(archive, "META-INF/container.xml")
+            if container_raw is None:
+                raise CanonicalParseError("EPUB is missing META-INF/container.xml.")
+            import xml.etree.ElementTree as ET
+
+            container = ET.fromstring(container_raw)
+            opf_path = ""
+            for element in container.iter():
+                if element.tag.split("}")[-1] == "rootfile":
+                    opf_path = str(element.attrib.get("full-path") or "").strip()
+                    if opf_path:
+                        break
+            if not opf_path:
+                raise CanonicalParseError("EPUB container.xml did not declare a rootfile.")
+            opf_raw = _read_zip_part(archive, opf_path)
+            if opf_raw is None:
+                raise CanonicalParseError(f"EPUB package document {opf_path!r} is missing.")
+            opf = ET.fromstring(opf_raw)
+            manifest: dict[str, str] = {}
+            spine: list[str] = []
+            for element in opf.iter():
+                local = element.tag.split("}")[-1]
+                if local == "item":
+                    item_id = str(element.attrib.get("id") or "").strip()
+                    href = str(element.attrib.get("href") or "").strip()
+                    if item_id and href:
+                        manifest[item_id] = href
+                elif local == "itemref":
+                    idref = str(element.attrib.get("idref") or "").strip()
+                    if idref:
+                        spine.append(idref)
+            opf_dir = posixpath.dirname(opf_path)
+            for idref in spine:
+                href = manifest.get(idref)
+                if not href:
+                    continue
+                chapter_path = posixpath.normpath(posixpath.join(opf_dir, href))
+                chapter_raw = _read_zip_part(archive, chapter_path)
+                if chapter_raw is None:
+                    warnings.append(f"EPUB spine item {idref!r} is missing.")
+                    continue
+                chapter_count += 1
+                soup = BeautifulSoup(chapter_raw.decode("utf-8", errors="ignore"), "html.parser")
+                body = soup.body or soup
+                for math in body.find_all("math"):
+                    math_text = " ".join(math.get_text(" ", strip=True).split())
+                    if math_text:
+                        math.replace_with(f"${math_text}$")
+                title = " ".join(soup.title.get_text(" ", strip=True).split()) if soup.title else ""
+                first_heading = body.find(["h1", "h2", "h3", "h4"])
+                first_heading_text = (
+                    " ".join(first_heading.get_text(" ", strip=True).split())
+                    if first_heading
+                    else ""
+                )
+                if title and title != first_heading_text:
+                    blocks.append(f"## {title}")
+                    blocks.append("")
+                for element in body.find_all(["h1", "h2", "h3", "h4", "p", "li", "table", "img"]):
+                    if element.name == "table":
+                        if element.find_parent("table"):
+                            continue
+                        table = _epub_table_markdown(element)
+                        if table:
+                            blocks.extend([table, ""])
+                        continue
+                    if element.name == "img":
+                        if element.find_parent("table"):
+                            continue
+                        src = str(element.get("src") or "").strip()
+                        if not src or src.startswith(("http://", "https://", "data:")):
+                            continue
+                        asset_path = posixpath.normpath(
+                            posixpath.join(posixpath.dirname(chapter_path), unquote(src.split("#")[0]))
+                        )
+                        if asset_path in seen_images:
+                            blocks.extend([seen_images[asset_path], ""])
+                            continue
+                        image_bytes = _read_zip_part(archive, asset_path)
+                        if image_bytes is None:
+                            warnings.append(f"EPUB image {src!r} is missing.")
+                            continue
+                        suffix = Path(asset_path).suffix.lower()
+                        extension = suffix.lstrip(".") if suffix in MIME_BY_SUFFIX else "png"
+                        filename = f"chapter-{chapter_count:03d}-image-{len(seen_images) + 1:03d}.{extension}"
+                        assets.append(
+                            CanonicalAsset(
+                                filename=filename,
+                                data=image_bytes,
+                                source_part=f"chapter {chapter_count}",
+                                media_type=MIME_BY_SUFFIX.get(f".{extension}", "image/png"),
+                            )
+                        )
+                        alt = " ".join(str(element.get("alt") or "image").split()).strip() or "image"
+                        ref = f"![{alt}](assets/{filename})"
+                        seen_images[asset_path] = ref
+                        blocks.extend([ref, ""])
+                        continue
+                    if element.find_parent("table"):
+                        continue
+                    if element.name == "p" and element.find_parent("li"):
+                        continue
+                    if element.name == "li" and element.find_parent("li"):
+                        continue
+                    text = " ".join(element.get_text(" ", strip=True).split())
+                    if not text:
+                        continue
+                    if element.name.startswith("h"):
+                        level = int(element.name[1])
+                        blocks.extend([f"{'#' * max(1, min(level, 6))} {text}", ""])
+                    elif element.name == "li":
+                        blocks.append(f"- {text}")
+                    else:
+                        blocks.extend([text, ""])
+    except CanonicalParseError:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive archive shapes
+        raise CanonicalParseError(f"EPUB parsing failed: {exc}") from exc
+    if not blocks:
+        raise CanonicalParseError("EPUB produced no readable text.")
+    if chapter_count == 0:
+        warnings.append("EPUB spine was empty.")
+    return "\n".join(blocks).strip(), _dedupe(warnings), assets, None, None
+
+
+def _epub_table_markdown(table: Any) -> str:
+    rows: list[list[str]] = []
+    header_row = False
+    for row in table.find_all("tr"):
+        cells = row.find_all(["th", "td"], recursive=False)
+        if not cells:
+            continue
+        values = [
+            " ".join(cell.get_text(" ", strip=True).split()).replace("|", "\\|")
+            for cell in cells
+        ]
+        if not rows and row.find("th") is not None:
+            header_row = True
+        rows.append(values)
+    if not rows:
+        return ""
+    width = max(len(row) for row in rows)
+    normalized = [row + [""] * (width - len(row)) for row in rows]
+    if not header_row:
+        normalized.insert(0, [f"Column {index + 1}" for index in range(width)])
+    header = normalized[0]
+    lines = [
+        "| " + " | ".join(header) + " |",
+        "| " + " | ".join("---" for _ in header) + " |",
+    ]
+    for row in normalized[1:]:
+        lines.append("| " + " | ".join(row) + " |")
+    return "\n".join(lines)
+
+
 def _pdf_text_from_bytes(raw: bytes) -> list[str]:
     try:
         from .preview import _extract_pdf_stream_texts  # type: ignore[attr-defined]
@@ -1443,6 +1623,27 @@ def plain_text_preview(markdown: str, max_chars: int = 200) -> str:
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 1].rstrip() + "…"
+
+
+def _safe_asset_segment(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]", "-", str(value or "")).strip(".-")
+    return cleaned or "resource"
+
+
+def _qualify_asset_refs(body: str, resource_id: str) -> str:
+    """Point Markdown image refs at the per-resource asset directory.
+
+    The store writes assets to ``markdown/assets/<resource_id>/`` so two
+    resources with the same parser filenames never collide. The Markdown body
+    must carry the same qualified path or the reader/preview shows broken
+    images.
+    """
+
+    segment = _safe_asset_segment(resource_id)
+    pattern = re.compile(
+        rf"!\[([^\]]*)\]\(assets/(?!{re.escape(segment)}/)([^)/]+)\)"
+    )
+    return pattern.sub(lambda match: f"![{match.group(1)}](assets/{segment}/{match.group(2)})", body)
 
 
 def anchors_for_body(body: str, source_type: str) -> list[DocumentAnchor]:

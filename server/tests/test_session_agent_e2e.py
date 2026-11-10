@@ -599,6 +599,20 @@ def test_session_message_auto_library_lookup_handles_mixed_language_doc_question
     coach_visible_status = body["reply"]["metadata"]["coach_visible_status"]
     assert coach_visible_status["source"] == "agent_loop"
     assert coach_visible_status["toolNames"] == ["search_resources"]
+    # The auto-grounded hit is not only model context: the transcript now
+    # carries a visible citation with the real version-scoped identity.
+    reply_parts = body["reply"]["metadata"]["parts"]
+    citation_parts = [part for part in reply_parts if part.get("type") == "citation"]
+    assert len(citation_parts) == 1
+    citation = citation_parts[0]
+    assert citation["resourceId"] == first_hit["resource_id"]
+    assert citation["title"] == "resources-view-contract.md"
+    assert "snippet" not in citation
+    assert citation["citationId"] == first_hit["citation_id"]
+    assert citation["versionId"] == first_hit["version_id"]
+    if first_hit.get("anchor_id"):
+        assert citation["chunkId"] == first_hit["anchor_id"]
+    assert citation["referenceOrigin"] == "library_auto"
 
 
 def test_session_message_preserves_auto_resource_evidence_when_agent_searches_again(
@@ -2795,3 +2809,293 @@ def test_session_message_marks_image_attachments_delivered_when_provider_is_visi
     ), captured_attachments
     support_lines = body["reply"]["metadata"]["support"]["lines"]
     assert any("reached the model as image input" in line for line in support_lines)
+
+
+def test_session_message_read_excerpt_surfaces_a_compact_citation(
+    runtime: TrainerRuntime,
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A read becomes a compact, versioned citation with an open-at-anchor action."""
+
+    runtime.resource_service.semantic_memory = SimpleNamespace(
+        upsert_text=lambda *_args, **_kwargs: None,
+    )
+
+    with TestClient(app) as client:
+        session_id = _seed_session(client, workspace_id="ws-visible-excerpt")
+        indexed = _upload_and_index_markdown(
+            client,
+            workspace_id="ws-visible-excerpt",
+            name="queue-locks.md",
+            text=(
+                "# Queue locks\n"
+                "A lock protects the write path from concurrent writers.\n"
+                "\n"
+                "## Boundary\n"
+                "Release the lock in a finally block so a failed write cannot strand it.\n"
+            ),
+        )
+        _patch_provider(
+            monkeypatch,
+            runtime,
+            responses=[
+                {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "read-1",
+                            "name": "read_resource_excerpt",
+                            "arguments": {"resource_id": indexed["id"], "chars": 900},
+                        }
+                    ],
+                },
+                {
+                    "content": "Read the original passage, then release the lock in a finally block.",
+                    "tool_calls": [],
+                },
+            ],
+        )
+        response = client.post(
+            "/session/message",
+            json={
+                "session_id": session_id,
+                "workspace_id": "ws-visible-excerpt",
+                "use_agent_loop": True,
+                "message": "Show me the exact queue-lock passage before explaining it.",
+                "response_language": "en-US",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    parts = body["reply"]["metadata"]["parts"]
+    citations = [
+        part
+        for part in parts
+        if part.get("type") == "citation" and part.get("referenceOrigin") == "library_read"
+    ]
+    assert citations, parts
+    citation = citations[0]
+    assert citation["resourceId"] == indexed["id"]
+    assert citation["versionId"]
+    assert citation["chunkId"]
+    assert citation["citationId"]
+    assert citation["location"]["anchor"]
+    assert citation["location"]["start_line"] is not None
+    # The transcript carries identity + action, never a second copy of the text.
+    assert "text" not in citation
+    assert "snippet" not in citation
+    assert "A lock protects the write path" not in body["reply"]["content"]
+    # Every visible citation resolves to a real source: either this library
+    # resource or a fetched web URL. A failed/missing read cannot mint one.
+    for part in parts:
+        if part.get("type") != "citation":
+            continue
+        assert part["resourceId"] == indexed["id"] or part.get("url", "").startswith("http")
+
+
+def test_resource_grounding_never_crosses_workspace_boundaries(
+    runtime: TrainerRuntime,
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A citation minted in workspace A is never readable from workspace B."""
+
+    runtime.resource_service.semantic_memory = SimpleNamespace(
+        upsert_text=lambda *_args, **_kwargs: None,
+    )
+
+    with TestClient(app) as client:
+        _seed_session(client, workspace_id="ws-library-a")
+        indexed = _upload_and_index_markdown(
+            client,
+            workspace_id="ws-library-a",
+            name="alpha-secret.md",
+            text=(
+                "# Alpha protocol\n"
+                "The Alpha protocol boundary sentence belongs only to workspace A.\n"
+            ),
+        )
+        session_b = _seed_session(client, workspace_id="ws-library-b")
+        _patch_provider(
+            monkeypatch,
+            runtime,
+            responses=[
+                {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "cross-read",
+                            "name": "read_resource_excerpt",
+                            "arguments": {"resource_id": indexed["id"]},
+                        }
+                    ],
+                },
+                {
+                    "content": "No library citation is available in this workspace.",
+                    "tool_calls": [],
+                },
+            ],
+        )
+        response = client.post(
+            "/session/message",
+            json={
+                "session_id": session_b,
+                "workspace_id": "ws-library-b",
+                "use_agent_loop": True,
+                "message": "What does the Alpha protocol boundary sentence say?",
+                "response_language": "en-US",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    parts = body["reply"]["metadata"]["parts"]
+    assert not [part for part in parts if part.get("type") == "citation"]
+    read_result = next(
+        part
+        for part in parts
+        if part.get("type") == "tool_result" and part.get("name") == "read_resource_excerpt"
+    )
+    assert read_result.get("error")
+    assert "Alpha protocol" not in body["reply"]["content"]
+
+
+def test_plain_acknowledgement_does_not_probe_the_library(
+    runtime: TrainerRuntime,
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A chat acknowledgement must not trigger a library search or citation."""
+
+    runtime.resource_service.semantic_memory = SimpleNamespace(
+        upsert_text=lambda *_args, **_kwargs: None,
+    )
+
+    async def fake_coaching_reply(
+        self: ProviderService,
+        profile: object,
+        message: str,
+        *args: object,
+        **kwargs: object,
+    ) -> str:
+        return "好，继续按你的节奏来。"
+
+    monkeypatch.setattr(ProviderService, "coaching_reply", fake_coaching_reply)
+
+    with TestClient(app) as client:
+        session_id = _seed_session(client, workspace_id="ws-plain-chat-no-search")
+        _upload_and_index_markdown(
+            client,
+            workspace_id="ws-plain-chat-no-search",
+            name="queue-locks.md",
+            text="# Queue locks\nA lock protects the write path.\n",
+        )
+        response = client.post(
+            "/session/message",
+            json={
+                "session_id": session_id,
+                "workspace_id": "ws-plain-chat-no-search",
+                "message": "好的，谢谢，先这样。",
+                "response_language": "zh-CN",
+                "provider": {
+                    "name": "plain-compatible",
+                    "baseUrl": "https://gateway.example/v1",
+                    "apiKeyRef": "trainer.plain",
+                    "model": "MiniMax-M3",
+                },
+                "apiKey": "sk-test",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    agent_meta = body.get("agent_meta") or {}
+    assert agent_meta.get("auto_resource_lookup") is not True
+    tool_events = agent_meta.get("tool_events") or []
+    assert not [event for event in tool_events if event.get("name") == "search_resources"]
+    parts = body["reply"]["metadata"].get("parts") or []
+    assert not [part for part in parts if part.get("type") == "citation"]
+
+
+def test_session_message_two_library_reads_surface_two_compact_citations(
+    runtime: TrainerRuntime,
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A compare-two-sources turn keeps both citations distinct and traceable."""
+
+    runtime.resource_service.semantic_memory = SimpleNamespace(
+        upsert_text=lambda *_args, **_kwargs: None,
+    )
+
+    with TestClient(app) as client:
+        session_id = _seed_session(client, workspace_id="ws-two-source-compare")
+        first = _upload_and_index_markdown(
+            client,
+            workspace_id="ws-two-source-compare",
+            name="queue-locks-a.md",
+            text="# Queue locks\nA lock protects the write path.\n",
+        )
+        second = _upload_and_index_markdown(
+            client,
+            workspace_id="ws-two-source-compare",
+            name="queue-locks-b.md",
+            text="# Queue locks\nRelease the lock in a finally block.\n",
+        )
+        _patch_provider(
+            monkeypatch,
+            runtime,
+            responses=[
+                {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "read-a",
+                            "name": "read_resource_excerpt",
+                            "arguments": {"resource_id": first["id"]},
+                        }
+                    ],
+                },
+                {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "read-b",
+                            "name": "read_resource_excerpt",
+                            "arguments": {"resource_id": second["id"]},
+                        }
+                    ],
+                },
+                {
+                    "content": "Both sources agree on the lock boundary; only the release wording differs.",
+                    "tool_calls": [],
+                },
+            ],
+        )
+        response = client.post(
+            "/session/message",
+            json={
+                "session_id": session_id,
+                "workspace_id": "ws-two-source-compare",
+                "use_agent_loop": True,
+                "message": "Compare what these two library notes say about the lock boundary.",
+                "response_language": "en-US",
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    citations = [
+        part
+        for part in body["reply"]["metadata"]["parts"]
+        if part.get("type") == "citation" and part.get("referenceOrigin") == "library_read"
+    ]
+    assert {part["resourceId"] for part in citations} == {first["id"], second["id"]}
+    assert all(part["chunkId"] for part in citations)
+    assert all(part["versionId"] for part in citations)
+    assert all(part["citationId"] for part in citations)
+    assert all("text" not in part and "snippet" not in part for part in citations)
+    assert "A lock protects the write path" not in body["reply"]["content"]
+    assert "Release the lock in a finally block" not in body["reply"]["content"]

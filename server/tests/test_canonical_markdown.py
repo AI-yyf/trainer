@@ -192,7 +192,7 @@ def test_docx_digest_keeps_structure_links_tables_images_and_footnotes(tmp_path:
     assert "[here](https://example.org/paper)" in body
     assert "| Quorum | Meaning |" in body
     assert "| R + W > N | Reads see the latest write |" in body
-    assert "![docx-image-001](assets/docx-image-001.png)" in body
+    assert "![docx-image-001](assets/res_docx/docx-image-001.png)" in body
     assert "[^2]" in body
     assert "[^2]: Quorum reads and writes intersect." in body
     assert document.page_count == 2
@@ -278,7 +278,7 @@ def test_pdf_digest_keeps_embedded_images_in_the_unified_markdown(tmp_path: Path
     built = build_canonical_document(path, resource_id="res_pdf_image")
 
     assert "Figure page body" in built.body
-    assert "![page-001-image-001.png](assets/page-001-image-001.png)" in built.body
+    assert "![page-001-image-001.png](assets/res_pdf_image/page-001-image-001.png)" in built.body
     assert built.assets[0].filename == "page-001-image-001.png"
     assert built.assets[0].data.startswith(b"\x89PNG")
 
@@ -302,7 +302,7 @@ def test_scanned_pdf_keeps_the_page_image_beside_ocr_text(tmp_path: Path, monkey
     built = build_canonical_document(path, resource_id="res_scan_image")
 
     assert "OCR fallback page text" in built.body
-    assert "![page 1](assets/page-001.png)" in built.body
+    assert "![page 1](assets/res_scan_image/page-001.png)" in built.body
     assert built.assets[0].filename == "page-001.png"
     assert built.assets[0].data.startswith(b"\x89PNG")
 
@@ -417,7 +417,9 @@ def test_store_writes_originals_markdown_and_assets(tmp_path: Path) -> None:
     assert expected_markdown.is_file()
     assert expected_original.is_file()
     assert (artifact.assets_dir / "docx-image-001.png").is_file()
-    assert read_text(expected_markdown).startswith("---\n")
+    stored_markdown = read_text(expected_markdown)
+    assert "![docx-image-001](assets/resource-abc/docx-image-001.png)" in stored_markdown
+    assert stored_markdown.startswith("---\n")
     assert artifact.markdown_relative.startswith("Trainer Library/.trainer-resources/markdown/")
     assert artifact.original_relative is not None
     assert artifact.original_relative.startswith("Trainer Library/.trainer-resources/originals/")

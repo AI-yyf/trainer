@@ -6,11 +6,13 @@ import {
 import { isDocxPreviewPath } from "../../../../../shared/src/previewAssets";
 import {
   describeTrainerStopReason,
+  type CitationPart,
   type TrainerMessagePart,
 } from "../../../../../shared/src/protocol";
-import type { ComposerLanguage } from "../../lib/types";
+import type { ComposerLanguage, ResourceRecord } from "../../lib/types";
 import { resolveCopy } from "../../lib/i18n/copy";
 import { statusNextStepPartIndex } from "../../lib/nextStepConfirmation";
+import { postMessage } from "../../lib/vscode";
 
 import { MermaidBlock } from "./MermaidBlock";
 import { coachMessagePartsCopy } from "../../lib/i18n/segments/coachMessagePartsCopy";
@@ -33,6 +35,8 @@ export interface CoachMessagePartsProps {
    * `false` so a turn never repeats the marker (`resolveNextStepConfirmationOwner`).
    */
   nextStepRequiresConfirmation?: boolean;
+  /** Current library records, used to invalidate stale citations live. */
+  resources?: ResourceRecord[];
 }
 
 function copy(
@@ -122,6 +126,160 @@ function humanizeToolName(name: string): string {
   return normalized.length > 0 ? normalized : name;
 }
 
+function citationStartLine(part: CitationPart): number | undefined {
+  const raw = part.location?.start_line ?? part.location?.startLine;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+}
+
+function openCitationResource(part: CitationPart): void {
+  const line = citationStartLine(part);
+  postMessage({
+    type: "resource/open",
+    payload: {
+      resourceId: part.resourceId,
+      ...(line !== undefined ? { line } : {}),
+    },
+  });
+}
+
+
+function freshnessLabel(
+  freshness: string | undefined,
+  language: ComposerLanguage,
+): string | undefined {
+  switch (freshness) {
+    case "fresh":
+      return copy(language, "最新");
+    case "stale":
+      return copy(language, "可能过期");
+    case "unknown":
+      return copy(language, "时效未知");
+    default:
+      return freshness;
+  }
+}
+
+function compactSourceLabel(source: string | undefined): string | undefined {
+  const normalized = source?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  try {
+    const url = new URL(normalized);
+    return url.hostname.replace(/^www\./, "") || undefined;
+  } catch {
+    const parts = normalized.split(/[\\/]/).filter(Boolean);
+    return parts.pop();
+  }
+}
+
+function CitationPartView({
+  part,
+  language,
+  resources,
+}: {
+  part: CitationPart;
+  language: ComposerLanguage;
+  resources?: ResourceRecord[];
+}) {
+  const sourceLabel = compactSourceLabel(part.source);
+  const title = part.title || sourceLabel || part.label;
+  const anchor = part.chunkId;
+  const provenance = [part.label, part.source, part.versionId, part.citationId]
+    .filter(Boolean)
+    .join(" · ");
+  const accessibleLabel = [copy(language, "打开原文"), title, anchor]
+    .filter(Boolean)
+    .join(" ");
+  const currentResource =
+    resources && !part.url
+      ? resources.find((resource) => resource.id === part.resourceId)
+      : undefined;
+  const resourceMissing = Boolean(resources && !part.url && !currentResource);
+  const currentVersion = currentResource?.versionId?.trim();
+  const currentHash = currentResource?.contentHash?.trim();
+  const versionChanged = Boolean(
+    !resourceMissing &&
+      part.versionId &&
+      currentVersion &&
+      part.versionId !== currentVersion,
+  );
+  const hashChanged = Boolean(
+    !resourceMissing &&
+      !versionChanged &&
+      part.contentHash &&
+      currentHash &&
+      part.contentHash !== currentHash,
+  );
+  const invalid = part.stale === true || resourceMissing || versionChanged || hashChanged;
+  const invalidLabel = resourceMissing
+    ? copy(language, "资料已删除")
+    : copy(language, "资料已更新");
+  const provenanceTitle = [
+    provenance,
+    currentVersion && currentVersion !== part.versionId
+      ? `${copy(language, "当前版本")}: ${currentVersion}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const content = (
+    <>
+      <span className="resource-citation-chip__kind" aria-hidden="true">
+        {part.url ? "WEB" : "REF"}
+      </span>
+      <span className="resource-citation-chip__title">{title}</span>
+      {anchor ? <span className="resource-citation-chip__anchor">{anchor}</span> : null}
+      {invalid ? null : (
+        <span className="resource-citation-chip__arrow" aria-hidden="true">
+          ↗
+        </span>
+      )}
+    </>
+  );
+  return (
+    <span
+      className={`resource-citation-chip${invalid ? " is-stale" : ""}`}
+      data-citation-part="true"
+      data-resource-id={part.resourceId}
+      data-resource-version-id={part.versionId}
+      data-resource-chunk-id={part.chunkId}
+      data-citation-id={part.citationId}
+      data-reference-origin={part.referenceOrigin}
+      data-citation-invalid={invalid ? "true" : undefined}
+      title={provenanceTitle}
+    >
+      {invalid ? (
+        <span className="resource-citation-chip__action is-invalid" aria-disabled="true">
+          {content}
+        </span>
+      ) : part.url ? (
+        <a
+          className="resource-citation-chip__action"
+          href={part.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={accessibleLabel}
+        >
+          {content}
+        </a>
+      ) : (
+        <button
+          className="resource-citation-chip__action"
+          type="button"
+          onClick={() => openCitationResource(part)}
+          aria-label={accessibleLabel}
+        >
+          {content}
+        </button>
+      )}
+      {invalid ? (
+        <span className="resource-citation-chip__stale">{invalidLabel}</span>
+      ) : null}
+    </span>
+  );
+}
+
 function visibleTrainingCardText(
   value: string | undefined,
   language: ComposerLanguage,
@@ -147,7 +305,7 @@ function renderPart(
   part: TrainerMessagePart,
   language: ComposerLanguage,
   index: number,
-  options?: { nextStepConfirmation?: boolean },
+  options?: { nextStepConfirmation?: boolean; resources?: ResourceRecord[] },
 ) {
   switch (part.type) {
     case "markdown":
@@ -224,19 +382,12 @@ function renderPart(
       );
     case "citation":
       return (
-        <div key={`part-${index}`} className="message-part message-part--citation">
-          <strong>{part.title || part.label}</strong>
-          <p className="message-part__meta">
-            <code>{part.resourceId}</code>
-            {part.chunkId ? <span>{` | ${part.chunkId}`}</span> : null}
-          </p>
-          {part.source ? <p className="message-part__meta">{part.source}</p> : null}
-          {typeof part.trustScore === "number" ? (
-            <p className="message-part__meta">
-              {copy(language, "可信度")} {Math.round(part.trustScore * 100)}%
-            </p>
-          ) : null}
-        </div>
+        <CitationPartView
+          key={`part-${index}`}
+          part={part}
+          language={language}
+          resources={options?.resources}
+        />
       );
     case "tool_call":
       // Tool-call bookkeeping is run metadata, not reply content — keep the
@@ -482,6 +633,7 @@ export function CoachMessageParts({
   parts,
   language = "en-US",
   nextStepRequiresConfirmation = false,
+  resources,
 }: CoachMessagePartsProps) {
   // Single-shot: the marker belongs to the first next-step line of the turn.
   const confirmationPartIndex = nextStepRequiresConfirmation
@@ -492,6 +644,7 @@ export function CoachMessageParts({
       {parts.map((part, index) =>
         renderPart(part, language, index, {
           nextStepConfirmation: index === confirmationPartIndex,
+          resources,
         }),
       )}
     </div>

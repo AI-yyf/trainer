@@ -1,0 +1,80 @@
+{
+  "query": "SQLite WAL mode documentation",
+  "ok": true,
+  "checks": {
+    "toolOk": true,
+    "fetchedSources": true,
+    "citationCount": true,
+    "allHaveHttpsUrl": true,
+    "noPastedBody": true,
+    "webOrigin": true,
+    "realFetchedAt": true
+  },
+  "sources": [
+    {
+      "title": "SQLite Home Page",
+      "url": "https://sqlite.org/index.html",
+      "source": "sqlite.org",
+      "fetched_at": "2026-11-10T05:33:09.443176+00:00",
+      "freshness": "fresh"
+    },
+    {
+      "title": "SQLite 教程 | 菜鸟教程",
+      "url": "https://www.runoob.com/sqlite/sqlite-tutorial.html",
+      "source": "runoob.com",
+      "fetched_at": "2026-11-10T05:33:09.522404+00:00",
+      "freshness": "fresh"
+    },
+    {
+      "title": "SQLite Download Page",
+      "url": "https://sqlite.org/download.html",
+      "source": "sqlite.org",
+      "fetched_at": "2026-11-10T05:33:11.206512+00:00",
+      "freshness": "fresh"
+    }
+  ],
+  "citations": [
+    {
+      "type": "citation",
+      "resourceId": "web:https://sqlite.org/index.html",
+      "url": "https://sqlite.org/index.html",
+      "label": "联网来源",
+      "title": "SQLite Home Page",
+      "source": "https://sqlite.org/index.html",
+      "sourceType": "sqlite.org",
+      "referenceOrigin": "web_research",
+      "fetchedAt": "2026-11-10T05:33:09.443176+00:00",
+      "freshness": "fresh",
+      "trustScore": 0.7,
+      "citationId": "find_163917ea"
+    },
+    {
+      "type": "citation",
+      "resourceId": "web:https://www.runoob.com/sqlite/sqlite-tutorial.html",
+      "url": "https://www.runoob.com/sqlite/sqlite-tutorial.html",
+      "label": "联网来源",
+      "title": "SQLite 教程 | 菜鸟教程",
+      "source": "https://www.runoob.com/sqlite/sqlite-tutorial.html",
+      "sourceType": "runoob.com",
+      "referenceOrigin": "web_research",
+      "fetchedAt": "2026-11-10T05:33:09.522404+00:00",
+      "freshness": "fresh",
+      "trustScore": 0.7,
+      "citationId": "find_9d94de92"
+    },
+    {
+      "type": "citation",
+      "resourceId": "web:https://sqlite.org/download.html",
+      "url": "https://sqlite.org/download.html",
+      "label": "联网来源",
+      "title": "SQLite Download Page",
+      "source": "https://sqlite.org/download.html",
+      "sourceType": "sqlite.org",
+      "referenceOrigin": "web_research",
+      "fetchedAt": "2026-11-10T05:33:11.206512+00:00",
+      "freshness": "fresh",
+      "trustScore": 0.7,
+      "citationId": "find_40e47f21"
+    }
+  ]
+}

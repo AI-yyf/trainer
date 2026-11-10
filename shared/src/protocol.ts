@@ -518,7 +518,22 @@ export type CitationPart = {
   label: string;
   title?: string;
   source?: string;
+  /** Real citation identity recorded by the library when one exists. */
+  citationId?: string;
+  /** Web sources open by URL instead of resolving a library resource id. */
+  url?: string;
+  snippet?: string;
+  summary?: string;
+  sourceType?: string;
+  freshness?: string;
+  referenceOrigin?: "library" | "library_auto" | "web_research" | string;
+  fetchedAt?: string;
+  whyItMatters?: string;
   trustScore?: number;
+  /** The indexed/cited version is older than the resource's current head. */
+  stale?: boolean;
+  currentVersionId?: string;
+  currentContentHash?: string;
 };
 
 export type ToolCallPart = {
@@ -1320,7 +1335,22 @@ function normalizeTrainerMessagePart(value: unknown): TrainerMessagePart | undef
             label,
             title: asString(record.title),
             source: asString(record.source),
+            citationId: asString(record.citationId) ?? asString(record.citation_id),
+            url: asString(record.url),
+            snippet: asString(record.snippet),
+            summary: asString(record.summary),
+            sourceType: asString(record.sourceType) ?? asString(record.source_type),
+            freshness: asString(record.freshness),
+            referenceOrigin:
+              asString(record.referenceOrigin) ?? asString(record.reference_origin),
+            fetchedAt: asString(record.fetchedAt) ?? asString(record.fetched_at),
+            whyItMatters: asString(record.whyItMatters) ?? asString(record.why_it_matters),
             trustScore: asNumber(record.trustScore) ?? asNumber(record.trust_score),
+            stale: asBoolean(record.stale),
+            currentVersionId:
+              asString(record.currentVersionId) ?? asString(record.current_version_id),
+            currentContentHash:
+              asString(record.currentContentHash) ?? asString(record.current_content_hash),
           }
         : undefined;
     }

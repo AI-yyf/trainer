@@ -356,12 +356,16 @@ const DEFAULT_COACH_DEFAULTS: CoachDefaults = {
   },
 };
 
-let vscodeApi = window.acquireVsCodeApi?.();
+let vscodeApi =
+  typeof window !== "undefined" ? window.acquireVsCodeApi?.() : undefined;
 
 function getVsCodeApi(): VsCodeApi | undefined {
   // Browser Preview installs its compatible API after the sidecar module graph
   // has loaded. Keep the VS Code singleton semantics while allowing that late
   // bridge to be captured before the first user action.
+  if (typeof window === "undefined") {
+    return undefined;
+  }
   if (!vscodeApi && typeof window.acquireVsCodeApi === "function") {
     vscodeApi = window.acquireVsCodeApi();
   }

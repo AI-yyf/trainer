@@ -56,7 +56,7 @@ import {
   findCoachVisibleStatusPart,
 } from "../../../../../shared/src/protocol";
 import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
-import type { ComposerLanguage, ConversationMessage } from "../../lib/types";
+import type { ComposerLanguage, ConversationMessage, ResourceRecord } from "../../lib/types";
 import {
   nextStepRequiresConfirmationFromArtifacts,
   resolveNextStepConfirmationOwner,
@@ -107,6 +107,8 @@ export interface CoachMessageBubbleProps {
    * also derives the flag from its own next_step artifacts' metadata.
    */
   nextStepRequiresConfirmation?: boolean;
+  /** Current library records for live citation invalidation. */
+  resources?: ResourceRecord[];
 }
 
 function fallbackRoleLabel(message: ConversationMessage): string {
@@ -267,6 +269,7 @@ function CoachMessageBubbleImpl({
   onMessageAction,
   pendingMessageAction,
   nextStepRequiresConfirmation = false,
+  resources,
 }: CoachMessageBubbleProps) {
   const resolvedRoleLabel =
     roleLabel ??
@@ -488,6 +491,7 @@ function CoachMessageBubbleImpl({
             parts={visibleParts ?? []}
             language={language}
             nextStepRequiresConfirmation={confirmationOwner === "status-line"}
+            resources={resources}
           />
         ) : null}
         {artifactOwnsConfirmation && !streaming ? (

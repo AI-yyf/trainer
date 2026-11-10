@@ -5804,11 +5804,12 @@ export function App() {
       attachments: attachments?.length ? attachments : undefined,
       useAgentLoop: requiresVerifiedAgentTools
         ? true
-        : laneNeedsVerifiedTools && providerSupportsFormalPlanTools
+        : providerSupportsFormalPlanTools &&
+            (laneNeedsVerifiedTools ||
+              data.resources.length > 0 ||
+              messageReferencesWorkspaceFile(text))
           ? true
-          : messageReferencesWorkspaceFile(text) && providerSupportsFormalPlanTools
-            ? true
-            : undefined,
+          : undefined,
       requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     };
     setLastTurnView(turnActiveView);
@@ -9049,6 +9050,7 @@ export function App() {
       onMessageAction={handleCoachMessageAction}
       pendingMessageAction={pendingMessageAction}
       turnNextStepRequiresConfirmation={coachTurnNextStepRequiresConfirmation}
+      resources={data.resources}
     />
   );
 
@@ -9284,6 +9286,7 @@ export function App() {
             className={isStreamingForView ? "message-bubble--streaming" : undefined}
             language={layout.composerLanguage}
             message={visibleReply}
+            resources={data.resources}
             openArtifactLabel={appUiCopy(layout.composerLanguage, "展开")}
             systemLabel={appUiCopy(layout.composerLanguage, "系统")}
             userLabel={t.you}

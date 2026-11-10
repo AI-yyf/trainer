@@ -140,8 +140,9 @@ async def test_read_excerpt_serves_real_chunk_text_with_synthetic_anchor() -> No
     first = result["excerpts"][0]
     assert "孔乙己是站着喝酒而穿长衫的唯一的人" in first["text"]
     assert first["anchor_id"] == "¶chunk:0@1"
-    # No citation for the synthetic anchor (fragment pins the spine anchor).
-    assert first["citation_id"] is None
+    # The synthetic anchor has no fragment-level citation, so the tool falls
+    # back to the honest document/version-scoped identity.
+    assert first["citation_id"] == f"citation:{_first_resource_id(runtime)}"
 
 
 @pytest.mark.asyncio
@@ -156,6 +157,23 @@ async def test_read_excerpt_resolves_real_paragraph_anchor_with_citation() -> No
     first = result["excerpts"][0]
     assert first["text"].startswith("孔乙己是站着喝酒")
     assert first["citation_id"] == "cite-res-1@v1"
+
+
+@pytest.mark.asyncio
+async def test_heading_anchor_resolves_to_the_chunk_containing_that_line() -> None:
+    runtime = _literature_library()
+    result = await _registry().invoke(
+        _context(runtime),
+        "read_resource_excerpt",
+        {"resource_id": _first_resource_id(runtime), "anchor_id": "¶h2@4"},
+    )
+    assert result["ok"] is True
+    excerpt = result["excerpts"][0]
+    assert "店内外充满了快活的空气" in excerpt["text"]
+    assert excerpt["paragraph_anchor"] == "¶h2@4"
+    assert excerpt["start_line"] == 4
+    assert excerpt["location"]["anchor"] == "¶chunk:1@4"
+    assert excerpt["location"]["start_line"] == 4
 
 
 @pytest.mark.asyncio

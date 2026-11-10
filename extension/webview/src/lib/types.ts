@@ -2162,7 +2162,15 @@ type WebviewActionBody =
         __trainerResourceOperationId?: string;
       };
     }
-  | { type: "resource/open"; payload: { resourceId: string } }
+  | {
+      type: "resource/open";
+      payload: {
+        resourceId: string;
+        openOriginal?: boolean;
+        openExternal?: boolean;
+        line?: number;
+      };
+    }
   | { type: "ui/focus"; payload: { target: "conversation" | "task" | "evaluation" } }
   /** Editor-panel surface only: dispose the panel and return to the sidebar. */
   | { type: "ui/collapseToSidebar" }

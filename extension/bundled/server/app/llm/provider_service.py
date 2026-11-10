@@ -498,7 +498,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         A successful connection test that recorded tools as verified overlays
         that pin so coach/library/plan loops can run.
         """
-        if not self.has_api_key:
+        if not self.has_api_key and not _is_loopback_provider_url(
+            getattr(self._config, "base_url", None)
+        ):
             return False
         truth = str(self._capability_truth.get("tools") or "").strip().lower()
         if truth == "verified":

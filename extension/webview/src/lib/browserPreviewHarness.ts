@@ -46,6 +46,8 @@ type BrowserPreviewState = PersistedWorkbenchState & {
   scenario?:
     | "stream"
     | "rich-content"
+    | "resource-grounding"
+    | "resource-grounding-updated"
     | "blocked"
     | "recovery"
     | "ready"
@@ -3912,6 +3914,8 @@ function resolvePreviewState(): BrowserPreviewState {
   const resolvedScenario =
     requestedScenario === "stream" ||
     requestedScenario === "rich-content" ||
+    requestedScenario === "resource-grounding" ||
+    requestedScenario === "resource-grounding-updated" ||
     requestedScenario === "blocked" ||
     requestedScenario === "recovery" ||
     requestedScenario === "ready" ||
@@ -4049,6 +4053,136 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
       encouragement: "",
       updatedAt: "2026-07-11T08:00:00.000Z",
     };
+    return;
+  }
+
+  if (scenario === "resource-grounding") {
+    applyConnectedProviderBootstrap(bootstrap, language);
+    bootstrap.streamingState = {
+      ...bootstrap.streamingState,
+      isStreaming: false,
+      streamedContent: "",
+      streamMessageId: undefined,
+      agentActivity: [],
+      agentStep: 0,
+    };
+    bootstrap.resources = [
+      {
+        id: "resource-queue-locks",
+        title: previewText(language, "并发队列的锁边界", "Queue lock boundaries"),
+        kind: "markdown",
+        status: "ready",
+        summary: previewText(language, "写入路径与锁边界", "Write path and lock boundaries"),
+        source: "library/queue-locks.md",
+        versionId: "rv-2026-11-10",
+        contentHash: "sha256:9f8e7d6c5b4a",
+        freshness: "fresh",
+        trustScore: 0.86,
+      },
+    ];
+    bootstrap.conversation = [
+      {
+        id: "preview-resource-grounding-1",
+        role: "assistant",
+        author: "Trainer",
+        body: previewText(
+          language,
+          "我先从你自己的资料里读到了这段原文。结论是：写入路径必须先拿到锁，并在 `finally` 里释放，失败才不会把锁永久留下。",
+          "I read this passage from your own library first. The rule is: acquire the lock before the write path and release it in `finally`, so a failed write cannot strand the lock.",
+        ),
+        parts: [
+          {
+            type: "citation",
+            resourceId: "resource-queue-locks",
+            versionId: "rv-2026-11-10",
+            contentHash: "sha256:9f8e7d6c5b4a",
+            chunkId: "¶spine:ch1:/body/p[3]",
+            location: { anchor: "¶spine:ch1:/body/p[3]", start_line: 4 },
+            label: previewText(language, "资料原文", "Original passage"),
+            title: previewText(language, "并发队列的锁边界", "Queue lock boundaries"),
+            source: "library/queue-locks.md",
+            citationId: "citation:resource-queue-locks:rv-2026-11-10:9f8e7d6c",
+            sourceType: "markdown",
+            freshness: "fresh",
+            referenceOrigin: "library_read",
+            trustScore: 0.86,
+          },
+          {
+            type: "citation",
+            resourceId: "web:https://sqlite.org/lockingv3.html",
+            url: "https://sqlite.org/lockingv3.html",
+            label: previewText(language, "联网来源", "Web source"),
+            title: "SQLite locking",
+            source: "https://sqlite.org/lockingv3.html",
+            sourceType: "web",
+            referenceOrigin: "web_research",
+            citationId: "source-sqlite-locking",
+            fetchedAt: "2026-11-10T04:00:00Z",
+            freshness: "fresh",
+            trustScore: 0.9,
+          },
+        ],
+        timestamp: "18:42",
+      },
+    ];
+    return;
+  }
+
+  if (scenario === "resource-grounding-updated") {
+    applyConnectedProviderBootstrap(bootstrap, language);
+    bootstrap.streamingState = {
+      ...bootstrap.streamingState,
+      isStreaming: false,
+      streamedContent: "",
+      streamMessageId: undefined,
+      agentActivity: [],
+      agentStep: 0,
+    };
+    bootstrap.resources = [
+      {
+        id: "resource-queue-locks",
+        title: previewText(language, "并发队列的锁边界", "Queue lock boundaries"),
+        kind: "markdown",
+        status: "ready",
+        summary: previewText(language, "写入路径与锁边界", "Write path and lock boundaries"),
+        source: "library/queue-locks.md",
+        versionId: "rv-current",
+        contentHash: "sha256:new",
+        freshness: "fresh",
+        trustScore: 0.86,
+      },
+    ];
+    bootstrap.conversation = [
+      {
+        id: "preview-resource-grounding-updated-1",
+        role: "assistant",
+        author: "Trainer",
+        body: previewText(
+          language,
+          "这条引用来自旧版本；资料已经更新，所以它不再能直接跳到旧位置。",
+          "This citation is from an older version; the resource has been updated, so it no longer opens the old location.",
+        ),
+        parts: [
+          {
+            type: "citation",
+            resourceId: "resource-queue-locks",
+            versionId: "rv-old",
+            contentHash: "sha256:old",
+            chunkId: "¶h2@7",
+            location: { anchor: "¶h2@7", start_line: 7 },
+            label: previewText(language, "资料原文", "Original passage"),
+            title: previewText(language, "并发队列的锁边界", "Queue lock boundaries"),
+            source: "library/queue-locks.md",
+            sourceType: "markdown",
+            referenceOrigin: "library_read",
+            citationId: "citation:resource-queue-locks:rv-old",
+            freshness: "fresh",
+            trustScore: 0.86,
+          },
+        ],
+        timestamp: "18:42",
+      },
+    ];
     return;
   }
 
@@ -5565,6 +5699,8 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
 function scenarioOwnsCoachSeed(scenario: BrowserPreviewState["scenario"]): boolean {
   switch (scenario) {
     case "rich-content":
+    case "resource-grounding":
+    case "resource-grounding-updated":
     case "blocked":
     case "recovery":
     case "provider-failure":

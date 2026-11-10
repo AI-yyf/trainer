@@ -89,6 +89,23 @@ test('trainer message parts normalize into the typed registry contract', () => {
     { type: 'filePreview', resourceId: 'file-1', path: '/tmp/notes.csv', previewKind: 'table', canNativeOpen: true },
     { type: 'checkList', checklist: ['Lock behavior', { text: 'Verify UI', done: true }] },
     { type: 'alert', severity: 'warn', title: 'Heads up', detail: 'Follow-up required' },
+    {
+      type: 'citation',
+      resource_id: 'resource-1',
+      version_id: 'rv-1',
+      content_hash: 'sha256-1',
+      location: { anchor: '¶spine:ch1:/body/p[3]', start_line: 4 },
+      chunk_id: 'chunk-1',
+      label: 'Library match',
+      title: 'Queue locks',
+      source: 'library/queue-locks.md',
+      citation_id: 'citation:resource-1:rv-1:abc',
+      snippet: 'A lock protects the write path.',
+      source_type: 'markdown',
+      freshness: 'fresh',
+      reference_origin: 'library_auto',
+      trust_score: 0.82,
+    },
   ]);
 
   assert.ok(parts);
@@ -104,6 +121,7 @@ test('trainer message parts normalize into the typed registry contract', () => {
     'file_preview',
     'checklist',
     'alert',
+    'citation',
   ]);
   assert.equal(parts[0].status, 'called');
   assert.deepEqual(parts[0].args, { query: 'FSRS' });
@@ -134,6 +152,13 @@ test('trainer message parts normalize into the typed registry contract', () => {
   assert.equal(parts[9].items.length, 2);
   assert.equal(parts[9].items[0].done, false);
   assert.equal(parts[10].level, 'warn');
+  assert.equal(parts[11].resourceId, 'resource-1');
+  assert.equal(parts[11].versionId, 'rv-1');
+  assert.equal(parts[11].contentHash, 'sha256-1');
+  assert.equal(parts[11].chunkId, 'chunk-1');
+  assert.equal(parts[11].citationId, 'citation:resource-1:rv-1:abc');
+  assert.equal(parts[11].snippet, 'A lock protects the write path.');
+  assert.equal(parts[11].referenceOrigin, 'library_auto');
 
   assert.deepEqual(deriveTrainerToolActivity(parts), [
     {

@@ -2967,6 +2967,7 @@ def test_system_prompt_includes_state_driven_teaching_and_retrieval_rhythm() -> 
     assert "preserve its step count, labels, and boundaries." in prompt
     assert "live coach with a working library habit" in prompt
     assert "explicitly requires a library/resource lookup" in prompt
+    assert "visible transcript already renders each read excerpt" in prompt
     assert "Keep 2-5 strong fragments, then synthesize." in prompt
 
 
@@ -2980,7 +2981,8 @@ def test_agent_prompt_prefers_direct_intake_when_no_evidence_lookup_was_requeste
 
     assert "write one direct coaching reply without tool calls" in prompt
     assert "Do not recall memory merely to confirm an empty or already-visible state." in prompt
-    assert "Do not search merely because a generic teaching topic might exist in a library." in prompt
+    assert "do one quick library search" in prompt
+    assert "Never invent a resource id, anchor or citation id." in prompt
 
 
 def test_nonofficial_anthropic_intake_hides_unneeded_agent_tools() -> None:
@@ -6490,6 +6492,48 @@ async def test_coaching_reply_postprocesses_principle_reply_when_apply_now_is_mi
 
 
 @pytest.mark.asyncio
+async def test_coaching_reply_does_not_paste_english_principle_prose_into_chinese() -> None:
+    config = _make_config()
+    service = ProviderService(config=config, api_key="sk-test-key")
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = "先看这个边界背后的机制，它解释了为什么这里会出错。"
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+
+    with patch.object(service, "_get_client") as mock_get_client:
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        mock_get_client.return_value = mock_client
+
+        reply = await service.coaching_reply(
+            _make_profile(),
+            "请你解释这里的原理，但要能马上落地。",
+            current_file=_make_rich_current_file(
+                coaching_state={"scenario": "principle", "learner_signal": "curious"}
+            ),
+            response_language="zh-CN",
+            coach_context={
+                "scenario": "principle",
+                "principle_notes": {
+                    "current_principle": "先把规则钉在一处真实边界上。",
+                    "why_it_matters": (
+                        "Keep implementation grounded in one observable behavior "
+                        "before abstracting."
+                    ),
+                    "apply_now": "先指出 app.py 里第一个失败边界。",
+                    "source_asset_title": "Boundary-first explanation",
+                },
+            },
+        )
+
+    assert "它在这里重要" not in reply
+    assert "Keep implementation grounded" not in reply
+    assert "先指出 app.py 里第一个失败边界" in reply
+    assert "Boundary-first explanation" in reply
+
+
+@pytest.mark.asyncio
 async def test_coaching_reply_postprocesses_project_idea_with_first_step() -> None:
     config = _make_config()
     service = ProviderService(config=config, api_key="sk-test-key")
@@ -7689,6 +7733,31 @@ def test_has_api_key_false() -> None:
 def test_has_api_key_false_empty_string() -> None:
     service = ProviderService(api_key="")
     assert service.has_api_key is False
+
+
+def test_loopback_provider_runs_tool_loop_without_api_key() -> None:
+    config = ProviderConfig(
+        name="loopback-fixture",
+        base_url="http://127.0.0.1:1234/v1",
+        api_key_ref="trainer.loopback",
+        model="fixture-model",
+        capabilities={"tools": True, "streaming": True},
+    )
+    service = ProviderService(config=config, api_key="")
+    assert service.has_api_key is False
+    assert service.supports_executable_tools() is True
+
+
+def test_remote_provider_still_needs_a_key_for_the_tool_loop() -> None:
+    config = ProviderConfig(
+        name="remote-fixture",
+        base_url="https://gateway.example/v1",
+        api_key_ref="trainer.remote",
+        model="fixture-model",
+        capabilities={"tools": True, "streaming": True},
+    )
+    service = ProviderService(config=config, api_key="")
+    assert service.supports_executable_tools() is False
 
 
 # 鈹€鈹€ test() method 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

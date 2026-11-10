@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.resources.search import SearchFilters, SearchIndex
+from app.resources.service import _best_match_position
 
 
 def _index_resource(
@@ -364,3 +365,37 @@ def test_search_index_requires_explicit_database_path_or_resolver() -> None:
         assert "explicit database path" in str(exc).lower()
     else:
         raise AssertionError("SearchIndex(None) should require an explicit database path or resolver")
+
+
+def test_best_match_position_prefers_distinct_term_coverage() -> None:
+    content = (
+        "# Lock\n"
+        "A lock protects the write path.\n"
+        "\n"
+        "## Boundary\n"
+        "Release the lock in finally so a failed write cannot strand it.\n"
+    )
+    position = _best_match_position(content, ["finally", "release", "strand", "lock"])
+    assert position >= 0
+    line = content.count("\n", 0, position) + 1
+    assert line == 5
+
+    # A single term resolves to its first occurrence (the heading line).
+    lock_position = _best_match_position(content, ["lock"])
+    assert content.count("\n", 0, lock_position) + 1 == 1
+    assert _best_match_position(content, []) == -1
+
+
+def test_best_match_position_prefers_the_matching_section_over_a_footnote() -> None:
+    content = (
+        "# Distributed Systems Notes\n"
+        "## Quorum\n"
+        "Quorum reads see the latest write when R + W > N.\n"
+        "## Footnotes\n"
+        "Quorum reads and writes intersect.\n"
+    )
+    position = _best_match_position(content, ["quorum", "reads", "intersect"])
+    line = content.count("\n", 0, position) + 1
+    # The Quorum section wins because its heading matches, even though the
+    # footnote happens to quote every term.
+    assert line in {2, 3}

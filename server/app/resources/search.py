@@ -68,6 +68,11 @@ class SearchResult:
     version_id: str | None = None
     content_hash: str | None = None
     location: dict[str, Any] = field(default_factory=dict)
+    # True when the indexed row was written from an older version than the
+    # resource's current head. The hit stays citable, but the UI must say so.
+    stale: bool = False
+    current_version_id: str | None = None
+    current_content_hash: str | None = None
 
 
 @dataclass(slots=True)

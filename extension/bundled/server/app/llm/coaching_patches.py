@@ -498,6 +498,20 @@ def _scaffold_next_step(
     return f"{mode_prefix} the highest-value next move is to {scenario_step}"
 
 
+def _matches_reply_script(text: str, chinese: bool) -> bool:
+    """Keep generated follow-through in the reply's visible language.
+
+    A principle note extracted from an English resource must not be pasted as
+    English prose into a zh-CN reply (and vice versa). Technical identifiers are
+    still allowed; this only rejects prose in the wrong script.
+    """
+
+    cjk_count = len(re.findall(r"[\u3400-\u9fff]", text))
+    if chinese:
+        return cjk_count > 0
+    return cjk_count < max(4, len(text) // 8)
+
+
 def _compose_principle_followthrough_patch(
     *,
     reply: str,
@@ -512,10 +526,10 @@ def _compose_principle_followthrough_patch(
     apply_now = str(principle_note.get("apply_now") or principle_note.get("follow_up_exercise") or "").strip()
     source_asset_title = str(principle_note.get("source_asset_title") or "").strip()
 
-    needs_reason = bool(why_it_matters) and not (
+    needs_reason = bool(why_it_matters) and _matches_reply_script(why_it_matters, chinese) and not (
         _reply_mentions_excerpt(reply, why_it_matters) or _reply_has_reason_signal(reply, chinese)
     )
-    needs_apply = bool(apply_now) and not (
+    needs_apply = bool(apply_now) and _matches_reply_script(apply_now, chinese) and not (
         _reply_mentions_excerpt(reply, apply_now) or _reply_has_action_signal(reply, chinese)
     )
     needs_source = bool(source_asset_title) and not (

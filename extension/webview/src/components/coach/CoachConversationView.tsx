@@ -1,7 +1,7 @@
 import { Conversation } from "../../templates/Conversation";
 import { memo } from "react";
 
-import type { ConversationMessage } from "../../lib/types";
+import type { ConversationMessage, ResourceRecord } from "../../lib/types";
 import type { ComposerLanguage } from "../../lib/types";
 import type { AgentToolActivity } from "../../app/useWorkbenchState";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
@@ -53,6 +53,8 @@ export interface CoachConversationViewProps {
    * re-renders this view only, never the whole workbench (DESIGN.md §3 R3).
    */
   liveContentFromStore?: boolean;
+  /** Current library records for live citation invalidation. */
+  resources?: ResourceRecord[];
 }
 
 interface CoachConversationItem {
@@ -85,6 +87,7 @@ function CoachConversationViewImpl({
   pendingMessageAction,
   turnNextStepRequiresConfirmation = false,
   liveContentFromStore = false,
+  resources,
 }: CoachConversationViewProps) {
   // Per-chunk streaming content lives here, not in App: the workbench shell
   // stays put while the in-flight reply grows (DESIGN.md §3 R3).
@@ -202,6 +205,7 @@ function CoachConversationViewImpl({
                     ? turnNextStepRequiresConfirmation
                     : false
                 }
+                resources={resources}
                 headNote={
                   item.streaming && streamingStripVisible ? (
                     <AgentActivityStrip

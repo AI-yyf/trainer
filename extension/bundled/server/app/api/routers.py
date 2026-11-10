@@ -68,6 +68,7 @@ from ..core.models import (
 from ..learner_state import learner_memory_snapshot
 from ..llm.prompts import infer_coaching_scenario as infer_message_coaching_scenario
 from ..llm.prompts import infer_learner_signal as infer_message_learner_signal
+from ..llm.provider.capability import _is_loopback_provider_url
 from ..llm.provider_gateway import (
     NEWAPI_CONNECTION_TYPE,
 )
@@ -80,6 +81,7 @@ from ..llm.provider_service import (
     redact_provider_error,
 )
 from ..llm.reply_continuity import visible_next_step
+from ..llm.resource_message_parts import build_resource_display_parts
 from ..llm.training_review_context import active_training_review
 from ..llm.turn_grounding import (
     GroundingDecision,
@@ -3210,7 +3212,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         response_language,
                     ),
                 )
-        if coaching_service.has_api_key:
+        config = getattr(coaching_service, "_config", None)
+        local_without_key = not coaching_service.has_api_key and _is_loopback_provider_url(
+            getattr(config, "base_url", None)
+        )
+        if coaching_service.has_api_key or local_without_key:
             return
         detail = localized_text(
             "Trainer needs a saved model provider and API key before a coaching turn can start.",
@@ -3234,8 +3240,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         """Reject grounded/tool lanes instead of silently degrading to plain chat."""
         if not _request_requires_agent_tools(request):
             return
+        config = getattr(coaching_service, "_config", None)
+        local_without_key = not coaching_service.has_api_key and _is_loopback_provider_url(
+            getattr(config, "base_url", None)
+        )
         if (
-            coaching_service.has_api_key
+            (coaching_service.has_api_key or local_without_key)
             and runtime.provider_connection_verified(coaching_service)
             and runtime.provider_capability_state_for(coaching_service, "tools") == "verified"
         ):
@@ -3261,7 +3271,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         closed; otherwise let the actual stream attempt produce the truth.
         """
 
-        if not coaching_service.has_api_key:
+        config = getattr(coaching_service, "_config", None)
+        loopback_without_key = not coaching_service.has_api_key and _is_loopback_provider_url(
+            getattr(config, "base_url", None)
+        )
+        if not coaching_service.has_api_key and not loopback_without_key:
             raise HTTPException(
                 status_code=409,
                 detail=localized_text(
@@ -3609,6 +3623,45 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         return references_imported_material or discusses_doc_contract
 
+    def message_deserves_library_probe(message: str | None) -> bool:
+        """Broader gate for the cheap automatic library probe.
+
+        Focus-hint and lane decisions keep using the strict teaching-marker
+        heuristic above. This probe only decides whether one local search is
+        cheap enough to run; it must not change the turn's scenario or focus.
+        """
+        if message_deserves_library_first_lookup(message):
+            return True
+        lowered = " ".join(str(message or "").strip().lower().split())
+        if not lowered:
+            return False
+        skip_markers = (
+            "thanks",
+            "thank you",
+            "ok",
+            "okay",
+            "got it",
+            "continue",
+            "next",
+            "status",
+            "what's next",
+            "what is next",
+            "how is it going",
+            "谢谢",
+            "好的",
+            "收到",
+            "继续",
+            "下一步",
+            "状态",
+            "怎么样",
+        )
+        if any(marker in lowered for marker in skip_markers):
+            return False
+        if "?" in lowered or "？" in lowered:
+            return True
+        cjk_chars = len(re.findall(r"[\u3400-\u9fff]", lowered))
+        return cjk_chars >= 6 or len(lowered.split()) >= 5
+
     def coach_context_has_prepared_library_grounding(
         coach_context: dict[str, object] | None,
     ) -> bool:
@@ -3706,6 +3759,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     "trust_state": str(hit_payload.get("trust_state") or ""),
                     "freshness": str(hit_payload.get("freshness") or ""),
                     "citation_id": str(hit_payload.get("citation_id") or ""),
+                    "version_id": str(hit_payload.get("version_id") or ""),
+                    "content_hash": str(hit_payload.get("content_hash") or ""),
+                    "stale": bool(hit_payload.get("stale")),
+                    "current_version_id": str(hit_payload.get("current_version_id") or ""),
+                    "current_content_hash": str(hit_payload.get("current_content_hash") or ""),
+                    "location": (
+                        dict(hit_payload.get("location"))
+                        if isinstance(hit_payload.get("location"), dict)
+                        else {}
+                    ),
+                    "anchor_id": str(hit_payload.get("anchor_id") or ""),
                     "evidence_summary": str(hit_payload.get("match_summary") or snippet),
                     "rank_reasons": list(hit_payload.get("rank_reasons") or []),
                 }
@@ -3872,7 +3936,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         *,
         limit: int = 4,
     ) -> dict[str, object]:
-        if not message_deserves_library_first_lookup(message):
+        if not message_deserves_library_probe(message):
             return {}
         workspace_resources = runtime.repository.list_resources(workspace_id)
         if not workspace_resources:
@@ -3966,6 +4030,35 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             citation_id = str(item.get("citation_id") or "").strip()
             if citation_id:
                 hit["citation_id"] = citation_id
+            version_id = str(item.get("version_id") or "").strip()
+            if version_id:
+                hit["version_id"] = version_id
+            content_hash = str(item.get("content_hash") or "").strip()
+            if content_hash:
+                hit["content_hash"] = content_hash
+            if item.get("stale") is True:
+                hit["stale"] = True
+            current_version_id = str(item.get("current_version_id") or "").strip()
+            if current_version_id:
+                hit["current_version_id"] = current_version_id
+            current_content_hash = str(item.get("current_content_hash") or "").strip()
+            if current_content_hash:
+                hit["current_content_hash"] = current_content_hash
+            location = item.get("location")
+            if isinstance(location, dict) and location:
+                hit["location"] = dict(location)
+            anchor_id = str(item.get("anchor_id") or "").strip()
+            if anchor_id:
+                hit["anchor_id"] = anchor_id
+            trust_score = item.get("trust_score")
+            if trust_score is not None:
+                hit["trust_score"] = trust_score
+            freshness = str(item.get("freshness") or "").strip()
+            if freshness:
+                hit["freshness"] = freshness
+            source_type = str(item.get("source_type") or "").strip()
+            if source_type:
+                hit["source_type"] = source_type
             rank_reasons = item.get("rank_reasons")
             if isinstance(rank_reasons, list):
                 hit["rank_reasons"] = [
@@ -6509,6 +6602,15 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 if error_text:
                     part["error"] = error_text
                 parts.append(part)
+        # Successful library/web reads become visible passage + citation parts.
+        # Failed or empty results produce nothing, so the transcript can never
+        # show a citation the tool did not return.
+        parts.extend(
+            build_resource_display_parts(
+                raw_events,
+                response_language=response_language,
+            )
+        )
         return parts
 
     def build_agent_finalize_artifact(

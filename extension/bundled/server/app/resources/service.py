@@ -82,6 +82,72 @@ def _original_filename_for(resource: Any, source_path: Path) -> str:
     return f"{Path(display_name).stem}{suffix}" if Path(display_name).suffix else f"{display_name}{suffix}"
 
 
+def _best_match_position(content: str, terms: list[str]) -> int:
+    """Return a line in the section that best covers the query terms.
+
+    Picking the earliest occurrence of any single term misroutes citations to
+    an earlier section that happens to repeat a common word. Scoring lines
+    alone over-rewards a footnote that quotes every term. Score sections first
+    (heading match + distinct-term coverage), then pick the strongest line
+    inside the winning section. Ties keep the earliest section/line.
+    """
+
+    lines = str(content or "").splitlines()
+    if not lines or not terms:
+        return -1
+    normalized_terms = [term.lower() for term in terms if len(term) >= 2]
+    if not normalized_terms:
+        return -1
+
+    heading_pattern = re.compile(r"^#{1,6}\s+(.+?)\s*$")
+    headings: list[tuple[int, str]] = []
+    for index, line in enumerate(lines):
+        match = heading_pattern.match(line.strip())
+        if match:
+            headings.append((index, match.group(1).strip()))
+    sections: list[tuple[int, int, str]] = []
+    if headings:
+        if headings[0][0] > 0:
+            sections.append((0, headings[0][0] - 1, ""))
+        for position, (start, title) in enumerate(headings):
+            end = headings[position + 1][0] - 1 if position + 1 < len(headings) else len(lines) - 1
+            sections.append((start, end, title))
+    else:
+        sections.append((0, len(lines) - 1, ""))
+
+    def _line_score(index: int) -> int:
+        line = lines[index].lower()
+        return sum(1 for term in normalized_terms if term in line)
+
+    best_section: tuple[int, int, str] | None = None
+    best_section_score = -1
+    for section in sections:
+        start, end, title = section
+        section_text = "\n".join(lines[start : end + 1]).lower()
+        covered = sum(1 for term in normalized_terms if term in section_text)
+        if covered == 0:
+            continue
+        heading_match = bool(title) and any(term in title.lower() for term in normalized_terms)
+        score = covered * 10 + (20 if heading_match else 0)
+        if score > best_section_score:
+            best_section_score = score
+            best_section = section
+    if best_section is None:
+        return -1
+
+    start, end, _title = best_section
+    best_line = start
+    best_line_score = -1
+    for index in range(start, end + 1):
+        score = _line_score(index)
+        if score > best_line_score:
+            best_line = index
+            best_line_score = score
+    if best_line_score <= 0:
+        best_line = start
+    return sum(len(line) + 1 for line in lines[:best_line])
+
+
 def _resolve_document_location(
     anchors: list[dict[str, Any]],
     line: int,
@@ -998,6 +1064,7 @@ class ResourceService:
             top_k=max(1, min(top_k, 50)),
         )
         self._enrich_search_locations(workspace_id, response, query)
+        self._mark_stale_search_versions(workspace_id, response)
         self._search_cache[cache_key] = (now, response)
         return response
 
@@ -1080,12 +1147,7 @@ class ResourceService:
             content = index.document_content(hit.resource_id)
             if isinstance(content_length, int) and content_length > 0:
                 content = content[:content_length]
-            lowered = content.lower()
-            position = -1
-            for term in terms:
-                found = lowered.find(term)
-                if found >= 0 and (position < 0 or found < position):
-                    position = found
+            position = _best_match_position(content, terms)
             if position < 0:
                 continue
             line = content.count("\n", 0, position) + 1
@@ -1098,6 +1160,27 @@ class ResourceService:
             location = dict(hit.location or {})
             location.update(resolved)
             hit.location = location
+
+    def _mark_stale_search_versions(
+        self,
+        workspace_id: str,
+        response: SearchResponse,
+    ) -> None:
+        """Flag indexed hits that no longer match the resource's current head."""
+
+        for hit in response.results:
+            indexed_version = str(hit.version_id or "").strip()
+            if not indexed_version:
+                continue
+            try:
+                current = self.version_store.current_version(workspace_id, hit.resource_id) or {}
+            except Exception:
+                current = {}
+            current_version = str(current.get("version_id") or "").strip()
+            if current_version and current_version != indexed_version:
+                hit.stale = True
+                hit.current_version_id = current_version
+                hit.current_content_hash = str(current.get("content_hash") or "") or None
 
     def delete_resource(
         self,
