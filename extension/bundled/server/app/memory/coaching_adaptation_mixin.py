@@ -1030,9 +1030,24 @@ class CoachingAdaptationMixin:
             "response_language",
             "answer_mode",
         }
-        for preference in lane_snapshot.preferences:
-            if preference.key not in ignored_keys:
-                return preference
+        candidates = [
+            preference
+            for preference in lane_snapshot.preferences
+            if preference.key not in ignored_keys
+        ]
+        # A long-term, explicit preference is the learner's habit; a single
+        # turn's phrasing is not. Prefer durable evidence when it exists, then
+        # fall back to the previous most-recent-first behaviour.
+        durable = [
+            preference
+            for preference in candidates
+            if getattr(preference, "durability", "") == "durable"
+            and getattr(preference, "confidence", 0.0) >= 0.6
+        ]
+        if durable:
+            return max(durable, key=lambda item: (item.confidence, item.updated_at))
+        if candidates:
+            return candidates[0]
         return lane_snapshot.preferences[0]
 
     def _personal_transfer_observation(self, lane_snapshot: LaneMemorySnapshot) -> str:

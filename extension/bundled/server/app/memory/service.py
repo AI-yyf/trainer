@@ -285,6 +285,29 @@ class SemanticMemoryService(SemanticMemory):
         return self.search_hits(text, top_k=top_k if top_k is not None else limit, metadata_filter=metadata_filter)
 
 
+# How strongly each preference source is trusted, and how long its value is
+# meant to live. Explicit learner statements outrank one turn's phrasing; a
+# repeated value strengthens, a changed value supersedes with an audit trail.
+_PREFERENCE_SOURCE_PROFILES: dict[str, tuple[float, str]] = {
+    "settings": (0.95, "durable"),
+    "user": (0.95, "durable"),
+    "learner": (0.95, "durable"),
+    "explicit": (0.95, "durable"),
+    "coach-defaults": (0.8, "durable"),
+    "coach-intake": (0.8, "durable"),
+    "coach-settings": (0.95, "durable"),
+    "coach-turn": (0.55, "session"),
+    "derived": (0.4, "turn"),
+}
+_PREFERENCE_DURABILITY_RANK: dict[str, int] = {"turn": 0, "session": 1, "durable": 2}
+
+
+def _stronger_durability(left: str, right: str) -> str:
+    left_rank = _PREFERENCE_DURABILITY_RANK.get(left, 0)
+    right_rank = _PREFERENCE_DURABILITY_RANK.get(right, 0)
+    return left if left_rank >= right_rank else right
+
+
 class StructuredMemoryService:
     def __init__(self) -> None:
         self._profile: dict[str, Any] = {}
@@ -570,8 +593,65 @@ class StructuredMemoryService:
         summary.updated_at = utc_now()
         return summary
 
-    def remember_preference(self, key: str, value: str, *, source: str = "derived") -> PreferenceRecord:
-        record = PreferenceRecord(key=key, value=value, source=source, updated_at=utc_now())
+    def remember_preference(
+        self,
+        key: str,
+        value: str,
+        *,
+        source: str = "derived",
+        confidence: float | None = None,
+        durability: str | None = None,
+        context: str = "",
+    ) -> PreferenceRecord:
+        """Remember one preference value with evidence strength.
+
+        Repeating the same value raises ``observations``/``confidence``;
+        changing it records ``superseded_value`` so the correction is an
+        explicit override, not a silent overwrite. Explicit learner sources
+        outrank a single turn's phrasing via ``durability``.
+        """
+        normalized_source = source.strip().lower() or "derived"
+        base_confidence, base_durability = _PREFERENCE_SOURCE_PROFILES.get(
+            normalized_source, (0.5, "session")
+        )
+        resolved_confidence = base_confidence if confidence is None else confidence
+        resolved_confidence = min(1.0, max(0.0, resolved_confidence))
+        resolved_durability = durability or base_durability
+        if resolved_durability not in _PREFERENCE_DURABILITY_RANK:
+            resolved_durability = base_durability
+        existing = self._preferences.get(key)
+        if existing is None:
+            record = PreferenceRecord(
+                key=key,
+                value=value,
+                source=source,
+                updated_at=utc_now(),
+                confidence=resolved_confidence,
+                observations=1,
+                durability=resolved_durability,
+                context=context,
+            )
+        elif existing.value == value:
+            record = replace(
+                existing,
+                updated_at=utc_now(),
+                confidence=min(1.0, max(existing.confidence, resolved_confidence) + 0.05),
+                observations=min(99, existing.observations + 1),
+                durability=_stronger_durability(existing.durability, resolved_durability),
+                context=context or existing.context,
+            )
+        else:
+            record = replace(
+                existing,
+                value=value,
+                source=source,
+                updated_at=utc_now(),
+                confidence=resolved_confidence,
+                observations=1,
+                durability=resolved_durability,
+                superseded_value=existing.value,
+                context=context or existing.context,
+            )
         self._preferences[key] = record
         return record
 

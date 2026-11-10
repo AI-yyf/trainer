@@ -86,10 +86,23 @@ class ReflectionRecord:
 
 @dataclass(slots=True)
 class PreferenceRecord:
+    """One remembered preference value plus how strongly it is held.
+
+    ``durability`` distinguishes a one-off turn request (``turn``) from a
+    session-level adaptation (``session``) and an explicit, long-term choice
+    (``durable``). ``superseded_value`` keeps the value the learner corrected
+    so the change is an explicit override rather than a silent loss.
+    """
+
     key: str
     value: str
     source: str = "derived"
     updated_at: datetime = field(default_factory=utc_now)
+    confidence: float = 0.6
+    observations: int = 1
+    durability: str = "session"
+    superseded_value: str = ""
+    context: str = ""
 
 
 @dataclass(slots=True)
