@@ -50,6 +50,12 @@ def _current(client: TestClient, workspace_id: str = "w-goal") -> dict | None:
         ("我想系统学习强化学习", "强化学习"),
         ("我想真正学会实现 PPO Clip，请先判断我该从哪里开始", "实现 PPO Clip"),
         ("帮我制定一个学习 PPO 的计划", "PPO"),
+        (
+            "帮我设定一个长期目标：3 天内能够独立解释 PPO 的裁剪目标，并手写对应的损失函数。",
+            "3 天内能够独立解释 PPO 的裁剪目标",
+        ),
+        ("Please set a goal: ship a small compiler", "ship a small compiler"),
+        ("今天的目标是什么？", None),
         ("随便聊聊", None),
         ("/review", None),
     ],

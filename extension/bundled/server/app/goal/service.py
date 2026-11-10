@@ -25,6 +25,17 @@ _ZH_PLAN_REQUEST = re.compile(
     r"^(?:请)?帮我(?:制定|规划|设计|安排)(?:一个|一份|一套)?"
     r"(?P<body>.+?)(?:的)?(?:学习|成长|能力)?(?:路线|计划|路径|方案)$"
 )
+# An explicit "set a goal" request is unambiguous, even when the title uses
+# "能够/会" instead of the learning verbs below.
+_ZH_EXPLICIT_GOAL = re.compile(
+    r"^(?:请)?(?:帮我|给我|为我)?(?:设定|设置|定下|定为|立下|立)"
+    r"(?:一个|个)?(?:长期|阶段|学习|能力|成长)?(?:的)?目标\s*[:：,，]?\s*(?P<title>.+)$"
+)
+_EN_EXPLICIT_GOAL = re.compile(
+    r"^(?:please\s+)?(?:help\s+me\s+)?(?:set|create|define|establish)\s+"
+    r"(?:a|an|my)?\s*(?:long-term|learning|capability|growth)?\s*goal\s*[:,\-]?\s*(?P<title>.+)$",
+    re.IGNORECASE,
+)
 _EN_INTENT = re.compile(
     r"^(?:please\s+)?(?:i\s+(?:really\s+|truly\s+)?(?:want|would like|need|hope|plan)\s+to|"
     r"help me)\s+(?P<verb>learn|master|get good at|become good at|study)\s+(?P<title>.+)$",
@@ -77,6 +88,12 @@ def detect_goal_candidate(message: str) -> str | None:
     plan_match = _ZH_PLAN_REQUEST.match(raw)
     if plan_match:
         title = _clean_candidate_title(plan_match.group("body"))
+        if len(title) >= 2:
+            return title
+
+    explicit_goal = _ZH_EXPLICIT_GOAL.match(raw) or _EN_EXPLICIT_GOAL.match(raw)
+    if explicit_goal:
+        title = _clean_candidate_title(explicit_goal.group("title"))
         if len(title) >= 2:
             return title
 
