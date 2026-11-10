@@ -26,6 +26,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { execFileSync } from "node:child_process";
+import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const packageJson = JSON.parse(
@@ -37,7 +38,7 @@ const vsixPath = path.join(
   `trainer-extension-${packageJson.version}-darwin-arm64.vsix`,
 );
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
-const electronBinary = "/Applications/Visual Studio Code.app/Contents/MacOS/Electron";
+const electronBinary = requireVSCodeElectronBinary();
 
 const baseUrl = required("PROBE_PROVIDER_BASE_URL");
 const apiKey = required("PROBE_PROVIDER_API_KEY");

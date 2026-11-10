@@ -20,6 +20,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
+import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -31,13 +32,10 @@ const vsixPath = path.join(
   `trainer-extension-${packageJson.version}-darwin-arm64.vsix`,
 );
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
-const electronBinary = "/Applications/Visual Studio Code.app/Contents/MacOS/Electron";
+const electronBinary = requireVSCodeElectronBinary();
 
 if (!fs.existsSync(vsixPath)) {
   throw new Error(`Packaged VSIX not found: ${vsixPath}. Run npm run package:vsix first.`);
-}
-if (!fs.existsSync(electronBinary)) {
-  throw new Error(`VS Code Electron binary not found: ${electronBinary}`);
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -701,21 +699,25 @@ function artifactFiles(dir) {
   return files;
 }
 const assetNames = artifactFiles(path.join(artifactDir, "markdown", "assets"));
+// The canonical store writes assets under `assets/<resource_id>/` so two
+// resources can both use `image-001.png`; the link must stay resource-scoped.
+const scopedAsset = (filename) =>
+  new RegExp(`!\\[[^\\]]*\\]\\(assets/[^)/]+/${filename.replace(/\./g, "\\.")}\\)`);
 record("canonical-artifacts", {
   ok:
     // DOCX: heading, hyperlink, footnote, table, image.
     /\[paper\]\(https:\/\/example\.org\/storage\)/.test(canonicalText) &&
     /\[\^2\]: Quorum acknowledgement/.test(canonicalText) &&
     /\| Level \| Cost \|/.test(canonicalText) &&
-    /!\[docx-image-001\]\(assets\/docx-image-001\.png\)/.test(canonicalText) &&
+    scopedAsset("docx-image-001.png").test(canonicalText) &&
     // PPTX: table, image, speaker notes.
     /\| State \| Meaning \|/.test(canonicalText) &&
-    /!\[slide-image-001\]\(assets\/slide-image-001\.png\)/.test(canonicalText) &&
+    scopedAsset("slide-image-001.png").test(canonicalText) &&
     /#### Speaker notes/.test(canonicalText) &&
     // PDF: page anchor, text and embedded image.
     /<!-- page: 2 -->/.test(canonicalText) &&
     /Storage chapter two/.test(canonicalText) &&
-    /!\[page-002-image-001\.png\]\(assets\/page-002-image-001\.png\)/.test(canonicalText) &&
+    scopedAsset("page-002-image-001.png").test(canonicalText) &&
     assetNames.includes("docx-image-001.png") &&
     assetNames.includes("slide-image-001.png") &&
     assetNames.includes("page-002-image-001.png"),

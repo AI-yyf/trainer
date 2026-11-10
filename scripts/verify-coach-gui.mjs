@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
+import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 import { buildVsixE2EProviderSavePayloadTemplate } from "../extension/scripts/vsix-e2e-provider-config.mjs";
 import {
   resolveVsixE2EProviderRuntime,
@@ -31,9 +32,9 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(extensionDir, "package.
 const extensionId = `${packageJson.publisher}.${packageJson.name}`;
 const vsixPath = path.join(extensionDir, `trainer-extension-${packageJson.version}-darwin-arm64.vsix`);
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
-const electronBinary = "/Applications/Visual Studio Code.app/Contents/MacOS/Electron";
-if (!fs.existsSync(vsixPath) || !fs.existsSync(electronBinary)) {
-  throw new Error("Run npm run package:vsix first (VSIX or VS Code Electron missing).");
+const electronBinary = requireVSCodeElectronBinary();
+if (!fs.existsSync(vsixPath)) {
+  throw new Error(`Packaged VSIX not found: ${vsixPath}. Run npm run package:vsix first.`);
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");

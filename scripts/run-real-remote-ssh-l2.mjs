@@ -21,12 +21,13 @@ import { _electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "extension", "package.json"), "utf8"),
 );
-const electronicBinary = "/Applications/Visual Studio Code.app/Contents/MacOS/Electron";
+const electronicBinary = requireVSCodeElectronBinary();
 const outDir = path.resolve(
   repoRoot,
   process.env.GUI_OUT_DIR ?? "output/remote-ssh-l2/run",

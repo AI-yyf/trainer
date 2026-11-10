@@ -27,12 +27,13 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
+import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, "extension", "package.json"), "utf8"));
 const vsixPath = path.join(repoRoot, "extension", `trainer-extension-${packageJson.version}-darwin-arm64.vsix`);
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
-const electronBinary = "/Applications/Visual Studio Code.app/Contents/MacOS/Electron";
+const electronBinary = requireVSCodeElectronBinary();
 const outDir = path.resolve(repoRoot, process.env.GUI_OUT_DIR ?? "docs/verification/v4-gui-dual-window-journey");
 fs.mkdirSync(outDir, { recursive: true });
 
