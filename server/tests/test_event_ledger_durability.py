@@ -146,3 +146,85 @@ def test_create_app_persists_and_replays_ledger_events(tmp_path: Path) -> None:
     )
     assert replay.event_id == original.event_id
     assert len(restarted_ledger.all_entries()) == 1
+
+
+def test_reversal_is_append_only_and_idempotent(tmp_path: Path) -> None:
+    service = EventLedgerService(build_store(tmp_path))
+    original = service.record_event(
+        "plan_updated",
+        project_id="workspace-a",
+        reversibility="reversible",
+    )
+    reversal = service.reverse_event(original.event_id, reason="wrong plan")
+    assert reversal is not None
+    assert reversal.event_type == "event_reversed"
+    assert reversal.payload_ref["reversed_event_id"] == original.event_id
+    assert service.is_reversed(original.event_id)
+
+    replay = service.reverse_event(original.event_id, reason="wrong plan")
+    assert replay is not None
+    assert replay.event_id == reversal.event_id
+    assert build_store(tmp_path).count() == 2  # original + one reversal
+
+
+def test_irreversible_or_unknown_events_cannot_be_reversed(tmp_path: Path) -> None:
+    service = EventLedgerService(build_store(tmp_path))
+    locked = service.record_event("plan_updated", project_id="workspace-a")
+    assert service.reverse_event(locked.event_id) is None
+    assert service.reverse_event("evt-does-not-exist") is None
+    assert not service.is_reversed(locked.event_id)
+
+
+def test_effective_entries_exclude_reversed_events(tmp_path: Path) -> None:
+    service = EventLedgerService(build_store(tmp_path))
+    kept = service.record_event("resource_uploaded", project_id="workspace-a", reversibility="reversible")
+    dropped = service.record_event("resource_uploaded", project_id="workspace-a", reversibility="reversible")
+    service.reverse_event(dropped.event_id)
+
+    effective_ids = [entry.event_id for entry in service.effective_entries()]
+    assert effective_ids == [kept.event_id]
+    assert len(service.all_entries()) == 3  # both originals + the reversal
+
+
+def test_reversal_survives_restart(tmp_path: Path) -> None:
+    original = EventLedgerService(build_store(tmp_path)).record_event(
+        "plan_updated",
+        project_id="workspace-a",
+        reversibility="reversible",
+    )
+    first = EventLedgerService(build_store(tmp_path))
+    first.reverse_event(original.event_id, reason="superseded")
+
+    restarted = EventLedgerService(build_store(tmp_path))
+    assert restarted.is_reversed(original.event_id)
+    assert [entry.event_id for entry in restarted.effective_entries()] == []
+    again = restarted.reverse_event(original.event_id)
+    assert again is not None and again.event_type == "event_reversed"
+    assert build_store(tmp_path).count() == 2
+
+
+def test_replay_recomputes_without_reversed_entries(tmp_path: Path) -> None:
+    service = EventLedgerService(build_store(tmp_path))
+    first = service.record_event("resource_uploaded", project_id="workspace-a", reversibility="reversible")
+    service.record_event("resource_uploaded", project_id="workspace-a", reversibility="reversible")
+    service.reverse_event(first.event_id)
+
+    counts = service.replay({}, lambda acc, entry: {**acc, entry.event_type: acc.get(entry.event_type, 0) + 1})
+    assert counts == {"resource_uploaded": 1}
+
+
+def test_telemetry_export_ignores_reversed_events(tmp_path: Path) -> None:
+    from app.telemetry.service import TelemetryService
+
+    ledger = EventLedgerService(build_store(tmp_path))
+    telemetry = TelemetryService(ledger, tmp_path)
+    telemetry.set_opt_in(True, source="settings")
+    event = ledger.record_event(
+        "resource_uploaded",
+        project_id="workspace-a",
+        reversibility="reversible",
+    )
+    assert telemetry.build_export(window_days=7)["by_event"].get("resource_uploaded") == 1
+
+    ledger.reverse_event(event.event_id, reason="upload retracted")
+    assert "resource_uploaded" not in telemetry.build_export(window_days=7)["by_event"]

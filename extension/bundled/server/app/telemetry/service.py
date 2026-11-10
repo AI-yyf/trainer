@@ -146,7 +146,12 @@ class TelemetryService:
         day_counts: dict[str, int] = {}
         by_event: dict[str, int] = {}
         dropped = 0
-        for entry in self._ledger.all_entries():
+        entries = (
+            self._ledger.effective_entries()
+            if hasattr(self._ledger, "effective_entries")
+            else self._ledger.all_entries()
+        )
+        for entry in entries:
             occurred = _parse_iso(getattr(entry, "occurred_at", None))
             if occurred is None or occurred < window_start or occurred > now:
                 continue

@@ -12,7 +12,8 @@ are also persisted and idempotency keys replay instead of duplicating.
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 from uuid import uuid4
 
 from .models import EventLedgerEntry, EventReversibility
@@ -94,6 +95,12 @@ EVENT_AGENT_TURN_CHECKPOINTED = "agent_turn_checkpointed"
 # source token.
 EVENT_TELEMETRY_CONSENT_CHANGED = "telemetry_consent_changed"
 
+# Ledger integrity (1) — append-only compensation for a reversible entry. The
+# reversal is a new event; the reversed entry is never mutated or deleted.
+EVENT_EVENT_REVERSED = "event_reversed"
+
+_T = TypeVar("_T")
+
 ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_CARD_CANDIDATE_CREATED,
     EVENT_CARD_STATUS_TRANSITIONED,
@@ -137,6 +144,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_REFLECTION_RECORDED,
     EVENT_AGENT_TURN_CHECKPOINTED,
     EVENT_TELEMETRY_CONSENT_CHANGED,
+    EVENT_EVENT_REVERSED,
 })
 
 
@@ -159,9 +167,19 @@ class EventLedgerService:
         self._counter: int = 0
         self._store = store
         self._idempotent: dict[tuple[str, str], EventLedgerEntry] = {}
+        self._reversals: set[str] = set()
         self._lock = threading.Lock()
         if store is not None:
             self._entries = store.load_recent(limit=hydrate_limit)
+            self._index_reversals()
+
+    def _index_reversals(self) -> None:
+        self._reversals = {
+            str(entry.payload_ref.get("reversed_event_id"))
+            for entry in self._entries
+            if entry.event_type == EVENT_EVENT_REVERSED
+            and entry.payload_ref.get("reversed_event_id")
+        }
 
     def record_event(
         self,
@@ -220,9 +238,95 @@ class EventLedgerService:
                 )
             if created:
                 self._entries.append(entry)
+            if entry.event_type == EVENT_EVENT_REVERSED:
+                reversed_id = entry.payload_ref.get("reversed_event_id")
+                if isinstance(reversed_id, str) and reversed_id:
+                    self._reversals.add(reversed_id)
             if key:
                 self._idempotent[(workspace, key)] = entry
             return entry
+
+    def _find_entry(self, event_id: str) -> EventLedgerEntry | None:
+        with self._lock:
+            for entry in reversed(self._entries):
+                if entry.event_id == event_id:
+                    return entry
+        return None
+
+    def reverse_event(
+        self,
+        event_id: str,
+        *,
+        workspace_id: str = "",
+        actor: str = "learner",
+        reason: str = "",
+    ) -> EventLedgerEntry | None:
+        """Append a reversal for ``event_id``; only reversible entries qualify.
+
+        The original entry is never mutated or deleted. Repeating the reversal
+        returns the already-recorded reversal (idempotent). Returns ``None`` for
+        an unknown or irreversible event.
+        """
+        target = self._find_entry(event_id)
+        if target is None or target.reversibility != "reversible":
+            return None
+        with self._lock:
+            already_reversed = event_id in self._reversals
+            existing = (
+                next(
+                    (
+                        entry
+                        for entry in reversed(self._entries)
+                        if entry.event_type == EVENT_EVENT_REVERSED
+                        and entry.payload_ref.get("reversed_event_id") == event_id
+                    ),
+                    None,
+                )
+                if already_reversed
+                else None
+            )
+        if existing is not None:
+            return existing
+        return self.record_event(
+            EVENT_EVENT_REVERSED,
+            actor=actor,
+            scope=target.scope,
+            project_id=target.project_id,
+            workspace_id=workspace_id or target.project_id,
+            source_chain=[*target.source_chain, "reversal"],
+            payload_ref={"reversed_event_id": event_id, "reason": reason},
+            reversibility="irreversible",
+            audit_note=(
+                f"Reversed event {event_id}" + (f": {reason}" if reason else "")
+            ),
+            idempotency_key=f"reversal:{event_id}",
+        )
+
+    def is_reversed(self, event_id: str) -> bool:
+        with self._lock:
+            return event_id in self._reversals
+
+    def effective_entries(self) -> list[EventLedgerEntry]:
+        """Entries with reversed events (and reversal bookkeeping) removed."""
+        with self._lock:
+            reversed_ids = set(self._reversals)
+            return [
+                entry
+                for entry in self._entries
+                if entry.event_id not in reversed_ids
+                and entry.event_type != EVENT_EVENT_REVERSED
+            ]
+
+    def replay(
+        self,
+        initial: _T,
+        apply: Callable[[_T, EventLedgerEntry], _T],
+    ) -> _T:
+        """Recompute a projection from effective entries in order."""
+        state = initial
+        for entry in self.effective_entries():
+            state = apply(state, entry)
+        return state
 
     def query(
         self,
@@ -261,7 +365,7 @@ class EventLedgerService:
         return len(results)
 
     def all_entries(self) -> list[EventLedgerEntry]:
-        """Return all entries (for testing / debugging)."""
+        """Return all entries, including reversed ones (testing / audit)."""
         return list(self._entries)
 
     def clear(self) -> None:
@@ -270,3 +374,4 @@ class EventLedgerService:
             self._entries.clear()
             self._counter = 0
             self._idempotent.clear()
+            self._reversals.clear()

@@ -26,7 +26,12 @@ def build_insights_router(runtime: TrainerRuntime) -> APIRouter:
         aggregation reads the ledger it is given and never appends to it.
         """
         ledger = getattr(runtime, "event_ledger", None)
-        entries = ledger.all_entries() if ledger is not None else []
+        if ledger is None:
+            entries = []
+        elif hasattr(ledger, "effective_entries"):
+            entries = ledger.effective_entries()
+        else:
+            entries = ledger.all_entries()
         return build_local_usage_insights(entries, window_days=window_days)
 
     return router
