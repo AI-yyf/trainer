@@ -25,6 +25,7 @@ from .api.runtime import TrainerRuntime
 from .browser_bridge import BrowserBridgeService
 from .core.config import Settings
 from .core.event_ledger import EventLedgerService
+from .core.event_ledger_store import EventLedgerStore
 from .core.settings import AppSettings
 from .db.repository import TrainerRepository
 from .db.research_repository import ResearchRepository
@@ -71,7 +72,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     qdrant_path = settings.qdrant_path if isinstance(settings, Settings) else data_dir / "qdrant"
     semantic_memory = SemanticMemory(qdrant_path)
     memory_service = MemoryService(repository)
-    event_ledger = EventLedgerService()
+    event_ledger = EventLedgerService(EventLedgerStore(database_path))
     provider_service = ProviderService()
     network_fetch_enabled = bool(getattr(settings, "enable_network_fetch", False))
     cost_ledger = CostLedger(data_dir / "cost-ledger")

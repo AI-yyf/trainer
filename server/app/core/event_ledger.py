@@ -4,13 +4,21 @@ Append-only audit trail for core state changes. Most legacy event consumers keep
 their short-lived in-memory view here. Durable agent-turn checkpoints are stored
 by :class:`TrainerRepository` because they need restart-safe replay without
 re-running providers or tools.
+
+With an :class:`~app.core.event_ledger_store.EventLedgerStore` supplied, entries
+are also persisted and idempotency keys replay instead of duplicating.
 """
 
 from __future__ import annotations
 
-from typing import Any
+import threading
+from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from .models import EventLedgerEntry, EventReversibility
+
+if TYPE_CHECKING:
+    from .event_ledger_store import EventLedgerStore
 
 # ---------------------------------------------------------------------------
 # §13.21 Event type constants — 39 canonical event types
@@ -133,11 +141,27 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
 
 
 class EventLedgerService:
-    """§13.21 Central event ledger — append-only, queryable in-memory store."""
+    """§13.21 Central event ledger — append-only, queryable store.
 
-    def __init__(self) -> None:
+    The in-memory list is the query surface. When an :class:`EventLedgerStore`
+    is supplied the ledger also persists every entry (restart-safe history) and
+    replays ``(workspace, idempotency_key)`` duplicates instead of appending
+    the same learning fact twice.
+    """
+
+    def __init__(
+        self,
+        store: "EventLedgerStore | None" = None,
+        *,
+        hydrate_limit: int = 2000,
+    ) -> None:
         self._entries: list[EventLedgerEntry] = []
         self._counter: int = 0
+        self._store = store
+        self._idempotent: dict[tuple[str, str], EventLedgerEntry] = {}
+        self._lock = threading.Lock()
+        if store is not None:
+            self._entries = store.load_recent(limit=hydrate_limit)
 
     def record_event(
         self,
@@ -152,27 +176,53 @@ class EventLedgerService:
         after_state_ref: dict[str, Any] | None = None,
         reversibility: EventReversibility = "irreversible",
         audit_note: str = "",
+        workspace_id: str = "",
+        idempotency_key: str = "",
     ) -> EventLedgerEntry:
-        """Record a new event in the ledger and return the entry."""
-        self._counter += 1
-        from .models import utc_now_iso
+        """Record a new event in the ledger and return the entry.
 
-        entry = EventLedgerEntry(
-            event_id=f"evt-{self._counter:06d}",
-            event_type=event_type,
-            occurred_at=utc_now_iso(),
-            actor=actor,
-            scope=scope,
-            project_id=project_id,
-            source_chain=list(source_chain or []),
-            payload_ref=dict(payload_ref or {}),
-            before_state_ref=dict(before_state_ref or {}),
-            after_state_ref=dict(after_state_ref or {}),
-            reversibility=reversibility,
-            audit_note=audit_note,
-        )
-        self._entries.append(entry)
-        return entry
+        ``workspace_id`` scopes storage and idempotency (defaults to
+        ``project_id``). A repeated non-empty ``idempotency_key`` within the
+        same workspace returns the already-recorded entry unchanged.
+        """
+        workspace = workspace_id or project_id
+        key = idempotency_key.strip()
+        with self._lock:
+            if key:
+                cached = self._idempotent.get((workspace, key))
+                if cached is not None:
+                    return cached
+            from .models import utc_now_iso
+
+            fields: dict[str, Any] = {
+                "event_type": event_type,
+                "occurred_at": utc_now_iso(),
+                "actor": actor,
+                "scope": scope,
+                "project_id": project_id,
+                "source_chain": list(source_chain or []),
+                "payload_ref": dict(payload_ref or {}),
+                "before_state_ref": dict(before_state_ref or {}),
+                "after_state_ref": dict(after_state_ref or {}),
+                "reversibility": reversibility,
+                "audit_note": audit_note,
+            }
+            if self._store is None:
+                self._counter += 1
+                entry = EventLedgerEntry(event_id=f"evt-{self._counter:06d}", **fields)
+                created = True
+            else:
+                entry = EventLedgerEntry(event_id=f"evt-{uuid4().hex}", **fields)
+                entry, created = self._store.append(
+                    entry,
+                    workspace_id=workspace,
+                    idempotency_key=key,
+                )
+            if created:
+                self._entries.append(entry)
+            if key:
+                self._idempotent[(workspace, key)] = entry
+            return entry
 
     def query(
         self,
@@ -215,6 +265,8 @@ class EventLedgerService:
         return list(self._entries)
 
     def clear(self) -> None:
-        """Clear all entries (for testing only)."""
-        self._entries.clear()
-        self._counter = 0
+        """Clear the in-memory view (for testing only; the store is untouched)."""
+        with self._lock:
+            self._entries.clear()
+            self._counter = 0
+            self._idempotent.clear()
