@@ -2945,9 +2945,8 @@ def _normalize_search_hits(raw: list[Any]) -> list[dict[str, Any]]:
             updated_at = entry.get("updated_at") or entry.get("updatedAt")
             if isinstance(updated_at, datetime):
                 updated_at = updated_at.isoformat()
-            location = (
-                dict(entry.get("location")) if isinstance(entry.get("location"), dict) else {}
-            )
+            raw_location = entry.get("location")
+            location: dict[str, Any] = dict(raw_location) if isinstance(raw_location, dict) else {}
             anchor_id = (
                 entry.get("anchor_id")
                 or entry.get("anchorId")
@@ -4439,8 +4438,9 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
             or _citation_for_anchor(record, chunk_anchor)
             or citation_id_for(record.id, excerpt_version)
         )
-        fragment_location = (
-            fragment.get("location") if isinstance(fragment, dict) and isinstance(fragment.get("location"), dict) else {}
+        raw_fragment_location = fragment.get("location") if isinstance(fragment, dict) else None
+        fragment_location: dict[str, Any] = (
+            dict(raw_fragment_location) if isinstance(raw_fragment_location, dict) else {}
         )
         excerpt_location = dict(fragment_location)
         excerpt_location.setdefault("anchor", chunk_anchor)

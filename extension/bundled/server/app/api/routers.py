@@ -3734,6 +3734,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if not snippet:
                 continue
             seen_resource_ids.add(resource_id)
+            raw_location = hit_payload.get("location")
+            hit_location: dict[str, object] = (
+                dict(raw_location) if isinstance(raw_location, dict) else {}
+            )
             requested_resources.append(
                 {
                     "id": resource_id,
@@ -3764,11 +3768,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     "stale": bool(hit_payload.get("stale")),
                     "current_version_id": str(hit_payload.get("current_version_id") or ""),
                     "current_content_hash": str(hit_payload.get("current_content_hash") or ""),
-                    "location": (
-                        dict(hit_payload.get("location"))
-                        if isinstance(hit_payload.get("location"), dict)
-                        else {}
-                    ),
+                    "location": hit_location,
                     "anchor_id": str(hit_payload.get("anchor_id") or ""),
                     "evidence_summary": str(hit_payload.get("match_summary") or snippet),
                     "rank_reasons": list(hit_payload.get("rank_reasons") or []),
