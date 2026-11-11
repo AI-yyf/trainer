@@ -109,6 +109,11 @@ EVENT_EVENT_REVERSED = "event_reversed"
 # auditable in the same ledger as training and goals (§P1-3c).
 EVENT_COACH_TURN_RECORDED = "coach_turn_recorded"
 
+# Training evidence (2) — the strongest learning fact joins the ledger:
+# a recorded controlled check and the reversal of the evidence it superseded.
+EVENT_TRAINING_EVIDENCE_RECORDED = "training_evidence_recorded"
+EVENT_TRAINING_EVIDENCE_SUPERSEDED = "training_evidence_superseded"
+
 _T = TypeVar("_T")
 
 ALL_EVENT_TYPES: frozenset[str] = frozenset({
@@ -156,6 +161,8 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_TELEMETRY_CONSENT_CHANGED,
     EVENT_EVENT_REVERSED,
     EVENT_COACH_TURN_RECORDED,
+    EVENT_TRAINING_EVIDENCE_RECORDED,
+    EVENT_TRAINING_EVIDENCE_SUPERSEDED,
     EVENT_GOAL_STARTED,
     EVENT_GOAL_ACTIVITY_RECORDED,
     EVENT_GOAL_COMPLETED,

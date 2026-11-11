@@ -270,7 +270,7 @@ class TestNewEventTypeConstants:
             EVENT_TELEMETRY_CONSENT_CHANGED,
         )
 
-        assert len(ALL_EVENT_TYPES) == 47
+        assert len(ALL_EVENT_TYPES) == 49
         assert EVENT_TELEMETRY_CONSENT_CHANGED in ALL_EVENT_TYPES
         assert EVENT_EVENT_REVERSED in ALL_EVENT_TYPES
         assert EVENT_GOAL_STARTED in ALL_EVENT_TYPES
@@ -398,7 +398,7 @@ class TestNewEventConstants:
 
     def test_total_event_type_count(self) -> None:
         """ALL_EVENT_TYPES includes agent checkpoints, telemetry, reversal and goals."""
-        assert len(ALL_EVENT_TYPES) == 47
+        assert len(ALL_EVENT_TYPES) == 49
 
     def test_record_new_event_types(self) -> None:
         """New event types can be recorded and queried back."""

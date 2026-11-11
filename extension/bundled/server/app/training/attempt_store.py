@@ -16,9 +16,10 @@ import hashlib
 import json
 import sqlite3
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .skill_projection import normalize_evidence_result
 
@@ -66,8 +67,20 @@ def content_hash(value: str) -> str:
 class AttemptStore:
     """SQLite-backed store for training attempts and their evidence records."""
 
-    def __init__(self, database_path: str | Path) -> None:
+    def __init__(
+        self,
+        database_path: str | Path,
+        *,
+        on_evidence_event: Callable[[str, dict[str, Any], list[str]], None] | None = None,
+    ) -> None:
         self._path = Path(database_path)
+        # Optional observer: (event_type, evidence_payload). The runtime wires
+        # this to the unified event ledger so the strongest learning fact
+        # (host-controlled evidence) is auditable like training. Supersede
+        # events carry the prior evidence payload as the reversal target.
+        # Declared as an attribute annotation (not a value) so pyright knows
+        # the runtime may attach the observer after construction.
+        self.on_evidence_event: Callable[[str, dict[str, Any]], None] | None = on_evidence_event
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -437,6 +450,7 @@ class AttemptStore:
         # stale verified attempt.
         trust_rank = {"self_reported": 0, "model_review": 1, "static_analysis": 2, "controlled_check": 3}
         connection = self._connect()
+        superseded_ids: list[str] = []
         try:
             connection.execute("BEGIN IMMEDIATE")
             live_rows = connection.execute(
@@ -472,6 +486,7 @@ class AttemptStore:
                     and trust_rank.get(trust_level, 0) >= trust_rank.get(prior.get("trust_level"), 0)
                 ):
                     prior["superseded_by_evidence_id"] = evidence_id
+                    superseded_ids.append(str(prior.get("evidence_id")))
                     connection.execute(
                         "UPDATE training_evidence SET payload = ? WHERE evidence_id = ?",
                         (json.dumps(prior, ensure_ascii=False), row["evidence_id"]),
@@ -522,6 +537,20 @@ class AttemptStore:
         # The brand-new record is current by definition: the attempt's bound
         # artifact hash now matches it.
         payload["is_current"] = True
+        if self.on_evidence_event is not None:
+            events = [("training_evidence_recorded", payload)]
+            for superseded_id in superseded_ids:
+                superseded = next(
+                    (item for item in items if item.get("evidence_id") == superseded_id),
+                    None,
+                )
+                if superseded is not None:
+                    events.append(("training_evidence_superseded", superseded))
+            for event_type, evidence_snapshot in events:
+                try:
+                    self.on_evidence_event(event_type, evidence_snapshot)
+                except Exception:  # noqa: BLE001 - observer must never break storage
+                    pass
         return payload
 
     def mark_evidence_resource_version_stale(
