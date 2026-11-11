@@ -1846,7 +1846,20 @@ class MemoryService(
             )
         )
 
+    def _canonical_workspace_id(self, workspace_id: str) -> str:
+        """Resolve a legacy workspace path to its provisioned project context.
+
+        The same project can be addressed by its folder path (the visible
+        session) or by its provisioned context id (training/plan writes). Both
+        must read and persist one structured-memory row, otherwise review
+        queues and mastery written by training are invisible to the chat
+        session that started from the folder path.
+        """
+        resolved = self.repository.resolve_context_id(workspace_id)
+        return resolved or workspace_id
+
     def _structured_for(self, workspace_id: str) -> StructuredMemoryService:
+        workspace_id = self._canonical_workspace_id(workspace_id)
         existing = self._structured_by_workspace.get(workspace_id)
         if existing is not None:
             return existing
@@ -1862,6 +1875,7 @@ class MemoryService(
 
     def _persist_structured(self, workspace_id: str) -> None:
         self._persist_generation += 1
+        workspace_id = self._canonical_workspace_id(workspace_id)
         structured = self._structured_for(workspace_id)
         self.repository.save_structured_memory(workspace_id, structured.export_state())
 
