@@ -71,7 +71,7 @@ class AttemptStore:
         self,
         database_path: str | Path,
         *,
-        on_evidence_event: Callable[[str, dict[str, Any], list[str]], None] | None = None,
+        on_evidence_event: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> None:
         self._path = Path(database_path)
         # Optional observer: (event_type, evidence_payload). The runtime wires
