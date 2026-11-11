@@ -60,3 +60,20 @@
   background: color-mix(in srgb, var(--bg-1) 82%, transparent);
 }
 
+
+/* Narrow sidebars: keep the horizontal scroll discoverable. The wrap clips
+   vertical overflow by design; a visible thin scrollbar tells the learner
+   the table continues sideways instead of reading as a squeezed grid. */
+.message-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--line) 80%, transparent) transparent;
+}
+
+.message-table-wrap::-webkit-scrollbar {
+  height: 6px;
+}
+
+.message-table-wrap::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 3px;
+}

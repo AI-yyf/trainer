@@ -92,3 +92,21 @@ select {
   font-weight: 400;
 }
 
+
+/* --------------------------------------------------------------------------
+ * KaTeX defensive layer (§消息公式)
+ * katex.min.css is imported globally in main.tsx and already hides the
+ * MathML twin. This rule is the safety net for surfaces where that import
+ * fails to load: without it the MathML glyphs, the raw TeX annotation and
+ * the HTML rendering all show at once and every formula reads three times.
+ * The MathML stays in the DOM for screen readers — only the paint is muted.
+ * ------------------------------------------------------------------------ */
+.katex-mathml {
+  clip: rect(1px, 1px, 1px, 1px);
+  border: 0;
+  height: 1px;
+  width: 1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+}
