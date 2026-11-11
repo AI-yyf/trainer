@@ -408,7 +408,7 @@ class TrainerRuntime:
 
     def __post_init__(self) -> None:
         if self.goal_service is None:
-            self.goal_service = GoalService(self.repository)
+            self.goal_service = GoalService(self.repository, event_ledger=self.event_ledger)
         if self.learner_state_service is None:
             self.learner_state_service = LearnerStateService(
                 self.repository,
@@ -438,7 +438,7 @@ class TrainerRuntime:
     def goals(self) -> GoalService:
         """GoalService is always available after construction."""
         if self.goal_service is None:
-            self.goal_service = GoalService(self.repository)
+            self.goal_service = GoalService(self.repository, event_ledger=self.event_ledger)
         if self.learner_state_service is None:
             self.learner_state_service = LearnerStateService(
                 self.repository,

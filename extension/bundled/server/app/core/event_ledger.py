@@ -87,6 +87,12 @@ EVENT_EVALUATION_FEEDBACK_RECORDED = "evaluation_feedback_recorded"
 # Reflection (1)
 EVENT_REFLECTION_RECORDED = "reflection_recorded"
 
+# Goal lifecycle (3) — §P1-3c: goal starts, real activities and completion
+# join the unified ledger so the goal round is auditable like training.
+EVENT_GOAL_STARTED = "goal_started"
+EVENT_GOAL_ACTIVITY_RECORDED = "goal_activity_recorded"
+EVENT_GOAL_COMPLETED = "goal_completed"
+
 # Agent recovery (1)
 EVENT_AGENT_TURN_CHECKPOINTED = "agent_turn_checkpointed"
 
@@ -98,6 +104,10 @@ EVENT_TELEMETRY_CONSENT_CHANGED = "telemetry_consent_changed"
 # Ledger integrity (1) — append-only compensation for a reversible entry. The
 # reversal is a new event; the reversed entry is never mutated or deleted.
 EVENT_EVENT_REVERSED = "event_reversed"
+
+# Coaching turns (1) — one entry per completed coach turn so the chat round is
+# auditable in the same ledger as training and goals (§P1-3c).
+EVENT_COACH_TURN_RECORDED = "coach_turn_recorded"
 
 _T = TypeVar("_T")
 
@@ -145,6 +155,10 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_AGENT_TURN_CHECKPOINTED,
     EVENT_TELEMETRY_CONSENT_CHANGED,
     EVENT_EVENT_REVERSED,
+    EVENT_COACH_TURN_RECORDED,
+    EVENT_GOAL_STARTED,
+    EVENT_GOAL_ACTIVITY_RECORDED,
+    EVENT_GOAL_COMPLETED,
 })
 
 

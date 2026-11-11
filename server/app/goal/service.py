@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from ..core.models import GoalActivity, GoalSession, LearningPlan, utc_now_iso
+
+if TYPE_CHECKING:
+    from ..core.event_ledger import EventLedgerService
 from ..db.repository import TrainerRepository
 
 _ZH_INTENT_PREFIX = re.compile(
@@ -133,9 +136,16 @@ def _active_plan_position(plan: LearningPlan | None) -> tuple[str | None, str | 
 
 
 class GoalService:
-    def __init__(self, repository: TrainerRepository, *, max_activities: int = 40) -> None:
+    def __init__(
+        self,
+        repository: TrainerRepository,
+        *,
+        max_activities: int = 40,
+        event_ledger: "EventLedgerService | None" = None,
+    ) -> None:
         self.repository = repository
         self.max_activities = max(1, int(max_activities))
+        self.event_ledger = event_ledger
 
     def current(self, workspace_id: str) -> GoalSession | None:
         scope = (workspace_id or "").strip()
@@ -221,6 +231,13 @@ class GoalService:
             updatedAt=now,
         )
         self.repository.save_goal(scope, goal)
+        self._record_goal_event(
+            "goal_started",
+            workspace_id=scope,
+            goal_id=goal.goal_id,
+            idempotency_key=f"goal_started:{goal.goal_id}",
+            payload={"goal_id": goal.goal_id, "title": goal.title, "source": source},
+        )
         return goal
 
     def pause(self, workspace_id: str, goal_id: str | None = None) -> GoalSession | None:
@@ -245,7 +262,16 @@ class GoalService:
         target = self._target(workspace_id, goal_id, include_completed=False)
         if target is None or target.status == "completed":
             return target
-        return self._mutate(target, lambda goal: self._set_status(goal, "completed"))
+        completed = self._mutate(target, lambda goal: self._set_status(goal, "completed"))
+        if completed is not None:
+            self._record_goal_event(
+                "goal_completed",
+                workspace_id=workspace_id,
+                goal_id=completed.goal_id,
+                idempotency_key=f"goal_completed:{completed.goal_id}",
+                payload={"goal_id": completed.goal_id, "title": completed.title},
+            )
+        return completed
 
     def observe_turn(
         self,
@@ -360,7 +386,55 @@ class GoalService:
             target.updated_at = activity.occurred_at
             return True
 
-        return self.repository.mutate_goal(workspace_id, goal.goal_id, mutate)
+        updated = self.repository.mutate_goal(workspace_id, goal.goal_id, mutate)
+        if updated is not None and updated.latest_activity is not None:
+            latest = updated.latest_activity
+            fingerprint = key or f"{kind}:{normalize_goal_title(summary)[:80]}:{latest.occurred_at}"
+            self._record_goal_event(
+                "goal_activity_recorded",
+                workspace_id=workspace_id,
+                goal_id=goal.goal_id,
+                idempotency_key=f"goal_activity:{goal.goal_id}:{fingerprint}",
+                payload={
+                    "goal_id": goal.goal_id,
+                    "kind": kind,
+                    "result": normalized_result,
+                    "activity_id": latest.activity_id,
+                },
+            )
+        return updated
+
+    def _record_goal_event(
+        self,
+        event_type: str,
+        *,
+        workspace_id: str,
+        goal_id: str,
+        idempotency_key: str = "",
+        payload: dict[str, str] | None = None,
+    ) -> None:
+        """Append a goal lifecycle fact to the unified ledger (best effort).
+
+        The ledger is optional (embedded/test runtimes); failures must never
+        block the goal mutation that already persisted.
+        """
+        if self.event_ledger is None:
+            return
+        try:
+            self.event_ledger.record_event(
+                event_type,
+                actor="system",
+                scope="goal",
+                project_id=workspace_id,
+                workspace_id=workspace_id,
+                source_chain=["goal_service"],
+                payload_ref={"goal_id": goal_id, **(payload or {})},
+                reversibility="reversible",
+                audit_note=f"Goal {goal_id}: {event_type}",
+                idempotency_key=idempotency_key,
+            )
+        except Exception:  # noqa: BLE001 - ledger must never break goal mutations
+            pass
 
     def _target(
         self,

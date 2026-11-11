@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
+from ...core.event_ledger import EVENT_COACH_TURN_RECORDED
 from ...core.models import (
     ActiveCardSelectionResult,
     AgentCheckpointAccessRequest,
@@ -289,6 +290,49 @@ class CoreRouteDeps:
     training_theory_drill_restore: Any = None
     turn: Any = None
     turn_stream: Any = None
+
+
+def _record_coach_turn_event(
+    runtime: Any,
+    *,
+    workspace_id: str,
+    session_id: str,
+    request_id: str,
+    message: str,
+) -> None:
+    """Append one coach-turn fact to the unified ledger (§P1-3c, best effort).
+
+    A repeated ``(workspace, session, request_id)`` triple is idempotent, so
+    singleflight replays never inflate the ledger. Failures must never break a
+    turn that already finished.
+    """
+    ledger = getattr(runtime, "event_ledger", None)
+    if ledger is None:
+        return
+    fingerprint = hashlib.sha256(
+        json.dumps({"session": session_id, "message": message}, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()[:16]
+    try:
+        ledger.record_event(
+            EVENT_COACH_TURN_RECORDED,
+            actor="coach",
+            scope="coach",
+            project_id=workspace_id,
+            workspace_id=workspace_id,
+            source_chain=["coach_turn"],
+            payload_ref={
+                "workspace_id": workspace_id,
+                "session_id": session_id,
+                "request_id": request_id,
+            },
+            reversibility="reversible",
+            audit_note=f"Coach turn recorded ({fingerprint})",
+            idempotency_key=(
+                f"coach_turn:{workspace_id}:{session_id}:{request_id or fingerprint}"
+            ),
+        )
+    except Exception:  # noqa: BLE001 - the ledger must never break a finished turn
+        pass
 
 
 def build_core_router(
@@ -687,6 +731,13 @@ def build_core_router(
 
         def _finish_session_response(payload: dict[str, object]) -> dict[str, object]:
             stamped = _attach_requested_workspace_files(payload, runtime, workspace_id)
+            _record_coach_turn_event(
+                runtime,
+                workspace_id=workspace_id,
+                session_id=str(request.session_id or ""),
+                request_id=request_id,
+                message=request.message,
+            )
             if not request_id:
                 return stamped
             return publish_session_request_singleflight(
@@ -1586,6 +1637,13 @@ def build_core_router(
             return stamped
 
         def _finish_turn_response(payload_map: dict[str, object]) -> dict[str, object]:
+            _record_coach_turn_event(
+                runtime,
+                workspace_id=workspace_id,
+                session_id=str(request.session_id or ""),
+                request_id=request_id,
+                message=request.message,
+            )
             if not request_id:
                 return payload_map
             return publish_session_request_singleflight(
