@@ -5,13 +5,21 @@
  * Provider-gated steps are recorded as BLOCKED, never PASS: this script does
  * not pretend a dead/invalid key produced a real teaching turn. The UI
  * surfaces are covered separately by the Playwright journey specs.
+ *
+ * Steps 18-21 drive one coach turn through a local scripted OpenAI-compatible
+ * stub (declared in every step detail). They prove the unified ledger wiring
+ * (goal_started / coach_turn_recorded / goal_activity_recorded /
+ * training_evidence_recorded, plus idempotent replay) over real HTTP and real
+ * SQLite — they make no claim about model teaching quality.
  */
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,6 +84,107 @@ async function stopSidecar() {
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
   if (sidecar.exitCode === null) sidecar.kill('SIGKILL');
+}
+
+// ---- Scripted OpenAI-compatible stub provider (ledger wiring only) ----
+// The reply text is fixed and self-describing: these steps exercise the real
+// sidecar pipeline (provider transport -> coach turn -> goal observation ->
+// ledger) without claiming a real model produced the content.
+let stubServer = null;
+let stubBaseUrl = '';
+const STUB_REPLY =
+  '结构性验证回合：这是本地脚本化回复，不代表真实模型；' +
+  '只用于证明教练轮次与统一学习事件账本的接线。';
+
+function startStubProvider() {
+  stubServer = http.createServer((request, response) => {
+    const url = request.url ?? '';
+    if ((request.method ?? '').toUpperCase() === 'GET' && url.includes('/models')) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ data: [{ id: 'structural-stub' }] }));
+      return;
+    }
+    if (!url.includes('/chat/completions')) {
+      response.writeHead(404, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: 'structural stub: not found' }));
+      return;
+    }
+    const chunks = [];
+    request.on('data', (chunk) => chunks.push(chunk));
+    request.on('end', () => {
+      let stream = false;
+      try {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+        stream = Boolean(body?.stream);
+      } catch { /* default to non-stream */ }
+      const created = Math.floor(Date.now() / 1000);
+      if (stream) {
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        const delta = {
+          id: 'structural-stub-chunk',
+          object: 'chat.completion.chunk',
+          created,
+          model: 'structural-stub',
+          choices: [{ index: 0, delta: { content: STUB_REPLY }, finish_reason: null }],
+        };
+        response.write(`data: ${JSON.stringify(delta)}\n\n`);
+        response.write(
+          `data: ${JSON.stringify({
+            ...delta,
+            choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+          })}\n\n`,
+        );
+        response.write('data: [DONE]\n\n');
+        response.end();
+        return;
+      }
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(
+        JSON.stringify({
+          id: 'structural-stub-completion',
+          object: 'chat.completion',
+          created,
+          model: 'structural-stub',
+          choices: [
+            { index: 0, message: { role: 'assistant', content: STUB_REPLY }, finish_reason: 'stop' },
+          ],
+          usage: { prompt_tokens: 16, completion_tokens: 32, total_tokens: 48 },
+        }),
+      );
+    });
+  });
+  return new Promise((resolve) => {
+    stubServer.listen(0, '127.0.0.1', () => {
+      const address = stubServer.address();
+      stubBaseUrl = `http://127.0.0.1:${address.port}`;
+      resolve(stubBaseUrl);
+    });
+  });
+}
+
+async function stopStubProvider() {
+  if (!stubServer) return;
+  const server = stubServer;
+  stubServer = null;
+  await new Promise((done) => server.close(() => done()));
+}
+
+function openLedgerDb() {
+  const primary = path.join(dataDir, 'trainer.sqlite3');
+  if (fs.existsSync(primary)) return new DatabaseSync(primary);
+  const found = fs.readdirSync(dataDir).find((name) => name.endsWith('.sqlite3'));
+  if (!found) throw new Error(`no sqlite db under ${dataDir}`);
+  return new DatabaseSync(path.join(dataDir, found));
+}
+
+function ledgerInventory(db) {
+  return db
+    .prepare('SELECT event_type, COUNT(*) AS n FROM event_ledger GROUP BY event_type')
+    .all()
+    .reduce((acc, row) => {
+      acc[row.event_type] = row.n;
+      return acc;
+    }, {});
 }
 
 try {
@@ -303,10 +412,89 @@ try {
     reason: 'No real provider key in this session; UI model-switch path is covered by trainer-settings-lifecycle / provider configuration specs.',
   });
   record('17-remote-ssh-l2', 'BLOCKED', { reason: 'No real Remote-SSH window in this environment.' });
+
+  // ---- Unified ledger wiring over real HTTP (scripted stub provider) ----
+  // Steps 18-21 prove the event families land in the real SQLite ledger via
+  // the real HTTP pipeline: coach turn -> goal observation -> goal activity,
+  // plus the attempt-evidence bridge (step 08) and idempotent replay.
+  const stubUrl = await startStubProvider();
+  const coachMessage = {
+    session_id: sessionA,
+    workspace_id: 'journey-structural-a',
+    message: '请开始第一课：为什么队列需要锁？',
+    goal_mode: true,
+    goal_text: '两周内掌握 threading.Lock 与队列',
+    request_id: 'structural-ledger-turn-1',
+    provider: { name: 'structural-stub', base_url: stubUrl, model: 'structural-stub' },
+    api_key: 'structural-stub-key',
+  };
+  const turn1 = await request('POST', '/session/message', coachMessage);
+  const db = openLedgerDb();
+  const inventory1 = ledgerInventory(db);
+  const goalRows = db.prepare('SELECT COUNT(*) AS n FROM goal_sessions').all();
+  const turnKeyRows = db
+    .prepare("SELECT COUNT(*) AS n FROM event_ledger WHERE event_type = 'coach_turn_recorded' AND idempotency_key LIKE '%structural-ledger-turn-1'")
+    .all();
+  record('18-coach-turn-ledger', turn1.status === 200
+      && (inventory1.goal_started ?? 0) >= 1
+      && (inventory1.coach_turn_recorded ?? 0) >= 1
+      && (turnKeyRows[0]?.n ?? 0) === 1
+      && (goalRows[0]?.n ?? 0) >= 1
+    ? 'PASS' : 'FAIL', {
+    status: turn1.status,
+    provider: 'structural-stub (scripted reply; wiring only)',
+    goal_sessions: goalRows[0]?.n ?? 0,
+    goal_started_events: inventory1.goal_started ?? 0,
+    coach_turn_events: inventory1.coach_turn_recorded ?? 0,
+    turn_key_rows: turnKeyRows[0]?.n ?? 0,
+  });
+
+  const turnReplay = await request('POST', '/session/message', coachMessage);
+  const inventory2 = ledgerInventory(db);
+  const replayIdempotent = (inventory2.coach_turn_recorded ?? 0) === (inventory1.coach_turn_recorded ?? 0)
+    && (inventory2.goal_started ?? 0) === (inventory1.goal_started ?? 0);
+  record('19-coach-turn-idempotent', turnReplay.status === 200 && replayIdempotent ? 'PASS' : 'FAIL', {
+    status: turnReplay.status,
+    provider: 'structural-stub (scripted reply; wiring only)',
+    coach_turn_events_after_replay: inventory2.coach_turn_recorded ?? 0,
+    goal_started_events_after_replay: inventory2.goal_started ?? 0,
+  });
+
+  const evaluation = await request('POST', '/evaluate/snippet', {
+    session_id: sessionA,
+    workspace_id: 'journey-structural-a',
+    language_id: 'python',
+    content: 'from queue import Queue\nq = Queue()\nq.push(1)\nassert q.pop() == 1\n',
+  });
+  const inventory3 = ledgerInventory(db);
+  record('20-goal-activity-ledger', evaluation.status === 200 && (inventory3.goal_activity_recorded ?? 0) >= 1 ? 'PASS' : 'FAIL', {
+    status: evaluation.status,
+    provider: 'not needed (local evaluator; stub still attached)',
+    goal_activity_events: inventory3.goal_activity_recorded ?? 0,
+  });
+
+  const requiredFamilies = [
+    'goal_started',
+    'coach_turn_recorded',
+    'goal_activity_recorded',
+    'training_evidence_recorded',
+  ];
+  const missingFamilies = requiredFamilies.filter((family) => (inventory3[family] ?? 0) < 1);
+  fs.writeFileSync(
+    path.join(outDir, 'event_ledger.json'),
+    `${JSON.stringify({ inventory: inventory3, requiredFamilies, missing: missingFamilies }, null, 2)}\n`,
+  );
+  record('21-ledger-inventory', missingFamilies.length === 0 ? 'PASS' : 'FAIL', {
+    inventory: inventory3,
+    missing: missingFamilies,
+    training_evidence_note: 'from step 08 attempt evidence via the ledger bridge',
+  });
+  db.close();
 } catch (error) {
   record('00-probe', 'FAIL', { error: error instanceof Error ? error.message : String(error), sidecar_log: sidecarLog.slice(-3000) });
   process.exitCode = 1;
 } finally {
+  await stopStubProvider();
   await stopSidecar();
   fs.rmSync(dataDir, { recursive: true, force: true });
   const summary = {
@@ -315,6 +503,9 @@ try {
     steps,
     blocked: steps.filter((step) => step.status === 'BLOCKED').map((step) => step.id),
     failed: steps.filter((step) => step.status === 'FAIL').map((step) => step.id),
+    stubProviderSteps: steps
+      .filter((step) => String(step.provider || '').includes('structural-stub'))
+      .map((step) => step.id),
   };
   fs.writeFileSync(path.join(outDir, 'summary.json'), JSON.stringify(summary, null, 2) + '\n');
   console.log(`[structural] ${steps.filter((step) => step.status === 'PASS').length} PASS, ${summary.blocked.length} BLOCKED, ${summary.failed.length} FAIL -> ${outDir}`);
