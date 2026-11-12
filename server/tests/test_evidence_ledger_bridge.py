@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
 from app.core.settings import AppSettings
 from app.main import create_app
 
@@ -31,17 +33,22 @@ def _ledger(app):
     return app.state.runtime.event_ledger
 
 
-def _events_by_type(app, event_type: str) -> list[dict]:
+def _recorded_events(app) -> list[dict]:
     return [
-        {"payload": entry.payload_ref, "id": entry.event_id}
+        {"payload": entry.payload_ref, "event_id": entry.event_id}
         for entry in _ledger(app).all_entries()
-        if entry.event_type == event_type
+        if entry.event_type == "training_evidence_recorded"
     ]
 
 
+def build_app(tmp_path: Path) -> TestClient:
+    settings = _settings(tmp_path)
+    return TestClient(create_app(settings))
+
+
 def test_evidence_records_a_ledger_event(tmp_path: Path) -> None:
-    app = create_app(_settings(tmp_path / "data"))
-    store = app.state.runtime.attempt_store
+    client = build_app(tmp_path)
+    store = client.app.state.runtime.attempt_store
     attempt = store.start_attempt(workspace_id="w-ev", card_id="card-1")
     evidence = store.record_evidence(
         attempt_id=attempt["attempt_id"],
@@ -52,7 +59,7 @@ def test_evidence_records_a_ledger_event(tmp_path: Path) -> None:
     )
     assert evidence is not None
 
-    events = _events_by_type(app, "training_evidence_recorded")
+    events = _recorded_events(client.app)
     assert len(events) == 1
     assert events[0]["payload"]["evidence_id"] == evidence["evidence_id"]
     assert events[0]["payload"]["result"] == "passed"
@@ -60,8 +67,8 @@ def test_evidence_records_a_ledger_event(tmp_path: Path) -> None:
 
 
 def test_evidence_event_is_idempotent_per_evidence_id(tmp_path: Path) -> None:
-    app = create_app(_settings(tmp_path / "data"))
-    store = app.state.runtime.attempt_store
+    client = build_app(tmp_path)
+    store = client.app.state.runtime.attempt_store
     attempt = store.start_attempt(workspace_id="w-ev", card_id="card-1")
     evidence = store.record_evidence(
         attempt_id=attempt["attempt_id"],
@@ -71,7 +78,7 @@ def test_evidence_event_is_idempotent_per_evidence_id(tmp_path: Path) -> None:
     )
     # The same evidence id can never be recorded twice (primary key), but the
     # ledger bridge must also be replay-safe if a caller re-emits it.
-    app.state.runtime.event_ledger.record_event(
+    client.app.state.runtime.event_ledger.record_event(
         "training_evidence_recorded",
         actor="system",
         scope="training",
@@ -79,13 +86,13 @@ def test_evidence_event_is_idempotent_per_evidence_id(tmp_path: Path) -> None:
         payload_ref={"evidence_id": evidence["evidence_id"]},
         idempotency_key=f"training_evidence_recorded:{evidence['evidence_id']}",
     )
-    events = _events_by_type(app, "training_evidence_recorded")
+    events = _recorded_events(client.app)
     assert len(events) == 1
 
 
-def test_superseded_evidence_records_a_reversal_event(tmp_path: Path) -> None:
-    app = create_app(_settings(tmp_path / "data"))
-    store = app.state.runtime.attempt_store
+def test_superseded_evidence_is_reversed_for_replay(tmp_path: Path) -> None:
+    client = build_app(tmp_path)
+    store = client.app.state.runtime.attempt_store
     attempt = store.start_attempt(workspace_id="w-ev", card_id="card-1")
     stale = store.record_evidence(
         attempt_id=attempt["attempt_id"],
@@ -93,39 +100,71 @@ def test_superseded_evidence_records_a_reversal_event(tmp_path: Path) -> None:
         result="passed",
         trust_level="controlled_check",
     )
-    store.record_evidence(
+    fresh = store.record_evidence(
         attempt_id=attempt["attempt_id"],
         artifact_hash="hash-2",
-        result="failed",
+        result="passed",
         trust_level="controlled_check",
     )
 
-    superseded_events = _events_by_type(app, "training_evidence_superseded")
-    assert len(superseded_events) == 1
-    assert superseded_events[0]["payload"]["evidence_id"] == stale["evidence_id"]
+    stale_ledger_event_id = next(
+        entry.event_id
+        for entry in _ledger(client.app).all_entries()
+        if entry.event_type == "training_evidence_recorded"
+        and entry.payload_ref.get("evidence_id") == stale["evidence_id"]
+    )
+    effective_ids = [
+        entry.payload_ref.get("evidence_id")
+        for entry in _ledger(client.app).effective_entries()
+        if entry.event_type == "training_evidence_recorded"
+    ]
+    assert effective_ids == [fresh["evidence_id"]]
+    reversal_events = [
+        entry
+        for entry in _ledger(client.app).all_entries()
+        if entry.event_type == "event_reversed"
+    ]
+    assert [
+        entry.payload_ref.get("reversed_event_id") for entry in reversal_events
+    ] == [stale_ledger_event_id]
 
-    recorded_events = _events_by_type(app, "training_evidence_recorded")
-    assert len(recorded_events) == 2
 
-
-def test_evidence_ledger_persists_across_app_restart(tmp_path: Path) -> None:
+def test_reversal_persists_across_app_restart(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     first = create_app(_settings(data_dir))
     store = first.state.runtime.attempt_store
     attempt = store.start_attempt(workspace_id="w-ev", card_id="card-1")
-    store.record_evidence(
+    stale = store.record_evidence(
         attempt_id=attempt["attempt_id"],
         artifact_hash="hash-1",
         result="passed",
         trust_level="controlled_check",
-        evidence_kind="controlled_evaluation",
+    )
+    fresh = store.record_evidence(
+        attempt_id=attempt["attempt_id"],
+        artifact_hash="hash-2",
+        result="passed",
+        trust_level="controlled_check",
     )
 
     restarted = create_app(_settings(data_dir))
-    entries = [
-        entry
+    stale_ledger_event_id = next(
+        entry.event_id
         for entry in restarted.state.runtime.event_ledger.all_entries()
         if entry.event_type == "training_evidence_recorded"
+        and entry.payload_ref.get("evidence_id") == stale["evidence_id"]
+    )
+    effective_ids = [
+        entry.payload_ref.get("evidence_id")
+        for entry in restarted.state.runtime.event_ledger.effective_entries()
+        if entry.event_type == "training_evidence_recorded"
     ]
-    assert len(entries) == 1
-    assert entries[0].payload_ref.get("evidence_kind") == "controlled_evaluation"
+    assert effective_ids == [fresh["evidence_id"]]
+    assert stale["evidence_id"] not in effective_ids
+    reversals = [
+        entry
+        for entry in restarted.state.runtime.event_ledger.all_entries()
+        if entry.event_type == "event_reversed"
+        and entry.payload_ref.get("reversed_event_id") == stale_ledger_event_id
+    ]
+    assert len(reversals) == 1

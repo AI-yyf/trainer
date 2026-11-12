@@ -327,6 +327,32 @@ class EventLedgerService:
         with self._lock:
             return event_id in self._reversals
 
+    def reverse_by_idempotency_key(
+        self,
+        workspace_id: str,
+        idempotency_key: str,
+        *,
+        actor: str = "system",
+        reason: str = "",
+    ) -> EventLedgerEntry | None:
+        """Reverse the event recorded under ``(workspace, idempotency_key)``.
+
+        Looks the entry up in the persistent store (so it works across
+        restarts), then appends a reversal. Returns None when no such event
+        exists or it was not reversible.
+        """
+        key = str(idempotency_key or "").strip()
+        if not key or self._store is None:
+            return None
+        entry = self._store.find_by_idempotency_key(
+            workspace_id=workspace_id or "", idempotency_key=key
+        )
+        if entry is None:
+            return None
+        return self.reverse_event(
+            entry.event_id, workspace_id=workspace_id, actor=actor, reason=reason
+        )
+
     def effective_entries(self) -> list[EventLedgerEntry]:
         """Entries with reversed events (and reversal bookkeeping) removed."""
         with self._lock:

@@ -95,6 +95,14 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
                 audit_note=f"{event_type}: {evidence.get('evidence_id')}",
                 idempotency_key=f"{event_type}:{evidence.get('evidence_id')}",
             )
+            if event_type == "training_evidence_superseded":
+                # 重算收敛：被覆盖的证据从有效集中撤销，重放只重建活跃证据。
+                event_ledger.reverse_by_idempotency_key(
+                    str(evidence.get("workspace_id") or ""),
+                    f"training_evidence_recorded:{evidence.get('evidence_id')}",
+                    actor="system",
+                    reason="superseded by newer evidence",
+                )
         except Exception:  # noqa: BLE001 - the ledger must never break evidence
             pass
 
