@@ -878,7 +878,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if resolved is not None:
                 return max(MIN_OPENAI_CLIENT_TIMEOUT_SECONDS, resolved)
         config = provider or self._config
-        if _is_kimi_like_provider(config):
+        if _needs_generous_visible_probe_budget(config):
+            # Measured reasoning-first gateways (kimi-k3, MiniMax-M3.x) spend
+            # 90s+ of hidden reasoning on generation-sized prompts; the 45s
+            # default kills real completions as false timeouts.
             return 300.0
         return DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS
 

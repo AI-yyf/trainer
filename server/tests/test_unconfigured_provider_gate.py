@@ -411,6 +411,37 @@ def test_kimi_like_provider_uses_generous_agent_and_http_timeouts() -> None:
     assert loop.first_step_timeout == 300.0
 
 
+def test_minimax_reasoning_first_provider_gets_generous_client_timeout() -> None:
+    """Measured MiniMax-M3.x spends 90s+ on generation-sized prompts; the
+    45s default killed real card authoring as a false timeout (two 45s
+    attempts = the observed 90.06s 400)."""
+    provider = ProviderConfig.model_validate(
+        {
+            "name": "minimax-relay",
+            "baseUrl": "http://minimax.example",
+            "apiKeyRef": "trainer.minimax",
+            "model": "MiniMax-M3.1-Flash",
+            "protocol": "openai_chat_completions_compatible",
+        }
+    )
+    service = ProviderService(config=provider, api_key="sk-test")
+    assert service._provider_client_timeout_seconds() == 300.0  # noqa: SLF001
+
+
+def test_plain_provider_keeps_default_client_timeout() -> None:
+    provider = ProviderConfig.model_validate(
+        {
+            "name": "plain-openai",
+            "baseUrl": "https://api.example/v1",
+            "apiKeyRef": "trainer.plain",
+            "model": "gpt-4.1-mini",
+            "protocol": "openai_chat_completions_compatible",
+        }
+    )
+    service = ProviderService(config=provider, api_key="sk-test")
+    assert service._provider_client_timeout_seconds() == 45.0  # noqa: SLF001
+
+
 def test_observed_capability_cache_unlocks_vision_delivery_on_a_new_service() -> None:
     provider = ProviderConfig.model_validate(KIMI_PROVIDER)
     service = ProviderService(config=provider, api_key="sk-test")

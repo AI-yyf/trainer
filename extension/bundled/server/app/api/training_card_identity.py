@@ -109,21 +109,32 @@ def prepare_training_file_evaluation(
     if targets:
         target_paths = {canonical(item) for item in targets}
         matched = bool(requested_path) and requested_path in target_paths
-        if not matched and project:
+        if not matched:
             # Cards often name only the leaf file (`queue_lock.py`) while the
             # project keeps it under src/. Match the leaf for that form, and
             # require the full relative suffix when the card names a directory.
+            # Leaf comparison needs no project root — but it must stay a
+            # RELATIVE request: with no project root an absolute path anywhere
+            # on disk must not count as the card's target (the original 409).
             requested_posix = str(request.file_path or "").replace("\\", "/")
-            requested_name = PurePosixPath(requested_posix).name
-            for target in targets:
-                normalized_target = target.replace("\\", "/")
-                if "/" not in normalized_target:
-                    if requested_name == normalized_target:
+            requested_absolute = Path(str(request.file_path or "")).is_absolute()
+            rescue_allowed = bool(project) or not requested_absolute
+            if rescue_allowed:
+                requested_name = PurePosixPath(requested_posix).name
+                for target in targets:
+                    normalized_target = target.replace("\\", "/")
+                    if "/" not in normalized_target:
+                        if requested_name == normalized_target:
+                            matched = True
+                            break
+                    elif requested_posix == normalized_target or requested_posix.endswith(
+                        "/" + normalized_target
+                    ):
+                        # Exact equality covers a bare workspace whose card
+                        # names a nested relative path ("trainer/ppo_loss.py")
+                        # that cannot be canonical() resolved without a root.
                         matched = True
                         break
-                elif requested_posix.endswith("/" + normalized_target):
-                    matched = True
-                    break
         if not matched:
             raise HTTPException(
                 status_code=409,
