@@ -436,6 +436,65 @@ class GoalService:
         except Exception:  # noqa: BLE001 - ledger must never break goal mutations
             pass
 
+    def recompute_goal_from_ledger(
+        self,
+        workspace_id: str,
+        goal_id: str,
+    ) -> dict | None:
+        """Recompute the goal projection from effective ledger events (重算).
+
+        Replays goal_started / goal_activity_recorded / goal_completed entries
+        for this goal in ledger order — reversed events are already excluded by
+        ``effective_entries`` — and returns the reconstructed projection:
+
+        ``{goal_id, workspace_id, title, source, status, activities,
+        activity_count, completed}``
+
+        Returns None when the ledger has no record of this goal. This is the
+        audit-side recomputation: the persisted GoalSession remains the
+        day-to-day truth; the ledger replay proves the persisted state is
+        derivable from the event history alone.
+        """
+        if self.event_ledger is None:
+            return None
+        effective = [
+            entry
+            for entry in self.event_ledger.effective_entries()
+            if entry.payload_ref.get("goal_id") == goal_id
+            and entry.event_type in {
+                "goal_started",
+                "goal_activity_recorded",
+                "goal_completed",
+            }
+        ]
+        if not effective:
+            return None
+        projection: dict = {
+            "goal_id": goal_id,
+            "workspace_id": workspace_id,
+            "title": "",
+            "source": "",
+            "status": "active",
+            "activities": [],
+            "activity_count": 0,
+            "completed": False,
+        }
+        for entry in effective:
+            payload = entry.payload_ref
+            if entry.event_type == "goal_started":
+                projection["title"] = str(payload.get("title") or "")
+                projection["source"] = str(payload.get("source") or "")
+            elif entry.event_type == "goal_activity_recorded":
+                projection["activities"].append({
+                    "kind": str(payload.get("kind") or ""),
+                    "result": str(payload.get("result") or ""),
+                })
+                projection["activity_count"] += 1
+            elif entry.event_type == "goal_completed":
+                projection["status"] = "completed"
+                projection["completed"] = True
+        return projection
+
     def _target(
         self,
         workspace_id: str,

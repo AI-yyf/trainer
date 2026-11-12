@@ -137,3 +137,92 @@ def test_events_persist_across_app_restart(tmp_path: Path) -> None:
     assert len(started) == 1
     assert len(activity) == 1
     assert started[0].payload_ref.get("goal_id") == goal.goal_id
+
+
+
+def _started_goal_id(runtime) -> str:
+    entries = [
+        entry
+        for entry in runtime.event_ledger.all_entries()
+        if entry.event_type == "goal_started"
+    ]
+    return str(entries[-1].payload_ref.get("goal_id"))
+
+
+def test_recompute_rebuilds_goal_from_effective_ledger_events(tmp_path: Path) -> None:
+    client = build_app(tmp_path)
+    runtime = client.app.state.runtime
+    goals = runtime.goals()
+    goals.start(workspace_id="w-ledger", title="学会 FSRS", source="user_explicit")
+    goals.record_activity(
+        workspace_id="w-ledger",
+        kind="verification",
+        result="passed",
+        summary="第一次受控验证通过",
+        event_key="verify-1",
+    )
+    goals.record_activity(
+        workspace_id="w-ledger",
+        kind="training_attempt",
+        result="failed",
+        summary="第二次练习未通过",
+        event_key="attempt-2",
+    )
+    goal_id = _started_goal_id(runtime)
+
+    rebuilt = goals.recompute_goal_from_ledger("w-ledger", goal_id)
+    assert rebuilt is not None
+    assert rebuilt["title"] == "学会 FSRS"
+    assert rebuilt["source"] == "user_explicit"
+    assert rebuilt["status"] == "active"
+    assert rebuilt["activity_count"] == 2
+
+
+def test_recompute_excludes_reversed_activity(tmp_path: Path) -> None:
+    client = build_app(tmp_path)
+    runtime = client.app.state.runtime
+    goals = runtime.goals()
+    goals.start(workspace_id="w-ledger", title="学会 FSRS", source="user_explicit")
+    goals.record_activity(
+        workspace_id="w-ledger",
+        kind="verification",
+        result="passed",
+        event_key="verify-1",
+    )
+    goals.record_activity(
+        workspace_id="w-ledger",
+        kind="training_attempt",
+        result="failed",
+        event_key="attempt-2",
+    )
+    activity_events = [
+        entry
+        for entry in runtime.event_ledger.all_entries()
+        if entry.event_type == "goal_activity_recorded"
+    ]
+    reversed_id = str(activity_events[0].event_id)
+    runtime.event_ledger.reverse_event(reversed_id, reason="误记的活动")
+
+    rebuilt = runtime.goals().recompute_goal_from_ledger("w-ledger", _started_goal_id(runtime))
+    assert rebuilt is not None
+    assert rebuilt["activity_count"] == 1
+    assert not rebuilt["completed"]
+
+
+def test_recompute_returns_none_for_unknown_goal(tmp_path: Path) -> None:
+    client = build_app(tmp_path)
+    runtime = client.app.state.runtime
+    assert runtime.goals().recompute_goal_from_ledger("w-ledger", "goal-unknown") is None
+
+
+def test_recompute_marks_completion(tmp_path: Path) -> None:
+    client = build_app(tmp_path)
+    runtime = client.app.state.runtime
+    goals = runtime.goals()
+    goal = goals.start(workspace_id="w-ledger", title="学会 FSRS", source="user_explicit")
+    goals.complete(workspace_id="w-ledger")
+
+    rebuilt = runtime.goals().recompute_goal_from_ledger("w-ledger", goal.goal_id)
+    assert rebuilt is not None
+    assert rebuilt["completed"] is True
+    assert rebuilt["status"] == "completed"
