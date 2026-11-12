@@ -22,7 +22,13 @@ const providerBase = process.env.PROBE_PROVIDER_BASE_URL ?? "";
 const providerKey = process.env.PROBE_PROVIDER_API_KEY ?? "";
 const model = process.env.PROBE_PROVIDER_MODEL ?? "MiniMax-M3.1-Flash";
 const modelSwitch = process.env.PROBE_PROVIDER_MODEL_SWITCH ?? "MiniMax-M2.7";
-const outDir = process.env.JOURNEY_OUT_DIR ?? path.join(repoRoot, "output/maturity/full-journey-run");
+const outDir =
+  process.env.JOURNEY_OUT_DIR ??
+  path.join(
+    repoRoot,
+    "output/maturity",
+    `full-journey-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+  );
 const verifyFile = path.join(repoRoot, "tmp", "verify_pass.py");
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -97,6 +103,18 @@ function step(name, data, { fail = false } = {}) {
   }
 }
 
+// A PARTIAL verdict records an honest shortfall without aborting the journey;
+// the final exit line reports FULL_JOURNEY_PARTIAL so callers cannot mistake
+// it for a fully clean run.
+let partialReasons = [];
+function markPartial(stepName, reason, detail) {
+  partialReasons.push({ step: stepName, reason, ...detail });
+  fs.writeFileSync(
+    path.join(outDir, "PARTIAL.json"),
+    JSON.stringify({ partial: true, reasons: partialReasons }, null, 2) + "\n",
+  );
+  console.log(`[partial] ${stepName} — ${reason}`);
+}
 function db() {
   return new DatabaseSync(DB, { readOnly: true });
 }
@@ -209,7 +227,7 @@ try {
     reply_chars: goalTurn.visible.length,
     goal_sessions: goalCount,
     goal_started_ledger: goalStarted.length > 0 ? JSON.parse(goalStarted[0].payload) : null,
-  }, { fail: goalCount < 1 || goalStarted.length === 0 });
+  }, { fail: goalCount !== 1 || goalStarted.length === 0 });
 
   // Step 4 — Coach explains with formulas (real model).
   const explain = await streamTurn({
@@ -248,9 +266,24 @@ try {
     title: cardData?.title ?? "",
     degraded,
     persisted: cardRows.length > 0,
+    // Red line: a degraded card must never pass as model-authored. Record the
+    // full raw response (model output only — the key never appears here) and
+    // stop the journey: downstream steps would be tainted by a fallback card.
+    ...(degraded
+      ? {
+          verdict: "BLOCKED",
+          reason: "model returned empty/degraded card content — not claiming a model-authored card",
+          raw_response: card.text,
+          request_payload: {
+            source: "conversation_gap",
+            card_type: "practice",
+            focus_area: "PPO 裁剪目标",
+            target_skill: "解释 PPO clip 目标并手写损失函数",
+          },
+        }
+      : {}),
   }, {
     fail: card.status !== 200 || !cardId || degraded,
-    blocked_reason: degraded ? "model returned empty content — degraded card" : "",
   });
 
   // Step 6 — learner answers (answer_draft non-empty).
@@ -304,7 +337,7 @@ try {
     static_checks: report.static_checks ?? [],
   }, { fail: evaluation.status !== 200 || !passed });
 
-  // Step 8 — ability projection + ledger events.
+  // Step 8 — ability projection + ledger events (payload-level assertions).
   await new Promise((r) => setTimeout(r, 2000));
   const projectionRow = dbRows(
     "SELECT substr(payload, instr(payload,'training_skill_projection'), 700) AS proj FROM structured_memory WHERE payload LIKE '%training_skill_projection%' LIMIT 1",
@@ -314,10 +347,30 @@ try {
   const ledgerEvents = dbRows(
     "SELECT event_type, COUNT(*) AS n FROM event_ledger WHERE event_type IN ('goal_activity_recorded','training_evidence_recorded') GROUP BY event_type",
   );
+  const evidenceEvent = dbRows(
+    "SELECT payload FROM event_ledger WHERE event_type = 'training_evidence_recorded' ORDER BY rowid DESC LIMIT 1",
+  );
+  const evidencePayload = evidenceEvent[0] ? JSON.parse(evidenceEvent[0].payload) : null;
+  const evidenceTrust = evidencePayload?.trust_level ?? "";
+  const evidenceResult = evidencePayload?.result ?? "";
   step("08-projection-and-ledger", {
     implementation_state: implementationState,
     ledger_events: ledgerEvents,
-  }, { fail: implementationState !== "independent" || ledgerEvents.length < 2 });
+    latest_evidence: evidencePayload
+      ? {
+          evidence_id: evidencePayload.evidence_id,
+          result: evidenceResult,
+          trust_level: evidenceTrust,
+          card_id: evidencePayload.card_id,
+        }
+      : null,
+  }, {
+    fail:
+      implementationState !== "independent"
+      || ledgerEvents.length < 2
+      || evidenceTrust !== "controlled_check"
+      || evidenceResult !== "passed",
+  });
 
   // Step 9 — restart sidecar → conversation and goal restored.
   stopSidecar();
@@ -355,7 +408,7 @@ try {
     due: dueReviews.slice(0, 2),
   }, { fail: dueReviews.length === 0 });
 
-  // Step 11 — recall round → FSRS fields update.
+  // Step 11 — recall round → FSRS fields update (mastery review_source=fsrs).
   const recall = await post("/training/flashcard/answer", {
     session_id: sessionId,
     workspace_id: "full-journey-ws",
@@ -368,24 +421,59 @@ try {
     sort_order: null,
   });
   await new Promise((r) => setTimeout(r, 2000));
-  const masteryAfter = mastery(workspaceDbPath());
-  function mastery(dbPath) {
-    const d = db();
+  const masteryRows = dbRows("SELECT payload FROM structured_memory ORDER BY rowid DESC LIMIT 20");
+  let masteryEntries = [];
+  for (const row of masteryRows) {
     try {
-      const row = d.prepare("SELECT payload FROM structured_memory ORDER BY rowid DESC LIMIT 1").get();
-      const parsed = row ? JSON.parse(Buffer.from(row.payload).toString("utf8")) : {};
-      return (Array.isArray(parsed.mastery) ? parsed.mastery : []).map((m) => ({
-        concept: m.concept, next_review_at: m.next_review_at,
-        review_source: m.review_source, fsrs_state: m.fsrs_state, fsrs_reps: m.fsrs_reps,
-      }));
-    } finally { d.close(); }
+      const parsed = JSON.parse(Buffer.from(row.payload).toString("utf8"));
+      if (Array.isArray(parsed.mastery) && parsed.mastery.length) {
+        masteryEntries = parsed.mastery;
+        break;
+      }
+    } catch { /* try older rows */ }
   }
+  const fsrsMastery = masteryEntries.filter((m) => m.review_source === "fsrs");
+  const cardScheduleRow = cardId
+    ? dbRows("SELECT payload FROM structured_memory WHERE payload LIKE '%review_schedule%' AND payload LIKE '%" + cardId + "%' LIMIT 1")
+    : [];
+  let cardSchedule = null;
+  for (const row of cardScheduleRow) {
+    try {
+      const parsed = JSON.parse(Buffer.from(row.payload).toString("utf8"));
+      const found = JSON.stringify(parsed).includes(cardId) ? parsed : null;
+      if (!found) continue;
+      const cards = Array.isArray(found.cards) ? found.cards : [];
+      const match = cards.find((c) => c.card_id === cardId && c.review_schedule) ?? null;
+      if (match) { cardSchedule = match.review_schedule; break; }
+    } catch { /* keep scanning */ }
+  }
+  const fsrsUpdated = fsrsMastery.length >= 1 && Number(fsrsMastery[0].fsrs_reps ?? 0) >= 1;
   step("11-recall-round", {
     status: recall.status,
-    ok: recall.json?.ok === true,
+    ok: recall.json?.ok === true || recall.status === 200,
     recall_evidence: recall.json?.recall_evidence ?? null,
-    mastery_after: masteryAfter,
-  }, { fail: recall.status !== 200 });
+    scheduled: recall.json?.scheduled ?? null,
+    fsrs_mastery_entries: fsrsMastery.map((m) => ({
+      concept: m.concept,
+      next_review_at: m.next_review_at,
+      review_source: m.review_source,
+      fsrs_state: m.fsrs_state,
+      fsrs_reps: m.fsrs_reps,
+    })),
+    card_review_schedule: cardSchedule,
+  }, {
+    fail: recall.status !== 200 || recall.json?.correct !== true,
+  });
+  if (recall.status === 200 && !fsrsUpdated) {
+    // Red line: FSRS fields still heuristic/new must be reported, with the
+    // known root cause called out instead of being papered over.
+    markPartial("11-recall-round", "mastery review_source is not fsrs / fsrs_reps not updated", {
+      root_cause: "review_scheduler.py:195 derive_due_reviews filters on review_source != 'fsrs'; schedule_training_card_recall did not promote the mastery entry",
+      mastery_entries: masteryEntries.map((m) => ({
+        concept: m.concept, review_source: m.review_source, fsrs_reps: m.fsrs_reps,
+      })),
+    });
+  }
 
   // Step 12 — Coach gives the next step based on the review result.
   const nextStepTurn = await streamTurn({
@@ -402,21 +490,14 @@ try {
   }, { fail: nextStepTurn.status !== 200 || nextStepTurn.visible.length < 40 });
 
   stopSidecar();
-  console.log(`FULL_JOURNEY_OK ${outDir}`);
+  if (partialReasons.length > 0) {
+    console.log(`FULL_JOURNEY_PARTIAL ${outDir}`);
+  } else {
+    console.log(`FULL_JOURNEY_OK ${outDir}`);
+  }
 } catch (error) {
   stopSidecar();
   step("FAILED", { error: error instanceof Error ? error.stack : String(error), sidecar_log: sidecarLog.slice(-3000) }, { fail: true });
   console.error(`FULL_JOURNEY_FAILED ${outDir}`);
   process.exit(1);
-}
-
-function workspaceDbPath() {
-  const roots = path.join(dataDir, "roots");
-  if (fs.existsSync(roots)) {
-    for (const entry of fs.readdirSync(roots)) {
-      const candidate = path.join(roots, entry, "trainer.sqlite3");
-      if (fs.existsSync(candidate)) return candidate;
-    }
-  }
-  return DB;
 }

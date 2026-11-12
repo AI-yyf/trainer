@@ -38,6 +38,7 @@
     "test:browser-focus-e2e": "node ./scripts/run-browser-focus-e2e.mjs",
     "test:structural-journey": "node ./scripts/run-structural-journey.mjs",
     "test:real-teaching-journey": "node ./scripts/run-real-teaching-journey.mjs",
+    "test:full-journey": "node ./scripts/run-full-journey.mjs && node ./scripts/run-full-journey-visual.mjs",
     "verify:canonical-gui": "node ./scripts/verify-canonical-gui.mjs",
     "verify:coach-gui": "node ./scripts/verify-coach-gui.mjs",
     "verify:ui-geometry": "node ./scripts/verify-ui-geometry.mjs",
