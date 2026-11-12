@@ -131,12 +131,11 @@ function labels(language: ComposerLanguage) {
   };
 }
 
-function renderPlainText(body: string) {
+/** 插件就绪前的加载态：绝不渲染原始正文（原始 LaTeX 会闪现）。 */
+function MarkdownLoading({ language }: { language: ComposerLanguage }) {
   return (
-    <div className="message-markdown message-markdown--plain">
-      {body.split(/\n{2,}/).map((paragraph, index) => (
-        <p key={`${index}-${paragraph.slice(0, 24)}`}>{paragraph.trim()}</p>
-      ))}
+    <div className="message-markdown message-markdown--loading" data-markdown-loading="true">
+      <p className="template-metadata">{messageRichContentCopy(language, "正在整理显示…")}</p>
     </div>
   );
 }
@@ -176,7 +175,13 @@ function RichMarkdownRenderer({
   }, []);
 
   if (!plugins) {
-    return renderPlainText(body);
+    // 懒加载插件就绪前绝不渲染原始正文：模型回复常含 \( \) / \[ \] 公式，
+    // 纯文本瞬态会把原始反斜杠直接闪给学习者（窄侧栏下尤其刺眼）。
+    return (
+      <div className="message-markdown message-markdown--loading" data-markdown-loading="true">
+        <p className="template-metadata">{copy.loading}</p>
+      </div>
+    );
   }
 
   return (
@@ -412,12 +417,12 @@ function MessageRichContentImpl({
           {split.stableBlocks.map((block, index) => (
             <StreamedStableBlock key={index} body={block} language={language} />
           ))}
-          <Suspense fallback={renderPlainText(split.tail)}>
+          <Suspense fallback={<MarkdownLoading language={language} />}>
             <RichMarkdownRenderer body={split.tail} language={language} streaming />
           </Suspense>
         </>
       ) : (
-        <Suspense fallback={renderPlainText(body)}>
+        <Suspense fallback={<MarkdownLoading language={language} />}>
           <RichMarkdownRenderer body={body} language={language} />
         </Suspense>
       )}
