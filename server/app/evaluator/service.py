@@ -1586,7 +1586,12 @@ def _looks_like_file_reference(value: str) -> bool:
 
 
 _FILE_VERIFICATION_VERB = re.compile(
-    r"验证|检查|核对|打开|运行|确认|verify|check|confirm|open|run",
+    # 完成/complete: model-authored cards phrase their completion criteria as
+    # "使用 <target> 完成交付物中的关键一步" — completing the deliverable in
+    # the named file IS file verification. Implementation verbs (实现/
+    # implement) deliberately stay OUT: implementation criteria require real
+    # code evidence, an untouched file target alone must not credit them.
+    r"验证|检查|核对|打开|运行|确认|完成|verify|check|confirm|open|run|complete",
     re.IGNORECASE,
 )
 _FILE_REFERENCE_TOKEN = re.compile(

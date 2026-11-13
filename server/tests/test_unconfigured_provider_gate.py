@@ -386,15 +386,16 @@ def test_provider_test_records_declared_vision_and_context_window(tmp_path: Path
     assert provider.capabilities.vision is True
 
 
-def test_kimi_like_provider_uses_generous_agent_and_http_timeouts() -> None:
+def test_kimi_like_provider_reasoning_steps_carry_no_designed_wall() -> None:
+    import math
+
     from app.llm.agent_loop import CoachAgentLoop
 
     provider = ProviderConfig.model_validate(KIMI_PROVIDER)
     service = ProviderService(config=provider, api_key="sk-test")
     timeouts = service._agent_loop_timeout_kwargs()  # noqa: SLF001
-    assert timeouts["step_timeout"] == 240.0
-    assert timeouts["first_step_timeout"] == 300.0
-    assert service._provider_client_timeout_seconds() == 300.0  # noqa: SLF001
+    assert timeouts["step_timeout"] == math.inf
+    assert timeouts["first_step_timeout"] == math.inf
     loop = CoachAgentLoop(
         provider=__import__("app.llm.agent_loop", fromlist=["AgentProvider"]).AgentProvider(
             protocol="openai_chat_completions_compatible",
@@ -407,14 +408,19 @@ def test_kimi_like_provider_uses_generous_agent_and_http_timeouts() -> None:
         ),
         **timeouts,
     )
-    assert loop.step_timeout == 240.0
-    assert loop.first_step_timeout == 300.0
+    assert loop.step_timeout == math.inf
+    assert loop.first_step_timeout == math.inf
 
 
 def test_minimax_reasoning_first_provider_gets_generous_client_timeout() -> None:
     """Measured MiniMax-M3.x spends 90s+ on generation-sized prompts; the
     45s default killed real card authoring as a false timeout (two 45s
-    attempts = the observed 90.06s 400)."""
+    attempts = the observed 90.06s 400). Reasoning carries no designed
+    read-time wall: the generation client's read timeout is unbounded while
+    connect/write/pool stay bounded, and the agent loop carries no per-step
+    wall either."""
+    import math
+
     provider = ProviderConfig.model_validate(
         {
             "name": "minimax-relay",
@@ -425,10 +431,15 @@ def test_minimax_reasoning_first_provider_gets_generous_client_timeout() -> None
         }
     )
     service = ProviderService(config=provider, api_key="sk-test")
-    assert service._provider_client_timeout_seconds() == 300.0  # noqa: SLF001
+    timeouts = service._agent_loop_timeout_kwargs()  # noqa: SLF001
+    assert timeouts["step_timeout"] == math.inf
+    assert timeouts["first_step_timeout"] == math.inf
 
 
-def test_plain_provider_keeps_default_client_timeout() -> None:
+def test_plain_provider_agent_steps_keep_bounded_defaults() -> None:
+    """Non-reasoning providers keep the bounded step defaults — the unbounded
+    reasoning tier exists so hidden thinking is never a false timeout, not to
+    remove liveness bounds for ordinary gateways."""
     provider = ProviderConfig.model_validate(
         {
             "name": "plain-openai",
@@ -439,7 +450,8 @@ def test_plain_provider_keeps_default_client_timeout() -> None:
         }
     )
     service = ProviderService(config=provider, api_key="sk-test")
-    assert service._provider_client_timeout_seconds() == 45.0  # noqa: SLF001
+    assert service._agent_loop_timeout_kwargs() == {}  # noqa: SLF001
+    assert service._probe_client_timeout_seconds() == 45.0  # noqa: SLF001
 
 
 def test_observed_capability_cache_unlocks_vision_delivery_on_a_new_service() -> None:

@@ -33,6 +33,7 @@ from app.llm.provider_service import (
     _NATIVE_MODEL_DISCOVERY_MAX_PAGES,
     _NATURAL_LANGUAGE_PROBE_PROMPT,
     DEFAULT_OPENAI_CLIENT_MAX_RETRIES,
+    DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS,
     ProviderService,
     _build_agent_tool_context_extra,
     _build_language_corruption_recovery_override,
@@ -1244,9 +1245,10 @@ def test_provider_test_appends_v1_for_non_google_gemini_gateway_without_version_
     assert result.ok is True
     assert captured["api_key"] == "sk-test"
     assert captured["base_url"] == "https://gateway.example.com/v1"
-    # MiniMax-M3 is reasoning-first: the generous 300s client tier applies
-    # (measured: hidden reasoning burns the 45s default as a false timeout).
-    assert captured["timeout"] == 300.0
+    # The sync client only serves bounded capability probes: its timeout
+    # stays a plain float regardless of the model being reasoning-first
+    # (generation carries no designed read wall; probes keep their bound).
+    assert captured["timeout"] == DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS
     assert captured["max_retries"] == DEFAULT_OPENAI_CLIENT_MAX_RETRIES
 
 
@@ -8005,9 +8007,10 @@ async def test_chat_completion_appends_v1_for_non_google_gemini_gateway_without_
     assert result == "pong"
     assert captured["api_key"] == "sk-test-key"
     assert captured["base_url"] == "https://gateway.example.com/v1"
-    # MiniMax-M3 is reasoning-first: the generous 300s client tier applies
-    # (measured: hidden reasoning burns the 45s default as a false timeout).
-    assert captured["timeout"] == 300.0
+    # Generation client: reasoning carries NO designed read wall (httpx
+    # Timeout with read=None); connect/write/pool stay bounded for liveness.
+    assert captured["timeout"].read is None
+    assert captured["timeout"].connect == 10.0
     assert captured["max_retries"] == DEFAULT_OPENAI_CLIENT_MAX_RETRIES
 
 

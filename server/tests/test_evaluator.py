@@ -311,6 +311,51 @@ class EvaluatorTests(unittest.TestCase):
         self.assertIn("Matched: Implement debounceSearch", training_check.detail)
         self.assertIn("Expected symbols supplied: 2.", training_check.detail)
 
+    def test_training_acceptance_completion_criterion_matches_verified_target_file(self) -> None:
+        """Model-authored cards phrase their completion criterion as
+        "使用 <target>.py 完成交付物中的关键一步" — 完成/complete belong in
+        the file-verification verb set, and the verified file satisfies the
+        file reference when the card declares it (measured gap: the full
+        real-model journey 40 run recorded this criterion as permanently
+        missing)."""
+        pipeline = FakeEvaluationPipeline()
+        service = EvaluatorService(pipeline=pipeline)
+
+        report = service.evaluate_current_file(
+            EvaluateCurrentFileRequest(
+                session_id="session-1",
+                workspace_id="workspace-1",
+                task_spec_id="task-card",
+                file_path="ppo_clip_loss.py",
+                language_id="python",
+                content=(
+                    'CARD_TARGET_FILE = "ppo_clip_loss.py"\n'
+                    "def ppo_clip_loss(new_logp: float, old_logp: float, advantage: float,"
+                    " clip_eps: float = 0.2) -> float:\n"
+                    "    ratio = exp(new_logp - old_logp)\n"
+                    "    clipped_ratio = clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps)\n"
+                    "    return -min(ratio * advantage, clipped_ratio * advantage)\n"
+                ),
+                diagnostics=[],
+                evaluation_source="training",
+                training_card_id="card-completion-1",
+                training_card_title="手写 PPO clip 损失",
+                acceptance_criteria=[
+                    "使用 `ppo_clip_loss.py` 完成交付物中的关键一步。",
+                ],
+                learner_deliverables=[
+                    "使用 `ppo_clip_loss.py` 完成交付物中的关键一步。",
+                ],
+                expected_symbols=["ppo_clip_loss.py"],
+            )
+        )
+
+        training_check = next(
+            check for check in report.semantic_checks if check.id == "training-acceptance"
+        )
+        self.assertEqual(training_check.status, "passed")
+        self.assertIn("current file target", training_check.detail)
+
     def test_training_acceptance_signals_block_missing_current_file_symbol(self) -> None:
         pipeline = FakeEvaluationPipeline()
         service = EvaluatorService(pipeline=pipeline)

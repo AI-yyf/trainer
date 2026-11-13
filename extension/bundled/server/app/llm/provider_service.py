@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 from contextvars import ContextVar
 from importlib import import_module
@@ -115,7 +116,6 @@ from .provider.assessment import (
 )
 from .provider.capability import (
     _flatten_minimax_thinking_for_raw_http,
-    _is_kimi_like_provider,
     _is_loopback_provider_url,
     _is_minimax_like_provider,
     _model_looks_reasoning_first,
@@ -230,6 +230,16 @@ logger = logging.getLogger("trainer.provider")
 DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS = 45.0
 DEFAULT_OPENAI_CLIENT_MAX_RETRIES = 0
 MIN_OPENAI_CLIENT_TIMEOUT_SECONDS = 5.0
+# Generation (chat completions, streams, agent turns) carries NO designed
+# read-time ceiling: reasoning-first models think for as long as the task
+# needs, and a fixed read cap converts long reasoning into a false timeout
+# (measured: a 45s cap killed real MiniMax-M3.x card authoring twice in a
+# row). Liveness comes from connect/write/pool bounds and transport errors —
+# not from an arbitrary wall. Probe/control calls keep the bounded 45s via
+# per-request overrides.
+GENERATION_CLIENT_TIMEOUT = httpx.Timeout(
+    connect=10.0, write=60.0, pool=30.0, read=None
+)
 _TOOL_CAPABILITY_PROBE_NAME = "trainer_capability_probe"
 _TOOL_CAPABILITY_PROBE_PROMPT = (
     "Call the supplied trainer_capability_probe tool now with probe set to ok. "
@@ -780,7 +790,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             client_kwargs: dict[str, Any] = {
                 "api_key": self._api_key,
                 "base_url": base_url,
-                "timeout": self._provider_client_timeout_seconds(),
+                # Generation client: no designed read ceiling (see
+                # GENERATION_CLIENT_TIMEOUT). Probe/control callers that share
+                # this client pass a per-request bounded timeout instead.
+                "timeout": GENERATION_CLIENT_TIMEOUT,
                 "max_retries": self._provider_client_max_retries(),
             }
             if self._uses_loopback_transport():
@@ -793,7 +806,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         client_kwargs: dict[str, Any] = {
             "api_key": api_key,
             "base_url": self._normalized_openai_compatible_base_url(provider),
-            "timeout": self._provider_client_timeout_seconds(provider),
+            # The sync client only serves bounded capability probes.
+            "timeout": self._probe_client_timeout_seconds(provider),
             "max_retries": self._provider_client_max_retries(provider),
         }
         if self._uses_loopback_transport(provider):
@@ -865,8 +879,15 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 return None
         return None
 
-    def _provider_client_timeout_seconds(self, provider: ProviderConfig | None = None) -> float:
-        defaults = self._provider_request_defaults(provider)
+    @staticmethod
+    def _probe_client_timeout_seconds(provider: ProviderConfig | None = None) -> float:
+        """Bounded wall for short probe/control calls (never generation).
+
+        Providers may declare their own bound via request defaults; anything
+        slower than the default is treated as the default so a misconfigured
+        provider cannot disable the probe's liveness bound.
+        """
+        defaults = _normalized_provider_request_defaults(provider)
         for key in (
             "clientTimeoutSeconds",
             "client_timeout_seconds",
@@ -874,27 +895,20 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             "timeout_seconds",
             "timeout",
         ):
-            resolved = self._request_default_number(defaults.get(key))
-            if resolved is not None:
-                return max(MIN_OPENAI_CLIENT_TIMEOUT_SECONDS, resolved)
-        config = provider or self._config
-        if _needs_generous_visible_probe_budget(config):
-            # Measured reasoning-first gateways (kimi-k3, MiniMax-M3.x) spend
-            # 90s+ of hidden reasoning on generation-sized prompts; the 45s
-            # default kills real completions as false timeouts.
-            return 300.0
+            value = defaults.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return max(MIN_OPENAI_CLIENT_TIMEOUT_SECONDS, float(value))
         return DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS
 
-    def _agent_loop_timeout_kwargs(self) -> dict[str, float]:
-        if not _is_kimi_like_provider(self._config):
-            return {}
-        # Measured kimi-k3 gateways: a single hidden-reasoning completion can
-        # take 160s+ with coach-sized prompts, so per-step waits must exceed
-        # the old 120s tier or every turn dies as a false timeout.
-        return {
-            "step_timeout": 240.0,
-            "first_step_timeout": 300.0,
-        }
+    def _agent_loop_timeout_kwargs(self) -> dict[str, float | None]:
+        # Reasoning-first gateways (kimi-k3, MiniMax-M3.x, deepseek-r1, …)
+        # think for as long as the task needs — measured runs blow past every
+        # fixed tier (24s/90s/120s/240s/300s) as a false timeout. Steps carry
+        # no designed wall-clock; liveness comes from the transport and the
+        # user's own cancel.
+        if _needs_generous_visible_probe_budget(self._config):
+            return {"step_timeout": math.inf, "first_step_timeout": math.inf}
+        return {}
 
     def _provider_client_max_retries(self, provider: ProviderConfig | None = None) -> int:
         defaults = self._provider_request_defaults(provider)

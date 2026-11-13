@@ -42,6 +42,7 @@ import asyncio
 import inspect
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable, cast
 
@@ -843,6 +844,11 @@ class CoachAgentLoop:
 
     @classmethod
     def _bounded_step_timeout(cls, timeout: float) -> float:
+        # math.inf is the explicit "no designed wall-clock for reasoning"
+        # marker: reasoning-first gateways think for as long as the task
+        # needs, and every fixed tier measured as a false timeout.
+        if timeout == math.inf:
+            return math.inf
         return min(
             cls.MAX_STEP_TIMEOUT_SECONDS,
             max(cls.MIN_STEP_TIMEOUT_SECONDS, float(timeout)),
@@ -870,8 +876,13 @@ class CoachAgentLoop:
         tools_schema: list[dict[str, Any]],
         timeout: float,
     ) -> dict[str, Any]:
+        # math.inf means "no designed wall-clock for reasoning": wait_for(None)
+        # waits without a timer while transport errors still surface.
+        wait_timeout = None if timeout == math.inf else timeout
         try:
-            return await asyncio.wait_for(self.provider.call(history, tools_schema), timeout=timeout)
+            return await asyncio.wait_for(
+                self.provider.call(history, tools_schema), timeout=wait_timeout
+            )
         except Exception as exc:
             if not is_prompt_too_long_error(exc):
                 raise
