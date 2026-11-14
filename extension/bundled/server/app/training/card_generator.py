@@ -3272,11 +3272,16 @@ def _build_prompt(context: CardGenerationContext, source: str, card_type: str) -
         )
     if card_type == "practice":
         prompt += (
-            "\n\nFor a standalone Python exercise, provide a python_behavior_contract with "
+            "\n\nFor a standalone Python exercise, set files_to_touch to the one .py target and "
+            "provide a python_behavior_contract with "
             'the exact function name and JSON-compatible cases, e.g. {"function":"double",'
             '"cases":[{"args":[3],"expected":6},{"args":[0],"expected":0}]}. '
-            "Include representative and boundary inputs and compute their expected values. "
-            "Use null for tasks that need non-JSON objects, exceptions or external services."
+            "Use two to four representative inputs and compute their expected return values. "
+            "The runner checks return values only. Do not add comparison settings or exception cases. "
+            "Use null for tasks that cannot be verified with JSON-compatible arguments and return values. "
+            "If the learner requests a concept recall question, put it in question, put the reference "
+            "answer in expected_answer, and set answer_mode to text. Keep fields concise and avoid "
+            "repeating cases or the answer key in learner-facing practice instructions."
         )
     return prompt
 

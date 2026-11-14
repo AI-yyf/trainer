@@ -8110,6 +8110,25 @@ async def test_reasoning_completion_closes_upstream_at_explicit_finish() -> None
 
 
 @pytest.mark.asyncio
+async def test_empty_truncated_completion_can_recover_with_a_complete_reply() -> None:
+    service = ProviderService(config=_make_config(), api_key="sk-test-key")
+
+    async def truncated():
+        yield SimpleNamespace(choices=[SimpleNamespace(delta=None, finish_reason="length")])
+
+    recovered = {"choices": [{"message": {"content": "Completed card"}, "finish_reason": "stop"}]}
+    with patch.object(service, "_get_client", return_value=SimpleNamespace()), patch.object(
+        service, "_create_chat_completion", side_effect=[(truncated(), "model"), (recovered, "model")],
+    ) as create:
+        chunks = [chunk async for chunk in service.chat_completion_stream([
+            {"role": "user", "content": "Return a card."},
+        ], max_tokens=2048)]
+
+    assert chunks == ["Completed card"]
+    assert create.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_chat_completion_strips_reasoning_blocks() -> None:
     config = _make_config()
     service = ProviderService(config=config, api_key="sk-test-key")

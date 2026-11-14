@@ -4503,12 +4503,15 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                         escalated,
                     )
                     try:
-                        retry_response, _ = await self._create_chat_completion(
-                            client=self._get_client(),
-                            model=model,
-                            messages=messages,
-                            temperature=temperature,
-                            max_tokens=escalated,
+                        retry_response, _ = await _await_provider_stream_with_cancellation(
+                            self._create_chat_completion(
+                                client=self._get_client(),
+                                model=model,
+                                messages=messages,
+                                temperature=temperature,
+                                max_tokens=escalated,
+                            ),
+                            cancel_event,
                         )
                         retry_text = _require_provider_runtime_response(
                             "openai_chat_completions",
@@ -4519,6 +4522,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                         retry_text = ""
                     if retry_text.strip():
                         raw_content = retry_text
+                        finish_reason = "stop"
                         yield retry_text
             _require_provider_runtime_response(
                 "openai_chat_completions",
