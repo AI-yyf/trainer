@@ -350,11 +350,17 @@ async function activate() {
     report.steps.push({ step: "coach-settings", ok: Boolean(settings && settings.ok) });
     if (process.env.FJ_VISUAL_IMPLEMENTATION) {
       const focus = "PPO 裁剪目标";
-      const generated = await vscode.commands.executeCommand("trainer.training.generateCard", {
+      const generate = () => vscode.commands.executeCommand("trainer.training.generateCard", {
         source: "conversation_gap", cardType: "practice", focusArea: focus,
         targetSkill: "解释 PPO clip 目标并手写损失函数",
         prompt: "请用 Python 标准库实现接收新旧对数概率列表、优势列表和裁剪阈值，返回逐项裁剪目标负均值的 PPO 损失函数。",
       });
+      let generated = await generate();
+      if (!generated?.ok && /provider request failed|timed out|temporarily unavailable/i.test(generated?.message || "")) {
+        report.steps.push({ step: "retry-card-generation", reason: generated.message });
+        await sleep(3000);
+        generated = await generate();
+      }
       const card = generated?.data?.card;
       if (!generated?.ok || card?.python_behavior_contract?.reference_id !== "trainer/ppo-clipped-loss/v1") {
         throw new Error("Native card generation did not create the reviewed practice contract. " + (generated?.message || ""));
@@ -501,7 +507,7 @@ async function main() {
 
   try {
     await page.waitForTimeout(8000);
-    const deadline = Date.now() + 180_000;
+    const deadline = Date.now() + (recallSource ? 600_000 : 180_000);
     while (!fs.existsSync(reportPath) && Date.now() < deadline) {
       await page.waitForTimeout(2000);
     }
@@ -575,7 +581,9 @@ async function main() {
       }
       const queue = frame.locator("[data-training-review-queue=true]");
       await queue.waitFor();
-      const reviewRow = queue.locator(".training-review-row").filter({ hasText: "PPO" });
+      const reviewRow = queue.locator(".training-review-row").filter({
+        has: frame.getByRole("heading", { name: before.schedule.concept_id, exact: true }),
+      });
       await reviewRow.locator(".training-review-row__actions-details > summary").click();
       await reviewRow.getByRole("button", { name: "开始复习", exact: true }).click();
       const form = frame.locator('[data-template="PracticeResponse"]').filter({ hasText: seeded.question });
