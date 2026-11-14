@@ -119,7 +119,8 @@ test('persistCoachSettings skips the save when the payload already matches the s
   const persistSource = source.slice(persistStart, persistEnd);
   assert.match(persistSource, /const savedWorkspaceSettings = data\.memory\.workspace;/);
   assert.match(persistSource, /const matchesSavedSettings = Boolean\(/);
-  assert.match(persistSource, /matchesSavedCoachDefaults\(payload\.coachDefaults, savedWorkspaceSettings\.coachDefaults\)/);
+  assert.match(persistSource, /matchesSavedCoachDefaults\(settings\.coachDefaults, savedWorkspaceSettings\.coachDefaults\)/);
+  assert.match(persistSource, /const matchesSavedSettings = Boolean\(\s*!coachHabit && savedWorkspaceSettings/);
   assert.match(persistSource, /if \(matchesSavedSettings\) \{\s*return;\s*\}/);
   assert.match(persistSource, /postMessage\(\{\s*type: "settings\/saveCoach",\s*payload,\s*\}\);/);
   assert.match(persistSource, /saveBrowserPreviewCoachSettings\(payload, previewSessionId\)/);
