@@ -37,11 +37,11 @@ async def _iterate_provider_stream_with_cancellation(
 
     async def close_iterator() -> None:
         nonlocal iterator_closed
-        if iterator_closed or iterator_exhausted:
+        if iterator_closed:
             return
         iterator_closed = True
         close = getattr(iterator, "aclose", None)
-        if close is not None:
+        if close is not None and not iterator_exhausted:
             try:
                 await close()
             except RuntimeError as exc:

@@ -803,8 +803,8 @@ async function main() {
         .map((message) => message.metadata?.stream_state ?? "missing");
       let stopSettled = true;
       try {
-        await waitFor(() => cancelled.closed && interruptedTurns().some((state) =>
-          ["cancelled", "interrupted", "failed"].includes(state)), "upstream closure and persisted stop state");
+        await waitFor(() => cancelled.closed && interruptedTurns()[0] === "cancelled",
+          "upstream closure and a persisted cancellation");
       } catch {
         stopSettled = false;
       }
@@ -821,8 +821,7 @@ async function main() {
       await stop.waitFor({ state: "hidden" });
       let dropSettled = true;
       try {
-        await waitFor(() => interruptedTurns().length === 2 && interruptedTurns().every((state) =>
-          ["cancelled", "interrupted", "failed"].includes(state)), "the persisted network failure");
+        await waitFor(() => interruptedTurns()[1] === "failed", "the persisted network failure");
       } catch {
         dropSettled = false;
       }

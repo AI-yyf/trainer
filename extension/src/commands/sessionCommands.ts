@@ -2763,7 +2763,8 @@ export async function cancelStreamMessageCommand(
   nextStreamGeneration(context);
   activeCoachStreams.delete(context);
   activeCoachStreamContexts.delete(context);
-  active?.abortController.abort();
+  // Give the sidecar a chance to record an explicit cancellation before
+  // closing the transport. The bounded request also covers a dead sidecar.
   if (active) void context.sidecarClient
     .postJson(
       active.sidecarPort,
@@ -2772,9 +2773,9 @@ export async function cancelStreamMessageCommand(
       { timeoutMs: 2000 },
     )
     .catch(() => {
-      // The local abort remains the fallback when the sidecar has already
-      // disconnected or is shutting down.
-    });
+      // The local abort also works if the sidecar has already disconnected.
+    })
+    .finally(() => active.abortController.abort());
   const responseLanguage = resolveProviderGuardLanguage(context);
   await postStreamReliabilityStatus(context, 'failed', responseLanguage);
   await updateStreamingState(context, (state) => ({

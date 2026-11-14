@@ -2667,9 +2667,8 @@ def build_core_router(
                 )
 
             except asyncio.CancelledError:
-                # Fail-closed: failed->acked + publish failure complete (no remint).
                 logger.info("trainer_stream_cancelled", extra={"stream_id": stream_id})
-                async for _abort_frame in _abort_fail_closed():
+                async for _abort_frame in _abort_for_cancellation():
                     yield _abort_frame
                 return
             except Exception as exc:
@@ -2701,7 +2700,11 @@ def build_core_router(
                     stream_state=(
                         "completed"
                         if stream_committed
-                        else ("failed" if stream_failed else "interrupted")
+                        else "cancelled"
+                        if core.stream_cancellation_requested(stream_id)
+                        else "failed"
+                        if stream_failed
+                        else "interrupted"
                     ),
                 )
                 core.unregister_stream_cancellation(stream_id)
@@ -4059,9 +4062,8 @@ def build_core_router(
                     provider_failure_detected=provider_failure_detected,
                 )
             except asyncio.CancelledError:
-                # Fail-closed: failed->acked + publish failure complete (no remint).
                 logger.info("trainer_stream_cancelled", extra={"stream_id": stream_id})
-                async for _abort_frame in _abort_fail_closed():
+                async for _abort_frame in _abort_for_cancellation():
                     yield _abort_frame
                 return
             except Exception as exc:
@@ -4096,7 +4098,11 @@ def build_core_router(
                         stream_state=(
                             "completed"
                             if stream_committed
-                            else ("failed" if stream_failed else "interrupted")
+                            else "cancelled"
+                            if core.stream_cancellation_requested(stream_id)
+                            else "failed"
+                            if stream_failed
+                            else "interrupted"
                         ),
                     )
                 core.unregister_stream_cancellation(stream_id)
