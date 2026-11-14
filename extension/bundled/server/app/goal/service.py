@@ -17,6 +17,8 @@ from ..core.event_ledger import EVENT_GOAL_ARCHIVED, EVENT_GOAL_COMPLETED
 from ..core.models import GoalActivity, GoalSession, LearningPlan, utc_now_iso
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from ..core.event_ledger import EventLedgerService
 from ..db.repository import TrainerRepository
 
@@ -374,18 +376,11 @@ class GoalService:
         key = str(event_key or "").strip()
         key = f"{normalized_kind}:{key}" if key else ""
 
-        ledger_activity: GoalActivity | None = None
-
         def mutate(target: GoalSession) -> bool:
-            nonlocal ledger_activity
             if target.status != "active":
                 return False
-            if key:
-                ledger_activity = next(
-                    (activity for activity in target.activities if activity.event_key == key), None,
-                )
-                if ledger_activity is not None:
-                    return False
+            if key and any(activity.event_key == key for activity in target.activities):
+                return False
             prior_refs = {
                 ref
                 for activity in target.activities
@@ -401,7 +396,6 @@ class GoalService:
                 evidenceRefs=refs,
                 eventKey=key,
             )
-            ledger_activity = activity
             target.activities.append(activity)
             target.activities = target.activities[-self.max_activities :]
             target.activity_count += 1
@@ -413,22 +407,32 @@ class GoalService:
             target.updated_at = activity.occurred_at
             return True
 
-        updated = self.repository.mutate_goal(workspace_id, goal.goal_id, mutate)
-        if updated is not None and ledger_activity is not None:
-            fingerprint = key or f"{kind}:{ledger_activity.summary[:80]}:{ledger_activity.occurred_at}"
-            self._record_goal_event(
+        def record_event(target: GoalSession, transaction: sqlite3.Connection) -> bool:
+            activity = target.latest_activity
+            if activity is None or self.event_ledger is None:
+                return True
+            # A caller key denotes a retry. A fresh activity without a key
+            # must receive its own identity even if its text and time match.
+            fingerprint = key or activity.activity_id
+            entry = self.event_ledger.record_event(
                 "goal_activity_recorded",
+                scope="goal",
+                project_id=workspace_id,
                 workspace_id=workspace_id,
-                goal_id=goal.goal_id,
                 idempotency_key=f"goal_activity:{goal.goal_id}:{fingerprint}",
-                payload={
+                source_chain=["goal_service"],
+                payload_ref={
                     "goal_id": goal.goal_id,
-                    "kind": ledger_activity.kind,
-                    "result": ledger_activity.result,
-                    "activity_id": ledger_activity.activity_id,
+                    **activity.model_dump(mode="json"),
                 },
+                reversibility="reversible",
+                transaction=transaction,
             )
-        return updated
+            return entry.payload_ref.get("activity_id") == activity.activity_id
+
+        return self.repository.mutate_goal(
+            workspace_id, goal.goal_id, mutate, before_commit=record_event,
+        )
 
     def _record_goal_event(
         self,

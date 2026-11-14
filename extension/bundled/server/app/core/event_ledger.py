@@ -349,6 +349,17 @@ class EventLedgerService:
         with self._lock:
             return event_id in self._reversals
 
+    def find_by_idempotency_key(
+        self, workspace_id: str, idempotency_key: str,
+        *, transaction: "sqlite3.Connection | None" = None,
+    ) -> EventLedgerEntry | None:
+        if self._store is not None:
+            return self._store.find_by_idempotency_key(
+                workspace_id=workspace_id, idempotency_key=idempotency_key, transaction=transaction,
+            )
+        with self._lock:
+            return self._idempotent.get((workspace_id, idempotency_key.strip()))
+
     def reverse_by_idempotency_key(
         self,
         workspace_id: str,
@@ -367,9 +378,7 @@ class EventLedgerService:
         key = str(idempotency_key or "").strip()
         if not key or self._store is None:
             return None
-        entry = self._store.find_by_idempotency_key(
-            workspace_id=workspace_id or "", idempotency_key=key, transaction=transaction,
-        )
+        entry = self.find_by_idempotency_key(workspace_id, key, transaction=transaction)
         if entry is None or entry.reversibility != "reversible":
             return None
         if transaction is not None:

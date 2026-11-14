@@ -440,6 +440,8 @@ class TrainerRepository:
         workspace_id: str,
         goal_id: str,
         mutate: Callable[[GoalSession], bool],
+        *,
+        before_commit: Callable[[GoalSession, sqlite3.Connection], bool] | None = None,
     ) -> GoalSession | None:
         """Atomically read-modify-write one goal.
 
@@ -460,6 +462,9 @@ class TrainerRepository:
             if not mutate(goal):
                 connection.rollback()
                 return goal
+            if before_commit is not None and not before_commit(goal, connection):
+                connection.rollback()
+                return GoalSession.model_validate_json(row["payload"])
             goal.workspace_id = workspace_id
             connection.execute(
                 """

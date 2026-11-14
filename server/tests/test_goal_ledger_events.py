@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.settings import AppSettings
+from app.goal.service import GoalService
 from app.main import create_app
 
 
@@ -89,6 +91,41 @@ def test_goal_activity_records_with_idempotent_key(tmp_path: Path) -> None:
     ]
     assert len(events) == 1
     assert events[0].payload_ref.get("kind") == "verification"
+
+
+def test_goal_activity_replay_survives_history_truncation_and_restart(tmp_path: Path) -> None:
+    runtime = build_app(tmp_path).app.state.runtime
+    goals = GoalService(runtime.repository, max_activities=1, event_ledger=runtime.event_ledger)
+    goals.start(workspace_id="workspace", title="Review results")
+    for key in ("first", "second"):
+        goals.record_activity(
+            workspace_id="workspace", kind="review", event_key=key, summary=key,
+        )
+    restarted = build_app(tmp_path).app.state.runtime
+    replayed = restarted.goals().record_activity(
+        workspace_id="workspace", kind="review", event_key="first", summary="Duplicate",
+    )
+
+    assert replayed.activity_count == 2
+    assert [item.summary for item in replayed.activities] == ["second"]
+    assert restarted.event_ledger.count(event_type="goal_activity_recorded") == 2
+
+
+def test_goal_activity_does_not_commit_when_event_write_fails(tmp_path: Path, monkeypatch) -> None:
+    runtime = build_app(tmp_path).app.state.runtime
+    goals = runtime.goals()
+    goals.start(workspace_id="workspace", title="Review results")
+    record_event = runtime.event_ledger.record_event
+
+    def failing_event(*args, **kwargs):
+        record_event(*args, **kwargs)
+        raise RuntimeError("Ledger write failed")
+
+    monkeypatch.setattr(runtime.event_ledger, "record_event", failing_event)
+    with pytest.raises(RuntimeError, match="Ledger write failed"):
+        goals.record_activity(workspace_id="workspace", kind="review", event_key="first")
+    assert goals.current("workspace").activity_count == 0
+    assert runtime.event_ledger.count(event_type="goal_activity_recorded") == 0
 
 
 def test_goal_completion_records_once(tmp_path: Path) -> None:
