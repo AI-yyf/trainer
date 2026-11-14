@@ -538,7 +538,7 @@ async function flushQueueLocked(options) {
   // once: a retryable head item yields its turn instead of wedging the queue.
   while (queue.length && !stop && capturePasses > 0) {
     capturePasses -= 1;
-    const item = TrainerCapture.takeNextQueueItem(queue);
+    let item = TrainerCapture.takeNextQueueItem(queue);
     if (item.workspaceId && auth.workspaceId && item.workspaceId !== auth.workspaceId) {
       await TrainerCapture.saveNotice(copy.queueWorkspaceChanged);
       queue = TrainerCapture.markQueueAttempt(
@@ -554,6 +554,13 @@ async function flushQueueLocked(options) {
       // rest of the queue.
       queue = TrainerCapture.rotateQueueItem(queue, item.clientCaptureId);
       continue;
+    }
+    if (!item.workspaceId && auth.workspaceId) {
+      item = TrainerCapture.createQueueItem({
+        ...item, workspaceId: auth.workspaceId, workspaceName: auth.workspaceName, dedupKey: ''
+      });
+      queue[0] = item;
+      await TrainerCapture.saveCaptureQueues(queue, failedCaptures);
     }
     const payload = TrainerCapture.buildCapturePayload(item);
     const response = await sendCaptureWithRecovery(payload, auth);

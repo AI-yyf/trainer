@@ -81,7 +81,7 @@ test('capture worker keeps recoverable failures across restarts and reuses the c
   const storage = {
     [C.STORAGE_KEYS.baseUrl]: C.SIDECAR.defaultBaseUrl,
     [C.STORAGE_KEYS.credential]: 'fixture-credential',
-    [C.STORAGE_KEYS.workspaceId]: 'workspace-a',
+    [C.STORAGE_KEYS.workspaceId]: '',
   };
   const submitted = [];
   let online = false;
@@ -155,6 +155,7 @@ test('capture worker keeps recoverable failures across restarts and reuses the c
   assert.equal((await send({ type: 'trainer:state' })).queueCount, 1);
 
   online = true;
+  storage[C.STORAGE_KEYS.workspaceId] = 'workspace-a';
   const delivery = await send({ type: 'trainer:flush' });
   assert.equal(delivery.ok, false);
   assert.equal(delivery.rejected, 1);
