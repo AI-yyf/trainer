@@ -6,8 +6,7 @@
  * Zero pairing UI: the background discovers the local sidecar and connects
  * itself, so the card is capture-only — the capture row (page / PDF / GitHub
  * repo), the optional project-folder download, and the library binding.
- * Captures taken while Trainer is unreachable queue automatically (the badge
- * carries the count); no connection status and no import history are shown.
+ * Pending captures queue automatically. Failed ones remain available for recovery.
  *
  * Copy follows the browser locale (zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP,
  * ko-KR, pt-BR — with English as the fallback). Motion is explanatory only and
@@ -29,12 +28,17 @@ const elements = {
   revoke: document.getElementById('revoke'),
   openTrainer: document.getElementById('open-trainer'),
   notice: document.getElementById('notice'),
+  pendingCaptures: document.getElementById('pending-captures'),
+  failedCaptures: document.getElementById('failed-captures'),
+  failedCaptureList: document.getElementById('failed-capture-list'),
   close: document.getElementById('popup-close')
 };
 
 const copy = TrainerCapture.copyFor(TrainerCapture.browserLocale());
 let currentTab = { url: '', title: '', kind: 'web' };
 let lastTabUrl = '';
+let failedSignature = '';
+const waitingForCapture = new Map();
 
 function t(key, values) {
   return TrainerCapture.formatCopy(copy[key] || '', values);
@@ -168,6 +172,82 @@ function revealCapturePanel() {
   revealPanel(elements.capturePanel);
 }
 
+function showCaptureResult(node, result) {
+  const failed = result.status === 'failed' || result.status === 'unpaired';
+  const waiting = result.status === 'queued' || result.status === 'received';
+  setFeedback(node, result.message || '', failed ? 'error' : waiting ? 'warn' : '');
+  if (result.status === 'ok' || result.status === 'duplicated') {
+    drawSuccessCheck();
+  } else {
+    elements.capturePage.querySelector('.capture-check')?.classList.remove('is-drawn');
+  }
+  if (result.status === 'queued' && result.clientCaptureId) {
+    waitingForCapture.set(node, result.clientCaptureId);
+  } else {
+    waitingForCapture.delete(node);
+  }
+}
+
+function renderFailedCaptures(items) {
+  const signature = JSON.stringify(items);
+  if (signature === failedSignature) return;
+  failedSignature = signature;
+  elements.failedCaptures.hidden = items.length === 0;
+  elements.failedCaptureList.replaceChildren();
+
+  for (const item of items) {
+    const row = document.createElement('li');
+    const title = document.createElement('strong');
+    title.textContent = item.title || item.url;
+    const error = document.createElement('p');
+    error.className = 'feedback feedback--error';
+    error.setAttribute('role', 'status');
+    error.textContent = item.lastError;
+    row.append(title, error);
+    const folder = item.download ? document.createElement('input') : null;
+    if (folder) {
+      folder.type = 'text';
+      folder.value = item.targetDir;
+      folder.setAttribute('aria-label', t('downloadLabel'));
+      row.append(folder);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'capture-recovery__actions';
+    const retry = document.createElement('button');
+    const remove = document.createElement('button');
+    for (const [button, label, type] of [
+      [retry, 'queueRetry', 'trainer:capture-failure-retry'],
+      [remove, 'queueDelete', 'trainer:capture-failure-remove']
+    ]) {
+      button.type = 'button';
+      button.className = 'pill';
+      button.textContent = t(label);
+      button.addEventListener('click', async () => {
+        retry.disabled = remove.disabled = true;
+        if (folder) folder.disabled = true;
+        const result = await send({ type, clientCaptureId: item.clientCaptureId, targetDir: folder?.value });
+        if (result.state) renderState(result.state);
+        if (result.ok && result.message) {
+          showCaptureResult(item.download ? elements.downloadFeedback : elements.captureResult, {
+            ...result,
+            status: result.queued ? 'queued' : result.status,
+            clientCaptureId: item.clientCaptureId
+          });
+        } else if (!result.ok) {
+          error.textContent = result.message || item.lastError;
+          if (folder && result.invalid) folder.setAttribute('aria-invalid', 'true');
+        }
+        retry.disabled = remove.disabled = false;
+        if (folder) folder.disabled = false;
+      });
+      actions.append(button);
+    }
+    row.append(actions);
+    elements.failedCaptureList.append(row);
+  }
+}
+
 function renderState(state) {
   const paired = Boolean(state && state.paired);
 
@@ -178,6 +258,14 @@ function renderState(state) {
   elements.revoke.hidden = !paired;
 
   renderFocusOptions(state || {});
+  const queueCount = state?.queueCount || 0;
+  elements.pendingCaptures.hidden = queueCount === 0;
+  elements.pendingCaptures.textContent = queueCount ? t('queueCount', { count: queueCount }) : '';
+  renderFailedCaptures(state?.failedCaptures || []);
+  for (const [node, id] of waitingForCapture) {
+    const result = state?.history?.find((entry) => entry.clientCaptureId === id);
+    if (result && result.status !== 'queued') showCaptureResult(node, result);
+  }
 
   if (state && state.targetDir && document.activeElement !== elements.targetDir) {
     elements.targetDir.value = state.targetDir;
@@ -236,16 +324,13 @@ async function refreshStateFromHost() {
 }
 
 async function capturePage() {
+  waitingForCapture.delete(elements.captureResult);
   elements.capturePage.disabled = true;
   setFeedback(elements.captureResult, t('captureBusy'), '');
   const focusId = elements.focusSelect.value || '';
   await TrainerCapture.saveFocusId(focusId);
   const result = await send({ type: 'trainer:capture-tab' });
-  const failed = result.status === 'failed' || result.status === 'unpaired';
-  setFeedback(elements.captureResult, result.message || '', failed ? 'error' : '');
-  if (!failed) {
-    drawSuccessCheck();
-  }
+  showCaptureResult(elements.captureResult, result);
   // Re-fetch the sidecar state so the focus binding reflects the capture
   // that just landed instead of the pre-capture cache.
   await refreshStateFromHost();
@@ -260,6 +345,7 @@ async function downloadToProject() {
     return;
   }
   elements.targetDir.removeAttribute('aria-invalid');
+  waitingForCapture.delete(elements.downloadFeedback);
   elements.captureDownload.disabled = true;
   setFeedback(elements.downloadFeedback, t('downloadBusy'), '');
 
@@ -277,11 +363,7 @@ async function downloadToProject() {
     download: true,
     targetDir: elements.targetDir.value
   });
-  const failed = result.status === 'failed' || result.status === 'unpaired';
-  setFeedback(elements.downloadFeedback, result.message || '', failed ? 'error' : '');
-  if (!failed) {
-    drawSuccessCheck();
-  }
+  showCaptureResult(elements.downloadFeedback, result);
   await refreshStateFromHost();
   await renderTabLine();
 }
@@ -307,6 +389,20 @@ async function init() {
   const state = await send({ type: 'trainer:state' });
   renderState(state);
   await renderTabLine();
+  const latestCapture = state?.history?.find((entry) =>
+    entry.clientCaptureId && entry.url === TrainerCapture.normalizeCaptureUrl(currentTab.url)
+  );
+  if (latestCapture) {
+    const node = latestCapture.download ? elements.downloadFeedback : elements.captureResult;
+    if (latestCapture.status === 'queued') {
+      if (state.queue?.some((item) => item.clientCaptureId === latestCapture.clientCaptureId)) {
+        showCaptureResult(node, latestCapture);
+      }
+    } else {
+      const tone = latestCapture.status === 'failed' ? 'error' : latestCapture.status === 'received' ? 'warn' : '';
+      setFeedback(node, latestCapture.message, tone);
+    }
+  }
 
   if (state && state.paired) {
     const refreshed = await send({ type: 'trainer:refresh' });

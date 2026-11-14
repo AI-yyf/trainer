@@ -216,10 +216,11 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 
 async function updateBadge() {
   try {
-    const [auth, queue, drafts] = await Promise.all([
+    const [auth, queue, drafts, failed] = await Promise.all([
       TrainerCapture.loadAuth(),
       TrainerCapture.loadQueue(),
-      TrainerCapture.loadDraftQueue()
+      TrainerCapture.loadDraftQueue(),
+      TrainerCapture.loadFailedCaptures()
     ]);
     const pending = queue.length + drafts.length;
     let text = '';
@@ -227,6 +228,8 @@ async function updateBadge() {
       text = pending ? String(pending) : '!';
     } else if (pending) {
       text = String(pending);
+    } else if (failed.length) {
+      text = '!';
     }
     await chrome.action.setBadgeText({ text });
     if (text) {
@@ -339,19 +342,36 @@ function buildHistoryEntry(target, status, message, response) {
     download: target.download === true,
     savedPath: (response && response.savedPath) || '',
     targetDir: target.download === true ? String(target.targetDir || '') : '',
-    dedupKey: trainerDedupKey(target),
+    dedupKey: target.dedupKey || TrainerCapture.buildDedupKey(target),
+    clientCaptureId: target.clientCaptureId || '',
     at: new Date().toISOString()
   };
 }
 
-function trainerDedupKey(target) {
-  return TrainerCapture.buildDedupKey({
-    url: target.url,
-    kind: target.kind,
-    includeDocs: target.includeDocs,
-    download: target.download,
-    targetDir: target.targetDir
-  });
+function captureReceipt(item, response, copy) {
+  const savedPath = item.download ? response.savedPath : '';
+  const title = TrainerCapture.captureLabel(item);
+  const status = response.processing === 'ready'
+    ? (response.deduped ? 'duplicated' : 'ok')
+    : 'received';
+  const downloadMessage = savedPath && TrainerCapture.formatCopy(
+    response.deduped ? copy.captureDownloadedDeduped : copy.captureDownloaded,
+    { path: savedPath }
+  );
+  const receivedMessage = TrainerCapture.formatCopy(copy.captureReceived, { title });
+  const message = status === 'received'
+    ? [downloadMessage, receivedMessage].filter(Boolean).join('\n')
+    : downloadMessage || TrainerCapture.formatCopy(
+      response.deduped ? copy.captureDeduped : copy.captureSuccess, { title }
+    );
+  return { status, message, savedPath, deepLink: response.deepLink, resourceId: response.resourceId };
+}
+
+function retainFailedCapture(failed, item, message) {
+  return [
+    { ...item, lastError: message },
+    ...failed.filter((entry) => entry.clientCaptureId !== item.clientCaptureId)
+  ];
 }
 
 /** Persist the last observed sidecar reachability for the popup's three states. */
@@ -363,239 +383,80 @@ async function recordConnection(state) {
   }
 }
 
-/**
- * Run one capture end to end. Returns a status payload the popup / content
- * script can render:
- *   ok | duplicated | duplicate-local | queued | unpaired | failed
- *
- * A download capture (`target.download`) is the same pipeline with
- * `download: true` + `target_dir` in the payload; the sidecar answers with
- * `saved_path`, which the notification and the history entry carry.
- */
+/** Accept a new capture, or retain its request for later delivery or recovery. */
 async function runCapture(target, options) {
-  const settings = options || {};
+  const notify = options?.notify !== false;
   const copy = dict();
   const url = TrainerCapture.normalizeCaptureUrl(target.url);
   if (!url) {
-    const message = copy.captureNoUrl;
-    if (settings.notify !== false) {
-      await notifyResult(copy.notifyFailedTitle, message, '');
-    }
-    return { status: 'failed', message, deepLink: '' };
+    if (notify) await notifyResult(copy.notifyFailedTitle, copy.captureNoUrl, '');
+    return { status: 'failed', message: copy.captureNoUrl };
   }
 
-  const kind = TrainerCapture.normalizeKind(target.kind);
-  const download = target.download === true && TrainerCapture.supportsDownload(kind);
-  const normalizedTarget = {
-    url,
-    kind,
-    title: target.title || '',
-    selection: target.selection || '',
-    includeDocs: kind === 'github_repo' && target.includeDocs === true,
-    download,
-    targetDir: download ? String(target.targetDir || '') : ''
-  };
-
-  let [auth, history, queue, storedFocusId, storedTargetDir] = await Promise.all([
-    TrainerCapture.loadAuth(),
-    TrainerCapture.loadHistory(),
-    TrainerCapture.loadQueue(),
+  const [auto, storedFocusId, storedTargetDir, storedWorkspaceName] = await Promise.all([
+    ensureAutoPair({ force: true }),
     TrainerCapture.loadFocusId(),
-    TrainerCapture.loadTargetDir()
+    TrainerCapture.loadTargetDir(),
+    TrainerCapture.loadWorkspaceName()
   ]);
-  // A user action must land in the window they are using right now.
-  const auto = await ensureAutoPair({ force: true });
-  if (auto.ok) {
-    auth = auto.auth;
-  }
-
-  // A right-click download carries no folder of its own: it uses the folder the
-  // popup last saved. Resolve it *before* the dedup key, so a menu download and
-  // a popup download of the same file into the same folder share one identity.
-  if (download && !normalizedTarget.targetDir) {
-    normalizedTarget.targetDir = storedTargetDir || TrainerCapture.DEFAULT_TARGET_DIR;
-  }
-  const dedupKey = trainerDedupKey(normalizedTarget);
-  const focusId =
-    target.focusId !== undefined && target.focusId !== null
-      ? String(target.focusId)
-      : storedFocusId;
-  const clientCaptureId = TrainerCapture.createClientCaptureId();
-
-  const label = TrainerCapture.captureLabel(normalizedTarget) || url;
-  // Only the pending queue may short-circuit locally: a past SUCCESS record
-  // must not impersonate this capture, because the resource may have been
-  // deleted or the user may want a fresh download (T-0011). The server owns
-  // existence/dedupe and answers with the real result.
-  const duplicate = TrainerCapture.findLocalDuplicate({ history: [], queue }, dedupKey);
-  if (duplicate && duplicate.where === "queue") {
-    const deepLink =
-      duplicate.entry.deepLink || TrainerCapture.buildDeepLink(duplicate.entry.resourceId);
-    const savedPath = duplicate.entry.savedPath || '';
-    let message;
-    if (download && savedPath) {
-      message = TrainerCapture.formatCopy(copy.captureDownloadedDeduped, { path: savedPath });
-    } else if (duplicate.where === 'queue') {
-      message = TrainerCapture.formatCopy(copy.captureDuplicateQueued, { title: label });
-    } else {
-      message = TrainerCapture.formatCopy(copy.captureDuplicateLocal, { title: label });
-    }
-    if (settings.notify !== false) {
-      await notifyResult(download ? copy.notifyDownloadTitle : copy.notifyLibraryTitle, message, deepLink);
-    }
+  const auth = auto.ok ? auto.auth : await TrainerCapture.loadAuth();
+  const item = TrainerCapture.createQueueItem({
+    ...target,
+    url,
+    workspaceId: auth.workspaceId,
+    workspaceName: auth.workspaceName || storedWorkspaceName,
+    focusId: target.focusId ?? storedFocusId,
+    targetDir: target.targetDir || storedTargetDir || TrainerCapture.DEFAULT_TARGET_DIR
+  });
+  const title = TrainerCapture.captureLabel(item);
+  const notifyTitle = item.download ? copy.notifyDownloadTitle : copy.notifyLibraryTitle;
+  const pending = await TrainerCapture.loadQueue();
+  const duplicate = TrainerCapture.findLocalDuplicate({ queue: pending }, item.dedupKey);
+  if (duplicate) {
+    const message = TrainerCapture.formatCopy(copy.captureDuplicateQueued, { title });
+    if (notify) await notifyResult(copy.notifyQueuedTitle, message, '');
     return {
-      status: duplicate.where === 'queue' ? 'queued' : 'duplicate-local',
-      message,
-      deepLink,
-      resourceId: duplicate.entry.resourceId || ''
+      status: 'queued', message, queueLength: pending.length, clientCaptureId: duplicate.entry.clientCaptureId
     };
   }
 
-  if (!auth.credential || !auth.baseUrl) {
-    // Zero-code onboarding: a capture taken before Trainer is reachable is
-    // queued, never rejected. The queue item carries no workspace yet; the
-    // sidecar binds it to whichever workspace auto-pairs first.
-    const item = TrainerCapture.createQueueItem({
-      url,
-      kind,
-      title: normalizedTarget.title,
-      selection: normalizedTarget.selection,
-      focusId,
-      includeDocs: normalizedTarget.includeDocs,
-      download: normalizedTarget.download,
-      targetDir: normalizedTarget.targetDir,
-      clientCaptureId,
-      workspaceId: auth.workspaceId || ''
-    });
-    const enqueued = await withQueueLock(async () => {
-      const fresh = await TrainerCapture.loadQueue();
-      const next = TrainerCapture.enqueueCapture(fresh, item, TrainerCapture.LIMITS.queue);
-      if (!next.rejectedFull) {
-        await TrainerCapture.saveQueue(next.queue);
-      }
-      return next;
-    });
-    if (enqueued.rejectedFull) {
-      const message = TrainerCapture.formatCopy(copy.captureQueueFull, {});
-      if (settings.notify !== false) {
-        await notifyResult(copy.notifyFailedTitle, message, '');
-      }
-      await updateBadge();
-      return { status: 'failed', message, deepLink: '' };
+  let response;
+  if (auth.credential && auth.baseUrl) {
+    if (notify) {
+      await notifyResult(notifyTitle, item.download ? copy.downloadBusy : copy.notifyPending, '');
     }
-    const queueMessage = TrainerCapture.formatCopy(
-      download ? copy.captureDownloadQueued : copy.captureQueued,
-      { count: enqueued.queue.length }
-    );
-    await TrainerCapture.recordHistory(
-      buildHistoryEntry(normalizedTarget, 'queued', queueMessage, null)
-    );
-    await recordConnection('offline');
-    if (settings.notify !== false) {
-      await notifyResult(
-        download ? copy.notifyDownloadTitle : copy.notifyQueuedTitle,
-        queueMessage,
-        ''
-      );
-    }
-    await updateBadge();
-    return { status: 'queued', message: queueMessage, queueLength: enqueued.queue.length };
+    response = await sendCaptureWithRecovery(TrainerCapture.buildCapturePayload(item), auth);
   }
-
-  const payload = TrainerCapture.buildCapturePayload({
-    url,
-    kind,
-    title: normalizedTarget.title,
-    selection: normalizedTarget.selection,
-    focusId,
-    includeDocs: normalizedTarget.includeDocs,
-    download: normalizedTarget.download,
-    targetDir: normalizedTarget.targetDir,
-    clientCaptureId,
-    workspaceId: auth.workspaceId
-  });
-
-  if (settings.notify !== false) {
-    await notifyResult(
-      download ? copy.notifyDownloadTitle : copy.notifyLibraryTitle,
-      download ? copy.downloadBusy : copy.notifyPending,
-      ''
-    );
-  }
-
-  const response = await sendCaptureWithRecovery(payload, auth);
-
-  if (response.ok) {
-    const status = response.deduped ? 'duplicated' : 'ok';
-    const savedPath = response.savedPath || '';
-    const message =
-      download && savedPath
-        ? TrainerCapture.formatCopy(
-            response.deduped ? copy.captureDownloadedDeduped : copy.captureDownloaded,
-            { path: savedPath }
-          )
-        : TrainerCapture.formatCopy(
-            response.deduped ? copy.captureDeduped : copy.captureSuccess,
-            { title: label }
-          );
-    await TrainerCapture.recordHistory(
-      buildHistoryEntry(normalizedTarget, status, message, response)
-    );
+  if (response?.ok) {
+    const receipt = captureReceipt(item, response, copy);
+    await TrainerCapture.recordHistory(buildHistoryEntry(item, receipt.status, receipt.message, response));
     await TrainerCapture.clearNotice();
     await recordConnection('ok');
-    if (settings.notify !== false) {
-      // A completed download names the saved path and offers the deep link
-      // back into VS Code (clicking the notification opens it).
-      const body = download && savedPath ? `${message}\n${copy.openInVsCode}` : message;
-      await notifyResult(download ? copy.notifyDownloadTitle : copy.notifyLibraryTitle, body, response.deepLink);
+    if (notify) {
+      const body = receipt.savedPath ? `${receipt.message}\n${copy.openInVsCode}` : receipt.message;
+      await notifyResult(notifyTitle, body, receipt.deepLink);
     }
     await updateBadge();
-    return {
-      status,
-      message,
-      deepLink: response.deepLink,
-      resourceId: response.resourceId,
-      savedPath,
-      deduped: response.deduped
-    };
+    return { ...receipt, deduped: response.deduped };
   }
-
-  if (response.unauthorized) {
-    // The sidecar may have been reset or re-paired while this browser kept the
-    // old credential. Drop it so the next flush auto-pairs again, and keep the
-    // capture instead of losing it to a stale token.
+  if (response?.unauthorized) {
     await TrainerCapture.clearAuth();
     resetAutoPairCache();
   }
-
-  if (!response.retryable && !response.unauthorized) {
-    // Permanent failure (e.g. network-disabled workspace, read-only workspace):
-    // record it and never queue it.
+  if (response && !response.retryable && !response.unauthorized) {
     const message = TrainerCapture.formatCopy(copy.captureFailed, { message: response.message });
-    await TrainerCapture.recordHistory(buildHistoryEntry(normalizedTarget, 'failed', message, null));
+    await withQueueLock(async () => {
+      const queue = await TrainerCapture.loadQueue();
+      const failed = await TrainerCapture.loadFailedCaptures();
+      await TrainerCapture.saveCaptureQueues(queue, retainFailedCapture(failed, item, message));
+    });
+    await TrainerCapture.recordHistory(buildHistoryEntry(item, 'failed', message, response));
     await recordConnection('ok');
-    if (settings.notify !== false) {
-      await notifyResult(copy.notifyFailedTitle, message, '');
-    }
+    if (notify) await notifyResult(copy.notifyFailedTitle, message, '');
     await updateBadge();
-    return { status: 'failed', message, deepLink: '' };
+    return { status: 'failed', message };
   }
 
-  // Transient failure (offline / timeout / 5xx): queue for automatic delivery.
-  const item = TrainerCapture.createQueueItem({
-    url,
-    kind,
-    title: normalizedTarget.title,
-    selection: normalizedTarget.selection,
-    focusId,
-    includeDocs: normalizedTarget.includeDocs,
-    download: normalizedTarget.download,
-    targetDir: normalizedTarget.targetDir,
-    clientCaptureId,
-    workspaceId: auth.workspaceId
-  });
-  // Re-read and persist under the lock: a save after the lock releases lets a
-  // concurrent capture/flush read stale state and erase the just-enqueued item.
   const enqueued = await withQueueLock(async () => {
     const fresh = await TrainerCapture.loadQueue();
     const next = TrainerCapture.enqueueCapture(fresh, item, TrainerCapture.LIMITS.queue);
@@ -605,32 +466,24 @@ async function runCapture(target, options) {
     return next;
   });
   if (enqueued.rejectedFull) {
-    const message = TrainerCapture.formatCopy(copy.captureQueueFull, {});
-    if (settings.notify !== false) {
-      await notifyResult(copy.notifyFailedTitle, message, '');
-    }
+    const message = copy.captureQueueFull;
+    if (notify) await notifyResult(copy.notifyFailedTitle, message, '');
     await updateBadge();
-    return { status: 'failed', message, deepLink: '' };
+    return { status: 'failed', message };
   }
-  const queueMessage = TrainerCapture.formatCopy(
-    download ? copy.captureDownloadQueued : copy.captureQueued,
+  const message = TrainerCapture.formatCopy(
+    item.download ? copy.captureDownloadQueued : copy.captureQueued,
     { count: enqueued.queue.length }
   );
-  await TrainerCapture.recordHistory(
-    buildHistoryEntry(normalizedTarget, 'queued', queueMessage, null)
-  );
-  // A 5xx/timeout means "reachable but did not finish", not "Trainer is gone".
-  await recordConnection(response.status ? 'ok' : 'offline');
+  await TrainerCapture.recordHistory(buildHistoryEntry(item, 'queued', message, null));
+  await recordConnection(response?.status ? 'ok' : 'offline');
+  if (notify) await notifyResult(copy.notifyQueuedTitle, message, '');
   await updateBadge();
-
-  if (settings.notify !== false) {
-    await notifyResult(
-      download ? copy.notifyDownloadTitle : copy.notifyQueuedTitle,
-      queueMessage,
-      ''
-    );
-  }
-  return { status: 'queued', message: queueMessage, queueLength: enqueued.queue.length };
+  const queued = enqueued.queue.find((entry) => entry.dedupKey === item.dedupKey);
+  return {
+    status: 'queued', message, queueLength: enqueued.queue.length,
+    clientCaptureId: queued?.clientCaptureId || item.clientCaptureId
+  };
 }
 
 // ------------------------------------------------------------ queue flush --
@@ -652,6 +505,7 @@ async function flushQueueLocked(options) {
     }
   }
   let queue = await TrainerCapture.loadQueue();
+  let failedCaptures = await TrainerCapture.loadFailedCaptures();
   let drafts = await TrainerCapture.loadDraftQueue();
   const pending = () => queue.length + drafts.length;
 
@@ -676,7 +530,9 @@ async function flushQueueLocked(options) {
   let stop = false;
   let capturePasses = queue.length;
   let draftPasses = drafts.length;
-  const savedPaths = [];
+  const deliveryMessages = [];
+  let rejected = 0;
+  let rejectionMessage = '';
 
   // Captures and downloads first. One pass visits each queued capture at most
   // once: a retryable head item yields its turn instead of wedging the queue.
@@ -705,35 +561,11 @@ async function flushQueueLocked(options) {
     if (response.ok) {
       queue = TrainerCapture.dequeueCapture(queue, item.clientCaptureId);
       flushed += 1;
-      const status = response.deduped ? 'duplicated' : 'ok';
-      const itemLabel = TrainerCapture.captureLabel(item) || item.url;
-      const message =
-        item.download === true && response.savedPath
-          ? TrainerCapture.formatCopy(
-              response.deduped ? copy.captureDownloadedDeduped : copy.captureDownloaded,
-              { path: response.savedPath }
-            )
-          : TrainerCapture.formatCopy(
-              response.deduped ? copy.captureDeduped : copy.captureSuccess,
-              { title: itemLabel }
-            );
-      if (item.download === true && response.savedPath) {
-        savedPaths.push(response.savedPath);
-      }
+      const receipt = captureReceipt(item, response, copy);
+      deliveryMessages.push(receipt.message);
+      failedCaptures = failedCaptures.filter((entry) => entry.clientCaptureId !== item.clientCaptureId);
       await TrainerCapture.recordHistory(
-        buildHistoryEntry(
-          {
-            url: item.url,
-            kind: item.kind,
-            title: item.title,
-            includeDocs: item.includeDocs,
-            download: item.download,
-            targetDir: item.targetDir
-          },
-          status,
-          message,
-          response
-        )
+        buildHistoryEntry(item, receipt.status, receipt.message, response)
       );
       continue;
     }
@@ -767,24 +599,13 @@ async function flushQueueLocked(options) {
       break;
     }
 
-    // Permanent failure: drop the item so the queue cannot wedge forever.
+    rejectionMessage = TrainerCapture.formatCopy(copy.captureFailed, { message: response.message });
+    failedCaptures = retainFailedCapture(failedCaptures, item, rejectionMessage);
     queue = TrainerCapture.dequeueCapture(queue, item.clientCaptureId);
-    const message = TrainerCapture.formatCopy(copy.captureFailed, { message: response.message });
-    await TrainerCapture.recordHistory(
-      buildHistoryEntry(
-        {
-          url: item.url,
-          kind: item.kind,
-          title: item.title,
-          includeDocs: item.includeDocs,
-          download: item.download,
-          targetDir: item.targetDir
-        },
-        'failed',
-        message,
-        null
-      )
-    );
+    // Commit the move together. A worker restart must never lose this item.
+    await TrainerCapture.saveCaptureQueues(queue, failedCaptures);
+    rejected += 1;
+    await TrainerCapture.recordHistory(buildHistoryEntry(item, 'failed', rejectionMessage, response));
   }
 
   // Coach drafts (selections) follow captures, same workspace fence and
@@ -869,20 +690,24 @@ async function flushQueueLocked(options) {
     drafts = TrainerCapture.rotateDraft(drafts, draft.clientDraftId);
   }
 
-  await TrainerCapture.saveQueue(queue);
+  await TrainerCapture.saveCaptureQueues(queue, failedCaptures);
   await TrainerCapture.saveDraftQueue(drafts);
   await updateBadge();
 
   if (flushed > 0) {
     await recordConnection('ok');
     let message = TrainerCapture.formatCopy(copy.queueFlushed, { count: flushed });
-    if (savedPaths.length === 1) {
-      message = `${message}\n${TrainerCapture.formatCopy(copy.captureDownloaded, { path: savedPaths[0] })}`;
-    }
+    if (deliveryMessages.length === 1) message += `\n${deliveryMessages[0]}`;
+    if (rejected) message += `\n${copy.failedCaptures} (${rejected})`;
     if (settings.notify !== false) {
       await notifyResult(copy.notifyQueueDoneTitle, message, '');
     }
-    return { ok: true, flushed, remaining: pending(), message };
+    return { ok: rejected === 0, flushed, rejected, remaining: pending(), message };
+  }
+  if (rejected) {
+    await recordConnection('ok');
+    if (settings.notify !== false) await notifyResult(copy.notifyFailedTitle, rejectionMessage, '');
+    return { ok: false, flushed, rejected, remaining: pending(), reason: 'failed', message: rejectionMessage };
   }
   if (lastError) {
     await recordConnection(lastStatus || lastErrorWasFence ? 'ok' : 'offline');
@@ -1022,12 +847,13 @@ async function buildState() {
       auth = auto.auth;
     }
   }
-  const [cached, queue, drafts, history, focusId, targetDir, notice, connection, storedWorkspaceName] =
+  const [cached, queue, drafts, history, failedCaptures, focusId, targetDir, notice, connection, storedWorkspaceName] =
     await Promise.all([
       TrainerCapture.loadStatusCache(),
       TrainerCapture.loadQueue(),
       TrainerCapture.loadDraftQueue(),
       TrainerCapture.loadHistory(),
+      TrainerCapture.loadFailedCaptures(),
       TrainerCapture.loadFocusId(),
       TrainerCapture.loadTargetDir(),
       TrainerCapture.loadNotice(),
@@ -1061,6 +887,7 @@ async function buildState() {
     queue: queue.slice(),
     drafts: drafts.slice(),
     history: history.slice(0, TrainerCapture.LIMITS.historyDisplay),
+    failedCaptures,
     notice
   };
 }
@@ -1192,14 +1019,14 @@ async function revokePairing() {
   await chrome.storage.local.set({
     [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: true
   });
-  // Pending captures cannot be delivered without a credential; drop them so
+  // Pending and failed captures are cleared on explicit revoke so
   // the badge does not keep counting forever after an explicit revoke, and
   // clear the local capture records so a later re-capture is not short-
   // circuited by the client-side duplicate hint.
   // Queue mutations serialize with capture/flush (T-0041): a lockless save
   // here would erase a capture enqueued while revoke was running.
   await withQueueLock(async () => {
-    await TrainerCapture.saveQueue([]);
+    await TrainerCapture.saveCaptureQueues([], []);
     await TrainerCapture.saveDraftQueue([]);
   });
   await TrainerCapture.clearHistory();
@@ -1237,6 +1064,51 @@ async function clearQueueEntries() {
   });
   await updateBadge();
   return { ok: true, remaining: 0, state: await buildState() };
+}
+
+async function recoverFailedCapture(message, retry) {
+  const copy = dict();
+  const id = String(message.clientCaptureId || '').trim();
+  const result = await withQueueLock(async () => {
+    const failed = await TrainerCapture.loadFailedCaptures();
+    const item = failed.find((entry) => entry.clientCaptureId === id);
+    if (!item) return { ok: false, message: copy.queueNothing };
+    const pending = await TrainerCapture.loadQueue();
+    const remaining = failed.filter((entry) => entry.clientCaptureId !== id);
+    if (!retry) {
+      await TrainerCapture.saveCaptureQueues(pending, remaining);
+      return { ok: true };
+    }
+
+    const targetDir = message.targetDir ?? item.targetDir;
+    if (item.download && !TrainerCapture.targetDirIsValid(targetDir)) {
+      return { ok: false, invalid: true, message: copy.downloadInvalidFolder };
+    }
+    const next = TrainerCapture.createQueueItem({ ...item, targetDir, dedupKey: '' });
+    // Manual retries use the failed request identity even if the learner
+    // corrected its destination folder.
+    if (!pending.some((entry) => entry.clientCaptureId === id)) {
+      if (pending.length >= TrainerCapture.LIMITS.queue) {
+        return { ok: false, message: copy.captureQueueFull };
+      }
+      pending.push(next);
+    }
+    await TrainerCapture.saveCaptureQueues(pending, remaining);
+    const status = TrainerCapture.formatCopy(copy.queueCount, { count: pending.length });
+    return { ok: true, queued: true, message: status };
+  });
+  await updateBadge();
+  if (result.queued) {
+    // Chrome keeps the message worker alive while this explicit retry runs.
+    await flushQueue({ notify: false });
+    const state = await buildState();
+    const failed = state.failedCaptures.find((item) => item.clientCaptureId === id);
+    if (failed) return { ok: false, message: failed.lastError, state };
+    if (state.queue.some((item) => item.clientCaptureId === id)) return { ...result, state };
+    const receipt = state.history.find((item) => item.clientCaptureId === id);
+    return { ok: true, status: receipt?.status, message: receipt?.message, state };
+  }
+  return { ...result, state: await buildState() };
 }
 
 async function coachDraft(info, tab) {
@@ -1387,6 +1259,8 @@ const MESSAGE_HANDLERS = {
       url: message.url,
       kind,
       title: message.title || '',
+      selection: message.selection || '',
+      captureMode: message.captureMode,
       includeDocs: message.includeDocs === true,
       download,
       targetDir: download ? String(message.targetDir || '') : ''
@@ -1396,6 +1270,8 @@ const MESSAGE_HANDLERS = {
     const result = await flushQueue({ notify: true });
     return Object.assign({}, result, { state: await buildState() });
   },
+  'trainer:capture-failure-retry': async (message) => recoverFailedCapture(message, true),
+  'trainer:capture-failure-remove': async (message) => recoverFailedCapture(message, false),
   'trainer:queue-remove': async (message) => removeQueueEntry(message && message.clientCaptureId),
   'trainer:queue-clear': async () => clearQueueEntries(),
   'trainer:revoke': async () => revokePairing(),

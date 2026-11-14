@@ -222,6 +222,8 @@ async function main() {
       args: [
         `--disable-extensions-except=${extensionDir}`,
         `--load-extension=${extensionDir}`,
+        `--proxy-server=http://127.0.0.1:1`,
+        `--proxy-bypass-list=<-loopback>;127.0.0.1:${port}`,
       ],
     });
 
@@ -453,6 +455,30 @@ async function main() {
     assert(sha256File(pdfPath) === pdfHash, "PDF re-download overwrote existing bytes");
     ok("pdf-not-overwritten", `${pdfFiles[0]}`);
 
+    const blockedDir = "Trainer Library/Folder already occupied";
+    const occupied = path.join(projectDir, blockedDir);
+    fs.writeFileSync(occupied, "keep this file");
+    const beforeRecovery = await browserStatus(baseUrl, credential);
+    const badFolder = await sendCapture({
+      url: PDF_URL, kind: "pdf", title: "Sample PDF", download: true, targetDir: blockedDir,
+    });
+    assert(badFolder.status === "failed", "An occupied folder must prompt for a different target");
+    await popup.reload();
+    const recovery = popup.locator("#failed-captures");
+    await recovery.waitFor({ state: "visible" });
+    await recovery.locator("summary").click();
+    const row = recovery.locator("li").filter({ hasText: "Sample PDF" });
+    const correctedDir = "Trainer Library/Recovered";
+    await row.locator("input").fill(correctedDir);
+    await row.locator("button").first().click();
+    await row.waitFor({ state: "detached" });
+    const filed = path.join(projectDir, correctedDir, "Sample PDF.pdf");
+    assert(fs.existsSync(filed) && sha256File(filed) === pdfHash, "Retry did not save the original PDF");
+    assert(fs.readFileSync(occupied, "utf8") === "keep this file", "Retry modified the occupied path");
+    const afterRecovery = await browserStatus(baseUrl, credential);
+    assert(afterRecovery.body?.library_count === beforeRecovery.body?.library_count, "Retry duplicated the library resource");
+    ok("failed-download-retries-in-corrected-folder-without-duplicate");
+
     const repo = await sendCapture({
       url: REPO_URL,
       kind: "github_repo",
@@ -511,6 +537,18 @@ async function main() {
       "404 download left a file behind",
     );
     ok("download-404-not-retried");
+
+    await popup.reload();
+    const failedPanel = popup.locator("#failed-captures");
+    await failedPanel.waitFor({ state: "visible" });
+    await failedPanel.locator("summary").click();
+    const failedRow = failedPanel.locator("li").filter({ hasText: "Missing PDF" });
+    assert(await failedRow.locator("input").count() === 1, "Failed download lost its editable folder");
+    assert(await failedRow.locator("button").count() === 2, "Failure lost its retry/remove actions");
+    assert(await popup.locator(".capture-check.is-drawn").count() === 0, "Failure drew a success check");
+    await failedRow.locator("button").last().click();
+    await failedRow.waitFor({ state: "detached" });
+    ok("permanent-failure-survives-popup-reopen-and-can-be-removed");
 
     const traversal = await fetch(`${baseUrl}/resources/capture`, {
       method: "POST",

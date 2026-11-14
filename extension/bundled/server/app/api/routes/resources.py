@@ -743,6 +743,23 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             )
         return response
 
+    def _retry_capture_index(workspace_id: str, resource: ResourceRecord) -> ResourceRecord:
+        if resource.parse_status != "failed" and resource.index_status != "failed":
+            return resource
+        try:
+            indexed = runtime.resource_service.index(
+                workspace_id,
+                ResourceIndexRequest(workspace_id=workspace_id, resource_id=resource.id, enable_network=False),
+            )
+            indexed, _ = runtime.postprocess_indexed_resource(workspace_id, indexed)
+        except (KeyError, PermissionError, FileNotFoundError, IsADirectoryError, ValueError) as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "index_failed", "message": f"Captured resource could not be indexed: {exc}"},
+            ) from exc
+        refresh_workspace_sessions(workspace_id)
+        return indexed
+
     def _replayed_capture(
         workspace_id: str,
         replay: dict[str, object],
@@ -755,6 +772,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             # The recorded resource was deleted since; the idempotency record
             # cannot answer for it, so the capture runs again.
             return None
+        resource = _retry_capture_index(workspace_id, resource)
         replayed_path = str(replay.get("saved_path") or "").strip() or None
         return _capture_response(resource, deduped=True, saved_path=replayed_path)
 
@@ -805,6 +823,24 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
 
         bridge = browser_bridge_service()
         client_capture_id = str(request.client_capture_id or "").strip()
+
+        def remember_completed_capture(resource: ResourceRecord, saved_path: str | None) -> None:
+            if (
+                bridge is None
+                or not client_capture_id
+                or resource.parse_status == "failed"
+                or resource.index_status == "failed"
+            ):
+                return
+            bridge.remember_capture(
+                client_capture_id,
+                {
+                    "resource_id": resource.id,
+                    "recorded_at": resource.fetched_at or "",
+                    "saved_path": saved_path or "",
+                },
+            )
+
         if bridge is not None and client_capture_id:
             replay = _replayed_capture(workspace_id, bridge.capture_replay(client_capture_id) or {})
             if replay is not None:
@@ -915,6 +951,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         if requested_key:
             existing = find_captured_resource(workspace_id, url_key=requested_key, intent_tag=intent_tag)
             if existing is not None:
+                existing = _retry_capture_index(workspace_id, existing)
                 download, download_warnings = download_capture_artifact(
                     kind=request.kind,
                     title=existing.name,
@@ -932,15 +969,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     focus_binding = bind_capture_to_learning_focus(
                         workspace_id, existing.id, focus_id
                     )
-                if bridge is not None and client_capture_id:
-                    bridge.remember_capture(
-                        client_capture_id,
-                        {
-                            "resource_id": existing.id,
-                            "recorded_at": existing.fetched_at or "",
-                            "saved_path": download.relative_path if download else "",
-                        },
-                    )
+                remember_completed_capture(existing, download.relative_path if download else None)
                 return _capture_response(
                     existing,
                     deduped=True,
@@ -974,6 +1003,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             intent_tag=intent_tag,
         )
         if duplicate is not None:
+            duplicate = _retry_capture_index(workspace_id, duplicate)
             download, download_warnings = download_capture_artifact(
                 kind=request.kind,
                 title=duplicate.name,
@@ -989,15 +1019,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 focus_binding = bind_capture_to_learning_focus(
                     workspace_id, duplicate.id, focus_id
                 )
-            if bridge is not None and client_capture_id:
-                bridge.remember_capture(
-                    client_capture_id,
-                    {
-                        "resource_id": duplicate.id,
-                        "recorded_at": duplicate.fetched_at or "",
-                        "saved_path": download.relative_path if download else "",
-                    },
-                )
+            remember_completed_capture(duplicate, download.relative_path if download else None)
             return _capture_response(
                 duplicate,
                 deduped=True,
@@ -1105,15 +1127,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         if focus_id:
             focus_binding = bind_capture_to_learning_focus(workspace_id, indexed.id, focus_id)
 
-        if bridge is not None and client_capture_id:
-            bridge.remember_capture(
-                client_capture_id,
-                {
-                    "resource_id": indexed.id,
-                    "recorded_at": indexed.fetched_at or "",
-                    "saved_path": download.relative_path if download else "",
-                },
-            )
+        remember_completed_capture(indexed, download.relative_path if download else None)
         refresh_workspace_sessions(workspace_id)
         return _capture_response(
             indexed,

@@ -440,38 +440,44 @@ test('normalizeCaptureResponse prefers the server deep link and reads saved_path
     TrainerCapture.normalizeCaptureResponse({
       resource_id: 'res-1',
       deduped: true,
+      index_status: 'indexed',
       deep_link: 'vscode://local.trainer-extension/library/res-1?from=server'
     }),
     {
       resourceId: 'res-1',
       deduped: true,
       deepLink: 'vscode://local.trainer-extension/library/res-1?from=server',
-      savedPath: ''
+      savedPath: '',
+      processing: 'ready'
     }
   );
   assert.deepEqual(TrainerCapture.normalizeCaptureResponse({ resource_id: 'res-2' }), {
     resourceId: 'res-2',
     deduped: false,
     deepLink: 'vscode://local.trainer-extension/library/res-2',
-    savedPath: ''
+    savedPath: '',
+    processing: 'received'
   });
   assert.deepEqual(TrainerCapture.normalizeCaptureResponse(null), {
     resourceId: '',
     deduped: false,
     deepLink: '',
-    savedPath: ''
+    savedPath: '',
+    processing: 'received'
   });
   assert.deepEqual(
     TrainerCapture.normalizeCaptureResponse({
       resource_id: 'res-3',
       saved_path: 'Trainer Library/paper.pdf',
+      parse_status: 'failed',
       deep_link: 'vscode://local.trainer-extension/library/res-3'
     }),
     {
       resourceId: 'res-3',
       deduped: false,
       deepLink: 'vscode://local.trainer-extension/library/res-3',
-      savedPath: 'Trainer Library/paper.pdf'
+      savedPath: 'Trainer Library/paper.pdf',
+      processing: 'failed'
     }
   );
   assert.equal(
@@ -666,7 +672,7 @@ test('describeHttpError maps sidecar failure codes to localized copy', () => {
   const zh = TrainerCapture.copyFor('zh-CN');
   const en = TrainerCapture.copyFor('en-US');
   assert.equal(TrainerCapture.describeHttpError(401, null, en), en.errUnauthorized);
-  assert.equal(TrainerCapture.describeHttpError(403, null, zh), zh.errUnauthorized);
+  assert.equal(TrainerCapture.describeHttpError(403, { detail: { code: 'workspace_mismatch' } }, zh), zh.queueWorkspaceChanged);
   assert.equal(
     TrainerCapture.describeHttpError(409, { detail: { code: 'network_disabled' } }, en),
     en.errNetworkDisabled

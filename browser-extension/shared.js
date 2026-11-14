@@ -62,6 +62,7 @@
     credential: 'trainerCapture.credential',
     history: 'trainerCapture.history',
     queue: 'trainerCapture.queue',
+    failedCaptures: 'trainerCapture.failedCaptures',
     draftQueue: 'trainerCapture.draftQueue',
     workspaceName: 'trainerCapture.workspaceName',
     autoPairDisabled: 'trainerCapture.autoPairDisabled',
@@ -199,6 +200,10 @@
       menuGithubReadme: '加入资料库（README+结构）',
       menuGithubDocs: '加入资料库（含 docs/）',
       coachMenu: '问 Trainer 教练',
+      captureReceived: 'Trainer 已接收：{title}。索引尚未确认。',
+      captureProcessingFailed: '资料处理失败，请重试。',
+      failedCaptures: '处理失败的采集',
+      captureUnconfirmed: 'Trainer 未确认接收结果，稍后重试。',
       captureSuccess: '已加入资料库：{title}',
       captureDeduped: '已在资料库：{title}',
       captureDuplicateLocal: '已在资料库（本地记录）：{title}',
@@ -333,6 +338,10 @@
       menuGithubReadme: 'Add to library (README + structure)',
       menuGithubDocs: 'Add to library (with docs/)',
       coachMenu: 'Ask the Trainer coach',
+      captureReceived: 'Trainer received {title}. Indexing is still unconfirmed.',
+      captureProcessingFailed: 'Processing failed. Retry this capture.',
+      failedCaptures: 'Failed captures',
+      captureUnconfirmed: 'Trainer did not confirm receipt. The capture will be retried.',
       captureSuccess: 'Added to the library: {title}',
       captureDeduped: 'Already in the library: {title}',
       captureDuplicateLocal: 'Already in your library (local record): {title}',
@@ -467,6 +476,10 @@
       menuGithubReadme: 'Añadir a la biblioteca (README + estructura)',
       menuGithubDocs: 'Añadir a la biblioteca (con docs/)',
       coachMenu: 'Preguntar al entrenador de Trainer',
+      captureReceived: 'Trainer recibió {title}. La indexación sigue sin confirmarse.',
+      captureProcessingFailed: 'No se pudo procesar. Vuelve a intentarlo.',
+      failedCaptures: 'Capturas fallidas',
+      captureUnconfirmed: 'Trainer no confirmó la recepción. Se reintentará la captura.',
       captureSuccess: 'Añadido a la biblioteca: {title}',
       captureDeduped: 'Ya está en la biblioteca: {title}',
       captureDuplicateLocal: 'Ya está en tu biblioteca (registro local): {title}',
@@ -601,6 +614,10 @@
       menuGithubReadme: 'Ajouter à la bibliothèque (README + structure)',
       menuGithubDocs: 'Ajouter à la bibliothèque (avec docs/)',
       coachMenu: 'Demander au coach Trainer',
+      captureReceived: 'Trainer a reçu {title}. L’indexation reste à confirmer.',
+      captureProcessingFailed: 'Échec du traitement. Réessayez la capture.',
+      failedCaptures: 'Captures en échec',
+      captureUnconfirmed: 'Trainer n’a pas confirmé la réception. La capture sera réessayée.',
       captureSuccess: 'Ajouté à la bibliothèque : {title}',
       captureDeduped: 'Déjà dans la bibliothèque : {title}',
       captureDuplicateLocal: 'Déjà dans votre bibliothèque (enregistrement local) : {title}',
@@ -735,6 +752,10 @@
       menuGithubReadme: 'Zur Bibliothek hinzufügen (README + Struktur)',
       menuGithubDocs: 'Zur Bibliothek hinzufügen (mit docs/)',
       coachMenu: 'Trainer-Coach fragen',
+      captureReceived: 'Trainer hat {title} empfangen. Die Indexierung ist noch nicht bestätigt.',
+      captureProcessingFailed: 'Verarbeitung fehlgeschlagen. Erfassung erneut versuchen.',
+      failedCaptures: 'Fehlgeschlagene Erfassungen',
+      captureUnconfirmed: 'Trainer hat den Empfang nicht bestätigt. Die Erfassung wird erneut versucht.',
       captureSuccess: 'Zur Bibliothek hinzugefügt: {title}',
       captureDeduped: 'Bereits in der Bibliothek: {title}',
       captureDuplicateLocal: 'Bereits in deiner Bibliothek (lokaler Eintrag): {title}',
@@ -869,6 +890,10 @@
       menuGithubReadme: 'ライブラリに追加（README + 構成）',
       menuGithubDocs: 'ライブラリに追加（docs/ を含む）',
       coachMenu: 'Trainer コーチに質問',
+      captureReceived: 'Trainer が {title} を受信しました。インデックス作成は未確認です。',
+      captureProcessingFailed: '処理に失敗しました。キャプチャを再試行してください。',
+      failedCaptures: '失敗したキャプチャ',
+      captureUnconfirmed: 'Trainer から受信確認がありませんでした。再試行します。',
       captureSuccess: 'ライブラリに追加しました：{title}',
       captureDeduped: 'すでにライブラリにあります：{title}',
       captureDuplicateLocal: 'すでにライブラリにあります（ローカル記録）：{title}',
@@ -1003,6 +1028,10 @@
       menuGithubReadme: '라이브러리에 추가(README + 구조)',
       menuGithubDocs: '라이브러리에 추가(docs/ 포함)',
       coachMenu: 'Trainer 코치에게 질문',
+      captureReceived: 'Trainer가 {title}을 받았습니다. 색인 완료는 확인되지 않았습니다.',
+      captureProcessingFailed: '처리에 실패했습니다. 다시 시도하세요.',
+      failedCaptures: '실패한 캡처',
+      captureUnconfirmed: 'Trainer가 수신을 확인하지 않았습니다. 다시 시도합니다.',
       captureSuccess: '라이브러리에 추가했습니다: {title}',
       captureDeduped: '이미 라이브러리에 있습니다: {title}',
       captureDuplicateLocal: '이미 라이브러리에 있습니다(로컬 기록): {title}',
@@ -1137,6 +1166,10 @@
       menuGithubReadme: 'Adicionar à biblioteca (README + estrutura)',
       menuGithubDocs: 'Adicionar à biblioteca (com docs/)',
       coachMenu: 'Perguntar ao treinador do Trainer',
+      captureReceived: 'O Trainer recebeu {title}. A indexação ainda não foi confirmada.',
+      captureProcessingFailed: 'Falha no processamento. Tente capturar novamente.',
+      failedCaptures: 'Capturas com falha',
+      captureUnconfirmed: 'O Trainer não confirmou o recebimento. A captura será tentada novamente.',
       captureSuccess: 'Adicionado à biblioteca: {title}',
       captureDeduped: 'Já está na biblioteca: {title}',
       captureDuplicateLocal: 'Já está na sua biblioteca (registro local): {title}',
@@ -1859,7 +1892,12 @@
     const resourceId = record.resource_id ? String(record.resource_id) : '';
     const deepLink = String(record.deep_link || '').trim() || buildDeepLink(resourceId);
     const savedPath = String(record.saved_path || record.savedPath || '').trim();
-    return { resourceId, deduped: record.deduped === true, deepLink, savedPath };
+    const parseStatus = record.parse_status || record.parseStatus;
+    const indexStatus = record.index_status || record.indexStatus;
+    const processing = parseStatus === 'failed' || indexStatus === 'failed'
+      ? 'failed'
+      : indexStatus === 'indexed' ? 'ready' : 'received';
+    return { resourceId, deduped: record.deduped === true, deepLink, savedPath, processing };
   }
 
   /**
@@ -1936,8 +1974,11 @@
           ? detail
           : '';
 
-    if (status === 401 || status === 403) {
+    if (status === 401 || code === 'invalid_credential') {
       return dict.errUnauthorized;
+    }
+    if (status === 403 && code === 'workspace_mismatch') {
+      return dict.queueWorkspaceChanged;
     }
     if (status === 409 && code === 'network_disabled') {
       return dict.errNetworkDisabled;
@@ -2280,7 +2321,7 @@
       return {
         ok: false,
         status: result.status,
-        unauthorized: result.status === 401 || result.status === 403,
+        unauthorized: result.status === 401,
         retryable: isRetryableStatus(result.status, result.transportError),
         transportError: result.transportError,
         message: result.transportError
@@ -2289,14 +2330,13 @@
       };
     }
     const normalized = normalizeCaptureResponse(result.body);
-    return {
-      ok: true,
-      status: result.status,
-      resourceId: normalized.resourceId,
-      deduped: normalized.deduped,
-      deepLink: normalized.deepLink,
-      savedPath: normalized.savedPath
-    };
+    if (!normalized.resourceId || (payload.download && !normalized.savedPath)) {
+      return { ok: false, status: result.status, retryable: true, message: dict.captureUnconfirmed };
+    }
+    if (normalized.processing === 'failed') {
+      return { ok: false, status: result.status, ...normalized, message: dict.captureProcessingFailed };
+    }
+    return { ok: true, status: result.status, ...normalized };
   }
 
   async function sendCoachDraft(baseUrl, credential, payload) {
@@ -2390,6 +2430,18 @@
 
   async function saveQueue(queue) {
     await chrome.storage.local.set({ [STORAGE_KEYS.queue]: Array.isArray(queue) ? queue : [] });
+  }
+
+  async function loadFailedCaptures() {
+    const stored = await chrome.storage.local.get({ [STORAGE_KEYS.failedCaptures]: [] });
+    return Array.isArray(stored[STORAGE_KEYS.failedCaptures]) ? stored[STORAGE_KEYS.failedCaptures] : [];
+  }
+
+  async function saveCaptureQueues(pending, failed) {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.queue]: pending,
+      [STORAGE_KEYS.failedCaptures]: failed
+    });
   }
 
   async function loadDraftQueue() {
@@ -2550,6 +2602,10 @@
             settle(label('pdfDuplicate'), true);
             return;
           }
+          if (status === 'received') {
+            settle(formatCopy(dict.captureReceived, { title: document.title || location.href }), false);
+            return;
+          }
           if (status === 'queued') {
             settle(label('pdfQueued'), false);
             return;
@@ -2686,6 +2742,8 @@
     recordHistory,
     loadQueue,
     saveQueue,
+    loadFailedCaptures,
+    saveCaptureQueues,
     loadDraftQueue,
     saveDraftQueue,
     loadWorkspaceName,

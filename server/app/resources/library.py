@@ -356,6 +356,14 @@ class LibraryService:
         if create:
             library_root = workspace_root / LIBRARY_DIRECTORY_NAME
             self._ensure_library_root(library_root)
+            if any(
+                parent.exists() and not parent.is_dir()
+                for parent in (normalized, *normalized.parents)
+                if parent == workspace_root or workspace_root in parent.parents
+            ):
+                raise LibraryError(
+                    "invalid_target_dir", status_code=422, params={"target_dir": relative}
+                )
             if not normalized.is_dir():
                 self._authorize(
                     workspace_id,

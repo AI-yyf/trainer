@@ -91,6 +91,39 @@ def _readonly_response(body: bytes, url: str, content_type: str) -> ControlledFe
     )
 
 
+def test_retries_a_failed_index_on_the_same_capture_identity(tmp_path, monkeypatch) -> None:
+    workspace_id = "capture-index-retry"
+    _patch_web_extract(monkeypatch, lambda _url: WEB_BODY)
+
+    with build_client(tmp_path) as client:
+        token = _pair_browser(client, workspace_id, code="384720")
+        headers = {"Authorization": f"Bearer {token}"}
+        runtime = client.app.state.runtime
+        index = runtime.resource_service.index
+        calls: list[str] = []
+
+        def index_once_as_failed(workspace, request):
+            indexed = index(workspace, request)
+            calls.append(indexed.id)
+            if len(calls) == 1:
+                indexed = indexed.model_copy(update={"index_status": "failed"})
+                runtime.repository.save_resource(workspace, indexed)
+            return indexed
+
+        monkeypatch.setattr(runtime.resource_service, "index", index_once_as_failed)
+        request = {"url": WEB_URL, "kind": "web", "client_capture_id": "retry-one"}
+        first = client.post("/resources/capture", json=request, headers=headers)
+        assert first.status_code == 200, first.text
+        assert first.json()["index_status"] == "failed"
+        second = client.post("/resources/capture", json=request, headers=headers)
+        assert second.status_code == 200, second.text
+        assert second.json()["index_status"] == "indexed"
+        assert second.json()["deduped"] is True
+        assert second.json()["resource_id"] == first.json()["resource_id"]
+        assert calls == [first.json()["resource_id"]] * 2
+        assert len(runtime.repository.list_resources(workspace_id)) == 1
+
+
 def test_web_capture_extracts_body_and_registers_it_in_the_library(tmp_path, monkeypatch) -> None:
     workspace_id = "workspace-capture-web"
     calls: list[tuple[str, bool]] = []

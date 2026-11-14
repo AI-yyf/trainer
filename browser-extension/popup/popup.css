@@ -224,3 +224,25 @@ input[aria-invalid="true"] { outline-color: var(--danger); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+.capture-recovery {
+  margin-top: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.capture-recovery > summary { cursor: pointer; }
+.capture-recovery ul {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.capture-recovery li {
+  display: grid;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--input);
+}
+.capture-recovery__actions { display: flex; flex-wrap: wrap; gap: 4px; }
