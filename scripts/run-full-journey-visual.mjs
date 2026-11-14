@@ -282,10 +282,22 @@ async function activate() {
     const target = vscode.extensions.getExtension(targetId);
     if (!target) throw new Error("Trainer extension not installed: " + targetId);
     await target.activate();
-    await sleep(12000);
-    const admitted = await vscode.commands.executeCommand("trainer.workspace.adoptProject", {
-      projectPath: process.env.FJ_VISUAL_PROJECT_PATH || undefined,
-    });
+    const waitForSidecar = async () => {
+      for (let attempt = 0; attempt < 150; attempt++) {
+        const state = target.exports?.getDebugState?.().sidecar;
+        if (state?.lifecycle === "ready") return;
+        if (state?.lifecycle === "error") throw new Error(state.detail || "Sidecar failed to start.");
+        await sleep(1000);
+      }
+      throw new Error("The isolated VS Code sidecar did not become ready.");
+    };
+    await waitForSidecar();
+    const adoptProject = () => vscode.commands.executeCommand("trainer.workspace.adoptProject");
+    let admitted = await adoptProject();
+    if (!admitted?.ok && /workspace changed/i.test(admitted?.message || "")) {
+      await waitForSidecar();
+      admitted = await adoptProject();
+    }
     report.steps.push({ step: "admit-project", ok: Boolean(admitted && admitted.ok), message: admitted && admitted.message });
     await sleep(1500);
     const saved = await vscode.commands.executeCommand("trainer.provider.save", {
@@ -361,7 +373,6 @@ async function main() {
     ...process.env,
     FJ_VISUAL_REPORT: reportPath,
     FJ_VISUAL_TARGET_EXTENSION_ID: extensionId,
-    FJ_VISUAL_PROJECT_PATH: workspaceDir,
     // The provider config (with the key) travels only through the process
     // environment of the extension host — never into repo files, logs or
     // screenshots.
