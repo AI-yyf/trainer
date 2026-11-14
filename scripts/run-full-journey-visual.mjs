@@ -10,8 +10,12 @@
  * Learning route at two widths, and asserts no raw LaTeX and no visible
  * KaTeX MathML twin anywhere.
  *
- * Evidence: <JOURNEY_OUT_DIR | output/maturity/full-journey-visual-<stamp>>/
- *   13-visual-katex.json + report.json + 13a/13b/13c screenshots
+ * TRAINER_VISUAL_RECALL_SOURCE_DIR optionally points to a completed API
+ * journey with an original passing implementation and recall response.
+ * The installed host creates and verifies a fresh card, then the workbench
+ * drives the scheduled answer and the script checks the actual database.
+ *
+ * Evidence lives in JOURNEY_OUT_DIR or output/maturity/full-journey-visual-<stamp>.
  */
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
@@ -46,6 +50,19 @@ const realBaseUrl = process.env.PROBE_PROVIDER_BASE_URL ?? "";
 const realApiKey = process.env.PROBE_PROVIDER_API_KEY ?? "";
 const realModel = process.env.PROBE_PROVIDER_MODEL ?? "MiniMax-M3.1-Flash";
 const usingRealProvider = Boolean(realBaseUrl && realApiKey);
+const recallSourceDir = process.env.TRAINER_VISUAL_RECALL_SOURCE_DIR?.trim();
+if (recallSourceDir && !usingRealProvider) {
+  throw new Error("The scheduled-recall visual journey requires the real provider.");
+}
+let recallSource;
+if (recallSourceDir) {
+  const verification = JSON.parse(fs.readFileSync(path.join(recallSourceDir, "07-verify-current-file.json"), "utf8"));
+  const attempts = verification.grading_attempts;
+  const passingAttempt = Array.isArray(attempts) ? attempts.findIndex((attempt) => attempt.passed === true) : -1;
+  const answer = fs.readFileSync(path.join(recallSourceDir, "11-recall-answer-raw.txt"), "utf8").trim();
+  if (passingAttempt < 0 || !answer) throw new Error("The API journey has no passing implementation or recall response.");
+  recallSource = { implementation: path.resolve(recallSourceDir, `06-submitted-${passingAttempt + 1}.py`), answer };
+}
 
 // Formula-laden scripted reply for the no-key mode. It exists so the render
 // pipeline can be verified without credentials; the report labels it.
@@ -145,6 +162,8 @@ const workspaceDir = path.join(root, "workspace");
 const trainerWorkspaceDir = path.join(root, "trainer-workspace");
 const driverDir = path.join(root, "driver");
 const reportPath = path.join(root, "report.json");
+const recallRequestPath = path.join(root, "recall-request.json");
+const recallStatePath = path.join(root, "recall-state.json");
 for (const dir of [
   path.join(userDataDir, "User"),
   extensionsDir,
@@ -270,6 +289,7 @@ function readMemento(value) {
     path.join(driverDir, "extension.js"),
     String.raw`
 const fs = require("node:fs");
+const path = require("node:path");
 const vscode = require("vscode");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -328,6 +348,60 @@ async function activate() {
       answerMode: "coach-first",
     });
     report.steps.push({ step: "coach-settings", ok: Boolean(settings && settings.ok) });
+    if (process.env.FJ_VISUAL_IMPLEMENTATION) {
+      const focus = "PPO 裁剪目标";
+      const generated = await vscode.commands.executeCommand("trainer.training.generateCard", {
+        source: "conversation_gap", cardType: "practice", focusArea: focus,
+        targetSkill: "解释 PPO clip 目标并手写损失函数",
+        prompt: "请用 Python 标准库实现接收新旧对数概率列表、优势列表和裁剪阈值，返回逐项裁剪目标负均值的 PPO 损失函数。",
+      });
+      const card = generated?.data?.card;
+      if (!generated?.ok || card?.python_behavior_contract?.reference_id !== "trainer/ppo-clipped-loss/v1") {
+        throw new Error("Native card generation did not create the reviewed practice contract. " + (generated?.message || ""));
+      }
+      const file = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, "ppo_clip_loss.py");
+      fs.copyFileSync(process.env.FJ_VISUAL_IMPLEMENTATION, file.fsPath);
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
+      const verified = await vscode.commands.executeCommand("trainer.evaluate.currentFile", {
+        source: "training", trainingPhase: "verify", cardId: card.card_id,
+        filesToTouch: ["ppo_clip_loss.py"],
+      });
+      if (!verified?.data?.passed || verified.data.verification_scope !== "behavior") {
+        throw new Error("Native verification failed. " + (verified?.data?.summary || verified?.message || ""));
+      }
+      const initialHostState = target.exports.getDebugState();
+      const dataDir = initialHostState.bootstrap?.memory?.workspace?.resourceSandbox?.effectivePath;
+      const workspaceId = initialHostState.bootstrap?.workspaceTrainingState?.workspaceId;
+      if (!dataDir || !workspaceId || !card.question) throw new Error("Native state is missing the reviewed card or its data folder.");
+      const beforeRestartPid = initialHostState.sidecar.pid;
+      process.env.TRAINER_TEST_NOW = new Date(Date.now() + 2 * 86400000).toISOString();
+      const restarted = await vscode.commands.executeCommand("trainer.sidecar.restart");
+      if (!restarted?.ok) throw new Error("Could not restart the installed sidecar.");
+      report.steps.push({ step: "prepare-scheduled-recall", ok: true, cardId: card.card_id,
+        question: card.question, workspaceId, database: path.join(dataDir, "trainer.sqlite3"),
+        clock: process.env.TRAINER_TEST_NOW,
+        newSidecar: beforeRestartPid !== target.exports.getDebugState().sidecar.pid });
+
+      const requestPath = process.env.FJ_VISUAL_RECALL_REQUEST;
+      const statePath = process.env.FJ_VISUAL_RECALL_STATE;
+      let checking = false;
+      const watcher = setInterval(async () => {
+        if (checking || !fs.existsSync(requestPath)) return;
+        checking = true;
+        clearInterval(watcher);
+        try {
+          const restart = await vscode.commands.executeCommand("trainer.sidecar.restart");
+          const state = target.exports.getDebugState();
+          const artifact = state.bootstrap?.workspaceTrainingState?.reviewArtifact;
+          fs.writeFileSync(statePath, JSON.stringify({
+            ok: restart?.ok === true, cardId: artifact?.trainingCardId, reviewId: artifact?.id,
+            status: artifact?.status, detail: artifact?.verifiedResult,
+          }));
+        } catch (error) {
+          fs.writeFileSync(statePath, JSON.stringify({ ok: false, error: String(error) }));
+        }
+      }, 500);
+    }
     report.ok = report.steps.every((step) => step.ok !== false);
   } catch (error) {
     report.error = error instanceof Error ? error.stack : String(error);
@@ -373,6 +447,9 @@ async function main() {
     ...process.env,
     FJ_VISUAL_REPORT: reportPath,
     FJ_VISUAL_TARGET_EXTENSION_ID: extensionId,
+    FJ_VISUAL_IMPLEMENTATION: recallSource?.implementation ?? "",
+    FJ_VISUAL_RECALL_REQUEST: recallRequestPath,
+    FJ_VISUAL_RECALL_STATE: recallStatePath,
     // The provider config (with the key) travels only through the process
     // environment of the extension host — never into repo files, logs or
     // screenshots.
@@ -459,6 +536,78 @@ async function main() {
       throw new Error("Trainer webview frame not found");
     };
     const frame = await findFrame();
+    if (recallSource) {
+      const seeded = driverReport.steps.find((item) => item.step === "prepare-scheduled-recall");
+      if (!seeded?.newSidecar) throw new Error("The installed sidecar did not restart before review.");
+      const readPersistedRecall = () => {
+        const database = new DatabaseSync(seeded.database, { readOnly: true });
+        try {
+          const memory = JSON.parse(database.prepare(
+            "SELECT payload FROM structured_memory WHERE workspace_id = ?",
+          ).get(seeded.workspaceId).payload);
+          return {
+            schedule: memory.workspace.latest_training_fsrs_states[seeded.cardId],
+            review: memory.review_artifact,
+            answer: memory.recent_flash_attempts.find((attempt) => attempt.card_id === seeded.cardId),
+          };
+        } finally {
+          database.close();
+        }
+      };
+      const before = readPersistedRecall();
+      if (before.schedule?.reps !== 0) throw new Error("The verified practice must have an unreviewed FSRS schedule.");
+      await frame.getByTestId("trainer-view-nav-plan").click();
+      const learning = frame.locator('[data-template="LearningHome"]:visible');
+      await learning.waitFor();
+      const more = learning.locator("[data-learning-focus-more]").first();
+      const startReview = learning.getByRole("button", { name: "开始复习", exact: true }).filter({ visible: true });
+      if (!(await startReview.count()) && await more.count() && (await more.getAttribute("open")) === null) {
+        await more.locator(":scope > summary").click();
+      }
+      try {
+        await startReview.click({ timeout: 12_000 });
+      } catch (error) {
+        record("13f-native-review-entry", {
+          ok: false, title: await learning.innerText(),
+          screenshot: await screenshot(page, "13f-native-review-entry-missing"),
+        });
+        throw error;
+      }
+      const queue = frame.locator("[data-training-review-queue=true]");
+      await queue.waitFor();
+      const reviewRow = queue.locator(".training-review-row").filter({ hasText: "PPO" });
+      await reviewRow.locator(".training-review-row__actions-details > summary").click();
+      await reviewRow.getByRole("button", { name: "开始复习", exact: true }).click();
+      const form = frame.locator('[data-template="PracticeResponse"]').filter({ hasText: seeded.question });
+      await form.waitFor({ timeout: 30_000 });
+      const promptImage = await screenshot(page, "13f-native-scheduled-recall-question");
+      await form.getByRole("textbox").fill(recallSource.answer);
+      await form.getByRole("button", { name: "提交回答", exact: true }).click();
+      await frame.getByText("复习已记录", { exact: true }).waitFor({ timeout: 75_000 });
+      const after = readPersistedRecall();
+      record("13f-native-scheduled-recall", {
+        ok: after.review?.training_card_id === seeded.cardId && after.review.status === "resolved" &&
+          after.answer?.learner_answer === recallSource.answer && after.answer?.correct === true &&
+          after.answer?.feedback?.grading_source === "model_review" && after.schedule?.reps === 1,
+        question: seeded.question, cardId: seeded.cardId, reviewId: after.review?.id,
+        sameAnswer: after.answer?.learner_answer === recallSource.answer,
+        gradingSource: after.answer?.feedback?.grading_source,
+        repsBefore: before.schedule.reps, repsAfter: after.schedule?.reps,
+        screenshots: [promptImage, await screenshot(page, "13f-native-scheduled-recall-recorded")],
+      });
+      fs.writeFileSync(recallRequestPath, "{}");
+      for (let attempt = 0; attempt < 150 && !fs.existsSync(recallStatePath); attempt++) {
+        await page.waitForTimeout(1000);
+      }
+      const restored = JSON.parse(fs.readFileSync(recallStatePath, "utf8"));
+      const restoredSchedule = readPersistedRecall().schedule;
+      record("13g-native-scheduled-recall-restored", {
+        ...restored, reps: restoredSchedule?.reps,
+        ok: restored.ok && restored.cardId === seeded.cardId && restored.reviewId === after.review?.id &&
+          restored.status === "resolved" && restoredSchedule?.reps === 1,
+      });
+      await frame.getByTestId("trainer-view-nav-coach").click();
+    }
     const composer = frame.locator("#coach-composer").first();
     await composer.waitFor({ timeout: 30_000 });
     const prompt =
@@ -603,7 +752,7 @@ async function main() {
     using_real_provider: usingRealProvider,
     results,
     failures: failures.length,
-    ok: failures.length === 0 && results.length === 7,
+    ok: failures.length === 0 && results.length === (recallSource ? 9 : 7),
     artifacts: fs.readdirSync(outDir).filter((name) => name.endsWith(".png")),
   };
   fs.writeFileSync(path.join(outDir, "report.json"), `${JSON.stringify(report, null, 2)}\n`);

@@ -852,6 +852,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   if (!plan) {
     const verifiedReturns = [...new Map([...pendingEvidenceItems, ...settledEvidenceItems]
       .filter(isVerifiedTrainingReturn).map(item => [item.id, item])).values()];
+    const showReviewLink = primaryIntent !== "start_review" &&
+      props.dueReviewItems?.some((item) => item.surfaceMode === "due");
     return (
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
         <header className="template-learning-home__header template-learning-home__header--row">
@@ -870,6 +872,11 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           <button type="button" className="template-learning-route" data-learning-link="progress" onClick={() => props.onNavigateToView?.("progress")}>
             {templateCopy[language].growth}
           </button>
+          {showReviewLink ? (
+            <button type="button" className="template-learning-route" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>
+              {templateCopy[language].startReview}
+            </button>
+          ) : null}
         </div>
         {liveEvidenceDecisionRow}
         {verifiedReturns.length ? (

@@ -544,10 +544,10 @@ test('an unbound evaluation cannot replace the formal plan next step', async ({ 
   await expect(page.getByText('Record a reflection on the verified result, then bring it back to Coach.', { exact: true })).toHaveCount(0);
 });
 
-test('Start review opens the due queue while preserving the current practice card', async ({ page }) => {
+async function verifyReviewQueuePreservesPractice(page, hasPlan) {
   await page.setViewportSize({ width: 360, height: 760 });
   await loadHostFixture(page, 'plan', 'review-queue-current-card');
-  await page.evaluate(() => {
+  await page.evaluate(hasPlan => {
     const current = window.__TRAINER_BOOTSTRAP__;
     const workspaceId = current.memory.workspace.workspaceId;
     const card = { cardId: 'card-due-review', type: 'practice', title: '保留当前元组练习',
@@ -558,6 +558,8 @@ test('Start review opens the due queue while preserving the current practice car
       source: 'weakness', severity: 'high', surfaceMode: 'due', dueAt: '2026-10-01T00:00:00Z' }];
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: {
       ...current,
+      plan: hasPlan ? current.plan : null,
+      planRuntimeStatus: hasPlan ? current.planRuntimeStatus : { recovered: false, reviewPoints: [] },
       memory: { ...current.memory, dueReviewCount: 1, dueReviews, reviewSummary: '旧主线的重复提示。'.repeat(80), workspace: { ...current.memory.workspace,
         liveTrainingSelection: { workspaceId, cardId: card.cardId, selectedAt: '2026-10-02T03:00:00Z' },
       } },
@@ -567,8 +569,9 @@ test('Start review opens the due queue while preserving the current practice car
         activeTrainingCardRouting: { selectedCardId: card.cardId, selectedCard: card, selectionScore: 100 },
       },
     } });
-  });
-  await openLearningMore(page);
+  }, hasPlan);
+  if (hasPlan) await openLearningMore(page);
+  await expect(page.locator('[data-template=LearningHome] [data-primary-action=true]')).toHaveCount(1);
   await page.getByRole('button', { name: '开始复习', exact: true }).click();
   await expect(page.getByRole('heading', { name: '保留当前元组练习', exact: true })).toBeVisible();
   const queue = page.locator('[data-training-review-queue="true"]');
@@ -637,6 +640,14 @@ test('Start review opens the due queue while preserving the current practice car
     (message) => message.type === 'session/sendStreamMessage',
   ).payload.text);
   expect(feedback).not.toContain('旧练习的文件校验契约');
+}
+
+test('Start review opens the due queue while preserving the current practice card', async ({ page }) => {
+  await verifyReviewQueuePreservesPractice(page, true);
+});
+
+test('Start review is available alongside a current practice card without a formal plan', async ({ page }) => {
+  await verifyReviewQueuePreservesPractice(page, false);
 });
 
 test('a scheduled review submits the shown question against its original card', async ({ page }) => {
