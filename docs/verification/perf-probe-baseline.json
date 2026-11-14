@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-11-14T13:06:49.979Z",
+  "generatedAt": "2026-11-14T13:34:05.448Z",
   "config": {
-    "baseUrl": "http://127.0.0.1:47413",
+    "baseUrl": "http://127.0.0.1:4234",
     "conversationSize": 300,
     "streamChunks": 300,
     "streamChunkChars": 100,
@@ -10,45 +10,45 @@
   },
   "longSessionNav": {
     "coldFirstVisitMs": {
-      "plan": 102,
-      "resources": 35,
-      "settings": 36,
-      "training": 24
+      "plan": 63,
+      "resources": 40,
+      "settings": 34,
+      "training": 21
     },
     "warmMs": {
       "plan": {
         "n": 3,
-        "min": 35,
-        "p50": 35,
-        "p90": 67,
-        "max": 67
+        "min": 33,
+        "p50": 47,
+        "p90": 59,
+        "max": 59
       },
       "resources": {
         "n": 3,
-        "min": 33,
-        "p50": 33,
-        "p90": 35,
-        "max": 35
+        "min": 44,
+        "p50": 46,
+        "p90": 55,
+        "max": 55
       },
       "training": {
         "n": 3,
-        "min": 14,
+        "min": 13,
         "p50": 14,
-        "p90": 15,
-        "max": 15
+        "p90": 14,
+        "max": 14
       },
       "settings": {
         "n": 3,
-        "min": 35,
-        "p50": 36,
-        "p90": 37,
-        "max": 37
+        "min": 33,
+        "p50": 35,
+        "p90": 70,
+        "max": 70
       }
     }
   },
   "streamingOverhead": {
     "coachOnlyVisited": {
-      "streamWallMs": 2520,
+      "streamWallMs": 2540,
       "longtaskCount": 0,
       "longtaskTotalMs": 0,
       "longtaskMaxMs": 0,
@@ -56,11 +56,11 @@
       "streamingRendered": true
     },
     "allVisited": {
-      "streamWallMs": 1850,
+      "streamWallMs": 1890,
       "longtaskCount": 0,
       "longtaskTotalMs": 0,
       "longtaskMaxMs": 0,
-      "navDuringStreamMs": 11,
+      "navDuringStreamMs": 13,
       "streamingRendered": true
     },
     "hiddenSurfaceDelta": {
@@ -76,7 +76,7 @@
     },
     "warmNavP90Ms": {
       "budget": 100,
-      "observed": 67,
+      "observed": 70,
       "pass": true
     }
   },
