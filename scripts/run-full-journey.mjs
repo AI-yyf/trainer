@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { isDeepStrictEqual } from "node:util";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -55,11 +56,14 @@ let providerTestResult = null;
 function sidecarProc(extraEnv = {}) {
   const env = { ...process.env, TRAINER_DATA_DIR: dataDir, ...extraEnv };
   delete env.PROBE_PROVIDER_API_KEY;
-  return spawn(python, ["run_sidecar.py", "--host", "127.0.0.1", "--port", String(port)], {
+  const child = spawn(python, ["run_sidecar.py", "--host", "127.0.0.1", "--port", String(port)], {
     cwd: serverDir,
     env,
-    stdio: ["ignore", "ignore", "ignore"],
+    stdio: ["ignore", "ignore", "pipe"],
   });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => fs.appendFileSync(path.join(outDir, "sidecar.log"), redact(chunk)));
+  return child;
 }
 
 function startSidecar(extraEnv = {}) {
@@ -158,6 +162,26 @@ function learnerTask(card, target) {
     },
     { role: "user", content: JSON.stringify(contract, null, 2) },
   ];
+}
+
+function checkPpoContract(contract) {
+  return (contract?.cases ?? []).map(({ args, expected }, index) => {
+    const [newLogProbs, oldLogProbs, advantages, epsilon] = args;
+    if (![newLogProbs, oldLogProbs, advantages].every(Array.isArray) ||
+        !advantages.length || newLogProbs.length !== advantages.length ||
+        oldLogProbs.length !== advantages.length || !(epsilon > 0 && epsilon < 1) ||
+        ![...newLogProbs, ...oldLogProbs, ...advantages].every(Number.isFinite)) {
+      return { case: index + 1, status: "unsupported_input" };
+    }
+    const sum = advantages.reduce((total, advantage, i) => {
+      const ratio = Math.exp(newLogProbs[i] - oldLogProbs[i]);
+      const clipped = Math.min(1 + epsilon, Math.max(1 - epsilon, ratio));
+      return total + Math.min(ratio * advantage, clipped * advantage);
+    }, 0);
+    const reference = -sum / advantages.length;
+    const matches = Number.isFinite(expected) && Math.abs(reference - expected) <= 1e-8;
+    return { case: index + 1, status: matches ? "verified" : "mismatch", reference, expected };
+  });
 }
 
 async function post(route, body) {
@@ -343,6 +367,31 @@ try {
   }, { fail: start.status !== 200 || providerTest.json?.ok !== true });
   providerTestResult = providerTest.json;
 
+  const personalWorkspace = "full-journey-personal";
+  const personalStart = await post("/session/start", {
+    workspace_id: personalWorkspace, workspace_name: "Personal Coach",
+  });
+  const personalSession = personalStart.json?.session_id;
+  const personalChat = await streamTurn("01b-personal-coach", {
+    workspace_id: personalWorkspace, session_id: personalSession, active_view: "coach",
+    message: "不用复习，也不需要学习计划。请只用一句话说说元组是什么。",
+    intent: "review", intent_source: "inferred", response_language: "zh-CN",
+  });
+  const personalSnapshot = personalChat.json?.snapshot;
+  step("01b-personal-coach", {
+    session_created: personalStart.status === 200 && Boolean(personalSession),
+    teaching_decision: personalSnapshot?.teaching_decision ?? null,
+    goal: personalSnapshot?.goal ?? null,
+    plan: personalSnapshot?.plan ?? null,
+    card_count: personalSnapshot?.memory?.training_card_candidates?.length ?? null,
+    reply: personalChat.visible,
+    stream: streamSummary(personalChat),
+  }, { fail: personalStart.status !== 200 || !personalSession || !streamSucceeded(personalChat) ||
+    !personalSnapshot || !personalChat.visible.includes("元组") ||
+    !Array.isArray(personalSnapshot.memory?.training_card_candidates) ||
+    Boolean(personalSnapshot.goal || personalSnapshot.plan || personalSnapshot.current_task ||
+      personalSnapshot.memory?.training_card_candidates?.length) });
+
   const chat = await streamTurn("02-natural-chat", {
     workspace_id: "full-journey-ws",
     session_id: sessionId,
@@ -399,7 +448,7 @@ try {
     card_type: "practice",
     focus_area: "PPO 裁剪目标",
     target_skill: "解释 PPO clip 目标并手写损失函数",
-    context_hint: "请出一道可使用 Python 标准库完成的独立编程练习。输入为新旧对数概率列表、优势列表和裁剪阈值，输出为标量损失。写明函数名称、参数、边界条件和可运行的行为验收用例，并提供一道开卷学习后能独立回忆的概念题及其参考答案。",
+    context_hint: "请出一道可使用 Python 标准库完成的独立编程练习。按新对数概率列表、旧对数概率列表、优势列表、裁剪阈值这个顺序接收参数，输出逐项 PPO 裁剪目标的负均值。写明函数名称、参数、边界条件和可运行的行为验收用例。验收用例仅使用有效输入，写出前先独立核算每个预期值。并提供一道开卷学习后能独立回忆的概念题及其参考答案。",
     response_language: "zh-CN",
   };
   writeArtifact("05-card-request.json", { route: cardRoute, body: cardRequestBody });
@@ -432,6 +481,11 @@ try {
       !cardRows.length || !cardData?.python_behavior_contract?.cases?.length,
   });
 
+  const referenceCases = checkPpoContract(cardData.python_behavior_contract);
+  step("05a-task-contract-values", { verification: "independent PPO formula", cases: referenceCases }, {
+    fail: referenceCases.some((item) => item.status !== "verified"),
+  });
+
   const cardTarget = String(cardData.files_to_touch?.[0] ?? "ppo_clip_loss.py")
     .trim().replace(/^[`'"]+|[`'"]+$/g, "").replaceAll("\\", "/");
   const targetPath = path.resolve(projectDir, cardTarget);
@@ -439,12 +493,28 @@ try {
     throw new Error("The model card did not name a usable Python path in the isolated workspace.");
   }
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const fakeImplementation = JSON.stringify(cardData.python_behavior_contract.function) + "\n";
+  const fake = await post("/evaluate/current-file", {
+    session_id: sessionId, workspace_id: "full-journey-ws", file_path: cardTarget,
+    content: fakeImplementation, language_id: "python", evaluation_source: "training",
+    training_phase: "verify", training_card_id: cardId,
+  });
+  const fakeEvidence = await fetch(`${baseUrl}/evidence/records?workspace_id=full-journey-ws`);
+  const fakeProjection = await fakeEvidence.json();
+  const evidenceRows = fakeProjection?.evidence;
+  step("05b-fake-implementation-rejected", {
+    status: fake.status,
+    passed: fake.json?.passed,
+    checks: fake.json?.dynamic_checks,
+    evidence: evidenceRows,
+  }, { fail: fake.status !== 200 || fake.json?.passed !== false || !fakeEvidence.ok ||
+    !fake.json?.dynamic_checks?.some((check) => check.id === "python-behavior" && check.status === "failed") ||
+    !Array.isArray(evidenceRows) || evidenceRows.some((row) => row.result === "passed") });
   const task = learnerTask(cardData, cardTarget);
   const raw = await learnerAnswer("06-original-answer", task);
   let submission = pythonSubmission(raw);
   const attemptStart = await post("/training/attempt/start", {
     workspace_id: "full-journey-ws", card_id: cardId, file_path: cardTarget,
-    assistance_level: "none",
   });
   const attemptId = attemptStart.json?.attempt?.attempt_id;
   const assistance = [];
@@ -455,6 +525,7 @@ try {
     const update = await post("/training/attempt/update", {
       workspace_id: "full-journey-ws", attempt_id: attemptId,
       answer_draft: text, file_hash: sha256, file_path: cardTarget,
+      ...(number === 1 ? { assistance_level: "none" } : {}),
     });
     if (update.status !== 200) throw new Error(`Could not save learner submission ${number}.`);
     return sha256;
@@ -576,6 +647,35 @@ try {
     clock: advance, initial_schedule: initialSchedule, due_card: dueCard, due_count: dueReviews.length,
   }, { fail: !dueCard });
 
+  const snooze = await post("/training/review-queue/action", {
+    workspace_id: "full-journey-ws", concept: dueCard.concept, training_card_id: cardId, action: "snooze",
+  });
+  const reminderAt = Date.parse(snooze.json?.actions?.[0]?.next_review_at ?? "");
+  const deferred = await post("/session/start", {
+    workspace_id: "full-journey-ws", session_id: sessionId, workspace_name: "Full Journey",
+  });
+  const deferredReviews = deferred.json?.memory?.due_reviews;
+  const unchangedWhileDeferred = isDeepStrictEqual(savedSchedule(deferred.json), initialSchedule);
+  step("10b-snooze-retains-schedule", {
+    status: snooze.status, action: snooze.json?.actions?.[0], unchanged_fsrs: unchangedWhileDeferred,
+    visible_review_ids: deferredReviews?.map((review) => review.training_card_id),
+  }, { fail: snooze.status !== 200 || deferred.status !== 200 || !(reminderAt > Date.parse(advance)) ||
+    !unchangedWhileDeferred || !Array.isArray(deferredReviews) ||
+    deferredReviews.some((review) => review.training_card_id === cardId) });
+
+  await stopSidecar();
+  const reminderClock = new Date(reminderAt + 60_000).toISOString();
+  startSidecar({ TRAINER_TEST_NOW: reminderClock });
+  await waitForHealth();
+  const reminder = await post("/session/start", {
+    workspace_id: "full-journey-ws", session_id: sessionId, workspace_name: "Full Journey",
+  });
+  const visibleAgain = reminder.json?.memory?.due_reviews?.some((review) => review.training_card_id === cardId);
+  const unchangedAfterReminder = isDeepStrictEqual(savedSchedule(reminder.json), initialSchedule);
+  step("10c-reminder-after-restart", {
+    clock: reminderClock, same_card_visible: visibleAgain, unchanged_fsrs: unchangedAfterReminder,
+  }, { fail: reminder.status !== 200 || !visibleAgain || !unchangedAfterReminder });
+
   const recallAnswer = await learnerAnswer("11-recall-answer", [
     { role: "system", content: "你是正在完成延迟复习的学习者。根据问题给出你的回答。" },
     { role: "user", content: cardData.question },
@@ -613,6 +713,53 @@ try {
     preview: nextStepTurn.visible.slice(0, 300),
     stream: streamSummary(nextStepTurn),
   }, { fail: !streamSucceeded(nextStepTurn) || nextStepTurn.visible.length < 40 });
+
+  const goalQuery = new URLSearchParams({ workspace_id: "full-journey-ws", session_id: sessionId });
+  const getGoal = async (route) => {
+    const response = await fetch(`${baseUrl}/goal/${route}?${goalQuery}`);
+    if (!response.ok) throw new Error(`Unable to read goal ${route} (HTTP ${response.status}).`);
+    return response.json();
+  };
+  const activeGoal = (await getGoal("current")).goal;
+  if (!activeGoal || activeGoal.status !== "active") throw new Error("Original goal is missing or inactive.");
+  const readCurrentProjection = async () => {
+    const response = await fetch(`${baseUrl}/memory/summary?${goalQuery}`);
+    const body = await response.json();
+    const currentProjection = body.memory?.workspace?.training_skill_projection;
+    if (!response.ok || !currentProjection) throw new Error("Unable to read skills during goal lifecycle check.");
+    return currentProjection;
+  };
+  const skillsBeforeGoalActions = await readCurrentProjection();
+  async function applyGoalAction(action, details = {}) {
+    const response = await post("/goal/action", {
+      workspace_id: "full-journey-ws", session_id: sessionId, action, ...details,
+    });
+    if (response.status !== 200 || !response.json?.goal) {
+      throw new Error(`Goal action ${action} did not return a goal (HTTP ${response.status}).`);
+    }
+    return response.json.goal;
+  }
+  const paused = await applyGoalAction("pause", { goalId: activeGoal.goalId });
+  const resumed = await applyGoalAction("resume", { goalId: activeGoal.goalId });
+  const archived = await applyGoalAction("archive", { goalId: activeGoal.goalId });
+  const newGoal = await applyGoalAction("start", { title: "理解一条概率比的边界" });
+  const completed = await applyGoalAction("complete", { goalId: newGoal.goalId });
+  await stopSidecar();
+  startSidecar({ TRAINER_TEST_NOW: reminderClock });
+  await waitForHealth();
+  const history = (await getGoal("list")).goals;
+  const skillsUnchanged = isDeepStrictEqual(await readCurrentProjection(), skillsBeforeGoalActions);
+  step("13-goal-lifecycle", {
+    paused: paused.status, resumed: resumed.status,
+    archived: history.find((goal) => goal.goalId === archived.goalId),
+    completed: history.find((goal) => goal.goalId === completed.goalId),
+    read_after_restart: true, skills_unchanged: skillsUnchanged,
+  }, { fail: paused.status !== "paused" || resumed.status !== "active" ||
+    [paused, resumed, archived].some((goal) => goal.goalId !== activeGoal.goalId) ||
+    !history.some((goal) => goal.goalId === archived.goalId && goal.status === "archived" &&
+      goal.archivedAt && !goal.completedAt && !goal.completionBasis) ||
+    !history.some((goal) => goal.goalId === newGoal.goalId && goal.status === "completed" &&
+      goal.completedAt && goal.completionBasis === "user_confirmed" && !goal.archivedAt) || !skillsUnchanged });
 
   console.log(`FULL_JOURNEY_OK ${outDir}`);
 } catch (error) {
