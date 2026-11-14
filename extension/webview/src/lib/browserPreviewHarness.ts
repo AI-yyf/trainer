@@ -864,6 +864,7 @@ async function runBrowserPreviewLiveTrainingAction(
         response = await requestFor("/training/flashcard/answer", {
           workspace_id: workspaceId,
           card_id: browserPreviewString(payload?.cardId),
+          review_artifact_id: browserPreviewString(payload?.reviewArtifactId) || undefined,
           learner_answer: browserPreviewString(payload?.learnerAnswer) || browserPreviewString(payload?.answer),
           selected_option_index:
             typeof payload?.selectedOptionIndex === "number" ? payload.selectedOptionIndex : undefined,

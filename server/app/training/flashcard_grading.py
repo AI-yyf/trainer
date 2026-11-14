@@ -112,7 +112,10 @@ async def assess_open_recall(
                 "(a brief explanation of the deciding criterion in feedback_language), and "
                 '"quote" (one short contiguous verbatim substring of the learner answer. '
                 "Copy the decisive phrase or formula exactly, with no joining, paraphrasing, "
-                "or punctuation changes)."
+                "or punctuation changes). Prefer a plain-text phrase over a formula when both "
+                "support the same decision. Encode line breaks and backslashes using standard "
+                "JSON escaping, including any LaTeX copied from the answer. Before returning, "
+                "check that the complete response parses as JSON."
             ),
         },
         {"role": "user", "content": json.dumps(passages, ensure_ascii=False)},

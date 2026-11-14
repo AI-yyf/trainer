@@ -4001,6 +4001,7 @@ export function App() {
   const activeTrainingReviewArtifact = reviewArtifactForeground
     ? trainingState?.reviewArtifact
     : undefined;
+  const scheduledRecallForeground = Boolean(activeTrainingReviewArtifact?.trainingCardId);
   const trainingLedgerEntry =
     trainingState?.trainingEventLedger?.find((entry) => entry.selectedCardId === trainingState?.selectedCardId) ??
     trainingState?.trainingEventLedger?.find((entry) => entry.cardCandidateId === trainingState?.selectedCardId) ??
@@ -4854,15 +4855,14 @@ export function App() {
   const trainingComposerVerifyItems = authoritativeVerifyItems.slice(0, 4);
   const trainingComposerSelectedVerifyItem =
     trainingComposerVerifyItems[trainingComposerVerifyIndex] ?? trainingComposerVerifyItems[0];
-  const hasTrainingCard = leftoverTrainingHandoffChromeNotLive
+  const hasTrainingCard = scheduledRecallForeground || (leftoverTrainingHandoffChromeNotLive
     ? false
     : Boolean(
         trainingState?.selectedCardId?.trim() &&
           (selectedTrainingCardCandidate || rawTrainingRouteCard),
-      );
-  const hasRenderableTrainingCard = leftoverTrainingHandoffChromeNotLive
-    ? false
-    : hasTrainingCard || Boolean(trainingState?.latestTrainingNextHop);
+      ));
+  const hasRenderableTrainingCard = hasTrainingCard ||
+    (!leftoverTrainingHandoffChromeNotLive && Boolean(trainingState?.latestTrainingNextHop));
   const boundTrainingCardFacts = useMemo(() => {
     const resolved = resolveBoundTrainingCardFacts({
       eligible: hasTrainingCard && syncStatus === "current" &&
@@ -7058,6 +7058,32 @@ export function App() {
 
     if (composerUsesTrainingFlow) {
       if (trainingPersistencePending) {
+        return;
+      }
+
+      if (scheduledRecallForeground) {
+        const review = activeTrainingReviewArtifact;
+        if (!review?.trainingCardId || !review.id || !normalizedDraft) {
+          return;
+        }
+        try {
+          const result = await requestTrainingPersistence(trainerCommands.trainingFlashcardAnswer, {
+            cardId: review.trainingCardId,
+            reviewArtifactId: review.id,
+            learnerAnswer: normalizedDraft,
+            responseLanguage: layout.composerLanguage,
+          });
+          if (result && typeof result === "object" && "correct" in result && result.correct === null &&
+              "detail" in result && typeof result.detail === "string") {
+            setOperationMessage({ tone: "info", message: result.detail }, "training");
+          }
+          setActivityDraft("");
+        } catch {
+          setOperationMessage({
+            tone: "error",
+            message: trainingPersistenceFailureMessage(layout.composerLanguage),
+          });
+        }
         return;
       }
 
@@ -10061,7 +10087,7 @@ export function App() {
             <SystemState kind="success" title={templateCopy[layout.composerLanguage].reviewRecorded}
               detail={trainingState?.reviewArtifact?.verifiedResult ?? trainingState?.reviewArtifact?.summary}
               action={{ label: templateCopy[layout.composerLanguage].askCoach, onClick: handleResumeTrainingInCoach }} />
-          ) : hasTrainingCard && !leftoverTrainingHandoffChromeNotLive && !trainingComposerReturnMode ? (
+          ) : hasTrainingCard && !trainingComposerReturnMode ? (
             <PracticeResponse
               attachmentScope={`${attachmentScope}\u0000${activeTrainingCardId ?? ""}\u0000${trainingComposerPhase}`}
               label={localizedTrainingComposerAccessibilityLabel}
@@ -10070,9 +10096,9 @@ export function App() {
               language={layout.composerLanguage}
               attachments={activityAttachments}
               onAttachmentsChange={setActivityAttachments}
-              attachmentsAvailable={providerImageInputState.supported && !trainingComposerReflectMode}
+              attachmentsAvailable={providerImageInputState.supported && !trainingComposerReflectMode && !scheduledRecallForeground}
               attachmentError={providerImageInputState.detail ?? providerImageInputState.reason}
-              submitLabel={trainingComposerReflectMode ? templateCopy[layout.composerLanguage].recordReflection : templateCopy[layout.composerLanguage].submitAnswer}
+              submitLabel={trainingComposerReflectMode && !activeTrainingReviewArtifact?.trainingCardId ? templateCopy[layout.composerLanguage].recordReflection : templateCopy[layout.composerLanguage].submitAnswer}
               busy={trainingPersistencePending || streaming.isStreaming}
               disabled={workspaceSessionBlocked}
               onChange={setActivityDraft}

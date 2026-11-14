@@ -1948,6 +1948,7 @@ class ReviewQueueAction(BaseModel):
 
 class ReviewArtifactSnapshot(BaseModel):
     id: str
+    training_card_id: str | None = None
     title: str = ""
     focus_area: str = ""
     source: str = ""
@@ -2053,6 +2054,7 @@ class FlashcardAnswerRequest(BaseModel):
 
     workspace_id: str
     card_id: str
+    review_artifact_id: str | None = None
     learner_answer: str = ""
     selected_option_index: int | None = None
     selected_option_indices: list[int] = Field(

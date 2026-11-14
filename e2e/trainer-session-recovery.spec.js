@@ -639,6 +639,59 @@ test('Start review opens the due queue while preserving the current practice car
   expect(feedback).not.toContain('旧练习的文件校验契约');
 });
 
+test('a scheduled review submits the shown question against its original card', async ({ page }) => {
+  await loadHostFixture(page, 'training', 'scheduled-card-answer');
+  const question = '优势为负时，先取较小概率比会发生什么？';
+  const answer = '乘以负数会反转两个概率比的大小关系。';
+  await page.evaluate(prompt => {
+    const current = window.__TRAINER_BOOTSTRAP__;
+    const workspaceId = current.memory.workspace.workspaceId;
+    const card = {
+      cardId: 'current-implementation', type: 'practice', title: '当前实现练习', status: 'active',
+      problemStatement: '完成 Python 实现。',
+    };
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: {
+      ...current,
+      memory: { ...current.memory, workspace: { ...current.memory.workspace,
+        liveTrainingSelection: { workspaceId, cardId: card.cardId, selectedAt: '2026-10-02T03:00:00Z' },
+      } },
+      workspaceTrainingState: {
+        ...current.workspaceTrainingState, workspaceId, latestTrainingSubmode: 'review_queue',
+        selectedCardId: card.cardId, selectedCardType: 'practice', selectedCardStatus: 'active',
+        selectedCardTitle: card.title, trainingCardCandidates: [card],
+        activeTrainingCardRouting: { selectedCardId: card.cardId, selectedCard: card, selectionScore: 100 },
+        reviewArtifact: { id: 'scheduled-review', trainingCardId: 'original-practice', title: '复习 PPO',
+          status: 'active', source: 'review_queue', summary: prompt, focusArea: 'PPO 裁剪目标',
+        },
+      },
+    } });
+  }, question);
+  const response = page.locator('[data-template=PracticeResponse]');
+  await expect(response).toContainText(question);
+  await expect(response.getByRole('button', { name: '记录训练复盘', exact: true })).toHaveCount(0);
+  await response.getByRole('textbox').fill(answer);
+  await response.getByRole('button', { name: '提交回答', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.find(
+    message => message.payload?.commandId === 'trainer.training.flashcardAnswer',
+  )?.payload.payload)).toMatchObject({
+    cardId: 'original-practice', reviewArtifactId: 'scheduled-review', learnerAnswer: answer,
+  });
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.some(
+    message => message.payload?.commandId === 'trainer.training.reviewArtifactAction',
+  ))).toBe(false);
+  const request = await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.find(
+    message => message.payload?.commandId === 'trainer.training.flashcardAnswer',
+  ));
+  await page.evaluate(payload => window.postMessage({ type: 'training/persistenceAck', payload }, location.origin), {
+    requestId: request.payload.payload.__trainerTrainingPersistenceId,
+    commandId: request.payload.commandId,
+    ok: true,
+    data: { correct: null, detail: '答案已保存，正确性尚未确认。' },
+  });
+  await expect(response.getByRole('textbox')).toHaveValue('');
+  await expect(response).toContainText(question);
+});
+
 test('a recorded review resumes as recall without a coding verification or empty Return action', async ({ page }) => {
   await loadHostFixture(page, 'training', 'resolved-recall-review');
   await page.evaluate(() => {

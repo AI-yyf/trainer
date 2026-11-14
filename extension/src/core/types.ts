@@ -1384,6 +1384,7 @@ export interface TrainingEventLedgerEntryView {
 
 export interface ReviewArtifactSummaryView {
   id?: string;
+  trainingCardId?: string;
   title?: string;
   focusArea?: string;
   source?: string;

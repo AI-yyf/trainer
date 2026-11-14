@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import Any, Literal, cast
 from uuid import uuid4
 
@@ -347,6 +348,7 @@ def build_core_router(
     seed: CoreRouteDeps,
 ) -> APIRouter:
     router = APIRouter()
+    recall_write_lock = Lock()
     core = seed
 
     def observe_goal_for_request(request: Any, workspace_id: str) -> Any:
@@ -4873,6 +4875,7 @@ def build_core_router(
 
     @router.post("/training/flashcard/answer")
     async def training_flashcard_answer(request: FlashcardAnswerRequest) -> dict[str, object]:
+        await run_in_threadpool(check_bound_recall, request)
         card = await run_in_threadpool(
             runtime.memory_service.get_card, request.workspace_id, request.card_id,
         )
@@ -4896,12 +4899,32 @@ def build_core_router(
             )
         return await run_in_threadpool(persist_flashcard_answer, request, card, assessment, language)
 
+    def check_bound_recall(request: FlashcardAnswerRequest) -> None:
+        if not request.review_artifact_id:
+            return
+        review = runtime.memory_service.snapshot(request.workspace_id).review_artifact
+        if (
+            review is None or review.id != request.review_artifact_id or review.status != "active"
+            or review.training_card_id != request.card_id
+        ):
+            raise HTTPException(status_code=409, detail="This scheduled review is no longer active.")
+
     def persist_flashcard_answer(
         request: FlashcardAnswerRequest,
         reviewed_card: TrainingCardCandidateSnapshot,
         assessment: RecallAssessment | None,
         language: str | None,
     ) -> dict[str, object]:
+        with recall_write_lock:
+            return save_flashcard_answer(request, reviewed_card, assessment, language)
+
+    def save_flashcard_answer(
+        request: FlashcardAnswerRequest,
+        reviewed_card: TrainingCardCandidateSnapshot,
+        assessment: RecallAssessment | None,
+        language: str | None,
+    ) -> dict[str, object]:
+        check_bound_recall(request)
         current_card = runtime.memory_service.get_card(request.workspace_id, request.card_id)
         if current_card is not None and assessment is not None:
             reviewed_fields = {"question", "expected_answer", "rubric", "answer_mode"}
@@ -4948,6 +4971,11 @@ def build_core_router(
                 workspace_id=request.workspace_id,
                 card_id=request.card_id,
                 answer_draft=attempt.learner_answer,
+            )
+        if request.review_artifact_id and attempt.correct is not None and recall_evidence:
+            runtime.memory_service.apply_review_artifact_action(
+                request.workspace_id, request.review_artifact_id, "resolved", note=attempt.detail,
+                recall_result=attempt.correct,
             )
         core.refresh_workspace_sessions(request.workspace_id)
         return {
@@ -5129,17 +5157,18 @@ def build_core_router(
             request.workspace_id, request.training_card_id,
         ) is None:
             raise HTTPException(status_code=404, detail="Review card not found.")
-        actions = runtime.memory_service.apply_review_queue_action(
-            request.workspace_id,
-            concept=request.concept,
-            action=request.action,
-            scope=request.scope,
-            focus_area=request.focus_area,
-            task_hint=request.task_hint,
-            note=request.note,
-            batch_limit=request.batch_limit,
-            training_card_id=request.training_card_id,
-        )
+        with recall_write_lock:
+            actions = runtime.memory_service.apply_review_queue_action(
+                request.workspace_id,
+                concept=request.concept,
+                action=request.action,
+                scope=request.scope,
+                focus_area=request.focus_area,
+                task_hint=request.task_hint,
+                note=request.note,
+                batch_limit=request.batch_limit,
+                training_card_id=request.training_card_id,
+            )
         core.refresh_workspace_sessions(request.workspace_id)
         return {
             "ok": True,
@@ -5149,13 +5178,17 @@ def build_core_router(
 
     @router.post("/training/review-artifact/action")
     def training_review_artifact_action(request: ReviewArtifactActionRequest) -> dict[str, object]:
-        artifact, history = runtime.memory_service.apply_review_artifact_action(
-            request.workspace_id,
-            review_artifact_id=request.review_artifact_id,
-            action=request.action,
-            note=request.note,
-            edit_patch=request.edit_patch,
-        )
+        try:
+            with recall_write_lock:
+                artifact, history = runtime.memory_service.apply_review_artifact_action(
+                    request.workspace_id,
+                    review_artifact_id=request.review_artifact_id,
+                    action=request.action,
+                    note=request.note,
+                    edit_patch=request.edit_patch,
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         core.refresh_workspace_sessions(request.workspace_id)
         return {
             "ok": artifact is not None,
@@ -5223,13 +5256,14 @@ def build_core_router(
 
     @router.post("/training/review-artifact/restore")
     def training_review_artifact_restore(request: ReviewArtifactRestoreRequest) -> dict[str, object]:
-        artifact, history = runtime.memory_service.restore_review_artifact_history(
-            request.workspace_id,
-            review_artifact_id=request.review_artifact_id,
-            history_entry_id=request.history_entry_id,
-            history_version=request.history_version,
-            note=request.note,
-        )
+        with recall_write_lock:
+            artifact, history = runtime.memory_service.restore_review_artifact_history(
+                request.workspace_id,
+                review_artifact_id=request.review_artifact_id,
+                history_entry_id=request.history_entry_id,
+                history_version=request.history_version,
+                note=request.note,
+            )
         core.refresh_workspace_sessions(request.workspace_id)
         return {
             "ok": artifact is not None,

@@ -1079,6 +1079,8 @@ class TestCardGenerationStreamingTruth(unittest.TestCase):
         response = {
             **_practice_llm_response(),
             "files_to_touch": ["wrong.py"],
+            "question": "",
+            "expected_answer": "",
             "python_behavior_contract": {
                 "function": "wrong", "reference_id": "claimed-by-model",
                 "cases": [{"args": [1], "expected": 999}, {"args": [2], "expected": 999}],
@@ -1098,7 +1100,13 @@ class TestCardGenerationStreamingTruth(unittest.TestCase):
 
         contract = card.python_behavior_contract
         assert contract is not None
-        self.assertEqual(contract, asyncio.run(streamed_card()).python_behavior_contract)
+        streamed = asyncio.run(streamed_card())
+        self.assertEqual(contract, streamed.python_behavior_contract)
+        self.assertEqual(card.question, streamed.question)
+        self.assertIn("advantage is negative", card.question)
+        self.assertEqual(card.expected_answer, streamed.expected_answer)
+        self.assertIn("−0.8", card.expected_answer)
+        self.assertNotIn(card.expected_answer, card.problem_statement)
         self.assertEqual(contract.reference_id, "trainer/ppo-clipped-loss/v1")
         self.assertEqual(card.files_to_touch, ["ppo_clip_loss.py"])
         self.assertEqual(contract.function, "ppo_clip_loss")

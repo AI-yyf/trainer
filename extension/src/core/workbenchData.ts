@@ -2710,7 +2710,7 @@ function applyLeftoverNotLiveTaskGuideFocus<
           latestLearningPartialProgress: leftoverTrainingHandoffNotLive
             ? undefined
             : patch.workspaceTrainingState.latestLearningPartialProgress,
-          reviewArtifact: leftoverTrainingHandoffNotLive
+          reviewArtifact: leftoverTrainingHandoffNotLive && !patch.workspaceTrainingState.reviewArtifact?.trainingCardId
             ? undefined
             : patch.workspaceTrainingState.reviewArtifact,
           latestTrainingHandoff: patch.workspaceTrainingState.latestTrainingHandoff
@@ -4926,6 +4926,8 @@ function mapWorkspaceTrainingState(
   }
 
   const selectedCardId = mapped.selectedCardId?.trim();
+  const scheduledReviewForeground = Boolean(mapped.reviewArtifact?.trainingCardId) &&
+    ['review', 'review_queue', 'review-queue'].includes(mapped.latestTrainingSubmode ?? '');
   const handoffCardId = mapped.latestTrainingHandoff?.cardId?.trim();
   const selectedCard = mapped.trainingCardCandidates?.find(card => card.cardId === selectedCardId) ??
     (mapped.activeTrainingCardRouting?.selectedCard?.cardId === selectedCardId
@@ -4946,7 +4948,7 @@ function mapWorkspaceTrainingState(
     mapped.latestLearningBlocker = undefined;
     mapped.latestLearningPartialProgress = undefined;
     mapped.latestLearningAbandonReason = undefined;
-    mapped.latestTrainingSubmode = mapped.reviewArtifact?.id === selectedCardId
+    mapped.latestTrainingSubmode = scheduledReviewForeground || mapped.reviewArtifact?.id === selectedCardId
       ? mapped.latestTrainingSubmode : mapped.selectedCardType;
     mapped.selectedCardTitle = selectedCard?.title;
   }
@@ -4959,12 +4961,12 @@ function mapWorkspaceTrainingState(
     mapped.activeTrainingCardRouting = undefined;
     mapped.selectedCardTitle = undefined;
     mapped.selectedCardStatus = undefined;
-    mapped.latestTrainingSubmode = undefined;
+    if (!scheduledReviewForeground) mapped.latestTrainingSubmode = undefined;
   }
   const selectedCardChanged = Boolean(
     sameWorkspace && fallback?.selectedCardId && incomingSelectedCardId && !sameSelectedCard,
   );
-  if (selectedCardChanged && mapped.reviewArtifact?.id !== selectedCardId) {
+  if (selectedCardChanged && !scheduledReviewForeground && mapped.reviewArtifact?.id !== selectedCardId) {
     mapped.latestTrainingSubmode = mapped.selectedCardType;
   }
 
@@ -5714,6 +5716,7 @@ function mapReviewArtifact(
 
   const mapped: ReviewArtifactStateView = {
     id: asString(record.id) ?? fallback?.id,
+    trainingCardId: asString(record.training_card_id ?? record.trainingCardId),
     title: asString(record.title) ?? fallback?.title,
     focusArea: asString(record.focus_area) ?? asString(record.focusArea) ?? fallback?.focusArea,
     source: asString(record.source) ?? fallback?.source,

@@ -407,22 +407,25 @@ try {
   }, { fail: !streamSucceeded(chat) || chat.visible.length < 40 });
 
   // Step 3 — explicit goal → goal_sessions=1 + goal_started ledger event.
+  const goalTitle = "3 天内能够独立解释 PPO 的裁剪目标，并手写对应的损失函数";
   const goalTurn = await streamTurn("03-explicit-goal", {
     workspace_id: "full-journey-ws",
     session_id: sessionId,
-    message: "帮我设定一个长期目标：3 天内能够独立解释 PPO 的裁剪目标，并手写对应的损失函数。",
+    message: `帮我设定一个长期目标：${goalTitle}。`,
     intent: "coach",
     active_view: "coach",
   });
   const goalCount = dbCount("SELECT COUNT(*) AS n FROM goal_sessions");
   const goalStarted = await waitForLedgerEvent("goal_started");
+  const startedGoal = goalStarted.length ? JSON.parse(goalStarted[0].payload) : null;
   step("03-explicit-goal", {
     turn_status: goalTurn.status,
     reply_chars: goalTurn.visible.length,
     goal_sessions: goalCount,
-    goal_started_ledger: goalStarted.length > 0 ? JSON.parse(goalStarted[0].payload) : null,
+    goal_started_ledger: startedGoal,
     stream: streamSummary(goalTurn),
-  }, { fail: !streamSucceeded(goalTurn) || goalCount !== 1 || goalStarted.length === 0 });
+  }, { fail: !streamSucceeded(goalTurn) || goalCount !== 1 || !startedGoal?.goal_id ||
+    startedGoal.title !== goalTitle });
 
   // Step 4 — Coach explains with formulas (real model).
   const explain = await streamTurn("04-coach-explain", {
@@ -476,9 +479,12 @@ try {
     card_status: cardData?.status, card_scenario: cardData?.scenario_pack,
     degraded, fallback: fallbackMarker, persisted: cardRows.length > 0, stream_attempts: cardAttempts,
     behavior_contract: cardData?.python_behavior_contract,
+    recall_question: cardData?.question,
+    has_recall_reference: Boolean(cardData?.expected_answer?.trim()),
   }, {
     fail: !streamSucceeded(card) || card.chunkCount === 0 || !cardId || degraded ||
-      !cardRows.length || !cardData?.python_behavior_contract?.cases?.length,
+      !cardRows.length || !cardData?.python_behavior_contract?.cases?.length ||
+      !cardData?.question?.trim() || !cardData?.expected_answer?.trim(),
   });
 
   const referenceCases = checkPpoContract(cardData.python_behavior_contract);
@@ -621,12 +627,28 @@ try {
     session_id: sessionId,
     workspace_name: "Full Journey",
   });
-  const goalCurrent = dbRows("SELECT title, status FROM goal_sessions LIMIT 1");
+  const goalQuery = new URLSearchParams({ workspace_id: "full-journey-ws", session_id: sessionId });
+  const getGoal = async (route) => {
+    const response = await fetch(`${baseUrl}/goal/${route}?${goalQuery}`);
+    if (!response.ok) throw new Error(`Unable to read goal ${route} (HTTP ${response.status}).`);
+    return response.json();
+  };
+  const restoredGoal = (await getGoal("current")).goal;
+  const restoredQuestion = restored.json?.memory?.training_card_candidates
+    ?.find((item) => item.card_id === cardId)?.question;
+  const restoredMessages = restored.json?.messages;
+  const originalConversationRestored = Array.isArray(restoredMessages) &&
+    restoredMessages.some((item) => item.role === "user" && item.content.includes(goalTitle));
   step("09-restart-restore", {
     status: restored.status,
     same_session: restored.json?.session_id === sessionId,
-    goal: goalCurrent[0] ?? null,
-  }, { fail: restored.status !== 200 || restored.json?.session_id !== sessionId });
+    original_conversation_restored: originalConversationRestored,
+    goal: restoredGoal,
+    same_recall_question: restoredQuestion === cardData.question,
+  }, { fail: restored.status !== 200 || restored.json?.session_id !== sessionId ||
+    !originalConversationRestored || restoredGoal?.goalId !== startedGoal.goal_id ||
+    restoredGoal?.status !== "active" || restoredGoal?.title !== goalTitle ||
+    restoredQuestion !== cardData.question });
 
   function savedSchedule(snapshot) {
     return snapshot?.memory?.workspace?.latest_training_fsrs_states?.[cardId] ??
@@ -634,7 +656,7 @@ try {
   }
   const initialSchedule = savedSchedule(restored.json);
   const dueAt = Date.parse(initialSchedule?.next_due_at ?? initialSchedule?.due ?? "");
-  if (!Number.isFinite(dueAt)) {
+  if (!Number.isFinite(dueAt) || initialSchedule.reps !== 0 || initialSchedule.last_reviewed_at) {
     step("10-due-review-surfaces", { card_id: cardId, initial_schedule: initialSchedule }, { fail: true });
   }
   const advance = new Date(Math.max(Date.now(), dueAt) + 60_000).toISOString();
@@ -679,12 +701,27 @@ try {
     clock: reminderClock, same_card_visible: visibleAgain, unchanged_fsrs: unchangedAfterReminder,
   }, { fail: reminder.status !== 200 || !visibleAgain || !unchangedAfterReminder });
 
+  const acceptedReview = await post("/training/review-queue/action", {
+    workspace_id: "full-journey-ws", concept: dueCard.concept, training_card_id: cardId, action: "accept",
+  });
+  const activeReviewState = await post("/session/start", {
+    workspace_id: "full-journey-ws", session_id: sessionId, workspace_name: "Full Journey",
+  });
+  const activeReview = activeReviewState.json?.memory?.review_artifact;
+  step("10d-review-opens-same-question", {
+    status: acceptedReview.status, review_id: activeReview?.id, card_id: activeReview?.training_card_id,
+    same_question: activeReview?.summary === cardData.question,
+  }, { fail: acceptedReview.status !== 200 || activeReviewState.status !== 200 ||
+    !activeReview?.id || activeReview.training_card_id !== cardId ||
+    activeReview.summary !== cardData.question });
+
   const recallAnswer = await learnerAnswer("11-recall-answer", [
     { role: "system", content: "你是正在完成延迟复习的学习者。根据问题给出你的回答。" },
     { role: "user", content: cardData.question },
   ]);
   const recall = await post("/training/flashcard/answer", {
-    workspace_id: "full-journey-ws", card_id: cardId, learner_answer: recallAnswer,
+    workspace_id: "full-journey-ws", card_id: cardId, review_artifact_id: activeReview.id,
+    learner_answer: recallAnswer,
     provider, api_key: providerKey, last_test_result: providerTestResult, response_language: "zh-CN",
   });
   const afterRecall = await post("/session/start", {
@@ -695,12 +732,15 @@ try {
     recalledSchedule.last_reviewed_at !== initialSchedule.last_reviewed_at &&
     Number(recalledSchedule.reps) > Number(initialSchedule.reps));
   const delayedRecall = recall.json?.recall_evidence?.delayed_recall === true;
+  const resolvedReview = afterRecall.json?.memory?.review_artifact;
   step("11-recall-round", {
     status: recall.status, recall_correct: recall.json?.correct, recall_evidence: recall.json?.recall_evidence,
     recall_feedback: recall.json?.feedback,
     schedule_before: initialSchedule, schedule_after: recalledSchedule, fsrs_updated: fsrsUpdated,
     delayed_recall: delayedRecall,
-  }, { fail: recall.status !== 200 || !fsrsUpdated || !delayedRecall });
+    review_status: resolvedReview?.status,
+  }, { fail: recall.status !== 200 || !fsrsUpdated || !delayedRecall ||
+    resolvedReview?.id !== activeReview.id || resolvedReview.status !== "resolved" });
 
   // Step 12 — Coach gives the next step based on the review result.
   const nextStepTurn = await streamTurn("12-next-step-after-review", {
@@ -717,12 +757,6 @@ try {
     stream: streamSummary(nextStepTurn),
   }, { fail: !streamSucceeded(nextStepTurn) || nextStepTurn.visible.length < 40 });
 
-  const goalQuery = new URLSearchParams({ workspace_id: "full-journey-ws", session_id: sessionId });
-  const getGoal = async (route) => {
-    const response = await fetch(`${baseUrl}/goal/${route}?${goalQuery}`);
-    if (!response.ok) throw new Error(`Unable to read goal ${route} (HTTP ${response.status}).`);
-    return response.json();
-  };
   const activeGoal = (await getGoal("current")).goal;
   if (!activeGoal || activeGoal.status !== "active") throw new Error("Original goal is missing or inactive.");
   const readCurrentProjection = async () => {

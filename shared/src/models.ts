@@ -398,6 +398,7 @@ export type ReviewQueueActionSnapshot = {
 
 export type ReviewArtifactSnapshot = {
   id?: string;
+  trainingCardId?: string;
   title?: string;
   focusArea?: string;
   source?: string;

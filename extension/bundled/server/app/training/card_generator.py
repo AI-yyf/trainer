@@ -3286,7 +3286,8 @@ def _build_prompt(context: CardGenerationContext, source: str, card_type: str) -
             "It returns the negative mean of the per-item minimum of the original and "
             "clipped ratio times advantage. The server supplies the behavior cases. "
             "Do not invent alternate signatures, expected values or sample outputs. "
-            "Keep the task about this function and include one conceptual recall question."
+            "The server also supplies a separate recall question and reference answer. "
+            "Keep the generated practice instructions focused on implementing the function."
         )
         return prompt
     if card_type == "practice":
@@ -3770,6 +3771,32 @@ class CardGenerationService:
                     language,
                 ),
             ]
+            question = _localized_text(
+                "Why can taking the smaller of the original and clipped probability ratios "
+                "before multiplying by the advantage give the wrong PPO objective when the "
+                "advantage is negative? Give one numerical example.",
+                "优势为负时，为什么先取原始概率比和裁剪后概率比的较小值，再乘优势，"
+                "可能得到错误的 PPO 目标？请举一个数值例子。",
+                language,
+            )
+            expected_answer = _localized_text(
+                "A negative advantage reverses the ordering when multiplying. For example, "
+                "with ratio 0.5, clip threshold 0.2 and advantage −1, the clipped ratio is 0.8. "
+                "PPO takes the smaller product, −0.8. Taking the smaller ratio first gives −0.5.",
+                "乘以负优势会反转大小关系。例如概率比为 0.5、裁剪阈值为 0.2、优势为 −1 时，"
+                "裁剪后的比值为 0.8。PPO 取两个乘积的较小值 −0.8。先取较小的比值会得到 −0.5。",
+                language,
+            )
+            validation = _localized_text(
+                "Verify the current file against the five behavior cases.",
+                "验证当前文件，检查五个行为用例。",
+                language,
+            )
+            return_with = _localized_text(
+                "Bring the behavior check results back to Coach.",
+                "带着行为检查结果回到教练。",
+                language,
+            )
             card = card.model_copy(update={
                 "files_to_touch": ["ppo_clip_loss.py"],
                 "expected_symbols": [PPO_CLIPPED_LOSS_FUNCTION],
@@ -3785,6 +3812,15 @@ class CardGenerationService:
                 "learner_deliverables": [],
                 "verification_steps": checks,
                 "acceptance_criteria": checks,
+                "validation_method": validation,
+                "success_signal": validation,
+                "return_with": return_with,
+                "next_after_completion": return_with,
+                "reflection_prompt": question,
+                "question": question,
+                "answer_mode": "text",
+                "expected_answer": expected_answer,
+                "rubric": [],
             })
         card = _enforce_learning_loop_contract(card, context)
         current_path = _guided_fact_path(context.current_file_path)

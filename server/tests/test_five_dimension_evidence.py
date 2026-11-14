@@ -309,6 +309,8 @@ def test_flashcard_recall_advances_only_after_a_real_delay(
          '"quote":"slots stay bound"}', None, None),
         ('{"verdict":"correct","reason":"Distinguishes slots from values",'
          '"quote":"fabricated excerpt"}', None, None),
+        ('{"verdict":"correct","reason":"Unescaped LaTeX \\min","quote":"slots stay bound"}',
+         None, None),
         (RuntimeError("provider unavailable"), None, None),
     ],
 )
@@ -340,6 +342,20 @@ def test_model_review_preserves_assessment_scope_and_schedule(
         runtime.memory_service.initialize_training_card_review(workspace, training_card_id=card.card_id)
         before = runtime.memory_service.snapshot(workspace).workspace["latest_training_fsrs_states"][card.card_id]
         monkeypatch.setenv("TRAINER_TEST_NOW", "2026-11-03T09:00:00Z")
+        accepted = client.post("/training/review-queue/action", json={
+            "workspace_id": workspace, "concept": "tuples", "training_card_id": card.card_id,
+            "action": "accept",
+        })
+        assert accepted.status_code == 200, accepted.text
+        artifact = runtime.memory_service.snapshot(workspace).review_artifact
+        assert artifact is not None
+        assert artifact.training_card_id == card.card_id
+        assert artifact.summary == card.question
+        rejected = client.post("/training/review-artifact/action", json={
+            "workspace_id": workspace, "review_artifact_id": artifact.id, "action": "resolved",
+            "note": "A reflection without assessment",
+        })
+        assert rejected.status_code == 409
         monkeypatch.setattr(ProviderService, "has_api_key", PropertyMock(return_value=True))
         completion = (
             AsyncMock(side_effect=provider_reply) if isinstance(provider_reply, Exception)
@@ -347,15 +363,18 @@ def test_model_review_preserves_assessment_scope_and_schedule(
         )
         monkeypatch.setattr(ProviderService, "chat_completion", completion)
         original = "The slots stay bound, but the list itself remains editable."
-        response = client.post(
-            "/training/flashcard/answer",
-            json={"workspace_id": workspace, "card_id": card.card_id, "learner_answer": original},
-        )
+        submission = {
+            "workspace_id": workspace, "card_id": card.card_id, "learner_answer": original,
+            "review_artifact_id": artifact.id,
+        }
+        response = client.post("/training/flashcard/answer", json=submission)
         assert response.status_code == 200, response.text
         completion.assert_awaited_once()
         result = response.json()
         snapshot = runtime.memory_service.snapshot(workspace)
         after = snapshot.workspace["latest_training_fsrs_states"][card.card_id]
+        assert snapshot.review_artifact is not None
+        assert snapshot.review_artifact.id == artifact.id
         assert result["correct"] is expected_correct
         assert result["attempt"]["learner_answer"] == original
         assert snapshot.recent_flash_attempts[0].learner_answer == original
@@ -364,6 +383,7 @@ def test_model_review_preserves_assessment_scope_and_schedule(
         )["recent_recall_result"]
         assert followup["correct"] is expected_correct
         if rating is None:
+            assert snapshot.review_artifact.status == "active"
             assert result["recall_evidence"] is None
             assert result["retry_required"] is False
             assert result["card_status"] == "active"
@@ -372,6 +392,10 @@ def test_model_review_preserves_assessment_scope_and_schedule(
             recorded = runtime.attempt_store.list_attempts(workspace_id=workspace, card_id=card.card_id)
             assert any(item["answer_draft"] == original for item in recorded)
         else:
+            assert snapshot.review_artifact.status == "resolved"
+            replay = client.post("/training/flashcard/answer", json=submission)
+            assert replay.status_code == 409
+            completion.assert_awaited_once()
             receipt = result["recall_evidence"]
             assert receipt["trust_level"] == "model_review"
             assert receipt["rating"] == rating

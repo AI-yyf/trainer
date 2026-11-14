@@ -5975,14 +5975,26 @@ class MemoryService(
             ))
         structured._review_queue_actions.extend(created)
         previous = structured._review_artifact
-        same_review = bool(previous and previous.source == "review_queue" and previous.focus_area == concept)
+        card = self.get_card(workspace_id, training_card_id) if training_card_id else None
+        recall_card = card if (
+            card and card.question.strip() and (card.expected_answer.strip() or card.rubric)
+            and flashcard_answer_mode(card) == "text"
+        ) else None
+        recall_card_id = recall_card.card_id if recall_card else None
+        recall_question = recall_card.question if recall_card else ""
+        same_review = bool(
+            previous and previous.source == "review_queue"
+            and previous.training_card_id == recall_card_id
+            and (recall_card_id or previous.focus_area == concept)
+        )
         if action == "accept" or (action == "reset" and same_review):
             language = _workspace_language(structured._workspace)
             artifact = previous if same_review else ReviewArtifactSnapshot(
                 id=f"review-{uuid4().hex[:10]}",
+                training_card_id=recall_card_id,
                 title=_localized_memory_text(f"Review: {concept}", f"复习：{concept}", language),
                 focus_area=concept, source="review_queue", status="active",
-                summary=task_hint or note or _localized_memory_text(
+                summary=recall_question or task_hint or note or _localized_memory_text(
                     f"Recall {concept} before the next attempt.", f"先回忆「{concept}」，再核对答案。", language,
                 ),
                 root_cause=note or _localized_memory_text(
@@ -6000,7 +6012,7 @@ class MemoryService(
             assert artifact is not None
             if same_review:
                 artifact = artifact.model_copy(update={
-                    "status": "active", "summary": task_hint or note or artifact.summary,
+                    "status": "active", "summary": recall_question or task_hint or note or artifact.summary,
                     "root_cause": note or artifact.root_cause, "last_action": "reviewed",
                     **({"verified_result": "", "blocker": "", "partial_progress": ""}
                        if artifact.status != "active" else {}),
@@ -6014,7 +6026,12 @@ class MemoryService(
                 after_snapshot=artifact.model_dump(mode="json"),
             ))
             structured.update_workspace(latest_training_submode="review_queue")
-        elif action == "done" and previous and previous.focus_area in concepts:
+        elif action == "done" and previous and (
+            same_review or (
+                not previous.training_card_id and not training_card_id
+                and previous.focus_area in concepts
+            )
+        ):
             structured._review_artifact = previous.model_copy(update={
                 "status": "resolved", "last_action": "resolved",
                 "version": previous.version + 1, "updated_at": now.isoformat(),
@@ -6053,6 +6070,8 @@ class MemoryService(
         action: str,
         note: str = "",
         edit_patch: dict[str, Any] | None = None,
+        *,
+        recall_result: bool | None = None,
     ) -> tuple[ReviewArtifactSnapshot | None, list[ReviewArtifactHistoryEntry]]:
         structured = self._structured_for(workspace_id)
         artifact = structured._review_artifact
@@ -6066,17 +6085,22 @@ class MemoryService(
         if action == "reviewed":
             update_payload["status"] = "active"
         elif action == "resolved":
-            update_payload.update({"status": "resolved", "verified_result": artifact.verified_result or note, "blocker": "", "partial_progress": ""})
+            if artifact.training_card_id and recall_result is None:
+                raise ValueError("Submit an answer to the scheduled recall question.")
+            result = note if artifact.training_card_id else artifact.verified_result or note
+            update_payload.update({"status": "resolved", "verified_result": result, "blocker": "", "partial_progress": ""})
         elif action == "reopened":
             update_payload["status"] = "active"
         elif action == "archived":
             update_payload["status"] = "archived"
         elif action == "updated" and edit_patch:
-            update_payload.update(edit_patch)
+            update_payload.update({
+                key: value for key, value in edit_patch.items() if key != "training_card_id"
+            })
             update_payload["status"] = artifact.status
         updated = artifact.model_copy(update=update_payload)
         structured._review_artifact = updated
-        if action == "resolved" and updated.focus_area:
+        if action == "resolved" and updated.focus_area and not updated.training_card_id:
             review_completed_at = utc_now()
             next_review_at = review_completed_at + timedelta(days=2)
             structured.update_mastery(

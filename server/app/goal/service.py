@@ -70,6 +70,10 @@ _TITLE_REQUEST_CLAUSE = re.compile(
     r"[，,。;；]\s*(?=(?:请|先|帮我|给我|告诉我|并|然后|再|以及|please\b|and\b))",
     re.IGNORECASE,
 )
+_EXPLICIT_GOAL_FOLLOWUP = re.compile(
+    r"[，,。;；]\s*(?=(?:(?:并|然后|再)?(?:请|帮我|给我|告诉我)|(?:and\s+)?please\b))",
+    re.IGNORECASE,
+)
 
 
 def _clean_candidate_title(value: str) -> str:
@@ -102,7 +106,7 @@ def detect_goal_candidate(message: str) -> str | None:
 
     explicit_goal = _ZH_EXPLICIT_GOAL.match(raw) or _EN_EXPLICIT_GOAL.match(raw)
     if explicit_goal:
-        title = _clean_candidate_title(explicit_goal.group("title"))
+        title = normalize_goal_title(_EXPLICIT_GOAL_FOLLOWUP.split(explicit_goal.group("title"), maxsplit=1)[0])
         if len(title) >= 2:
             return title
 

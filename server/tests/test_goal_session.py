@@ -52,9 +52,17 @@ def _current(client: TestClient, workspace_id: str = "w-goal") -> dict | None:
         ("帮我制定一个学习 PPO 的计划", "PPO"),
         (
             "帮我设定一个长期目标：3 天内能够独立解释 PPO 的裁剪目标，并手写对应的损失函数。",
-            "3 天内能够独立解释 PPO 的裁剪目标",
+            "3 天内能够独立解释 PPO 的裁剪目标，并手写对应的损失函数",
+        ),
+        (
+            "帮我设置学习目标：解释公式并手写损失函数，请先给我一个最小例子。",
+            "解释公式并手写损失函数",
         ),
         ("Please set a goal: ship a small compiler", "ship a small compiler"),
+        (
+            "Set a goal: explain the parser, and implement it; please suggest a first exercise.",
+            "explain the parser, and implement it",
+        ),
         ("今天的目标是什么？", None),
         ("随便聊聊", None),
         ("/review", None),

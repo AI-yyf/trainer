@@ -1625,6 +1625,7 @@ export async function trainingFlashcardAnswerCommand(
 ): Promise<CommandExecutionResult> {
   const p = payload as {
     cardId?: string;
+    reviewArtifactId?: string;
     learnerAnswer?: string;
     answer?: string;
     selectedOptionIndex?: number;
@@ -1643,6 +1644,7 @@ export async function trainingFlashcardAnswerCommand(
     const requestBody: Record<string, unknown> = {
       workspace_id: workspaceId,
       card_id: p?.cardId ?? '',
+      ...(p?.reviewArtifactId ? { review_artifact_id: p.reviewArtifactId } : {}),
       learner_answer: learnerAnswer,
       selected_option_index: p?.selectedOptionIndex ?? null,
     };

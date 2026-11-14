@@ -5674,6 +5674,7 @@ function mapReviewArtifact(
 
   const mapped: ReviewArtifactStateView = {
     id: asString(record.id) ?? fallback?.id,
+    trainingCardId: asString(record.training_card_id ?? record.trainingCardId),
     title: asString(record.title) ?? fallback?.title,
     focusArea: asString(record.focus_area) ?? asString(record.focusArea) ?? fallback?.focusArea,
     source: asString(record.source) ?? fallback?.source,
