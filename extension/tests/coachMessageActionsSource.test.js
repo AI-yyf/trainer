@@ -88,7 +88,7 @@ test('conversation view threads message actions into each bubble', () => {
 
   assert.match(source, /onMessageAction\?: \(action: CoachMessageAction, message: ConversationMessage\)/);
   assert.match(source, /pendingMessageAction\?: string \| null/);
-  assert.match(source, /onMessageAction=\{onMessageAction\}/);
+  assert.match(source, /onMessageAction=\{partialReply && item\.message\.id === "streaming" \? undefined : onMessageAction\}/);
   assert.match(source, /pendingMessageAction=\{pendingMessageAction\}/);
 });
 
