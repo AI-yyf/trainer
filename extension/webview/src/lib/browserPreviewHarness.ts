@@ -945,6 +945,7 @@ async function runBrowserPreviewLiveTrainingAction(
         response = await requestFor("/training/review-queue/action", {
           workspace_id: workspaceId,
           concept: browserPreviewString(payload?.concept),
+          training_card_id: browserPreviewString(payload?.trainingCardId) || undefined,
           action: browserPreviewString(payload?.action),
           scope: browserPreviewString(payload?.scope) || "single",
           focus_area: browserPreviewString(payload?.focusArea),

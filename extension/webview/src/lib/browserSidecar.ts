@@ -6569,6 +6569,9 @@ function asDueReviews(value: unknown) {
     .filter((item): item is Record<string, unknown> => Boolean(item))
     .map((item) => ({
       concept: asString(item.concept) ?? "review",
+      trainingCardId: asString(item.training_card_id ?? item.trainingCardId),
+      evidenceBasis: item.evidence_basis === "fsrs_recall" || item.evidenceBasis === "fsrs_recall"
+        ? "fsrs_recall" as const : "no_recall_evidence" as const,
       reason: asString(item.reason) ?? "",
       dueAt: asString(item.due_at) ?? undefined,
       source: toReviewSource(asString(item.source)),

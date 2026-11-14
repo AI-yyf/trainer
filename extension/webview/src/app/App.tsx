@@ -4002,6 +4002,9 @@ export function App() {
     ? trainingState?.reviewArtifact
     : undefined;
   const scheduledRecallForeground = Boolean(activeTrainingReviewArtifact?.trainingCardId);
+  const [recallFeedback, setRecallFeedback] = useState<{ reviewId: string; detail: string; failed: boolean }>();
+  const currentRecallFeedback = recallFeedback?.reviewId === activeTrainingReviewArtifact?.id
+    ? recallFeedback : undefined;
   const trainingLedgerEntry =
     trainingState?.trainingEventLedger?.find((entry) => entry.selectedCardId === trainingState?.selectedCardId) ??
     trainingState?.trainingEventLedger?.find((entry) => entry.cardCandidateId === trainingState?.selectedCardId) ??
@@ -7066,6 +7069,7 @@ export function App() {
         if (!review?.trainingCardId || !review.id || !normalizedDraft) {
           return;
         }
+        setRecallFeedback(undefined);
         try {
           const result = await requestTrainingPersistence(trainerCommands.trainingFlashcardAnswer, {
             cardId: review.trainingCardId,
@@ -7073,15 +7077,16 @@ export function App() {
             learnerAnswer: normalizedDraft,
             responseLanguage: layout.composerLanguage,
           });
-          if (result && typeof result === "object" && "correct" in result && result.correct === null &&
-              "detail" in result && typeof result.detail === "string") {
-            setOperationMessage({ tone: "info", message: result.detail }, "training");
+          if (result && typeof result === "object" && "correct" in result && result.correct === null) {
+            const detail = "detail" in result && typeof result.detail === "string" ? result.detail : "";
+            if (detail) setRecallFeedback({ reviewId: review.id, detail, failed: false });
+            return;
           }
           setActivityDraft("");
         } catch {
-          setOperationMessage({
-            tone: "error",
-            message: trainingPersistenceFailureMessage(layout.composerLanguage),
+          setRecallFeedback({
+            reviewId: review.id, failed: true,
+            detail: trainingPersistenceFailureMessage(layout.composerLanguage),
           });
         }
         return;
@@ -10090,7 +10095,7 @@ export function App() {
           ) : hasTrainingCard && !trainingComposerReturnMode ? (
             <PracticeResponse
               attachmentScope={`${attachmentScope}\u0000${activeTrainingCardId ?? ""}\u0000${trainingComposerPhase}`}
-              label={localizedTrainingComposerAccessibilityLabel}
+              label={scheduledRecallForeground ? trainingComposerModeTextCopy.answerAccessibilityLabel : localizedTrainingComposerAccessibilityLabel}
               prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) : undefined}
               value={activityDraft}
               language={layout.composerLanguage}
@@ -10104,7 +10109,9 @@ export function App() {
               onChange={setActivityDraft}
               onSubmit={(value) => { void handleSubmit(value); }}
             >
-              {renderTrainingComposerAccessory()}
+              {scheduledRecallForeground && currentRecallFeedback ? (
+                <SystemState kind={currentRecallFeedback.failed ? "recoverable-error" : "information"} title={currentRecallFeedback.detail} />
+              ) : renderTrainingComposerAccessory()}
             </PracticeResponse>
           ) : null}
           cardId={activeTrainingCardId}

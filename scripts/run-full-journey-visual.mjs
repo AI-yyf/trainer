@@ -587,11 +587,42 @@ async function main() {
       await reviewRow.locator(".training-review-row__actions-details > summary").click();
       await reviewRow.getByRole("button", { name: "开始复习", exact: true }).click();
       const form = frame.locator('[data-template="PracticeResponse"]').filter({ hasText: seeded.question });
-      await form.waitFor({ timeout: 30_000 });
+      const submit = form.getByRole("button", { name: "提交回答", exact: true });
+      await submit.waitFor({ timeout: 30_000 });
       const promptImage = await screenshot(page, "13f-native-scheduled-recall-question");
-      await form.getByRole("textbox").fill(recallSource.answer);
-      await form.getByRole("button", { name: "提交回答", exact: true }).click();
-      await frame.getByText("复习已记录", { exact: true }).waitFor({ timeout: 75_000 });
+      const receipt = frame.getByText("复习已记录", { exact: true });
+      const pending = form.getByText(/答案已保存，正确性尚未确认/).filter({ visible: true });
+      const answerInput = form.getByRole("textbox");
+      try {
+        await answerInput.fill(recallSource.answer);
+        await submit.click();
+        await receipt.or(pending).first().waitFor({ timeout: 75_000 });
+        if (await pending.count()) {
+          const unconfirmed = readPersistedRecall();
+          const draftRetained = await answerInput.inputValue() === recallSource.answer;
+          record("13f1-native-recall-unconfirmed", {
+            ok: unconfirmed.review?.status === "active" && unconfirmed.answer?.correct === null &&
+              unconfirmed.answer.learner_answer === recallSource.answer &&
+              unconfirmed.schedule?.reps === before.schedule.reps && draftRetained,
+            reviewStatus: unconfirmed.review?.status,
+            feedback: unconfirmed.answer?.feedback,
+            draftRetained,
+            screenshot: await screenshot(page, "13f1-native-scheduled-recall-unconfirmed"),
+          });
+          if (!draftRetained) throw new Error("The unconfirmed recall did not retain the learner's draft.");
+          await submit.click();
+        }
+        await receipt.waitFor({ timeout: 75_000 });
+      } catch (error) {
+        const failed = readPersistedRecall();
+        record("13f-native-scheduled-recall", {
+          ok: false, reviewStatus: failed.review?.status, reviewedCardId: failed.review?.training_card_id,
+          answerRecorded: Boolean(failed.answer?.learner_answer), feedback: failed.answer?.feedback,
+          reps: failed.schedule?.reps,
+          screenshot: await screenshot(page, "13f-native-scheduled-recall-failed"),
+        });
+        throw error;
+      }
       const after = readPersistedRecall();
       record("13f-native-scheduled-recall", {
         ok: after.review?.training_card_id === seeded.cardId && after.review.status === "resolved" &&
@@ -760,7 +791,8 @@ async function main() {
     using_real_provider: usingRealProvider,
     results,
     failures: failures.length,
-    ok: failures.length === 0 && results.length === (recallSource ? 9 : 7),
+    ok: failures.length === 0 &&
+      results.filter((item) => item.step !== "13f1-native-recall-unconfirmed").length === (recallSource ? 9 : 7),
     artifacts: fs.readdirSync(outDir).filter((name) => name.endsWith(".png")),
   };
   fs.writeFileSync(path.join(outDir, "report.json"), `${JSON.stringify(report, null, 2)}\n`);

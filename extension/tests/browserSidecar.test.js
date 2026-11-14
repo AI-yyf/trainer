@@ -1705,6 +1705,8 @@ function createPreviewTrainingSummary() {
       due_reviews: [
         {
           concept: 'fastapi Depends',
+          training_card_id: 'card-practice-1',
+          evidence_basis: 'fsrs_recall',
           reason: 'Review the boundary choice.',
           source: 'plan',
           severity: 'medium',
@@ -2354,6 +2356,9 @@ test('sendBrowserPreviewMessage preserves workspace training state in preview pa
       result.message.payload.workspaceTrainingState.reviewArtifact.status,
       'resolved',
     );
+    const dueReview = result.message.payload.workspaceTrainingState.dueReviews[0];
+    assert.equal(dueReview.trainingCardId, 'card-practice-1');
+    assert.equal(dueReview.evidenceBasis, 'fsrs_recall');
     assert.equal(result.message.payload.conversation[0].parts[0].type, 'tool_call');
     assert.equal(result.message.payload.conversation[0].parts[0].name, 'recall_memory');
   } finally {

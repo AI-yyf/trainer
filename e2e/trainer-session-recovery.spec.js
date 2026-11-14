@@ -699,7 +699,8 @@ test('a scheduled review submits the shown question against its original card', 
     ok: true,
     data: { correct: null, detail: '答案已保存，正确性尚未确认。' },
   });
-  await expect(response.getByRole('textbox')).toHaveValue('');
+  await expect(response.getByRole('textbox')).toHaveValue(answer);
+  await expect(response.getByText('答案已保存，正确性尚未确认。', { exact: true })).toBeVisible();
   await expect(response).toContainText(question);
 });
 
