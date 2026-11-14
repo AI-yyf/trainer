@@ -45,6 +45,10 @@ async def _iterate_provider_stream_with_cancellation(
             except RuntimeError as exc:
                 if "asynchronous generator is already running" not in str(exc):
                     raise
+        if stream is not iterator:
+            close_stream = getattr(stream, "close", None)
+            if close_stream is not None:
+                await close_stream()
 
     try:
         while True:
@@ -100,9 +104,11 @@ async def _iterate_provider_stream_with_cancellation(
                     iterator_exhausted = True
                     return
             finally:
+                if not next_item.done():
+                    next_item.cancel()
                 if not cancellation.done():
                     cancellation.cancel()
-                await asyncio.gather(cancellation, return_exceptions=True)
+                await asyncio.gather(next_item, cancellation, return_exceptions=True)
     finally:
         await close_iterator()
 
@@ -116,6 +122,9 @@ async def _await_provider_stream_with_cancellation(
     if cancel_event is None:
         return await awaitable
     if cancel_event.is_set():
+        pending = asyncio.ensure_future(awaitable)
+        pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
         raise asyncio.CancelledError
 
     operation = asyncio.ensure_future(awaitable)
@@ -131,6 +140,8 @@ async def _await_provider_stream_with_cancellation(
             raise asyncio.CancelledError
         return operation.result()
     finally:
+        if not operation.done():
+            operation.cancel()
         if not cancellation.done():
             cancellation.cancel()
-        await asyncio.gather(cancellation, return_exceptions=True)
+        await asyncio.gather(operation, cancellation, return_exceptions=True)

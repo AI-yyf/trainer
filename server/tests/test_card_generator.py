@@ -1853,8 +1853,8 @@ class _StallingStreamProvider:
         yield ""
 
 
-class TestCardGenerationStreamIdleFallback(unittest.TestCase):
-    def test_stalled_stream_yields_a_marked_deterministic_fallback_card(self) -> None:
+class TestCardGenerationStreamIdle(unittest.TestCase):
+    def test_stalled_conversation_stream_requires_an_explicit_retry(self) -> None:
         service = CardGenerationService(provider_service=_StallingStreamProvider())
 
         async def collect():
@@ -1874,14 +1874,8 @@ class TestCardGenerationStreamIdleFallback(unittest.TestCase):
         with patch(
             "app.training.card_generator._CARD_STREAM_IDLE_TIMEOUT_SECONDS",
             0.01,
-        ):
-            events = asyncio.run(collect())
+        ), self.assertRaises(CardGenerationStreamError) as error:
+            asyncio.run(collect())
 
-        cards = [event.card for event in events if event.card is not None]
-        self.assertEqual(len(cards), 1)
-        card = cards[0]
-        self.assertEqual(card.generation_source, "deterministic_fallback")
-        self.assertEqual(card.generation_fallback_reason, "provider_stalled")
-        self.assertEqual(card.generation_status, "degraded")
-        self.assertTrue(card.generation_recoverable)
-        self.assertIn("降级", card.why_now)
+        self.assertEqual(error.exception.reason, "provider_stalled")
+        self.assertTrue(error.exception.retryable)

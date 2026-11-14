@@ -4118,6 +4118,11 @@ class CardGenerationService:
         }
         if cancel_event is not None:
             stream_kwargs["cancel_event"] = cancel_event
+        allows_slow_reasoning = getattr(self._provider, "needs_unbounded_reasoning_stream", None)
+        idle_timeout = (
+            None if callable(allows_slow_reasoning) and allows_slow_reasoning() is True
+            else _CARD_STREAM_IDLE_TIMEOUT_SECONDS
+        )
         last_stream_error: Exception | None = None
         # Relays and rate-limited providers commonly fail the request before the
         # first visible token. Retry once while nothing has been streamed, so a
@@ -4132,7 +4137,7 @@ class CardGenerationService:
                     try:
                         chunk = await asyncio.wait_for(
                             stream_iterator.__anext__(),
-                            timeout=_CARD_STREAM_IDLE_TIMEOUT_SECONDS,
+                            timeout=idle_timeout,
                         )
                     except StopAsyncIteration:
                         break
@@ -4158,26 +4163,20 @@ class CardGenerationService:
                     continue
                 break
         if last_stream_error is not None:
-            if isinstance(last_stream_error, asyncio.TimeoutError) and not raw_parts:
-                # Explicit deterministic fallback only for a stalled stream: no
-                # model text was visible, so a local card cannot conflict with
-                # streamed content. A provider error stays an honest failure
-                # (the UI keeps the retry path); it must not be disguised as a
-                # model-authored or fallback card.
-                fallback_source = (
-                    "plan_requirement"
-                    if str(context.plan_stage_id or "").strip()
-                    else source
-                )
+            stalled = isinstance(last_stream_error, asyncio.TimeoutError)
+            if stalled and not raw_parts and context.plan_stage_id.strip():
+                # A formal plan can still provide a grounded exercise when
+                # its already known step is available during a provider stall.
                 yield CardGenerationStreamEvent(
                     card=self.generate_card(
-                        fallback_source,
+                        "plan_requirement",
                         context,
                         allow_llm=False,
                         fallback_reason="provider_stalled",
                     )
                 )
                 return
+            reason = "provider_stalled" if stalled else "stream_interrupted"
             if self._event_ledger is not None:
                 self._event_ledger.record_event(
                     "card_generation_failed",
@@ -4187,7 +4186,7 @@ class CardGenerationService:
                     payload_ref={
                         "source": source,
                         "card_type": card_type,
-                        "reason": "stream_interrupted",
+                        "reason": reason,
                         "retryable": True,
                         "recoverable": True,
                     },
@@ -4197,6 +4196,8 @@ class CardGenerationService:
                         f"source='{source}' can be retried."
                     ),
                 )
+            if stalled:
+                raise CardGenerationStreamError(source, reason=reason) from last_stream_error
             raise CardGenerationStreamError(source) from last_stream_error
 
         raw_payload = "".join(raw_parts)

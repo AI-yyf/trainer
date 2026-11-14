@@ -8083,6 +8083,33 @@ async def test_chat_completion_stream_cancels_pending_upstream_stream_creation()
 
 
 @pytest.mark.asyncio
+async def test_reasoning_completion_closes_upstream_at_explicit_finish() -> None:
+    config = _make_config().model_copy(update={"model": "MiniMax-M3.1-Flash"})
+    service = ProviderService(config=config, api_key="sk-test-key")
+    closed = asyncio.Event()
+
+    async def chunks():
+        try:
+            delta = SimpleNamespace(content="Finished card")
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=delta, finish_reason="stop")])
+            await asyncio.Event().wait()
+        finally:
+            closed.set()
+
+    async def consume():
+        return [chunk async for chunk in service.chat_completion_stream([
+            {"role": "user", "content": "Return a card."},
+        ])]
+
+    with patch.object(service, "_get_client", return_value=SimpleNamespace()), patch.object(
+        service, "_create_chat_completion", return_value=(chunks(), "MiniMax-M3.1-Flash"),
+    ):
+        assert await asyncio.wait_for(consume(), timeout=1) == ["Finished card"]
+
+    assert closed.is_set()
+
+
+@pytest.mark.asyncio
 async def test_chat_completion_strips_reasoning_blocks() -> None:
     config = _make_config()
     service = ProviderService(config=config, api_key="sk-test-key")

@@ -405,13 +405,15 @@ try {
   }
   const cardData = card.json?.card ?? card.json?.data?.card;
   const cardId = cardData?.card_id ?? "";
-  const degraded = cardData?.degraded === true || card.json?.degraded === true;
+  const fallbackMarker = cardData?.source_chain?.find((marker) =>
+    typeof marker === "string" && marker.startsWith("generation_source=deterministic_fallback;"));
+  const degraded = cardData?.generation_status === "degraded" || Boolean(fallbackMarker);
   const cardRows = cardId
     ? dbRows("SELECT payload FROM structured_memory WHERE payload LIKE ? LIMIT 1", [`%${cardId}%`]) : [];
   step("05-training-card", {
     route: cardRoute, status: card.status, card_id: cardId, title: cardData?.title,
     card_status: cardData?.status, card_scenario: cardData?.scenario_pack,
-    degraded, persisted: cardRows.length > 0, stream_attempts: cardAttempts,
+    degraded, fallback: fallbackMarker, persisted: cardRows.length > 0, stream_attempts: cardAttempts,
     behavior_contract: cardData?.python_behavior_contract,
   }, {
     fail: !streamSucceeded(card) || card.chunkCount === 0 || !cardId || degraded ||

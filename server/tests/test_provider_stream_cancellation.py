@@ -49,3 +49,26 @@ async def test_provider_stream_iterator_closes_when_consumer_stops_after_first_c
     await stream.aclose()
 
     assert closed.is_set()
+
+
+@pytest.mark.asyncio
+async def test_cancelling_consumer_cancels_the_pending_upstream_read() -> None:
+    reading = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def upstream():
+        try:
+            reading.set()
+            await asyncio.Event().wait()
+            yield "unreachable"
+        finally:
+            closed.set()
+
+    stream = _iterate_provider_stream_with_cancellation(upstream(), asyncio.Event())
+    pending = asyncio.create_task(anext(stream))
+    await reading.wait()
+    pending.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await pending
+
+    assert closed.is_set()

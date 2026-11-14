@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import re
+from contextlib import aclosing
 from contextvars import ContextVar
 from importlib import import_module
 from time import monotonic
@@ -1181,6 +1182,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         if self._config is not None and _model_looks_reasoning_first(self._config):
             return max(default, 8192)
         return default
+
+    def needs_unbounded_reasoning_stream(self) -> bool:
+        return _model_looks_reasoning_first(self._config)
 
     @staticmethod
     def _escalated_chat_budget(requested: int | None) -> int | None:
@@ -4466,19 +4470,24 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
             raw_content = ""
             finish_reason: str | None = None
-            async for chunk in _iterate_provider_stream_with_cancellation(stream, cancel_event):
-                choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
-                candidate_finish_reason = getattr(choice, "finish_reason", None)
-                if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
-                    finish_reason = candidate_finish_reason
-                delta = getattr(choice, "delta", None)
-                if delta is not None and getattr(delta, "content", None):
-                    visible_chunk = _normalize_stream_chunk(
-                        reasoning_filter.push(delta.content)
-                    )
-                    if visible_chunk:
-                        raw_content += visible_chunk
-                        yield visible_chunk
+            upstream = (
+                _iterate_provider_stream_with_cancellation(stream, cancel_event, idle_timeout=None)
+                if self.needs_unbounded_reasoning_stream()
+                else _iterate_provider_stream_with_cancellation(stream, cancel_event)
+            )
+            async with aclosing(upstream) as chunks:
+                async for chunk in chunks:
+                    choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
+                    delta = getattr(choice, "delta", None)
+                    if delta is not None and getattr(delta, "content", None):
+                        visible_chunk = _normalize_stream_chunk(reasoning_filter.push(delta.content))
+                        if visible_chunk:
+                            raw_content += visible_chunk
+                            yield visible_chunk
+                    candidate_finish_reason = getattr(choice, "finish_reason", None)
+                    if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
+                        finish_reason = candidate_finish_reason
+                        break
             tail = _normalize_stream_chunk(reasoning_filter.flush())
             if tail:
                 raw_content += tail
