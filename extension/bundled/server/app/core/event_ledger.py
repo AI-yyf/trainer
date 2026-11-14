@@ -173,8 +173,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
 class EventLedgerService:
     """§13.21 Central event ledger — append-only, queryable store.
 
-    The in-memory list is the query surface. When an :class:`EventLedgerStore`
-    is supplied the ledger also persists every entry (restart-safe history) and
+    When an :class:`EventLedgerStore` is supplied the ledger reads durable history and
     replays ``(workspace, idempotency_key)`` duplicates instead of appending
     the same learning fact twice.
     """
@@ -191,17 +190,9 @@ class EventLedgerService:
         self._idempotent: dict[tuple[str, str], EventLedgerEntry] = {}
         self._reversals: set[str] = set()
         self._lock = threading.Lock()
-        if store is not None:
-            self._entries = store.load_recent(limit=hydrate_limit)
-            self._index_reversals()
-
-    def _index_reversals(self) -> None:
-        self._reversals = {
-            str(entry.payload_ref.get("reversed_event_id"))
-            for entry in self._entries
-            if entry.event_type == EVENT_EVENT_REVERSED
-            and entry.payload_ref.get("reversed_event_id")
-        }
+        # Kept for callers that previously configured startup hydration.
+        # Persistent reads no longer depend on hydration.
+        del hydrate_limit
 
     def record_event(
         self,
@@ -228,7 +219,7 @@ class EventLedgerService:
         workspace = workspace_id or project_id
         key = idempotency_key.strip()
         with self._lock:
-            if key:
+            if key and self._store is None:
                 cached = self._idempotent.get((workspace, key))
                 if cached is not None:
                     return cached
@@ -258,13 +249,13 @@ class EventLedgerService:
                     workspace_id=workspace,
                     idempotency_key=key,
                 )
-            if created:
+            if created and self._store is None:
                 self._entries.append(entry)
-            if entry.event_type == EVENT_EVENT_REVERSED:
+            if self._store is None and entry.event_type == EVENT_EVENT_REVERSED:
                 reversed_id = entry.payload_ref.get("reversed_event_id")
                 if isinstance(reversed_id, str) and reversed_id:
                     self._reversals.add(reversed_id)
-            if key:
+            if key and self._store is None:
                 self._idempotent[(workspace, key)] = entry
             return entry
 
@@ -289,9 +280,20 @@ class EventLedgerService:
         returns the already-recorded reversal (idempotent). Returns ``None`` for
         an unknown or irreversible event.
         """
-        target = self._find_entry(event_id)
+        if self._store is None:
+            target = self._find_entry(event_id)
+            target_workspace = target.project_id if target is not None else ""
+        else:
+            stored = self._store.find_event(event_id)
+            target_workspace, target = stored if stored is not None else ("", None)
         if target is None or target.reversibility != "reversible":
             return None
+        if workspace_id and workspace_id != target_workspace:
+            return None
+        if self._store is not None:
+            recorded = self._store.find_reversal(event_id)
+            if recorded is not None:
+                return recorded
         with self._lock:
             already_reversed = event_id in self._reversals
             existing = (
@@ -314,7 +316,7 @@ class EventLedgerService:
             actor=actor,
             scope=target.scope,
             project_id=target.project_id,
-            workspace_id=workspace_id or target.project_id,
+            workspace_id=target_workspace,
             source_chain=[*target.source_chain, "reversal"],
             payload_ref={"reversed_event_id": event_id, "reason": reason},
             reversibility="irreversible",
@@ -325,6 +327,8 @@ class EventLedgerService:
         )
 
     def is_reversed(self, event_id: str) -> bool:
+        if self._store is not None:
+            return self._store.find_reversal(event_id) is not None
         with self._lock:
             return event_id in self._reversals
 
@@ -354,8 +358,10 @@ class EventLedgerService:
             entry.event_id, workspace_id=workspace_id, actor=actor, reason=reason
         )
 
-    def effective_entries(self) -> list[EventLedgerEntry]:
+    def effective_entries(self, *, project_id: str | None = None) -> list[EventLedgerEntry]:
         """Entries with reversed events (and reversal bookkeeping) removed."""
+        if self._store is not None:
+            return self._store.query(project_id=project_id, effective=True)
         with self._lock:
             reversed_ids = set(self._reversals)
             return [
@@ -363,6 +369,7 @@ class EventLedgerService:
                 for entry in self._entries
                 if entry.event_id not in reversed_ids
                 and entry.event_type != EVENT_EVENT_REVERSED
+                and (project_id is None or entry.project_id == project_id)
             ]
 
     def replay(
@@ -387,6 +394,11 @@ class EventLedgerService:
         offset: int = 0,
     ) -> list[EventLedgerEntry]:
         """Query events with optional filters. Returns entries in chronological order."""
+        if self._store is not None:
+            return self._store.query(
+                event_type=event_type, project_id=project_id, scope=scope, actor=actor,
+                limit=limit, offset=offset,
+            )
         results = self._entries
         if event_type is not None:
             results = [e for e in results if e.event_type == event_type]
@@ -405,6 +417,8 @@ class EventLedgerService:
         project_id: str | None = None,
     ) -> int:
         """Count events matching optional filters."""
+        if self._store is not None:
+            return self._store.count(event_type=event_type, project_id=project_id)
         results = self._entries
         if event_type is not None:
             results = [e for e in results if e.event_type == event_type]
@@ -414,6 +428,8 @@ class EventLedgerService:
 
     def all_entries(self) -> list[EventLedgerEntry]:
         """Return all entries, including reversed ones (testing / audit)."""
+        if self._store is not None:
+            return self._store.query()
         return list(self._entries)
 
     def clear(self) -> None:

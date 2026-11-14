@@ -485,9 +485,8 @@ class GoalService:
             return None
         effective = [
             entry
-            for entry in self.event_ledger.effective_entries()
-            if entry.project_id == workspace_id
-            and entry.payload_ref.get("goal_id") == goal_id
+            for entry in self.event_ledger.effective_entries(project_id=workspace_id)
+            if entry.payload_ref.get("goal_id") == goal_id
             and entry.event_type in {
                 "goal_started",
                 "goal_activity_recorded",
