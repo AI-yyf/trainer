@@ -940,8 +940,11 @@ def build_coaching_system_prompt(
                 system_prompt += (
                     "\nSame card's implementation: already passed controlled behavior checks "
                     f"(recorded assistance: {assistance}). Retain this result. "
+                    "If assistance was recorded, state its scope in plain language. "
                     "If recall was correct, offer one small transfer task with a changed "
                     "constraint or input rather than assigning the verified implementation again. "
+                    "When assigning that task, give inputs and what to submit. Leave "
+                    "the solution and branch outcomes for the learner to work out. "
                     "If recall was incorrect, target the recall gap. Avoid claiming transfer "
                     "or overall mastery before it is verified."
                 )

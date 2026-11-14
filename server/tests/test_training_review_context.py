@@ -108,6 +108,8 @@ def test_coach_followup_uses_the_completed_card_result():
     assert card.expected_answer not in prompt
     assert "already passed controlled behavior checks (recorded assistance: hint_level_1)" in prompt
     assert "changed constraint or input" in prompt
+    assert "state its scope in plain language" in prompt
+    assert "branch outcomes for the learner to work out" in prompt
     assert "latest controlled implementation check failed" not in prompt
 
     unrelated = {"learner_message": "解释 Python 的异常传播。"}
