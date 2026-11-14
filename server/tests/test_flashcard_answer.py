@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.models import TrainingCardCandidateSnapshot
 from app.db.repository import TrainerRepository
 from app.memory.service import MemoryService
+from app.training.flashcard_grading import RecallAssessment
 
 
 def _make_flash_card(
@@ -83,17 +84,21 @@ class FlashcardAnswerUnitTests(unittest.TestCase):
         self.assertEqual(updated.status, "answered")  # Must transition
 
     # ---------- Scenario 2: Wrong text answer ----------
-    def test_wrong_text_answer_marks_incorrect_and_transitions(self) -> None:
+    def test_model_assessed_wrong_text_answer_transitions(self) -> None:
         card = _make_flash_card(expected_answer="flex-direction: column")
         self.service.upsert_card(self.ws, card)
         result = self.service.submit_flashcard_answer(
-            self.ws, card.card_id, "display: block"
+            self.ws, card.card_id, "display: block",
+            assessment=RecallAssessment(
+                "incorrect", "This does not set the flex direction.", "display: block", "test",
+            ),
         )
         self.assertFalse(result.correct)
         updated = self.service.get_card(self.ws, card.card_id)
         self.assertIsNotNone(updated)
         self.assertEqual(updated.status, "needs_primer")
         self.assertEqual(result.feedback["retry_required"], True)
+        self.assertEqual(result.feedback["grading_source"], "model_review")
 
     def test_long_unrelated_text_does_not_pass(self) -> None:
         card = _make_flash_card(expected_answer="flex-direction: column")
@@ -113,8 +118,8 @@ class FlashcardAnswerUnitTests(unittest.TestCase):
             card.card_id,
             "The request should use a retry policy.",
         )
-        self.assertFalse(result.correct)
-        self.assertEqual(result.feedback["retry_required"], True)
+        self.assertIsNone(result.correct)
+        self.assertEqual(result.feedback["retry_required"], False)
 
     # ---------- Scenario 3: Empty answer is wrong ----------
     def test_empty_answer_is_wrong(self) -> None:

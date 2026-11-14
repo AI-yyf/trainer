@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from ..training.attempt_store import content_hash
+from ..training.flashcard_grading import RecallAssessment
 from ..training.skill_projection import DELAYED_RECALL_MIN_DAYS
 
 if TYPE_CHECKING:
@@ -53,12 +54,13 @@ def record_recall_evidence(
     assistance_level: str = "none",
     immediate_dimension: str = "comprehension",
     allow_missing_card: bool = False,
+    learner_answer: str = "",
+    assessment: RecallAssessment | None = None,
 ) -> dict[str, Any] | None:
     """Persist one answered recall as evidence.
 
-    ``assistance_level`` must be explicit. The built-in flashcard/theory flows
-    have no in-app hint path, so they record ``none``; a hinted recall records
-    the hint level and cannot advance the independent rung.
+    Objective recall can carry recorded in-app assistance. Semantic
+    assessment can inform scheduling and remains model-review evidence.
     """
     workspace = str(workspace_id or "").strip()
     card = str(card_id or "").strip()
@@ -70,6 +72,8 @@ def record_recall_evidence(
         return None
     card_record = memory.get_card(workspace, card)
     scheduled: dict[str, Any] | None = None
+    # Model-graded recall can inform scheduling without attesting independent
+    # capability. A conservative Hard records a substantive successful recall.
     rating = recall_rating_for(correct, assistance_level)
     if card_record is None:
         if not allow_missing_card:
@@ -106,14 +110,32 @@ def record_recall_evidence(
         workspace_id=workspace,
         card_id=card,
         assistance_level=assistance_level,
+        answer_draft=learner_answer,
     )
+    trust_level = "model_review" if assessment is not None else "controlled_check"
     evidence = store.record_evidence(
         attempt_id=attempt["attempt_id"],
         caller_workspace_id=workspace,
         artifact_hash=answer_hash,
         result="passed" if correct else "failed",
-        trust_level="controlled_check",
-        runner_version=f"trainer-{source}",
+        trust_level=trust_level,
+        runner_version=(
+            "trainer-flashcard-semantic-v1" if assessment is not None
+            else "trainer-flashcard-answer-key-v1" if source == "flashcard"
+            else f"trainer-{source}"
+        ),
+        limitations=(
+            ["Semantic assessment by a model; assistance was not observed."]
+            if assessment is not None else None
+        ),
+        environment=(
+            {
+                "configured_model": assessment.configured_model,
+                "reason": assessment.reason,
+                "answer_quote": assessment.quote,
+            }
+            if assessment is not None else None
+        ),
         execution_location="session",
         dimension=dimension,
         evidence_kind=evidence_kind,
@@ -131,6 +153,7 @@ def record_recall_evidence(
     return {
         "evidence_id": evidence.get("evidence_id"),
         "dimension": dimension,
+        "trust_level": trust_level,
         "delay_days": round(delay_days, 4),
         "delayed_recall": delayed,
         "rating": rating,

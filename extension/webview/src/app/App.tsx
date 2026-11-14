@@ -7144,7 +7144,7 @@ export function App() {
               )
             : -1;
         try {
-          await requestTrainingPersistence(
+          const result = await requestTrainingPersistence(
             activeTheoryDrill?.id
               ? trainerCommands.trainingTheoryDrillAnswer
               : trainerCommands.trainingFlashcardAnswer,
@@ -7159,8 +7159,18 @@ export function App() {
                   cardId: activeTrainingCardId,
                   learnerAnswer: normalizedAnswer,
                   selectedOptionIndex: selectedOptionIndex >= 0 ? selectedOptionIndex : undefined,
+                  responseLanguage: layout.composerLanguage,
                 },
           );
+          if (
+            !activeTheoryDrill?.id && result && typeof result === "object" &&
+            "correct" in result && result.correct === null &&
+            "detail" in result && typeof result.detail === "string"
+          ) {
+            setActivityDraft("");
+            setOperationMessage({ tone: "info", message: result.detail }, "training");
+            return;
+          }
         } catch {
           setOperationMessage({
             tone: "error",

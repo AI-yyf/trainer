@@ -814,6 +814,9 @@ class EvaluatorService:
         behavior_passed = any(
             check.id == "python-behavior" and check.status == "passed" for check in dynamic_checks
         )
+        script_failed_after_behavior_passed = (
+            behavior_passed and set(failed_tool_labels) == {"python-script"}
+        )
         card_behavior_pending = requires_card_behavior and not any(
             check.id == "python-behavior" and check.status in {"passed", "failed"}
             for check in dynamic_checks
@@ -867,6 +870,12 @@ class EvaluatorService:
             summary = _localized_text(
                 "Verification is still required: the task behavior check could not run to completion.",
                 "仍需验证：任务行为检查未能运行到结论。",
+                response_language,
+            )
+        elif script_failed_after_behavior_passed:
+            summary = _localized_text(
+                "The task behavior cases passed. Running the submitted file as a script failed.",
+                "任务行为用例已通过。直接运行提交文件时失败。",
                 response_language,
             )
         elif failed_tool_labels:
@@ -926,6 +935,13 @@ class EvaluatorService:
             next_step = _localized_text(
                 "Record a reflection on the verified result, then bring it back to Coach.",
                 "记录一条针对已验证结果的反思，然后带回 Coach。",
+                response_language,
+            )
+        elif script_failed_after_behavior_passed:
+            next_step = _localized_text(
+                "Check the script traceback. If a self-test failed, verify its expected value "
+                "against the task contract before changing the implementation.",
+                "查看脚本报错位置。如果是自测断言失败，先对照任务契约检查预期值，再决定是否修改实现。",
                 response_language,
             )
         elif report.recommendations:

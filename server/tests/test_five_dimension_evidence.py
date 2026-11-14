@@ -10,10 +10,12 @@ The ladder is intentionally strict:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, PropertyMock
 
 import pytest
 
+from app.llm.provider_service import ProviderService
 from app.training.attempt_store import AttemptStore
 from app.training.skill_projection import project_skills
 from tests.test_api import build_client
@@ -292,6 +294,94 @@ def test_flashcard_recall_advances_only_after_a_real_delay(
             runtime.memory_service.snapshot(workspace).workspace or {}
         ).get("training_skill_projection", {}).get("dimensions", {})
         assert dimensions["delayed_recall"]["state"] == "independent"
+
+
+@pytest.mark.parametrize(
+    ("provider_reply", "expected_correct", "rating"),
+    [
+        ('{"verdict":"correct","reason":"Distinguishes slots from values",'
+         '"quote":"slots stay bound"}', True, "hard"),
+        ('{"verdict":"incorrect","reason":"Confuses slots and values",'
+         '"quote":"slots stay bound"}', False, "again"),
+        ('{"verdict":"uncertain","reason":"Cannot determine the case",'
+         '"quote":"slots stay bound"}', None, None),
+        ('{"verdict":"correct","reason":"Distinguishes slots from values",'
+         '"quote":"fabricated excerpt"}', None, None),
+        (RuntimeError("provider unavailable"), None, None),
+    ],
+)
+def test_model_review_preserves_assessment_scope_and_schedule(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, provider_reply, expected_correct, rating,
+) -> None:
+    from app.core.models import TrainingCardCandidateSnapshot
+    from app.llm.training_review_context import apply_training_review_context
+
+    monkeypatch.setenv("TRAINER_TEST_NOW", "2026-11-01T09:00:00Z")
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        workspace = "ws-open-recall"
+        started = client.post(
+            "/session/start", json={"workspace_id": workspace, "workspace_name": "Recall lab"},
+        )
+        assert started.status_code == 200, started.text
+        card = TrainingCardCandidateSnapshot(
+            card_id="open-recall",
+            card_type="flash",
+            status="active",
+            title="Tuple contents",
+            focus_area="tuples",
+            question="What is fixed when a tuple contains a mutable list?",
+            expected_answer="Tuple references are immutable while the list can change.",
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(workspace, selected_card_id=card.card_id)
+        runtime.memory_service.initialize_training_card_review(workspace, training_card_id=card.card_id)
+        before = runtime.memory_service.snapshot(workspace).workspace["latest_training_fsrs_states"][card.card_id]
+        monkeypatch.setenv("TRAINER_TEST_NOW", "2026-11-03T09:00:00Z")
+        monkeypatch.setattr(ProviderService, "has_api_key", PropertyMock(return_value=True))
+        completion = (
+            AsyncMock(side_effect=provider_reply) if isinstance(provider_reply, Exception)
+            else AsyncMock(return_value=provider_reply)
+        )
+        monkeypatch.setattr(ProviderService, "chat_completion", completion)
+        original = "The slots stay bound, but the list itself remains editable."
+        response = client.post(
+            "/training/flashcard/answer",
+            json={"workspace_id": workspace, "card_id": card.card_id, "learner_answer": original},
+        )
+        assert response.status_code == 200, response.text
+        completion.assert_awaited_once()
+        result = response.json()
+        snapshot = runtime.memory_service.snapshot(workspace)
+        after = snapshot.workspace["latest_training_fsrs_states"][card.card_id]
+        assert result["correct"] is expected_correct
+        assert result["attempt"]["learner_answer"] == original
+        assert snapshot.recent_flash_attempts[0].learner_answer == original
+        followup = apply_training_review_context(
+            {"learner_message": "What did my last recall show?"}, snapshot, "coach",
+        )["recent_recall_result"]
+        assert followup["correct"] is expected_correct
+        if rating is None:
+            assert result["recall_evidence"] is None
+            assert result["retry_required"] is False
+            assert result["card_status"] == "active"
+            assert after == before
+            assert runtime.attempt_store.list_workspace_evidence(workspace) == []
+            recorded = runtime.attempt_store.list_attempts(workspace_id=workspace, card_id=card.card_id)
+            assert any(item["answer_draft"] == original for item in recorded)
+        else:
+            receipt = result["recall_evidence"]
+            assert receipt["trust_level"] == "model_review"
+            assert receipt["rating"] == rating
+            assert receipt["delayed_recall"]
+            assert after["reps"] == before["reps"] + 1
+            evidence = runtime.attempt_store.list_workspace_evidence(workspace)[0]
+            assert evidence["environment"]["answer_quote"] == "slots stay bound"
+            attempt = runtime.attempt_store.get_attempt_payload(evidence["attempt_id"])
+            assert attempt and attempt["answer_draft"] == original
+            dims = snapshot.workspace["training_skill_projection"]["dimensions"]
+            assert dims["delayed_recall"]["state"] == "not_verified"
+            assert dims["delayed_recall"]["independent_attempt_count"] == 0
 
 
 def test_review_queue_done_without_an_answer_does_not_grade_fsrs(tmp_path) -> None:

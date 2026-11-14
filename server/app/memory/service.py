@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import re
-from collections import Counter
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, fields, is_dataclass, replace
 from datetime import datetime, timedelta
@@ -65,6 +64,7 @@ from ..pedagogy.evidence_controls import (
     review_after_days_for_frequency,
 )
 from ..resources.asset_library import AssetLibraryService
+from ..training.flashcard_grading import RecallAssessment, exact_text_answer, flashcard_answer_mode
 from ..training.handoff import (
     EvidenceRecord,
     HandoffStatus,
@@ -197,49 +197,6 @@ from .workspace_recovery import (
     select_training_record_for_scope,
     stamp_workspace_scope,
 )
-
-_CJK_TEXT_CORRECT_THRESHOLD = 0.60
-
-
-def _contains_cjk_answer_text(value: str) -> bool:
-    return any("\u3400" <= char <= "\u9fff" for char in value)
-
-
-def _cjk_normalized_answer(value: str) -> str:
-    """Drop punctuation like the latin tokenizer, but keep CJK characters."""
-
-    return re.sub(r"[^a-z0-9\u3400-\u9fff]+", "", value)
-
-
-def _dice_coefficient(left: str, right: str, *, size: int) -> float:
-    if len(left) < size or len(right) < size:
-        return 1.0 if left and left == right else 0.0
-    left_counts = Counter(left[index : index + size] for index in range(len(left) - size + 1))
-    right_counts = Counter(right[index : index + size] for index in range(len(right) - size + 1))
-    overlap = sum((left_counts & right_counts).values())
-    total = sum(left_counts.values()) + sum(right_counts.values())
-    return (2.0 * overlap) / total if total else 0.0
-
-
-def _cjk_answer_similarity(expected: str, answer: str) -> float:
-    """Dice similarity for CJK text answers.
-
-    Primary coefficient is the Dice score over character bigrams of the
-    whitespace-collapsed strings (punctuation excluded, CJK kept). Short CJK
-    paraphrases reorder words, which collapses bigram overlap, so the
-    character-level Dice acts as a floor before the answer is failed.
-    """
-
-    normalized_expected = _cjk_normalized_answer(expected)
-    normalized_answer = _cjk_normalized_answer(answer)
-    coefficient = _dice_coefficient(normalized_expected, normalized_answer, size=2)
-    if coefficient < _CJK_TEXT_CORRECT_THRESHOLD:
-        coefficient = max(
-            coefficient,
-            _dice_coefficient(normalized_expected, normalized_answer, size=1),
-        )
-    return coefficient
-
 
 def _normalize_source_freshness(value: object) -> Literal["fresh", "stale", "unknown"]:
     normalized = str(value or "").strip().lower()
@@ -5492,6 +5449,9 @@ class MemoryService(
         selected_option_indices: list[int] | None = None,
         fill_blank_answers: dict[str, str] | None = None,
         sort_order: list[int] | None = None,
+        *,
+        assessment: RecallAssessment | None = None,
+        review_detail: str = "Answer saved. Its correctness is awaiting assessment.",
     ) -> FlashcardAttempt:
         structured = self._structured_for(workspace_id)
         self._sync_dependency_training_views(structured)
@@ -5524,16 +5484,7 @@ class MemoryService(
                 detail="Flashcard not found. Refresh Training to load the current cards.",
             )
 
-        answer_mode = str(card.answer_mode or "text").strip().lower()
-        answer_mode = {
-            "choice": "single_choice",
-            "single": "single_choice",
-            "multiple": "multiple_choice",
-            "multi": "multiple_choice",
-            "fill": "fill_blank",
-            "truefalse": "true_false",
-            "boolean": "true_false",
-        }.get(answer_mode, answer_mode)
+        answer_mode = flashcard_answer_mode(card)
         expected_indices = sorted(
             {
                 int(index)
@@ -5541,7 +5492,7 @@ class MemoryService(
                 if isinstance(index, int) and index >= 0
             }
         )
-        if not expected_indices and card.correct_option_index is not None:
+        if not expected_indices and card.correct_option_index is not None and card.correct_option_index >= 0:
             expected_indices = [card.correct_option_index]
         expected_blanks = {
             str(key): str(value).strip()
@@ -5553,10 +5504,19 @@ class MemoryService(
             for index in (card.correct_sort_order or [])
             if isinstance(index, int) and index >= 0
         ]
-        score = 0.0
+        score: float | None = 0.0
         mismatches: list[str] = []
-        correct = False
-        if answer_mode in {"single_choice", "true_false"}:
+        correct: bool | None = False
+        grading_source = "answer_key"
+        missing_answer_key = (
+            (answer_mode in {"single_choice", "multiple_choice", "true_false"} and not expected_indices)
+            or (answer_mode == "sorting" and not expected_sort_order)
+        )
+        if missing_answer_key:
+            grading_source = "ungraded"
+            correct = None
+            score = None
+        elif answer_mode in {"single_choice", "true_false"}:
             correct = bool(expected_indices and selected_indices == expected_indices)
             score = 1.0 if correct else 0.0
             if not correct:
@@ -5582,59 +5542,36 @@ class MemoryService(
             if not correct:
                 mismatches.append("sort_order")
         elif answer_mode == "fill_blank" and expected_blanks:
-            expected_values = [
-                expected_blanks[key]
-                for key in sorted(expected_blanks, key=lambda value: int(value) if value.isdigit() else value)
-            ]
-            submitted_values = [
-                submitted_blanks[key]
-                for key in sorted(submitted_blanks, key=lambda value: int(value) if value.isdigit() else value)
-            ]
-            if len(expected_values) == len(submitted_values):
-                matched = sum(
-                    re.sub(r"\s+", " ", expected.lower()) == re.sub(r"\s+", " ", actual.lower())
-                    for expected, actual in zip(expected_values, submitted_values, strict=False)
-                )
-                score = matched / len(expected_values) if expected_values else 0.0
-            correct = bool(expected_values and score == 1.0)
+            if all(key.isdecimal() and int(key) > 0 for key in expected_blanks) and "0" in submitted_blanks:
+                # Older clients sent zero-based indices for one-based placeholders.
+                submitted_blanks = {
+                    str(int(key) + 1) if key.isdecimal() else key: value
+                    for key, value in submitted_blanks.items()
+                }
+            matched = sum(
+                re.sub(r"\s+", " ", expected.lower())
+                == re.sub(r"\s+", " ", submitted_blanks.get(key, "").lower())
+                for key, expected in expected_blanks.items()
+            )
+            score = matched / len(expected_blanks)
+            correct = score == 1.0 and submitted_blanks.keys() == expected_blanks.keys()
             if not correct:
                 mismatches.append("fill_blank")
-        elif card.expected_answer:
-            expected = re.sub(r"\s+", " ", card.expected_answer.strip().lower())
-            answer = re.sub(r"\s+", " ", answer_text.lower())
-            exact = answer and answer == expected
-            containment = answer and (answer in expected or expected in answer)
-            stop_words = {"a", "an", "and", "are", "for", "in", "is", "of", "on", "or", "the", "to", "use", "with"}
-            expected_tokens = {
-                token for token in re.split(r"[^a-z0-9]+", expected)
-                if len(token) > 2 and token not in stop_words
-            }
-            answer_tokens = {
-                token for token in re.split(r"[^a-z0-9]+", answer)
-                if len(token) > 2 and token not in stop_words
-            }
-            overlap = len(expected_tokens & answer_tokens)
-            overlap_threshold = max(3, (len(expected_tokens) + 1) // 2)
-            correct = bool(exact or containment or (expected_tokens and overlap >= overlap_threshold))
-            if not correct and card.dependency_key:
-                normalized_answer = answer.replace(" ", "")
-                dependency_hint = card.dependency_key.replace("-", "")
-                correct = dependency_hint in normalized_answer
-            score = 1.0 if correct else 0.0
-            if not correct and (_contains_cjk_answer_text(expected) or _contains_cjk_answer_text(answer)):
-                # CJK fallback: latin tokenization yields no tokens for Chinese
-                # text, so grade paraphrases by CJK bigram/unigram Dice instead.
-                coefficient = _cjk_answer_similarity(expected, answer)
-                if coefficient >= _CJK_TEXT_CORRECT_THRESHOLD:
-                    correct = True
-                    score = coefficient
-            if not correct:
+        elif exact_text_answer(card.expected_answer, answer_text):
+            correct = True
+            score = 1.0
+        elif assessment is not None and assessment.verdict != "uncertain":
+            grading_source = "model_review"
+            correct = assessment.verdict == "correct"
+            score = float(correct)
+            if correct is False:
                 mismatches.append("text_answer")
         else:
-            correct = False
-            mismatches.append("missing_answer_key")
+            grading_source = "ungraded"
+            correct = None
+            score = None
 
-        if card.status == "active":
+        if card.status == "active" and correct is not None:
             next_status = "answered" if correct else "needs_primer"
             transition_reason = (
                 "Flashcard answer submitted."
@@ -5649,18 +5586,25 @@ class MemoryService(
             )
             card = self.get_card(workspace_id, card.card_id) or card
 
-        detail = (
-            "Flashcard answer matches the answer key."
-            if correct
-            else "Flashcard answer needs another pass against the answer key."
-        )
+        if correct is None:
+            detail = review_detail
+        elif assessment is not None and grading_source == "model_review":
+            detail = assessment.reason
+        else:
+            detail = (
+                "Flashcard answer matches the answer key."
+                if correct
+                else "Flashcard answer needs another pass against the answer key."
+            )
+        rounded_score = round(score, 3) if score is not None else None
         feedback: dict[str, Any] = {
             "kind": "flashcard_answer",
             "answer_mode": answer_mode,
             "correct": correct,
-            "score": round(score, 3),
+            "score": rounded_score,
             "detail": detail,
-            "retry_required": not correct,
+            "retry_required": correct is False,
+            "grading_source": grading_source,
             "mismatches": mismatches,
             "expected_option_indices": expected_indices,
             "selected_option_indices": selected_indices,
@@ -5669,6 +5613,8 @@ class MemoryService(
             "expected_fill_blank_answers": expected_blanks,
             "submitted_fill_blank_answers": submitted_blanks,
         }
+        if assessment is not None:
+            feedback["assessment"] = asdict(assessment)
         updated_card = card.model_copy(
             update={
                 "last_feedback": feedback,
@@ -5682,7 +5628,7 @@ class MemoryService(
         structured._training_cards[card.card_id] = updated_card
         card = updated_card
 
-        if card.focus_area:
+        if card.focus_area and grading_source == "answer_key":
             structured.update_mastery(
                 card.focus_area,
                 delta=0.08 if correct else -0.02,
@@ -5690,7 +5636,7 @@ class MemoryService(
                 review_after_days=2 if correct else 1,
             )
 
-        if card.dependency_key:
+        if card.dependency_key and grading_source == "answer_key":
             dependency_key = self._normalize_dependency_key(card.dependency_key)
             current = structured._dependency_mastery.get(dependency_key) or {}
             current_stage = str(current.get("mastery_stage") or "understood")
@@ -5741,7 +5687,7 @@ class MemoryService(
         attempt = FlashcardAttempt(
             card_id=card.card_id,
             correct=correct,
-            score=round(score, 3),
+            score=rounded_score,
             detail=detail,
             learner_answer=learner_answer,
             selected_option_index=selected_option_index,

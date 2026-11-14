@@ -919,15 +919,19 @@ def build_coaching_system_prompt(
         )
     recent_recall = coach_context.get("recent_recall_result") if isinstance(coach_context, dict) else None
     if isinstance(recent_recall, dict):
-        correct = recent_recall.get("correct") is True
+        correct = recent_recall.get("correct")
+        verdict = "correct" if correct is True else "incorrect" if correct is False else "unconfirmed"
         system_prompt += (
-            "\n\n## Most Recent Graded Recall\n"
+            "\n\n## Most Recent Recall\n"
             f"Card: {_compact_text(recent_recall.get('title'), 160)}\n"
             f"Question: {_compact_text(recent_recall.get('question'), 500)}\n"
-            f"Recorded verdict: {'correct' if correct else 'incorrect'}.\n"
+            f"Recorded verdict: {verdict}.\n"
+            f"Basis: {_compact_text(recent_recall.get('grading_source'), 40)}.\n"
             f"Feedback: {_compact_text(recent_recall.get('detail'), 240)}\n"
             "Use this recorded result to give one concrete next step. The learner already "
-            "submitted the answer. Scope the conclusion to this question."
+            "submitted the answer. Scope the conclusion to this question. Model-reviewed "
+            "or unconfirmed recall does not verify independent capability. If unconfirmed, "
+            "say so and offer clarification without inventing a mistake or a schedule change."
         )
         implementation = recent_recall.get("implementation")
         if isinstance(implementation, dict):

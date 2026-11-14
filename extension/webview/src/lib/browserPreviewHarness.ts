@@ -867,6 +867,8 @@ async function runBrowserPreviewLiveTrainingAction(
           learner_answer: browserPreviewString(payload?.learnerAnswer) || browserPreviewString(payload?.answer),
           selected_option_index:
             typeof payload?.selectedOptionIndex === "number" ? payload.selectedOptionIndex : undefined,
+          response_language: language,
+          ...browserPreviewProviderRequestOverride(),
         });
         break;
       case trainerCommands.trainingTheoryDrillAnswer:
@@ -1045,11 +1047,13 @@ async function runBrowserPreviewLiveTrainingAction(
     const detail = await readLiveTrainingResponseDetail(response);
     const responseRecord = await readLiveTrainingResponseRecord(response);
     emitBrowserPreviewTrainingPersistenceAck(persistence, true, responseRecord);
+    const unconfirmedRecall =
+      commandId === trainerCommands.trainingFlashcardAnswer && responseRecord?.correct === null;
     emitBrowserPreviewHostMessage({
       type: "operation/status",
       payload: {
-        tone: "success",
-        message: livePreviewTrainingSuccessMessage(
+        tone: unconfirmedRecall ? "info" : "success",
+        message: unconfirmedRecall && detail ? detail : livePreviewTrainingSuccessMessage(
           commandId,
           language,
           detail ? detail.replace(/\s+/g, " ") : undefined,

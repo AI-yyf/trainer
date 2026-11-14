@@ -22,6 +22,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from ...core.event_ledger import EVENT_COACH_TURN_RECORDED
 from ...core.models import (
@@ -77,6 +78,7 @@ from ...memory.workspace_recovery import (
 from ...training.card_generator import (
     CardGenerationProviderFailure,
 )
+from ...training.flashcard_grading import RecallAssessment, assess_open_recall, needs_semantic_review
 from ...training.recall_evidence import record_recall_evidence
 from ...training.reliability import should_replay
 from .. import coach_support
@@ -4860,7 +4862,49 @@ def build_core_router(
         return runtime.memory_service.snapshot(resolved_workspace_id).active_training_card_routing or selection
 
     @router.post("/training/flashcard/answer")
-    def training_flashcard_answer(request: FlashcardAnswerRequest) -> dict[str, object]:
+    async def training_flashcard_answer(request: FlashcardAnswerRequest) -> dict[str, object]:
+        card = await run_in_threadpool(
+            runtime.memory_service.get_card, request.workspace_id, request.card_id,
+        )
+        if card is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Flashcard not found. Refresh Training to load the current cards.",
+            )
+        language = await run_in_threadpool(
+            core.effective_response_language,
+            request.workspace_id, request.response_language, request.learner_answer,
+        )
+        assessment = None
+        if needs_semantic_review(card, request.learner_answer):
+            service = await run_in_threadpool(
+                core.build_coaching_service,
+                request.model_dump(include={"workspace_id", "provider", "api_key", "last_test_result"}),
+            )
+            assessment = await assess_open_recall(
+                service, card, request.learner_answer, language=language,
+            )
+        return await run_in_threadpool(persist_flashcard_answer, request, card, assessment, language)
+
+    def persist_flashcard_answer(
+        request: FlashcardAnswerRequest,
+        reviewed_card: TrainingCardCandidateSnapshot,
+        assessment: RecallAssessment | None,
+        language: str | None,
+    ) -> dict[str, object]:
+        current_card = runtime.memory_service.get_card(request.workspace_id, request.card_id)
+        if current_card is not None and assessment is not None:
+            reviewed_fields = {"question", "expected_answer", "rubric", "answer_mode"}
+            if current_card.model_dump(include=reviewed_fields) != reviewed_card.model_dump(include=reviewed_fields):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This flashcard changed. Refresh Training and resubmit.",
+                )
+        review_detail = localized_text(
+            "Answer saved. Its correctness is unconfirmed; the review date is unchanged.",
+            "答案已保存，正确性尚未确认。复习日期保持原定时间。",
+            language,
+        )
         attempt = runtime.memory_service.submit_flashcard_answer(
             request.workspace_id,
             request.card_id,
@@ -4869,27 +4913,40 @@ def build_core_router(
             selected_option_indices=request.selected_option_indices,
             fill_blank_answers=request.fill_blank_answers,
             sort_order=request.sort_order,
+            assessment=assessment,
+            review_detail=review_detail,
         )
-        core.refresh_workspace_sessions(request.workspace_id)
         card = runtime.memory_service.get_card(request.workspace_id, request.card_id)
-        recall_evidence = record_recall_evidence(
-            runtime,
-            workspace_id=request.workspace_id,
-            card_id=request.card_id,
-            correct=attempt.correct,
-            source="flashcard",
-            answer_mode=attempt.answer_mode,
-            detail=attempt.detail,
-            assistance_level="none",
-            immediate_dimension="delayed_recall",
-        )
+        recall_evidence = None
+        if attempt.correct is not None:
+            model_review = assessment if attempt.feedback["grading_source"] == "model_review" else None
+            recall_evidence = record_recall_evidence(
+                runtime,
+                workspace_id=request.workspace_id,
+                card_id=request.card_id,
+                correct=attempt.correct,
+                source="flashcard",
+                answer_mode=attempt.answer_mode,
+                detail=attempt.detail,
+                assistance_level="unknown" if model_review is not None else "none",
+                immediate_dimension="delayed_recall",
+                learner_answer=attempt.learner_answer,
+                assessment=model_review,
+            )
+        elif attempt.learner_answer.strip() and runtime.attempt_store is not None:
+            runtime.attempt_store.start_recall_attempt(
+                workspace_id=request.workspace_id,
+                card_id=request.card_id,
+                answer_draft=attempt.learner_answer,
+            )
+        core.refresh_workspace_sessions(request.workspace_id)
         return {
             "correct": attempt.correct,
             "score": attempt.score,
             "detail": attempt.detail,
             "feedback": attempt.feedback,
             "card_status": card.status if card is not None else None,
-            "retry_required": not attempt.correct,
+            "retry_required": attempt.correct is False,
             "attempt": attempt.model_dump(mode="json"),
             "recall_evidence": recall_evidence,
         }

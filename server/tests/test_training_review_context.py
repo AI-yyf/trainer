@@ -79,7 +79,11 @@ def test_coach_followup_uses_the_completed_card_result():
     )
     memory = MemorySnapshot(
         training_card_candidates=[card],
-        recent_flash_attempts=[FlashcardAttempt(card_id=card.card_id, correct=True)],
+        recent_flash_attempts=[
+            FlashcardAttempt(
+                card_id=card.card_id, correct=True, feedback={"grading_source": "model_review"},
+            ),
+        ],
         workspace={"training_skill_projection": {"dimensions": project_skills([
             {
                 "card_id": card.card_id, "is_current": True, "dimension": "implementation",

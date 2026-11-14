@@ -18,6 +18,7 @@ _RECALL_FOLLOWUP = re.compile(
     r"(?:just (?:finished|completed|answered)|(?:this|last|my))\b.{0,55}\b(?:review|recall|flashcard)",
     re.I,
 )
+_TRAINING_ANSWER_FEEDBACK = ("我刚提交了本轮训练作答", "I just submitted a training answer.")
 
 
 def _card_implementation_evidence(memory: MemorySnapshot, card_id: str) -> dict[str, str] | None:
@@ -55,21 +56,33 @@ def apply_training_review_context(
     artifact = active_training_review(memory, active_view)
     if artifact is None:
         message = str(context.get("learner_message") or "")
-        if not _RECALL_FOLLOWUP.search(message) or not memory.recent_flash_attempts:
+        if not memory.recent_flash_attempts:
             return context
         attempt = memory.recent_flash_attempts[0]
         card = next((card for card in memory.training_card_candidates if card.card_id == attempt.card_id), None)
         if card is None or not card.question.strip():
             return context
+        direct_followup = _RECALL_FOLLOWUP.search(message)
+        from_card = (
+            active_view == "training"
+            and message.startswith(_TRAINING_ANSWER_FEEDBACK)
+            and card.question.strip() in message
+            and bool(attempt.learner_answer.strip())
+            and attempt.learner_answer.strip() in message
+        )
+        if not (direct_followup or from_card):
+            return context
+        grading_source = attempt.feedback.get("grading_source")
         return {
             **context,
             "recent_recall_result": {
                 "card_id": card.card_id,
                 "title": card.title,
                 "question": card.question,
-                "correct": attempt.correct,
+                "correct": attempt.correct if grading_source else None,
+                "grading_source": grading_source or "legacy_requires_recheck",
                 "answer_mode": attempt.answer_mode,
-                "detail": attempt.detail,
+                "detail": attempt.detail if grading_source else "This earlier grading result needs confirmation.",
                 "implementation": _card_implementation_evidence(memory, card.card_id),
             },
         }

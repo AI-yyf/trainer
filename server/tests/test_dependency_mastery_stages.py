@@ -44,7 +44,7 @@ def test_flashcard_success_promotes_dependency_to_recalled(tmp_path: Path) -> No
     response = service.submit_flashcard_answer(
         workspace_id,
         card_id=dependency_card.card_id,
-        learner_answer="Depends injects a dependency into a FastAPI route.",
+        learner_answer=dependency_card.expected_answer,
         selected_option_index=0 if dependency_card.answer_mode == "choice" else None,
     )
 
@@ -125,7 +125,7 @@ def test_learning_signal_transfer_requires_explicit_cross_project_evidence(tmp_p
     assert preserved.mastery_stage == "transferable"
 
 
-def test_parameter_flashcard_requires_semantic_answer_and_writes_back_skill_item_key(tmp_path: Path) -> None:
+def test_ungraded_parameter_flashcard_does_not_change_dependency_mastery(tmp_path: Path) -> None:
     service, workspace_id = _make_service(tmp_path)
     structured = service.structured_for_workspace(workspace_id)
     structured.upsert_dependency_mastery(
@@ -147,11 +147,9 @@ def test_parameter_flashcard_requires_semantic_answer_and_writes_back_skill_item
         card_id=parameter_card.card_id,
         learner_answer="Depends",
     )
-    assert not failed.correct
-    assert failed.dependency_skill_map_history
-    assert failed.dependency_skill_map_history[0].focus_item_key
-    assert failed.dependency_skill_map_history[0].focus_item_key != parameter_card.card_id
+    assert failed.correct is None
+    assert not failed.dependency_skill_map_history
 
     refreshed = service.snapshot(workspace_id)
     assert refreshed.recent_flash_attempts[0].dependency_layer == "parameter"
-    assert refreshed.workspace["latest_flashcard_recovery_mode"] == "flashcards"
+    assert refreshed.workspace.get("latest_flashcard_recovery_mode") is None

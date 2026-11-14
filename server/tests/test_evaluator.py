@@ -546,6 +546,26 @@ class EvaluatorTests(unittest.TestCase):
         pytest_check = next(check for check in report.dynamic_checks if check.id == "pytest")
         self.assertEqual(pytest_check.status, "failed")
 
+    def test_task_cases_pass_while_submitted_script_assertion_fails(self) -> None:
+        pipeline = FakeEvaluationPipeline()
+        lane_report = pipeline.evaluate(_snippet_request("def skill(): return True"))
+        lane_report.overall_status = CheckStatus.FAILED
+        lane_report.checks.extend([
+            CheckResult(name="python-script", status=CheckStatus.FAILED, summary="AssertionError"),
+            CheckResult(name="python-behavior", status=CheckStatus.PASSED, summary="3 cases passed"),
+        ])
+        with patch.object(pipeline, "evaluate", return_value=lane_report):
+            report = EvaluatorService(pipeline=pipeline).evaluate_current_file(
+                EvaluateCurrentFileRequest(
+                    workspace_id="test", session_id="session", file_path="skill.py",
+                    language_id="python", content="def skill(): return True",
+                    evaluation_source="training",
+                ),
+            )
+        self.assertFalse(report.passed)
+        self.assertIn("The task behavior cases passed.", report.summary)
+        self.assertIn("verify its expected value", report.next_step)
+
     def test_training_current_file_requires_acceptance_when_no_formal_task_exists(self) -> None:
         pipeline = EvaluationPipeline(runner=FakeRunner({"pytest": CheckStatus.SKIPPED}))
         service = EvaluatorService(pipeline=pipeline)

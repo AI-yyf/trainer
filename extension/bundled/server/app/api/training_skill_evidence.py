@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .runtime import TrainerRuntime
 
 
-_VERIFICATION_POLICY_VERSION = 2
+_VERIFICATION_POLICY_VERSION = 3
 
 
 def _card_subject_family(card: Any) -> str:

@@ -49,8 +49,8 @@ class TrainingEndpointIntegrationTests(unittest.TestCase):
         data = response.json()
         self.assertIn("Refresh Training", data["detail"])
 
-    def test_long_unrelated_flashcard_answer_returns_incorrect(self) -> None:
-        """E2: A real card is still graded, but a long unrelated answer does not pass."""
+    def test_ungradable_flashcard_answer_is_saved_without_a_verdict(self) -> None:
+        """E2: An old card without a question cannot establish a recall verdict."""
         workspace_id = f"{self.workspace_id}-flash-{uuid4().hex}"
         self._runtime().memory_service.upsert_card(
             workspace_id,
@@ -73,7 +73,9 @@ class TrainingEndpointIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertFalse(data["correct"])
+        self.assertIsNone(data["correct"])
+        self.assertIsNone(data["recall_evidence"])
+        self.assertEqual(data["card_status"], "active")
 
     def test_structured_flashcard_answer_modes_round_trip_feedback(self) -> None:
         """E2a: multi-answer payloads reach the route and return structured grading."""

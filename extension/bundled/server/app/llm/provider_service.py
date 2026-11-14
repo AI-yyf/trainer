@@ -525,6 +525,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
     def has_api_key(self) -> bool:
         return bool(self._api_key)
 
+    @property
+    def configured_model(self) -> str:
+        return self._resolve_model()
+
     def clear_last_reply_state(self) -> None:
         self.clear_last_reply_failure()
         self.clear_last_reply_override()

@@ -1,4 +1,4 @@
-"""L2 regressions: CJK flashcard text grading via Dice similarity."""
+"""Open-answer grading preserves assessment and uncertainty for CJK recall."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 from app.core.models import TrainingCardCandidateSnapshot
 from app.db.repository import TrainerRepository
 from app.memory.service import MemoryService
+from app.training.flashcard_grading import RecallAssessment
 
 
 def _flash_card(card_id: str, expected_answer: str) -> TrainingCardCandidateSnapshot:
@@ -21,7 +22,7 @@ def _flash_card(card_id: str, expected_answer: str) -> TrainingCardCandidateSnap
     )
 
 
-def test_cjk_paraphrase_passes_with_dice_score(tmp_path: Path) -> None:
+def test_cjk_paraphrase_keeps_the_model_assessment(tmp_path: Path) -> None:
     workspace_id = "ws-cjk-flash-paraphrase"
     service = MemoryService(TrainerRepository(tmp_path / "cjk-paraphrase.db"))
     card = service.upsert_card(
@@ -33,14 +34,16 @@ def test_cjk_paraphrase_passes_with_dice_score(tmp_path: Path) -> None:
         workspace_id,
         card.card_id,
         learner_answer="事件循环负责调度协程的执行",
+        assessment=RecallAssessment("correct", "正确解释了调度职责。", "调度协程的执行", "test"),
     )
 
     assert attempt.correct is True
-    assert attempt.score >= 0.6
+    assert attempt.score == 1.0
     assert attempt.feedback["correct"] is True
+    assert attempt.feedback["assessment"]["quote"] == "调度协程的执行"
 
 
-def test_cjk_unrelated_answer_still_fails(tmp_path: Path) -> None:
+def test_cjk_contradiction_with_high_similarity_stays_unconfirmed_without_model(tmp_path: Path) -> None:
     workspace_id = "ws-cjk-flash-unrelated"
     service = MemoryService(TrainerRepository(tmp_path / "cjk-unrelated.db"))
     card = service.upsert_card(
@@ -51,12 +54,12 @@ def test_cjk_unrelated_answer_still_fails(tmp_path: Path) -> None:
     attempt = service.submit_flashcard_answer(
         workspace_id,
         card.card_id,
-        learner_answer="快速排序需要递归",
+        learner_answer="事件循环不是调度协程执行的核心机制",
     )
 
-    assert attempt.correct is False
-    assert attempt.score < 0.6
-    assert "text_answer" in attempt.feedback["mismatches"]
+    assert attempt.correct is None
+    assert attempt.score is None
+    assert attempt.feedback["grading_source"] == "ungraded"
 
 
 def test_english_exact_match_is_unchanged(tmp_path: Path) -> None:
@@ -71,9 +74,7 @@ def test_english_exact_match_is_unchanged(tmp_path: Path) -> None:
     assert attempt.score == 1.0
 
 
-def test_english_exact_match_is_unchanged_when_cjk_appears_in_other_cards(tmp_path: Path) -> None:
-    """The CJK fallback must not alter grading for answers without CJK text."""
-
+def test_english_nonmatch_is_unconfirmed_without_model(tmp_path: Path) -> None:
     workspace_id = "ws-cjk-flash-mixed"
     service = MemoryService(TrainerRepository(tmp_path / "cjk-mixed.db"))
     english = service.upsert_card(
@@ -85,5 +86,5 @@ def test_english_exact_match_is_unchanged_when_cjk_appears_in_other_cards(tmp_pa
         english.card_id,
         learner_answer="A quicksort partitions the array",
     )
-    assert wrong.correct is False
-    assert wrong.score == 0.0
+    assert wrong.correct is None
+    assert wrong.score is None

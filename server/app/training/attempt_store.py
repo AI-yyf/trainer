@@ -157,6 +157,7 @@ class AttemptStore:
         workspace_id: str,
         card_id: str,
         assistance_level: str = "unknown",
+        answer_draft: str = "",
     ) -> dict[str, Any]:
         """Create a one-shot attempt for a recall answer.
 
@@ -171,7 +172,7 @@ class AttemptStore:
             "workspace_id": workspace_id,
             "card_id": card_id,
             "status": "returned",
-            "answer_draft": "",
+            "answer_draft": answer_draft,
             "assistance_level": assistance_level,
             "file_path": None,
             "file_hash": None,

@@ -44,6 +44,9 @@ LEGACY_VERIFICATION_TRUST = {
     "trainer-current-file-evaluator": "static_analysis",
     "trainer-current-file-evaluator-v2": "static_analysis",
     "trainer-theory_drill": "model_review",
+    # The old runner had the same identity for exact answers and lexical
+    # guesses, with no per-record answer mode. Its verdict needs a recheck.
+    "trainer-flashcard": "self_reported",
 }
 
 # A recall answer is only "delayed recall" after a real retention interval.
@@ -325,10 +328,12 @@ def project_skills(
         )
         # This historical runner accepted symbol matches plus any successful
         # execution, including a script exit with no assertion.
-        legacy_trust = LEGACY_VERIFICATION_TRUST.get(str(rec.get("runner_version") or ""))
+        runner_version = str(rec.get("runner_version") or "")
+        legacy_flashcard = runner_version == "trainer-flashcard"
+        legacy_trust = LEGACY_VERIFICATION_TRUST.get(runner_version)
         trust_level = legacy_trust or str(rec.get("trust_level") or "")
-        requires_recheck = legacy_trust is not None and result_str == "passed"
-        if requires_recheck:
+        requires_recheck = legacy_flashcard or (legacy_trust is not None and result_str == "passed")
+        if requires_recheck and result_str == "passed":
             result_str = "partial"
         weight = _RESULT_WEIGHT.get(result_str, 0)
         # Trust bonus only amplifies positive results — a failed controlled
@@ -413,9 +418,15 @@ def project_skills(
                     # Unknown/missing assistance is not independent and not
                     # assisted; it stays visible in the drilldown but cannot
                     # advance the skill ladder.
-                elif result_str == "failed" and recall_qualified and trust_level != "model_review":
+                elif (
+                    result_str == "failed" and recall_qualified
+                    and trust_level != "model_review" and not legacy_flashcard
+                ):
                     failed_dimensions[dim] = True
-                elif result_str == "partial" and recall_qualified and trust_level != "model_review":
+                elif (
+                    result_str == "partial" and recall_qualified
+                    and trust_level != "model_review" and not legacy_flashcard
+                ):
                     partial_dimensions[dim] = True
 
     for dim in active_dimensions:

@@ -246,8 +246,17 @@ def test_training_verification_checks_the_persisted_contract(
         assert bool(dimension["verified_count"]) is passed
 
 
-@pytest.mark.parametrize("version", ["trainer-current-file-evaluator", "trainer-current-file-evaluator-v2"])
-def test_startup_recomputes_legacy_overcredit(tmp_path: Path, version: str) -> None:
+@pytest.mark.parametrize(
+    ("version", "dimension", "old_policy"),
+    [
+        ("trainer-current-file-evaluator", "implementation", 1),
+        ("trainer-current-file-evaluator-v2", "implementation", 1),
+        ("trainer-flashcard", "delayed_recall", 2),
+    ],
+)
+def test_startup_recomputes_legacy_overcredit(
+    tmp_path: Path, version: str, dimension: str, old_policy: int,
+) -> None:
     workspace = "legacy-verification"
     with build_client(tmp_path) as client:
         runtime = client.app.state.runtime
@@ -260,18 +269,20 @@ def test_startup_recomputes_legacy_overcredit(tmp_path: Path, version: str) -> N
             attempt_id=attempt["attempt_id"], artifact_hash="hash",
             result="passed", trust_level="controlled_check",
             runner_version=version,
+            dimension=dimension,
+            recall_delay_days=2 if dimension == "delayed_recall" else None,
         )
         runtime.memory_service.update_workspace_state(workspace, training_skill_projection={
-            "verification_policy_version": 1,
-            "attempt_id": attempt["attempt_id"], "dimensions": {"implementation": {"state": "independent"}},
+            "verification_policy_version": old_policy,
+            "attempt_id": attempt["attempt_id"], "dimensions": {dimension: {"state": "independent"}},
         })
 
     with build_client(tmp_path) as client:
         memory = client.get("/memory/summary", params={"workspace_id": workspace}).json()["memory"]
         projection = memory["workspace"]["training_skill_projection"]
-        assert projection["dimensions"]["implementation"]["verified_count"] == 0
-        assert projection["dimensions"]["implementation"]["state"] != "independent"
-        assert projection["dimensions"]["implementation"]["evidence"][0]["verification_recheck_required"]
+        assert projection["dimensions"][dimension]["verified_count"] == 0
+        assert projection["dimensions"][dimension]["state"] != "independent"
+        assert projection["dimensions"][dimension]["evidence"][0]["verification_recheck_required"]
         original = client.app.state.runtime.attempt_store.list_evidence(attempt["attempt_id"])
         assert original[0]["evidence_id"] == evidence["evidence_id"]
         assert original[0]["result"] == "passed"

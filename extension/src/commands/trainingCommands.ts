@@ -1631,6 +1631,7 @@ export async function trainingFlashcardAnswerCommand(
     selectedOptionIndices?: number[];
     fillBlankAnswers?: Record<number, string>;
     sortOrder?: number[];
+    responseLanguage?: string;
   } | undefined;
   const learnerAnswer = p?.learnerAnswer ?? p?.answer ?? '';
   const workspaceId = getRuntimeWorkspaceId(context);
@@ -1654,15 +1655,20 @@ export async function trainingFlashcardAnswerCommand(
     if (Array.isArray(p?.sortOrder)) {
       requestBody.sort_order = p.sortOrder;
     }
+    if (p?.responseLanguage) {
+      requestBody.response_language = p.responseLanguage;
+    }
+    await attachLiveProviderToTrainingRequest(context, requestBody);
     const response = await context.sidecarClient.postJson<{
-      correct: boolean;
-      score?: number;
+      correct: boolean | null;
+      score?: number | null;
       detail: string;
       feedback?: Record<string, unknown>;
     }>(
       status.port,
       '/training/flashcard/answer',
       requestBody,
+      { timeoutMs: 35_000 },
     );
     context.outputChannel.appendLine('[training] Flashcard answer submitted');
     await rehydrateTrainingSummary(context, status.port);

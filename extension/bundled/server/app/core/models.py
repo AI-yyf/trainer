@@ -1874,8 +1874,8 @@ class FlashcardAttempt(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     card_id: str
-    correct: bool
-    score: float = 0.0
+    correct: bool | None
+    score: float | None = 0.0
     detail: str = ""
     learner_answer: str = ""
     selected_option_index: int | None = None
@@ -2037,6 +2037,10 @@ class FlashcardAnswerRequest(BaseModel):
         alias="fillBlankAnswers",
     )
     sort_order: list[int] = Field(default_factory=list, alias="sortOrder")
+    provider: dict[str, Any] | None = None
+    api_key: str | None = Field(default=None, alias="apiKey", repr=False)
+    last_test_result: dict[str, Any] | None = Field(default=None, alias="lastTestResult")
+    response_language: str | None = Field(default=None, alias="responseLanguage")
 
 
 class TheoryDrillAnswerRequest(BaseModel):

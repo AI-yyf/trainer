@@ -487,7 +487,7 @@ try {
     const feedback = {
       summary: gradeResult.report.summary,
       next_step: gradeResult.report.next_step,
-      checks: gradeResult.report.dynamic_checks?.filter((check) => check.status !== "passed"),
+      checks: gradeResult.report.dynamic_checks,
     };
     assistance.push({ type: "grader_feedback", feedback });
     if (hint) assistance.push({ type: "card_hint", text: hint });
@@ -577,6 +577,7 @@ try {
   ]);
   const recall = await post("/training/flashcard/answer", {
     workspace_id: "full-journey-ws", card_id: cardId, learner_answer: recallAnswer,
+    provider, api_key: providerKey, last_test_result: providerTestResult, response_language: "zh-CN",
   });
   const afterRecall = await post("/session/start", {
     workspace_id: "full-journey-ws", session_id: sessionId, workspace_name: "Full Journey",
@@ -588,6 +589,7 @@ try {
   const delayedRecall = recall.json?.recall_evidence?.delayed_recall === true;
   step("11-recall-round", {
     status: recall.status, recall_correct: recall.json?.correct, recall_evidence: recall.json?.recall_evidence,
+    recall_feedback: recall.json?.feedback,
     schedule_before: initialSchedule, schedule_after: recalledSchedule, fsrs_updated: fsrsUpdated,
     delayed_recall: delayedRecall,
   }, { fail: recall.status !== 200 || !fsrsUpdated || !delayedRecall });
