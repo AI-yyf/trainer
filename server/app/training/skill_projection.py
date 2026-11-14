@@ -42,6 +42,7 @@ _KNOWN_DIMENSIONS = frozenset(_DIMENSIONS) | frozenset(LITERATURE_DIMENSIONS)
 
 LEGACY_VERIFICATION_TRUST = {
     "trainer-current-file-evaluator": "static_analysis",
+    "trainer-current-file-evaluator-v2": "static_analysis",
     "trainer-theory_drill": "model_review",
 }
 
@@ -379,6 +380,7 @@ def project_skills(
                     {
                         "evidence_id": evidence_id,
                         "attempt_id": str(rec.get("attempt_id") or "") or None,
+                        "card_id": str(rec.get("card_id") or "") or None,
                         "timestamp": str(rec.get("created_at") or rec.get("timestamp") or "") or None,
                         "result": result_str,
                         "assistance_level": assistance_level or "unknown",

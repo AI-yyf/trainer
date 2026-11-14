@@ -158,6 +158,10 @@ def test_missing_assistance_is_unknown_and_never_advances_the_skill_ladder() -> 
             False, "independent", False, "partial", "static_analysis", "not_verified",
         ),
         (
+            'if __name__ == "__main__":\n    print("solve_queue")\n',
+            True, "independent", False, "failed", "controlled_check", "needs_review",
+        ),
+        (
             "def solve_queue(items: list[int]) -> int:\n    return 99\n",
             True, "independent", False, "failed", "controlled_check", "needs_review",
         ),
@@ -238,7 +242,8 @@ def test_training_verification_checks_the_persisted_contract(
         assert bool(dimension["verified_count"]) is passed
 
 
-def test_startup_recomputes_legacy_overcredit(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version", ["trainer-current-file-evaluator", "trainer-current-file-evaluator-v2"])
+def test_startup_recomputes_legacy_overcredit(tmp_path: Path, version: str) -> None:
     workspace = "legacy-verification"
     with build_client(tmp_path) as client:
         runtime = client.app.state.runtime
@@ -250,9 +255,10 @@ def test_startup_recomputes_legacy_overcredit(tmp_path: Path) -> None:
         evidence = store.record_evidence(
             attempt_id=attempt["attempt_id"], artifact_hash="hash",
             result="passed", trust_level="controlled_check",
-            runner_version="trainer-current-file-evaluator",
+            runner_version=version,
         )
         runtime.memory_service.update_workspace_state(workspace, training_skill_projection={
+            "verification_policy_version": 1,
             "attempt_id": attempt["attempt_id"], "dimensions": {"implementation": {"state": "independent"}},
         })
 

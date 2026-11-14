@@ -929,6 +929,23 @@ def build_coaching_system_prompt(
             "Use this recorded result to give one concrete next step. The learner already "
             "submitted the answer. Scope the conclusion to this question."
         )
+        implementation = recent_recall.get("implementation")
+        if isinstance(implementation, dict):
+            assistance = _compact_text(implementation.get("assistance"), 40)
+            if implementation.get("result") == "passed":
+                system_prompt += (
+                    "\nSame card's implementation: already passed controlled behavior checks "
+                    f"(recorded assistance: {assistance}). Retain this result. "
+                    "If recall was correct, offer one small transfer task with a changed "
+                    "constraint or input rather than assigning the verified implementation again. "
+                    "If recall was incorrect, target the recall gap. Avoid claiming transfer "
+                    "or overall mastery before it is verified."
+                )
+            elif implementation.get("result") == "failed":
+                system_prompt += (
+                    "\nSame card's latest controlled implementation check failed. "
+                    "Keep the implementation verdict separate from the recall result."
+                )
 
     system_prompt += (
         "\n\n## Teaching Style Bias\n"

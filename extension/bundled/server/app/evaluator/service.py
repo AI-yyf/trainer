@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import json
+import math
 import os
 import re
 import shutil
@@ -28,32 +30,34 @@ from .models import EvaluationReport as LaneEvaluationReport
 from .verifiers import PythonToolchainPlanner, VerifierPack, verifier_pack_for
 
 _PYTHON_BEHAVIOR_RUNNER = """
+from contextlib import redirect_stdout
 import json
-import math
 import runpy
 import sys
 from pathlib import Path
 
+def json_value(value):
+    if type(value) in (type(None), bool, int, float, str):
+        return value
+    if type(value) is list:
+        return [json_value(item) for item in value]
+    if type(value) is dict and all(type(key) is str for key in value):
+        return {key: json_value(item) for key, item in value.items()}
+    raise TypeError("The target must return a JSON-compatible value.")
+
 target = Path(sys.argv[1])
-contract = json.loads(sys.argv[2])
+function_name = sys.argv[2]
+inputs = json.loads(sys.argv[3])
 sys.path.insert(0, str(target.parent))
 try:
-    function = runpy.run_path(str(target)).get(contract["function"])
-    if not callable(function):
-        raise AssertionError(f'Missing callable: {contract["function"]}')
-    for index, case in enumerate(contract["cases"], 1):
-        actual = function(*case["args"])
-        expected = case["expected"]
-        if isinstance(expected, float) and type(actual) in {int, float}:
-            matches = math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-12)
-        else:
-            matches = type(actual) is type(expected) and actual == expected
-        if not matches:
-            raise AssertionError(f'Case {index} returned a different value than expected.')
+    with redirect_stdout(sys.stderr):
+        function = runpy.run_path(str(target)).get(function_name)
+        if not callable(function):
+            raise AssertionError(f"Missing callable: {function_name}")
+        values = [json_value(function(*args)) for args in inputs]
 except ModuleNotFoundError:
-    print("TRAINER_DEPENDENCY_MISSING")
     sys.exit(3)
-print(f'TRAINER_BEHAVIOR_CASES_PASSED:{len(contract["cases"])}')
+print(json.dumps(values, allow_nan=False))
 """
 
 _DYNAMIC_CHECKS = frozenset({"pytest", "hypothesis", "python-script", "python-behavior"})
@@ -397,21 +401,35 @@ class EvaluationPipeline:
             name="python-behavior",
             argv=[
                 PythonToolchainPlanner.python_executable(request),
-                "-B", "-c", _PYTHON_BEHAVIOR_RUNNER, target,
-                contract.model_dump_json(),
+                "-I", "-B", "-c", _PYTHON_BEHAVIOR_RUNNER, target, contract.function,
+                json.dumps([case.args for case in contract.cases]),
             ],
             cwd=request.workspace,
         ))
-        if result.exit_code == 3 and result.stdout.strip().endswith("TRAINER_DEPENDENCY_MISSING"):
+        if result.exit_code == 3:
             result.status = CheckStatus.ERROR
             result.summary = "A dependency required by the behavior check is unavailable."
-        elif result.status == CheckStatus.PASSED and not result.stdout.strip().endswith(
-            f"TRAINER_BEHAVIOR_CASES_PASSED:{len(contract.cases)}"
-        ):
+        if result.status != CheckStatus.PASSED:
+            return result
+        try:
+            values = json.loads(result.stdout)
+        except ValueError:
+            values = None
+        if not isinstance(values, list) or len(values) != len(contract.cases):
             result.status = CheckStatus.ERROR
-            result.summary = "The behavior check exited before reporting a verdict."
-        elif result.status == CheckStatus.PASSED:
-            result.summary = f"{len(contract.cases)} task behavior cases passed."
+            result.summary = "The behavior check exited without a return value for every case."
+            return result
+        for index, (actual, case) in enumerate(zip(values, contract.cases, strict=True), 1):
+            expected = case.expected
+            if isinstance(expected, float) and type(actual) in {int, float}:
+                matches = math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-12)
+            else:
+                matches = type(actual) is type(expected) and actual == expected
+            if not matches:
+                result.status = CheckStatus.FAILED
+                result.summary = f"Case {index} returned a different value than expected."
+                return result
+        result.summary = f"{len(contract.cases)} task behavior cases passed."
         return result
 
     def evaluate(self, request: EvaluationRequest) -> LaneEvaluationReport:
@@ -516,6 +534,11 @@ class EvaluationPipeline:
             # slowest tool instead of the sum. Order is preserved by mapping
             # over the plan rather than collecting from the pool.
             planned = self.plan_commands(request)
+            behavior_check = (
+                self._check_python_behavior(behavior_contract, request, target)
+                if behavior_contract is not None
+                else None
+            )
             # A script may write temporary files. Run it after the independent
             # analysis/test processes, and never reuse a cached execution result.
             commands = [command for command in planned if command.name != "python-script"]
@@ -549,8 +572,8 @@ class EvaluationPipeline:
                 self._runner.run(command) for command in planned if command.name == "python-script"
             )
             checks.append(self._hypothesis_hook.run(request))
-            if behavior_contract is not None:
-                checks.append(self._check_python_behavior(behavior_contract, request, target))
+            if behavior_check is not None:
+                checks.append(behavior_check)
             semantic_review = self._semantic_reviewer.review(request.spec, code, checks)
             overall_status = self._overall_status(checks, semantic_review)
             return LaneEvaluationReport(

@@ -20,6 +20,24 @@ _RECALL_FOLLOWUP = re.compile(
 )
 
 
+def _card_implementation_evidence(memory: MemorySnapshot, card_id: str) -> dict[str, str] | None:
+    projection = memory.workspace.get("training_skill_projection")
+    dimensions = projection.get("dimensions") if isinstance(projection, dict) else None
+    implementation = dimensions.get("implementation") if isinstance(dimensions, dict) else None
+    rows = implementation.get("evidence") if isinstance(implementation, dict) else None
+    if not isinstance(rows, list):
+        return None
+    for row in rows:
+        if not isinstance(row, dict) or row.get("card_id") != card_id:
+            continue
+        if row.get("trust_level") != "controlled_check" or row.get("verification_recheck_required"):
+            continue
+        verdict = row.get("result")
+        if verdict in {"passed", "failed"}:
+            return {"result": str(verdict), "assistance": str(row.get("assistance_level") or "unknown")}
+    return None
+
+
 def active_training_review(
     memory: MemorySnapshot, active_view: str | None,
 ) -> ReviewArtifactSnapshot | None:
@@ -52,6 +70,7 @@ def apply_training_review_context(
                 "correct": attempt.correct,
                 "answer_mode": attempt.answer_mode,
                 "detail": attempt.detail,
+                "implementation": _card_implementation_evidence(memory, card.card_id),
             },
         }
     result = dict(context)

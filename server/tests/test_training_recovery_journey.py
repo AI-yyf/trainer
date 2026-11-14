@@ -13,7 +13,7 @@ from provider_fixtures import seed_verified_capabilities
 from app.core.models import ProviderConfig
 from app.core.settings import AppSettings
 from app.evaluator.models import CheckCommand, CheckResult, CheckStatus
-from app.evaluator.service import EvaluationPipeline, EvaluatorService
+from app.evaluator.service import EvaluationPipeline, EvaluatorService, SubprocessCommandRunner
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 
@@ -23,12 +23,13 @@ class _DeterministicRunner:
         self._pytest_status = pytest_status
 
     def run(self, command: CheckCommand) -> CheckResult:
+        if command.name == "python-behavior":
+            return SubprocessCommandRunner().run(command)
         status = self._pytest_status if command.name == "pytest" else CheckStatus.PASSED
         return CheckResult(
             name=command.name,
             status=status,
             command=command.argv,
-            stdout="TRAINER_BEHAVIOR_CASES_PASSED:2" if command.name == "python-behavior" else "",
             summary=f"{command.name} {status.value} in deterministic journey runner.",
         )
 

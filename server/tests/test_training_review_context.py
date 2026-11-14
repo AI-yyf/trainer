@@ -71,6 +71,7 @@ def test_current_review_prompt_reaches_the_model_without_old_coding_history():
 def test_coach_followup_uses_the_completed_card_result():
     from app.core.models import FlashcardAttempt, TrainingCardCandidateSnapshot, UserProfile
     from app.llm.prompts import build_coaching_messages
+    from app.training.skill_projection import project_skills
 
     card = TrainingCardCandidateSnapshot(
         card_id="tuple-card", title="元组槽位", status="answered",
@@ -79,6 +80,17 @@ def test_coach_followup_uses_the_completed_card_result():
     memory = MemorySnapshot(
         training_card_candidates=[card],
         recent_flash_attempts=[FlashcardAttempt(card_id=card.card_id, correct=True)],
+        workspace={"training_skill_projection": {"dimensions": project_skills([
+            {
+                "card_id": card.card_id, "is_current": True, "dimension": "implementation",
+                "trust_level": "controlled_check", "result": "passed",
+                "assistance_level": "hint_level_1",
+            },
+            {
+                "card_id": "other-card", "is_current": True, "dimension": "implementation",
+                "trust_level": "controlled_check", "result": "failed",
+            },
+        ], card_id="other-card")}},
     )
     message = "我刚完成了复习。根据这次复习的表现，下一步该做什么？"
     context = apply_training_review_context({"learner_message": message}, memory, "coach")
@@ -90,6 +102,9 @@ def test_coach_followup_uses_the_completed_card_result():
     assert "Recorded verdict: correct" in prompt
     assert card.question in prompt
     assert card.expected_answer not in prompt
+    assert "already passed controlled behavior checks (recorded assistance: hint_level_1)" in prompt
+    assert "changed constraint or input" in prompt
+    assert "latest controlled implementation check failed" not in prompt
 
     unrelated = {"learner_message": "解释 Python 的异常传播。"}
     assert apply_training_review_context(unrelated, memory, "coach") is unrelated

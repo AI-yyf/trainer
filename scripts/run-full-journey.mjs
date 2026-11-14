@@ -335,7 +335,9 @@ try {
   });
   step("01-session-start", {
     status: start.status, session_id: sessionId,
+    provider_http_status: providerTest.status,
     provider_test_ok: providerTest.json?.ok === true,
+    provider_detail: providerTest.json?.detail ?? errorDetail(providerTest.text),
     streaming_ready: providerTest.json?.streaming_ready === true,
     tools_ready: providerTest.json?.tools_ready === true,
   }, { fail: start.status !== 200 || providerTest.json?.ok !== true });

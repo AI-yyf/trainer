@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .runtime import TrainerRuntime
 
 
-_VERIFICATION_POLICY_VERSION = 1
+_VERIFICATION_POLICY_VERSION = 2
 
 
 def _card_subject_family(card: Any) -> str:
@@ -250,7 +250,7 @@ def record_executed_training_evidence(
         artifact_hash=artifact_hash,
         result=result,
         trust_level="controlled_check" if controlled else "static_analysis",
-        runner_version="trainer-current-file-evaluator-v2",
+        runner_version="trainer-current-file-evaluator-v3",
         execution_location="workspace",
         dimension=dimension,
         evidence_kind="controlled_evaluation" if controlled else "current_file_observation",
