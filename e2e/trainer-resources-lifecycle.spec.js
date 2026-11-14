@@ -145,6 +145,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     const action = await waitForHostAction(page, start, (item) =>
       item.type === "command/execute" && item.payload.commandId === "trainer.resource.search",
     );
+    await expect(page.locator(".resources-library-shell").getByRole("status")).toBeVisible();
     await sendHostMessage(page, {
       type: "state/patch",
       payload: {

@@ -2940,7 +2940,9 @@ export function ResourcesWorkbenchView({
       {omitLeftoverLibrary ? null : (
       <div className="resources-library-shell">
       {hasSearchQuery ? (
-        shouldShowNoMatches ? (
+        searchStatus ? (
+          <SystemState kind={searchStatus.tone === "failed" ? "recoverable-error" : "processing"} title={searchStatus.label} />
+        ) : shouldShowNoMatches ? (
           <SystemState kind="empty" title={localize(language, "noMatches")} />
         ) : (
           <ul className="resources-search-results" aria-label={localize(language, "searchPlaceholder")}>
