@@ -4678,6 +4678,8 @@ function mapTrainingSkillProjection(
         assistanceLevel: asString(rowRecord.assistance_level) ?? asString(rowRecord.assistanceLevel),
         trustLevel: asString(rowRecord.trust_level) ?? asString(rowRecord.trustLevel),
         evidenceKind: asString(rowRecord.evidence_kind) ?? asString(rowRecord.evidenceKind),
+        verificationRecheckRequired:
+          rowRecord.verification_recheck_required === true || rowRecord.verificationRecheckRequired === true,
         scenario: asString(rowRecord.scenario),
         recallDelayDays:
           typeof rowRecord.recall_delay_days === 'number'

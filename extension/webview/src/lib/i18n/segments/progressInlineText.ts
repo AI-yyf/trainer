@@ -154,6 +154,8 @@ export const COPY: Record<
     drilldownNoScenario: string;
     drilldownAssisted: string;
     drilldownIndependent: string;
+    drilldownAssistanceUnknown: string;
+    drilldownRecheck: string;
   }
 > = {
   "zh-CN": {
@@ -172,6 +174,8 @@ export const COPY: Record<
     drilldownNoScenario: "无场景标记",
     drilldownAssisted: "有辅助",
     drilldownIndependent: "独立完成",
+    drilldownAssistanceUnknown: "辅助情况未记录",
+    drilldownRecheck: "旧记录的验收依据待复核",
   },
   "en-US": {
     ariaLabel: "Your progress",
@@ -190,6 +194,8 @@ export const COPY: Record<
     drilldownNoScenario: "No scenario tag",
     drilldownAssisted: "With help",
     drilldownIndependent: "Independent",
+    drilldownAssistanceUnknown: "Assistance not recorded",
+    drilldownRecheck: "Earlier verification needs rechecking",
   },
   "es-ES": {
     ariaLabel: "Tu progreso",
@@ -208,6 +214,8 @@ export const COPY: Record<
     drilldownNoScenario: "Sin escenario",
     drilldownAssisted: "Con ayuda",
     drilldownIndependent: "Independiente",
+    drilldownAssistanceUnknown: "Ayuda sin registrar",
+    drilldownRecheck: "Verificación anterior pendiente de revisión",
   },
   "fr-FR": {
     ariaLabel: "Votre progression",
@@ -226,6 +234,8 @@ export const COPY: Record<
     drilldownNoScenario: "Sans scénario",
     drilldownAssisted: "Avec aide",
     drilldownIndependent: "Indépendant",
+    drilldownAssistanceUnknown: "Aide non consignée",
+    drilldownRecheck: "Vérification antérieure à revoir",
   },
   "de-DE": {
     ariaLabel: "Dein Fortschritt",
@@ -244,6 +254,8 @@ export const COPY: Record<
     drilldownNoScenario: "Ohne Szenario",
     drilldownAssisted: "Mit Hilfe",
     drilldownIndependent: "Selbstständig",
+    drilldownAssistanceUnknown: "Hilfe nicht dokumentiert",
+    drilldownRecheck: "Frühere Überprüfung noch zu prüfen",
   },
   "ja-JP": {
     ariaLabel: "あなたの成長",
@@ -262,6 +274,8 @@ export const COPY: Record<
     drilldownNoScenario: "シナリオ記録なし",
     drilldownAssisted: "ヒント付き",
     drilldownIndependent: "自力で完了",
+    drilldownAssistanceUnknown: "補助の記録なし",
+    drilldownRecheck: "以前の検証は再確認が必要",
   },
   "ko-KR": {
     ariaLabel: "당신의 성장",
@@ -280,6 +294,8 @@ export const COPY: Record<
     drilldownNoScenario: "시나리오 기록 없음",
     drilldownAssisted: "도움 받음",
     drilldownIndependent: "독립 완료",
+    drilldownAssistanceUnknown: "도움 여부 기록 없음",
+    drilldownRecheck: "이전 검증 재확인 필요",
   },
   "pt-BR": {
     ariaLabel: "Seu progresso",
@@ -298,5 +314,7 @@ export const COPY: Record<
     drilldownNoScenario: "Sem cenário",
     drilldownAssisted: "Com ajuda",
     drilldownIndependent: "Independente",
+    drilldownAssistanceUnknown: "Ajuda não registrada",
+    drilldownRecheck: "Verificação anterior precisa ser revista",
   },
 };

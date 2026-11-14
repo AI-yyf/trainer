@@ -483,7 +483,8 @@ try {
 
   const referenceCases = checkPpoContract(cardData.python_behavior_contract);
   step("05a-task-contract-values", { verification: "independent PPO formula", cases: referenceCases }, {
-    fail: referenceCases.some((item) => item.status !== "verified"),
+    fail: cardData.python_behavior_contract.reference_id !== "trainer/ppo-clipped-loss/v1" ||
+      referenceCases.some((item) => item.status !== "verified"),
   });
 
   const cardTarget = String(cardData.files_to_touch?.[0] ?? "ppo_clip_loss.py")
@@ -553,7 +554,8 @@ try {
   const gradingAttempts = [];
   let gradeResult = await grade(submission, 1, hash);
   gradingAttempts.push({ sha256: hash, http: gradeResult.status, passed: gradeResult.report.passed });
-  if (gradeResult.status === 200 && gradeResult.report.passed === false && gradeResult.report.verification_scope === "behavior") {
+  while (gradingAttempts.length < 3 && gradeResult.status === 200 &&
+      gradeResult.report.passed === false && gradeResult.report.verification_scope === "behavior") {
     const hint = cardData.hint_ladder?.[0] ?? "";
     const feedback = {
       summary: gradeResult.report.summary,
@@ -565,8 +567,9 @@ try {
           check.status === "failed" && check.id !== "training-acceptance"),
       ],
     };
-    assistance.push({ type: "grader_feedback", feedback });
-    if (hint) assistance.push({ type: "card_hint", text: hint });
+    const number = gradingAttempts.length + 1;
+    assistance.push({ type: "grader_feedback", feedback, retry: number });
+    if (hint) assistance.push({ type: "card_hint", text: hint, retry: number });
     writeArtifact("07-assistance.json", assistance);
     const updated = await post("/training/attempt/update", {
       workspace_id: "full-journey-ws", attempt_id: attemptId, assistance_level: "hint_level_1",
@@ -574,14 +577,14 @@ try {
     if (updated.json?.attempt?.assistance_level !== "hint_level_1") {
       throw new Error("Assistance was not persisted before retry.");
     }
-    const revised = await learnerAnswer("07-revised-answer", [
+    const revised = await learnerAnswer(number === 2 ? "07-revised-answer" : "07-second-revised-answer", [
       ...task,
-      { role: "assistant", content: raw },
+      { role: "assistant", content: submission },
       { role: "user", content: `根据以下实际反馈修正实现，输出完整 Python 文件。\n${JSON.stringify({ feedback, hint })}` },
     ]);
     submission = pythonSubmission(revised);
-    hash = await saveSubmission(submission, 2);
-    gradeResult = await grade(submission, 2, hash);
+    hash = await saveSubmission(submission, number);
+    gradeResult = await grade(submission, number, hash);
     gradingAttempts.push({ sha256: hash, http: gradeResult.status, passed: gradeResult.report.passed });
   }
   const { report } = gradeResult;

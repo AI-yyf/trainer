@@ -45,7 +45,7 @@ export function ProgressView({ language, projection, onOpenTraining, onBack }: P
   const dimensionKeys = dimensionKeysFor(projection);
   const hasAnyEvidence = dimensionKeys.some((key) => {
     const state = dimensionState(projection, key);
-    return Boolean(state && (state.verifiedCount ?? 0) > 0);
+    return Boolean(state && ((state.verifiedCount ?? 0) > 0 || state.evidence?.length));
   });
   const updatedAt = projection?.updatedAt ? new Date(projection.updatedAt) : undefined;
   const updatedLabel =
@@ -99,15 +99,17 @@ export function ProgressView({ language, projection, onOpenTraining, onBack }: P
                           ? recordedAt.toLocaleDateString(copy.localeTag)
                           : undefined;
                         const assistance =
-                          row.assistanceLevel === "independent"
+                          row.assistanceLevel === "independent" || row.assistanceLevel === "none"
                             ? copy.drilldownIndependent
-                            : copy.drilldownAssisted;
+                            : !row.assistanceLevel || row.assistanceLevel === "unknown"
+                              ? copy.drilldownAssistanceUnknown
+                              : copy.drilldownAssisted;
                         return (
                           <li key={row.evidenceId ?? `${day}-${row.scenario ?? ""}`}>
                             <span className="progress-view__drilldown-day">{day ?? ""}</span>
                             <span className="progress-view__drilldown-assistance">{assistance}</span>
                             <span className="progress-view__drilldown-scenario">
-                              {row.scenario || copy.drilldownNoScenario}
+                              {row.verificationRecheckRequired ? copy.drilldownRecheck : row.scenario || copy.drilldownNoScenario}
                             </span>
                           </li>
                         );

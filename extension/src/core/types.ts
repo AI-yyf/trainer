@@ -1476,6 +1476,7 @@ export interface TrainingSkillEvidenceRowView {
   assistanceLevel?: string;
   trustLevel?: string;
   evidenceKind?: string;
+  verificationRecheckRequired?: boolean;
   scenario?: string;
   recallDelayDays?: number;
   recallRating?: string;
