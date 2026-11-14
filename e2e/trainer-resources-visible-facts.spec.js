@@ -53,6 +53,7 @@ for (const mode of ['missing', 'wrong-path', 'embedded', 'standalone']) {
     await expect(page.locator('text=' + previewBody)).toHaveCount(0);
 
     const facts = await latestFacts(page);
+    expect(facts.selectedSandboxPath).toBe(previewPath);
     expect(facts.activeSurface).toBe('sandbox'); // Logical restore scope remains supported.
     expect(facts.sandboxPaneVisible).toBe(false);
     expect(facts.previewPaneVisible).toBe(false);
@@ -62,10 +63,11 @@ for (const mode of ['missing', 'wrong-path', 'embedded', 'standalone']) {
     // The shipped library has no Reader detail page at all; every mode keeps
     // the logical restore scope without rendering resource content.
     await expect(reader).toHaveCount(0);
-    if (mode === 'standalone') {
-      await expect(page.locator('.resources-inline-context')).toBeVisible();
-    } else {
-      await expect(page.locator('.resources-knowledge')).toBeVisible();
+    await expect(page.locator('.resources-inline-context')).toHaveCount(0);
+    await expect(page.getByText('Sandbox context restored', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(previewPath, { exact: true })).toHaveCount(0);
+    await expect(page.locator('.resources-knowledge')).toBeVisible();
+    if (mode !== 'standalone') {
       await expect(page.getByRole('treeitem', { name: 'preview-proof.md', exact: true })).toBeVisible();
     }
   });

@@ -103,7 +103,6 @@ test('view-owned headings and title-like copy stay capped at the same VS Code-si
     '.rhythm-title',
     '.memory-title',
     '.schedule-title',
-    '.resources-inline-context__title',
     '.flash-create-form__title',
     '.flash-empty__title',
     '.flash-complete__title',

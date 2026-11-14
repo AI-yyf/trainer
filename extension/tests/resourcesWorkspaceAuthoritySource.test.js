@@ -48,12 +48,9 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
   assert.match(source, /hasSearchQuery/);
   // No in-Trainer content preview survives: the library is navigation only.
   assert.doesNotMatch(source, /sandboxPreview/);
-  assert.doesNotMatch(source, /MessageRichContent/);
+  assert.doesNotMatch(source, /MessageRichContent|resources-inline-context/);
 
-  const treeIndex = source.indexOf('className="resources-knowledge__tree"');
-  const restoreContextIndex = source.indexOf('className="resources-inline-context"');
-  assert.ok(treeIndex >= 0, 'expected a knowledge-resource tree');
-  assert.ok(restoreContextIndex >= 0, 'expected guarded sandbox restore context');
+
 });
 
 test('the sandbox copy keeps the project-workspace boundary explicit', () => {

@@ -2057,15 +2057,10 @@ writeProgress();
           resumeReason: "Show the installed resource detail truth.",
           focusArea: "resource detail",
         });
-        await sleep(1500);
-
-        const trainerExtension = vscode.extensions.getExtension(extensionId);
-        const exported = trainerExtension && trainerExtension.isActive ? trainerExtension.exports : undefined;
-        const state =
-          exported && typeof exported.getDebugState === "function"
-            ? exported.getDebugState()
-            : null;
-        const visible = state && state.visibleFacts ? state.visibleFacts.resources || null : null;
+        const visible = await waitForVisibleFacts(
+          "resources",
+          (facts) => facts.activeSurface === "detail" && facts.selectedResourceId === resourceId,
+        );
         const facts = visible;
         return {
           resourceId,
@@ -2091,14 +2086,13 @@ writeProgress();
               data.surface === "resources" &&
               data.activeView === "resources" &&
               data.activeSurface === "detail" &&
-              data.resourceDetailVisible === true &&
-              data.resourceDetailId === data.resourceId &&
+              data.resourceDetailVisible === false &&
+              data.resourceDetailId === null &&
+              data.resourceDetailTitle === null &&
               data.selectedResourceId === data.resourceId &&
-              typeof data.resourceDetailTitle === "string" &&
-              data.resourceDetailTitle.length > 0 &&
               data.singleWorkbenchSurface === true &&
               data.compactMode === true &&
-              data.detailPaneVisible === true &&
+              data.detailPaneVisible === false &&
               data.sandboxPaneVisible === false &&
               data.previewPaneVisible === false
           ),
@@ -2177,7 +2171,7 @@ writeProgress();
                 facts.activeSurface === "sandbox" &&
                 facts.selectedSandboxPath === sandboxPath &&
                 facts.singleWorkbenchSurface === true &&
-                facts.detailPaneVisible === true &&
+                facts.detailPaneVisible === false &&
                 facts.sandboxPaneVisible === false &&
                 facts.previewPaneVisible === false,
             ),
@@ -2204,7 +2198,7 @@ writeProgress();
               data.activeSurface === "sandbox" &&
               data.selectedSandboxPath === data.sandboxPath &&
               data.singleWorkbenchSurface === true &&
-              data.detailPaneVisible === true &&
+              data.detailPaneVisible === false &&
               data.sandboxPaneVisible === false &&
               data.previewPaneVisible === false
           ),
@@ -2262,7 +2256,7 @@ writeProgress();
                 facts.selectedSandboxPath === sandboxPath &&
                 facts.singleWorkbenchSurface === true &&
                 facts.sandboxPaneVisible === false &&
-                facts.detailPaneVisible === true &&
+                facts.detailPaneVisible === false &&
                 facts.previewPaneVisible === false,
             ),
         );
@@ -2294,7 +2288,7 @@ writeProgress();
               typeof data.selectedSandboxPath === "string" &&
               data.selectedSandboxPath === data.sandboxPath &&
               data.singleWorkbenchSurface === true &&
-              data.detailPaneVisible === true &&
+              data.detailPaneVisible === false &&
               data.sandboxPaneVisible === false &&
               data.previewPaneVisible === false
           ),

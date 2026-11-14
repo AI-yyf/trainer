@@ -291,20 +291,6 @@ function chooseWorkspaceRootLabel(language: ComposerLanguage): string {
   return labels[language];
 }
 
-function restoredSandboxContextTitle(language: ComposerLanguage): string {
-  const labels: Record<ComposerLanguage, string> = {
-    "zh-CN": "\u6c99\u7bb1\u4e0a\u4e0b\u6587\u5df2\u6062\u590d",
-    "en-US": "Sandbox context restored",
-    "es-ES": "Contexto del sandbox restaurado",
-    "fr-FR": "Contexte du sandbox restaure",
-    "de-DE": "Sandbox-Kontext wiederhergestellt",
-    "ja-JP": "\u30b5\u30f3\u30c9\u30dc\u30c3\u30af\u30b9\u306e\u30b3\u30f3\u30c6\u30ad\u30b9\u30c8\u3092\u5fa9\u5143",
-    "ko-KR": "\uc0cc\ub4dc\ubc15\uc2a4 \ucee8\ud14d\uc2a4\ud2b8\uac00 \ubcf5\uc6d0\ub428",
-    "pt-BR": "Contexto do sandbox restaurado",
-  };
-  return labels[language];
-}
-
 function localizeCount(language: ComposerLanguage, key: ResourceTextKey, count: number): string {
   const text =
     language === "en-US" && count === 1
@@ -2522,14 +2508,6 @@ export function ResourcesWorkbenchView({
     selectedResourceIndexNotice
       ? selectedResourceIndexNotice.label
       : (selectedResourceSourceLabel || undefined);
-  const restoreContextPath = restoreContext?.sandboxPath?.trim() || undefined;
-  const restoreContextPreviewPath = restoreContext?.previewPath?.trim() || undefined;
-  const restoreContextMeta = restoreContext
-    ? [restoreContext.focusArea, restoreContextPath]
-        .map((value) => value?.trim())
-        .filter((value): value is string => Boolean(value))
-        .join(" | ")
-    : "";
   const leftoverStoredNote = leftoverNote?.trim() || "";
   const omitLeftoverLibrary = Boolean(leftoverStoredNote) && resources.length === 0
     && resourceWriteAccess?.allowed !== true;
@@ -2911,23 +2889,6 @@ export function ResourcesWorkbenchView({
           </div>
         </form>
       ) : null}
-
-      {omitLeftoverLibrary ? null : restoreContext?.surface === "sandbox" ? (
-        <div className="resources-inline-context" role="status">
-          <strong className="resources-inline-context__title">
-            {restoredSandboxContextTitle(language)}
-          </strong>
-          {restoreContextPreviewPath ? <p>{restoreContextPreviewPath}</p> : null}
-          {!restoreContextPreviewPath && restoreContext.summary?.trim() ? (
-            <p>{restoreContext.summary}</p>
-          ) : null}
-          {restoreContextMeta ? (
-            <p className="resources-inline-context__meta">{restoreContextMeta}</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {searchStatus ? <SystemState kind={searchStatus.tone === "failed" ? "recoverable-error" : searchStatus.tone === "pending" ? "processing" : "information"} title={searchStatus.label} /> : null}
 
       {organizationConfirm ? (
         <div
