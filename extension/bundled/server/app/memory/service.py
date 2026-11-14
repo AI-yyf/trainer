@@ -3935,6 +3935,7 @@ class MemoryService(
             training_card_id, card.target_skill or card.focus_area or card.title,
             card_type=card.card_type, focus_area=card.focus_area,
         )
+        state.first_learned_at = state.created_at
         state.due = state.next_due_at = state.created_at + timedelta(days=1)
         state.interval = 1
         states[training_card_id] = card_state_to_payload(state)

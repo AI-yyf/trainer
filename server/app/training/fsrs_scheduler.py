@@ -64,6 +64,7 @@ class TrainingCardState:
     
     # Timestamps
     created_at: datetime = field(default_factory=_clock_now)
+    first_learned_at: datetime | None = None
     last_reviewed_at: datetime | None = None
     next_due_at: datetime | None = None
 
@@ -185,7 +186,7 @@ class FSRSTrainerCardScheduler:
             now,
         )
         
-        previous_reviewed_at = card_state.last_reviewed_at
+        previous_practice_at = card_state.last_reviewed_at or card_state.first_learned_at
 
         # Update card state with new values
         card_state.stability = next_card.stability if next_card.stability is not None else 0.0
@@ -207,10 +208,10 @@ class FSRSTrainerCardScheduler:
             card_state.lapses += 1
         card_state.last_reviewed_at = now
 
-        # Calculate elapsed days since the previous review, not the one we just wrote.
-        elapsed_days = 0.0
-        if previous_reviewed_at:
-            elapsed_days = (now - previous_reviewed_at).total_seconds() / 86400
+        elapsed_days = (
+            max(0.0, (now - previous_practice_at).total_seconds() / 86400)
+            if previous_practice_at else 0.0
+        )
         
         # Calculate mastery score based on stability
         card_state.mastery_score = self._calculate_mastery(card_state)
@@ -388,6 +389,7 @@ def card_state_to_payload(state: TrainingCardState) -> dict[str, Any]:
         "knowledge_type": state.knowledge_type,
         "mastery_score": state.mastery_score,
         "created_at": state.created_at.isoformat() if state.created_at else None,
+        "first_learned_at": state.first_learned_at.isoformat() if state.first_learned_at else None,
         "last_reviewed_at": state.last_reviewed_at.isoformat() if state.last_reviewed_at else None,
         "next_due_at": state.next_due_at.isoformat() if state.next_due_at else None,
     }
@@ -433,6 +435,9 @@ def card_state_from_payload(payload: dict[str, Any]) -> TrainingCardState | None
         mastery_score=float(payload.get("mastery_score") or payload.get("masteryScore") or 0.0),
         created_at=_parse_fsrs_datetime(payload.get("created_at") or payload.get("createdAt"))
         or _clock_now(),
+        first_learned_at=_parse_fsrs_datetime(
+            payload.get("first_learned_at") or payload.get("firstLearnedAt")
+        ),
         last_reviewed_at=_parse_fsrs_datetime(
             payload.get("last_reviewed_at") or payload.get("lastReviewedAt")
         ),

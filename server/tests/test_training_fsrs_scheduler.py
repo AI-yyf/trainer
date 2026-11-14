@@ -4,7 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.training.fsrs_scheduler import FSRSTrainerCardScheduler, TrainingRating
+from app.training.fsrs_scheduler import (
+    FSRSTrainerCardScheduler,
+    TrainingRating,
+    card_state_from_payload,
+    card_state_to_payload,
+)
 
 
 def test_process_review_reports_elapsed_time_before_refresh() -> None:
@@ -18,3 +23,22 @@ def test_process_review_reports_elapsed_time_before_refresh() -> None:
 
     assert result.elapsed_days == pytest.approx(2.0, abs=0.05)
     assert result.new_interval >= 0
+
+
+def test_first_recall_uses_recorded_learning_time_after_reload(monkeypatch) -> None:
+    monkeypatch.setenv("TRAINER_TEST_NOW", "2026-11-01T09:00:00Z")
+    state = FSRSTrainerCardScheduler().create_card("practice-card", "tuple unpacking")
+    state.first_learned_at = state.created_at
+    payload = card_state_to_payload(state)
+    assert payload["reps"] == 0
+    assert payload["last_reviewed_at"] is None
+
+    monkeypatch.setenv("TRAINER_TEST_NOW", "2026-11-02T09:00:00Z")
+    restored = card_state_from_payload(payload)
+    assert restored is not None
+    scheduler = FSRSTrainerCardScheduler()
+    scheduler.load_card_states([restored])
+    review = scheduler.process_review("practice-card", TrainingRating.GOOD)
+
+    assert review.elapsed_days == pytest.approx(1.0)
+    assert review.reps == 1

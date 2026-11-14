@@ -483,10 +483,10 @@ def test_theory_drill_answer_records_comprehension_not_delayed_recall(tmp_path) 
         assert dimensions["delayed_recall"]["state"] == "not_verified"
 
 
-def test_attempt_store_marks_no_hint_as_none_not_independent(tmp_path) -> None:
+def test_attempt_store_keeps_unrecorded_assistance_unknown(tmp_path) -> None:
     store = AttemptStore(tmp_path / "attempts.db")
     attempt = store.start_attempt(workspace_id="ws", card_id="card")
-    assert attempt["assistance_level"] == "none"
+    assert attempt["assistance_level"] == "unknown"
 
     evidence = store.record_evidence(
         attempt_id=attempt["attempt_id"],
@@ -494,6 +494,6 @@ def test_attempt_store_marks_no_hint_as_none_not_independent(tmp_path) -> None:
         result="passed",
     )
     assert evidence is not None
-    assert evidence["assistance_level"] == "none"
+    assert evidence["assistance_level"] == "unknown"
     projected = project_skills([evidence])["implementation"]
-    assert projected["state"] == "independent"
+    assert projected["state"] == "not_verified"
