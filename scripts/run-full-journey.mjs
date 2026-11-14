@@ -487,7 +487,12 @@ try {
     const feedback = {
       summary: gradeResult.report.summary,
       next_step: gradeResult.report.next_step,
-      checks: gradeResult.report.dynamic_checks,
+      checks: [
+        ...(gradeResult.report.static_checks ?? []).filter((check) => check.status === "failed"),
+        ...(gradeResult.report.dynamic_checks ?? []),
+        ...(gradeResult.report.semantic_checks ?? []).filter((check) =>
+          check.status === "failed" && check.id !== "training-acceptance"),
+      ],
     };
     assistance.push({ type: "grader_feedback", feedback });
     if (hint) assistance.push({ type: "card_hint", text: hint });
