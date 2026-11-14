@@ -40,7 +40,7 @@ try {
     cases.push(await verifyManualNoticePreserved(page, previewUrl));
     cases.push(await verifyStreamStartClearsRecoveredNotice(page, previewUrl));
     cases.push(await verifyRestoreTrainingView(page, previewUrl));
-    cases.push(await verifyRestoreResourcesSandboxPreview(page, previewUrl));
+    cases.push(await verifyRestoreResourcesSandboxContext(page, previewUrl));
     cases.push(await verifyPlanFirstViewport(page, previewUrl));
 
     console.log(
@@ -596,49 +596,30 @@ async function verifyRestoreTrainingView(page, previewUrl) {
   };
 }
 
-async function verifyRestoreResourcesSandboxPreview(page, previewUrl) {
+async function verifyRestoreResourcesSandboxContext(page, previewUrl) {
   await resetPreviewPage(page, previewUrl);
+  const sandboxPath = "/workspace/server/app/research/web_search.py";
+  const previewPath = "/preview/resources/web-search";
   await injectPreviewHostMessage(page, {
     type: "ui/restoreView",
     payload: {
       activeView: "resources",
       resourceSurface: "sandbox",
       focusArea: "research sandbox",
-      sandboxPath: "/workspace/server/app/research/web_search.py",
-      previewPath: "/preview/resources/web-search",
+      sandboxPath,
+      previewPath,
       latestSummary: "Preview the resource-linked sandbox before reusing it.",
     },
   });
-  await page.waitForSelector(".resources-pane", { timeout: waitTimeoutMs });
-  const surface = await readResourcesRestoreSurface(page);
-  assertEqual(
-    surface.heading,
-    "Unified library",
-    "Restoring a resources view should land on the resources library heading.",
-  );
-  assertEqual(
-    surface.cardTitle,
-    "Sandbox context restored",
-    "Restoring a sandbox preview should surface the restored sandbox title.",
-  );
-  assertEqual(
-    surface.cardDetail,
-    "/preview/resources/web-search",
-    "Restoring a sandbox preview should surface the preview path as the first visible detail.",
-  );
-  assertIncludes(
-    surface.cardMeta,
-    "research sandbox",
-    "Restoring a sandbox preview should keep the focus area visible in the spotlight meta.",
-  );
-  assertIncludes(
-    surface.cardMeta,
-    "/workspace/server/app/research/web_search.py",
-    "Restoring a sandbox preview should keep the sandbox path visible in the spotlight meta.",
-  );
+  const library = page.locator('.resources-pane [data-template="Library"]');
+  await library.getByRole("searchbox").waitFor({ timeout: waitTimeoutMs });
+  const libraryText = await library.innerText();
+  assertEqual(await page.locator(".resources-inline-context").count(), 0, "Restore should leave the library free of a sandbox banner.");
+  assertEqual(libraryText.includes(sandboxPath), false, "Restore should keep the sandbox path out of the library.");
+  assertEqual(libraryText.includes(previewPath), false, "Restore should keep the preview path out of the library.");
   return {
-    id: "restore-resources-sandbox-preview",
-    surface,
+    id: "restore-resources-sandbox-context",
+    librarySearchVisible: true,
   };
 }
 
@@ -771,22 +752,6 @@ async function readTrainingRestoreSurface(page) {
       cardTitle: normalize(currentCard?.querySelector("h2")?.textContent),
       cardDetail: normalize(phase?.querySelector('.message-markdown')?.textContent),
       cardMeta: focus?.getBoundingClientRect().height ? normalize(focus.textContent) : null,
-    };
-  });
-}
-
-async function readResourcesRestoreSurface(page) {
-  return await page.evaluate(() => {
-    const normalize = (value) => value?.replace(/\s+/g, " ").trim() ?? null;
-    const pane = document.querySelector(".resources-pane");
-    const spotlight = pane?.querySelector(".resources-inline-context");
-    return {
-      heading: normalize(pane?.querySelector(".workbench-pane__heading h2")?.textContent),
-      cardTitle: normalize(spotlight?.querySelector(".resources-inline-context__title")?.textContent),
-      cardDetail: normalize(
-        spotlight?.querySelector("p:not(.resources-inline-context__title):not(.resources-inline-context__meta)")?.textContent,
-      ),
-      cardMeta: normalize(spotlight?.querySelector(".resources-inline-context__meta")?.textContent),
     };
   });
 }
