@@ -177,6 +177,10 @@ def test_missing_assistance_is_unknown_and_never_advances_the_skill_ladder() -> 
             "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
             True, "independent", True, "passed", "controlled_check", "independent",
         ),
+        (
+            "def solve_queue(items: list[int]) -> float:\n    return float(len(items))\n",
+            True, "independent", True, "passed", "controlled_check", "independent",
+        ),
     ],
 )
 def test_training_verification_checks_the_persisted_contract(

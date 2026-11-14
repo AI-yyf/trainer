@@ -421,8 +421,13 @@ class EvaluationPipeline:
             return result
         for index, (actual, case) in enumerate(zip(values, contract.cases, strict=True), 1):
             expected = case.expected
-            if isinstance(expected, float) and type(actual) in {int, float}:
-                matches = math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-12)
+            if type(expected) in {int, float} and type(actual) in {int, float}:
+                matches = (
+                    actual == expected
+                    or (isinstance(expected, float) and math.isclose(
+                        actual, expected, rel_tol=1e-9, abs_tol=1e-12,
+                    ))
+                )
             else:
                 matches = type(actual) is type(expected) and actual == expected
             if not matches:
