@@ -120,8 +120,9 @@ def record_recall_evidence(
         result="passed" if correct else "failed",
         trust_level=trust_level,
         runner_version=(
-            "trainer-flashcard-semantic-v1" if assessment is not None
+            f"trainer-{source.replace('_', '-')}-semantic-v1" if assessment is not None
             else "trainer-flashcard-answer-key-v1" if source == "flashcard"
+            else "trainer-theory-drill-answer-key-v1" if source == "theory_drill"
             else f"trainer-{source}"
         ),
         limitations=(

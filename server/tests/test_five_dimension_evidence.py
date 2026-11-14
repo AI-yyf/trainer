@@ -578,6 +578,10 @@ def test_theory_drill_answer_records_comprehension_not_delayed_recall(tmp_path) 
         ).get("training_skill_projection", {}).get("dimensions", {})
         assert dimensions["comprehension"]["state"] == "not_verified"
         assert dimensions["delayed_recall"]["state"] == "not_verified"
+        attempts = runtime.attempt_store.list_attempts(workspace_id=workspace, card_id=theory_drill.id)
+        evidence = runtime.attempt_store.list_evidence(attempts[-1]["attempt_id"])[0]
+        assert evidence["runner_version"] == "trainer-theory-drill-answer-key-v1"
+        assert evidence["assistance_level"] == "unknown"
 
 
 def test_attempt_store_keeps_unrecorded_assistance_unknown(tmp_path) -> None:
