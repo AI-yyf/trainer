@@ -1281,30 +1281,31 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         if stream_call is None:
             raise RuntimeError("The configured agent provider does not support streaming.")
         try:
-            async for event in _iterate_provider_stream_with_cancellation(
+            async with aclosing(_iterate_provider_stream_with_cancellation(
                 stream_call(prepared_messages, None),
                 cancel_event,
-            ):
-                event_type = str(event.get("type") or "")
-                if event_type in {"delta", "text"}:
-                    chunk = str(event.get("delta") or event.get("chunk") or "")
-                    if chunk:
-                        emitted += chunk
-                        yield chunk
-                    continue
-                if event_type != "final":
-                    continue
-                final_content = _visible_model_text(event.get("content"))
-                if not final_content:
-                    continue
-                if not emitted:
-                    emitted = final_content
-                    yield final_content
-                elif final_content.startswith(emitted):
-                    suffix = final_content[len(emitted) :]
-                    if suffix:
+            )) as upstream:
+                async for event in upstream:
+                    event_type = str(event.get("type") or "")
+                    if event_type in {"delta", "text"}:
+                        chunk = str(event.get("delta") or event.get("chunk") or "")
+                        if chunk:
+                            emitted += chunk
+                            yield chunk
+                        continue
+                    if event_type != "final":
+                        continue
+                    final_content = _visible_model_text(event.get("content"))
+                    if not final_content:
+                        continue
+                    if not emitted:
                         emitted = final_content
-                        yield suffix
+                        yield final_content
+                    elif final_content.startswith(emitted):
+                        suffix = final_content[len(emitted) :]
+                        if suffix:
+                            emitted = final_content
+                            yield suffix
         except ProviderRuntimeResponseError as exc:
             if allow_local_empty_fallback and exc.provider_error_category in {
                 "empty_response",
@@ -4439,13 +4440,14 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         model = self._resolve_model(model)
         try:
             if self._plain_completion_uses_agent_binding():
-                async for chunk in self._completion_stream_via_agent_binding(
+                async with aclosing(self._completion_stream_via_agent_binding(
                     messages,  # type: ignore[arg-type]
                     temperature=temperature,
                     max_tokens=max_tokens,
                     cancel_event=cancel_event,
-                ):
-                    yield chunk
+                )) as upstream:
+                    async for chunk in upstream:
+                        yield chunk
                 return
             client = self._get_client()
             stream, _ = await _await_provider_stream_with_cancellation(
@@ -4582,22 +4584,23 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             )
             if self._plain_completion_uses_agent_binding():
                 raw_content = ""
-                async for chunk in self._completion_stream_via_agent_binding(
+                async with aclosing(self._completion_stream_via_agent_binding(
                     messages,
                     temperature=0.7,
                     max_tokens=max_tokens,
                     prefer_configured_output=True,
                     allow_local_empty_fallback=True,
-                ):
-                    raw_content += chunk
-                    reply_corruption_detail = _mixed_script_reply_corruption_detail(
-                        raw_content,
-                        message=message,
-                        response_language=response_language,
-                    )
-                    if reply_corruption_detail:
-                        self._record_reply_language_corruption(reply_corruption_detail)
-                        return
+                )) as upstream:
+                    async for chunk in upstream:
+                        raw_content += chunk
+                        reply_corruption_detail = _mixed_script_reply_corruption_detail(
+                            raw_content,
+                            message=message,
+                            response_language=response_language,
+                        )
+                        if reply_corruption_detail:
+                            self._record_reply_language_corruption(reply_corruption_detail)
+                            return
                 reply_corruption_detail = _mixed_script_reply_corruption_detail(
                     raw_content,
                     message=message,
@@ -4836,16 +4839,17 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 binding._max_tokens = call_max_tokens  # noqa: SLF001 - binding owns protocol payloads
                 try:
                     provider_obj.last_failure = None
-                    async for event in original_call_stream(prepared_messages, tools):
-                        # AgentLoop only forwards tool-capable text deltas when
-                        # the binding has explicitly identified them as
-                        # visible model output. Tool argument fragments remain
-                        # untouched and are handled by the binding's final
-                        # tool-call envelope.
-                        if tools and str(event.get("type") or "") in {"delta", "text"}:
-                            yield {**event, "safe_to_stream": True}
-                        else:
-                            yield event
+                    async with aclosing(original_call_stream(prepared_messages, tools)) as upstream:
+                        async for event in upstream:
+                            # AgentLoop only forwards tool-capable text deltas when
+                            # the binding has explicitly identified them as
+                            # visible model output. Tool argument fragments remain
+                            # untouched and are handled by the binding's final
+                            # tool-call envelope.
+                            if tools and str(event.get("type") or "") in {"delta", "text"}:
+                                yield {**event, "safe_to_stream": True}
+                            else:
+                                yield event
                 except Exception as exc:
                     record_transport_failure(exc)
                     raise
@@ -5736,78 +5740,134 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     return ""
                 return available[len(streamed_visible_text) :]
 
-            async for event in loop.run_stream(messages):
-                if self._agent_provider_context_budget_exhausted(provider_obj):
-                    yield {
-                        "type": "final",
-                        "content": self._context_budget_status_reply(response_language),
-                        "summary": None,
-                        "next_step": None,
-                        "stop_reason": "context_budget_exhausted",
-                        "fell_back": False,
-                        **attachment_delivery,
-                    }
-                    return
-                event_type = str(event.get("type") or "")
-                if event_type == "tool_call" or event_type == "tool_result":
-                    tool_events.append(dict(event))
-                if event_type == "text":
-                    delta = str(event.get("delta") or "")
-                    buffered_text += delta
-                    if event.get("safe_to_stream") is True:
-                        # Native tool-capable streams can expose visible model
-                        # text before the tool decision arrives. Keep the
-                        # guardrails that strip internal metadata and reject
-                        # mixed-script corruption, but do not wait for the
-                        # complete tool loop before forwarding a valid prefix.
-                        visible = _strip_internal_coach_meta(buffered_text)
-                        if (
-                            visible == _visible_model_text(buffered_text).strip()
-                            and _strip_short_cyrillic_noise(visible, message=message) == visible
-                            and not _mixed_script_reply_corruption_detail(
-                                visible,
-                                message=message,
-                                response_language=response_language,
-                            )
-                            and visible.startswith(streamed_visible_text)
-                        ):
-                            safe_delta = visible[len(streamed_visible_text) :]
-                            if safe_delta:
-                                streamed_visible_text = visible
-                                yield {
-                                    "type": "text",
-                                    "delta": safe_delta,
-                                    "safe_to_stream": True,
-                                }
-                        continue
-                    safe_delta = safe_direct_reply_prefix()
-                    if safe_delta:
-                        streamed_visible_text += safe_delta
+            async with aclosing(loop.run_stream(messages)) as upstream:
+                async for event in upstream:
+                    if self._agent_provider_context_budget_exhausted(provider_obj):
                         yield {
-                            "type": "text",
-                            "delta": safe_delta,
-                            "safe_to_stream": True,
+                            "type": "final",
+                            "content": self._context_budget_status_reply(response_language),
+                            "summary": None,
+                            "next_step": None,
+                            "stop_reason": "context_budget_exhausted",
+                            "fell_back": False,
+                            **attachment_delivery,
                         }
-                    continue
-                if event_type == "final":
-                    if selected_skills:
-                        # 执行结果回流 (streaming path): usage facts → registry
-                        # stats + memory highlight, exactly like the buffered path.
-                        try:
-                            from ..skills.runtime import record_skill_usage
+                        return
+                    event_type = str(event.get("type") or "")
+                    if event_type == "tool_call" or event_type == "tool_result":
+                        tool_events.append(dict(event))
+                    if event_type == "text":
+                        delta = str(event.get("delta") or "")
+                        buffered_text += delta
+                        if event.get("safe_to_stream") is True:
+                            # Native tool-capable streams can expose visible model
+                            # text before the tool decision arrives. Keep the
+                            # guardrails that strip internal metadata and reject
+                            # mixed-script corruption, but do not wait for the
+                            # complete tool loop before forwarding a valid prefix.
+                            visible = _strip_internal_coach_meta(buffered_text)
+                            if (
+                                visible == _visible_model_text(buffered_text).strip()
+                                and _strip_short_cyrillic_noise(visible, message=message) == visible
+                                and not _mixed_script_reply_corruption_detail(
+                                    visible,
+                                    message=message,
+                                    response_language=response_language,
+                                )
+                                and visible.startswith(streamed_visible_text)
+                            ):
+                                safe_delta = visible[len(streamed_visible_text) :]
+                                if safe_delta:
+                                    streamed_visible_text = visible
+                                    yield {
+                                        "type": "text",
+                                        "delta": safe_delta,
+                                        "safe_to_stream": True,
+                                    }
+                            continue
+                        safe_delta = safe_direct_reply_prefix()
+                        if safe_delta:
+                            streamed_visible_text += safe_delta
+                            yield {
+                                "type": "text",
+                                "delta": safe_delta,
+                                "safe_to_stream": True,
+                            }
+                        continue
+                    if event_type == "final":
+                        if selected_skills:
+                            # 执行结果回流 (streaming path): usage facts → registry
+                            # stats + memory highlight, exactly like the buffered path.
+                            try:
+                                from ..skills.runtime import record_skill_usage
 
-                            record_skill_usage(
-                                runtime_obj,
-                                workspace_id,
-                                session_id,
-                                selected_skills,
-                                stop_reason=str(event.get("stop_reason") or ""),
-                                final_content=str(event.get("content") or ""),
+                                record_skill_usage(
+                                    runtime_obj,
+                                    workspace_id,
+                                    session_id,
+                                    selected_skills,
+                                    stop_reason=str(event.get("stop_reason") or ""),
+                                    final_content=str(event.get("content") or ""),
+                                    tool_events=tool_events,
+                                )
+                            except Exception:
+                                logger.warning("skill_usage_record_failed", exc_info=True)
+                        if event.get("stop_reason") == "provider_error":
+                            transport_failure = self._agent_provider_failure_result(
+                                provider_obj,
+                                response_language=response_language,
+                                attachment_delivery=attachment_delivery,
+                                steps=[],
                                 tool_events=tool_events,
                             )
-                        except Exception:
-                            logger.warning("skill_usage_record_failed", exc_info=True)
-                    if event.get("stop_reason") == "provider_error":
+                            if transport_failure is not None:
+                                yield {"type": "final", **transport_failure}
+                                return
+                        if not str(event.get("content") or "").strip():
+                            event = {**event, "content": buffered_text}
+                        event = await self._recover_agentic_stream_final_event(
+                            event,
+                            profile=profile,
+                            message=message,
+                            current_file=current_file,
+                            response_language=response_language,
+                            answer_mode=answer_mode,
+                            coach_context=coach_context,
+                            history=history,
+                            tool_events=tool_events,
+                        )
+                        auto_events = await _maybe_auto_verify_practice_current_file(
+                            registry=registry,
+                            context=context,
+                            tool_events=tool_events,
+                            message=message,
+                            content=str(event.get("content") or ""),
+                            current_file=current_file,
+                            coach_context=coach_context,
+                        )
+                        for auto_event in auto_events:
+                            tool_events.append(auto_event)
+                            yield auto_event
+                        event = self._visible_agentic_final_event(
+                            event,
+                            profile=profile,
+                            message=message,
+                            current_file=current_file,
+                            response_language=response_language,
+                            answer_mode=answer_mode,
+                            coach_context=coach_context,
+                            tool_events=tool_events,
+                        )
+                    elif event_type == "error":
+                        # AgentLoop emits a recovery final after provider errors.
+                        # Mark this frame explicitly so SSE consumers do not
+                        # mistake it for a terminal stream failure.
+                        event = {
+                            **event,
+                            "recoverable": event.get("recoverable", True),
+                            "terminal": event.get("terminal", False),
+                            "degraded": event.get("degraded", True),
+                        }
                         transport_failure = self._agent_provider_failure_result(
                             provider_obj,
                             response_language=response_language,
@@ -5816,71 +5876,16 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                             tool_events=tool_events,
                         )
                         if transport_failure is not None:
-                            yield {"type": "final", **transport_failure}
-                            return
-                    if not str(event.get("content") or "").strip():
-                        event = {**event, "content": buffered_text}
-                    event = await self._recover_agentic_stream_final_event(
-                        event,
-                        profile=profile,
-                        message=message,
-                        current_file=current_file,
-                        response_language=response_language,
-                        answer_mode=answer_mode,
-                        coach_context=coach_context,
-                        history=history,
-                        tool_events=tool_events,
-                    )
-                    auto_events = await _maybe_auto_verify_practice_current_file(
-                        registry=registry,
-                        context=context,
-                        tool_events=tool_events,
-                        message=message,
-                        content=str(event.get("content") or ""),
-                        current_file=current_file,
-                        coach_context=coach_context,
-                    )
-                    for auto_event in auto_events:
-                        tool_events.append(auto_event)
-                        yield auto_event
-                    event = self._visible_agentic_final_event(
-                        event,
-                        profile=profile,
-                        message=message,
-                        current_file=current_file,
-                        response_language=response_language,
-                        answer_mode=answer_mode,
-                        coach_context=coach_context,
-                        tool_events=tool_events,
-                    )
-                elif event_type == "error":
-                    # AgentLoop emits a recovery final after provider errors.
-                    # Mark this frame explicitly so SSE consumers do not
-                    # mistake it for a terminal stream failure.
-                    event = {
-                        **event,
-                        "recoverable": event.get("recoverable", True),
-                        "terminal": event.get("terminal", False),
-                        "degraded": event.get("degraded", True),
-                    }
-                    transport_failure = self._agent_provider_failure_result(
-                        provider_obj,
-                        response_language=response_language,
-                        attachment_delivery=attachment_delivery,
-                        steps=[],
-                        tool_events=tool_events,
-                    )
-                    if transport_failure is not None:
-                        event = {
-                            "type": "error",
-                            "detail": transport_failure["content"],
-                            "category": transport_failure["stop_reason"],
-                            "retryable": transport_failure["retryable"],
-                            "recoverable": True,
-                            "terminal": False,
-                            "degraded": True,
-                        }
-                yield event
+                            event = {
+                                "type": "error",
+                                "detail": transport_failure["content"],
+                                "category": transport_failure["stop_reason"],
+                                "retryable": transport_failure["retryable"],
+                                "recoverable": True,
+                                "terminal": False,
+                                "degraded": True,
+                            }
+                    yield event
         except ContextBudgetExhaustedError:
             yield {
                 "type": "final",
@@ -6367,6 +6372,7 @@ async def _provider_service_coaching_reply_stream(
         history=history,
     )
     model = self._resolve_model()
+    yielded_visible = False
     try:
         messages, max_tokens = self._prepare_context_budget(
             messages,
@@ -6379,43 +6385,43 @@ async def _provider_service_coaching_reply_stream(
         if self._plain_completion_uses_agent_binding():
             raw_content = ""
             pending_visible = ""
-            yielded_visible = False
             holdback_chars = _stream_holdback_chars(response_language)
-            async for chunk in self._completion_stream_via_agent_binding(
+            async with aclosing(self._completion_stream_via_agent_binding(
                 messages,
                 temperature=0.7,
                 max_tokens=max_tokens,
                 prefer_configured_output=True,
                 allow_local_empty_fallback=True,
                 cancel_event=cancel_event,
-            ):
-                raw_content += chunk
-                pending_visible += chunk
-                reply_corruption_detail = _mixed_script_reply_corruption_detail(
-                    raw_content,
-                    message=message,
-                    response_language=response_language,
-                )
-                if reply_corruption_detail:
-                    self._record_reply_language_corruption(reply_corruption_detail)
-                    if not yielded_visible:
-                        recovery_override = _build_language_corruption_recovery_override(
-                            message,
-                            current_file=current_file,
-                            coach_context=coach_context,
-                            response_language=response_language,
-                        )
-                        if isinstance(recovery_override, dict):
-                            reply_override = str(recovery_override.get("reply") or "").strip()
-                            if reply_override:
-                                yield reply_override
-                    return
-                if len(pending_visible) > holdback_chars:
-                    safe_prefix = pending_visible[:-holdback_chars]
-                    pending_visible = pending_visible[-holdback_chars:]
-                    if safe_prefix:
-                        yielded_visible = True
-                        yield safe_prefix
+            )) as upstream:
+                async for chunk in upstream:
+                    raw_content += chunk
+                    pending_visible += chunk
+                    reply_corruption_detail = _mixed_script_reply_corruption_detail(
+                        raw_content,
+                        message=message,
+                        response_language=response_language,
+                    )
+                    if reply_corruption_detail:
+                        self._record_reply_language_corruption(reply_corruption_detail)
+                        if not yielded_visible:
+                            recovery_override = _build_language_corruption_recovery_override(
+                                message,
+                                current_file=current_file,
+                                coach_context=coach_context,
+                                response_language=response_language,
+                            )
+                            if isinstance(recovery_override, dict):
+                                reply_override = str(recovery_override.get("reply") or "").strip()
+                                if reply_override:
+                                    yield reply_override
+                        return
+                    if len(pending_visible) > holdback_chars:
+                        safe_prefix = pending_visible[:-holdback_chars]
+                        pending_visible = pending_visible[-holdback_chars:]
+                        if safe_prefix:
+                            yielded_visible = True
+                            yield safe_prefix
             reply_corruption_detail = _mixed_script_reply_corruption_detail(
                 raw_content,
                 message=message,
@@ -6468,7 +6474,6 @@ async def _provider_service_coaching_reply_stream(
         )
         reasoning_filter = ReasoningBlockFilter()
         emitted_visible = False
-        yielded_visible = False
 
         def _normalize_stream_chunk(text: str) -> str:
             nonlocal emitted_visible
@@ -6484,43 +6489,44 @@ async def _provider_service_coaching_reply_stream(
         pending_visible = ""
         holdback_chars = _stream_holdback_chars(response_language)
         finish_reason: str | None = None
-        async for chunk in _iterate_provider_stream_with_cancellation(stream, cancel_event):
-            choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
-            candidate_finish_reason = getattr(choice, "finish_reason", None)
-            if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
-                finish_reason = candidate_finish_reason
-            delta = getattr(choice, "delta", None)
-            if delta is not None and getattr(delta, "content", None):
-                text = _normalize_stream_chunk(reasoning_filter.push(delta.content))
-                if not text:
-                    continue
-                raw_content += text
-                pending_visible += text
-                reply_corruption_detail = _mixed_script_reply_corruption_detail(
-                    raw_content,
-                    message=message,
-                    response_language=response_language,
-                )
-                if reply_corruption_detail:
-                    self._record_reply_language_corruption(reply_corruption_detail)
-                    if not yielded_visible:
-                        recovery_override = _build_language_corruption_recovery_override(
-                            message,
-                            current_file=current_file,
-                            coach_context=coach_context,
-                            response_language=response_language,
-                        )
-                        if isinstance(recovery_override, dict):
-                            reply_override = str(recovery_override.get("reply") or "").strip()
-                            if reply_override:
-                                yield reply_override
-                    return
-                if len(pending_visible) > holdback_chars:
-                    safe_prefix = pending_visible[:-holdback_chars]
-                    pending_visible = pending_visible[-holdback_chars:]
-                    if safe_prefix:
-                        yielded_visible = True
-                        yield safe_prefix
+        async with aclosing(_iterate_provider_stream_with_cancellation(stream, cancel_event)) as upstream:
+            async for chunk in upstream:
+                choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
+                candidate_finish_reason = getattr(choice, "finish_reason", None)
+                if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
+                    finish_reason = candidate_finish_reason
+                delta = getattr(choice, "delta", None)
+                if delta is not None and getattr(delta, "content", None):
+                    text = _normalize_stream_chunk(reasoning_filter.push(delta.content))
+                    if not text:
+                        continue
+                    raw_content += text
+                    pending_visible += text
+                    reply_corruption_detail = _mixed_script_reply_corruption_detail(
+                        raw_content,
+                        message=message,
+                        response_language=response_language,
+                    )
+                    if reply_corruption_detail:
+                        self._record_reply_language_corruption(reply_corruption_detail)
+                        if not yielded_visible:
+                            recovery_override = _build_language_corruption_recovery_override(
+                                message,
+                                current_file=current_file,
+                                coach_context=coach_context,
+                                response_language=response_language,
+                            )
+                            if isinstance(recovery_override, dict):
+                                reply_override = str(recovery_override.get("reply") or "").strip()
+                                if reply_override:
+                                    yield reply_override
+                        return
+                    if len(pending_visible) > holdback_chars:
+                        safe_prefix = pending_visible[:-holdback_chars]
+                        pending_visible = pending_visible[-holdback_chars:]
+                        if safe_prefix:
+                            yielded_visible = True
+                            yield safe_prefix
         tail = _normalize_stream_chunk(reasoning_filter.flush())
         if tail:
             raw_content += tail
@@ -6624,6 +6630,16 @@ async def _provider_service_coaching_reply_stream(
         yield self._context_budget_status_reply(response_language)
     except Exception as exc:
         category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
+        if yielded_visible and category in {"network", "timeout"}:
+            # The caller already has the visible prefix. End this turn as an
+            # interruption instead of appending a fallback to that prefix and
+            # committing a nominal assistant reply.
+            detail = (
+                "Provider connection interrupted."
+                if category == "network"
+                else "Provider stream timed out."
+            )
+            raise RuntimeError(detail) from exc
         provider_config = self._config or ProviderConfig(
             name="unspecified-provider",
             baseUrl="",

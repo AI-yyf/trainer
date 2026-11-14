@@ -111,7 +111,7 @@ class ErrorClassificationMixin:
         ):
             return ("timeout", True, status_code, False, None)
         if (
-            isinstance(error, (OSError, httpx.NetworkError))
+            isinstance(error, (OSError, httpx.NetworkError, httpx.RemoteProtocolError))
             or "connection refused" in lowered
             or "name or service not known" in lowered
         ):

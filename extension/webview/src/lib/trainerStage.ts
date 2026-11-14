@@ -6,7 +6,9 @@ export type TrainerStageKind =
   | "organize"
   | "cards"
   | "finalize"
-  | "think";
+  | "waiting"
+  | "responding"
+  | "interrupted";
 
 export type TrainerStage = {
   kind: TrainerStageKind;
@@ -22,7 +24,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "正在整理资料",
     cards: "正在生成训练卡",
     finalize: "正在整理回答",
-    think: "正在思考",
+    waiting: "等待模型响应",
+    responding: "正在回复",
+    interrupted: "回复未完成",
   },
   "en-US": {
     retrieve: "Searching resources",
@@ -30,7 +34,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organizing the library",
     cards: "Creating a training card",
     finalize: "Shaping the answer",
-    think: "Thinking",
+    waiting: "Waiting for the model",
+    responding: "Writing a reply",
+    interrupted: "Incomplete reply",
   },
   "es-ES": {
     retrieve: "Buscando recursos",
@@ -38,7 +44,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organizando la biblioteca",
     cards: "Creando una tarjeta",
     finalize: "Preparando la respuesta",
-    think: "Pensando",
+    waiting: "Esperando al modelo",
+    responding: "Redactando la respuesta",
+    interrupted: "Respuesta incompleta",
   },
   "fr-FR": {
     retrieve: "Recherche des ressources",
@@ -46,7 +54,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organisation de la bibliothèque",
     cards: "Création d'une carte",
     finalize: "Préparation de la réponse",
-    think: "Réflexion",
+    waiting: "En attente du modèle",
+    responding: "Rédaction de la réponse",
+    interrupted: "Réponse incomplète",
   },
   "de-DE": {
     retrieve: "Ressourcen werden durchsucht",
@@ -54,7 +64,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Bibliothek wird organisiert",
     cards: "Trainingskarte wird erstellt",
     finalize: "Antwort wird formuliert",
-    think: "Denkt nach",
+    waiting: "Wartet auf das Modell",
+    responding: "Antwort wird geschrieben",
+    interrupted: "Unvollständige Antwort",
   },
   "ja-JP": {
     retrieve: "資料を検索中",
@@ -62,7 +74,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "ライブラリを整理中",
     cards: "トレーニングカードを作成中",
     finalize: "回答を整えています",
-    think: "考えています",
+    waiting: "モデルの応答を待っています",
+    responding: "回答を作成中",
+    interrupted: "未完了の回答",
   },
   "ko-KR": {
     retrieve: "자료 검색 중",
@@ -70,7 +84,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "라이브러리 정리 중",
     cards: "트레이닝 카드 생성 중",
     finalize: "답변 정리 중",
-    think: "생각 중",
+    waiting: "모델 응답 대기 중",
+    responding: "답변 작성 중",
+    interrupted: "완료되지 않은 답변",
   },
   "pt-BR": {
     retrieve: "Buscando recursos",
@@ -78,7 +94,9 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organizando a biblioteca",
     cards: "Criando um cartão",
     finalize: "Preparando a resposta",
-    think: "Pensando",
+    waiting: "Aguardando o modelo",
+    responding: "Escrevendo a resposta",
+    interrupted: "Resposta incompleta",
   },
 };
 
@@ -112,7 +130,7 @@ const TOOL_STAGES: Record<string, TrainerStageKind> = {
 };
 
 export function trainerStageKindForTool(toolName: string | undefined): TrainerStageKind {
-  return TOOL_STAGES[String(toolName ?? "").trim()] ?? "think";
+  return TOOL_STAGES[String(toolName ?? "").trim()] ?? "waiting";
 }
 
 export function trainerStageLabel(kind: TrainerStageKind, language: ComposerLanguage): string {
@@ -125,8 +143,8 @@ type ActivityLike = {
 };
 
 /**
- * Prefer the currently running tool; once tools have finished, the model is
- * shaping the answer. An empty activity list is still a real "thinking" stage.
+ * Prefer the currently running tool and wait for a response when no known
+ * work has been reported.
  */
 export function currentTrainerStage(
   activities: readonly ActivityLike[] | undefined,
@@ -135,6 +153,6 @@ export function currentTrainerStage(
   const list = activities ?? [];
   const running = [...list].reverse().find((activity) => activity.status === "running");
   const latest = running ?? [...list].reverse().find((activity) => activity.status === "succeeded");
-  const kind = latest ? trainerStageKindForTool(latest.name) : "think";
+  const kind = latest ? trainerStageKindForTool(latest.name) : "waiting";
   return { kind, label: trainerStageLabel(kind, language) };
 }

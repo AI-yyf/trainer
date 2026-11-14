@@ -66,7 +66,7 @@ export function CoachWorkingIndicator({
 
   const label = stage?.label ?? COACH_WORKING_LABELS[language] ?? COACH_WORKING_LABELS["en-US"];
   const seconds = Math.floor(elapsedMs / 1000);
-  const stageKind = stage?.kind ?? "think";
+  const stageKind = stage?.kind ?? "waiting";
   const classes = [
     "coach-streaming-dots",
     "coach-working",

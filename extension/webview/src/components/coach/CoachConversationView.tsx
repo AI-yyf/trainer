@@ -8,7 +8,7 @@ import { useWorkbenchState } from "../../app/useWorkbenchState";
 import type { CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { AgentActivityStrip } from "./AgentActivityStripSmart";
 import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
-import { currentTrainerStage } from "../../lib/trainerStage";
+import { currentTrainerStage, trainerStageLabel } from "../../lib/trainerStage";
 import { CoachMessageBubble, type CoachMessageAction } from "./CoachMessageBubble";
 
 export interface StreamingMessageState {
@@ -93,6 +93,11 @@ function CoachConversationViewImpl({
   // stays put while the in-flight reply grows (DESIGN.md §3 R3).
   const storeStreamedContent = useWorkbenchState((state) => state.streaming.streamedContent);
   const storeStreamMessageId = useWorkbenchState((state) => state.streaming.streamMessageId);
+  const storeStreamIncomplete = useWorkbenchState((state) =>
+    !state.streaming.isStreaming && Boolean(state.streaming.streamError ||
+      state.streaming.completionStopReason === "cancelled" || state.streaming.reliabilityOutcome === "failure" ||
+      state.streaming.reliabilityOutcome === "timeout" || state.streaming.reliabilityOutcome === "cancelled"),
+  );
   const storeAgentActivity = useWorkbenchState((state) => state.streaming.agentActivity);
   const storeAgentStep = useWorkbenchState((state) => state.streaming.agentStep);
   const resolvedAgentActivity = liveContentFromStore ? storeAgentActivity : agentActivity;
@@ -118,7 +123,9 @@ function CoachConversationViewImpl({
     .filter(Boolean)
     .join(" ");
   const showHeader = Boolean(eyebrow || title || subtitle);
-  const hasMessages = messages.length > 0 || Boolean(streamingMessage);
+  const partialReply = liveContentFromStore && !streamingMessage && storeStreamIncomplete &&
+    Boolean(storeStreamMessageId && !storeStreamMessageId.startsWith("training_") && storeStreamedContent.trim());
+  const hasMessages = messages.length > 0 || Boolean(streamingMessage || partialReply);
 
   // One flat, append-only list. Keys are positional so the streaming slot and
   // the server-confirmed assistant message that later lands at the same index
@@ -136,27 +143,29 @@ function CoachConversationViewImpl({
       break;
     }
   }
-  if (streamingMessage) {
+  if (streamingMessage || partialReply) {
     items.push({
       key: items.length,
-      streaming: true,
+      streaming: Boolean(streamingMessage),
       isLatestAssistant: false,
       message: {
         // Canonical streaming bubble id: the webview-recovery contract and
         // host tooling locate the in-flight reply by it.
         id: "streaming",
-        role: streamingMessage.role ?? "assistant",
-        author: streamingMessage.author ?? "Trainer",
-        body: resolvedStreamingBody ?? streamingMessage.body,
-        timestamp: streamingMessage.timestamp ?? "Streaming...",
-        contextNote: streamingMessage.note,
+        role: streamingMessage?.role ?? "assistant",
+        author: streamingMessage?.author ?? "Trainer",
+        body: partialReply ? storeStreamedContent : resolvedStreamingBody ?? "",
+        timestamp: streamingMessage?.timestamp ?? "",
+        contextNote: streamingMessage?.note,
       },
     });
   }
   const streamingStripVisible = Boolean(
     streamingMessage && resolvedAgentActivity && resolvedAgentActivity.length > 0,
   );
-  const activeTrainerStage = currentTrainerStage(resolvedAgentActivity ?? [], language);
+  const activeTrainerStage = resolvedStreamingBody?.trim()
+    ? { kind: "responding" as const, label: trainerStageLabel("responding", language) }
+    : currentTrainerStage(resolvedAgentActivity, language);
 
   return (
     <Conversation className={classes} label={title}>
@@ -176,7 +185,7 @@ function CoachConversationViewImpl({
         }`}
       >
         {listHead}
-        {messages.length === 0 && !streamingMessage && emptyState ? emptyState : null}
+        {!hasMessages && emptyState ? emptyState : null}
 
         {items.map((item, itemIndex) => (
           <div
@@ -198,7 +207,7 @@ function CoachConversationViewImpl({
                 streaming={item.streaming}
                 isLatestAssistant={item.isLatestAssistant}
                 onArtifactOpen={onArtifactOpen}
-                onMessageAction={onMessageAction}
+                onMessageAction={partialReply && item.message.id === "streaming" ? undefined : onMessageAction}
                 pendingMessageAction={pendingMessageAction}
                 nextStepRequiresConfirmation={
                   item.isLatestAssistant || item.streaming
@@ -213,6 +222,10 @@ function CoachConversationViewImpl({
                       step={resolvedAgentStep}
                       language={language}
                     />
+                  ) : partialReply && item.message.id === "streaming" ? (
+                    <span className="message-bubble__assistant-time" data-partial-reply="true">
+                      {trainerStageLabel("interrupted", language)}
+                    </span>
                   ) : undefined
                 }
               >

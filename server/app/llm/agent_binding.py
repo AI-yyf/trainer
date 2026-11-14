@@ -42,7 +42,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable
+from contextlib import aclosing
 from inspect import isawaitable
 from typing import Any, cast
 from urllib.parse import quote
@@ -70,7 +71,7 @@ from .vision_payload import openai_responses_input_image_parts
 logger = logging.getLogger("trainer.llm.agent_binding")
 
 
-async def _iterate_and_close_provider_stream(stream: Any) -> AsyncIterator[Any]:
+async def _iterate_and_close_provider_stream(stream: Any) -> AsyncGenerator[Any, None]:
     """Consume a provider stream and explicitly release its HTTP response."""
     try:
         async for chunk in stream:
@@ -1058,21 +1059,25 @@ class ProviderAgentBinding:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         if self._protocol == "anthropic_messages":
-            async for event in self._anthropic_stream(messages, tools):
-                yield event
+            async with aclosing(self._anthropic_stream(messages, tools)) as upstream:
+                async for event in upstream:
+                    yield event
             return
         if self._protocol == "openai_responses":
-            async for event in self._openai_responses_stream(messages, tools):
-                yield event
+            async with aclosing(self._openai_responses_stream(messages, tools)) as upstream:
+                async for event in upstream:
+                    yield event
             return
         if self._protocol == "gemini_generate_content":
-            async for event in self._gemini_stream(messages, tools):
-                yield event
+            async with aclosing(self._gemini_stream(messages, tools)) as upstream:
+                async for event in upstream:
+                    yield event
             return
-        async for event in self._openai_chat_stream(messages, tools):
-            yield event
+        async with aclosing(self._openai_chat_stream(messages, tools)) as upstream:
+            async for event in upstream:
+                yield event
 
     # -- OpenAI Responses ---------------------------------------------------
 
@@ -1116,7 +1121,7 @@ class ProviderAgentBinding:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         client = self._provider_service._get_client()  # noqa: SLF001 - intentional
         instructions, input_items = _format_openai_responses_input(
             messages,
@@ -1264,7 +1269,7 @@ class ProviderAgentBinding:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         api_key, model = self._gemini_credentials()
         payload = self._apply_gemini_request_defaults(
             _format_gemini_payload(
@@ -1595,7 +1600,7 @@ class ProviderAgentBinding:
         tools: list[dict[str, Any]] | None,
         *,
         compatibility_thinking_disabled: bool = False,
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         client = self._provider_service._get_client()  # noqa: SLF001
         formatted = _format_openai_messages(
             messages,
@@ -1650,34 +1655,35 @@ class ProviderAgentBinding:
 
         tool_call_state: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
-        async for chunk in _iterate_and_close_provider_stream(stream):
-            choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
-            if choice is None:
-                continue
-            candidate_finish_reason = getattr(choice, "finish_reason", None)
-            if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
-                finish_reason = candidate_finish_reason
-            delta = getattr(choice, "delta", None)
-            if delta is None:
-                continue
-            piece = getattr(delta, "content", None)
-            if isinstance(piece, str) and piece:
-                visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
-                if visible_piece:
-                    text_buffer += visible_piece
-                    yield {"type": "delta", "delta": visible_piece}
-            for delta_call in getattr(delta, "tool_calls", []) or []:
-                index = int(getattr(delta_call, "index", 0) or 0)
-                slot = tool_call_state.setdefault(index, {"id": "", "name": "", "arguments": ""})
-                if getattr(delta_call, "id", None):
-                    slot["id"] = str(delta_call.id)
-                fn = getattr(delta_call, "function", None)
-                if fn is None:
+        async with aclosing(_iterate_and_close_provider_stream(stream)) as upstream:
+            async for chunk in upstream:
+                choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
+                if choice is None:
                     continue
-                if getattr(fn, "name", None):
-                    slot["name"] = str(fn.name)
-                if getattr(fn, "arguments", None):
-                    slot["arguments"] += str(fn.arguments)
+                candidate_finish_reason = getattr(choice, "finish_reason", None)
+                if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
+                    finish_reason = candidate_finish_reason
+                delta = getattr(choice, "delta", None)
+                if delta is None:
+                    continue
+                piece = getattr(delta, "content", None)
+                if isinstance(piece, str) and piece:
+                    visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
+                    if visible_piece:
+                        text_buffer += visible_piece
+                        yield {"type": "delta", "delta": visible_piece}
+                for delta_call in getattr(delta, "tool_calls", []) or []:
+                    index = int(getattr(delta_call, "index", 0) or 0)
+                    slot = tool_call_state.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                    if getattr(delta_call, "id", None):
+                        slot["id"] = str(delta_call.id)
+                    fn = getattr(delta_call, "function", None)
+                    if fn is None:
+                        continue
+                    if getattr(fn, "name", None):
+                        slot["name"] = str(fn.name)
+                    if getattr(fn, "arguments", None):
+                        slot["arguments"] += str(fn.arguments)
 
         tail = _normalize_stream_chunk(reasoning_filter.flush())
         if tail:
@@ -1830,7 +1836,7 @@ class ProviderAgentBinding:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         api_key, model = self._anthropic_credentials()
         payload = _format_anthropic_payload(
             messages,

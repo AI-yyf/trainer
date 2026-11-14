@@ -637,7 +637,9 @@ export function App() {
   });
   const [skillImportText, setSkillImportText] = useState("");
   const composerDeckRef = useRef<HTMLDivElement | null>(null);
-  const streamResumeDraftRef = useRef("");
+  const streamResumeDraftRef = useRef<{
+    text: string; scope?: string; attachments?: MessageAttachment[];
+  }>();
   const sendRecoveredPlanResumeRef = useRef<
     (action: "continue_step" | "clear_blocker") => void
   >(() => undefined);
@@ -5815,7 +5817,11 @@ export function App() {
       requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     };
     setLastTurnView(turnActiveView);
-    streamResumeDraftRef.current = text;
+    streamResumeDraftRef.current = effectiveStream ? {
+      text: draft.trim() || text,
+      scope: layout.composerDraftScope,
+      attachments,
+    } : undefined;
     // Local echo: the user's turn shows up instantly; the server-confirmed
     // copy lands at the same list position when the snapshot merges.
     appendOptimisticTurn(text);
@@ -8328,17 +8334,11 @@ export function App() {
     if (!streaming.isStreaming) {
       return;
     }
-    const resumeDraft = streamResumeDraftRef.current;
-    if (resumeDraft.trim() && !draft.trim()) {
-      // Restore the sent text only when the learner has not already started
-      // editing a new draft while the reply was in flight.
-      setComposerDraft(resumeDraft);
-    }
     postMessage({
       type: "session/cancelStreamMessage",
       payload: streaming.streamMessageId ? { messageId: streaming.streamMessageId } : undefined,
     });
-  }, [draft, setComposerDraft, streaming.isStreaming, streaming.streamMessageId]);
+  }, [streaming.isStreaming, streaming.streamMessageId]);
 
   const streamWasActiveRef = useRef(streaming.isStreaming);
   // §3.7 red line 5 (stay mode): the store owns the stay-send marker and the
@@ -8367,10 +8367,20 @@ export function App() {
   useEffect(() => {
     const wasActive = streamWasActiveRef.current;
     streamWasActiveRef.current = streaming.isStreaming;
-    if (wasActive && !streaming.isStreaming && streaming.completionStopReason !== "cancelled") {
-      streamResumeDraftRef.current = "";
+    if (wasActive && !streaming.isStreaming) {
+      const resumeDraft = streamResumeDraftRef.current;
+      streamResumeDraftRef.current = undefined;
+      if (
+        resumeDraft && resumeDraft.scope === layout.composerDraftScope &&
+        !draft.trim() && composerAttachments.length === 0 &&
+        (streaming.reliabilityOutcome === "failure" || streaming.reliabilityOutcome === "timeout" ||
+          streaming.completionStopReason === "cancelled" || isCoachCheckpointRecoveryState(streaming))
+      ) {
+        setComposerDraft(resumeDraft.text);
+        setComposerAttachments(resumeDraft.attachments ?? []);
+      }
     }
-  }, [streaming.completionStopReason, streaming.isStreaming]);
+  }, [composerAttachments.length, draft, layout.composerDraftScope, setComposerDraft, streaming]);
 
   const renderComposerAccessory = () => {
     if (!openMenu) {

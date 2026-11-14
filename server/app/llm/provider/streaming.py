@@ -6,6 +6,8 @@ import asyncio
 import logging
 from typing import Any
 
+from anyio import CancelScope
+
 logger = logging.getLogger(__name__)
 
 # Upstreams occasionally send finish_reason and then keep the HTTP stream open
@@ -108,9 +110,13 @@ async def _iterate_provider_stream_with_cancellation(
                     next_item.cancel()
                 if not cancellation.done():
                     cancellation.cancel()
-                await asyncio.gather(next_item, cancellation, return_exceptions=True)
+                # Starlette cancels the whole scope on disconnect. Join the
+                # cancelled read before closing the underlying iterator.
+                with CancelScope(shield=True):
+                    await asyncio.gather(next_item, cancellation, return_exceptions=True)
     finally:
-        await close_iterator()
+        with CancelScope(shield=True):
+            await close_iterator()
 
 
 async def _await_provider_stream_with_cancellation(
@@ -144,4 +150,5 @@ async def _await_provider_stream_with_cancellation(
             operation.cancel()
         if not cancellation.done():
             cancellation.cancel()
-        await asyncio.gather(operation, cancellation, return_exceptions=True)
+        with CancelScope(shield=True):
+            await asyncio.gather(operation, cancellation, return_exceptions=True)

@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -2168,7 +2169,7 @@ def build_core_router(
                     agent_context["workspace_id"] = workspace_id
                     agent_context["session_id"] = state.session_id
                     agent_context["stream_cancel_event"] = core.stream_cancellation_events.get(stream_id)
-                    async for event in coaching_service.coaching_reply_agentic_stream(
+                    async with aclosing(coaching_service.coaching_reply_agentic_stream(
                         profile,
                         request.message,
                         request.current_file.model_dump() if request.current_file else None,
@@ -2181,64 +2182,65 @@ def build_core_router(
                             state.snapshot.messages,
                             drop_latest_user=True,
                         ),
-                        ):
-                            if await stream_cancelled():
-                                async for _abort_frame in _abort_for_cancellation():
-                                    yield _abort_frame
-                                return
-                            event_type = str(event.get("type") or "")
-                            if event_type == "text":
-                                delta = str(event.get("delta") or "")
-                                if delta:
-                                    full_content += delta
-                                    token_count += 1
-                                    if event.get("safe_to_stream") is True and (
-                                        not core.requires_formal_plan_commit(request)
-                                        or core.formal_plan_commit_tool_succeeded(agent_tool_events)
+                        )) as upstream:
+                        async for event in upstream:
+                                if await stream_cancelled():
+                                    async for _abort_frame in _abort_for_cancellation():
+                                        yield _abort_frame
+                                    return
+                                event_type = str(event.get("type") or "")
+                                if event_type == "text":
+                                    delta = str(event.get("delta") or "")
+                                    if delta:
+                                        full_content += delta
+                                        token_count += 1
+                                        if event.get("safe_to_stream") is True and (
+                                            not core.requires_formal_plan_commit(request)
+                                            or core.formal_plan_commit_tool_succeeded(agent_tool_events)
+                                        ):
+                                            visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
+                                                pending_streamed_reply_content,
+                                                delta,
+                                                full_content,
+                                            )
+                                            if visible_delta:
+                                                streamed_reply_content += visible_delta
+                                                yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                                elif event_type == "tool_call":
+                                    agent_tool_events.append(dict(event))
+                                    yield core.stream_frame("tool_call", event, stream_id)
+                                elif event_type == "tool_result":
+                                    agent_tool_events.append(dict(event))
+                                    yield core.stream_frame("tool_result", event, stream_id)
+                                elif event_type == "step":
+                                    agent_steps.append(dict(event))
+                                    yield core.stream_frame("step", event, stream_id)
+                                elif event_type == "final":
+                                    final_content = str(event.get("content") or "")
+                                    if final_content:
+                                        full_content = final_content
+                                    agent_summary = event.get("summary")
+                                    agent_next_step = event.get("next_step")
+                                    agent_stop_reason = event.get("stop_reason")
+                                    agent_decision = event.get("decision")
+                                    agent_blocker = event.get("blocker")
+                                    agent_teaching_note = event.get("teaching_note")
+                                    agent_resume_thread = event.get("resume_thread")
+                                    agent_confidence = event.get("confidence")
+                                    agent_evidence = (
+                                        list(event.get("evidence") or [])
+                                        if isinstance(event.get("evidence"), list)
+                                        else None
+                                    )
+                                elif event_type == "error":
+                                    async for _abort_frame in _abort_fail_closed(
+                                        error_detail=redact_provider_error(
+                                            event.get("detail"),
+                                            api_key=getattr(coaching_service, "_api_key", None),
+                                        ),
                                     ):
-                                        visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                            pending_streamed_reply_content,
-                                            delta,
-                                            full_content,
-                                        )
-                                        if visible_delta:
-                                            streamed_reply_content += visible_delta
-                                            yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
-                            elif event_type == "tool_call":
-                                agent_tool_events.append(dict(event))
-                                yield core.stream_frame("tool_call", event, stream_id)
-                            elif event_type == "tool_result":
-                                agent_tool_events.append(dict(event))
-                                yield core.stream_frame("tool_result", event, stream_id)
-                            elif event_type == "step":
-                                agent_steps.append(dict(event))
-                                yield core.stream_frame("step", event, stream_id)
-                            elif event_type == "final":
-                                final_content = str(event.get("content") or "")
-                                if final_content:
-                                    full_content = final_content
-                                agent_summary = event.get("summary")
-                                agent_next_step = event.get("next_step")
-                                agent_stop_reason = event.get("stop_reason")
-                                agent_decision = event.get("decision")
-                                agent_blocker = event.get("blocker")
-                                agent_teaching_note = event.get("teaching_note")
-                                agent_resume_thread = event.get("resume_thread")
-                                agent_confidence = event.get("confidence")
-                                agent_evidence = (
-                                    list(event.get("evidence") or [])
-                                    if isinstance(event.get("evidence"), list)
-                                    else None
-                                )
-                            elif event_type == "error":
-                                async for _abort_frame in _abort_fail_closed(
-                                    error_detail=redact_provider_error(
-                                        event.get("detail"),
-                                        api_key=getattr(coaching_service, "_api_key", None),
-                                    ),
-                                ):
-                                    yield _abort_frame
-                                return
+                                        yield _abort_frame
+                                    return
                     if full_content:
                         full_content = coaching_service.finalize_coaching_reply(
                             full_content,
@@ -2303,7 +2305,7 @@ def build_core_router(
                     coach_turn = core.extract_coach_turn_payload(updated_coach_turn)
                 else:
                     try:
-                        async for chunk in coaching_service.coaching_reply_stream(
+                        async with aclosing(coaching_service.coaching_reply_stream(
                             profile,
                             request.message,
                             request.current_file.model_dump() if request.current_file else None,
@@ -2315,21 +2317,22 @@ def build_core_router(
                                 drop_latest_user=True,
                             ),
                             cancel_event=core.stream_cancellation_events.get(stream_id),
-                        ):
-                            if await stream_cancelled():
-                                async for _abort_frame in _abort_for_cancellation():
-                                    yield _abort_frame
-                                return
-                            full_content += chunk
-                            token_count += 1
-                            visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
-                                pending_streamed_reply_content,
-                                chunk,
-                                full_content,
-                            )
-                            if visible_chunk and not core.requires_formal_plan_commit(request):
-                                streamed_reply_content += visible_chunk
-                                yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
+                        )) as upstream:
+                            async for chunk in upstream:
+                                if await stream_cancelled():
+                                    async for _abort_frame in _abort_for_cancellation():
+                                        yield _abort_frame
+                                    return
+                                full_content += chunk
+                                token_count += 1
+                                visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
+                                    pending_streamed_reply_content,
+                                    chunk,
+                                    full_content,
+                                )
+                                if visible_chunk and not core.requires_formal_plan_commit(request):
+                                    streamed_reply_content += visible_chunk
+                                    yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
                     except Exception:
                         if not stream_recovery_requested or streamed_reply_content or full_content:
                             raise
@@ -3090,7 +3093,7 @@ def build_core_router(
                         agent_context["workspace_id"] = workspace_id
                         agent_context["session_id"] = state.session_id
                         agent_context["stream_cancel_event"] = core.stream_cancellation_events.get(stream_id)
-                        async for event in coaching_service.coaching_reply_agentic_stream(
+                        async with aclosing(coaching_service.coaching_reply_agentic_stream(
                             profile,
                             request.message,
                             request.current_file.model_dump() if request.current_file else None,
@@ -3107,66 +3110,67 @@ def build_core_router(
                                 state.snapshot.messages,
                                 drop_latest_user=True,
                             ),
-                        ):
-                            if await stream_cancelled():
-                                async for _abort_frame in _abort_for_cancellation():
-                                    yield _abort_frame
-                                return
-                            if not isinstance(event, dict):
-                                continue
-                            event_type = str(event.get("type") or "")
-                            if event_type == "text":
-                                delta = str(event.get("delta") or "")
-                                if delta:
-                                    full_content += delta
-                                    token_count += 1
-                                    if event.get("safe_to_stream") is True and (
-                                        not core.requires_formal_plan_commit(request)
-                                        or core.formal_plan_commit_tool_succeeded(agent_tool_events)
+                        )) as upstream:
+                            async for event in upstream:
+                                if await stream_cancelled():
+                                    async for _abort_frame in _abort_for_cancellation():
+                                        yield _abort_frame
+                                    return
+                                if not isinstance(event, dict):
+                                    continue
+                                event_type = str(event.get("type") or "")
+                                if event_type == "text":
+                                    delta = str(event.get("delta") or "")
+                                    if delta:
+                                        full_content += delta
+                                        token_count += 1
+                                        if event.get("safe_to_stream") is True and (
+                                            not core.requires_formal_plan_commit(request)
+                                            or core.formal_plan_commit_tool_succeeded(agent_tool_events)
+                                        ):
+                                            visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
+                                                pending_streamed_reply_content,
+                                                delta,
+                                                full_content,
+                                            )
+                                            if visible_delta:
+                                                streamed_reply_content += visible_delta
+                                                yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                                elif event_type == "tool_call":
+                                    agent_tool_events.append(dict(event))
+                                    yield core.stream_frame("tool_call", event, stream_id)
+                                elif event_type == "tool_result":
+                                    agent_tool_events.append(dict(event))
+                                    yield core.stream_frame("tool_result", event, stream_id)
+                                elif event_type == "step":
+                                    agent_steps.append(dict(event))
+                                    yield core.stream_frame("step", event, stream_id)
+                                elif event_type == "final":
+                                    final_content = str(event.get("content") or "")
+                                    if final_content:
+                                        full_content = final_content
+                                    agent_summary = event.get("summary")
+                                    agent_next_step = event.get("next_step")
+                                    agent_stop_reason = event.get("stop_reason")
+                                    agent_decision = event.get("decision")
+                                    agent_blocker = event.get("blocker")
+                                    agent_teaching_note = event.get("teaching_note")
+                                    agent_resume_thread = event.get("resume_thread")
+                                    agent_confidence = event.get("confidence")
+                                    agent_evidence = (
+                                        list(event.get("evidence") or [])
+                                        if isinstance(event.get("evidence"), list)
+                                        else None
+                                    )
+                                elif event_type == "error":
+                                    async for _abort_frame in _abort_fail_closed(
+                                        error_detail=redact_provider_error(
+                                            event.get("detail"),
+                                            api_key=getattr(coaching_service, "_api_key", None),
+                                        ),
                                     ):
-                                        visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                            pending_streamed_reply_content,
-                                            delta,
-                                            full_content,
-                                        )
-                                        if visible_delta:
-                                            streamed_reply_content += visible_delta
-                                            yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
-                            elif event_type == "tool_call":
-                                agent_tool_events.append(dict(event))
-                                yield core.stream_frame("tool_call", event, stream_id)
-                            elif event_type == "tool_result":
-                                agent_tool_events.append(dict(event))
-                                yield core.stream_frame("tool_result", event, stream_id)
-                            elif event_type == "step":
-                                agent_steps.append(dict(event))
-                                yield core.stream_frame("step", event, stream_id)
-                            elif event_type == "final":
-                                final_content = str(event.get("content") or "")
-                                if final_content:
-                                    full_content = final_content
-                                agent_summary = event.get("summary")
-                                agent_next_step = event.get("next_step")
-                                agent_stop_reason = event.get("stop_reason")
-                                agent_decision = event.get("decision")
-                                agent_blocker = event.get("blocker")
-                                agent_teaching_note = event.get("teaching_note")
-                                agent_resume_thread = event.get("resume_thread")
-                                agent_confidence = event.get("confidence")
-                                agent_evidence = (
-                                    list(event.get("evidence") or [])
-                                    if isinstance(event.get("evidence"), list)
-                                    else None
-                                )
-                            elif event_type == "error":
-                                async for _abort_frame in _abort_fail_closed(
-                                    error_detail=redact_provider_error(
-                                        event.get("detail"),
-                                        api_key=getattr(coaching_service, "_api_key", None),
-                                    ),
-                                ):
-                                    yield _abort_frame
-                                return
+                                        yield _abort_frame
+                                    return
                         if full_content:
                             full_content = coaching_service.finalize_coaching_reply(
                                 full_content,
@@ -3185,7 +3189,7 @@ def build_core_router(
                                 response_language=request.response_language,
                             )
                     else:
-                        async for chunk in coaching_service.coaching_reply_stream(
+                        async with aclosing(coaching_service.coaching_reply_stream(
                             profile,
                             request.message,
                             request.current_file.model_dump() if request.current_file else None,
@@ -3197,24 +3201,25 @@ def build_core_router(
                                 drop_latest_user=True,
                             ),
                             cancel_event=core.stream_cancellation_events.get(stream_id),
-                        ):
-                            if await stream_cancelled():
-                                async for _abort_frame in _abort_for_cancellation():
-                                    yield _abort_frame
-                                return
-                            delta = str(chunk or "")
-                            if not delta:
-                                continue
-                            full_content += delta
-                            token_count += 1
-                            visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                pending_streamed_reply_content,
-                                delta,
-                                full_content,
-                            )
-                            if visible_delta and not core.requires_formal_plan_commit(request):
-                                streamed_reply_content += visible_delta
-                                yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                        )) as upstream:
+                            async for chunk in upstream:
+                                if await stream_cancelled():
+                                    async for _abort_frame in _abort_for_cancellation():
+                                        yield _abort_frame
+                                    return
+                                delta = str(chunk or "")
+                                if not delta:
+                                    continue
+                                full_content += delta
+                                token_count += 1
+                                visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
+                                    pending_streamed_reply_content,
+                                    delta,
+                                    full_content,
+                                )
+                                if visible_delta and not core.requires_formal_plan_commit(request):
+                                    streamed_reply_content += visible_delta
+                                    yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                         stream_finalization = coaching_service.consume_stream_finalization()
                         if stream_finalization is not None:
                             full_content = stream_finalization[1]
@@ -3518,7 +3523,7 @@ def build_core_router(
                     agent_context["workspace_id"] = workspace_id
                     agent_context["session_id"] = state.session_id
                     agent_context["stream_cancel_event"] = core.stream_cancellation_events.get(stream_id)
-                    async for event in coaching_service.coaching_reply_agentic_stream(
+                    async with aclosing(coaching_service.coaching_reply_agentic_stream(
                         profile,
                         request.message,
                         request.current_file.model_dump() if request.current_file else None,
@@ -3533,64 +3538,65 @@ def build_core_router(
                             state.snapshot.messages,
                             drop_latest_user=True,
                         ),
-                        ):
-                            if await stream_cancelled():
-                                async for _abort_frame in _abort_for_cancellation():
-                                    yield _abort_frame
-                                return
-                            event_type = str(event.get("type") or "")
-                            if event_type == "text":
-                                delta = str(event.get("delta") or "")
-                                if delta:
-                                    full_content += delta
-                                    token_count += 1
-                                    if event.get("safe_to_stream") is True and (
-                                        not core.requires_formal_plan_commit(request)
-                                        or core.formal_plan_commit_tool_succeeded(agent_tool_events)
+                        )) as upstream:
+                        async for event in upstream:
+                                if await stream_cancelled():
+                                    async for _abort_frame in _abort_for_cancellation():
+                                        yield _abort_frame
+                                    return
+                                event_type = str(event.get("type") or "")
+                                if event_type == "text":
+                                    delta = str(event.get("delta") or "")
+                                    if delta:
+                                        full_content += delta
+                                        token_count += 1
+                                        if event.get("safe_to_stream") is True and (
+                                            not core.requires_formal_plan_commit(request)
+                                            or core.formal_plan_commit_tool_succeeded(agent_tool_events)
+                                        ):
+                                            visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
+                                                pending_streamed_reply_content,
+                                                delta,
+                                                full_content,
+                                            )
+                                            if visible_delta:
+                                                streamed_reply_content += visible_delta
+                                                yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                                elif event_type == "tool_call":
+                                    agent_tool_events.append(dict(event))
+                                    yield core.stream_frame("tool_call", event, stream_id)
+                                elif event_type == "tool_result":
+                                    agent_tool_events.append(dict(event))
+                                    yield core.stream_frame("tool_result", event, stream_id)
+                                elif event_type == "step":
+                                    agent_steps.append(dict(event))
+                                    yield core.stream_frame("step", event, stream_id)
+                                elif event_type == "final":
+                                    final_content = str(event.get("content") or "")
+                                    if final_content:
+                                        full_content = final_content
+                                    agent_summary = event.get("summary")
+                                    agent_next_step = event.get("next_step")
+                                    agent_stop_reason = event.get("stop_reason")
+                                    agent_decision = event.get("decision")
+                                    agent_blocker = event.get("blocker")
+                                    agent_teaching_note = event.get("teaching_note")
+                                    agent_resume_thread = event.get("resume_thread")
+                                    agent_confidence = event.get("confidence")
+                                    agent_evidence = (
+                                        list(event.get("evidence") or [])
+                                        if isinstance(event.get("evidence"), list)
+                                        else None
+                                    )
+                                elif event_type == "error":
+                                    async for _abort_frame in _abort_fail_closed(
+                                        error_detail=redact_provider_error(
+                                            event.get("detail"),
+                                            api_key=getattr(coaching_service, "_api_key", None),
+                                        ),
                                     ):
-                                        visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                            pending_streamed_reply_content,
-                                            delta,
-                                            full_content,
-                                        )
-                                        if visible_delta:
-                                            streamed_reply_content += visible_delta
-                                            yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
-                            elif event_type == "tool_call":
-                                agent_tool_events.append(dict(event))
-                                yield core.stream_frame("tool_call", event, stream_id)
-                            elif event_type == "tool_result":
-                                agent_tool_events.append(dict(event))
-                                yield core.stream_frame("tool_result", event, stream_id)
-                            elif event_type == "step":
-                                agent_steps.append(dict(event))
-                                yield core.stream_frame("step", event, stream_id)
-                            elif event_type == "final":
-                                final_content = str(event.get("content") or "")
-                                if final_content:
-                                    full_content = final_content
-                                agent_summary = event.get("summary")
-                                agent_next_step = event.get("next_step")
-                                agent_stop_reason = event.get("stop_reason")
-                                agent_decision = event.get("decision")
-                                agent_blocker = event.get("blocker")
-                                agent_teaching_note = event.get("teaching_note")
-                                agent_resume_thread = event.get("resume_thread")
-                                agent_confidence = event.get("confidence")
-                                agent_evidence = (
-                                    list(event.get("evidence") or [])
-                                    if isinstance(event.get("evidence"), list)
-                                    else None
-                                )
-                            elif event_type == "error":
-                                async for _abort_frame in _abort_fail_closed(
-                                    error_detail=redact_provider_error(
-                                        event.get("detail"),
-                                        api_key=getattr(coaching_service, "_api_key", None),
-                                    ),
-                                ):
-                                    yield _abort_frame
-                                return
+                                        yield _abort_frame
+                                    return
                     if full_content:
                         full_content = coaching_service.finalize_coaching_reply(
                             full_content,
@@ -3649,7 +3655,7 @@ def build_core_router(
                     coach_turn = core.extract_coach_turn_payload(updated_coach_turn)
                 else:
                     try:
-                        async for chunk in coaching_service.coaching_reply_stream(
+                        async with aclosing(coaching_service.coaching_reply_stream(
                             profile,
                             request.message,
                             request.current_file.model_dump() if request.current_file else None,
@@ -3661,21 +3667,22 @@ def build_core_router(
                                 drop_latest_user=True,
                             ),
                             cancel_event=core.stream_cancellation_events.get(stream_id),
-                        ):
-                            if await stream_cancelled():
-                                async for _abort_frame in _abort_for_cancellation():
-                                    yield _abort_frame
-                                return
-                            full_content += chunk
-                            token_count += 1
-                            visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
-                                pending_streamed_reply_content,
-                                chunk,
-                                full_content,
-                            )
-                            if visible_chunk and not core.requires_formal_plan_commit(request):
-                                streamed_reply_content += visible_chunk
-                                yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
+                        )) as upstream:
+                            async for chunk in upstream:
+                                if await stream_cancelled():
+                                    async for _abort_frame in _abort_for_cancellation():
+                                        yield _abort_frame
+                                    return
+                                full_content += chunk
+                                token_count += 1
+                                visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
+                                    pending_streamed_reply_content,
+                                    chunk,
+                                    full_content,
+                                )
+                                if visible_chunk and not core.requires_formal_plan_commit(request):
+                                    streamed_reply_content += visible_chunk
+                                    yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
                     except Exception:
                         if not stream_recovery_requested or streamed_reply_content or full_content:
                             raise

@@ -51,8 +51,12 @@ const realApiKey = process.env.PROBE_PROVIDER_API_KEY ?? "";
 const realModel = process.env.PROBE_PROVIDER_MODEL ?? "MiniMax-M3.1-Flash";
 const usingRealProvider = Boolean(realBaseUrl && realApiKey);
 const recallSourceDir = process.env.TRAINER_VISUAL_RECALL_SOURCE_DIR?.trim();
+const checkStreamRecovery = process.env.TRAINER_VISUAL_STREAM_RECOVERY === "1";
 if (recallSourceDir && !usingRealProvider) {
   throw new Error("The scheduled-recall visual journey requires the real provider.");
+}
+if (checkStreamRecovery && usingRealProvider) {
+  throw new Error("The stream recovery probe needs a local upstream whose connection the test can interrupt.");
 }
 let recallSource;
 if (recallSourceDir) {
@@ -75,6 +79,17 @@ const STUB_REPLY = [
 
 let stubServer = null;
 let stubBaseUrl = "";
+const interruptPrompt = "请讲解这个代码示例，保留空行、公式和表格。";
+const interruptPrefix = [
+  "代码示例包含两个步骤。",
+  "```python\nfirst = 1\n\nsecond = first + 1\n```",
+  "其中 $x + 1$ 对应第二步。",
+  "| 步骤 | 值 |\n| --- | --- |\n| 一 | 1 |\n| 二 | 2 |",
+  "更多说明会单独列出。".repeat(20),
+].join("\n\n");
+const recoveryPrompt = "请继续讲解第二步，给出一个新的小例子。";
+const recoveryReply = "第二步使用第一步的结果。例如第一步得到 3，第二步得到 4。";
+const heldStreams = [];
 function startStubProvider() {
   stubServer = http.createServer((request, response) => {
     const url = request.url ?? "";
@@ -91,21 +106,38 @@ function startStubProvider() {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
-      let stream = false;
+      let body;
       try {
-        const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-        stream = Boolean(body?.stream);
-      } catch { /* default to non-stream */ }
+        body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+      } catch (error) {
+        response.writeHead(400);
+        response.end(String(error));
+        return;
+      }
       const created = Math.floor(Date.now() / 1000);
-      if (stream) {
+      const userText = JSON.stringify(body?.messages?.findLast((message) => message.role === "user")?.content ?? "");
+      const holdOpen = checkStreamRecovery && body?.stream && userText.includes(interruptPrompt);
+      const reply = holdOpen ? interruptPrefix : userText.includes(recoveryPrompt) ? recoveryReply : STUB_REPLY;
+      if (body?.stream) {
         response.writeHead(200, { "content-type": "text/event-stream" });
         const delta = {
           id: "visual-stub-chunk",
           object: "chat.completion.chunk",
           created,
           model: "structural-stub",
-          choices: [{ index: 0, delta: { content: STUB_REPLY }, finish_reason: null }],
+          choices: [{ index: 0, delta: { content: reply }, finish_reason: null }],
         };
+        if (holdOpen) {
+          const held = { response, closed: false, initialContentSent: false };
+          heldStreams.push(held);
+          response.once("close", () => { held.closed = true; });
+          // Split the fence, its blank line, the formula and the table across SSE events.
+          for (const content of reply.match(/.{1,23}|\n/gu)) {
+            response.write(`data: ${JSON.stringify({ ...delta, choices: [{ index: 0, delta: { content }, finish_reason: null }] })}\n\n`);
+          }
+          held.initialContentSent = true;
+          return;
+        }
         response.write(`data: ${JSON.stringify(delta)}\n\n`);
         response.write(
           `data: ${JSON.stringify({
@@ -125,7 +157,7 @@ function startStubProvider() {
           created,
           model: "structural-stub",
           choices: [
-            { index: 0, message: { role: "assistant", content: STUB_REPLY }, finish_reason: "stop" },
+            { index: 0, message: { role: "assistant", content: reply }, finish_reason: "stop" },
           ],
           usage: { prompt_tokens: 24, completion_tokens: 96, total_tokens: 120 },
         }),
@@ -141,6 +173,7 @@ function startStubProvider() {
 }
 async function stopStubProvider() {
   if (!stubServer) return;
+  for (const { response } of heldStreams) response.destroy();
   const server = stubServer;
   stubServer = null;
   await new Promise((done) => server.close(() => done()));
@@ -348,6 +381,12 @@ async function activate() {
       answerMode: "coach-first",
     });
     report.steps.push({ step: "coach-settings", ok: Boolean(settings && settings.ok) });
+    if (process.env.TRAINER_VISUAL_STREAM_RECOVERY === "1") {
+      const state = target.exports.getDebugState();
+      const dataDir = state.bootstrap?.memory?.workspace?.resourceSandbox?.effectivePath;
+      if (!dataDir) throw new Error("Missing the isolated database for stream recovery.");
+      report.steps.push({ step: "stream-database", ok: true, database: path.join(dataDir, "trainer.sqlite3") });
+    }
     if (process.env.FJ_VISUAL_IMPLEMENTATION) {
       const focus = "PPO 裁剪目标";
       const generate = () => vscode.commands.executeCommand("trainer.training.generateCard", {
@@ -709,6 +748,105 @@ async function main() {
       facts: mathTwinFacts,
     });
 
+    if (checkStreamRecovery) {
+      const databasePath = driverReport.steps.find((step) => step.step === "stream-database").database;
+      const readTurns = () => {
+        const database = new DatabaseSync(databasePath, { readOnly: true });
+        try {
+          return database.prepare("SELECT payload FROM sessions").all()
+            .map(({ payload }) => JSON.parse(payload).snapshot.messages)
+            .find((messages) => messages.some((message) => message.content === prompt)) ?? [];
+        } finally {
+          database.close();
+        }
+      };
+      const waitFor = async (predicate, description) => {
+        const deadline = Date.now() + 15_000;
+        while (!await predicate()) {
+          if (Date.now() > deadline) throw new Error(`Did not observe ${description}.`);
+          await page.waitForTimeout(150);
+        }
+      };
+      const send = async (text) => {
+        await composer.fill(text);
+        await composer.press("Enter");
+      };
+      const stop = frame.locator(".composer__send.is-busy");
+      const live = frame.locator('[data-message-id="streaming"] .message-markdown').first();
+      const partial = frame.locator('[data-template="Conversation"] .message-markdown')
+        .filter({ hasText: "代码示例包含两个步骤。" });
+      const startHeldTurn = async () => {
+        const count = heldStreams.length;
+        await send(interruptPrompt);
+        await stop.waitFor();
+        await waitFor(() => heldStreams.length > count, "the real upstream SSE request");
+        return heldStreams.at(-1);
+      };
+
+      const cancelled = await startHeldTurn();
+      await live.locator("table").waitFor({ timeout: 15_000 }).catch(async (error) => {
+        record("13h-streaming-markdown", {
+          ok: false, heldOpen: !cancelled.closed, initialContentSent: cancelled.initialContentSent,
+          visible: await live.allTextContents(), screenshot: await screenshot(page, "13h-streaming-markdown-missing"),
+        });
+        throw error;
+      });
+      const code = await live.locator("pre code").innerText();
+      record("13h-streaming-markdown", {
+        ok: code.trim() === "first = 1\n\nsecond = first + 1" &&
+          await live.locator(".katex-html").count() === 1 && !cancelled.closed,
+        screenshot: await screenshot(page, "13h-streaming-markdown"),
+      });
+      await stop.click();
+      await stop.waitFor({ state: "hidden" });
+      const interruptedTurns = () => readTurns().filter((message) => message.content === interruptPrompt)
+        .map((message) => message.metadata?.stream_state ?? "missing");
+      let stopSettled = true;
+      try {
+        await waitFor(() => cancelled.closed && interruptedTurns().some((state) =>
+          ["cancelled", "interrupted", "failed"].includes(state)), "upstream closure and persisted stop state");
+      } catch {
+        stopSettled = false;
+      }
+      record("13i-stop-stream", {
+        ok: stopSettled && await partial.last().isVisible() && await composer.inputValue() === interruptPrompt,
+        partialVisible: await partial.last().isVisible(), upstreamClosed: cancelled.closed, persisted: interruptedTurns(),
+        screenshot: await screenshot(page, "13i-stop-stream"),
+      });
+      if (!stopSettled) cancelled.response.destroy();
+
+      const dropped = await startHeldTurn();
+      await live.locator("table").waitFor();
+      dropped.response.destroy();
+      await stop.waitFor({ state: "hidden" });
+      let dropSettled = true;
+      try {
+        await waitFor(() => interruptedTurns().length === 2 && interruptedTurns().every((state) =>
+          ["cancelled", "interrupted", "failed"].includes(state)), "the persisted network failure");
+      } catch {
+        dropSettled = false;
+      }
+      const draft = await composer.inputValue();
+      record("13j-dropped-stream", {
+        ok: dropSettled && await partial.last().isVisible() && draft === interruptPrompt && dropped.closed,
+        partialVisible: await partial.last().isVisible(), draftRestored: draft === interruptPrompt,
+        persisted: interruptedTurns(),
+        screenshot: await screenshot(page, "13j-dropped-stream"),
+      });
+
+      await send(recoveryPrompt);
+      await frame.locator('article[data-role="assistant"]').getByText(recoveryReply, { exact: true }).waitFor();
+      await stop.waitFor({ state: "hidden" });
+      const finalTurns = readTurns();
+      record("13k-stream-recovery", {
+        ok: finalTurns.filter((message) => message.role === "user" && message.content === recoveryPrompt).length === 1 &&
+          finalTurns.filter((message) => message.role === "assistant" && message.content === recoveryReply).length === 1 &&
+          !finalTurns.some((message) => message.role === "assistant" && message.content.includes("代码示例包含两个步骤。")) &&
+          heldStreams.every((entry) => entry.closed),
+        screenshot: await screenshot(page, "13k-stream-recovery"),
+      });
+    }
+
     await frame.getByTestId("trainer-view-nav-plan").click();
     await frame.locator('[data-template="LearningHome"]:visible').first().waitFor();
     await page.waitForTimeout(4000);
@@ -792,7 +930,8 @@ async function main() {
     results,
     failures: failures.length,
     ok: failures.length === 0 &&
-      results.filter((item) => item.step !== "13f1-native-recall-unconfirmed").length === (recallSource ? 9 : 7),
+      results.filter((item) => item.step !== "13f1-native-recall-unconfirmed").length ===
+        (recallSource ? 9 : 7) + (checkStreamRecovery ? 4 : 0),
     artifacts: fs.readdirSync(outDir).filter((name) => name.endsWith(".png")),
   };
   fs.writeFileSync(path.join(outDir, "report.json"), `${JSON.stringify(report, null, 2)}\n`);

@@ -964,7 +964,7 @@ function classifyProviderFailure(detail: string): ProviderFailureMeta {
   }
 
   if (
-    /network|connection refused|failed to fetch|name or service not known|sidecar request failed \(5\d{2}\)|could not reach the provider endpoint|econnrefused|enotfound/.test(
+    /network|connection (refused|interrupted)|failed to fetch|name or service not known|sidecar request failed \(5\d{2}\)|could not reach the provider endpoint|econnrefused|econnreset|enotfound/.test(
       lowered,
     )
   ) {
@@ -2149,6 +2149,7 @@ export async function sendStreamMessageCommand(
     });
     await postStreamReliabilityStatus(context, 'pending', responseLanguage);
 
+    let chunkFlushTimer: ReturnType<typeof setTimeout> | undefined;
     try {
     const requestPath = usesSessionMessageRoute(streamPayload)
       ? '/session/message/stream'
@@ -2211,8 +2212,18 @@ export async function sendStreamMessageCommand(
       }
       const now = Date.now();
       if (!force && now - lastChunkFlushAt < CHUNK_COALESCE_WINDOW_MS) {
+        // A short burst can be followed by a long quiet read. Show its tail
+        // when the coalescing window ends even if no next event arrives.
+        chunkFlushTimer ??= setTimeout(() => {
+          chunkFlushTimer = undefined;
+          void flushChunkFrame(true).catch((error: unknown) => {
+            context.outputChannel?.appendLine(`[stream] Could not publish a buffered chunk: ${normalizeErrorText(error)}`);
+          });
+        }, CHUNK_COALESCE_WINDOW_MS - (now - lastChunkFlushAt));
         return;
       }
+      clearTimeout(chunkFlushTimer);
+      chunkFlushTimer = undefined;
       const frame = pendingChunkText;
       pendingChunkText = '';
       streamedVisibleText += frame;
@@ -2539,6 +2550,7 @@ export async function sendStreamMessageCommand(
           });
           continue;
         }
+        await flushChunkFrame(true);
         throw new Error(detail || 'SSE stream failed.');
       }
 
@@ -2695,6 +2707,8 @@ export async function sendStreamMessageCommand(
       ok: false,
       message: userMessage,
     };
+    } finally {
+      clearTimeout(chunkFlushTimer);
     }
   } finally {
     if (activeCoachStream && activeCoachStreams.get(context) === activeCoachStream) {

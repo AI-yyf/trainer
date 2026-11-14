@@ -1399,7 +1399,7 @@ test.describe("Trainer three-destination shell", () => {
     await expect(page.locator(".notice")).toHaveCount(0);
     await expect(page.locator(".message-bubble--streaming")).toBeVisible();
     // No canned sentence before the first chunk: one quiet working label.
-    await expect(page.locator(".message-bubble--streaming .coach-working__label")).toHaveText("正在思考");
+    await expect(page.locator(".message-bubble--streaming .coach-working__label")).toHaveText("等待模型响应");
     await expect(page.locator(".message-bubble--streaming")).not.toContainText(
       "正在梳理你的问题",
     );

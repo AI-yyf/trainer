@@ -321,7 +321,7 @@ test("training generation keeps raw card JSON out of the conversation surface", 
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'stream/chunk', payload: { messageId: 'training_raw_card', chunk: '{"title":"INTERNAL_CARD_JSON_123"' } });
   });
   await expect(page.getByText(/INTERNAL_CARD_JSON_123/)).toHaveCount(0);
-  await expect(page.locator('.coach-working__label')).toHaveText('Thinking');
+  await expect(page.locator('.coach-working__label')).toHaveText('Waiting for the model');
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
     type: 'stream/cancelled', payload: { messageId: 'training_raw_card' },
   }));

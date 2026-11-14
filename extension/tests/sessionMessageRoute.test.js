@@ -647,6 +647,32 @@ test('cancellation unlocks the composer while a provider iterator is still unwin
   assert.equal(context.getStreamingState().streamedContent, 'A partial explanation');
 });
 
+test('a burst of coach text flushes while the next SSE read is pending', async () => {
+  const { sendStreamMessageCommand, cancelStreamMessageCommand } = loadWithVscodeMock(
+    sessionCommandsModulePath, { window: { activeTextEditor: undefined } },
+  );
+  const context = createContext();
+  let requestComplete = false;
+  context.sidecarClient.fetchSSE = async function* (_port, _path, _body, { signal }) {
+    yield { event: 'chunk', data: JSON.stringify({ chunk: 'First fragment.' }) };
+    yield { event: 'chunk', data: JSON.stringify({ chunk: ' Second fragment.' }) };
+    await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+  };
+  const running = sendStreamMessageCommand(context, { text: 'Explain the example.', stream: true })
+    .finally(() => { requestComplete = true; });
+  try {
+    const deadline = Date.now() + 1000;
+    while (!context.getStreamingState().streamedContent.endsWith(' Second fragment.') && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 15));
+    }
+    assert.equal(requestComplete, false);
+    assert.equal(context.getStreamingState().streamedContent, 'First fragment. Second fragment.');
+  } finally {
+    await cancelStreamMessageCommand(context);
+    await running;
+  }
+});
+
 test('invalidateActiveTrainerStreams drops buffered Coach SSE events after a workspace switch', async () => {
   const vscodeMock = {
     window: {
