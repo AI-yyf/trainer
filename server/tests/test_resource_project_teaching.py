@@ -97,7 +97,7 @@ def test_card_evaluation_cites_current_resource_version(tmp_path: Path) -> None:
 
 def test_resource_version_change_stales_old_evidence_until_reverified(tmp_path: Path) -> None:
     store = AttemptStore(tmp_path / "attempts.db")
-    attempt = store.start_attempt(workspace_id="ws", card_id="card")
+    attempt = store.start_attempt(workspace_id="ws", card_id="card", assistance_level="none")
     evidence = store.record_evidence(
         attempt_id=attempt["attempt_id"],
         artifact_hash="artifact-hash",
