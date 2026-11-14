@@ -87,8 +87,8 @@ async def assess_open_recall(
                 "point. Mark uncertain if you cannot justify either verdict. Return only a JSON "
                 'object with "verdict" ("correct", "incorrect", or "uncertain"), "reason" '
                 "(a brief explanation of the deciding criterion in feedback_language), and "
-                '"quote" (one short verbatim excerpt from the learner answer, preferably '
-                "plain prose without Markdown delimiters or mathematical escape sequences)."
+                '"quote" (one short contiguous verbatim substring of the learner answer. '
+                "Copy one phrase exactly, with no joining, paraphrasing, or punctuation changes)."
             ),
         },
         {"role": "user", "content": json.dumps(passages, ensure_ascii=False)},
@@ -112,6 +112,21 @@ async def assess_open_recall(
         return None
     if not isinstance(reason, str) or not 1 <= len(reason.strip()) <= 800:
         return None
-    if not isinstance(quote, str) or not 1 <= len(quote.strip()) <= 400 or quote.strip() not in answer:
+    if not isinstance(quote, str) or not 1 <= len(quote.strip()) <= 400:
         return None
-    return RecallAssessment(verdict, reason.strip(), quote.strip(), provider.configured_model)
+    excerpt = grounded_recall_excerpt(quote.strip(), answer)
+    if excerpt is None:
+        return None
+    return RecallAssessment(verdict, reason.strip(), excerpt, provider.configured_model)
+
+
+def grounded_recall_excerpt(quote: str, answer: str) -> str | None:
+    if quote in answer:
+        return quote
+    # A model occasionally joins answer bullets with a semicolon. Keep one
+    # substantial, exact fragment and persist its original text.
+    fragments = re.split(r"[;；\n]+", quote)
+    for fragment in sorted(map(str.strip, fragments), key=len, reverse=True):
+        if len(fragment) >= 12 and fragment in answer:
+            return fragment
+    return None

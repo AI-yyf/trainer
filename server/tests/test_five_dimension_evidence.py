@@ -301,6 +301,8 @@ def test_flashcard_recall_advances_only_after_a_real_delay(
     [
         ('{"verdict":"correct","reason":"Distinguishes slots from values",'
          '"quote":"slots stay bound"}', True, "hard"),
+        ('{"verdict":"correct","reason":"Distinguishes slots from values",'
+         '"quote":"slots stay bound; unrelated text"}', True, "hard"),
         ('{"verdict":"incorrect","reason":"Confuses slots and values",'
          '"quote":"slots stay bound"}', False, "again"),
         ('{"verdict":"uncertain","reason":"Cannot determine the case",'
