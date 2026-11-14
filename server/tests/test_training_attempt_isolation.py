@@ -109,7 +109,7 @@ def test_double_evidence_recording_keeps_a_single_current_record(tmp_path: Path)
 def test_distinct_attempts_produce_repeat_verified(tmp_path: Path) -> None:
     store = make_store(tmp_path)
     first = store.start_attempt(
-        workspace_id="ws-1", card_id="card-1", file_hash="hash-A"
+        workspace_id="ws-1", card_id="card-1", file_hash="hash-A", assistance_level="none",
     )
     store.record_evidence(
         attempt_id=first["attempt_id"], artifact_hash="hash-A", result="passed"
@@ -119,7 +119,7 @@ def test_distinct_attempts_produce_repeat_verified(tmp_path: Path) -> None:
     # retires it before a genuinely new practice cycle can count as repetition.
     store.close_attempt(first["attempt_id"], workspace_id="ws-1")
     second = store.start_attempt(
-        workspace_id="ws-1", card_id="card-1", file_hash="hash-B"
+        workspace_id="ws-1", card_id="card-1", file_hash="hash-B", assistance_level="none",
     )
     assert second["attempt_id"] != first["attempt_id"]
     store.record_evidence(

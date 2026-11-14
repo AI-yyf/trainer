@@ -107,7 +107,7 @@ class AttemptStore:
         file_path: str | None = None,
         file_hash: str | None = None,
         file_version: int | None = None,
-        assistance_level: str = "none",
+        assistance_level: str = "unknown",
     ) -> dict[str, Any]:
         # Idempotent enter, concurrency-safe (T-0016): the check-then-insert
         # runs inside one BEGIN IMMEDIATE transaction, so two racing starts
@@ -162,7 +162,7 @@ class AttemptStore:
         *,
         workspace_id: str,
         card_id: str,
-        assistance_level: str = "none",
+        assistance_level: str = "unknown",
     ) -> dict[str, Any]:
         """Create a one-shot attempt for a recall answer.
 

@@ -108,7 +108,9 @@ def test_self_report_cannot_supersede_same_artifact_controlled_check(tmp_path: P
     from app.training.attempt_store import AttemptStore
 
     store = AttemptStore(tmp_path / "attempts.db")
-    attempt = store.start_attempt(workspace_id="ws", card_id="card", file_hash="hash")
+    attempt = store.start_attempt(
+        workspace_id="ws", card_id="card", file_hash="hash", assistance_level="independent",
+    )
     trusted = store.record_evidence(attempt_id=attempt["attempt_id"], artifact_hash="hash", result="passed")
     store.record_evidence(
         attempt_id=attempt["attempt_id"], artifact_hash="hash", result="passed", trust_level="self_reported",
@@ -165,7 +167,7 @@ def test_missing_assistance_is_unknown_and_never_advances_the_skill_ladder() -> 
         ),
         (
             "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
-            True, "unknown", True, "passed", "controlled_check", "not_verified",
+            True, None, True, "passed", "controlled_check", "not_verified",
         ),
         (
             "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
@@ -174,7 +176,7 @@ def test_missing_assistance_is_unknown_and_never_advances_the_skill_ladder() -> 
     ],
 )
 def test_training_verification_checks_the_persisted_contract(
-    tmp_path: Path, monkeypatch, source: str, with_contract: bool, assistance: str,
+    tmp_path: Path, monkeypatch, source: str, with_contract: bool, assistance: str | None,
     passed: bool, result: str, trust: str, skill: str,
 ) -> None:
     from app.evaluator.service import SubprocessCommandRunner, default_command_runner
@@ -207,10 +209,11 @@ def test_training_verification_checks_the_persisted_contract(
         })
         runtime.memory_service.upsert_card(workspace, card)
         runtime.memory_service.update_workspace_state(workspace, selected_card_id=card.card_id)
-        attempt = runtime.attempt_store.start_attempt(
-            workspace_id=workspace, card_id=card.card_id, file_path=str(path),
-            assistance_level=assistance,
-        )
+        if assistance is not None:
+            runtime.attempt_store.start_attempt(
+                workspace_id=workspace, card_id=card.card_id, file_path=str(path),
+                assistance_level=assistance,
+            )
         response = client.post("/evaluate/current-file", json={
             "session_id": session, "workspace_id": workspace, "evaluation_source": "training",
             "training_phase": "verify", "training_card_id": card.card_id,
@@ -222,11 +225,13 @@ def test_training_verification_checks_the_persisted_contract(
         })
         assert response.status_code == 200, response.text
         assert response.json()["passed"] is passed, response.json()
+        attempt = runtime.attempt_store.find_active_attempt(workspace, card.card_id)
+        assert attempt is not None
         evidence = runtime.attempt_store.list_evidence(attempt["attempt_id"])
         assert len(evidence) == 1
         assert evidence[0]["result"] == result
         assert evidence[0]["trust_level"] == trust
-        assert evidence[0]["assistance_level"] == assistance
+        assert evidence[0]["assistance_level"] == (assistance or "unknown")
         memory = client.get("/memory/summary", params={"workspace_id": workspace}).json()["memory"]
         dimension = memory["workspace"]["training_skill_projection"]["dimensions"]["implementation"]
         assert dimension["state"] == skill
