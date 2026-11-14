@@ -145,7 +145,7 @@ export interface ResourcesWorkbenchViewProps {
   onDeleteLibraryFolder?: (path: string) => Promise<ResourceMutationOutcome>;
   /** Reveal a downloaded file path through the host's existing file-manager action. */
   onRevealSavedPath?: (path: string) => void;
-  onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; openExternal?: boolean; line?: number }) => void;
+  onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; openExternal?: boolean; line?: number; versionId?: string }) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
   onAskCoach?: (resourceIds: string[]) => void;
@@ -157,10 +157,8 @@ export interface ResourcesWorkbenchViewProps {
   onChooseWorkspaceRoot?: () => void;
   /**
    * The App owns the cross-view conversation context.  The library reports the
-   * resource currently open in the reader (explicit selection only, empty when
-   * nothing is open) so switching views does not silently discard context.
+   * current source selection so switching views preserves the conversation context.
    */
-  initialResourceContextIds?: string[];
   onResourceSelectionChange?: (
     resourceIds: string[],
     reason?: "selection" | "unmount",
@@ -189,6 +187,8 @@ export interface ResourcesWorkbenchViewProps {
 export interface ResourceRestoreContext {
   surface: "detail" | "sandbox";
   resourceId?: string;
+  versionId?: string;
+  line?: number;
   focusArea?: string;
   sandboxPath?: string;
   previewPath?: string;
@@ -1607,13 +1607,10 @@ export function ResourcesWorkbenchView({
   }, [onRestoreContextChange, resources, selectedResourceId]);
 
   useEffect(() => {
-    if (restoreContext?.surface !== "detail" || !restoreContext.resourceId) {
-      return;
+    if (restoreContext?.surface !== "sandbox") {
+      setSelectedResourceId(restoreContext?.resourceId ?? null);
     }
-    if (resources.some((resource) => resource.id === restoreContext.resourceId)) {
-      setSelectedResourceId(restoreContext.resourceId);
-    }
-  }, [resources, restoreContext]);
+  }, [restoreContext]);
 
   useEffect(() => {
     if (restoreContext?.surface !== "sandbox") {
@@ -1810,10 +1807,8 @@ export function ResourcesWorkbenchView({
     resource: ResourceRecord,
     options?: { openOriginal?: boolean; openExternal?: boolean; line?: number },
   ) => {
-    // A library row is a native "open the source" action. The host resolves
-    // the original file (or the live URL); canonical Markdown is internal.
-    const line = options?.line;
-    onOpenResource?.(resource.id, { ...options, ...(line ? { line } : {}) });
+    // The host opens the library document at the search hit when available.
+    onOpenResource?.(resource.id, { ...options, versionId: resource.versionId });
   };
 
   const openResourceRowMenu = (
@@ -2983,6 +2978,34 @@ export function ResourcesWorkbenchView({
 
       {omitLeftoverLibrary ? null : (
       <div className="resources-library-shell">
+      {hasSearchQuery ? (
+        shouldShowNoMatches ? (
+          <SystemState kind="empty" title={localize(language, "noMatches")} />
+        ) : (
+          <ul className="resources-search-results" aria-label={localize(language, "searchPlaceholder")}>
+            {visibleResources.map((resource) => {
+              const rawLine = resource.location?.start_line ?? resource.location?.line_start;
+              const line = typeof rawLine === "number" && Number.isSafeInteger(rawLine) && rawLine > 0
+                ? rawLine
+                : undefined;
+              const snippet = resource.snippet?.replace(/<\/?mark>/g, "");
+              return (
+                <li key={resource.id}>
+                  <button
+                    type="button"
+                    className="resources-search-result"
+                    aria-current={selectedResourceId === resource.id ? "true" : undefined}
+                    onClick={() => openResourceInVsCode(resource, line ? { line } : undefined)}
+                  >
+                    <strong>{resource.title}{line ? ` · L${line}` : ""}</strong>
+                    {snippet || resource.summary ? <span>{snippet || resource.summary}</span> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      ) : (
       <div
         className="resources-knowledge__tree"
         ref={treeRef}
@@ -3025,9 +3048,6 @@ export function ResourcesWorkbenchView({
               </div>
             ) : null}
 
-            {shouldShowNoMatches ? (
-              <SystemState kind="empty" title={localize(language, "noMatches")} />
-            ) : null}
           </>
         )}
 
@@ -3186,6 +3206,7 @@ export function ResourcesWorkbenchView({
         />
       )}
       </div>
+      )}
       </div>
       )}
 

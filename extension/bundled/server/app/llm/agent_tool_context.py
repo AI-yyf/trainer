@@ -23,6 +23,13 @@ def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
     streak_blocks = extra.get("streak_blocks_live_object_mint") is True
     # Learning OS: never silently write learner project / business code.
     denied.extend(sorted(PROJECT_WRITE_TOOL_NAMES))
+    if extra.get("current_resource_scope"):
+        denied.extend((
+            "list_sandbox", "read_sandbox_file", "write_sandbox_file", "index_sandbox_file",
+            "search_learning_materials", "list_project_modules", "read_project_symbol",
+            "import_resource_url", "organize_resources", "delete_resource", "restore_resource",
+            "refresh_resource_index",
+        ))
     # Composer chat never mints cards (even explicit "create a practice card").
     # Intentional mint is POST /training/generate-card only.
     denied.append("generate_training_card")
@@ -170,6 +177,7 @@ def _build_agent_tool_context_extra(
         "library_sandbox_work",
         "workspace_file_snapshot",
         "resource_composer_intent",
+        "current_resource_scope",
         "learner_signal",
         "current_focus",
         "summary",

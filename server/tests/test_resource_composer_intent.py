@@ -53,7 +53,7 @@ def test_resource_composer_intent_is_semantic_only_and_alias_safe() -> None:
     assert request.resource_composer_intent is not None
     assert request.resource_composer_intent.mode == "organize"
     assert request.resource_composer_intent.resource_ids == ["resource-1", "resource:note-2"]
-    assert request.model_dump(by_alias=True)["resourceComposerIntent"] == {
+    assert request.model_dump(by_alias=True, exclude_none=True)["resourceComposerIntent"] == {
         "mode": "organize",
         "resourceIds": ["resource-1", "resource:note-2"],
     }

@@ -676,17 +676,14 @@ test.describe("Trainer three-destination shell", () => {
       ).toHaveCount(1);
 
       await search.fill(copy.indexingResource);
-      const indexingTreeItem = tree.getByRole("treeitem", {
-        name: copy.indexingResource,
-        exact: true,
-      });
-      await expect(indexingTreeItem).toBeVisible();
-      // Per-row index-status badges are gone; the reader holds the status line.
-      await expect(indexingTreeItem.locator(".resources-library-tree__status")).toHaveCount(0);
+      const results = library.locator(".resources-search-results");
+      const indexingResult = results.getByRole("button", { name: new RegExp(copy.indexingResource) });
+      await expect(indexingResult).toBeVisible();
+      await expect(tree).toHaveCount(0);
 
       await search.fill("no-resource-match");
-      await expect(tree.getByRole("treeitem")).toHaveCount(0);
-      await expect(tree).toContainText(copy.noMatchesLabel);
+      await expect(results.getByRole("button")).toHaveCount(0);
+      await expect(library).toContainText(copy.noMatchesLabel);
       await search.fill("");
       await expect(primaryTreeItem).toBeVisible();
 

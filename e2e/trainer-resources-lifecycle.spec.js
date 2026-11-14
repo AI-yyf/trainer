@@ -115,6 +115,73 @@ async function sendResourceOperationStatus(page, kind, requestId, message) {
 }
 
 test.describe("Trainer Resources lifecycle through the VS Code host bridge", () => {
+  test("ranked results open and send the same current resource and line", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__TRAINER_E2E_HOST_ACTIONS__ = [];
+      window.acquireVsCodeApi = () => ({
+        getState: () => ({
+          activeView: "resources",
+          composerLanguage: "en-US",
+          composerSendPreference: "stay",
+        }),
+        setState: () => undefined,
+        postMessage: (message) => window.__TRAINER_E2E_HOST_ACTIONS__.push(message),
+      });
+    });
+    await page.goto("/");
+    await waitForHostAction(page, 0, (action) => action.type === "request/bootstrap");
+    const a = { ...lifecycleResource("ready"), title: "A queue notes.md" };
+    const b = { ...a, id: "resource-rotation", title: "B rotation notes.md", versionId: "rv-b" };
+    await sendHostMessage(page, { type: "bootstrap", payload: hostBootstrap([a, b], []) });
+
+    const rowA = page.getByRole("treeitem", { name: a.title, exact: true });
+    await rowA.press("Enter");
+    const anchor = page.locator("[data-dock-anchor]");
+    await expect(anchor).toContainText(a.title);
+
+    const start = await actionCount(page);
+    const search = page.locator(".resources-knowledge__search input");
+    await search.fill("owner");
+    const action = await waitForHostAction(page, start, (item) =>
+      item.type === "command/execute" && item.payload.commandId === "trainer.resource.search",
+    );
+    await sendHostMessage(page, {
+      type: "state/patch",
+      payload: {
+        resourceSearch: {
+          requestId: action.payload.payload.requestId,
+          query: "owner",
+          total: 2,
+          filters: {},
+          hits: [
+            { ...b, location: { line_start: 3 }, snippet: "The <mark>owner</mark> is Amber Compass." },
+            a,
+          ],
+        },
+      },
+    });
+    const results = page.locator(".resources-search-results");
+    await expect(results.getByRole("button").first()).toContainText(b.title);
+    await expect(results).toContainText("The owner is Amber Compass.");
+    await results.getByRole("button").first().click();
+    const opened = await waitForHostAction(page, start, (item) => item.type === "resource/open");
+    expect(opened.payload).toEqual({ resourceId: b.id, line: 3 });
+    await expect(anchor).toContainText("B rotation notes.md · L3");
+
+    const composer = page.locator("#coach-composer");
+    await composer.fill("Who is the owner in this document?");
+    await page.locator(".composer__send").click();
+    const sent = await waitForHostAction(page, start, (item) => item.type === "session/sendStreamMessage");
+    expect(sent.payload).toMatchObject({
+      resourceIds: [b.id],
+      resourceComposerIntent: { currentResource: { resourceId: b.id, versionId: "rv-b", line: 3 } },
+    });
+    await expect(anchor).toBeVisible();
+    await anchor.getByRole("button", { name: "Clear", exact: true }).click();
+    await expect(anchor).toHaveCount(0);
+    await expect(results.getByRole("button").first()).not.toHaveAttribute("aria-current", "true");
+  });
+
   test("34: preserves resource identity through upload, open, delete, and per-item restore", async ({ page }) => {
     const consoleErrors = [];
     page.on("console", (message) => {
@@ -216,7 +283,7 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     );
     expect(openAction).toEqual({ type: "resource/open", payload: { resourceId: RESOURCE_ID } });
     await expect(page.locator("[data-template=ResourceReader]")).toHaveCount(0);
-    await expect(resourceTreeItem).not.toHaveAttribute("aria-current", "true");
+    await expect(resourceTreeItem).toHaveAttribute("aria-current", "true");
 
     // Delete lives in the compact row menu next to the source-open action.
     const deleteMenuTrigger = resourceTreeItem.getByRole("button", {

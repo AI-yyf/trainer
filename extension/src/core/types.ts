@@ -825,6 +825,8 @@ export interface ResourceRecordView {
   freshness?: 'fresh' | 'stale' | 'unknown';
   indexState?: string;
   citationId?: string;
+  versionId?: string;
+  snippet?: string;
   previewTier?: 'rich' | 'converted' | 'metadata';
   previewKind?: string;
   rankScore?: number;

@@ -1135,6 +1135,17 @@ def _build_resource_composer_boundary(context: dict[str, Any]) -> str:
         ),
         "- Formal Plan changes still require the explicit formal-plan mutation path.",
     ]
+    current_resource = context.get("current_resource_scope")
+    if isinstance(current_resource, dict):
+        resource_id = current_resource.get("resource_id")
+        line = current_resource.get("line")
+        location = f" starting at the selected line {line}" if isinstance(line, int) else ""
+        lines.append(
+            f"- The learner means the currently open source ({resource_id}). Use "
+            f"read_resource_excerpt{location} for the original passage and ground the answer "
+            "only in this source. Leave previous sources out unless the learner asks to compare. "
+            "If the selected passage is unavailable or its version changed, say so."
+        )
     if mode == "cards":
         lines.append(
             "- Treat cards as candidates only. Do not create or activate a Training card solely "
@@ -2587,6 +2598,7 @@ def extract_coaching_context(
         "requested_resource_ids": requested_resource_ids,
         "resource_fragments": resource_fragments if isinstance(resource_fragments, list) else [],
         "resource_composer_intent": resource_composer_intent,
+        "current_resource_scope": _nested_get(coach_context, "current_resource_scope") if coach_context else None,
         "requested_resource_summary": requested_resource_summary,
         "resource_sequence_summary": resource_sequence_summary,
         "resource_sequence_guidance": resource_sequence_guidance,

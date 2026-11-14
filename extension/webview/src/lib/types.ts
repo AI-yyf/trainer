@@ -693,6 +693,7 @@ export interface ResourceRecord {
   indexState?: string;
   citationId?: string;
   versionId?: string;
+  snippet?: string;
   contentHash?: string;
   location?: Record<string, unknown>;
   previewTier?: "rich" | "converted" | "metadata";
@@ -1603,12 +1604,17 @@ export type ResourceComposerIntentMode = (typeof RESOURCE_COMPOSER_INTENT_MODES)
 
 /**
  * Semantic direction for a Resources composer turn. This deliberately carries
- * only an action and opaque resource identifiers; it cannot authorize a path,
+ * only an action and resource references; it cannot authorize a path,
  * network operation, or sandbox write.
  */
 export interface ResourceComposerIntent {
   mode: ResourceComposerIntentMode;
   resourceIds?: string[];
+  currentResource?: {
+    resourceId: string;
+    versionId?: string;
+    line?: number;
+  };
 }
 
 export interface WorkspaceMemoryToggles {

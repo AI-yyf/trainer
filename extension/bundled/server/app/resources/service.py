@@ -1037,6 +1037,7 @@ class ResourceService:
         source_type: str | None = None,
         kind: str | None = None,
         index_state: str | None = None,
+        resource_id: str | None = None,
     ) -> SearchResponse:
         filters = SearchFilters(
             project_scope=project_scope or workspace_id,
@@ -1045,6 +1046,7 @@ class ResourceService:
             source_type=source_type,
             kind=kind,
             index_state=index_state,
+            resource_id=resource_id,
         )
         cache_key = (
             str(workspace_id),
@@ -1141,8 +1143,6 @@ class ResourceService:
                 if isinstance(document_anchors, list) and document_anchors
                 else metadata.get("canonical_anchors")
             )
-            if not isinstance(anchors, list) or not anchors:
-                continue
             content_length = metadata.get("content_length")
             content = index.document_content(hit.resource_id)
             if isinstance(content_length, int) and content_length > 0:
@@ -1152,13 +1152,11 @@ class ResourceService:
                 continue
             line = content.count("\n", 0, position) + 1
             resolved = _resolve_document_location(
-                [item for item in anchors if isinstance(item, dict)],
+                [item for item in anchors if isinstance(item, dict)] if isinstance(anchors, list) else [],
                 line,
             )
-            if not resolved:
-                continue
             location = dict(hit.location or {})
-            location.update(resolved)
+            location.update({"anchor_id": f"¶line@{line}", "line_start": line, **resolved})
             hit.location = location
 
     def _mark_stale_search_versions(

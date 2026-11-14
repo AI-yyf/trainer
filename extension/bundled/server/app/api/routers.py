@@ -4203,6 +4203,38 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             merged.update(requested)
         if composer_context:
             merged.update(composer_context)
+        current_resource = resource_composer_intent.current_resource if resource_composer_intent else None
+        # With one opened source, a question about "this" source has an explicit
+        # referent. Whole-library searches and multi-source requests keep their
+        # normal retrieval paths.
+        if (
+            current_resource is not None
+            and resource_composer_intent is not None
+            and resource_composer_intent.mode in {"locate", "cards"}
+            and list(resource_ids or []) == [current_resource.resource_id]
+            and re.search(
+                r"这份|这篇|这段|当前资料|正在查看的|\b(?:this|current|open) "
+                r"(?:resource|source|document|article|file|note|passage|material)\b|"
+                r"この(?:資料|文書)|이 (?:자료|문서)|\b(?:ce|cet|cette) (?:document|article|source)\b|"
+                r"\b(?:este|esta|dieses|diese) (?:documento|artigo|artículo|fonte|fuente|dokument|quelle)\b",
+                (message or "").split("\n[当前资料]", 1)[0],
+                re.IGNORECASE,
+            )
+            and not re.search(
+                r"比较|对比|其他资料|别的资料|整个资料库|\b(?:compare|versus|other sources|whole library)\b",
+                message or "",
+                re.IGNORECASE,
+            )
+        ):
+            scope = current_resource.model_dump(exclude_none=True)
+            if current_resource.version_id and runtime.resource_version_store is not None:
+                version = runtime.resource_version_store.current_version(
+                    workspace_id, current_resource.resource_id
+                )
+                if (version or {}).get("version_id") != current_resource.version_id:
+                    # Current summaries and excerpts cannot stand in for the version the learner opened.
+                    return {**composer_context, "current_resource_scope": scope}
+            merged["current_resource_scope"] = scope
         if not merged:
             return merged
         if message:

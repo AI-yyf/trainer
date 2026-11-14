@@ -214,6 +214,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     "source": str(getattr(item, "source", "") or ""),
                     "source_type": str(getattr(item, "source_type", "") or ""),
                     "summary": str(getattr(item, "summary", "") or ""),
+                    "snippet": str(getattr(item, "snippet", "") or ""),
                     "trust_score": float(getattr(item, "trust_score", 0.0) or 0.0),
                     "trust_state": str(getattr(item, "trust_state", "") or ""),
                     "freshness": str(getattr(item, "freshness", "") or ""),

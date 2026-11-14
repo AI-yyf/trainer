@@ -4336,7 +4336,11 @@ function resolveBrowserPreviewTurnIntent(
 }
 
 function resourceComposerIntentPayload(request: SessionMessageRequest):
-  | { mode: "locate" | "download" | "organize" | "cards"; resource_ids: string[] }
+  | {
+      mode: NonNullable<SessionMessageRequest["resourceComposerIntent"]>["mode"];
+      resource_ids: string[];
+      current_resource?: NonNullable<SessionMessageRequest["resourceComposerIntent"]>["currentResource"];
+    }
   | undefined {
   const intent = request.resourceComposerIntent;
   if (!intent) {
@@ -4345,6 +4349,7 @@ function resourceComposerIntentPayload(request: SessionMessageRequest):
   return {
     mode: intent.mode,
     resource_ids: intent.resourceIds ?? [],
+    ...(intent.currentResource ? { current_resource: intent.currentResource } : {}),
   };
 }
 
@@ -6295,6 +6300,7 @@ function mapResources(value: unknown): ResourceRecord[] {
         freshness: normalizePreviewFreshness(asString(item.freshness)),
         indexState: indexStatus,
         citationId: asString(item.citation_id) ?? asString(item.citationId) ?? undefined,
+        versionId: asString(item.version_id) ?? asString(item.versionId),
         previewTier: normalizePreviewTier(asString(item.preview_tier) ?? asString(item.previewTier)),
         previewKind: asString(item.preview_kind) ?? asString(item.previewKind) ?? undefined,
         rankScore: asNumber(item.rank_score) ?? asNumber(item.rankScore) ?? undefined,
@@ -6400,6 +6406,9 @@ function normalizePreviewResourceSearchHit(
     freshness: normalizePreviewFreshness(asString(record.freshness)),
     indexState,
     citationId: asString(record.citation_id) ?? asString(record.citationId),
+    versionId: asString(record.version_id) ?? asString(record.versionId),
+    snippet: asString(record.snippet),
+    location: asRecord(record.location),
     previewTier: normalizePreviewTier(asString(record.preview_tier) ?? asString(record.previewTier)),
     previewKind: asString(record.preview_kind) ?? asString(record.previewKind),
     rankScore: asNumber(record.rank_score) ?? asNumber(record.rankScore),

@@ -1119,13 +1119,20 @@ export async function openResourceCommand(
     // unless the learner explicitly asked for the external app.
     await vscode.env.openExternal(targetUri);
   } else {
+    let editorLine = requestedLine ? requestedLine - 1 : 0;
+    if (requestedLine && resource.canonicalMarkdownPath && !openOriginal) {
+      const document = await vscode.workspace.openTextDocument(targetUri);
+      const frontMatter = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n)*/.exec(document.getText());
+      const bodyOffset = frontMatter?.[0].match(/\n/g)?.length ?? 0;
+      editorLine = Math.min(editorLine + bodyOffset, document.lineCount - 1);
+    }
     await vscode.commands.executeCommand('vscode.open', targetUri, {
       preview: false,
       preserveFocus: false,
       // Open at the requested line when a search hit names one; otherwise at
       // the start — a library row click should reveal the file, not a stale
       // scroll position or selection from an earlier visit.
-      selection: new vscode.Range(requestedLine ? requestedLine - 1 : 0, 0, requestedLine ? requestedLine - 1 : 0, 0),
+      selection: new vscode.Range(editorLine, 0, editorLine, 0),
     });
   }
   return {
@@ -2996,6 +3003,8 @@ function normalizeResourceDetailRecord(value: unknown): ResourceDetailRecordView
     freshness: normalizeFreshness(asString(record.freshness)),
     indexState: asString(record.index_state) ?? asString(record.indexState),
     citationId: asString(record.citation_id) ?? asString(record.citationId),
+    versionId: asString(record.version_id) ?? asString(record.versionId),
+    snippet: asString(record.snippet),
     previewTier:
       normalizePreviewTier(asString(record.preview_tier) ?? asString(record.previewTier)) ?? undefined,
     previewKind: asString(record.preview_kind) ?? asString(record.previewKind),

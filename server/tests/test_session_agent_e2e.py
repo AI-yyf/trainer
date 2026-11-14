@@ -2811,6 +2811,75 @@ def test_session_message_marks_image_attachments_delivered_when_provider_is_visi
     assert any("reached the model as image input" in line for line in support_lines)
 
 
+def test_current_resource_read_scopes_search_and_keeps_the_selected_line(
+    runtime: TrainerRuntime,
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime.resource_service.semantic_memory = SimpleNamespace(
+        upsert_text=lambda *_args, **_kwargs: None,
+    )
+    with TestClient(app) as client:
+        workspace_id = "ws-current-source"
+        session_id = _seed_session(client, workspace_id=workspace_id)
+        first = _upload_and_index_markdown(
+            client, workspace_id=workspace_id, name="queue.md",
+            text="# Queue\n\nThe owner is Crimson Lantern.\n",
+        )
+        current = _upload_and_index_markdown(
+            client, workspace_id=workspace_id, name="rotation.md",
+            text="# Rotation\n\nThe owner is Amber Compass.\n",
+        )
+        runtime.resource_version_store = runtime.resource_service.version_store
+        version = runtime.resource_version_store.current_version(workspace_id, current["id"])
+        assert version is not None
+
+        _patch_provider(
+            monkeypatch, runtime,
+            responses=[
+                {
+                    "content": "",
+                    "tool_calls": [
+                        {"id": "search-all", "name": "search_resources",
+                         "arguments": {"query": "owner"}},
+                        {"id": "read-old", "name": "read_resource_excerpt",
+                         "arguments": {"resource_id": first["id"]}},
+                        {"id": "read-current", "name": "read_resource_excerpt",
+                         "arguments": {"resource_id": current["id"], "anchor_id": "¶line@1"}},
+                    ],
+                },
+                {"content": "The owner is Amber Compass.", "tool_calls": []},
+            ],
+        )
+        response = client.post("/turn", json={
+            "intent": "coach",
+            "active_view": "resources",
+            "session_id": session_id,
+            "workspace_id": workspace_id,
+            "use_agent_loop": True,
+            "message": "Who is the owner in this document?",
+            "resource_ids": [current["id"]],
+            "resource_composer_intent": {
+                "mode": "locate",
+                "resource_ids": [current["id"]],
+                "current_resource": {
+                    "resource_id": current["id"], "version_id": version["version_id"], "line": 3,
+                },
+            },
+            "response_language": "en-US",
+        })
+
+    assert response.status_code == 200, response.text
+    parts = response.json()["reply"]["metadata"]["parts"]
+    citations = [part for part in parts if part["type"] == "citation"]
+    assert citations
+    assert {part["resourceId"] for part in citations} == {current["id"]}
+    read = next(part for part in citations if part["referenceOrigin"] == "library_read")
+    assert read["versionId"] == version["version_id"]
+    assert read["location"]["start_line"] == 3
+    assert read["location"]["anchor"] == "¶line@3"
+
+
 def test_session_message_read_excerpt_surfaces_a_compact_citation(
     runtime: TrainerRuntime,
     app: FastAPI,

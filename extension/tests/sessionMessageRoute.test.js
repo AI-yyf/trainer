@@ -411,6 +411,7 @@ test('sendStreamMessageCommand routes default Coach turns through /session/messa
     resourceComposerIntent: {
       mode: 'locate',
       resourceIds: ['resource-coach'],
+      currentResource: { resourceId: 'resource-coach', versionId: 'rv-123', line: 17 },
     },
     responseLanguage: 'en-US',
     answerMode: 'coach-first',
@@ -430,6 +431,7 @@ test('sendStreamMessageCommand routes default Coach turns through /session/messa
   assert.deepEqual(body.resource_composer_intent, {
     mode: 'locate',
     resource_ids: ['resource-coach'],
+    current_resource: { resourceId: 'resource-coach', versionId: 'rv-123', line: 17 },
   });
   assert.equal(body.response_language, 'en-US');
   assert.equal(body.answer_mode, 'guided');

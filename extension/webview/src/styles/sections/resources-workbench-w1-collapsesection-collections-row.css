@@ -810,3 +810,36 @@
 .template-reader-open-actions .button {
   min-height: 26px;
 }
+
+.resources-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.resources-search-result {
+  display: grid;
+  width: 100%;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-1);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.resources-search-result:hover,
+.resources-search-result[aria-current="true"] {
+  background: var(--bg-2);
+}
+
+.resources-search-result span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: var(--fg-2);
+  font-size: var(--trainer-font-2xs);
+}

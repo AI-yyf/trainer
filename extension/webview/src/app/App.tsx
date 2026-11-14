@@ -112,7 +112,6 @@ import {
   leftoverTrainingFocusChromeIsNotLive,
   leftoverTrainingHandoffChromeIsNotLive,
   independentTrainingSelectionIsLive,
-  leftoverResourceSelectedDetailIsNotLive,
   leftoverResourceSandboxStateIsNotLive,
   leftoverResourceLibraryListIsNotLive,
   leftoverSettingsProfileRhythmIsNotLive,
@@ -204,7 +203,7 @@ import {
 import { AppShell } from "../templates/AppShell";
 import { PracticeResponse } from "../templates/PracticeResponse";
 import { ActivityHeader } from "../templates/ActivityHeader";
-import { appendDockAnchor, composerDockDraftScope, dockSendNavigation, docksComposer, normalizeDockSendPreference, resolveDockContextAnchor } from "../lib/composerDock";
+import { appendDockAnchor, composerDockDraftScope, dockSendNavigation, docksComposer, normalizeDockSendPreference } from "../lib/composerDock";
 import { useComposerDockAnchor } from "./useComposerDockAnchor";
 import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
 import {
@@ -2703,9 +2702,6 @@ export function App() {
   const leftoverTrainingHandoffChromeNotLive = leftoverTrainingHandoffChromeIsNotLive(
     leftoverChromeIdentity,
   ) && !independentTrainingSelectionLive;
-  const leftoverResourceSelectedDetailNotLive = leftoverResourceSelectedDetailIsNotLive(
-    leftoverChromeIdentity,
-  );
   const leftoverResourceSandboxStateNotLive = leftoverResourceSandboxStateIsNotLive(
     leftoverChromeIdentity,
   );
@@ -7248,15 +7244,7 @@ export function App() {
     }
 
     const dockSendPreference = normalizeDockSendPreference(layout.composerSendPreference);
-    const dockAnchor = activeView === "coach" ? null : resolveDockContextAnchor(
-      activeView,
-      {
-        stageTitle: activePlanStage?.title,
-        stageProgress: dockStageProgressLabel,
-        resourceLabel: selectedResourceNavigationLabel,
-      },
-      dockAnchorControl.suppressed,
-    );
+    const dockAnchor = activeView === "plan" ? dockAnchorControl.anchor : null;
     const analyzedIntent =
       sendAnalysis.intent === "coach" ||
       sendAnalysis.intent === "next_task" ||
@@ -7312,6 +7300,13 @@ export function App() {
           ? {
               mode: resourcesComposerMode,
               resourceIds: selectedResourceContextIds,
+              currentResource: openedResource
+                ? {
+                    resourceId: openedResource.id,
+                    versionId: resourceRestoreContext?.versionId,
+                    line: resourceRestoreContext?.line,
+                  }
+                : undefined,
             }
           : undefined,
       includeDiagnostics: intent === "review" ? true : undefined,
@@ -7927,18 +7922,21 @@ export function App() {
     [setComposerDraft],
   );
 
-  const selectedResourceNavigationLabel = leftoverResourceSelectedDetailNotLive
-    ? undefined
-    : truncateInlineText(
-        data.memory.selectedResourceDetail?.title ??
-          data.memory.selectedResourceDetail?.sandboxPath ??
-          liveSandboxState?.selectedPath,
-        layout.composerLanguage === "zh-CN" ? 22 : 46,
-      ) ??
-      truncateInlineText(
-        data.memory.selectedResourceDetail?.source,
-        layout.composerLanguage === "zh-CN" ? 22 : 46,
-      );
+  const openedResource = resourceRestoreContext?.surface === "detail"
+    ? liveResources.find((resource) => resource.id === resourceRestoreContext.resourceId)
+    : undefined;
+  const selectedResourceNavigationLabel = truncateInlineText(
+    openedResource?.title,
+    layout.composerLanguage === "zh-CN" ? 22 : 46,
+  );
+  const selectedResourceLine = resourceRestoreContext?.line;
+  const dockResourceLabel = selectedResourceNavigationLabel && selectedResourceLine
+    ? `${selectedResourceNavigationLabel} · L${selectedResourceLine}`
+    : selectedResourceNavigationLabel;
+  const clearResourceConversationContext = () => {
+    setResourceRestoreContext(undefined);
+    handleResourceSelectionChange([]);
+  };
   const dockStageProgressLabel = hasFormalPlan && activePlanStage
     ? PLAN_COPY[layout.composerLanguage].stageProgress
         .replace(
@@ -7953,7 +7951,7 @@ export function App() {
     activeView,
     activePlanStage?.title,
     dockStageProgressLabel,
-    selectedResourceNavigationLabel,
+    dockResourceLabel,
   );
   const resourceConversationContextLabel = useMemo(() => {
     if (resourceConversationContextIds.length === 0) {
@@ -9832,7 +9830,6 @@ export function App() {
             setActiveView("coach");
             requestCoachComposerFocus();
           }}
-          initialResourceContextIds={resourceConversationContextIds}
           onResourceSelectionChange={handleResourceSelectionChange}
           onRestoreContextChange={setResourceRestoreContext}
           onSearchResources={
@@ -9893,12 +9890,12 @@ export function App() {
           isLiveBrowserPreview={isBrowserPreview && !browserPreviewFixture}
           onExpandToEditor={canOpenInEditor ? () => openViewInEditor("resources") : undefined}
           expandToEditorLabel={expandToEditorLabel}
-          onOpenResource={(resourceId, options) =>
-            postMessage({
-              type: "resource/open",
-              payload: { resourceId, ...options },
-            })
-          }
+          onOpenResource={(resourceId, options) => {
+            handleResourceSelectionChange([resourceId]);
+            const { versionId, ...openOptions } = options ?? {};
+            setResourceRestoreContext({ surface: "detail", resourceId, versionId, line: openOptions.line });
+            postMessage({ type: "resource/open", payload: { resourceId, ...openOptions } });
+          }}
           onRefreshResources={
             isBrowserPreview
               ? () => {
@@ -10916,10 +10913,7 @@ export function App() {
                   <button
                     className="button button--ghost composer-secondary-button"
                     type="button"
-                    onClick={() => {
-                      setSelectedResourceContextIds([]);
-                      setResourceConversationContextIds([]);
-                    }}
+                    onClick={clearResourceConversationContext}
                   >
                     <span className="composer-secondary-button__label">
                       {appUiCopy(layout.composerLanguage, "清除")}
@@ -10958,7 +10952,7 @@ export function App() {
             </div> : null}
             {dockAnchorControl.anchor && activeView !== "coach" ? <div className="template-context" role="group" data-dock-anchor="true">
               <span>{dockAnchorControl.anchor.label}</span>
-              <button type="button" className="template-back" onClick={dockAnchorControl.suppress}>{appUiCopy(layout.composerLanguage, "清除")}</button>
+              <button type="button" className="template-back" onClick={activeView === "resources" ? clearResourceConversationContext : dockAnchorControl.suppress}>{appUiCopy(layout.composerLanguage, "清除")}</button>
             </div> : null}
             {coachSuggestionChips}
             <CoachComposer

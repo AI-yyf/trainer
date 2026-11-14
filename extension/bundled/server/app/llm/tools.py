@@ -663,6 +663,11 @@ def _snapshot_file_listed(context: ToolContext, path_raw: str) -> bool:
     return False
 
 
+def _current_resource_scope(context: ToolContext) -> dict[str, Any]:
+    value = context.extra.get("current_resource_scope")
+    return value if isinstance(value, dict) else {}
+
+
 # --- search_resources ---------------------------------------------------
 
 
@@ -698,7 +703,20 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
 
         # Most resource services expose either search() or search_resources()
         # and return a structured search response object, not a raw list.
-        if hasattr(resource_service, "search"):
+        scope = _current_resource_scope(context)
+        if scope:
+            search_result = resource_service.search_resources(
+                workspace_id=context.workspace_id,
+                query=query,
+                top_k=internal_limit,
+                resource_id=scope["resource_id"],
+                trust_state=trust_state,
+                file_type=file_type,
+                source_type=source_type,
+                kind=kind,
+                index_state=index_state,
+            )
+        elif hasattr(resource_service, "search"):
             search_result = resource_service.search(
                 workspace_id=context.workspace_id,
                 query=query,
@@ -734,6 +752,12 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
 
     normalized = _normalize_search_response(search_result, fallback_query=query)
+    if scope.get("version_id"):
+        normalized["hits"] = [
+            hit for hit in normalized["hits"]
+            if hit.get("version_id") == scope["version_id"] and not hit.get("stale")
+        ]
+        normalized["total"] = len(normalized["hits"])
     visible_hits = _apply_search_mode(normalized["hits"], mode=mode)
     plan = _retrieval_plan(mode, limit)
     visible_hits = [_trim_hit_text(hit, plan["excerpt_budget"]) for hit in visible_hits]
@@ -1921,6 +1945,7 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
 
 
 async def _handle_list_resources(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    scoped_id = _current_resource_scope(context).get("resource_id")
     repository = getattr(context.runtime, "repository", None)
     list_resources = getattr(repository, "list_resources", None)
     if not callable(list_resources):
@@ -1930,7 +1955,10 @@ async def _handle_list_resources(context: ToolContext, args: dict[str, Any]) -> 
             "detail": "The resource library is not attached to this run.",
         }
     try:
-        resources = list(cast("Iterable[Any]", list_resources(context.workspace_id)) or [])
+        resources = [
+            item for item in cast("Iterable[Any]", list_resources(context.workspace_id)) or []
+            if not scoped_id or item.id == scoped_id
+        ]
     except Exception as exc:
         return {"ok": False, "error": "resource_list_failed", "detail": str(exc)}
 
@@ -4064,10 +4092,18 @@ async def _resolve_excerpt_resource(context: ToolContext, args: dict[str, Any]) 
     if registry is None:
         return None, "registry_unavailable"
     resource_id = str(args.get("resource_id") or "").strip()
-    if resource_id:
-        record = _workspace_scoped_registry_resource(context, resource_id)
+    scope = _current_resource_scope(context)
+    scoped_id = scope.get("resource_id")
+    if scoped_id and resource_id and resource_id != scoped_id:
+        return None, "resource_outside_current_scope"
+    resolved_id = resource_id or (scoped_id if isinstance(scoped_id, str) else "")
+    if resolved_id:
+        record = _workspace_scoped_registry_resource(context, resolved_id)
         if record is None:
             return None, "resource_not_found"
+        expected_version = scope.get("version_id")
+        if expected_version and _current_resource_version(context, record).get("version_id") != expected_version:
+            return None, "resource_version_changed"
         return record, None
     query = str(args.get("query") or "").strip()
     if not query:
@@ -4125,7 +4161,7 @@ def _canonical_excerpt_fallback(
     except Exception:
         max_chars = 1600
     anchor = str(args.get("anchor_id") or "").strip()
-    excerpt = text.strip()
+    excerpt = text
     start_line = 1
     page_match = re.search(r"page(\d+)@", anchor)
     if page_match:
@@ -4143,11 +4179,14 @@ def _canonical_excerpt_fallback(
             lines = excerpt.splitlines()
             excerpt = "\n".join(lines[start_line - 1 :])
     excerpt = excerpt.strip()
+    if not excerpt:
+        return None
     truncated = len(excerpt) > max_chars
     if truncated:
         excerpt = excerpt[:max_chars] + "…"
     current_version = _current_resource_version(context, record)
     resource_display = _resource_display(record)
+    version_id = current_version.get("version_id") or resource_display.get("version_id")
     return {
         "ok": True,
         "tool": "read_resource_excerpt",
@@ -4159,10 +4198,9 @@ def _canonical_excerpt_fallback(
                 "paragraph_anchor": anchor or None,
                 "text": excerpt,
                 "start_line": start_line,
-                "end_line": None,
-                "citation_id": None,
-                "version_id": current_version.get("version_id")
-                or resource_display.get("version_id"),
+                "end_line": start_line + excerpt.count("\n") if anchor.startswith("¶line@") else None,
+                "citation_id": citation_id_for(record.id, version_id),
+                "version_id": version_id,
                 "content_hash": current_version.get("content_hash")
                 or resource_display.get("content_hash"),
                 "location": {
@@ -4173,8 +4211,7 @@ def _canonical_excerpt_fallback(
             }
         ],
         "note": (
-            "Excerpts come from the canonical Markdown document; the chunk "
-            "registry was empty (for example after a sidecar restart)."
+            "Excerpt located in the persisted canonical Markdown document."
         ),
     }
 
@@ -4371,6 +4408,14 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
     resource_service = getattr(context.runtime, "resource_service", None)
     registry = getattr(resource_service, "registry", None)
     chunks = registry.list_chunks(record.id) if registry is not None else []
+    line = _current_resource_scope(context).get("line")
+    if isinstance(line, int):
+        args = {**args, "anchor_id": f"¶line@{line}"}
+    requested_anchor = str(args.get("anchor_id") or "").strip()
+    if requested_anchor.startswith("¶line@"):
+        persisted_excerpt = _canonical_excerpt_fallback(context, record, args)
+        if persisted_excerpt:
+            return persisted_excerpt
     if not chunks:
         fallback_text = _canonical_excerpt_fallback(context, record, args)
         if fallback_text:
@@ -4389,7 +4434,14 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
     anchor_line = int(anchor_line_match.group(1)) if anchor_line_match else None
     selected: list[Any] = []
     if anchor_id:
-        matched = _chunk_for_anchor(chunks, anchor_id)
+        if anchor_id.startswith("¶line@") and anchor_line is not None:
+            matched = [
+                chunk for chunk in chunks
+                if chunk.start_line is not None and chunk.end_line is not None
+                and chunk.start_line <= anchor_line <= chunk.end_line
+            ][:1]
+        else:
+            matched = _chunk_for_anchor(chunks, anchor_id)
         if not matched:
             fragment_chunk_id = _chunk_id_for_paragraph_anchor(record, anchor_id)
             if fragment_chunk_id:
@@ -4417,10 +4469,16 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
     current_version = _current_resource_version(context, record)
     excerpts: list[dict[str, Any]] = []
     for chunk in selected:
-        text = str(getattr(chunk, "text", "") or "").strip()
+        raw_text = str(getattr(chunk, "text", "") or "")
+        text = raw_text.strip()
         if not text:
             continue
         chunk_anchor = f"¶chunk:{getattr(chunk, 'order', 0)}@{getattr(chunk, 'start_line', 0)}"
+        if anchor_id.startswith("¶line@") and anchor_line is not None:
+            offset = anchor_line - (chunk.start_line or 1)
+            text = "\n".join(raw_text.splitlines()[offset:]).strip()
+            if not text:
+                continue
         truncated = len(text) > per_excerpt
         if truncated:
             text = text[:per_excerpt] + "…"
@@ -4443,7 +4501,10 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
             dict(raw_fragment_location) if isinstance(raw_fragment_location, dict) else {}
         )
         excerpt_location = dict(fragment_location)
-        excerpt_location.setdefault("anchor", chunk_anchor)
+        if anchor_id.startswith("¶line@"):
+            excerpt_location["anchor"] = anchor_id
+        else:
+            excerpt_location.setdefault("anchor", chunk_anchor)
         if anchor_line is not None:
             excerpt_location["start_line"] = anchor_line
         elif getattr(chunk, "start_line", None) is not None:

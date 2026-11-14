@@ -85,6 +85,7 @@ class SearchFilters:
     source_type: str | None = None
     kind: str | None = None
     index_state: str | None = None
+    resource_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -442,6 +443,7 @@ class SearchIndex:
                 fts_query=fts_query,
                 cjk_query=self._normalize_cjk_query(query_text),
                 file_type=filters.file_type,
+                resource_id=filters.resource_id,
                 limit=max(top_k * 3, top_k),
             )
             if not fts_results:
@@ -647,6 +649,7 @@ class SearchIndex:
         cjk_query: str | None,
         file_type: str | None,
         limit: int,
+        resource_id: str | None = None,
     ) -> list[dict[str, Any]]:
         rows_by_id: dict[str, dict[str, Any]] = {}
         if fts_query != '""':
@@ -664,6 +667,9 @@ class SearchIndex:
             if file_type:
                 fts_sql += " AND file_type = ?"
                 params.append(file_type)
+            if resource_id:
+                fts_sql += " AND resource_id = ?"
+                params.append(resource_id)
             fts_sql += " ORDER BY fts_rank LIMIT ?"
             params.append(limit)
             for row in conn.execute(fts_sql, params).fetchall():
@@ -685,6 +691,9 @@ class SearchIndex:
                 )
             """
             cjk_params.append(file_type)
+        if resource_id:
+            cjk_sql += " AND resource_id = ?"
+            cjk_params.append(resource_id)
         cjk_sql += " ORDER BY fts_rank LIMIT ?"
         cjk_params.append(limit)
         cjk_rows = conn.execute(cjk_sql, cjk_params).fetchall()
@@ -767,6 +776,10 @@ class SearchIndex:
             if filters.index_state:
                 sql += " AND index_state = ?"
                 params.append(filters.index_state)
+
+            if filters.resource_id:
+                sql += " AND resource_id = ?"
+                params.append(filters.resource_id)
 
             sql += " ORDER BY trust_score DESC, updated_at DESC LIMIT ?"
             params.append(top_k)

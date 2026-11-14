@@ -73,7 +73,7 @@ test('opening a resource editor tab resets the cursor to the top of the file', (
   const commands = fs.readFileSync(commandPath, 'utf8');
   assert.match(
     commands,
-    /selection: new vscode\.Range\(requestedLine \? requestedLine - 1 : 0, 0, requestedLine \? requestedLine - 1 : 0, 0\)/,
+    /let editorLine = requestedLine \? requestedLine - 1 : 0/,
   );
   assert.match(commands, /preview: false/);
   assert.match(commands, /preserveFocus: false/);

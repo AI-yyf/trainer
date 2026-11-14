@@ -1645,7 +1645,13 @@ test('openResourceCommand opens the canonical Markdown by default and the origin
         openedExternal.push(uri);
       },
     },
-    workspace: { workspaceFolders: [] },
+    workspace: {
+      workspaceFolders: [],
+      async openTextDocument(uri) {
+        const text = fs.readFileSync(uri.fsPath, 'utf8');
+        return { getText: () => text, lineCount: text.split('\n').length };
+      },
+    },
   };
   const { openResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, vscodeMock);
   const context = createContext();
@@ -1655,7 +1661,7 @@ test('openResourceCommand opens the canonical Markdown by default and the origin
   fs.mkdirSync(path.dirname(originalPath), { recursive: true });
   fs.mkdirSync(path.dirname(markdownPath), { recursive: true });
   fs.writeFileSync(originalPath, 'docx bytes');
-  fs.writeFileSync(markdownPath, '# canonical digest');
+  fs.writeFileSync(markdownPath, '---\ntitle: Notes\n---\n\n# canonical digest\n\nThe selected passage.');
   const resource = context.getHostState().bootstrap.resources[0];
   const bootstrap = context.getHostState().bootstrap;
   context.getHostState = () => ({ bootstrap, workspace: { workspaceFolder: workspaceRoot } });
@@ -1672,6 +1678,10 @@ test('openResourceCommand opens the canonical Markdown by default and the origin
   assert.equal(executedCommands.length, 1);
   assert.equal(executedCommands[0][0], 'vscode.open');
   assert.equal(executedCommands[0][1].fsPath, markdownPath);
+
+  const hitResult = await openResourceCommand(context, { resourceId: 'resource-1', line: 3 });
+  assert.equal(hitResult.ok, true);
+  assert.equal(executedCommands[1][2].selection.start.line, 6);
 
   const originalResult = await openResourceCommand(context, {
     resourceId: 'resource-1',

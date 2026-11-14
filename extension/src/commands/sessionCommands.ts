@@ -161,6 +161,11 @@ export async function invalidateActiveTrainerStreams(
 type ResourceComposerIntentPayload = {
   mode: 'locate' | 'download' | 'organize' | 'cards';
   resourceIds?: string[];
+  currentResource?: {
+    resourceId: string;
+    versionId?: string;
+    line?: number;
+  };
 };
 
 type ResourceComposerSessionMessagePayload = SessionMessagePayload & {
@@ -3783,9 +3788,20 @@ function extractResourceComposerIntent(value: unknown): ResourceComposerIntentPa
         .filter((item, index, values) => values.indexOf(item) === index)
         .slice(0, 12)
     : undefined;
+  const current = asTrainingRecord(record.currentResource);
+  const resourceId = asNonEmptyString(current?.resourceId);
+  const versionId = asNonEmptyString(current?.versionId);
+  const line = current?.line;
   return {
     mode,
     resourceIds: resourceIds && resourceIds.length > 0 ? resourceIds : undefined,
+    currentResource: resourceId && isOpaqueResourceId(resourceId)
+      ? {
+          resourceId,
+          versionId: versionId && isOpaqueResourceId(versionId) ? versionId : undefined,
+          line: typeof line === 'number' && Number.isSafeInteger(line) && line > 0 ? line : undefined,
+        }
+      : undefined,
   };
 }
 
@@ -3802,13 +3818,14 @@ function isOpaqueResourceId(value: string): boolean {
 
 function resourceComposerIntentWire(
   intent: ResourceComposerIntentPayload | undefined,
-): { mode: ResourceComposerIntentPayload['mode']; resource_ids: string[] } | undefined {
+): { mode: ResourceComposerIntentPayload['mode']; resource_ids: string[]; current_resource?: ResourceComposerIntentPayload['currentResource'] } | undefined {
   if (!intent) {
     return undefined;
   }
   return {
     mode: intent.mode,
     resource_ids: intent.resourceIds ?? [],
+    ...(intent.currentResource ? { current_resource: intent.currentResource } : {}),
   };
 }
 

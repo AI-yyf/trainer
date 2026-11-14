@@ -2767,12 +2767,23 @@ class CoachDefaults(BaseModel):
     custom_skills: list[CustomSkill] = Field(default_factory=list, alias="customSkills", max_length=24)
 
 
+class CurrentResourceReference(BaseModel):
+    """Resource currently open in the library, optionally at a known line."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    resource_id: str = Field(alias="resourceId", min_length=1, max_length=160)
+    version_id: str | None = Field(default=None, alias="versionId", min_length=1, max_length=160)
+    line: int | None = Field(default=None, gt=0, le=2**53 - 1, strict=True)
+
+
 class ResourceComposerIntent(BaseModel):
     """Advisory Resources-composer context with no path or write authority."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     mode: Literal["locate", "download", "organize", "cards"]
+    current_resource: CurrentResourceReference | None = Field(default=None, alias="currentResource")
     resource_ids: list[str] = Field(default_factory=list, alias="resourceIds", max_length=12)
 
     @field_validator("resource_ids")

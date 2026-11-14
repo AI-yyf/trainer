@@ -292,6 +292,8 @@ type OperationMessage = TrainerOperationMessage;
 export interface ResourceRestoreContext {
   surface: "detail" | "sandbox";
   resourceId?: string;
+  versionId?: string;
+  line?: number;
   focusArea?: string;
   sandboxPath?: string;
   previewPath?: string;
