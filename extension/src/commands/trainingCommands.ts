@@ -2109,6 +2109,7 @@ export async function trainingReviewQueueActionCommand(
 ): Promise<CommandExecutionResult> {
   const p = payload as {
     concept?: string;
+    trainingCardId?: string;
     action?: string;
     scope?: string;
     batchLimit?: number;
@@ -2128,6 +2129,7 @@ export async function trainingReviewQueueActionCommand(
       {
         workspace_id: workspaceId,
         concept: p?.concept ?? '',
+        ...(p?.trainingCardId ? { training_card_id: p.trainingCardId } : {}),
         action: p?.action ?? '',
         scope: p?.scope ?? 'single',
         batch_limit: p?.batchLimit ?? 4,

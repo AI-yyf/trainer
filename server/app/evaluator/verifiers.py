@@ -284,10 +284,7 @@ class PythonToolchainPlanner:
         if "-p" not in pytest_args:
             pytest_args = [*pytest_args, "-p", "no:cacheprovider"]
         # PyInstaller's sys.executable is the sidecar launcher, not a Python CLI.
-        python = request.verification_python or (
-            (shutil.which("python3") or shutil.which("python") or "python3")
-            if getattr(sys, "frozen", False) else sys.executable
-        )
+        python = self.python_executable(request)
         modules = bool(request.verification_python or getattr(sys, "frozen", False))
         commands = [
             CheckCommand(name="ruff", argv=[python, "-m", "ruff", "check", target] if modules else ["ruff", "check", target], cwd=cwd),
@@ -301,6 +298,13 @@ class PythonToolchainPlanner:
         if _has_python_script_entrypoint(request.code or ""):
             commands.append(CheckCommand(name="python-script", argv=[python, "-B", target], cwd=cwd))
         return tuple(commands)
+
+    @staticmethod
+    def python_executable(request: EvaluationRequest) -> str:
+        return request.verification_python or (
+            (shutil.which("python3") or shutil.which("python") or "python3")
+            if getattr(sys, "frozen", False) else sys.executable
+        )
 
 
 def _has_python_script_entrypoint(code: str) -> bool:

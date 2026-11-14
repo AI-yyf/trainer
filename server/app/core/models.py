@@ -9,6 +9,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    JsonValue,
     ValidationInfo,
     computed_field,
     field_validator,
@@ -1254,11 +1255,13 @@ class EvaluationReport(BaseModel):
     next_step: str
     reflection: str | None = None
     passed: bool
+    verification_scope: Literal["unverified", "execution", "test_suite", "behavior"] = "unverified"
     workspace_id: str = Field(default="", alias="workspaceId")
 
 
 class ReviewQueueItem(BaseModel):
     concept: str
+    training_card_id: str | None = None
     reason: str
     due_at: str | None = None
     source: Literal["weakness", "mastery", "reflection", "plan"] = "weakness"
@@ -1293,6 +1296,22 @@ def _normalize_training_file_path(value: object) -> str:
     return text.strip()
 
 
+class PythonBehaviorCase(BaseModel):
+    args: list[JsonValue] = Field(default_factory=list, max_length=16)
+    expected: JsonValue
+
+
+class PythonBehaviorContract(BaseModel):
+    function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$", max_length=100)
+    cases: list[PythonBehaviorCase] = Field(min_length=2, max_length=12)
+
+    @model_validator(mode="after")
+    def require_distinct_inputs(self) -> "PythonBehaviorContract":
+        if any(case.args != self.cases[0].args for case in self.cases[1:]):
+            return self
+        raise ValueError("Behavior checks need at least two distinct inputs.")
+
+
 class TrainingCardCandidateSnapshot(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -1319,6 +1338,7 @@ class TrainingCardCandidateSnapshot(BaseModel):
     validation_method: str = ""
     grading_rubric: list[str] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
+    python_behavior_contract: PythonBehaviorContract | None = None
     trainer_review_input: str = ""
     stuck_recovery: str = ""
     reflection_prompt: str = ""
@@ -1882,6 +1902,7 @@ class FlashcardAttempt(BaseModel):
 class ReviewQueueAction(BaseModel):
     entry_id: str = ""
     concept: str
+    training_card_id: str | None = None
     action: str
     outcome: str
     focus_area: str = ""
@@ -2103,6 +2124,7 @@ class TrainingHandoffActionResponse(BaseModel):
 class ReviewQueueActionRequest(BaseModel):
     workspace_id: str
     concept: str
+    training_card_id: str | None = None
     action: Literal["accept", "snooze", "reset", "skip", "done"]
     scope: str = "single"
     focus_area: str = ""

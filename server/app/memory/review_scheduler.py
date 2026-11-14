@@ -6,10 +6,12 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Literal
 
-from ..core.models import LearningPlan, ReviewQueueItem
+from ..core.models import LearningPlan, ReviewQueueAction, ReviewQueueItem
+from ..training.fsrs_scheduler import card_state_from_payload
 from .models import MasteryRecord, ProgressRecord, ReflectionRecord, WeaknessRecord, utc_now
 from .models import MemorySnapshot as LaneMemorySnapshot
 from .review_intervention import curate_review_items, derive_review_budget
+from .review_queue import visible_review_queue_items
 from .workspace_recovery import (
     PLAN_RUNTIME_KEY,
     live_coach_stage_label,
@@ -103,6 +105,8 @@ class ReviewScheduler:
         plan: LearningPlan | None,
         lane_snapshot: LaneMemorySnapshot,
         weakness_records: list[WeaknessRecord],
+        queue_actions: tuple[ReviewQueueAction, ...] = (),
+        reviewable_card_ids: set[str] | None = None,
     ) -> list[ReviewQueueItem]:
         now = utc_now()
         workspace = lane_snapshot.workspace if isinstance(lane_snapshot.workspace, dict) else {}
@@ -140,6 +144,52 @@ class ReviewScheduler:
         )
 
         due_items: list[ReviewQueueItem] = []
+        scheduled_concepts: set[str] = set()
+        states = workspace.get("latest_training_fsrs_states") or workspace.get(
+            "latestTrainingFsrsStates"
+        )
+        if isinstance(states, dict):
+            for card_id, payload in states.items():
+                if reviewable_card_ids is not None and card_id not in reviewable_card_ids:
+                    continue
+                if not isinstance(payload, dict):
+                    continue
+                try:
+                    state = card_state_from_payload(payload)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                if state is None or state.card_id != card_id:
+                    continue
+                due = state.next_due_at or state.due
+                if due is None:
+                    continue
+                scheduled_concepts.add(state.concept_id)
+                if not self._within_horizon(due, now=now, horizon_days=horizon_days):
+                    continue
+                focus = state.focus_area or state.concept_id
+                context = language_context or focus
+                due_items.append(self._make_item(
+                    concept=state.concept_id,
+                    reason=_localized_text(
+                        "Recall this card at its scheduled review time.",
+                        "按这张卡片的调度时间进行回忆。",
+                        context,
+                    ),
+                    due_at=due,
+                    source="mastery",
+                    severity="medium",
+                    reminder_mode=reminder_mode,
+                    review_cadence=review_cadence,
+                    task_hint=_localized_text(
+                        "Try recalling the answer before checking your notes.",
+                        "先回忆答案，再查看笔记。",
+                        context,
+                    ),
+                    focus_area=focus,
+                    linked_context="",
+                    interval_days=state.interval,
+                    evidence_basis="fsrs_recall" if state.reps else "no_recall_evidence",
+                ).model_copy(update={"training_card_id": state.card_id}))
 
         for weakness in weakness_records:
             if weakness.next_review_at and not self._within_horizon(
@@ -190,6 +240,8 @@ class ReviewScheduler:
             )
 
         for mastery in lane_snapshot.mastery:
+            if mastery.concept in scheduled_concepts:
+                continue
             # Only FSRS owns due dates. Heuristic mastery has no recall
             # evidence and must not be presented as a scheduled review.
             if mastery.review_source != "fsrs" or mastery.next_review_at is None:
@@ -429,7 +481,10 @@ class ReviewScheduler:
                     )
                 )
 
-        ranked = self._dedupe_items(due_items, active_thread_focus)
+        visible = visible_review_queue_items(
+            due_items, queue_actions, {record.concept: record for record in weakness_records}, now=now,
+        )
+        ranked = self._dedupe_items(visible, active_thread_focus)
         # Finalize the existing four-item head first so a plan checkpoint can
         # take its reserved slot; the intervention budget then decides how much
         # of that head may be surfaced this turn.
@@ -776,7 +831,9 @@ class ReviewScheduler:
 
     def _item_sort_key(self, item: ReviewQueueItem, active_thread_focus: str) -> tuple[int, int, int, str, int, float]:
         return (
-            0 if active_thread_focus and item.focus_area == active_thread_focus else 1,
+            0 if item.training_card_id and item.surface_mode == "due"
+            else 1 if active_thread_focus and item.focus_area == active_thread_focus
+            else 2,
             self._surface_rank.get(item.surface_mode, 1),
             self._severity_rank.get(item.severity, 1),
             item.due_at or "9999-12-31T00:00:00+00:00",
@@ -785,6 +842,8 @@ class ReviewScheduler:
         )
 
     def _dedupe_key(self, item: ReviewQueueItem) -> str:
+        if item.training_card_id:
+            return f"training-card:{item.training_card_id}"
         focus = (item.focus_area or item.concept).strip().lower()
         concept = item.concept.strip().lower()
         if focus:

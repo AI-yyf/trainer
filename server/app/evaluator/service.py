@@ -17,6 +17,7 @@ from ..core.models import (
     EvaluateSnippetRequest,
     EvaluationCheck,
     EvaluationReport,
+    PythonBehaviorContract,
 )
 from ..core.models import TaskSpec as ApiTaskSpec
 from ..memory.workspace_recovery import live_training_card_title
@@ -24,7 +25,38 @@ from ..specs.models import RequirementItem, TaskSpec
 from .check_cache import CHECK_RESULT_CACHE
 from .models import CheckCommand, CheckResult, CheckStatus, EvaluationRequest, SemanticReview
 from .models import EvaluationReport as LaneEvaluationReport
-from .verifiers import VerifierPack, verifier_pack_for
+from .verifiers import PythonToolchainPlanner, VerifierPack, verifier_pack_for
+
+_PYTHON_BEHAVIOR_RUNNER = """
+import json
+import math
+import runpy
+import sys
+from pathlib import Path
+
+target = Path(sys.argv[1])
+contract = json.loads(sys.argv[2])
+sys.path.insert(0, str(target.parent))
+try:
+    function = runpy.run_path(str(target)).get(contract["function"])
+    if not callable(function):
+        raise AssertionError(f'Missing callable: {contract["function"]}')
+    for index, case in enumerate(contract["cases"], 1):
+        actual = function(*case["args"])
+        expected = case["expected"]
+        if isinstance(expected, float) and type(actual) in {int, float}:
+            matches = math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-12)
+        else:
+            matches = type(actual) is type(expected) and actual == expected
+        if not matches:
+            raise AssertionError(f'Case {index} returned a different value than expected.')
+except ModuleNotFoundError:
+    print("TRAINER_DEPENDENCY_MISSING")
+    sys.exit(3)
+print(f'TRAINER_BEHAVIOR_CASES_PASSED:{len(contract["cases"])}')
+"""
+
+_DYNAMIC_CHECKS = frozenset({"pytest", "hypothesis", "python-script", "python-behavior"})
 
 
 def _prefers_chinese(language: str | None) -> bool:
@@ -358,6 +390,30 @@ class EvaluationPipeline:
         # the planner and propagates.
         return list(self._verifier_pack.command_planner.plan(request))
 
+    def _check_python_behavior(
+        self, contract: PythonBehaviorContract, request: EvaluationRequest, target: str,
+    ) -> CheckResult:
+        result = self._runner.run(CheckCommand(
+            name="python-behavior",
+            argv=[
+                PythonToolchainPlanner.python_executable(request),
+                "-B", "-c", _PYTHON_BEHAVIOR_RUNNER, target,
+                contract.model_dump_json(),
+            ],
+            cwd=request.workspace,
+        ))
+        if result.exit_code == 3 and result.stdout.strip().endswith("TRAINER_DEPENDENCY_MISSING"):
+            result.status = CheckStatus.ERROR
+            result.summary = "A dependency required by the behavior check is unavailable."
+        elif result.status == CheckStatus.PASSED and not result.stdout.strip().endswith(
+            f"TRAINER_BEHAVIOR_CASES_PASSED:{len(contract.cases)}"
+        ):
+            result.status = CheckStatus.ERROR
+            result.summary = "The behavior check exited before reporting a verdict."
+        elif result.status == CheckStatus.PASSED:
+            result.summary = f"{len(contract.cases)} task behavior cases passed."
+        return result
+
     def evaluate(self, request: EvaluationRequest) -> LaneEvaluationReport:
         # Always own a TemporaryDirectory as tool cwd — ignore any caller workspace
         # that might point at the learner project.
@@ -366,6 +422,7 @@ class EvaluationPipeline:
         target = target_path_value or "<snippet>"
         code = request.code or ""
 
+        behavior_contract = request.python_behavior_contract
         try:
             sandbox = temp_dir.name
             reported_target = target
@@ -492,6 +549,8 @@ class EvaluationPipeline:
                 self._runner.run(command) for command in planned if command.name == "python-script"
             )
             checks.append(self._hypothesis_hook.run(request))
+            if behavior_contract is not None:
+                checks.append(self._check_python_behavior(behavior_contract, request, target))
             semantic_review = self._semantic_reviewer.review(request.spec, code, checks)
             overall_status = self._overall_status(checks, semantic_review)
             return LaneEvaluationReport(
@@ -540,6 +599,7 @@ class EvaluatorService:
         leftover_task_title: str = "",
         response_language: str | None = None,
         project_root: str | None = None,
+        python_behavior_contract: PythonBehaviorContract | None = None,
     ) -> EvaluationReport:
         if spec is not None and request.task_spec_id != spec.id:
             spec = None
@@ -560,6 +620,7 @@ class EvaluatorService:
                 code=request.content,
                 project_root=project_root,
                 verification_python=request.verification_python,
+                python_behavior_contract=python_behavior_contract,
                 # cwd sandbox is owned by EvaluationPipeline.evaluate (TemporaryDirectory);
                 # never pass the learner project parent (avoids .pytest_cache / pyc writes).
             )
@@ -572,7 +633,7 @@ class EvaluatorService:
             learner_deliverables=request.learner_deliverables,
             expected_symbols=request.expected_symbols,
             execution_passed=report.overall_status == CheckStatus.PASSED and any(
-                check.name in {"pytest", "hypothesis", "python-script"} and check.status == CheckStatus.PASSED
+                check.name in _DYNAMIC_CHECKS and check.status == CheckStatus.PASSED
                 for check in report.checks
             ),
             script_stdout=next((
@@ -599,6 +660,7 @@ class EvaluatorService:
                 _requires_code_evidence(request.language_id)
             ),
             response_language=response_language,
+            requires_card_behavior=str(request.evaluation_source or "").strip().lower() == "training",
         )
 
     def evaluate_snippet(
@@ -676,6 +738,7 @@ class EvaluatorService:
         vscode_diagnostics: list[str] | None = None,
         training_acceptance_check: EvaluationCheck | None = None,
         requires_dynamic_verification: bool = False,
+        requires_card_behavior: bool = False,
         response_language: str | None = None,
     ) -> EvaluationReport:
         diagnostics = [item.strip() for item in (vscode_diagnostics or []) if item and item.strip()]
@@ -697,7 +760,7 @@ class EvaluatorService:
         dynamic_checks = [
             self._to_api_check(check)
             for check in report.checks
-            if check.name in {"pytest", "hypothesis", "python-script"}
+            if check.name in _DYNAMIC_CHECKS
         ]
         semantic_detail_lines = [
             *(context_notes or []),
@@ -712,20 +775,31 @@ class EvaluatorService:
             if check.status in {CheckStatus.FAILED, CheckStatus.ERROR}
         ]
         has_dynamic_verification = any(
-            check.name in {"pytest", "hypothesis", "python-script"} and check.status == CheckStatus.PASSED
+            check.name in _DYNAMIC_CHECKS and check.status == CheckStatus.PASSED
             for check in report.checks
         )
-        verification_required = requires_dynamic_verification and not has_dynamic_verification
+        verification_required = requires_dynamic_verification and not any(
+            check.status in {"passed", "failed"} for check in dynamic_checks
+        )
         if has_error_diagnostics:
             failed_tool_labels.append("vscode-diagnostics")
+        behavior_passed = any(
+            check.id == "python-behavior" and check.status == "passed" for check in dynamic_checks
+        )
+        card_behavior_pending = requires_card_behavior and not any(
+            check.id == "python-behavior" and check.status in {"passed", "failed"}
+            for check in dynamic_checks
+        )
         training_acceptance_blocks = (
-            training_acceptance_check is not None and training_acceptance_check.status != "passed"
+            not behavior_passed and training_acceptance_check is not None
+            and training_acceptance_check.status != "passed"
         )
         passed = (
             report.overall_status == CheckStatus.PASSED
             and not has_error_diagnostics
             and not training_acceptance_blocks
             and not verification_required
+            and not card_behavior_pending
         )
         if passed:
             passed_tools = [check.name for check in report.checks if check.status == CheckStatus.PASSED]
@@ -744,12 +818,29 @@ class EvaluatorService:
             )
             if training_acceptance_check is not None:
                 summary += _localized_text(
-                    " Training acceptance signals matched.",
-                    " 训练验收信号已匹配。",
+                    " Task behavior cases passed."
+                    if behavior_passed else
+                    " Training acceptance signals matched. Task behavior still needs independent verification.",
+                    " 任务行为用例已通过。"
+                    if behavior_passed else " 训练验收信号已匹配。任务行为仍需独立验证。",
                     response_language,
                 )
             if report.semantic_review.status == CheckStatus.PASSED and report.semantic_review.summary:
                 summary += f" {report.semantic_review.summary}"
+        elif card_behavior_pending and not failed_tool_labels and not training_acceptance_blocks:
+            summary = _localized_text(
+                "Verification is still required: no task-specific behavior result is available.",
+                "仍需验证：当前没有针对训练任务的行为检查结果。",
+                response_language,
+            )
+        elif any(
+            check.id == "python-behavior" and check.status == "warning" for check in dynamic_checks
+        ):
+            summary = _localized_text(
+                "Verification is still required: the task behavior check could not run to completion.",
+                "仍需验证：任务行为检查未能运行到结论。",
+                response_language,
+            )
         elif failed_tool_labels:
             summary = _localized_text(
                 f"Evaluation failed on: {', '.join(failed_tool_labels)}.",
@@ -826,6 +917,12 @@ class EvaluatorService:
                 "为这张练习卡提供具体的验收标准或期望符号，然后重新运行验证。",
                 response_language,
             )
+        elif card_behavior_pending and not training_acceptance_blocks:
+            next_step = _localized_text(
+                "Check that the exercise has behavior cases and that its dependencies are available, then re-run verification.",
+                "确认练习有可运行的行为用例和所需依赖后，再次验证。",
+                response_language,
+            )
         elif verification_required:
             next_step = _localized_text(
                 "Run at least one dynamic verifier, then re-run verification.",
@@ -879,6 +976,21 @@ class EvaluatorService:
         ]
         if training_acceptance_check is not None:
             semantic_checks.append(training_acceptance_check)
+        verification_scope: Literal["unverified", "execution", "test_suite", "behavior"]
+        if any(
+            check.id == "python-behavior" and check.status in {"passed", "failed"}
+            for check in dynamic_checks
+        ):
+            verification_scope = "behavior"
+        elif any(
+            check.status == "passed" and check.id in {"pytest", "hypothesis"}
+            for check in dynamic_checks
+        ):
+            verification_scope = "test_suite"
+        elif has_dynamic_verification:
+            verification_scope = "execution"
+        else:
+            verification_scope = "unverified"
         return EvaluationReport(
             task_spec_id=task_spec_id,
             summary=summary,
@@ -888,6 +1000,7 @@ class EvaluatorService:
             next_step=next_step,
             reflection=report.reflection.get("summary"),
             passed=passed,
+            verification_scope=verification_scope,
         )
 
     def _evaluation_context_notes(
@@ -979,12 +1092,15 @@ class EvaluatorService:
         )
         implicit_protocols: set[str] = set()
         python_expressions: set[str] = set()
+        return_literals: set[str] | None = None
         if str(language_id or "").lower() in _PYTHON_LANGUAGE_IDS:
             try:
                 syntax = ast.parse(code)
             except SyntaxError:
                 syntax = None
+            return_literals = set()
             if syntax is not None:
+                return_literals = _python_return_literals(syntax)
                 python_expressions = {
                     ast.dump(node, include_attributes=False)
                     for node in ast.walk(syntax)
@@ -1007,6 +1123,7 @@ class EvaluatorService:
                 python_expressions=python_expressions,
                 script_stdout=script_stdout,
                 raw_code=literal_evidence,
+                return_literals=return_literals,
                 defer_without_signals=(
                     _criterion_is_explanation_only(item)
                     and not _criterion_requires_explicit_evidence(item)
@@ -1021,6 +1138,7 @@ class EvaluatorService:
                 requires_code_evidence=requires_code_evidence,
                 python_expressions=python_expressions,
                 raw_code=literal_evidence,
+                return_literals=return_literals,
             )
             for item in symbols
         ]
@@ -1402,6 +1520,16 @@ def _matches_string_literal(symbol: str, code: str | None) -> bool:
     )
 
 
+def _python_return_literals(syntax: ast.AST) -> set[str]:
+    return {
+        node.value.value
+        for node in ast.walk(syntax)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    }
+
+
 def _matches_code_symbol(symbol: str, evidence: str) -> bool:
     normalized = _normalize_code_symbol(symbol)
     if normalized is None:
@@ -1499,6 +1627,7 @@ def _criterion_result(
     python_expressions: set[str] | None = None,
     script_stdout: str | None = None,
     raw_code: str | None = None,
+    return_literals: set[str] | None = None,
     defer_without_signals: bool = False,
 ) -> dict[str, list[str] | str]:
     if requires_code_evidence:
@@ -1528,7 +1657,11 @@ def _criterion_result(
         matched_signals = [
             signal for signal in code_signals
             if _matches_code_symbol(signal, evidence)
-            or _matches_string_literal(signal, raw_code)
+            or (
+                _normalize_code_symbol(signal) in return_literals
+                if return_literals is not None
+                else _matches_string_literal(signal, raw_code)
+            )
             or _python_expression_key(signal) in (python_expressions or set()) or (
                 describes_protocol and signal not in expected_symbols
                 and signal in (implicit_protocols or set())
@@ -1620,6 +1753,7 @@ def _expected_symbol_result(
     requires_code_evidence: bool,
     python_expressions: set[str] | None = None,
     raw_code: str | None = None,
+    return_literals: set[str] | None = None,
 ) -> dict[str, list[str] | str]:
     normalized = symbol.strip()
     # Some cards name a statement, not an identifier (`with self._lock`).
@@ -1634,7 +1768,11 @@ def _expected_symbol_result(
     matched = (
         (
             _matches_code_symbol(normalized, evidence)
-            or _matches_string_literal(normalized, raw_code)
+            or (
+                _normalize_code_symbol(normalized) in return_literals
+                if return_literals is not None
+                else _matches_string_literal(normalized, raw_code)
+            )
             or statement_match
             or _python_expression_key(normalized) in (python_expressions or set())
         )

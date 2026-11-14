@@ -48,6 +48,7 @@ export interface TrainingReviewItem {
   id: string;
   title: string;
   concept: string;
+  trainingCardId?: string;
   focusArea: string;
   taskHint: string;
   due?: string;
@@ -176,6 +177,7 @@ export interface TrainingWorkbenchViewProps {
   reviewItems?: TrainingReviewItem[];
   onReviewQueueAction?: (payload: {
     concept: string;
+    trainingCardId?: string;
     action: TrainingReviewAction;
     focusArea: string;
     taskHint: string;
@@ -1218,6 +1220,7 @@ export function TrainingWorkbenchView({
                                   type="button"
                                   onClick={() => onReviewQueueAction?.({
                                     concept: item.concept,
+                                    trainingCardId: item.trainingCardId,
                                     action,
                                     focusArea: item.focusArea,
                                     taskHint: item.taskHint,
@@ -1239,6 +1242,7 @@ export function TrainingWorkbenchView({
                                       type="button"
                                       onClick={() => onReviewQueueAction?.({
                                         concept: item.concept,
+                                        trainingCardId: item.trainingCardId,
                                         action,
                                         focusArea: item.focusArea,
                                         taskHint: item.taskHint,

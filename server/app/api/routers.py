@@ -9312,6 +9312,20 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             "teaching_style": teaching_style,
             "coach_defaults": coach_defaults,
         }
+        if isinstance(request, TurnRequest):
+            from ..pedagogy.turn_decision import TurnFacts, decide_turn
+
+            turn = decide_turn(TurnFacts(
+                message=request.message,
+                requested_intent=request.intent,
+                intent_source=request.intent_source,
+            ))
+            action = {"task": "practice", "next_task": "practice"}.get(
+                request.intent, request.intent,
+            )
+            if action in turn.refused_actions:
+                update["intent"] = "coach"
+                update["formal_plan_mutation"] = False
         if isinstance(request, TurnRequest) and request.intent == "plan":
             frozen_blocks = leftover_frozen_blocks_turn_generation(workspace_id)
             if not request.formal_plan_mutation or frozen_blocks:
@@ -12590,7 +12604,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             failed_checks=failed_checks,
             missing_requirements=missing_requirements,
             evidence_source=evidence_source,
-            verified_by_evaluator=bool(report.passed) and report_has_executed_pass(report),
+            verified_by_evaluator=report.passed and report.verification_scope == "behavior",
         )
         if isinstance(request, EvaluateCurrentFileRequest):
             record_executed_training_evidence(
@@ -12600,14 +12614,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 report=report,
                 returned_card=return_context,
             )
-        phase = str(getattr(request, "training_phase", "") or "").strip().lower()
-        # Explicit Verify may record AGAIN on failure; without a phase, keep
-        # the legacy pass-only rule because Try shares this endpoint.
-        if phase == "verify" or (not phase and bool(report.passed)):
-            runtime.memory_service.schedule_live_training_card_fsrs_after_verify(
+        if report.passed and report.verification_scope == "behavior":
+            runtime.memory_service.initialize_training_card_review(
                 workspace_id,
                 training_card_id=training_card_id,
-                passed=bool(report.passed),
             )
         persist_training_card_to_sandbox(workspace_id, training_card, mark_current=True)
         persist_training_evaluation_note_to_sandbox(

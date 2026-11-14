@@ -74,13 +74,15 @@ def test_training_requirements_do_not_inherit_an_unrelated_task(tmp_path):
         evaluation_source='training', acceptance_criteria=['Implement test_example'], expected_symbols=['test_example'])
     unrelated = TaskSpec(id='old-task', title='Old task', natural_language_goal='Implement unrelated_operation')
     report = service.evaluate_current_file(request, unrelated)
-    assert report.passed, report.model_dump()
+    assert not report.passed, report.model_dump()
+    assert report.verification_scope == "test_suite"
     assert report.semantic_checks[0].status == 'skipped'
     assert report.semantic_checks[1].status == 'passed'
-    assert 'ruff, pyright, pytest' in report.summary
-    assert 'Training acceptance signals matched' in report.summary
+    assert {check.id for check in report.static_checks if check.status == 'passed'} == {'ruff', 'pyright'}
+    assert any(check.id == 'pytest' and check.status == 'passed' for check in report.dynamic_checks)
+    assert 'no task-specific behavior result' in report.summary
     assert 'No task requirements' not in report.summary
-    assert 'reflection' in report.next_step
+    assert 'behavior cases' in report.next_step
     assert 'blocker' not in report.next_step
 
 
@@ -111,7 +113,8 @@ def test_runtime_acceptance_requires_real_tests_and_return_prose_is_not_code(tmp
         learner_deliverables=['One short reflection', 'One verification output'],
     )
     report = service.evaluate_current_file(request)
-    assert report.passed, report.model_dump()
+    assert not report.passed, report.model_dump()
+    assert report.verification_scope == "test_suite"
     assert report.semantic_checks[-1].status == 'passed'
     request.content = 'def test_boundary() -> None:\n    value = 1\n    assert value == 99\n'
     report = service.evaluate_current_file(request)
@@ -144,7 +147,8 @@ def test_python_card_acceptance_distinguishes_file_and_implicit_assignment_proto
         expected_symbols=['replace_second_item', 'test_nested_mutability', 'TypeError'],
     )
     report = service.evaluate_current_file(request)
-    assert report.passed, report.model_dump()
+    assert not report.passed, report.model_dump()
+    assert report.verification_scope == "test_suite"
     request.expected_symbols.append('__setitem__')
     report = service.evaluate_current_file(request)
     assert not report.passed, 'An explicitly required method still needs its implementation'

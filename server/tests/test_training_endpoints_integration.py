@@ -398,6 +398,7 @@ class TrainingEndpointIntegrationTests(unittest.TestCase):
             structured = memory.structured_for_workspace(workspace_id)
             structured.record_weakness("tuple slot", "Explain the assignment boundary.", severity=3, review_after_days=0)
             memory._persist_structured(workspace_id)
+            original_due = structured._weaknesses["tuple slot"].next_review_at
             self.assertTrue(any(item.concept == "tuple slot" for item in memory.snapshot(workspace_id).due_reviews))
             response = self.client.post("/training/review-queue/action", json={
                 "workspace_id": workspace_id, "concept": "tuple slot", "action": action,
@@ -407,7 +408,7 @@ class TrainingEndpointIntegrationTests(unittest.TestCase):
             self.assertFalse(any(item.concept == "tuple slot" for item in snapshot.due_reviews))
             self.assertIsNone(snapshot.review_artifact)
             self.assertFalse(snapshot.learning_outcomes)
-            self.assertGreater(structured._weaknesses["tuple slot"].next_review_at, utc_now())
+            self.assertEqual(structured._weaknesses["tuple slot"].next_review_at, original_due)
             restored = MemoryService(memory.repository).snapshot(workspace_id)
             self.assertFalse(any(item.concept == "tuple slot" for item in restored.due_reviews))
             self.assertIsNone(restored.review_artifact)

@@ -26,6 +26,7 @@ from uuid import uuid4
 from ..core.models import (
     CardGenerationContext,
     DependencyUsageEvidence,
+    PythonBehaviorContract,
     ResourceKnowledgeEvidence,
     TrainingCardCandidateSnapshot,
     TrainingCardCreatedFrom,
@@ -514,7 +515,6 @@ def _match_guided_scenario_pack(
             "find all references",
             "intellisense",
             "autocomplete",
-            "function",
             "函数提示",
             "参数提示",
             "函数签名",
@@ -2936,6 +2936,18 @@ _LLM_CARD_FIELD_MAP = frozenset(
     }
 )
 
+def _python_behavior_contract_for_payload(data: dict[str, Any]) -> PythonBehaviorContract | None:
+    targets = data.get("files_to_touch")
+    if not isinstance(targets, list) or len(targets) != 1 or not str(targets[0]).endswith(".py"):
+        return None
+    payload = data.get("python_behavior_contract")
+    if not isinstance(payload, dict):
+        return None
+    try:
+        return PythonBehaviorContract.model_validate(payload)
+    except ValueError:
+        return None
+
 # Acceptance criteria must be machine-checkable: the training-acceptance check
 # in the sidecar evaluator accepts a criterion only when it names at least one
 # "verifiable code symbol" — a backticked literal (e.g. `asyncio.gather`) or a
@@ -3257,6 +3269,14 @@ def _build_prompt(context: CardGenerationContext, source: str, card_type: str) -
             "If adding a new function, explicitly say to create it. For file practice, use the "
             "supplied exact path in files_to_touch; do not invent another path. A selected snippet "
             "is only part of the file. Missing diagnostics do not prove a defect or a passing test."
+        )
+    if card_type == "practice":
+        prompt += (
+            "\n\nFor a standalone Python exercise, provide a python_behavior_contract with "
+            'the exact function name and JSON-compatible cases, e.g. {"function":"double",'
+            '"cases":[{"args":[3],"expected":6},{"args":[0],"expected":0}]}. '
+            "Include representative and boundary inputs and compute their expected values. "
+            "Use null for tasks that need non-JSON objects, exceptions or external services."
         )
     return prompt
 
@@ -3931,6 +3951,8 @@ class CardGenerationService:
                         data,
                         context,
                     )
+                    if card_type == "practice":
+                        card_kwargs["python_behavior_contract"] = _python_behavior_contract_for_payload(data)
                     return TrainingCardCandidateSnapshot(**card_kwargs)
                 except Exception:
                     logger.warning(
@@ -4029,6 +4051,8 @@ class CardGenerationService:
             if key in data:
                 card_kwargs[key] = data[key]
         card_kwargs["acceptance_criteria"] = _acceptance_criteria_for_payload(data, context)
+        if card_type == "practice":
+            card_kwargs["python_behavior_contract"] = _python_behavior_contract_for_payload(data)
         try:
             return TrainingCardCandidateSnapshot(**card_kwargs)
         except Exception:

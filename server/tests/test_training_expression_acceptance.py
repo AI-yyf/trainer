@@ -97,3 +97,9 @@ def test_string_values_only_in_comments_do_not_satisfy_symbol_acceptance():
     result = acceptance(code, ["ask_clarification"])
     assert result is not None
     assert result.status == "failed"
+
+
+def test_function_name_in_a_printed_string_is_not_a_definition():
+    result = acceptance('if __name__ == "__main__":\n    print("ppo_clip_loss")\n', ["ppo_clip_loss"])
+    assert result is not None
+    assert result.status == "failed"

@@ -23,6 +23,7 @@ from .api.routes.telemetry import build_telemetry_router
 from .api.routes.training_attempts import build_training_attempts_router
 from .api.routes.training_handoff import build_training_handoff_router
 from .api.runtime import TrainerRuntime
+from .api.training_skill_evidence import refresh_legacy_skill_projections
 from .browser_bridge import BrowserBridgeService
 from .core.config import Settings
 from .core.event_ledger import EventLedgerService
@@ -171,6 +172,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         # expire them honestly (failed/recoverable) at startup instead of
         # letting stale `executing` records linger until their timeout.
         runtime.memory_service.expire_in_flight_training_reliability_at_startup()
+        refresh_legacy_skill_projections(runtime)
         runtime.bind_organizer_loop(asyncio.get_running_loop())
         organizer_task = asyncio.create_task(runtime.run_background_resource_organizer())
         yield

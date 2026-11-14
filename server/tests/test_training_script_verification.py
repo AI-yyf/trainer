@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
 
 @pytest.mark.real_tools
-def test_real_script_without_pytest_tests_counts_as_dynamic_verification_and_runs_fresh():
+def test_real_script_runs_fresh_and_reports_execution_scope():
     runner = ScriptRunner()
     service = EvaluatorService(pipeline=EvaluationPipeline(runner=runner))
     for _ in range(2):
@@ -61,7 +61,8 @@ def test_real_script_without_pytest_tests_counts_as_dynamic_verification_and_run
             "定义 `sum_nested` 并使其对 `[]` 返回 0",
             "使用 `python sum_nested.py` 跑通并 print 0、6、15",
         ]))
-        assert report.passed, report.summary
+        assert not report.passed, report.summary
+        assert report.verification_scope == "execution"
         assert next(c for c in report.dynamic_checks if c.id == "python-script").status == "passed"
     assert runner.script_calls == 2
     assert all(not Path(path).exists() for path in runner.script_workspaces)

@@ -272,7 +272,7 @@ class EvaluatorTests(unittest.TestCase):
         )
         self.assertIn("VS Code diagnostics attached: 2.", semantic_detail)
 
-    def test_training_acceptance_signals_allow_current_file_practice_pass(self) -> None:
+    def test_training_acceptance_signals_are_distinct_from_a_behavior_pass(self) -> None:
         pipeline = FakeEvaluationPipeline()
         service = EvaluatorService(pipeline=pipeline)
 
@@ -303,7 +303,7 @@ class EvaluatorTests(unittest.TestCase):
             )
         )
 
-        self.assertTrue(report.passed)
+        self.assertFalse(report.passed)
         training_check = next(
             check for check in report.semantic_checks if check.id == "training-acceptance"
         )
@@ -519,7 +519,7 @@ class EvaluatorTests(unittest.TestCase):
 
         self.assertFalse(report.passed)
         self.assertIn("Verification is still required", report.summary)
-        self.assertIn("Run at least one dynamic verifier", report.next_step)
+        self.assertIn("behavior cases", report.next_step)
         self.assertEqual(pipeline.requests[0].spec.requirements, [])
         pytest_check = next(check for check in report.dynamic_checks if check.id == "pytest")
         self.assertEqual(pytest_check.status, "skipped")

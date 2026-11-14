@@ -377,6 +377,7 @@ export type EvaluationReport = {
 
 export type ReviewQueueItem = {
   concept: string;
+  trainingCardId?: string;
   reason: string;
   dueAt?: string;
   source: "weakness" | "mastery" | "reflection" | "plan";

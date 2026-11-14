@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.core.models import MemorySnapshot, TurnRequest
 from app.pedagogy.service import PedagogyService
 from app.pedagogy.turn_decision import TurnFacts, decide_turn
@@ -84,6 +86,25 @@ def test_explicit_task_intent_starts_practice() -> None:
     assert decision.allow_formal_plan is False
 
 
+@pytest.mark.parametrize(
+    "request_text",
+    [
+        "Ponme un ejercicio.",
+        "Donne-moi un exercice.",
+        "Gib mir eine Übung.",
+        "練習問題を一問出してください。",
+        "연습 문제를 한 개 내 주세요.",
+        "Me dê um exercício.",
+    ],
+)
+def test_learning_composer_exercise_requests_keep_their_turn_intent(request_text: str) -> None:
+    decision = decide_turn(TurnFacts(message=request_text, answer_mode="direct"))
+    assert decision.mode == "practice"
+    assert decision.allow_question is True
+    assert decision.allow_review is False
+    assert decision.allow_formal_plan is False
+
+
 def test_explicit_review_and_plan_requests_are_honored() -> None:
     review = decide_turn(
         TurnFacts(message="帮我复习一下", requested_intent="review", intent_source="explicit")
@@ -93,6 +114,39 @@ def test_explicit_review_and_plan_requests_are_honored() -> None:
     )
     assert review.mode == "review" and review.allow_review is True
     assert plan.mode == "plan" and plan.allow_formal_plan is True
+
+
+def test_refusal_overrides_inferred_and_explicit_review_routing() -> None:
+    turn = decide_turn(TurnFacts(
+        message="不要复习，今天只想聊聊。", requested_intent="review",
+        needs_review=True, due_review_count=3,
+    ))
+    assert turn.mode == "chat"
+    assert turn.allow_review is False
+
+
+def test_practice_request_overrides_stored_direct_answer_preference() -> None:
+    turn = decide_turn(TurnFacts(
+        message="我平时喜欢直接回答，今天给我出一道题。", answer_mode="direct",
+    ))
+    assert turn.allow_formal_task is True
+    assert turn.mode == "practice"
+
+
+def test_refusal_does_not_block_a_later_different_request() -> None:
+    turn = decide_turn(TurnFacts(message="今天不要复习，不过请给我出一道题。"))
+    assert turn.mode == "practice"
+    assert turn.allow_review is False
+    assert turn.allow_formal_task is True
+
+
+def test_referenced_actions_do_not_create_formal_learning_work() -> None:
+    discussion = decide_turn(TurnFacts(message="这段文档为什么建议每天复习？"))
+    refusal = decide_turn(TurnFacts(
+        message="我不是要制定学习计划。", requested_intent="plan",
+    ))
+    assert discussion.mode == "teach" and not discussion.allow_review
+    assert not refusal.allow_formal_plan
 
 
 def test_proactive_review_does_not_interrupt_a_blocked_activity() -> None:

@@ -40,8 +40,8 @@ def _passed_report() -> EvaluationReport:
         static_checks=[],
         dynamic_checks=[
             EvaluationCheck(
-                id="dynamic-ok",
-                label="dynamic-ok",
+                id="python-behavior",
+                label="python-behavior",
                 status="passed",
                 detail="Verifier ack.",
             )
@@ -50,6 +50,7 @@ def _passed_report() -> EvaluationReport:
         next_step="Return through training handoff.",
         reflection="",
         passed=True,
+        verification_scope="behavior",
     )
 
 
@@ -135,6 +136,8 @@ def test_training_verify_schedules_fsrs_for_live_card_only(tmp_path: Path) -> No
             status="active",
             focus_area="token expiry",
             target_skill="auth expiry",
+            question="When does an expired token stop authorizing requests?",
+            expected_answer="At the expiration timestamp.",
         )
         runtime.memory_service.upsert_card(workspace_id, card)
         _select(runtime, workspace_id, card)
@@ -167,8 +170,10 @@ def test_training_verify_schedules_fsrs_for_live_card_only(tmp_path: Path) -> No
         fsrs_states = workspace.get("latest_training_fsrs_states") or {}
         assert card_id in fsrs_states
         assert set(fsrs_states.keys()) == {card_id}
-        assert int(fsrs_states[card_id].get("reps") or 0) >= 1
-        assert str(fsrs_states[card_id].get("state") or "")
+        assert fsrs_states[card_id]["reps"] == 0
+        assert fsrs_states[card_id]["state"] == "new"
+        assert fsrs_states[card_id]["last_reviewed_at"] is None
+        assert fsrs_states[card_id]["next_due_at"]
 
         assert {
             str(getattr(item, "card_id", "") or "")
@@ -296,7 +301,7 @@ def test_failed_verify_records_again_without_changing_mastery_score(
         assert int(states[card_id]["fail_streak"]) >= 1
 
 
-def test_explicit_verify_phase_records_fsrs_again_on_failure(tmp_path: Path) -> None:
+def test_explicit_verify_failure_does_not_record_recall(tmp_path: Path) -> None:
     workspace_id = "ws-live-fsrs-explicit-fail"
     card_id = "card-live-fsrs-explicit-fail"
     app = create_app(_settings(tmp_path / "data"))
@@ -343,19 +348,6 @@ def test_explicit_verify_phase_records_fsrs_again_on_failure(tmp_path: Path) -> 
         assert response.status_code == 200, response.text
         assert response.json().get("passed") is False
 
-        states = structured._workspace["latest_training_fsrs_states"]
-        assert card_id in states
-        assert int(states[card_id].get("lapses") or 0) >= 1
+        assert card_id not in structured._workspace.get("latest_training_fsrs_states", {})
         mastery = structured._mastery["auth expiry"]
         assert mastery.score == before_score
-        assert mastery.next_review_at is not None
-
-        summary = client.get(f"/memory/summary?workspace_id={workspace_id}").json()
-        memory = summary.get("memory") or summary
-        due = memory.get("due_reviews") or memory.get("dueReviews") or []
-        concepts = {
-            str(item.get("concept") or "").strip()
-            for item in due
-            if isinstance(item, dict)
-        }
-        assert "auth expiry" in concepts

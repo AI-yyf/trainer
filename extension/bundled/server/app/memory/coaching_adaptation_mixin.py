@@ -21,6 +21,7 @@ from ..core.models import (
     LearningPlan,
     MemorySnapshot,
     ResourceRecord,
+    ReviewQueueAction,
     ReviewQueueItem,
     UserProfile,
     WorkspaceUnderstandingSnapshot,
@@ -338,11 +339,16 @@ class CoachingAdaptationMixin:
         plan: LearningPlan | None,
         lane_snapshot: LaneMemorySnapshot,
         weakness_records: list[WeaknessRecord],
+        *,
+        queue_actions: tuple[ReviewQueueAction, ...] = (),
+        reviewable_card_ids: set[str] | None = None,
     ) -> list[ReviewQueueItem]:
         due_reviews = self._review_scheduler.derive_due_reviews(
             plan=plan,
             lane_snapshot=lane_snapshot,
             weakness_records=weakness_records,
+            queue_actions=queue_actions,
+            reviewable_card_ids=reviewable_card_ids,
         )
         active_thread = lane_snapshot.workspace.get("active_thread")
         if not self._is_provider_recovery_thread(active_thread) or not isinstance(active_thread, dict):

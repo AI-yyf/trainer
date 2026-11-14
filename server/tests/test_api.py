@@ -3570,8 +3570,8 @@ def test_training_current_file_evaluation_projects_practice_handoff(tmp_path: Pa
                 static_checks=[],
                 dynamic_checks=[
                     EvaluationCheck(
-                        id="dynamic-practice-api",
-                        label="dynamic-practice-api",
+                        id="python-behavior",
+                        label="python-behavior",
                         status="passed",
                         detail="Controlled check executed.",
                     )
@@ -3587,6 +3587,7 @@ def test_training_current_file_evaluation_projects_practice_handoff(tmp_path: Pa
                 next_step="Return to Coach and route the next training card.",
                 reflection="The practice card has verified evidence.",
                 passed=True,
+                verification_scope="behavior",
             )
         )
 

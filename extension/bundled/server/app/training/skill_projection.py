@@ -40,6 +40,11 @@ DIMENSION_REGISTRY: dict[str, tuple[str, ...]] = {
 }
 _KNOWN_DIMENSIONS = frozenset(_DIMENSIONS) | frozenset(LITERATURE_DIMENSIONS)
 
+LEGACY_VERIFICATION_TRUST = {
+    "trainer-current-file-evaluator": "static_analysis",
+    "trainer-theory_drill": "model_review",
+}
+
 # A recall answer is only "delayed recall" after a real retention interval.
 # Immediate answers stay practice/comprehension evidence and cannot advance
 # this dimension.
@@ -305,7 +310,7 @@ def project_skills(
     partial_dimensions: dict[str, bool] = {dim: False for dim in active_dimensions}
 
     for index, rec in enumerate(evidence_records):
-        if rec.get("superseded_by_evidence_id"):
+        if rec.get("superseded_by_evidence_id") or rec.get("retracted_at"):
             continue
         if not rec.get("is_current") or rec.get("source_deleted") or rec.get("source_stale"):
             continue
@@ -317,10 +322,17 @@ def project_skills(
             error_code=rec.get("error_code"),
             limitations=rec.get("limitations"),
         )
+        # This historical runner accepted symbol matches plus any successful
+        # execution, including a script exit with no assertion.
+        legacy_trust = LEGACY_VERIFICATION_TRUST.get(str(rec.get("runner_version") or ""))
+        trust_level = legacy_trust or str(rec.get("trust_level") or "")
+        requires_recheck = legacy_trust is not None and result_str == "passed"
+        if requires_recheck:
+            result_str = "partial"
         weight = _RESULT_WEIGHT.get(result_str, 0)
         # Trust bonus only amplifies positive results — a failed controlled
         # check should not score higher because the runner was trusted.
-        trust = _TRUST_BONUS.get(str(rec.get("trust_level") or ""), 0) if weight > 0 else 0
+        trust = _TRUST_BONUS.get(trust_level, 0) if weight > 0 else 0
         assistance_level = _normalise_marker(rec.get("assistance_level"))
         assistance = (
             _ASSISTANCE_PENALTY.get(assistance_level, -1)
@@ -370,7 +382,8 @@ def project_skills(
                         "timestamp": str(rec.get("created_at") or rec.get("timestamp") or "") or None,
                         "result": result_str,
                         "assistance_level": assistance_level or "unknown",
-                        "trust_level": str(rec.get("trust_level") or ""),
+                        "trust_level": trust_level,
+                        **({"verification_recheck_required": True} if requires_recheck else {}),
                         "evidence_kind": str(rec.get("evidence_kind") or "") or None,
                         "scenario": str(rec.get("scenario") or "") or None,
                         "recall_delay_days": _recall_delay_days(rec),
@@ -384,7 +397,7 @@ def project_skills(
                 # in the drilldown, but cannot attest executable capability.
                 if (
                     result_str == "passed"
-                    and rec.get("trust_level") == "controlled_check"
+                    and trust_level == "controlled_check"
                     and recall_qualified
                 ):
                     result[dim]["verified_count"] += 1
@@ -398,9 +411,9 @@ def project_skills(
                     # Unknown/missing assistance is not independent and not
                     # assisted; it stays visible in the drilldown but cannot
                     # advance the skill ladder.
-                elif result_str == "failed" and recall_qualified:
+                elif result_str == "failed" and recall_qualified and trust_level != "model_review":
                     failed_dimensions[dim] = True
-                elif result_str == "partial" and recall_qualified:
+                elif result_str == "partial" and recall_qualified and trust_level != "model_review":
                     partial_dimensions[dim] = True
 
     for dim in active_dimensions:

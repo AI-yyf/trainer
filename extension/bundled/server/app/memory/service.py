@@ -105,7 +105,7 @@ from .review_intervention import (
     merge_review_offer,
     merge_review_refusal,
 )
-from .review_scheduler import ReviewRating, ReviewScheduler
+from .review_scheduler import ReviewScheduler
 from .semantic import HashingEmbedder, SemanticMemory
 from .snapshot_builder import build_memory_snapshot
 from .teaching_asset_catalog_mixin import TeachingAssetCatalogMixin
@@ -3909,6 +3909,38 @@ class MemoryService(
         # No recovered runtime overlay: workspace selected id matching stored card is live.
         return candidate
 
+    def initialize_training_card_review(
+        self, workspace_id: str, *, training_card_id: str,
+    ) -> None:
+        """Schedule first recall without recording a recall that did not occur."""
+        from ..training.fsrs_scheduler import card_state_to_payload, create_training_scheduler
+
+        card = self.get_card(workspace_id, training_card_id)
+        if card is None or self.live_selected_training_card_id(workspace_id) != training_card_id:
+            return
+        if not card.question.strip() or not (
+            card.expected_answer.strip() or card.correct_option_indices
+            or card.correct_option_index is not None or card.fill_blank_answers
+            or card.correct_sort_order
+        ):
+            return
+        structured = self._structured_for(workspace_id)
+        current = structured._workspace.get("latest_training_fsrs_states") or structured._workspace.get(
+            "latestTrainingFsrsStates"
+        )
+        states = dict(current) if isinstance(current, dict) else {}
+        if training_card_id in states:
+            return
+        state = create_training_scheduler().create_card(
+            training_card_id, card.target_skill or card.focus_area or card.title,
+            card_type=card.card_type, focus_area=card.focus_area,
+        )
+        state.due = state.next_due_at = state.created_at + timedelta(days=1)
+        state.interval = 1
+        states[training_card_id] = card_state_to_payload(state)
+        structured.update_workspace(latest_training_fsrs_states=states)
+        self._persist_structured(workspace_id)
+
     def schedule_live_training_card_fsrs_after_verify(
         self,
         workspace_id: str,
@@ -5925,11 +5957,12 @@ class MemoryService(
         task_hint: str = "",
         note: str = "",
         batch_limit: int = 4,
+        training_card_id: str | None = None,
     ) -> list[ReviewQueueAction]:
         structured = self._structured_for(workspace_id)
         concept = concept.strip()
         concepts = [concept]
-        if scope == "focus_area" and focus_area:
+        if scope == "focus_area" and focus_area and not training_card_id:
             concepts = [
                 item.concept
                 for item in structured._weaknesses.values()
@@ -5943,36 +5976,19 @@ class MemoryService(
         created: list[ReviewQueueAction] = []
         for entry_concept in concepts:
             deadline = None
-            if action == "reset":
+            if action == "reset" and not training_card_id:
                 structured.record_weakness(
                     entry_concept, note or "Review queue signaled more practice is needed.",
                     severity=2, review_after_days=0, context=focus_area,
                 )
-                mastery = structured._mastery.get(entry_concept)
-                if mastery is not None:
-                    structured._mastery[entry_concept] = self._review_scheduler.process_mastery_review(
-                        mastery, ReviewRating.AGAIN,
-                    )
             elif action in {"snooze", "skip", "done"}:
                 deadline = now + timedelta(days=1)
-                mastery = structured._mastery.get(entry_concept)
-                # "Done" is self-reported completion, not a recall answer.
-                # It may defer the queue, but it must not update FSRS stability
-                # or mastery as if the learner had successfully recalled.
-                if mastery is not None:
-                    structured._mastery[entry_concept] = replace(
-                        mastery, next_review_at=deadline, due_date=deadline,
-                    )
-                weakness = structured._weaknesses.get(entry_concept)
-                if weakness is not None:
-                    structured._weaknesses[entry_concept] = replace(
-                        weakness, next_review_at=deadline, updated_at=now,
-                    )
             created.append(ReviewQueueAction(
                 entry_id=f"review-action-{uuid4().hex[:10]}", concept=entry_concept,
                 action=action, outcome=outcomes[action], focus_area=focus_area,
                 task_hint=task_hint, note=note, scope=scope, created_at=now.isoformat(),
                 next_review_at=deadline.isoformat() if deadline else "",
+                training_card_id=training_card_id,
             ))
         structured._review_queue_actions.extend(created)
         previous = structured._review_artifact

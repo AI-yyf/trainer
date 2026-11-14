@@ -41,15 +41,44 @@ _DIRECT_ANSWER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _PRACTICE_PATTERN = re.compile(
-    r"(带我练|给我(出|一个)?练习|出一个练习|出题|练习一下|"
+    r"(带我练|给我(出|一个)?练习|给我出.{0,4}题|出一个练习|出题|练习一下|"
     r"give me an exercise|give me a practice|let me practice|quiz me on|"
-    r"let'?s practice)",
+    r"let'?s practice|ponme un ejercicio|donne-moi un exercice|gib mir eine übung|"
+    r"練習問題を一問出して|연습 문제를 한 개 내|me dê um exercício)",
     re.IGNORECASE,
 )
 _REVIEW_PATTERN = re.compile(
-    r"(复习|间隔重复|考考我|帮我回忆|"
+    r"(^复习(?:一下|上次|之前)?|(?:帮我|带我|我想|开始|一起|继续|请|来)复习|考考我|帮我回忆|"
     r"review (me|what i learned)|spaced repetition|quiz me for review|"
     r"help me recall)",
+    re.IGNORECASE,
+)
+_ACTION_REFUSALS = {
+    "practice": re.compile(
+        r"(?:不要|不用|别|先不|不想|不是要).{0,12}(?:练习|出题|训练)|"
+        r"\b(?:don['’]t|do not|no|skip)\s+(?:give me (?:an? )?|start )?(?:practice|exercise|quiz)",
+        re.IGNORECASE,
+    ),
+    "review": re.compile(
+        r"(?:不要|不用|别|先不|不想|不需要|不是要).{0,12}(?:复习|回忆|考我)|"
+        r"\b(?:don['’]t|do not|no|skip|not now for)\s+(?:start |do )?(?:review|recall|spaced repetition)",
+        re.IGNORECASE,
+    ),
+    "plan": re.compile(
+        r"(?:不要|不用|别|先不|不想|不需要|不是要).{0,12}(?:学习计划|制定计划|生成计划|做计划)|"
+        r"\b(?:don['’]t|do not|no|skip)\s+(?:(?:create|generate|make|build) (?:a )?)?(?:learning )?plan",
+        re.IGNORECASE,
+    ),
+}
+_QUOTED_TEXT = re.compile(r'`+[^`]*`+|“[^”]*”|「[^」]*」|"[^"]*"')
+_CLAUSE_BOUNDARY = re.compile(
+    r"[,，。！？!?；;\n]+|(?:但是|不过|而是|但(?=我|今天|现在|请|可以))|\b(?:but|instead)\b",
+    re.IGNORECASE,
+)
+_HABITUAL_CONTEXT = re.compile(r"平时|通常|一贯|以往|\busually\b|\bnormally\b", re.IGNORECASE)
+_REPORTED_CONTEXT = re.compile(
+    r"^(?:为什么|为何|什么是|如何|怎么|这[段份篇]|文档|材料|原文|他[说问]|她[说问]|"
+    r"why\b|what\b|how\b|the (?:document|article|book)\b|(?:he|she|they) (?:said|wrote)\b)",
     re.IGNORECASE,
 )
 _TEACH_PATTERN = re.compile(
@@ -99,11 +128,35 @@ class TurnDecision:
     allow_review: bool = False
     may_interrupt: bool = False
     evidence: list[str] = field(default_factory=list)
+    refused_actions: frozenset[str] = field(default_factory=frozenset)
 
 
 def _matches(pattern: re.Pattern[str], text: str) -> str | None:
     match = pattern.search(text)
     return match.group(1) if match else None
+
+
+def _action_cues(message: str) -> tuple[dict[str, str], frozenset[str]]:
+    cues: dict[str, str] = {}
+    refused: set[str] = set()
+    for clause in _CLAUSE_BOUNDARY.split(_QUOTED_TEXT.sub(" ", message)):
+        clause = clause.strip()
+        if _HABITUAL_CONTEXT.search(clause) or _REPORTED_CONTEXT.match(clause):
+            continue
+        for action, pattern in (
+            ("direct", _DIRECT_ANSWER_PATTERN),
+            ("practice", _PRACTICE_PATTERN),
+            ("review", _REVIEW_PATTERN),
+            ("plan", _PLAN_PATTERN),
+        ):
+            refusal = _ACTION_REFUSALS.get(action)
+            if refusal is not None and refusal.search(clause):
+                refused.add(action)
+                cues.pop(action, None)
+            elif cue := _matches(pattern, clause):
+                refused.discard(action)
+                cues[action] = cue
+    return cues, frozenset(refused)
 
 
 def decide_turn(facts: TurnFacts) -> TurnDecision:
@@ -115,44 +168,43 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
 
     message = " ".join(str(facts.message or "").split())
     explicit_intent = facts.intent_source == "explicit"
-    evidence: list[str] = []
+    cues, refused = _action_cues(message)
+    evidence = [f"explicit_{action}_refusal" for action in sorted(refused)]
 
-    direct_cue = _matches(_DIRECT_ANSWER_PATTERN, message)
-    explicit_direct = bool(direct_cue) or str(facts.answer_mode or "").strip().lower() == "direct"
+    direct_cue = cues.get("direct")
+    prefers_direct = str(facts.answer_mode or "").strip().lower() == "direct"
     if direct_cue:
         evidence.append(f"direct_answer_request:{direct_cue}")
-    elif explicit_direct:
-        evidence.append("direct_answer_mode")
 
-    practice_cue = _matches(_PRACTICE_PATTERN, message)
-    explicit_practice = bool(practice_cue) or (
+    practice_cue = cues.get("practice")
+    explicit_practice = "practice" not in refused and (bool(practice_cue) or (
         explicit_intent and facts.requested_intent in {"task", "next_task"}
-    )
+    ))
     if practice_cue:
         evidence.append(f"explicit_practice_request:{practice_cue}")
     elif explicit_practice:
         evidence.append(f"explicit_practice_intent:{facts.requested_intent}")
 
-    review_cue = _matches(_REVIEW_PATTERN, message)
-    explicit_review = bool(review_cue) or (
+    review_cue = cues.get("review")
+    explicit_review = "review" not in refused and (bool(review_cue) or (
         explicit_intent and facts.requested_intent == "review"
-    )
+    ))
     if review_cue:
         evidence.append(f"explicit_review_request:{review_cue}")
     elif explicit_review:
         evidence.append("explicit_review_intent:review")
 
-    plan_cue = _matches(_PLAN_PATTERN, message)
-    explicit_plan = bool(plan_cue) or (
+    plan_cue = cues.get("plan")
+    explicit_plan = "plan" not in refused and (bool(plan_cue) or (
         explicit_intent and facts.requested_intent == "plan"
-    )
+    ))
     if plan_cue:
         evidence.append(f"explicit_plan_request:{plan_cue}")
     elif explicit_plan:
         evidence.append("explicit_plan_intent:plan")
 
     # 1. "Just tell me" is the strongest constraint: answer, no quiz, no task.
-    if explicit_direct:
+    if direct_cue and not (practice_cue or review_cue or plan_cue):
         return TurnDecision(
             mode="direct_answer",
             source="explicit_user",
@@ -164,6 +216,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=False,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 2. Formal practice starts only from an explicit request (or explicit
@@ -180,6 +233,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=False,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 3. Formal review can be explicit; a due review may also be proactive
@@ -196,6 +250,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=True,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 4. Formal learning plans only from an explicit plan request.
@@ -211,22 +266,27 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=False,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 5. Rescue is fix-first; it never mints a task/plan and does not quiz.
-    if facts.needs_rescue:
-        evidence.append("learner_state:needs_rescue")
+    if facts.needs_rescue or (prefers_direct and not facts.activity_in_progress):
+        evidence.append("learner_state:needs_rescue" if facts.needs_rescue else "direct_answer_mode")
         return TurnDecision(
             mode="direct_answer",
             source="learner_state",
             confidence="known",
-            reason="The learner is blocked; fix the immediate issue before teaching.",
+            reason=(
+                "The learner is blocked; fix the immediate issue before teaching."
+                if facts.needs_rescue else "The learner prefers a direct answer."
+            ),
             allow_question=False,
             allow_formal_task=False,
             allow_formal_plan=False,
             allow_review=False,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     teach_cue = _matches(_TEACH_PATTERN, message)
@@ -250,6 +310,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=False,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 6. Proactive review is allowed only when it is due, the learner has not
@@ -258,6 +319,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
     #    more urgent than a background review.
     if (
         not teach_cue
+        and "review" not in refused
         and facts.needs_review
         and facts.due_review_count > 0
         and facts.intervention_allowed
@@ -280,6 +342,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=True,
             may_interrupt=True,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 7. A concrete goal or trusted evidence supports teaching, not a formal
@@ -298,6 +361,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=False,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 8. A substantive question or discussion is teachable without inventing
@@ -316,6 +380,7 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
             allow_review=False,
             may_interrupt=False,
             evidence=evidence,
+            refused_actions=refused,
         )
 
     # 9. No usable signal: stay conversational instead of inventing a state.
@@ -331,4 +396,5 @@ def decide_turn(facts: TurnFacts) -> TurnDecision:
         allow_review=False,
         may_interrupt=False,
         evidence=evidence,
+        refused_actions=refused,
     )

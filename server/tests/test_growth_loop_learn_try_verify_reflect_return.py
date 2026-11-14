@@ -21,8 +21,10 @@ from app.core.models import (
     LearningPlan,
     PlanStage,
     ProviderConfig,
+    PythonBehaviorContract,
 )
 from app.core.settings import AppSettings
+from app.evaluator.service import EvaluationPipeline, EvaluatorService, SubprocessCommandRunner
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 from app.memory.workspace_recovery import leftover_formal_plan_is_live_for_fill
@@ -303,6 +305,17 @@ def test_class_human_learn_try_verify_reflect_return_closed_loop(tmp_path: Path)
         assert runtime.memory_service.global_memory().capability_profile == {}
 
         # 5) Verify — real evaluator ack with matching symbols + tests
+        runtime.evaluator_service = EvaluatorService(EvaluationPipeline(runner=SubprocessCommandRunner()))
+        stored_card = runtime.memory_service.get_card(workspace_id, card_id)
+        assert stored_card is not None
+        runtime.memory_service.upsert_card(workspace_id, stored_card.model_copy(update={
+            "question": "What is the expected behavior for an expired token?",
+            "expected_answer": "Reject the expired token.",
+            "python_behavior_contract": PythonBehaviorContract.model_validate({
+                "function": "require_fresh",
+                "cases": [{"args": ["tok"], "expected": "tok"}, {"args": ["other"], "expected": "other"}],
+            }),
+        }))
         evaluate = client.post(
             "/evaluate/current-file",
             json={
@@ -362,12 +375,12 @@ def test_class_human_learn_try_verify_reflect_return_closed_loop(tmp_path: Path)
         ) or {}
         assert card_id in fsrs_states
         assert set(fsrs_states.keys()) == {card_id}
-        assert int(fsrs_states[card_id].get("reps") or 0) >= 1
+        assert fsrs_states[card_id]["reps"] == 0
+        assert fsrs_states[card_id]["next_due_at"]
         live_card = runtime.memory_service.get_card(workspace_id, card_id)
         assert live_card is not None
-        review_schedule = live_card.review_schedule or {}
-        assert str(review_schedule.get("card_id") or "") == card_id
-        assert review_schedule.get("fsrs_difficulty") is not None
+        assert fsrs_states[card_id]["card_id"] == card_id
+        assert fsrs_states[card_id]["last_reviewed_at"] is None
         assert str(live_card.difficulty or "") in {"easy", "medium", "hard"}
 
         handoff = workspace.get("latest_training_handoff") or workspace.get(

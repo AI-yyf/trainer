@@ -161,7 +161,14 @@ def build_memory_snapshot(service: Any, workspace_id: str) -> MemorySnapshot:
         )
     due_reviews = service._visible_due_reviews(
         service._prepend_transfer_review(
-            service._derive_due_reviews(plan, active_lane_snapshot, raw_weakness_records),
+            service._derive_due_reviews(
+                plan, active_lane_snapshot, raw_weakness_records,
+                queue_actions=tuple(structured_service._review_queue_actions),
+                reviewable_card_ids={
+                    card.card_id for card in structured_service._training_cards.values()
+                    if card.status not in {"archived", "skipped"}
+                },
+            ),
             active_lane_snapshot,
         )
     )

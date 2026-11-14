@@ -383,14 +383,19 @@ def build_core_router(
         evidence_refs = [f"evaluation:{content_hash}"]
         if card_id:
             evidence_refs.insert(0, f"training_card:{card_id}")
+        training = str(request.evaluation_source or "").strip().lower() == "training"
+        result: Literal["passed", "failed", "pending"] = "passed" if report.passed else "failed"
+        if training and report.verification_scope != "behavior":
+            result = "pending"
+        verdict_key = result if training else str(report.passed)
         runtime.goals().record_activity(
             workspace_id=workspace_id,
             kind="evaluation",
             summary=str(getattr(report, "summary", "") or getattr(report, "next_step", "") or ""),
-            result="passed" if bool(getattr(report, "passed", False)) else "failed",
+            result=result,
             concept=str(getattr(request, "training_card_title", "") or "").strip(),
             evidence_refs=evidence_refs,
-            event_key=f"{target}:{content_hash}:{bool(getattr(report, 'passed', False))}",
+            event_key=f"{target}:{content_hash}:{verdict_key}",
         )
         runtime.publish_goal(workspace_id)
 
@@ -4149,15 +4154,19 @@ def build_core_router(
         workspace_id = core.current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
         request = prepare_training_file_evaluation(runtime, workspace_id, request)
+        is_training = str(request.evaluation_source or "").strip().lower() == "training"
         training_verification_live = True
-        if str(request.evaluation_source or "").strip().lower() == "training":
+        if is_training:
             training_verification_live = training_card_is_live_for_verify(
                 runtime, workspace_id, str(request.training_card_id or "")
             )
         leftover = core.leftover_plan_state_fields(workspace_id)
         leftover_runtime = leftover.get("leftover_runtime")
         training_project_root: str | None = None
-        if str(request.evaluation_source or "").strip().lower() == "training":
+        card = None
+        if is_training:
+            if training_verification_live:
+                card = runtime.memory_service.get_card(workspace_id, str(request.training_card_id or ""))
             workspace_payload = runtime.memory_service.snapshot(workspace_id).workspace
             training_project_root = str(
                 workspace_payload.get("canonical_project_path")
@@ -4173,6 +4182,9 @@ def build_core_router(
                 leftover_task_title=str(leftover.get("leftover_task_title") or ""),
                 response_language=core.workspace_response_language(workspace_id),
                 project_root=training_project_root,
+                python_behavior_contract=(
+                    card.python_behavior_contract if card is not None else None
+                ),
             ),
             workspace_id,
         )
@@ -4192,11 +4204,12 @@ def build_core_router(
                 Path(str(request.file_path or "")).stem.strip() or "current-file"
             ),
         )
-        core.advance_plan_after_evaluation(
-            workspace_id=workspace_id,
-            state=state,
-            report=report,
-        )
+        if not is_training or report.verification_scope == "behavior":
+            core.advance_plan_after_evaluation(
+                workspace_id=workspace_id,
+                state=state,
+                report=report,
+            )
         core.record_training_practice_evaluation(
             workspace_id=workspace_id,
             state=state,
@@ -5012,6 +5025,10 @@ def build_core_router(
 
     @router.post("/training/review-queue/action")
     def training_review_queue_action(request: ReviewQueueActionRequest) -> dict[str, object]:
+        if request.training_card_id and runtime.memory_service.get_card(
+            request.workspace_id, request.training_card_id,
+        ) is None:
+            raise HTTPException(status_code=404, detail="Review card not found.")
         actions = runtime.memory_service.apply_review_queue_action(
             request.workspace_id,
             concept=request.concept,
@@ -5021,6 +5038,7 @@ def build_core_router(
             task_hint=request.task_hint,
             note=request.note,
             batch_limit=request.batch_limit,
+            training_card_id=request.training_card_id,
         )
         core.refresh_workspace_sessions(request.workspace_id)
         return {

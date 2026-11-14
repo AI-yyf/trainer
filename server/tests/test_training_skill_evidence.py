@@ -43,7 +43,10 @@ def test_card_bound_file_evaluation_updates_growth_and_resumes_verified_attempt(
         )
         runtime.evaluator_service.evaluate_current_file = MagicMock(return_value=EvaluationReport(
             passed=True, summary="1 test passed", next_step="Reflect", reflection="",
-            dynamic_checks=[EvaluationCheck(id="pytest", label="pytest", status="passed", detail="1 passed")],
+            verification_scope="behavior",
+            dynamic_checks=[EvaluationCheck(
+                id="python-behavior", label="Behavior cases", status="passed", detail="2 cases passed",
+            )],
         ))
         payload = {
             "workspace_id": workspace, "session_id": session, "evaluation_source": "training",
@@ -143,3 +146,117 @@ def test_missing_assistance_is_unknown_and_never_advances_the_skill_ladder() -> 
     }])["implementation"]
     assert explicit["state"] == "independent"
     assert explicit["independent_attempt_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("source", "with_contract", "assistance", "passed", "result", "trust", "skill"),
+    [
+        (
+            'if __name__ == "__main__":\n    print("solve_queue")\n',
+            False, "independent", False, "partial", "static_analysis", "not_verified",
+        ),
+        (
+            "def solve_queue(items: list[int]) -> int:\n    return 99\n",
+            True, "independent", False, "failed", "controlled_check", "needs_review",
+        ),
+        (
+            "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
+            True, "hint_level_2", True, "passed", "controlled_check", "assisted",
+        ),
+        (
+            "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
+            True, "unknown", True, "passed", "controlled_check", "not_verified",
+        ),
+        (
+            "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
+            True, "independent", True, "passed", "controlled_check", "independent",
+        ),
+    ],
+)
+def test_training_verification_checks_the_persisted_contract(
+    tmp_path: Path, monkeypatch, source: str, with_contract: bool, assistance: str,
+    passed: bool, result: str, trust: str, skill: str,
+) -> None:
+    from app.evaluator.service import SubprocessCommandRunner, default_command_runner
+
+    class BehaviorRunner:
+        def run(self, command):
+            if command.name in {"python-behavior", "python-script"}:
+                return SubprocessCommandRunner().run(command)
+            return fallback.run(command)
+
+    fallback = default_command_runner()
+    monkeypatch.setattr("app.evaluator.service.default_command_runner", BehaviorRunner)
+    with build_client(tmp_path) as client:
+        workspace = "verified-contract"
+        runtime = client.app.state.runtime
+        session = client.post("/session/start", json={
+            "workspace_id": workspace, "workspace_name": "Behavior verification",
+        }).json()["session_id"]
+        path = tmp_path / "solution.py"
+        path.write_text(source)
+        card = TrainingCardCandidateSnapshot.model_validate({
+            "card_id": "card-queue", "card_type": "practice", "status": "active",
+            "title": "Implement solve_queue", "target_skill": "count queued items",
+            "files_to_touch": [str(path)], "expected_symbols": ["solve_queue"],
+            "acceptance_criteria": ["Implement `solve_queue`; empty lists return 0."],
+            "python_behavior_contract": {
+                "function": "solve_queue",
+                "cases": [{"args": [[]], "expected": 0}, {"args": [[1, 2, 3]], "expected": 3}],
+            } if with_contract else None,
+        })
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(workspace, selected_card_id=card.card_id)
+        attempt = runtime.attempt_store.start_attempt(
+            workspace_id=workspace, card_id=card.card_id, file_path=str(path),
+            assistance_level=assistance,
+        )
+        response = client.post("/evaluate/current-file", json={
+            "session_id": session, "workspace_id": workspace, "evaluation_source": "training",
+            "training_phase": "verify", "training_card_id": card.card_id,
+            "file_path": str(path), "content": source, "language_id": "python",
+            "python_behavior_contract": {
+                "function": "solve_queue",
+                "cases": [{"args": [[]], "expected": 99}, {"args": [[1]], "expected": 99}],
+            },
+        })
+        assert response.status_code == 200, response.text
+        assert response.json()["passed"] is passed, response.json()
+        evidence = runtime.attempt_store.list_evidence(attempt["attempt_id"])
+        assert len(evidence) == 1
+        assert evidence[0]["result"] == result
+        assert evidence[0]["trust_level"] == trust
+        assert evidence[0]["assistance_level"] == assistance
+        memory = client.get("/memory/summary", params={"workspace_id": workspace}).json()["memory"]
+        dimension = memory["workspace"]["training_skill_projection"]["dimensions"]["implementation"]
+        assert dimension["state"] == skill
+        assert bool(dimension["verified_count"]) is passed
+
+
+def test_startup_recomputes_legacy_overcredit(tmp_path: Path) -> None:
+    workspace = "legacy-verification"
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        store = runtime.attempt_store
+        attempt = store.start_attempt(
+            workspace_id=workspace, card_id="card", file_hash="hash",
+            assistance_level="independent",
+        )
+        evidence = store.record_evidence(
+            attempt_id=attempt["attempt_id"], artifact_hash="hash",
+            result="passed", trust_level="controlled_check",
+            runner_version="trainer-current-file-evaluator",
+        )
+        runtime.memory_service.update_workspace_state(workspace, training_skill_projection={
+            "attempt_id": attempt["attempt_id"], "dimensions": {"implementation": {"state": "independent"}},
+        })
+
+    with build_client(tmp_path) as client:
+        memory = client.get("/memory/summary", params={"workspace_id": workspace}).json()["memory"]
+        projection = memory["workspace"]["training_skill_projection"]
+        assert projection["dimensions"]["implementation"]["verified_count"] == 0
+        assert projection["dimensions"]["implementation"]["state"] != "independent"
+        assert projection["dimensions"]["implementation"]["evidence"][0]["verification_recheck_required"]
+        original = client.app.state.runtime.attempt_store.list_evidence(attempt["attempt_id"])
+        assert original[0]["evidence_id"] == evidence["evidence_id"]
+        assert original[0]["result"] == "passed"

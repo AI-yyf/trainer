@@ -28,6 +28,7 @@ class _DeterministicRunner:
             name=command.name,
             status=status,
             command=command.argv,
+            stdout="TRAINER_BEHAVIOR_CASES_PASSED:2" if command.name == "python-behavior" else "",
             summary=f"{command.name} {status.value} in deterministic journey runner.",
         )
 
@@ -308,6 +309,17 @@ def test_agent_card_current_file_recovery_reflect_and_return_are_continuous(
         app.state.runtime.evaluator_service = EvaluatorService(
             pipeline=EvaluationPipeline(runner=_DeterministicRunner())
         )
+        from app.core.models import PythonBehaviorContract
+
+        memory_service = app.state.runtime.memory_service
+        stored_card = memory_service.get_card(workspace_id, card_id)
+        assert stored_card is not None
+        memory_service.upsert_card(workspace_id, stored_card.model_copy(update={
+            "python_behavior_contract": PythonBehaviorContract.model_validate({
+                "function": "normalize_query",
+                "cases": [{"args": [" A "], "expected": "a"}, {"args": ["B"], "expected": "b"}],
+            }),
+        }))
         evaluated = client.post("/evaluate/current-file", json=evaluation_request)
         assert evaluated.status_code == 200, evaluated.text
         assert evaluated.json()["passed"] is True

@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from .runtime import TrainerRuntime
 
 
+_VERIFICATION_POLICY_VERSION = 1
+
+
 def _card_subject_family(card: Any) -> str:
     """Classify one training card's subject family through the taxonomy.
 
@@ -122,6 +125,7 @@ def persist_skill_projection(
     runtime.memory_service.update_workspace_state(
         workspace_id,
         training_skill_projection={
+            "verification_policy_version": _VERIFICATION_POLICY_VERSION,
             "workspace_id": workspace_id,
             "attempt_id": attempt_id,
             "card_id": card_id,
@@ -131,6 +135,25 @@ def persist_skill_projection(
         },
     )
     return projection
+
+
+def refresh_legacy_skill_projections(runtime: TrainerRuntime) -> None:
+    """Recompute previously stored capability claims using current evidence rules."""
+    if runtime.attempt_store is None:
+        return
+    for workspace_id, payload in runtime.repository.list_structured_memory():
+        workspace = payload.get("workspace") or {}
+        projection = workspace.get("training_skill_projection") or {}
+        if not isinstance(projection, dict) or projection.get("verification_policy_version") == _VERIFICATION_POLICY_VERSION:
+            continue
+        attempt_id = projection.get("attempt_id")
+        if not attempt_id:
+            continue
+        dimensions = projection.get("dimensions")
+        if not isinstance(dimensions, dict) or not dimensions:
+            continue
+        # The persisted result is disposable. Original attempt evidence stays auditable.
+        persist_skill_projection(runtime, workspace_id, attempt_id)
 
 
 def record_executed_training_evidence(
@@ -151,8 +174,8 @@ def record_executed_training_evidence(
     store = runtime.attempt_store
     if store is None:
         return
-    dynamic_passed = any(check.status == "passed" for check in report.dynamic_checks)
-    dynamic_failed = any(check.status == "failed" for check in report.dynamic_checks)
+    behavior = next((check for check in report.dynamic_checks if check.id == "python-behavior"), None)
+    controlled = behavior is not None and behavior.status in {"passed", "failed"}
     artifact_hash = content_hash(request.content)
     card_id = str(request.training_card_id)
     card = runtime.memory_service.get_card(workspace_id, card_id)
@@ -175,9 +198,11 @@ def record_executed_training_evidence(
             attempt["attempt_id"], workspace_id=workspace_id,
             file_path=request.file_path, file_hash=artifact_hash,
         )
-    controlled = dynamic_passed or dynamic_failed
-    result = "passed" if report.passed and dynamic_passed else "failed"
-    if report.passed and not dynamic_passed:
+    if controlled:
+        result = "passed" if report.passed else "failed"
+    elif behavior is not None and behavior.status in {"warning", "skipped"}:
+        result = "execution_error"
+    else:
         result = "partial"
     # A returned card is the same capability applied back in the project after
     # a scenario/handoff. That is a real cross-context transfer fact; a normal
@@ -187,8 +212,10 @@ def record_executed_training_evidence(
     evidence_limitations = [
         f"{check.label}: {check.detail}"
         for check in report.dynamic_checks
-        if check.status in {"skipped", "pending"}
+        if check.status in {"skipped", "warning"}
     ]
+    if not controlled:
+        evidence_limitations.append(f"Verification scope: {report.verification_scope}.")
     resource_id = str(getattr(card, "resource_id", "") or "").strip()
     if resource_id:
         repository = getattr(runtime, "repository", None)
@@ -223,10 +250,10 @@ def record_executed_training_evidence(
         artifact_hash=artifact_hash,
         result=result,
         trust_level="controlled_check" if controlled else "static_analysis",
-        runner_version="trainer-current-file-evaluator",
+        runner_version="trainer-current-file-evaluator-v2",
         execution_location="workspace",
         dimension=dimension,
-        evidence_kind="controlled_evaluation",
+        evidence_kind="controlled_evaluation" if controlled else "current_file_observation",
         scenario=(
             str(getattr(card, "scenario", "") or getattr(card, "focus_area", "") or "").strip()
             or None
@@ -238,6 +265,6 @@ def record_executed_training_evidence(
         limitations=evidence_limitations,
         **resource_fields,
     )
-    if is_return_context:
+    if is_return_context and controlled:
         store.close_attempt(attempt["attempt_id"], workspace_id=workspace_id)
     persist_skill_projection(runtime, workspace_id, attempt["attempt_id"])

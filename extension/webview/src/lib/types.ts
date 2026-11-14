@@ -387,6 +387,7 @@ export interface EvaluationReport {
 
 export interface ReviewQueueItem {
   concept: string;
+  trainingCardId?: string;
   reason: string;
   dueAt?: string;
   source: "weakness" | "mastery" | "reflection" | "plan";

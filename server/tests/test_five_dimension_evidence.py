@@ -334,7 +334,7 @@ def test_review_queue_done_without_an_answer_does_not_grade_fsrs(tmp_path) -> No
         assert mastery.fsrs_reps == 3
         assert mastery.review_source == "fsrs"
         assert mastery.next_review_at is not None
-        assert mastery.next_review_at > datetime.now(UTC) - timedelta(minutes=5)
+        assert mastery.next_review_at == past
 
 
 def test_return_card_controlled_pass_counts_as_transfer(
@@ -372,17 +372,19 @@ def test_return_card_controlled_pass_counts_as_transfer(
             workspace_id=workspace,
             card_id=card.card_id,
             file_path=path,
+            assistance_level="none",
         )
         runtime.evaluator_service.evaluate_current_file = MagicMock(
             return_value=EvaluationReport(
                 passed=True,
+                verification_scope="behavior",
                 summary="1 test passed",
                 next_step="Reflect",
                 reflection="",
                 dynamic_checks=[
                     EvaluationCheck(
-                        id="pytest",
-                        label="pytest",
+                        id="python-behavior",
+                        label="python-behavior",
                         status="passed",
                         detail="1 passed",
                     )
@@ -477,7 +479,7 @@ def test_theory_drill_answer_records_comprehension_not_delayed_recall(tmp_path) 
         dimensions = (
             runtime.memory_service.snapshot(workspace).workspace or {}
         ).get("training_skill_projection", {}).get("dimensions", {})
-        assert dimensions["comprehension"]["state"] == "independent"
+        assert dimensions["comprehension"]["state"] == "not_verified"
         assert dimensions["delayed_recall"]["state"] == "not_verified"
 
 

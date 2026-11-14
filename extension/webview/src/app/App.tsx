@@ -4419,7 +4419,8 @@ export function App() {
   const trainingReviewItems = useMemo<TrainingReviewItem[]>(
     () =>
       authoritativeDueReviews.slice(0, 4).map((item, index) => ({
-        id: `training-review-${index}-${item.concept}`,
+        id: item.trainingCardId ?? `training-review-${index}-${item.concept}`,
+        trainingCardId: item.trainingCardId,
         title: reviewConceptLabel(item.concept) ?? t.reviewQueue,
         concept: item.concept,
         focusArea: item.focusArea ?? item.concept,

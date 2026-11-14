@@ -770,7 +770,25 @@ class PedagogyService:
                 onboarding_needed=onboarding_needed,
             )
         )
-        if depth.direct_answer_override or turn.mode == "direct_answer":
+        direct_override = turn.mode == "direct_answer" or (
+            depth.direct_answer_override and turn.source != "explicit_user"
+        )
+        if "review" in turn.refused_actions and mode == "review_reflection":
+            mode = "guided"
+            tone_profile = "steady"
+            lesson_shape, exercise_shape, teaching_strategy, closing_move, artifact_priority = (
+                self._mode_playbook(
+                    mode=mode,
+                    scenario="guided",
+                    focus_area=focus_area or learner_state.active_focus,
+                    learner_state=learner_state,
+                    memory_snapshot=memory_snapshot,
+                    adaptive_bias=adaptive_bias,
+                    decision_should_generate_exercise=False,
+                    decision_should_produce_plan_artifact=False,
+                )
+            )
+        if direct_override:
             # One turn decision, one set of constraints: an explicit direct
             # answer request must not still carry a quiz, exercise or formal
             # plan artifact through the teaching-decision contract.
@@ -799,6 +817,11 @@ class PedagogyService:
         elif turn.mode == "plan":
             should_produce_plan_artifact = True
             should_generate_exercise = False
+        if "practice" in turn.refused_actions:
+            should_generate_exercise = False
+            exercise_shape = ""
+        if not turn.allow_formal_plan:
+            should_produce_plan_artifact = False
         if not turn.allow_question:
             should_end_with_question = False
         reason_parts.append(f"turn:{turn.mode}:{turn.source}")
@@ -825,8 +848,8 @@ class PedagogyService:
             focus_area=focus_area,
             depth_level=depth.level,
             depth_label=depth.label,
-            direct_answer_override=depth.direct_answer_override,
-            offer_light_practice=depth.offer_light_practice,
+            direct_answer_override=direct_override,
+            offer_light_practice=depth.offer_light_practice and "practice" not in turn.refused_actions,
             turn_mode=turn.mode,
             turn_source=turn.source,
             turn_confidence=turn.confidence,

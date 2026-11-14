@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from app.core.models import PythonBehaviorContract
 from app.specs.models import TaskSpec
 
 
@@ -52,6 +53,7 @@ class EvaluationRequest:
     project_root: str | None = None
     hypothesis_target: str | None = None
     verification_python: str | None = None
+    python_behavior_contract: PythonBehaviorContract | None = None
 
 
 @dataclass(slots=True)

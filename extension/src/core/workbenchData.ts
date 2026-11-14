@@ -6072,6 +6072,8 @@ function mapDueReviews(
     })
     .map((item) => ({
       concept: asString(item.concept) ?? '复习项',
+      trainingCardId: asString(item.training_card_id ?? item.trainingCardId),
+      evidenceBasis: item.evidence_basis === "fsrs_recall" ? "fsrs_recall" : "no_recall_evidence",
       reason: asString(item.reason) ?? '',
       dueAt: asString(item.due_at),
       source: toReviewSource(asString(item.source)),
