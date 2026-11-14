@@ -65,50 +65,44 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         logging.getLogger(__name__).warning(
             "Legacy Trainer registration recovery was unavailable; current scoped data was preserved."
         )
-    def _record_evidence_ledger_event(event_type: str, evidence: dict[str, Any]) -> None:
-        """Bridge one evidence fact from AttemptStore into the unified ledger.
+    event_ledger = EventLedgerService(EventLedgerStore(database_path))
 
-        The strongest learning fact (host-controlled verification) must be
-        auditable in the same ledger as goals and coach turns. The evidence id
-        is the idempotency key, so replays and multi-window writes never
-        inflate the history; a superseded evidence emits its own reversal-style
-        event so the ledger can reconstruct the live set.
-        """
-        try:
-            event_ledger.record_event(
-                event_type,
+    def _record_evidence_ledger_event(
+        event_type: str, evidence: dict[str, Any], transaction: sqlite3.Connection,
+    ) -> None:
+        workspace = str(evidence["workspace_id"])
+        evidence_id = str(evidence["evidence_id"])
+        event_ledger.record_event(
+            event_type,
+            actor="system",
+            scope="training",
+            project_id=workspace,
+            source_chain=["attempt_store"],
+            payload_ref={
+                "evidence_id": evidence_id,
+                "attempt_id": str(evidence["attempt_id"]),
+                "card_id": str(evidence["card_id"]),
+                "result": str(evidence["result"]),
+                "trust_level": str(evidence["trust_level"]),
+                "dimension": str(evidence.get("dimension") or ""),
+                "evidence_kind": str(evidence.get("evidence_kind") or ""),
+                "superseded_by": str(evidence.get("superseded_by_evidence_id") or ""),
+            },
+            reversibility="reversible",
+            audit_note=f"{event_type}: {evidence_id}",
+            idempotency_key=f"{event_type}:{evidence_id}",
+            transaction=transaction,
+        )
+        if event_type == "training_evidence_superseded":
+            event_ledger.reverse_by_idempotency_key(
+                workspace,
+                f"training_evidence_recorded:{evidence_id}",
                 actor="system",
-                scope="training",
-                project_id=str(evidence.get("workspace_id") or ""),
-                workspace_id=str(evidence.get("workspace_id") or ""),
-                source_chain=["attempt_store"],
-                payload_ref={
-                    "evidence_id": str(evidence.get("evidence_id") or ""),
-                    "attempt_id": str(evidence.get("attempt_id") or ""),
-                    "card_id": str(evidence.get("card_id") or ""),
-                    "result": str(evidence.get("result") or ""),
-                    "trust_level": str(evidence.get("trust_level") or ""),
-                    "dimension": str(evidence.get("dimension") or ""),
-                    "evidence_kind": str(evidence.get("evidence_kind") or ""),
-                    "superseded_by": str(evidence.get("superseded_by_evidence_id") or ""),
-                },
-                reversibility="reversible",
-                audit_note=f"{event_type}: {evidence.get('evidence_id')}",
-                idempotency_key=f"{event_type}:{evidence.get('evidence_id')}",
+                reason="superseded by newer evidence",
+                transaction=transaction,
             )
-            if event_type == "training_evidence_superseded":
-                # 重算收敛：被覆盖的证据从有效集中撤销，重放只重建活跃证据。
-                event_ledger.reverse_by_idempotency_key(
-                    str(evidence.get("workspace_id") or ""),
-                    f"training_evidence_recorded:{evidence.get('evidence_id')}",
-                    actor="system",
-                    reason="superseded by newer evidence",
-                )
-        except Exception:  # noqa: BLE001 - the ledger must never break evidence
-            pass
 
-    attempt_store = AttemptStore(database_path)
-    attempt_store.on_evidence_event = _record_evidence_ledger_event
+    attempt_store = AttemptStore(database_path, on_evidence_event=_record_evidence_ledger_event)
     plan_revision_store = PlanRevisionStore(database_path)
     resource_version_store = ResourceVersionStore(database_path)
     recover_runtime_paths(database_path, data_dir)
@@ -117,7 +111,6 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     qdrant_path = settings.qdrant_path if isinstance(settings, Settings) else data_dir / "qdrant"
     semantic_memory = SemanticMemory(qdrant_path)
     memory_service = MemoryService(repository)
-    event_ledger = EventLedgerService(EventLedgerStore(database_path))
     provider_service = ProviderService()
     network_fetch_enabled = bool(getattr(settings, "enable_network_fetch", False))
     cost_ledger = CostLedger(data_dir / "cost-ledger")

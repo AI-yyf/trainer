@@ -13,12 +13,15 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from contextlib import nullcontext
 from typing import TYPE_CHECKING, Any, TypeVar
 from uuid import uuid4
 
 from .models import EventLedgerEntry, EventReversibility
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from .event_ledger_store import EventLedgerStore
 
 # ---------------------------------------------------------------------------
@@ -209,6 +212,7 @@ class EventLedgerService:
         audit_note: str = "",
         workspace_id: str = "",
         idempotency_key: str = "",
+        transaction: "sqlite3.Connection | None" = None,
     ) -> EventLedgerEntry:
         """Record a new event in the ledger and return the entry.
 
@@ -218,7 +222,11 @@ class EventLedgerService:
         """
         workspace = workspace_id or project_id
         key = idempotency_key.strip()
-        with self._lock:
+        if transaction is not None and self._store is None:
+            raise ValueError("A persistent event ledger is required for transactional writes.")
+        # Persistent writes are serialized by SQLite. A caller can hold the
+        # database lock already, so taking the in-memory lock risks deadlock.
+        with self._lock if self._store is None else nullcontext():
             if key and self._store is None:
                 cached = self._idempotent.get((workspace, key))
                 if cached is not None:
@@ -248,6 +256,7 @@ class EventLedgerService:
                     entry,
                     workspace_id=workspace,
                     idempotency_key=key,
+                    transaction=transaction,
                 )
             if created and self._store is None:
                 self._entries.append(entry)
@@ -311,12 +320,19 @@ class EventLedgerService:
             )
         if existing is not None:
             return existing
+        return self._record_reversal(target, target_workspace, actor, reason)
+
+    def _record_reversal(
+        self, target: EventLedgerEntry, workspace_id: str, actor: str, reason: str,
+        *, transaction: "sqlite3.Connection | None" = None,
+    ) -> EventLedgerEntry:
+        event_id = target.event_id
         return self.record_event(
             EVENT_EVENT_REVERSED,
             actor=actor,
             scope=target.scope,
             project_id=target.project_id,
-            workspace_id=target_workspace,
+            workspace_id=workspace_id,
             source_chain=[*target.source_chain, "reversal"],
             payload_ref={"reversed_event_id": event_id, "reason": reason},
             reversibility="irreversible",
@@ -324,6 +340,7 @@ class EventLedgerService:
                 f"Reversed event {event_id}" + (f": {reason}" if reason else "")
             ),
             idempotency_key=f"reversal:{event_id}",
+            transaction=transaction,
         )
 
     def is_reversed(self, event_id: str) -> bool:
@@ -339,6 +356,7 @@ class EventLedgerService:
         *,
         actor: str = "system",
         reason: str = "",
+        transaction: "sqlite3.Connection | None" = None,
     ) -> EventLedgerEntry | None:
         """Reverse the event recorded under ``(workspace, idempotency_key)``.
 
@@ -350,10 +368,12 @@ class EventLedgerService:
         if not key or self._store is None:
             return None
         entry = self._store.find_by_idempotency_key(
-            workspace_id=workspace_id or "", idempotency_key=key
+            workspace_id=workspace_id or "", idempotency_key=key, transaction=transaction,
         )
-        if entry is None:
+        if entry is None or entry.reversibility != "reversible":
             return None
+        if transaction is not None:
+            return self._record_reversal(entry, workspace_id, actor, reason, transaction=transaction)
         return self.reverse_event(
             entry.event_id, workspace_id=workspace_id, actor=actor, reason=reason
         )

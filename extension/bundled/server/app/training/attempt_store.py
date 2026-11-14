@@ -71,16 +71,10 @@ class AttemptStore:
         self,
         database_path: str | Path,
         *,
-        on_evidence_event: Callable[[str, dict[str, Any]], None] | None = None,
+        on_evidence_event: Callable[[str, dict[str, Any], sqlite3.Connection], None] | None = None,
     ) -> None:
         self._path = Path(database_path)
-        # Optional observer: (event_type, evidence_payload). The runtime wires
-        # this to the unified event ledger so the strongest learning fact
-        # (host-controlled evidence) is auditable like training. Supersede
-        # events carry the prior evidence payload as the reversal target.
-        # Declared as an attribute annotation (not a value) so pyright knows
-        # the runtime may attach the observer after construction.
-        self.on_evidence_event: Callable[[str, dict[str, Any]], None] | None = on_evidence_event
+        self._on_evidence_event = on_evidence_event
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -528,29 +522,18 @@ class AttemptStore:
                     "UPDATE training_attempts SET payload = ? WHERE attempt_id = ?",
                     (json.dumps(attempt_payload, ensure_ascii=False), attempt_id),
                 )
+            if self._on_evidence_event is not None:
+                self._on_evidence_event("training_evidence_recorded", payload, connection)
+                for item in items:
+                    if item.get("evidence_id") in superseded_ids:
+                        self._on_evidence_event("training_evidence_superseded", item, connection)
             connection.commit()
         except Exception:
             connection.rollback()
             raise
         finally:
             connection.close()
-        # The brand-new record is current by definition: the attempt's bound
-        # artifact hash now matches it.
         payload["is_current"] = True
-        if self.on_evidence_event is not None:
-            events = [("training_evidence_recorded", payload)]
-            for superseded_id in superseded_ids:
-                superseded = next(
-                    (item for item in items if item.get("evidence_id") == superseded_id),
-                    None,
-                )
-                if superseded is not None:
-                    events.append(("training_evidence_superseded", superseded))
-            for event_type, evidence_snapshot in events:
-                try:
-                    self.on_evidence_event(event_type, evidence_snapshot)
-                except Exception:  # noqa: BLE001 - observer must never break storage
-                    pass
         return payload
 
     def mark_evidence_resource_version_stale(

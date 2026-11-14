@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.settings import AppSettings
@@ -64,6 +65,34 @@ def test_evidence_records_a_ledger_event(tmp_path: Path) -> None:
     assert events[0]["payload"]["evidence_id"] == evidence["evidence_id"]
     assert events[0]["payload"]["result"] == "passed"
     assert events[0]["payload"]["trust_level"] == "controlled_check"
+
+
+def test_failed_reversal_rolls_back_evidence_and_ledger_together(tmp_path: Path, monkeypatch) -> None:
+    client = build_app(tmp_path)
+    store = client.app.state.runtime.attempt_store
+    ledger = _ledger(client.app)
+    attempt = store.start_attempt(workspace_id="w-ev", card_id="card-1")
+    first = store.record_evidence(
+        attempt_id=attempt["attempt_id"], artifact_hash="hash-1", result="passed",
+    )
+    before = ledger.all_entries()
+    reverse = ledger.reverse_by_idempotency_key
+
+    def unavailable(*args, **kwargs):
+        reverse(*args, **kwargs)
+        raise RuntimeError("Ledger write failed")
+
+    monkeypatch.setattr(ledger, "reverse_by_idempotency_key", unavailable)
+    with pytest.raises(RuntimeError, match="Ledger write failed"):
+        store.record_evidence(
+            attempt_id=attempt["attempt_id"], artifact_hash="hash-2", result="failed",
+        )
+
+    assert ledger.all_entries() == before
+    evidence = store.list_evidence(attempt["attempt_id"])
+    assert len(evidence) == 1
+    assert evidence[0]["evidence_id"] == first["evidence_id"]
+    assert evidence[0]["is_current"] is True
 
 
 def test_evidence_event_is_idempotent_per_evidence_id(tmp_path: Path) -> None:

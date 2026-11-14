@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import closing
+from contextlib import closing, nullcontext
 from pathlib import Path
 from typing import Any, cast
 
@@ -134,6 +134,7 @@ class EventLedgerStore:
         *,
         workspace_id: str = "",
         idempotency_key: str = "",
+        transaction: sqlite3.Connection | None = None,
     ) -> tuple[EventLedgerEntry, bool]:
         """Append ``entry``; replay the stored entry for a repeated key.
 
@@ -142,8 +143,10 @@ class EventLedgerStore:
         """
         key = idempotency_key.strip()
         workspace = workspace_id or entry.project_id
-        connection = self._connect()
-        try:
+        connection_scope = (
+            nullcontext(transaction) if transaction is not None else closing(self._connect())
+        )
+        with connection_scope as connection:
             cursor = connection.execute(
                 _INSERT_SQL,
                 (
@@ -175,9 +178,8 @@ class EventLedgerStore:
                         "Event ledger reported a replay conflict without a stored entry."
                     )
                 return entry_from_row(row), False
-            connection.commit()
-        finally:
-            connection.close()
+            if transaction is None:
+                connection.commit()
         return entry, True
 
     def load_recent(self, *, limit: int = 2000) -> list[EventLedgerEntry]:
@@ -261,17 +263,18 @@ class EventLedgerStore:
         return int(row["n"]) if row is not None else 0
 
     def find_by_idempotency_key(
-        self, *, workspace_id: str, idempotency_key: str
+        self, *, workspace_id: str, idempotency_key: str,
+        transaction: sqlite3.Connection | None = None,
     ) -> EventLedgerEntry | None:
         key = idempotency_key.strip()
         if not key:
             return None
-        connection = self._connect()
-        try:
+        connection_scope = (
+            nullcontext(transaction) if transaction is not None else closing(self._connect())
+        )
+        with connection_scope as connection:
             row = connection.execute(
                 "SELECT * FROM event_ledger WHERE workspace_id = ? AND idempotency_key = ?",
                 (workspace_id, key),
             ).fetchone()
-        finally:
-            connection.close()
         return entry_from_row(row) if row is not None else None
