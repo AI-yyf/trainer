@@ -22,13 +22,14 @@ import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
 import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 import { withVsixE2EFixtureLoopbackBypass } from "../extension/scripts/vsix-e2e-provider-runtime.mjs";
+import { resolveVsixOutputPath } from "../extension/scripts/package-vsix.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const extensionDir = path.join(repoRoot, "extension");
 const packageJson = JSON.parse(fs.readFileSync(path.join(extensionDir, "package.json"), "utf8"));
 const extensionId = `${packageJson.publisher}.${packageJson.name}`;
-const vsixPath = path.join(extensionDir, `trainer-extension-${packageJson.version}-darwin-arm64.vsix`);
+const vsixPath = resolveVsixOutputPath({ extensionDir, packageJson });
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
 const electronBinary = requireVSCodeElectronBinary();
 if (!fs.existsSync(vsixPath)) {
@@ -344,7 +345,7 @@ async function main() {
     results.push({ step, ...payload });
     fs.writeFileSync(
       path.join(outDir, "13-visual-katex.json"),
-      `${JSON.stringify({ provider: providerLabel, results }, null, 2)}\n`,
+      `${JSON.stringify({ provider: providerLabel, vsixPath, results }, null, 2)}\n`,
     );
     console.log(`[visual] ${step}`, JSON.stringify(payload).slice(0, 240));
   };
@@ -373,6 +374,7 @@ async function main() {
     }),
   });
 
+  launchEnv.TRAINER_FILE_STORE_ROOT = path.join(root, "file-store");
   const app = await _electron.launch({
     executablePath: electronBinary,
     args: [
@@ -438,8 +440,7 @@ async function main() {
         for (const candidate of page.frames()) {
           if (!candidate.url().includes("vscode-webview://")) continue;
           try {
-            const text = await candidate.locator("body").innerText({ timeout: 1500 });
-            if (/对话|Coach/.test(text)) return candidate;
+            if (await candidate.getByTestId("trainer-view-nav-coach").isVisible()) return candidate;
           } catch { /* still loading */ }
         }
         await page.waitForTimeout(800);
@@ -459,10 +460,7 @@ async function main() {
       const start = Date.now();
       while (Date.now() - start < timeout) {
         const busy = await frame.locator(".coach-working, .agent-activity-strip").count();
-        const assistant = await frame
-          .locator(".message-bubble__body")
-          .filter({ has: frame.locator(".message-bubble__assistant-rail") })
-          .count();
+        const assistant = await frame.locator('article[data-role="assistant"] .katex').count();
         if (busy === 0 && assistant > 0) return true;
         await page.waitForTimeout(800);
       }
@@ -512,16 +510,18 @@ async function main() {
       facts: mathTwinFacts,
     });
 
-    const learningTab = frame.getByRole("button", { name: "学习", exact: true }).first();
-    if (await learningTab.count()) await learningTab.click();
+    await frame.getByTestId("trainer-view-nav-plan").click();
+    await frame.locator('[data-template="LearningHome"]:visible').first().waitFor();
     await page.waitForTimeout(4000);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.waitForTimeout(2500);
     const wideBody = (await frame.locator("body").innerText()).replace(/\s+/g, " ").trim();
+    const wideSidebar = await frame.evaluate(() => innerWidth);
     const wideRawLatex = /\\pi_\theta|\\frac|\\operatorname/.test(wideBody);
     record("13b-learning-wide", {
       ok: !wideRawLatex,
-      width: 1280,
+      window_width: 1280,
+      sidebar_width: wideSidebar,
       has_raw_latex: wideRawLatex,
       text_head: wideBody.slice(0, 300),
       screenshot: await screenshot(page, "13b-learning-wide"),
@@ -530,13 +530,53 @@ async function main() {
     await page.setViewportSize({ width: 400, height: 900 });
     await page.waitForTimeout(3000);
     const narrowBody = (await frame.locator("body").innerText()).replace(/\s+/g, " ").trim();
+    const narrowSidebar = await frame.evaluate(() => innerWidth);
     const narrowRawLatex = /\\pi_\theta|\\frac|\\operatorname/.test(narrowBody);
     record("13c-learning-narrow", {
-      ok: !narrowRawLatex,
-      width: 400,
+      ok: !narrowRawLatex && narrowSidebar <= wideSidebar,
+      window_width: 400,
+      sidebar_width: narrowSidebar,
       has_raw_latex: narrowRawLatex,
       text_head: narrowBody.slice(0, 300),
       screenshot: await screenshot(page, "13c-learning-narrow"),
+    });
+
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await frame.getByTestId("trainer-view-nav-resources").click();
+    const library = frame.locator('[data-resource-library-container="true"]');
+    await library.waitFor();
+    const resourcesFacts = await library.evaluate((element) => ({
+      width: innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      restoresBanner: Boolean(element.querySelector(".resources-inline-context")),
+    }));
+    record("13d-resources-library", {
+      ok: !resourcesFacts.restoresBanner && resourcesFacts.scrollWidth <= resourcesFacts.width + 1,
+      facts: resourcesFacts,
+      screenshot: await screenshot(page, "13d-resources-library"),
+    });
+
+    await frame.getByTestId("trainer-view-nav-settings").click();
+    await frame.locator('[data-settings-category="teaching"]').click();
+    const habit = frame.locator(".settings-coach-habit");
+    const habitInput = habit.locator("input");
+    const demoHabit = "先给一个最小例子，再讲公式";
+    await habitInput.fill(demoHabit);
+    await habit.getByRole("button", { name: "保存", exact: true }).click();
+    const disable = habit.getByRole("button", { name: "停用", exact: true });
+    const enable = habit.getByRole("button", { name: "启用", exact: true });
+    await disable.click();
+    await enable.waitFor();
+    const retained = await habitInput.inputValue();
+    const settingsScreenshot = await screenshot(page, "13e-coach-habit-disabled");
+    await enable.click();
+    await disable.waitFor();
+    const forget = habit.getByRole("button", { name: "忘记", exact: true });
+    await forget.click();
+    await forget.waitFor({ state: "detached" });
+    record("13e-coach-habit", {
+      ok: retained === demoHabit && await habitInput.inputValue() === "",
+      screenshot: settingsScreenshot,
     });
   } finally {
     try {
@@ -548,10 +588,11 @@ async function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     provider: providerLabel,
+    vsixPath,
     using_real_provider: usingRealProvider,
     results,
     failures: failures.length,
-    ok: failures.length === 0 && results.length >= 4,
+    ok: failures.length === 0 && results.length === 7,
     artifacts: fs.readdirSync(outDir).filter((name) => name.endsWith(".png")),
   };
   fs.writeFileSync(path.join(outDir, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
@@ -562,10 +603,10 @@ async function main() {
 try {
   if (!usingRealProvider) await startStubProvider();
   const ok = await main();
-  process.exit(ok ? 0 : 1);
+  process.exitCode = ok ? 0 : 1;
 } catch (error) {
   console.error("FULL_JOURNEY_VISUAL_FAILED", error instanceof Error ? error.stack : String(error));
-  process.exit(1);
+  process.exitCode = 1;
 } finally {
   await stopStubProvider();
   fs.rmSync(root, { recursive: true, force: true });
