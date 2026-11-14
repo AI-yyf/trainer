@@ -80,8 +80,6 @@ test('Training first screen gates leftover handoff card chrome', () => {
     source,
     /const trainingWhyThisCard = leftoverTrainingHandoffChromeNotLive/,
   );
-  assert.match(source, /leftoverResourceSelectedDetailIsNotLive\(/);
-  assert.match(source, /leftoverResourceSelectedDetailNotLive/);
   assert.doesNotMatch(source, /leftoverResourceSandboxPreviewIsNotLive\(/);
   assert.doesNotMatch(source, /leftoverSandboxPreviewNotLive/);
   assert.match(source, /leftoverResourceSandboxStateIsNotLive\(/);

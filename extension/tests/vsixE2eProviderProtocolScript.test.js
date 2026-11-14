@@ -385,7 +385,7 @@ test('VSIX E2E checks the public sandbox skill capability contract instead of an
   assert.match(source, /trainer\.resource_sandbox\.skill_runtime\.v1/);
 });
 
-test('VSIX E2E asserts no in-Trainer preview command and the sandbox context reader', () => {
+test('VSIX E2E asserts sandbox restore uses the library without an embedded reader', () => {
   const source = fs.readFileSync(e2eScriptPath, 'utf8');
   const sandboxStart = source.indexOf('await record("assert-resources-no-in-trainer-preview"');
   const sandboxEnd = source.indexOf('await record("capture-owned-workbench-after-sandbox-restore"', sandboxStart);
@@ -411,7 +411,7 @@ test('VSIX E2E asserts no in-Trainer preview command and the sandbox context rea
   assert.match(sandboxSource, /data\.restoreSucceeded === true/);
   assert.match(sandboxSource, /data\.activeSurface === "sandbox"/);
   assert.match(sandboxSource, /data\.selectedSandboxPath === data\.sandboxPath/);
-  assert.match(sandboxSource, /data\.detailPaneVisible === true/);
+  assert.match(sandboxSource, /data\.detailPaneVisible === false/);
   assert.match(sandboxSource, /data\.sandboxPaneVisible === false/);
   assert.match(sandboxSource, /data\.previewPaneVisible === false/);
   assert.doesNotMatch(sandboxSource, /data\.activeSurface === "detail"/);

@@ -170,8 +170,8 @@ test('Resources restores one requested surface and keeps it through ordinary vie
   const stateSource = fs.readFileSync(workbenchStatePath, 'utf8');
 
   assert.match(viewSource, /surface: "detail" \| "sandbox";/);
-  assert.match(viewSource, /restoreContext\?\.surface !== "detail" \|\| !restoreContext\.resourceId/);
-  assert.match(viewSource, /setSelectedResourceId\(restoreContext\.resourceId\);/);
+  assert.match(viewSource, /restoreContext\?\.surface !== "sandbox"/);
+  assert.match(viewSource, /setSelectedResourceId\(restoreContext\?\.resourceId \?\? null\);/);
   assert.match(viewSource, /onRestoreContextChange\?: \(context\?: ResourceRestoreContext\) => void;/);
   assert.match(viewSource, /const setResourceDetail = \(resourceId: string \| null\) => \{/);
   assert.match(viewSource, /onRestoreContextChange\?\.\(\s*resourceId\s*\?/);

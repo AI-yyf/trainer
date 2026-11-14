@@ -217,7 +217,6 @@ test('Learning resolves one governed primary action before rendering', () => {
   assert.match(source, /preferRecoveredTrainingFocusChrome\(/);
   assert.match(source, /leftoverTrainingHandoffChromeIsNotLive\(/);
   assert.match(source, /preferRecoveredTrainingHandoffChrome\(/);
-  assert.match(source, /leftoverResourceSelectedDetailIsNotLive\(/);
   assert.doesNotMatch(source, /leftoverResourceSandboxPreviewIsNotLive\(/);
   assert.match(source, /leftoverResourceSandboxStateIsNotLive\(/);
   assert.match(source, /leftoverResourceLibraryListIsNotLive\(/);

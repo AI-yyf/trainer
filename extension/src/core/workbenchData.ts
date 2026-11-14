@@ -6655,7 +6655,6 @@ function mapResource(value: unknown): ResourceRecordView | undefined {
       freshness === 'fresh' || freshness === 'stale' || freshness === 'unknown' ? freshness : undefined,
     indexState: asText(record.index_state) ?? asText(record.indexState) ?? indexStatus,
     citationId: asText(record.citation_id) ?? asText(record.citationId),
-    versionId: asText(record.version_id) ?? asText(record.versionId),
     previewTier: asPreviewTier(asText(record.preview_tier) ?? asText(record.previewTier)),
     previewKind: asText(record.preview_kind) ?? asText(record.previewKind),
     rankScore: asNumber(record.rank_score) ?? asNumber(record.rankScore),
@@ -7321,6 +7320,8 @@ function canonicalResourceFields(
   record: Record<string, unknown>,
 ): Partial<ResourceDetailRecordView> {
   const fields: Partial<ResourceDetailRecordView> = {};
+  const versionId = asText(record.version_id) ?? asText(record.versionId);
+  if (versionId) fields.versionId = versionId;
   const markdownPath =
     asText(record.canonical_markdown_path) ?? asText(record.canonicalMarkdownPath);
   const originalPath =

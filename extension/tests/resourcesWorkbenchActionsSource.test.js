@@ -75,7 +75,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl\?: \(\) => void;/);
   assert.match(
     viewSource,
-    /onOpenResource\?: \(resourceId: string, options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number \}\) => void;/,
+    /onOpenResource\?: \(resourceId: string, options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number; versionId\?: string \}\) => void;/,
   );
   assert.match(viewSource, /onRefreshResources\?: \(\) => void \| Promise<void>;/);
   assert.match(inlineCopy, /pendingIndex: \{ zh: "\\u5f85\\u7d22\\u5f15", en: "Waiting to be indexed" \}/);
@@ -455,10 +455,6 @@ test('Resources preserves an explicit selection across views and records unmount
   const appSource = readAppModuleSource();
   const viewSource = readResourcesViewSource();
 
-  assert.match(
-    viewSource,
-    /initialResourceContextIds\?: string\[\];/,
-  );
   assert.match(viewSource, /onResourceSelectionChange\?\.\(selectedResourceContextIds, "selection"\);/);
   assert.match(viewSource, /onResourceSelectionChange\?\.\(\[\], "unmount"\);/);
   assert.match(appSource, /const turnActiveView = activeViewOverride \?\? activeView;/);
@@ -467,11 +463,11 @@ test('Resources preserves an explicit selection across views and records unmount
     /const \[resourceConversationContextIds, setResourceConversationContextIds\] = useState<string\[\]>\(\[\]\);/,
   );
   assert.match(appSource, /if \(reason !== "unmount"\) \{\s*setResourceConversationContextIds\(resourceIds\);/);
-  assert.match(appSource, /initialResourceContextIds=\{resourceConversationContextIds\}/);
+  assert.match(appSource, /onOpenResource=\{\(resourceId, options\) => \{\s*handleResourceSelectionChange\(\[resourceId\]\)/);
   assert.match(appSource, /: selectedResourceContextIds\.length > 0\s*\? selectedResourceContextIds\s*:\s*resourceConversationContextIds;/);
   assert.match(appSource, /const resourceConversationContextLabel = useMemo\(/);
   assert.match(appSource, /activeView === "coach" && resourceConversationContextLabel/);
-  assert.match(appSource, /setResourceConversationContextIds\(\[\]\);/);
+  assert.match(appSource, /const clearResourceConversationContext = \(\) => \{\s*setResourceRestoreContext\(undefined\);\s*handleResourceSelectionChange\(\[\]\);/);
   assert.match(appSource, /activeView: turnActiveView,/);
 });
 

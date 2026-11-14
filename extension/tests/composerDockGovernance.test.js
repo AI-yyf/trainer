@@ -131,11 +131,11 @@ test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banne
 
   // Anchor chip strip renders only outside Coach and is removable.
   assert.match(app, /dockAnchorControl\.anchor && activeView !== "coach" \? <div className="template-context" role="group" data-dock-anchor="true">/);
-  assert.match(app, /onClick=\{dockAnchorControl\.suppress\}/);
+  assert.match(app, /onClick=\{activeView === "resources" \? clearResourceConversationContext : dockAnchorControl\.suppress\}/);
 
-  // Sends from Learning/Resources append the anchor line to the outgoing message.
+  // Learning appends its stage. Resources sends its source as structured context.
   assert.match(app, /const messageText = appendDockAnchor\(rawMessageText, dockAnchor\);/);
-  assert.match(app, /const dockAnchor = activeView === "coach" \? null : resolveDockContextAnchor\(/);
+  assert.match(app, /const dockAnchor = activeView === "plan" \? dockAnchorControl\.anchor : null/);
 
   // Default jump-to-coach; stay mode records the surface in the store and the
   // stream/complete reducer raises the actionable returnToSurface notice
