@@ -265,17 +265,19 @@ class TestNewEventTypeConstants:
             EVENT_COACH_TURN_RECORDED,
             EVENT_EVENT_REVERSED,
             EVENT_GOAL_ACTIVITY_RECORDED,
-            EVENT_GOAL_COMPLETED,
+            EVENT_GOAL_ARCHIVED,
+    EVENT_GOAL_COMPLETED,
             EVENT_GOAL_STARTED,
             EVENT_TELEMETRY_CONSENT_CHANGED,
         )
 
-        assert len(ALL_EVENT_TYPES) == 49
+        assert len(ALL_EVENT_TYPES) == 50
         assert EVENT_TELEMETRY_CONSENT_CHANGED in ALL_EVENT_TYPES
         assert EVENT_EVENT_REVERSED in ALL_EVENT_TYPES
         assert EVENT_GOAL_STARTED in ALL_EVENT_TYPES
         assert EVENT_GOAL_ACTIVITY_RECORDED in ALL_EVENT_TYPES
         assert EVENT_GOAL_COMPLETED in ALL_EVENT_TYPES
+        assert EVENT_GOAL_ARCHIVED in ALL_EVENT_TYPES
         assert EVENT_COACH_TURN_RECORDED in ALL_EVENT_TYPES
 
     def test_dependency_mastery_updated_constant(self) -> None:
@@ -398,7 +400,7 @@ class TestNewEventConstants:
 
     def test_total_event_type_count(self) -> None:
         """ALL_EVENT_TYPES includes agent checkpoints, telemetry, reversal and goals."""
-        assert len(ALL_EVENT_TYPES) == 49
+        assert len(ALL_EVENT_TYPES) == 50
 
     def test_record_new_event_types(self) -> None:
         """New event types can be recorded and queried back."""

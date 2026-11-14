@@ -87,11 +87,11 @@ EVENT_EVALUATION_FEEDBACK_RECORDED = "evaluation_feedback_recorded"
 # Reflection (1)
 EVENT_REFLECTION_RECORDED = "reflection_recorded"
 
-# Goal lifecycle (3) — §P1-3c: goal starts, real activities and completion
-# join the unified ledger so the goal round is auditable like training.
+# Goal lifecycle (4) — starts, real activities, completion and archival.
 EVENT_GOAL_STARTED = "goal_started"
 EVENT_GOAL_ACTIVITY_RECORDED = "goal_activity_recorded"
 EVENT_GOAL_COMPLETED = "goal_completed"
+EVENT_GOAL_ARCHIVED = "goal_archived"
 
 # Agent recovery (1)
 EVENT_AGENT_TURN_CHECKPOINTED = "agent_turn_checkpointed"
@@ -166,6 +166,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_GOAL_STARTED,
     EVENT_GOAL_ACTIVITY_RECORDED,
     EVENT_GOAL_COMPLETED,
+    EVENT_GOAL_ARCHIVED,
 })
 
 

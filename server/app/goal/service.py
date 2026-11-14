@@ -7,16 +7,20 @@ ends the focus, it never promotes competency or rewrites evidence.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
+from ..core.event_ledger import EVENT_GOAL_ARCHIVED, EVENT_GOAL_COMPLETED
 from ..core.models import GoalActivity, GoalSession, LearningPlan, utc_now_iso
 
 if TYPE_CHECKING:
     from ..core.event_ledger import EventLedgerService
 from ..db.repository import TrainerRepository
+
+logger = logging.getLogger(__name__)
 
 _ZH_INTENT_PREFIX = re.compile(
     r"(?:我(?:真的|真心|一直|很|想|打算)?(?:要|想|希望|打算)|帮我|请帮我|我想要)"
@@ -186,7 +190,7 @@ class GoalService:
             (
                 goal
                 for goal in self.list(scope)
-                if goal.status != "completed" and self._same_title(goal.title, normalized)
+                if goal.status in {"active", "paused"} and self._same_title(goal.title, normalized)
             ),
             None,
         )
@@ -196,7 +200,7 @@ class GoalService:
             if source == "coach_detected":
                 return same_title
             if existing is not None and existing.goal_id != same_title.goal_id:
-                self._mutate(existing, lambda goal: self._set_status(goal, "paused"))
+                self._mutate(existing, lambda goal: self._transition_open_goal(goal, "paused"))
             return self._mutate(
                 same_title,
                 lambda goal: self._refresh_identity(
@@ -212,7 +216,7 @@ class GoalService:
             if source == "coach_detected":
                 # Observed learning intent never replaces an explicit focus.
                 return existing
-            self._mutate(existing, lambda goal: self._set_status(goal, "paused"))
+            self._mutate(existing, lambda goal: self._transition_open_goal(goal, "paused"))
 
         now = utc_now_iso()
         goal = GoalSession(
@@ -244,34 +248,44 @@ class GoalService:
         target = self._target(workspace_id, goal_id)
         if target is None or target.status != "active":
             return target
-        return self._mutate(target, lambda goal: self._set_status(goal, "paused"))
+        return self._mutate(target, lambda goal: self._transition_open_goal(goal, "paused"))
 
     def resume(self, workspace_id: str, goal_id: str | None = None) -> GoalSession | None:
-        target = self._target(workspace_id, goal_id, include_completed=False)
-        if target is None or target.status == "completed":
+        target = self._target(workspace_id, goal_id)
+        if target is None or target.status != "paused":
             return target
         # One active focus: pausing siblings keeps the UI and Coach unambiguous.
         for other in self.list(workspace_id):
             if other.goal_id != target.goal_id and other.status == "active":
-                self._mutate(other, lambda goal: self._set_status(goal, "paused"))
-        if target.status == "active":
-            return target
-        return self._mutate(target, lambda goal: self._set_status(goal, "active"))
+                self._mutate(other, lambda goal: self._transition_open_goal(goal, "paused"))
+        return self._mutate(target, lambda goal: self._transition_open_goal(goal, "active"))
 
     def complete(self, workspace_id: str, goal_id: str | None = None) -> GoalSession | None:
-        target = self._target(workspace_id, goal_id, include_completed=False)
-        if target is None or target.status == "completed":
-            return target
-        completed = self._mutate(target, lambda goal: self._set_status(goal, "completed"))
-        if completed is not None:
+        return self._finish(workspace_id, goal_id, "completed")
+
+    def archive(self, workspace_id: str, goal_id: str | None = None) -> GoalSession | None:
+        return self._finish(workspace_id, goal_id, "archived")
+
+    def _finish(
+        self, workspace_id: str, goal_id: str | None, status: Literal["completed", "archived"],
+    ) -> GoalSession | None:
+        target = self._target(workspace_id, goal_id)
+        if target is None:
+            return None
+        finished = self._mutate(target, lambda goal: self._transition_open_goal(goal, status))
+        if finished is not None and finished.status == status:
+            event_type = EVENT_GOAL_COMPLETED if status == "completed" else EVENT_GOAL_ARCHIVED
+            payload = {"title": finished.title}
+            if finished.completion_basis:
+                payload["completion_basis"] = finished.completion_basis
             self._record_goal_event(
-                "goal_completed",
+                event_type,
                 workspace_id=workspace_id,
-                goal_id=completed.goal_id,
-                idempotency_key=f"goal_completed:{completed.goal_id}",
-                payload={"goal_id": completed.goal_id, "title": completed.title},
+                goal_id=finished.goal_id,
+                idempotency_key=f"{event_type}:{finished.goal_id}",
+                payload=payload,
             )
-        return completed
+        return finished
 
     def observe_turn(
         self,
@@ -305,7 +319,10 @@ class GoalService:
         if str(active_view or "coach").strip().lower() not in {"coach", ""}:
             return None
         candidate = detect_goal_candidate(message)
-        if not candidate:
+        if not candidate or any(
+            goal.status in {"archived", "completed"} and self._same_title(goal.title, candidate)
+            for goal in self.list(workspace_id)
+        ):
             return None
         return self.start(
             workspace_id=workspace_id,
@@ -330,7 +347,7 @@ class GoalService:
     ) -> GoalSession | None:
         """Append one real learning activity to the active goal.
 
-        Paused/completed goals are not advanced. A repeated ``event_key`` is
+        Only active goals can accumulate activities. A repeated ``event_key`` is
         idempotent so retries and multi-window replays cannot inflate counts.
         """
         goal = self.current(workspace_id)
@@ -357,9 +374,18 @@ class GoalService:
         key = str(event_key or "").strip()
         key = f"{normalized_kind}:{key}" if key else ""
 
+        ledger_activity: GoalActivity | None = None
+
         def mutate(target: GoalSession) -> bool:
-            if key and any(activity.event_key == key for activity in target.activities):
+            nonlocal ledger_activity
+            if target.status != "active":
                 return False
+            if key:
+                ledger_activity = next(
+                    (activity for activity in target.activities if activity.event_key == key), None,
+                )
+                if ledger_activity is not None:
+                    return False
             prior_refs = {
                 ref
                 for activity in target.activities
@@ -375,6 +401,7 @@ class GoalService:
                 evidenceRefs=refs,
                 eventKey=key,
             )
+            ledger_activity = activity
             target.activities.append(activity)
             target.activities = target.activities[-self.max_activities :]
             target.activity_count += 1
@@ -387,9 +414,8 @@ class GoalService:
             return True
 
         updated = self.repository.mutate_goal(workspace_id, goal.goal_id, mutate)
-        if updated is not None and updated.latest_activity is not None:
-            latest = updated.latest_activity
-            fingerprint = key or f"{kind}:{normalize_goal_title(summary)[:80]}:{latest.occurred_at}"
+        if updated is not None and ledger_activity is not None:
+            fingerprint = key or f"{kind}:{ledger_activity.summary[:80]}:{ledger_activity.occurred_at}"
             self._record_goal_event(
                 "goal_activity_recorded",
                 workspace_id=workspace_id,
@@ -397,9 +423,9 @@ class GoalService:
                 idempotency_key=f"goal_activity:{goal.goal_id}:{fingerprint}",
                 payload={
                     "goal_id": goal.goal_id,
-                    "kind": kind,
-                    "result": normalized_result,
-                    "activity_id": latest.activity_id,
+                    "kind": ledger_activity.kind,
+                    "result": ledger_activity.result,
+                    "activity_id": ledger_activity.activity_id,
                 },
             )
         return updated
@@ -433,8 +459,8 @@ class GoalService:
                 audit_note=f"Goal {goal_id}: {event_type}",
                 idempotency_key=idempotency_key,
             )
-        except Exception:  # noqa: BLE001 - ledger must never break goal mutations
-            pass
+        except Exception:
+            logger.exception("Could not append %s for goal %s", event_type, goal_id)
 
     def recompute_goal_from_ledger(
         self,
@@ -460,11 +486,13 @@ class GoalService:
         effective = [
             entry
             for entry in self.event_ledger.effective_entries()
-            if entry.payload_ref.get("goal_id") == goal_id
+            if entry.project_id == workspace_id
+            and entry.payload_ref.get("goal_id") == goal_id
             and entry.event_type in {
                 "goal_started",
                 "goal_activity_recorded",
-                "goal_completed",
+                EVENT_GOAL_COMPLETED,
+                EVENT_GOAL_ARCHIVED,
             }
         ]
         if not effective:
@@ -490,23 +518,21 @@ class GoalService:
                     "result": str(payload.get("result") or ""),
                 })
                 projection["activity_count"] += 1
-            elif entry.event_type == "goal_completed":
+            elif entry.event_type == EVENT_GOAL_COMPLETED:
                 projection["status"] = "completed"
                 projection["completed"] = True
+                projection["completion_basis"] = payload.get("completion_basis")
+            elif entry.event_type == EVENT_GOAL_ARCHIVED:
+                projection["status"] = "archived"
         return projection
 
     def _target(
         self,
         workspace_id: str,
         goal_id: str | None,
-        *,
-        include_completed: bool = True,
     ) -> GoalSession | None:
         if goal_id and str(goal_id).strip():
-            goal = self.get(workspace_id, str(goal_id))
-            if goal is not None and (include_completed or goal.status != "completed"):
-                return goal
-            return None
+            return self.get(workspace_id, str(goal_id))
         return self.current(workspace_id)
 
     def _mutate(
@@ -521,17 +547,20 @@ class GoalService:
         return normalize_goal_title(left).casefold() == normalize_goal_title(right).casefold()
 
     @staticmethod
-    def _set_status(
+    def _transition_open_goal(
         goal: GoalSession,
-        status: Literal["active", "paused", "completed"],
+        status: Literal["active", "paused", "completed", "archived"],
     ) -> bool:
-        if goal.status == status:
+        if goal.status not in {"active", "paused"} or goal.status == status:
             return False
         goal.status = status
         now = utc_now_iso()
         goal.updated_at = now
         if status == "completed":
             goal.completed_at = now
+            goal.completion_basis = "user_confirmed"
+        elif status == "archived":
+            goal.archived_at = now
         elif status == "active":
             goal.completed_at = None
         return True
@@ -546,6 +575,8 @@ class GoalService:
         position: str,
         status: Literal["active", "paused", "completed"],
     ) -> bool:
+        if goal.status not in {"active", "paused"}:
+            return False
         changed = False
         if session_id and goal.session_id != session_id:
             goal.session_id = session_id

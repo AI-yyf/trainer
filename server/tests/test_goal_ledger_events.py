@@ -226,3 +226,43 @@ def test_recompute_marks_completion(tmp_path: Path) -> None:
     assert rebuilt is not None
     assert rebuilt["completed"] is True
     assert rebuilt["status"] == "completed"
+
+
+def test_archived_and_completed_goals_keep_distinct_history_after_restart(tmp_path: Path) -> None:
+    scope = {"workspace_id": "w-ledger"}
+    first = build_app(tmp_path)
+    draft = first.post("/goal/action", json={**scope, "action": "start", "title": "Implement a queue"})
+    archived_id = draft.json()["goal"]["goalId"]
+    focused = first.post("/goal/action", json={**scope, "action": "start", "title": "Explain FIFO"})
+    focused_id = focused.json()["goal"]["goalId"]
+
+    archived = first.post("/goal/action", json={**scope, "action": "archive", "goalId": archived_id})
+    assert archived.status_code == 200
+    assert archived.json()["goal"]["status"] == "archived"
+    assert archived.json()["goal"]["archivedAt"]
+    assert archived.json()["goal"]["completedAt"] is None
+    assert archived.json()["currentGoal"]["goalId"] == focused_id
+
+    for action in ("archive", "resume", "complete"):
+        replay = first.post("/goal/action", json={**scope, "action": action, "goalId": archived_id})
+        assert replay.json()["goal"]["status"] == "archived"
+
+    result = first.post("/goal/action", json={**scope, "action": "complete", "goalId": focused_id})
+    assert result.json()["goal"]["completionBasis"] == "user_confirmed"
+    assert result.json()["goal"]["completedAt"]
+    assert result.json()["currentGoal"] is None
+
+    restarted = build_app(tmp_path)
+    goals = restarted.get("/goal/list", params=scope).json()["goals"]
+    assert {goal["goalId"]: goal["status"] for goal in goals} == {
+        archived_id: "archived", focused_id: "completed",
+    }
+    assert restarted.get("/goal/current", params=scope).json()["goal"] is None
+    runtime = restarted.app.state.runtime
+    entries = [entry for entry in runtime.event_ledger.all_entries() if entry.scope == "goal"]
+    assert [entry.event_type for entry in entries] == [
+        "goal_started", "goal_started", "goal_archived", "goal_completed",
+    ]
+    projection = runtime.goals().recompute_goal_from_ledger(scope["workspace_id"], archived_id)
+    assert projection and projection["status"] == "archived" and not projection["completed"]
+    assert not runtime.memory_service.global_memory().capability_profile

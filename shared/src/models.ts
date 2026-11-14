@@ -837,7 +837,7 @@ export interface GoalSession {
   capability: string;
   planId?: string | null;
   stageId?: string | null;
-  status: "active" | "paused" | "completed";
+  status: "active" | "paused" | "completed" | "archived";
   source: "user_explicit" | "coach_detected" | "plan_stage";
   currentPosition: string;
   latestActivity?: GoalActivity | null;
@@ -848,4 +848,6 @@ export interface GoalSession {
   updatedAt: string;
   lastActivityAt?: string | null;
   completedAt?: string | null;
+  completionBasis?: "user_confirmed" | null;
+  archivedAt?: string | null;
 }

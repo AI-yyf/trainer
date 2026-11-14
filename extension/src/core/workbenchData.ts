@@ -7528,7 +7528,7 @@ export function normalizeGoalSession(value: unknown): GoalSession | undefined {
   if (!goalId || !title) return undefined;
   const statusValue = asString(record.status)?.trim();
   const status: GoalSession['status'] =
-    statusValue === 'paused' || statusValue === 'completed' ? statusValue : 'active';
+    statusValue === 'paused' || statusValue === 'completed' || statusValue === 'archived' ? statusValue : 'active';
   const sourceValue = asString(record.source)?.trim();
   const source: GoalSession['source'] =
     sourceValue === 'coach_detected' || sourceValue === 'plan_stage' ? sourceValue : 'user_explicit';
@@ -7562,5 +7562,7 @@ export function normalizeGoalSession(value: unknown): GoalSession | undefined {
     updatedAt: asString(record.updated_at) ?? asString(record.updatedAt) ?? '',
     lastActivityAt: lastActivityAt ?? null,
     completedAt: completedAt ?? null,
+    completionBasis: (record.completion_basis ?? record.completionBasis) === 'user_confirmed' ? 'user_confirmed' : null,
+    archivedAt: asString(record.archived_at) ?? asString(record.archivedAt) ?? null,
   };
 }

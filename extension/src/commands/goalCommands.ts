@@ -3,7 +3,7 @@ import type { CommandExecutionResult } from '../core/types';
 import { normalizeGoalSession } from '../core/workbenchData';
 import { getRuntimeWorkspaceId } from './workspaceContext';
 
-type GoalAction = 'start' | 'pause' | 'resume' | 'complete';
+type GoalAction = 'start' | 'pause' | 'resume' | 'complete' | 'archive';
 
 type GoalControlPayload = {
   action?: unknown;
@@ -11,7 +11,7 @@ type GoalControlPayload = {
   goalId?: unknown;
 };
 
-const GOAL_ACTIONS = new Set<GoalAction>(['start', 'pause', 'resume', 'complete']);
+const GOAL_ACTIONS = new Set<GoalAction>(['start', 'pause', 'resume', 'complete', 'archive']);
 
 export async function goalControlCommand(
   context: CommandContext,
@@ -34,7 +34,7 @@ export async function goalControlCommand(
     return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
   }
   try {
-    const result = await context.sidecarClient.postJson<{ goal?: unknown }>(
+    const result = await context.sidecarClient.postJson<{ goal?: unknown; currentGoal?: unknown }>(
       status.port,
       '/goal/action',
       {
@@ -47,7 +47,9 @@ export async function goalControlCommand(
           : {}),
       },
     );
-    await context.patchWorkbenchData({ goal: normalizeGoalSession(result.goal) });
+    await context.patchWorkbenchData({
+      goal: normalizeGoalSession('currentGoal' in result ? result.currentGoal : result.goal),
+    });
     return { ok: true, message: '', data: result };
   } catch (error) {
     return {

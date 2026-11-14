@@ -1100,7 +1100,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     }),
   applyServerGoal: (goal) =>
     set((state) => {
-      const activeGoal = goal && goal.status !== "completed" ? goal : undefined;
+      const activeGoal = goal?.status === "active" || goal?.status === "paused" ? goal : undefined;
       const paused = activeGoal?.status === "paused";
       const title = activeGoal?.title ?? "";
       if (

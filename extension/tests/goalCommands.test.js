@@ -149,3 +149,16 @@ test('an unavailable sidecar fails closed without patching goal state', async ()
   assert.equal(context.__posts.length, 0);
   assert.equal(context.__patches.length, 0);
 });
+
+test('archiving a goal keeps the sidecar-selected focus', async () => {
+  const archived = { goalId: 'first', title: 'First goal', status: 'archived' };
+  const currentGoal = { goalId: 'second', title: 'Second goal', status: 'paused' };
+  const context = createContext({ response: { goal: archived, currentGoal } });
+  const result = await moduleUnderTest.goalControlCommand(context, { action: 'archive', goalId: 'first' });
+
+  assert.equal(result.ok, true);
+  assert.equal(context.__posts[0].body.action, 'archive');
+  assert.equal(context.__posts[0].body.goal_id, 'first');
+  assert.equal(context.__patches[0].goal.goalId, 'second');
+  assert.equal(context.__patches[0].goal.status, 'paused');
+});

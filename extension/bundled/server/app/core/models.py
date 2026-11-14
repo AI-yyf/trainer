@@ -2593,7 +2593,7 @@ class GoalSession(BaseModel):
     capability: str = ""
     plan_id: str | None = Field(default=None, alias="planId")
     stage_id: str | None = Field(default=None, alias="stageId")
-    status: Literal["active", "paused", "completed"] = "active"
+    status: Literal["active", "paused", "completed", "archived"] = "active"
     source: Literal["user_explicit", "coach_detected", "plan_stage"] = "user_explicit"
     current_position: str = Field(default="", alias="currentPosition")
     latest_activity: GoalActivity | None = Field(default=None, alias="latestActivity")
@@ -2604,6 +2604,8 @@ class GoalSession(BaseModel):
     updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
     last_activity_at: str | None = Field(default=None, alias="lastActivityAt")
     completed_at: str | None = Field(default=None, alias="completedAt")
+    completion_basis: Literal["user_confirmed"] | None = Field(default=None, alias="completionBasis")
+    archived_at: str | None = Field(default=None, alias="archivedAt")
 
 
 class WorkbenchSnapshot(BaseModel):
@@ -2867,7 +2869,7 @@ class GoalControlRequest(BaseModel):
 
     session_id: str | None = None
     workspace_id: str | None = None
-    action: Literal["start", "pause", "resume", "complete"]
+    action: Literal["start", "pause", "resume", "complete", "archive"]
     title: str | None = Field(default=None, max_length=240)
     goal_id: str | None = Field(default=None, alias="goalId")
 

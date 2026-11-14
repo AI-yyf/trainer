@@ -5,7 +5,7 @@ import type { ComposerLanguage } from "../../lib/types";
 import { TargetIcon } from "../icons";
 import { TrainerIconBase } from "../icons/TrainerIconBase";
 
-function GoalGlyph({ kind }: { kind: "pause" | "play" | "trash" | "chevron" }) {
+function GoalGlyph({ kind }: { kind: "pause" | "play" | "archive" | "chevron" }) {
   return (
     <TrainerIconBase viewBox="0 0 24 24" size={14}>
       {kind === "pause" ? (
@@ -15,11 +15,10 @@ function GoalGlyph({ kind }: { kind: "pause" | "play" | "trash" | "chevron" }) {
         </>
       ) : null}
       {kind === "play" ? <path d="M8 5.5v13l10-6.5z" /> : null}
-      {kind === "trash" ? (
+      {kind === "archive" ? (
         <>
-          <path d="M4 7h16" />
-          <path d="M9 7V4.5h6V7" />
-          <path d="m6.5 7 1 13h9l1-13" />
+          <rect x="4" y="4.5" width="16" height="4.5" rx="1" />
+          <path d="M5.5 9v10h13V9M10 13h4" />
         </>
       ) : null}
       {kind === "chevron" ? <path d="m6 9 6 6 6-6" /> : null}
@@ -33,7 +32,8 @@ export interface CoachGoalBarProps {
   paused: boolean;
   onPause: () => void;
   onResume: () => void;
-  onClear: () => void;
+  onArchive: () => void;
+  onComplete: () => void;
 }
 
 /**
@@ -46,7 +46,8 @@ export function CoachGoalBar({
   paused,
   onPause,
   onResume,
-  onClear,
+  onArchive,
+  onComplete,
 }: CoachGoalBarProps) {
   const copy = GOAL_MODE_COPY[language] ?? GOAL_MODE_COPY["en-US"];
   const [open, setOpen] = useState(false);
@@ -79,11 +80,11 @@ export function CoachGoalBar({
           <button
             type="button"
             className="coach-goal-bar__action"
-            aria-label={copy.clear}
-            title={copy.clear}
-            onClick={onClear}
+            aria-label={copy.archive}
+            title={copy.archive}
+            onClick={onArchive}
           >
-            <GoalGlyph kind="trash" />
+            <GoalGlyph kind="archive" />
           </button>
           <button
             type="button"
@@ -103,6 +104,9 @@ export function CoachGoalBar({
         <div className="coach-goal-bar__details">
           <p>{copy.hint}</p>
           <p>{copy.mastery}</p>
+          <button className="button button--ghost" type="button" onClick={onComplete}>
+            {copy.complete}
+          </button>
         </div>
       ) : null}
     </section>

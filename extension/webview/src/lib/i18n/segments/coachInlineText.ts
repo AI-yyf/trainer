@@ -34,7 +34,8 @@ export const GOAL_MODE_COPY: Record<
     paused: string;
     pause: string;
     resume: string;
-    clear: string;
+    archive: string;
+    complete: string;
     expand: string;
   }
 > = {
@@ -50,7 +51,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "已暂停",
     pause: "暂停目标",
     resume: "继续目标",
-    clear: "结束目标",
+    archive: "结束并归档",
+    complete: "标记为完成",
     expand: "展开目标详情",
   },
   "en-US": {
@@ -65,7 +67,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "Paused",
     pause: "Pause goal",
     resume: "Resume goal",
-    clear: "End goal",
+    archive: "End and archive",
+    complete: "Mark as complete",
     expand: "Show goal details",
   },
   "es-ES": {
@@ -80,7 +83,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "En pausa",
     pause: "Pausar objetivo",
     resume: "Reanudar objetivo",
-    clear: "Finalizar objetivo",
+    archive: "Cerrar y archivar",
+    complete: "Marcar como completado",
     expand: "Ver detalles del objetivo",
   },
   "fr-FR": {
@@ -95,7 +99,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "En pause",
     pause: "Mettre l'objectif en pause",
     resume: "Reprendre l'objectif",
-    clear: "Terminer l'objectif",
+    archive: "Clore et archiver",
+    complete: "Marquer comme terminé",
     expand: "Afficher les détails de l'objectif",
   },
   "de-DE": {
@@ -110,7 +115,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "Pausiert",
     pause: "Ziel pausieren",
     resume: "Ziel fortsetzen",
-    clear: "Ziel beenden",
+    archive: "Beenden und archivieren",
+    complete: "Als abgeschlossen markieren",
     expand: "Zieldetails anzeigen",
   },
   "ja-JP": {
@@ -125,7 +131,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "一時停止中",
     pause: "目標を一時停止",
     resume: "目標を再開",
-    clear: "目標を終了",
+    archive: "終了してアーカイブ",
+    complete: "完了にする",
     expand: "目標の詳細を表示",
   },
   "ko-KR": {
@@ -140,7 +147,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "일시 중지됨",
     pause: "목표 일시 중지",
     resume: "목표 재개",
-    clear: "목표 종료",
+    archive: "종료하고 보관",
+    complete: "완료로 표시",
     expand: "목표 세부정보 표시",
   },
   "pt-BR": {
@@ -155,7 +163,8 @@ export const GOAL_MODE_COPY: Record<
     paused: "Pausada",
     pause: "Pausar meta",
     resume: "Retomar meta",
-    clear: "Encerrar meta",
+    archive: "Encerrar e arquivar",
+    complete: "Marcar como concluída",
     expand: "Ver detalhes da meta",
   },
 };

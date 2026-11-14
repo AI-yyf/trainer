@@ -768,12 +768,13 @@ export function App() {
     }
   }, [applyServerGoal, data.goal]);
   const requestGoalControl = useCallback(
-    (action: "start" | "pause" | "resume" | "complete", title?: string) => {
+    (action: "start" | "pause" | "resume" | "complete" | "archive", title?: string) => {
+      const goalId = action === "start" ? undefined : useWorkbenchState.getState().data.goal?.goalId;
       postMessage({
         type: "command/execute",
         payload: {
           commandId: trainerCommands.goalControl,
-          payload: { action, ...(title ? { title } : {}) },
+          payload: { action, ...(title ? { title } : {}), ...(goalId ? { goalId } : {}) },
         },
       });
     },
@@ -10934,16 +10935,20 @@ export function App() {
                 title={goalText}
                 paused={goalPaused}
                 onPause={() => {
-                  pauseGoal();
-                  requestGoalControl("pause");
+                  if (inVsCodeWebview()) requestGoalControl("pause");
+                  else pauseGoal();
                 }}
                 onResume={() => {
-                  resumeGoal();
-                  requestGoalControl("resume");
+                  if (inVsCodeWebview()) requestGoalControl("resume");
+                  else resumeGoal();
                 }}
-                onClear={() => {
-                  clearGoal();
-                  requestGoalControl("complete");
+                onArchive={() => {
+                  if (inVsCodeWebview()) requestGoalControl("archive");
+                  else clearGoal();
+                }}
+                onComplete={() => {
+                  if (inVsCodeWebview()) requestGoalControl("complete");
+                  else clearGoal();
                 }}
               />
             ) : null}

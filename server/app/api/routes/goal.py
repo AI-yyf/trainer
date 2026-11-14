@@ -63,14 +63,18 @@ def build_goal_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             goal = service.pause(resolved_workspace_id, request.goal_id)
         elif request.action == "resume":
             goal = service.resume(resolved_workspace_id, request.goal_id)
+        elif request.action == "archive":
+            goal = service.archive(resolved_workspace_id, request.goal_id)
         else:
             goal = service.complete(resolved_workspace_id, request.goal_id)
         if goal is None and request.action == "start":
             raise HTTPException(status_code=404, detail="No goal is available for this action.")
         runtime.publish_goal(resolved_workspace_id)
+        current = service.current(resolved_workspace_id)
         return {
             "ok": True,
             "goal": goal.model_dump(by_alias=True) if goal is not None else None,
+            "currentGoal": current.model_dump(by_alias=True) if current is not None else None,
         }
 
     return router

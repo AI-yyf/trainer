@@ -1,5 +1,6 @@
-import { memo, Suspense, createContext, lazy, useContext, useEffect, useId, useMemo, useState } from "react";
+import { memo, Suspense, createContext, lazy, useContext, useDeferredValue, useEffect, useId, useMemo, useState } from "react";
 import type { Element } from "hast";
+import type { Components } from "react-markdown";
 
 import type { ComposerLanguage } from "../../lib/types";
 import { messageRichContentCopy } from "../../lib/i18n/segments/messageRichContentCopy";
@@ -57,6 +58,7 @@ type RichTableContextValue = {
 };
 
 const RichTableContext = createContext<RichTableContextValue | undefined>(undefined);
+const MarkdownStreamingContext = createContext(false);
 
 function childElements(node: Element | undefined): Element[] {
   return node?.children.filter((child): child is Element => child.type === "element") ?? [];
@@ -145,22 +147,19 @@ function InlineCode({ children }: { children: React.ReactNode }) {
   return <code className="message-markdown__inline-code">{children}</code>;
 }
 
-function RichMarkdownRenderer({
+const RichMarkdownRenderer = memo(function RichMarkdownRenderer({
   body,
   language,
-  streaming = false,
 }: {
   body: string;
   language: ComposerLanguage;
-  /** Live tail of a streaming reply: long growing code blocks stay unhighlighted. */
-  streaming?: boolean;
 }) {
   const [plugins, setPlugins] = useState<{
     rehypeKatex: RehypeKatexPlugin;
     remarkGfm: RemarkGfmPlugin;
     remarkMath: RemarkMathPlugin;
   }>();
-  const copy = labels(language);
+  const copy = useMemo(() => labels(language), [language]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,6 +172,122 @@ function RichMarkdownRenderer({
       cancelled = true;
     };
   }, []);
+
+  const components = useMemo<Components>(() => ({
+    // 处理代码元素 - 区分行内代码和代码块
+    code({ className, children }) {
+      const streaming = useContext(MarkdownStreamingContext);
+      const value = String(children ?? "").replace(/\n$/, "");
+      const match = /language-(\w+)/.exec(className || "");
+      const languageId = match ? match[1] : "";
+
+      // 如果没有语言标识且没有换行，认为是行内代码
+      const isInline = !languageId && !value.includes("\n");
+
+      if (isInline) {
+        return <InlineCode>{value}</InlineCode>;
+      }
+
+      // Mermaid 图表
+      if (languageId === "mermaid") {
+        const summaryLabel = value.includes("mindmap") ? copy.mindmap : copy.diagram;
+        return (
+          <MermaidBlock
+            chart={value}
+            errorLabel={copy.renderError}
+            summaryLabel={summaryLabel}
+            loadingLabel={copy.loading}
+          />
+        );
+      }
+
+      // 代码块
+      return (
+        <RichCodeBlock
+          code={value}
+          languageId={languageId}
+          language={language}
+          streaming={streaming}
+        />
+      );
+    },
+    a({ node, children, href, ...props }) {
+      // External links leave the webview instead of replacing Trainer.
+      return (
+        <a
+          {...props}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {children}
+        </a>
+      );
+    },
+    // 处理 pre 元素 - 防止嵌套问题
+    pre({ children }) {
+      // pre 元素的内容应该由 code 组件处理
+      // 这里直接返回 children，避免额外的 pre 嵌套
+      return <>{children}</>;
+    },
+    table({ node, children, ...props }) {
+      const tableId = useId();
+      const context = node
+        ? richTableContext(
+            node,
+            tableId,
+            copy.table,
+            messageRichContentCopy(language, "列"),
+          )
+        : undefined;
+      return (
+        <div className="message-render-block message-render-block--table">
+          <div className="message-table-wrap">
+            <RichTableContext.Provider value={context}>
+              <table
+                {...props}
+                aria-label={copy.table}
+                data-rich-table="true"
+                data-column-count={context?.headerByOffset.size ?? 0}
+              >
+                <caption className="sr-only">{copy.table}</caption>
+                {children}
+              </table>
+            </RichTableContext.Provider>
+          </div>
+        </div>
+      );
+    },
+    th({ node, children, ...props }) {
+      const context = useContext(RichTableContext);
+      const column = context?.headerByOffset.get(elementOffset(node) ?? -1);
+      return (
+        <th
+          {...props}
+          id={column?.id}
+          scope="col"
+          data-column-index={column ? column.index + 1 : undefined}
+          data-column-label={column?.label}
+        >
+          {children}
+        </th>
+      );
+    },
+    td({ node, children, ...props }) {
+      const context = useContext(RichTableContext);
+      const column = context?.cellByOffset.get(elementOffset(node) ?? -1);
+      return (
+        <td
+          {...props}
+          headers={column?.id}
+          data-column-index={column ? column.index + 1 : undefined}
+          data-column-label={column?.label}
+        >
+          {children}
+        </td>
+      );
+    },
+  }), [copy, language]);
 
   if (!plugins) {
     // 懒加载插件就绪前绝不渲染原始正文：模型回复常含 \( \) / \[ \] 公式，
@@ -198,125 +313,12 @@ function RichMarkdownRenderer({
         rehypeChatScripts,
       ]}
       remarkPlugins={[[plugins.remarkGfm, { singleTilde: false }], remarkChatBreaks, plugins.remarkMath]}
-      components={{
-        // 处理代码元素 - 区分行内代码和代码块
-        code({ node, className, children, ...props }) {
-          const value = String(children ?? "").replace(/\n$/, "");
-          const match = /language-(\w+)/.exec(className || "");
-          const languageId = match ? match[1] : "";
-
-          // 如果没有语言标识且没有换行，认为是行内代码
-          const isInline = !languageId && !value.includes("\n");
-
-          if (isInline) {
-            return <InlineCode>{value}</InlineCode>;
-          }
-
-          // Mermaid 图表
-          if (languageId === "mermaid") {
-            const summaryLabel = value.includes("mindmap") ? copy.mindmap : copy.diagram;
-            return (
-              <MermaidBlock
-                chart={value}
-                errorLabel={copy.renderError}
-                summaryLabel={summaryLabel}
-                loadingLabel={copy.loading}
-              />
-            );
-          }
-
-          // 代码块
-          return (
-            <RichCodeBlock
-              code={value}
-              languageId={languageId}
-              language={language}
-              streaming={streaming}
-            />
-          );
-        },
-        a({ node, children, href, ...props }) {
-          // External links leave the webview instead of replacing Trainer.
-          return (
-            <a
-              {...props}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {children}
-            </a>
-          );
-        },
-        // 处理 pre 元素 - 防止嵌套问题
-        pre({ children }) {
-          // pre 元素的内容应该由 code 组件处理
-          // 这里直接返回 children，避免额外的 pre 嵌套
-          return <>{children}</>;
-        },
-        table({ node, children, ...props }) {
-          const tableId = useId();
-          const context = node
-            ? richTableContext(
-                node,
-                tableId,
-                copy.table,
-                messageRichContentCopy(language, "列"),
-              )
-            : undefined;
-          return (
-            <div className="message-render-block message-render-block--table">
-              <div className="message-table-wrap">
-                <RichTableContext.Provider value={context}>
-                  <table
-                    {...props}
-                    aria-label={copy.table}
-                    data-rich-table="true"
-                    data-column-count={context?.headerByOffset.size ?? 0}
-                  >
-                    <caption className="sr-only">{copy.table}</caption>
-                    {children}
-                  </table>
-                </RichTableContext.Provider>
-              </div>
-            </div>
-          );
-        },
-        th({ node, children, ...props }) {
-          const context = useContext(RichTableContext);
-          const column = context?.headerByOffset.get(elementOffset(node) ?? -1);
-          return (
-            <th
-              {...props}
-              id={column?.id}
-              scope="col"
-              data-column-index={column ? column.index + 1 : undefined}
-              data-column-label={column?.label}
-            >
-              {children}
-            </th>
-          );
-        },
-        td({ node, children, ...props }) {
-          const context = useContext(RichTableContext);
-          const column = context?.cellByOffset.get(elementOffset(node) ?? -1);
-          return (
-            <td
-              {...props}
-              headers={column?.id}
-              data-column-index={column ? column.index + 1 : undefined}
-              data-column-label={column?.label}
-            >
-              {children}
-            </td>
-          );
-        },
-      }}
+      components={components}
     >
       {body}
     </ReactMarkdown>
   );
-}
+});
 
 export interface MessageRichContentProps {
   body: string;
@@ -324,111 +326,30 @@ export interface MessageRichContentProps {
   streaming?: boolean;
 }
 
-/**
- * While streaming, only the tail after the last completed markdown block
- * (paragraph boundary, closed code fence, or closed math block) changes from
- * frame to frame. Splitting there lets completed blocks render through
- * memoized components — one parse per block for the whole stream instead of a
- * full-document re-parse per frame (O(n²) over long replies).
- */
-function splitStreamingBody(body: string): { stableBlocks: string[]; tail: string } {
-  const lines = body.split("\n");
-  let inFence = false;
-  let fence = "";
-  let inMath = false;
-  let lastStableLine = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-    if (inFence) {
-      if (trimmed.startsWith(fence)) {
-        inFence = false;
-        lastStableLine = i;
-      }
-      continue;
-    }
-    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
-      inFence = true;
-      fence = trimmed.slice(0, 3);
-      continue;
-    }
-    if (trimmed === "$$") {
-      if (inMath) {
-        inMath = false;
-        lastStableLine = i;
-      } else {
-        inMath = true;
-      }
-      continue;
-    }
-    if (trimmed === "") {
-      let previous = i - 1;
-      while (previous >= 0 && lines[previous].trim() === "") {
-        previous--;
-      }
-      if (previous >= 0) {
-        lastStableLine = previous;
-      }
-    }
-  }
-  if (lastStableLine < 0) {
-    return { stableBlocks: [], tail: body };
-  }
-  const stable = lines.slice(0, lastStableLine + 1).join("\n");
-  const tail = lines.slice(lastStableLine + 1).join("\n");
-  const stableBlocks = stable
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-  return { stableBlocks, tail };
-}
-
-const StreamedStableBlock = memo(function StreamedStableBlock({
-  body,
-  language,
-}: {
-  body: string;
-  language: ComposerLanguage;
-}) {
-  return <RichMarkdownRenderer body={body} language={language} />;
-});
-
 function MessageRichContentImpl({
   body: rawBody,
   language,
   streaming = false,
 }: MessageRichContentProps) {
-  // Coach replies may carry LaTeX in \[ \] / \( \) delimiters that
-  // remark-math cannot parse; normalize outside code fences/spans.
-  const body = useMemo(() => normalizeLatexDelimiters(rawBody), [rawBody]);
-  // Split per frame: cheap line scan keeps completed blocks byte-stable so
-  // their memoized renderers never re-parse.
-  const split = useMemo(
-    () => (streaming ? splitStreamingBody(body) : null),
-    [body, streaming],
-  );
-  const content = (
+  // Keep Markdown grammar context across chunks, including list continuations,
+  // blank lines inside fences, and references defined later in the reply.
+  const deferredBody = useDeferredValue(rawBody);
+  const visibleBody = streaming ? deferredBody : rawBody;
+  const body = useMemo(() => normalizeLatexDelimiters(visibleBody), [visibleBody]);
+
+  return (
     <div
       className={`message-markdown ${language === "zh-CN" ? "is-zh" : "is-en"} ${
         streaming ? "is-streaming" : ""
       }`}
     >
-      {split ? (
-        <>
-          {split.stableBlocks.map((block, index) => (
-            <StreamedStableBlock key={index} body={block} language={language} />
-          ))}
-          <Suspense fallback={<MarkdownLoading language={language} />}>
-            <RichMarkdownRenderer body={split.tail} language={language} streaming />
-          </Suspense>
-        </>
-      ) : (
+      <MarkdownStreamingContext.Provider value={streaming}>
         <Suspense fallback={<MarkdownLoading language={language} />}>
           <RichMarkdownRenderer body={body} language={language} />
         </Suspense>
-      )}
+      </MarkdownStreamingContext.Provider>
     </div>
   );
-  return content;
 }
 
 export const MessageRichContent = memo(MessageRichContentImpl);
