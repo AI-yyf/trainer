@@ -1068,6 +1068,7 @@ export interface MemorySnapshotView {
     windowTrusted?: boolean;
     responseLanguage?: ComposerLanguage;
     answerMode?: 'auto' | 'coach-first' | 'balanced' | 'direct';
+    coachHabit?: import('../../../shared/src/coachHabit').CoachHabit | null;
     resourceSearchMode?: ResourceSearchMode;
     followCurrentFile?: boolean;
     contextDetail?: 'focused' | 'balanced' | 'full';
@@ -1806,6 +1807,7 @@ export interface SessionMessagePayload {
 }
 
 export interface CoachSettingsPayload {
+  coachHabit?: import('../../../shared/src/coachHabit').CoachHabitChange;
   responseLanguage?: ComposerLanguage;
   answerMode?: 'auto' | 'coach-first' | 'balanced' | 'direct';
   resourceSearchMode?: ResourceSearchMode;

@@ -8942,12 +8942,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         effective_mode: str | None,
         fallback_mode: str | None,
     ) -> str | None:
-        requested = str(raw_requested or "").strip()
-        if requested:
-            return requested
-        if str(saved_preference or "").strip() == "auto":
-            return "auto"
-        return effective_mode or fallback_mode
+        return raw_requested or effective_mode or saved_preference or fallback_mode
 
     def normalize_teaching_style(value: str | None) -> str:
         normalized = str(value or "").strip().lower()
@@ -9218,7 +9213,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         requested: str | None,
     ) -> ResponseLanguage | None:
         response_language = supported_response_language(requested)
-        if response_language is not None:
+        if response_language is not None and not workspace_preferences(workspace_id).get("response_language"):
             runtime.memory_service.update_workspace_state(
                 workspace_id,
                 response_language=response_language,

@@ -389,12 +389,8 @@ class MemoryServiceTests(unittest.TestCase):
         self.assertIn("Load it back on the next runtime boot.", snapshot.current_focus)
         self.assertEqual(snapshot.workspace.get("workspace_id"), workspace_id)
         self.assertGreaterEqual(snapshot.due_review_count, 1)
-        self.assertTrue(
-            any(
-                "remembered preference" in item.lower() or "response_language" in item
-                for item in snapshot.teaching_observations
-            )
-        )
+        self.assertEqual(snapshot.workspace["latest_turn_response_language"], "zh-CN")
+        self.assertEqual(snapshot.workspace["latest_turn_answer_mode"], "guided")
 
     def test_active_thread_is_persisted_and_restored(self) -> None:
         database_path = Path(".tmp-test/memory-active-thread.db")

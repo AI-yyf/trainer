@@ -25,6 +25,7 @@ import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import { trainerCommands } from "../../../../shared/src/commands";
+import type { CoachHabitChange } from "../../../../shared/src/coachHabit";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
 import type { TrainingPlanBinding } from "../../../../shared/src/models";
 import { isComposerLanguage } from "../../../../shared/src/types";
@@ -6693,8 +6694,8 @@ export function App() {
       includeSelection: boolean;
       includeDiagnostics: boolean;
       includeRelatedFiles: boolean;
-    }>) => {
-      const payload = {
+    }>, coachHabit?: CoachHabitChange) => {
+      const settings = {
         responseLanguage: overrides?.responseLanguage ?? layout.composerLanguage,
         answerMode: overrides?.answerMode ?? layout.composerAnswerMode,
         resourceSearchMode: overrides?.resourceSearchMode ?? layout.resourceSearchMode,
@@ -6718,22 +6719,23 @@ export function App() {
         ? normalizeTeachingStyle(data.profile.preferredStyle)
         : undefined;
       const matchesSavedSettings = Boolean(
-        savedWorkspaceSettings &&
-          payload.responseLanguage === savedWorkspaceSettings.responseLanguage &&
-          payload.answerMode === savedWorkspaceSettings.answerMode &&
-          payload.resourceSearchMode === savedWorkspaceSettings.resourceSearchMode &&
-          (savedTeachingStyle === undefined || payload.teachingStyle === savedTeachingStyle) &&
-          payload.followCurrentFile === savedWorkspaceSettings.followCurrentFile &&
-          payload.contextDetail === savedWorkspaceSettings.contextDetail &&
-          payload.includeCurrentFile === savedWorkspaceSettings.includeCurrentFile &&
-          payload.includeSelection === savedWorkspaceSettings.includeSelection &&
-          payload.includeDiagnostics === savedWorkspaceSettings.includeDiagnostics &&
-          payload.includeRelatedFiles === savedWorkspaceSettings.includeRelatedFiles &&
-          matchesSavedCoachDefaults(payload.coachDefaults, savedWorkspaceSettings.coachDefaults),
+        !coachHabit && savedWorkspaceSettings &&
+          settings.responseLanguage === savedWorkspaceSettings.responseLanguage &&
+          settings.answerMode === savedWorkspaceSettings.answerMode &&
+          settings.resourceSearchMode === savedWorkspaceSettings.resourceSearchMode &&
+          (savedTeachingStyle === undefined || settings.teachingStyle === savedTeachingStyle) &&
+          settings.followCurrentFile === savedWorkspaceSettings.followCurrentFile &&
+          settings.contextDetail === savedWorkspaceSettings.contextDetail &&
+          settings.includeCurrentFile === savedWorkspaceSettings.includeCurrentFile &&
+          settings.includeSelection === savedWorkspaceSettings.includeSelection &&
+          settings.includeDiagnostics === savedWorkspaceSettings.includeDiagnostics &&
+          settings.includeRelatedFiles === savedWorkspaceSettings.includeRelatedFiles &&
+          matchesSavedCoachDefaults(settings.coachDefaults, savedWorkspaceSettings.coachDefaults),
       );
       if (matchesSavedSettings) {
         return;
       }
+      const payload = coachHabit ? { coachHabit } : settings;
 
       if (isBrowserPreview) {
         setSettingsActionState({
@@ -6751,7 +6753,7 @@ export function App() {
             setOperationMessage({
               tone: "success",
               message:
-                appUiCopy(payload.responseLanguage, "已保存教练默认设置。"),
+                appUiCopy(layout.composerLanguage, "已保存教练默认设置。"),
             });
           })
           .catch(() => {
@@ -10714,6 +10716,7 @@ export function App() {
         reviewRhythmSummary: resolvedCoachReview,
         onCoachSettingsMutated: queueCoachSettingsSave,
         onSaveCoachSettings: () => persistCoachSettings(),
+        onCoachHabitChange: (change) => persistCoachSettings(undefined, change),
         onSaveProvider: saveProviderDraft,
         onUseProviderTemplateLabel: useProviderTemplateByLabel,
         providerSaveBusy: settingsActionState?.kind === "save-provider",

@@ -1,6 +1,7 @@
 import { templateCopy } from "../../templates/templateCopy";
 import { SettingsIndex, type SettingsSectionId } from "../../templates/SettingsIndex";
 import { SettingsDetail } from "../../templates/SettingsDetail";
+import { CoachHabitSettings } from "./CoachHabitSettings";
 import {
   ChoiceList,
   ContextList,
@@ -942,6 +943,7 @@ export interface CoachSettingsViewProps {
    */
   onCoachSettingsMutated?: () => void;
   onSaveCoachSettings?: () => void;
+  onCoachHabitChange?: (change: import("../../../../../shared/src/coachHabit").CoachHabitChange) => void;
   onSaveProvider?: () => void;
   onSaveProviderProfile?: () => void;
   onUseProviderTemplateLabel?: (templateLabel: string) => void;
@@ -990,6 +992,7 @@ interface CoachSettingsViewSheetProps {
    */
   onCoachSettingsMutated?: () => void;
   onSaveCoachSettings?: () => void;
+  coachHabitSettings?: ReactNode;
   onSaveProvider?: () => void;
   onSaveProviderProfile?: () => void;
   providerSpeedTestResults?: ProviderEndpointSpeedTestResult[];
@@ -1923,6 +1926,7 @@ export function CoachSettingsView({
   companionInstallState,
   onCoachSettingsMutated,
   onSaveCoachSettings,
+  onCoachHabitChange,
   onSaveProvider,
   onSaveProviderProfile,
   onUseProviderTemplateLabel,
@@ -1936,6 +1940,8 @@ export function CoachSettingsView({
   onOpenConfig,
   onResetDefaults,
 }: CoachSettingsViewProps) {
+  const coachHabit = useWorkbenchState((state) => state.data.memory.workspace?.coachHabit);
+  const language = useWorkbenchState((state) => state.layout.composerLanguage);
   // App's single provider-connection controller instance (draft, speed test,
   // API-key focus): the same instance App's composer and deep links use.
   const {
@@ -1970,6 +1976,15 @@ export function CoachSettingsView({
       companionInstallState={companionInstallState}
       onCoachSettingsMutated={onCoachSettingsMutated}
       onSaveCoachSettings={onSaveCoachSettings}
+      coachHabitSettings={onCoachHabitChange && coachHabit !== undefined ? (
+        <CoachHabitSettings
+          key={coachHabit?.text ?? ""}
+          language={language}
+          habit={coachHabit}
+          onChange={onCoachHabitChange}
+          saving={coachDefaultsStatus?.feedback?.tone === "pending"}
+        />
+      ) : undefined}
       onSaveProvider={onSaveProvider}
       onSaveProviderProfile={onSaveProviderProfile}
       onUseProviderTemplateLabel={onUseProviderTemplateLabel}
@@ -2085,6 +2100,7 @@ function CoachSettingsViewSheet({
   skillSharing,
   onCoachSettingsMutated,
   onSaveCoachSettings,
+  coachHabitSettings,
   onSaveProvider,
   onSaveProviderProfile,
   providerSpeedTestResults = [],
@@ -6758,9 +6774,7 @@ function CoachSettingsViewSheet({
                   />
                 </div>
               </div>
-
-
-
+              {coachHabitSettings}
           </div>
         </section>
         ) : null}

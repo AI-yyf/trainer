@@ -124,6 +124,23 @@
   color: var(--fg-1);
 }
 
+.settings-coach-habit input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font: inherit;
+}
+
+.settings-coach-habit__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
 .settings-anchor {
   min-width: 0;
 }

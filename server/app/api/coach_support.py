@@ -4834,6 +4834,11 @@ def build_coach_context(deps: CoachSupportDeps,
         "provider_mode": "background-embedded",
         "active_thread": active_thread,
         "coach_defaults": coach_defaults,
+        "coach_habit": (
+            memory.global_memory.coach_habit.text
+            if memory.global_memory and memory.global_memory.coach_habit and memory.global_memory.coach_habit.enabled
+            else None
+        ),
         "coach_focus": {
             "current_focus": current_focus,
             "review_rhythm": review_rhythm,

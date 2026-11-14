@@ -906,6 +906,26 @@ class GlobalMemoryGrowthRecord(BaseModel):
     verified_at: str = Field(default_factory=utc_now_iso, alias="verifiedAt")
 
 
+class CoachHabit(BaseModel):
+    text: str = Field(min_length=1, max_length=240)
+    enabled: bool = True
+    source: Literal["learner", "settings"] = "settings"
+    updated_at: str = Field(default_factory=utc_now_iso)
+
+
+class CoachHabitChange(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    action: Literal["save", "enable", "disable", "forget"]
+    text: str | None = Field(default=None, min_length=1, max_length=240)
+
+    @model_validator(mode="after")
+    def validate_text(self) -> CoachHabitChange:
+        if (self.action == "save") != (self.text is not None):
+            raise ValueError("Only saving a coach habit requires text.")
+        return self
+
+
 class GlobalMemory(BaseModel):
     """Owner-scoped memory that intentionally excludes project state."""
 
@@ -913,6 +933,7 @@ class GlobalMemory(BaseModel):
 
     owner_id: str = Field(alias="ownerId")
     preferences: dict[str, str] = Field(default_factory=dict, alias="preferences")
+    coach_habit: CoachHabit | None = None
     long_term_goals: list[str] = Field(default_factory=list, alias="longTermGoals")
     capability_profile: dict[str, GlobalMemoryCapability] = Field(
         default_factory=dict,
@@ -2895,6 +2916,7 @@ class CoachSettingsRequest(BaseModel):
     response_language: ResponseLanguage | None = None
     answer_mode: CoachRequestAnswerMode | None = None
     teaching_style: str | None = None
+    coach_habit: CoachHabitChange | None = None
     coach_defaults: CoachDefaults | None = None
     follow_current_file: bool | None = None
     context_detail: Literal["focused", "balanced", "full"] | None = None

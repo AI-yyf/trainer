@@ -971,6 +971,7 @@ export interface MemorySnapshot {
     windowTrusted?: boolean;
     responseLanguage?: ComposerLanguage;
     answerMode?: CoachAnswerMode;
+    coachHabit?: import('../../../../shared/src/coachHabit').CoachHabit | null;
     resourceSearchMode?: ResourceSearchMode;
     followCurrentFile?: boolean;
     contextDetail?: "focused" | "balanced" | "full";
@@ -1708,6 +1709,7 @@ export interface SessionMessageRequest {
 }
 
 export interface CoachSettingsRequest {
+  coachHabit?: import('../../../../shared/src/coachHabit').CoachHabitChange;
   responseLanguage?: ComposerLanguage;
   answerMode?: CoachAnswerMode;
   resourceSearchMode?: ResourceSearchMode;

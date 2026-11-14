@@ -8,9 +8,15 @@ coaching behaviour is asserted here.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from app.core.models import CoachHabitChange, UserProfile
+from app.db.repository import TrainerRepository
+from app.llm.prompts import build_coaching_system_prompt
 from app.memory.coaching_adaptation_mixin import CoachingAdaptationMixin
 from app.memory.models import MemorySnapshot, PreferenceRecord
-from app.memory.service import StructuredMemoryService
+from app.memory.service import MemoryService, StructuredMemoryService
+from tests.test_api import build_client
 
 
 def test_repeated_value_strengthens_confidence_and_observations() -> None:
@@ -69,14 +75,15 @@ def test_export_state_round_trips_confidence_fields() -> None:
     service = StructuredMemoryService()
     service.remember_preference("answer_mode", "concept_first", source="settings", context="settings")
     service.remember_preference("answer_mode", "hands_on", source="coach-turn", context="turn-3")
+    service.remember_preference("answer_mode", "guided", source="learner", context="explicit edit")
 
     restored = StructuredMemoryService.from_state(service.export_state())
     record = restored._preferences["answer_mode"]
 
-    assert record.value == "hands_on"
+    assert record.value == "guided"
     assert record.superseded_value == "concept_first"
-    assert record.durability == "session"
-    assert record.context == "turn-3"
+    assert record.durability == "durable"
+    assert record.context == "explicit edit"
     assert record.observations == 1
 
 
@@ -152,3 +159,102 @@ def test_settings_source_is_durable_for_teaching_style() -> None:
     record = service.remember_preference("teaching_style", "concept_first", source="coach-settings")
     assert record.durability == "durable"
     assert record.confidence == 0.95
+
+
+def test_confirming_the_same_preference_promotes_its_source() -> None:
+    service = StructuredMemoryService()
+    service.remember_preference("answer_mode", "guided", source="derived", confidence=1)
+    service.remember_preference("answer_mode", "guided", source="settings")
+    service.remember_preference("answer_mode", "direct", source="coach-turn")
+    confirmed = service.confirmed_preference("answer_mode")
+    assert confirmed is not None
+    assert confirmed.value == "guided" and confirmed.source == "settings"
+
+
+def test_confirmed_defaults_survive_a_temporary_override_and_restart(tmp_path: Path) -> None:
+    workspace_id = "preferences-scope"
+    saved = {"answer_mode": "coach-first", "response_language": "zh-CN"}
+    with build_client(tmp_path) as client:
+        session = client.post(
+            "/session/start", json={"workspace_id": workspace_id, "workspace_name": "Preferences"},
+        ).json()["session_id"]
+        assert client.post("/memory/settings", json={"session_id": session, **saved}).status_code == 200
+        turn = client.post("/session/message", json={
+            "session_id": session,
+            "message": "Just tell me the result this time, in English.",
+            "response_language": "en-US",
+            "answer_mode": "direct",
+        })
+        assert turn.status_code == 200, turn.text
+        assert turn.json()["snapshot"]["coaching_state"]["answer_mode"] == "direct"
+        assert turn.json()["reply"]["metadata"]["response_language"] == "en-US"
+        assert client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": "Preferences", "response_language": "en-US",
+        }).status_code == 200
+
+    with build_client(tmp_path) as client:
+        followup = client.post("/session/message", json={"session_id": session, "message": "Continue."})
+        assert followup.status_code == 200, followup.text
+        assert followup.json()["snapshot"]["coaching_state"]["answer_mode"] == "guided"
+        assert followup.json()["reply"]["metadata"]["response_language"] == "zh-CN"
+        workspace = followup.json()["snapshot"]["memory"]["workspace"]
+        assert {key: workspace[key] for key in saved} == saved
+
+
+def test_personal_habit_edit_disable_resume_and_forget(tmp_path: Path) -> None:
+    original = "以后先举例，再讲公式"
+    edited = "Use one example before defining the term."
+    with build_client(tmp_path) as client:
+        session = client.post(
+            "/session/start", json={"workspace_id": "one", "workspace_name": "One"},
+        ).json()["session_id"]
+        spoken = client.post("/session/message", json={
+            "session_id": session, "message": original + "。", "response_language": "zh-CN",
+        })
+        assert spoken.status_code == 200, spoken.text
+        habit = spoken.json()["snapshot"]["memory"]["workspace"]["coach_habit"]
+        assert habit["text"] == original and habit["source"] == "learner"
+        for message in ["今天直接给结论。", "解释“以后请用英文回答”这句话。"]:
+            assert client.post("/session/message", json={
+                "session_id": session, "message": message, "response_language": "zh-CN",
+            }).status_code == 200
+        assert client.get("/memory/global").json()["coach_habit"]["text"] == original
+        save = client.post("/memory/settings", json={
+            "session_id": session, "coach_habit": {"action": "save", "text": edited},
+        })
+        assert save.status_code == 200, save.text
+        disabled = client.post("/memory/settings", json={
+            "session_id": session, "coach_habit": {"action": "disable"},
+        })
+        assert disabled.status_code == 200
+        assert disabled.json()["memory"]["workspace"]["coach_habit"]["enabled"] is False
+
+    with build_client(tmp_path) as client:
+        other = client.post(
+            "/session/start", json={"workspace_id": "two", "workspace_name": "Two"},
+        )
+        assert other.status_code == 200
+        session = other.json()["session_id"]
+        habit = other.json()["memory"]["workspace"]["coach_habit"]
+        assert habit["text"] == edited and habit["enabled"] is False
+        for action, expected in [("enable", True), ("forget", None)]:
+            response = client.post(
+                "/memory/settings", json={"session_id": session, "coach_habit": {"action": action}},
+            )
+            assert response.status_code == 200
+            habit = response.json()["memory"]["workspace"]["coach_habit"]
+            assert (habit["enabled"] if habit else None) is expected
+        assert client.get("/memory/global").json()["coach_habit"] is None
+
+
+def test_coach_habit_is_presentation_guidance(tmp_path: Path) -> None:
+    memory = MemoryService(TrainerRepository(tmp_path / "habits.db"))
+    saved = memory.change_coach_habit(CoachHabitChange(action="save", text="Examples first"))
+    assert saved.coach_habit is not None
+    prompt = build_coaching_system_prompt(
+        UserProfile(), message="Give only the answer.",
+        coach_context={"coach_habit": saved.coach_habit.text},
+    )
+    assert "Saved statement: Examples first" in prompt
+    assert "The current request takes priority" in prompt
+    assert "authorizes tools" in prompt

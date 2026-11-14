@@ -83,12 +83,14 @@ def test_global_memory_excludes_workspace_resources_and_decisions(tmp_path: Path
     assert set(global_payload) == {
         "ownerId",
         "preferences",
+        "coach_habit",
         "longTermGoals",
         "capabilityProfile",
         "growthHistory",
         "createdAt",
         "updatedAt",
     }
+    assert global_payload["coach_habit"] is None
     global_text = json.dumps(global_payload, sort_keys=True)
     for private_value in (
         "project-a-private-resource",

@@ -15,6 +15,8 @@ from ..core.models import (
     ActiveCardSelectionResult,
     CardStatusTransitionResponse,
     CoachDefaults,
+    CoachHabit,
+    CoachHabitChange,
     DependencyMasterySnapshot,
     DependencySkillItemSnapshot,
     DependencySkillMapHistoryEntry,
@@ -257,12 +259,14 @@ _PREFERENCE_SOURCE_PROFILES: dict[str, tuple[float, str]] = {
     "derived": (0.4, "turn"),
 }
 _PREFERENCE_DURABILITY_RANK: dict[str, int] = {"turn": 0, "session": 1, "durable": 2}
+_CONFIRMED_PREFERENCE_SOURCES = frozenset({"settings", "user", "learner", "explicit", "coach-settings"})
 
 
-def _stronger_durability(left: str, right: str) -> str:
-    left_rank = _PREFERENCE_DURABILITY_RANK.get(left, 0)
-    right_rank = _PREFERENCE_DURABILITY_RANK.get(right, 0)
-    return left if left_rank >= right_rank else right
+def _preference_priority(source: str, durability: str) -> tuple[bool, int]:
+    return (
+        durability == "durable" and source.strip().lower() in _CONFIRMED_PREFERENCE_SOURCES,
+        _PREFERENCE_DURABILITY_RANK.get(durability, 0),
+    )
 
 
 class StructuredMemoryService:
@@ -577,11 +581,17 @@ class StructuredMemoryService:
         if resolved_durability not in _PREFERENCE_DURABILITY_RANK:
             resolved_durability = base_durability
         existing = self._preferences.get(key)
+        incoming_priority = _preference_priority(normalized_source, resolved_durability)
+        existing_priority = (
+            _preference_priority(existing.source, existing.durability) if existing else (False, -1)
+        )
+        if existing is not None and existing_priority > incoming_priority:
+            return existing
         if existing is None:
             record = PreferenceRecord(
                 key=key,
                 value=value,
-                source=source,
+                source=normalized_source,
                 updated_at=utc_now(),
                 confidence=resolved_confidence,
                 observations=1,
@@ -591,17 +601,22 @@ class StructuredMemoryService:
         elif existing.value == value:
             record = replace(
                 existing,
+                source=(
+                    normalized_source
+                    if incoming_priority > existing_priority or resolved_confidence >= existing.confidence
+                    else existing.source
+                ),
                 updated_at=utc_now(),
                 confidence=min(1.0, max(existing.confidence, resolved_confidence) + 0.05),
                 observations=min(99, existing.observations + 1),
-                durability=_stronger_durability(existing.durability, resolved_durability),
+                durability=resolved_durability,
                 context=context or existing.context,
             )
         else:
             record = replace(
                 existing,
                 value=value,
-                source=source,
+                source=normalized_source,
                 updated_at=utc_now(),
                 confidence=resolved_confidence,
                 observations=1,
@@ -611,6 +626,12 @@ class StructuredMemoryService:
             )
         self._preferences[key] = record
         return record
+
+    def confirmed_preference(self, key: str) -> PreferenceRecord | None:
+        record = self._preferences.get(key)
+        if record is not None and _preference_priority(record.source, record.durability)[0]:
+            return record
+        return None
 
     def remember_decision(
         self,
@@ -1044,6 +1065,12 @@ class StructuredMemoryService:
             PreferenceRecord,
             key_field="key",
         )
+        for key in ("answer_mode", "response_language"):
+            record = service._preferences.get(key)
+            if record is None:
+                continue
+            if service.confirmed_preference(key) is not None:
+                service._workspace[key] = record.value
         service._decisions = cls._restore_index(
             payload.get("decisions"),
             DecisionRecord,
@@ -1417,28 +1444,33 @@ class MemoryService(
         preferences: dict[str, str] | None = None,
         long_term_goals: list[str] | None = None,
     ) -> GlobalMemory:
-        current = self.global_memory()
-        next_preferences = (
-            {
-                str(key).strip(): str(value).strip()
-                for key, value in preferences.items()
-                if str(key).strip()
-            }
-            if preferences is not None
-            else dict(current.preferences)
-        )
-        next_goals = list(long_term_goals) if long_term_goals is not None else list(current.long_term_goals)
-        updated = GlobalMemory(
-            ownerId=current.owner_id,
-            preferences=next_preferences,
-            longTermGoals=next_goals,
-            capabilityProfile=current.capability_profile,
-            growthHistory=current.growth_history,
-            createdAt=current.created_at,
-            updatedAt=utc_now().isoformat(),
-        )
-        self.repository.save_global_memory(updated)
-        return updated
+        update: dict[str, Any] = {"updated_at": utc_now().isoformat()}
+        if preferences is not None:
+            update["preferences"] = {key.strip(): value.strip() for key, value in preferences.items() if key.strip()}
+        if long_term_goals is not None:
+            update["long_term_goals"] = GlobalMemory.normalize_long_term_goals(long_term_goals)
+        return self.repository.update_global_memory(lambda current: current.model_copy(update=update))
+
+    def change_coach_habit(
+        self, change: CoachHabitChange, *, source: Literal["learner", "settings"] = "settings",
+    ) -> GlobalMemory:
+        def update(current: GlobalMemory) -> GlobalMemory:
+            habit = current.coach_habit
+            now = utc_now().isoformat()
+            if change.action == "forget":
+                habit = None
+            elif change.action == "save" and change.text is not None:
+                habit = CoachHabit(
+                    text=change.text, source=source, updated_at=now,
+                    enabled=habit.enabled if habit else True,
+                )
+            elif habit is not None:
+                habit = habit.model_copy(update={"enabled": change.action == "enable", "updated_at": now})
+            else:
+                return current
+            return current.model_copy(update={"coach_habit": habit, "updated_at": now})
+
+        return self.repository.update_global_memory(update)
 
     _GLOBAL_PROMOTABLE_OUTCOMES = {
         "code_landed",
@@ -1762,46 +1794,34 @@ class MemoryService(
         normalized_concepts = list(dict.fromkeys(item.strip() for item in concepts if item and item.strip()))
         if not normalized_concepts:
             return
-        current = self.global_memory()
         recorded_at = utc_now().isoformat()
-        capability_profile = dict(current.capability_profile)
-        for concept in normalized_concepts:
-            key = concept.casefold()
-            existing = capability_profile.get(key)
-            workspace_ids = list(existing.workspace_ids) if existing else []
-            if workspace_id and workspace_id not in workspace_ids:
-                workspace_ids.append(workspace_id)
-            capability_profile[key] = GlobalMemoryCapability(
-                concept=concept,
-                verifiedCount=(existing.verified_count if existing else 0) + 1,
-                lastOutcome=outcome,
-                lastVerifiedAt=recorded_at,
-                workspaceIds=workspace_ids,
-                sceneCount=max(
-                    existing.scene_count if existing else 0,
-                    scene_count,
-                    len(workspace_ids),
-                ),
+
+        def update(current: GlobalMemory) -> GlobalMemory:
+            capability_profile = dict(current.capability_profile)
+            for concept in normalized_concepts:
+                key = concept.casefold()
+                prior = capability_profile.get(key)
+                workspace_ids = list(prior.workspace_ids) if prior else []
+                if workspace_id and workspace_id not in workspace_ids:
+                    workspace_ids.append(workspace_id)
+                capability_profile[key] = GlobalMemoryCapability(
+                    concept=concept,
+                    verifiedCount=(prior.verified_count if prior else 0) + 1,
+                    lastOutcome=outcome,
+                    lastVerifiedAt=recorded_at,
+                    workspaceIds=workspace_ids,
+                    sceneCount=max(prior.scene_count if prior else 0, scene_count, len(workspace_ids)),
+                )
+            growth = GlobalMemoryGrowthRecord(
+                outcome=outcome, concepts=normalized_concepts, verifiedAt=recorded_at,
             )
-        growth_history = [
-            *current.growth_history,
-            GlobalMemoryGrowthRecord(
-                outcome=outcome,
-                concepts=normalized_concepts,
-                verifiedAt=recorded_at,
-            ),
-        ][-100:]
-        self.repository.save_global_memory(
-            GlobalMemory(
-                ownerId=current.owner_id,
-                preferences=current.preferences,
-                longTermGoals=current.long_term_goals,
-                capabilityProfile=capability_profile,
-                growthHistory=growth_history,
-                createdAt=current.created_at,
-                updatedAt=recorded_at,
-            )
-        )
+            return current.model_copy(update={
+                "capability_profile": capability_profile,
+                "growth_history": [*current.growth_history, growth][-100:],
+                "updated_at": recorded_at,
+            })
+
+        self.repository.update_global_memory(update)
 
     def _canonical_workspace_id(self, workspace_id: str) -> str:
         """Resolve a legacy workspace path to its provisioned project context.
@@ -1969,7 +1989,15 @@ class MemoryService(
             if is_current_workspace or "preferences" in shared_categories:
                 for preference in snapshot.preferences:
                     existing = aggregate._preferences.get(preference.key)
-                    if existing is None or preference.updated_at >= existing.updated_at:
+                    if existing is None or (
+                        _preference_priority(preference.source, preference.durability),
+                        preference.confidence,
+                        preference.updated_at,
+                    ) > (
+                        _preference_priority(existing.source, existing.durability),
+                        existing.confidence,
+                        existing.updated_at,
+                    ):
                         aggregate._preferences[preference.key] = preference
 
             if is_current_workspace:
@@ -2066,6 +2094,8 @@ class MemoryService(
         self,
         structured: "StructuredMemoryService",
         coach_defaults: CoachDefaults,
+        *,
+        from_turn: bool = False,
     ) -> dict[str, Any]:
         """Merge incoming coach defaults into the stored record.
 
@@ -2078,9 +2108,13 @@ class MemoryService(
         existing = self._coach_defaults_from_workspace(structured.snapshot().workspace)
         existing_toggles = existing.get("workspace_memory_toggles")
         incoming_toggles = dumped.get("workspace_memory_toggles")
+        merged = {**dumped, **existing} if from_turn else {**existing, **dumped}
         if isinstance(existing_toggles, dict) and isinstance(incoming_toggles, dict):
-            dumped["workspace_memory_toggles"] = {**existing_toggles, **incoming_toggles}
-        patch: dict[str, Any] = {"coach_defaults": {**existing, **dumped}}
+            merged["workspace_memory_toggles"] = (
+                {**incoming_toggles, **existing_toggles} if from_turn
+                else {**existing_toggles, **incoming_toggles}
+            )
+        patch: dict[str, Any] = {"coach_defaults": merged}
         for key in (
             "memory_scope",
             "working_set_mode",
@@ -2088,8 +2122,8 @@ class MemoryService(
             "review_reminder_mode",
             "workspace_memory_toggles",
         ):
-            if key in dumped:
-                patch[key] = dumped[key]
+            if key in merged:
+                patch[key] = merged[key]
         return patch
 
     @staticmethod
@@ -6443,13 +6477,12 @@ class MemoryService(
             "updated_at": utc_now().isoformat(),
         }
         workspace_patch: dict[str, Any] = {"latest_recovery": recovery}
-        if answer_mode:
-            workspace_patch["answer_mode"] = answer_mode.strip()
-        if response_language:
-            workspace_patch["response_language"] = response_language.strip()
+        workspace_patch.update(
+            self._turn_preference_patch(structured, answer_mode, response_language),
+        )
         if coach_defaults:
             workspace_patch.update(
-                self._coach_defaults_workspace_patch(structured, coach_defaults)
+                self._coach_defaults_workspace_patch(structured, coach_defaults, from_turn=True)
             )
         structured.update_workspace(**workspace_patch)
         if cleaned_user_message:
@@ -6546,10 +6579,6 @@ class MemoryService(
         # current_focus inherit this focus, so a verbatim message prefix must
         # never be persisted as focus_area.
         cleaned_focus = sanitize_memory_anchor(cleaned_focus, normalized_user_message)
-        if answer_mode:
-            structured.remember_preference("answer_mode", answer_mode, source="coach-turn")
-        if response_language:
-            structured.remember_preference("response_language", response_language, source="coach-turn")
         if cleaned_focus:
             structured.remember_preference("focus_area", cleaned_focus, source="coach-turn")
         if cleaned_focus:
@@ -6651,17 +6680,16 @@ class MemoryService(
             "latest_turn_confidence": normalized_confidence,
             "latest_turn_evidence": normalized_evidence,
         }
-        if normalized_answer_mode:
-            workspace_patch["answer_mode"] = normalized_answer_mode
-        if response_language:
-            workspace_patch["response_language"] = response_language
+        workspace_patch.update(
+            self._turn_preference_patch(structured, normalized_answer_mode, normalized_response_language),
+        )
         if teaching_goal:
             workspace_patch["latest_turn_teaching_goal"] = teaching_goal.strip()
         if isinstance(exercise_prompt, dict) and exercise_prompt:
             workspace_patch["exercise_prompt"] = dict(exercise_prompt)
         if coach_defaults:
             workspace_patch.update(
-                self._coach_defaults_workspace_patch(structured, coach_defaults)
+                self._coach_defaults_workspace_patch(structured, coach_defaults, from_turn=True)
             )
         structured.update_workspace(**workspace_patch)
         structured.update_active_thread(
@@ -6723,16 +6751,28 @@ class MemoryService(
             structured.add_session_highlight(session_id, cleaned_next_step)
         if session_id and cleaned_summary and toggles.get("decisions", True):
             structured.add_session_highlight(session_id, cleaned_summary)
-        if normalized_answer_mode:
-            structured.remember_preference("teaching_preference.answer_mode", normalized_answer_mode, source="coach-turn")
-        if normalized_response_language:
-            structured.remember_preference(
-                "teaching_preference.response_language",
-                normalized_response_language,
-                source="coach-turn",
-            )
         self._stamp_coach_provenance(resolved_workspace_id, structured, admission)
         self._persist_structured(resolved_workspace_id)
+
+    @staticmethod
+    def _turn_preference_patch(
+        structured: StructuredMemoryService,
+        answer_mode: str | None,
+        response_language: str | None,
+    ) -> dict[str, str]:
+        patch: dict[str, str] = {}
+        for key, incoming in (("answer_mode", answer_mode), ("response_language", response_language)):
+            if not incoming or not incoming.strip():
+                continue
+            value = incoming.strip()
+            patch[f"latest_turn_{key}"] = value
+            confirmed = structured.confirmed_preference(key)
+            if confirmed:
+                patch[key] = confirmed.value
+            elif not structured._workspace.get(key):
+                # Seed a default for legacy clients that start with a turn.
+                patch[key] = structured.remember_preference(key, value, source="coach-turn").value
+        return patch
 
     def _stamp_coach_provenance(
         self,
@@ -6786,17 +6826,9 @@ class MemoryService(
         if learner_name:
             structured.remember_preference("learner_name", learner_name, source="coach-intake")
 
-        teaching_style = self._extract_teaching_style(message)
-        if teaching_style and profile.teaching_style in {"guided", "auto"}:
-            profile_updates["teaching_style"] = teaching_style
-        if teaching_style:
-            structured.remember_preference("teaching_style", teaching_style, source="coach-intake")
-
-        answer_policy = self._extract_answer_policy(message)
-        if answer_policy and profile.answer_policy in {"guided", "auto"}:
-            profile_updates["answer_policy"] = answer_policy
-        if answer_policy:
-            structured.remember_preference("answer_policy", answer_policy, source="coach-intake")
+        lasting_request = self._lasting_preference_clause(message)
+        if lasting_request:
+            self.change_coach_habit(CoachHabitChange(action="save", text=lasting_request), source="learner")
 
         preferred_libraries = self._extract_preferred_libraries(message)
         if preferred_libraries:

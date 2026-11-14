@@ -441,6 +441,9 @@ def build_memory_snapshot(service: Any, workspace_id: str) -> MemorySnapshot:
         ]
     teaching_observations = curated_teaching_observations[:4]
     workspace_payload = dict(lane_snapshot.workspace)
+    workspace_payload["coach_habit"] = (
+        global_memory.coach_habit.model_dump(mode="json") if global_memory.coach_habit else None
+    )
     workspace_payload.setdefault("workspace_id", workspace_id)
     _localize_plan_runtime_next_after(workspace_payload, current_focus_context)
     user_feedback_items = [

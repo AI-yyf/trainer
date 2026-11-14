@@ -1,3 +1,4 @@
+import { readCoachHabit } from "../../../../shared/src/coachHabit";
 import type {
   ActiveWorkbenchView,
   BootstrapData,
@@ -2686,6 +2687,7 @@ export async function saveBrowserPreviewCoachSettings(
       response_language: request.responseLanguage,
       answer_mode: request.answerMode,
       teaching_style: request.teachingStyle,
+      coach_habit: request.coachHabit,
       coach_defaults: request.coachDefaults
         ? {
             memory_scope: request.coachDefaults.memoryScope,
@@ -6035,6 +6037,7 @@ function asMemoryWorkspace(value: unknown): BootstrapData["memory"]["workspace"]
   return {
     responseLanguage: toComposerLanguage(asString(record.response_language)),
     answerMode: toAnswerPolicy(asString(record.answer_mode)),
+    coachHabit: readCoachHabit(record.coach_habit),
     followCurrentFile: asBoolean(record.follow_current_file) ?? undefined,
     contextDetail: toContextDetail(asString(record.context_detail)),
     includeCurrentFile: asBoolean(record.include_current_file) ?? undefined,

@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { normalizeStageMaterials } from '../../../shared/src/stageMaterials';
 import { trainerCommandCatalog } from '../../../shared/src/commands';
+import { readCoachHabit } from '../../../shared/src/coachHabit';
 import {
   createEmptyTrainerStreamingState,
   normalizeNextStepHint,
@@ -4318,6 +4319,7 @@ function mapMemoryWorkspace(
   const responseLanguage = toComposerLanguage(
     asString(record.response_language) ?? asString(record.responseLanguage),
   );
+  const coachHabit = readCoachHabit(record.coach_habit);
   const incomingWorkspaceId = asString(record.workspace_id) ?? asString(record.workspaceId);
   // A managed admission contextId is this host's runtime workspace identity (see
   // getRuntimeWorkspaceContext); honour it when workspaceId was never stamped yet.
@@ -4346,6 +4348,7 @@ function mapMemoryWorkspace(
     workspaceId: incomingWorkspaceId ?? (sameWorkspace ? fallbackWorkspaceId : undefined),
     responseLanguage: responseLanguage ?? (sameWorkspace ? fallback?.responseLanguage : undefined),
     answerMode: answerMode ?? (sameWorkspace ? fallback?.answerMode : undefined),
+    coachHabit: coachHabit === undefined ? fallback?.coachHabit : coachHabit,
     resourceSearchMode:
       record.resource_search_mode || record.resourceSearchMode
         ? normalizeResourceSearchMode(

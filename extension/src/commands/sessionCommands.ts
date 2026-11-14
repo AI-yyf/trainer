@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { readCoachHabitChange } from '../../../shared/src/coachHabit';
 
 import type { CommandContext } from '../core/commandContext';
 import { SIDECAR_DEFAULTS } from '../core/constants';
@@ -3080,7 +3081,7 @@ export async function saveCoachSettingsCommand(
     ? normalizeResourceSearchMode(settings.resourceSearchMode)
     : undefined;
   const workspaceGate = trainerWorkspaceSessionGate(context);
-  if (workspaceGate) {
+  if (workspaceGate && !settings?.coachHabit) {
     const current = context.getHostState().bootstrap;
     const localPatch: Partial<BootstrapData> = {
       memory: {
@@ -3109,17 +3110,19 @@ export async function saveCoachSettingsCommand(
   const response = await context.sidecarClient.postJson<unknown>(status.port, '/memory/settings', {
     session_id: context.getSessionId(),
     workspace_id: getRuntimeWorkspaceId(context),
-    response_language: settings?.responseLanguage,
-    answer_mode: settings?.answerMode,
-    resource_search_mode: resourceSearchMode,
-    teaching_style: settings?.teachingStyle,
-    coach_defaults: settings?.coachDefaults,
-    follow_current_file: settings?.followCurrentFile,
-    context_detail: settings?.contextDetail,
-    include_current_file: settings?.includeCurrentFile,
-    include_selection: settings?.includeSelection,
-    include_diagnostics: settings?.includeDiagnostics,
-    include_related_files: settings?.includeRelatedFiles,
+    ...(settings?.coachHabit ? { coach_habit: settings.coachHabit } : {
+      response_language: settings?.responseLanguage,
+      answer_mode: settings?.answerMode,
+      resource_search_mode: resourceSearchMode,
+      teaching_style: settings?.teachingStyle,
+      coach_defaults: settings?.coachDefaults,
+      follow_current_file: settings?.followCurrentFile,
+      context_detail: settings?.contextDetail,
+      include_current_file: settings?.includeCurrentFile,
+      include_selection: settings?.includeSelection,
+      include_diagnostics: settings?.includeDiagnostics,
+      include_related_files: settings?.includeRelatedFiles,
+    }),
   });
 
   await context.patchWorkbenchData(
@@ -4241,6 +4244,7 @@ function extractCoachSettingsPayload(payload: unknown): CoachSettingsPayload | u
   return {
     responseLanguage:
       isComposerLanguage(asRecord.responseLanguage) ? asRecord.responseLanguage : undefined,
+    coachHabit: readCoachHabitChange(asRecord.coachHabit),
     answerMode:
       asRecord.answerMode === 'auto' ||
       asRecord.answerMode === 'coach-first' ||

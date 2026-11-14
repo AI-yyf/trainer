@@ -7,7 +7,7 @@ import threading
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from uuid import uuid4
 
 from ..core.models import (
@@ -1315,9 +1315,7 @@ class TrainerRepository:
         memory = self.get_global_memory(owner.id)
         if memory is not None:
             return memory
-        memory = GlobalMemory(ownerId=owner.id)
-        self.save_global_memory(memory)
-        return memory
+        return self.update_global_memory(lambda current: current)
 
     def save_global_memory(self, memory: GlobalMemory) -> None:
         with self._connect() as connection:
@@ -1338,6 +1336,27 @@ class TrainerRepository:
                 (owner_id,),
             ).fetchone()
         return GlobalMemory.model_validate_json(row["payload"]) if row else None
+
+    def update_global_memory(
+        self, change: Callable[[GlobalMemory], GlobalMemory],
+    ) -> GlobalMemory:
+        owner = self.ensure_default_local_owner()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT payload FROM global_memory WHERE owner_id = ?", (owner.id,),
+            ).fetchone()
+            current = GlobalMemory.model_validate_json(row["payload"]) if row else GlobalMemory(ownerId=owner.id)
+            updated = change(current)
+            if row is None or updated != current:
+                connection.execute(
+                    """
+                    INSERT INTO global_memory (owner_id, payload) VALUES (?, ?)
+                    ON CONFLICT(owner_id) DO UPDATE SET payload = excluded.payload
+                    """,
+                    (owner.id, updated.model_dump_json()),
+                )
+            return updated
 
     def save_global_plan(self, plan: GlobalPlan) -> None:
         with self._connect() as connection:

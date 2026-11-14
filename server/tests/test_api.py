@@ -6392,7 +6392,7 @@ def test_turn_uses_saved_workspace_defaults_when_request_omits_them(tmp_path: Pa
         assert summary_response.status_code == 200
         workspace = summary_response.json()["memory"]["workspace"]
         assert workspace["response_language"] == "zh-CN"
-        assert workspace["answer_mode"] == "guided"
+        assert workspace["answer_mode"] == "coach-first"
         assert workspace["coach_defaults"]["memory_scope"] == "personal"
         assert workspace["coach_defaults"]["working_set_mode"] == "broad"
         assert workspace["coach_defaults"]["review_cadence"] == "active"

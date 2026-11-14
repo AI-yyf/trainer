@@ -296,6 +296,8 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             include_diagnostics=request.include_diagnostics,
             include_related_files=request.include_related_files,
         )
+        if request.coach_habit is not None:
+            runtime.memory_service.change_coach_habit(request.coach_habit)
 
         state = runtime.get_session(request.session_id) if request.session_id else runtime.latest_session()
         if state and state.workspace_id == workspace_id:

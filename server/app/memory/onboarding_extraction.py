@@ -21,6 +21,28 @@ class OnboardingExtractionMixin:
     """Hosts the onboarding signal extraction statics of ``MemoryService``."""
 
     @staticmethod
+    def _lasting_preference_clause(message: str) -> str:
+        unquoted = re.sub(r'`+[^`]*`+|“[^”]*”|「[^」]*」|"[^"]*"', "", message)
+        for clause in re.split(
+            r"[。！？.!?；;\n]+|\bbut\b|但是|不过|[，,]\s*(?=今天|这次|先不|today\b|this time\b)",
+            unquoted, flags=re.I,
+        ):
+            clause = clause.strip()
+            if re.match(
+                r"^(?:请\s*)?(?:以后|今后|从现在起|我平时喜欢|我通常喜欢|"
+                r"(?:please\s+)?(?:from now on\b|always\b)|I (?:usually |generally )?prefer\b)",
+                clause,
+                flags=re.I,
+            ) and re.search(
+                r"回答|答复|讲解|举例|例子|解释|公式|简洁|简短|结论|引导|语气|用中文|用英文|"
+                r"\b(?:answer|explain|explanations?|examples?|formulas?|brief|concise|tone|reply)\b",
+                clause, flags=re.I,
+            ):
+                if 1 <= len(clause) <= 240:
+                    return clause
+        return ""
+
+    @staticmethod
     def _extract_long_term_goal(message: str) -> str:
         patterns = [
             r"(?:长期目标(?:是)?|目标是|我想要|我希望|我想)([^。！？\n]{4,80})",
@@ -69,28 +91,6 @@ class OnboardingExtractionMixin:
         if en:
             return int(en.group(1))
         return None
-
-    @staticmethod
-    def _extract_teaching_style(message: str) -> str:
-        lowered = message.lower()
-        if any(token in lowered for token in ("引导式", "guided")):
-            return "guided"
-        if any(token in lowered for token in ("平衡式", "balanced")):
-            return "balanced"
-        if any(token in lowered for token in ("直接式", "直接一点", "direct")):
-            return "direct"
-        return ""
-
-    @staticmethod
-    def _extract_answer_policy(message: str) -> str:
-        lowered = message.lower()
-        if any(token in lowered for token in ("直接给代码", "直接告诉我", "just tell me", "give me the code")):
-            return "direct"
-        if any(token in lowered for token in ("引导", "guided")):
-            return "guided"
-        if any(token in lowered for token in ("平衡", "balanced")):
-            return "balanced"
-        return ""
 
     @staticmethod
     def _extract_preferred_libraries(message: str) -> list[str]:
