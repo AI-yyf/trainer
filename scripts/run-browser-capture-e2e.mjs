@@ -575,20 +575,24 @@ async function main() {
     // capture, and a later flush must deliver it to the same library.
     await stopSidecar();
     ok("sidecar-stopped-for-offline");
-    const queued = await popup.evaluate(
-      (url) =>
-        new Promise((resolve) => {
-          chrome.runtime.sendMessage(
-            { type: "trainer:capture", url, kind: "web", title: "Example Domain Offline" },
-            resolve,
-          );
-        }),
-      `${CAPTURE_URL}?offline=1`,
-    );
-    assert(
-      queued && queued.status === "queued",
-      `Offline capture was not queued: ${JSON.stringify(queued)}`,
-    );
+    const offlineUrl = `${CAPTURE_URL}?offline=1`;
+    await popup.evaluate((url) => {
+      // A Playwright tab hosts the popup, so provide its captured tab identity
+      // while keeping submission, storage and result rendering on the real worker.
+      const send = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (message, reply) => send(
+        message.type === "trainer:capture-tab"
+          ? { type: "trainer:capture", url, kind: "web", title: "Example Domain Offline" }
+          : message,
+        reply,
+      );
+      document.querySelector("#capture-page").disabled = false;
+    }, offlineUrl);
+    await popup.locator("#capture-page").click();
+    await popup.locator("#pending-captures").waitFor({ state: "visible" });
+    assert(await popup.locator("#capture-result.feedback--warn").isVisible(), "Queued result was not marked as waiting");
+    assert(await popup.locator(".capture-check.is-drawn").count() === 0, "Queued capture drew a success check");
+    ok("offline-popup-shows-waiting-without-success");
     const queuedPdf = await sendCapture({
       url: RETRY_PDF_URL,
       kind: "pdf",
