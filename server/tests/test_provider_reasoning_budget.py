@@ -18,7 +18,7 @@ def test_minimax_m3_is_reasoning_first_and_gets_headroom() -> None:
     provider = _provider("MiniMax-M3.1-Flash")
     assert _model_looks_reasoning_first(provider) is True
     service = ProviderService(config=provider)
-    assert service.recommended_generation_max_tokens(1024) == 8192
+    assert service.recommended_generation_max_tokens(1024) == 16384
 
 
 def test_minimax_m27_keeps_the_normal_budget() -> None:

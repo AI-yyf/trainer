@@ -1179,8 +1179,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
     def recommended_generation_max_tokens(self, default: int) -> int:
         """Reasoning-first models can spend the whole default budget on hidden
         reasoning before any visible JSON appears, so grant them headroom."""
-        if self._config is not None and _model_looks_reasoning_first(self._config):
-            return max(default, 8192)
+        if self.needs_unbounded_reasoning_stream():
+            return max(default, 16384)
         return default
 
     def needs_unbounded_reasoning_stream(self) -> bool:
