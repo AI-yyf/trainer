@@ -294,9 +294,19 @@ function streamSummary(stream) {
 async function streamTurn(name, body) {
   writeArtifact(`${name}-request.json`, body);
   const turn = await streamRequest("/turn/stream", body);
-  writeArtifact(`${name}-response.json`, {
-    ...streamSummary(turn), visible: turn.visible, terminal_reply: turn.json?.reply,
+  const artifact = (reply) => ({
+    ...streamSummary(reply), visible: reply.visible, terminal_reply: reply.json?.reply,
   });
+  writeArtifact(`${name}-response.json`, artifact(turn));
+  // The opening explanation is a read-only question. An acknowledged failure
+  // can be retried explicitly without replaying any goal or evidence write.
+  if (name === "02-natural-chat" && turn.completed && turn.outcome === "failure") {
+    writeArtifact(`${name}-first-response.json`, artifact(turn));
+    await sleep(2500);
+    const retried = await streamRequest("/turn/stream", body);
+    writeArtifact(`${name}-response.json`, artifact(retried));
+    return retried;
+  }
   return turn;
 }
 
