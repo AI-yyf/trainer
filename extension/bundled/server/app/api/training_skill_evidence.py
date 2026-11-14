@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .runtime import TrainerRuntime
 
 
-_VERIFICATION_POLICY_VERSION = 3
+_VERIFICATION_POLICY_VERSION = 4
 
 
 def _card_subject_family(card: Any) -> str:
@@ -175,7 +175,8 @@ def record_executed_training_evidence(
     if store is None:
         return
     behavior = next((check for check in report.dynamic_checks if check.id == "python-behavior"), None)
-    controlled = behavior is not None and behavior.status in {"passed", "failed"}
+    reference_pending = report.behavior_reference_pending
+    controlled = not reference_pending and behavior is not None and behavior.status in {"passed", "failed"}
     artifact_hash = content_hash(request.content)
     card_id = str(request.training_card_id)
     card = runtime.memory_service.get_card(workspace_id, card_id)
@@ -198,9 +199,14 @@ def record_executed_training_evidence(
             attempt["attempt_id"], workspace_id=workspace_id,
             file_path=request.file_path, file_hash=artifact_hash,
         )
-    if controlled:
-        result = "passed" if report.passed else "failed"
-    elif behavior is not None and behavior.status in {"warning", "skipped"}:
+    if controlled and behavior is not None:
+        # A linter or type-check failure can block completion even when the
+        # function does what the cases ask. Keep that observation separate.
+        if report.passed:
+            result = "passed"
+        else:
+            result = "failed" if behavior.status == "failed" else "partial"
+    elif reference_pending or (behavior is not None and behavior.status in {"warning", "skipped"}):
         result = "execution_error"
     else:
         result = "partial"
@@ -214,6 +220,11 @@ def record_executed_training_evidence(
         for check in report.dynamic_checks
         if check.status in {"skipped", "warning"}
     ]
+    if controlled and not report.passed:
+        evidence_limitations.extend(
+            f"{check.label}: {check.detail}"
+            for check in report.static_checks if check.status == "failed"
+        )
     if not controlled:
         evidence_limitations.append(f"Verification scope: {report.verification_scope}.")
     resource_id = str(getattr(card, "resource_id", "") or "").strip()
@@ -250,7 +261,8 @@ def record_executed_training_evidence(
         artifact_hash=artifact_hash,
         result=result,
         trust_level="controlled_check" if controlled else "static_analysis",
-        runner_version="trainer-current-file-evaluator-v3",
+        runner_version="trainer-current-file-evaluator-v4",
+        error_category="behavior_reference_pending" if reference_pending else None,
         execution_location="workspace",
         dimension=dimension,
         evidence_kind="controlled_evaluation" if controlled else "current_file_observation",
@@ -260,7 +272,10 @@ def record_executed_training_evidence(
         )
         if is_return_context
         else None,
-        environment={"phase": "return"} if is_return_context else None,
+        environment={
+            **({"phase": "return"} if is_return_context else {}),
+            **({"behavior_reference_id": report.behavior_reference_id} if report.behavior_reference_id else {}),
+        } or None,
         transfer_metadata={"source": "training_return"} if is_return_context else None,
         limitations=evidence_limitations,
         **resource_fields,

@@ -689,6 +689,8 @@ class EvaluatorService:
             ),
             response_language=response_language,
             requires_card_behavior=str(request.evaluation_source or "").strip().lower() == "training",
+            behavior_reference_id=python_behavior_contract.reference_id if python_behavior_contract else "",
+            behavior_reference_pending=bool(python_behavior_contract and not python_behavior_contract.reference_id),
         )
 
     def evaluate_snippet(
@@ -767,6 +769,8 @@ class EvaluatorService:
         training_acceptance_check: EvaluationCheck | None = None,
         requires_dynamic_verification: bool = False,
         requires_card_behavior: bool = False,
+        behavior_reference_id: str = "",
+        behavior_reference_pending: bool = False,
         response_language: str | None = None,
     ) -> EvaluationReport:
         diagnostics = [item.strip() for item in (vscode_diagnostics or []) if item and item.strip()]
@@ -790,6 +794,18 @@ class EvaluatorService:
             for check in report.checks
             if check.name in _DYNAMIC_CHECKS
         ]
+        if behavior_reference_pending:
+            dynamic_checks = [
+                check.model_copy(update={
+                    "status": "warning",
+                    "detail": _localized_text(
+                        f"Proposed case run ({check.status}). {check.detail}",
+                        f"建议用例试跑（{check.status}）。{check.detail}",
+                        response_language,
+                    ),
+                }) if check.id == "python-behavior" else check
+                for check in dynamic_checks
+            ]
         semantic_detail_lines = [
             *(context_notes or []),
             f"VS Code diagnostics attached: {len(diagnostics)}." if diagnostics else "",
@@ -827,6 +843,7 @@ class EvaluatorService:
         )
         passed = (
             report.overall_status == CheckStatus.PASSED
+            and not behavior_reference_pending
             and not has_error_diagnostics
             and not training_acceptance_blocks
             and not verification_required
@@ -858,6 +875,12 @@ class EvaluatorService:
                 )
             if report.semantic_review.status == CheckStatus.PASSED and report.semantic_review.summary:
                 summary += f" {report.semantic_review.summary}"
+        elif behavior_reference_pending:
+            summary = _localized_text(
+                "Verification is still required: this card's expected outputs have no checked reference.",
+                "仍需验证：这张卡的预期输出尚无已核对的参考依据。",
+                response_language,
+            )
         elif card_behavior_pending and not failed_tool_labels and not training_acceptance_blocks:
             summary = _localized_text(
                 "Verification is still required: no task-specific behavior result is available.",
@@ -935,6 +958,12 @@ class EvaluatorService:
             next_step = _localized_text(
                 "Record a reflection on the verified result, then bring it back to Coach.",
                 "记录一条针对已验证结果的反思，然后带回 Coach。",
+                response_language,
+            )
+        elif behavior_reference_pending:
+            next_step = _localized_text(
+                "Keep your implementation and ask Coach to confirm the expected behavior before making changes.",
+                "保留当前实现，把用例带回教练核对预期行为，再决定是否修改。",
                 response_language,
             )
         elif script_failed_after_behavior_passed:
@@ -1045,6 +1074,8 @@ class EvaluatorService:
             reflection=report.reflection.get("summary"),
             passed=passed,
             verification_scope=verification_scope,
+            behavior_reference_id=behavior_reference_id,
+            behavior_reference_pending=behavior_reference_pending,
         )
 
     def _evaluation_context_notes(

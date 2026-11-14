@@ -313,6 +313,7 @@ def test_class_human_learn_try_verify_reflect_return_closed_loop(tmp_path: Path)
             "expected_answer": "Reject the expired token.",
             "python_behavior_contract": PythonBehaviorContract.model_validate({
                 "function": "require_fresh",
+                "reference_id": "test/require-fresh/v1",
                 "cases": [{"args": ["tok"], "expected": "tok"}, {"args": ["other"], "expected": "other"}],
             }),
         }))

@@ -1277,6 +1277,8 @@ class EvaluationReport(BaseModel):
     reflection: str | None = None
     passed: bool
     verification_scope: Literal["unverified", "execution", "test_suite", "behavior"] = "unverified"
+    behavior_reference_id: str = ""
+    behavior_reference_pending: bool = False
     workspace_id: str = Field(default="", alias="workspaceId")
 
 
@@ -1325,6 +1327,9 @@ class PythonBehaviorCase(BaseModel):
 class PythonBehaviorContract(BaseModel):
     function: str = Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$", max_length=100)
     cases: list[PythonBehaviorCase] = Field(min_length=2, max_length=12)
+    # Set by the contract owner after deriving outputs from a reviewed reference.
+    # Legacy cards and model proposals have no independently established key.
+    reference_id: str = Field(default="", max_length=120)
 
     @model_validator(mode="after")
     def require_distinct_inputs(self) -> "PythonBehaviorContract":

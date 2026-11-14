@@ -44,6 +44,11 @@ from ..pedagogy.evidence_controls import (
     ReviewFrequency,
     apply_controls_to_card,
 )
+from .behavior_reference import (
+    PPO_CLIPPED_LOSS_FUNCTION,
+    ppo_clipped_loss_contract,
+    use_ppo_loss_reference,
+)
 from .subject_taxonomy import build_subject_blob, classify_learning_subject
 
 try:
@@ -2944,7 +2949,9 @@ def _python_behavior_contract_for_payload(data: dict[str, Any]) -> PythonBehavio
     if not isinstance(payload, dict):
         return None
     try:
-        return PythonBehaviorContract.model_validate(payload)
+        return PythonBehaviorContract.model_validate({
+            "function": payload.get("function"), "cases": payload.get("cases"),
+        })
     except ValueError:
         return None
 
@@ -3270,6 +3277,18 @@ def _build_prompt(context: CardGenerationContext, source: str, card_type: str) -
             "supplied exact path in files_to_touch; do not invent another path. A selected snippet "
             "is only part of the file. Missing diagnostics do not prove a defect or a passing test."
         )
+    if use_ppo_loss_reference(context, source, card_type):
+        prompt += (
+            "\n\nUse the reviewed standalone task specification: implement "
+            "ppo_clip_loss(new_log_probs, old_log_probs, advantages, epsilon) in "
+            "ppo_clip_loss.py using the Python standard library. Its inputs are equal-length "
+            "nonempty lists of finite floats and a clip epsilon strictly between zero and one. "
+            "It returns the negative mean of the per-item minimum of the original and "
+            "clipped ratio times advantage. The server supplies the behavior cases. "
+            "Do not invent alternate signatures, expected values or sample outputs. "
+            "Keep the task about this function and include one conceptual recall question."
+        )
+        return prompt
     if card_type == "practice":
         prompt += (
             "\n\nFor a standalone Python exercise, set files_to_touch to the one .py target and "
@@ -3718,6 +3737,55 @@ class CardGenerationService:
         card = _ensure_flash_contract(card, context, source)
         card = _ensure_practice_contract(card, context)
         card = _replace_mismatched_card_prose(card, context)
+        if use_ppo_loss_reference(context, source, card.card_type):
+            language = context.response_language
+            requirements = _localized_text(
+                "Implement `ppo_clip_loss(new_log_probs, old_log_probs, advantages, epsilon)` "
+                "using the Python standard library in `ppo_clip_loss.py`. The three lists are "
+                "nonempty, equal in length and contain finite numbers. For each item, compute "
+                "the probability ratio from the difference in log probabilities and take the "
+                "minimum of the original and clipped ratio times advantage. Return the negative "
+                "mean. Use 0 < epsilon < 1.",
+                "在 `ppo_clip_loss.py` 中用 Python 标准库实现 "
+                "`ppo_clip_loss(new_log_probs, old_log_probs, advantages, epsilon)`。"
+                "前三个参数是等长、非空的有限数值列表，且 0 < epsilon < 1。"
+                "根据对数概率之差计算比值，对每项取原始比值与裁剪比值分别乘优势后的较小值，"
+                "返回这些结果的负均值。",
+                language,
+            )
+            checks = [
+                _localized_text(
+                    "Check `ppo_clip_loss` with zero advantage and mixed batches.",
+                    "检查 `ppo_clip_loss` 的零优势和混合批次。",
+                    language,
+                ),
+                _localized_text(
+                    "Check `ppo_clip_loss` above and below the clip boundaries.",
+                    "检查 `ppo_clip_loss` 在裁剪上下界之外的行为。",
+                    language,
+                ),
+                _localized_text(
+                    "Check that `ppo_clip_loss` uses the difference between both log probabilities.",
+                    "检查 `ppo_clip_loss` 是否使用新旧对数概率之差。",
+                    language,
+                ),
+            ]
+            card = card.model_copy(update={
+                "files_to_touch": ["ppo_clip_loss.py"],
+                "expected_symbols": [PPO_CLIPPED_LOSS_FUNCTION],
+                "python_behavior_contract": ppo_clipped_loss_contract(),
+                "scenario": requirements,
+                "suggested_workspace_action": requirements,
+                "self_check": checks,
+                "grading_rubric": checks,
+                "api_hints": [],
+                "problem_statement": requirements,
+                "deliverable": requirements,
+                "constraints": [],
+                "learner_deliverables": [],
+                "verification_steps": checks,
+                "acceptance_criteria": checks,
+            })
         card = _enforce_learning_loop_contract(card, context)
         current_path = _guided_fact_path(context.current_file_path)
         if card.card_type == "practice" and current_path and (

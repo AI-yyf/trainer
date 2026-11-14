@@ -151,46 +151,61 @@ def test_missing_assistance_is_unknown_and_never_advances_the_skill_ladder() -> 
 
 
 @pytest.mark.parametrize(
-    ("source", "with_contract", "assistance", "passed", "result", "trust", "skill"),
+    ("source", "reference_id", "assistance", "passed", "result", "trust", "skill"),
     [
         (
             'if __name__ == "__main__":\n    print("solve_queue")\n',
-            False, "independent", False, "partial", "static_analysis", "not_verified",
+            None, "independent", False, "partial", "static_analysis", "not_verified",
         ),
         (
-            'if __name__ == "__main__":\n    print("solve_queue")\n',
-            True, "independent", False, "failed", "controlled_check", "needs_review",
+            "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
+            "", "independent", False, "execution_error", "static_analysis", "not_verified",
         ),
         (
             "def solve_queue(items: list[int]) -> int:\n    return 99\n",
-            True, "independent", False, "failed", "controlled_check", "needs_review",
+            "", "independent", False, "execution_error", "static_analysis", "not_verified",
+        ),
+        (
+            'if __name__ == "__main__":\n    print("solve_queue")\n',
+            "test/count-items/v1", "independent", False, "failed", "controlled_check", "needs_review",
+        ),
+        (
+            "def solve_queue(items: list[int]) -> int:\n    return 99\n",
+            "test/count-items/v1", "independent", False, "failed", "controlled_check", "needs_review",
         ),
         (
             "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
-            True, "hint_level_2", True, "passed", "controlled_check", "assisted",
+            "test/count-items/v1", "hint_level_2", True, "passed", "controlled_check", "assisted",
         ),
         (
             "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
-            True, None, True, "passed", "controlled_check", "not_verified",
+            "test/count-items/v1", None, True, "passed", "controlled_check", "not_verified",
         ),
         (
             "def solve_queue(items: list[int]) -> int:\n    return len(items)\n",
-            True, "independent", True, "passed", "controlled_check", "independent",
+            "test/count-items/v1", "independent", True, "passed", "controlled_check", "independent",
         ),
         (
             "def solve_queue(items: list[int]) -> float:\n    return float(len(items))\n",
-            True, "independent", True, "passed", "controlled_check", "independent",
+            "test/count-items/v1", "independent", True, "passed", "controlled_check", "independent",
+        ),
+        (
+            "def solve_queue(items: list[int]) -> int:\n    return len(items)\n# fixture-static-error\n",
+            "test/count-items/v1", "independent", False, "partial", "controlled_check", "not_verified",
         ),
     ],
 )
 def test_training_verification_checks_the_persisted_contract(
-    tmp_path: Path, monkeypatch, source: str, with_contract: bool, assistance: str | None,
+    tmp_path: Path, monkeypatch, source: str, reference_id: str | None, assistance: str | None,
     passed: bool, result: str, trust: str, skill: str,
 ) -> None:
+    from app.evaluator.models import CheckResult, CheckStatus
     from app.evaluator.service import SubprocessCommandRunner, default_command_runner
 
     class BehaviorRunner:
         def run(self, command):
+            if command.name == "ruff" and "fixture-static-error" in source:
+                return CheckResult(name="ruff", status=CheckStatus.FAILED, summary="Fixture static error.")
             if command.name in {"python-behavior", "python-script"}:
                 return SubprocessCommandRunner().run(command)
             return fallback.run(command)
@@ -212,8 +227,9 @@ def test_training_verification_checks_the_persisted_contract(
             "acceptance_criteria": ["Implement `solve_queue`; empty lists return 0."],
             "python_behavior_contract": {
                 "function": "solve_queue",
-                "cases": [{"args": [[]], "expected": 0}, {"args": [[1, 2, 3]], "expected": 3}],
-            } if with_contract else None,
+                "reference_id": reference_id,
+                "cases": [{"args": [[]], "expected": 0}, {"args": [[1, 2, 3]], "expected": 99 if reference_id == "" else 3}],
+            } if reference_id is not None else None,
         })
         runtime.memory_service.upsert_card(workspace, card)
         runtime.memory_service.update_workspace_state(workspace, selected_card_id=card.card_id)
@@ -232,7 +248,14 @@ def test_training_verification_checks_the_persisted_contract(
             },
         })
         assert response.status_code == 200, response.text
-        assert response.json()["passed"] is passed, response.json()
+        report = response.json()
+        assert report["passed"] is passed, report
+        if reference_id == "":
+            assert report["behavior_reference_pending"] is True
+            assert report["verification_scope"] != "behavior"
+            assert next(check for check in report["dynamic_checks"] if check["id"] == "python-behavior")["status"] == "warning"
+        elif "fixture-static-error" in source:
+            assert next(check for check in report["dynamic_checks"] if check["id"] == "python-behavior")["status"] == "passed"
         attempt = runtime.attempt_store.find_active_attempt(workspace, card.card_id)
         assert attempt is not None
         evidence = runtime.attempt_store.list_evidence(attempt["attempt_id"])
@@ -244,6 +267,9 @@ def test_training_verification_checks_the_persisted_contract(
         dimension = memory["workspace"]["training_skill_projection"]["dimensions"]["implementation"]
         assert dimension["state"] == skill
         assert bool(dimension["verified_count"]) is passed
+        if reference_id == "":
+            assert memory["workspace"]["latest_learning_outcome"] == "verification_pending"
+            assert card.card_id not in memory["workspace"].get("latest_training_fsrs_states", {})
 
 
 @pytest.mark.parametrize(
@@ -251,6 +277,7 @@ def test_training_verification_checks_the_persisted_contract(
     [
         ("trainer-current-file-evaluator", "implementation", 1),
         ("trainer-current-file-evaluator-v2", "implementation", 1),
+        ("trainer-current-file-evaluator-v3", "implementation", 3),
         ("trainer-flashcard", "delayed_recall", 2),
     ],
 )

@@ -12687,6 +12687,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
 
     def evaluation_requires_verification(report) -> bool:
+        if getattr(report, "behavior_reference_pending", False):
+            return True
         dynamic_checks = list(getattr(report, "dynamic_checks", []) or [])
         if any(str(check.status).strip().lower() == "passed" for check in dynamic_checks):
             return False

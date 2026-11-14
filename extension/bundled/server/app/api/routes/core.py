@@ -391,7 +391,13 @@ def build_core_router(
             evidence_refs.insert(0, f"training_card:{card_id}")
         training = str(request.evaluation_source or "").strip().lower() == "training"
         result: Literal["passed", "failed", "pending"] = "passed" if report.passed else "failed"
-        if training and report.verification_scope != "behavior":
+        if training and (
+            report.verification_scope != "behavior"
+            or (not report.passed and not any(
+                check.id == "python-behavior" and check.status == "failed"
+                for check in report.dynamic_checks
+            ))
+        ):
             result = "pending"
         verdict_key = result if training else str(report.passed)
         runtime.goals().record_activity(

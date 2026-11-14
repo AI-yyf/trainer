@@ -1071,6 +1071,43 @@ def _complete_llm_response() -> dict:
 class TestCardGenerationStreamingTruth(unittest.TestCase):
     """Streaming generation must distinguish degradation from interruption."""
 
+    def test_reviewed_ppo_contract_replaces_model_values_for_both_entry_points(self) -> None:
+        context = _ctx(
+            focus_area="PPO clipped objective", target_skill="Implement PPO loss",
+            context_hint="Use Python with lists of new and old log probabilities.",
+        )
+        response = {
+            **_practice_llm_response(),
+            "files_to_touch": ["wrong.py"],
+            "python_behavior_contract": {
+                "function": "wrong", "reference_id": "claimed-by-model",
+                "cases": [{"args": [1], "expected": 999}, {"args": [2], "expected": 999}],
+            },
+        }
+        service = CardGenerationService(provider_service=_MockProviderService(response))
+        card = service.generate_card("conversation_gap", context)
+
+        async def streamed_card() -> TrainingCardCandidateSnapshot:
+            stream_service = CardGenerationService(
+                provider_service=_StreamingMockProviderService([json.dumps(response)]),
+            )
+            async for event in stream_service.generate_card_stream("conversation_gap", context):
+                if event.card is not None:
+                    return event.card
+            raise AssertionError("Card was not produced")
+
+        contract = card.python_behavior_contract
+        assert contract is not None
+        self.assertEqual(contract, asyncio.run(streamed_card()).python_behavior_contract)
+        self.assertEqual(contract.reference_id, "trainer/ppo-clipped-loss/v1")
+        self.assertEqual(card.files_to_touch, ["ppo_clip_loss.py"])
+        self.assertEqual(contract.function, "ppo_clip_loss")
+        self.assertEqual([case.expected for case in contract.cases], [0, -2.5, 1.5, 0.5, 0.25])
+
+        generic = service.generate_card("conversation_gap", _ctx(focus_area="async patterns"))
+        assert generic.python_behavior_contract is not None
+        self.assertEqual(generic.python_behavior_contract.reference_id, "")
+
     def test_partial_stream_json_is_rejected_without_a_candidate(self) -> None:
         ledger = EventLedgerService()
         service = CardGenerationService(

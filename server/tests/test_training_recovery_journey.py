@@ -318,6 +318,7 @@ def test_agent_card_current_file_recovery_reflect_and_return_are_continuous(
         memory_service.upsert_card(workspace_id, stored_card.model_copy(update={
             "python_behavior_contract": PythonBehaviorContract.model_validate({
                 "function": "normalize_query",
+                "reference_id": "test/normalize-query/v1",
                 "cases": [{"args": [" A "], "expected": "a"}, {"args": ["B"], "expected": "b"}],
             }),
         }))

@@ -326,13 +326,21 @@ def project_skills(
             error_code=rec.get("error_code"),
             limitations=rec.get("limitations"),
         )
-        # This historical runner accepted symbol matches plus any successful
-        # execution, including a script exit with no assertion.
+        # Older runners could accept a clean exit or compare against an
+        # unchecked model-authored answer key. Preserve the source records.
         runner_version = str(rec.get("runner_version") or "")
         legacy_flashcard = runner_version == "trainer-flashcard"
+        unchecked_behavior = (
+            runner_version == "trainer-current-file-evaluator-v3"
+            and result_str in {"passed", "failed"}
+        )
         legacy_trust = LEGACY_VERIFICATION_TRUST.get(runner_version)
-        trust_level = legacy_trust or str(rec.get("trust_level") or "")
-        requires_recheck = legacy_flashcard or (legacy_trust is not None and result_str == "passed")
+        trust_level = "model_review" if unchecked_behavior else legacy_trust or str(rec.get("trust_level") or "")
+        requires_recheck = (
+            legacy_flashcard or unchecked_behavior or (legacy_trust is not None and result_str == "passed")
+        )
+        if unchecked_behavior and result_str == "failed":
+            result_str = "execution_error"
         if requires_recheck and result_str == "passed":
             result_str = "partial"
         weight = _RESULT_WEIGHT.get(result_str, 0)
