@@ -2059,7 +2059,7 @@ writeProgress();
         });
         const visible = await waitForVisibleFacts(
           "resources",
-          (facts) => facts.activeSurface === "detail" && facts.selectedResourceId === resourceId,
+          (facts) => facts?.activeSurface === "detail" && facts.selectedResourceId === resourceId,
         );
         const facts = visible;
         return {
