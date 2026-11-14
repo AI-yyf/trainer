@@ -1,16 +1,17 @@
 const { test, expect } = require('playwright/test');
 
-const previewPath = '/owned-sandbox/preview-proof.md';
+const previewPath = '/owned-sandbox/roots/root-3dc25b18c4864de0975fbb6d78a296ee/sandboxes/context-1e916fbe790646da96d18c43dcda79b8/sources/inbox/preview-proof.md';
 const previewBody = 'ACTUAL_MATCHED_PREVIEW_BODY';
 
 async function restoreSandboxReader(page, mode) {
-  await page.goto(`/vscode-preview.html?view=resources&lang=en-US&connection=connected&run=resource-facts-${mode}`);
+  await page.setViewportSize({ width: 340, height: 800 });
+  await page.goto(`/vscode-preview.html?view=resources&lang=zh-CN&connection=connected&run=resource-facts-${mode}`);
   await expect(page.locator('#root[data-trainer-app-ready=true]')).toBeVisible();
   const bootstrap = await page.evaluate(() => window.__TRAINER_BOOTSTRAP__);
   await page.addInitScript(() => {
     window.__TRAINER_E2E_HOST_ACTIONS__ = [];
     window.acquireVsCodeApi = () => ({
-      getState: () => ({ activeView: 'resources', composerLanguage: 'en-US' }),
+      getState: () => ({ activeView: 'resources', composerLanguage: 'zh-CN' }),
       setState: () => undefined,
       postMessage: message => window.__TRAINER_E2E_HOST_ACTIONS__.push(message),
     });
@@ -32,7 +33,7 @@ async function restoreSandboxReader(page, mode) {
     } }, location.origin);
     window.postMessage({ type: 'ui/restoreView', payload: {
       activeView: 'resources', resourceSurface: 'sandbox', sandboxPath: previewPath,
-      previewPath,
+      previewPath, focusArea: 'resource sandbox',
     } }, location.origin);
   }, { bootstrap, mode, previewPath, previewBody });
   await expect.poll(() => latestFacts(page).then(facts => facts?.activeSurface)).toBe('sandbox');
@@ -64,9 +65,11 @@ for (const mode of ['missing', 'wrong-path', 'embedded', 'standalone']) {
     // the logical restore scope without rendering resource content.
     await expect(reader).toHaveCount(0);
     await expect(page.locator('.resources-inline-context')).toHaveCount(0);
-    await expect(page.getByText('Sandbox context restored', { exact: true })).toHaveCount(0);
-    await expect(page.getByText(previewPath, { exact: true })).toHaveCount(0);
-    await expect(page.locator('.resources-knowledge')).toBeVisible();
+    const library = page.locator('.resources-knowledge');
+    await expect(library).toBeVisible();
+    await expect(library).not.toContainText(/沙箱上下文已恢复|Sandbox context restored|resource sandbox/);
+    await expect(library).not.toContainText(previewPath);
+    await expect(library.getByRole('searchbox')).toBeVisible();
     if (mode !== 'standalone') {
       await expect(page.getByRole('treeitem', { name: 'preview-proof.md', exact: true })).toBeVisible();
     }
