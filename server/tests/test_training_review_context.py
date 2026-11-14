@@ -66,3 +66,30 @@ def test_current_review_prompt_reaches_the_model_without_old_coding_history():
     assert "我的概念复述。" in prompt
     assert "self-reported concept recall" in prompt
     assert "旧断言" not in prompt
+
+
+def test_coach_followup_uses_the_completed_card_result():
+    from app.core.models import FlashcardAttempt, TrainingCardCandidateSnapshot, UserProfile
+    from app.llm.prompts import build_coaching_messages
+
+    card = TrainingCardCandidateSnapshot(
+        card_id="tuple-card", title="元组槽位", status="answered",
+        question="重绑定槽位和修改对象有什么区别？", expected_answer="REFERENCE_ONLY",
+    )
+    memory = MemorySnapshot(
+        training_card_candidates=[card],
+        recent_flash_attempts=[FlashcardAttempt(card_id=card.card_id, correct=True)],
+    )
+    message = "我刚完成了复习。根据这次复习的表现，下一步该做什么？"
+    context = apply_training_review_context({"learner_message": message}, memory, "coach")
+    messages = build_coaching_messages(
+        UserProfile(long_term_goal="Learn Python"), message, None,
+        response_language="zh-CN", coach_context=context,
+    )
+    prompt = str(messages)
+    assert "Recorded verdict: correct" in prompt
+    assert card.question in prompt
+    assert card.expected_answer not in prompt
+
+    unrelated = {"learner_message": "解释 Python 的异常传播。"}
+    assert apply_training_review_context(unrelated, memory, "coach") is unrelated

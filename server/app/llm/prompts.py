@@ -917,6 +917,18 @@ def build_coaching_system_prompt(
             f"Recall rule: {_compact_text(recall.get('guardrail'), 240)}\n"
             f"Recorded answer: {_compact_text(recall.get('verified_result'), 1000)}"
         )
+    recent_recall = coach_context.get("recent_recall_result") if isinstance(coach_context, dict) else None
+    if isinstance(recent_recall, dict):
+        correct = recent_recall.get("correct") is True
+        system_prompt += (
+            "\n\n## Most Recent Graded Recall\n"
+            f"Card: {_compact_text(recent_recall.get('title'), 160)}\n"
+            f"Question: {_compact_text(recent_recall.get('question'), 500)}\n"
+            f"Recorded verdict: {'correct' if correct else 'incorrect'}.\n"
+            f"Feedback: {_compact_text(recent_recall.get('detail'), 240)}\n"
+            "Use this recorded result to give one concrete next step. The learner already "
+            "submitted the answer. Scope the conclusion to this question."
+        )
 
     system_prompt += (
         "\n\n## Teaching Style Bias\n"

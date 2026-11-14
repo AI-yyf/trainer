@@ -573,10 +573,12 @@ try {
   const fsrsUpdated = Boolean(recalledSchedule?.last_reviewed_at &&
     recalledSchedule.last_reviewed_at !== initialSchedule.last_reviewed_at &&
     Number(recalledSchedule.reps) > Number(initialSchedule.reps));
+  const delayedRecall = recall.json?.recall_evidence?.delayed_recall === true;
   step("11-recall-round", {
     status: recall.status, recall_correct: recall.json?.correct, recall_evidence: recall.json?.recall_evidence,
     schedule_before: initialSchedule, schedule_after: recalledSchedule, fsrs_updated: fsrsUpdated,
-  }, { fail: recall.status !== 200 || !fsrsUpdated });
+    delayed_recall: delayedRecall,
+  }, { fail: recall.status !== 200 || !fsrsUpdated || !delayedRecall });
 
   // Step 12 — Coach gives the next step based on the review result.
   const nextStepTurn = await streamTurn("12-next-step-after-review", {

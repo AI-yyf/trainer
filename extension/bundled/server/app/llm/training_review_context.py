@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..core.models import MemorySnapshot, ReviewArtifactSnapshot
@@ -12,6 +13,11 @@ _PREVIOUS_PRACTICE_KEYS = {
     "latest_learning_verified_result", "latest_learning_blocker", "latest_learning_followup",
     "selected_card_id", "selected_card_type", "selected_card_title", "selected_card_status",
 }
+_RECALL_FOLLOWUP = re.compile(
+    r"(?:刚(?:刚)?|这次|本次|上次|刚才).{0,12}(?:复习|回忆|闪卡)|"
+    r"(?:just (?:finished|completed|answered)|(?:this|last|my))\b.{0,55}\b(?:review|recall|flashcard)",
+    re.I,
+)
 
 
 def active_training_review(
@@ -30,7 +36,24 @@ def apply_training_review_context(
 ) -> dict[str, Any]:
     artifact = active_training_review(memory, active_view)
     if artifact is None:
-        return context
+        message = str(context.get("learner_message") or "")
+        if not _RECALL_FOLLOWUP.search(message) or not memory.recent_flash_attempts:
+            return context
+        attempt = memory.recent_flash_attempts[0]
+        card = next((card for card in memory.training_card_candidates if card.card_id == attempt.card_id), None)
+        if card is None or not card.question.strip():
+            return context
+        return {
+            **context,
+            "recent_recall_result": {
+                "card_id": card.card_id,
+                "title": card.title,
+                "question": card.question,
+                "correct": attempt.correct,
+                "answer_mode": attempt.answer_mode,
+                "detail": attempt.detail,
+            },
+        }
     result = dict(context)
     result.update({
         "current_focus": artifact.focus_area,
