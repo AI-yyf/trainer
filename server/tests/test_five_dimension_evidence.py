@@ -552,7 +552,12 @@ def test_theory_drill_answer_records_comprehension_not_delayed_recall(tmp_path) 
         )
         theory_drill = runtime.memory_service.snapshot(workspace).theory_drill
         assert theory_drill is not None
-        question = theory_drill.questions[0]
+        question = theory_drill.questions[0].model_copy(update={
+            "answer": "FastAPI resolves Depends before calling the route handler.",
+            "answer_is_rubric": False,
+        })
+        structured._theory_drill = theory_drill.model_copy(update={"questions": [question]})
+        runtime.memory_service.update_workspace_state(workspace)
 
         response = client.post(
             "/training/theory-drill/answer",

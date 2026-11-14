@@ -1690,6 +1690,7 @@ export async function trainingTheoryDrillAnswerCommand(
     learnerAnswer?: string;
     answer?: string;
     selectedOptionIndex?: number;
+    responseLanguage?: string;
   } | undefined;
   const learnerAnswer = p?.learnerAnswer ?? p?.answer ?? '';
   const workspaceId = getRuntimeWorkspaceId(context);
@@ -1698,16 +1699,22 @@ export async function trainingTheoryDrillAnswerCommand(
     return { ok: false, message: 'Sidecar is not running.' };
   }
   try {
-    const response = await context.sidecarClient.postJson<{ ok: boolean; detail: string }>(
+    const requestBody: Record<string, unknown> = {
+      workspace_id: workspaceId,
+      theory_drill_id: p?.theoryDrillId ?? '',
+      question_id: p?.questionId ?? '',
+      learner_answer: learnerAnswer,
+      selected_option_index: p?.selectedOptionIndex ?? null,
+    };
+    if (p?.responseLanguage) {
+      requestBody.response_language = p.responseLanguage;
+    }
+    await attachLiveProviderToTrainingRequest(context, requestBody);
+    const response = await context.sidecarClient.postJson<{ ok: boolean; correct: boolean | null; detail: string }>(
       status.port,
       '/training/theory-drill/answer',
-      {
-        workspace_id: workspaceId,
-        theory_drill_id: p?.theoryDrillId ?? '',
-        question_id: p?.questionId ?? '',
-        learner_answer: learnerAnswer,
-        selected_option_index: p?.selectedOptionIndex ?? null,
-      },
+      requestBody,
+      { timeoutMs: 35_000 },
     );
     context.outputChannel.appendLine('[training] Theory drill answer submitted');
     await rehydrateTrainingSummary(context, status.port);

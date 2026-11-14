@@ -176,7 +176,21 @@ class TrainingEndpointIntegrationTests(unittest.TestCase):
             },
         )
         self.assertEqual(long_unrelated_answer.status_code, 200)
-        self.assertFalse(long_unrelated_answer.json()["correct"])
+        self.assertIsNone(long_unrelated_answer.json()["correct"])
+        self.assertIsNone(long_unrelated_answer.json()["recall_evidence"])
+
+        keyword_only = self.client.post(
+            "/training/theory-drill/answer",
+            json={
+                "workspace_id": workspace_id,
+                "theory_drill_id": theory_drill.id,
+                "question_id": question.id,
+                "learner_answer": f"The reference claims {question.answer} I disagree with it entirely.",
+            },
+        )
+        self.assertEqual(keyword_only.status_code, 200)
+        self.assertIsNone(keyword_only.json()["correct"])
+        self.assertIsNone(keyword_only.json()["recall_evidence"])
 
         grounded_answer = self.client.post(
             "/training/theory-drill/answer",
@@ -188,7 +202,26 @@ class TrainingEndpointIntegrationTests(unittest.TestCase):
             },
         )
         self.assertEqual(grounded_answer.status_code, 200)
-        self.assertTrue(grounded_answer.json()["correct"])
+        self.assertIsNone(grounded_answer.json()["correct"])
+        self.assertIsNone(grounded_answer.json()["recall_evidence"])
+        structured._theory_drill = theory_drill.model_copy(update={
+            "questions": [question.model_copy(update={
+                "answer": "FastAPI resolves Depends before calling the route handler.",
+                "answer_is_rubric": False,
+            })],
+        })
+        self._runtime().memory_service.update_workspace_state(workspace_id)
+        exact_answer = self.client.post(
+            "/training/theory-drill/answer",
+            json={
+                "workspace_id": workspace_id,
+                "theory_drill_id": theory_drill.id,
+                "question_id": question.id,
+                "learner_answer": "FastAPI resolves Depends before calling the route handler.",
+            },
+        )
+        self.assertEqual(exact_answer.status_code, 200, exact_answer.text)
+        self.assertTrue(exact_answer.json()["correct"])
         saved_drill = self._runtime().memory_service.snapshot(workspace_id).theory_drill
         self.assertIsNotNone(saved_drill)
         assert saved_drill is not None

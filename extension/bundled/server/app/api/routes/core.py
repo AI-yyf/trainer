@@ -11,7 +11,6 @@ import asyncio
 import hashlib
 import json
 import logging
-import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -78,7 +77,12 @@ from ...memory.workspace_recovery import (
 from ...training.card_generator import (
     CardGenerationProviderFailure,
 )
-from ...training.flashcard_grading import RecallAssessment, assess_open_recall, needs_semantic_review
+from ...training.flashcard_grading import (
+    RecallAssessment,
+    assess_open_recall,
+    exact_text_answer,
+    needs_semantic_review,
+)
 from ...training.recall_evidence import record_recall_evidence
 from ...training.reliability import should_replay
 from .. import coach_support
@@ -4952,8 +4956,8 @@ def build_core_router(
         }
 
     @router.post("/training/theory-drill/answer")
-    def training_theory_drill_answer(request: TheoryDrillAnswerRequest) -> dict[str, object]:
-        snapshot = runtime.memory_service.snapshot(request.workspace_id)
+    async def training_theory_drill_answer(request: TheoryDrillAnswerRequest) -> dict[str, object]:
+        snapshot = await run_in_threadpool(runtime.memory_service.snapshot, request.workspace_id)
         theory_drill = snapshot.theory_drill
         if theory_drill is None:
             raise HTTPException(
@@ -4976,78 +4980,111 @@ def build_core_router(
                 status_code=409,
                 detail="This theory question is no longer current. Refresh Training to load the latest question.",
         )
-        answer = re.sub(r"\s+", " ", request.learner_answer.strip().lower())
-        reference = re.sub(r"\s+", " ", question.answer.strip().lower())
+        answer = request.learner_answer
+        reference = question.answer.strip()
         if not reference:
             raise HTTPException(
                 status_code=409,
                 detail="This theory question has no answer key yet. Refresh Training to load a gradeable question.",
             )
-        reference_tokens = {
-            token for token in re.findall(r"[a-z0-9][a-z0-9_-]*", reference) if len(token) > 2
-        }
-        prompt_tokens = {
-            token
-            for token in re.findall(r"[a-z0-9][a-z0-9_-]*", question.prompt.lower())
-            if len(token) > 2
-        }
-        answer_tokens = {
-            token for token in re.findall(r"[a-z0-9][a-z0-9_-]*", answer) if len(token) > 2
-        }
-        grounded_terms = reference_tokens | prompt_tokens
-        dependency_hint = re.sub(r"[^a-z0-9]+", "", question.dependency_key.lower())
-        normalized_answer = re.sub(r"[^a-z0-9]+", "", answer)
-        has_dependency_context = bool(dependency_hint and dependency_hint in normalized_answer)
-        correct = bool(
-            answer
-            and (
-                answer == reference
-                or reference in answer
-                or (
-                    has_dependency_context
-                    and len(answer_tokens & grounded_terms) >= 2
-                )
-                or (
-                    not dependency_hint
-                    and len(answer_tokens & grounded_terms) >= 2
-                )
-            )
+        language = await run_in_threadpool(
+            core.effective_response_language, request.workspace_id, request.response_language, answer,
         )
-        detail = (
-            "Theory drill answer is grounded enough to continue."
-            if correct
-            else "Answer is still too thin; rebuild the explanation before widening scope."
-        )
-        if correct:
-            updated, _ = runtime.memory_service.apply_theory_drill_action(
-                request.workspace_id,
-                theory_drill_id=request.theory_drill_id,
-                action="reopen",
-                note="Theory drill answer recorded.",
+        assessment = None
+        is_rubric_only = question.answer_is_rubric or reference in {
+            "Give the smallest grounded explanation and one concrete proof.",
+            "给出最小、贴着真实边界的解释，再补一个具体证据。",
+        }
+        index = request.selected_option_index
+        if question.choices and index is not None:
+            correct = (
+                0 <= index < len(question.choices)
+                and exact_text_answer(reference, question.choices[index])
             )
-            if updated is None:
+        elif exact_text_answer(reference, answer) and not is_rubric_only:
+            correct = True
+        else:
+            review_card = TrainingCardCandidateSnapshot(
+                card_id=question.id, card_type="flash", question=question.prompt,
+                expected_answer="" if is_rubric_only else reference,
+                rubric=[reference] if is_rubric_only else [],
+            )
+            if needs_semantic_review(review_card, answer):
+                provider = await run_in_threadpool(
+                    core.build_coaching_service,
+                    request.model_dump(include={"workspace_id", "provider", "api_key", "last_test_result"}),
+                )
+                assessment = await assess_open_recall(provider, review_card, answer, language=language)
+            correct = (
+                assessment.verdict == "correct"
+                if assessment is not None and assessment.verdict != "uncertain" else None
+            )
+
+        def save_answer() -> dict[str, object]:
+            current = runtime.memory_service.snapshot(request.workspace_id).theory_drill
+            if (
+                current is None or current.id != theory_drill.id
+                or next((item for item in current.questions if item.id == question.id), None) != question
+            ):
                 raise HTTPException(
                     status_code=409,
-                    detail="This theory drill changed before the answer could be saved. Refresh Training and try again.",
+                    detail="This theory drill changed. Refresh Training and resubmit.",
                 )
-        recall_evidence = record_recall_evidence(
-            runtime,
-            workspace_id=request.workspace_id,
-            card_id=theory_drill.id,
-            correct=correct,
-            source="theory_drill",
-            answer_mode="text",
-            detail=detail,
-            immediate_dimension="comprehension",
-            allow_missing_card=True,
-        )
-        core.refresh_workspace_sessions(request.workspace_id)
-        return {
-            "ok": True,
-            "detail": detail,
-            "correct": correct,
-            "recall_evidence": recall_evidence,
-        }
+            if correct is None:
+                detail = localized_text(
+                    "Answer saved. Its correctness is unconfirmed.",
+                    "答案已保存，正确性尚未确认。",
+                    language,
+                )
+            elif assessment is not None:
+                detail = assessment.reason
+            elif correct:
+                detail = localized_text("The answer matches the key.", "答案符合参考答案。", language)
+            else:
+                detail = localized_text(
+                    "The selected answer does not match the key.", "所选答案不符合参考答案。", language,
+                )
+            if correct:
+                updated, _ = runtime.memory_service.apply_theory_drill_action(
+                    request.workspace_id,
+                    theory_drill_id=request.theory_drill_id,
+                    action="reopen",
+                    note="Theory drill answer recorded.",
+                )
+                if updated is None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This theory drill changed before the answer could be saved. Refresh Training and try again.",
+                    )
+            recall_evidence = None
+            if correct is not None:
+                recall_evidence = record_recall_evidence(
+                    runtime,
+                    workspace_id=request.workspace_id,
+                    card_id=theory_drill.id,
+                    correct=correct,
+                    source="theory_drill",
+                    answer_mode="text",
+                    detail=detail,
+                    assistance_level="unknown",
+                    immediate_dimension="comprehension",
+                    allow_missing_card=True,
+                    learner_answer=answer,
+                    assessment=assessment,
+                )
+            elif answer.strip() and runtime.attempt_store is not None:
+                runtime.attempt_store.start_recall_attempt(
+                    workspace_id=request.workspace_id, card_id=theory_drill.id, answer_draft=answer,
+                )
+            core.refresh_workspace_sessions(request.workspace_id)
+            return {
+                "ok": True,
+                "detail": detail,
+                "correct": correct,
+                "recall_evidence": recall_evidence,
+            }
+
+        return await run_in_threadpool(save_answer)
 
     @router.post("/training/practice-return")
     def training_practice_return(request: PracticeReturnRequest) -> dict[str, object]:

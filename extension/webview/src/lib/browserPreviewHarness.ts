@@ -879,6 +879,8 @@ async function runBrowserPreviewLiveTrainingAction(
           learner_answer: browserPreviewString(payload?.learnerAnswer) || browserPreviewString(payload?.answer),
           selected_option_index:
             typeof payload?.selectedOptionIndex === "number" ? payload.selectedOptionIndex : undefined,
+          response_language: language,
+          ...browserPreviewProviderRequestOverride(),
         });
         break;
       case trainerCommands.trainingPracticeReturn:

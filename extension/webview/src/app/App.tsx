@@ -7156,6 +7156,7 @@ export function App() {
                   questionId: flashQuestion?.id,
                   learnerAnswer: normalizedAnswer,
                   selectedOptionIndex: selectedOptionIndex >= 0 ? selectedOptionIndex : undefined,
+                  responseLanguage: layout.composerLanguage,
                 }
               : {
                   cardId: activeTrainingCardId,
@@ -7165,7 +7166,7 @@ export function App() {
                 },
           );
           if (
-            !activeTheoryDrill?.id && result && typeof result === "object" &&
+            result && typeof result === "object" &&
             "correct" in result && result.correct === null &&
             "detail" in result && typeof result.detail === "string"
           ) {

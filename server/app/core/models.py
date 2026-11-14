@@ -2009,6 +2009,7 @@ class TheoryDrillQuestion(BaseModel):
     prompt: str
     choices: list[str] = Field(default_factory=list)
     answer: str = ""
+    answer_is_rubric: bool = False
     explanation: str = ""
     dependency_key: str = ""
     dependency_layer: str = ""
@@ -2065,11 +2066,17 @@ class FlashcardAnswerRequest(BaseModel):
 
 
 class TheoryDrillAnswerRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     workspace_id: str
     theory_drill_id: str
     question_id: str
     learner_answer: str = ""
     selected_option_index: int | None = None
+    provider: dict[str, Any] | None = None
+    api_key: str | None = Field(default=None, alias="apiKey", repr=False)
+    last_test_result: dict[str, Any] | None = Field(default=None, alias="lastTestResult")
+    response_language: str | None = Field(default=None, alias="responseLanguage")
 
 
 class TrainingReliabilityRecord(BaseModel):

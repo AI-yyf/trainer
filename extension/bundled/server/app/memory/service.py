@@ -200,6 +200,7 @@ from .workspace_recovery import (
     stamp_workspace_scope,
 )
 
+
 def _normalize_source_freshness(value: object) -> Literal["fresh", "stale", "unknown"]:
     normalized = str(value or "").strip().lower()
     if normalized == "fresh":
@@ -4730,6 +4731,7 @@ class MemoryService(
                             "Give the smallest grounded explanation and one concrete proof.",
                             "给出最小、贴着真实边界的解释，再补一个具体证据。",
                         ),
+                        answer_is_rubric=True,
                         explanation=skill_map.priority_summary,
                         dependency_key=dependency_key,
                         dependency_layer=item.layer,
