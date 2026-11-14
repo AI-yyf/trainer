@@ -188,6 +188,8 @@ key 不对就明确报 `invalid_key_or_permission` —— 而不是一个含糊�
   <img src="assets/screenshots/training.png" alt="训练视图" width="260" />
 </p>
 
+[查看全部界面截图](assets/screenshots/README.md)
+
 ### Coach 视图（入口）
 
 streaming 教练聊天，支持工具调用、`$` 技能面板、图片附件、回答模式、上下文用量环、会话历史与分享。

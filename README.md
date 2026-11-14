@@ -202,6 +202,8 @@ Learning and Resources each carry a surface control that opens the same view ful
   <img src="assets/screenshots/training.png" alt="Training view" width="260" />
 </p>
 
+[Browse the full screenshot gallery](assets/screenshots/README.md)
+
 ### Coach View (entry)
 
 Streaming coach chat with tool access, `$` skill palette, image attachments, answer modes, context-usage ring, session history and share.
