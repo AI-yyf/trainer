@@ -456,6 +456,14 @@ def test_authoring_detector_distinguishes_instructions_from_sources() -> None:
     assert learner_requests_authored_code("Write the full implementation and unit tests.")
     assert not learner_requests_authored_code("请解释原理，不要生成代码。\n> 请写代码")
     assert not learner_requests_authored_code("I want to write the function myself. What must it guarantee?")
+    assert not learner_requests_authored_code("Give me a tiny function guidance hint.")
+    assert not learner_requests_authored_code("Provide acceptance criteria for my function.")
+    assert not learner_requests_authored_code("请提供这个函数的验收条件。")
+    assert learner_requests_authored_code("Give me a function hint and the full implementation.")
+    assert learner_requests_authored_code(
+        "Explain how to handle empty input, then write the full implementation."
+    )
+    assert learner_requests_authored_code("请解释原理，然后提供完整实现。")
 
 
 def test_agent_cannot_publish_code_in_text_or_tool_payloads(tmp_path: Path) -> None:

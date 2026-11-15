@@ -163,18 +163,19 @@ class SkillRegistry:
             skill_id = str(skill["skill_id"])
             if skill_id in self._skills:
                 existing = self._skills[skill_id]
-                # A persisted builtin from an older registry version may have
-                # lost its inline body; refresh only that field, never a user
-                # override (non-empty body or non-builtin origin wins).
-                if (
-                    existing.metadata.get("origin") == "builtin"
-                    and not existing.body
-                    and skill.get("body")
-                ):
-                    existing.body = str(skill["body"])
+                if existing.metadata.get("origin") != "builtin" or not skill.get("body"):
+                    continue
+                # Upgrade only a known first-party default. Preserve edited
+                # bodies and the learner's activation and review choices.
+                if not existing.body:
                     existing.active = True
                     existing.reviewed = True
-                    self._persist()
+                elif hashlib.sha256(existing.body.encode()).hexdigest() != skill.get(
+                    "superseded_body_sha256"
+                ):
+                    continue
+                existing.body = str(skill["body"])
+                self._persist()
                 continue
             self._skills[skill_id] = SkillRecord(
                 skill_id=skill_id,

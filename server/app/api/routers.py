@@ -84,6 +84,7 @@ from ..llm.provider_service import (
 )
 from ..llm.reply_continuity import visible_next_step
 from ..llm.resource_message_parts import build_resource_display_parts
+from ..llm.teaching_boundary import teaching_metadata
 from ..llm.training_review_context import active_training_review
 from ..llm.turn_grounding import (
     GroundingDecision,
@@ -139,9 +140,11 @@ from ..training.card_generator import (
     _make_guided_scenario_pack_card,
 )
 from ..training.card_request import message_requests_explicit_training_card
-from ..llm.teaching_boundary import teaching_metadata
 from ..training.plan_binding import validated_mint_binding
-from ..training.resource_practice import build_independent_resource_practice, is_independent_resource_practice
+from ..training.resource_practice import (
+    build_independent_resource_practice,
+    is_independent_resource_practice,
+)
 from ..workspace.classifier import (
     classify_heuristic,
     is_code_like_current_file,

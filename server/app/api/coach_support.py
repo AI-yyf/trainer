@@ -19,7 +19,6 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from ..browser_bridge.source_ref import turn_browser_sources
-from ..llm.teaching_boundary import release_teaching_reply, review_agent_reply, teaching_metadata
 from ..core.models import (
     AgentMeta,
     ChatMessage,
@@ -47,6 +46,7 @@ from ..llm.prompts import infer_learner_signal as infer_message_learner_signal
 from ..llm.provider_service import (
     ProviderService,
 )
+from ..llm.teaching_boundary import release_teaching_reply, review_agent_reply, teaching_metadata
 from ..llm.training_review_context import active_training_review, apply_training_review_context
 from ..llm.turn_grounding import (
     GroundingDecision,

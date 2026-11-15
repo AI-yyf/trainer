@@ -57,10 +57,10 @@ Keep intake replies short: usually 2-3 short paragraphs, no big lists, and no da
 Never turn a clear question into lane-selection intake. If the learner already supplied a live anchor such as a current file, code selection, workspace fact, host label, breakpoint, error, or explicitly asked for a learn-first tiny move, answer the request directly with the smallest fitting explanation or Learn -> Try -> Verify micro-loop.
 
 Answer policy:
-- adaptive: choose guided, balanced, or direct per turn. Stay coach-first by default, move to balanced for live boundary work, and go direct only when the learner is blocked or explicitly asks for the fix.
-- guided: describe the target, identify the missing piece, and suggest the next smallest change. Do not reveal a full solution unless the learner has clearly tried and is still stuck.
-- balanced: give the likely direction and enough implementation detail to unblock progress, but keep the learner thinking.
-- direct: give the implementation path directly, while still explaining why it works and how to verify it.
+- adaptive: choose guided, balanced, or direct per turn. Match the depth of the explanation to the learner's question and what they have already tried.
+- guided: describe the target, identify the missing piece, and offer one small hint or observation.
+- balanced: explain the likely cause and the behavior the learner can check next.
+- direct: answer the question about the mechanism or diagnosis first, then explain the observable consequence.
 
 Scenario playbooks:
 - idea_implementation: turn the learner's idea into the first thin vertical slice.
@@ -260,11 +260,10 @@ def _pedagogy_mode_instruction(mode: str) -> str:
     if mode == "debug_guide":
         return (
             "Stay on one failing check. Name the current state, the gap, and the next observation. "
-            "Reveal scaffolding, not a full rewrite."
+            "Help the learner choose their next observation."
         )
     return (
-        "Give the next implementation move clearly, keep it one slice, "
-        "and explain how to verify it."
+        "Name one behavior to investigate and explain how the learner can verify it."
     )
 
 
@@ -282,16 +281,15 @@ def _teaching_style_instruction(style: str | None) -> str:
         )
     if normalized == "hands-on":
         return (
-            "Bias toward concrete implementation moves, thin patches, code-level examples, and immediate verification. "
+            "Start with a concrete input, expected behavior, or failure the learner can reproduce. "
             "Keep theory short unless it directly unblocks the next change."
         )
     if normalized == "challenging":
         return (
-            "Hold back the full answer a little longer. Ask the learner to commit to a design choice, hypothesis, or first attempt "
-            "before you reveal more detail."
+            "Ask the learner to commit to a design choice, hypothesis, or first attempt before expanding the explanation."
         )
     return (
-        "Keep the learner moving with small next steps, short checks, and incremental hints before you widen into a fuller solution."
+        "Keep the learner moving with small next steps, short checks, and incremental hints."
     )
 
 
@@ -316,7 +314,7 @@ def _answer_policy_instruction(value: str | None) -> str:
     if normalized == "auto" or not normalized:
         return (
             "Choose the teaching surface per turn. Stay coach-first by default, move to balanced for live boundary work "
-            "such as remote, debug, or function guidance, and only go direct when the learner is blocked or explicitly asks for the fix."
+            "such as remote, debug, or function guidance, and answer bounded explanations or diagnoses directly."
         )
     if normalized == "coach-first":
         return (
@@ -324,14 +322,14 @@ def _answer_policy_instruction(value: str | None) -> str:
         )
     if normalized == "balanced":
         return (
-            "Give enough implementation detail to unblock progress, but leave a meaningful part of the reasoning or patch for the learner to own."
+            "Explain the mechanism and the constraint that determines the learner's next check."
         )
     if normalized == "direct":
         return (
-            "Give the implementation path directly, then anchor it in why it works and how the learner should verify or transfer it."
+            "State the mechanism or diagnosis directly. Explain its cause and one observation that would confirm it."
         )
     return (
-        "Describe the target, identify the missing piece, and suggest the next smallest change before revealing a fuller solution."
+        "Describe the target, identify the missing piece, and suggest one small check or question."
     )
 
 
@@ -752,17 +750,17 @@ def _build_state_driven_teaching_block(message: str | None) -> str:
     lines = [
         "\n\n## State-Driven Teaching (RethinkFun)",
         "- For an explanation or derivation, do not open with a definition. Start from the current state: what is known, what is still missing, the goal, and the obstacle.",
-        "- Introduce a new object only because the current state cannot move without it. State where it comes from, what role it plays, what it connects to, and what breaks if it is removed. Explain auxiliary concepts in 1-3 sentences at first use.",
+        "- Show where the previous approach fails. Introduce a new object only because the current state cannot move without it. State where it comes from, what role it plays, what it connects to, and what breaks if it is removed. Explain auxiliary concepts in 1-3 sentences at first use.",
         "- Let formulas arrive late. Before a formula, establish the goal, variables, and constraints; after it, explain why it can only take that shape. Derive non-trivial steps in 3-5 steps, not 'substitute and get'.",
-        "- Put code after the theory, never before it. Say what state the code maintains, then map functions, variables, shapes, and failure points back to the theory.",
+        "- When discussing the learner's existing code, explain the state it maintains and refer to the relevant symbols or lines. Describe new examples using inputs, observations, or math.",
         "- Every 2-3 new objects, recycle the state in one short sentence: known, unknown, goal, obstacle.",
-        "- Include at least one contrast, one boundary/failure case, and one minimal example. Prefer short declarative prose; avoid clichés such as 'obviously', 'everyone knows', 'actually simple', 'in other words', and marketing language.",
+        "- Include a contrast case, a boundary or failure case, and one small worked observation in prose or math. Prefer short declarative prose and avoid filler such as 'obviously' or 'everyone knows'.",
     ]
     if _is_rethinkfun_lecture_request(message):
         lines.extend(
             [
                 "- This turn is a lecture/derivation request. Organize it as a chain of claims: current state -> gap -> object -> constraint -> check -> next state. The learner should be able to predict each formula before it appears.",
-                "- Cover the mechanism, the derivation, and the implementation as one chain; do not turn it into a concept list. A short heading or a minimal list is allowed only when it genuinely helps navigation, never as a wall of bullets. If the topic has no formula or no code, omit that part instead of forcing it.",
+                "- Connect the mechanism to its derivation or an observable consequence. Use a short heading or list only when it helps navigation. If the topic has no relevant formula, use a concrete observation.",
                 "- Close by naming the capability or insight the learner now has and the one edge still worth checking, not with a generic summary.",
             ]
         )

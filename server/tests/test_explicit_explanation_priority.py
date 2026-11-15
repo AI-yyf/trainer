@@ -19,9 +19,8 @@ def test_explicit_zh_explanation_uses_a_direct_answer_even_with_guided_defaults(
         "\u5217\u8868\u63a8\u5bfc\u5f0f\uff0c\u5e76\u7ed9\u4e00\u4e2a\u5e73\u65b9\u793a\u4f8b"
     )
     provider_reply = (
-        "\u5217\u8868\u63a8\u5bfc\u5f0f\u4f1a\u7528\u4e00\u4e2a\u8868\u8fbe\u5f0f\u4e3a\u6bcf\u4e2a\u5143\u7d20"
-        "\u751f\u6210\u65b0\u5217\u8868\u3002\u4f8b\u5982 `squares = [x * x for x in range(5)]` "
-        "\u4f1a\u5f97\u5230 `[0, 1, 4, 9, 16]`\u3002"
+        "列表推导式对每个输入元素应用同一个表达式，并把结果组成新列表。"
+        "例如，把 0 到 4 的每个数平方，会依次得到 0、1、4、9、16。"
     )
 
     with (
@@ -76,5 +75,5 @@ def test_explicit_zh_explanation_uses_a_direct_answer_even_with_guided_defaults(
     assert coaching_reply.await_args.kwargs["answer_mode"] == "direct"
     assert payload["reply"]["content"] == provider_reply
     assert "\u5217\u8868\u63a8\u5bfc\u5f0f" in payload["reply"]["content"]
-    assert "squares = [x * x for x in range(5)]" in payload["reply"]["content"]
+    assert "0、1、4、9、16" in payload["reply"]["content"]
     assert "\u5148\u522b\u76f4\u63a5\u7ed9\u7b54\u6848" not in payload["reply"]["content"]

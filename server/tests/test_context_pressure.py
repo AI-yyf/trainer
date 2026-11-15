@@ -487,7 +487,7 @@ def test_pedagogy_mode_rewrites_coach_system_prompt() -> None:
         coach_context={"coaching_adaptation": {"pedagogy_mode": "direct"}},
     )
     assert "Active mode: direct" in direct
-    assert "one slice" in direct
+    assert "Name one behavior to investigate" in direct
 
 
 def _client(tmp_path: Path) -> TestClient:

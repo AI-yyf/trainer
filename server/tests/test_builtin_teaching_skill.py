@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
+from app.skills.builtin import BUILTIN_TUTOR_SKILLS, RETHINKFUN_LECTURE_BODY
 from app.skills.registry import SkillRegistry
 from app.skills.runtime import build_skill_guidance_block, select_active_skills
 
@@ -36,6 +38,23 @@ def test_builtin_seed_is_idempotent_and_never_overrides_user_records(tmp_path: P
     second._persist()
     third = SkillRegistry(dir_path)
     assert third._skills["rethinkfun-lecture"].body == "user override"
+
+
+def test_builtin_refreshes_the_known_default_without_reenabling_it(tmp_path, monkeypatch) -> None:
+    directory = tmp_path / "skills"
+    registry = SkillRegistry(directory)
+    lecture = registry._skills["rethinkfun-lecture"]
+    lecture.body = "Legacy first-party default."
+    lecture.active = False
+    registry._persist()
+    monkeypatch.setitem(
+        BUILTIN_TUTOR_SKILLS[0], "superseded_body_sha256",
+        hashlib.sha256(lecture.body.encode()).hexdigest(),
+    )
+
+    refreshed = SkillRegistry(directory)._skills["rethinkfun-lecture"]
+    assert refreshed.body == RETHINKFUN_LECTURE_BODY
+    assert not refreshed.active
 
 
 def test_builtin_skill_selected_by_lecture_triggers(tmp_path: Path) -> None:
@@ -71,13 +90,14 @@ def test_coach_system_prompt_carries_deep_explanation_contract() -> None:
         current_file=None,
         response_language="zh-CN",
     )
-    assert "state-flow lecture contract" in prompt
-    assert "old approach's failure" in prompt
-    assert "formulas appear late" in prompt
+    assert "State-Driven Teaching (RethinkFun)" in prompt
+    assert "Show where the previous approach fails" in prompt
+    assert "formulas arrive late" in prompt
     assert "3-5 steps" in prompt
-    assert "at least one contrast case" in prompt
-    assert "minimal working example" in prompt
-    assert "never pad with \"obviously\"" in prompt
+    assert "a contrast case, a boundary or failure case" in prompt
+    assert "worked observation in prose or math" in prompt
+    assert "avoid filler such as 'obviously'" in prompt
+    assert "Never supply code" in prompt
 
 
 def test_applied_is_evidence_driven_not_name_substring(tmp_path: Path) -> None:

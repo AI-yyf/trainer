@@ -5554,7 +5554,7 @@ def test_session_message_uses_saved_teaching_style_bias_in_followup_prompt(tmp_p
     system_prompt = captured_messages["messages"][0]["content"]
     assert "## Teaching Style Bias" in system_prompt
     assert "Active style: challenging" in system_prompt
-    assert "Hold back the full answer a little longer." in system_prompt
+    assert "Ask the learner to commit to a design choice, hypothesis, or first attempt" in system_prompt
 
 
 def test_session_message_accepts_per_turn_teaching_style_override_without_saving_it(
@@ -5623,7 +5623,7 @@ def test_session_message_accepts_per_turn_teaching_style_override_without_saving
     system_prompt = captured_messages["messages"][0]["content"]
     assert "## Teaching Style Bias" in system_prompt
     assert "Active style: challenging" in system_prompt
-    assert "Hold back the full answer a little longer." in system_prompt
+    assert "Ask the learner to commit to a design choice, hypothesis, or first attempt" in system_prompt
     assert profile_response.json()["teaching_style"] == "guided"
 
 
@@ -5704,7 +5704,7 @@ def test_session_message_saved_auto_teaching_style_goes_hands_on_for_remote_boun
     system_prompt = captured_messages["messages"][0]["content"]
     assert "## Teaching Style Bias" in system_prompt
     assert "Active style: hands-on" in system_prompt
-    assert "Bias toward concrete implementation moves" in system_prompt
+    assert "Start with a concrete input, expected behavior, or failure" in system_prompt
     assert profile_response.json()["teaching_style"] == "auto"
 
 

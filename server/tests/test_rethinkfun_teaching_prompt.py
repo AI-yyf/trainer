@@ -20,7 +20,7 @@ def test_lecture_request_gets_state_flow_and_claim_chain() -> None:
     assert "This turn is a lecture/derivation request" in prompt
     assert "chain of claims" in prompt
     assert "predict each formula" in prompt
-    assert "If the topic has no formula or no code, omit that part" in prompt
+    assert "If the topic has no relevant formula, use a concrete observation" in prompt
 
 
 def test_short_factual_question_stays_direct() -> None:

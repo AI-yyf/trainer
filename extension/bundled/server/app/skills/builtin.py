@@ -31,8 +31,8 @@ RETHINKFUN_LECTURE_BODY = """\
 4. 公式晚出现：先有目标与约束，让听众能猜到大致形状；解释"为什么只能长这样"，不解释"表示什么"。
 5. 非平凡推导展开 3-5 步，每步说明用了什么条件、消掉哪个缺口；禁止"代入即得"。
 6. 每推进 2-3 个新对象，回收一次状态：已知、未知、目标、障碍。
-7. 代码是理论的实现状态：先说维护什么状态，再说语法；每个函数回指对应数学对象/状态转换。
-8. 至少给：1 个对比对象、1 个边界/失败情形、1 个最小可运行例子、1 个非直觉但关键的结论。
+7. 讨论学习者已有代码时，用名称和位置说明它维护的状态，并把函数与对应的数学对象或状态转换联系起来。
+8. 给出对比情形、边界或失败情形，以及一个用输入和可观察结果说明的例子。实现和测试由学习者完成。
 9. 连续散文口播，短句判断句，不列提纲、不用"第一部分"、不堆项目符号。
 10. 禁用空话："显然""其实很简单""大家都知道"；每个判断都要给可检查的理由。
 11. 收尾用很短一段回收整条链：现在已知什么，下一步验证什么。
@@ -47,7 +47,7 @@ BUILTIN_TUTOR_SKILLS: list[dict[str, Any]] = [
         "kind": "tutor",
         "name": "RethinkFun 讲解法",
         "description": (
-            "把技术主题讲成一条连续理解链：状态流推进、缺口驱动、公式晚出现、代码后置回指。"
+            "把技术主题按状态流讲明白，解释缺口、公式和可观察结果。"
             "Use for deep explanations, 讲明白/讲透/好好讲 requests, lectures and study notes."
         ),
         "triggers": [
@@ -63,6 +63,7 @@ BUILTIN_TUTOR_SKILLS: list[dict[str, Any]] = [
             "讲稿",
         ],
         "body": RETHINKFUN_LECTURE_BODY,
+        "superseded_body_sha256": "5dfca01cdb162bbc82815531d2cb8a84d9600564a2d16dca806b94d06371b803",
         "evidence_markers": ["缺口", "失败", "旧方案", "为什么", "状态"],
         "origin_note": "internalized from user-provided rethinkfun-lecture skill",
     }

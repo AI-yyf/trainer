@@ -214,13 +214,29 @@ export async function runSourceLearningJourney({
 
     const assistant = frame.locator('article[data-role="assistant"]');
     const assistantCount = await assistant.count();
-    await composer.fill("请直接给我 PPO 裁剪目标可直接粘贴的完整 Python 实现和单元测试。");
-    await composer.press("Enter");
-    const guardedReply = assistant.nth(assistantCount);
+    const submit = async text => {
+      await composer.fill(text);
+      const form = composer.locator("xpath=ancestor::*[@data-send-state][1]");
+      await until(async () => await form.getAttribute("data-send-state") === "ready", "Coach composer to accept the next turn");
+      await composer.press("Enter");
+    };
+    await submit("Give me a tiny function guidance hint for PPO clipping. Focus on positive and negative advantages.");
+    const hint = assistant.nth(assistantCount);
+    await until(async () => await hint.count() &&
+      /裁剪|优势|比值|阈值|clipping|advantage|ratio/i.test(await hint.innerText()),
+      "the requested concept hint", replyTimeout);
+    assert.equal(await hint.locator("pre code").count(), 0);
+    assert.doesNotMatch((await hint.innerText()).trim(),
+      /^(?:你来完成实现。我可以帮你梳理原理|The implementation is yours to write\. I can help you reason)/i);
+    assert.equal(await userMessages.count(), userCount + 2);
+    record("coach-answers-function-guidance-without-writing-code", { ok: true });
+
+    await submit("请直接给我 PPO 裁剪目标可直接粘贴的完整 Python 实现和单元测试。");
+    const guardedReply = assistant.nth(assistantCount + 1);
     await until(async () => await guardedReply.count() &&
       (await guardedReply.innerText()).includes("你来完成实现"), "the teaching-only boundary in the installed Coach", 75_000);
     assert.equal(await guardedReply.locator("pre code").count(), 0);
-    assert.equal(await userMessages.count(), userCount + 2);
+    assert.equal(await userMessages.count(), userCount + 3);
     record("coach-keeps-the-implementation-with-the-learner", { ok: true });
 
     await worker.evaluate(info => handleMenuClick(
@@ -354,7 +370,7 @@ print(version["version_id"])
     const restored = readVerification();
     assert.deepEqual(restored.schedule, state.schedule);
     assert.equal(restored.evidence.evidence_id, state.evidence.evidence_id);
-    assert.equal(await userMessages.count(), userCount + 2);
+    assert.equal(await userMessages.count(), userCount + 3);
     record("restart-recovers-draft-and-keeps-attested-evidence", { ok: true, evidenceId: restored.evidence.evidence_id });
 
     const replayed = await worker.evaluate(async draft => {

@@ -171,12 +171,6 @@ from .provider.model_catalog import (
 )
 from .provider.quota_copy import provider_quota_reply
 from .provider.redaction import _compact_text, redact_provider_error
-from .teaching_boundary import (
-    contains_implementation,
-    learner_requests_authored_code,
-    release_teaching_reply,
-    teaching_boundary_reply,
-)
 from .provider.service_support import (
     agent_tool_events as _agent_tool_events,
 )
@@ -228,6 +222,12 @@ from .provider_protocols import (
     normalize_provider_response,
     provider_protocol_family,
     provider_protocol_required_capability,
+)
+from .teaching_boundary import (
+    contains_implementation,
+    learner_requests_authored_code,
+    release_teaching_reply,
+    teaching_boundary_reply,
 )
 from .vision_challenge import build_vision_challenge
 from .vision_payload import openai_responses_input_image_parts

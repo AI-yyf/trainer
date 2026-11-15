@@ -22,11 +22,11 @@ TEACHING_ONLY_INSTRUCTION = (
 
 _AUTHORING_REQUEST = re.compile(
     r"\b(?:write|generate|produce|give|show|provide|output|complete|finish|implement|"
-    r"patch|fix|rewrite|refactor|autofix)\b[^.!?\n]{0,64}"
-    r"\b(?:code|implementation|solution|script|test cases?|unit tests?|function|class|"
-    r"patch|function body|implementation template|pseudocode)\b"
-    r"|(?:写|生成|补全|输出|直接给|贴出|提供|改好|重构|代写|实现)[^。！？\n]{0,18}"
-    r"(?:代码|脚本|函数|测试用例|单元测试|完整实现|完整答案|实现模板|补丁)"
+    r"patch|fix|rewrite|refactor|autofix)\b[^,;.!?\n]{0,64}"
+    r"\b(?P<english_topic>code|implementation template|implementation|solution|script|"
+    r"test cases?|unit tests?|function body|function|class|patch|pseudocode)\b"
+    r"|(?:写|生成|补全|输出|直接给|贴出|提供|改好|重构|代写|实现)[^，；。！？\n]{0,18}"
+    r"(?P<chinese_topic>代码|脚本|函数|测试用例|单元测试|完整实现|完整答案|实现模板|补丁)"
     r"|\b(?:ready.to.paste|copy.and.paste|drop.in implementation)\b|可直接粘贴",
     re.IGNORECASE,
 )
@@ -36,6 +36,15 @@ _GUIDANCE_PREFIX = re.compile(
     r"|(?:为什么|解释|讲解|引导我|教我如何|怎么理解|如何理解|我想|我准备|我会自己)", re.IGNORECASE,
 )
 _NEGATED_AUTHORING = re.compile(r"(?:不要|不用|避免|不得|不必|禁止|\bdo not\b|\bdon't\b|\bwithout\b)\s*$", re.IGNORECASE)
+_GUIDANCE_AFTER_TOPIC = re.compile(
+    r"\s+(?:guidance|hints?|explanations?|suggestions?|feedback|reviews?|acceptance criteria)\b"
+    r"|\s*的\s*(?:提示|讲解|解释|验收标准|验收条件|反馈|检查思路)", re.IGNORECASE,
+)
+_GUIDANCE_BEFORE_TOPIC = re.compile(
+    r"\b(?:hints?|guidance|explanations?|suggestions?|feedback|reviews?|acceptance criteria|"
+    r"practice exercises?)\s+(?:on|for|about|of|around|with)\b"
+    r"(?:(?!\b(?:and|then|also|or)\b).)*$", re.IGNORECASE,
+)
 
 _CODE_LINE = re.compile(
     r"^\s*(?:(?:async\s+)?(?:def|function)\s+\w+\s*\(|"
@@ -101,9 +110,23 @@ def learner_requests_authored_code(message: str) -> bool:
         if line.lstrip().startswith(">"):
             continue
         for match in _AUTHORING_REQUEST.finditer(line):
-            prior = re.split(r"[.!?。！？;；]", line[:match.start()])[-1]
-            if not _GUIDANCE_PREFIX.search(prior) and not _NEGATED_AUTHORING.search(prior):
-                return True
+            prior = re.split(
+                r"[,.!?，。！？;；]|\b(?:then|also)\b|(?:并且|然后|随后|再请|并请)",
+                line[:match.start()], flags=re.IGNORECASE,
+            )[-1]
+            if _GUIDANCE_PREFIX.search(prior) or _NEGATED_AUTHORING.search(prior):
+                continue
+            # A function can be the topic of a requested hint or rubric. The
+            # separate output gate still withholds implementation in every mode.
+            if (match["english_topic"] or match["chinese_topic"]) and _GUIDANCE_AFTER_TOPIC.match(
+                line[match.end():]
+            ):
+                continue
+            if match["english_topic"] and _GUIDANCE_BEFORE_TOPIC.search(
+                line[match.start():match.start("english_topic")]
+            ):
+                continue
+            return True
     return False
 
 

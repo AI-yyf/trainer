@@ -32,9 +32,9 @@ def body():
                      "apiKeyRef": "fixture"}, "api_key": "fixture-secret"}
 
 
-def payload(title="Guide"):
+def payload(title="Guide", content="Compare the outputs for a normal input and an empty input."):
     return json.dumps({"materials": [{"kind": kind, "title": f"{title}-{kind}",
-        "summary": "A real document", "content": "```python\nif True:\n    print(1)\n```"}
+        "summary": "A real document", "content": content}
         for kind in ("study_guide", "cheat_sheet", "exercise_set", "code_examples")]})
 
 
@@ -85,6 +85,21 @@ def test_invalid_model_results_are_explicit_templates(tmp_path):
         assert response.status_code == 200, response.text
         assert len(response.json()["materials"]) == 4
         assert all(item["generationSource"] == "template" for item in response.json()["materials"])
+
+
+def test_stage_materials_withhold_sample_implementation_and_retry(tmp_path):
+    with TestClient(make_app(tmp_path)) as client:
+        seed(client.app.state.runtime)
+        unsafe = payload("Worked solution", "```python\nprint(WORKED_SOLUTION)\n```")
+        completion = AsyncMock(side_effect=[unsafe, payload("Observation")])
+        with patch.object(ProviderService, "chat_completion", new=completion):
+            response = client.post("/plan/plan-materials/stages/stage-1/material/generate", json=body())
+        assert response.status_code == 200, response.text
+        assert completion.await_count == 2
+        assert "WORKED_SOLUTION" not in response.text
+        assert all(item["title"].startswith("Observation") for item in response.json()["materials"])
+        restored = client.get("/memory/summary", params={"workspace_id": "ws-materials"})
+        assert "WORKED_SOLUTION" not in restored.text
 
 
 def test_timeout_does_not_save_template_or_material(tmp_path):

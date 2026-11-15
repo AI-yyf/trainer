@@ -4217,10 +4217,14 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
     assert context.extra["answer_mode"] == "guided"
     assert context.extra["allow_coach_only_tools"] is True
     assert context.extra["explicit_training_card_request"] is False
-    assert context.extra["denied_tool_names"] == [
+    assert set(context.extra["denied_tool_names"]) == {
         "apply_patch",
         "edit_file",
+        "execute_command",
+        "insert_code",
+        "run_command",
         "write_file",
+        "write_sandbox_file",
         "generate_training_card",
         "save_formal_plan",
         "record_learning_note",
@@ -4231,7 +4235,7 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
         "run_rubric_review",
         "specify_task",
         "next_task",
-    ]
+    }
     assert context.extra["current_file"]["path"] == "src/app.py"
 
 

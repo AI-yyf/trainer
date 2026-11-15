@@ -88,7 +88,10 @@ from ...training.flashcard_grading import (
 )
 from ...training.recall_evidence import record_recall_evidence
 from ...training.reliability import should_replay
-from ...training.resource_practice import is_independent_resource_card, is_independent_resource_practice
+from ...training.resource_practice import (
+    is_independent_resource_card,
+    is_independent_resource_practice,
+)
 from .. import coach_support
 from .._helpers import (
     localized_text,
