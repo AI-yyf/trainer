@@ -14,6 +14,7 @@ import {
   resolveResourceOriginalCandidates,
 } from '../../../shared/src/resourceOpen';
 import type { CommandContext } from '../core/commandContext';
+import { SidecarHttpError } from '../core/httpClient';
 import { attachPreviewAssetUris } from '../core/previewAssetUris';
 import type {
   BootstrapData,
@@ -24,7 +25,7 @@ import type {
 import type { ManagedDataFolderChangeResult } from '../core/sidecarProcessManager';
 import { mergeMemorySummarySnapshot, mergeResourceRecords, resetWorkbenchAfterRuntimeDataChange } from '../core/workbenchData';
 import { rehydrateWorkbenchRuntime, trainerSessionBlockReason } from '../core/runtimeRehydration';
-import { getRuntimeWorkspaceId, isRemoteWorkspaceSnapshot, withWorkspaceQuery } from './workspaceContext';
+import { captureRuntimeIdentity, getRuntimeWorkspaceId, isRemoteWorkspaceSnapshot, runtimeIdentityChanged, withWorkspaceQuery } from './workspaceContext';
 import { basenameFs, looksLikeWindowsAbsolutePath, normalizeFsPath } from '../core/workspaceRoots';
 import { runtimeDataRootUnder } from './workspaceAdmissionCommands';
 
@@ -1492,6 +1493,60 @@ export function restoreResourceCommand(
     ),
   );
   return operation;
+}
+
+export async function bindResourceToCurrentStageCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const admission = resourceMutationAdmissionBlock(context);
+  if (admission) return admission;
+  const zh = resourceResponseLanguage(context) === 'zh-CN';
+  const input = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  const { resourceId, contentHash, versionId, planId, stageId } = input;
+  if (typeof resourceId !== 'string' || !resourceId.trim() ||
+      typeof contentHash !== 'string' || !contentHash.trim() ||
+      typeof planId !== 'string' || !planId.trim() || typeof stageId !== 'string' || !stageId.trim()) {
+    return { ok: false, message: zh ? '请先选定当前学习阶段和已保存的资料版本。' : 'Select a current learning stage and a saved resource version first.' };
+  }
+  const identity = captureRuntimeIdentity(context);
+  const status = await context.sidecarManager.ensureRunning();
+  if (runtimeIdentityChanged(context, identity)) return { ok: false, cancelled: true };
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: zh ? 'Trainer 暂时不可用，请重试。' : 'Trainer is unavailable. Try again.' };
+  }
+  try {
+    await context.sidecarClient.postJson(status.port, '/resource/bind-current-stage', {
+      workspace_id: identity.workspaceId,
+      session_id: identity.sessionId,
+      plan_id: planId,
+      stage_id: stageId,
+      resource_id: resourceId,
+      content_hash: contentHash,
+      version_id: typeof versionId === 'string' ? versionId : undefined,
+    });
+  } catch (error) {
+    if (runtimeIdentityChanged(context, identity)) return { ok: false, cancelled: true };
+    const code = error instanceof SidecarHttpError ? error.metadata.code : undefined;
+    if (code === 'stale_version' || code === 'version_unavailable' || code === 'resource_not_found') {
+      return { ok: false, message: zh ? '资料版本已变化，请刷新资料库后重试。' : 'The resource version has changed. Refresh the library and try again.' };
+    }
+    if (code === 'stage_changed' || code === 'focus_not_found' || code === 'no_plan' || code === 'write_conflict') {
+      return { ok: false, message: zh ? '当前学习阶段已变化，请刷新学习视图后重试。' : 'The current learning stage has changed. Refresh Learning and try again.' };
+    }
+    context.outputChannel.appendLine('[resources] could not bind the resource to the current learning stage');
+    return { ok: false, message: zh ? '未能加入当前学习，请重试。' : 'Could not add this resource to current learning. Try again.' };
+  }
+  if (runtimeIdentityChanged(context, identity)) return { ok: true, cancelled: true };
+  try {
+    const summary = await context.sidecarClient.getJson(status.port, withWorkspaceQuery('/memory/summary', context, identity.workspaceId));
+    if (runtimeIdentityChanged(context, identity)) return { ok: true, cancelled: true };
+    await context.patchWorkbenchData(mergeMemorySummarySnapshot(context.getHostState().bootstrap, summary, identity.workspaceId));
+  } catch {
+    if (runtimeIdentityChanged(context, identity)) return { ok: true, cancelled: true };
+    return { ok: true, message: zh ? '已加入当前学习。刷新学习视图可查看关联。' : 'Added to current learning. Refresh Learning to see the resource.' };
+  }
+  return { ok: true, message: zh ? '已加入当前学习。' : 'Added to current learning.' };
 }
 
 export function refreshResourceTrashCommand(

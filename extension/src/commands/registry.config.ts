@@ -59,6 +59,7 @@ import {
   searchResourcesCommand,
   uploadResourceCommand,
   captureResourceCommand,
+  bindResourceToCurrentStageCommand,
   organizeResourceCommand,
   exportResourceCommand,
 } from './resourceCommands';
@@ -294,6 +295,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.taskSpecify, register: (ctx, payload) => specifyTaskCommand(ctx, payload) },
     { commandId: COMMAND_IDS.nextTask, register: (ctx, payload) => nextTaskCommand(ctx, payload) },
     { commandId: COMMAND_IDS.uploadResource, register: (ctx, payload) => uploadResourceCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.bindResourceToCurrentStage, register: (ctx, payload) => bindResourceToCurrentStageCommand(ctx, payload) },
     { commandId: COMMAND_IDS.indexResources, register: (ctx) => indexResourcesCommand(ctx) },
     { commandId: COMMAND_IDS.searchResources, register: (ctx, payload) => searchResourcesCommand(ctx, payload) },
     { commandId: COMMAND_IDS.deleteResource, register: (ctx, payload) => deleteResourceCommand(ctx, payload) },

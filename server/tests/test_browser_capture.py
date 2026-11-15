@@ -13,6 +13,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.core.models import LearningPlan, PlanStage
 from app.core.settings import AppSettings
 from app.main import create_app
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse
@@ -752,6 +753,29 @@ def test_capture_binds_a_known_learning_focus_and_ignores_an_unknown_one(
         plan = runtime.repository.get_latest_plan(workspace_id)
         assert plan is not None
         assert plan.stages[0].resources == [bound.json()["id"]]
+        [anchor] = plan.stages[0].resource_anchors
+        assert anchor.resource_id == bound.json()["id"]
+        assert anchor.content_hash == bound.json()["content_hash"]
+
+        join_request = {
+            "workspace_id": workspace_id,
+            "plan_id": "plan-focus",
+            "stage_id": "stage-guards",
+            "resource_id": anchor.resource_id,
+            "content_hash": anchor.content_hash,
+            "version_id": anchor.version_id,
+        }
+        already_bound = client.post("/resource/bind-current-stage", json=join_request)
+        assert already_bound.status_code == 200, already_bound.text
+        assert already_bound.json()["outcome"] == "already_bound"
+        stale = client.post("/resource/bind-current-stage", json={**join_request, "version_id": "old"})
+        assert stale.status_code == 409, stale.text
+        assert stale.json()["detail"]["code"] == "stale_version"
+        wrong_stage = client.post(
+            "/resource/bind-current-stage", json={**join_request, "stage_id": "stage-next"}
+        )
+        assert wrong_stage.status_code == 409
+        assert wrong_stage.json()["detail"]["code"] == "stage_changed"
 
         unknown = client.post(
             "/resources/capture",
@@ -1088,6 +1112,71 @@ def test_selection_capture_keeps_its_excerpt_and_does_not_collide_with_other_int
         )
         assert missing.status_code == 422
         assert "Selection capture requires a non-empty excerpt" in missing.text
+
+
+def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_path) -> None:
+    root = tmp_path / "trainer"
+    project = root / "learner"
+    project.mkdir(parents=True)
+    with build_client(tmp_path, enable_network_fetch=False) as client:
+        runtime = client.app.state.runtime
+        workspace = runtime.provision_project_adoption(
+            workspace_id="browser-learning", root_path=str(root),
+            project_path=str(project), project_name="Learner",
+        ).context_id
+        token = _pair_browser(client, workspace, code="135790")
+        runtime.repository.save_plan(workspace, LearningPlan(
+            id="browser-learning-plan", title="Queue behavior", current_stage_id="queue-stage",
+            stages=[PlanStage(id="queue-stage", title="Completion", goal="Verify queue behavior",
+                              outcomes=["One edge case"], status="active")],
+        ))
+        captured = client.post("/resources/capture", headers={"Authorization": f"Bearer {token}"}, json={
+            "url": "https://docs.python.org/3/library/queue.html", "kind": "web",
+            "title": "Queue task completion", "capture_mode": "selection",
+            "selection": "A queue reports completion after every submitted task has been marked complete. Calling join waits until the outstanding task count reaches zero.",
+        })
+        assert captured.status_code == 200, captured.text
+        resource = captured.json()
+        anchor = runtime.resource_service.version_store.current_version(workspace, resource["id"])
+        assert anchor and anchor["content_hash"] == resource["content_hash"]
+
+        bound = client.post("/resource/bind-current-stage", json={
+            "workspace_id": workspace, "plan_id": "browser-learning-plan", "stage_id": "queue-stage",
+            "resource_id": resource["id"], "content_hash": anchor["content_hash"],
+            "version_id": anchor["version_id"],
+        })
+        assert bound.status_code == 200 and bound.json()["outcome"] == "bound", bound.text
+
+        request = {
+            "workspace_id": workspace, "source": "resource_knowledge", "card_type": "practice",
+            "resource_id": resource["id"], "resource_content_hash": anchor["content_hash"],
+            "resource_version_id": anchor["version_id"], "context_hint": "DO_NOT_COPY_THIS_ANSWER",
+        }
+        streamed = client.post("/training/generate-card/stream", json=request)
+        assert streamed.status_code == 200, streamed.text
+        assert '"chunk"' not in streamed.text
+        assert '"event": "complete"' in streamed.text or 'event: complete' in streamed.text
+        direct = client.post("/training/generate-card", json=request)
+        assert direct.status_code == 200, direct.text
+        card = direct.json()["card"]
+        assert len(runtime.memory_service.get_cards(workspace)) == 1
+        assert direct.json()["active_routing"]["selected_card_id"] == card["card_id"]
+        assert card["card_type"] == "practice"
+        assert card["plan_links"] == ["queue-stage"]
+        assert card["resource_anchor"] == {
+            "resource_id": resource["id"], "version_id": anchor["version_id"],
+            "content_hash": anchor["content_hash"],
+        }
+        assert card["acceptance_criteria"] and card["deliverable"]
+        assert not card["expected_answer"] and not card["api_hints"] and not card["hint_ladder"]
+        assert "DO_NOT_COPY_THIS_ANSWER" not in direct.text
+
+        runtime.resource_service.version_store.record_version(
+            workspace_id=workspace, resource_id=resource["id"], content="A newer version.",
+        )
+        stale = client.post("/training/generate-card", json=request)
+        assert stale.status_code == 409 and stale.json()["detail"]["code"] == "stale_version"
+        assert len(runtime.memory_service.get_cards(workspace)) == 1
 
 
 def test_non_snapshot_capture_cannot_request_an_artifact_download(tmp_path) -> None:

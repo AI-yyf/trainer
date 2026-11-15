@@ -143,6 +143,7 @@ export interface TrainingHandoffFacts {
 }
 
 export interface TrainingWorkbenchViewProps {
+  sourceResource?: ReactNode;
   /** Governed facts of the card on the card face (see `TrainingCardFacts`). */
   card: TrainingCardFacts;
   /** Live handoff / verification status of the active attempt (see `TrainingHandoffFacts`). */
@@ -628,6 +629,7 @@ function resolveVerificationReturnState(input: {
 }
 
 export function TrainingWorkbenchView({
+  sourceResource,
   card,
   handoff,
   language,
@@ -1095,7 +1097,7 @@ export function TrainingWorkbenchView({
                 phase={trainingExecutionState.composerPhase === "answer" ? "try" : trainingExecutionState.composerPhase}
                 phaseLabel={activeLoopStep.label}
                 onBack={onBackToLearning}
-                details={cardTaskDetails}
+                details={<>{sourceResource}{cardTaskDetails}</>}
               >
                 {degradedCard ? (
                   <section

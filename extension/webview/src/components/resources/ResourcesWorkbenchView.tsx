@@ -146,10 +146,11 @@ export interface ResourcesWorkbenchViewProps {
   /** Reveal a downloaded file path through the host's existing file-manager action. */
   onRevealSavedPath?: (path: string) => void;
   onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; openExternal?: boolean; line?: number; versionId?: string }) => void;
-  onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
+  onStartTrainingFromResource?: (resourceId: string, version?: { contentHash: string; versionId?: string }) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
   onAskCoach?: (resourceIds: string[]) => void;
-  onJoinLearning?: (resourceIds: string[]) => void;
+  onJoinLearning?: (resource: ResourceRecord) => void;
+  learningStage?: { title: string; resourceAnchors?: { resourceId: string; contentHash: string; versionId: string }[] };
   onRefreshResources?: () => void | Promise<void>;
   onDeleteResources?: (resourceIds: string[]) => void | Promise<void>;
   onRestoreResources?: (resourceIds: string[]) => void | Promise<void>;
@@ -187,6 +188,7 @@ export interface ResourcesWorkbenchViewProps {
 export interface ResourceRestoreContext {
   surface: "detail" | "sandbox";
   resourceId?: string;
+  reader?: boolean;
   versionId?: string;
   line?: number;
   focusArea?: string;
@@ -253,6 +255,7 @@ type ResourceTrainingStartPhase = "loading" | ResourceTrainingHandoffResult["out
 
 type ResourceTrainingStartState = {
   resourceId: string;
+  contentHash: string;
   phase: ResourceTrainingStartPhase;
   reason?: ResourceTrainingHandoffResult["reason"];
 };
@@ -1157,6 +1160,7 @@ export function ResourcesWorkbenchView({
   onOrientationAction,
   onAskCoach,
   onJoinLearning,
+  learningStage,
   onDebugVisibleFacts,
   organizationConfirm,
   onExpandToEditor,
@@ -1238,9 +1242,6 @@ export function ResourcesWorkbenchView({
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(
     () => restoreContext?.surface === "detail" ? restoreContext.resourceId ?? null : null,
   );
-  // Retired: library rows open the source directly. Kept as a runtime-false
-  // constant while the old reader markup is removed in a follow-up.
-  const RESOURCE_READER_ENABLED: boolean = false;
   const [rowMenu, setRowMenu] = useState<{
     resource: ResourceRecord;
     x: number;
@@ -1338,6 +1339,11 @@ export function ResourcesWorkbenchView({
     () => resources.find((resource) => resource.id === selectedResourceId),
     [resources, selectedResourceId],
   );
+  const showResourceReader = Boolean(restoreContext?.reader && selectedResource);
+  const selectedResourceJoined = selectedResource && learningStage?.resourceAnchors?.some((anchor) =>
+    anchor.resourceId === selectedResource.id && anchor.contentHash === selectedResource.contentHash &&
+    (!selectedResource.versionId || anchor.versionId === selectedResource.versionId),
+  );
 
   const loadProjectStructure = (resourceId: string) => {
     setProjectStructureState({ resourceId, status: "loading" });
@@ -1359,7 +1365,8 @@ export function ResourcesWorkbenchView({
       resourceWriteAccess?.allowed === true,
   );
   const selectedResourceTrainingState =
-    selectedResource && trainingStartState?.resourceId === selectedResource.id
+    selectedResource && trainingStartState?.resourceId === selectedResource.id &&
+      trainingStartState.contentHash === selectedResource.contentHash
       ? trainingStartState
       : undefined;
   const selectedResourceTrainingReadiness = selectedResource
@@ -1383,15 +1390,20 @@ export function ResourcesWorkbenchView({
       !selectedResource ||
       !selectedResourceCanStartTraining ||
       !onStartTrainingFromResource ||
+      !selectedResource.contentHash ||
       selectedResourceTrainingIsAvailable
     ) {
       return;
     }
-    setTrainingStartState({ resourceId: selectedResource.id, phase: "loading" });
-    void onStartTrainingFromResource(selectedResource.id)
+    const contentHash = selectedResource.contentHash;
+    setTrainingStartState({ resourceId: selectedResource.id, contentHash, phase: "loading" });
+    void onStartTrainingFromResource(selectedResource.id, {
+      contentHash: selectedResource.contentHash, versionId: restoreContext?.versionId ?? selectedResource.versionId,
+    })
       .then((result) =>
         setTrainingStartState({
           resourceId: selectedResource.id,
+          contentHash,
           phase: result.outcome,
           reason: result.reason,
         }),
@@ -1399,6 +1411,7 @@ export function ResourcesWorkbenchView({
       .catch(() =>
         setTrainingStartState({
           resourceId: selectedResource.id,
+          contentHash,
           phase: "failed",
           reason: "unavailable",
         }),
@@ -2538,7 +2551,7 @@ export function ResourcesWorkbenchView({
     const activeSurface =
       restoreContext?.surface === "sandbox"
         ? "sandbox"
-        : selectedResource
+        : showResourceReader
           ? "detail"
           : "library";
     onDebugVisibleFacts?.({
@@ -2547,21 +2560,21 @@ export function ResourcesWorkbenchView({
       activeSurface,
       visibleTitle: orientation?.objectLabel ?? selectedResource?.title ?? localize(language, "title"),
       visibleSummary: orientation?.why ?? selectedResource?.summary,
-      resourceDetailVisible: false,
-      resourceDetailId: undefined,
-      resourceDetailTitle: undefined,
+      resourceDetailVisible: showResourceReader,
+      resourceDetailId: showResourceReader ? selectedResource?.id : undefined,
+      resourceDetailTitle: showResourceReader ? selectedResource?.title : undefined,
       selectedResourceId: selectedResource?.id,
       selectedSandboxPath: restoreContext?.sandboxPath ?? sandboxRoot,
       previewPath: restoreContext?.previewPath,
       singleWorkbenchSurface: true,
       compactMode: true,
       modebarHiddenInCompact: true,
-      detailPaneVisible: false,
+      detailPaneVisible: showResourceReader,
       // Sandbox restore is a logical scope; no sandbox content pane exists.
       sandboxPaneVisible: false,
       previewPaneVisible: false,
     });
-  }, [language, onDebugVisibleFacts, orientation, restoreContext, sandboxRoot, selectedResource]);
+  }, [language, onDebugVisibleFacts, orientation, restoreContext, sandboxRoot, selectedResource, showResourceReader]);
 
   return (
     <section
@@ -2575,7 +2588,7 @@ export function ResourcesWorkbenchView({
       </div>
       {/* The orientation card owns the only import CTA on an empty library, so
           the search/expand toolbar would be dead chrome until content exists. */}
-      <Library hidden={false} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && !canWriteResources) ? null : (
+      <Library hidden={showResourceReader} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && !canWriteResources) ? null : (
       <div className="resources-knowledge__toolbar">
         <label className="resources-search resources-search--hero resources-knowledge__search">
           <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
@@ -3341,14 +3354,12 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {/* The library no longer opens a Reader page: a row opens the original
-          source directly, and the row menu owns secondary actions. */}
-      {RESOURCE_READER_ENABLED && selectedResource ? (
+      {showResourceReader && selectedResource ? (
         <ResourceReader
           parent={localize(language, "title")}
           title={selectedResource.title}
           source={selectedResourceSourceLabel}
-          updatedAt={selectedResource.updatedAt}
+          stage={learningStage?.title}
           onBack={() => setResourceDetail(null)}
           askCoach={onAskCoach ? { label: templateCopy[language].askCoach, onClick: () => onAskCoach([selectedResource.id]) } : undefined}
           openInEditor={
@@ -3371,14 +3382,23 @@ export function ResourcesWorkbenchView({
                 }
               : undefined
           }
-          joinLearning={onJoinLearning ? { label: templateCopy[language].joinLearning, onClick: () => onJoinLearning([selectedResource.id]) } : undefined}
-          generatePractice={selectedResourceCanStartTraining ? {
-            label: selectedResourceTrainingIsAvailable ? localize(language, "openCurrentTraining") : templateCopy[language].generatePractice,
+          joinLearning={onJoinLearning ? {
+            label: selectedResourceJoined ? templateCopy[language].joinedLearning : templateCopy[language].joinLearning,
+            onClick: () => onJoinLearning({ ...selectedResource, versionId: restoreContext?.versionId ?? selectedResource.versionId }),
+            disabled: selectedResourceJoined || !learningStage || !selectedResource.contentHash || !canWriteResources,
+          } : undefined}
+          generatePractice={onStartTrainingFromResource ? {
+            label: selectedResourceTrainingIsAvailable ? localize(language, "openCurrentTraining") : templateCopy[language].practiceFromSource,
             onClick: selectedResourceTrainingIsAvailable ? () => onOpenTraining?.() : startTrainingFromSelectedResource,
-            disabled: selectedResourceTrainingIsAvailable ? !onOpenTraining : !onStartTrainingFromResource,
+            disabled: selectedResourceTrainingIsAvailable ? !onOpenTraining : !selectedResourceCanStartTraining || !selectedResource.contentHash,
             busy: selectedResourceTrainingState?.phase === "loading",
           } : undefined}
         >
+          {selectedResourceTrainingState?.phase === "failed" || selectedResourceTrainingState?.phase === "blocked" ? (
+            <p className="template-metadata" role="status">{selectedResourceTrainingStatusMessage}</p>
+          ) : null}
+          <details className="template-disclosure">
+          <summary>{localize(language, "resourceDetail")}</summary>
           <section
             className="resources-knowledge__detail-object"
             aria-label={selectedResource.title}
@@ -3764,6 +3784,7 @@ export function ResourcesWorkbenchView({
             </details>
           ) : null}
           </section>
+          </details>
         </ResourceReader>
       ) : null}
       {rowMenu ? (() => {

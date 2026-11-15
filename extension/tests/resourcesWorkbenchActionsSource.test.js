@@ -478,7 +478,7 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   // segment file; its content assertion slices there.
   const inlineCopy = fs.readFileSync(resourcesInlineTextPath, 'utf8');
 
-  assert.match(viewSource, /onStartTrainingFromResource\?: \(resourceId: string\) => Promise<ResourceTrainingHandoffResult>;/);
+  assert.match(viewSource, /onStartTrainingFromResource\?: \(resourceId: string, version\?: \{ contentHash: string; versionId\?: string \}\) => Promise<ResourceTrainingHandoffResult>;/);
   assert.match(viewSource, /function resourceCanStartTraining\(resource: ResourceRecord\): boolean/);
   assert.match(viewSource, /function resourceHasTrainingTrust\(resource: ResourceRecord\): boolean/);
   assert.match(viewSource, /resource\.indexState === "indexed"/);
@@ -520,7 +520,7 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   assert.match(viewSource, /localize\(language, "emptyOpenHint"\)/);
 
   assert.match(appSource, /const requestResourceTrainingHandoff = useCallback/);
-  assert.match(appSource, /source: "resource_knowledge",[\s\S]*?cardType: "flash",[\s\S]*?submode: "flash"/);
+  assert.match(appSource, /source: "resource_knowledge",[\s\S]*?cardType: version \? "practice" : "flash",[\s\S]*?resourceContentHash: version\?\.contentHash/);
   assert.match(appSource, /result\.outcome === "ready"[\s\S]*?setActiveView\("training"\)/);
   assert.match(appSource, /isBrowserPreview=\{browserPreviewFixture\}/);
   assert.match(

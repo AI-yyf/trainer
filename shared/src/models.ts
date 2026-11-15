@@ -807,6 +807,12 @@ export type FlashcardRecoveryMode =
   | "scenario_lab_or_project"
   | "transfer"
   | "review";
+export interface ResourceVersionAnchor {
+  resourceId: string;
+  versionId: string;
+  contentHash: string;
+}
+
 export interface TrainingPlanBinding {
   planId: string;
   stageId: string;

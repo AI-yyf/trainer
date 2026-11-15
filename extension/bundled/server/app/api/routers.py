@@ -50,6 +50,7 @@ from ..core.models import (
     ResourceComposerIntent,
     ResourceKnowledgeEvidence,
     ResourceRecord,
+    ResourceVersionAnchor,
     ResponseLanguage,
     ReviewQueueItem,
     SandboxWriteRequest,
@@ -139,6 +140,7 @@ from ..training.card_generator import (
 )
 from ..training.card_request import message_requests_explicit_training_card
 from ..training.plan_binding import validated_mint_binding
+from ..training.resource_practice import build_independent_resource_practice, is_independent_resource_practice
 from ..workspace.classifier import (
     classify_heuristic,
     is_code_like_current_file,
@@ -9654,6 +9656,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 # Nested IDE input is consumed into vetted fields below; never carry raw input onward.
                 "current_file": None,
                 "resource_knowledge_evidence": None,
+                "resource_anchor": None,
                 "plan_stage_id": "",
                 **guided_training_workspace_facts(
                     workspace_id=request.workspace_id,
@@ -10023,6 +10026,29 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                     request_payload.workspace_id,
                     resource,
                 )
+                version = runtime.resource_service.version_store.current_version(
+                    request_payload.workspace_id, resource.id
+                )
+                resource_anchor = None
+                if version and version["content_hash"] == resource.content_hash:
+                    resource_anchor = ResourceVersionAnchor(
+                        resource_id=resource.id, version_id=version["version_id"],
+                        content_hash=version["content_hash"],
+                    )
+                if request_payload.resource_content_hash and (
+                    resource_anchor is None or
+                    request_payload.resource_content_hash != resource_anchor.content_hash or
+                    (request_payload.resource_version_id and
+                     request_payload.resource_version_id != resource_anchor.version_id)
+                ):
+                    raise HTTPException(status_code=409, detail={"code": "stale_version"})
+                if is_independent_resource_practice(request_payload):
+                    plan = runtime.repository.get_latest_plan(request_payload.workspace_id)
+                    if plan and resource_anchor:
+                        stage = next((item for item in plan.stages if (
+                            item.id == plan.current_stage_id and resource_anchor in item.resource_anchors
+                        )), None)
+                        request_payload.plan_stage_id = stage.id if stage else ""
                 request_payload = request_payload.model_copy(
                     update={
                         "resource_quality_flags": list(resource.quality_flags or []),
@@ -10030,6 +10056,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         "resource_trust_state": resource_trust_state(resource),
                         "resource_freshness": str(resource.freshness or "unknown"),
                         "resource_knowledge_evidence": resource_evidence,
+                        "resource_anchor": resource_anchor,
                     }
                 )
             else:
@@ -10066,6 +10093,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 if card.created_from == "resource"
                 and card.resource_id == request_payload.resource_id
                 and card.card_type == request_payload.card_type
+                and card.resource_anchor == request_payload.resource_anchor
+                and (not is_independent_resource_practice(request_payload) or
+                     card.plan_links == ([request_payload.plan_stage_id] if request_payload.plan_stage_id else []))
                 and card.status in {"candidate", "active", "needs_primer"}
             ),
             None,
@@ -10089,16 +10119,20 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         generated_card: TrainingCardCandidateSnapshot | None = None,
         provider_service_override: ProviderService | None = None,
     ) -> CardGenerationResponse:
-        generator = card_generation_service_for(provider_service_override or runtime.provider_service)
         request_payload = prepare_training_card_request(request)
 
         def store_generated_card(
             generated_card: TrainingCardCandidateSnapshot | None = None,
         ) -> TrainingCardCandidateSnapshot:
-            card = generated_card or generator.generate_card(request_payload.source, request_payload)
+            if is_independent_resource_practice(request_payload):
+                card = build_independent_resource_practice(request_payload)
+            else:
+                generator = card_generation_service_for(provider_service_override or runtime.provider_service)
+                card = generated_card or generator.generate_card(request_payload.source, request_payload)
             card = card.model_copy(
                 update={
                     "resource_id": request_payload.resource_id or card.resource_id,
+                    "resource_anchor": request_payload.resource_anchor or card.resource_anchor,
                     "trust_state": request_payload.resource_trust_state or card.trust_state,
                     "difficulty": request_payload.difficulty or card.difficulty,
                 }

@@ -30,6 +30,7 @@ from ...core.models import (
     ResourceSearchRequest,
     ResourceTrashResponse,
     ResourceUploadRequest,
+    ResourceVersionAnchor,
 )
 from ...core.models import ResourceRecord as _ApiResourceRecord  # type annotation only
 from ...resources.asset_library import (
@@ -55,7 +56,7 @@ from ...resources.library_downloads import ArtifactNote
 from ...training.course_fork import fork_course_manifest
 from ...training.course_pack import build_course_manifest, inspect_course_manifest
 from ...workspace.authority import PermissionLevel, WorkspaceAuthority
-from ..runtime import TrainerRuntime
+from ..runtime import TrainerRuntime, WorkspaceBindingError
 from ._deps import RouterDeps
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,18 @@ class CourseExportRequest(BaseModel):
     workspace_id: str | None = Field(default=None, alias="workspaceId")
     plan_id: str | None = Field(default=None, alias="planId")
     subject_family: str = ""
+
+
+class ResourceStageBindingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: str = Field(min_length=1)
+    session_id: str | None = None
+    plan_id: str = Field(min_length=1, max_length=128)
+    stage_id: str = Field(min_length=1, max_length=128)
+    resource_id: str = Field(min_length=1, max_length=128)
+    content_hash: str = Field(min_length=1, max_length=128)
+    version_id: str | None = Field(default=None, max_length=128)
 
 
 def capture_deep_link(resource_id: str) -> str:
@@ -685,28 +698,51 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
     def bind_capture_to_learning_focus(
         workspace_id: str,
         resource_id: str,
-        focus_id: str,
+        focus_id: str | None,
+        *,
+        expected_content_hash: str | None = None,
+        expected_version_id: str | None = None,
+        expected_plan_id: str | None = None,
+        expected_stage_id: str | None = None,
     ) -> str:
-        """Bind a captured resource to a plan stage (best-effort).
-
-        Returns ``bound`` | ``already_bound`` | ``focus_not_found`` | ``no_plan``
-        | ``write_failed``. An unknown focus never fails the capture itself —
-        the extension only needs to know that the binding did not happen.
-        """
+        """Bind the retained resource version to a plan stage with a revision check."""
 
         plan = runtime.repository.get_latest_plan(workspace_id)
         if plan is None:
             return "no_plan"
-        stage = next((item for item in plan.stages if item.id == focus_id), None)
+        current_focus = focus_id or plan.current_stage_id
+        stage = next((item for item in plan.stages if item.id == current_focus), None)
+        if stage is None and focus_id is None and not current_focus:
+            stage = next((item for item in plan.stages if item.status == "active"), None)
         if stage is None:
             return "focus_not_found"
-        if resource_id in stage.resources:
+        if (expected_plan_id and plan.id != expected_plan_id) or (
+            expected_stage_id and stage.id != expected_stage_id
+        ):
+            return "stage_changed"
+        resource = runtime.repository.get_resource(workspace_id, resource_id)
+        if resource is None:
+            return "resource_not_found"
+        version = runtime.resource_service.version_store.current_version(workspace_id, resource_id)
+        if not version or version["content_hash"] != resource.content_hash:
+            return "version_unavailable"
+        if ((expected_content_hash and expected_content_hash != version["content_hash"]) or
+                (expected_version_id and expected_version_id != version["version_id"])):
+            return "stale_version"
+        anchor = ResourceVersionAnchor(
+            resource_id=resource_id, version_id=version["version_id"], content_hash=version["content_hash"],
+        )
+        if resource_id in stage.resources and anchor in stage.resource_anchors:
             return "already_bound"
-        stage.resources = [*stage.resources, resource_id]
+        stage.resources = list(dict.fromkeys([*stage.resources, resource_id]))
+        stage.resource_anchors = [
+            *[item for item in stage.resource_anchors if item.resource_id != resource_id], anchor,
+        ]
+        revision = int((plan.model_extra or {}).get("_plan_revision", 0))
         try:
-            from ...training.plan_revision import save_plan_advancing_revision
-
-            save_plan_advancing_revision(runtime.repository, workspace_id, plan)
+            saved = runtime.repository.save_plan_with_revision(
+                workspace_id, plan, expected_revision=revision, require_latest=True,
+            )
         except Exception:
             logger.warning(
                 "Capture focus binding failed for resource %s in workspace %s.",
@@ -715,8 +751,28 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 exc_info=True,
             )
             return "write_failed"
+        if saved is None:
+            return "write_conflict"
         refresh_workspace_sessions(workspace_id)
         return "bound"
+
+    @router.post("/resource/bind-current-stage")
+    def bind_resource_to_current_stage(payload: ResourceStageBindingRequest) -> dict[str, str]:
+        try:
+            workspace_id = runtime.resolve_workspace_id_for_write(
+                workspace_id=payload.workspace_id, session_id=payload.session_id,
+            )
+        except WorkspaceBindingError as exc:
+            raise HTTPException(status_code=409, detail={"code": exc.code, "message": exc.detail}) from exc
+        outcome = bind_capture_to_learning_focus(
+            workspace_id, payload.resource_id, None,
+            expected_content_hash=payload.content_hash, expected_version_id=payload.version_id,
+            expected_plan_id=payload.plan_id, expected_stage_id=payload.stage_id,
+        )
+        if outcome not in {"bound", "already_bound"}:
+            status = 404 if outcome == "resource_not_found" else 503 if outcome == "write_failed" else 409
+            raise HTTPException(status_code=status, detail={"code": outcome})
+        return {"outcome": outcome, "resource_id": payload.resource_id}
 
     def _capture_response(
         resource: ResourceRecord,

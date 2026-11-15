@@ -17,7 +17,7 @@ test('the reading library opens one file directly and removes management panels'
     .some(action => action.type === 'request/bootstrap'))).toBe(true);
   await page.evaluate(data => window.postMessage({ type: 'bootstrap', payload: data }, location.origin), {
     ...bootstrap, resources: [
-      { id: 'reader-note', title: '边界验证.md', kind: 'markdown', source: '/tmp/reader-note.md', status: 'indexed', summary: 'HIDDEN_MANAGEMENT_SUMMARY' },
+      { id: 'reader-note', title: '边界验证.md', kind: 'markdown', source: '/tmp/reader-note.md', status: 'indexed', summary: 'HIDDEN_MANAGEMENT_SUMMARY', contentHash: 'sha256:reader-fixture' },
       { id: 'reader-snapshot', title: '网页快照.md', kind: 'url', source: 'https://example.com', sandboxPath: '/tmp/captured.md', status: 'indexed' },
     ], conversation: [], sessionHistoryRestored: true,
   });
@@ -52,6 +52,33 @@ test('the reading library opens one file directly and removes management panels'
     expect(Math.abs(fieldBounds.y + fieldBounds.height / 2 - iconBounds.y - iconBounds.height / 2)).toBeLessThanOrEqual(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
+  await page.evaluate(data => window.postMessage({ type: 'bootstrap', payload: data }, location.origin), {
+    ...bootstrap,
+    resources: [{ id: 'reader-note', title: '边界验证.md', kind: 'markdown', source: '/tmp/reader-note.md',
+      status: 'ready', indexState: 'indexed', trustState: 'trusted', trustScore: 0.9,
+      freshness: 'fresh', contentHash: 'sha256:reader-fixture' }],
+    plan: { ...bootstrap.plan, id: 'reader-plan', currentStep: 'Understand boundaries', currentStageId: 'reader-stage',
+      stages: [{ id: 'reader-stage', title: '验证边界', objective: 'Cover an edge case', status: 'active' }] },
+    planRuntimeStatus: { recovered: false },
+    memory: { ...bootstrap.memory, workspace: { ...bootstrap.memory.workspace,
+      trainerWorkspace: { status: 'managed' } } },
+    conversation: [], sessionHistoryRestored: true,
+  });
+  await page.evaluate(() => window.postMessage({ type: 'ui/openResource', resourceId: 'reader-note' }, location.origin));
+  const reader = page.locator('[data-template="ResourceReader"]');
+  await expect(reader).toBeVisible();
+  await expect(page.locator('[data-template="Library"]')).toBeHidden();
+  await expect(reader.getByText('验证边界', { exact: true })).toBeVisible();
+  const join = reader.getByRole('button', { name: '加入当前学习', exact: true });
+  await expect(join).toBeEnabled();
+  await join.click();
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
+    .find(action => action.payload?.commandId === 'trainer.resource.bindCurrentStage')?.payload.payload))
+    .toMatchObject({ planId: 'reader-plan', stageId: 'reader-stage', resourceId: 'reader-note', contentHash: 'sha256:reader-fixture' });
+  await reader.getByRole('button', { name: '基于资料练习' }).click();
+  await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__
+    .find(action => action.payload?.commandId === 'trainer.training.generateCard')?.payload.payload))
+    .toMatchObject({ source: 'resource_knowledge', cardType: 'practice', resourceId: 'reader-note', resourceContentHash: 'sha256:reader-fixture' });
 });
 
 test('nested folders stay distinct, support keyboard navigation and open their file directly', async ({ page }) => {

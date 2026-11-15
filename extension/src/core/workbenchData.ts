@@ -47,7 +47,7 @@ import {
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
 import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { normalizeTransferSkillStateRecord } from '../../../shared/src/transferSkillGovernance';
-import type { GoalActivity, GoalSession } from '../../../shared/src/models';
+import type { GoalActivity, GoalSession, ResourceVersionAnchor } from '../../../shared/src/models';
 import {
   normalizePlanRuntimeRecovery,
   normalizePlanRuntimeResumeState,
@@ -3196,12 +3196,23 @@ function deriveCurrentStageFromSnapshot(snapshot: UnknownRecord | undefined) {
   };
 }
 
+function mapResourceVersionAnchor(value: unknown): ResourceVersionAnchor | undefined {
+  const anchor = asRecord(value);
+  const resourceId = asString(anchor?.resource_id ?? anchor?.resourceId);
+  const versionId = asString(anchor?.version_id ?? anchor?.versionId);
+  const contentHash = asString(anchor?.content_hash ?? anchor?.contentHash);
+  return resourceId && versionId && contentHash ? { resourceId, versionId, contentHash } : undefined;
+}
+
 function mapPlanStage(value: unknown, index: number) {
   const record = asRecord(value);
   const rawStatus = asString(record?.status);
+  const rawResourceAnchors = record?.resource_anchors;
   return {
     id: asString(record?.id) ?? `stage-${index + 1}`,
     title: asString(record?.title) ?? `阶段 ${index + 1}`,
+    resourceAnchors: Array.isArray(rawResourceAnchors) ? rawResourceAnchors.map(mapResourceVersionAnchor)
+      .filter((anchor): anchor is ResourceVersionAnchor => anchor !== undefined) : undefined,
     objective:
       asString(record?.goal) ??
       asString(record?.objective) ??
@@ -5265,6 +5276,7 @@ function mapTrainingCardCandidates(
 type TrainingCardVerificationFields = Pick<
   TrainingCardCandidateStateView,
   | 'learningPhase'
+  | 'resourceAnchor'
   | 'question'
   | 'choices'
   | 'answerMode'
@@ -5309,6 +5321,8 @@ function mapTrainingCardVerificationFields(
     return fallback ?? {};
   }
   return {
+    resourceAnchor: record.resource_anchor === null ? undefined :
+      mapResourceVersionAnchor(record.resource_anchor ?? record.resourceAnchor) ?? fallback?.resourceAnchor,
     learningPhase:
       toTrainingLearningPhase(
         asString(record.learning_phase) ?? asString(record.learningPhase),
@@ -6663,6 +6677,8 @@ function mapResource(value: unknown): ResourceRecordView | undefined {
       freshness === 'fresh' || freshness === 'stale' || freshness === 'unknown' ? freshness : undefined,
     indexState: asText(record.index_state) ?? asText(record.indexState) ?? indexStatus,
     citationId: asText(record.citation_id) ?? asText(record.citationId),
+    versionId: asText(record.version_id) ?? asText(record.versionId),
+    contentHash: asText(record.content_hash) ?? asText(record.contentHash),
     previewTier: asPreviewTier(asText(record.preview_tier) ?? asText(record.previewTier)),
     previewKind: asText(record.preview_kind) ?? asText(record.previewKind),
     rankScore: asNumber(record.rank_score) ?? asNumber(record.rankScore),

@@ -365,12 +365,19 @@ class PlanPhase(BaseModel):
     completion_signal: str = ""
 
 
+class ResourceVersionAnchor(BaseModel):
+    resource_id: str
+    version_id: str
+    content_hash: str
+
+
 class PlanStage(BaseModel):
     id: str
     title: str
     goal: str
     outcomes: list[str]
     resources: list[str] = Field(default_factory=list)
+    resource_anchors: list[ResourceVersionAnchor] = Field(default_factory=list)
     status: Literal["pending", "active", "completed"] = "pending"
 
 
@@ -1400,6 +1407,7 @@ class TrainingCardCandidateSnapshot(BaseModel):
     trust_state: TrainingCardTrustState = "unknown"
     trust_acknowledged: bool = False
     resource_id: str = ""
+    resource_anchor: ResourceVersionAnchor | None = None
     dependency_key: str = ""
     dependency_layer: str = ""
     question_style: str = ""
@@ -1578,6 +1586,7 @@ class CardGenerationContext(BaseModel):
     plan_stage_id: str = ""
     plan_binding: TrainingPlanBinding | None = Field(default=None, alias="planBinding")
     resource_id: str = ""
+    resource_anchor: ResourceVersionAnchor | None = None
     difficulty: str = "medium"
     hint_count: int | None = None
     code_reveal: str = ""
@@ -1635,6 +1644,8 @@ class CardGenerationRequest(CardGenerationContext):
     source: str = "conversation_gap"
     card_type: TrainingCardType = "practice"
     submode: str = ""
+    resource_content_hash: str = Field(default="", max_length=128)
+    resource_version_id: str = Field(default="", max_length=128)
     current_file: dict[str, Any] | None = Field(default=None, alias="currentFile")
     # Stream cancel remint identity — same request_id must not double-mint.
     request_id: str = Field(default="", alias="requestId", max_length=128)

@@ -218,6 +218,17 @@
   background: color-mix(in srgb, var(--bg-1) 72%, transparent);
 }
 
+.template-reader-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-block: var(--space-2);
+}
+
+[data-template="ResourceReader"] > .template-metadata {
+  overflow-wrap: anywhere;
+}
+
 .resources-knowledge__detail-object {
   display: flex;
   flex-direction: column;

@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/src/models';
 import type { TrainerMessagePart, TrainerStreamingState } from '../../../shared/src/protocol';
 import type { BrowserSourceRef } from '../../../shared/src/browserSourceRef';
+import type { ResourceVersionAnchor } from '../../../shared/src/models';
 import type { ResourceSearchMode } from '../../../shared/src/resourceSearch';
 import type { RemoteWorkspaceType } from '../../../shared/src/remoteWorkspace';
 import type { TrainerCustomSkill } from '../../../shared/src/skillCatalog';
@@ -523,6 +524,7 @@ export interface PlanStageView {
   title: string;
   objective: string;
   status: 'done' | 'active' | 'queued';
+  resourceAnchors?: ResourceVersionAnchor[];
 }
 
 export interface SubPlanView {
@@ -827,6 +829,7 @@ export interface ResourceRecordView {
   indexState?: string;
   citationId?: string;
   versionId?: string;
+  contentHash?: string;
   snippet?: string;
   previewTier?: 'rich' | 'converted' | 'metadata';
   previewKind?: string;
@@ -1249,6 +1252,7 @@ export interface TrainingCardCandidateView {
   cardId: string;
   type: TrainingCardTypeView;
   title: string;
+  resourceAnchor?: ResourceVersionAnchor;
   whyNow?: string;
   status?: string;
   learningPhase?: 'learn' | 'try' | 'verify' | 'reflect' | 'return';
@@ -1293,6 +1297,7 @@ export interface ActiveTrainingCardRoutingView {
   selectedCard?: {
     cardId?: string;
     title?: string;
+    resourceAnchor?: ResourceVersionAnchor;
     type?: TrainingCardTypeView;
     learningPhase?: 'learn' | 'try' | 'verify' | 'reflect' | 'return';
     question?: string;

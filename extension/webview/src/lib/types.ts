@@ -5,7 +5,7 @@ import type { TrainerMessagePart, TrainerStreamingState } from "../../../../shar
 import type { BrowserSourceRef } from "../../../../shared/src/browserSourceRef";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
-import type { GoalSession } from "../../../../shared/src/models";
+import type { GoalSession, ResourceVersionAnchor } from "../../../../shared/src/models";
 import type { ComposerLanguage as SharedComposerLanguage } from "../../../../shared/src/types";
 import type {
   ProviderCapabilityEvidence,
@@ -221,6 +221,7 @@ export interface PlanStage {
   title: string;
   objective: string;
   status: "done" | "active" | "queued";
+  resourceAnchors?: ResourceVersionAnchor[];
 }
 
 export interface SubPlan {
@@ -1209,6 +1210,7 @@ export interface TrainingCardCandidate {
   cardId: string;
   type: TrainingCardType;
   title: string;
+  resourceAnchor?: ResourceVersionAnchor;
   whyNow?: string;
   status?: string;
   learningPhase?: "learn" | "try" | "verify" | "reflect" | "return";
@@ -1253,6 +1255,7 @@ export interface ActiveTrainingCardRouting {
   selectedCard?: {
     cardId?: string;
     title?: string;
+    resourceAnchor?: ResourceVersionAnchor;
     type?: TrainingCardType;
     learningPhase?: "learn" | "try" | "verify" | "reflect" | "return";
     learningFamily?: TrainingLearningFamily;

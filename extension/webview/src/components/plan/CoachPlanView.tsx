@@ -127,6 +127,7 @@ interface PlanDecisionStripState {
 }
 
 export interface CoachPlanViewProps {
+  linkedResources?: ReactNode;
   plan: LearningPlan | null;
   /** Resolved by the domain controller; the view never ranks actions. */
   primaryAction: NextActionProps;
@@ -1249,6 +1250,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       nextTools={<>
         {props.dockReturnNotice}
         {liveEvidenceDecisionRow}
+        {props.linkedResources}
         {props.onPracticePlanStep ? (
           <div className="plan-step-card-action" data-plan-step-card-action="true">
             <button

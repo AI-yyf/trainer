@@ -154,6 +154,8 @@ type TrainingGenerateCardWaiterInput = {
   cardType: string;
   submode: string;
   resourceId?: string;
+  resourceContentHash?: string;
+  resourceVersionId?: string;
   focusArea?: string;
   targetSkill?: string;
   prompt?: string;
@@ -190,6 +192,8 @@ async function settleTrainingGenerateCardWaiter(
     card_type: string;
     submode: string;
     resource_id: string;
+    resource_content_hash?: string;
+    resource_version_id?: string;
     focus_area: string;
     target_skill: string;
     context_hint: string;
@@ -205,6 +209,8 @@ async function settleTrainingGenerateCardWaiter(
     card_type: input.cardType,
     submode: input.submode,
     resource_id: input.resourceId ?? "",
+    resource_content_hash: input.resourceContentHash,
+    resource_version_id: input.resourceVersionId,
     focus_area: input.focusArea ?? "",
     target_skill: input.targetSkill ?? "",
     context_hint: buildTrainingContextHint(
@@ -229,10 +235,9 @@ async function settleTrainingGenerateCardWaiter(
   if (input.responseLanguage) {
     requestBody.response_language = input.responseLanguage;
   }
-  await attachLiveProviderToTrainingRequest(
-    context,
-    requestBody as unknown as Record<string, unknown>,
-  );
+  if (!(input.source === "resource_knowledge" && input.cardType === "practice" && input.resourceContentHash)) {
+    await attachLiveProviderToTrainingRequest(context, requestBody as unknown as Record<string, unknown>);
+  }
 
   try {
     let response: TrainingCardGenerationResponse | undefined;
@@ -835,14 +840,16 @@ export async function trainingGenerateCardCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
-  const { source, cardType, submode, focusArea, targetSkill, resourceId, prompt, planBinding, requestId: payloadRequestId } =
+  const { source, cardType, submode, focusArea, targetSkill, resourceId, resourceContentHash, resourceVersionId, prompt, planBinding, requestId: payloadRequestId } =
     extractGenerateCardPayload(payload);
   const resourceTrainingBlock = resourceTrainingGate(context, source, resourceId);
   if (resourceTrainingBlock) {
     return resourceTrainingBlock;
   }
-  const workspaceId = getRuntimeWorkspaceId(context);
+  const runtimeIdentity = captureRuntimeIdentity(context);
+  const workspaceId = runtimeIdentity.workspaceId;
   const status = await context.sidecarManager.ensureRunning();
+  if (runtimeIdentityChanged(context, runtimeIdentity)) return { ok: false, cancelled: true };
   if (status.lifecycle !== "ready" || !status.port) {
     return { ok: false, message: status.detail ?? "Sidecar is unavailable." };
   }
@@ -885,6 +892,8 @@ export async function trainingGenerateCardCommand(
         cardType: finalCardType,
         submode: submode ?? "",
         resourceId,
+        resourceContentHash,
+        resourceVersionId,
         focusArea,
         targetSkill,
         prompt,
@@ -906,6 +915,8 @@ export async function trainingGenerateCardCommand(
       card_type: string;
       submode: string;
       resource_id: string;
+      resource_content_hash?: string;
+      resource_version_id?: string;
       focus_area: string;
       target_skill: string;
       context_hint: string;
@@ -921,6 +932,8 @@ export async function trainingGenerateCardCommand(
       card_type: finalCardType,
       submode: submode ?? "",
       resource_id: resourceId ?? "",
+      resource_content_hash: resourceContentHash,
+      resource_version_id: resourceVersionId,
       focus_area: focusArea ?? "",
       target_skill: targetSkill ?? "",
       context_hint: buildTrainingContextHint(
@@ -942,10 +955,10 @@ export async function trainingGenerateCardCommand(
     if (responseLanguage) {
       requestBody.response_language = responseLanguage;
     }
-    await attachLiveProviderToTrainingRequest(
-      context,
-      requestBody as unknown as Record<string, unknown>,
-    );
+    if (!(source === "resource_knowledge" && finalCardType === "practice" && resourceContentHash)) {
+      await attachLiveProviderToTrainingRequest(context, requestBody as unknown as Record<string, unknown>);
+    }
+    if (runtimeIdentityChanged(context, runtimeIdentity)) return { ok: false, cancelled: true };
 
     type TrainingCardGenerationResponse = {
       card?: Record<string, unknown>;
@@ -1585,6 +1598,8 @@ function extractGenerateCardPayload(
   focusArea?: string;
   targetSkill?: string;
   resourceId?: string;
+  resourceContentHash?: string;
+  resourceVersionId?: string;
   prompt?: string;
   requestId?: string;
 } {
@@ -1597,6 +1612,8 @@ function extractGenerateCardPayload(
     targetSkill?: string;
     resourceId?: string;
     resource_id?: string;
+    resourceContentHash?: string;
+    resourceVersionId?: string;
     prompt?: string;
     requestId?: string;
     request_id?: string;
@@ -1609,6 +1626,8 @@ function extractGenerateCardPayload(
     focusArea: p?.focusArea,
     targetSkill: p?.targetSkill,
     resourceId: p?.resourceId ?? p?.resource_id,
+    resourceContentHash: readNonEmptyString(p?.resourceContentHash),
+    resourceVersionId: readNonEmptyString(p?.resourceVersionId),
     prompt: p?.prompt,
     requestId: readNonEmptyString(p?.requestId) ?? readNonEmptyString(p?.request_id),
   };

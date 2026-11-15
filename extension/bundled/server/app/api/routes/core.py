@@ -87,6 +87,7 @@ from ...training.flashcard_grading import (
 )
 from ...training.recall_evidence import record_recall_evidence
 from ...training.reliability import should_replay
+from ...training.resource_practice import is_independent_resource_practice
 from .. import coach_support
 from .._helpers import (
     localized_text,
@@ -4588,16 +4589,18 @@ def build_core_router(
             generate_payload["api_key"] = request.api_key
         if request.last_test_result:
             generate_payload["lastTestResult"] = request.last_test_result
-        coaching_service = core.build_coaching_service(generate_payload)
-        core.ensure_coach_provider_ready(
-            coaching_service,
-            response_language=getattr(request, "response_language", None),
-        )
-        core.reject_if_provider_not_live_usable(
-            coaching_service,
-            generate_payload,
-            getattr(request, "response_language", None),
-        )
+        coaching_service = None
+        if not is_independent_resource_practice(request):
+            coaching_service = core.build_coaching_service(generate_payload)
+            core.ensure_coach_provider_ready(
+                coaching_service,
+                response_language=getattr(request, "response_language", None),
+            )
+            core.reject_if_provider_not_live_usable(
+                coaching_service,
+                generate_payload,
+                getattr(request, "response_language", None),
+            )
         try:
             return core.training_generate_and_route_card(
                 core.trusted_training_card_request_from_api(request),
@@ -4618,23 +4621,26 @@ def build_core_router(
         except Exception:
             raw_payload = {}
         stream_payload = raw_payload if isinstance(raw_payload, dict) else {}
-        training_provider_service = runtime.overlay_last_test_on_service(
-            core.build_coaching_service(stream_payload)
-        )
-        core.ensure_coach_provider_ready(
-            training_provider_service,
-            response_language=getattr(request, "response_language", None),
-        )
-        core.reject_if_provider_not_live_usable(
-            training_provider_service,
-            stream_payload,
-            getattr(request, "response_language", None),
-        )
-        runtime.adopt_request_provider_evidence(request, training_provider_service)
-        core.ensure_streaming_ready(
-            training_provider_service,
-            getattr(request, "response_language", None),
-        )
+        independent_practice = is_independent_resource_practice(request)
+        training_provider_service = None
+        if not independent_practice:
+            training_provider_service = runtime.overlay_last_test_on_service(
+                core.build_coaching_service(stream_payload)
+            )
+            core.ensure_coach_provider_ready(
+                training_provider_service,
+                response_language=getattr(request, "response_language", None),
+            )
+            core.reject_if_provider_not_live_usable(
+                training_provider_service,
+                stream_payload,
+                getattr(request, "response_language", None),
+            )
+            runtime.adopt_request_provider_evidence(request, training_provider_service)
+            core.ensure_streaming_ready(
+                training_provider_service,
+                getattr(request, "response_language", None),
+            )
         stream_id = core.resolve_stream_id(raw_payload)
         stream_id_payload = (
             {"stream_id": stream_id}
@@ -4775,7 +4781,6 @@ def build_core_router(
                     async for _abort_frame in _abort_fail_closed():
                         yield _abort_frame
                     return
-                generator = core.card_generation_service_for(training_provider_service)
                 trusted_request = core.trusted_training_card_request_from_api(request)
                 request_payload = core.prepare_training_card_request(trusted_request)
                 existing_card = (
@@ -4783,7 +4788,7 @@ def build_core_router(
                     if request_payload.source == "resource_knowledge" and request_payload.resource_id
                     else None
                 )
-                if existing_card is not None:
+                if existing_card is not None or independent_practice:
                     if core.stream_cancellation_requested(stream_id):
                         async for _abort_frame in _abort_fail_closed():
                             yield _abort_frame
@@ -4810,6 +4815,7 @@ def build_core_router(
                         request_id=request_id or None,
                     )
                     return
+                generator = core.card_generation_service_for(training_provider_service)
                 async for event in generator.generate_card_stream(
                     request_payload.source,
                     request_payload,

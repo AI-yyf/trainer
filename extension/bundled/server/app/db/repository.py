@@ -543,6 +543,7 @@ class TrainerRepository:
         *,
         expected_revision: int,
         allow_legacy: bool = False,
+        require_latest: bool = False,
     ) -> dict[str, Any] | None:
         """Atomically compare and write a plan revision.
 
@@ -552,6 +553,14 @@ class TrainerRepository:
         scope = (workspace_id or "").strip()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if require_latest:
+                latest = connection.execute(
+                    "SELECT plan_id FROM learning_plan WHERE workspace_id = ? ORDER BY rowid DESC LIMIT 1",
+                    (scope,),
+                ).fetchone()
+                if latest is None or latest["plan_id"] != plan.id:
+                    connection.rollback()
+                    return None
             row = connection.execute(
                 "SELECT workspace_id, payload FROM learning_plan WHERE plan_id = ?",
                 (plan.id,),

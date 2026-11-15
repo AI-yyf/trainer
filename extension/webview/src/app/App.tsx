@@ -28,7 +28,7 @@ import { trainerCommands } from "../../../../shared/src/commands";
 import type { BrowserSourceRef } from "../../../../shared/src/browserSourceRef";
 import type { CoachHabitChange } from "../../../../shared/src/coachHabit";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
-import type { TrainingPlanBinding } from "../../../../shared/src/models";
+import type { ResourceVersionAnchor, TrainingPlanBinding } from "../../../../shared/src/models";
 import { isComposerLanguage } from "../../../../shared/src/types";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import { analyzeSendIntent, messageReferencesWorkspaceFile, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
@@ -1235,7 +1235,7 @@ export function App() {
     ],
   );
   const requestResourceTrainingHandoff = useCallback(
-    (resourceId: string): Promise<ResourceTrainingHandoffResult> => {
+    (resourceId: string, version?: { contentHash: string; versionId?: string }): Promise<ResourceTrainingHandoffResult> => {
       const requestId = `resource-training-${Date.now().toString(36)}-${++resourceTrainingHandoffSequenceRef.current}`;
       return new Promise<ResourceTrainingHandoffResult>((resolve) => {
         const timeoutId = window.setTimeout(() => {
@@ -1254,9 +1254,11 @@ export function App() {
               commandId: trainerCommands.trainingGenerateCard,
               payload: {
                 source: "resource_knowledge",
-                cardType: "flash",
-                submode: "flash",
+                cardType: version ? "practice" : "flash",
+                submode: version ? undefined : "flash",
                 resourceId,
+                resourceContentHash: version?.contentHash,
+                resourceVersionId: version?.versionId,
                 __trainerResourceTrainingHandoffId: requestId,
               },
             },
@@ -9887,13 +9889,17 @@ export function App() {
             setActiveView("coach");
             requestCoachComposerFocus();
           }}
-          onJoinLearning={(resourceIds) => {
-            setSelectedResourceContextIds(resourceIds);
-            setResourceConversationContextIds(resourceIds);
-            setCoachPlanContext("explain");
-            setActiveView("coach");
-            requestCoachComposerFocus();
-          }}
+          learningStage={formalPlanLive ? activePlanStage : undefined}
+          onJoinLearning={!isBrowserPreview ? (resource) => {
+            if (!formalPlanLive || !activePlanStage?.id || !resource.contentHash) return;
+            postMessage({ type: "command/execute", payload: {
+              commandId: trainerCommands.bindResourceToCurrentStage,
+              payload: {
+                planId: data.plan.id, stageId: activePlanStage.id, resourceId: resource.id,
+                contentHash: resource.contentHash, versionId: resource.versionId,
+              },
+            } });
+          } : undefined}
           onResourceSelectionChange={handleResourceSelectionChange}
           onRestoreContextChange={setResourceRestoreContext}
           onSearchResources={
@@ -9957,7 +9963,8 @@ export function App() {
           onOpenResource={(resourceId, options) => {
             handleResourceSelectionChange([resourceId]);
             const { versionId, ...openOptions } = options ?? {};
-            setResourceRestoreContext({ surface: "detail", resourceId, versionId, line: openOptions.line });
+            setResourceRestoreContext({ surface: "detail", resourceId, versionId, line: openOptions.line,
+              reader: resourceRestoreContext?.reader && resourceRestoreContext.resourceId === resourceId });
             postMessage({ type: "resource/open", payload: { resourceId, ...openOptions } });
           }}
           onRefreshResources={
@@ -10011,7 +10018,22 @@ export function App() {
     );
   };
 
+  const renderVersionedResource = (anchor: ResourceVersionAnchor) => {
+    const resource = liveResources.find((item) => item.id === anchor.resourceId);
+    if (!resource || resource.contentHash !== anchor.contentHash ||
+        (resource.versionId && resource.versionId !== anchor.versionId)) {
+      return <span className="template-metadata">{appUiCopy(layout.composerLanguage, "资料版本已变化，请刷新资料库后重试。")}</span>;
+    }
+    return <button type="button" className="button button--ghost button--compact"
+      onClick={() => {
+        setResourceRestoreContext({ surface: "detail", resourceId: resource.id, versionId: anchor.versionId, reader: true });
+        setActiveView("resources");
+      }}>{resource.title}</button>;
+  };
+
   const renderTrainingView = () => {
+    const anchor = (selectedTrainingCardCandidate?.cardId === activeTrainingCardId ? selectedTrainingCardCandidate?.resourceAnchor : undefined) ??
+      (selectedTrainingRouteCard?.cardId === activeTrainingCardId ? selectedTrainingRouteCard?.resourceAnchor : undefined);
     const title = hasRenderableTrainingCard
       ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickFirstText(
           visibleTrainingCardTitle,
@@ -10108,6 +10130,7 @@ export function App() {
           cardType={trainingCardType}
           trainingSubmode={effectiveTrainingSubmode}
           cardOnly={true}
+          sourceResource={anchor ? renderVersionedResource(anchor) : undefined}
           response={resolvedReviewArtifact ? (
             <SystemState kind="success" title={templateCopy[layout.composerLanguage].reviewRecorded}
               detail={trainingState?.reviewArtifact?.verifiedResult ?? trainingState?.reviewArtifact?.summary}
@@ -10425,6 +10448,11 @@ export function App() {
         primaryEvidenceId={learningPrimaryAction.target.evidenceId}
         projection={data.workspaceTrainingState?.skillProjection}
         onNavigateToView={setActiveView}
+        linkedResources={formalPlanLive && activePlanStage?.resourceAnchors?.length ? (
+          <div aria-label={t.resourcesMenu} role="group">
+            {activePlanStage.resourceAnchors.map((anchor) => <div key={anchor.resourceId}>{renderVersionedResource(anchor)}</div>)}
+          </div>
+        ) : undefined}
         className="plan-pane"
         compactPrimary
         onExpandToEditor={canOpenInEditor ? () => openViewInEditor("plan") : undefined}

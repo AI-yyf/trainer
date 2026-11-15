@@ -293,6 +293,7 @@ type OperationMessage = TrainerOperationMessage;
 export interface ResourceRestoreContext {
   surface: "detail" | "sandbox";
   resourceId?: string;
+  reader?: boolean;
   versionId?: string;
   line?: number;
   focusArea?: string;
@@ -1865,6 +1866,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           resourceRestoreContext: {
             surface: "detail" as const,
             resourceId,
+            reader: true,
           },
           layout: persistLayout({
             ...state.layout,
