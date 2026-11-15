@@ -27,6 +27,7 @@ import { _electron } from "playwright";
 import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 import { withVsixE2EFixtureLoopbackBypass } from "../extension/scripts/vsix-e2e-provider-runtime.mjs";
 import { resolveVsixOutputPath } from "../extension/scripts/package-vsix.mjs";
+import { prepareSourceLearningFixture, runSourceLearningJourney } from "./source-learning-journey.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -34,8 +35,13 @@ const extensionDir = path.join(repoRoot, "extension");
 const packageJson = JSON.parse(fs.readFileSync(path.join(extensionDir, "package.json"), "utf8"));
 const extensionId = `${packageJson.publisher}.${packageJson.name}`;
 const vsixPath = resolveVsixOutputPath({ extensionDir, packageJson });
-const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
-const electronBinary = requireVSCodeElectronBinary();
+const codeCli = process.env.CODE_CLI_PATH || "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+const provisionedBinary = process.env.CODE_CLI_PATH && ["Code", "Electron"]
+  .map(name => path.resolve(path.dirname(codeCli), "../../../MacOS", name))
+  .find(candidate => fs.existsSync(candidate));
+const electronBinary = requireVSCodeElectronBinary({
+  env: { ...process.env, TRAINER_VSCODE_ELECTRON: process.env.TRAINER_VSCODE_ELECTRON || provisionedBinary || "" },
+});
 if (!fs.existsSync(vsixPath)) {
   throw new Error(`Packaged VSIX not found: ${vsixPath}. Run npm run package:vsix first.`);
 }
@@ -52,6 +58,7 @@ const realModel = process.env.PROBE_PROVIDER_MODEL ?? "MiniMax-M3.1-Flash";
 const usingRealProvider = Boolean(realBaseUrl && realApiKey);
 const recallSourceDir = process.env.TRAINER_VISUAL_RECALL_SOURCE_DIR?.trim();
 const checkStreamRecovery = process.env.TRAINER_VISUAL_STREAM_RECOVERY === "1";
+const checkSourceLearning = process.env.TRAINER_VISUAL_SOURCE_LEARNING === "1";
 if (recallSourceDir && !usingRealProvider) {
   throw new Error("The scheduled-recall visual journey requires the real provider.");
 }
@@ -206,6 +213,7 @@ for (const dir of [
 ]) {
   fs.mkdirSync(dir, { recursive: true });
 }
+const sourceFixture = checkSourceLearning ? prepareSourceLearningFixture({ repoRoot, workspaceDir, root }) : undefined;
 
 fs.writeFileSync(
   path.join(userDataDir, "User", "settings.json"),
@@ -216,6 +224,7 @@ fs.writeFileSync(
       "update.mode": "none",
       "extensions.autoCheckUpdates": false,
       "extensions.autoUpdate": false,
+      ...(sourceFixture ? { "extensions.confirmedUriHandlerExtensionIds": [extensionId] } : {}),
       "workbench.startupEditor": "none",
       "workbench.colorTheme": "Default Dark Modern",
       "chat.disableAIFeatures": true,
@@ -324,6 +333,7 @@ function readMemento(value) {
 const fs = require("node:fs");
 const path = require("node:path");
 const vscode = require("vscode");
+const { spawnSync } = require("node:child_process");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function activate() {
@@ -381,6 +391,45 @@ async function activate() {
       answerMode: "coach-first",
     });
     report.steps.push({ step: "coach-settings", ok: Boolean(settings && settings.ok) });
+    if (process.env.FJ_VISUAL_SOURCE_FIXTURE) {
+      const fixture = JSON.parse(process.env.FJ_VISUAL_SOURCE_FIXTURE);
+      const state = target.exports.getDebugState();
+      const dataDir = state.bootstrap?.memory?.workspace?.resourceSandbox?.effectivePath;
+      const contextId = state.bootstrap?.memory?.workspace?.trainerWorkspace?.contextId;
+      if (!dataDir || !contextId) throw new Error("Source fixture cannot identify the adopted workspace.");
+      const database = path.join(dataDir, "trainer.sqlite3");
+      const seeded = spawnSync(fixture.python, [fixture.seedPath, database, contextId], {
+        cwd: fixture.serverDir, env: { ...process.env, PYTHONPATH: fixture.serverDir }, encoding: "utf8",
+      });
+      if (seeded.status !== 0) throw new Error("Could not seed the existing learning stage. " + seeded.stderr);
+      const restarted = await vscode.commands.executeCommand("trainer.sidecar.restart");
+      await waitForSidecar();
+      const live = target.exports.getDebugState();
+      if (!restarted?.ok || live.bootstrap.plan.id !== fixture.planId) {
+        throw new Error("The installed host did not restore the fixture learning plan.");
+      }
+      await vscode.commands.executeCommand("trainer.openWorkbench");
+      report.steps.push({
+        step: "source-learning-setup", ok: true, port: live.sidecar.port,
+        pid: live.sidecar.pid, workspaceId: contextId, database, sessionId: live.sessionId,
+      });
+      const control = setInterval(async () => {
+        if (!fs.existsSync(path.join(fixture.controlDir, "restart.request"))) return;
+        clearInterval(control);
+        let response;
+        try {
+          const result = await vscode.commands.executeCommand("trainer.sidecar.restart");
+          const state = target.exports.getDebugState();
+          response = { ok: result?.ok === true, lifecycle: state.sidecar.lifecycle, port: state.sidecar.port,
+            pid: state.sidecar.pid, workspaceId: state.bootstrap.memory.workspace.trainerWorkspace.contextId };
+        } catch (error) {
+          response = { ok: false, error: String(error) };
+        }
+        const resultPath = path.join(fixture.controlDir, "restart.json");
+        fs.writeFileSync(resultPath + ".tmp", JSON.stringify(response));
+        fs.renameSync(resultPath + ".tmp", resultPath);
+      }, 250);
+    }
     if (process.env.TRAINER_VISUAL_STREAM_RECOVERY === "1") {
       const state = target.exports.getDebugState();
       const dataDir = state.bootstrap?.memory?.workspace?.resourceSandbox?.effectivePath;
@@ -495,6 +544,7 @@ async function main() {
     FJ_VISUAL_IMPLEMENTATION: recallSource?.implementation ?? "",
     FJ_VISUAL_RECALL_REQUEST: recallRequestPath,
     FJ_VISUAL_RECALL_STATE: recallStatePath,
+    FJ_VISUAL_SOURCE_FIXTURE: sourceFixture ? JSON.stringify(sourceFixture) : "",
     // The provider config (with the key) travels only through the process
     // environment of the extension host — never into repo files, logs or
     // screenshots.
@@ -581,6 +631,24 @@ async function main() {
       throw new Error("Trainer webview frame not found");
     };
     const frame = await findFrame();
+    if (sourceFixture) {
+      try {
+        await runSourceLearningJourney({
+          fixture: sourceFixture, setup: driverReport.steps.find(step => step.step === "source-learning-setup"),
+          frame, page, root, installedRoot: path.join(extensionsDir, `${extensionId}-${packageJson.version}`),
+          openInCode: (args) => runCode(["--user-data-dir", userDataDir, "--extensions-dir", extensionsDir, ...args]),
+          record, screenshot,
+        });
+      } catch (error) {
+        record("source-learning-failed", {
+          ok: false, error: String(error), screenshot: await screenshot(page, "source-learning-failure"),
+        });
+        throw error;
+      }
+      fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify({ ok: true, vsixPath, results }, null, 2));
+      console.log(`SOURCE_LEARNING_NATIVE_OK ${outDir}`);
+      return true;
+    }
     if (recallSource) {
       const seeded = driverReport.steps.find((item) => item.step === "prepare-scheduled-recall");
       if (!seeded?.newSidecar) throw new Error("The installed sidecar did not restart before review.");

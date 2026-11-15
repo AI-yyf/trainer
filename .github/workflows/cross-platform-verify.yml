@@ -307,6 +307,17 @@ jobs:
           TRAINER_E2E_EXPORT_REPORT_PATH: output/maturity/ci-installed/host-report.json
         run: npm run test:vsix-e2e
 
+      - name: Verify installed browser-to-learning journey (macOS)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && runner.os == 'macOS' }}
+        env:
+          TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
+          TRAINER_VISUAL_SOURCE_LEARNING: "1"
+          JOURNEY_OUT_DIR: ${{ github.workspace }}/output/maturity/ci-installed/source-learning
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install chromium
+          node scripts/run-full-journey-visual.mjs
+
       - name: Archive native install and host acceptance evidence
         if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true }}
         uses: actions/upload-artifact@v4
