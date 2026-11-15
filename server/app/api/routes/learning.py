@@ -8,7 +8,9 @@ from fastapi import APIRouter, HTTPException
 
 from ...core.models import TeachingKnowledgeAsset
 from ...pedagogy.stage_material_state import stage_material_payload, stage_material_state
+from ...training.resource_practice import is_independent_resource_card
 from ...workspace.remote_identity import validate_remote_verification_artifact
+from ..project_test_attestation import attest_project_test_run
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -213,6 +215,13 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         project_path = provisioning.project_path if provisioning is not None else runtime.resolve_workspace_path(resolved_workspace_id) or ""
         workspace = runtime.memory_service.snapshot(resolved_workspace_id).workspace
         remote = project_path.startswith("vscode-remote://") or bool(workspace.get("remote_name"))
+        receipt_id = str(payload.get("project_test_receipt_id") or "").strip()
+        attest_card = runtime.memory_service.get_card(resolved_workspace_id, card_id)
+        if receipt_id or (not remote and is_independent_resource_card(attest_card)):
+            return attest_project_test_run(
+                runtime, resolved_workspace_id, session_id=str(payload.get("session_id") or ""),
+                card_id=card_id, receipt_id=receipt_id,
+            )
         if remote or verification_artifact is not None:
             try:
                 if provisioning is None:
@@ -226,7 +235,6 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         # otherwise an unrelated passing test could mark this practice verified.
         if verification_artifact is not None:
             artifact_path = str(verification_artifact.get("artifact_path") or verification_artifact.get("artifact_uri") or "")
-            attest_card = runtime.memory_service.get_card(resolved_workspace_id, card_id)
             card_targets = list(getattr(attest_card, "files_to_touch", []) or [])
             if artifact_path and card_targets:
                 from urllib.parse import unquote as _unquote

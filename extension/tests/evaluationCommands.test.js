@@ -2,6 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const { createHash } = require('node:crypto');
 const path = require('node:path');
 
 const { loadWithVscodeMock } = require('./helpers/loadWithVscodeMock');
@@ -184,6 +187,58 @@ function createContext(options = {}) {
     __outputLines: outputLines,
   };
 }
+
+test('source-linked verification hashes the saved file and submits the evaluator receipt through Host Attestation', async t => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-saved-file-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const filePath = path.join(root, 'solution.py');
+  const bytes = Buffer.from('saved contents\r\n');
+  fs.writeFileSync(filePath, bytes);
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  const document = {
+    uri: { fsPath: filePath, scheme: 'file' }, languageId: 'python', isDirty: false, version: 1,
+    getText() { throw new Error('An editor buffer cannot become saved-file evidence'); },
+  };
+  const { evaluateCurrentFileCommand } = loadWithVscodeMock(evaluationCommandsModulePath, {
+    window: { activeTextEditor: { document } },
+  });
+  const context = createContext();
+  const bootstrap = context.getHostState().bootstrap;
+  const cardId = 'card-from-source';
+  bootstrap.workspaceTrainingState = {
+    selectedCardId: cardId, selectedCardType: 'practice', selectedCardStatus: 'active',
+    trainingCardCandidates: [{
+      cardId, requiresSavedProjectVerification: true, resourceAnchor: { resourceId: 'source' },
+    }],
+  };
+  context.getHostState = () => ({ bootstrap, workspace: { workspaceFolder: root } });
+  context.sidecarClient.postJson = async (port, requestPath, body) => {
+    context.__posts.push({ port, requestPath, body });
+    return requestPath === '/evaluate/current-file' ? {
+      workspace_id: root, summary: 'Project tests passed.',
+      saved_file_verification: {
+        verdict: 'passed', sha256: digest, receipt_id: 'a'.repeat(32), card_id: cardId,
+      },
+    } : { ok: true };
+  };
+  const payload = { source: 'training', cardId, trainingPhase: 'verify' };
+  document.isDirty = true;
+  assert.equal((await evaluateCurrentFileCommand(context, payload)).ok, false);
+  assert.equal(context.__posts.length, 0);
+  document.isDirty = false;
+  assert.equal((await evaluateCurrentFileCommand(context, payload)).ok, true);
+  assert.deepEqual(context.__posts.map(post => post.requestPath), [
+    '/evaluate/current-file', '/training/verification/attest',
+  ]);
+  assert.equal(context.__posts[0].body.saved_file_sha256, digest);
+  assert.equal(context.__posts[0].body.content, '');
+  assert.equal(context.__posts[1].body.project_test_receipt_id, 'a'.repeat(32));
+  assert.equal(context.__posts[1].body.session_id, 'session-1');
+  assert.equal(context.__posts[1].body.workspace_id, root);
+  assert.equal(context.__posts[1].body.card_id, cardId);
+  assert.equal(context.__gets.length, 1);
+  assert.deepEqual(fs.readFileSync(filePath), bytes);
+});
 
 test('evaluateCurrentFileCommand reads IDE file content and diagnostics for training practice verification', async () => {
   const document = {

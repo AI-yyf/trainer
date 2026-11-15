@@ -28,6 +28,7 @@ from ..training.reliability import (
     record_dedupe_entry,
     recover_record,
     request_cancel,
+    same_identity,
     should_coalesce,
     should_replay,
     training_dedupe_key,
@@ -281,6 +282,7 @@ class TrainingReliabilityMixin:
                 if (
                     str(existing.get("command_id") or "") == command_id
                     and str(existing.get("card_id") or "") == card_id
+                    and (not idempotency_key.strip() or same_identity(existing, request_id, idempotency_key))
                 ):
                     record = recover_record(
                         existing,

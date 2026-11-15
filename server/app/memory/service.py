@@ -3902,19 +3902,19 @@ class MemoryService(
         return candidate
 
     def initialize_training_card_review(
-        self, workspace_id: str, *, training_card_id: str,
+        self, workspace_id: str, *, training_card_id: str, project_test_concept: str = "",
     ) -> None:
-        """Schedule first recall without recording a recall that did not occur."""
+        """Schedule first review without recording a recall that did not occur."""
         from ..training.fsrs_scheduler import card_state_to_payload, create_training_scheduler
 
         card = self.get_card(workspace_id, training_card_id)
         if card is None or self.live_selected_training_card_id(workspace_id) != training_card_id:
             return
-        if not card.question.strip() or not (
+        if not project_test_concept and (not card.question.strip() or not (
             card.expected_answer.strip() or card.correct_option_indices
             or card.correct_option_index is not None or card.fill_blank_answers
             or card.correct_sort_order
-        ):
+        )):
             return
         structured = self._structured_for(workspace_id)
         current = structured._workspace.get("latest_training_fsrs_states") or structured._workspace.get(
@@ -3924,8 +3924,8 @@ class MemoryService(
         if training_card_id in states:
             return
         state = create_training_scheduler().create_card(
-            training_card_id, card.target_skill or card.focus_area or card.title,
-            card_type=card.card_type, focus_area=card.focus_area,
+            training_card_id, project_test_concept or card.target_skill or card.focus_area or card.title,
+            card_type=card.card_type, focus_area=project_test_concept or card.focus_area,
         )
         state.first_learned_at = state.created_at
         state.due = state.next_due_at = state.created_at + timedelta(days=1)

@@ -11,6 +11,8 @@ import base64
 import hashlib
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -1119,10 +1121,12 @@ def test_selection_capture_keeps_its_excerpt_and_does_not_collide_with_other_int
 
 def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("app.evaluator.service.default_command_runner", SubprocessCommandRunner)
+    monkeypatch.setenv("TRAINER_SIDECAR_TOKEN", "test-trainer-host")
     root = tmp_path / "trainer"
     project = root / "learner"
     project.mkdir(parents=True)
     with build_client(tmp_path, enable_network_fetch=False) as client:
+        client.headers["x-trainer-token"] = "test-trainer-host"
         runtime = client.app.state.runtime
         workspace = runtime.provision_project_adoption(
             workspace_id="browser-learning", root_path=str(root),
@@ -1199,15 +1203,41 @@ def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_
             **verification, "saved_file_sha256": digest,
         })
         assert verified.status_code == 200, verified.text
-        assert verified.json()["saved_file_verification"] == {
+        proof = verified.json()["saved_file_verification"]
+        first_receipt = proof.pop("receipt_id")
+        assert first_receipt
+        assert proof == {
             "verdict": "passed", "card_id": card["card_id"],
             "file_path": str(learner_file.resolve()), "sha256": digest,
         }, verified.text
         assert verified.json()["verification_scope"] == "test_suite"
         assert learner_file.read_bytes() == original
+        attestation = {
+            "workspace_id": workspace, "card_id": card["card_id"],
+            "evidence_source": "test_runner", "passed": True,
+        }
+        attest_path = "/training/verification/attest"
+        assert client.post(attest_path, json=attestation).status_code == 422
+        unauthorized = TestClient(client.app)
+        assert unauthorized.post(attest_path, json={
+            **attestation, "project_test_receipt_id": first_receipt,
+        }).status_code == 401
+        wrong_session = client.post(attest_path, json={
+            **attestation, "project_test_receipt_id": first_receipt, "session_id": "different-session",
+        })
+        assert wrong_session.status_code == 409
+        wrong_workspace = client.post(attest_path, json={
+            **attestation, "project_test_receipt_id": first_receipt, "workspace_id": "other-workspace",
+        })
+        assert wrong_workspace.status_code == 409
+        assert runtime.attempt_store.list_attempts(workspace_id=workspace) == []
 
         changed = b"def complete(total):\n    return True\n"
         learner_file.write_bytes(changed)
+        changed_after = client.post(attest_path, json={
+            **attestation, "project_test_receipt_id": first_receipt,
+        })
+        assert changed_after.status_code == 409 and "changed after testing" in changed_after.text
         stale_file = client.post("/evaluate/current-file", json={
             **verification, "saved_file_sha256": digest,
         })
@@ -1218,7 +1248,18 @@ def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_
         assert failed.json()["saved_file_verification"]["verdict"] == "failed"
         assert failed.json()["verification_scope"] == "test_suite"
         assert learner_file.read_bytes() == changed
-        (project / "test_completion.py").write_text(
+        failed_receipt = failed.json()["saved_file_verification"]["receipt_id"]
+        failed_attested = client.post(attest_path, json={
+            **attestation, "project_test_receipt_id": failed_receipt,
+        })
+        assert failed_attested.status_code == 200, failed_attested.text
+        assert not failed_attested.json()["workspace"].get("latest_training_fsrs_states")
+        [failed_evidence] = runtime.attempt_store.list_workspace_evidence(workspace)
+        assert failed_evidence["result"] == "failed"
+        assert failed_evidence["trust_level"] == "controlled_check"
+        tests = project / "test_completion.py"
+        test_source = tests.read_text(encoding="utf-8")
+        tests.write_text(
             "import pytest\n\n@pytest.mark.skip\ndef test_no_verdict():\n    assert False\n",
             encoding="utf-8",
         )
@@ -1226,6 +1267,8 @@ def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_
             **verification, "saved_file_sha256": hashlib.sha256(changed).hexdigest(),
         })
         assert skipped.json()["saved_file_verification"]["verdict"] == "unknown"
+        assert skipped.json()["saved_file_verification"]["receipt_id"] == ""
+        tests.write_text(test_source, encoding="utf-8")
 
         real_run = SubprocessCommandRunner.run
 
@@ -1242,7 +1285,49 @@ def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_
         assert changed_during.json()["saved_file_verification"]["verdict"] == "unknown"
         assert "changed while" in changed_during.json()["summary"]
 
-        assert runtime.attempt_store.list_attempts(workspace_id=workspace) == []
+        older = client.post(attest_path, json={
+            **attestation, "project_test_receipt_id": first_receipt,
+        })
+        assert older.status_code == 409 and "newer project test" in older.text
+        passing = client.post("/evaluate/current-file", json={
+            **verification, "saved_file_sha256": digest,
+        })
+        passed_receipt = passing.json()["saved_file_verification"]["receipt_id"]
+        before_attestation = client.post("/evaluate/current-file", json={
+            **verification, "saved_file_sha256": digest,
+        })
+        stale_receipt = before_attestation.json()["saved_file_verification"]["receipt_id"]
+        attest_pass = {**attestation, "passed": False, "project_test_receipt_id": passed_receipt}
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            first = executor.submit(client.post, attest_path, json=attest_pass)
+            simultaneous = executor.submit(client.post, attest_path, json=attest_pass)
+            recorded, replay_while_running = first.result(), simultaneous.result()
+        assert recorded.status_code == 200, recorded.text
+        assert replay_while_running.status_code == 200, replay_while_running.text
+        workspace_state = recorded.json()["workspace"]
+        projection = workspace_state["training_skill_projection"]["dimensions"]["implementation"]
+        assert projection["verified_count"] == 0 and projection["evidence"][0]["result"] == "passed"
+        schedule = workspace_state["latest_training_fsrs_states"][card["card_id"]]
+        assert schedule["reps"] == 0 and schedule["next_due_at"]
+        assert schedule["concept_id"] == resource["name"]
+        evidence = runtime.attempt_store.list_workspace_evidence(workspace)
+        assert len(evidence) == 2
+        assert evidence[0]["result"] == "passed" and evidence[0]["artifact_hash"] == digest
+        assert evidence[0]["resource_version_id"] == anchor["version_id"]
+        assert evidence[0]["resource_content_hash"] == anchor["content_hash"]
+        assert evidence[0]["environment"]["scope"] == "test_suite"
+        duplicate = client.post(attest_path, json=attest_pass)
+        assert duplicate.status_code == 200, duplicate.text
+        assert duplicate.json()["workspace"]["latest_training_fsrs_states"][card["card_id"]] == schedule
+        assert len(runtime.attempt_store.list_workspace_evidence(workspace)) == 2
+        assert learner_file.read_bytes() == original
+        review_time = datetime.fromisoformat(schedule["next_due_at"]) + timedelta(minutes=1)
+        with monkeypatch.context() as clock:
+            clock.setattr("app.memory.review_scheduler.utc_now", lambda: review_time)
+            review = next(item for item in runtime.memory_service.snapshot(workspace).due_reviews
+                          if item.training_card_id == card["card_id"])
+        assert review.due_at == schedule["next_due_at"]
+        assert review.evidence_basis == "no_recall_evidence"
 
         runtime.resource_service.version_store.record_version(
             workspace_id=workspace, resource_id=resource["id"], content="A newer version.",
@@ -1254,7 +1339,18 @@ def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_
         })
         assert stale_verification.status_code == 409
         assert stale_verification.json()["detail"]["code"] == "stale_version"
+        stale_attest = client.post(attest_path, json={
+            **attestation, "project_test_receipt_id": stale_receipt,
+        })
+        assert stale_attest.status_code == 409 and stale_attest.json()["detail"]["code"] == "stale_version"
         assert len(runtime.memory_service.get_cards(workspace)) == 1
+
+    with build_client(tmp_path, enable_network_fetch=False) as restarted:
+        restarted.headers["x-trainer-token"] = "test-trainer-host"
+        replay = restarted.post(attest_path, json=attest_pass)
+        assert replay.status_code == 200, replay.text
+        assert replay.json()["workspace"]["latest_training_fsrs_states"][card["card_id"]] == schedule
+        assert len(restarted.app.state.runtime.attempt_store.list_workspace_evidence(workspace)) == 2
 
 
 def test_non_snapshot_capture_cannot_request_an_artifact_download(tmp_path) -> None:

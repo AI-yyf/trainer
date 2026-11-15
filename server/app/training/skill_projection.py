@@ -22,6 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 _DIMENSIONS = ("comprehension", "implementation", "debugging", "transfer", "delayed_recall")
+SAVED_PROJECT_TEST_EVIDENCE_KIND = "saved_project_tests"
 
 # P2 #21: the dimension vocabulary is subject-scoped. The projection ladder,
 # trust semantics and transfer rule stay globally uniform (P4); only the
@@ -343,7 +344,12 @@ def project_skills(
             result_str = "execution_error"
         if requires_recheck and result_str == "passed":
             result_str = "partial"
-        weight = _RESULT_WEIGHT.get(result_str, 0)
+        project_tests_passed = (
+            rec.get("evidence_kind") == SAVED_PROJECT_TEST_EVIDENCE_KIND and result_str == "passed"
+        )
+        # A suite can pass while omitting the exact behavior the card asks for.
+        # Retain the verdict in the drilldown and score it as a partial signal.
+        weight = _RESULT_WEIGHT.get("partial" if project_tests_passed else result_str, 0)
         # Trust bonus only amplifies positive results — a failed controlled
         # check should not score higher because the runner was trusted.
         trust = _TRUST_BONUS.get(trust_level, 0) if weight > 0 else 0
@@ -414,6 +420,7 @@ def project_skills(
                     result_str == "passed"
                     and trust_level == "controlled_check"
                     and recall_qualified
+                    and not project_tests_passed
                 ):
                     result[dim]["verified_count"] += 1
                     if assistance_level in _UNASSISTED_LEVELS:
@@ -432,7 +439,7 @@ def project_skills(
                 ):
                     failed_dimensions[dim] = True
                 elif (
-                    result_str == "partial" and recall_qualified
+                    (result_str == "partial" or project_tests_passed) and recall_qualified
                     and trust_level != "model_review" and not legacy_flashcard
                 ):
                     partial_dimensions[dim] = True

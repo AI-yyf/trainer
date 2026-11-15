@@ -1278,6 +1278,7 @@ class SavedFileVerification(BaseModel):
     card_id: str
     file_path: str = ""
     sha256: str = ""
+    receipt_id: str = ""
 
 
 class EvaluationReport(BaseModel):

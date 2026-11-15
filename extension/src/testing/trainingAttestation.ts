@@ -81,6 +81,7 @@ export interface TrainingVerificationAttestationBody {
    */
   idempotency_key?: string;
   verification_artifact?: RemoteVerificationArtifact;
+  project_test_receipt_id?: string;
 }
 
 /**
@@ -182,6 +183,7 @@ export function buildTestRunAttestationBody(input: {
   /** Stable per-run key for replay-safe delivery retries. */
   idempotencyKey?: string;
   verificationArtifact?: RemoteVerificationArtifact;
+  projectTestReceiptId?: string;
 }): TrainingVerificationAttestationBody {
   return {
     card_id: input.card.cardId,
@@ -195,6 +197,7 @@ export function buildTestRunAttestationBody(input: {
     ...(input.workspaceId ? { workspace_id: input.workspaceId } : {}),
     ...(input.idempotencyKey ? { idempotency_key: input.idempotencyKey } : {}),
     ...(input.verificationArtifact ? { verification_artifact: input.verificationArtifact } : {}),
+    ...(input.projectTestReceiptId ? { project_test_receipt_id: input.projectTestReceiptId } : {}),
   };
 }
 

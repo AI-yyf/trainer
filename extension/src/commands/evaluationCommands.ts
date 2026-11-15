@@ -7,12 +7,18 @@ import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import { mergeEvaluationResultSnapshot, mergeMemorySummarySnapshot } from '../core/workbenchData';
 import {
+  ATTESTATION_UNDELIVERED_MARKER,
+  buildTestRunAttestationBody,
+  dispatchTestRunAttestation,
+} from '../testing/trainingAttestation';
+import {
   captureRuntimeIdentity,
   getRuntimeWorkspaceContext,
   getRuntimeWorkspaceId,
   isRemoteWorkspaceSnapshot,
   runtimeIdentityChanged,
   withWorkspaceQuery,
+  type RuntimeIdentitySnapshot,
 } from './workspaceContext';
 import { describeProviderSendState } from '../../../shared/src/providerStatus';
 import {
@@ -146,7 +152,12 @@ async function verifySavedProjectFile(
   }
   const response = await context.sidecarClient.postJson<{
     summary: string;
-    saved_file_verification?: { verdict: 'passed' | 'failed' | 'unknown' };
+    saved_file_verification?: {
+      card_id: string;
+      verdict: 'passed' | 'failed' | 'unknown';
+      receipt_id?: string;
+      sha256?: string;
+    };
   }>(status.port, '/evaluate/current-file', {
     session_id: identity.sessionId,
     workspace_id: identity.workspaceId,
@@ -167,8 +178,30 @@ async function verifySavedProjectFile(
     context.getHostState().bootstrap, response, identity.workspaceId,
   ));
   context.tests.publishReport(response, document.uri);
+  const proof = response.saved_file_verification;
+  if (proof && proof.verdict !== 'unknown') {
+    if (!proof.receipt_id || proof.card_id !== cardId || proof.sha256 !== sha256 ||
+        scopeChanged() || document.isDirty || document.version !== documentVersion) {
+      return { ok: false, message: ATTESTATION_UNDELIVERED_MARKER };
+    }
+    const outcome = await dispatchTestRunAttestation(context, buildTestRunAttestationBody({
+      card: { cardId },
+      passed: proof.verdict === 'passed',
+      summary: response.summary,
+      testsOutput: '',
+      workspaceId: identity.workspaceId,
+      sessionId: identity.sessionId,
+      projectTestReceiptId: proof.receipt_id,
+    }));
+    if (outcome !== 'delivered') {
+      return { ok: false, message: ATTESTATION_UNDELIVERED_MARKER };
+    }
+    if (!scopeChanged()) {
+      await refreshMemorySummaryAfterEvaluation(context, status.port, identity);
+    }
+  }
   return {
-    ok: Boolean(response.saved_file_verification),
+    ok: Boolean(proof),
     message: response.summary,
     data: response,
   };
@@ -328,17 +361,19 @@ async function evaluateDocument(
 async function refreshMemorySummaryAfterEvaluation(
   context: CommandContext,
   port: number,
+  identity: RuntimeIdentitySnapshot = captureRuntimeIdentity(context),
 ): Promise<string | undefined> {
   try {
     const summary = await context.sidecarClient.getJson<unknown>(
       port,
-      withWorkspaceQuery('/memory/summary', context),
+      withWorkspaceQuery('/memory/summary', context, identity.workspaceId),
     );
+    if (runtimeIdentityChanged(context, identity)) return undefined;
     await context.patchWorkbenchData(
       mergeMemorySummarySnapshot(
         context.getHostState().bootstrap,
         summary,
-        getRuntimeWorkspaceId(context),
+        identity.workspaceId,
       ),
     );
     return undefined;

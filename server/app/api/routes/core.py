@@ -99,6 +99,7 @@ from .._singleflight import (
     publish_session_request_singleflight,
 )
 from ..coach_support import CoachTurnPayload
+from ..project_test_attestation import current_practice_source, issue_project_test_receipt
 from ..router_support import (
     _attach_requested_workspace_files,
     _normalize_resource_turn_request,
@@ -4145,37 +4146,37 @@ def build_core_router(
                 if authority and not authority.is_remote_workspace else None
             )
             anchor = card.resource_anchor
-
-            def source_is_current() -> bool:
-                resource = runtime.repository.get_resource(workspace_id, anchor.resource_id)
-                if resource is None or resource.content_hash != anchor.content_hash:
-                    return False
-                version = runtime.resource_service.version_store.current_version(
-                    workspace_id, anchor.resource_id,
-                )
-                return bool(
-                    version and version["version_id"] == anchor.version_id
-                    and version["content_hash"] == anchor.content_hash
-                )
-
-            if not source_is_current():
+            workspace = runtime.memory_service.snapshot(workspace_id).workspace
+            selection_at = str(workspace.get("selected_card_updated_at") or "")
+            if current_practice_source(runtime, workspace_id, anchor) is None:
                 raise HTTPException(status_code=409, detail={"code": "stale_version"})
             if request.training_phase != "verify":
                 raise HTTPException(status_code=422, detail="Use Verify current file for this practice.")
+            started_at = datetime.now(UTC).isoformat()
             report = runtime.evaluator_service.verify_saved_project_file(
                 request,
                 project_root=project_path,
                 response_language=core.workspace_response_language(workspace_id),
             )
+            current_card = runtime.memory_service.get_card(workspace_id, card_id)
             if (
-                runtime.memory_service.live_selected_training_card_id(workspace_id) != card_id
+                current_card is None
+                or current_card.updated_at != card.updated_at
+                or current_card.resource_anchor != anchor
+                or runtime.memory_service.live_selected_training_card_id(workspace_id) != card_id
                 or not training_card_is_live_for_verify(runtime, workspace_id, card_id)
+                or str(runtime.memory_service.snapshot(workspace_id).workspace.get("selected_card_updated_at") or "") != selection_at
             ):
                 raise HTTPException(status_code=409, detail="The source-linked practice changed during verification.")
-            if not source_is_current():
+            if current_practice_source(runtime, workspace_id, anchor) is None:
                 raise HTTPException(status_code=409, detail={"code": "stale_version"})
             # The project suite covers its own cases. Card state and growth are
             # changed by the host attestation, not by this report.
+            issue_project_test_receipt(
+                runtime, workspace_id, report, session_id=request.session_id or "",
+                started_at=started_at, selection_at=selection_at,
+                card_updated_at=card.updated_at, source=anchor,
+            )
             return stamp_produced_workspace_record(report, workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
         request = prepare_training_file_evaluation(runtime, workspace_id, request)
