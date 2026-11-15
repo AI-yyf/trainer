@@ -20,7 +20,7 @@ import { useTrainingWorkbenchViewState } from "./useTrainingWorkbenchViewState";
 import { MessageRichContent } from "../coach/MessageRichContent";
 import { ArrowRightIcon } from "../icons";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
-import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
+import type { ComposerLanguage, EvaluationReport, TrainingCardType } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import type { TrainingCardStatus } from "../../../../../shared/src/trainingCardRouting";
 import { groupReviewQueueByFocusArea } from "../../../../../shared/src/reviewQueueGovernance";
@@ -144,6 +144,8 @@ export interface TrainingHandoffFacts {
 
 export interface TrainingWorkbenchViewProps {
   sourceResource?: ReactNode;
+  requiresSavedProjectVerification?: boolean;
+  savedProjectReport?: EvaluationReport;
   /** Governed facts of the card on the card face (see `TrainingCardFacts`). */
   card: TrainingCardFacts;
   /** Live handoff / verification status of the active attempt (see `TrainingHandoffFacts`). */
@@ -630,6 +632,8 @@ function resolveVerificationReturnState(input: {
 
 export function TrainingWorkbenchView({
   sourceResource,
+  requiresSavedProjectVerification,
+  savedProjectReport,
   card,
   handoff,
   language,
@@ -815,7 +819,7 @@ export function TrainingWorkbenchView({
   const resolvedFilesToTouch = filesToTouch
     .map((file) => file.trim())
     .filter((file) => file.length > 0 && !/^<[^>]*>$/.test(file) && !file.includes("<current failing file>"));
-  const practiceVerificationMode = resolvePracticeVerificationMode({
+  const practiceVerificationMode = requiresSavedProjectVerification ? "file" : resolvePracticeVerificationMode({
     isFlashCard,
     learningSubtype,
     learningFamily,
@@ -1120,7 +1124,14 @@ export function TrainingWorkbenchView({
                     ) : null}
                   </section>
                 ) : null}
-                {verificationNotice ? <VerificationResult language={language} verdict="unknown" summary={verificationNotice} /> : null}
+                {verificationNotice ? <VerificationResult language={language} verdict="unknown" summary={verificationNotice} /> : (
+                  savedProjectReport?.savedFileVerification ? <VerificationResult
+                    language={language}
+                    verdict={savedProjectReport.savedFileVerification.verdict}
+                    summary={savedProjectReport.summary}
+                    checks={savedProjectReport.checks}
+                  /> : null
+                )}
                 {returnContinuedInChat ? (
                   <section
                     className={`training-verification-return ${trainingExecutionState.verified ? "is-verified" : "is-needs-review"}`}

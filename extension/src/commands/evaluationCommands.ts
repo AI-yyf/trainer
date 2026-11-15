@@ -1,11 +1,19 @@
 import * as vscode from 'vscode';
+import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import { mergeEvaluationResultSnapshot, mergeMemorySummarySnapshot } from '../core/workbenchData';
-import { getRuntimeWorkspaceContext, getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
+import {
+  captureRuntimeIdentity,
+  getRuntimeWorkspaceContext,
+  getRuntimeWorkspaceId,
+  isRemoteWorkspaceSnapshot,
+  runtimeIdentityChanged,
+  withWorkspaceQuery,
+} from './workspaceContext';
 import { describeProviderSendState } from '../../../shared/src/providerStatus';
 import {
   normalizeTrainingFilePath,
@@ -74,6 +82,19 @@ export async function evaluateCurrentFileCommand(
     return { ok: false, message };
   }
 
+  const training = context.getHostState().bootstrap.workspaceTrainingState;
+  const routed = training?.activeTrainingCardRouting?.selectedCard;
+  const card = routed?.cardId === evaluationPayload.cardId && routed?.requiresSavedProjectVerification
+    ? routed
+    : training?.trainingCardCandidates?.find(candidate => candidate.cardId === evaluationPayload.cardId);
+  if (evaluationPayload.source === 'training' && card?.resourceAnchor &&
+      card.requiresSavedProjectVerification) {
+    if (!card.cardId || card.cardId !== training?.selectedCardId) {
+      return { ok: false, message: 'The source-linked practice is no longer active.' };
+    }
+    return verifySavedProjectFile(context, targetDocument, card.cardId);
+  }
+
   return evaluateDocument(
     context,
     targetDocument,
@@ -81,6 +102,76 @@ export async function evaluateCurrentFileCommand(
     '/evaluate/current-file',
     payload,
   );
+}
+
+async function verifySavedProjectFile(
+  context: CommandContext,
+  document: vscode.TextDocument,
+  cardId: string,
+): Promise<CommandExecutionResult> {
+  const identity = captureRuntimeIdentity(context);
+  const scopeChanged = () => runtimeIdentityChanged(context, identity)
+    || context.getHostState().bootstrap.workspaceTrainingState?.selectedCardId !== cardId;
+  const { canonicalProjectPath: projectPath } = getRuntimeWorkspaceContext(context);
+  if (!projectPath || isRemoteWorkspaceSnapshot(context.getHostState().workspace) ||
+      document.uri.scheme !== 'file' || document.isDirty) {
+    return { ok: false, message: 'Save a file in the active local project before verifying.' };
+  }
+
+  const documentVersion = document.version;
+  let sha256: string;
+  try {
+    const [target, root] = await Promise.all([
+      fs.promises.realpath(document.uri.fsPath),
+      fs.promises.realpath(projectPath),
+    ]);
+    const relative = path.relative(root, target);
+    if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relative) || !(await fs.promises.stat(target)).isFile()) {
+      return { ok: false, message: 'Open a file in the active project before verifying.' };
+    }
+    const hash = createHash('sha256');
+    for await (const chunk of fs.createReadStream(target)) hash.update(chunk);
+    sha256 = hash.digest('hex');
+  } catch (error) {
+    return { ok: false, message: `Could not read the saved project file: ${formatErrorMessage(error)}` };
+  }
+  const python = await resolveVerificationPython(context, document.uri);
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+  }
+  if (scopeChanged() || document.isDirty || document.version !== documentVersion) {
+    return { ok: false, message: 'The file or practice changed before verification.' };
+  }
+  const response = await context.sidecarClient.postJson<{
+    summary: string;
+    saved_file_verification?: { verdict: 'passed' | 'failed' | 'unknown' };
+  }>(status.port, '/evaluate/current-file', {
+    session_id: identity.sessionId,
+    workspace_id: identity.workspaceId,
+    file_path: document.uri.fsPath,
+    language_id: document.languageId,
+    content: '',
+    evaluation_source: 'training',
+    training_phase: 'verify',
+    training_card_id: cardId,
+    saved_file_sha256: sha256,
+    ...(python ? { verification_python: python } : {}),
+  }, { timeoutMs: 75_000 });
+
+  if (scopeChanged() || document.isDirty || document.version !== documentVersion) {
+    return { ok: false, message: 'The file or practice changed while verification was running.' };
+  }
+  await context.patchWorkbenchData(mergeEvaluationResultSnapshot(
+    context.getHostState().bootstrap, response, identity.workspaceId,
+  ));
+  context.tests.publishReport(response, document.uri);
+  return {
+    ok: Boolean(response.saved_file_verification),
+    message: response.summary,
+    data: response,
+  };
 }
 
 /** Native Testing API reruns read the document again; cached display rows are not proof. */

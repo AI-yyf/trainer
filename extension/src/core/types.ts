@@ -665,6 +665,10 @@ export interface EvaluationReportView {
   updatedAt: string;
   checks: EvaluationCheckView[];
   nextStep: string;
+  savedFileVerification?: {
+    cardId: string;
+    verdict: 'passed' | 'failed' | 'unknown';
+  };
 }
 
 export interface ReviewQueueItemView {
@@ -1253,6 +1257,7 @@ export interface TrainingCardCandidateView {
   type: TrainingCardTypeView;
   title: string;
   resourceAnchor?: ResourceVersionAnchor;
+  requiresSavedProjectVerification?: boolean;
   whyNow?: string;
   status?: string;
   learningPhase?: 'learn' | 'try' | 'verify' | 'reflect' | 'return';
@@ -1298,6 +1303,7 @@ export interface ActiveTrainingCardRoutingView {
     cardId?: string;
     title?: string;
     resourceAnchor?: ResourceVersionAnchor;
+    requiresSavedProjectVerification?: boolean;
     type?: TrainingCardTypeView;
     learningPhase?: 'learn' | 'try' | 'verify' | 'reflect' | 'return';
     question?: string;

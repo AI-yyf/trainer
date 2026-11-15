@@ -8,13 +8,16 @@ search/library registration.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
+import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.core.models import LearningPlan, PlanStage
 from app.core.settings import AppSettings
+from app.evaluator.service import SubprocessCommandRunner
 from app.main import create_app
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse
 from app.resources.capture import PDF_FETCH_TIMEOUT_SECONDS, PDF_MAX_RESPONSE_BYTES
@@ -1114,7 +1117,8 @@ def test_selection_capture_keeps_its_excerpt_and_does_not_collide_with_other_int
         assert "Selection capture requires a non-empty excerpt" in missing.text
 
 
-def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_path) -> None:
+def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("app.evaluator.service.default_command_runner", SubprocessCommandRunner)
     root = tmp_path / "trainer"
     project = root / "learner"
     project.mkdir(parents=True)
@@ -1171,11 +1175,85 @@ def test_saved_browser_selection_becomes_one_versioned_independent_practice(tmp_
         assert not card["expected_answer"] and not card["api_hints"] and not card["hint_ladder"]
         assert "DO_NOT_COPY_THIS_ANSWER" not in direct.text
 
+        learner_file = project / "completion.py"
+        original = b"def complete(total):\r\n    return total == 0\r\n"
+        learner_file.write_bytes(original)
+        (project / "test_completion.py").write_text(
+            "from completion import complete\n\n"
+            "def test_completion():\n"
+            "    assert complete(0)\n"
+            "    assert not complete(1)\n",
+            encoding="utf-8",
+        )
+        verification = {
+            "workspace_id": workspace, "training_card_id": card["card_id"],
+            "training_phase": "verify", "evaluation_source": "training", "language_id": "python",
+            "file_path": str(learner_file), "content": "INVALID BUFFER MUST NOT BE EXECUTED",
+            "verification_python": sys.executable,
+        }
+        digest = hashlib.sha256(original).hexdigest()
+        unbound = client.post("/evaluate/current-file", json=verification)
+        assert unbound.status_code == 200, unbound.text
+        assert unbound.json()["saved_file_verification"]["verdict"] == "unknown"
+        verified = client.post("/evaluate/current-file", json={
+            **verification, "saved_file_sha256": digest,
+        })
+        assert verified.status_code == 200, verified.text
+        assert verified.json()["saved_file_verification"] == {
+            "verdict": "passed", "card_id": card["card_id"],
+            "file_path": str(learner_file.resolve()), "sha256": digest,
+        }, verified.text
+        assert verified.json()["verification_scope"] == "test_suite"
+        assert learner_file.read_bytes() == original
+
+        changed = b"def complete(total):\n    return True\n"
+        learner_file.write_bytes(changed)
+        stale_file = client.post("/evaluate/current-file", json={
+            **verification, "saved_file_sha256": digest,
+        })
+        assert stale_file.json()["saved_file_verification"]["verdict"] == "unknown"
+        failed = client.post("/evaluate/current-file", json={
+            **verification, "saved_file_sha256": hashlib.sha256(changed).hexdigest(),
+        })
+        assert failed.json()["saved_file_verification"]["verdict"] == "failed"
+        assert failed.json()["verification_scope"] == "test_suite"
+        assert learner_file.read_bytes() == changed
+        (project / "test_completion.py").write_text(
+            "import pytest\n\n@pytest.mark.skip\ndef test_no_verdict():\n    assert False\n",
+            encoding="utf-8",
+        )
+        skipped = client.post("/evaluate/current-file", json={
+            **verification, "saved_file_sha256": hashlib.sha256(changed).hexdigest(),
+        })
+        assert skipped.json()["saved_file_verification"]["verdict"] == "unknown"
+
+        real_run = SubprocessCommandRunner.run
+
+        def edit_after_tests(runner, command):
+            result = real_run(runner, command)
+            learner_file.write_bytes(original)
+            return result
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(SubprocessCommandRunner, "run", edit_after_tests)
+            changed_during = client.post("/evaluate/current-file", json={
+                **verification, "saved_file_sha256": hashlib.sha256(changed).hexdigest(),
+            })
+        assert changed_during.json()["saved_file_verification"]["verdict"] == "unknown"
+        assert "changed while" in changed_during.json()["summary"]
+
+        assert runtime.attempt_store.list_attempts(workspace_id=workspace) == []
+
         runtime.resource_service.version_store.record_version(
             workspace_id=workspace, resource_id=resource["id"], content="A newer version.",
         )
         stale = client.post("/training/generate-card", json=request)
         assert stale.status_code == 409 and stale.json()["detail"]["code"] == "stale_version"
+        stale_verification = client.post("/evaluate/current-file", json={
+            **verification, "saved_file_sha256": digest,
+        })
+        assert stale_verification.status_code == 409
+        assert stale_verification.json()["detail"]["code"] == "stale_version"
         assert len(runtime.memory_service.get_cards(workspace)) == 1
 
 

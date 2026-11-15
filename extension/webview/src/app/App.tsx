@@ -9731,6 +9731,7 @@ export function App() {
   // eight-language surface labels; the card reports status transitions and
   // verification requests through the handler below.
   const handleVerifyCurrentFileFromCard = () => {
+    setTrainingVerifyNotice(undefined);
     if (data.workspace?.isRemoteWorkspace && !isBrowserPreview) {
       // The controller owns the running guard, panel state and request identity.
       beginRemoteVerification(activeTrainingCardId ?? "");
@@ -10034,6 +10035,12 @@ export function App() {
   const renderTrainingView = () => {
     const anchor = (selectedTrainingCardCandidate?.cardId === activeTrainingCardId ? selectedTrainingCardCandidate?.resourceAnchor : undefined) ??
       (selectedTrainingRouteCard?.cardId === activeTrainingCardId ? selectedTrainingRouteCard?.resourceAnchor : undefined);
+    const requiresSavedProjectVerification = Boolean(anchor && activeTrainingCardId && (
+      (selectedTrainingCardCandidate?.cardId === activeTrainingCardId &&
+        selectedTrainingCardCandidate.requiresSavedProjectVerification) ||
+      (selectedTrainingRouteCard?.cardId === activeTrainingCardId &&
+        selectedTrainingRouteCard.requiresSavedProjectVerification)
+    ));
     const title = hasRenderableTrainingCard
       ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickFirstText(
           visibleTrainingCardTitle,
@@ -10126,6 +10133,9 @@ export function App() {
       <section className="training-view">
         <Suspense fallback={<ViewFallback label={t.training} language={layout.composerLanguage} />}>
           <TrainingWorkbenchView
+          requiresSavedProjectVerification={requiresSavedProjectVerification}
+          savedProjectReport={requiresSavedProjectVerification &&
+            data.evaluation.savedFileVerification?.cardId === activeTrainingCardId ? data.evaluation : undefined}
           language={layout.composerLanguage}
           cardType={trainingCardType}
           trainingSubmode={effectiveTrainingSubmode}

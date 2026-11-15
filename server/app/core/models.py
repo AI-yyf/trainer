@@ -1273,6 +1273,13 @@ class EvaluationCheck(BaseModel):
     detail: str
 
 
+class SavedFileVerification(BaseModel):
+    verdict: Literal["passed", "failed", "unknown"]
+    card_id: str
+    file_path: str = ""
+    sha256: str = ""
+
+
 class EvaluationReport(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -1287,6 +1294,7 @@ class EvaluationReport(BaseModel):
     verification_scope: Literal["unverified", "execution", "test_suite", "behavior"] = "unverified"
     behavior_reference_id: str = ""
     behavior_reference_pending: bool = False
+    saved_file_verification: SavedFileVerification | None = None
     workspace_id: str = Field(default="", alias="workspaceId")
 
 
@@ -3471,6 +3479,7 @@ class EvaluateCurrentFileRequest(BaseModel):
     workspace_id: str | None = None
     task_spec_id: str | None = None
     file_path: str
+    saved_file_sha256: str | None = None
     language_id: str
     content: str
     diagnostics: list[str] = Field(default_factory=list)

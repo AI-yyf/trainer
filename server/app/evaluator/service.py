@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import math
 import os
@@ -13,6 +14,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Literal, Protocol
+from xml.etree import ElementTree
 
 from ..core.models import (
     EvaluateCurrentFileRequest,
@@ -20,6 +22,7 @@ from ..core.models import (
     EvaluationCheck,
     EvaluationReport,
     PythonBehaviorContract,
+    SavedFileVerification,
 )
 from ..core.models import TaskSpec as ApiTaskSpec
 from ..memory.workspace_recovery import live_training_card_title
@@ -394,6 +397,58 @@ class EvaluationPipeline:
         # the planner and propagates.
         return list(self._verifier_pack.command_planner.plan(request))
 
+    def run_saved_project_tests(
+        self, project: Path, relative_file: Path, content: bytes, python: str | None,
+    ) -> CheckResult:
+        # A scoped verification never substitutes an isolated script or a cached
+        # result when the project's existing test suite cannot run.
+        with tempfile.TemporaryDirectory(prefix="trainer-project-check-") as temporary:
+            sandbox = Path(temporary) / "project"
+            results = Path(temporary) / "results.xml"
+            sandbox.mkdir()
+            if not _copy_project_to_sandbox(project, sandbox):
+                return CheckResult("pytest", CheckStatus.SKIPPED, summary="Project copy unavailable.")
+            target = sandbox / relative_file
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+            request = EvaluationRequest(
+                spec=_convert_spec(None, None),
+                target_path=str(target),
+                workspace=str(sandbox),
+                pytest_args=[".", f"--junitxml={results}"],
+                verification_python=python,
+            )
+            command = next(
+                (item for item in self.plan_commands(request) if item.name == "pytest"), None,
+            )
+            if command is None:
+                return CheckResult(
+                    "pytest", CheckStatus.SKIPPED, summary="Project test runner unavailable.",
+                )
+            check = self._runner.run(command)
+            try:
+                with target.open("rb") as checked:
+                    unchanged = checked.read(len(content) + 1) == content
+            except OSError:
+                unchanged = False
+            if not unchanged:
+                return CheckResult(
+                    "pytest", CheckStatus.ERROR, summary="The test copy changed during testing.",
+                )
+            if check.exit_code not in (0, 1):
+                return check
+            try:
+                cases = ElementTree.parse(results).iter("testcase")
+                executed = [case for case in cases if case.find("skipped") is None]
+            except (OSError, ElementTree.ParseError):
+                executed = []
+            if not executed or (
+                check.exit_code == 1 and not any(case.find("failure") is not None for case in executed)
+            ):
+                check.status = CheckStatus.ERROR
+                check.summary = "No completed test verdict was recorded by pytest."
+            return check
+
     def _check_python_behavior(
         self, contract: PythonBehaviorContract, request: EvaluationRequest, target: str,
     ) -> CheckResult:
@@ -616,6 +671,111 @@ class EvaluationPipeline:
 class EvaluatorService:
     def __init__(self, pipeline: EvaluationPipeline | None = None) -> None:
         self.pipeline = pipeline or EvaluationPipeline()
+
+    def verify_saved_project_file(
+        self,
+        request: EvaluateCurrentFileRequest,
+        *,
+        project_root: str | None,
+        response_language: str | None,
+    ) -> EvaluationReport:
+        def message(english: str, chinese: str) -> str:
+            return _localized_text(english, chinese, response_language)
+
+        def unknown(english: str, chinese: str) -> EvaluationReport:
+            return EvaluationReport(
+                passed=False,
+                summary=message(english, chinese),
+                next_step=message("Save the project file and verify again.", "保存工作区文件后重新验证。"),
+                saved_file_verification=SavedFileVerification(
+                    verdict="unknown", card_id=request.training_card_id or "",
+                ),
+            )
+
+        expected = request.saved_file_sha256 or ""
+        if not re.fullmatch(r"[0-9a-f]{64}", expected) or not project_root:
+            return unknown(
+                "Select and save a project file before running its existing tests.",
+                "请先打开并保存工作区文件，再运行项目现有测试。",
+            )
+        try:
+            project = Path(project_root).resolve(strict=True)
+            requested_path = Path(request.file_path)
+            if not requested_path.is_absolute():
+                raise ValueError("Expected an absolute file path.")
+            target = requested_path.resolve(strict=True)
+            relative_file = target.relative_to(project)
+            if target.suffix.lower() != ".py" or not target.is_file():
+                raise ValueError("Expected a Python source file.")
+            with target.open("rb") as saved:
+                content = saved.read(_PROJECT_COPY_MAX_BYTES + 1)
+            if len(content) > _PROJECT_COPY_MAX_BYTES or hashlib.sha256(content).hexdigest() != expected:
+                return unknown(
+                    "The saved file changed before testing or exceeds the project copy limit.",
+                    "测试前文件已变化或超出项目副本大小上限。",
+                )
+        except (OSError, RuntimeError, ValueError):
+            return unknown(
+                "Open a saved Python file inside the active local project.",
+                "请在当前本地工程内打开一个已保存的 Python 文件。",
+            )
+
+        try:
+            check = self.pipeline.run_saved_project_tests(
+                project, relative_file, content, request.verification_python,
+            )
+            if requested_path.resolve(strict=True) != target:
+                raise ValueError("Saved path changed.")
+            with target.open("rb") as saved:
+                actual = hashlib.sha256(saved.read(_PROJECT_COPY_MAX_BYTES + 1)).hexdigest()
+        except (OSError, RuntimeError, ValueError):
+            return unknown(
+                "The saved file or the project test copy could not be read.",
+                "无法读取已保存的文件或项目测试副本。",
+            )
+        if actual != expected:
+            return unknown(
+                "The file changed while the project tests were running.",
+                "项目测试运行期间文件发生了变化。",
+            )
+
+        # Pytest exit 1 is a test failure. Interruptions, invalid invocations,
+        # missing modules, empty collections and all-skipped suites stay unknown.
+        if check.status == CheckStatus.PASSED and check.exit_code == 0:
+            verdict = "passed"
+            summary = message(
+                "Existing project tests passed with this saved revision included.",
+                "包含该保存版本的项目副本通过了现有测试。",
+            )
+        elif check.status == CheckStatus.FAILED and check.exit_code == 1:
+            verdict = "failed"
+            summary = message(
+                "Existing project tests failed with this saved revision included.",
+                "包含该保存版本的项目副本未通过现有测试。",
+            )
+        else:
+            report = unknown(
+                "The existing project tests did not produce a pass or fail result.",
+                "项目现有测试没有给出通过或失败的结论。",
+            )
+            report.dynamic_checks = [
+                self._to_api_check(check).model_copy(update={"status": "warning"}),
+            ]
+            return report
+        return EvaluationReport(
+            passed=verdict == "passed",
+            summary=summary,
+            next_step=message(
+                "Compare the test output with the practice requirements.",
+                "对照测试输出和练习要求检查覆盖范围。",
+            ),
+            dynamic_checks=[self._to_api_check(check)],
+            verification_scope="test_suite",
+            saved_file_verification=SavedFileVerification(
+                verdict=verdict, card_id=request.training_card_id or "",
+                file_path=str(target), sha256=expected,
+            ),
+        )
 
     def evaluate_current_file(
         self,

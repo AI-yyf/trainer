@@ -88,7 +88,7 @@ from ...training.flashcard_grading import (
 )
 from ...training.recall_evidence import record_recall_evidence
 from ...training.reliability import should_replay
-from ...training.resource_practice import is_independent_resource_practice
+from ...training.resource_practice import is_independent_resource_card, is_independent_resource_practice
 from .. import coach_support
 from .._helpers import (
     localized_text,
@@ -114,7 +114,7 @@ from ..router_support import (
     reset_provider_scheme_cache as reset_provider_scheme_cache,
 )
 from ..routes._deps import RouterDeps
-from ..runtime import SessionState, TrainerRuntime
+from ..runtime import SessionState, TrainerRuntime, WorkspaceBindingError
 from ..training_card_identity import (
     prepare_training_file_evaluation,
     training_card_is_live_for_verify,
@@ -1751,7 +1751,7 @@ def build_core_router(
                 session_workspace_id=workspace_id,
             )
         response_data = core.json_object_payload(response)
-        response_data["artifacts"] = teaching_metadata(artifacts)
+        response_data["artifacts"] = teaching_metadata(artifacts) if isinstance(artifacts, dict) else {}
         response_data["intent"] = original_intent
         return _finish_turn_response(
             core.attach_operation_reliability(
@@ -4118,9 +4118,67 @@ def build_core_router(
     @router.post("/evaluate/current-file")
     def evaluate_current_file(request: EvaluateCurrentFileRequest):
         workspace_id = core.current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        is_training = str(request.evaluation_source or "").strip().lower() == "training"
+        card_id = str(request.training_card_id or "")
+        card = runtime.memory_service.get_card(workspace_id, card_id) if is_training else None
+        independent_card = is_independent_resource_card(card)
+        if request.saved_file_sha256 is not None or independent_card:
+            if (
+                not independent_card
+                or card is None
+                or card.resource_anchor is None
+                or runtime.memory_service.live_selected_training_card_id(workspace_id) != card_id
+                or not training_card_is_live_for_verify(runtime, workspace_id, card_id)
+            ):
+                raise HTTPException(status_code=409, detail="The source-linked practice is no longer active.")
+            try:
+                bound = runtime.resolve_workspace_id_for_write(
+                    session_id=request.session_id, workspace_id=request.workspace_id,
+                )
+            except WorkspaceBindingError as exc:
+                raise HTTPException(status_code=409, detail=exc.detail) from exc
+            if bound != workspace_id:
+                raise HTTPException(status_code=409, detail="The verification workspace changed.")
+            authority = runtime.workspace_authority(workspace_id)
+            project_path = (
+                authority.active_workspace_root
+                if authority and not authority.is_remote_workspace else None
+            )
+            anchor = card.resource_anchor
+
+            def source_is_current() -> bool:
+                resource = runtime.repository.get_resource(workspace_id, anchor.resource_id)
+                if resource is None or resource.content_hash != anchor.content_hash:
+                    return False
+                version = runtime.resource_service.version_store.current_version(
+                    workspace_id, anchor.resource_id,
+                )
+                return bool(
+                    version and version["version_id"] == anchor.version_id
+                    and version["content_hash"] == anchor.content_hash
+                )
+
+            if not source_is_current():
+                raise HTTPException(status_code=409, detail={"code": "stale_version"})
+            if request.training_phase != "verify":
+                raise HTTPException(status_code=422, detail="Use Verify current file for this practice.")
+            report = runtime.evaluator_service.verify_saved_project_file(
+                request,
+                project_root=project_path,
+                response_language=core.workspace_response_language(workspace_id),
+            )
+            if (
+                runtime.memory_service.live_selected_training_card_id(workspace_id) != card_id
+                or not training_card_is_live_for_verify(runtime, workspace_id, card_id)
+            ):
+                raise HTTPException(status_code=409, detail="The source-linked practice changed during verification.")
+            if not source_is_current():
+                raise HTTPException(status_code=409, detail={"code": "stale_version"})
+            # The project suite covers its own cases. Card state and growth are
+            # changed by the host attestation, not by this report.
+            return stamp_produced_workspace_record(report, workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
         request = prepare_training_file_evaluation(runtime, workspace_id, request)
-        is_training = str(request.evaluation_source or "").strip().lower() == "training"
         training_verification_live = True
         if is_training:
             training_verification_live = training_card_is_live_for_verify(

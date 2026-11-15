@@ -385,6 +385,10 @@ export interface EvaluationReport {
   updatedAt: string;
   checks: EvaluationCheck[];
   nextStep: string;
+  savedFileVerification?: {
+    cardId: string;
+    verdict: "passed" | "failed" | "unknown";
+  };
 }
 
 export interface ReviewQueueItem {
@@ -1211,6 +1215,7 @@ export interface TrainingCardCandidate {
   type: TrainingCardType;
   title: string;
   resourceAnchor?: ResourceVersionAnchor;
+  requiresSavedProjectVerification?: boolean;
   whyNow?: string;
   status?: string;
   learningPhase?: "learn" | "try" | "verify" | "reflect" | "return";
@@ -1256,6 +1261,7 @@ export interface ActiveTrainingCardRouting {
     cardId?: string;
     title?: string;
     resourceAnchor?: ResourceVersionAnchor;
+    requiresSavedProjectVerification?: boolean;
     type?: TrainingCardType;
     learningPhase?: "learn" | "try" | "verify" | "reflect" | "return";
     learningFamily?: TrainingLearningFamily;

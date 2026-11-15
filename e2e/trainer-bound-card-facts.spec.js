@@ -51,6 +51,45 @@ async function seed(page, language, recovered, mode = 'matching') {
   }, { author, recovered, mode });
 }
 
+test('source-linked implementation verifies the open file and scopes its test verdict to the active card', async ({ page }) => {
+  await page.goto('/vscode-preview.html?view=training&lang=en-US&connection=connected&scenario=training-debug');
+  await expect(page.locator('#root[data-trainer-app-ready=true]')).toBeVisible();
+  const cardId = 'source-practice';
+  const applyResult = activeResult => page.evaluate(({ author, cardId, activeResult }) => {
+    const current = window.__TRAINER_BOOTSTRAP__;
+    const workspaceId = current.memory.workspace.workspaceId;
+    const card = {
+      ...author, cardId, type: 'practice', status: 'active', learningPhase: 'try',
+      learningFamily: 'code', learningSubtype: 'implementation',
+      resourceAnchor: { resourceId: 'source', versionId: 'v1', contentHash: 'source-digest' },
+      requiresSavedProjectVerification: true, filesToTouch: [],
+    };
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: {
+      ...current, plan: null, sessionHistoryRestored: true,
+      planRuntimeStatus: { recovered: false },
+      memory: { ...current.memory, workspace: { ...current.memory.workspace,
+        liveTrainingSelection: { workspaceId, cardId }, latestPlanRuntime: undefined,
+        latestTrainingHandoff: undefined, latestTrainingNextHop: undefined,
+      } },
+      workspaceTrainingState: {
+        workspaceId, selectedCardId: cardId, selectedCardType: 'practice',
+        selectedCardStatus: 'active', trainingCardCandidates: [card],
+        activeTrainingCardRouting: { selectedCardId: cardId, selectedCard: card },
+      },
+      evaluation: { ...current.evaluation, summary: 'Existing project tests failed.',
+        savedFileVerification: { cardId: activeResult ? cardId : 'other-card', verdict: 'failed' },
+      },
+    } });
+  }, { author, cardId, activeResult });
+  await applyResult(false);
+  const active = page.locator(`[data-training-card-id="${cardId}"]`);
+  await expect(active.getByRole('button', { name: 'Verify current file', exact: true })).toBeVisible();
+  await expect(active.locator('[data-template=VerificationResult]')).toHaveCount(0);
+  await applyResult(true);
+  await expect(active.locator('[data-template=VerificationResult]')).toHaveAttribute('data-verdict', 'failed');
+  await expect(active.locator('[data-template=VerificationResult]')).toContainText('Existing project tests failed.');
+});
+
 for (const language of ['zh-CN', 'en-US']) {
   for (const recovered of [true, false]) {
     test(`bound authored practice facts survive UI locale ${language}, recovered=${recovered}`, async ({ page }) => {

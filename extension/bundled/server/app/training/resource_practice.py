@@ -11,6 +11,13 @@ def is_independent_resource_practice(request: CardGenerationRequest) -> bool:
     )
 
 
+def is_independent_resource_card(card: TrainingCardCandidateSnapshot | None) -> bool:
+    return bool(
+        card and card.resource_anchor and card.card_type == "practice"
+        and card.source_chain[:2] == ["card_generation_router", "resource_knowledge"]
+    )
+
+
 def build_independent_resource_practice(request: CardGenerationRequest) -> TrainingCardCandidateSnapshot:
     if request.resource_anchor is None:
         raise ValueError("Resource practice requires a verified source version.")

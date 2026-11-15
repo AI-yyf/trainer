@@ -3280,6 +3280,9 @@ function mapEvaluation(
   ];
   const passCount = checks.filter((check) => check.status === 'pass').length;
   const passRate = checks.length === 0 ? 0 : passCount / checks.length;
+  const savedFile = asRecord(record.saved_file_verification);
+  const verdict = savedFile?.verdict;
+  const cardId = asString(savedFile?.card_id);
 
   return {
     headline: checks.length
@@ -3290,6 +3293,8 @@ function mapEvaluation(
     updatedAt: formatTimestamp(new Date().toISOString()),
     checks,
     nextStep: asString(record.next_step) ?? (useFallback ? fallback.nextStep : ''),
+    ...(cardId && (verdict === 'passed' || verdict === 'failed' || verdict === 'unknown')
+      ? { savedFileVerification: { cardId, verdict } } : {}),
   };
 }
 
@@ -5279,6 +5284,7 @@ type TrainingCardVerificationFields = Pick<
   TrainingCardCandidateStateView,
   | 'learningPhase'
   | 'resourceAnchor'
+  | 'requiresSavedProjectVerification'
   | 'question'
   | 'choices'
   | 'answerMode'
@@ -5322,7 +5328,12 @@ function mapTrainingCardVerificationFields(
   if (!record) {
     return fallback ?? {};
   }
+  const sourceChain = asStringArray(record.source_chain ?? record.sourceChain);
+  const requiresSavedProjectVerification = sourceChain
+    ? sourceChain[0] === 'card_generation_router' && sourceChain[1] === 'resource_knowledge'
+    : fallback?.requiresSavedProjectVerification;
   return {
+    ...(requiresSavedProjectVerification ? { requiresSavedProjectVerification: true } : {}),
     resourceAnchor: record.resource_anchor === null ? undefined :
       mapResourceVersionAnchor(record.resource_anchor ?? record.resourceAnchor) ?? fallback?.resourceAnchor,
     learningPhase:
