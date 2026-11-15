@@ -636,14 +636,14 @@ test('copyFor returns the selected language and falls back to English per key', 
   assert.equal(TrainerCapture.copyFor('sv-SE').pairAction, 'Pair');
   // A few marker keys per language, to catch copy blocks pasted from English.
   const markers = {
-    zh: { pdfButton: '加入 Trainer', menuLink: '加入资料库（链接）', statusOk: '成功' },
-    en: { pdfButton: 'Add to Trainer', menuLink: 'Add to library (link)', statusOk: 'Added' },
-    es: { pdfButton: 'Añadir a Trainer', menuLink: 'Añadir a la biblioteca (enlace)', statusOk: 'Añadido' },
-    fr: { pdfButton: 'Ajouter à Trainer', menuLink: 'Ajouter à la bibliothèque (lien)', statusOk: 'Ajouté' },
-    de: { pdfButton: 'Zu Trainer hinzufügen', menuLink: 'Zur Bibliothek hinzufügen (Link)', statusOk: 'Hinzugefügt' },
-    ja: { pdfButton: 'Trainer に追加', menuLink: 'ライブラリに追加（リンク）', statusOk: '追加済み' },
-    ko: { pdfButton: 'Trainer에 추가', menuLink: '라이브러리에 추가(링크)', statusOk: '추가됨' },
-    pt: { pdfButton: 'Adicionar ao Trainer', menuLink: 'Adicionar à biblioteca (link)', statusOk: 'Adicionado' }
+    zh: { menuPdfLibrary: '加入资料库（PDF）', menuLink: '加入资料库（链接）', statusOk: '成功' },
+    en: { menuPdfLibrary: 'Add to library (PDF)', menuLink: 'Add to library (link)', statusOk: 'Added' },
+    es: { menuPdfLibrary: 'Añadir a la biblioteca (PDF)', menuLink: 'Añadir a la biblioteca (enlace)', statusOk: 'Añadido' },
+    fr: { menuPdfLibrary: 'Ajouter à la bibliothèque (PDF)', menuLink: 'Ajouter à la bibliothèque (lien)', statusOk: 'Ajouté' },
+    de: { menuPdfLibrary: 'Zur Bibliothek hinzufügen (PDF)', menuLink: 'Zur Bibliothek hinzufügen (Link)', statusOk: 'Hinzugefügt' },
+    ja: { menuPdfLibrary: 'ライブラリに追加（PDF）', menuLink: 'ライブラリに追加（リンク）', statusOk: '追加済み' },
+    ko: { menuPdfLibrary: '라이브러리에 추가(PDF)', menuLink: '라이브러리에 추가(링크)', statusOk: '추가됨' },
+    pt: { menuPdfLibrary: 'Adicionar à biblioteca (PDF)', menuLink: 'Adicionar à biblioteca (link)', statusOk: 'Adicionado' }
   };
   for (const [locale, expected] of Object.entries(markers)) {
     const dict = TrainerCapture.copyFor(locale);
@@ -1406,9 +1406,10 @@ test('the manifest localizes its own name/description for all eight languages', 
 
 test('the packaged bundle covers every file the manifest references', () => {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+  assert.equal(manifest.content_scripts, undefined);
+  assert.ok(!manifest.permissions.includes('scripting'));
   const referenced = new Set([
     manifest.background.service_worker,
-    ...manifest.content_scripts.flatMap((entry) => entry.js),
     manifest.action.default_popup,
     ...Object.values(manifest.icons),
     ...Object.values(manifest.action.default_icon),

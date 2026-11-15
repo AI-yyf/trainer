@@ -6,9 +6,9 @@
 
 ## 设计边界
 
-- **纯数据通道**：不注入页面脚本执行代码，不读取 cookie，不读取页面正文；只发送用户明确触发的内容（`url` / `kind` / `title` / 选中的文本）。
+- **纯数据通道**。右键菜单和工具栏弹窗只发送用户主动采集的 `url`、`kind`、`title` 和选中文本。
 - **服务端抓取**：正文、快照、权威去重全部由本地 Trainer sidecar 完成（网页 → 正文抽取；PDF → 下载后 PDF ingest；GitHub → repo URL + README/结构）。
-- **面向本机的权限**：`host_permissions` 仅覆盖 `http://127.0.0.1/*` 与 `http://localhost/*`。content script 只在 http(s) 页面按 `document.contentType` 判断是否为 PDF，非 PDF 页面完全静默。
+- **面向本机的权限**。`host_permissions` 仅覆盖 `http://127.0.0.1/*` 与 `http://localhost/*`。
 
 ## 加载（开发者模式）
 
@@ -38,11 +38,13 @@ Trainer 尚未启动时，采集入口**不会要求先配对**：内容直接�
 | PDF 链接右键「PDF 选项」子菜单 | 同上，针对被右键的链接地址 |
 | GitHub 仓库页右键「加入资料库（GitHub 仓库）」 | 子项「README+结构」/「含 docs/」/「下载项目到文件夹」分别提交 `include_docs:false/true` 与 `download:true` |
 | 选中文本右键「问 Trainer 教练」 | `POST /browser/coach-draft`，通知「已送入 Trainer 输入框」——**不自动发送**，预填由宿主侧完成 |
-| PDF 页面角落浮出按钮「加入 Trainer」 | 仅当 `document.contentType === 'application/pdf'` 时出现 |
+| 选中文本右键「将选段加入资料库」 | 保存选段和网页来源，并沿用当前学习目标的绑定设置 |
 | 弹窗「将当前页面加入资料库」 | 采集当前标签页，并可先在下拉里**可选**绑定学习目标 |
 | 弹窗「下载到项目文件夹」 | 仅对 PDF / GitHub 仓库出现；目标文件夹可编辑（默认 `Trainer Library/`），选择即成为右键菜单下载的默认值 |
 
 **绑定学习目标**：下拉选项来自 `GET /browser/status` 的 `focus_options`，可留空不绑；弹窗里的选择同时作为右键菜单采集的默认绑定（存 `chrome.storage.local`）。
+
+没有 `.pdf` 后缀的 PDF 地址也可以用「将当前页面加入资料库」采集。Sidecar 根据收到的文件内容识别 PDF。
 
 **幂等**：每次捕获都带 `client_capture_id`，离线重投不会产生重复记录；服务端返回 `deduped=true` 时提示「已在资料库」并给出深链。
 
@@ -147,7 +149,6 @@ browser-extension/
 ├── _locales/<lang>/messages.json  # 8 语言的拓展名称与描述（en/zh/es/fr/de/ja/ko/pt）
 ├── shared.js              # 第 1 节：无 chrome 依赖的纯逻辑（URL 规范化、去重键、下载目标路径、捕获/草稿队列、自动配对 API、i18n 文案）
 │                          # 第 2 节：薄 chrome 封装（storage / fetch / locale / 连通性快照）
-│                          # 第 3 节：PDF 浮出按钮（manifest 里声明的 content script，非 PDF 页面立即返回）
 ├── background.js          # 右键菜单（含 PDF/GitHub 下载子菜单）、自动配对、采集管线、双队列投递、告警、角标、通知
 ├── popup/                 # 280px 单卡片：采集 + 下载；无配对码、无状态页、无历史列表
 └── icons/                 # 手绘 SVG 源 + 由 PyMuPDF 渲染的 16/32/48/128 PNG

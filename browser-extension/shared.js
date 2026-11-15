@@ -3,8 +3,7 @@
 /**
  * Trainer Capture — shared module.
  *
- * Loaded three ways: importScripts() in the MV3 service worker, a <script> in
- * the popup, and as the declarative content script on http(s) pages.
+ * Loaded by importScripts() in the MV3 service worker and a <script> in the popup.
  *
  * Layout:
  *   1. Pure helpers — no chrome/browser API access at module scope or inside
@@ -12,8 +11,6 @@
  *      require() the file in plain Node.
  *   2. Thin chrome wrappers — storage, fetch, locale. Every wrapper assumes
  *      the extension environment and stays free of business rules.
- *   3. Content-script page affordance — the PDF auto-float button, inert
- *      unless the document itself is a PDF.
  *
  * Data-channel discipline: no page scripts are injected, no cookies or page
  * bodies are read; the extension forwards only the URL / title / selection the
@@ -231,14 +228,6 @@
       notifyFailedTitle: 'Trainer 采集失败',
       notifyDraftTitle: 'Trainer 教练',
       notifyQueueDoneTitle: 'Trainer 待投递完成',
-      pdfButton: '加入 Trainer',
-      pdfTitle: '将这篇 PDF 加入 Trainer 资料库',
-      pdfWorking: '添加中…',
-      pdfDone: '已加入资料库',
-      pdfDuplicate: '已在资料库',
-      pdfQueued: '已排队',
-      pdfNeedsPair: '请先配对',
-      pdfFailed: '失败，点击重试',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF 选项',
       menuPdfLibrary: '加入资料库（PDF）',
@@ -370,14 +359,6 @@
       notifyFailedTitle: 'Trainer capture failed',
       notifyDraftTitle: 'Trainer coach',
       notifyQueueDoneTitle: 'Trainer queue delivered',
-      pdfButton: 'Add to Trainer',
-      pdfTitle: 'Add this PDF to the Trainer library',
-      pdfWorking: 'Adding…',
-      pdfDone: 'Added to library',
-      pdfDuplicate: 'Already in library',
-      pdfQueued: 'Queued',
-      pdfNeedsPair: 'Pair first',
-      pdfFailed: 'Failed — click to retry',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF actions',
       menuPdfLibrary: 'Add to library (PDF)',
@@ -509,14 +490,6 @@
       notifyFailedTitle: 'Error de captura de Trainer',
       notifyDraftTitle: 'Entrenador de Trainer',
       notifyQueueDoneTitle: 'Cola de entrega completada',
-      pdfButton: 'Añadir a Trainer',
-      pdfTitle: 'Añadir este PDF a la biblioteca de Trainer',
-      pdfWorking: 'Añadiendo…',
-      pdfDone: 'Añadido a la biblioteca',
-      pdfDuplicate: 'Ya en la biblioteca',
-      pdfQueued: 'En cola',
-      pdfNeedsPair: 'Empareja primero',
-      pdfFailed: 'Error; haz clic para reintentar',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'Acciones de PDF',
       menuPdfLibrary: 'Añadir a la biblioteca (PDF)',
@@ -648,14 +621,6 @@
       notifyFailedTitle: 'Échec de la capture Trainer',
       notifyDraftTitle: 'Coach Trainer',
       notifyQueueDoneTitle: 'File d’attente envoyée',
-      pdfButton: 'Ajouter à Trainer',
-      pdfTitle: 'Ajouter ce PDF à la bibliothèque Trainer',
-      pdfWorking: 'Ajout…',
-      pdfDone: 'Ajouté à la bibliothèque',
-      pdfDuplicate: 'Déjà dans la bibliothèque',
-      pdfQueued: 'En attente',
-      pdfNeedsPair: 'Associez d’abord',
-      pdfFailed: 'Échec — cliquez pour réessayer',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'Actions PDF',
       menuPdfLibrary: 'Ajouter à la bibliothèque (PDF)',
@@ -787,14 +752,6 @@
       notifyFailedTitle: 'Trainer-Erfassung fehlgeschlagen',
       notifyDraftTitle: 'Trainer-Coach',
       notifyQueueDoneTitle: 'Warteschlange übertragen',
-      pdfButton: 'Zu Trainer hinzufügen',
-      pdfTitle: 'Dieses PDF zur Trainer-Bibliothek hinzufügen',
-      pdfWorking: 'Wird hinzugefügt…',
-      pdfDone: 'Zur Bibliothek hinzugefügt',
-      pdfDuplicate: 'Bereits in der Bibliothek',
-      pdfQueued: 'In Warteschlange',
-      pdfNeedsPair: 'Zuerst koppeln',
-      pdfFailed: 'Fehlgeschlagen – zum Wiederholen klicken',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF-Aktionen',
       menuPdfLibrary: 'Zur Bibliothek hinzufügen (PDF)',
@@ -926,14 +883,6 @@
       notifyFailedTitle: 'Trainer のキャプチャに失敗',
       notifyDraftTitle: 'Trainer コーチ',
       notifyQueueDoneTitle: '配信待ちを配信しました',
-      pdfButton: 'Trainer に追加',
-      pdfTitle: 'この PDF を Trainer ライブラリに追加',
-      pdfWorking: '追加中…',
-      pdfDone: 'ライブラリに追加しました',
-      pdfDuplicate: 'ライブラリにあります',
-      pdfQueued: '配信待ち',
-      pdfNeedsPair: '先にペアリングしてください',
-      pdfFailed: '失敗しました。クリックで再試行',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF の操作',
       menuPdfLibrary: 'ライブラリに追加（PDF）',
@@ -1065,14 +1014,6 @@
       notifyFailedTitle: 'Trainer 캡처 실패',
       notifyDraftTitle: 'Trainer 코치',
       notifyQueueDoneTitle: '전송 대기 전송 완료',
-      pdfButton: 'Trainer에 추가',
-      pdfTitle: '이 PDF를 Trainer 라이브러리에 추가',
-      pdfWorking: '추가 중…',
-      pdfDone: '라이브러리에 추가했습니다',
-      pdfDuplicate: '이미 라이브러리에 있습니다',
-      pdfQueued: '대기열에 추가됨',
-      pdfNeedsPair: '먼저 페어링하세요',
-      pdfFailed: '실패 — 클릭하여 다시 시도',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF 작업',
       menuPdfLibrary: '라이브러리에 추가(PDF)',
@@ -1204,14 +1145,6 @@
       notifyFailedTitle: 'Falha na captura do Trainer',
       notifyDraftTitle: 'Treinador do Trainer',
       notifyQueueDoneTitle: 'Fila entregue',
-      pdfButton: 'Adicionar ao Trainer',
-      pdfTitle: 'Adicionar este PDF à biblioteca do Trainer',
-      pdfWorking: 'Adicionando…',
-      pdfDone: 'Adicionado à biblioteca',
-      pdfDuplicate: 'Já na biblioteca',
-      pdfQueued: 'Na fila',
-      pdfNeedsPair: 'Emparelhe primeiro',
-      pdfFailed: 'Falha — clique para tentar novamente',
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'Ações de PDF',
       menuPdfLibrary: 'Adicionar à biblioteca (PDF)',
@@ -2536,132 +2469,6 @@
   async function clearNotice() {
     await chrome.storage.local.set({ [STORAGE_KEYS.notice]: '' });
   }
-
-  // =========================================================================
-  // 3. Content-script page affordance: the PDF auto-float button.
-  //
-  // shared.js is the declarative content script for http(s) pages (see
-  // manifest.json content_scripts), so this section runs on every page — and
-  // stays completely inert unless the document itself is a PDF
-  // (document.contentType === 'application/pdf'). Nothing is read from the
-  // page: the button only forwards location.href and the document title after
-  // the user clicks it.
-  // =========================================================================
-
-  const PDF_FLOAT_BUTTON_ID = 'trainer-capture-pdf-float';
-
-  function pdfFloatStyles() {
-    return [
-      'position: fixed',
-      'right: 18px',
-      'bottom: 18px',
-      'z-index: 2147483647',
-      'padding: 8px 14px',
-      'border: 1px solid rgba(15, 23, 42, 0.18)',
-      'border-radius: 999px',
-      'background: #2563eb',
-      'color: #ffffff',
-      'font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif',
-      'box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28)',
-      'cursor: pointer'
-    ].join('; ');
-  }
-
-  function createPdfFloatButton(page) {
-    const dict = copyFor(browserLocale());
-    const label = (key) => String(dict[key] || '');
-    const button = page.createElement('button');
-    button.id = PDF_FLOAT_BUTTON_ID;
-    button.type = 'button';
-    button.textContent = label('pdfButton');
-    button.title = label('pdfTitle');
-    button.setAttribute('aria-label', label('pdfTitle'));
-    button.style.cssText = pdfFloatStyles();
-
-    let busy = false;
-    const settle = (text, disable) => {
-      button.textContent = text;
-      if (disable) {
-        button.disabled = true;
-        button.style.cursor = 'default';
-      }
-    };
-
-    button.addEventListener('click', () => {
-      if (busy || button.disabled) {
-        return;
-      }
-      busy = true;
-      button.textContent = label('pdfWorking');
-      chrome.runtime.sendMessage(
-        { type: 'trainer:pdf-capture', url: location.href, title: document.title || '' },
-        (response) => {
-          busy = false;
-          if (chrome.runtime.lastError) {
-            settle(label('pdfFailed'), false);
-            return;
-          }
-          const status = response && response.status ? String(response.status) : 'failed';
-          if (status === 'ok') {
-            settle(label('pdfDone'), true);
-            return;
-          }
-          if (status === 'duplicated' || status === 'duplicate-local') {
-            settle(label('pdfDuplicate'), true);
-            return;
-          }
-          if (status === 'received') {
-            settle(formatCopy(dict.captureReceived, { title: document.title || location.href }), false);
-            return;
-          }
-          if (status === 'queued') {
-            settle(label('pdfQueued'), false);
-            return;
-          }
-          if (status === 'unpaired') {
-            settle(label('pdfNeedsPair'), false);
-            return;
-          }
-          settle(label('pdfFailed'), false);
-        }
-      );
-    });
-
-    return button;
-  }
-
-  function mountPdfFloatButton() {
-    try {
-      if (typeof document === 'undefined' || !document) {
-        return;
-      }
-      if (document.contentType !== 'application/pdf') {
-        return;
-      }
-      if (document.getElementById(PDF_FLOAT_BUTTON_ID)) {
-        return;
-      }
-      if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
-        return;
-      }
-      const attach = () => {
-        const root = document.body || document.documentElement;
-        if (root && !document.getElementById(PDF_FLOAT_BUTTON_ID)) {
-          root.appendChild(createPdfFloatButton(document));
-        }
-      };
-      if (document.body) {
-        attach();
-      } else {
-        document.addEventListener('DOMContentLoaded', attach, { once: true });
-      }
-    } catch (error) {
-      // A content script must never break the page it runs on.
-      console.warn('Trainer Capture PDF button failed:', error);
-    }
-  }
-
-  mountPdfFloatButton();
 
   global.TrainerCapture = {
     // pure

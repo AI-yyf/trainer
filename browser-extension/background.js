@@ -1315,16 +1315,7 @@ const MESSAGE_HANDLERS = {
     const targetDir = await TrainerCapture.saveTargetDir(raw);
     return { ok: true, targetDir };
   },
-  'trainer:open': async (message) => ({ ok: await openDeepLink(message.url) }),
-  'trainer:pdf-capture': async (message) =>
-    runCapture(
-      {
-        url: message.url,
-        kind: 'pdf',
-        title: message.title || ''
-      },
-      { notify: false }
-    )
+  'trainer:open': async (message) => ({ ok: await openDeepLink(message.url) })
 };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

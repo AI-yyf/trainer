@@ -156,6 +156,9 @@ export async function runSourceLearningJourney({
   try {
     browser = await launchInstalledCapture({ root, installedRoot, proxy });
     const worker = browser.serviceWorkers()[0] ?? await browser.waitForEvent("serviceworker");
+    const manifest = await worker.evaluate(() => chrome.runtime.getManifest());
+    assert.equal(manifest.content_scripts, undefined);
+    assert.ok(!manifest.permissions.includes("scripting"));
     await worker.evaluate(() => ensureAutoPair({ force: true }));
     const pairing = await until(() => worker.evaluate(async () => {
       const auth = await TrainerCapture.loadAuth();
@@ -163,7 +166,9 @@ export async function runSourceLearningJourney({
     }), "installed browser auto-pairing");
     assert.equal(pairing.workspaceId, setup.workspaceId);
     assert.equal(new URL(pairing.baseUrl).port, String(setup.port));
-    record("browser-auto-pairs-with-installed-host", { ok: true, workspaceId: pairing.workspaceId });
+    record("browser-auto-pairs-with-installed-host", {
+      ok: true, workspaceId: pairing.workspaceId, browserVersion: manifest.version,
+    });
 
     const sourcePage = await browser.newPage();
     await sourcePage.route(SOURCE_URL, route => route.fulfill({
@@ -197,6 +202,8 @@ export async function runSourceLearningJourney({
     record("selection-prefills-with-source-without-sending", {
       ok: true, screenshot: await screenshot(page, "source-coach-prefill"),
     });
+    const editedQuestion = "请用两三句话解释正负优势为什么使用不同的裁剪方向，并给一个可口算的问题。";
+    await composer.fill(`${await composer.inputValue()}\n\n${editedQuestion}`);
     await composer.press("Enter");
     const coachReply = frame.locator('article[data-role="assistant"]').last();
     await coachReply.waitFor({ timeout: replyTimeout });
@@ -207,7 +214,7 @@ export async function runSourceLearningJourney({
       const row = db.prepare("SELECT payload FROM sessions WHERE session_id = ? AND workspace_id = ?")
         .get(setup.sessionId, setup.workspaceId);
       const message = row && JSON.parse(row.payload).snapshot.messages.findLast(item => item.role === "user");
-      return message?.metadata?.browser_sources?.some(source =>
+      return message?.content.includes(editedQuestion) && message.metadata?.browser_sources?.some(source =>
         source.url === SOURCE_URL && source.selection === SELECTION && source.provenance === "temporary_web");
     }), "the browser provenance on the saved conversation");
     record("learner-sends-and-coach-replies-without-implementation", { ok: true, persistedSource });
