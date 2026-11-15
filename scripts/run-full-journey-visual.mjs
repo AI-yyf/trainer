@@ -637,7 +637,7 @@ async function main() {
           fixture: sourceFixture, setup: driverReport.steps.find(step => step.step === "source-learning-setup"),
           frame, page, root, installedRoot: path.join(extensionsDir, `${extensionId}-${packageJson.version}`),
           openInCode: (args) => runCode(["--user-data-dir", userDataDir, "--extensions-dir", extensionsDir, ...args]),
-          record, screenshot,
+          record, screenshot, replyTimeout: usingRealProvider ? 180_000 : 75_000,
         });
       } catch (error) {
         record("source-learning-failed", {
@@ -645,7 +645,9 @@ async function main() {
         });
         throw error;
       }
-      fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify({ ok: true, vsixPath, results }, null, 2));
+      fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify({
+        ok: true, vsixPath, provider: providerLabel, using_real_provider: usingRealProvider, results,
+      }, null, 2));
       console.log(`SOURCE_LEARNING_NATIVE_OK ${outDir}`);
       return true;
     }

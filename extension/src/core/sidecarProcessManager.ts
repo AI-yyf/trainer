@@ -351,33 +351,50 @@ export class SidecarProcessManager implements vscode.Disposable {
     // Phase-A metric: engine process starts must stay at zero during pure UI
     // activity (visibility toggles, view switches, state syncs).
     recordSidecarStart();
-    const port = await this.resolveLaunchPort();
-    const candidates = this.buildLaunchCandidates(port);
-    if (candidates.length === 0) {
-      const status: SidecarStatus = {
-        lifecycle: 'unavailable',
-        host: SIDECAR_DEFAULTS.host,
-        canStart: false,
-        detail: this.getUnavailableLaunchDetail(),
-      };
-      this.updateStatus(status);
-      return status;
-    }
-
+    const racedPorts = new Set<number>();
+    let port: number | undefined;
     let lastError: Error | undefined;
-
-    for (const candidate of candidates) {
+    while (true) {
       try {
-        return await this.launchCandidate(candidate, port);
+        port = await this.resolveLaunchPort(racedPorts);
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        this.outputChannel.appendLine(
-          `[sidecar] launch failed for ${candidate.command}: ${lastError.message}`,
-        );
-        if (this.process?.exitCode === null) {
-          break;
+        break;
+      }
+      const candidates = this.buildLaunchCandidates(port);
+      if (candidates.length === 0) {
+        const status: SidecarStatus = {
+          lifecycle: 'unavailable',
+          host: SIDECAR_DEFAULTS.host,
+          canStart: false,
+          detail: this.getUnavailableLaunchDetail(),
+        };
+        this.updateStatus(status);
+        return status;
+      }
+      let portRace = false;
+      for (const candidate of candidates) {
+        try {
+          return await this.launchCandidate(candidate, port);
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          this.outputChannel.appendLine(
+            `[sidecar] launch failed for ${candidate.command}: ${lastError.message}`,
+          );
+          if (this.process?.exitCode === null) {
+            break;
+          }
+          // Another extension host may bind after our availability probe.
+          // Only retry a new port once this attempt's child has stopped.
+          portRace = /EADDRINUSE|address already in use|WinError 10048/i.test(lastError.message)
+            || !(await isPortAvailable(port));
+          if (portRace) {
+            racedPorts.add(port);
+            break;
+          }
         }
       }
+      if (!portRace) break;
     }
 
     const status: SidecarStatus = {
@@ -520,10 +537,10 @@ export class SidecarProcessManager implements vscode.Disposable {
     return status;
   }
 
-  private async resolveLaunchPort(): Promise<number> {
+  private async resolveLaunchPort(racedPorts: ReadonlySet<number>): Promise<number> {
     const configuredPort = this.readConfiguredSidecarPort();
     if (configuredPort !== undefined) {
-      if (await isPortAvailable(configuredPort)) {
+      if (!racedPorts.has(configuredPort) && await isPortAvailable(configuredPort)) {
         return configuredPort;
       }
       this.outputChannel.appendLine(
@@ -538,7 +555,7 @@ export class SidecarProcessManager implements vscode.Disposable {
         );
       }
     }
-    return findAvailablePort(SIDECAR_DEFAULTS.portStart, SIDECAR_DEFAULTS.portEnd);
+    return findAvailablePort(SIDECAR_DEFAULTS.portStart, SIDECAR_DEFAULTS.portEnd, racedPorts);
   }
 
   private readConfiguredSidecarPort(): number | undefined {
@@ -1099,9 +1116,9 @@ function directoryIsEmpty(targetPath: string): boolean {
   }
 }
 
-async function findAvailablePort(start: number, end: number): Promise<number> {
+async function findAvailablePort(start: number, end: number, racedPorts: ReadonlySet<number>): Promise<number> {
   for (let port = start; port <= end; port += 1) {
-    if (await isPortAvailable(port)) {
+    if (!racedPorts.has(port) && await isPortAvailable(port)) {
       return port;
     }
   }

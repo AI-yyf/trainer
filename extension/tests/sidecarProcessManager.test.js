@@ -209,6 +209,40 @@ test('SidecarProcessManager falls back when the configured sidecar port is occup
   }
 });
 
+test('SidecarProcessManager retries on a managed port when another host wins the launch race', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-sidecar-launch-race-'));
+  const competingHost = net.createServer();
+  try {
+    const preferredPort = await reserveFreePort();
+    const manager = createManagerFixture({
+      workspaceFolder: path.join(tempRoot, 'workspace'),
+      extensionPath: path.join(tempRoot, 'extension'),
+      configuredSidecarPort: preferredPort,
+    });
+    const launches = [];
+    manager.buildLaunchCandidates = () => [{ label: 'test', command: 'test', args: [], cwd: tempRoot }];
+    manager.launchCandidate = async (_candidate, port) => {
+      launches.push(port);
+      if (port === preferredPort) {
+        await new Promise((resolve, reject) => {
+          competingHost.once('error', reject);
+          competingHost.listen(port, '127.0.0.1', resolve);
+        });
+        throw new Error('Sidecar exited before readiness (code=3, signal=null)');
+      }
+      return { lifecycle: 'ready', host: '127.0.0.1', port, canStart: true };
+    };
+    const status = await manager.start();
+    assert.equal(status.lifecycle, 'ready');
+    assert.deepEqual(launches, [preferredPort, status.port]);
+    assert.notEqual(status.port, preferredPort);
+    assert.ok(status.port >= 34891 && status.port <= 34911);
+  } finally {
+    if (competingHost.listening) await new Promise(resolve => competingHost.close(resolve));
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('SidecarProcessManager uses workspace source candidates ahead of bundled binary only in development', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-sidecar-order-'));
   try {

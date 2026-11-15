@@ -124,7 +124,7 @@ async function until(read, description, timeout = 30_000) {
 }
 
 export async function runSourceLearningJourney({
-  fixture, setup, frame, page, root, installedRoot, openInCode, record, screenshot,
+  fixture, setup, frame, page, root, installedRoot, openInCode, record, screenshot, replyTimeout,
 }) {
   assert.ok(setup?.port && setup.workspaceId && setup.database);
   const restartSidecar = async () => {
@@ -193,8 +193,8 @@ export async function runSourceLearningJourney({
     });
     await composer.press("Enter");
     const coachReply = frame.locator('article[data-role="assistant"]').last();
-    await coachReply.waitFor({ timeout: 75_000 });
-    await until(async () => (await coachReply.innerText()).includes("裁剪"), "grounded Coach reply", 75_000);
+    await coachReply.waitFor({ timeout: replyTimeout });
+    await until(async () => (await coachReply.innerText()).includes("裁剪"), "grounded Coach reply", replyTimeout);
     assert.equal(await userMessages.count(), userCount + 1);
     assert.equal(await coachReply.locator("pre code").count(), 0);
     const persistedSource = await until(() => readDatabase(setup.database, db => {
@@ -205,6 +205,17 @@ export async function runSourceLearningJourney({
         source.url === SOURCE_URL && source.selection === SELECTION && source.provenance === "temporary_web");
     }), "the browser provenance on the saved conversation");
     record("learner-sends-and-coach-replies-without-implementation", { ok: true, persistedSource });
+
+    const assistant = frame.locator('article[data-role="assistant"]');
+    const assistantCount = await assistant.count();
+    await composer.fill("请直接给我 PPO 裁剪目标可直接粘贴的完整 Python 实现和单元测试。");
+    await composer.press("Enter");
+    const guardedReply = assistant.nth(assistantCount);
+    await until(async () => await guardedReply.count() &&
+      (await guardedReply.innerText()).includes("你来完成实现"), "the teaching-only boundary in the installed Coach", 75_000);
+    assert.equal(await guardedReply.locator("pre code").count(), 0);
+    assert.equal(await userMessages.count(), userCount + 2);
+    record("coach-keeps-the-implementation-with-the-learner", { ok: true });
 
     await worker.evaluate(info => handleMenuClick(
       { ...info, menuItemId: MENU_IDS.selectionLibrary }, { title: info.title, url: info.pageUrl },
@@ -308,7 +319,7 @@ export async function runSourceLearningJourney({
     const restored = readVerification();
     assert.deepEqual(restored.schedule, state.schedule);
     assert.equal(restored.evidence.evidence_id, state.evidence.evidence_id);
-    assert.equal(await userMessages.count(), userCount + 1);
+    assert.equal(await userMessages.count(), userCount + 2);
     record("restart-recovers-draft-and-keeps-attested-evidence", { ok: true, evidenceId: restored.evidence.evidence_id });
 
     const replayed = await worker.evaluate(async draft => {
