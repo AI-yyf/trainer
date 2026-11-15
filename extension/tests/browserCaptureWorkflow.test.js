@@ -84,6 +84,7 @@ test('capture worker keeps recoverable failures across restarts and reuses the c
     [C.STORAGE_KEYS.workspaceId]: '',
   };
   const submitted = [];
+  const menus = [];
   let online = false;
   let rejectFolder = true;
   const response = (status, body) => ({
@@ -109,7 +110,11 @@ test('capture worker keeps recoverable failures across restarts and reuses the c
         },
       },
       notifications: { create: noop, onClicked: { addListener: noop } },
-      contextMenus: { onClicked: { addListener: noop } },
+      contextMenus: {
+        create: (menu) => menus.push(structuredClone(menu)),
+        removeAll: async () => { menus.length = 0; },
+        onClicked: { addListener: noop },
+      },
       action: { setBadgeText: noop, setBadgeBackgroundColor: noop },
       alarms: { get: async () => true, onAlarm: { addListener: noop } },
       runtime: {
@@ -141,9 +146,12 @@ test('capture worker keeps recoverable failures across restarts and reuses the c
     });
     context.self = context;
     vm.runInContext(files['background.js'], context);
-    return (message) => new Promise((resolve) => onMessage(message, {}, (value) =>
+    const send = (message) => new Promise((resolve) => onMessage(message, {}, (value) =>
       resolve(structuredClone(value)),
     ));
+    send.registerMenus = vm.runInContext('ensureMenus', context);
+    send.clickMenu = vm.runInContext('handleMenuClick', context);
+    return send;
   }
 
   let send = worker();
@@ -206,4 +214,19 @@ test('capture worker keeps recoverable failures across restarts and reuses the c
   assert.equal(removed.ok, true);
   assert.equal(removed.state.failedCaptures.length, 0);
   assert.equal(submitted.length, 4);
+
+  await send.registerMenus();
+  assert.deepEqual(menus.filter((menu) => menu.contexts.includes('selection')).map((menu) => menu.id), [
+    'trainer-coach-selection', 'trainer-capture-selection',
+  ]);
+  storage[C.STORAGE_KEYS.focusId] = 'stage-a';
+  const selection = 'A principle.\nA concrete observation.';
+  await send.clickMenu({
+    menuItemId: 'trainer-capture-selection', pageUrl: 'https://example.com/reading', selectionText: selection,
+  }, { title: 'Reading' });
+  assert.equal(submitted.length, 5);
+  assert.equal(submitted.at(-1).capture_mode, 'selection');
+  assert.equal(submitted.at(-1).selection, selection);
+  assert.equal(submitted.at(-1).bind_focus_id, 'stage-a');
+  assert.equal(submitted.at(-1).workspace_id, 'workspace-a');
 });

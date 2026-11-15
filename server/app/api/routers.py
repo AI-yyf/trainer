@@ -16,6 +16,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 
+from ..browser_bridge.source_ref import turn_browser_sources
 from ..core.models import (
     ActiveCardSelectionResult,
     AffectState,
@@ -5308,6 +5309,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         profile: UserProfile | None,
         attachment_delivery: dict[str, object] | None = None,
         *,
+        workspace_id: str | None = None,
         stream_id: str | None = None,
         stream_state: str | None = None,
     ) -> dict[str, object]:
@@ -5319,6 +5321,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         }
         if request.active_view:
             metadata["active_view"] = request.active_view
+        if workspace_id and request.browser_sources:
+            metadata["browser_sources"] = turn_browser_sources(
+                runtime.resource_service, workspace_id, request.browser_sources
+            )
         if isinstance(request, TurnRequest):
             metadata["intent"] = request.intent
         if current_file:
@@ -5405,6 +5411,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 request,
                 profile,
                 attachment_delivery,
+                workspace_id=state.workspace_id,
                 stream_id=stream_id,
                 stream_state="in_progress",
             ),

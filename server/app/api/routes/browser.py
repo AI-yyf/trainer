@@ -35,6 +35,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential, BrowserPairingError
+from ...browser_bridge.source_ref import resolve_library_source
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -343,6 +344,9 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
                 title=str(body.get("title") or ""),
                 client_id=str(body.get("client_id") or body.get("clientId") or ""),
                 language=str(language) if language else None,
+                resolve_source=lambda source: resolve_library_source(
+                    runtime.resource_service, credential.workspace_id, source
+                ),
             )
         except BrowserPairingError as exc:
             raise HTTPException(
@@ -424,7 +428,13 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         )
         raw_ids = body.get("ids")
         ids = [str(item) for item in raw_ids] if isinstance(raw_ids, list) else []
-        removed = _browser_bridge(runtime).ack_drafts(scope, ids)
+        try:
+            removed = _browser_bridge(runtime).ack_drafts(scope, ids)
+        except BrowserPairingError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail={"code": exc.code, "message": exc.detail},
+            ) from exc
         return {"ok": True, "workspace_id": scope, "removed": removed}
 
     return router

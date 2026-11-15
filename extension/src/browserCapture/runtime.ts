@@ -150,6 +150,8 @@ export function createBrowserCaptureRuntime(
         type: COACH_DRAFT_PREFILL_MESSAGE,
         draftId: draft.id,
         text: draft.text,
+        ...(draft.workspaceId ? { workspaceId: draft.workspaceId } : {}),
+        ...(draft.sourceRef ? { sourceRef: draft.sourceRef } : {}),
       });
       if (!(await receipt)) {
         throw new Error(`draft ${draft.id} was not confirmed by the workbench`);

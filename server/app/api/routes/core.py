@@ -862,7 +862,9 @@ def build_core_router(
             role="user",
             content=request.message,
             timestamp=datetime.now(UTC),
-            metadata=core.build_user_message_metadata(request, profile, attachment_delivery),
+            metadata=core.build_user_message_metadata(
+                request, profile, attachment_delivery, workspace_id=state.workspace_id
+            ),
         )
         state.snapshot.messages.append(user_message)
         state.snapshot.profile = profile

@@ -34,6 +34,10 @@ from pathlib import Path
 from typing import Callable
 from uuid import uuid4
 
+from pydantic import ValidationError
+
+from .source_ref import BROWSER_SELECTION_LIMIT, BROWSER_TITLE_LIMIT, BrowserSourceRef
+
 logger = logging.getLogger(__name__)
 
 PAIR_CODE_LENGTH = 6
@@ -51,8 +55,6 @@ _STATE_VERSION = 1
 _MAX_REMEMBERED_CAPTURES = 200
 _MAX_PENDING_DRAFTS = 50
 _MAX_ACKED_DRAFT_IDS = 200
-_DRAFT_SELECTION_LIMIT = 1200
-_DRAFT_TITLE_LIMIT = 160
 # Workspace and client id are joined with NUL: repository paths never contain
 # it, so ("ws-a", "1") and ("ws-a\01", "") cannot collide.
 _DRAFT_DEDUPE_SEPARATOR = "\u0000"
@@ -116,9 +118,23 @@ class _PendingDraft:
     text: str
     client_id: str
     created_at: str
+    source_ref: BrowserSourceRef | None = None
 
-    def as_payload(self) -> dict[str, str]:
-        return {"id": self.id, "workspace_id": self.workspace_id, "text": self.text}
+    def as_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {"id": self.id, "workspace_id": self.workspace_id, "text": self.text}
+        if self.source_ref is not None:
+            payload["source_ref"] = self.source_ref.as_payload()
+        return payload
+
+
+def _restore_source_ref(value: object) -> BrowserSourceRef | None:
+    if value is None:
+        return None
+    try:
+        return BrowserSourceRef.model_validate(value)
+    except ValidationError:
+        logger.warning("Invalid browser source metadata in a persisted draft. Keeping its text.")
+        return None
 
 
 def _hashed(token: str) -> str:
@@ -227,6 +243,7 @@ class BrowserBridgeService:
                         text=text,
                         client_id=str(entry.get("client_id") or ""),
                         created_at=str(entry.get("created_at") or _utc_now_iso()),
+                        source_ref=_restore_source_ref(entry.get("source_ref")),
                     )
                 )
             self._pending_drafts = drafts
@@ -236,12 +253,15 @@ class BrowserBridgeService:
                 str(item) for item in raw_acked if str(item).strip()
             ]
 
-    def _write_state_locked(self) -> None:
+    def _write_state_locked(self) -> bool:
         payload = {
             "version": _STATE_VERSION,
             "credentials": list(self._credentials.values()),
             "captures": self._captures,
-            "pending_drafts": [asdict(draft) for draft in self._pending_drafts],
+            "pending_drafts": [
+                {**draft.as_payload(), "client_id": draft.client_id, "created_at": draft.created_at}
+                for draft in self._pending_drafts
+            ],
             "acked_draft_client_ids": list(self._acked_draft_client_ids),
         }
         serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
@@ -250,8 +270,10 @@ class BrowserBridgeService:
             temp_path = self._state_path.with_suffix(".json.tmp")
             temp_path.write_text(serialized, encoding="utf-8")
             os.replace(temp_path, self._state_path)
-        except OSError as exc:  # pragma: no cover - unwritable data dir
+        except OSError as exc:
             logger.warning("Browser bridge state could not be persisted: %s", exc)
+            return False
+        return True
 
     # -------------------------------------------------------------- pair codes
 
@@ -563,6 +585,7 @@ class BrowserBridgeService:
         title: str = "",
         client_id: str = "",
         language: str | None = None,
+        resolve_source: Callable[[BrowserSourceRef], BrowserSourceRef] | None = None,
     ) -> dict[str, object]:
         normalized_workspace = str(workspace_id or "").strip()
         if not normalized_workspace:
@@ -571,15 +594,28 @@ class BrowserBridgeService:
                 "A coach draft requires the workspace its selection was captured for.",
                 status_code=422,
             )
-        excerpt = " ".join(str(selection or "").split())
+        excerpt = str(selection or "").strip()
         if not excerpt:
             raise BrowserPairingError(
                 "empty_selection",
                 "A coach draft requires a non-empty selection.",
                 status_code=422,
             )
-        if len(excerpt) > _DRAFT_SELECTION_LIMIT:
-            excerpt = excerpt[: _DRAFT_SELECTION_LIMIT - 1].rstrip() + "…"
+        if len(excerpt) > BROWSER_SELECTION_LIMIT:
+            excerpt = excerpt[: BROWSER_SELECTION_LIMIT - 1].rstrip() + "…"
+        source_url = str(url or "").strip()
+        source_title = " ".join(str(title or "").split())[:BROWSER_TITLE_LIMIT]
+        source_ref = None
+        if source_url:
+            try:
+                source_ref = BrowserSourceRef(url=source_url, title=source_title, selection=excerpt)
+            except ValidationError as exc:
+                raise BrowserPairingError(
+                    "invalid_source_url", "The excerpt requires a valid HTTP or HTTPS source URL.",
+                    status_code=422,
+                ) from exc
+            if resolve_source:
+                source_ref = resolve_source(source_ref)
         normalized_client_id = str(client_id or "").strip()
         with self._lock:
             if normalized_client_id:
@@ -607,8 +643,8 @@ class BrowserBridgeService:
                 )
             text = build_coach_draft_text(
                 selection=excerpt,
-                url=str(url or "").strip(),
-                title=" ".join(str(title or "").split())[:_DRAFT_TITLE_LIMIT],
+                url=source_url,
+                title=source_title,
                 language=language,
             )
             draft = _PendingDraft(
@@ -617,12 +653,18 @@ class BrowserBridgeService:
                 text=text,
                 client_id=normalized_client_id,
                 created_at=_utc_now_iso(),
+                source_ref=source_ref,
             )
             self._pending_drafts.append(draft)
-            self._write_state_locked()
+            if not self._write_state_locked():
+                self._pending_drafts.pop()
+                raise BrowserPairingError(
+                    "draft_storage_unavailable", "Trainer could not save this draft. Please retry.",
+                    status_code=503,
+                )
             return {"ok": True, "draft_id": draft.id, "duplicate": False}
 
-    def pending_drafts(self, workspace_id: str) -> list[dict[str, str]]:
+    def pending_drafts(self, workspace_id: str) -> list[dict[str, object]]:
         normalized_workspace = str(workspace_id or "").strip()
         if not normalized_workspace:
             # Never hand a caller that did not state its workspace every
@@ -642,23 +684,27 @@ class BrowserBridgeService:
             return 0
         with self._lock:
             remaining: list[_PendingDraft] = []
+            acknowledged = list(self._acked_draft_client_ids)
             removed = 0
             for draft in self._pending_drafts:
                 if draft.workspace_id == normalized_workspace and draft.id in wanted:
                     removed += 1
                     if draft.client_id:
-                        self._acked_draft_client_ids.append(
+                        acknowledged.append(
                             _draft_dedupe_key(draft.workspace_id, draft.client_id)
                         )
-                        if len(self._acked_draft_client_ids) > _MAX_ACKED_DRAFT_IDS:
-                            del self._acked_draft_client_ids[
-                                : len(self._acked_draft_client_ids) - _MAX_ACKED_DRAFT_IDS
-                            ]
                 else:
                     remaining.append(draft)
-            self._pending_drafts = remaining
             if removed:
-                self._write_state_locked()
+                previous_drafts, previous_acked = self._pending_drafts, self._acked_draft_client_ids
+                self._pending_drafts = remaining
+                self._acked_draft_client_ids = acknowledged[-_MAX_ACKED_DRAFT_IDS:]
+                if not self._write_state_locked():
+                    self._pending_drafts, self._acked_draft_client_ids = previous_drafts, previous_acked
+                    raise BrowserPairingError(
+                        "draft_storage_unavailable", "Trainer could not confirm this draft. Please retry.",
+                        status_code=503,
+                    )
             return removed
 
 
@@ -668,49 +714,49 @@ _DRAFT_TEMPLATES: dict[str, dict[str, str]] = {
     "zh-CN": {
         "intro": "请帮我理解这段内容（来自《{source}》）：",
         "source_line": "来源：{url}",
-        "ask": "请结合这段内容解释关键概念，并告诉我下一步该练什么。",
+        "ask": "请解释这段内容的原理，并提出帮助我理解的问题。如果涉及编程，请引导我独立完成，避免生成代码或给出实现。",
         "fallback_source": "选中的内容",
     },
     "en-US": {
         "intro": "Help me understand this excerpt (from \u201c{source}\u201d):",
         "source_line": "Source: {url}",
-        "ask": "Explain the key ideas here and suggest what I should practise next.",
+        "ask": "Explain the principles and ask questions that help me understand them. For programming, guide me to finish independently without generating code or giving an implementation.",
         "fallback_source": "the captured page",
     },
     "es-ES": {
         "intro": "Ayudame a entender este fragmento (de \u00ab{source}\u00bb):",
         "source_line": "Fuente: {url}",
-        "ask": "Explica las ideas clave y sugiere que deberia practicar a continuacion.",
+        "ask": "Explica los principios y haz preguntas que me ayuden a entenderlos. Si hay programación, guíame para resolverla por mi cuenta, sin generar código ni dar la implementación.",
         "fallback_source": "la pagina capturada",
     },
     "fr-FR": {
         "intro": "Aide-moi a comprendre cet extrait (de \u00ab {source} \u00bb) :",
         "source_line": "Source : {url}",
-        "ask": "Explique les idees cles et suggere ce que je devrais pratiquer ensuite.",
+        "ask": "Explique les principes et pose des questions qui m’aident à les comprendre. Pour la programmation, guide-moi vers une résolution autonome sans générer de code ni fournir d’implémentation.",
         "fallback_source": "la page capturee",
     },
     "de-DE": {
         "intro": "Hilf mir, diesen Ausschnitt zu verstehen (aus \u201e{source}\u201c):",
         "source_line": "Quelle: {url}",
-        "ask": "Erklare die Kernideen und schlage vor, was ich als Nachstes uben sollte.",
+        "ask": "Erkläre die Prinzipien und stelle Fragen, die mir beim Verstehen helfen. Leite mich beim Programmieren zur eigenen Lösung an, ohne Code oder eine Implementierung vorzugeben.",
         "fallback_source": "die erfasste Seite",
     },
     "ja-JP": {
         "intro": "この抜粋を理解したいです（出典：{source}）：",
         "source_line": "出典：{url}",
-        "ask": "重要な考え方を説明し、次に何を練習すべきか教えてください。",
+        "ask": "原理を説明し、理解を助ける質問をしてください。プログラミングではコードや実装を示さず、自力で取り組めるように導いてください。",
         "fallback_source": "取り込んだページ",
     },
     "ko-KR": {
         "intro": "이 발췌를 이해하고 싶어요(출처: {source}):",
         "source_line": "출처: {url}",
-        "ask": "핵심 개념을 설명하고 다음에 무엇을 연습해야 할지 알려 주세요.",
+        "ask": "원리를 설명하고 이해를 돕는 질문을 해 주세요. 프로그래밍에서는 코드나 구현을 제공하지 말고 제가 스스로 풀 수 있게 안내해 주세요.",
         "fallback_source": "캡처한 페이지",
     },
     "pt-BR": {
         "intro": "Ajude-me a entender este trecho (de \u201c{source}\u201d):",
         "source_line": "Fonte: {url}",
-        "ask": "Explique as ideias principais e sugira o que devo praticar em seguida.",
+        "ask": "Explique os princípios e faça perguntas que me ajudem a compreendê-los. Em programação, oriente-me a resolver por conta própria, sem gerar código nem fornecer a implementação.",
         "fallback_source": "a pagina capturada",
     },
 }

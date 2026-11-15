@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { readCoachHabitChange } from '../../../shared/src/coachHabit';
+import { parseBrowserSourceRefs } from '../../../shared/src/browserSourceRef';
 
 import type { CommandContext } from '../core/commandContext';
 import { SIDECAR_DEFAULTS } from '../core/constants';
@@ -1901,6 +1902,7 @@ export async function sendMessageCommand(
     message,
     provider: providerConfig,
     resource_ids: sessionPayload?.resourceIds ?? [],
+    browserSources: sessionPayload?.browserSources,
     resource_composer_intent: resourceComposerIntentWire(sessionPayload?.resourceComposerIntent),
     current_file: await getCurrentFilePayload(context, sessionPayload, message),
     workspace_file_snapshot: workspaceFileSnapshot,
@@ -2168,6 +2170,7 @@ export async function sendStreamMessageCommand(
       message: streamPayload.text,
       provider: providerConfig,
       resource_ids: streamPayload.resourceIds ?? [],
+      browserSources: streamPayload.browserSources,
       resource_composer_intent: resourceComposerIntentWire(streamPayload.resourceComposerIntent),
       current_file: await getCurrentFilePayload(context, streamPayload, streamPayload.text),
       workspace_file_snapshot: workspaceFileSnapshot,
@@ -3668,6 +3671,7 @@ function extractSessionPayload(payload: unknown): ResourceComposerSessionMessage
       : undefined;
   return {
     text,
+    browserSources: parseBrowserSourceRefs(asRecord.browserSources),
     intent:
       asRecord.intent === 'coach' ||
       asRecord.intent === 'next_task' ||

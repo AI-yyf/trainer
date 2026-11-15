@@ -18,6 +18,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from pydantic import ValidationError
 
+from ..browser_bridge.source_ref import turn_browser_sources
 from ..core.models import (
     AgentMeta,
     ChatMessage,
@@ -5561,6 +5562,10 @@ def resolve_coach_turn(deps: CoachSupportDeps,
         plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
         context_tier=context_tier,
     )
+    if request.browser_sources:
+        coach_context["browser_sources"] = turn_browser_sources(
+            deps.runtime.resource_service, state.workspace_id, request.browser_sources,
+        )
     if getattr(request, "goal_mode", False):
         coach_context["goal_mode"] = True
     if completed_return and current_evaluation is not None and current_evaluation.passed:
@@ -5827,6 +5832,10 @@ def build_session_response(deps: CoachSupportDeps,
         )
         if getattr(request, "goal_mode", False):
             refreshed_coach_context["goal_mode"] = True
+        if request.browser_sources:
+            refreshed_coach_context["browser_sources"] = turn_browser_sources(
+                deps.runtime.resource_service, state.workspace_id, request.browser_sources,
+            )
         original_history_mode = (
             str(original_coach_context.get("history_mode") or "").strip().lower()
             if isinstance(original_coach_context, dict)
@@ -6378,6 +6387,7 @@ async def execute_turn(deps: CoachSupportDeps,
             request,
             profile,
             attachment_delivery,
+            workspace_id=state.workspace_id,
             stream_id=stream_id,
             stream_state="in_progress" if stream_id else None,
         ),

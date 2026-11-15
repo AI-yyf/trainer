@@ -2,6 +2,7 @@ import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOpe
 import type { TrainerCommandCatalogItem } from "../../../../shared/src/commands";
 import type { CompanionInstallState } from "../../../../shared/src/companionInstallState";
 import type { TrainerMessagePart, TrainerStreamingState } from "../../../../shared/src/protocol";
+import type { BrowserSourceRef } from "../../../../shared/src/browserSourceRef";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
 import type { GoalSession } from "../../../../shared/src/models";
@@ -1680,6 +1681,7 @@ export interface MessageAttachment {
 
 export interface SessionMessageRequest {
   text: string;
+  browserSources?: BrowserSourceRef[];
   intent?: "coach" | "next_task" | "review" | "plan" | "task" | "resources";
   goals?: string[];
   formalPlanMutation?: boolean;
@@ -2021,6 +2023,7 @@ export interface PersistedWorkbenchState extends UiLayoutState {
   composerDraft: string;
   composerDraftScope?: string;
   composerDrafts?: Record<string, string>;
+  composerBrowserSources?: Record<string, BrowserSourceRef[]>;
   /** Dock composer send behavior (§3.7): jump to Coach (default) or stay. */
   composerSendPreference?: "jump" | "stay";
   surfaceScrollPositions?: Record<string, number>;
@@ -2255,7 +2258,7 @@ type HostMessageBody =
    * sidecar queue entry so the webview can answer the applied receipt the
    * poller waits for before acknowledging delivery.
    */
-  | { type: "ui/coachDraftPrefill"; text: string; draftId?: string }
+  | { type: "ui/coachDraftPrefill"; text: string; draftId?: string; workspaceId?: string; sourceRef?: BrowserSourceRef }
   /**
    * Answer to one real-folder request (`/library/groups` list/create/rename/
    * delete) that the webview posted as a host command. Correlated by the

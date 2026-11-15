@@ -92,11 +92,13 @@ test('syncBrowserCaptureExtension stages the unpacked extension with a version m
     const marker = JSON.parse(
       fs.readFileSync(path.join(fixture.stagedDir, 'trainer-browser-capture.json'), 'utf8'),
     );
+    assert.match(marker.sourceFingerprint, /^[a-f0-9]{64}$/);
     assert.deepEqual(marker, {
       schemaVersion: 1,
       name: 'trainer-capture',
       version: '0.1.0',
       fileCount: 6,
+      sourceFingerprint: result.sourceFingerprint,
       generatedFrom: 'browser-extension',
     });
 
@@ -178,8 +180,8 @@ test('verifyBrowserCaptureBundle detects staged drift, stale files and a stale m
   }
 });
 
-test('the VSIX archive gate requires every staged browser-capture entry', async () => {
-  const { collectBrowserCaptureVsixEntries, verifyBrowserCaptureVsixArtifact } =
+test('the VSIX archive gate requires the exact source and marker bytes', async () => {
+  const { verifyBrowserCaptureBundle, verifyBrowserCaptureVsixArtifact } =
     await loadBundleModule();
   const fixture = createFixture();
   try {
@@ -189,22 +191,38 @@ test('the VSIX archive gate requires every staged browser-capture entry', async 
       repoRoot: fixture.repoRoot,
       env: { TRAINER_VSIX_CAPTURE_QUIET: '1' },
     });
-    const bundleEntries = collectBrowserCaptureVsixEntries({ extensionDir: fixture.extensionDir });
+    const { archiveHashes } = verifyBrowserCaptureBundle(fixture);
+    const bundleEntries = Object.keys(archiveHashes);
     assert.ok(bundleEntries.includes('browser-capture/manifest.json'));
     assert.ok(bundleEntries.includes('browser-capture/trainer-browser-capture.json'));
 
     const completeEntries = Object.fromEntries(
-      bundleEntries.map((relative) => [`extension/${relative}`, 'payload']),
+      bundleEntries.map((relative) => [`extension/${relative}`,
+        fs.readFileSync(path.join(fixture.extensionDir, relative))]),
     );
     const completePath = path.join(fixture.root, 'complete.vsix');
     fs.writeFileSync(completePath, zip(completeEntries));
     const complete = verifyBrowserCaptureVsixArtifact({
       vsixPath: completePath,
-      bundleEntries,
+      archiveHashes,
     });
     assert.equal(complete.required, true);
     assert.deepEqual(complete.errors, []);
     assert.deepEqual(complete.missingEntries, []);
+
+    const driftedPath = path.join(fixture.root, 'drifted.vsix');
+    fs.writeFileSync(driftedPath, zip({
+      ...completeEntries,
+      'extension/browser-capture/background.js': '// obsolete worker\n',
+      'extension/browser-capture/trainer-browser-capture.json': '{}',
+      'extension/browser-capture/removed.js': '// stale file\n',
+    }));
+    const drifted = verifyBrowserCaptureVsixArtifact({ vsixPath: driftedPath, archiveHashes });
+    assert.deepEqual(drifted.missingEntries, []);
+    assert.deepEqual(drifted.contentMismatches, [
+      'browser-capture/background.js', 'browser-capture/trainer-browser-capture.json',
+    ]);
+    assert.deepEqual(drifted.unexpectedFiles, ['extension/browser-capture/removed.js']);
 
     const incompletePath = path.join(fixture.root, 'incomplete.vsix');
     fs.writeFileSync(
@@ -213,7 +231,7 @@ test('the VSIX archive gate requires every staged browser-capture entry', async 
     );
     const incomplete = verifyBrowserCaptureVsixArtifact({
       vsixPath: incompletePath,
-      bundleEntries,
+      archiveHashes,
     });
     assert.equal(incomplete.required, true);
     assert.ok(incomplete.errors.length > 0);
@@ -222,7 +240,7 @@ test('the VSIX archive gate requires every staged browser-capture entry', async 
     );
 
     // A tree with no staged bundle reports required=false (fixtures, partial checkouts).
-    const notRequired = verifyBrowserCaptureVsixArtifact({ vsixPath: completePath, bundleEntries: [] });
+    const notRequired = verifyBrowserCaptureVsixArtifact({ vsixPath: completePath });
     assert.deepEqual(notRequired, { required: false, bundleEntries: [], missingEntries: [], errors: [] });
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
@@ -252,9 +270,9 @@ test('prepublish stages the capture bundle before package verification', () => {
   assert.match(verifySource, /for \(const message of report\.browserCapture\?\.errors \?\? \[\]\)/);
 
   const packageSource = fs.readFileSync(packageVsixModulePath, 'utf8');
-  assert.match(packageSource, /assertBrowserCaptureVsixArtifact,/);
+  assert.match(packageSource, /import \{ assertBrowserCaptureVsixArtifact \}/);
   assert.match(packageSource, /const browserCaptureArtifact = assertBrowserCaptureVsixArtifact\(\{/);
-  assert.match(packageSource, /bundleEntries: collectBrowserCaptureVsixEntries\(\{ extensionDir \}\),/);
+  assert.match(packageSource, /archiveHashes: packageReport\.browserCapture\.archiveHashes,/);
   assert.match(packageSource, /browserCaptureArtifact,/);
 });
 

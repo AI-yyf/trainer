@@ -37,7 +37,8 @@ const MENU_IDS = {
   githubReadme: 'trainer-capture-github-readme',
   githubDocs: 'trainer-capture-github-docs',
   githubDownload: 'trainer-capture-github-download',
-  selectionCoach: 'trainer-coach-selection'
+  selectionCoach: 'trainer-coach-selection',
+  selectionLibrary: 'trainer-capture-selection'
 };
 
 const FLUSH_ALARM = 'trainer-capture-flush';
@@ -156,6 +157,11 @@ async function ensureMenus() {
     title: copy.coachMenu,
     contexts: ['selection']
   });
+  chrome.contextMenus.create({
+    id: MENU_IDS.selectionLibrary,
+    title: copy.menuSelectionLibrary,
+    contexts: ['selection']
+  });
 }
 
 // --------------------------------------------------------- notifications ----
@@ -270,6 +276,21 @@ function resolveCaptureTarget(menuId, info, tab) {
 
   if (!TrainerCapture.httpUrlOnly(pageUrl)) {
     return null;
+  }
+
+  if (menuId === MENU_IDS.selectionLibrary) {
+    const selection = String(info.selectionText || '').trim();
+    if (!selection) {
+      return null;
+    }
+    return {
+      url: pageUrl,
+      kind: TrainerCapture.detectKind(pageUrl),
+      title: tabTitle || null,
+      captureMode: 'selection',
+      selection,
+      source: 'menu-selection'
+    };
   }
 
   if (menuId === MENU_IDS.pdfPageLibrary || menuId === MENU_IDS.pdfPageDownload) {

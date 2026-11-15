@@ -20,6 +20,9 @@ export function readZipEntries(archive) {
     const localHeaderOffset = archive.readUInt32LE(offset + 42);
     assertZipRange(archive, offset + 46, fileNameLength, "central directory filename");
     const name = archive.subarray(offset + 46, offset + 46 + fileNameLength).toString("utf8");
+    if (entries.has(name)) {
+      throw new Error(`VSIX contains two entries named ${name}.`);
+    }
     entries.set(name, { flags, compressionMethod, compressedSize, localHeaderOffset });
     offset += 46 + fileNameLength + extraLength + commentLength;
   }

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureCurrentVsix } from "./prepare-current-vsix.mjs";
+import { BROWSER_CAPTURE_DIRNAME, verifyBrowserCaptureBundle } from "./bundle-browser-capture.mjs";
 import {
   SIDECAR_BINARY_MANIFEST_FILE,
 } from "./bundle-sidecar-binary.mjs";
@@ -39,6 +40,13 @@ try {
   }
 
   const installedRoot = path.join(extensionsDir, installedDirName);
+  const browserCapture = verifyBrowserCaptureBundle({
+    extensionDir,
+    targetDir: path.join(installedRoot, BROWSER_CAPTURE_DIRNAME),
+  });
+  if (!browserCapture.ok || !browserCapture.staged) {
+    fail(`Installed browser capture verification failed.\n${browserCapture.errors.join("\n") || browserCapture.reason}`);
+  }
   const requiredFiles = [
     "package.json",
     "dist/extension/src/extension.js",
@@ -89,6 +97,11 @@ try {
         installedRoot,
         listEntry: expectedListEntry,
         requiredFiles,
+        browserCapture: {
+          version: browserCapture.version,
+          sourceFingerprint: browserCapture.sourceFingerprint,
+          fileCount: browserCapture.fileCount,
+        },
         binaryManifest: binaryManifestReport.manifest,
         runtimeSmoke: {
           targetPlatform: runtimeSmoke.targetPlatform,

@@ -25,6 +25,7 @@ import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import { trainerCommands } from "../../../../shared/src/commands";
+import type { BrowserSourceRef } from "../../../../shared/src/browserSourceRef";
 import type { CoachHabitChange } from "../../../../shared/src/coachHabit";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
 import type { TrainingPlanBinding } from "../../../../shared/src/models";
@@ -638,7 +639,7 @@ export function App() {
   const [skillImportText, setSkillImportText] = useState("");
   const composerDeckRef = useRef<HTMLDivElement | null>(null);
   const streamResumeDraftRef = useRef<{
-    text: string; scope?: string; attachments?: MessageAttachment[];
+    text: string; scope?: string; attachments?: MessageAttachment[]; browserSources?: BrowserSourceRef[];
   }>();
   const sendRecoveredPlanResumeRef = useRef<
     (action: "continue_step" | "clear_blocker") => void
@@ -1621,6 +1622,10 @@ export function App() {
   const draft = layout.composerDraft;
   const composerSessionKey = `${data.memory.workspace?.resourceSandbox?.effectivePath
     ?? data.memory.workspace?.workspaceId ?? data.workspaceName}\u0000${data.sessionLabel}`;
+  const coachComposerScope = composerDockDraftScope("coach", composerSessionKey);
+  const composerBrowserSources = layout.composerDraftScope === coachComposerScope
+    ? layout.composerBrowserSources?.[coachComposerScope]
+    : undefined;
   const surfaceInstanceKey = `${composerSessionKey}\u0000${data.runtimeDataGeneration ?? ""}`;
   const attachmentScope = syncIdentity
     ? JSON.stringify([syncIdentity.generation, syncIdentity.workspaceId, syncIdentity.sessionId])
@@ -5694,6 +5699,7 @@ export function App() {
     planRuntimeRecovery,
     resourceComposerIntent,
     attachments,
+    browserSources,
     goalMode: turnGoalMode,
   }: {
     text: string;
@@ -5710,6 +5716,7 @@ export function App() {
     planRuntimeRecovery?: RecoveredPlanResumeTurn;
     resourceComposerIntent?: ResourceComposerIntent;
     attachments?: MessageAttachment[];
+    browserSources?: BrowserSourceRef[];
     goalMode?: boolean;
   }) => {
     if (workspaceSessionBlocked) {
@@ -5806,6 +5813,7 @@ export function App() {
         turnActiveView === "plan" ? planComposerMode ?? resolvedPlanComposerMode : undefined,
       planRuntimeRecovery: recoveredResume,
       attachments: attachments?.length ? attachments : undefined,
+      browserSources: browserSources?.length ? browserSources : undefined,
       useAgentLoop: requiresVerifiedAgentTools
         ? true
         : providerSupportsFormalPlanTools &&
@@ -5821,6 +5829,7 @@ export function App() {
       text: draft.trim() || text,
       scope: layout.composerDraftScope,
       attachments,
+      browserSources,
     } : undefined;
     // Local echo: the user's turn shows up instantly; the server-confirmed
     // copy lands at the same list position when the snapshot merges.
@@ -7362,6 +7371,7 @@ export function App() {
       includeDiagnostics: intent === "review" ? true : undefined,
       contextDetail: intent === "review" ? "full" : undefined,
       attachments: composerAttachments,
+      browserSources: activeView === "coach" ? composerBrowserSources : undefined,
       goalMode: intent === "coach" ? goalMode && !goalPaused : undefined,
     });
     if (activeView === "plan" || activeView === "resources") {
@@ -8376,7 +8386,7 @@ export function App() {
         (streaming.reliabilityOutcome === "failure" || streaming.reliabilityOutcome === "timeout" ||
           streaming.completionStopReason === "cancelled" || isCoachCheckpointRecoveryState(streaming))
       ) {
-        setComposerDraft(resumeDraft.text);
+        setComposerDraft(resumeDraft.text, resumeDraft.browserSources);
         setComposerAttachments(resumeDraft.attachments ?? []);
       }
     }
@@ -11092,6 +11102,8 @@ export function App() {
                 </>
               }
               attachments={composerAttachments}
+              browserSources={activeView === "coach" ? composerBrowserSources : undefined}
+              onRemoveBrowserSource={(source) => setComposerDraft(draft, composerBrowserSources?.filter((entry) => entry !== source))}
               onAttachmentsChange={setComposerAttachments}
               attachmentsAvailable={providerImageInputState.supported}
               attachmentsUnavailableReason={

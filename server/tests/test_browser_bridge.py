@@ -14,8 +14,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.browser_bridge import BrowserBridgeService, build_coach_draft_text
-from app.core.models import LearningPlan, PlanStage
+from app.browser_bridge.source_ref import BrowserSourceRef, turn_browser_sources
+from app.core.models import LearningPlan, PlanStage, UserProfile
 from app.core.settings import AppSettings
+from app.llm.prompts import build_coaching_messages
 from app.main import create_app
 
 
@@ -533,6 +535,59 @@ def test_browser_lane_paths_are_not_blocked_by_the_instance_token(tmp_path, monk
         assert allowed_queue.json()["drafts"] == []
 
 
+def test_browser_excerpt_provenance_is_verified_in_the_paired_library(tmp_path: Path) -> None:
+    workspace_id = "workspace-browser-source"
+    url = "https://docs.example.com/retry"
+    selection = "The queue waits for an applied receipt.\nThe receipt can be retried."
+    with build_client(tmp_path) as client:
+        token = _pair(client, workspace_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+        def queue_excerpt(client_id: str) -> BrowserSourceRef:
+            result = client.post(
+                "/browser/coach-draft", headers=headers, json={
+                    "client_id": client_id, "url": url, "title": "Retry notes",
+                    "selection": selection, "resourceId": "forged-resource",
+                },
+            )
+            assert result.status_code == 200, result.text
+            queue = client.get("/browser/pending-drafts", params={"workspace_id": workspace_id})
+            return BrowserSourceRef.model_validate(queue.json()["drafts"][-1]["source_ref"])
+
+        temporary = queue_excerpt("temporary")
+        assert temporary.resource_id is None
+        assert temporary.selection == selection
+
+        captured = client.post("/resources/capture", headers=headers, json={
+            "url": url, "kind": "web", "capture_mode": "selection", "selection": selection,
+        })
+        assert captured.status_code == 200, captured.text
+        assert captured.json()["index_status"] == "indexed"
+
+        source = queue_excerpt("captured")
+        assert source.resource_id == captured.json()["id"]
+        assert source.version_id and source.content_hash == captured.json()["content_hash"]
+        assert source.location == {"heading": "Captured selection"}
+
+        service = client.app.state.runtime.resource_service
+        sources = turn_browser_sources(service, workspace_id, [source])
+        assert sources[0]["provenance"] == "library"
+        prompt = build_coaching_messages(
+            UserProfile(), "Why is the receipt required?", coach_context={"browser_sources": sources}
+        )[-1]["content"]
+        assert "Browser selections attached to this request" in prompt
+        assert source.version_id in prompt
+        assert "The queue waits for an applied receipt." in prompt
+        foreign = turn_browser_sources(service, "other-workspace", [source])
+        assert foreign == [{**temporary.as_payload(), "provenance": "stale_library"}]
+
+        service.version_store.record_version(
+            workspace_id=workspace_id, resource_id=source.resource_id, content="A new version."
+        )
+        stale = turn_browser_sources(service, workspace_id, [source])
+        assert stale == foreign
+
+
 def test_pending_drafts_survive_sidecar_restart(tmp_path: Path) -> None:
     """T-0009: accepted drafts are durable state, not process memory."""
     data_root = tmp_path / "bridge-data"
@@ -540,7 +595,9 @@ def test_pending_drafts_survive_sidecar_restart(tmp_path: Path) -> None:
     first = BrowserBridgeService(data_root)
     enqueued = first.enqueue_draft(
         workspace_id="ws-drafts",
-        selection="persist me across restarts",
+        selection="persist me across restarts\nwith a second line",
+        url="https://docs.example.com/retry",
+        title="Retry notes",
         client_id="client-1",
     )
     assert enqueued["ok"] is True and enqueued["duplicate"] is False
@@ -551,8 +608,13 @@ def test_pending_drafts_survive_sidecar_restart(tmp_path: Path) -> None:
     assert len(drafts) == 1
     assert drafts[0]["id"] == enqueued["draft_id"]
     assert "persist me across restarts" in drafts[0]["text"]
+    assert drafts[0]["source_ref"] == {
+        "selection": "persist me across restarts\nwith a second line",
+        "url": "https://docs.example.com/retry",
+        "title": "Retry notes",
+    }
 
-    assert restarted.ack_drafts("ws-drafts", [drafts[0]["id"]]) == 1
+    assert restarted.ack_drafts("ws-drafts", [str(drafts[0]["id"])]) == 1
     assert restarted.pending_drafts("ws-drafts") == []
 
     # The ack receipt also survives: the same client capture must not be

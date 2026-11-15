@@ -1,8 +1,9 @@
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readZipEntries } from "./vsix-archive.mjs";
+import { readZipEntries, readZipEntry } from "./vsix-archive.mjs";
 
 /**
  * Stage the browser capture extension (repo root `browser-extension/`) inside
@@ -76,14 +77,27 @@ function readCaptureManifestVersion(sourceDir) {
   }
 }
 
-function buildVersionMarker(sourceDir, fileCount) {
+function sha256(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function hashFiles(rootDir, files) {
+  return Object.fromEntries(files.map((file) => [file, sha256(fs.readFileSync(path.join(rootDir, file)))]));
+}
+
+function buildVersionMarker(sourceDir, sourceHashes) {
   return {
     schemaVersion: 1,
     name: "trainer-capture",
     version: readCaptureManifestVersion(sourceDir),
-    fileCount,
+    fileCount: Object.keys(sourceHashes).length,
+    sourceFingerprint: sha256(JSON.stringify(sourceHashes)),
     generatedFrom: "browser-extension",
   };
+}
+
+function serializeVersionMarker(marker) {
+  return `${JSON.stringify(marker, null, 2)}\n`;
 }
 
 /**
@@ -111,7 +125,7 @@ export function syncBrowserCaptureExtension({
   }
 
   const files = collectBrowserCaptureFiles(sourceDir);
-  const marker = buildVersionMarker(sourceDir, files.length);
+  const marker = buildVersionMarker(sourceDir, hashFiles(sourceDir, files));
   fs.rmSync(targetDir, { recursive: true, force: true });
   fs.mkdirSync(targetDir, { recursive: true });
   for (const relative of files) {
@@ -121,7 +135,7 @@ export function syncBrowserCaptureExtension({
   }
   fs.writeFileSync(
     path.join(targetDir, BROWSER_CAPTURE_VERSION_FILE),
-    `${JSON.stringify(marker, null, 2)}\n`,
+    serializeVersionMarker(marker),
     "utf8",
   );
 
@@ -131,6 +145,7 @@ export function syncBrowserCaptureExtension({
     targetDir,
     fileCount: files.length,
     version: marker.version,
+    sourceFingerprint: marker.sourceFingerprint,
   };
   if (env.TRAINER_VSIX_CAPTURE_QUIET !== "1") {
     console.log(
@@ -148,8 +163,9 @@ export function syncBrowserCaptureExtension({
 export function verifyBrowserCaptureBundle({
   extensionDir = path.resolve(__dirname, ".."),
   repoRoot = path.resolve(extensionDir, ".."),
+  targetDir = resolveBrowserCaptureDirs({ extensionDir, repoRoot }).targetDir,
 } = {}) {
-  const { sourceDir, targetDir } = resolveBrowserCaptureDirs({ extensionDir, repoRoot });
+  const { sourceDir } = resolveBrowserCaptureDirs({ extensionDir, repoRoot });
   const targetRelative = path.relative(extensionDir, targetDir).split(path.sep).join("/");
   const errors = [];
 
@@ -188,9 +204,11 @@ export function verifyBrowserCaptureBundle({
   }
 
   const sourceFiles = collectBrowserCaptureFiles(sourceDir);
+  const sourceHashes = hashFiles(sourceDir, sourceFiles);
   const targetFiles = collectBrowserCaptureFiles(targetDir).filter(
     (relative) => relative !== BROWSER_CAPTURE_VERSION_FILE,
   );
+  const targetHashes = hashFiles(targetDir, targetFiles);
   const missingEntries = [
     ...BROWSER_CAPTURE_REQUIRED_ENTRIES.filter(
       (relative) => !fs.existsSync(path.join(targetDir, relative)),
@@ -217,10 +235,7 @@ export function verifyBrowserCaptureBundle({
 
   const contentMismatches = sourceFiles.filter(
     (relative) =>
-      targetFiles.includes(relative) &&
-      !fs.readFileSync(path.join(sourceDir, relative)).equals(
-        fs.readFileSync(path.join(targetDir, relative)),
-      ),
+      Object.hasOwn(targetHashes, relative) && sourceHashes[relative] !== targetHashes[relative],
   );
   for (const relative of contentMismatches) {
     errors.push(`Staged browser capture drift detected: ${targetRelative}/${relative}`);
@@ -230,17 +245,23 @@ export function verifyBrowserCaptureBundle({
   if (!fs.existsSync(markerPath)) {
     errors.push(`Staged browser capture bundle is missing its version marker: ${targetRelative}/${BROWSER_CAPTURE_VERSION_FILE}`);
   }
-  const manifestVersion = readCaptureManifestVersion(sourceDir);
+  const expectedMarker = buildVersionMarker(sourceDir, sourceHashes);
+  const expectedMarkerHash = sha256(serializeVersionMarker(expectedMarker));
+  const manifestVersion = expectedMarker.version;
   let version;
   if (fs.existsSync(markerPath)) {
     try {
-      const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+      const markerBytes = fs.readFileSync(markerPath);
+      const marker = JSON.parse(markerBytes.toString("utf8"));
       version = typeof marker?.version === "string" ? marker.version : undefined;
       if (marker?.schemaVersion !== 1) {
         errors.push(`Staged browser capture version marker has an unsupported schema: ${targetRelative}/${BROWSER_CAPTURE_VERSION_FILE}`);
       }
       if (!manifestVersion || version !== manifestVersion) {
         errors.push("Staged browser capture version marker does not match browser-extension/manifest.json.");
+      }
+      if (sha256(markerBytes) !== expectedMarkerHash) {
+        errors.push("Staged browser capture marker bytes do not match the source manifest and fingerprint.");
       }
     } catch (error) {
       errors.push(
@@ -260,21 +281,17 @@ export function verifyBrowserCaptureBundle({
     contentMismatches,
     version,
     manifestVersion,
+    sourceFingerprint: expectedMarker.sourceFingerprint,
+    fileCount: expectedMarker.fileCount,
+    archiveHashes: Object.fromEntries(Object.entries({
+      ...sourceHashes,
+      [BROWSER_CAPTURE_VERSION_FILE]: expectedMarkerHash,
+    }).map(([file, hash]) => [`${BROWSER_CAPTURE_DIRNAME}/${file}`, hash])),
     errors,
   };
 }
 
-/** Staged bundle entries relative to the extension directory (VSIX paths). */
-export function collectBrowserCaptureVsixEntries({
-  extensionDir = path.resolve(__dirname, ".."),
-} = {}) {
-  const targetDir = path.join(extensionDir, BROWSER_CAPTURE_DIRNAME);
-  return collectBrowserCaptureFiles(targetDir).map(
-    (relative) => `${BROWSER_CAPTURE_DIRNAME}/${relative}`,
-  );
-}
-
-export function inspectBrowserCaptureVsixContents({ entryNames = [], bundleEntries = [] }) {
+function inspectBrowserCaptureVsixContents({ entryNames, bundleEntries }) {
   const entries = new Set(entryNames);
   const required = bundleEntries.length > 0;
   const missingEntries = required
@@ -283,14 +300,20 @@ export function inspectBrowserCaptureVsixContents({ entryNames = [], bundleEntri
   const errors = missingEntries.map(
     (relative) => `VSIX is missing the bundled browser capture entry: extension/${relative}.`,
   );
-  return { required, bundleEntries, missingEntries, errors };
+  const unexpectedFiles = entryNames.filter((name) =>
+    name.startsWith(`extension/${BROWSER_CAPTURE_DIRNAME}/`) &&
+    !name.endsWith("/") && !bundleEntries.includes(name.slice("extension/".length)),
+  );
+  errors.push(...unexpectedFiles.map((file) => `VSIX contains an unexpected browser capture file: ${file}.`));
+  return { required, bundleEntries, missingEntries, unexpectedFiles, errors };
 }
 
 /** Archive-level gate for `package:vsix`, mirroring the target-runtime check. */
 export function verifyBrowserCaptureVsixArtifact({
   vsixPath,
-  bundleEntries = [],
+  archiveHashes = {},
 } = {}) {
+  const bundleEntries = Object.keys(archiveHashes);
   if (bundleEntries.length === 0) {
     return { required: false, bundleEntries, missingEntries: [], errors: [] };
   }
@@ -303,8 +326,15 @@ export function verifyBrowserCaptureVsixArtifact({
     };
   }
   try {
-    const entryNames = [...readZipEntries(fs.readFileSync(vsixPath)).keys()];
-    return { vsixPath, ...inspectBrowserCaptureVsixContents({ entryNames, bundleEntries }) };
+    const archive = fs.readFileSync(vsixPath);
+    const entries = readZipEntries(archive);
+    const report = inspectBrowserCaptureVsixContents({ entryNames: [...entries.keys()], bundleEntries });
+    const contentMismatches = bundleEntries.filter((file) => {
+      const entry = entries.get(`extension/${file}`);
+      return entry && sha256(readZipEntry(archive, entry)) !== archiveHashes[file];
+    });
+    report.errors.push(...contentMismatches.map((file) => `VSIX browser capture drift detected: extension/${file}.`));
+    return { vsixPath, ...report, contentMismatches };
   } catch (error) {
     return {
       required: true,

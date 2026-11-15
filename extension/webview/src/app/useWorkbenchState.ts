@@ -6,6 +6,7 @@ import {
 } from "../../../../shared/src/webviewSync";
 
 import { trainerCommands } from "../../../../shared/src/commands";
+import { MAX_BROWSER_SOURCE_REFS, type BrowserSourceRef } from "../../../../shared/src/browserSourceRef";
 import type { GoalSession } from "../../../../shared/src/models";
 import { isCurrentStreamEvent } from "../../../../shared/src/streamEventScope";
 import { sanitizeErrorSurfaceText } from "../../../../shared/src/errorSurfaceSanitizer";
@@ -373,7 +374,7 @@ export interface WorkbenchStore {
   setContextDetail: (detail: "focused" | "balanced" | "full") => void;
   setFollowCurrentFile: (enabled: boolean) => void;
   setCoachDefaults: (defaults: Partial<CoachDefaults>) => void;
-  setComposerDraft: (draft: string) => void;
+  setComposerDraft: (draft: string, restoredSources?: BrowserSourceRef[]) => void;
   selectComposerDraftScope: (scope: string) => void;
   setComposerSendPreference: (preference: "jump" | "stay") => void;
   markDockStaySend: (surface: "plan" | "resources") => void;
@@ -995,14 +996,20 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         },
       }),
     })),
-  setComposerDraft: (composerDraft) =>
+  setComposerDraft: (composerDraft, restoredSources) =>
     set((state) => {
+      const scope = state.layout.composerDraftScope;
+      const scopedSources = state.layout.composerBrowserSources;
+      const resetSources = scope && ((scopedSources?.[scope] && !composerDraft.trim()) || restoredSources);
       const nextLayout: PersistedWorkbenchState = {
         ...state.layout,
         composerDraft,
         composerDrafts: state.layout.composerDraftScope
           ? { ...state.layout.composerDrafts, [state.layout.composerDraftScope]: composerDraft }
           : state.layout.composerDrafts,
+        ...(scope && resetSources ? {
+          composerBrowserSources: { ...scopedSources, [scope]: restoredSources ?? [] },
+        } : {}),
       };
       scheduleComposerDraftPersist(() => get().layout);
       return { layout: nextLayout };
@@ -1187,6 +1194,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       // The host retries until it gets the applied receipt, so a delivery for
       // a draft id that is already in the composer is a no-op — except that
       // it still confirms delivery again.
+      const workspaceId = current.syncCursor.workspaceId || current.data.memory.workspace?.workspaceId;
+      if (message.workspaceId && (!workspaceId || message.workspaceId !== workspaceId)) return;
       const draft = sanitizeVisibleText(message.text).trim();
       const draftId = typeof message.draftId === "string" ? message.draftId.trim() : "";
       const appliedDraftIds = current.layout.appliedDraftIds ?? [];
@@ -1213,6 +1222,13 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
               ? `${existingDraft}\n\n${draft}`
               : existingDraft || draft;
           drafts[coachScope] = nextDraft;
+          const source = message.sourceRef;
+          const sources = state.layout.composerBrowserSources?.[coachScope] ?? [];
+          const usableSource = source && sanitizeVisibleText(source.selection) === source.selection &&
+            sanitizeVisibleText(source.url) === source.url && sanitizeVisibleText(source.title) === source.title;
+          const sourceAlreadyPresent = source && sources.some((entry) =>
+            entry.url === source.url && entry.selection === source.selection && entry.versionId === source.versionId,
+          );
           return {
             layout: persistLayout({
               ...state.layout,
@@ -1220,6 +1236,12 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
               composerDraftScope: coachScope,
               composerDrafts: drafts,
               composerDraft: nextDraft,
+              ...(usableSource && !sourceAlreadyPresent ? {
+                composerBrowserSources: {
+                  ...state.layout.composerBrowserSources,
+                  [coachScope]: [...sources, source].slice(-MAX_BROWSER_SOURCE_REFS),
+                },
+              } : {}),
               ...(draftId
                 ? {
                     appliedDraftIds: [...(state.layout.appliedDraftIds ?? []), draftId].slice(
@@ -1801,6 +1823,9 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             composerDraftScope: coachScope,
             composerDrafts: drafts,
             composerDraft: draft,
+            ...(state.layout.composerBrowserSources?.[coachScope] ? {
+              composerBrowserSources: { ...state.layout.composerBrowserSources, [coachScope]: [] },
+            } : {}),
           }),
         };
       }

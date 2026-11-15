@@ -227,16 +227,34 @@ test("browser selection prefill lands in Coach and preserves the Learning draft"
   const textbox = page.getByRole("textbox");
   await textbox.fill("MY PLAN DRAFT");
   await page.evaluate(() => {
+    const applyMessage = window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__;
+    const workspaceId = window.__TRAINER_BOOTSTRAP__.memory.workspace.workspaceId;
+    applyMessage({
+      type: "ui/coachDraftPrefill", draftId: "wrong-workspace", text: "FOREIGN SELECTION",
+      workspaceId: `${workspaceId}-other`,
+    });
+  });
+  await expect(textbox).toHaveValue("MY PLAN DRAFT");
+  await page.evaluate(() => {
+    const workspaceId = window.__TRAINER_BOOTSTRAP__.memory.workspace.workspaceId;
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
       type: "ui/coachDraftPrefill",
       draftId: "browser-prefill-1",
       text: "BROWSER SELECTION",
+      workspaceId,
+      sourceRef: { url: "https://example.com/excerpt", title: "Browser source", selection: "BROWSER SELECTION" },
     });
   });
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("textbox")).toHaveValue("BROWSER SELECTION");
+  await expect(page.getByRole("link", { name: "Browser source" })).toHaveAttribute("href", "https://example.com/excerpt");
+  await textbox.fill("What does this excerpt mean?");
   await page.getByTestId("trainer-view-nav-plan").click();
   await expect(page.getByRole("textbox")).toHaveValue("MY PLAN DRAFT");
+  await expect(page.getByRole("link", { name: "Browser source" })).toHaveCount(0);
+  await page.getByTestId("trainer-view-nav-coach").click();
+  await expect(textbox).toHaveValue("What does this excerpt mean?");
+  await expect(page.getByRole("link", { name: "Browser source" })).toBeVisible();
 });
 
 test("host coach prompt lands in Coach without leaking into the Learning draft", async ({ page }) => {

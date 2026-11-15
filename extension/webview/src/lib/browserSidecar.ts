@@ -4309,6 +4309,7 @@ function browserPreviewTurnPayload(
     formal_plan_mutation: request.formalPlanMutation === true,
     active_view: request.activeView,
     resource_ids: request.resourceIds ?? [],
+    browserSources: request.browserSources,
     resource_composer_intent: resourceComposerIntentPayload(request),
     include_current_file: request.includeCurrentFile,
     include_selection: request.includeSelection,

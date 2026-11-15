@@ -5,10 +5,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import { resolveNativeSidecarTarget } from "./bundle-sidecar-binary.mjs";
-import {
-  assertBrowserCaptureVsixArtifact,
-  collectBrowserCaptureVsixEntries,
-} from "./bundle-browser-capture.mjs";
+import { assertBrowserCaptureVsixArtifact } from "./bundle-browser-capture.mjs";
 import { assertPackageVerified } from "./verify-package.mjs";
 import { readZipEntries, readZipEntry } from "./vsix-archive.mjs";
 import { resolveNpmExecPath } from "./vsix-build-helpers.mjs";
@@ -230,12 +227,9 @@ export async function packageVsix({
     throw new Error(`VSIX packaging completed without producing ${outputPath}.`);
   }
   const targetArtifact = assertVsixTargetArtifact({ vsixPath: outputPath, targetPlatform });
-  // The capture bundle rides inside the archive: every staged entry must be
-  // present as extension/browser-capture/... so the install command can copy it
-  // out. A tree without the staged bundle reports required=false.
   const browserCaptureArtifact = assertBrowserCaptureVsixArtifact({
     vsixPath: outputPath,
-    bundleEntries: collectBrowserCaptureVsixEntries({ extensionDir }),
+    archiveHashes: packageReport.browserCapture.archiveHashes,
   });
   const metadataPath = writeVsixBuildMetadata({ outputPath, targetPlatform, packageJson,
     packageReport, repoRoot, env });
@@ -267,6 +261,11 @@ export function writeVsixBuildMetadata({ outputPath, targetPlatform, packageJson
     sourceDirty: status.stdout.trim().length > 0,
     sourceSnapshot: packageReport.binaryManifest.manifest.sourceSnapshot,
     sidecarBuild: packageReport.binaryManifest.manifest,
+    browserCapture: packageReport.browserCapture?.staged ? {
+      version: packageReport.browserCapture.version,
+      sourceFingerprint: packageReport.browserCapture.sourceFingerprint,
+      fileCount: packageReport.browserCapture.fileCount,
+    } : undefined,
     vsix: { file: path.basename(outputPath), bytes: fs.statSync(outputPath).size,
       sha256: crypto.createHash("sha256").update(fs.readFileSync(outputPath)).digest("hex") },
     tools: { node: process.version, vsce: "4.0.0" },

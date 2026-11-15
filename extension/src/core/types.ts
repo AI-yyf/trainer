@@ -9,6 +9,7 @@ import type {
   WorkspaceUnderstandingSnapshot as SharedWorkspaceUnderstandingSnapshot,
 } from '../../../shared/src/models';
 import type { TrainerMessagePart, TrainerStreamingState } from '../../../shared/src/protocol';
+import type { BrowserSourceRef } from '../../../shared/src/browserSourceRef';
 import type { ResourceSearchMode } from '../../../shared/src/resourceSearch';
 import type { RemoteWorkspaceType } from '../../../shared/src/remoteWorkspace';
 import type { TrainerCustomSkill } from '../../../shared/src/skillCatalog';
@@ -1763,6 +1764,7 @@ export interface MessageAttachmentPayload {
 
 export interface SessionMessagePayload {
   text: string;
+  browserSources?: BrowserSourceRef[];
   intent?: 'coach' | 'next_task' | 'review' | 'plan' | 'task';
   /** Explicit action vs natural-language inference; only explicit may start formal flows. */
   intentSource?: 'explicit' | 'inferred' | 'none';

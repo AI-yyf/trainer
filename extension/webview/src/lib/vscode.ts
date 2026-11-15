@@ -4,6 +4,7 @@ import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
 import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
 import { trainerCommands } from "../../../../shared/src/commands";
+import { parseBrowserSourceRef, parseBrowserSourceRefs } from "../../../../shared/src/browserSourceRef";
 
 import type {
   CoachDefaults,
@@ -332,6 +333,8 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("ui/coachDraftPrefill"),
     text: z.string(),
     draftId: z.string().optional(),
+    workspaceId: z.string().optional(),
+    sourceRef: z.unknown().transform(parseBrowserSourceRef).optional(),
   }),
   z.object({
     type: z.literal("resourceOrganization/pending"),
@@ -701,8 +704,15 @@ export function requestCollapseToSidebar(): void {
 }
 
 function normalizePersistedState(state: PersistedWorkbenchState): PersistedWorkbenchState {
+  const browserSources = state.composerBrowserSources;
   return {
     ...state,
+    composerBrowserSources: browserSources && typeof browserSources === "object" && !Array.isArray(browserSources)
+      ? Object.fromEntries(Object.entries(browserSources).flatMap(([scope, value]) => {
+          const sources = parseBrowserSourceRefs(value);
+          return sources ? [[scope, sources] as const] : [];
+        }))
+      : undefined,
     themePreference: state.themePreference ?? "system",
     learningSurfaceAlignment: state.learningSurfaceAlignment === "right" ? "right" : "left",
     activeView: normalizeSidebarView(state.activeView),

@@ -12,9 +12,10 @@ import {
 } from "react";
 
 import type { ComposerLanguage, MessageAttachment } from "../../lib/types";
+import type { BrowserSourceRef } from "../../../../../shared/src/browserSourceRef";
 import { useImageAttachmentStaging } from "../../lib/useImageAttachmentStaging";
 import { SystemState } from "../../templates/SystemState";
-import { AttachmentIcon, CheckMarkIcon, CloseIcon, PlusIcon, SendIcon, SquareIcon } from "../icons";
+import { AttachmentIcon, CheckMarkIcon, CloseIcon, LinkIcon, PlusIcon, SendIcon, SquareIcon } from "../icons";
 import { ComposerIconButton } from "./ComposerIconButton";
 import { composerLocaleCopy, MAX_STAGED_ATTACHMENTS } from "../../lib/i18n/segments/coachInlineText";
 
@@ -102,6 +103,8 @@ export interface CoachComposerProps {
   accessory?: ReactNode;
   /** Image attachments staged for the next send (paste / drop). */
   attachments?: MessageAttachment[];
+  browserSources?: BrowserSourceRef[];
+  onRemoveBrowserSource?: (source: BrowserSourceRef) => void;
   attachmentScope?: string;
   onAttachmentsChange?: (attachments: MessageAttachment[]) => void;
   attachmentsAvailable?: boolean;
@@ -145,6 +148,8 @@ export function CoachComposer({
   onNavigateHistory,
   accessory,
   attachments,
+  browserSources,
+  onRemoveBrowserSource,
   onAttachmentsChange,
   attachmentScope = textareaId,
   attachmentsAvailable = true,
@@ -852,6 +857,23 @@ export function CoachComposer({
       <span className="sr-only" id={composerStatusId} aria-live="polite">
         {composerStatusText}
       </span>
+      {browserSources?.length ? (
+        <div className="composer__attachments">
+          {browserSources.map((source) => (
+            <span className="composer__attachment-chip" key={JSON.stringify([source.url, source.selection, source.versionId])}>
+              <LinkIcon size={12} />
+              <a className="composer__attachment-label" href={source.url} title={source.url} target="_blank" rel="noreferrer">
+                {source.title || new URL(source.url).hostname}
+              </a>
+              <button type="button" className="composer__attachment-remove"
+                aria-label={`${localizedCopy.removeAttachment} ${source.title || source.url}`}
+                onClick={() => onRemoveBrowserSource?.(source)} disabled={isTextareaDisabled}>
+                <CloseIcon size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       {attachmentsEnabled && stagedAttachments.length > 0 ? (
         <div className="composer__attachments" aria-label={attachmentCountLabel} aria-live="polite">
           {stagedAttachments.map((attachment) => (

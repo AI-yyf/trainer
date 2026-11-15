@@ -16,6 +16,7 @@ from pydantic import (
     model_validator,
 )
 
+from ..browser_bridge.source_ref import MAX_BROWSER_SOURCES, BrowserSourceRef
 from .image_attachments import (
     MAX_IMAGE_BASE64_LENGTH,
     MAX_IMAGE_COUNT,
@@ -2851,6 +2852,9 @@ class SessionMessageRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
     message: str
+    browser_sources: list[BrowserSourceRef] = Field(
+        default_factory=list, alias="browserSources", max_length=MAX_BROWSER_SOURCES,
+    )
     # The client reports whether its intent came from an explicit user action
     # (slash command, skill button, review/task control) or from natural
     # language inference. Only an explicit source may start formal flows.

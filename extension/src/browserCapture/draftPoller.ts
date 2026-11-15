@@ -1,4 +1,5 @@
 import { BROWSER_CAPTURE } from '../core/constants';
+import { parseBrowserSourceRef, type BrowserSourceRef } from '../../../shared/src/browserSourceRef';
 
 /**
  * Forwards browser-captured coach drafts into the workbench.
@@ -23,6 +24,7 @@ export interface PendingBrowserDraft {
   id: string;
   text: string;
   workspaceId: string;
+  sourceRef?: BrowserSourceRef;
 }
 
 export const COACH_DRAFT_PREFILL_MESSAGE = 'ui/coachDraftPrefill';
@@ -71,7 +73,8 @@ export function parsePendingDrafts(payload: unknown): PendingBrowserDraft[] {
     const text = typeof record.text === 'string' ? record.text : '';
     const workspaceId = typeof record.workspace_id === 'string' ? record.workspace_id.trim() : '';
     if (id && text.trim()) {
-      parsed.push({ id, text, workspaceId });
+      const sourceRef = parseBrowserSourceRef(record.source_ref);
+      parsed.push({ id, text, workspaceId, ...(sourceRef ? { sourceRef } : {}) });
     }
   }
   return parsed;
@@ -219,6 +222,7 @@ export class BrowserDraftPoller {
 
       const forwardedIds: string[] = [];
       for (const draft of drafts) {
+        if (this.options.getWorkspaceId().trim() !== workspaceId) break;
         try {
           await this.options.forwardDraft(draft);
           forwardedIds.push(draft.id);
