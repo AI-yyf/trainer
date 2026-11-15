@@ -67,6 +67,7 @@ from ...llm.provider_service import (
     redact_provider_error,
 )
 from ...llm.stream_agent_metadata import merge_stream_agent_metadata
+from ...llm.teaching_boundary import review_agent_reply, teaching_metadata
 from ...memory.workspace_recovery import (
     PLAN_RUNTIME_KEY,
     leftover_formal_plan_is_live_for_fill,
@@ -156,7 +157,6 @@ class CoreRouteDeps:
     completed_session_requests_guard: Any
     completed_training_card_requests: Any
     completed_training_card_requests_guard: Any
-    completion_stream_delta: Any
     consume_provider_empty_reply_override: Any
     consume_provider_reply_failure_override: Any
     current_snapshot: Any
@@ -228,7 +228,6 @@ class CoreRouteDeps:
     resource_contract_stream_recovery_requested: Any
     routing_changed: Any
     safe_activate_training_card_from_coach_request: Any
-    safe_stream_delta: Any
     save_plan_or_conflict: Any
     select_active_training_card: Any
     should_attach_auto_resource_events: Any
@@ -1052,6 +1051,7 @@ def build_core_router(
                     drop_latest_user=True,
                 ),
             )
+            agent_outcome = review_agent_reply(agent_outcome, request.message, request.response_language)
             assistant_content = str(agent_outcome.get("content") or "").strip()
             agent_resume_thread = str(agent_outcome.get("resume_thread") or "").strip()
             if not agent_resume_thread:
@@ -1401,7 +1401,7 @@ def build_core_router(
         runtime.save_session_state(state.session_id)
         response_payload = core.json_object_payload(response)
         if agent_meta:
-            response_payload.setdefault("agent_meta", agent_meta)
+            response_payload.setdefault("agent_meta", teaching_metadata(agent_meta))
         return _finish_session_response(response_payload)
 
     @router.get("/session/history", response_model=None)
@@ -1751,7 +1751,7 @@ def build_core_router(
                 session_workspace_id=workspace_id,
             )
         response_data = core.json_object_payload(response)
-        response_data["artifacts"] = artifacts
+        response_data["artifacts"] = teaching_metadata(artifacts)
         response_data["intent"] = original_intent
         return _finish_turn_response(
             core.attach_operation_reliability(
@@ -2016,8 +2016,6 @@ def build_core_router(
         # site pins the async-iterator type explicitly.
         async def generate():  # pyright: ignore[reportGeneralTypeIssues]
             token_count = 0
-            streamed_reply_content = ""
-            pending_streamed_reply_content = ""
             stream_user_message: ChatMessage | None = None
             stream_assistant_message_ids: set[str] = set()
             stream_committed = False
@@ -2197,28 +2195,17 @@ def build_core_router(
                                     if delta:
                                         full_content += delta
                                         token_count += 1
-                                        if event.get("safe_to_stream") is True and (
-                                            not core.requires_formal_plan_commit(request)
-                                            or core.formal_plan_commit_tool_succeeded(agent_tool_events)
-                                        ):
-                                            visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                                pending_streamed_reply_content,
-                                                delta,
-                                                full_content,
-                                            )
-                                            if visible_delta:
-                                                streamed_reply_content += visible_delta
-                                                yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                                 elif event_type == "tool_call":
-                                    agent_tool_events.append(dict(event))
+                                    agent_tool_events.append(teaching_metadata(event))
                                     yield core.stream_frame("tool_call", event, stream_id)
                                 elif event_type == "tool_result":
-                                    agent_tool_events.append(dict(event))
+                                    agent_tool_events.append(teaching_metadata(event))
                                     yield core.stream_frame("tool_result", event, stream_id)
                                 elif event_type == "step":
-                                    agent_steps.append(dict(event))
+                                    agent_steps.append(teaching_metadata(event))
                                     yield core.stream_frame("step", event, stream_id)
                                 elif event_type == "final":
+                                    event = review_agent_reply(event, request.message, request.response_language)
                                     final_content = str(event.get("content") or "")
                                     if final_content:
                                         full_content = final_content
@@ -2328,16 +2315,8 @@ def build_core_router(
                                     return
                                 full_content += chunk
                                 token_count += 1
-                                visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
-                                    pending_streamed_reply_content,
-                                    chunk,
-                                    full_content,
-                                )
-                                if visible_chunk and not core.requires_formal_plan_commit(request):
-                                    streamed_reply_content += visible_chunk
-                                    yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
                     except Exception:
-                        if not stream_recovery_requested or streamed_reply_content or full_content:
+                        if not stream_recovery_requested or full_content:
                             raise
                         # A grounded resource/project confirmation may recover through
                         # the existing synchronous contract only after the live stream
@@ -2619,12 +2598,11 @@ def build_core_router(
                     if isinstance(reply_record, dict)
                     else ""
                 )
-                visible_delta = core.completion_stream_delta(streamed_reply_content, visible_content)
-                if visible_delta:
+                if visible_content:
                     token_count += 1
-                    yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                    yield f"data: {json.dumps({'chunk': visible_content})}\n\n"
                 if final_agent_meta:
-                    response_data["agent"] = final_agent_meta
+                    response_data["agent"] = teaching_metadata(final_agent_meta)
                 if await stream_cancelled():
                     if not core.stream_cancellation_requested(stream_id):
                         # Client disconnected: no listener remains for a terminal frame;
@@ -2948,8 +2926,6 @@ def build_core_router(
         async def generate():  # pyright: ignore[reportGeneralTypeIssues]
             nonlocal coaching_service, profile, request, state, use_agent_stream, workspace_id
             token_count = 0
-            streamed_reply_content = ""
-            pending_streamed_reply_content = ""
             stream_user_message: ChatMessage | None = None
             stream_assistant_message_ids: set[str] = set()
             stream_committed = False
@@ -3130,28 +3106,17 @@ def build_core_router(
                                     if delta:
                                         full_content += delta
                                         token_count += 1
-                                        if event.get("safe_to_stream") is True and (
-                                            not core.requires_formal_plan_commit(request)
-                                            or core.formal_plan_commit_tool_succeeded(agent_tool_events)
-                                        ):
-                                            visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                                pending_streamed_reply_content,
-                                                delta,
-                                                full_content,
-                                            )
-                                            if visible_delta:
-                                                streamed_reply_content += visible_delta
-                                                yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                                 elif event_type == "tool_call":
-                                    agent_tool_events.append(dict(event))
+                                    agent_tool_events.append(teaching_metadata(event))
                                     yield core.stream_frame("tool_call", event, stream_id)
                                 elif event_type == "tool_result":
-                                    agent_tool_events.append(dict(event))
+                                    agent_tool_events.append(teaching_metadata(event))
                                     yield core.stream_frame("tool_result", event, stream_id)
                                 elif event_type == "step":
-                                    agent_steps.append(dict(event))
+                                    agent_steps.append(teaching_metadata(event))
                                     yield core.stream_frame("step", event, stream_id)
                                 elif event_type == "final":
+                                    event = review_agent_reply(event, request.message, request.response_language)
                                     final_content = str(event.get("content") or "")
                                     if final_content:
                                         full_content = final_content
@@ -3218,14 +3183,6 @@ def build_core_router(
                                     continue
                                 full_content += delta
                                 token_count += 1
-                                visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                    pending_streamed_reply_content,
-                                    delta,
-                                    full_content,
-                                )
-                                if visible_delta and not core.requires_formal_plan_commit(request):
-                                    streamed_reply_content += visible_delta
-                                    yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                         stream_finalization = coaching_service.consume_stream_finalization()
                         if stream_finalization is not None:
                             full_content = stream_finalization[1]
@@ -3367,7 +3324,7 @@ def build_core_router(
                             attachment_delivery=attachment_delivery,
                         )
                     )
-                    response_data["artifacts"] = artifacts
+                    response_data["artifacts"] = teaching_metadata(artifacts)
                     response_data["intent"] = original_intent
                     reply_record = response_data.get("reply")
                     visible_content = (
@@ -3375,12 +3332,11 @@ def build_core_router(
                         if isinstance(reply_record, dict)
                         else ""
                     )
-                    visible_delta = core.completion_stream_delta(streamed_reply_content, visible_content)
-                    if visible_delta:
+                    if visible_content:
                         token_count += 1
-                        yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                        yield f"data: {json.dumps({'chunk': visible_content})}\n\n"
                     if final_agent_meta:
-                        response_data["agent"] = final_agent_meta
+                        response_data["agent"] = teaching_metadata(final_agent_meta)
                     if await stream_cancelled():
                         if not core.stream_cancellation_requested(stream_id):
                             # Client disconnected: no listener remains for a terminal frame;
@@ -3556,28 +3512,17 @@ def build_core_router(
                                     if delta:
                                         full_content += delta
                                         token_count += 1
-                                        if event.get("safe_to_stream") is True and (
-                                            not core.requires_formal_plan_commit(request)
-                                            or core.formal_plan_commit_tool_succeeded(agent_tool_events)
-                                        ):
-                                            visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
-                                                pending_streamed_reply_content,
-                                                delta,
-                                                full_content,
-                                            )
-                                            if visible_delta:
-                                                streamed_reply_content += visible_delta
-                                                yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                                 elif event_type == "tool_call":
-                                    agent_tool_events.append(dict(event))
+                                    agent_tool_events.append(teaching_metadata(event))
                                     yield core.stream_frame("tool_call", event, stream_id)
                                 elif event_type == "tool_result":
-                                    agent_tool_events.append(dict(event))
+                                    agent_tool_events.append(teaching_metadata(event))
                                     yield core.stream_frame("tool_result", event, stream_id)
                                 elif event_type == "step":
-                                    agent_steps.append(dict(event))
+                                    agent_steps.append(teaching_metadata(event))
                                     yield core.stream_frame("step", event, stream_id)
                                 elif event_type == "final":
+                                    event = review_agent_reply(event, request.message, request.response_language)
                                     final_content = str(event.get("content") or "")
                                     if final_content:
                                         full_content = final_content
@@ -3681,16 +3626,8 @@ def build_core_router(
                                     return
                                 full_content += chunk
                                 token_count += 1
-                                visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
-                                    pending_streamed_reply_content,
-                                    chunk,
-                                    full_content,
-                                )
-                                if visible_chunk and not core.requires_formal_plan_commit(request):
-                                    streamed_reply_content += visible_chunk
-                                    yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
                     except Exception:
-                        if not stream_recovery_requested or streamed_reply_content or full_content:
+                        if not stream_recovery_requested or full_content:
                             raise
                         # Grounding recovery is deliberately exceptional: the
                         # nominal path above is always provider-backed SSE.
@@ -3737,7 +3674,7 @@ def build_core_router(
                                 session_workspace_id=fallback_workspace_id,
                             )
                         response_data = json_response_payload(fallback_response)
-                        response_data["artifacts"] = fallback_artifacts
+                        response_data["artifacts"] = teaching_metadata(fallback_artifacts)
                         response_data["intent"] = original_intent
                         if "agent" not in response_data and isinstance(
                             response_data.get("agent_meta"),
@@ -4006,7 +3943,7 @@ def build_core_router(
                         attachment_delivery=attachment_delivery,
                     )
                 )
-                response_data["artifacts"] = dict(coach_turn["artifacts"])
+                response_data["artifacts"] = teaching_metadata(dict(coach_turn["artifacts"]))
                 response_data["intent"] = original_intent
                 reply_record = response_data.get("reply")
                 visible_content = (
@@ -4014,12 +3951,11 @@ def build_core_router(
                     if isinstance(reply_record, dict)
                     else ""
                 )
-                visible_delta = core.completion_stream_delta(streamed_reply_content, visible_content)
-                if visible_delta:
+                if visible_content:
                     token_count += 1
-                    yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                    yield f"data: {json.dumps({'chunk': visible_content})}\n\n"
                 if final_agent_meta:
-                    response_data["agent"] = final_agent_meta
+                    response_data["agent"] = teaching_metadata(final_agent_meta)
                 if await stream_cancelled():
                     if not core.stream_cancellation_requested(stream_id):
                         # Client disconnected: no listener remains for a terminal frame;
@@ -4827,7 +4763,6 @@ def build_core_router(
                         return
                     if event.chunk:
                         token_count += 1
-                        yield f"data: {json.dumps({'chunk': event.chunk, **stream_id_payload})}\n\n"
                     if event.card is not None:
                         generated_card = event.card
                 if core.stream_cancellation_requested(stream_id):

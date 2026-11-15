@@ -931,27 +931,11 @@ def _gate_mcp_tool_call(
                 details={"actor": "mcp", "server": server_name, "tool": tool_name, "arguments": arguments},
             )
         return None
-    if authority is None:
-        return {
-            "ok": False,
-            "error": "workspace_authority_unavailable",
-            "detail": (
-                f"MCP tool {tool_name!r} on server {server_name!r} is a write-class operation, "
-                "but no workspace authority is available to approve it."
-            ),
-        }
-    allowed = authority.check_permission(operation, authority.active_workspace_root or target)
-    if allowed:
-        return None
     return {
         "ok": False,
-        "error": "workspace_permission_denied",
-        "detail": (
-            f"MCP tool {tool_name!r} on server {server_name!r} maps to workspace operation "
-            f"{operation!r}, which the current permission level does not allow."
-        ),
+        "error": "teaching_boundary",
+        "detail": "The Coach can use external tools only to read and observe.",
         "required_operation": operation,
-        "current_permission_level": authority.permission_level.name,
     }
 
 
@@ -992,6 +976,8 @@ async def build_coach_mcp_tools(
                 continue
             registration_name = _registration_name(config.name, raw_tool_name, used_names)
             operation = classify_mcp_tool_operation(raw_tool_name)
+            if operation != "read":
+                continue
 
             def _make_handler(
                 server_name: str,

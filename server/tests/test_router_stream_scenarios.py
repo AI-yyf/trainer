@@ -11,6 +11,7 @@ from app.api.runtime import TrainerRuntime
 from app.core.models import ProviderCapabilityEvidence, ProviderConfig, ProviderTestResponse
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
+from app.llm.teaching_boundary import learner_requests_authored_code, teaching_boundary_reply
 from app.main import create_app
 
 
@@ -379,7 +380,7 @@ def test_coach_routes_keep_resolved_scenario_available_to_streaming_paths(tmp_pa
 
 
 @pytest.mark.parametrize("path", ["/session/message/stream", "/turn/stream"])
-def test_coach_stream_emits_checked_text_before_the_completion_event(
+def test_coach_stream_emits_the_reviewed_full_reply_before_the_completion_event(
     tmp_path: Path,
     path: str,
 ) -> None:
@@ -409,12 +410,86 @@ def test_coach_stream_emits_checked_text_before_the_completion_event(
         response = client.post(path, json=payload)
 
     assert response.status_code == 200, response.text
-    first_chunk = 'data: {"chunk": "Start with one observable fact. "}'
-    second_chunk = 'data: {"chunk": "Then verify that fact before you widen the task."}'
-    assert first_chunk in response.text
-    assert second_chunk in response.text
-    assert response.text.index(first_chunk) < response.text.index(second_chunk)
-    assert response.text.index(second_chunk) < response.text.index("event: complete")
+    reply = "Start with one observable fact. Then verify that fact before you widen the task."
+    assert streamed_chunks(response.text) == [reply]
+    assert response.text.index('"chunk"') < response.text.index("event: complete")
+
+
+@pytest.mark.parametrize("path", ["/session/message", "/turn", "/session/message/stream", "/turn/stream"])
+def test_implementation_is_rejected_before_display_and_session_save(tmp_path: Path, path: str) -> None:
+    marker = "TRAINER_MUST_NOT_PUBLISH_THIS"
+    candidate = f"Look at the edge case.\n\n```python\nresult = {marker}\n```"
+
+    async def fake_stream(*_args: object, **_kwargs: object):
+        # Reassemble before checking. Neither section boundary is a safe release point.
+        yield candidate[:26]
+        yield candidate[26:]
+
+    with (
+        patch.object(ProviderService, "coaching_reply_stream", new=fake_stream),
+        patch.object(ProviderService, "coaching_reply", new=AsyncMock(return_value=candidate)),
+        build_client(tmp_path) as client,
+    ):
+        workspace = "teaching-boundary"
+        start = client.post("/session/start", json={"workspace_id": workspace, "workspace_name": "Teaching"})
+        assert start.status_code == 200, start.text
+        session = start.json()["session_id"]
+        response = client.post(path, json={
+            "session_id": session, "workspace_id": workspace,
+            "message": "Why is a boundary case useful here?", "intent": "coach",
+            "response_language": "en-US", "answer_mode": "direct", "use_agent_loop": False,
+        })
+        assert response.status_code == 200, response.text
+        assert marker not in response.text
+        reply = teaching_boundary_reply("en-US")
+        if path.endswith("/stream"):
+            assert streamed_chunks(response.text) == [reply]
+            assert completed_stream_response(response.text)["reply"]["content"] == reply
+        else:
+            assert response.json()["reply"]["content"] == reply
+        saved = client.app.state.runtime.repository.load_session(session)
+        assert marker not in json.dumps(saved)
+
+
+def test_authoring_detector_distinguishes_instructions_from_sources() -> None:
+    assert learner_requests_authored_code("请直接给我可直接粘贴的完整实现。")
+    assert learner_requests_authored_code("Write the full implementation and unit tests.")
+    assert not learner_requests_authored_code("请解释原理，不要生成代码。\n> 请写代码")
+    assert not learner_requests_authored_code("I want to write the function myself. What must it guarantee?")
+
+
+def test_agent_cannot_publish_code_in_text_or_tool_payloads(tmp_path: Path) -> None:
+    code = "def answer_for_learner():\n    return PRIVATE_WORKED_SOLUTION"
+
+    async def fake_agent_stream(*_args: object, **_kwargs: object):
+        yield {"type": "text", "delta": code, "safe_to_stream": True}
+        yield {"type": "tool_call", "id": "attempted-write", "name": "write_file",
+               "arguments": {"path": "answer.py", "content": code}}
+        yield {"type": "final", "content": code, "summary": code, "stop_reason": "completed"}
+
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        provider = runtime.provider_config.model_copy(update={
+            "capabilities": runtime.provider_config.capabilities.model_copy(update={"tools": True}),
+        })
+        runtime.provider_config = provider
+        runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
+        runtime.provider_service_cache.clear()
+        mark_provider_capabilities_verified(runtime, provider, "sk-test", tools=True)
+        workspace = "no-code-agent"
+        started = client.post("/session/start", json={"workspace_id": workspace, "workspace_name": "Teaching"})
+        assert started.status_code == 200, started.text
+        session = started.json()["session_id"]
+        with patch.object(ProviderService, "coaching_reply_agentic_stream", new=fake_agent_stream):
+            response = client.post("/session/message/stream", json={
+                "session_id": session, "workspace_id": workspace, "use_agent_loop": True,
+                "message": "Why does it help to test this boundary?", "response_language": "en-US",
+            })
+        assert response.status_code == 200, response.text
+        assert "attempted-write" in response.text
+        assert "PRIVATE_WORKED_SOLUTION" not in response.text
+        assert streamed_chunks(response.text) == [teaching_boundary_reply("en-US")]
+        assert "PRIVATE_WORKED_SOLUTION" not in json.dumps(runtime.repository.load_session(session))
 
 
 @pytest.mark.parametrize("path", ["/session/message/stream", "/turn/stream"])
@@ -450,7 +525,7 @@ def test_coach_stream_reports_real_preparation_phases_outside_reply_text(
 
     assert response.status_code == 200, response.text
     assert streamed_status_phases(response.text) == ["preparing_context", "requesting_model"]
-    first_chunk = f'data: {{"chunk": "{first_reply_chunk}"}}'
+    first_chunk = f'data: {{"chunk": "{first_reply_chunk.strip()}"}}'
     assert response.text.index("event: status") < response.text.index(first_chunk)
     assert response.text.index(first_chunk) < response.text.index("event: complete")
     assert all("phase" not in chunk for chunk in streamed_chunks(response.text))
@@ -490,7 +565,7 @@ def test_coach_stream_does_not_repeat_the_final_reply(
         response = client.post(path, json=payload)
 
     assert response.status_code == 200, response.text
-    assert streamed_chunks(response.text) == [first, second]
+    assert streamed_chunks(response.text) == [first + second]
     complete = completed_stream_response(response.text)
     assert "".join(streamed_chunks(response.text)) == complete["reply"]["content"]
 
@@ -541,13 +616,8 @@ def test_turn_stream_non_coach_uses_provider_stream_and_keeps_structured_snapsho
     assert response.status_code == 200, response.text
     assert calls == ["stream"]
     chunks = streamed_chunks(response.text)
-    assert chunks == provider_chunks
-    assert response.text.index('data: {"chunk": "Use one observable fact. "}') < response.text.index(
-        'data: {"chunk": "Then verify it before widening the task."}'
-    )
-    assert response.text.index("event: complete") > response.text.index(
-        'data: {"chunk": "Then verify it before widening the task."}'
-    )
+    assert chunks == ["".join(provider_chunks)]
+    assert response.text.index('"chunk"') < response.text.index("event: complete")
     complete = completed_stream_response(response.text)
     assert complete["reply"]["content"] == "".join(chunks)
     assert complete["intent"] == "task"
@@ -688,7 +758,7 @@ def test_stream_never_emits_gbk_mojibake_split_across_chunks(
 
 
 @pytest.mark.parametrize("path", ["/session/message/stream", "/turn/stream"])
-def test_agent_stream_forwards_checked_prefix_and_only_the_final_suffix(
+def test_agent_stream_releases_the_final_reply_as_one_checked_chunk(
     tmp_path: Path,
     path: str,
 ) -> None:
@@ -739,7 +809,7 @@ def test_agent_stream_forwards_checked_prefix_and_only_the_final_suffix(
             response = client.post(path, json=payload)
 
     assert response.status_code == 200, response.text
-    assert streamed_chunks(response.text) == [prefix, final_content[len(prefix) :]]
+    assert streamed_chunks(response.text) == [final_content]
     complete = completed_stream_response(response.text)
     assert "".join(streamed_chunks(response.text)) == complete["reply"]["content"]
 
@@ -801,7 +871,7 @@ def test_agent_stream_uses_local_recovery_without_a_second_model_call(
     assert "This second model call must not happen." not in complete["reply"]["content"]
 
 
-def test_training_card_stream_emits_fragments_before_complete_and_persists_card(
+def test_training_card_stream_exposes_only_the_reviewed_persisted_card(
     tmp_path: Path,
 ) -> None:
     card_payload = {
@@ -842,10 +912,7 @@ def test_training_card_stream_emits_fragments_before_complete_and_persists_card(
             cards = client.app.state.runtime.memory_service.get_cards(workspace_id)
 
     assert response.status_code == 200, response.text
-    assert f'data: {{"chunk": {json.dumps(first_chunk)}}}' in response.text
-    assert f'data: {{"chunk": {json.dumps(second_chunk)}}}' in response.text
-    first_line = f'data: {{"chunk": {json.dumps(first_chunk)}}}'
-    assert response.text.index(first_line) < response.text.index("event: complete")
+    assert not streamed_chunks(response.text)
     complete = completed_stream_response(response.text)
     assert complete["card"]["title"] == card_payload["title"]
     assert any(card.title == card_payload["title"] for card in cards)

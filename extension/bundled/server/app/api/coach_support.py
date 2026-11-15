@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from ..browser_bridge.source_ref import turn_browser_sources
+from ..llm.teaching_boundary import release_teaching_reply, review_agent_reply, teaching_metadata
 from ..core.models import (
     AgentMeta,
     ChatMessage,
@@ -6090,7 +6091,14 @@ def build_session_response(deps: CoachSupportDeps,
             next_step=next_step,
             blocker=blocker,
         )
+    guarded_reply = release_teaching_reply(reply_content, request.message, request.response_language)
+    if guarded_reply != reply_content:
+        if isinstance(agent_meta, dict):
+            agent_meta = {**agent_meta, "content": guarded_reply, "summary": guarded_reply}
+        reply_content = guarded_reply
+    artifacts = teaching_metadata(artifacts)
     if isinstance(agent_meta, dict):
+        agent_meta = teaching_metadata(agent_meta)
         deps.apply_agent_meta_to_coaching_state(
             snapshot_for_response,
             agent_meta,
@@ -6574,6 +6582,7 @@ async def execute_turn(deps: CoachSupportDeps,
                         drop_latest_user=True,
                     ),
                 )
+                agent_outcome = review_agent_reply(agent_outcome, request.message, request.response_language)
                 assistant_content = str(agent_outcome.get("content") or "").strip()
                 agent_resume_thread = str(agent_outcome.get("resume_thread") or "").strip()
                 if not agent_resume_thread:
@@ -7153,6 +7162,7 @@ async def execute_turn(deps: CoachSupportDeps,
                 ),
                 history=history,
             )
+            agent_outcome = review_agent_reply(agent_outcome, request.message, request.response_language)
             assistant_content = str(agent_outcome.get("content") or "").strip()
             agent_resume_thread = str(agent_outcome.get("resume_thread") or "").strip()
             if not agent_resume_thread:

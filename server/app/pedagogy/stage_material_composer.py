@@ -1,7 +1,7 @@
 """Stage material composition for learning-plan stages.
 
 Composes a bounded set of teaching materials (study guide, cheat sheet,
-exercise set, code examples) for one learning-plan stage. Generation asks the
+exercise set, cases to analyze) for one learning-plan stage. Generation asks the
 LLM once for a single JSON payload covering all four material kinds; on
 failure it retries once with a higher temperature, then falls back to a
 deterministic, content-bearing skeleton assembled from the stage definition.
@@ -18,6 +18,7 @@ import logging
 from typing import Any, cast
 
 from ..core.models import TeachingAssetKind, TeachingKnowledgeAsset, TurnRequest
+from ..llm.teaching_boundary import TEACHING_ONLY_INSTRUCTION, has_implementation_payload
 from ..training.card_generator import _parse_llm_json
 from .principle_explainer import PrincipleExplainerService
 from .service import LearnerState, TeachingDecision
@@ -48,23 +49,24 @@ _STAGE_MATERIAL_SYSTEM_PROMPT = (
     "Rules:\n"
     "- kind must be one of: study_guide, cheat_sheet, exercise_set, code_examples.\n"
     "- Include exactly one material for each of the four kinds.\n"
+    "- The historical code_examples kind contains a case to analyze and checks in prose.\n"
     "- content carries the full material text in markdown; summary is a one-sentence description.\n"
     "- sources lists the provided resource titles, teaching assets, or plan artifacts each "
-    "material draws on."
+    "material draws on.\n\n" + TEACHING_ONLY_INSTRUCTION
 )
 
 _ZH_FALLBACK_LABELS: dict[str, str] = {
     "study_guide": "学习指南",
     "cheat_sheet": "速查表",
     "exercise_set": "练习集",
-    "code_examples": "示例代码",
+    "code_examples": "案例分析",
 }
 
 _EN_FALLBACK_LABELS: dict[str, str] = {
     "study_guide": "Study guide",
     "cheat_sheet": "Cheat sheet",
     "exercise_set": "Exercise set",
-    "code_examples": "Code examples",
+    "code_examples": "Case analysis",
 }
 
 
@@ -236,12 +238,12 @@ def _fallback_asset(
         )
     else:  # code_examples
         content = _localized_text(
-            f"Code example scaffold for '{stage_title}'.\n\n"
+            f"Case analysis for '{stage_title}'.\n\n"
             f"Build one minimal example around '{topic}':\n"
             "1. Pick the smallest relevant file or function in the project.\n"
             "2. Run the smallest possible check after the change.\n"
             "3. Record the output and name which stage outcome it proves.",
-            f"「{stage_title}」示例代码骨架。\n\n"
+            f"「{stage_title}」案例分析。\n\n"
             f"围绕「{topic}」写一个最小示例：\n"
             "1. 选择项目中最小相关的文件或函数。\n"
             "2. 实现或修改后运行最小检查。\n"
@@ -330,6 +332,8 @@ class StageMaterialComposer:
                         max_tokens=_MATERIAL_MAX_TOKENS,
                     )
                     materials = _extract_valid_materials(_parse_llm_json(raw))
+                    if has_implementation_payload(materials):
+                        materials = []
                 except Exception:
                     logger.warning(
                         "Stage material LLM attempt %s failed for stage=%s",

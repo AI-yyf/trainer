@@ -65,6 +65,7 @@ from ..evaluator.verifiers import (
 from ..resources.capture import CaptureError, capture_source
 from ..resources.search import citation_id_for
 from ..training.card_request import DeliverableKind, normalize_deliverable_kind
+from .teaching_boundary import contains_implementation, has_implementation_payload
 
 logger = logging.getLogger("trainer.llm.tools")
 
@@ -80,9 +81,10 @@ def _localized_text(english: str, chinese: str, language: str | None) -> str:
 
 # Learning OS fail-closed: coach agent must never silently write user business code.
 # These names stay unregistered and are always denied even if hallucinated or re-added.
-PROJECT_WRITE_TOOL_NAMES: frozenset[str] = frozenset(
-    {"write_file", "apply_patch", "edit_file"}
-)
+PROJECT_WRITE_TOOL_NAMES: frozenset[str] = frozenset({
+    "write_file", "apply_patch", "edit_file", "write_sandbox_file",
+    "insert_code", "execute_command", "run_command",
+})
 
 JsonSchema = dict[str, Any]
 ToolHandler = Callable[["ToolContext", dict[str, Any]], Any]
@@ -224,7 +226,7 @@ class ToolRegistry:
                 "ok": False,
                 "error": "tool_not_available",
                 "detail": (
-                    "Coach tools must not silently write learner project or business code."
+                    "Trainer's coach does not author or edit files."
                 ),
             }
         allowed = _tool_name_allowlist(context.extra.get("allowed_tool_names"))
@@ -302,6 +304,12 @@ class ToolRegistry:
                 ),
             }
         parsed_arguments = _coerce_arguments(arguments)
+        if name in {"save_formal_plan", "record_learning_note"} and has_implementation_payload(parsed_arguments):
+            return {
+                "ok": False,
+                "error": "teaching_boundary",
+                "detail": "Keep the learning record to goals, observations, and acceptance criteria.",
+            }
         from .harness import (
             lookup_sandbox_operation,
             sandbox_operation_key,
@@ -5146,6 +5154,8 @@ async def _handle_record_learning_note(context: ToolContext, args: dict[str, Any
     note = str(args.get("note") or "").strip()
     if not note:
         return {"ok": False, "error": "missing_note", "detail": "note must be non-empty."}
+    if contains_implementation(note):
+        return {"ok": False, "error": "teaching_boundary", "detail": "Record the learning observation in prose."}
     kind = str(args.get("kind") or "observation").strip() or "observation"
     record_fn = (
         getattr(memory_service, "record_teaching_observation", None)
@@ -6690,31 +6700,6 @@ def build_default_tool_registry(
                 "required": ["path"],
             },
             handler=_handle_read_sandbox_file,
-        )
-    )
-
-    registry.register(
-        ToolDefinition(
-            name="write_sandbox_file",
-            description=(
-                "Create or overwrite a text file inside Trainer's managed resource sandbox. "
-                "Use this to edit library notes, extracted artifacts, and working copies. "
-                "Never write the learner's project or business code. Parent folders are created."
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "path": _string("Sandbox-relative path to write."),
-                    "content": _string("Full file contents to write."),
-                    "create": {
-                        "type": "boolean",
-                        "description": "Create the file when missing. Defaults to true.",
-                        "default": True,
-                    },
-                },
-                "required": ["path", "content"],
-            },
-            handler=_handle_write_sandbox_file,
         )
     )
 

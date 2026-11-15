@@ -33,6 +33,7 @@ from ..core.models import (
     TrainingCardTrustState,
     TrainingCardType,
 )
+from ..llm.teaching_boundary import review_teaching_card
 from ..pedagogy.evidence_controls import (
     CodeReveal,
     Difficulty,
@@ -3912,6 +3913,11 @@ class CardGenerationService:
             )
         if not card.project_id and context.workspace_id:
             card = card.model_copy(update={"project_id": context.workspace_id})
+
+        card = review_teaching_card(card, context.response_language)
+        creation_payload["title"] = card.title
+        creation_payload["focus_area"] = card.focus_area
+        creation_payload["target_skill"] = card.target_skill
 
         # §13.21 Record card creation event in unified event ledger
         if self._event_ledger is not None:

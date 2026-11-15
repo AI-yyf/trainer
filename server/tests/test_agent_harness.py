@@ -441,7 +441,8 @@ def test_core_prompt_stays_until_done_and_library_skill_is_gated() -> None:
         coach_context={"active_view": "resources", "library_sandbox_work": True},
     )
     assert "list_sandbox" in library
-    assert "write_sandbox_file" in library
+    assert "read_sandbox_file" in library
+    assert "write_sandbox_file" not in library
 
 
 @pytest.mark.asyncio

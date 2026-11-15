@@ -171,6 +171,12 @@ from .provider.model_catalog import (
 )
 from .provider.quota_copy import provider_quota_reply
 from .provider.redaction import _compact_text, redact_provider_error
+from .teaching_boundary import (
+    contains_implementation,
+    learner_requests_authored_code,
+    release_teaching_reply,
+    teaching_boundary_reply,
+)
 from .provider.service_support import (
     agent_tool_events as _agent_tool_events,
 )
@@ -3276,6 +3282,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         history: list[dict[str, str]] | None = None,
     ) -> str:
         self.clear_last_reply_state()
+        if learner_requests_authored_code(message):
+            return teaching_boundary_reply(response_language)
         if not self.has_api_key:
             if not profile:
                 return self._missing_api_key_reply(response_language)
@@ -3289,7 +3297,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             )
         if not profile:
             return self._onboarding_reply(response_language)
-        return await self._llm_reply(
+        reply = await self._llm_reply(
             profile,
             message,
             current_file,
@@ -3298,6 +3306,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             coach_context=coach_context,
             history=history,
         )
+        return release_teaching_reply(reply, message, response_language)
 
     async def _llm_reply(
         self,
@@ -3443,8 +3452,14 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         coach_context: dict[str, Any] | None = None,
         grounded_completion: bool = False,
     ) -> str:
+        if learner_requests_authored_code(message) or contains_implementation(content):
+            return teaching_boundary_reply(response_language)
         visible_content = _strip_internal_coach_meta(content)
         visible_content = _strip_leading_html_shell_artifact(visible_content)
+        if visible_content.strip() and isinstance(coach_context, dict) and coach_context.get("browser_sources"):
+            # An attached excerpt already anchors the discussion. Preserve the
+            # answer to the learner's question instead of restarting intake.
+            return release_teaching_reply(visible_content.strip(), message, response_language)
         if not visible_content.strip():
             if _looks_like_provider_html_shell(content):
                 detail = _malformed_provider_html_shell_detail()
@@ -4965,6 +4980,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             }
         """
         self.clear_last_reply_state()
+        if learner_requests_authored_code(message):
+            return {
+                "content": teaching_boundary_reply(response_language), "steps": [],
+                "summary": None, "next_step": None, "stop_reason": "teaching_boundary",
+                "tool_events": [], "fell_back": False,
+            }
         attachment_delivery = self.describe_attachment_delivery(
             attachments=attachments,
             protocol=protocol,
@@ -5541,6 +5562,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         checks as a non-streaming reply. Tool progress remains live.
         """
         self.clear_last_reply_state()
+        if learner_requests_authored_code(message):
+            yield {"type": "final", "content": teaching_boundary_reply(response_language),
+                   "stop_reason": "teaching_boundary"}
+            return
         attachment_delivery = self.describe_attachment_delivery(
             attachments=attachments,
             protocol=protocol,
@@ -6342,6 +6367,9 @@ async def _provider_service_coaching_reply_stream(
     cancel_event: asyncio.Event | None = None,
 ):
     self.clear_last_reply_state()
+    if learner_requests_authored_code(message):
+        yield teaching_boundary_reply(response_language)
+        return
     cancel_event = cancel_event or _stream_cancel_event(
         coach_context.get("stream_cancel_event") if isinstance(coach_context, dict) else None
     )

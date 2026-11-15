@@ -139,6 +139,7 @@ from ..training.card_generator import (
     _make_guided_scenario_pack_card,
 )
 from ..training.card_request import message_requests_explicit_training_card
+from ..llm.teaching_boundary import teaching_metadata
 from ..training.plan_binding import validated_mint_binding
 from ..training.resource_practice import build_independent_resource_practice, is_independent_resource_practice
 from ..workspace.classifier import (
@@ -152,7 +153,6 @@ from ..workspace.provisioning import (
 )
 from . import coach_support
 from ._helpers import (
-    GBK_MOJIBAKE_FRAGMENTS,
     SUPPORTED_RESPONSE_LANGUAGES,
     contains_cjk_text,
     localized_text,
@@ -5491,15 +5491,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             history.append({"role": item.role, "content": content})
         return history
 
-    def completion_stream_delta(streamed_content: str, final_content: str) -> str:
-        if not final_content:
-            return ""
-        if not streamed_content:
-            return final_content
-        if final_content.startswith(streamed_content):
-            return final_content[len(streamed_content) :]
-        return ""
-
     _STREAM_STATUS_PHASES = {
         "preparing_context",
         "requesting_model",
@@ -5812,35 +5803,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         return {**value, "stream_id": stream_id}
 
     def stream_frame(event: str, value: object, stream_id: str) -> str:
+        if event in {"tool_call", "tool_result", "step"} and isinstance(value, dict):
+            value = teaching_metadata(value)
         return (
             f"event: {event}\n"
             f"data: {json.dumps(stream_event_payload(value, stream_id))}\n\n"
         )
-
-    def safe_stream_delta(
-        pending_content: str,
-        delta: str,
-        full_content: str,
-    ) -> tuple[str, str]:
-        if looks_like_mojibake_text(full_content):
-            return "", ""
-
-        candidate = f"{pending_content}{delta}"
-        if looks_like_mojibake_text(candidate):
-            return "", ""
-
-        held_suffix_length = max(
-            (
-                suffix_length
-                for fragment in GBK_MOJIBAKE_FRAGMENTS
-                for suffix_length in range(1, min(len(candidate), len(fragment) - 1) + 1)
-                if candidate.endswith(fragment[:suffix_length])
-            ),
-            default=0,
-        )
-        if held_suffix_length:
-            return candidate[:-held_suffix_length], candidate[-held_suffix_length:]
-        return candidate, ""
 
     def summarize_support_categories(
         categories: list[str],
@@ -13638,7 +13606,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         completed_session_requests_guard=completed_session_requests_guard,
         completed_training_card_requests=completed_training_card_requests,
         completed_training_card_requests_guard=completed_training_card_requests_guard,
-        completion_stream_delta=completion_stream_delta,
         consume_provider_empty_reply_override=consume_provider_empty_reply_override,
         consume_provider_reply_failure_override=consume_provider_reply_failure_override,
         current_snapshot=current_snapshot,
@@ -13709,7 +13676,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         resource_contract_stream_recovery_requested=resource_contract_stream_recovery_requested,
         routing_changed=routing_changed,
         safe_activate_training_card_from_coach_request=safe_activate_training_card_from_coach_request,
-        safe_stream_delta=safe_stream_delta,
         save_plan_or_conflict=save_plan_or_conflict,
         select_active_training_card=select_active_training_card,
         should_attach_auto_resource_events=should_attach_auto_resource_events,

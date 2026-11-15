@@ -16,7 +16,7 @@ from app.core.settings import AppSettings
 from app.llm.agent_loop import CoachAgentLoop, _shrink_older_tool_history, _tool_message
 from app.llm.harness import tool_output_limit
 from app.llm.provider_service import ProviderService, _agent_loop_max_steps
-from app.llm.tools import ToolContext, build_default_tool_registry
+from app.llm.tools import ToolContext, _handle_write_sandbox_file, build_default_tool_registry
 from app.main import create_app
 from app.sandbox.service import SandboxService
 
@@ -35,7 +35,6 @@ def test_default_registry_exposes_sandbox_library_tools() -> None:
     assert {
         "list_sandbox",
         "read_sandbox_file",
-        "write_sandbox_file",
         "index_sandbox_file",
         "search_resources",
         "organize_resources",
@@ -43,6 +42,7 @@ def test_default_registry_exposes_sandbox_library_tools() -> None:
         "read_workspace_file",
         "list_workspace_files",
     }.issubset(names)
+    assert "write_sandbox_file" not in names
 
 
 def test_library_turns_enable_the_agent_loop_when_tools_are_declared() -> None:
@@ -290,7 +290,7 @@ def test_remote_snapshot_enables_the_agent_loop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sandbox_library_tools_write_read_and_never_touch_project(tmp_path: Path) -> None:
+async def test_sandbox_library_tools_read_existing_files_and_deny_writes(tmp_path: Path) -> None:
     workspace_id = "workspace-sandbox-write"
     project = tmp_path / "project"
     project.mkdir()
@@ -309,10 +309,15 @@ async def test_sandbox_library_tools_write_read_and_never_touch_project(tmp_path
     )
     registry = build_default_tool_registry()
     context = _context(runtime, workspace_id)
-    written = await registry.invoke(
+    blocked = await registry.invoke(
         context,
         "write_sandbox_file",
         {"path": "notes/login-errors.md", "content": "Map the login error to the real return code."},
+    )
+    assert blocked["ok"] is False and blocked["error"] == "tool_not_available"
+    assert not (Path(sandbox.ensure_workspace_root(workspace_id)) / "notes/login-errors.md").exists()
+    written = await _handle_write_sandbox_file(
+        context, {"path": "notes/login-errors.md", "content": "Map the login error to the real return code."},
     )
     assert written["ok"] is True
     assert written["written"] is True
@@ -334,7 +339,7 @@ async def test_sandbox_library_tools_write_read_and_never_touch_project(tmp_path
         {"path": "../escape.md", "content": "nope"},
     )
     assert escaped["ok"] is False
-    assert escaped["error"] == "invalid_path"
+    assert escaped["error"] == "tool_not_available"
 
 
 @pytest.mark.asyncio
@@ -365,9 +370,8 @@ async def test_index_sandbox_file_registers_library_record_and_search_finds_it(t
             session_id=started.json()["session_id"],
             extra={"active_view": "resources", "library_sandbox_work": True},
         )
-        written = await registry.invoke(
+        written = await _handle_write_sandbox_file(
             context,
-            "write_sandbox_file",
             {
                 "path": "archive/unique-token-9912.md",
                 "content": "unique-token-9912 login error mapping notes",
@@ -397,9 +401,8 @@ async def test_index_sandbox_file_registers_library_record_and_search_finds_it(t
         hits = search.json().get("hits") or search.json().get("results") or []
         assert any(str(item.get("resource_id") or item.get("id") or "") == resource_id for item in hits)
 
-        rewritten = await registry.invoke(
+        rewritten = await _handle_write_sandbox_file(
             context,
-            "write_sandbox_file",
             {
                 "path": "archive/unique-token-9912.md",
                 "content": "unique-token-9912 updated: wrong password shows the real code.",
@@ -453,9 +456,8 @@ async def test_write_sandbox_file_updates_existing_library_record(tmp_path: Path
         resolve_workspace_path=lambda _workspace_id: None,
         postprocess_indexed_resource=None,
     )
-    result = await build_default_tool_registry().invoke(
+    result = await _handle_write_sandbox_file(
         _context(runtime, workspace_id),
-        "write_sandbox_file",
         {"path": "notes.md", "content": "Map the login error to the real return code."},
     )
     assert result["ok"] is True
