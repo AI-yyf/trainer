@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
+import { SidecarHttpError } from '../core/httpClient';
 import { mergeEvaluationResultSnapshot, mergeMemorySummarySnapshot } from '../core/workbenchData';
 import {
   ATTESTATION_UNDELIVERED_MARKER,
@@ -169,10 +170,24 @@ async function verifySavedProjectFile(
     training_card_id: cardId,
     saved_file_sha256: sha256,
     ...(python ? { verification_python: python } : {}),
-  }, { timeoutMs: 75_000 });
+  }, { timeoutMs: 75_000 }).catch((error: unknown) => {
+    if (error instanceof SidecarHttpError && error.statusCode === 409 &&
+        error.metadata.code === 'stale_version') return undefined;
+    throw error;
+  });
 
   if (scopeChanged() || document.isDirty || document.version !== documentVersion) {
     return { ok: false, message: 'The file or practice changed while verification was running.' };
+  }
+  if (!response) {
+    await context.patchWorkbenchData(mergeEvaluationResultSnapshot(
+      context.getHostState().bootstrap, {
+        workspace_id: identity.workspaceId,
+        summary: '',
+        saved_file_verification: { card_id: cardId, verdict: 'unknown', stale_resource: true },
+      }, identity.workspaceId,
+    ));
+    return { ok: false, surfaced: true, message: 'The source version changed before verification.' };
   }
   await context.patchWorkbenchData(mergeEvaluationResultSnapshot(
     context.getHostState().bootstrap, response, identity.workspaceId,

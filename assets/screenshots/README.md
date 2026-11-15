@@ -24,6 +24,8 @@
 | 场景 | 截图 |
 | --- | --- |
 | 浏览器选段到 VS Code 项目验证 | [草稿预填](native/source-learning/source-coach-prefill.png) · [阅读并加入学习](native/source-learning/source-reader-joined.png) · [独立训练](native/source-learning/source-training.png) · [现有测试通过](native/source-learning/source-verification.png) |
+| 双窗口草稿切换 | [原工作区](native/source-learning/source-focus-first.png) · [第二工作区](native/source-learning/source-focus-second.png) |
+| 来源版本更新 | [旧练习的验证结果待确认](native/source-learning/source-verification-stale.png) |
 | MiniMax 中文公式回复 | [VS Code 对话](native/coach-minimax.png) |
 | 流式 Markdown | [代码、公式和表格](native/streaming-markdown.png) |
 | 取消、断线、恢复 | [主动取消](native/stream-cancelled.png) · [连接中断](native/stream-disconnected.png) · [重新发送](native/stream-recovered.png) |
@@ -31,3 +33,5 @@
 MiniMax 对话与复习截图来自 `5b59af1` 安装包。取消、断线及资料截图来自 `d9de193` 安装包。取消与断线由本地测试服务控制，便于复现相同的中断条件。
 
 浏览器选段旅程使用 `9ab9d7d` 的 macOS ARM64 安装包、隔离的 Chromium 和确定性测试 Provider。训练验证读取的是测试脚本提供的学习者文件。
+
+双窗口和来源更新截图来自后续 macOS ARM64 安装验收，使用隔离工作区。旧版本用例在通过项目测试后更新测试资料的版本，再核对卡片状态和证据记录。

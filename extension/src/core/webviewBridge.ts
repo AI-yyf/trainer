@@ -90,11 +90,12 @@ function resourceOperationStatusMessage(commandId: string, payload: unknown, mes
 
 function shouldDeliverOperationStatus(
   commandId: string,
-  result: { ok?: boolean; cancelled?: boolean },
+  result: { ok?: boolean; cancelled?: boolean; surfaced?: boolean },
 ): boolean {
   if (result.cancelled || commandId === COMMAND_IDS.primeProviderModels) {
     return false;
   }
+  if (commandId === COMMAND_IDS.evaluateCurrentFile && result.surfaced) return false;
   // Successful chat-stream commands stay silent (the stream is the feedback);
   // failures still surface so the learner sees what went wrong.
   if (result.ok && SILENT_SUCCESS_COMMAND_IDS.has(commandId)) {

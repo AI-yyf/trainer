@@ -3294,7 +3294,9 @@ function mapEvaluation(
     checks,
     nextStep: asString(record.next_step) ?? (useFallback ? fallback.nextStep : ''),
     ...(cardId && (verdict === 'passed' || verdict === 'failed' || verdict === 'unknown')
-      ? { savedFileVerification: { cardId, verdict } } : {}),
+      ? { savedFileVerification: { cardId, verdict,
+          ...(verdict === 'unknown' && savedFile?.stale_resource === true ? { staleResource: true } : {}),
+        } } : {}),
   };
 }
 

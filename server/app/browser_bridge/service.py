@@ -29,6 +29,8 @@ import os
 import secrets
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
@@ -166,6 +168,7 @@ class BrowserBridgeService:
     ) -> None:
         self._data_root = Path(data_root)
         self._state_path = self._data_root / _STATE_FILE_NAME
+        self._state_lock_path = self._state_path.with_suffix(".lock")
         self._clock = clock
         self._lock = threading.RLock()
         self._pair_codes: dict[str, PairCodeRegistration] = {}
@@ -182,11 +185,31 @@ class BrowserBridgeService:
 
     # ------------------------------------------------------------ persistence
 
+    @contextmanager
+    def _shared_state(self) -> Iterator[None]:
+        """Reload durable state under a lock shared by windows using this root."""
+        with self._lock:
+            self._data_root.mkdir(parents=True, exist_ok=True)
+            with self._state_lock_path.open("a+b") as lock_file:
+                if os.name == "nt":
+                    import msvcrt
+
+                    lock_file.seek(0)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(lock_file, fcntl.LOCK_EX)
+                # Closing the descriptor releases the process lock after the
+                # entire read-modify-replace, including failed operations.
+                self._load_state()
+                yield
+
     def _load_state(self) -> None:
         try:
             raw = self._state_path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return
+            raw = json.dumps({"version": _STATE_VERSION})
         except OSError as exc:  # pragma: no cover - unreadable data dir
             logger.warning("Browser bridge state could not be read: %s", exc)
             return
@@ -197,6 +220,10 @@ class BrowserBridgeService:
             return
         if not isinstance(payload, dict) or payload.get("version") != _STATE_VERSION:
             return
+        self._credentials = {}
+        self._captures = {}
+        self._pending_drafts = []
+        self._acked_draft_client_ids = []
         credentials = payload.get("credentials")
         if isinstance(credentials, list):
             for entry in credentials:
@@ -348,7 +375,7 @@ class BrowserBridgeService:
                 status_code=422,
             )
         now = self._clock()
-        with self._lock:
+        with self._shared_state():
             registration = self._pair_codes.get(normalized_code)
             if registration is None:
                 self._pair_failed_attempts += 1
@@ -460,7 +487,7 @@ class BrowserBridgeService:
             created_at=_utc_now_iso(),
             pair_code_id=AUTO_PAIR_ID,
         )
-        with self._lock:
+        with self._shared_state():
             self._credentials[credential.token_hash] = {
                 **asdict(credential),
                 "last_used_at": None,
@@ -475,7 +502,7 @@ class BrowserBridgeService:
         if not normalized:
             return None
         token_hash = _hashed(normalized)
-        with self._lock:
+        with self._shared_state():
             entry = self._credentials.get(token_hash)
             if entry is None:
                 return None
@@ -512,13 +539,13 @@ class BrowserBridgeService:
         if not normalized:
             return False
         token_hash = _hashed(normalized)
-        with self._lock:
+        with self._shared_state():
             removed = self._credentials.pop(token_hash, None) is not None
             if removed:
                 self._write_state_locked()
             return removed
 
-    def revoke_registered_pairing(self) -> dict[str, object]:
+    def revoke_registered_pairing(self, workspace_id: str) -> dict[str, object]:
         """Host-side revocation (``DELETE /browser/pair`` without a Bearer token).
 
         The host revokes "the pairing", not one browser credential: it drops the
@@ -527,18 +554,23 @@ class BrowserBridgeService:
         the workbench.
         """
 
-        with self._lock:
-            had_pending_code = self._pair_codes != {}
-            self._pair_codes = {}
+        with self._shared_state():
+            had_pending_code = any(
+                code.workspace_id == workspace_id for code in self._pair_codes.values()
+            )
+            if had_pending_code:
+                self._pair_codes = {}
             pair_code_id = self._latest_pair_code_id
             removed = [
                 token_hash
                 for token_hash, entry in self._credentials.items()
-                if not pair_code_id or str(entry.get("pair_code_id") or "") == pair_code_id
+                if entry.get("workspace_id") == workspace_id
+                and (not pair_code_id or str(entry.get("pair_code_id") or "") == pair_code_id)
             ]
             for token_hash in removed:
                 self._credentials.pop(token_hash, None)
-            self._latest_pair_code_id = ""
+            if removed or had_pending_code:
+                self._latest_pair_code_id = ""
             if removed or had_pending_code:
                 self._write_state_locked()
             return {
@@ -548,7 +580,7 @@ class BrowserBridgeService:
             }
 
     def credential_count(self) -> int:
-        with self._lock:
+        with self._shared_state():
             return len(self._credentials)
 
     # ----------------------------------------------------------- idempotency
@@ -557,7 +589,7 @@ class BrowserBridgeService:
         key = str(client_capture_id or "").strip()
         if not key:
             return None
-        with self._lock:
+        with self._shared_state():
             entry = self._captures.get(key)
             return dict(entry) if entry is not None else None
 
@@ -565,7 +597,7 @@ class BrowserBridgeService:
         key = str(client_capture_id or "").strip()
         if not key:
             return
-        with self._lock:
+        with self._shared_state():
             self._captures[key] = {**payload, "client_capture_id": key}
             while len(self._captures) > _MAX_REMEMBERED_CAPTURES:
                 oldest = next(iter(self._captures))
@@ -617,7 +649,7 @@ class BrowserBridgeService:
             if resolve_source:
                 source_ref = resolve_source(source_ref)
         normalized_client_id = str(client_id or "").strip()
-        with self._lock:
+        with self._shared_state():
             if normalized_client_id:
                 for draft in self._pending_drafts:
                     if (
@@ -670,7 +702,7 @@ class BrowserBridgeService:
             # Never hand a caller that did not state its workspace every
             # project's captures: an unscoped read is refused, not guessed.
             return []
-        with self._lock:
+        with self._shared_state():
             return [
                 draft.as_payload()
                 for draft in self._pending_drafts
@@ -682,7 +714,7 @@ class BrowserBridgeService:
         wanted = {str(item).strip() for item in ids if str(item).strip()}
         if not normalized_workspace or not wanted:
             return 0
-        with self._lock:
+        with self._shared_state():
             remaining: list[_PendingDraft] = []
             acknowledged = list(self._acked_draft_client_ids)
             removed = 0

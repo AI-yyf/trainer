@@ -2025,7 +2025,7 @@ writeProgress();
           "Installed-state next-hop screenshot capture failed: " + JSON.stringify(data),
       });
 
-      await record("assert-resources-resource-detail-webview-debug-state", async () => {
+      await record("assert-resources-library-selection-webview-debug-state", async () => {
         const uploadResult = await vscode.commands.executeCommand("trainer.resource.upload", {
           mode: "files",
           uploads: [
@@ -2054,12 +2054,12 @@ writeProgress();
           resourceId,
           resourceDetailId: resourceId,
           workspaceLabel: "trainer-vsix-e2e",
-          resumeReason: "Show the installed resource detail truth.",
-          focusArea: "resource detail",
+          resumeReason: "Restore the selected item in the installed library.",
+          focusArea: "library selection",
         });
         const visible = await waitForVisibleFacts(
           "resources",
-          (facts) => facts?.activeSurface === "detail" && facts.selectedResourceId === resourceId,
+          (facts) => facts?.activeSurface === "library" && facts.selectedResourceId === resourceId,
         );
         const facts = visible;
         return {
@@ -2085,7 +2085,7 @@ writeProgress();
               data.hasVisibleFacts === true &&
               data.surface === "resources" &&
               data.activeView === "resources" &&
-              data.activeSurface === "detail" &&
+              data.activeSurface === "library" &&
               data.resourceDetailVisible === false &&
               data.resourceDetailId === null &&
               data.resourceDetailTitle === null &&
@@ -2097,7 +2097,7 @@ writeProgress();
               data.previewPaneVisible === false
           ),
         errorMessage: (data) =>
-          "Installed-state resource detail webview debug-state mismatch: " + JSON.stringify(data),
+          "Installed-state library selection webview debug-state mismatch: " + JSON.stringify(data),
       });
 
       await record("capture-owned-workbench-after-resource-detail-restore", async () => {

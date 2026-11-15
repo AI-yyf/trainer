@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
@@ -65,13 +66,14 @@ function readDatabase(database, callback) {
   }
 }
 
-function browserBridgeState(database) {
+export function browserBridgeState(database) {
   return JSON.parse(fs.readFileSync(path.join(path.dirname(database), "browser_bridge.json"), "utf8"));
 }
 
-async function startSidecarProxy(initialPort) {
-  let allowedOrigin = `http://127.0.0.1:${initialPort}`;
-  let online = true;
+export async function startSidecarProxy(...initialPorts) {
+  const origin = port => `http://127.0.0.1:${port}`;
+  const allowedOrigins = new Set(initialPorts.map(origin));
+  const offlineOrigins = new Set();
   let dropped = 0;
   const server = http.createServer((request, response) => {
     let target;
@@ -81,11 +83,11 @@ async function startSidecarProxy(initialPort) {
       response.writeHead(403).end();
       return;
     }
-    if (target.origin !== allowedOrigin) {
+    if (!allowedOrigins.has(target.origin)) {
       response.writeHead(403).end();
       return;
     }
-    if (!online) {
+    if (offlineOrigins.has(target.origin)) {
       dropped++;
       request.destroy();
       return;
@@ -103,9 +105,9 @@ async function startSidecarProxy(initialPort) {
   });
   return {
     url: `http://127.0.0.1:${server.address().port}`,
-    disconnect() { online = false; },
+    disconnect(port = initialPorts[0]) { offlineOrigins.add(origin(port)); },
     droppedRequests() { return dropped; },
-    reconnect(port) { allowedOrigin = `http://127.0.0.1:${port}`; online = true; },
+    reconnect(port) { allowedOrigins.add(origin(port)); offlineOrigins.delete(origin(port)); },
     async close() {
       server.closeAllConnections();
       await new Promise(resolve => server.close(resolve));
@@ -113,7 +115,7 @@ async function startSidecarProxy(initialPort) {
   };
 }
 
-async function until(read, description, timeout = 30_000) {
+export async function until(read, description, timeout = 30_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const value = await read();
@@ -121,6 +123,20 @@ async function until(read, description, timeout = 30_000) {
     await new Promise(resolve => setTimeout(resolve, 300));
   }
   throw new Error(`Timed out waiting for ${description}`);
+}
+
+export async function launchInstalledCapture({ root, installedRoot, proxy }) {
+  const extensionDir = path.join(installedRoot, "browser-capture");
+  return chromium.launchPersistentContext(path.join(root, "chromium"), {
+    channel: "chromium",
+    headless: true,
+    args: [
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
+      `--proxy-server=${proxy.url}`,
+      "--proxy-bypass-list=<-loopback>",
+    ],
+  });
 }
 
 export async function runSourceLearningJourney({
@@ -135,20 +151,10 @@ export async function runSourceLearningJourney({
     assert.ok(state.ok, state.error);
     return state;
   };
-  const extensionDir = path.join(installedRoot, "browser-capture");
   const proxy = await startSidecarProxy(setup.port);
   let browser;
   try {
-    browser = await chromium.launchPersistentContext(path.join(root, "chromium"), {
-    channel: "chromium",
-    headless: true,
-    args: [
-      `--disable-extensions-except=${extensionDir}`,
-      `--load-extension=${extensionDir}`,
-      `--proxy-server=${proxy.url}`,
-      "--proxy-bypass-list=<-loopback>",
-    ],
-    });
+    browser = await launchInstalledCapture({ root, installedRoot, proxy });
     const worker = browser.serviceWorkers()[0] ?? await browser.waitForEvent("serviceworker");
     await worker.evaluate(() => ensureAutoPair({ force: true }));
     const pairing = await until(() => worker.evaluate(async () => {
@@ -257,11 +263,14 @@ export async function runSourceLearningJourney({
     const readVerification = () => readDatabase(setup.database, db => {
       const rows = db.prepare("SELECT payload FROM training_evidence WHERE workspace_id = ?")
         .all(setup.workspaceId).map(row => JSON.parse(row.payload));
-      const evidence = rows.find(row => row.card_id === cardId && row.evidence_kind === "saved_project_tests");
+      const savedFileEvidence = rows.filter(row => row.card_id === cardId && row.evidence_kind === "saved_project_tests");
+      const [evidence] = savedFileEvidence;
       const memory = JSON.parse(db.prepare("SELECT payload FROM structured_memory WHERE workspace_id = ?")
         .get(setup.workspaceId)?.payload ?? "{}").workspace;
       const schedule = memory?.latest_training_fsrs_states?.[cardId];
-      return evidence && schedule && { evidence, schedule, projection: memory.training_skill_projection };
+      return evidence && schedule && {
+        evidence, evidenceCount: savedFileEvidence.length, schedule, projection: memory.training_skill_projection,
+      };
     });
     const state = await until(readVerification, "workspace Evidence Ledger and FSRS state", 75_000);
     assert.equal(state.evidence.result, "passed");
@@ -286,6 +295,32 @@ export async function runSourceLearningJourney({
       ok: true, cardId, savedHash, dueAt: state.schedule.next_due_at,
       evidenceId: state.evidence.evidence_id,
       screenshot: await screenshot(page, "source-verification"),
+    });
+
+    const nextVersion = execFileSync(fixture.python, ["-c", `
+import sys
+from app.resources.versioning import ResourceVersionStore
+
+database, workspace, resource = sys.argv[1:]
+version = ResourceVersionStore(database).record_version(
+    workspace_id=workspace, resource_id=resource,
+    content="Updated source excerpt for the native stale version fixture.",
+)
+print(version["version_id"])
+`, setup.database, setup.workspaceId, resourceId], { cwd: fixture.serverDir, encoding: "utf8" }).trim();
+    assert.notEqual(nextVersion, state.evidence.resource_version_id);
+    openInCode(["--reuse-window", fixture.implementation]);
+    await card.getByRole("button", { name: "验证当前文件", exact: true }).click();
+    const staleVerification = card.locator('[data-template="VerificationResult"][data-verdict="unknown"]');
+    await staleVerification.getByText(/资料版本/).waitFor({ timeout: 15_000 });
+    assert.equal(await card.locator('[data-template="VerificationResult"][data-verdict="passed"]').count(), 0);
+    const afterStale = readVerification();
+    assert.deepEqual(afterStale.schedule, state.schedule);
+    assert.equal(afterStale.evidence.evidence_id, state.evidence.evidence_id);
+    assert.equal(afterStale.evidenceCount, state.evidenceCount);
+    assert.equal(hash(), savedHash);
+    record("stale-resource-version-withholds-a-new-verdict", {
+      ok: true, cardId, screenshot: await screenshot(page, "source-verification-stale"),
     });
 
     await frame.getByTestId("trainer-view-nav-coach").click();
@@ -334,6 +369,7 @@ export async function runSourceLearningJourney({
     assert.equal(browserBridgeState(setup.database).pending_drafts.length, 0);
     assert.equal((await composer.inputValue()).split(offlineSelection).length - 1, 1);
     record("replayed-browser-draft-is-not-applied-twice", { ok: true });
+
   } finally {
     try {
       await browser?.close();

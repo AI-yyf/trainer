@@ -108,7 +108,7 @@ for (let index = 1; index <= roundsRequested; index += 1) {
     !result.signal &&
     (!requireProvider || !providerSkipped);
 
-  const detailStep = findStep(steps, "assert-resources-resource-detail-webview-debug-state");
+  const detailStep = findStep(steps, "assert-resources-library-selection-webview-debug-state");
   const previewStep = findStep(steps, "assert-resources-embedded-preview-webview-debug-state");
   const capabilityStep = findStep(steps, "assert-resources-sandbox-restore-webview-debug-state");
   const capabilityHostStep = findStep(steps, "assert-sandbox-capability-truth");
@@ -131,7 +131,7 @@ for (let index = 1; index <= roundsRequested; index += 1) {
   const nextHopData = asRecord(nextHopStep?.data);
   const faultData = asRecord(faultStep?.data);
 
-  const detailEvidenceOk = hasResourceDetailEvidence(detailData);
+  const detailEvidenceOk = hasLibrarySelectionEvidence(detailData);
   const previewEvidenceOk = hasSandboxPreviewEvidence(previewData);
   const capabilityEvidenceOk = hasSandboxCapabilityEvidence(capabilityData, capabilityHostData);
   const crossLeakDetected = detectCrossWorkspaceLeak(crossData);
@@ -388,7 +388,7 @@ function hasResourceBridgeEvidence(crossData) {
   return hasExpectedResource && detailNameMatches && summaryLooksCorrect;
 }
 
-function hasResourceDetailEvidence(detailData) {
+function hasLibrarySelectionEvidence(detailData) {
   if (!detailData) {
     return false;
   }
@@ -396,17 +396,16 @@ function hasResourceDetailEvidence(detailData) {
     detailData.hasVisibleFacts === true &&
       detailData.surface === "resources" &&
       detailData.activeView === "resources" &&
-      detailData.activeSurface === "detail" &&
-      detailData.resourceDetailVisible === true &&
+      detailData.activeSurface === "library" &&
+      detailData.resourceDetailVisible === false &&
       typeof detailData.resourceId === "string" &&
       detailData.resourceId.length > 0 &&
-      detailData.resourceDetailId === detailData.resourceId &&
+      detailData.resourceDetailId === null &&
       detailData.selectedResourceId === detailData.resourceId &&
-      typeof detailData.resourceDetailTitle === "string" &&
-      detailData.resourceDetailTitle.length > 0 &&
+      detailData.resourceDetailTitle === null &&
       detailData.singleWorkbenchSurface === true &&
       detailData.compactMode === true &&
-      detailData.detailPaneVisible === true &&
+      detailData.detailPaneVisible === false &&
       detailData.sandboxPaneVisible === false &&
       detailData.previewPaneVisible === false,
   );

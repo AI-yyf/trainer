@@ -238,6 +238,23 @@ test('source-linked verification hashes the saved file and submits the evaluator
   assert.equal(context.__posts[1].body.card_id, cardId);
   assert.equal(context.__gets.length, 1);
   assert.deepEqual(fs.readFileSync(filePath), bytes);
+
+  const { SidecarHttpError } = require('../dist/extension/src/core/httpClient.js');
+  context.sidecarClient.postJson = async (port, requestPath, body) => {
+    context.__posts.push({ port, requestPath, body });
+    throw new SidecarHttpError(409, 'Source version conflict', { code: 'stale_version' });
+  };
+  const stale = await evaluateCurrentFileCommand(context, payload);
+  assert.equal(stale.ok, false);
+  assert.equal(stale.surfaced, true);
+  assert.deepEqual(context.__patches.at(-1).evaluation.savedFileVerification, {
+    cardId, verdict: 'unknown', staleResource: true,
+  });
+  assert.deepEqual(context.__posts.map(post => post.requestPath), [
+    '/evaluate/current-file', '/training/verification/attest', '/evaluate/current-file',
+  ]);
+  assert.equal(context.__publishedReports.length, 1);
+  assert.deepEqual(fs.readFileSync(filePath), bytes);
 });
 
 test('evaluateCurrentFileCommand reads IDE file content and diagnostics for training practice verification', async () => {

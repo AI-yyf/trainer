@@ -28,6 +28,8 @@ import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
 import { withVsixE2EFixtureLoopbackBypass } from "../extension/scripts/vsix-e2e-provider-runtime.mjs";
 import { resolveVsixOutputPath } from "../extension/scripts/package-vsix.mjs";
 import { prepareSourceLearningFixture, runSourceLearningJourney } from "./source-learning-journey.mjs";
+import { runSourceFocusJourney } from "./source-focus-journey.mjs";
+import { launchNativeFocusHost } from "./vscode-native-focus-host.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -59,6 +61,7 @@ const usingRealProvider = Boolean(realBaseUrl && realApiKey);
 const recallSourceDir = process.env.TRAINER_VISUAL_RECALL_SOURCE_DIR?.trim();
 const checkStreamRecovery = process.env.TRAINER_VISUAL_STREAM_RECOVERY === "1";
 const checkSourceLearning = process.env.TRAINER_VISUAL_SOURCE_LEARNING === "1";
+const checkSourceFocus = process.env.TRAINER_VISUAL_SOURCE_FOCUS === "1";
 if (recallSourceDir && !usingRealProvider) {
   throw new Error("The scheduled-recall visual journey requires the real provider.");
 }
@@ -190,7 +193,7 @@ const providerApiKey = usingRealProvider ? realApiKey : "structural-stub-key";
 const providerModel = usingRealProvider ? realModel : "structural-stub";
 const providerLabel = usingRealProvider
   ? `real provider (${realModel})`
-  : "local scripted stub (formula-laden reply; render pipeline only)";
+  : "local deterministic test provider";
 
 // macOS caps unix socket paths (~104 chars); VS Code puts its main IPC sock
 // under <profile>/user-data/, so the profile root must stay short. $TMPDIR on
@@ -199,6 +202,7 @@ const root = fs.mkdtempSync("/tmp/fjv-");
 const userDataDir = path.join(root, "user-data");
 const extensionsDir = path.join(root, "extensions");
 const workspaceDir = path.join(root, "workspace");
+const secondWorkspaceDir = path.join(root, "workspace-two");
 const trainerWorkspaceDir = path.join(root, "trainer-workspace");
 const driverDir = path.join(root, "driver");
 const reportPath = path.join(root, "report.json");
@@ -210,6 +214,7 @@ for (const dir of [
   workspaceDir,
   trainerWorkspaceDir,
   driverDir,
+  ...(checkSourceFocus ? [secondWorkspaceDir] : []),
 ]) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -337,7 +342,9 @@ const { spawnSync } = require("node:child_process");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function activate() {
-  const reportPath = process.env.FJ_VISUAL_REPORT;
+  const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const focusRoot = process.env.FJ_VISUAL_SOURCE_FOCUS;
+  const reportPath = focusRoot && workspace ? path.join(focusRoot, path.basename(workspace) + ".json") : process.env.FJ_VISUAL_REPORT;
   const targetId = process.env.FJ_VISUAL_TARGET_EXTENSION_ID;
   const provider = JSON.parse(process.env.FJ_VISUAL_PROVIDER || "{}");
   const report = { ok: false, steps: [] };
@@ -362,6 +369,27 @@ async function activate() {
       admitted = await adoptProject();
     }
     report.steps.push({ step: "admit-project", ok: Boolean(admitted && admitted.ok), message: admitted && admitted.message });
+    if (focusRoot) {
+      const live = target.exports.getDebugState();
+      const dataDir = live.bootstrap?.memory?.workspace?.resourceSandbox?.effectivePath;
+      const workspaceId = live.bootstrap?.memory?.workspace?.trainerWorkspace?.contextId;
+      if (!admitted?.ok || !dataDir || !workspaceId) throw new Error("Focus fixture cannot identify the adopted workspace.");
+      await vscode.commands.executeCommand("trainer.openWorkbench");
+      const focusFile = reportPath.replace(/\.json$/, "-focus.json");
+      const focusEvents = [];
+      const recordFocus = ({ focused }) => {
+        const state = target.exports.getDebugState();
+        focusEvents.push({ focused, port: state.sidecar.port, lifecycle: state.sidecar.lifecycle,
+          workspaceId: state.bootstrap.memory.workspace?.trainerWorkspace?.contextId });
+        fs.writeFileSync(focusFile, JSON.stringify(focusEvents));
+      };
+      recordFocus(vscode.window.state);
+      vscode.window.onDidChangeWindowState(recordFocus);
+      report.steps.push({ step: "source-focus-setup", ok: true, workspaceId,
+        port: live.sidecar.port, pid: live.sidecar.pid, database: path.join(dataDir, "trainer.sqlite3"), focusFile });
+      report.ok = true;
+      return;
+    }
     await sleep(1500);
     const saved = await vscode.commands.executeCommand("trainer.provider.save", {
       ...(provider.payload || {}),
@@ -500,7 +528,9 @@ async function activate() {
   } catch (error) {
     report.error = error instanceof Error ? error.stack : String(error);
   } finally {
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    const temporaryReport = reportPath + ".tmp";
+    fs.writeFileSync(temporaryReport, JSON.stringify(report, null, 2));
+    fs.renameSync(temporaryReport, reportPath);
   }
 }
 
@@ -509,8 +539,8 @@ exports.activate = activate;
   );
 })();
 
-function runCode(args) {
-  const result = spawnSync(codeCli, args, { stdio: "ignore", timeout: 120_000 });
+function runCode(args, env = process.env) {
+  const result = spawnSync(codeCli, args, { stdio: "ignore", timeout: 120_000, env });
   if (result.status !== 0) {
     throw new Error(`code CLI failed (${result.status}) for: ${args.join(" ")}`);
   }
@@ -545,6 +575,7 @@ async function main() {
     FJ_VISUAL_RECALL_REQUEST: recallRequestPath,
     FJ_VISUAL_RECALL_STATE: recallStatePath,
     FJ_VISUAL_SOURCE_FIXTURE: sourceFixture ? JSON.stringify(sourceFixture) : "",
+    FJ_VISUAL_SOURCE_FOCUS: checkSourceFocus ? root : "",
     // The provider config (with the key) travels only through the process
     // environment of the extension host — never into repo files, logs or
     // screenshots.
@@ -558,7 +589,8 @@ async function main() {
   });
 
   launchEnv.TRAINER_FILE_STORE_ROOT = path.join(root, "file-store");
-  const app = await _electron.launch({
+  const launch = checkSourceFocus ? launchNativeFocusHost : options => _electron.launch(options);
+  const app = await launch({
     executablePath: electronBinary,
     args: [
       "--user-data-dir", userDataDir,
@@ -596,12 +628,16 @@ async function main() {
 
   try {
     await page.waitForTimeout(8000);
-    const deadline = Date.now() + (recallSource ? 600_000 : 180_000);
-    while (!fs.existsSync(reportPath) && Date.now() < deadline) {
-      await page.waitForTimeout(2000);
-    }
-    if (!fs.existsSync(reportPath)) throw new Error("Driver never wrote its report.");
-    const driverReport = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    const readDriverReport = async (workspace, timeout = 180_000) => {
+      const file = checkSourceFocus ? path.join(root, `${path.basename(workspace)}.json`) : reportPath;
+      const deadline = Date.now() + timeout;
+      while (!fs.existsSync(file) && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      if (!fs.existsSync(file)) throw new Error(`Driver never wrote its report for ${workspace}.`);
+      return JSON.parse(fs.readFileSync(file, "utf8"));
+    };
+    const driverReport = await readDriverReport(workspaceDir, recallSource ? 600_000 : 180_000);
     record("driver-report", {
       ok: driverReport.ok === true,
       // Never echo the provider payload back into evidence.
@@ -617,25 +653,55 @@ async function main() {
     await page.keyboard.press("Enter");
     await page.waitForTimeout(7000);
 
-    const findFrame = async (timeout = 60_000) => {
+    const findFrame = async (targetPage = page, timeout = 60_000) => {
       const start = Date.now();
       while (Date.now() - start < timeout) {
-        for (const candidate of page.frames()) {
+        for (const candidate of targetPage.frames()) {
           if (!candidate.url().includes("vscode-webview://")) continue;
           try {
             if (await candidate.getByTestId("trainer-view-nav-coach").isVisible()) return candidate;
           } catch { /* still loading */ }
         }
-        await page.waitForTimeout(800);
+        await targetPage.waitForTimeout(800);
       }
       throw new Error("Trainer webview frame not found");
     };
     const frame = await findFrame();
+    const installedRoot = path.join(extensionsDir, `${extensionId}-${packageJson.version}`);
+    if (checkSourceFocus) {
+      // VS Code reuses the development window when the driver path matches.
+      const secondDriver = path.join(root, "driver-two");
+      fs.cpSync(driverDir, secondDriver, { recursive: true });
+      const windowOpened = app.nextWindow({ timeout: 90_000 });
+      runCode(["--user-data-dir", userDataDir, "--extensions-dir", extensionsDir,
+        "--extensionDevelopmentPath", secondDriver, "--new-window", secondWorkspaceDir], launchEnv);
+      const secondPage = await windowOpened;
+      try {
+        const secondReport = await readDriverReport(secondWorkspaceDir);
+        record("second-native-window", secondReport);
+        if (!secondReport.ok) throw new Error(`Second window setup failed: ${secondReport.error}`);
+        await runSourceFocusJourney({ app, root, installedRoot, record, screenshot, windows: [
+          { page, frame, setup: driverReport.steps.find(step => step.step === "source-focus-setup") },
+          { page: secondPage, frame: await findFrame(secondPage), setup: secondReport.steps.find(step => step.step === "source-focus-setup") },
+        ] });
+      } catch (error) {
+        const reports = [workspaceDir, secondWorkspaceDir].map(workspace =>
+          path.join(root, `${path.basename(workspace)}-focus.json`));
+        for (const report of reports.filter(file => fs.existsSync(file))) {
+          fs.copyFileSync(report, path.join(outDir, path.basename(report)));
+        }
+        record("source-focus-failed", { ok: false, error: String(error), screenshot: await screenshot(secondPage, "source-focus-failure") });
+        throw error;
+      }
+      fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify({ ok: true, vsixPath, results }, null, 2));
+      console.log(`SOURCE_FOCUS_NATIVE_OK ${outDir}`);
+      return true;
+    }
     if (sourceFixture) {
       try {
         await runSourceLearningJourney({
           fixture: sourceFixture, setup: driverReport.steps.find(step => step.step === "source-learning-setup"),
-          frame, page, root, installedRoot: path.join(extensionsDir, `${extensionId}-${packageJson.version}`),
+          frame, page, root, installedRoot,
           openInCode: (args) => runCode(["--user-data-dir", userDataDir, "--extensions-dir", extensionsDir, ...args]),
           record, screenshot, replyTimeout: usingRealProvider ? 180_000 : 75_000,
         });
@@ -1009,7 +1075,7 @@ async function main() {
 }
 
 try {
-  if (!usingRealProvider) await startStubProvider();
+  if (!usingRealProvider && !checkSourceFocus) await startStubProvider();
   const ok = await main();
   process.exitCode = ok ? 0 : 1;
 } catch (error) {

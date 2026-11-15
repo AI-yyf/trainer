@@ -301,10 +301,11 @@ test('re-running the pairing command rotates the registered code', async () => {
     lane.requests.map((entry) => entry.kind),
     ['postJson', 'deleteJson', 'postJson'],
   );
-  assert.equal(lane.requests[1].requestPath, BROWSER_CAPTURE.pairPath);
+  assert.equal(lane.requests[1].requestPath,
+    `${BROWSER_CAPTURE.pairPath}?workspace_id=${encodeURIComponent(registrations[0].body.workspace_id)}`);
 });
 
-test('revoking the pairing calls DELETE /browser/pair and reports the failure honestly', async () => {
+test('revoking the pairing scopes DELETE /browser/pair to this workspace', async () => {
   const { BROWSER_CAPTURE } = require(constantsModulePath);
   const lane = createPairingCommandContext();
   const { revokeBrowserCapturePairingCommand } = loadWithVscodeMock(commandsModulePath, lane.vscodeMock);
@@ -313,7 +314,9 @@ test('revoking the pairing calls DELETE /browser/pair and reports the failure ho
 
   assert.equal(result.ok, true);
   assert.equal(lane.requests[0].kind, 'deleteJson');
-  assert.equal(lane.requests[0].requestPath, BROWSER_CAPTURE.pairPath);
+  const request = new URL(lane.requests[0].requestPath, 'http://127.0.0.1');
+  assert.equal(request.pathname, BROWSER_CAPTURE.pairPath);
+  assert.ok(request.searchParams.get('workspace_id'));
 
   const failing = createPairingCommandContext({
     deletePairingImpl: () => {

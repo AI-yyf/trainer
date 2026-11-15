@@ -1130,6 +1130,7 @@ export function TrainingWorkbenchView({
                     verdict={savedProjectReport.savedFileVerification.verdict}
                     summary={savedProjectReport.summary}
                     checks={savedProjectReport.checks}
+                    staleResource={savedProjectReport.savedFileVerification.staleResource}
                   /> : null
                 )}
                 {returnContinuedInChat ? (

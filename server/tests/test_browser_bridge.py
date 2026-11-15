@@ -9,6 +9,7 @@ Covers ``POST /browser/pair-code``, ``POST /browser/pair``, ``DELETE
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -199,6 +200,37 @@ def test_credentials_are_persisted_and_revocable_across_restart(tmp_path) -> Non
             headers={"Authorization": f"Bearer {token}"},
         )
         assert after_restart.status_code == 401
+
+
+def test_two_windows_sharing_a_root_preserve_both_drafts_and_receipts(tmp_path) -> None:
+    first = BrowserBridgeService(tmp_path)
+    second = BrowserBridgeService(tmp_path)
+
+    def submit(bridge: BrowserBridgeService, workspace: str) -> tuple[str, str]:
+        _, token = bridge.issue_auto_credential(workspace_id=workspace, workspace_name=workspace)
+        draft = bridge.enqueue_draft(workspace_id=workspace, selection=workspace, client_id="same-id")
+        return token, str(draft["draft_id"])
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        left = workers.submit(submit, first, "workspace-a")
+        right = workers.submit(submit, second, "workspace-b")
+        token_a, draft_a = left.result()
+        token_b, draft_b = right.result()
+
+    assert first.credential_for_token(token_b).workspace_id == "workspace-b"
+    assert second.credential_for_token(token_a).workspace_id == "workspace-a"
+    assert [item["id"] for item in second.pending_drafts("workspace-a")] == [draft_a]
+    assert [item["id"] for item in first.pending_drafts("workspace-b")] == [draft_b]
+    assert first.ack_drafts("workspace-a", [draft_a, draft_b]) == 1
+    assert second.ack_drafts("workspace-b", [draft_b]) == 1
+    assert first.revoke_registered_pairing("workspace-a")["credentials_revoked"] == 1
+    assert second.credential_for_token(token_a) is None
+    assert second.credential_for_token(token_b) is not None
+    restored = BrowserBridgeService(tmp_path)
+    for workspace in ("workspace-a", "workspace-b"):
+        assert restored.pending_drafts(workspace) == []
+        replay = restored.enqueue_draft(workspace_id=workspace, selection=workspace, client_id="same-id")
+        assert replay["duplicate"] is True
 
 
 def test_host_revocation_without_bearer_retires_the_registration(tmp_path) -> None:

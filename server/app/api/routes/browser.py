@@ -192,7 +192,7 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         return credential.as_payload(credential=token)
 
     @router.delete("/browser/pair")
-    def revoke_pairing(request: Request) -> dict[str, object]:
+    def revoke_pairing(request: Request, workspace_id: str = "") -> dict[str, object]:
         """Revoke a credential (Bearer) or retire the latest host registration."""
 
         bridge = _browser_bridge(runtime)
@@ -209,7 +209,9 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
                 )
             bridge.revoke_token(token)
             return {"revoked": True, "had_registration": True, "credentials_revoked": 1}
-        return bridge.revoke_registered_pairing()
+        latest = runtime.latest_session()
+        scope = workspace_id.strip() or (latest.workspace_id if latest else "")
+        return bridge.revoke_registered_pairing(scope)
 
     @router.post("/browser/auto-pair")
     def auto_pair(request: Request) -> dict[str, object]:

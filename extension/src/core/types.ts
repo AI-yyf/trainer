@@ -668,6 +668,7 @@ export interface EvaluationReportView {
   savedFileVerification?: {
     cardId: string;
     verdict: 'passed' | 'failed' | 'unknown';
+    staleResource?: boolean;
   };
 }
 

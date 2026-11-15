@@ -92,7 +92,9 @@ export function createSidecarPairingTransport(deps: {
     },
     async revokePairing() {
       const port = await deps.ensureSidecarPort();
-      await deps.sidecarClient.deleteJson(port, BROWSER_CAPTURE.pairPath);
+      const workspaceId = deps.workspaceId?.().trim();
+      const query = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+      await deps.sidecarClient.deleteJson(port, `${BROWSER_CAPTURE.pairPath}${query}`);
     },
   };
 }

@@ -270,6 +270,7 @@ jobs:
         run: node ./scripts/vsix-ci-capability.mjs
 
       - name: Verify native VSIX installation in VS Code
+        id: install-vsix
         if: ${{ steps.vsix-capability.outputs.install_available == 'true' }}
         shell: bash
         env:
@@ -308,7 +309,8 @@ jobs:
         run: npm run test:vsix-e2e
 
       - name: Verify installed browser-to-learning journey (macOS)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && runner.os == 'macOS' }}
+        id: installed-source-learning
+        if: ${{ !cancelled() && steps.install-vsix.outcome == 'success' && github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true && steps.vsix-capability.outputs.host_e2e_available == 'true' && runner.os == 'macOS' }}
         env:
           TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
           TRAINER_VISUAL_SOURCE_LEARNING: "1"
@@ -317,6 +319,14 @@ jobs:
           npm ci --ignore-scripts
           npx playwright install chromium
           node scripts/run-full-journey-visual.mjs
+
+      - name: Verify browser draft recovery across installed VS Code windows (macOS)
+        if: ${{ !cancelled() && steps.installed-source-learning.outcome == 'success' }}
+        env:
+          TRAINER_VSIX_OUTPUT_PATH: ${{ steps.package-vsix.outputs.vsix_path }}
+          TRAINER_VISUAL_SOURCE_FOCUS: "1"
+          JOURNEY_OUT_DIR: ${{ github.workspace }}/output/maturity/ci-installed/source-focus
+        run: node scripts/run-full-journey-visual.mjs
 
       - name: Archive native install and host acceptance evidence
         if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.run_vsix_host_e2e == true }}
