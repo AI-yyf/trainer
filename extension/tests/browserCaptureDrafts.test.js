@@ -282,6 +282,7 @@ test('the capture runtime forwards pending drafts as ui/coachDraftPrefill and ac
   const { BROWSER_CAPTURE } = require(constantsModulePath);
   const posts = [];
   const requests = [];
+  const sourceRef = { url: 'https://example.com/retry', title: 'Retry notes', selection: 'retry here' };
   let runtime;
   runtime = createBrowserCaptureRuntime({
     sidecarClient: {
@@ -289,7 +290,7 @@ test('the capture runtime forwards pending drafts as ui/coachDraftPrefill and ac
         requests.push({ kind: 'get', port, requestPath });
         return {
           drafts: [
-            { id: 'draft-7', workspace_id: 'workspace-runtime', text: 'prefilled coach draft' },
+            { id: 'draft-7', workspace_id: 'workspace-runtime', text: 'prefilled coach draft', source_ref: sourceRef },
           ],
         };
       },
@@ -322,7 +323,10 @@ test('the capture runtime forwards pending drafts as ui/coachDraftPrefill and ac
     assert.equal(result.forwarded, 1);
     assert.equal(result.acknowledged, 1);
     assert.deepEqual(posts, [
-      { type: 'ui/coachDraftPrefill', draftId: 'draft-7', text: 'prefilled coach draft' },
+      {
+        type: 'ui/coachDraftPrefill', draftId: 'draft-7', text: 'prefilled coach draft',
+        workspaceId: 'workspace-runtime', sourceRef,
+      },
     ]);
     assert.deepEqual(requests, [
       {
@@ -382,7 +386,7 @@ test('a forwarded draft is acknowledged only after the workbench receipt arrives
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.deepEqual(posts, [
-      { type: 'ui/coachDraftPrefill', draftId: 'draft-9', text: 'waiting draft' },
+      { type: 'ui/coachDraftPrefill', draftId: 'draft-9', text: 'waiting draft', workspaceId: 'workspace-x' },
     ]);
     // No receipt yet: the queue entry must still be pending server-side.
     assert.deepEqual(
@@ -447,7 +451,7 @@ test('a draft whose receipt never arrives stays unacknowledged and is reported',
     const result = await runtime.drafts.pollOnce();
 
     assert.deepEqual(posts, [
-      { type: 'ui/coachDraftPrefill', draftId: 'draft-11', text: 'lost draft' },
+      { type: 'ui/coachDraftPrefill', draftId: 'draft-11', text: 'lost draft', workspaceId: 'workspace-y' },
     ]);
     assert.equal(result.forwarded, 0);
     assert.equal(result.acknowledged, 0);
