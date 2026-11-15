@@ -1,21 +1,25 @@
 # Trainer 界面截图
 
-预览图来自本分支 `d9de193` 的中文浏览器预览，使用演示数据。原生图来自隔离的 VS Code 窗口，浏览器采集图来自独立 Chromium 配置。
+对话、学习、资料、训练、成长和设置的主视图，以及选段、资料关联和训练验证状态，均用 `3ede277` 的中文浏览器预览复核。预览图使用演示数据。原生图来自隔离的 VS Code 窗口，浏览器采集图来自独立 Chromium 配置。
 
 ## 工作台
 
+| 对话 | 学习 | 资料 | 独立训练 |
+| --- | --- | --- | --- |
+| <a href="coach-browser-selection.png"><img src="coach-browser-selection.png" width="180" alt="对话输入框中的网页选段和来源" /></a> | <a href="learning-linked-resource.png"><img src="learning-linked-resource.png" width="180" alt="学习阶段及关联资料" /></a> | <a href="resource-reader.png"><img src="resource-reader.png" width="180" alt="资料阅读与学习操作" /></a> | <a href="training-from-resource.png"><img src="training-from-resource.png" width="180" alt="独立训练任务、交付物和原始资料" /></a> |
+
 | 界面 | 截图 |
 | --- | --- |
-| 对话 | [首次打开](chat-first-run.png) · [窄侧栏](coach-narrow.png) · [消息操作](message-actions.png) · [会话历史](history.png) |
-| 学习 | [学习首页](plan.png) · [原生学习首页](native/learning.png) · [原生窄侧栏](native/learning-narrow.png) |
-| 资料 | [资料库](resources.png) · [原生资料库](native/resources.png) · [搜索结果](native/resources-search.png) · [打开资料](native/resources-editor.png) |
-| 训练 | [独立训练卡](training.png) · [到期复习队列](review-queue.png) · [复习作答](native/recall-question.png) · [作答结果](native/recall-recorded.png) |
+| 对话 | [首次打开](chat-first-run.png) · [窄侧栏](coach-narrow.png) · [浏览器选段草稿](coach-browser-selection.png) · [消息操作](message-actions.png) · [会话历史](history.png) |
+| 学习 | [学习首页](plan.png) · [阶段关联资料](learning-linked-resource.png) · [原生学习首页](native/learning.png) · [原生窄侧栏](native/learning-narrow.png) |
+| 资料 | [资料库](resources.png) · [资料阅读](resource-reader.png) · [原生资料库](native/resources.png) · [搜索结果](native/resources-search.png) · [打开资料](native/resources-editor.png) |
+| 训练 | [独立训练卡](training.png) · [基于资料的独立练习](training-from-resource.png) · [验证结果待确认](training-verification.png) · [到期复习队列](review-queue.png) · [复习作答](native/recall-question.png) · [作答结果](native/recall-recorded.png) |
 | 成长 | [能力与证据](progress.png) |
 | 设置 | [设置首页](settings-index.png) · [连接](settings-connected.png) · [快速配置](settings-quick-setup.png) · [教练与技能](skill-manager.png) · [工作区](settings-workspace.png) · [偏好](settings-preferences.png) · [教练习惯](native/coach-habit.png) |
 | 技能 | [对话技能面板](skill-deck.png) |
 | 浏览器采集 | [采集弹窗](browser-capture.png) · [离线等待投递](browser-capture-offline.png) · [失败恢复](browser-capture-retry.png) |
 
-## 原生运行状态
+## 原生运行记录
 
 | 场景 | 截图 |
 | --- | --- |
