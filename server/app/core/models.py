@@ -1253,6 +1253,10 @@ class ResearchBriefDraftRequest(BaseModel):
     project_id: str | None = Field(default=None, alias="projectId")
     save: bool = False
     asset_id: str | None = Field(default=None, alias="assetId")
+    # Per-request provider override (same contract as /plan/generate): the
+    # journey/host passes the provider explicitly instead of a saved profile.
+    provider: dict[str, Any] | None = None
+    api_key: str | None = None
 
     @field_validator("research_goal", "reply", "title")
     @classmethod

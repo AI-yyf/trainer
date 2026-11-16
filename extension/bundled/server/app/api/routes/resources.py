@@ -7,6 +7,10 @@ from dataclasses import asdict
 from typing import Any, cast
 from urllib.parse import quote
 
+from ..provider_payload import (
+    provider_api_key_from_payload,
+    provider_config_from_payload,
+)
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -594,7 +598,15 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                         "title": record.name,
                     }
 
+        # Per-request provider override (same contract as /plan/generate): the
+        # headless journeys and the host both pass the provider explicitly.
+        override_config = provider_config_from_payload(
+            {"provider": request.provider, "provider_config": request.provider}
+        )
+        api_key_override = provider_api_key_from_payload({"api_key": request.api_key})
         provider = runtime.provider_service
+        if override_config is not None or api_key_override is not None:
+            provider = runtime.provider_service_for(override_config, api_key_override)
         if getattr(provider, "has_api_key", False) is not True:
             raise HTTPException(status_code=503, detail={"code": "provider_unavailable"})
         language = request.response_language or "en-US"
