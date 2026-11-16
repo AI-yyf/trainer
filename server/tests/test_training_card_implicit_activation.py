@@ -55,11 +55,20 @@ def test_explicit_training_card_language_bar_matches_router_and_tool() -> None:
         "Create a practice card for debugging a Python traceback in VS Code."
     )
     assert message_requests_explicit_training_card("Give me a flash card for Remote SSH.")
+    assert message_requests_explicit_training_card("把这道题保存为训练卡")
     assert not message_requests_explicit_training_card(
         "Help me understand this VS Code remote workspace first, then verify one tiny step."
     )
     assert not message_requests_explicit_training_card("What is a training card?")
     assert not message_requests_explicit_training_card("continue")
+    # Instant practice: asking for an exercise never authorizes a card.
+    assert not message_requests_explicit_training_card("给我一道练习。")
+    assert not message_requests_explicit_training_card("来一道题，检验一下锁的行为。")
+    assert not message_requests_explicit_training_card("考考我锁在异常时怎么释放")
+    assert not message_requests_explicit_training_card(
+        "Give me a practice exercise about locks and exceptions."
+    )
+    assert not message_requests_explicit_training_card("quiz me on Python locks")
 
 
 def _training_provider_payload() -> dict[str, object]:

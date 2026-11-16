@@ -1210,6 +1210,10 @@ export interface TrainingCardCandidate {
   title: string;
   whyNow?: string;
   status?: string;
+  /** P1.4 candidate management: learner-controlled flags, server-owned. */
+  important?: boolean;
+  cardPriority?: number;
+  mergedInto?: string;
   learningPhase?: "learn" | "try" | "verify" | "reflect" | "return";
   learningFamily?: TrainingLearningFamily;
   learningSubtype?: TrainingLearningSubtype;

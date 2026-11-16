@@ -29,6 +29,9 @@ from ...core.models import (
     AgentCheckpointAccessRequest,
     CardGenerationRequest,
     CardGenerationResponse,
+    CardImportanceRequest,
+    CardMergeRequest,
+    CardPriorityRequest,
     CardStatusTransitionRequest,
     CardStatusTransitionResponse,
     ChatMessage,
@@ -4541,6 +4544,54 @@ def build_core_router(
                 raise HTTPException(status_code=404, detail="Training card not found.")
             return CardStatusTransitionResponse(card=card)
         return captured[0]
+
+    @router.post("/training/card/importance", response_model=CardStatusTransitionResponse)
+    def training_card_importance(request: CardImportanceRequest) -> CardStatusTransitionResponse:
+        """P1.4: the learner marks (or unmarks) a candidate as important."""
+        try:
+            card = runtime.memory_service.set_card_importance(
+                request.workspace_id,
+                request.card_id,
+                request.important,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            status_code = 404 if "not found" in message else 422
+            raise HTTPException(status_code=status_code, detail=message) from exc
+        core.refresh_workspace_sessions(request.workspace_id)
+        return card
+
+    @router.post("/training/card/priority", response_model=CardStatusTransitionResponse)
+    def training_card_priority(request: CardPriorityRequest) -> CardStatusTransitionResponse:
+        """P1.4: the learner adjusts a candidate's practice priority."""
+        try:
+            card = runtime.memory_service.set_card_priority(
+                request.workspace_id,
+                request.card_id,
+                request.priority,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            status_code = 404 if "not found" in message else 422
+            raise HTTPException(status_code=status_code, detail=message) from exc
+        core.refresh_workspace_sessions(request.workspace_id)
+        return card
+
+    @router.post("/training/cards/merge", response_model=CardStatusTransitionResponse)
+    def training_cards_merge(request: CardMergeRequest) -> CardStatusTransitionResponse:
+        """P1.4: merge duplicate candidates into the keeper the learner chose."""
+        try:
+            card = runtime.memory_service.merge_training_cards(
+                request.workspace_id,
+                request.keep_card_id,
+                request.duplicate_card_ids,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            status_code = 404 if "not found" in message else 422
+            raise HTTPException(status_code=status_code, detail=message) from exc
+        core.refresh_workspace_sessions(request.workspace_id)
+        return card
 
     @router.post("/training/generate-card", response_model=CardGenerationResponse)
     def training_generate_card(request: CardGenerationRequest) -> CardGenerationResponse:

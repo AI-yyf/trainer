@@ -5,7 +5,7 @@ from typing import Any
 
 from ..core.models import UserProfile
 from ..workspace.classifier import is_code_like_current_file, is_code_like_entry_point
-from .library_practice import library_practice_requested
+from .library_practice import library_analysis_question, library_practice_requested
 
 COACHING_SYSTEM_TEMPLATE = """You are Trainer, a long-term learning coach inside VS Code.
 
@@ -1605,7 +1605,8 @@ def build_coaching_messages(
             {"role": "system", "content": _library_analysis_system_prompt(
                 profile, coach_context, response_language, message,
             )},
-            {"role": "user", "content": message},
+            {"role": "user", "content": library_analysis_question(message)
+             if library_practice_requested(message, coach_context) else message},
         ]
     _, current_file = _function_guidance_prompt_inputs(
         message,

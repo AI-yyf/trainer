@@ -75,7 +75,14 @@ import {
 } from "./coachToolResultCopy";
 import { MessageRichContent } from "./MessageRichContent";
 
-export type CoachMessageAction = "copy" | "share" | "save-resource" | "training-card" | "set-goal" | "retry";
+export type CoachMessageAction =
+  | "copy"
+  | "share"
+  | "save-resource"
+  | "save-research-brief"
+  | "training-card"
+  | "set-goal"
+  | "retry";
 
 export interface CoachMessageBubbleProps {
   message: ConversationMessage;
@@ -579,6 +586,17 @@ function CoachMessageBubbleImpl({
                 onClick={() => onMessageAction?.("save-resource", message)}
               >
                 <ActionGlyph glyphs={GLYPH_LIBRARY} />
+              </button>
+              <button
+                type="button"
+                className="message-bubble__icon-action"
+                data-message-quick-action="save-research-brief"
+                data-action-label={messageActionLabels["save-research-brief"]}
+                aria-label={messageActionLabels["save-research-brief"]}
+                disabled={Boolean(pendingAssistantAction)}
+                onClick={() => onMessageAction?.("save-research-brief", message)}
+              >
+                <ActionGlyph glyphs={GLYPH_CARD} />
               </button>
               {isLatestAssistant ? (
                 <button

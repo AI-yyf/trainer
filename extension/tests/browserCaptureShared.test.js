@@ -427,6 +427,41 @@ test('browser draft payload preserves the source location and retry identity', (
   assert.match(generated.client_id, /^bd-/);
 });
 
+test('ask trainer question rides the draft payload and the offline queue item', () => {
+  // P4: the learner's typed question travels with the staged page context.
+  const payload = TrainerCapture.buildCoachDraftPayload({
+    selection: 'Episode boundaries decide reward accumulation.',
+    url: 'https://rl.example.com/episodes',
+    question: '  解释截断与终止的区别  ',
+    clientId: 'ask-1'
+  });
+  assert.equal(payload.question, '解释截断与终止的区别');
+
+  const capped = TrainerCapture.buildCoachDraftPayload({
+    selection: 'long question',
+    url: 'https://rl.example.com/second',
+    question: '长'.repeat(600)
+  });
+  assert.equal(capped.question.length, 500);
+
+  // No question: the field stays absent, so the wire shape is unchanged.
+  const bare = TrainerCapture.buildCoachDraftPayload({ selection: 'plain', url: 'https://x.example.com' });
+  assert.equal('question' in bare, false);
+
+  const queued = TrainerCapture.createDraftQueueItem({
+    clientDraftId: 'ask-q-1',
+    selection: 'Selection text.',
+    url: 'https://rl.example.com/third',
+    question: '为什么会这样？'
+  });
+  assert.equal(queued.question, '为什么会这样？');
+  const queuedBare = TrainerCapture.createDraftQueueItem({
+    clientDraftId: 'ask-q-2',
+    selection: 'Selection text.'
+  });
+  assert.equal(queuedBare.question, '');
+});
+
 test('buildDeepLink points at the Trainer library route', () => {
   assert.equal(
     TrainerCapture.buildDeepLink('res 1/2'),

@@ -14,6 +14,9 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from ..core.event_ledger import (
+    EVENT_CARD_MARKED_IMPORTANT,
+    EVENT_CARD_MERGED,
+    EVENT_CARD_PRIORITY_ADJUSTED,
     EVENT_CARD_STATUS_TRANSITIONED,
     EVENT_EVALUATION_FEEDBACK_RECORDED,
     EVENT_PRACTICE_SUBMISSION_RECORDED,
@@ -5156,6 +5159,169 @@ class MemoryService(
                 workspace_id, updated, EVENT_CARD_STATUS_TRANSITIONED, event["event_id"], "started",
             )
         return CardStatusTransitionResponse(card=updated, ledger_entry=ledger_entry)
+
+    # --------------------------------------------------------------
+    # P1.4 candidate management: merge / mark important / priority.
+    # The learner decides which candidates are worth keeping. All three ride
+    # the existing card records, the existing structured ledger and the
+    # unified event ledger — no second card store, no new status machine.
+    # --------------------------------------------------------------
+
+    def set_card_importance(
+        self,
+        workspace_id: str,
+        card_id: str,
+        important: bool,
+    ) -> CardStatusTransitionResponse:
+        structured = self._structured_for(workspace_id)
+        card = self.get_card(workspace_id, card_id)
+        if card is None:
+            raise ValueError(f"Card {card_id!r} not found")
+        updated = card.model_copy(
+            update={"important": bool(important), "updated_at": utc_now().isoformat()}
+        )
+        structured._training_cards[card_id] = updated
+        event = self._record_training_event(
+            structured,
+            event_type="training_card_importance_changed",
+            payload={
+                "candidate_id": card_id,
+                "important": bool(important),
+            },
+        )
+        self._persist_structured(workspace_id)
+        self._record_persisted_card_activity(
+            workspace_id, updated, EVENT_CARD_MARKED_IMPORTANT, event["event_id"],
+            "important" if important else "unimportant",
+        )
+        return CardStatusTransitionResponse(card=updated)
+
+    def set_card_priority(
+        self,
+        workspace_id: str,
+        card_id: str,
+        priority: int,
+    ) -> CardStatusTransitionResponse:
+        structured = self._structured_for(workspace_id)
+        card = self.get_card(workspace_id, card_id)
+        if card is None:
+            raise ValueError(f"Card {card_id!r} not found")
+        try:
+            normalized = int(priority)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("card priority must be an integer") from exc
+        normalized = max(-5, min(5, normalized))
+        updated = card.model_copy(
+            update={"card_priority": normalized, "updated_at": utc_now().isoformat()}
+        )
+        structured._training_cards[card_id] = updated
+        event = self._record_training_event(
+            structured,
+            event_type="training_card_priority_changed",
+            payload={
+                "candidate_id": card_id,
+                "priority": normalized,
+            },
+        )
+        self._persist_structured(workspace_id)
+        self._record_persisted_card_activity(
+            workspace_id, updated, EVENT_CARD_PRIORITY_ADJUSTED, event["event_id"],
+            f"priority:{normalized}",
+        )
+        return CardStatusTransitionResponse(card=updated)
+
+    def merge_training_cards(
+        self,
+        workspace_id: str,
+        keep_card_id: str,
+        duplicate_card_ids: list[str],
+    ) -> CardStatusTransitionResponse:
+        """Merge duplicate candidates into one keeper the learner chose.
+
+        Only still-candidate duplicates merge — a card already in flight keeps
+        its history. The keeper absorbs the duplicates' still-missing plan
+        links, acceptance criteria, mistakes, hint steps and source chain, and
+        each duplicate is archived in place with ``merged_into`` pointing at
+        the keeper. Every step rides the existing card records and ledger.
+        """
+        structured = self._structured_for(workspace_id)
+        keeper = self.get_card(workspace_id, keep_card_id)
+        if keeper is None:
+            raise ValueError(f"Card {keep_card_id!r} not found")
+        wanted: list[str] = []
+        for duplicate_id in duplicate_card_ids:
+            normalized = str(duplicate_id or "").strip()
+            if normalized and normalized != keep_card_id and normalized not in wanted:
+                wanted.append(normalized)
+        if not wanted:
+            raise ValueError("Merging requires at least one other duplicate card")
+        merged_sources = list(keeper.source_chain)
+        merged_criteria = list(keeper.acceptance_criteria)
+        merged_mistakes = list(keeper.common_mistakes)
+        merged_plan_links = list(keeper.plan_links)
+        merged_hint_ladder = list(keeper.hint_ladder)
+        archived_count = 0
+        for duplicate_id in wanted:
+            duplicate = self.get_card(workspace_id, duplicate_id)
+            if duplicate is None:
+                raise ValueError(f"Card {duplicate_id!r} not found")
+            if duplicate.status != "candidate":
+                raise ValueError(
+                    f"Only candidate cards can be merged; {duplicate_id!r} is {duplicate.status!r}"
+                )
+            merged_sources.extend(
+                source for source in duplicate.source_chain if source not in merged_sources
+            )
+            merged_criteria.extend(
+                item for item in duplicate.acceptance_criteria if item not in merged_criteria
+            )
+            merged_mistakes.extend(
+                item for item in duplicate.common_mistakes if item not in merged_mistakes
+            )
+            merged_plan_links.extend(
+                link for link in duplicate.plan_links if link not in merged_plan_links
+            )
+            merged_hint_ladder.extend(
+                hint for hint in duplicate.hint_ladder if hint not in merged_hint_ladder
+            )
+            structured._training_cards[duplicate_id] = duplicate.model_copy(
+                update={
+                    "status": "archived",
+                    "merged_into": keep_card_id,
+                    "updated_at": utc_now().isoformat(),
+                }
+            )
+            archived_count += 1
+        updated = keeper.model_copy(
+            update={
+                "source_chain": merged_sources,
+                "acceptance_criteria": merged_criteria,
+                "common_mistakes": merged_mistakes,
+                "plan_links": merged_plan_links,
+                "hint_ladder": merged_hint_ladder,
+                "updated_at": utc_now().isoformat(),
+            }
+        )
+        structured._training_cards[keep_card_id] = updated
+        routing = structured._active_training_card_routing
+        if routing is not None and routing.selected_card_id == keep_card_id:
+            structured._active_training_card_routing = routing.model_copy(
+                update={"selected_card": updated, "selected_card_id": updated.card_id}
+            )
+        event = self._record_training_event(
+            structured,
+            event_type="training_cards_merged",
+            payload={
+                "keep_card_id": keep_card_id,
+                "merged_card_ids": wanted,
+            },
+        )
+        self._persist_structured(workspace_id)
+        self._record_persisted_card_activity(
+            workspace_id, updated, EVENT_CARD_MERGED, event["event_id"],
+            f"merged:{archived_count}",
+        )
+        return CardStatusTransitionResponse(card=updated)
 
     def enqueue_evidence(
         self,

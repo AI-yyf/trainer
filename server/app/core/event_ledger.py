@@ -26,13 +26,19 @@ if TYPE_CHECKING:
 # §13.21 Event type constants — 39 canonical event types
 # ---------------------------------------------------------------------------
 
-# Card lifecycle (6)
+# Card lifecycle (9)
 EVENT_CARD_CANDIDATE_CREATED = "card_candidate_created"
 EVENT_CARD_STATUS_TRANSITIONED = "card_status_transitioned"
 EVENT_CARD_SCORE_COMPUTED = "card_score_computed"
 EVENT_ACTIVE_CARD_SELECTED = "active_card_selected"
 EVENT_PRACTICE_SUBMISSION_RECORDED = "practice_submission_recorded"
 EVENT_CARD_GENERATION_FAILED = "card_generation_failed"
+# P1.4 candidate management: the learner decides which candidates are worth
+# keeping. These ride the same ledger and the same card records — no second
+# data structure.
+EVENT_CARD_MARKED_IMPORTANT = "card_marked_important"
+EVENT_CARD_PRIORITY_ADJUSTED = "card_priority_adjusted"
+EVENT_CARD_MERGED = "card_merged"
 
 # Plan lifecycle (4)
 EVENT_PLAN_GENERATED = "plan_generated"
@@ -124,6 +130,9 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_CARD_CANDIDATE_CREATED,
     EVENT_CARD_STATUS_TRANSITIONED,
     EVENT_CARD_SCORE_COMPUTED,
+    EVENT_CARD_MARKED_IMPORTANT,
+    EVENT_CARD_PRIORITY_ADJUSTED,
+    EVENT_CARD_MERGED,
     EVENT_ACTIVE_CARD_SELECTED,
     EVENT_PRACTICE_SUBMISSION_RECORDED,
     EVENT_CARD_GENERATION_FAILED,

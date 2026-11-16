@@ -63,6 +63,15 @@ export class SidecarProcessManager implements vscode.Disposable {
   private ensurePromise?: Promise<SidecarStatus>;
   private startPromise?: Promise<SidecarStatus>;
   private didNotifyPortFallback = false;
+  // Output-channel content is buffered in the window renderer, so streaming
+  // sidecar output into it unbounded has crashed VS Code windows (observed as
+  // V8 OOM renderer crashes, code 5) whenever a launch loop or chatty engine
+  // kept writing. Keep a trailing window of diagnostics instead of growing it.
+  private static readonly outputTailLimitChars = 262_144;
+  private static readonly outputFlushIntervalMs = 500;
+  private outputTail = '';
+  private outputFlushTimer?: NodeJS.Timeout;
+  private outputChannelClosed = false;
   private status: SidecarStatus = {
     lifecycle: 'idle',
     host: SIDECAR_DEFAULTS.host,
@@ -344,7 +353,51 @@ export class SidecarProcessManager implements vscode.Disposable {
 
   dispose(): void {
     void this.stop();
+    this.disposeSidecarOutput();
     this.statusEmitter.dispose();
+  }
+
+  /** Buffer one line of status output through the capped tail and surface it promptly. */
+  private logSidecarLine(line: string): void {
+    this.recordSidecarOutput(`${line}\n`);
+    this.flushSidecarOutput();
+  }
+
+  /** Accumulate raw sidecar output into the capped tail; flushes are throttled. */
+  private recordSidecarOutput(text: string): void {
+    this.outputTail = `${this.outputTail}${text}`.slice(
+      -SidecarProcessManager.outputTailLimitChars,
+    );
+    if (!this.outputFlushTimer && !this.outputChannelClosed) {
+      this.outputFlushTimer = setTimeout(() => {
+        this.outputFlushTimer = undefined;
+        this.flushSidecarOutput();
+      }, SidecarProcessManager.outputFlushIntervalMs);
+    }
+  }
+
+  private flushSidecarOutput(): void {
+    if (this.outputChannelClosed) {
+      return;
+    }
+    try {
+      // replace() pins the channel to the tail; append() would let the
+      // renderer-side buffer grow for the lifetime of the window.
+      this.outputChannel.replace(this.outputTail);
+    } catch {
+      // The channel dies with its window ("Channel has been closed") while the
+      // extension host can briefly outlive it. Stop writing instead of
+      // turning every streamed chunk into an unhandled error.
+      this.disposeSidecarOutput();
+    }
+  }
+
+  private disposeSidecarOutput(): void {
+    this.outputChannelClosed = true;
+    if (this.outputFlushTimer) {
+      clearTimeout(this.outputFlushTimer);
+      this.outputFlushTimer = undefined;
+    }
   }
 
   private async start(): Promise<SidecarStatus> {
@@ -371,7 +424,7 @@ export class SidecarProcessManager implements vscode.Disposable {
         return await this.launchCandidate(candidate, port);
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        this.outputChannel.appendLine(
+        this.logSidecarLine(
           `[sidecar] launch failed for ${candidate.command}: ${lastError.message}`,
         );
         if (this.process?.exitCode === null) {
@@ -399,7 +452,7 @@ export class SidecarProcessManager implements vscode.Disposable {
     this.instanceToken = randomUUID();
     this.client.setInstanceToken(this.instanceToken);
 
-    this.outputChannel.appendLine(
+    this.logSidecarLine(
       `[sidecar] starting (${candidate.label}): ${candidate.command} ${candidate.args.join(' ')}`,
     );
 
@@ -433,11 +486,11 @@ export class SidecarProcessManager implements vscode.Disposable {
     // Python/import/port errors instead of a bare exit code.
     let stderrTail = '';
     child.stdout.on('data', (chunk) => {
-      this.outputChannel.append(chunk.toString());
+      this.recordSidecarOutput(chunk.toString());
     });
     child.stderr.on('data', (chunk) => {
       const text = chunk.toString();
-      this.outputChannel.append(text);
+      this.recordSidecarOutput(text);
       stderrTail = `${stderrTail}${text}`.slice(-800);
     });
 
@@ -526,7 +579,7 @@ export class SidecarProcessManager implements vscode.Disposable {
       if (await isPortAvailable(configuredPort)) {
         return configuredPort;
       }
-      this.outputChannel.appendLine(
+      this.logSidecarLine(
         `[sidecar] configured port ${configuredPort} is unavailable; using a managed fallback port.`,
       );
       if (!this.didNotifyPortFallback) {

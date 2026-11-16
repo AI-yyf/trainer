@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential
 from ...core.event_ledger import EVENT_RESOURCE_INDEXED, EVENT_RESOURCE_LINKED
@@ -20,6 +20,9 @@ from ...core.models import (
     LibraryAssetUpsertRequest,
     LibraryGroupNode,
     LibraryGroupsResponse,
+    ResearchBrief,
+    ResearchBriefDraftRequest,
+    ResearchBriefUpsertRequest,
     ResourceCanonicalizeRequest,
     ResourceCaptureRequest,
     ResourceCaptureResponse,
@@ -438,6 +441,278 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         refresh_asset_sessions(asset)
         return {"asset": asset_response(asset)}
+
+    def research_brief_response(asset: LibraryAsset) -> dict[str, object]:
+        payload = asset_response(asset)
+        try:
+            brief = ResearchBrief.model_validate(asset.payload)
+        except Exception as exc:  # noqa: BLE001 — surface payload drift as 422
+            raise HTTPException(status_code=422, detail=f"research brief payload invalid: {exc}") from exc
+        return {"asset": payload, "brief": brief.model_dump(by_alias=True, mode="json")}
+
+    @router.post("/resource/research-brief")
+    def save_research_brief(request: ResearchBriefUpsertRequest) -> dict[str, object]:
+        """Persist one research/lesson-prep result as a ``research_brief`` asset."""
+        project_id, context_id = resolve_asset_context_identity(request.project_id, request.context_id)
+        upsert = LibraryAssetUpsertRequest(
+            assetId=request.asset_id,
+            assetType="research_brief",
+            scope=request.scope,
+            title=request.title,
+            sourceChain=request.source_chain,
+            projectId=project_id,
+            contextId=context_id,
+            payload=request.brief.model_dump(by_alias=True, mode="json"),
+            approved=request.approved,
+        )
+        try:
+            asset = asset_library.upsert(upsert)
+        except AssetApprovalRequired as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "approval_required", "operation": exc.operation},
+            ) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except AssetLibraryError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        refresh_asset_sessions(asset)
+        return research_brief_response(asset)
+
+    @router.get("/resource/research-briefs")
+    def list_research_briefs(
+        query: str = "",
+        scope: str | None = None,
+        project_id: str | None = None,
+        context_id: str | None = None,
+        include_deleted: bool = False,
+        limit: int = 50,
+    ) -> dict[str, object]:
+        resolved_project_id, resolved_context_id = resolve_asset_context_identity(project_id, context_id)
+        try:
+            result = asset_library.list(
+                query=query,
+                scope=scope,
+                asset_type="research_brief",
+                project_id=resolved_project_id,
+                context_id=resolved_context_id,
+                include_deleted=include_deleted,
+                limit=limit,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except AssetLibraryError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "items": [research_brief_response(asset) for asset in result.items],
+            "total": result.total,
+            "query": query,
+        }
+
+    @router.get("/resource/research-briefs/{asset_id}")
+    def get_research_brief(
+        asset_id: str,
+        context_id: str | None = None,
+        include_deleted: bool = False,
+    ) -> dict[str, object]:
+        resolved_context_id = require_asset_context_authority(context_id)
+        try:
+            asset = asset_library.get(
+                asset_id,
+                context_id=resolved_context_id,
+                include_deleted=include_deleted,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        return research_brief_response(asset)
+
+    @router.post("/resource/research-brief/draft")
+    async def draft_research_brief(request: ResearchBriefDraftRequest) -> dict[str, object]:
+        """Draft (and optionally save) a Research Brief from one finished turn.
+
+        Honesty contract: only claims the model ties to a resource the learner
+        actually attached stay ``sourced`` — and the server, not the model,
+        pins their version and hash. Unresolved sources are downgraded to
+        ``inferred`` before the brief is returned or persisted.
+        """
+        project_id, context_id = resolve_asset_context_identity(request.project_id, request.context_id)
+        if not request.reply.strip():
+            raise HTTPException(status_code=422, detail="A non-empty reply is required to draft a brief.")
+
+        resource_pins: dict[str, dict[str, Any]] = {}
+        if context_id:
+            for resource_id in request.resource_ids[:4]:
+                record = runtime.repository.get_resource(context_id, resource_id)
+                if record is not None:
+                    resource_pins[record.id] = {
+                        "resource_id": record.id,
+                        "version_id": record.version_id or "",
+                        "content_hash": record.content_hash or "",
+                        "title": record.name,
+                    }
+
+        provider = runtime.provider_service
+        if getattr(provider, "has_api_key", False) is not True:
+            raise HTTPException(status_code=503, detail={"code": "provider_unavailable"})
+        language = request.response_language or "en-US"
+        pins_block = "\n".join(
+            f"- {pin['title']} (resource_id: {pin['resource_id']})"
+            for pin in resource_pins.values()
+        ) or "- (none)"
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are the preparation engine of a learning coach. Compress a finished "
+                    "research/analysis turn into a Research Brief and answer with ONLY a JSON "
+                    "object — no prose, no code fences. Fields: researchGoal (string), "
+                    "keyQuestions (string[]), findings (array of {statement, claimStatus, "
+                    "location}), sourceDisagreements (string[]), concepts (string[]), "
+                    "prerequisites (string[]), knowledgeStructure (string[]), teachingOrder "
+                    "(string[]), explanationStrategy (string), examples (string[]), "
+                    "misconceptions (string[]), checkQuestions (array of {question, "
+                    "acceptance: string[]}), acceptanceCriteria (string[]), openQuestions "
+                    "(string[]), followUpResearch (string[]). Rule: claimStatus is one of "
+                    "sourced | inferred | unverified. Mark a finding sourced ONLY when its "
+                    "statement is a conclusion of the attached resources; add \"sourceRef\": "
+                    "\"<resource_id>\" (exactly the id given) on that finding. Never invent "
+                    "resources. Findings that restate your own reasoning are inferred. Write "
+                    f"all text in the learner's language ({language})."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Research goal: {request.research_goal}\n\n"
+                    f"Attached resources:\n{pins_block}\n\n"
+                    "Finished analysis reply:\n"
+                    f"{request.reply[:12000]}"
+                ),
+            },
+        ]
+        try:
+            raw = await provider.chat_completion(messages, temperature=0.2, max_tokens=1600)
+        except Exception as exc:  # noqa: BLE001 — surfaced as an honest 503
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "provider_unavailable", "detail": str(exc)},
+            ) from exc
+
+        from ...training.card_generator import _parse_llm_json
+
+        data = _parse_llm_json(raw)
+        if data is None:
+            raise HTTPException(status_code=422, detail={"code": "invalid_provider_output"})
+
+        def _finding(source: Any) -> dict[str, Any] | None:
+            if not isinstance(source, dict):
+                return None
+            statement = str(source.get("statement") or "").strip()
+            if not statement:
+                return None
+            status = str(source.get("claimStatus") or source.get("claim_status") or "inferred")
+            status = status if status in {"sourced", "inferred", "unverified"} else "inferred"
+            refs: list[dict[str, Any]] = []
+            raw_ref = source.get("sourceRef") or source.get("source_ref")
+            ref_ids = raw_ref if isinstance(raw_ref, list) else ([raw_ref] if raw_ref else [])
+            for ref_id in ref_ids:
+                pin = resource_pins.get(str(ref_id).strip())
+                if pin is None:
+                    continue
+                refs.append({
+                    "kind": "resource",
+                    "ref": pin["resource_id"],
+                    "label": pin["title"],
+                    "metadata": {
+                        "resource_id": pin["resource_id"],
+                        "version_id": pin["version_id"],
+                        "content_hash": pin["content_hash"],
+                    },
+                })
+            if status == "sourced" and not refs:
+                # The server, not the model, decides what counts as sourced.
+                status = "inferred"
+            return {
+                "statement": statement,
+                "claimStatus": status,
+                "sourceRefs": refs,
+                "location": str(source.get("location") or "").strip(),
+            }
+
+        raw_findings = data.get("findings") if isinstance(data.get("findings"), list) else []
+        findings = [entry for entry in (_finding(item) for item in raw_findings) if entry]
+        goal = str(data.get("researchGoal") or data.get("research_goal") or "").strip() \
+            or request.research_goal
+        def _lines(value: Any) -> list[str]:
+            if not isinstance(value, list):
+                return []
+            return [str(item).strip() for item in value if str(item).strip()]
+        raw_checks = data.get("checkQuestions") if isinstance(data.get("checkQuestions"), list) else []
+        checks = []
+        for item in raw_checks:
+            if not isinstance(item, dict):
+                continue
+            question = str(item.get("question") or "").strip()
+            if not question:
+                continue
+            acceptance = item.get("acceptance")
+            checks.append({
+                "question": question,
+                "acceptance": _lines(acceptance) if isinstance(acceptance, list) else [],
+            })
+        try:
+            brief = ResearchBrief.model_validate({
+                "researchGoal": goal,
+                "keyQuestions": _lines(data.get("keyQuestions")),
+                "findings": findings,
+                "sourceDisagreements": _lines(data.get("sourceDisagreements")),
+                "concepts": _lines(data.get("concepts")),
+                "prerequisites": _lines(data.get("prerequisites")),
+                "knowledgeStructure": _lines(data.get("knowledgeStructure")),
+                "teachingOrder": _lines(data.get("teachingOrder")),
+                "explanationStrategy": str(data.get("explanationStrategy") or "").strip(),
+                "examples": _lines(data.get("examples")),
+                "misconceptions": _lines(data.get("misconceptions")),
+                "checkQuestions": checks,
+                "acceptanceCriteria": _lines(data.get("acceptanceCriteria")),
+                "openQuestions": _lines(data.get("openQuestions")),
+                "followUpResearch": _lines(data.get("followUpResearch")),
+            })
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_provider_output", "detail": str(exc)},
+            ) from exc
+
+        if not request.save:
+            return {"brief": brief.model_dump(by_alias=True, mode="json"), "saved": False}
+
+        title = request.title or (goal[:60] or "Research brief")
+        upsert = LibraryAssetUpsertRequest(
+            assetId=request.asset_id,
+            assetType="research_brief",
+            scope=request.scope,
+            title=title,
+            sourceChain=[
+                {"kind": "resource", "ref": pin["resource_id"], "label": pin["title"]}
+                for pin in resource_pins.values()
+            ],
+            projectId=project_id,
+            contextId=context_id,
+            payload=brief.model_dump(by_alias=True, mode="json"),
+            approved=False,
+        )
+        try:
+            asset = asset_library.upsert(upsert)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except AssetLibraryError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        refresh_asset_sessions(asset)
+        response = research_brief_response(asset)
+        return {**response, "saved": True}
 
     def record_resource_indexed(workspace_id: str, resource: ResourceRecord) -> None:
         if runtime.event_ledger is None or resource.index_status != "indexed":

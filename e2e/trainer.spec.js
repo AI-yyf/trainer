@@ -412,6 +412,66 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
+  test("instant practice stays in the Coach conversation and mints no training card", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "coach", {
+      lang: "en-US",
+      scenario: "ready",
+      connection: "connected",
+    });
+    await expectActiveView(page, "en-US", "coach");
+    const cardBefore = await page.evaluate(
+      () => window.__TRAINER_BOOTSTRAP__?.workspaceTrainingState?.selectedCardId ?? null,
+    );
+
+    await page.locator("#coach-composer").fill("Give me a practice exercise about thread locks.");
+    const bubblesBefore = await page.locator(".message-bubble__body").count();
+    await page.locator(".composer__send").click();
+
+    // P0: a plain exercise request is instant practice — inline conversation
+    // reply, no card, no navigation into the training surface.
+    await expect.poll(
+      () => page.locator(".message-bubble__body").count(),
+      { timeout: 30000 },
+    ).toBeGreaterThan(bubblesBefore);
+    await expectActiveView(page, "en-US", "coach");
+    await expect(page.locator('[data-template="FocusedPractice"]')).toHaveCount(0);
+    const cardAfter = await page.evaluate(
+      () => window.__TRAINER_BOOTSTRAP__?.workspaceTrainingState?.selectedCardId ?? null,
+    );
+    expect(cardAfter).toBe(cardBefore);
+    await expectNoConsoleErrors(errors);
+  });
+
+  test("Learning presents progress, practice, and long-term plan as three in-place views", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "plan", {
+      lang: "zh-CN",
+      scenario: "ready",
+      connection: "connected",
+    });
+    await expectActiveView(page, "zh-CN", "plan");
+
+    // P1: 进度 / 练习 / 长期规划 are three views of one Learning stream.
+    const tablist = page.getByRole("tablist", { name: "当前学习" });
+    await expect(tablist).toBeVisible();
+    await expect(tablist.getByRole("tab", { name: "长期规划", exact: true })).toHaveAttribute("aria-selected", "true");
+
+    await tablist.getByRole("tab", { name: "进度", exact: true }).click();
+    await expectActiveView(page, "zh-CN", "progress");
+    await expect(tablist.getByRole("tab", { name: "进度", exact: true })).toHaveAttribute("aria-selected", "true");
+
+    await tablist.getByRole("tab", { name: "练习", exact: true }).click();
+    await expectActiveView(page, "zh-CN", "training");
+    await expect(tablist.getByRole("tab", { name: "练习", exact: true })).toHaveAttribute("aria-selected", "true");
+
+    // Three views, one unified composer.
+    await expect(page.locator("#coach-composer")).toHaveCount(1);
+    await expectNoConsoleErrors(errors);
+  });
+
   test("comparing library papers keeps the Learning composer and reply in place", async ({ page }) => {
     await page.setViewportSize({ width: 420, height: 761 });
     await openPreview(page, "plan", { lang: "en-US", scenario: "ready", connection: "connected" });
@@ -1079,6 +1139,12 @@ test.describe("Trainer three-destination shell", () => {
       title: "Recover a function contract with editor guidance",
       taskEvidence: "Open a real call site, then use hover and Go to Definition to see the parameters and return value",
       returnEvidence: "Return with the function contract",
+      // The function pack ships only placeholder file targets ("<live call
+      // site>"), so r1-g1-5 keeps it a manual practice: the card shows no raw
+      // placeholder and no card-level action — the answer flows through the
+      // unified composer ("Submit the current training note").
+      answerFlow: "composer",
+      rawPlaceholder: "<live call site>",
     },
   ]) {
     test(`renders the ${scenario.id} training scenario with concrete evidence`, async ({ page }) => {
@@ -1099,14 +1165,19 @@ test.describe("Trainer three-destination shell", () => {
       await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
         scenario.returnEvidence,
       );
-      // The card's primary action depends on whether the try note is already
-      // present: an empty note asks for Submit answer, a filled one offers
-      // Verify current file. Both stay inside the card, never the composer.
-      const verifyButton = card.getByRole("button", { name: "Verify current file", exact: true });
-      if ((await verifyButton.count()) > 0) {
-        await expect(verifyButton).toBeVisible();
+      // File-bound practices answer with the in-card Verify action; manual
+      // practices answer through the unified composer. Neither surfaces a
+      // verify button in the composer shell.
+      if (scenario.answerFlow === "composer") {
+        if (scenario.rawPlaceholder) {
+          await expect(card).not.toContainText(scenario.rawPlaceholder);
+        }
+        await expect(
+          page.locator(".composer-shell").getByText("Submit the current training note"),
+        ).toBeVisible();
+        await expect(card.getByRole("button", { name: "Verify current file", exact: true })).toHaveCount(0);
       } else {
-        await expect(card.getByRole("button", { name: "Submit answer", exact: true })).toBeVisible();
+        await expect(card.getByRole("button", { name: "Verify current file", exact: true })).toBeVisible();
       }
       await expect(
         page.locator(".composer-shell").getByRole("button", {
@@ -1117,6 +1188,79 @@ test.describe("Trainer three-destination shell", () => {
       await expectNoConsoleErrors(errors);
     });
   }
+
+  test("candidate management discloses merge, importance, and priority on a candidate card", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+    const commands = collectPreviewCommands(page);
+
+    await page.setViewportSize({ width: 420, height: 761 });
+    await page.goto("/vscode-preview.html?view=training&lang=en-US&connection=connected&run=candidate-manage");
+    await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+    await page.evaluate(() => {
+      const current = window.__TRAINER_BOOTSTRAP__;
+      const workspaceId = "workspace-candidate-manage";
+      const keeper = {
+        cardId: "card-candidate-e2e",
+        type: "practice",
+        title: "Candidate management card",
+        status: "candidate",
+        learningPhase: "learn",
+        focusArea: "candidate management",
+        targetSkill: "candidate management",
+        problemStatement: "Decide which candidates are worth keeping.",
+        suggestedWorkspaceAction: "Review the candidate.",
+        answerMode: "text",
+      };
+      const duplicate = {
+        ...keeper,
+        cardId: "card-dup-e2e",
+        title: "Duplicate candidate",
+      };
+      window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: "bootstrap", payload: {
+        ...current, plan: null, sessionHistoryRestored: true,
+        memory: { ...current.memory, workspace: {
+          ...current.memory.workspace, workspaceId,
+          liveTrainingSelection: { workspaceId, cardId: keeper.cardId, selectedAt: "2026-11-17T00:00:00Z" },
+        } },
+        workspaceTrainingState: {
+          workspaceId,
+          selectedCardId: keeper.cardId,
+          selectedCardType: "practice",
+          selectedCardTitle: keeper.title,
+          selectedCardStatus: "candidate",
+          trainingCardCandidates: [keeper, duplicate],
+          activeTrainingCardRouting: { selectedCardId: keeper.cardId, selectedCard: keeper,
+            candidateCount: 2, eligibleCount: 2 },
+        },
+      } });
+    });
+
+    const card = page.getByRole("group", { name: "Current training card", exact: true });
+    const manage = card.locator("[data-candidate-management=true]");
+    await expect(manage).toBeVisible();
+    await manage.locator(":scope > summary").click();
+
+    // The learner's decisions travel to the host as management commands; the
+    // sidecar owns the card records and the ledger.
+    await manage.locator("[data-candidate-action=important]").click();
+    await expect.poll(() => commands.some((command) =>
+      command?.payload?.commandId === "trainer.trainingCard.markImportant" &&
+      command?.payload?.payload?.cardId === "card-candidate-e2e" &&
+      command?.payload?.payload?.important === true)).toBe(true);
+
+    await manage.locator("[data-candidate-priority=true] select").selectOption("-1");
+    await expect.poll(() => commands.some((command) =>
+      command?.payload?.commandId === "trainer.trainingCard.setPriority" &&
+      command?.payload?.payload?.priority === -1)).toBe(true);
+
+    await manage.locator("[data-candidate-merge='card-dup-e2e']").click();
+    await expect.poll(() => commands.some((command) =>
+      command?.payload?.commandId === "trainer.trainingCard.merge" &&
+      command?.payload?.payload?.keepCardId === "card-candidate-e2e" &&
+      JSON.stringify(command?.payload?.payload?.duplicateCardIds) === JSON.stringify(["card-dup-e2e"]))).toBe(true);
+    await expectActiveView(page, "en-US", "training");
+    await expectNoConsoleErrors(errors);
+  });
 
   test("keeps a selected Spanish training card and composer in Spanish", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);

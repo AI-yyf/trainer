@@ -274,7 +274,6 @@ import {
   ResourcesIcon,
   SkillCubeIcon,
   TargetIcon,
-  TerminalIcon,
   UploadIcon,
   WarningIcon,
 } from "../components/icons";
@@ -1024,6 +1023,59 @@ export function App() {
     },
     [layout.composerLanguage],
   );
+  // P2: one explicit learner action turns a finished Resources analysis into
+  // a traceable Research Brief library asset (server drafts, validates and
+  // pins the citations; the reply itself is never auto-briefed).
+  const requestCoachResearchBrief = useCallback(
+    (message: ConversationMessage): Promise<void> => {
+      const requestId = `resource-operation-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
+      return new Promise<void>((resolve, reject) => {
+        // Drafting runs a provider completion server-side; allow the same
+        // generous window as a training-card handoff.
+        const timeoutMs = 135_000;
+        const timeoutId = window.setTimeout(() => {
+          const operation = resourceOperationResolversRef.current.get(requestId);
+          if (!operation || operation.kind !== "save-research-brief") {
+            return;
+          }
+          resourceOperationResolversRef.current.delete(requestId);
+          operation.reject(new Error("Research brief timed out."));
+        }, timeoutMs);
+        resourceOperationResolversRef.current.set(requestId, {
+          kind: "save-research-brief",
+          resolve,
+          reject,
+          timeoutId,
+        });
+        try {
+          const conversation = useWorkbenchState.getState().data.conversation;
+          const researchGoal = goalTitleFromConversation(conversation, message.id);
+          postMessage({
+            type: "command/execute",
+            payload: {
+              commandId: trainerCommands.saveResearchBrief,
+              payload: {
+                researchGoal: researchGoal.slice(0, 300),
+                reply: message.body.slice(0, 12000),
+                resourceIds: selectedResourceContextIds.slice(0, 4),
+                __trainerResourceOperationId: requestId,
+              },
+            },
+          });
+        } catch (error) {
+          const operation = resourceOperationResolversRef.current.get(requestId);
+          resourceOperationResolversRef.current.delete(requestId);
+          if (operation) {
+            window.clearTimeout(operation.timeoutId);
+            operation.reject(error);
+          } else {
+            reject(error);
+          }
+        }
+      });
+    },
+    [selectedResourceContextIds],
+  );
   const handleCoachMessageAction = useCallback(
     async (action: CoachMessageAction, message: ConversationMessage) => {
       if (action === "set-goal") {
@@ -1140,6 +1192,38 @@ export function App() {
           setOperationMessage({
             tone: "error",
             message: `${appUiCopy(layout.composerLanguage, "这条回复没有存进资料库,请重试。")} ${sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage)}`,
+          });
+        } finally {
+          finishPendingMessageAction();
+        }
+        return;
+      }
+      if (action === "save-research-brief") {
+        try {
+          if (isBrowserPreview) {
+            const browserPreview = await loadBrowserPreviewModule();
+            const conversation = useWorkbenchState.getState().data.conversation;
+            const researchGoal = goalTitleFromConversation(conversation, message.id);
+            await browserPreview.saveBrowserPreviewResearchBrief({
+              researchGoal: researchGoal.slice(0, 300),
+              reply: message.body.slice(0, 12000),
+              resourceIds: selectedResourceContextIds.slice(0, 4),
+            }, previewSessionId);
+            setOperationMessage({
+              tone: "success",
+              message: appUiCopy(layout.composerLanguage, "备课简报已存入资料库。"),
+            });
+          } else {
+            await requestCoachResearchBrief(message);
+            setOperationMessage({
+              tone: "success",
+              message: appUiCopy(layout.composerLanguage, "备课简报已存入资料库。"),
+            });
+          }
+        } catch (error) {
+          setOperationMessage({
+            tone: "error",
+            message: `${appUiCopy(layout.composerLanguage, "这份回复没有生成备课简报。")} ${sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage)}`,
           });
         } finally {
           finishPendingMessageAction();
@@ -1379,7 +1463,7 @@ export function App() {
       // Reply uploads settle through their request-id acknowledgement. An
       // unrelated status (for example Trash refresh) must not enable duplicates.
       if (message.type === "operation/status" || message.type === "stream/start") {
-        clearPendingMessageActionUnless(":save-resource");
+        clearPendingMessageActionUnless([":save-resource", ":save-research-brief"]);
       }
       if (message.type === "remoteCompanion/state") {
         setCompanionInstallState(
@@ -7459,7 +7543,10 @@ export function App() {
       return;
     }
 
-    if (!hasImageAttachments && unified.kind === "practice") {
+    // P0: outside the formal Training surface a practice request is instant
+    // practice — answer it inline in this conversation, never mint a card.
+    // The reply keeps its explicit "save as training card" action.
+    if (!hasImageAttachments && unified.kind === "practice" && activeView === "training") {
       const resourceIds = activeComposerResourceIds;
       const explicitlyUsesFile = shouldAttachCurrentFile(instruction) || /\.py\b|\.tsx?\b/i.test(instruction);
       const step = recoveredDisplayFacts.currentStep?.trim();
@@ -7467,7 +7554,7 @@ export function App() {
         ? { planId: data.plan.id, stageId: activePlanStage.id, step, revision: data.plan.revision }
         : undefined;
       if (unified.referencesSource && resourceIds.length !== 1) {
-        const linked = (activeView === "plan" || activeView === "training" || activeView === "progress") && planBinding && resourceIds.length === 0
+        const linked = planBinding && resourceIds.length === 0
           ? resolveLinkedPracticeSource(activePlanStage?.resourceIds ?? [], data.resources) : undefined;
         if (!planBinding || !linked) {
           setOperationMessage({ tone: "info", message: unifiedComposerCopy[layout.composerLanguage].selectIndexedSource });
@@ -7833,7 +7920,9 @@ export function App() {
       planComposerMode: planComposerSubmission ? submittedPlanMode : undefined,
       resourceComposerIntent: unified.kind === "resource-turn"
         ? { mode: unified.mode, resourceIds }
-        : turnView === "resources" ? { mode: "locate", resourceIds } : undefined,
+        : unified.kind === "practice" && resourceIds.length > 0
+          ? { mode: "analyze", resourceIds }
+          : turnView === "resources" ? { mode: "locate", resourceIds } : undefined,
       resourceIds,
       includeDiagnostics: intent === "review" ? true : undefined,
       contextDetail: intent === "review" ? "full" : undefined,
@@ -8748,26 +8837,6 @@ export function App() {
           onSwitchProfile={switchComposerProviderProfile}
           initialOptionLimit={COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT}
         />
-      );
-    }
-
-    if (openMenu === "workflows") {
-      return (
-        <div className="command-deck" role="group" aria-label={composerAddCopy[layout.composerLanguage].workflows}>
-          <div className="command-deck__list">
-            {unifiedComposerCommands("/", layout.composerLanguage).map((command) => (
-              <button key={command} type="button" className="command-deck__item" onClick={() => {
-                setOpenMenu(undefined);
-                if (composerUsesTrainingFlow) setActivityDraft(`${command} ${activityDraft.trim()}`);
-                else setComposerDraft(`${command} ${normalizedDraft}`, composerDraftScope);
-                setDismissedComposerDeck("command");
-                requestCoachComposerFocus();
-              }}>
-                <span className="command-deck__command">{command}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       );
     }
 
@@ -9996,6 +10065,28 @@ export function App() {
     }
     handleVerifyTrainingFromIde();
   };
+  // P1.4 candidate management: merge / mark important / priority. The host
+  // command posts one management call to the sidecar; the card record and the
+  // ledger stay server-owned. In preview the commands are observed but not
+  // executed by the fixture.
+  const handleMarkCandidateImportant = useCallback((cardId: string, important: boolean) => {
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.trainingCardMarkImportant, payload: { cardId, important } },
+    });
+  }, []);
+  const handleSetCandidatePriority = useCallback((cardId: string, priority: number) => {
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.trainingCardSetPriority, payload: { cardId, priority } },
+    });
+  }, []);
+  const handleMergeCandidateDuplicates = useCallback((keepCardId: string, duplicateCardIds: string[]) => {
+    postMessage({
+      type: "command/execute",
+      payload: { commandId: trainerCommands.trainingCardMerge, payload: { keepCardId, duplicateCardIds } },
+    });
+  }, []);
   useEffect(() => {
     if (activeView !== "settings" || isBrowserPreview || companionStateQueriedRef.current) {
       return;
@@ -10422,6 +10513,19 @@ export function App() {
           cardId={activeTrainingCardId}
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
+          siblingCandidates={
+            leftoverTrainingHandoffChromeNotLive
+              ? undefined
+              : (trainingState?.trainingCardCandidates ?? []).filter((candidate) =>
+                  candidate.cardId !== activeTrainingCardId &&
+                  candidate.status === "candidate" &&
+                  !candidate.mergedInto)
+          }
+          cardImportant={selectedTrainingCardCandidate?.important ?? false}
+          cardPriorityValue={selectedTrainingCardCandidate?.cardPriority ?? 0}
+          onMarkImportant={handleMarkCandidateImportant}
+          onSetPriority={handleSetCandidatePriority}
+          onMergeDuplicates={handleMergeCandidateDuplicates}
           onVerifyCurrentFile={reviewArtifactForeground ? undefined : handleVerifyCurrentFileFromCard}
           remoteVerification={remoteVerification}
           onStopRemoteVerification={handleStopRemoteVerification}
@@ -11080,6 +11184,8 @@ export function App() {
   const renderLearningWorkspace = (view: "plan" | "training" | "progress") => (
     <LearningWorkspace
       language={layout.composerLanguage}
+      activeTab={view}
+      onTabChange={(tab) => setActiveView(tab)}
       goal={view === "plan" ? undefined : (visibleFormalPlan?.title || goalText)}
       details={view === "plan" ? undefined : activePlanStage?.title}
       activity={data.memory.learningActivity}
@@ -11621,12 +11727,6 @@ export function App() {
                         },
                       },
                     ]),
-                {
-                  id: "composer-workflows",
-                  label: composerAddCopy[layout.composerLanguage].workflows,
-                  icon: <TerminalIcon size={16} />,
-                  onClick: () => setOpenMenu("workflows"),
-                },
                 {
                   id: "composer-goal-mode",
                   label: goalPaused ? goalModeCopy.resume : goalModeCopy.enter,

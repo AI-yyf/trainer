@@ -159,12 +159,13 @@ test('reply uploads wait for their own acknowledgement while other actions clear
 
   assert.match(dispatch, /message\.type === "operation\/status" \|\| message\.type === "stream\/start"/);
   // The dispatch delegates to the controller helper; the save-to-resource
-  // upload is exempt so it can wait for its own request-id acknowledgement.
-  assert.match(dispatch, /clearPendingMessageActionUnless\(":save-resource"\);/);
+  // upload and the research-brief preparation are exempt so they can wait
+  // for their own request-id acknowledgement.
+  assert.match(dispatch, /clearPendingMessageActionUnless\(\[":save-resource", ":save-research-brief"\]\);/);
   assert.match(controllerSource, /const \[pendingMessageAction, setPendingMessageAction\] = useState<string \| null>\(null\);/);
   assert.match(
     controllerSource,
-    /const clearPendingMessageActionUnless = useCallback\(\(keepSuffix: string\) => \{[\s\S]*?if \(pendingMessageActionRef\.current\?\.endsWith\(keepSuffix\)\) \{\s*return;\s*\}[\s\S]*?setPendingMessageAction\(null\);/,
+    /const clearPendingMessageActionUnless = useCallback\(\(keepSuffixes: string \| string\[\]\) => \{[\s\S]*?if \(suffixes\.some\(\(suffix\) => pendingMessageActionRef\.current\?\.endsWith\(suffix\)\)\) \{\s*return;\s*\}[\s\S]*?setPendingMessageAction\(null\);/,
   );
   assert.match(source, /beginPendingMessageAction\(`\$\{message\.id\}:\$\{action\}`\)/);
   assert.match(controllerSource, /pendingMessageActionRef\.current = key;/);

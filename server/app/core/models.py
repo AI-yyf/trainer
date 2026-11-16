@@ -170,6 +170,7 @@ LibraryAssetType = Literal[
     "memory",
     "habit",
     "skill_definition",
+    "research_brief",
 ]
 LibraryAssetScope = Literal["library", "personal", "project"]
 LibraryAssetStatus = Literal["active", "deleted"]
@@ -1103,6 +1104,162 @@ class LibraryAssetLifecycleRequest(BaseModel):
     reason: str = ""
 
 
+ResearchBriefClaimStatus = Literal["sourced", "inferred", "unverified"]
+
+
+class ResearchBriefFinding(BaseModel):
+    """One research conclusion with explicit provenance.
+
+    ``sourced`` claims must carry at least one source reference so every key
+    conclusion stays traceable to its resource, version and location. Model
+    inference and still-unverified assumptions are separate statuses and must
+    never be presented as sourced facts.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    statement: str
+    claim_status: ResearchBriefClaimStatus = Field(default="inferred", alias="claimStatus")
+    source_refs: list[AssetSourceReference] = Field(default_factory=list, alias="sourceRefs")
+    location: str = ""
+
+    @field_validator("statement", "location")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def _require_sources_for_sourced_claims(self) -> "ResearchBriefFinding":
+        self.location = self.location.strip()
+        if self.claim_status == "sourced" and not self.source_refs:
+            raise ValueError("sourced research findings require at least one sourceRef")
+        return self
+
+
+class ResearchBriefCheckQuestion(BaseModel):
+    """One learning check with its acceptance bar (备课验收)."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    question: str
+    acceptance: list[str] = Field(default_factory=list)
+
+    @field_validator("question")
+    @classmethod
+    def _strip_question(cls, value: str) -> str:
+        return value.strip()
+
+
+class ResearchBrief(BaseModel):
+    """Preparation Engine output: one research + lesson-preparation result.
+
+    Stored as a ``research_brief`` library asset payload so研究成果 become
+    manageable, traceable library assets instead of a second dashboard.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    research_goal: str = Field(alias="researchGoal")
+    key_questions: list[str] = Field(default_factory=list, alias="keyQuestions")
+    findings: list[ResearchBriefFinding] = Field(default_factory=list)
+    source_disagreements: list[str] = Field(default_factory=list, alias="sourceDisagreements")
+    concepts: list[str] = Field(default_factory=list)
+    prerequisites: list[str] = Field(default_factory=list)
+    knowledge_structure: list[str] = Field(default_factory=list, alias="knowledgeStructure")
+    teaching_order: list[str] = Field(default_factory=list, alias="teachingOrder")
+    explanation_strategy: str = Field(default="", alias="explanationStrategy")
+    examples: list[str] = Field(default_factory=list)
+    misconceptions: list[str] = Field(default_factory=list)
+    check_questions: list[ResearchBriefCheckQuestion] = Field(default_factory=list, alias="checkQuestions")
+    acceptance_criteria: list[str] = Field(default_factory=list, alias="acceptanceCriteria")
+    open_questions: list[str] = Field(default_factory=list, alias="openQuestions")
+    follow_up_research: list[str] = Field(default_factory=list, alias="followUpResearch")
+    plan_id: str | None = Field(default=None, alias="planId")
+    stage_id: str | None = Field(default=None, alias="stageId")
+
+    @field_validator("research_goal", "explanation_strategy")
+    @classmethod
+    def _strip_brief_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("plan_id", "stage_id")
+    @classmethod
+    def _strip_optional_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def _normalize_brief_lines(self) -> "ResearchBrief":
+        self.research_goal = (self.research_goal or "").strip()
+        line_fields = (
+            "key_questions", "source_disagreements", "concepts", "prerequisites",
+            "knowledge_structure", "teaching_order", "examples", "misconceptions",
+            "acceptance_criteria", "open_questions", "follow_up_research",
+        )
+        for field_name in line_fields:
+            values = getattr(self, field_name)
+            setattr(self, field_name, [line.strip() for line in values if line.strip()])
+        self.explanation_strategy = (self.explanation_strategy or "").strip()
+        self.plan_id = self.plan_id or None
+        self.stage_id = self.stage_id or None
+        if not self.research_goal:
+            raise ValueError("research_goal is required")
+        return self
+
+
+class ResearchBriefUpsertRequest(BaseModel):
+    """Save (or update) one Research Brief as a traceable library asset."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    asset_id: str | None = Field(default=None, alias="assetId")
+    scope: LibraryAssetScope = "library"
+    title: str
+    brief: ResearchBrief
+    source_chain: list[AssetSourceReference] = Field(default_factory=list, alias="sourceChain")
+    project_id: str | None = Field(default=None, alias="projectId")
+    context_id: str | None = Field(default=None, alias="contextId")
+    approved: bool = False
+
+    @field_validator("title")
+    @classmethod
+    def _require_title(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("research brief title is required")
+        return normalized
+
+
+class ResearchBriefDraftRequest(BaseModel):
+    """Draft (and optionally save) a Research Brief from one finished turn.
+
+    The webview sends the learner's stated research goal, the reply text and
+    the resource ids the turn was grounded in. The server drafts the brief
+    with the provider, downgrades claims whose sources do not resolve, and
+    pins every sourced citation to the real resource version and hash.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    research_goal: str = Field(alias="researchGoal")
+    reply: str
+    title: str = ""
+    resource_ids: list[str] = Field(default_factory=list, alias="resourceIds")
+    response_language: str | None = Field(default=None, alias="responseLanguage")
+    scope: LibraryAssetScope = "library"
+    context_id: str | None = Field(default=None, alias="contextId")
+    project_id: str | None = Field(default=None, alias="projectId")
+    save: bool = False
+    asset_id: str | None = Field(default=None, alias="assetId")
+
+    @field_validator("research_goal", "reply", "title")
+    @classmethod
+    def _strip_draft_text(cls, value: str) -> str:
+        return value.strip()
+
+
 class TeachingKnowledgeAsset(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
@@ -1376,6 +1533,13 @@ class TrainingCardCandidateSnapshot(BaseModel):
     next_after_completion: str = ""
     created_at: str = ""
     updated_at: str = ""
+    # P1.4 candidate management: the learner decides which candidates are
+    # worth keeping. These ride the existing card record and ledger — merging
+    # archives the duplicate in place (merged_into) instead of inventing a
+    # second card store.
+    important: bool = False
+    card_priority: int = Field(default=0, alias="cardPriority")
+    merged_into: str = Field(default="", alias="mergedInto")
 
     @model_validator(mode="after")
     def sync_training_defaults(self) -> "TrainingCardCandidateSnapshot":
@@ -1676,6 +1840,36 @@ class CardStatusTransitionRequest(TrainingReliabilityRequestFields):
     card_id: str
     new_status: TrainingCardStatus
     reason: str = ""
+
+
+class CardImportanceRequest(BaseModel):
+    """P1.4 candidate management: mark/unmark a candidate as important."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    workspace_id: str
+    card_id: str
+    important: bool
+
+
+class CardPriorityRequest(BaseModel):
+    """P1.4 candidate management: adjust a candidate's practice priority."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    workspace_id: str
+    card_id: str
+    priority: int
+
+
+class CardMergeRequest(BaseModel):
+    """P1.4 candidate management: merge duplicate candidates into one keeper."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    workspace_id: str
+    keep_card_id: str = Field(alias="keepCardId")
+    duplicate_card_ids: list[str] = Field(default_factory=list, alias="duplicateCardIds")
 
 
 class EvidenceItem(BaseModel):

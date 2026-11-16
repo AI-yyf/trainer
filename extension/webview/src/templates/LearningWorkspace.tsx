@@ -27,7 +27,11 @@ const ACTIVITY_LABELS: Record<ComposerLanguage, string[]> = {
 const activityKinds = ["browser_source_received", "resource_indexed", "resource_linked", "card_status_transitioned",
   "practice_submission_recorded", "training_evidence_recorded", "review_scheduled", "card_candidate_created", "evaluation_feedback_recorded"];
 
-export function LearningWorkspace({ language, goal, details, activity, entries, onReview, reviewLabel, evidence, overview, librarySearch, resources, children }: {
+export type LearningWorkspaceTab = "progress" | "training" | "plan";
+
+const LEARNING_TAB_ORDER: LearningWorkspaceTab[] = ["progress", "training", "plan"];
+
+export function LearningWorkspace({ language, goal, details, activity, entries, onReview, reviewLabel, evidence, overview, librarySearch, resources, activeTab, onTabChange, children }: {
   language: ComposerLanguage;
   goal?: string;
   details?: string;
@@ -39,6 +43,9 @@ export function LearningWorkspace({ language, goal, details, activity, entries, 
   overview?: { label: string; content: ReactNode };
   librarySearch?: { requestId: string; query: string; result?: ResourceSearchState; failed?: boolean };
   resources: ResourceRecord[];
+  /** P1: Learning presents 进度 / 练习 / 长期规划 as three views over one stream. */
+  activeTab?: LearningWorkspaceTab;
+  onTabChange?: (tab: LearningWorkspaceTab) => void;
   children: ReactNode;
 }) {
   const copy = unifiedComposerCopy[language];
@@ -53,6 +60,31 @@ export function LearningWorkspace({ language, goal, details, activity, entries, 
     .slice(0, 20);
   return (
     <section className="template-learning-workspace" data-template="LearningWorkspace" aria-label={templateCopy[language].currentLearning}>
+      {activeTab && onTabChange ? (
+        <div className="template-learning-tabs" role="tablist" aria-label={templateCopy[language].currentLearning} data-learning-tabs="true">
+          {LEARNING_TAB_ORDER.map((tab) => {
+            const label = tab === "progress"
+              ? templateCopy[language].learningProgress
+              : tab === "training"
+                ? templateCopy[language].learningPractice
+                : templateCopy[language].learningPlan;
+            const selected = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                className={selected ? "template-learning-tab is-active" : "template-learning-tab"}
+                data-learning-tab={tab}
+                onClick={() => { if (!selected) onTabChange(tab); }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {goal ? <header className="template-learning-workspace__goal">
         <p className="template-metadata">{templateCopy[language].currentLearning}</p>
         <h2>{goal}</h2>

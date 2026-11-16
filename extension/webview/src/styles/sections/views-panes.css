@@ -3020,3 +3020,55 @@
 .resources-knowledge__trash > summary {
   min-height: 32px;
 }
+
+/* P1.4 candidate management: merge / mark important / priority, disclosed on
+   the candidate card. Token-driven, one quiet disclosure per candidate. */
+.training-candidate-manage > summary {
+  min-height: 32px;
+  cursor: pointer;
+}
+.training-candidate-manage__body {
+  display: grid;
+  gap: 8px;
+  padding-block: 8px;
+}
+.training-candidate-manage__action {
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--bg-0);
+  color: var(--fg-1);
+}
+.training-candidate-manage__action:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--fg-0);
+}
+.training-candidate-manage__priority {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.training-candidate-manage__priority select {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--bg-0);
+  color: var(--fg-0);
+}
+.training-candidate-manage__duplicates {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.training-candidate-manage__duplicates li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.training-candidate-manage__duplicate-title {
+  overflow-wrap: anywhere;
+}

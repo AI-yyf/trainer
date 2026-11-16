@@ -180,6 +180,11 @@
 .template-learning-more { display: grid; gap: 8px; }
 .template-learning-more__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .template-learning-workspace { min-width: 0; overflow-wrap: anywhere; }
+/* P1: the Learning destination presents 进度 / 练习 / 长期规划 as three views. */
+.template-learning-tabs { display: flex; gap: 4px; padding-block: 4px 8px; }
+.template-learning-tab { min-height: 28px; padding: 4px 12px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--fg-1); font-size: var(--trainer-font-xs); }
+.template-learning-tab:hover { background: var(--bg-1); color: var(--fg-0); }
+.template-learning-tab.is-active { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); color: var(--accent); }
 .template-learning-workspace__goal { padding-block: 8px; }
 .template-learning-workspace__goal h2 { margin-block: 4px; font-size: var(--trainer-font-md); }
 .template-learning-timeline { padding-inline-start: 16px; margin: 12px 0; }

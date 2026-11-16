@@ -4580,6 +4580,39 @@ function isCompletedBrowserPreviewResourceIndex(resource: ResourceRecord): boole
   );
 }
 
+/**
+ * P2: save one finished analysis reply as a Research Brief library asset,
+ * straight from the browser preview. The server drafts and validates; this
+ * stub only forwards the learner's goal, the reply and the attached ids.
+ */
+export async function saveBrowserPreviewResearchBrief(
+  input: { researchGoal: string; reply: string; resourceIds?: string[] },
+  sessionId?: string,
+): Promise<{ sessionId: string; saved: boolean }> {
+  const resolvedSessionId = await ensureBrowserPreviewSession(sessionId);
+  // The fixture never fabricates a brief: the request still goes to a live
+  // sidecar, and without one the honest network failure surfaces as an error.
+  const response = await fetchPreview(`${baseUrl()}/resource/research-brief/draft`, {
+    method: "POST",
+    headers: asJsonHeaders(),
+    body: JSON.stringify({
+      session_id: resolvedSessionId,
+      workspace_id: previewWorkspaceId(),
+      context_id: previewWorkspaceId(),
+      researchGoal: input.researchGoal,
+      reply: input.reply,
+      resourceIds: input.resourceIds ?? [],
+      save: true,
+    }),
+  }, "upload");
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(detail.slice(0, 200) || `Research brief failed (${response.status})`);
+  }
+  const payload = (await response.json()) as { saved?: boolean };
+  return { sessionId: resolvedSessionId, saved: payload.saved !== false };
+}
+
 function mapSnapshotToBootstrap(snapshot: unknown): BootstrapData {
   const record = asRecord(snapshot);
   const profile = asRecord(record?.profile);

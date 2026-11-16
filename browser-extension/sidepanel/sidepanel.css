@@ -1,0 +1,63 @@
+/* Ask Trainer side panel — reuses the popup card tokens; the popup pins a
+   280px column, the side panel takes the full drawer width instead. */
+
+html,
+body {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.ask-card {
+  display: grid;
+  gap: 10px;
+  min-height: 100vh;
+  box-sizing: border-box;
+  align-content: start;
+}
+
+.ask-label {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ask-page-line {
+  margin: -6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ask-question {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--input);
+  color: var(--fg);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 84px;
+}
+
+.ask-hint {
+  margin: -4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ask-send {
+  width: 100%;
+  justify-content: center;
+}
+
+.ask-send:disabled {
+  opacity: 0.55;
+}

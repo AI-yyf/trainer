@@ -210,6 +210,34 @@ def test_library_comparison_exercise_uses_the_original_numbered_passages(suffix:
         assert "这是第一篇论文介绍的场景" not in result
 
 
+def test_single_source_practice_keeps_both_cases_and_removes_the_models_drill() -> None:
+    profile = UserProfile()
+    message = "分析两种结束方式在训练目标上的区别，给我一道练习。\n\n当前阶段：验证边界条件"
+    context = {
+        "resource_composer_intent": {"mode": "analyze"},
+        "resource_fragments": [{"excerpt": (
+            "# Episode boundaries\n"
+            "> Returning a terminal state ends reward collection. The value afterward is zero. "
+            "In contrast, truncation can stop sampling before the task ends. "
+            "The target then uses an estimate of the final state's value."
+        )}],
+    }
+    messages = build_coaching_messages(profile, message, coach_context=context)
+    assert messages[-1]["content"] == "分析两种结束方式在训练目标上的区别\n\n当前阶段：验证边界条件"
+    result = ProviderService().finalize_coaching_reply(
+        "两种情况影响目标值。[1]\n\n```text\n# Practice\n```\n\n"
+        "### 练习题目\n\n模型重复出的题。\n\n### 参考答案\n\n模型给的答案。\n\n"
+        "### 学习建议\n\n先写出两种情况的预期值，再写测试。",
+        profile=profile, message=message, response_language="zh-CN", coach_context=context,
+    )
+    assert result.count("### 练习") == 1
+    assert "模型重复出的题" not in result and "模型给的答案" not in result
+    assert "### 学习建议" in result and "```text\n# Practice\n```" in result
+    assert "什么时候发生 → 结果怎么处理" in result
+    assert "> [1] The value afterward is zero." in result
+    assert "> [1] The target then uses an estimate of the final state's value." in result
+
+
 def test_training_excerpt_retains_both_sides_of_a_contrast_and_the_indexed_version(
     tmp_path: Path,
 ) -> None:

@@ -239,6 +239,52 @@ test("browser selection prefill lands in Coach and preserves the Learning draft"
   await expect(page.getByRole("textbox")).toHaveValue("MY PLAN DRAFT");
 });
 
+test("Ask Trainer draft with a learner question lands in the shared Coach composer", async ({ page }) => {
+  // P4: the browser side panel stages page context + the learner's question
+  // through the existing coach-draft channel. With a source attached the
+  // staged ask follows the visible work context — opened on Coach it lands
+  // in the Coach conversation, the question replaces the default ask line,
+  // and the Learning draft keeps its own scope.
+  await page.goto("/vscode-preview.html?view=coach&lang=en-US&connection=connected&scenario=ready");
+  await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+  const textbox = page.getByRole("textbox");
+  await textbox.fill("MY COACH DRAFT");
+  await page.evaluate(() => {
+    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
+      type: "ui/coachDraftPrefill",
+      draftId: "ask-trainer-1",
+      text: [
+        "Help me understand this excerpt (from \u201cEpisode boundaries\u201d):",
+        "",
+        "> Episode boundaries decide whether reward keeps accumulating.",
+        "",
+        "Source: https://rl.example.com/episodes",
+        "",
+        "Explain truncation versus termination in the training objective.",
+      ].join("\n"),
+      source: {
+        url: "https://rl.example.com/episodes",
+        title: "Episode boundaries",
+        selection: "Episode boundaries decide whether reward keeps accumulating.",
+      },
+    });
+  });
+  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+  await expect(textbox).toHaveValue(/Explain truncation versus termination in the training objective\./);
+  await expect(textbox).toHaveValue(
+    /Episode boundaries decide whether reward keeps accumulating\./,
+  );
+  await expect(textbox).toHaveValue(/Source: https:\/\/rl\.example\.com\/episodes/);
+  // The learner's own words replace the default ask template.
+  await expect(textbox).not.toHaveValue(/Explain the key ideas here/);
+  // Drafts keep their per-surface scope inside one shared workspace session:
+  // the Learning composer never saw the ask, and Coach keeps it after switching.
+  await page.getByTestId("trainer-view-nav-plan").click();
+  await expect(page.getByRole("textbox")).toHaveValue("");
+  await page.getByTestId("trainer-view-nav-coach").click();
+  await expect(textbox).toHaveValue(/Explain truncation versus termination/);
+});
+
 test("host coach prompt lands in Coach without leaking into the Learning draft", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=en-US&connection=connected&scenario=ready");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();

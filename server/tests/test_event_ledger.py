@@ -263,6 +263,9 @@ class TestNewEventTypeConstants:
         from app.core.event_ledger import (
             ALL_EVENT_TYPES,
             EVENT_BROWSER_SOURCE_RECEIVED,
+            EVENT_CARD_MARKED_IMPORTANT,
+            EVENT_CARD_MERGED,
+            EVENT_CARD_PRIORITY_ADJUSTED,
             EVENT_COACH_TURN_RECORDED,
             EVENT_EVENT_REVERSED,
             EVENT_GOAL_ACTIVITY_RECORDED,
@@ -273,7 +276,7 @@ class TestNewEventTypeConstants:
             EVENT_TELEMETRY_CONSENT_CHANGED,
         )
 
-        assert len(ALL_EVENT_TYPES) == 52
+        assert len(ALL_EVENT_TYPES) == 55  # +3 P1.4 candidate management events
         assert EVENT_BROWSER_SOURCE_RECEIVED in ALL_EVENT_TYPES
         assert EVENT_RESOURCE_LINKED in ALL_EVENT_TYPES
         assert EVENT_REVIEW_SCHEDULED in ALL_EVENT_TYPES
@@ -283,6 +286,10 @@ class TestNewEventTypeConstants:
         assert EVENT_GOAL_ACTIVITY_RECORDED in ALL_EVENT_TYPES
         assert EVENT_GOAL_COMPLETED in ALL_EVENT_TYPES
         assert EVENT_COACH_TURN_RECORDED in ALL_EVENT_TYPES
+        # P1.4 candidate management rides the same ledger registry.
+        assert EVENT_CARD_MARKED_IMPORTANT in ALL_EVENT_TYPES
+        assert EVENT_CARD_PRIORITY_ADJUSTED in ALL_EVENT_TYPES
+        assert EVENT_CARD_MERGED in ALL_EVENT_TYPES
 
     def test_dependency_mastery_updated_constant(self) -> None:
         from app.core.event_ledger import (
@@ -404,7 +411,7 @@ class TestNewEventConstants:
 
     def test_total_event_type_count(self) -> None:
         """ALL_EVENT_TYPES includes cross-surface learning activity."""
-        assert len(ALL_EVENT_TYPES) == 52
+        assert len(ALL_EVENT_TYPES) == 55  # +3 P1.4 candidate management events
 
     def test_record_new_event_types(self) -> None:
         """New event types can be recorded and queried back."""

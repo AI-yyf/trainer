@@ -103,7 +103,7 @@ from .coaching_scaffold import (
     _scaffold_teaching_note,
 )
 from .harness import estimate_tokens, extract_provider_usage
-from .library_practice import build_library_practice, library_practice_requested
+from .library_practice import build_library_practice, library_practice_requested, remove_model_practice
 from .prompts import (
     build_coaching_messages,
     extract_coaching_context,
@@ -3475,7 +3475,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         if coach_context is not None and library_practice_requested(message, coach_context):
             practice = build_library_practice(coach_context, response_language)
             if practice and self.peek_last_reply_failure() is None:
-                return f"{reply.strip()}\n\n{practice}"
+                analysis = remove_model_practice(reply)
+                return "\n\n".join(part for part in (analysis, practice) if part)
         if _should_preserve_visible_reply(
             message,
             answer_mode=answer_mode,

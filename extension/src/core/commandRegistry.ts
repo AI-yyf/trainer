@@ -13,6 +13,7 @@ type CommandHandler = (
 const LONG_RUNNING_COMMANDS: Record<string, string> = {
   [COMMAND_IDS.generatePlan]: 'Trainer is drafting your plan…',
   [COMMAND_IDS.uploadResource]: 'Trainer is importing resources…',
+  [COMMAND_IDS.saveResearchBrief]: 'Trainer is preparing the research brief…',
   [COMMAND_IDS.evaluateCurrentFile]: 'Trainer is evaluating the current file…',
   [COMMAND_IDS.evaluateSelection]: 'Trainer is evaluating the selection…',
   [COMMAND_IDS.trainingGenerateCard]: 'Trainer is generating a training card…',

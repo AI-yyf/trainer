@@ -35,6 +35,7 @@ function createOutputChannel() {
   return {
     append() {},
     appendLine() {},
+    replace() {},
   };
 }
 

@@ -28,6 +28,7 @@ const elements = {
   downloadFeedback: document.getElementById('download-feedback'),
   revoke: document.getElementById('revoke'),
   openTrainer: document.getElementById('open-trainer'),
+  openAskPanel: document.getElementById('open-ask-panel'),
   notice: document.getElementById('notice'),
   close: document.getElementById('popup-close')
 };
@@ -356,6 +357,16 @@ if (elements.close) {
 
 elements.openTrainer.addEventListener('click', () => {
   void send({ type: 'trainer:open', url: TrainerCapture.HOST_DEEP_LINK });
+});
+
+// P4: the Ask Trainer side panel. The click is the user gesture that lets the
+// worker open the panel; the panel itself reads page content only on Ask.
+elements.openAskPanel.addEventListener('click', () => {
+  void send({ type: 'trainer:open-ask-panel' }).then((result) => {
+    if (result && result.ok === false) {
+      setFeedback(elements.captureResult, result.message || '', 'error');
+    }
+  });
 });
 
 document.addEventListener('DOMContentLoaded', () => {

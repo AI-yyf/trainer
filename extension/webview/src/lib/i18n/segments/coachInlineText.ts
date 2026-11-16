@@ -19,15 +19,15 @@ export const COACH_TYPING_LABELS: Record<ComposerLanguage, string> = {
   "pt-BR": "O coach está digitando…",
 };
 
-export const composerAddCopy: Record<ComposerLanguage, { heading: string; attachment: string; workflows: string; skills: string }> = {
-  "zh-CN": { heading: "添加", attachment: "附件", workflows: "工作流", skills: "技能" },
-  "en-US": { heading: "Add", attachment: "Attachment", workflows: "Workflows", skills: "Skills" },
-  "es-ES": { heading: "Añadir", attachment: "Archivo adjunto", workflows: "Flujos de trabajo", skills: "Habilidades" },
-  "fr-FR": { heading: "Ajouter", attachment: "Pièce jointe", workflows: "Flux de travail", skills: "Compétences" },
-  "de-DE": { heading: "Hinzufügen", attachment: "Anhang", workflows: "Workflows", skills: "Fähigkeiten" },
-  "ja-JP": { heading: "追加", attachment: "添付ファイル", workflows: "ワークフロー", skills: "スキル" },
-  "ko-KR": { heading: "추가", attachment: "첨부 파일", workflows: "워크플로", skills: "스킬" },
-  "pt-BR": { heading: "Adicionar", attachment: "Anexo", workflows: "Fluxos de trabalho", skills: "Habilidades" },
+export const composerAddCopy: Record<ComposerLanguage, { heading: string; attachment: string; skills: string }> = {
+  "zh-CN": { heading: "添加", attachment: "附件", skills: "技能" },
+  "en-US": { heading: "Add", attachment: "Attachment", skills: "Skills" },
+  "es-ES": { heading: "Añadir", attachment: "Archivo adjunto", skills: "Habilidades" },
+  "fr-FR": { heading: "Ajouter", attachment: "Pièce jointe", skills: "Compétences" },
+  "de-DE": { heading: "Hinzufügen", attachment: "Anhang", skills: "Fähigkeiten" },
+  "ja-JP": { heading: "追加", attachment: "添付ファイル", skills: "スキル" },
+  "ko-KR": { heading: "추가", attachment: "첨부 파일", skills: "스킬" },
+  "pt-BR": { heading: "Adicionar", attachment: "Anexo", skills: "Habilidades" },
 };
 
 /** Goal mode: one small goal, the learner does the work and is taught by doing. */

@@ -54,7 +54,8 @@
   const LIMITS = {
     historyDisplay: 5,
     historyStore: 50,
-    queue: 100
+    queue: 100,
+    askQuestion: 500
   };
 
   const STORAGE_KEYS = {
@@ -131,6 +132,12 @@
 
   const COPY = {
     zh: {
+      askPanelHeading: '问 Trainer',
+      askPanelPageLabel: '当前网页',
+      askPanelQuestionPlaceholder: '想问什么？例如：解释这一段。',
+      askPanelSelectionHint: '提问时会一并读取页面上的选中文本。',
+      askPanelSend: '问 Trainer',
+      askPanelBusy: '正在送入 Trainer…',
       appTitle: 'Trainer 采集',
       checking: '正在检查…',
       detecting: '正在探测本机 Trainer…',
@@ -265,6 +272,12 @@
       queueAttempts: '已尝试 {count} 次'
     },
     en: {
+      askPanelHeading: 'Ask Trainer',
+      askPanelPageLabel: 'Current page',
+      askPanelQuestionPlaceholder: 'What do you want to ask? e.g. explain this part.',
+      askPanelSelectionHint: 'Asking also reads the text you selected on the page.',
+      askPanelSend: 'Ask Trainer',
+      askPanelBusy: 'Sending to Trainer…',
       appTitle: 'Trainer Capture',
       checking: 'Checking…',
       detecting: 'Looking for Trainer on this machine…',
@@ -399,6 +412,12 @@
       queueAttempts: 'Attempts: {count}'
     },
     es: {
+      askPanelHeading: 'Pregunta a Trainer',
+      askPanelPageLabel: 'Página actual',
+      askPanelQuestionPlaceholder: '¿Qué quieres preguntar? P. ej., explica este fragmento.',
+      askPanelSelectionHint: 'Al preguntar también se lee el texto seleccionado en la página.',
+      askPanelSend: 'Preguntar',
+      askPanelBusy: 'Enviando a Trainer…',
       appTitle: 'Captura de Trainer',
       checking: 'Comprobando…',
       detecting: 'Buscando Trainer en este equipo…',
@@ -533,6 +552,12 @@
       queueAttempts: 'Intentos: {count}'
     },
     fr: {
+      askPanelHeading: 'Demander à Trainer',
+      askPanelPageLabel: 'Page actuelle',
+      askPanelQuestionPlaceholder: 'Que voulez-vous demander ? Ex. : expliquez ce passage.',
+      askPanelSelectionHint: 'Demander lit aussi le texte sélectionné sur la page.',
+      askPanelSend: 'Demander',
+      askPanelBusy: 'Envoi vers Trainer…',
       appTitle: 'Capture Trainer',
       checking: 'Vérification…',
       detecting: 'Recherche de Trainer sur cet ordinateur…',
@@ -667,6 +692,12 @@
       queueAttempts: 'Tentatives : {count}'
     },
     de: {
+      askPanelHeading: 'Trainer fragen',
+      askPanelPageLabel: 'Aktuelle Seite',
+      askPanelQuestionPlaceholder: 'Was möchtest du fragen? Z. B. diesen Abschnitt erklären.',
+      askPanelSelectionHint: 'Beim Fragen wird auch der markierte Text der Seite gelesen.',
+      askPanelSend: 'Fragen',
+      askPanelBusy: 'Wird an Trainer gesendet…',
       appTitle: 'Trainer-Erfassung',
       checking: 'Wird geprüft…',
       detecting: 'Trainer wird auf diesem Rechner gesucht…',
@@ -801,6 +832,12 @@
       queueAttempts: 'Versuche: {count}'
     },
     ja: {
+      askPanelHeading: 'Trainer に質問',
+      askPanelPageLabel: '現在のページ',
+      askPanelQuestionPlaceholder: '質問を入力（例：この部分を解説して）',
+      askPanelSelectionHint: '質問時にページ内の選択テキストも読み取ります。',
+      askPanelSend: '質問する',
+      askPanelBusy: 'Trainer に送信中…',
       appTitle: 'Trainer キャプチャ',
       checking: '確認中…',
       detecting: 'この PC 上の Trainer を探しています…',
@@ -935,6 +972,12 @@
       queueAttempts: '試行回数：{count}'
     },
     ko: {
+      askPanelHeading: 'Trainer에게 질문',
+      askPanelPageLabel: '현재 페이지',
+      askPanelQuestionPlaceholder: '궁금한 점을 입력하세요 (예: 이 부분 설명해 줘)',
+      askPanelSelectionHint: '질문 시 페이지에서 선택한 텍스트도 함께 읽어 옵니다.',
+      askPanelSend: '질문하기',
+      askPanelBusy: 'Trainer에 전송 중…',
       appTitle: 'Trainer 캡처',
       checking: '확인 중…',
       detecting: '이 컴퓨터에서 Trainer를 찾는 중…',
@@ -1069,6 +1112,12 @@
       queueAttempts: '시도 {count}회'
     },
     pt: {
+      askPanelHeading: 'Perguntar ao Trainer',
+      askPanelPageLabel: 'Página atual',
+      askPanelQuestionPlaceholder: 'O que você quer perguntar? Ex.: explique este trecho.',
+      askPanelSelectionHint: 'Ao perguntar, o texto selecionado na página também é lido.',
+      askPanelSend: 'Perguntar',
+      askPanelBusy: 'Enviando ao Trainer…',
       appTitle: 'Captura do Trainer',
       checking: 'Verificando…',
       detecting: 'Procurando o Trainer neste computador…',
@@ -1710,6 +1759,7 @@
       selection,
       url,
       title: String(source.title || '').trim(),
+      question: String(source.question || '').trim().slice(0, LIMITS.askQuestion),
       workspaceId: String(source.workspaceId || '').trim(),
       createdAt: String(source.createdAt || new Date().toISOString()),
       attempts: Number.isFinite(source.attempts) ? Math.trunc(source.attempts) : 0,
@@ -1848,11 +1898,15 @@
     if (!selection && !httpUrlOnly(url)) {
       return null;
     }
+    // Ask Trainer (P4): the learner's typed question rides with the staged
+    // page context and becomes the draft's ask line on the host side.
+    const question = String(source.question || '').trim().slice(0, LIMITS.askQuestion);
     return {
       selection,
       url,
       title: String(source.title || '').trim(),
-      client_id: String(source.clientId || createCoachDraftId())
+      client_id: String(source.clientId || createCoachDraftId()),
+      ...(question ? { question } : {})
     };
   }
 

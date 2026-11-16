@@ -809,6 +809,7 @@ async function flushQueueLocked(options) {
       selection: draft.selection,
       url: draft.url,
       title: draft.title,
+      question: draft.question,
       clientId: draft.clientDraftId
     });
     const result = await TrainerCapture.sendCoachDraft(auth.baseUrl, auth.credential, payload);
@@ -1242,6 +1243,7 @@ async function clearQueueEntries() {
 async function coachDraft(info, tab) {
   const copy = dict();
   const selection = String(info.selectionText || '').trim();
+  const question = String(info.question || '').trim();
   if (!selection && info.pageContext !== true) {
     await notifyResult(copy.notifyDraftTitle, copy.coachEmptySelection, '');
     return { status: 'failed', message: copy.coachEmptySelection };
@@ -1255,6 +1257,7 @@ async function coachDraft(info, tab) {
     selection,
     url: String(info.pageUrl || (tab && tab.url) || ''),
     title: tab && tab.title ? String(tab.title) : '',
+    question,
     clientId: TrainerCapture.createCoachDraftId()
   });
 
@@ -1264,6 +1267,7 @@ async function coachDraft(info, tab) {
       selection,
       url: payload.url,
       title: payload.title,
+      question,
       workspaceId: auth.workspaceId || ''
     });
     const enqueued = await withQueueLock(async () => {
@@ -1377,19 +1381,43 @@ const MESSAGE_HANDLERS = {
     return { ok: result.ok, message: result.message || '', state: await buildState() };
   },
   'trainer:refresh': async () => ({ ok: true, state: await refreshState() }),
-  'trainer:send-tab-context': async () => {
+  'trainer:send-tab-context': async (message) => {
     const tab = await activeTab();
     if (!tab || !TrainerCapture.httpUrlOnly(tab.url)) {
       return { status: 'failed', message: dict().captureNoUrl };
     }
-    // Content is read only when the learner clicks Send. On restricted pages
-    // Chrome may not expose a content script; the URL remains the source.
+    // Content is read only when the learner clicks Ask/Send. On restricted
+    // pages Chrome may not expose a content script; the URL remains the source.
     let selectionText = '';
     if (Number.isInteger(tab.id)) {
       const context = await chrome.tabs.sendMessage(tab.id, { type: 'trainer:read-selection' }).catch(() => undefined);
       selectionText = typeof context?.selection === 'string' ? context.selection : '';
     }
-    return coachDraft({ selectionText, pageContext: true, pageUrl: tab.url }, tab);
+    return coachDraft(
+      {
+        selectionText,
+        pageContext: true,
+        pageUrl: tab.url,
+        question: String((message && message.question) || '')
+      },
+      tab
+    );
+  },
+  'trainer:open-ask-panel': async () => {
+    // The side panel keeps the popup capture-only; this entry is opened from
+    // a user click (popup button or panel context menu), so the gesture
+    // requirement for sidePanel.open is satisfied.
+    const tab = await activeTab();
+    if (!tab || !Number.isInteger(tab.id)) {
+      return { ok: false, message: dict().captureNoUrl };
+    }
+    try {
+      await chrome.sidePanel.open({ tabId: tab.id });
+      await chrome.sidePanel.setOptions({ tabId: tab.id, path: 'sidepanel/sidepanel.html' });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: String((error && error.message) || error) };
+    }
   },
   'trainer:capture-tab': async (message) =>
     captureActiveTab({

@@ -3923,6 +3923,13 @@ class CardGenerationService:
             score += 0.2
         if not card.focus_area:
             score -= 0.15
+        # P1.4 candidate management: the learner's explicit priority and
+        # importance tilt routing — the learner decides what is worth keeping
+        # and practising first. Bounded so management never overrides the
+        # status/weakness signals entirely.
+        score += 0.04 * max(-5, min(5, int(getattr(card, "card_priority", 0) or 0)))
+        if bool(getattr(card, "important", False)):
+            score += 0.05
         # Boost if learner has prior weakness in this area.
         weaknesses = learner_state.get("weaknesses", [])
         if isinstance(weaknesses, list) and card.focus_area in weaknesses:

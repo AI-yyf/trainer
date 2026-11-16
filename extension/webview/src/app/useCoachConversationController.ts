@@ -125,10 +125,12 @@ export function useCoachConversationController({
 
   /**
    * An unrelated status (or a new stream) settles a stale action — except the
-   * save-to-resource upload, which waits for its own request-id ack.
+   * save-to-resource upload and the research-brief preparation, which wait for
+   * their own request-id acks.
    */
-  const clearPendingMessageActionUnless = useCallback((keepSuffix: string) => {
-    if (pendingMessageActionRef.current?.endsWith(keepSuffix)) {
+  const clearPendingMessageActionUnless = useCallback((keepSuffixes: string | string[]) => {
+    const suffixes = Array.isArray(keepSuffixes) ? keepSuffixes : [keepSuffixes];
+    if (suffixes.some((suffix) => pendingMessageActionRef.current?.endsWith(suffix))) {
       return;
     }
     if (pendingMessageActionTimeoutRef.current !== undefined) {

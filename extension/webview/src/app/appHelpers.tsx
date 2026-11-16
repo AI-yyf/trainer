@@ -364,6 +364,7 @@ export type ResourceOperationKind =
   | "search"
   | "index"
   | "upload"
+  | "save-research-brief"
   | "capture"
   | "link-learning"
   | "check-versions"
@@ -427,7 +428,7 @@ export const coachFirstComposerPlaceholder: Record<ComposerLanguage, string> = {
 };
 
 export const RESOURCE_OPERATION_STATUS_PATTERN =
-  /^\[\[trainer-resource-operation:(delete|restore|search|index|upload|capture|link-learning|check-versions|organize|export):([a-z0-9-]{1,96})\]\]\s*/i;
+  /^\[\[trainer-resource-operation:(delete|restore|search|index|upload|save-research-brief|capture|link-learning|check-versions|organize|export):([a-z0-9-]{1,96})\]\]\s*/i;
 // Learning-feedback completion is a protocol acknowledgement, not a text
 // match: the host echoes the request id the UI generated inside a marker.
 export const LEARNING_FEEDBACK_STATUS_PATTERN =

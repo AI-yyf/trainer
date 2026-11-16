@@ -20,7 +20,7 @@ import { useTrainingWorkbenchViewState } from "./useTrainingWorkbenchViewState";
 import { MessageRichContent } from "../coach/MessageRichContent";
 import { ArrowRightIcon } from "../icons";
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
-import type { ComposerLanguage, TrainingCardType } from "../../lib/types";
+import type { ComposerLanguage, TrainingCardCandidate, TrainingCardType } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
 import type { TrainingCardStatus } from "../../../../../shared/src/trainingCardRouting";
 import { groupReviewQueueByFocusArea } from "../../../../../shared/src/reviewQueueGovernance";
@@ -154,6 +154,14 @@ export interface TrainingWorkbenchViewProps {
   selectedCardStatus?: string;
   /** Fail-closed: skip/grade must use hooked persistence path, not a bare command. */
   onCardStatusTransition?: (cardId: string, newStatus: TrainingCardStatus, reason?: string) => void;
+  /** P1.4 candidate management: sibling candidates the learner may merge in. */
+  siblingCandidates?: TrainingCardCandidate[];
+  /** Learner-controlled candidate flags, server-owned (P1.4). */
+  cardImportant?: boolean;
+  cardPriorityValue?: number;
+  onMarkImportant?: (cardId: string, important: boolean) => void;
+  onSetPriority?: (cardId: string, priority: number) => void;
+  onMergeDuplicates?: (keepCardId: string, duplicateCardIds: string[]) => void;
   response?: ReactNode;
   /** Card-owned verification affordance (preview/workspace verify flow). */
   onVerifyCurrentFile?: () => void;
@@ -636,6 +644,12 @@ export function TrainingWorkbenchView({
   cardId,
   selectedCardStatus,
   onCardStatusTransition,
+  siblingCandidates,
+  cardImportant = false,
+  cardPriorityValue = 0,
+  onMarkImportant,
+  onSetPriority,
+  onMergeDuplicates,
   response,
   onVerifyCurrentFile,
   remoteVerification,
@@ -1173,6 +1187,54 @@ export function TrainingWorkbenchView({
                   {nextCardButton}
                 </>}
                 {remoteVerification && (remoteVerification.running || remoteVerification.summary) ? <RemoteVerificationPanel verification={remoteVerification} remoteName={remoteName} language={language} onStop={onStopRemoteVerification} /> : null}
+                {selectedCardStatus === "candidate" && cardId && (onMarkImportant || onSetPriority || onMergeDuplicates) ? (
+                  <details className="training-candidate-manage" data-candidate-management="true">
+                    <summary>{trainingWorkbenchText(language, "candidateManage")}</summary>
+                    <div className="training-candidate-manage__body">
+                      {onMarkImportant ? (
+                        <button
+                          type="button"
+                          className="training-candidate-manage__action"
+                          data-candidate-action="important"
+                          data-candidate-important={cardImportant ? "true" : "false"}
+                          onClick={() => onMarkImportant(cardId, !cardImportant)}
+                        >
+                          {trainingWorkbenchText(language, cardImportant ? "candidateUnmarkImportant" : "candidateMarkImportant")}
+                        </button>
+                      ) : null}
+                      {onSetPriority ? (
+                        <label className="training-candidate-manage__priority" data-candidate-priority="true">
+                          <span>{trainingWorkbenchText(language, "candidatePriorityLabel")}</span>
+                          <select
+                            value={String(cardPriorityValue)}
+                            onChange={(event) => onSetPriority(cardId, Number(event.target.value))}
+                          >
+                            <option value="2">{trainingWorkbenchText(language, "candidatePriorityHigh")}</option>
+                            <option value="0">{trainingWorkbenchText(language, "candidatePriorityNormal")}</option>
+                            <option value="-1">{trainingWorkbenchText(language, "candidatePriorityLow")}</option>
+                          </select>
+                        </label>
+                      ) : null}
+                      {onMergeDuplicates && (siblingCandidates?.length ?? 0) > 0 ? (
+                        <ul className="training-candidate-manage__duplicates" data-candidate-duplicates="true">
+                          {siblingCandidates!.map((sibling) => (
+                            <li key={sibling.cardId}>
+                              <span className="training-candidate-manage__duplicate-title">{sibling.title}</span>
+                              <button
+                                type="button"
+                                className="training-candidate-manage__action"
+                                data-candidate-merge={sibling.cardId}
+                                onClick={() => onMergeDuplicates(cardId, [sibling.cardId])}
+                              >
+                                {trainingWorkbenchText(language, "candidateMergeInto")}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </details>
+                ) : null}
               </FocusedPractice>
             ) : null}
           </section>

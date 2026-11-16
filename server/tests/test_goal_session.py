@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.models import LearningPlan, PlanStage
 from app.core.settings import AppSettings
 from app.goal.service import detect_goal_candidate
 from app.main import create_app
@@ -103,6 +104,47 @@ def test_auto_detection_never_replaces_an_existing_goal(tmp_path: Path) -> None:
         )
         assert same is not None
         assert same.goal_id == detected.goal_id
+
+
+def test_goal_records_its_place_in_the_long_term_plan(tmp_path: Path) -> None:
+    """P0: Goal Mode is a micro-goal inside the plan, not an isolated mode."""
+    app = create_app(_settings(tmp_path / "data"))
+    plan = LearningPlan(
+        id="plan-world-models",
+        title="系统掌握自动驾驶中的世界模型",
+        stages=[
+            PlanStage(
+                id="stage-foundations",
+                title="阶段一：基础知识",
+                goal="理解状态、动作与预测目标",
+                outcomes=["能解释世界模型在规划中的作用"],
+                status="active",
+            ),
+            PlanStage(
+                id="stage-core",
+                title="阶段二：核心原理",
+                goal="理解潜在动力学模型",
+                outcomes=["能推导一步预测误差"],
+            ),
+        ],
+        current_stage_id="stage-foundations",
+        current_step="写出一个单步预测的状态转移",
+    )
+    with TestClient(app) as client:
+        client.get("/snapshot", params={"workspace_id": "w-plan"})
+        goal = app.state.runtime.goals().start(
+            workspace_id="w-plan",
+            title="实现单步预测",
+            plan=plan,
+        )
+        assert goal.plan_id == "plan-world-models"
+        assert goal.stage_id == "stage-foundations"
+        assert goal.current_position == "阶段一：基础知识"
+        # The persisted record — not just the in-memory return — carries the link.
+        restored = app.state.runtime.goals().current("w-plan")
+        assert restored is not None
+        assert restored.plan_id == goal.plan_id
+        assert restored.stage_id == goal.stage_id
 
 
 def test_explicit_goal_survives_restart_and_is_in_the_snapshot(tmp_path: Path) -> None:

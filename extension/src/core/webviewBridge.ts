@@ -59,6 +59,8 @@ export function resourceOperationStatusMessage(commandId: string, payload: unkno
   const kind =
     commandId === COMMAND_IDS.uploadResource
       ? 'upload'
+      : commandId === COMMAND_IDS.saveResearchBrief
+      ? 'save-research-brief'
       : commandId === COMMAND_IDS.captureResource
       ? 'capture'
       : commandId === COMMAND_IDS.linkResourceToLearning

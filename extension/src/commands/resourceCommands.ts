@@ -892,6 +892,58 @@ export async function linkResourceToLearningCommand(
   }
 }
 
+/**
+ * P2 (Trainer 2.0): turn one finished library/analysis reply into a Research
+ * Brief library asset. The server drafts, validates and pins the citations —
+ * the host only forwards the learner's goal, the reply text and the attached
+ * resource ids, and never invents brief content itself.
+ */
+export async function saveResearchBriefCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const request = isResourceCapturePayloadRecord(payload);
+  const researchGoal = asString(request.researchGoal ?? request.research_goal)?.trim() ?? '';
+  const reply = asString(request.reply)?.trim() ?? '';
+  if (!researchGoal || !reply) {
+    return {
+      ok: false,
+      message: 'A research goal and the analysis reply are required to prepare a brief.',
+    };
+  }
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Sidecar unavailable.' };
+  }
+  const resourceIds = Array.isArray(request.resourceIds)
+    ? request.resourceIds
+        .map((item) => asString(item)?.trim() ?? '')
+        .filter(Boolean)
+        .slice(0, 4)
+    : [];
+  try {
+    const result = await context.sidecarClient.postJson(
+      status.port,
+      '/resource/research-brief/draft',
+      {
+        researchGoal: researchGoal.slice(0, 300),
+        reply: reply.slice(0, 12000),
+        resourceIds,
+        responseLanguage: resourceResponseLanguage(context),
+        contextId: getRuntimeWorkspaceId(context),
+        save: true,
+        __trainerResourceOperationId: request.__trainerResourceOperationId,
+      },
+    );
+    return { ok: true, data: result };
+  } catch (error) {
+    return {
+      ok: false,
+      message: errorSidecarDetail(error) ?? 'The research brief could not be prepared.',
+    };
+  }
+}
+
 function errorSidecarDetail(error: unknown): string | undefined {
   const metadata = (error as { metadata?: { detail?: unknown; code?: unknown } }).metadata;
   const detail = typeof metadata?.detail === 'string' ? metadata.detail.trim() : '';

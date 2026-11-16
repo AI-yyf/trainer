@@ -1,8 +1,13 @@
 """Shared language bar for an explicit training-card request.
 
-Coach turns must not mint a card unless the learner asked to create or
-generate one. Router force-paths and the ``generate_training_card`` tool
-share this helper so the bar cannot drift.
+Coach turns must not mint a card unless the learner asked to create, generate
+or keep a training card. Router force-paths and the ``generate_training_card``
+tool share this helper so the bar cannot drift.
+
+A plain exercise request ("give me a practice", "给我一道题", "考考我") is
+instant practice: it is answered inline in the conversation and is **not**
+card authorization. Only language that names a card object, or explicitly asks
+to keep the exercise as a card, crosses the bar.
 """
 
 from __future__ import annotations
@@ -64,6 +69,8 @@ def message_requests_explicit_training_card(message: str | None) -> bool:
         "prepare",
         "route",
         "turn this into",
+        "save this as",
+        "keep this as",
         "give me a",
         "i want a",
         "need a",
@@ -71,6 +78,8 @@ def message_requests_explicit_training_card(message: str | None) -> bool:
         "\u751f\u6210",
         "\u521b\u5efa",
         "\u505a\u4e00\u5f20",
+        "\u4fdd\u5b58\u4e3a",
+        "\u5b58\u4e3a",
         "\u7ed9\u6211",
         "\u6765\u4e00\u5f20",
         "\u5b89\u6392",
@@ -118,23 +127,11 @@ def message_requests_explicit_training_card(message: str | None) -> bool:
     ):
         return True
 
-    english_practice_patterns = (
-        r"\b(?:give|make|create|start|prepare)\s+(?:me\s+)?(?:a|an)?\s*(?:practice|exercise|quiz|test)\b",
-        r"^(?:please\s+)?(?:quiz|test)\s+me\b",
-    )
-    chinese_practice_phrases = (
-        "\u7ed9\u6211\u4e00\u9053\u7ec3\u4e60",
-        "\u51fa\u4e00\u9053\u7ec3\u4e60",
-        "\u7ed9\u6211\u51fa\u9898",
-        "\u6765\u4e00\u9053\u9898",
-    )
-    if any(re.search(pattern, lowered) for pattern in english_practice_patterns) or any(
-        phrase in lowered for phrase in chinese_practice_phrases
-    ):
-        return True
-    return lowered.startswith(
-        ("\u6d4b\u9a8c\u6211", "\u8bf7\u6d4b\u9a8c\u6211", "\u8003\u8003\u6211", "\u8bf7\u8003\u8003\u6211")
-    )
+    # Practice/exercise/test language is instant practice, never card consent.
+    # The inline coach reply (and the library practice builder) owns it; a card
+    # is minted only after the learner explicitly asks to keep it.
+    return False
+
 
 
 def message_requests_rubric_review(message: str | None) -> bool:

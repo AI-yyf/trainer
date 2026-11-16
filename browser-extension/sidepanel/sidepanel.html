@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trainer Capture</title>
+    <link rel="stylesheet" href="../popup/popup.css" />
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <!--
+      Ask Trainer side panel (P4): one question box over the current page
+      context. Content (title/URL/selection) is read only when the learner
+      clicks Ask — nothing is collected by merely opening the panel. The
+      staged draft lands in the shared Trainer composer via the existing
+      browser-capture channel; it is never sent as chat by itself.
+    -->
+
+    <main class="card ask-card">
+      <h1 class="card-title" data-copy="askPanelHeading">Ask Trainer</h1>
+      <p class="ask-label" data-copy="askPanelPageLabel">Current page</p>
+      <p id="ask-page-line" class="ask-page-line"></p>
+      <textarea
+        id="ask-question"
+        class="ask-question"
+        rows="4"
+        data-copy-placeholder="askPanelQuestionPlaceholder"
+      ></textarea>
+      <p class="ask-hint" data-copy="askPanelSelectionHint"></p>
+      <button id="ask-send" class="row row--action ask-send" type="button">
+        <span class="row__title" data-copy="askPanelSend">Ask Trainer</span>
+      </button>
+      <p id="ask-result" class="feedback" role="status" aria-live="polite"></p>
+
+      <footer class="foot">
+        <button id="open-trainer" class="pill" type="button">
+          <span data-copy="openTrainer">Open Trainer</span>
+        </button>
+      </footer>
+    </main>
+
+    <script src="../shared.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

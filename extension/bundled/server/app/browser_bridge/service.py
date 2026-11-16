@@ -53,6 +53,7 @@ _MAX_PENDING_DRAFTS = 50
 _MAX_ACKED_DRAFT_IDS = 200
 _DRAFT_SELECTION_LIMIT = 1200
 _DRAFT_TITLE_LIMIT = 160
+_DRAFT_QUESTION_LIMIT = 500
 # Workspace and client id are joined with NUL: repository paths never contain
 # it, so ("ws-a", "1") and ("ws-a\01", "") cannot collide.
 _DRAFT_DEDUPE_SEPARATOR = "\u0000"
@@ -119,11 +120,14 @@ class _PendingDraft:
     url: str = ""
     title: str = ""
     selection: str = ""
+    question: str = ""
 
     def as_payload(self) -> dict[str, str]:
         result = {"id": self.id, "workspace_id": self.workspace_id, "text": self.text}
         if self.url:
             result.update(url=self.url, title=self.title, selection=self.selection)
+        if self.question:
+            result["question"] = self.question
         return result
 
 
@@ -572,6 +576,7 @@ class BrowserBridgeService:
         title: str = "",
         client_id: str = "",
         language: str | None = None,
+        question: str = "",
     ) -> dict[str, object]:
         normalized_workspace = str(workspace_id or "").strip()
         if not normalized_workspace:
@@ -585,6 +590,7 @@ class BrowserBridgeService:
         if not source_url.lower().startswith(("https://", "http://")):
             source_url = ""
         source_title = " ".join(str(title or "").split())[:_DRAFT_TITLE_LIMIT]
+        learner_question = " ".join(str(question or "").split())[:_DRAFT_QUESTION_LIMIT]
         if not excerpt and not source_url:
             raise BrowserPairingError(
                 "empty_selection",
@@ -623,6 +629,7 @@ class BrowserBridgeService:
                 url=source_url,
                 title=source_title,
                 language=language,
+                question=learner_question,
             )
             draft = _PendingDraft(
                 id=f"draft-{uuid4().hex[:12]}",
@@ -633,6 +640,7 @@ class BrowserBridgeService:
                 url=source_url,
                 title=source_title,
                 selection=excerpt,
+                question=learner_question,
             )
             self._pending_drafts.append(draft)
             self._write_state_locked()
@@ -750,6 +758,7 @@ def build_coach_draft_text(
     url: str = "",
     title: str = "",
     language: str | None = None,
+    question: str = "",
 ) -> str:
     """Compose the pre-filled, editable coach draft for one selection.
 
@@ -757,10 +766,14 @@ def build_coach_draft_text(
     an intent line, the quoted excerpt, then the source line. ``language``
     follows the workspace's effective response language — all eight supported
     languages have a template; unknown languages fall back to English.
+
+    A learner question from the browser Ask Trainer entry replaces the
+    default ask line with the learner's own words — the question is the ask.
     """
 
     template = _draft_template(language)
     source_label = title or url or template["fallback_source"]
+    ask_line = str(question or "").strip() or template["ask"]
     quote = "\n".join(f"> {line}" if line else ">" for line in selection.splitlines())
     lines = [template["intro"].format(source=source_label), "", quote, ""] if quote else []
     if not quote:
@@ -768,7 +781,7 @@ def build_coach_draft_text(
     if url:
         lines.append(template["source_line"].format(url=url))
     lines.append("")
-    lines.append(template["ask"])
+    lines.append(ask_line)
     return "\n".join(lines)
 
 

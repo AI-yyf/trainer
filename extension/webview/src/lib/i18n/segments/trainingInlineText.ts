@@ -880,6 +880,14 @@ export const trainingCardOnlySurfaceCopy: Record<
 /** §十五: workbench-surface copy in eight languages (no zh/en binary). */
 export type TrainingWorkbenchTextKey =
   | "ungrouped"
+  | "candidateManage"
+  | "candidateMarkImportant"
+  | "candidateUnmarkImportant"
+  | "candidatePriorityLabel"
+  | "candidatePriorityHigh"
+  | "candidatePriorityNormal"
+  | "candidatePriorityLow"
+  | "candidateMergeInto"
   | "startHere"
   | "currentScenario"
   | "scenarioPack"
@@ -965,6 +973,14 @@ export const trainingWorkbenchTextCopy: Record<
   Record<TrainingWorkbenchTextKey, string>
 > = {
   "zh-CN": {
+    candidateManage: "管理候选卡",
+    candidateMarkImportant: "标记重要",
+    candidateUnmarkImportant: "取消重要",
+    candidatePriorityLabel: "练习优先级",
+    candidatePriorityHigh: "高",
+    candidatePriorityNormal: "普通",
+    candidatePriorityLow: "低",
+    candidateMergeInto: "并入这张卡",
     ungrouped: "未分组",
     startHere: "先做这一步",
     currentScenario: "当前场景",
@@ -1047,6 +1063,14 @@ export const trainingWorkbenchTextCopy: Record<
     degradedCardRetry: "重新生成",
   },
   "en-US": {
+    candidateManage: "Manage candidate",
+    candidateMarkImportant: "Mark important",
+    candidateUnmarkImportant: "Unmark important",
+    candidatePriorityLabel: "Practice priority",
+    candidatePriorityHigh: "High",
+    candidatePriorityNormal: "Normal",
+    candidatePriorityLow: "Low",
+    candidateMergeInto: "Merge into this card",
     ungrouped: "Ungrouped",
     startHere: "Start here",
     currentScenario: "Current scenario",
@@ -1129,6 +1153,14 @@ export const trainingWorkbenchTextCopy: Record<
     degradedCardRetry: "Retry card",
   },
   "es-ES": {
+    candidateManage: "Gestionar candidata",
+    candidateMarkImportant: "Marcar como importante",
+    candidateUnmarkImportant: "Quitar importancia",
+    candidatePriorityLabel: "Prioridad de práctica",
+    candidatePriorityHigh: "Alta",
+    candidatePriorityNormal: "Normal",
+    candidatePriorityLow: "Baja",
+    candidateMergeInto: "Fusionar en esta tarjeta",
     ungrouped: "Sin agrupar",
     startHere: "Empieza aquí",
     currentScenario: "Escenario actual",
@@ -1211,6 +1243,14 @@ export const trainingWorkbenchTextCopy: Record<
     degradedCardRetry: "Reintentar tarjeta",
   },
   "fr-FR": {
+    candidateManage: "Gérer la candidate",
+    candidateMarkImportant: "Marquer importante",
+    candidateUnmarkImportant: "Retirer l'importance",
+    candidatePriorityLabel: "Priorité de pratique",
+    candidatePriorityHigh: "Haute",
+    candidatePriorityNormal: "Normale",
+    candidatePriorityLow: "Basse",
+    candidateMergeInto: "Fusionner dans cette carte",
     ungrouped: "Non groupé",
     startHere: "Commencez ici",
     currentScenario: "Scénario actuel",
@@ -1293,6 +1333,14 @@ export const trainingWorkbenchTextCopy: Record<
     degradedCardRetry: "Régénérer la carte",
   },
   "de-DE": {
+    candidateManage: "Kandidat verwalten",
+    candidateMarkImportant: "Als wichtig markieren",
+    candidateUnmarkImportant: "Wichtig-Markierung entfernen",
+    candidatePriorityLabel: "Übungspriorität",
+    candidatePriorityHigh: "Hoch",
+    candidatePriorityNormal: "Normal",
+    candidatePriorityLow: "Niedrig",
+    candidateMergeInto: "In diese Karte zusammenführen",
     ungrouped: "Ungruppiert",
     startHere: "Hier starten",
     currentScenario: "Aktuelles Szenario",
@@ -1375,6 +1423,14 @@ export const trainingWorkbenchTextCopy: Record<
     degradedCardRetry: "Karte erneut erzeugen",
   },
   "ja-JP": {
+    candidateManage: "候補カードを管理",
+    candidateMarkImportant: "重要としてマーク",
+    candidateUnmarkImportant: "重要を解除",
+    candidatePriorityLabel: "練習の優先度",
+    candidatePriorityHigh: "高",
+    candidatePriorityNormal: "普通",
+    candidatePriorityLow: "低",
+    candidateMergeInto: "このカードに統合",
     ungrouped: "未グループ",
     startHere: "まずこのステップ",
     currentScenario: "現在のシナリオ",
@@ -1457,6 +1513,14 @@ export const trainingWorkbenchTextCopy: Record<
     degradedCardRetry: "カードを再生成",
   },
   "ko-KR": {
+    candidateManage: "후보 카드 관리",
+    candidateMarkImportant: "중요 표시",
+    candidateUnmarkImportant: "중요 해제",
+    candidatePriorityLabel: "연습 우선순위",
+    candidatePriorityHigh: "높음",
+    candidatePriorityNormal: "보통",
+    candidatePriorityLow: "낮음",
+    candidateMergeInto: "이 카드로 병합",
     ungrouped: "그룹 없음",
     startHere: "이 단계부터",
     currentScenario: "현재 시나리오",
@@ -1539,6 +1603,14 @@ export const trainingWorkbenchTextCopy: Record<
     degradedCardRetry: "카드 다시 생성",
   },
   "pt-BR": {
+    candidateManage: "Gerenciar candidata",
+    candidateMarkImportant: "Marcar como importante",
+    candidateUnmarkImportant: "Remover importância",
+    candidatePriorityLabel: "Prioridade de prática",
+    candidatePriorityHigh: "Alta",
+    candidatePriorityNormal: "Normal",
+    candidatePriorityLow: "Baixa",
+    candidateMergeInto: "Mesclar nesta carta",
     ungrouped: "Sem grupo",
     startHere: "Comece por aqui",
     currentScenario: "Cenário atual",

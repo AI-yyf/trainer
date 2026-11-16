@@ -457,6 +457,69 @@ def test_coach_draft_text_covers_all_eight_supported_languages() -> None:
     assert build_coach_draft_text(selection="x", title="T", language="xx-YY").startswith("Help me")
 
 
+def test_ask_trainer_question_replaces_the_ask_line_and_rides_the_queue(tmp_path) -> None:
+    """P4: the browser Ask Trainer entry stages the learner's own question.
+
+    The question becomes the draft's ask line (the question IS the ask), is
+    capped at the shared limit, and reaches the host poll payload untouched.
+    """
+    with build_client(tmp_path) as client:
+        token = _pair(client, "workspace-ask-trainer", code="445566")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = client.post(
+            "/browser/coach-draft",
+            json={
+                "selection": "Episode boundaries decide whether reward keeps accumulating.",
+                "url": "https://rl.example.com/episodes",
+                "title": "Episode boundaries",
+                "client_id": "ask-client-1",
+                "question": "解释截断与终止在训练目标上的区别",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+
+        long_question = "长" * 600
+        capped = client.post(
+            "/browser/coach-draft",
+            json={
+                "selection": "A second selection.",
+                "url": "https://rl.example.com/second",
+                "client_id": "ask-client-2",
+                "question": long_question,
+            },
+            headers=headers,
+        )
+        assert capped.status_code == 200, capped.text
+
+        pending = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-ask-trainer"},
+        )
+        drafts = pending.json()["drafts"]
+        by_client = {draft["question"]: draft for draft in drafts}
+        asked = next(
+            draft for draft in drafts if draft.get("question") == "解释截断与终止在训练目标上的区别"
+        )
+        assert "解释截断与终止在训练目标上的区别" in asked["text"]
+        assert "> Episode boundaries decide whether reward keeps accumulating." in asked["text"]
+        assert "https://rl.example.com/episodes" in asked["text"]
+        # The learner's words replace the default ask line for this draft.
+        assert "Explain the key ideas here" not in asked["text"]
+
+        truncated = next(draft for draft in drafts if draft.get("question", "").startswith("长"))
+        assert len(truncated["question"]) == 500
+        assert by_client  # payload map built; both drafts delivered
+
+    # Without a question, the per-language default ask line stays.
+    default_text = build_coach_draft_text(
+        selection="plain excerpt",
+        url="https://x.example.com",
+        title="T",
+    )
+    assert "Explain the key ideas here" in default_text
+
+
 def test_coach_draft_route_uses_the_workspace_response_language(tmp_path) -> None:
     with build_client(tmp_path) as client:
         token = _pair(client, "workspace-bridge-draft-language", code="202020")

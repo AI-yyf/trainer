@@ -67,7 +67,7 @@ test("resource menu closes on an outside click", async ({ page }) => {
   await expect(page.locator(".composer-menu-panel")).toHaveCount(0);
 });
 
-test("the single Add menu exposes attachments, workflows, and skills directly", async ({ page }) => {
+test("the single Add menu exposes attachments and skills directly", async ({ page }) => {
   await page.setViewportSize({ width: 340, height: 640 });
   await page.goto("/?scenario=ready&lang=en-US&theme=light");
   const composer = page.locator("#coach-composer");
@@ -77,7 +77,8 @@ test("the single Add menu exposes attachments, workflows, and skills directly", 
   await add.focus();
   await add.press("ArrowDown");
   await expect(menu.getByRole("menuitem", { name: "Attachment" })).toBeFocused();
-  await expect(menu.getByRole("menuitem", { name: "Workflows" })).toBeVisible();
+  // Workflows is no longer a product entry (§十: automatic skills, typed / only).
+  await expect(menu.getByRole("menuitem", { name: "Workflows" })).toHaveCount(0);
   await expect(menu.getByText("Skills", { exact: true })).toBeAttached();
   await expect(menu.getByText(/View all|See all/i)).toHaveCount(0);
   const bounds = await menu.boundingBox();
@@ -87,12 +88,14 @@ test("the single Add menu exposes attachments, workflows, and skills directly", 
   await page.keyboard.press("Escape");
   await expect(add).toBeFocused();
 
-  await composer.fill("threads and locks");
-  await add.click();
-  await menu.getByRole("menuitem", { name: "Workflows" }).click();
-  await page.getByRole("group", { name: "Workflows" }).getByRole("button", { name: "/search" }).click();
+  // The accelerator survives as a typed shortcut, not as a menu.
+  await composer.fill("/sea");
+  const deck = page.getByRole("list", { name: "Slash Commands" });
+  await expect(deck).toBeVisible();
+  await deck.getByRole("button", { name: "/search" }).click();
   await expect(composer).toBeFocused();
-  await expect(composer).toHaveValue("/search threads and locks");
+  await expect(composer).toHaveValue("/search ");
+  await composer.fill("");
 
   await composer.fill("threads and locks");
   await add.click();

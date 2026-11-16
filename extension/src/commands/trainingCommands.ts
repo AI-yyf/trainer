@@ -831,6 +831,97 @@ export async function trainingCardStatusTransitionCommand(
 }
 
 /**
+ * P1.4 candidate management: merge duplicates / mark important / priority.
+ * Each command is one POST to its management endpoint; the sidecar owns the
+ * ledger event and the card record — the host only forwards the learner's
+ * decision and rehydrates the training state afterwards.
+ */
+async function postCardManagement(
+  context: CommandContext,
+  path: string,
+  body: Record<string, unknown>,
+  logLabel: string,
+): Promise<CommandExecutionResult> {
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== "ready" || !status.port) {
+    return { ok: false, message: status.detail ?? "Sidecar is unavailable." };
+  }
+  try {
+    const response = await context.sidecarClient.postJson<{
+      card?: Record<string, unknown>;
+      detail?: string;
+    }>(status.port, path, { workspace_id: workspaceId, ...body });
+    if (response.detail) {
+      context.outputChannel.appendLine(`[training] Card management failed: ${response.detail}`);
+      return { ok: false, message: response.detail };
+    }
+    context.outputChannel.appendLine(`[training] Card management ok: ${logLabel}`);
+    await rehydrateTrainingSummary(context, status.port);
+    await context.workbench.syncState();
+    return { ok: true };
+  } catch (error) {
+    context.outputChannel.appendLine(`[training] Card management error: ${error}`);
+    return { ok: false, message: String(error) };
+  }
+}
+
+export async function trainingCardMarkImportantCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const record = readPayloadRecord(payload);
+  const cardId = typeof record.cardId === "string" ? record.cardId : "";
+  if (!cardId) {
+    return { ok: false, message: "A candidate card id is required to mark importance." };
+  }
+  return postCardManagement(
+    context,
+    "/training/card/importance",
+    { card_id: cardId, important: record.important === true },
+    `importance ${String(record.important)} ${cardId}`,
+  );
+}
+
+export async function trainingCardSetPriorityCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const record = readPayloadRecord(payload);
+  const cardId = typeof record.cardId === "string" ? record.cardId : "";
+  const priority = Number(record.priority);
+  if (!cardId || !Number.isFinite(priority)) {
+    return { ok: false, message: "A candidate card id and numeric priority are required." };
+  }
+  return postCardManagement(
+    context,
+    "/training/card/priority",
+    { card_id: cardId, priority },
+    `priority ${priority} ${cardId}`,
+  );
+}
+
+export async function trainingCardMergeCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const record = readPayloadRecord(payload);
+  const keepCardId = typeof record.keepCardId === "string" ? record.keepCardId : "";
+  const duplicateCardIds = Array.isArray(record.duplicateCardIds)
+    ? record.duplicateCardIds.filter((item): item is string => typeof item === "string")
+    : [];
+  if (!keepCardId || duplicateCardIds.length === 0) {
+    return { ok: false, message: "Merging needs a keeper card and at least one duplicate." };
+  }
+  return postCardManagement(
+    context,
+    "/training/cards/merge",
+    { keep_card_id: keepCardId, duplicate_card_ids: duplicateCardIds },
+    `merge ${duplicateCardIds.join(",")} -> ${keepCardId}`,
+  );
+}
+
+/**
  * §1.16 Card generation: POST /training/generate-card
  * Triggers structured card creation from a specified source.
  */

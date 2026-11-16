@@ -266,13 +266,13 @@ test('confirmation allocation is single-shot and reads the first next-step line'
   assert.equal(lib.statusNextStepPartIndex(undefined), -1);
 });
 
-test('the five quick-action icons feed a CSS label instead of a title tooltip', () => {
+test('the quick-action icons feed a CSS label instead of a title tooltip', () => {
   const source = fs.readFileSync(
     path.join(srcRoot, 'components', 'coach', 'CoachMessageBubble.tsx'),
     'utf8',
   );
 
-  for (const action of ['copy', 'share', 'save-resource', 'training-card', 'set-goal', 'retry']) {
+  for (const action of ['copy', 'share', 'save-resource', 'save-research-brief', 'training-card', 'set-goal', 'retry']) {
     assert.ok(
       source.includes(`data-action-label={messageActionLabels`),
       `expected the ${action} action to carry a label attribute`,
@@ -280,8 +280,8 @@ test('the five quick-action icons feed a CSS label instead of a title tooltip', 
   }
   assert.equal(
     countOccurrences(source, 'data-action-label={'),
-    7,
-    'six shortcuts plus the next-action reveal',
+    8,
+    'seven shortcuts plus the next-action reveal',
   );
   assert.doesNotMatch(source, /title=\{messageActionLabels/, 'the native tooltip stays removed');
 });
