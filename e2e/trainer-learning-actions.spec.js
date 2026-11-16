@@ -62,6 +62,28 @@ async function apply(page, payload) {
   await page.evaluate(next => window.__ACTION_TEST_APPLY__(next), payload);
 }
 
+test('the Learning composer sends a blocker with the active stage and leaves the Coach draft intact', async ({ page }) => {
+  await openLearning(page);
+  const composer = page.locator('#coach-composer');
+  await page.getByTestId('trainer-view-nav-coach').click();
+  await composer.fill('Unsent Coach question');
+  await page.getByTestId('trainer-view-nav-plan').click();
+  await composer.fill('The test runner cannot find the fixture.');
+  await page.locator('#plan-composer-mode').click();
+  await page.getByRole('menuitemradio', { name: 'Shrink blocker' }).click();
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue('The test runner cannot find the fixture.');
+  await expect(page.locator('form.composer [data-dock-anchor]')).toContainText('Boundary rules');
+  await composer.press('Enter');
+  await expect(page.locator('[data-surface=coach]')).toBeVisible();
+  await expect(composer).toHaveValue('Unsent Coach question');
+  const sent = await page.evaluate(() => window.__ACTION_TEST_HOST_ACTIONS__.find(message =>
+    message.type === 'session/sendStreamMessage'));
+  expect(sent.payload).toMatchObject({ activeView: 'plan', intent: 'coach', planComposerMode: 'blocker', formalPlanMutation: false });
+  expect(sent.payload.text).toContain('The test runner cannot find the fixture.');
+  expect(sent.payload.text).toContain('Boundary rules');
+});
+
 for (const [language, label] of [
   ['zh-CN', '继续当前步骤'], ['en-US', 'Continue current step'], ['es-ES', 'Continuar el paso actual'],
   ['fr-FR', 'Continuer l’étape actuelle'], ['de-DE', 'Aktuellen Schritt fortsetzen'],

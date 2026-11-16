@@ -111,6 +111,7 @@ export interface ResourcesWorkbenchViewProps {
   isBrowserPreview?: boolean;
   isLiveBrowserPreview?: boolean;
   onSearchResources?: (request: ResourceSearchRequest) => void | Promise<void>;
+  searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
@@ -1129,6 +1130,7 @@ export function ResourcesWorkbenchView({
   isBrowserPreview = false,
   isLiveBrowserPreview = false,
   onSearchResources,
+  searchQuery,
   onSearchQueryChange,
   onImportFiles,
   onImportFolder,
@@ -1172,14 +1174,14 @@ export function ResourcesWorkbenchView({
   const importMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const importMenuRef = useRef<HTMLDivElement>(null);
   const importMenuId = useId();
-  const [query, setQuery] = useState("");
+  const [localQuery, setLocalQuery] = useState("");
+  const query = searchQuery ?? localQuery;
   const [projectStructureState, setProjectStructureState] = useState<{
     resourceId?: string;
     status: "idle" | "loading" | "ready" | "error";
     data?: ProjectStructure;
     message?: string;
   }>({ status: "idle" });
-  useEffect(() => { onSearchQueryChange?.(query); }, [onSearchQueryChange, query]);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [urlImportOpen, setUrlImportOpen] = useState(false);
   const [urlImportValue, setUrlImportValue] = useState("");
@@ -2596,7 +2598,11 @@ export function ResourcesWorkbenchView({
           <input
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (searchQuery === undefined) setLocalQuery(value);
+              onSearchQueryChange?.(value);
+            }}
             placeholder={compactResourceSearchPlaceholder[language]}
           />
         </label>

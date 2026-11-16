@@ -112,7 +112,7 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
   );
   assert.match(source, /if \(action === "generate_plan"\) \{\s*openPlanComposerMode\("generate"\);/);
   assert.match(source, /if \(action === "continue_without_plan"\) \{\s*setActiveView\("coach"\);\s*requestCoachComposerFocus\(\);/);
-  assert.match(source, /const planComposerSubmission = activeView === "plan" \|\| coachPlanContext !== undefined;/);
+  assert.match(source, /const submittedPlanMode = activeView === "plan"\s*\? resolvedPlanComposerMode\s*:\s*activeView === "coach" \? coachPlanContext : undefined;/);
   assert.match(
     source,
     /const formalPlanGeneration =\s*\(planComposerSubmission && submittedPlanMode === "generate"\) \|\|\s*\(activeView === "coach" && sendAnalysis.intent === "plan"\);/,
@@ -145,7 +145,7 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
   assert.match(source, /const formalPlanSkill = submittedSkill\.commandId === trainerCommands\.generatePlan;/);
   assert.match(source, /if \(formalPlanSkill && !providerCanMutateFormalPlan\) \{/);
   assert.match(source, /formalPlanMutation: formalPlanSkill,/);
-  assert.match(source, /const intent = formalPlanGeneration \? "plan" : analyzedIntent;/);
+  assert.match(source, /const intent = formalPlanGeneration\s*\? "plan"\s*:\s*activeView === "plan" \|\| activeView === "resources" \? "coach" : analyzedIntent;/);
   assert.match(source, /formalPlanMutation: formalPlanGeneration && !previewPlanCandidateGeneration,/);
   assert.doesNotMatch(
     source,
@@ -312,7 +312,7 @@ test('Learning resolves one governed primary action before rendering', () => {
   assert.match(source, /openPlanComposerMode\("evidence"\);/);
   assert.match(
     source,
-    /const waitingComposerEvidence =\s*\(activeView === "plan" \|\| coachPlanContext !== undefined\) &&\s*\(coachPlanContext \?\? resolvedPlanComposerMode\) === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
+    /const waitingComposerEvidence =\s*submittedPlanMode === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
   );
   assert.match(source, /trainerCommands\.evidenceEnqueue/);
   assert.match(source, /waitingComposer: true,/);

@@ -405,8 +405,8 @@ test('vision-ready preview declares and verifies vision and tools truth for imag
   assert.match(readyBranch, /name: "tools", declared: true, observed: true, state: "verified"/);
   assert.match(readyBranch, /toolsReady: scenario === "vision-ready",/);
   assert.match(readyBranch, /toolProbeStatus: scenario === "vision-ready" \? \("verified" as const\) : \("unverified" as const\),/);
-  assert.match(appSource, /attachments=\{composerAttachments\}/);
-  assert.match(appSource, /onAttachmentsChange=\{setComposerAttachments\}/);
+  assert.match(appSource, /attachments=\{isResourceSearchMode \? undefined : composerAttachments\}/);
+  assert.match(appSource, /onAttachmentsChange=\{isResourceSearchMode \? undefined : setComposerAttachments\}/);
   assert.match(appSource, /attachmentsAvailable=\{providerImageInputState\.supported\}/);
 });
 

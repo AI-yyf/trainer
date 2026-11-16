@@ -26,26 +26,18 @@
 }
 
 .learning-cards__header {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .learning-cards__header h2 {
   margin: 0;
   font-size: var(--trainer-font-lg);
   line-height: 1.35;
-}
-
-.learning-cards__subhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 24px;
-}
-
-.learning-cards__subhead .template-metadata {
-  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .learning-card-stack {
@@ -67,8 +59,10 @@
 }
 
 .learning-card--now {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-  background: color-mix(in srgb, var(--accent) 4%, var(--bg-1));
+  padding: var(--space-3);
+  border-color: color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
 }
 
 .learning-card-group {
@@ -233,6 +227,10 @@
 .learning-card--now .template-next-action {
   padding-block: 2px 4px;
   gap: 4px;
+}
+
+.learning-card--now .template-next-action > .template-metadata {
+  display: none;
 }
 
 .learning-card--now .template-next-action h3 {

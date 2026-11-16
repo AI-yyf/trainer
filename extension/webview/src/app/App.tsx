@@ -279,6 +279,7 @@ import { resolveCopy as resolveWorkbenchCopy, type Copy } from "../lib/i18n/copy
 import { resolvePlanComposerCopy } from "../lib/i18n/planComposerCopy";
 import { GOAL_MODE_COPY } from "../lib/i18n/segments/coachInlineText";
 import { resolveResourceComposerCopy } from "../lib/i18n/resourceComposerCopy";
+import { compactResourceSearchPlaceholder } from "../lib/i18n/segments/resourcesInlineText";
 import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
 import { resolveTextDirection, type TextDirection } from "../lib/i18n/direction";
 import {
@@ -701,7 +702,7 @@ export function App() {
   >("not_installed");
   const companionStateQueriedRef = useRef(false);
   const [resourcesComposerMode, setResourcesComposerMode] =
-    useState<ResourcesComposerMode>("locate");
+    useState<ResourcesComposerMode | "search">("locate");
   const [selectedResourceContextIds, setSelectedResourceContextIds] = useState<string[]>([]);
   const [resourceConversationContextIds, setResourceConversationContextIds] = useState<string[]>([]);
   const [resourcesViewSearchQuery, setResourcesViewSearchQuery] = useState("");
@@ -3554,6 +3555,11 @@ export function App() {
     coachContextTransition.conversationLength === data.conversation.length;
   const openPlanComposerMode = useCallback(
     (mode: PlanComposerMode) => {
+      if (activeView === "plan") {
+        setPlanComposerMode(mode);
+        requestCoachComposerFocus();
+        return;
+      }
       // The dock keeps one draft scope per surface. Select Coach's scope before
       // writing the prompt, otherwise the guidance lands in the Plan scope and
       // disappears the moment the composer switches surfaces.
@@ -6916,6 +6922,13 @@ export function App() {
       return;
     }
 
+    if (activityResponse === undefined && activeView === "resources" && resourcesComposerMode === "search") {
+      if (!normalizedDraft) return;
+      setResourcesViewSearchQuery(normalizedDraft);
+      setComposerDraft("");
+      return;
+    }
+
     if (canCaptureGoalBeforeWorkspaceSetup && normalizedDraft) {
       openWorkspaceAdmission();
       setOperationMessage({
@@ -7267,9 +7280,12 @@ export function App() {
       return;
     }
 
+    const submittedPlanMode = activeView === "plan"
+      ? resolvedPlanComposerMode
+      : activeView === "coach" ? coachPlanContext : undefined;
+    const planComposerSubmission = submittedPlanMode !== undefined;
     const waitingComposerEvidence =
-      (activeView === "plan" || coachPlanContext !== undefined) &&
-      (coachPlanContext ?? resolvedPlanComposerMode) === "evidence" &&
+      submittedPlanMode === "evidence" &&
       recoveredRuntime &&
       planRuntimeStatus?.resumeState === "waiting" &&
       Boolean(planRuntimeStatus?.currentStep?.trim()) &&
@@ -7314,8 +7330,6 @@ export function App() {
       sendAnalysis.intent === "task"
         ? sendAnalysis.intent
         : "coach";
-    const planComposerSubmission = activeView === "plan" || coachPlanContext !== undefined;
-    const submittedPlanMode = coachPlanContext ?? resolvedPlanComposerMode;
     const formalPlanGeneration =
       (planComposerSubmission && submittedPlanMode === "generate") ||
       (activeView === "coach" && sendAnalysis.intent === "plan");
@@ -7335,14 +7349,24 @@ export function App() {
       });
       return;
     }
-    const intent = formalPlanGeneration ? "plan" : analyzedIntent;
+    const intent = formalPlanGeneration
+      ? "plan"
+      : activeView === "plan" || activeView === "resources" ? "coach" : analyzedIntent;
     const rawMessageText =
       sendAnalysis.draftBody ||
       (hasImageAttachments
         ? buildGenericImageReviewPrompt(layout.composerLanguage, normalizedDraft)
         : defaultPromptText(intent, layout.composerLanguage));
-    const messageText = appendDockAnchor(rawMessageText, dockAnchor);
-    if (goalMode && !goalText.trim() && normalizedDraft && intent === "coach") {
+    // The host receives the task framing along with the learner's text. The
+    // browser preview also uses the explicit mode to render fixture results.
+    const modePrompt = activeView === "plan" && (submittedPlanMode === "evidence" || submittedPlanMode === "blocker")
+      ? activePlanComposerMode.hint
+      : undefined;
+    const messageText = appendDockAnchor(
+      modePrompt ? `${rawMessageText}\n\n${modePrompt}` : rawMessageText,
+      dockAnchor,
+    );
+    if (activeView === "coach" && goalMode && !goalText.trim() && normalizedDraft && intent === "coach") {
       startGoal(normalizedDraft);
       requestGoalControl("start", normalizedDraft);
     }
@@ -7357,7 +7381,7 @@ export function App() {
       formalPlanMutation: formalPlanGeneration && !previewPlanCandidateGeneration,
       planComposerMode: planComposerSubmission ? submittedPlanMode : undefined,
       resourceComposerIntent:
-        activeView === "resources"
+        activeView === "resources" && resourcesComposerMode !== "search"
           ? {
               mode: resourcesComposerMode,
               resourceIds: selectedResourceContextIds,
@@ -7374,7 +7398,7 @@ export function App() {
       contextDetail: intent === "review" ? "full" : undefined,
       attachments: composerAttachments,
       browserSources: activeView === "coach" ? composerBrowserSources : undefined,
-      goalMode: intent === "coach" ? goalMode && !goalPaused : undefined,
+      goalMode: activeView === "coach" && intent === "coach" ? goalMode && !goalPaused : undefined,
     });
     if (activeView === "plan" || activeView === "resources") {
       if (dockSendNavigation(dockSendPreference, activeView) === "jump_to_coach") {
@@ -7388,7 +7412,7 @@ export function App() {
     }
     setComposerDraft("");
     setComposerAttachments([]);
-    setCoachPlanContext(undefined);
+    if (activeView === "coach") setCoachPlanContext(undefined);
   };
 
   // Re-arm the bootstrap request guard only on the false -> true transition of
@@ -8253,6 +8277,8 @@ export function App() {
   const activeResourcesComposerMode =
     resourceComposerModes.find((mode) => mode.id === resourcesComposerMode) ??
     resourceComposerModes[0];
+  const resourceSearchModeLabel = compactResourceSearchPlaceholder[layout.composerLanguage];
+  const isResourceSearchMode = activeView === "resources" && resourcesComposerMode === "search";
 
   const renderTrainingComposerAccessory = () => {
     if (!composerUsesTrainingFlow) {
@@ -9546,7 +9572,7 @@ export function App() {
       : composerUsesTrainingFlow && !composerSendBlocked
       ? resolvedTrainingComposerPlaceholder
       : activeView === "resources"
-        ? activeResourcesComposerMode.placeholder
+        ? isResourceSearchMode ? resourceSearchModeLabel : activeResourcesComposerMode.placeholder
         : activeView === "plan"
           ? activePlanComposerMode.placeholder
           : refinedUtilityComposerPlaceholder;
@@ -9806,6 +9832,12 @@ export function App() {
       </button>
     </>
   );
+  const importResourceFiles = () => triggerResourceUpload({
+    browserPreview: isBrowserPreview,
+    payloadMode: "files",
+    filesInputRef: uploadFilesInputRef,
+    folderInputRef: uploadFolderInputRef,
+  });
 
   const renderResourcesView = () => {
     return (
@@ -9825,6 +9857,7 @@ export function App() {
           language={layout.composerLanguage}
           resources={liveResources}
           resourceSearch={data.resourceSearch}
+          searchQuery={resourcesViewSearchQuery}
           onSearchQueryChange={setResourcesViewSearchQuery}
           orientation={
             leftoverResourceLibraryListNotLive && resourcesOrientation
@@ -9885,9 +9918,8 @@ export function App() {
           }
           onOpenTraining={() => setActiveView("training")}
           onAskCoach={(resourceIds) => {
-            setSelectedResourceContextIds(resourceIds);
-            setResourceConversationContextIds(resourceIds);
-            setActiveView("coach");
+            handleResourceSelectionChange(resourceIds);
+            setResourcesComposerMode("locate");
             requestCoachComposerFocus();
           }}
           learningStage={formalPlanLive ? activePlanStage : undefined}
@@ -9910,14 +9942,7 @@ export function App() {
                 : requestBrowserPreviewResourceSearch
               : requestResourceSearch
           }
-          onImportFiles={() =>
-            triggerResourceUpload({
-              browserPreview: isBrowserPreview,
-              payloadMode: "files",
-              filesInputRef: uploadFilesInputRef,
-              folderInputRef: uploadFolderInputRef,
-            })
-          }
+          onImportFiles={importResourceFiles}
           onImportFolder={() =>
             triggerResourceUpload({
               browserPreview: isBrowserPreview,
@@ -10150,6 +10175,7 @@ export function App() {
               attachmentScope={`${attachmentScope}\u0000${activeTrainingCardId ?? ""}\u0000${trainingComposerPhase}`}
               label={scheduledRecallForeground ? trainingComposerModeTextCopy.answerAccessibilityLabel : localizedTrainingComposerAccessibilityLabel}
               prompt={reviewArtifactForeground ? trainingState?.reviewArtifact?.summary : trainingComposerReflectMode ? readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) : undefined}
+              placeholder={resolvedTrainingComposerPlaceholder}
               value={activityDraft}
               language={layout.composerLanguage}
               attachments={activityAttachments}
@@ -11051,13 +11077,9 @@ export function App() {
                 }}
               />
             ) : null}
-            {coachPlanContext ? <div className="template-context" role="group">
+            {activeView === "coach" && coachPlanContext ? <div className="template-context" role="group">
               <span>{resolvePlanComposerCopy(layout.composerLanguage).modes[coachPlanContext].label}</span>
               <button type="button" className="template-back" onClick={() => setCoachPlanContext(undefined)}>{appUiCopy(layout.composerLanguage, "清除")}</button>
-            </div> : null}
-            {dockAnchorControl.anchor && activeView !== "coach" ? <div className="template-context" role="group" data-dock-anchor="true">
-              <span>{dockAnchorControl.anchor.label}</span>
-              <button type="button" className="template-back" onClick={activeView === "resources" ? clearResourceConversationContext : dockAnchorControl.suppress}>{appUiCopy(layout.composerLanguage, "清除")}</button>
             </div> : null}
             {coachSuggestionChips}
             <CoachComposer
@@ -11066,7 +11088,40 @@ export function App() {
               onChange={handleComposerDraftChange}
               onSubmit={handleSubmit}
               onCancel={handleCancelStream}
-              mentionItems={composerMentionItems}
+              contextAnchor={dockAnchorControl.anchor ? {
+                label: dockAnchorControl.anchor.label,
+                clearLabel: appUiCopy(layout.composerLanguage, "清除"),
+                onClear: activeView === "resources" ? clearResourceConversationContext : dockAnchorControl.suppress,
+              } : undefined}
+              modeControl={activeView === "plan" ? {
+                id: "plan-composer-mode",
+                label: t.plan,
+                value: activePlanComposerMode.id,
+                options: planComposerModes.filter(({ id }) =>
+                  planHasFormalThread || recoveredRuntime || id === "explain" || id === "generate",
+                ).map(({ id, label }) => ({ value: id, label })),
+                onChange: (value) => {
+                  const mode = planComposerModes.find(({ id }) => id === value);
+                  if (mode) setPlanComposerMode(mode.id);
+                },
+              } : activeView === "resources" ? {
+                id: "resource-composer-mode",
+                label: resourcesViewLabel(layout.composerLanguage),
+                value: resourcesComposerMode,
+                options: [
+                  { value: "search", label: resourceSearchModeLabel },
+                  ...resourceComposerModes.map(({ id, label }) => ({ value: id, label })),
+                ],
+                onChange: (value) => {
+                  if (value === "search") {
+                    setResourcesComposerMode(value);
+                    return;
+                  }
+                  const mode = resourceComposerModes.find(({ id }) => id === value);
+                  if (mode) setResourcesComposerMode(mode.id);
+                },
+              } : undefined}
+              mentionItems={isResourceSearchMode ? undefined : composerMentionItems}
               onMentionSelect={handleComposerMentionSelect}
               onNavigateHistory={navigateComposerHistory}
               density={composerModelActionDensity}
@@ -11081,7 +11136,9 @@ export function App() {
               }
               disabled={workspaceSessionBlocked && !canCaptureGoalBeforeWorkspaceSetup}
               submitDisabled={
-                canCaptureGoalBeforeWorkspaceSetup
+                isResourceSearchMode
+                  ? !normalizedDraft
+                  : canCaptureGoalBeforeWorkspaceSetup
                   ? !normalizedDraft || imageAttachmentSendBlocked
                   : composerSendBlocked || imageAttachmentSendBlocked
               }
@@ -11097,8 +11154,8 @@ export function App() {
                   : t.streaming
               }
               submitLabel=""
-              accessibilityLabel={localizedTrainingComposerAccessibilityLabel}
-              submitAriaLabel={localizedTrainingComposerSubmitAriaLabel}
+              accessibilityLabel={isResourceSearchMode ? resourceSearchModeLabel : localizedTrainingComposerAccessibilityLabel}
+              submitAriaLabel={isResourceSearchMode ? resourceSearchModeLabel : localizedTrainingComposerSubmitAriaLabel}
               emptySubmitAriaLabel={
                 !trainingComposerTalkMode && composerUsesTrainingFlow && trainingComposerReflectMode
                   ? trainingHandoffComposerTextCopy.reflectEmptySubmitAriaLabel
@@ -11139,10 +11196,10 @@ export function App() {
                   {renderCommandDeck()}
                 </>
               }
-              attachments={composerAttachments}
+              attachments={isResourceSearchMode ? undefined : composerAttachments}
               browserSources={activeView === "coach" ? composerBrowserSources : undefined}
               onRemoveBrowserSource={(source) => setComposerDraft(draft, composerBrowserSources?.filter((entry) => entry !== source))}
-              onAttachmentsChange={setComposerAttachments}
+              onAttachmentsChange={isResourceSearchMode ? undefined : setComposerAttachments}
               attachmentsAvailable={providerImageInputState.supported}
               attachmentsUnavailableReason={
                 providerImageInputState.detail ?? providerImageInputState.reason
@@ -11173,7 +11230,7 @@ export function App() {
                 },
               ]}
               onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing) {
+                if (event.nativeEvent.isComposing || event.keyCode === 229) {
                   return;
                 }
 
@@ -11304,20 +11361,29 @@ export function App() {
 
                 if (event.key === "Enter" && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
                   event.preventDefault();
-                  handleSubmit();
+                  if (activeView === "coach") handleSubmit();
+                  else event.currentTarget.form?.requestSubmit();
                   return;
                 }
 
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                   event.preventDefault();
-                  handleSubmit();
+                  if (activeView === "coach") handleSubmit();
+                  else event.currentTarget.form?.requestSubmit();
                 }
               }}
               leadingActions={[
                 // The current-file context toggle lives in Settings (advanced
                 // context); the composer keeps only the resources entry here.
                 ...(activeView === "resources"
-                  ? []
+                  ? [{
+                      id: "import-resources",
+                      label: t.addFiles,
+                      icon: <UploadIcon size={16} />,
+                      pinned: true,
+                      disabled: resourceWriteAccess?.allowed === false,
+                      onClick: importResourceFiles,
+                    }]
                   : [
                       {
                         id: "resources",

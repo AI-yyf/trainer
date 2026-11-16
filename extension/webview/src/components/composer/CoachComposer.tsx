@@ -15,7 +15,7 @@ import type { ComposerLanguage, MessageAttachment } from "../../lib/types";
 import type { BrowserSourceRef } from "../../../../../shared/src/browserSourceRef";
 import { useImageAttachmentStaging } from "../../lib/useImageAttachmentStaging";
 import { SystemState } from "../../templates/SystemState";
-import { AttachmentIcon, CheckMarkIcon, CloseIcon, LinkIcon, PlusIcon, SendIcon, SquareIcon } from "../icons";
+import { AttachmentIcon, CheckMarkIcon, ChevronDownIcon, CloseIcon, LinkIcon, PlusIcon, SendIcon, SquareIcon } from "../icons";
 import { ComposerIconButton } from "./ComposerIconButton";
 import { composerLocaleCopy, MAX_STAGED_ATTACHMENTS } from "../../lib/i18n/segments/coachInlineText";
 
@@ -95,6 +95,7 @@ export interface CoachComposerProps {
   leadingActions?: ComposerActionItem[];
   secondaryActions?: ComposerSecondaryAction[];
   modeControl?: ComposerModeControl;
+  contextAnchor?: { label: string; clearLabel: string; onClear: () => void };
   showCharCount?: boolean;
   maxLength?: number;
   language?: ComposerLanguage;
@@ -141,6 +142,7 @@ export function CoachComposer({
   leadingActions,
   secondaryActions,
   modeControl,
+  contextAnchor,
   showCharCount = true,
   maxLength = 2000,
   language = "zh-CN",
@@ -481,7 +483,8 @@ export function CoachComposer({
         return;
       }
       modeControl.onChange(value);
-      closeModeMenu(true);
+      closeModeMenu();
+      textareaRef.current?.focus();
     },
     [closeModeMenu, modeControl],
   );
@@ -857,6 +860,21 @@ export function CoachComposer({
       <span className="sr-only" id={composerStatusId} aria-live="polite">
         {composerStatusText}
       </span>
+      {contextAnchor ? (
+        <div className="composer__attachments" data-dock-anchor="true">
+          <span className="composer__attachment-chip" title={contextAnchor.label}>
+            <span className="composer__attachment-label">{contextAnchor.label}</span>
+            <button
+              type="button"
+              className="composer__attachment-remove"
+              aria-label={contextAnchor.clearLabel}
+              onClick={contextAnchor.onClear}
+            >
+              <CloseIcon size={12} />
+            </button>
+          </span>
+        </div>
+      ) : null}
       {browserSources?.length ? (
         <div className="composer__attachments">
           {browserSources.map((source) => (
@@ -1148,6 +1166,7 @@ export function CoachComposer({
                 <span className="composer-mode-control__label">
                   {selectedModeOption?.label ?? modeControl.label}
                 </span>
+                <ChevronDownIcon size={12} aria-hidden="true" />
               </button>
               {isModeMenuOpen ? (
                 <div

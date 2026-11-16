@@ -407,7 +407,7 @@ test('formal Plan generation requires a current verified tools probe, not declar
   );
   assert.match(source, /formalPlanMutation: formalPlanSkill,/);
   assert.match(source, /formalPlanMutation: formalPlanGeneration && !previewPlanCandidateGeneration,/);
-  assert.match(source, /const intent = formalPlanGeneration \? "plan" : analyzedIntent;/);
+  assert.match(source, /const intent = formalPlanGeneration\s*\? "plan"\s*:\s*activeView === "plan" \|\| activeView === "resources" \? "coach" : analyzedIntent;/);
 });
 
 test('coach composer does not gate sending on an unverified streaming probe', () => {

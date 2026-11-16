@@ -1,5 +1,4 @@
 import { FocusedPractice } from "../../templates/FocusedPractice";
-import { NextAction } from "../../templates/NextAction";
 import { VerificationResult } from "../../templates/VerificationResult";
 import { templateCopy } from "../../templates/templateCopy";
 import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
@@ -842,12 +841,8 @@ export function TrainingWorkbenchView({
   const resolvedNextAfterCompletion = firstText(nextAfterCompletion?.trim());
   const resolvedFallbackAction = firstText(fallbackAction?.trim(), stuckRecovery?.trim());
   const resolvedSuccessSignal = firstText(successSignal?.trim());
-  const resolvedDeliverables = uniqueTrainingCardItems([deliverable, ...deliverables]);
-  const resolvedVerifyItems = uniqueTrainingCardItems([
-    validationMethod,
-    verificationMethod,
-    ...verifyItems,
-  ]);
+  const resolvedDeliverables = uniqueTrainingCardItems(deliverables);
+  const resolvedVerifyItems = uniqueTrainingCardItems(verifyItems);
   // Card facts that previously reached the view but never rendered (dead
   // props): the self-check list, common mistakes, and the stuck-recovery
   // path are part of the card's guidance contract, so they stay in the task
@@ -934,7 +929,7 @@ export function TrainingWorkbenchView({
   const cardOnlyTask = resolvedProblemStatement;
   const cardOnlyDeliverable = resolvedDeliverables.length > 1
     ? resolvedDeliverables.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
-    : firstText(resolvedDeliverables[0]?.trim(), resolvedSuccessSignal, cardOnlyTask) ?? cardOnlyTask;
+    : firstText(resolvedDeliverables[0], deliverable, resolvedSuccessSignal, cardOnlyTask) ?? cardOnlyTask;
   // r2-g1-1: multi-item deliverables render as real list items (one row per
   // item) instead of the " - " joined run-on paragraph.
   const deliverablesListNode = resolvedDeliverables.length > 1 ? (
@@ -948,6 +943,8 @@ export function TrainingWorkbenchView({
     ? resolvedVerifyItems.map(item => `- ${item.replace(/\n/g, "\n  ")}`).join("\n")
     : firstText(
         resolvedVerifyItems[0],
+        validationMethod,
+        verificationMethod,
         resolvedSuccessSignal,
         isFlashCard
           ? trainingCardOnlySurfaceText(language, "flashAnswerMethod")
@@ -982,9 +979,59 @@ export function TrainingWorkbenchView({
     </button>
   ) : null;
 
-  // One collapsed disclosure per card (TASK 2): source, reason, deliverable,
-  // verify and return facts as plain text — no nested composer, no competing
-  // disclosures. Hidden while the learn phase owns the card face.
+  const tryPhase = trainingExecutionState.composerPhase === "try" || trainingExecutionState.composerPhase === "answer";
+  const learnPhase = trainingExecutionState.composerPhase === "learn";
+  const verifyPhase = trainingExecutionState.composerPhase === "verify";
+  const showStartStep = learnPhase || (tryPhase && (!selectedCardStatus || selectedCardStatus === "candidate"));
+  const showFileVerification = (tryPhase && !isFlashCard && practiceVerificationMode === "file") ||
+    (verifyPhase && Boolean(onVerifyCurrentFile));
+  const requirementsVisible = !learnPhaseActive && (tryPhase || verifyPhase);
+  const cardRequirements = (
+    <div className="template-focused-practice__requirements">
+      <div data-training-card-fact="deliverable"><span className="template-metadata">{templateCopy[language].complete}</span>{deliverablesListNode ?? <MessageRichContent body={cardOnlyDeliverable ?? ""} language={language} />}</div>
+      <div data-training-card-fact="verify"><span className="template-metadata">{trainingWorkbenchText(language, "acceptanceMethod")}</span><MessageRichContent body={cardOnlyVerification ?? ""} language={language} /></div>
+    </div>
+  );
+  const cardStepAction = returnContinuedInChat ? null : showStartStep ? (
+    <button
+      className="button button--accent"
+      type="button"
+      data-primary-action="true"
+      disabled={!onCardStatusTransition || !cardId || reliabilityInFlight}
+      onClick={() => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); }}
+    >
+      {trainingSurfaceLabel(language, "startStep")}
+    </button>
+  ) : showFileVerification ? (
+    <button
+      className="button button--accent"
+      type="button"
+      data-primary-action="true"
+      disabled={!onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight}
+      onClick={onVerifyCurrentFile}
+    >
+      {tryPhase && remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile")}
+    </button>
+  ) : null;
+  const cardTaskBrief = (
+    <>
+      {learnPhase ? (
+        <MessageRichContent body={learnFirstDetail ?? cardOnlyTask ?? ""} language={language} />
+      ) : tryPhase ? (
+        <MessageRichContent body={isFlashCard ? flashPrompt || cardOnlyTask : cardOnlyTask} language={language} />
+      ) : null}
+      {resolvedFilesToTouch.length ? (
+        <p className="template-metadata training-card-files" data-training-files="true">
+          {resolvedFilesToTouch.map((file) => (
+            <span key={file} className="training-card-files__item">{file}</span>
+          ))}
+        </p>
+      ) : null}
+      {requirementsVisible ? cardRequirements : null}
+      {cardStepAction ? <div className="template-focused-practice__actions">{cardStepAction}</div> : null}
+    </>
+  );
+
   const cardTaskDetails = learnPhaseActive ? undefined : (
     <details className="template-disclosure" data-training-card-details="true">
       <summary>{trainingWorkbenchText(language, "taskDetails")}</summary>
@@ -993,8 +1040,11 @@ export function TrainingWorkbenchView({
         {resolvedWhyNow ? <div data-training-card-fact="why-now" title={cardOnlyWhyNowSummary}><MessageRichContent body={resolvedWhyNow} language={language} /></div> : null}
         {sourceDetail ? <MessageRichContent body={sourceDetail} language={language} /> : null}
         {currentStep && normalizeCardText(currentStep) !== normalizeCardText(cardOnlyTask) ? <MessageRichContent body={currentStep} language={language} /> : null}
-        <div data-training-card-fact="deliverable">{deliverablesListNode ?? <MessageRichContent body={cardOnlyDeliverable ?? ""} language={language} />}</div>
-        <div data-training-card-fact="verify"><span className="template-metadata">{trainingWorkbenchText(language, "verifyNow")}</span><MessageRichContent body={cardOnlyVerification ?? ""} language={language} /></div>
+        {!requirementsVisible ? cardRequirements : null}
+        {resolvedDeliverables.length > 0 && deliverable && !resolvedDeliverables.includes(deliverable) ? <MessageRichContent body={deliverable} language={language} /> : null}
+        {resolvedVerifyItems.length > 0 ? uniqueTrainingCardItems([validationMethod, verificationMethod])
+          .filter((item) => !resolvedVerifyItems.includes(item))
+          .map((item) => <MessageRichContent key={item} body={item} language={language} />) : null}
         <div data-training-card-fact="return"><MessageRichContent body={resolvedReturnWith || defaultReturnPath} language={language} /></div>
         {resolvedSelfCheck.length > 0 ? (
           <div data-training-card-fact="self-check">
@@ -1101,6 +1151,7 @@ export function TrainingWorkbenchView({
                 phase={trainingExecutionState.composerPhase === "answer" ? "try" : trainingExecutionState.composerPhase}
                 phaseLabel={activeLoopStep.label}
                 onBack={onBackToLearning}
+                brief={cardTaskBrief}
                 details={<>{sourceResource}{cardTaskDetails}</>}
               >
                 {degradedCard ? (
@@ -1153,30 +1204,15 @@ export function TrainingWorkbenchView({
                       {nextCardButton}
                     </div>
                   </section>
-                ) : trainingExecutionState.composerPhase === "learn" ? <>
-                  <MessageRichContent body={learnFirstDetail ?? cardOnlyTask ?? ""} language={language} />
-                  <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
-                </> : trainingExecutionState.composerPhase === "try" || trainingExecutionState.composerPhase === "answer" ? <>
-                  <MessageRichContent body={isFlashCard ? flashPrompt || cardOnlyTask : cardOnlyTask} language={language} />
-                  {resolvedFilesToTouch.length ? (
-                    <p className="template-metadata training-card-files" data-training-files="true">
-                      {resolvedFilesToTouch.map((file) => (
-                        <span key={file} className="training-card-files__item">{file}</span>
-                      ))}
-                    </p>
-                  ) : null}
+                ) : learnPhase ? null : tryPhase ? <>
                   {cardOnlyBlockerDistinct ? <VerificationResult language={language} verdict={trainingExecutionState.blocked ? "failed" : "unknown"} summary={cardOnlyBlockerDistinct} /> : null}
-                  {selectedCardStatus === "candidate" || !selectedCardStatus ? (
-                    <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
-                  ) : !isFlashCard && practiceVerificationMode === "file" ? (
-                    <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
-                  ) : response}
+                  {!showStartStep && !showFileVerification ? response : null}
                   {hintLadder.length && cardType === "practice" ? <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} language={language} /> : null}
-                </> : trainingExecutionState.composerPhase === "verify" ? <>
+                </> : verifyPhase ? <>
                   {trainingExecutionState.verified || trainingExecutionState.blocked ? (
                     <VerificationResult language={language} verdict={trainingExecutionState.verified ? "passed" : "failed"} summary={latestVerifiedResult || latestLearningBlocker} />
-                  ) : <MessageRichContent body={cardOnlyVerification || practiceSectionNote} language={language} />}
-                  {onVerifyCurrentFile ? <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} action={{ label: trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: onVerifyCurrentFile }} /> : response}
+                  ) : null}
+                  {!showFileVerification ? response : null}
                 </> : trainingExecutionState.composerPhase === "reflect" ? response : <>
                   <MessageRichContent body={latestVerifiedResult || latestLearningBlocker || resolvedReturnWith || defaultReturnPath} language={language} />
                   {actions}

@@ -175,7 +175,7 @@ test("Chinese flash questions keep inline code identifiers visible", async ({ pa
       },
     } });
   });
-  const question = page.locator('.template-focused-practice__phase p').filter({ hasText: '请说明为什么其中一条合法、另一条抛错。' }).first();
+  const question = page.locator('[data-training-brief] p').filter({ hasText: '请说明为什么其中一条合法、另一条抛错。' }).first();
   await expect(question).toBeVisible();
   await expect(question).toContainText('各自的结果是什么？');
   await expect(question.locator('code')).toHaveText(['pair = ([1, 2], 3)', 'pair[0].append(4)', 'pair[1] = 9']);
@@ -216,9 +216,13 @@ test("empty Plan honors an explicit Generate plan action", async ({ page }) => {
   await expect(page.getByText(/先启用一组可用连接/)).toHaveCount(0);
   await page.locator('[data-learning-section=more] > summary').click();
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
-  await expect(page.locator(".template-context")).toContainText("生成计划");
+  const composer = page.locator("#coach-composer");
+  await expect(page.locator("#plan-composer-mode")).toContainText("生成计划");
+  await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
+  await expect(composer).toBeFocused();
+  await composer.fill("学会为登录失败写可执行的提示");
+  await composer.press("Enter");
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("textbox")).toHaveValue(/生成正式计划/);
 });
 
 test("browser selection prefill lands in Coach and preserves the Learning draft", async ({ page }) => {
@@ -326,9 +330,12 @@ test("Plan generate keeps an unsent Coach draft instead of overwriting it", asyn
   await page.getByTestId("trainer-view-nav-plan").click();
   await page.locator('[data-learning-section=more] > summary').click();
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
+  await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator("#plan-composer-mode")).toContainText("生成计划");
+  await expect(page.locator("#coach-composer")).toBeFocused();
+  await page.getByTestId("trainer-view-nav-coach").click();
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("textbox")).toHaveValue("我的教练草稿");
-  await expect(page.locator(".template-context")).toContainText("生成计划");
 });
 
 test("training generation keeps raw card JSON out of the conversation surface", async ({ page }) => {

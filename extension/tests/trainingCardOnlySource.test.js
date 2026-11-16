@@ -90,10 +90,11 @@ test('training cards preserve their explicit deliverable and verification contra
   assert.match(source, /deliverable\?: string;/);
   assert.match(source, /validationMethod\?: string;/);
   assert.match(source, /verificationMethod\?: string;/);
-  assert.match(source, /const resolvedDeliverables = uniqueTrainingCardItems\(\[deliverable, \.\.\.deliverables\]\);/);
-  assert.match(source, /const resolvedVerifyItems = uniqueTrainingCardItems\(\[[\s\S]*?validationMethod,[\s\S]*?verificationMethod,[\s\S]*?\.\.\.verifyItems,/);
+  assert.match(source, /const resolvedDeliverables = uniqueTrainingCardItems\(deliverables\);/);
+  assert.match(source, /const resolvedVerifyItems = uniqueTrainingCardItems\(verifyItems\);/);
+  assert.match(source, /firstText\(resolvedDeliverables\[0\], deliverable,/);
   assert.match(source, /const cardOnlyVerification = resolvedVerifyItems\.length > 1/);
-  assert.match(source, /firstText\(\s*resolvedVerifyItems\[0\],/);
+  assert.match(source, /firstText\(\s*resolvedVerifyItems\[0\],\s*validationMethod,\s*verificationMethod,/);
 });
 
 test('training card-only mode replaces the full phase rail with the active phase at the narrowest sidebar width', () => {

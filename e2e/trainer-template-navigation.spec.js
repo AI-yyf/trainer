@@ -73,6 +73,9 @@ test('surface switches retain the Coach draft and resource search without sharin
   // One task-details disclosure per card; the flash response sits on the card
   // face instead of a nested "Full acceptance" composer.
   const cardDetails = page.locator('[data-training-card-details]');
+  const brief = page.locator('[data-training-brief]');
+  await expect(brief.locator('[data-training-card-fact="deliverable"]')).toContainText('Explain the invariant');
+  await expect(brief.locator('[data-training-card-fact="verify"]')).toContainText('Compare against the written rule');
   await expect(cardDetails).toHaveCount(1);
   await expect(cardDetails.locator(':scope > summary')).toContainText(/任务详情|Task details/);
   await expect(cardDetails).not.toHaveAttribute('open', '');

@@ -118,6 +118,7 @@ test('visible send-preference switch copy covers all eight UI languages', () => 
 test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banner', () => {
   const app = read('app/App.tsx');
   const hook = read('app/useComposerDockAnchor.ts');
+  const composer = read('components/composer/CoachComposer.tsx');
   const types = read('lib/types.ts');
   const state = read('app/useWorkbenchState.ts');
 
@@ -130,11 +131,12 @@ test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banne
   assert.match(app, /\[activeView, composerSessionKey, data\.sessionLabel, hasReceivedHostState\]/);
 
   // Anchor chip strip renders only outside Coach and is removable.
-  assert.match(app, /dockAnchorControl\.anchor && activeView !== "coach" \? <div className="template-context" role="group" data-dock-anchor="true">/);
-  assert.match(app, /onClick=\{activeView === "resources" \? clearResourceConversationContext : dockAnchorControl\.suppress\}/);
+  assert.match(app, /contextAnchor=\{dockAnchorControl\.anchor \? \{/);
+  assert.match(composer, /<div className="composer__attachments" data-dock-anchor="true">/);
+  assert.match(app, /onClear: activeView === "resources" \? clearResourceConversationContext : dockAnchorControl\.suppress/);
 
   // Learning appends its stage. Resources sends its source as structured context.
-  assert.match(app, /const messageText = appendDockAnchor\(rawMessageText, dockAnchor\);/);
+  assert.match(app, /const messageText = appendDockAnchor\([\s\S]*?dockAnchor,\s*\);/);
   assert.match(app, /const dockAnchor = activeView === "plan" \? dockAnchorControl\.anchor : null/);
 
   // Default jump-to-coach; stay mode records the surface in the store and the

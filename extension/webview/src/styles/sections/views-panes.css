@@ -1427,6 +1427,7 @@
   padding: 3px 0;
   border: 0;
   box-shadow: none;
+  background: transparent;
 }
 
 .resources-knowledge__training-handoff {

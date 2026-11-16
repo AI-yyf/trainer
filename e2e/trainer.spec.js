@@ -239,18 +239,12 @@ async function openPlanGovernanceDisclosure(page) {
 }
 
 async function submitPlanComposerRequest(page, mode, message) {
-  await openPlanGovernanceDisclosure(page);
-  const more = page.locator('[data-plan-governance-disclosure]');
-  const action = more.getByRole('button', { name: mode === 'generate' ? /^Adjust plan/ : 'Ask Coach' });
-  if (await action.isDisabled()) {
-    // §3.7: Learning owns the dock composer even when this plan intent is
-    // unavailable — a disabled action only means no plan-composer draft.
-    await expect(page.locator('#coach-composer')).toHaveCount(1);
-    return false;
-  }
-  await action.click();
-  await expect(page.getByTestId('trainer-view-nav-coach')).toHaveAttribute('aria-current', 'page');
-  await expect(page.locator('.template-context')).toContainText(mode === 'generate' ? 'Generate' : 'Explain');
+  const label = mode === 'generate' ? 'Generate' : 'Explain';
+  const modeButton = page.locator('#plan-composer-mode');
+  await modeButton.click();
+  await page.getByRole('menuitemradio', { name: label, exact: true }).click();
+  await expect(page.getByTestId('trainer-view-nav-plan')).toHaveAttribute('aria-current', 'page');
+  await expect(modeButton).toContainText(label);
   const userCountBefore = await page.evaluate(() =>
     window.__TRAINER_BOOTSTRAP__?.conversation?.filter((entry) => entry.role === "user").length ?? 0,
   );
@@ -272,7 +266,6 @@ async function submitPlanComposerRequest(page, mode, message) {
     ),
   ).toBe(true);
   await expect(page.locator("#coach-composer")).toHaveValue("");
-  return true;
 }
 
 test.describe("Trainer three-destination shell", () => {
@@ -478,7 +471,7 @@ test.describe("Trainer three-destination shell", () => {
       await expectActiveView(page, "en-US", "plan");
 
       await expect(page.locator("[data-template=LearningHome]").first()).toBeVisible();
-      await expect(page.getByRole("region", { name: "Today's learning", exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Current learning", exact: true })).toBeVisible();
       await expect(page.locator("[data-template=NextAction]").first()).toBeVisible();
       await expect(page.locator("[data-plan-governance-disclosure]")).not.toHaveAttribute("open", "");
       await expect(page.locator("[data-plan-evidence-list]").filter({ visible: true })).toHaveCount(0);
@@ -493,7 +486,7 @@ test.describe("Trainer three-destination shell", () => {
         };
       });
       const message = `Local fixture assertion for ${mode} mode.`;
-      const submitted = await submitPlanComposerRequest(page, mode, message);
+      await submitPlanComposerRequest(page, mode, message);
       const formalPlanAfter = await page.evaluate(() => {
         const plan = window.__TRAINER_BOOTSTRAP__?.plan;
         return {
@@ -505,16 +498,10 @@ test.describe("Trainer three-destination shell", () => {
         };
       });
       expect(formalPlanAfter).toEqual(formalPlanBefore);
-      if (!submitted) {
-        // §3.7: the dock composer stays mounted on Learning; the disabled plan
-        // intent only means no plan-composer draft is seeded.
-        await expect(page.locator("#coach-composer")).toHaveCount(1);
-        continue;
-      }
       await expect.poll(() =>
         page.evaluate((expectedMessage) =>
           window.__TRAINER_BOOTSTRAP__?.conversation?.some(
-            (entry) => entry.role === "user" && entry.body === expectedMessage,
+            (entry) => entry.role === "user" && entry.body.split("\n")[0] === expectedMessage,
           ) ?? false,
         message),
       ).toBe(true);
@@ -890,7 +877,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
     await expect(card).toContainText("Build one minimal debug loop");
-    await expect(card.locator('[data-training-card-fact="verify"]')).toContainText("Verify");
+    await expect(card.locator('[data-training-card-fact="verify"]')).toContainText("Acceptance method");
     await revealTrainingCardDetails(card);
     await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
       "Return with the repro step",
@@ -1081,7 +1068,7 @@ test.describe("Trainer three-destination shell", () => {
       await expectTrainingLoop(card, "try");
       await expectTrainingCardFacts(card);
       await expect(card).toContainText(scenario.taskEvidence);
-      await expect(card.locator('[data-training-card-fact="verify"]')).toContainText("Verify");
+      await expect(card.locator('[data-training-card-fact="verify"]')).toContainText("Acceptance method");
       await expect(card.locator('[data-training-card-fact="return"]')).toContainText(
         scenario.returnEvidence,
       );
@@ -1460,9 +1447,9 @@ test.describe("Trainer three-destination shell", () => {
     await openPlanGovernanceDisclosure(page);
     await page.getByRole('button', { name: '整理证据', exact: true }).click();
     await expect(page.locator('[data-plan-evidence-row="pending"]').filter({ visible: true })).toHaveCount(0);
-    await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".template-context")).toContainText(/证据|Evidence/);
-    await expect(page.locator("#coach-composer")).toBeEditable();
+    await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
+    await expect(page.locator("#plan-composer-mode")).toContainText("证据");
+    await expect(page.locator("#coach-composer")).toBeFocused();
     const visibleMore = page.locator("main summary").filter({ hasText: /^(更多|More)$/ });
     let visibleMoreCount = 0;
     for (let index = 0; index < await visibleMore.count(); index += 1) {

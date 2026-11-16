@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { NextAction, type NextActionProps } from "./NextAction";
 
 export interface LearningHomeSlot {
@@ -8,24 +8,10 @@ export interface LearningHomeSlot {
   count?: number;
 }
 
-export interface LearningTodayView {
-  eyebrow: string;
-  title: string;
-  detail?: string;
-  progress: number;
-  done: number;
-  total: number;
-  due: number;
-  dueLabel: string;
-  remaining: number;
-  remainingLabel: string;
-}
-
 export interface LearningHomeProps {
   currentLabel: string;
   title: string;
   stage?: string;
-  today?: LearningTodayView;
   next: NextActionProps;
   nextTools?: ReactNode;
   state?: ReactNode;
@@ -95,7 +81,6 @@ export function LearningHome({
   currentLabel,
   title,
   stage,
-  today,
   next,
   nextTools,
   state,
@@ -112,48 +97,22 @@ export function LearningHome({
       data-template="LearningHome"
       data-plan-primary="true"
     >
-      {today ? (
-        <section className="learning-today" data-learning-section="today" aria-label={today.eyebrow}>
-          {headerActions ? (
-            <div className="learning-today__actions">{headerActions}</div>
-          ) : null}
-          <div className="learning-today__copy">
-            <p className="eyebrow">{today.eyebrow}</p>
-            <h2>{today.title}</h2>
-            {today.detail ? <p className="learning-today__detail">{today.detail}</p> : null}
-            <div className="learning-today__stats">
-              <span><strong>{today.due}</strong>{today.dueLabel}</span>
-              <span><strong>{today.remaining}</strong>{today.remainingLabel}</span>
-            </div>
-          </div>
-          <div
-            className="learning-today__ring"
-            style={{ "--learning-progress": `${today.progress}%` } as CSSProperties}
-            aria-label={`${today.done}/${today.total}`}
-          >
-            <span>{today.done}/{today.total}</span>
-          </div>
-        </section>
-      ) : (
-        <header className="learning-cards__header">
-          <p className="eyebrow">{currentLabel}</p>
-          <h2>{title}</h2>
-          {stage || headerActions ? (
-            <div className="learning-cards__subhead">
-              {stage ? <p className="template-metadata">{stage}</p> : <span />}
-              {headerActions ? (
-                <div className="template-learning-home__header-actions">{headerActions}</div>
-              ) : null}
-            </div>
-          ) : null}
-        </header>
-      )}
       <div className="learning-card-stack">
         <section
           className="learning-card learning-card--now"
           data-learning-section="current"
           data-learning-card-group="current"
+          aria-label={currentLabel}
         >
+          <header className="learning-cards__header">
+            <div>
+              {stage ? <p className="template-metadata">{stage}</p> : null}
+              <h2>{title}</h2>
+            </div>
+            {headerActions ? (
+              <div className="template-learning-home__header-actions">{headerActions}</div>
+            ) : null}
+          </header>
           {state ? state : <NextAction {...next} />}
           {nextTools}
         </section>

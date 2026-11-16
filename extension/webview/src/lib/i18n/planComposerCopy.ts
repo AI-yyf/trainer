@@ -32,7 +32,7 @@ const planComposerCopy: Record<ComposerLanguage, PlanComposerCopy> = {
         label: "解释这一步",
         header: "解释当前阶段",
         hint: "说明为什么当前先做这一步、何时算完成，以及怎么做最小验证。",
-        placeholder: "讨论当前阶段、为什么现在做，以及最小验证标准。",
+        placeholder: "问当前这一步",
         accessibilityLabel: "提交阶段解释或澄清请求",
         primaryPrompt: {
           label: "解释阶段",
@@ -47,7 +47,7 @@ const planComposerCopy: Record<ComposerLanguage, PlanComposerCopy> = {
         label: "生成计划",
         header: "生成或重排正式计划",
         hint: "生成第一版正式计划，或把当前主线重排成更清晰的阶段。",
-        placeholder: "生成、重排，或冻结当前正式计划。",
+        placeholder: "写下目标或调整要求",
         accessibilityLabel: "提交正式计划生成或重排请求",
         primaryPrompt: {
           label: "生成计划",
@@ -62,7 +62,7 @@ const planComposerCopy: Record<ComposerLanguage, PlanComposerCopy> = {
         label: "证据",
         header: "记下这次结果",
         hint: "改完了、卡住了，还是结果对不上，写在这里。",
-        placeholder: "改完了、卡住了，还是结果对不上？",
+        placeholder: "写下结果和验证方式",
         accessibilityLabel: "提交计划证据整理请求",
         primaryPrompt: {
           label: "整理证据",
@@ -77,7 +77,7 @@ const planComposerCopy: Record<ComposerLanguage, PlanComposerCopy> = {
         label: "收小一步",
         header: "把卡点缩成更小一步",
         hint: "把卡点缩成可恢复的小步骤，并说明应该退回到哪里。",
-        placeholder: "把卡点缩成更小的下一步，先别直接改正式计划。",
+        placeholder: "写下你卡在哪里",
         accessibilityLabel: "提交计划卡点收紧请求",
         primaryPrompt: {
           label: "缩小下一步",

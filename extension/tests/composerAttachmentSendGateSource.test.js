@@ -32,7 +32,7 @@ test('image attachments keep staging separate from the verified send gate', () =
   );
   assert.match(appSource, /operationReliabilityPhase: streaming\.reliabilityPhase,/);
   assert.match(appSource, /submitBlockedReason=\{imageAttachmentBlockedReason\}/);
-  assert.match(appSource, /attachments=\{composerAttachments\}[\s\S]*onAttachmentsChange=\{setComposerAttachments\}/);
+  assert.match(appSource, /attachments=\{isResourceSearchMode \? undefined : composerAttachments\}[\s\S]*onAttachmentsChange=\{isResourceSearchMode \? undefined : setComposerAttachments\}/);
   assert.match(
     appSource,
     /const requiresVerifiedAgentTools = Boolean\(resolvedFormalPlanMutation\);[\s\S]*if \(requiresVerifiedAgentTools && !providerSupportsFormalPlanTools\)/,

@@ -141,7 +141,14 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
 
     const start = await actionCount(page);
     const search = page.locator(".resources-knowledge__search input");
-    await search.fill("owner");
+    const composer = page.locator("#coach-composer");
+    const mode = page.locator("#resource-composer-mode");
+    await mode.click();
+    await page.getByRole("menuitemradio", { name: "Search", exact: true }).click();
+    await expect(composer).toBeFocused();
+    await composer.fill("owner");
+    await composer.press("Enter");
+    await expect(search).toHaveValue("owner");
     const action = await waitForHostAction(page, start, (item) =>
       item.type === "command/execute" && item.payload.commandId === "trainer.resource.search",
     );
@@ -169,13 +176,14 @@ test.describe("Trainer Resources lifecycle through the VS Code host bridge", () 
     expect(opened.payload).toEqual({ resourceId: b.id, line: 3 });
     await expect(anchor).toContainText("B rotation notes.md · L3");
 
-    const composer = page.locator("#coach-composer");
+    await mode.click();
+    await page.getByRole("menuitemradio", { name: "Make cards", exact: true }).click();
     await composer.fill("Who is the owner in this document?");
     await page.locator(".composer__send").click();
     const sent = await waitForHostAction(page, start, (item) => item.type === "session/sendStreamMessage");
     expect(sent.payload).toMatchObject({
       resourceIds: [b.id],
-      resourceComposerIntent: { currentResource: { resourceId: b.id, versionId: "rv-b", line: 3 } },
+      resourceComposerIntent: { mode: "cards", currentResource: { resourceId: b.id, versionId: "rv-b", line: 3 } },
     });
     await expect(anchor).toBeVisible();
     await anchor.getByRole("button", { name: "Clear", exact: true }).click();

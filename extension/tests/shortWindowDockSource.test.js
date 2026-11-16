@@ -1,7 +1,6 @@
 'use strict';
 
-// Source contract for T-0022: short windows collapse secondary dock chrome so
-// the primary action and learning content keep their space.
+// Short windows compress the dock while keeping selected context visible.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -12,9 +11,9 @@ const composerCss = fs.readFileSync(
   'utf8',
 );
 
-test('short windows collapse the dock anchor and shrink the frame', () => {
+test('short windows compress the anchor padding and shrink the frame', () => {
   assert.match(composerCss, /@media \(max-height: 700px\)/);
-  assert.match(composerCss, /\.template-context\[data-dock-anchor="true"\]/);
+  assert.match(composerCss, /\.composer__attachments\[data-dock-anchor="true"\]\s*\{\s*padding-block: 0;/);
   assert.match(composerCss, /min-height: 30px;/);
 });
 

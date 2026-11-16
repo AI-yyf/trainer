@@ -296,7 +296,7 @@ test('training return is an empty-draft command and handoff composer copy is loc
   );
   assert.match(appSource, /allowEmptySubmit=\{allowEmptyTrainingReturnSubmission\}/);
   assert.match(appSource, /inputReadOnly=\{allowEmptyTrainingReturnSubmission\}/);
-  assert.match(appSource, /submitAriaLabel=\{localizedTrainingComposerSubmitAriaLabel\}/);
+  assert.match(appSource, /submitAriaLabel=\{isResourceSearchMode \? resourceSearchModeLabel : localizedTrainingComposerSubmitAriaLabel\}/);
 
   assert.match(composerSource, /allowEmptySubmit\?: boolean;/);
   assert.match(composerSource, /inputReadOnly\?: boolean;/);

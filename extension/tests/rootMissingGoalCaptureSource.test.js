@@ -30,7 +30,7 @@ test('a missing workspace root preserves a typed goal instead of disabling the C
   );
   assert.match(
     source,
-    /submitDisabled=\{\s*canCaptureGoalBeforeWorkspaceSetup\s*\?\s*!normalizedDraft\s*\|\|\s*imageAttachmentSendBlocked\s*:\s*composerSendBlocked\s*\|\|\s*imageAttachmentSendBlocked\s*\}/,
+    /submitDisabled=\{\s*isResourceSearchMode\s*\? !normalizedDraft\s*:\s*canCaptureGoalBeforeWorkspaceSetup\s*\?\s*!normalizedDraft\s*\|\|\s*imageAttachmentSendBlocked\s*:\s*composerSendBlocked\s*\|\|\s*imageAttachmentSendBlocked\s*\}/,
   );
   assert.match(copyTypes, /\| "workspaceAdmissionGoalSaved"/);
   assert.equal((copy.match(/workspaceAdmissionGoalSaved:/g) ?? []).length, 8);

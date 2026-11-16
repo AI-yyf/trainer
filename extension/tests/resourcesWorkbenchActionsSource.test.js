@@ -119,7 +119,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(appSource, /<ResourcesWorkbenchView[\s\S]*?resources=\{liveResources\}/);
   assert.match(appSource, /<ResourcesWorkbenchView[\s\S]*?deletedResources=\{data\.deletedResources\}/);
   assert.match(appSource, /onRefreshDeletedResources=/);
-  assert.match(appSource, /onImportFiles=\{\(\) =>/);
+  assert.match(appSource, /onImportFiles=\{importResourceFiles\}/);
   assert.match(appSource, /payloadMode: "files",/);
   assert.match(appSource, /onImportFolder=\{\(\) =>/);
   assert.match(appSource, /payloadMode: "folder",/);

@@ -32,7 +32,7 @@ const resourceComposerCopy: Record<ComposerLanguage, ResourceComposerCopy> = {
         header: "定位下一份资料",
         summary: "资料 · 定位",
         hint: "找出现在最值得打开的资料。",
-        placeholder: "搜一份资料",
+        placeholder: "按用途找资料",
         accessibilityLabel: "提交资料定位或打开请求",
         primaryPrompt: {
           label: "找文件",
@@ -48,7 +48,7 @@ const resourceComposerCopy: Record<ComposerLanguage, ResourceComposerCopy> = {
         header: "补齐缺少的资料",
         summary: "资料 · 补齐",
         hint: "判断还缺什么，是否值得导入。",
-        placeholder: "讨论缺少的资料、要导入什么，以及放在哪里。",
+        placeholder: "这一步还缺什么资料？",
         accessibilityLabel: "提交资料补齐请求",
         primaryPrompt: {
           label: "找缺口",
@@ -64,7 +64,7 @@ const resourceComposerCopy: Record<ComposerLanguage, ResourceComposerCopy> = {
         header: "整理资料结构",
         summary: "资料 · 整理",
         hint: "把资料分组得更清楚、更好找。",
-        placeholder: "整理资料结构、项目文件夹或命名方式。",
+        placeholder: "这些资料想怎么分组？",
         accessibilityLabel: "提交资料整理请求",
         primaryPrompt: {
           label: "整理结构",
@@ -80,7 +80,7 @@ const resourceComposerCopy: Record<ComposerLanguage, ResourceComposerCopy> = {
         header: "把资料变成可练习的卡片",
         summary: "资料 · 卡片",
         hint: "挑出最值得练习的内容。",
-        placeholder: "挑选最值得转成训练卡或闪卡的资料。",
+        placeholder: "用哪份资料做练习？",
         accessibilityLabel: "提交资料转卡请求",
         primaryPrompt: {
           label: "生成卡片",

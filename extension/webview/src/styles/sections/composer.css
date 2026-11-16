@@ -165,17 +165,16 @@
   border-radius: var(--composer-dock-radius);
 }
 
-.composer-shell--quiet .composer-mode-control__trigger {
-  width: var(--composer-dock-hit);
-  height: var(--composer-dock-hit);
-  padding: 0;
-  max-width: none;
+.composer-shell--quiet .composer-mode-control__trigger--label {
+  width: auto;
+  max-width: min(15ch, 38vw);
+  padding-inline: var(--space-1);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-xs);
 }
 
-.composer-shell--quiet .composer-mode-control__label {
-  overflow: visible;
-  text-overflow: clip;
-  max-width: none;
+.composer-mode-control__trigger--label svg {
+  flex: none;
 }
 
 .composer-shell--quiet .composer__clear-btn svg {
@@ -1561,13 +1560,10 @@
   white-space: nowrap;
 }
 
-/* T-0022: on short windows the dock must never squeeze out the learning
-   content or hide the primary send action. Collapse secondary dock chrome
-   (context anchor) and shrink the frame; the context anchor remains
-   reachable — its chips move into the message when relevant. */
+/* The context stays visible while the draft area adapts to short windows. */
 @media (max-height: 700px) {
-  .trainer-shell .template-context[data-dock-anchor="true"] {
-    display: none;
+  .trainer-shell .composer__attachments[data-dock-anchor="true"] {
+    padding-block: 0;
   }
 
   .trainer-shell .composer__frame textarea {

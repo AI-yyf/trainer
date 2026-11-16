@@ -96,14 +96,15 @@ for (const language of ['zh-CN', 'en-US']) {
       await page.setViewportSize({ width: language === 'zh-CN' ? 460 : 340, height: 820 });
       await seed(page, language, recovered);
       const card = page.locator('[data-training-card-id]');
+      const brief = card.locator('[data-training-brief]');
       await expect(card).toHaveAttribute('data-training-card-id', 'author-card');
+      await expect(brief.locator('[data-training-card-fact=deliverable]')).toContainText(author.deliverable);
+      await expect(brief.locator('[data-training-card-fact=verify]')).toContainText(author.validationMethod.replace(/`/g, ''));
       const details = page.locator('[data-training-card-details=true]');
       if (await details.count()) await details.locator(':scope > summary').click();
       await expect(card.locator('.template-activity-header')).toContainText(author.title);
       await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('workspace_id isolation');
       await expect(details).toContainText(author.problemStatement);
-      await expect(details.locator('[data-training-card-fact=deliverable]')).toHaveText(author.deliverable);
-      await expect(details.locator('[data-training-card-fact=verify]')).toContainText(author.validationMethod.replace(/`/g, ''));
       await expect(card).toContainText(author.deliverable);
       await expect(card).not.toContainText('OLD_FORMAL_TASK_TITLE');
       const screenshot = test.info().outputPath('actual-mixed-author-card.png');
@@ -209,25 +210,25 @@ for (const language of ['zh-CN', 'en-US']) {
     await page.setViewportSize({ width: language === 'zh-CN' ? 460 : 340, height: 900 });
     const foreignAction = await seedRestoredScenario(page, language);
     const card = page.locator('[data-training-card-id]');
+    const brief = card.locator('[data-training-brief]');
     await expect(card).toHaveAttribute('data-training-card-id', 'restored-scenario');
     await expect(card.locator('.template-activity-header')).toContainText('Scenario lab: FastAPI receipt');
     const details = page.locator('[data-training-card-details=true]');
     await details.locator(':scope > summary').click();
-    await expect(details).toContainText(scenarioSummary);
+    await expect(brief).toContainText(scenarioSummary);
     const observed = await card.evaluate(el => ({ text: el.innerText,
-      body: el.querySelector('.template-focused-practice__phase')?.innerText,
+      body: el.querySelector('[data-training-brief]')?.innerText,
       completion: el.querySelector('[data-training-card-fact=deliverable]')?.textContent,
       verification: el.querySelector('[data-training-card-fact=verify]')?.textContent }));
     await test.info().attach('actual-restored-scenario-fields', { body: JSON.stringify(observed, null, 2), contentType: 'application/json' });
     const shot = test.info().outputPath('restored-scenario-missing-fields.png');
     await page.screenshot({ path: shot, animations: 'disabled' });
     await test.info().attach('restored-scenario-missing-fields', { path: shot, contentType: 'image/png' });
-    await expect(card.locator('.template-focused-practice__phase')).toContainText(scenarioSummary);
     await expect(card).not.toContainText('restore_history');
     await expect(card).not.toContainText('CONTROL_REVIEW_OUTCOME');
     await expect(card).not.toContainText(foreignAction);
     await expect(card).not.toContainText('foreign_workspace_id');
-    await expect(details.locator('[data-training-card-fact=deliverable]')).toHaveText(scenarioSummary);
+    await expect(brief.locator('[data-training-card-fact=deliverable]')).toContainText(scenarioSummary);
     await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('FastAPI receipt');
     await page.locator('.app-shell-nav').getByRole('button', { name: language === 'zh-CN' ? '学习' : 'Learning', exact: true }).click();
     const next = page.locator('[data-template=NextAction]').filter({ has: page.locator('[data-action-intent=resume_training]') });

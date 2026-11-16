@@ -98,10 +98,8 @@
 .template-learning-home__header--row .eyebrow { margin: 0; }
 .template-learning-home > .template-next-action { padding-top: 10px; }
 
-.template-practice-response { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding-block: 16px; }
-.template-practice-response label { font-size: var(--trainer-font-sm); font-weight: 600; }
-.template-practice-response textarea { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-0); color: var(--fg-0); font: inherit; line-height: 1.5; resize: vertical; }
-.template-practice-response textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.template-practice-response.composer-shell--quiet { padding: 0; }
+.template-practice-response.composer-shell--quiet .composer { max-width: none; }
 .template-surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .template-surface[hidden] { display: none; }
 .app-shell-overlay { position: absolute; inset: 0; z-index: 10; }
@@ -185,7 +183,33 @@
 .template-resource-reader > .template-metadata { margin-bottom: 16px; overflow-wrap: anywhere; }
 .template-resource-reader > button { margin-top: 16px; }
 .template-reader-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
-.template-focused-practice__phase { padding-block: 8px 16px; }
+.template-focused-practice__brief {
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+}
+.template-focused-practice__brief .template-activity-header {
+  gap: var(--space-1);
+  padding: 0 0 var(--space-2);
+}
+.template-focused-practice__brief .template-activity-header h2 {
+  overflow-wrap: anywhere;
+  font-size: var(--trainer-font-lg);
+  font-weight: 600;
+}
+.template-focused-practice__requirements {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+}
+.template-focused-practice__requirements .template-metadata { display: block; font-weight: 600; }
+.template-focused-practice__requirements p { margin-block: 0; }
+.template-focused-practice__requirements .training-card-list { margin-block: var(--space-1) 0; }
+.template-focused-practice__actions { margin-top: var(--space-3); }
+.template-focused-practice__phase { padding-block: var(--space-2); }
 .template-focused-practice__phase p { line-height: 1.6; }
 .template-focused-practice__phase > button { margin-top: 12px; }
 .template-verification h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--fg-0); font-size: var(--trainer-font-md); font-weight: 600; }
@@ -193,9 +217,7 @@
 .template-verification ul { margin: 12px 0; padding-inline-start: 20px; }
 .template-verification li { margin-block: 4px; }
 .template-verification pre { overflow: auto; max-height: 320px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.template-attachment-input { display: flex; flex-wrap: wrap; gap: 8px; color: var(--fg-muted); }
-.template-attachment-input input { max-width: 100%; font: inherit; font-size: var(--trainer-font-xs); }
-.template-attachment, .template-context { display: flex; align-items: center; gap: 12px; min-width: 0; padding-block: 4px; color: var(--fg-muted); font-size: var(--trainer-font-xs); }
+.template-context { display: flex; align-items: center; gap: 12px; min-width: 0; padding-block: 4px; color: var(--fg-muted); font-size: var(--trainer-font-xs); }
 /* At 200% font a long label (es "Tras el envío") plus the two answer-mode
    buttons do not fit on one 420px line; without wrapping the label shrinks to
    one character per line. Give the label a real flex basis and let the buttons

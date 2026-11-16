@@ -21,7 +21,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 
-test('the current card identity and focus remain available in one collapsed task disclosure', () => {
+test('the current card presents requirements and keeps supplemental facts in one collapsed disclosure', () => {
   const { render } = require('./templateAssertions');
   const previousWindow = globalThis.window;
   globalThis.window = { location: { search: '', hash: '', origin: 'http://localhost' },
@@ -48,9 +48,15 @@ test('the current card identity and focus remain available in one collapsed task
       const openingTag = html.slice(html.lastIndexOf('<details', detailsStart), detailsStart);
       assert.doesNotMatch(openingTag, /\bopen\b/);
       assert.equal((html.match(/data-training-card-details="true"/g) ?? []).length, 1);
+      const briefStart = html.indexOf('data-training-brief="true"');
+      const phaseStart = html.indexOf('class="template-focused-practice__phase"');
+      const brief = html.slice(briefStart, phaseStart);
+      assert.ok(briefStart >= 0 && phaseStart > briefStart);
+      assert.match(brief, /data-training-card-fact="deliverable">/);
+      assert.match(brief, /data-training-card-fact="verify">/);
       const order = [...details.matchAll(/data-training-card-fact="([^"]+)"/g)].map(match => match[1]);
-      assert.deepEqual(order.slice(0, currentFocus ? 5 : 4),
-        [...(currentFocus ? ['focus'] : []), 'why-now', 'deliverable', 'verify', 'return']);
+      assert.deepEqual(order.slice(0, currentFocus ? 3 : 2),
+        [...(currentFocus ? ['focus'] : []), 'why-now', 'return']);
       if (currentFocus) assert.ok(details.includes(currentFocus));
       assert.doesNotMatch(details, /training-response|coach-composer/);
     }
