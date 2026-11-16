@@ -406,7 +406,7 @@ test('buildCapturePayload never sends include_docs for non-repo kinds', () => {
   assert.equal('include_docs' in payload, false);
 });
 
-test('buildCoachDraftPayload requires a selection and carries the client id', () => {
+test('browser draft payload preserves the source location and retry identity', () => {
   assert.equal(TrainerCapture.buildCoachDraftPayload({ selection: '   ' }), null);
   const payload = TrainerCapture.buildCoachDraftPayload({
     selection: '  explain this closure  ',
@@ -416,10 +416,13 @@ test('buildCoachDraftPayload requires a selection and carries the client id', ()
   });
   assert.deepEqual(payload, {
     selection: 'explain this closure',
-    url: 'https://example.com/a',
+    url: 'https://example.com/a/?utm_source=x',
     title: 'Example',
     client_id: 'bd-1'
   });
+  const page = TrainerCapture.buildCoachDraftPayload({ url: 'https://example.com/paper.pdf#page=7' });
+  assert.equal(page.selection, '');
+  assert.equal(page.url, 'https://example.com/paper.pdf#page=7');
   const generated = TrainerCapture.buildCoachDraftPayload({ selection: 'hi' });
   assert.match(generated.client_id, /^bd-/);
 });

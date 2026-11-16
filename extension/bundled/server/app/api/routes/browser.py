@@ -29,14 +29,18 @@ polling for gets an error, never another project's captures.
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential, BrowserPairingError
+from ...core.event_ledger import EVENT_BROWSER_SOURCE_RECEIVED
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
+
+logger = logging.getLogger(__name__)
 
 
 def _browser_bridge(runtime: TrainerRuntime) -> BrowserBridgeService:
@@ -349,6 +353,16 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
                 status_code=exc.status_code,
                 detail={"code": exc.code, "message": exc.detail},
             ) from exc
+        draft_id = str(queued.get("draft_id") or "")
+        if draft_id and not queued.get("duplicate") and runtime.event_ledger is not None:
+            try:
+                runtime.event_ledger.record_event(
+                    EVENT_BROWSER_SOURCE_RECEIVED, actor="learner", scope="resources",
+                    project_id=credential.workspace_id, idempotency_key=f"browser-source:{draft_id}",
+                    payload_ref={"draft_id": draft_id},
+                )
+            except Exception:
+                logger.exception("Could not record browser intake in the event ledger")
         return {"workspace_id": credential.workspace_id, **queued}
 
     def host_workspace_scope(raw_workspace_id: object, raw_session_id: object) -> str:

@@ -225,7 +225,7 @@ test('Resources keeps the first screen focused and folds secondary governance ac
   const viewSource = readResourcesViewSource();
   const stylesSource = readStylesSource();
 
-  assert.match(viewSource, /resources-knowledge__search/);
+  assert.match(viewSource, /submittedSearchQuery/);
   assert.match(viewSource, /resources-knowledge__open-action/);
   // Reading-first first screen: no batch-selection bar; per-resource delete
   // moved into the reader detail actions.
@@ -303,7 +303,7 @@ test('Resources keeps a slow index refresh single-flight across rapid clicks', (
   );
   assert.match(viewSource, /aria-busy=\{isIndexRefreshing\}/);
 
-  assert.match(appSource, /type ResourceOperationKind =\n  \| "delete"\n  \| "restore"\n  \| "search"\n  \| "index"\n  \| "upload"\n  \| "capture"\n  \| "organize"\n  \| "export";/);
+  assert.match(appSource, /type ResourceOperationKind =[\s\S]*?\| "index"/);
   assert.match(appSource, /const requestResourceIndex = useCallback\(\(\): Promise<void> =>/);
   assert.match(appSource, /kind: "index",[\s\S]*?commandId: trainerCommands\.indexResources,[\s\S]*?__trainerResourceOperationId: requestId/);
   assert.match(appSource, /isBrowserPreview[\s\S]*?: requestResourceIndex/);
@@ -462,13 +462,9 @@ test('Resources preserves an explicit selection across views and records unmount
   assert.match(viewSource, /onResourceSelectionChange\?\.\(selectedResourceContextIds, "selection"\);/);
   assert.match(viewSource, /onResourceSelectionChange\?\.\(\[\], "unmount"\);/);
   assert.match(appSource, /const turnActiveView = activeViewOverride \?\? activeView;/);
-  assert.match(
-    appSource,
-    /const \[resourceConversationContextIds, setResourceConversationContextIds\] = useState<string\[\]>\(\[\]\);/,
-  );
-  assert.match(appSource, /if \(reason !== "unmount"\) \{\s*setResourceConversationContextIds\(resourceIds\);/);
-  assert.match(appSource, /initialResourceContextIds=\{resourceConversationContextIds\}/);
-  assert.match(appSource, /: selectedResourceContextIds\.length > 0\s*\? selectedResourceContextIds\s*:\s*resourceConversationContextIds;/);
+  assert.match(appSource, /resourceSelectionBySession\[composerSessionKey\]/);
+  assert.match(appSource, /initialResourceContextIds=\{selectedResourceContextIds\}/);
+  assert.match(appSource, /view === "resources" \? selectedResourceContextIds : \[\]/);
   assert.match(appSource, /const resourceConversationContextLabel = useMemo\(/);
   assert.match(appSource, /activeView === "coach" && resourceConversationContextLabel/);
   assert.match(appSource, /setResourceConversationContextIds\(\[\]\);/);
@@ -524,7 +520,8 @@ test('Resources starts a review card only from fresh, trusted, indexed material 
   assert.match(viewSource, /localize\(language, "emptyOpenHint"\)/);
 
   assert.match(appSource, /const requestResourceTrainingHandoff = useCallback/);
-  assert.match(appSource, /source: "resource_knowledge",[\s\S]*?cardType: "flash",[\s\S]*?submode: "flash"/);
+  assert.match(appSource, /cardType: "flash" \| "practice" = "flash"/);
+  assert.match(appSource, /source: linkedPractice\?\.filePractice \? "formal_plan_step" : "resource_knowledge",[\s\S]*?cardType,[\s\S]*?submode: cardType/);
   assert.match(appSource, /result\.outcome === "ready"[\s\S]*?setActiveView\("training"\)/);
   assert.match(appSource, /isBrowserPreview=\{browserPreviewFixture\}/);
   assert.match(

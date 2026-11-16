@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from typing import Any, cast
 from urllib.parse import quote
@@ -11,6 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential
+from ...core.event_ledger import EVENT_RESOURCE_INDEXED, EVENT_RESOURCE_LINKED
 from ...core.models import (
     LibraryAsset,
     LibraryAssetLifecycleRequest,
@@ -52,6 +54,7 @@ from ...resources.library import (
 )
 from ...resources.library_copy import library_message
 from ...resources.library_downloads import ArtifactNote
+from ...resources.version_check import ResourceVersionCheckResult, effective_capture_tags
 from ...training.course_fork import fork_course_manifest
 from ...training.course_pack import build_course_manifest, inspect_course_manifest
 from ...workspace.authority import PermissionLevel, WorkspaceAuthority
@@ -97,6 +100,27 @@ class CourseExportRequest(BaseModel):
     workspace_id: str | None = Field(default=None, alias="workspaceId")
     plan_id: str | None = Field(default=None, alias="planId")
     subject_family: str = ""
+
+
+class LearningSource(BaseModel):
+    resource_id: str
+    version_id: str = ""
+    content_hash: str = ""
+
+
+class LinkLearningSourcesRequest(BaseModel):
+    workspace_id: str | None = None
+    session_id: str | None = None
+    plan_id: str
+    expected_revision: int = Field(ge=0)
+    stage_id: str
+    sources: list[LearningSource] = Field(min_length=1, max_length=50)
+
+
+class CheckResourceVersionsRequest(BaseModel):
+    workspace_id: str | None = None
+    session_id: str | None = None
+    sources: list[LearningSource] = Field(min_length=1, max_length=4)
 
 
 def capture_deep_link(resource_id: str) -> str:
@@ -415,6 +439,20 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         refresh_asset_sessions(asset)
         return {"asset": asset_response(asset)}
 
+    def record_resource_indexed(workspace_id: str, resource: ResourceRecord) -> None:
+        if runtime.event_ledger is None or resource.index_status != "indexed":
+            return
+        try:
+            runtime.event_ledger.record_event(
+                EVENT_RESOURCE_INDEXED, project_id=workspace_id, scope="resources",
+                idempotency_key=f"resource-indexed:{resource.id}:{resource.content_hash or ''}",
+                payload_ref={"resource_id": resource.id, "title": resource.name,
+                             "content_hash": resource.content_hash or "",
+                             "version_id": resource.version_id or ""},
+            )
+        except Exception:
+            logger.exception("Could not record indexed resource in the event ledger")
+
     @router.post("/resource/upload", response_model=ResourceRecord)
     def resource_upload(request: ResourceUploadRequest) -> ResourceRecord:
         workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
@@ -478,6 +516,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ) from exc
         except (FileNotFoundError, IsADirectoryError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        record_resource_indexed(workspace_id, indexed)
         return indexed
 
     @router.post("/resource/canonicalize/analyze")
@@ -656,7 +695,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         wanted_hash = str(content_hash or "").strip()
 
         def matches_intent(resource: ResourceRecord) -> bool:
-            tags = tuple(resource.tags)
+            tags = effective_capture_tags(resource)
             if intent_tag:
                 return intent_tag in tags
             # A full snapshot is a different operation from an honest link or
@@ -673,7 +712,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             logger.warning("Capture dedup scan failed for workspace %s.", workspace_id, exc_info=True)
             return None
         for resource in resources:
-            if url_key and url_key in resource.tags:
+            if url_key and url_key in effective_capture_tags(resource):
                 return resource
         if wanted_hash:
             for resource in resources:
@@ -685,6 +724,8 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         workspace_id: str,
         resource_id: str,
         focus_id: str,
+        plan_id: str | None = None,
+        expected_revision: int | None = None,
     ) -> str:
         """Bind a captured resource to a plan stage (best-effort).
 
@@ -693,29 +734,122 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         the extension only needs to know that the binding did not happen.
         """
 
+        resource = runtime.repository.get_resource(workspace_id, resource_id)
+        if resource is None:
+            return "source_missing"
+        return bind_resources_to_learning_focus(
+            workspace_id, [resource], focus_id, plan_id, expected_revision
+        )
+
+    def bind_resources_to_learning_focus(
+        workspace_id: str,
+        resources: list[ResourceRecord],
+        focus_id: str,
+        plan_id: str | None,
+        expected_revision: int | None,
+    ) -> str:
         plan = runtime.repository.get_latest_plan(workspace_id)
         if plan is None:
             return "no_plan"
+        if plan_id and (plan.id != plan_id or plan.frozen):
+            return "plan_changed"
         stage = next((item for item in plan.stages if item.id == focus_id), None)
         if stage is None:
             return "focus_not_found"
-        if resource_id in stage.resources:
+        additions = [resource for resource in resources if resource.id not in stage.resources]
+        if not additions:
             return "already_bound"
-        stage.resources = [*stage.resources, resource_id]
-        try:
-            from ...training.plan_revision import save_plan_advancing_revision
+        stage.resources = [*stage.resources, *(resource.id for resource in additions)]
+        from ...training.plan_revision import (
+            PlanRevisionConflict,
+            save_plan_advancing_revision,
+            save_plan_checked,
+        )
 
-            save_plan_advancing_revision(runtime.repository, workspace_id, plan)
+        try:
+            if expected_revision is None:
+                save_plan_advancing_revision(runtime.repository, workspace_id, plan)
+            else:
+                save_plan_checked(runtime.repository, workspace_id, plan, expected_revision=expected_revision)
+        except PlanRevisionConflict:
+            return "plan_changed"
         except Exception:
             logger.warning(
-                "Capture focus binding failed for resource %s in workspace %s.",
-                resource_id,
+                "Learning focus binding failed for stage %s in workspace %s.",
+                focus_id,
                 workspace_id,
                 exc_info=True,
             )
             return "write_failed"
+        if runtime.event_ledger is not None:
+            for resource in additions:
+                try:
+                    version = runtime.resource_service.version_store.current_version(
+                        workspace_id, resource.id
+                    ) or {}
+                    runtime.event_ledger.record_event(
+                        EVENT_RESOURCE_LINKED,
+                        project_id=workspace_id,
+                        scope="learning",
+                        actor="learner",
+                        idempotency_key=f"resource-linked:{plan.id}:{focus_id}:{resource.id}",
+                        payload_ref={
+                            "resource_id": resource.id,
+                            "plan_id": plan.id,
+                            "stage_id": focus_id,
+                            "title": resource.name,
+                            "version_id": version.get("version_id", ""),
+                            "content_hash": resource.content_hash or "",
+                        },
+                    )
+                except Exception:
+                    logger.exception("Could not record resource binding in the event ledger")
         refresh_workspace_sessions(workspace_id)
         return "bound"
+
+    @router.post("/resources/check-versions")
+    def check_source_versions(request: CheckResourceVersionsRequest) -> list[ResourceVersionCheckResult]:
+        workspace_id = deps.trusted_write_workspace_id(
+            session_id=request.session_id, workspace_id=request.workspace_id,
+        )
+
+        def check(source: LearningSource) -> ResourceVersionCheckResult:
+            return runtime.resource_service.check_source_version(
+                workspace_id, source.resource_id, source.version_id, source.content_hash,
+            )
+
+        with ThreadPoolExecutor(max_workers=len(request.sources)) as pool:
+            return list(pool.map(check, request.sources))
+
+    @router.post("/resources/link-learning")
+    def link_learning_sources(request: LinkLearningSourcesRequest) -> dict[str, str]:
+        workspace_id = deps.trusted_write_workspace_id(
+            session_id=request.session_id,
+            workspace_id=request.workspace_id,
+        )
+        resources: dict[str, ResourceRecord] = {}
+        for source in request.sources:
+            resource = runtime.repository.get_resource(workspace_id, source.resource_id)
+            version = runtime.resource_service.version_store.current_version(
+                workspace_id, source.resource_id
+            ) or {}
+            if (
+                resource is None
+                or (source.version_id and (
+                    version.get("version_id") != source.version_id
+                    or version.get("content_hash") != source.content_hash
+                ))
+                or (resource.content_hash or "") != source.content_hash
+            ):
+                raise HTTPException(status_code=409, detail="A source changed. Confirm the learning link again.")
+            resources[resource.id] = resource
+        binding = bind_resources_to_learning_focus(
+            workspace_id, list(resources.values()), request.stage_id,
+            request.plan_id, request.expected_revision,
+        )
+        if binding not in {"bound", "already_bound"}:
+            raise HTTPException(status_code=409, detail="The learning stage changed. Confirm the link again.")
+        return {"binding": binding}
 
     def _capture_response(
         resource: ResourceRecord,
@@ -755,7 +889,8 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             # cannot answer for it, so the capture runs again.
             return None
         replayed_path = str(replay.get("saved_path") or "").strip() or None
-        return _capture_response(resource, deduped=True, saved_path=replayed_path)
+        return _capture_response(resource, deduped=True, saved_path=replayed_path,
+                                 focus_binding=str(replay.get("focus_binding") or ""))
 
     @router.post("/resources/capture", response_model=ResourceCaptureResponse)
     def resource_capture(
@@ -863,7 +998,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             warnings: list[str] = []
             if request.kind != "github_repo" or not request.include_docs:
                 return resource, warnings
-            if "docs-supplemented" in (resource.tags or []):
+            if "docs-supplemented" in effective_capture_tags(resource):
                 return resource, warnings
             section, docs_warning = github_docs_section(request.url)
             if docs_warning or not section:
@@ -882,9 +1017,10 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             if "Repository docs/ layout" in text:
                 return resource, warnings
             snapshot_path.write_text(text + "\n" + section, encoding="utf-8")
-            updated = resource.model_copy(
-                update={"tags": [*(resource.tags or []), "docs-supplemented"]}
-            )
+            updated = resource.model_copy(update={
+                "tags": [*resource.tags, "docs-supplemented"],
+                "capture_provenance_tags": [*effective_capture_tags(resource), "docs-supplemented"],
+            })
             runtime.repository.save_resource(workspace_id, updated)
             try:
                 runtime.resource_service.index(
@@ -929,7 +1065,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 focus_id = str(request.bind_focus_id or "").strip()
                 if focus_id:
                     focus_binding = bind_capture_to_learning_focus(
-                        workspace_id, existing.id, focus_id
+                        workspace_id, existing.id, focus_id, request.bind_plan_id, request.bind_plan_revision
                     )
                 if bridge is not None and client_capture_id:
                     bridge.remember_capture(
@@ -937,6 +1073,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                         {
                             "resource_id": existing.id,
                             "recorded_at": existing.fetched_at or "",
+                            "focus_binding": focus_binding,
                             "saved_path": download.relative_path if download else "",
                         },
                     )
@@ -986,7 +1123,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             focus_id = str(request.bind_focus_id or "").strip()
             if focus_id:
                 focus_binding = bind_capture_to_learning_focus(
-                    workspace_id, duplicate.id, focus_id
+                    workspace_id, duplicate.id, focus_id, request.bind_plan_id, request.bind_plan_revision
                 )
             if bridge is not None and client_capture_id:
                 bridge.remember_capture(
@@ -994,6 +1131,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                     {
                         "resource_id": duplicate.id,
                         "recorded_at": duplicate.fetched_at or "",
+                        "focus_binding": focus_binding,
                         "saved_path": download.relative_path if download else "",
                     },
                 )
@@ -1098,11 +1236,14 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 detail={"code": "index_failed", "message": f"Captured resource could not be indexed: {exc}"},
             ) from exc
         indexed = library.remember_download(workspace_id, indexed, download) or indexed
+        record_resource_indexed(workspace_id, indexed)
 
         focus_binding = ""
         focus_id = str(request.bind_focus_id or "").strip()
         if focus_id:
-            focus_binding = bind_capture_to_learning_focus(workspace_id, indexed.id, focus_id)
+            focus_binding = bind_capture_to_learning_focus(
+                workspace_id, indexed.id, focus_id, request.bind_plan_id, request.bind_plan_revision
+            )
 
         if bridge is not None and client_capture_id:
             bridge.remember_capture(
@@ -1110,6 +1251,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
                 {
                     "resource_id": indexed.id,
                     "recorded_at": indexed.fetched_at or "",
+                    "focus_binding": focus_binding,
                     "saved_path": download.relative_path if download else "",
                 },
             )

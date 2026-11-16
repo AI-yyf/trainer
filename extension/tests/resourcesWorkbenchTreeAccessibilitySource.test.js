@@ -63,7 +63,7 @@ test('Resources lets its workspace tree fill the unused primary panel area', () 
   // Product-level template contract replaces the previous layout grammar.
   const { read } = require('./templateAssertions');
   const source = read('components/resources/ResourcesWorkbenchView.tsx');
-  for (const marker of ['<Library', 'type="search"', 'onOpen={openResourceInVsCode}', 'onMenu={openResourceRowMenu}', 'onStartTrainingFromResource', 'openResourceInVsCode', 'resources-row-menu']) assert.ok(source.includes(marker), marker);
+  for (const marker of ['<Library', 'data-clear-resource-search', 'onOpen={openResourceInVsCode}', 'onMenu={openResourceRowMenu}', 'onStartTrainingFromResource', 'openResourceInVsCode', 'resources-row-menu']) assert.ok(source.includes(marker), marker);
   assert.ok(!source.includes('didAutoSelectResource'));
   assert.ok(source.includes('onAskCoach([resource.id])'));
 });
@@ -74,6 +74,8 @@ test('Resources keeps complete local copy for every supported workbench language
   for (const language of ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
     assert.match(source, new RegExp(`"${language}"|${language === 'zh-CN' ? 'zh:' : language === 'en-US' ? 'en:' : `"${language}":`}`));
   }
-  assert.match(source, /resourceTextLocaleOverrides\[language\]\[key\]/);
+  assert.match(source, /resourceLibraryText as localize/);
+  const copySource = fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'i18n', 'segments', 'resourcesInlineText.ts'), 'utf8');
+  assert.match(copySource, /resourceTextLocaleOverrides\[language\]\[key\]/);
   assert.match(source, /deleteConfirmation/);
 });

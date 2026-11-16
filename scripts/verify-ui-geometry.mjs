@@ -374,10 +374,7 @@ async function main() {
       await page.goto(`${base}?view=${view}&scenario=${scenario}`, { waitUntil: "networkidle" });
       const tabs = await page.locator('.app-shell-nav button').allTextContents();
       check(tabs.join('|') === '对话|学习|资料', `navigation: ${view}/${scenario} has three stable destinations`);
-      // §3.7 product ruling (composerDock.ts): the persistent dock composer is
-      // mounted on the three primary destinations and nowhere else — Training
-      // owns its phase inputs, Progress/Settings are utilities.
-      const expectedComposerShells = ['coach', 'plan', 'resources'].includes(view) ? 1 : 0;
+      const expectedComposerShells = view === "settings" ? 0 : 1;
       check(await page.locator('.composer-shell').count() === expectedComposerShells, `composer: ${view}/${scenario} has the correct owner`);
     }
   }

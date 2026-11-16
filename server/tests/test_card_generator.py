@@ -914,6 +914,28 @@ class TestCurrentIdeFileGrounding(unittest.TestCase):
                 )
                 self.assertEqual(card.files_to_touch, [context.current_file_path])
 
+    def test_indexed_material_and_current_file_share_one_verification_target(self) -> None:
+        evidence = _resource_evidence("paper-a")
+        context = _ctx(
+            resource_id=evidence.resource_id,
+            resource_version_id="rv-paper",
+            resource_content_hash="abc123",
+            resource_knowledge_evidence=evidence,
+            current_file_path="/workspace/src/client.py",
+            current_file_content="import httpx",
+        )
+        service = CardGenerationService()
+        messages = service._llm_messages(context, "plan_requirement", "practice")
+        self.assertIn(context.current_file_path, messages[1]["content"])
+        self.assertIn(evidence.summary, messages[1]["content"])
+        card = service._finalize_card(
+            TrainingCardCandidateSnapshot(card_type="practice", files_to_touch=["made-up.py"]),
+            "plan_requirement", context,
+        )
+        self.assertEqual(card.files_to_touch, [context.current_file_path])
+        self.assertEqual(card.resource_version_id, "rv-paper")
+        self.assertEqual(card.resource_content_hash, "abc123")
+
     def test_other_file_same_basename_is_not_rebound_and_flash_has_no_file_target(self) -> None:
         context = _ctx(current_file_path="/workspace/nested/sample.py", current_file_content="x = 1")
         service = CardGenerationService()
@@ -1070,6 +1092,80 @@ def _complete_llm_response() -> dict:
 
 class TestCardGenerationStreamingTruth(unittest.TestCase):
     """Streaming generation must distinguish degradation from interruption."""
+
+    def test_localizes_an_english_draft_without_changing_project_checks(self) -> None:
+        translated = {
+            "title": "让单个请求失败时仍能返回其他结果",
+            "scenario": "批量请求中可能有一个请求失败。",
+            "problem_statement": "修改 fetch_all，让单个请求失败时仍然保留其他结果。",
+            "deliverable": "提交修改后的 fetch_all。",
+        }
+
+        class Provider(_StreamingMockProviderService):
+            async def chat_completion(self, messages, **kwargs):
+                assert set(json.loads(messages[-1]["content"])) == set(translated)
+                return json.dumps(translated, ensure_ascii=False)
+
+        checks = ["`assert fetch_all(True)` · `test_client.py:10`"]
+        service = CardGenerationService(
+            provider_service=Provider([json.dumps(_practice_llm_response())]),
+        )
+        context = _ctx(
+            response_language="zh-CN", resource_id="paper-a",
+            resource_knowledge_evidence=_resource_evidence("paper-a"),
+            current_file_path="client.py", current_file_content="def fetch_all(): pass",
+            project_verification_steps=checks,
+        )
+
+        async def collect() -> list[TrainingCardCandidateSnapshot]:
+            return [event.card async for event in service.generate_card_stream("plan_requirement", context)
+                    if event.card is not None]
+
+        card, = asyncio.run(collect())
+        self.assertEqual(card.title, translated["title"])
+        self.assertEqual(card.problem_statement, translated["problem_statement"])
+        self.assertEqual(card.verification_steps, checks)
+        self.assertEqual(card.expected_symbols, ["fetch_all"])
+        self.assertEqual(card.generation_source, "model")
+
+    def test_indexed_file_practice_binds_the_host_target_before_validating_model_fields(self) -> None:
+        evidence = _resource_evidence("paper-a")
+        context = _ctx(
+            plan_stage_id="stage-1",
+            resource_id=evidence.resource_id,
+            resource_version_id="rv-paper",
+            resource_content_hash="abc123",
+            resource_knowledge_evidence=evidence,
+            current_file_path="/workspace/src/client  demo.py",
+            current_file_content="import httpx",
+        )
+        # The live model returned a scalar here, even though the prompt uses an array.
+        response = {**_practice_llm_response(), "files_to_touch": "made-up.py",
+                    "target_skill": "unspecified", "self_check": "Can the errors be observed?"}
+        response["verification_steps"].append(response["verification_steps"][0])
+        streaming = CardGenerationService(
+            provider_service=_StreamingMockProviderService([json.dumps(response)]),
+        )
+
+        async def collect() -> list[TrainingCardCandidateSnapshot]:
+            return [
+                event.card
+                async for event in streaming.generate_card_stream("plan_requirement", context)
+                if event.card is not None
+            ]
+
+        blocking = CardGenerationService(provider_service=_MockProviderService(response))
+        streamed_cards = asyncio.run(collect())
+        self.assertEqual(len(streamed_cards), 1)
+        for card in [*streamed_cards, blocking.generate_card("plan_requirement", context)]:
+            self.assertEqual(card.title, response["title"])
+            self.assertEqual(card.target_skill, response["focus_area"])
+            self.assertEqual(card.verification_steps, response["verification_steps"][:2])
+            self.assertEqual(card.self_check, [response["self_check"]])
+            self.assertEqual(card.files_to_touch, [context.current_file_path])
+            self.assertEqual(card.resource_id, evidence.resource_id)
+            self.assertEqual(card.resource_version_id, context.resource_version_id)
+            self.assertEqual(card.resource_content_hash, context.resource_content_hash)
 
     def test_partial_stream_json_is_rejected_without_a_candidate(self) -> None:
         ledger = EventLedgerService()
@@ -1792,7 +1888,8 @@ class TestCardGenerationPrompts(unittest.TestCase):
             "practice",
         )
         self.assertIn("Learn -> Try -> Verify -> Reflect", prompt)
-        self.assertIn("current state -> gap -> object or boundary -> verification", prompt)
+        self.assertIn("wrong choice changes the result", prompt)
+        self.assertIn("specific starting state or input and the observable result", prompt)
         self.assertIn("Output valid JSON only", prompt)
         self.assertIn("Respond in zh-CN", prompt)
 
@@ -1809,7 +1906,8 @@ class TestCardGenerationPrompts(unittest.TestCase):
         )
         self.assertIn("test real understanding, not detached trivia", prompt)
         self.assertIn("Learn -> Verify -> Reflect -> Return", prompt)
-        self.assertIn("ask for role, difference, boundary, or failure mode", prompt)
+        self.assertIn("one misconception that matters most", prompt)
+        self.assertIn("one short question in everyday language", prompt)
         self.assertIn('"next_after_completion": string', prompt)
         self.assertIn("Match the learner's active language", prompt)
 

@@ -1,3 +1,4 @@
+import type { LearningActivity, ResourceVersionCheckResult } from "../../../../shared/src/models";
 import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from "../../../../shared/src/webviewSync";
 import type { TrainerCommandCatalogItem } from "../../../../shared/src/commands";
 import type { CompanionInstallState } from "../../../../shared/src/companionInstallState";
@@ -220,6 +221,7 @@ export interface PlanStage {
   title: string;
   objective: string;
   status: "done" | "active" | "queued";
+  resourceIds?: string[];
 }
 
 export interface SubPlan {
@@ -938,6 +940,7 @@ export interface CoachingAdaptationView {
 }
 
 export interface MemorySnapshot {
+  learningActivity?: LearningActivity[];
   currentFocus: string;
   weakSpots: string[];
   recentWins: string[];
@@ -1594,6 +1597,7 @@ export type ReviewReminderMode = "due" | "ahead" | "digest";
 
 export const RESOURCE_COMPOSER_INTENT_MODES = [
   "locate",
+  "analyze",
   "download",
   "organize",
   "cards",
@@ -2021,7 +2025,17 @@ export interface PersistedWorkbenchState extends UiLayoutState {
    * idempotent across retries and webview reloads.
    */
   appliedDraftIds?: string[];
+  composerBrowserSources?: Record<string, BrowserComposerSource>;
+  composerResourceRefs?: Record<string, string[]>;
   previewProviderConfig?: Partial<ProviderConfigView>;
+}
+
+export interface BrowserComposerSource {
+  id: string;
+  url: string;
+  title: string;
+  selection: string;
+  prefill?: string;
 }
 
 /**
@@ -2217,6 +2231,8 @@ type HostMessageBody =
         phase?: string;
         surface?: "global" | "stream";
         providerTest?: HostProviderTestSummary;
+        resourceCapture?: import("../../../../shared/src/models").ResourceCaptureReceipt;
+        resourceVersionResults?: ResourceVersionCheckResult[];
       };
     }
   | { type: "training/resourceHandoff"; payload: ResourceTrainingHandoffResult }
@@ -2244,7 +2260,7 @@ type HostMessageBody =
    * sidecar queue entry so the webview can answer the applied receipt the
    * poller waits for before acknowledging delivery.
    */
-  | { type: "ui/coachDraftPrefill"; text: string; draftId?: string }
+  | { type: "ui/coachDraftPrefill"; text: string; draftId?: string; workspaceId?: string; source?: Omit<BrowserComposerSource, "id"> }
   /**
    * Answer to one real-folder request (`/library/groups` list/create/rename/
    * delete) that the webview posted as a host command. Correlated by the

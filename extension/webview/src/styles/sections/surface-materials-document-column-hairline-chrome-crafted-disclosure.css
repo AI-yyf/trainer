@@ -275,17 +275,14 @@ details[open] > :not(summary) {
   white-space: nowrap;
 }
 
-.composer__plus-control {
-  position: relative;
-}
-
 .composer-plus-menu {
   position: absolute;
-  left: 0;
+  inset-inline: -1px;
   bottom: calc(100% + 6px);
-  z-index: 8;
-  min-width: 168px;
-  inline-size: min(240px, calc(100vw - 32px));
+  z-index: 30;
+  inline-size: auto;
+  max-inline-size: none;
+  max-block-size: min(48dvh, 360px);
   padding: var(--space-1);
   border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
@@ -293,10 +290,16 @@ details[open] > :not(summary) {
   box-shadow: none;
 }
 
+.composer-plus-menu__heading {
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+}
+
 .composer-plus-menu__option {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
   min-height: 28px;
@@ -305,8 +308,13 @@ details[open] > :not(summary) {
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--fg-1);
-  text-align: left;
+  text-align: start;
   cursor: pointer;
+}
+
+.composer-plus-menu__icon {
+  display: inline-flex;
+  color: var(--fg-1);
 }
 
 .composer-plus-menu__option.is-active,

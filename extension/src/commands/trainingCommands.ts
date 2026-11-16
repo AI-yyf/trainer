@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { TrainingPlanBinding } from "../../../shared/src/models";
+import type { ResourceVersionPin, TrainingPlanBinding } from "../../../shared/src/models";
 import type { CommandContext } from "../core/commandContext";
 import type { CommandExecutionResult } from "../core/types";
 import { SidecarRequestAbortedError, type SSEMessage } from "../core/httpClient";
@@ -150,6 +150,7 @@ async function attachLiveProviderToTrainingRequest(
 
 type TrainingGenerateCardWaiterInput = {
   planBinding?: TrainingPlanBinding;
+  expectedResourceVersion?: ResourceVersionPin;
   source: string;
   cardType: string;
   submode: string;
@@ -196,6 +197,7 @@ async function settleTrainingGenerateCardWaiter(
     workspace_id: string;
     plan_stage_id: string;
     plan_binding?: TrainingPlanBinding;
+    expected_resource_version?: ResourceVersionPin;
     current_file: TrainingCurrentFilePayload | undefined;
     response_language?: string;
     stream_id?: string;
@@ -221,6 +223,7 @@ async function settleTrainingGenerateCardWaiter(
     workspace_id: input.workspaceId,
     plan_stage_id: input.planBinding?.stageId ?? "",
     plan_binding: input.planBinding,
+    expected_resource_version: input.expectedResourceVersion,
     current_file: input.currentFile,
     // Distinct stream_id for transport; UI events reuse owner messageId.
     stream_id: `training_waiter_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -835,7 +838,8 @@ export async function trainingGenerateCardCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
-  const { source, cardType, submode, focusArea, targetSkill, resourceId, prompt, planBinding, requestId: payloadRequestId } =
+  const { source, cardType, submode, focusArea, targetSkill, resourceId, prompt, planBinding,
+    expectedResourceVersion, requestId: payloadRequestId } =
     extractGenerateCardPayload(payload);
   const resourceTrainingBlock = resourceTrainingGate(context, source, resourceId);
   if (resourceTrainingBlock) {
@@ -881,6 +885,7 @@ export async function trainingGenerateCardCommand(
     ) {
       return settleTrainingGenerateCardWaiter(context, activeOwnerStream, {
         planBinding,
+        expectedResourceVersion,
         source,
         cardType: finalCardType,
         submode: submode ?? "",
@@ -912,6 +917,7 @@ export async function trainingGenerateCardCommand(
       workspace_id: string;
       plan_stage_id: string;
       plan_binding?: TrainingPlanBinding;
+      expected_resource_version?: ResourceVersionPin;
       current_file: TrainingCurrentFilePayload | undefined;
       response_language?: string;
       stream_id?: string;
@@ -937,6 +943,7 @@ export async function trainingGenerateCardCommand(
       workspace_id: workspaceId,
       plan_stage_id: planBinding?.stageId ?? "",
       plan_binding: planBinding,
+      expected_resource_version: expectedResourceVersion,
       current_file: currentFile,
     };
     if (responseLanguage) {
@@ -1579,6 +1586,7 @@ function extractGenerateCardPayload(
   payload: unknown,
 ): {
   planBinding?: TrainingPlanBinding;
+  expectedResourceVersion?: ResourceVersionPin;
   source: string;
   cardType: string;
   submode: string;
@@ -1590,6 +1598,7 @@ function extractGenerateCardPayload(
 } {
   const p = payload as {
     planBinding?: TrainingPlanBinding;
+    expectedResourceVersion?: ResourceVersionPin;
     source?: string;
     cardType?: string;
     submode?: string;
@@ -1603,6 +1612,7 @@ function extractGenerateCardPayload(
   } | undefined;
   return {
     planBinding: p?.planBinding,
+    expectedResourceVersion: p?.expectedResourceVersion,
     source: p?.source ?? "conversation_gap",
     cardType: p?.cardType ?? "practice",
     submode: p?.submode ?? "",

@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import type { ResourceVersionCheckResult } from '../../../shared/src/models';
 import { normalizeStageMaterials } from '../../../shared/src/stageMaterials';
 import { trainerCommandCatalog } from '../../../shared/src/commands';
 import {
@@ -1513,12 +1514,16 @@ export function toOperationStatus(
   ok: boolean,
   message: string,
   providerTest?: ProviderTestOutcomeSummary,
+  resourceCapture?: { resourceId: string; title?: string; deduped: boolean; focusBinding?: string },
+  resourceVersionResults?: ResourceVersionCheckResult[],
 ): HostMessage {
   return {
     type: 'operation/status',
     payload: {
       tone: ok ? 'success' : 'error',
       message,
+      ...(resourceCapture ? { resourceCapture } : {}),
+      ...(resourceVersionResults ? { resourceVersionResults } : {}),
       ...(providerTest ? { providerTest: {
         ...(typeof providerTest.ok === 'boolean' ? { ok: providerTest.ok } : {}),
         ...(typeof providerTest.errorCategory === 'string' ? { errorCategory: providerTest.errorCategory } : {}),
@@ -3198,9 +3203,11 @@ function deriveCurrentStageFromSnapshot(snapshot: UnknownRecord | undefined) {
 function mapPlanStage(value: unknown, index: number) {
   const record = asRecord(value);
   const rawStatus = asString(record?.status);
+  const resourceIds = asStringArray(record?.resources);
   return {
     id: asString(record?.id) ?? `stage-${index + 1}`,
     title: asString(record?.title) ?? `阶段 ${index + 1}`,
+    ...(resourceIds?.length ? { resourceIds } : {}),
     objective:
       asString(record?.goal) ??
       asString(record?.objective) ??
@@ -3526,6 +3533,19 @@ function mapMemory(
         ? []
         : fallback.recentWins);
   return {
+    learningActivity: Array.isArray(record.learning_activity)
+      ? record.learning_activity.flatMap((value: unknown) => {
+          const activity = asRecord(value);
+          const id = asString(activity?.event_id);
+          const kind = asString(activity?.event_type);
+          const timestamp = asString(activity?.occurred_at);
+          return id && kind && timestamp ? [{
+            id, kind, timestamp, title: asString(activity?.title), cardId: asString(activity?.card_id),
+            resourceId: asString(activity?.resource_id), nextDue: asString(activity?.next_due),
+            trustLevel: asString(activity?.trust_level), result: asString(activity?.result),
+          }] : [];
+        })
+      : workspaceChanged ? [] : fallback.learningActivity,
     currentFocus: mapCurrentFocus(
       record.current_focus ?? record.currentFocus ?? record.recent_summary,
       fallback.currentFocus,
@@ -7326,12 +7346,16 @@ function canonicalResourceFields(
   const parserVersion = asText(record.parser_version) ?? asText(record.parserVersion);
   const pageCount = asNumber(record.page_count) ?? asNumber(record.pageCount);
   const slideCount = asNumber(record.slide_count) ?? asNumber(record.slideCount);
+  const versionId = asText(record.version_id) ?? asText(record.versionId);
+  const contentHash = asText(record.content_hash) ?? asText(record.contentHash);
   if (markdownPath) fields.canonicalMarkdownPath = markdownPath;
   if (originalPath) fields.canonicalOriginalPath = originalPath;
   if (parser) fields.parser = parser;
   if (parserVersion) fields.parserVersion = parserVersion;
   if (pageCount !== undefined) fields.pageCount = pageCount;
   if (slideCount !== undefined) fields.slideCount = slideCount;
+  if (versionId) fields.versionId = versionId;
+  if (contentHash) fields.contentHash = contentHash;
   return fields;
 }
 

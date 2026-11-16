@@ -19,6 +19,17 @@ export const COACH_TYPING_LABELS: Record<ComposerLanguage, string> = {
   "pt-BR": "O coach está digitando…",
 };
 
+export const composerAddCopy: Record<ComposerLanguage, { heading: string; attachment: string; workflows: string; skills: string }> = {
+  "zh-CN": { heading: "添加", attachment: "附件", workflows: "工作流", skills: "技能" },
+  "en-US": { heading: "Add", attachment: "Attachment", workflows: "Workflows", skills: "Skills" },
+  "es-ES": { heading: "Añadir", attachment: "Archivo adjunto", workflows: "Flujos de trabajo", skills: "Habilidades" },
+  "fr-FR": { heading: "Ajouter", attachment: "Pièce jointe", workflows: "Flux de travail", skills: "Compétences" },
+  "de-DE": { heading: "Hinzufügen", attachment: "Anhang", workflows: "Workflows", skills: "Fähigkeiten" },
+  "ja-JP": { heading: "追加", attachment: "添付ファイル", workflows: "ワークフロー", skills: "スキル" },
+  "ko-KR": { heading: "추가", attachment: "첨부 파일", workflows: "워크플로", skills: "스킬" },
+  "pt-BR": { heading: "Adicionar", attachment: "Anexo", workflows: "Fluxos de trabalho", skills: "Habilidades" },
+};
+
 /** Goal mode: one small goal, the learner does the work and is taught by doing. */
 export const GOAL_MODE_COPY: Record<
   ComposerLanguage,
@@ -438,9 +449,9 @@ type ComposerLocaleCopy = {
   dropToAttach: string;
   imageUnavailable: string;
   image: string;
+  attachImage: string;
   removeAttachment: string;
   clear: string;
-  plusMenu: string;
   mentionMenu: string;
   mentionResource: string;
   mentionFile: string;
@@ -461,9 +472,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "松开以附加图片",
     imageUnavailable: "当前连接暂不支持图片输入",
     image: "图片",
+    attachImage: "附加图片",
     removeAttachment: "移除附件",
     clear: "清空",
-    plusMenu: "给这一条加点东西",
     mentionMenu: "关联资料或文件",
     mentionResource: "资料",
     mentionFile: "文件",
@@ -482,9 +493,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "Drop to attach image",
     imageUnavailable: "Image input is unavailable for this connection",
     image: "image",
+    attachImage: "Attach image",
     removeAttachment: "Remove attachment",
     clear: "Clear",
-    plusMenu: "Add to this message",
     mentionMenu: "Link a resource or file",
     mentionResource: "Resource",
     mentionFile: "File",
@@ -503,9 +514,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "Suelta para adjuntar una imagen",
     imageUnavailable: "Las imágenes no están disponibles para esta conexión",
     image: "imagen",
+    attachImage: "Adjuntar imagen",
     removeAttachment: "Quitar archivo adjunto",
     clear: "Limpiar",
-    plusMenu: "Añadir a este mensaje",
     mentionMenu: "Vincular recurso o archivo",
     mentionResource: "Recurso",
     mentionFile: "Archivo",
@@ -524,9 +535,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "Déposez pour joindre une image",
     imageUnavailable: "Les images ne sont pas disponibles avec cette connexion",
     image: "image",
+    attachImage: "Joindre une image",
     removeAttachment: "Retirer la pièce jointe",
     clear: "Effacer",
-    plusMenu: "Ajouter à ce message",
     mentionMenu: "Lier une ressource ou un fichier",
     mentionResource: "Ressource",
     mentionFile: "Fichier",
@@ -545,9 +556,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "Loslassen, um ein Bild anzuhängen",
     imageUnavailable: "Bildeingaben sind für diese Verbindung nicht verfügbar",
     image: "Bild",
+    attachImage: "Bild anhängen",
     removeAttachment: "Anhang entfernen",
     clear: "Leeren",
-    plusMenu: "Dieser Nachricht hinzufügen",
     mentionMenu: "Ressource oder Datei verknüpfen",
     mentionResource: "Ressource",
     mentionFile: "Datei",
@@ -566,9 +577,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "画像をドロップして添付",
     imageUnavailable: "この接続では画像を入力できません",
     image: "画像",
+    attachImage: "画像を添付",
     removeAttachment: "添付を削除",
     clear: "消去",
-    plusMenu: "このメッセージに追加",
     mentionMenu: "資料またはファイルを関連付け",
     mentionResource: "資料",
     mentionFile: "ファイル",
@@ -587,9 +598,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "이미지를 놓아 첨부",
     imageUnavailable: "이 연결에서는 이미지 입력을 사용할 수 없습니다",
     image: "이미지",
+    attachImage: "이미지 첨부",
     removeAttachment: "첨부 파일 제거",
     clear: "지우기",
-    plusMenu: "이 메시지에 추가",
     mentionMenu: "자료 또는 파일 연결",
     mentionResource: "자료",
     mentionFile: "파일",
@@ -608,9 +619,9 @@ export const composerLocaleCopy: Record<ComposerLanguage, ComposerLocaleCopy> = 
     dropToAttach: "Solte para anexar uma imagem",
     imageUnavailable: "As imagens não estão disponíveis nesta conexão",
     image: "imagem",
+    attachImage: "Anexar imagem",
     removeAttachment: "Remover anexo",
     clear: "Limpar",
-    plusMenu: "Adicionar a esta mensagem",
     mentionMenu: "Vincular recurso ou arquivo",
     mentionResource: "Recurso",
     mentionFile: "Arquivo",

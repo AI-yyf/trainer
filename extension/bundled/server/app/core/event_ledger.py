@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from itertools import islice
 from typing import TYPE_CHECKING, Any, TypeVar
 from uuid import uuid4
 
@@ -72,6 +73,9 @@ EVENT_SANDBOX_WORKSPACE_CLEARED = "sandbox_workspace_cleared"
 # Resource (2)
 EVENT_RESOURCE_UPLOADED = "resource_uploaded"
 EVENT_RESOURCE_INDEXED = "resource_indexed"
+EVENT_BROWSER_SOURCE_RECEIVED = "browser_source_received"
+EVENT_RESOURCE_LINKED = "resource_linked"
+EVENT_REVIEW_SCHEDULED = "review_scheduled"
 
 # Profile & settings (3)
 EVENT_PROFILE_UPDATED = "profile_updated"
@@ -149,6 +153,9 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_SANDBOX_WORKSPACE_CLEARED,
     EVENT_RESOURCE_UPLOADED,
     EVENT_RESOURCE_INDEXED,
+    EVENT_BROWSER_SOURCE_RECEIVED,
+    EVENT_RESOURCE_LINKED,
+    EVENT_REVIEW_SCHEDULED,
     EVENT_PROFILE_UPDATED,
     EVENT_COACH_SETTINGS_UPDATED,
     EVENT_WORKSPACE_UNDERSTANDING_UPDATED,
@@ -374,6 +381,21 @@ class EventLedgerService:
         for entry in self.effective_entries():
             state = apply(state, entry)
         return state
+
+    def recent_learning_activity(self, workspace_id: str, limit: int = 20) -> list[EventLedgerEntry]:
+        kinds = {
+            EVENT_BROWSER_SOURCE_RECEIVED, EVENT_RESOURCE_INDEXED, EVENT_RESOURCE_LINKED,
+            EVENT_CARD_CANDIDATE_CREATED, EVENT_CARD_STATUS_TRANSITIONED,
+            EVENT_PRACTICE_SUBMISSION_RECORDED, EVENT_TRAINING_EVIDENCE_RECORDED,
+            EVENT_EVALUATION_FEEDBACK_RECORDED, EVENT_REVIEW_SCHEDULED,
+        }
+        with self._lock:
+            activity = (
+                entry for entry in reversed(self._entries)
+                if entry.project_id == workspace_id and entry.event_type in kinds
+                and entry.event_id not in self._reversals
+            )
+            return list(islice(activity, limit))
 
     def query(
         self,

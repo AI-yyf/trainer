@@ -239,10 +239,10 @@ test('panel commands route through the shared registry and post a reconciled sta
   ]);
   assert.deepEqual(
     harness.postedMessages.map((message) => message.type),
-    ['operation/status', 'state/patch'],
+    ['state/patch', 'operation/status'],
   );
-  assert.equal(harness.postedMessages[0].payload.tone, 'success');
-  assert.equal(harness.postedMessages[1].payload.memory.currentFocus, 'Panel command ran');
+  assert.equal(harness.postedMessages[0].payload.memory.currentFocus, 'Panel command ran');
+  assert.equal(harness.postedMessages[1].payload.tone, 'success');
   panel.dispose();
 });
 

@@ -149,7 +149,7 @@ test('live reflect and return persist; leftover cannot fire them', () => {
   );
   assert.match(
     appSource,
-    /const handleSubmitTrainingEvidence = useCallback\(async \(evidence: string\): Promise<boolean> => \{\s*if \(leftoverTrainingHandoffChromeNotLive\) \{\s*return false;/,
+    /const handleSubmitTrainingEvidence = useCallback\(async \(evidence: string, returnMode = trainingComposerPracticeReturnMode\): Promise<boolean> => \{\s*if \(leftoverTrainingHandoffChromeNotLive\) \{\s*return false;/,
   );
   assert.match(
     appSource,

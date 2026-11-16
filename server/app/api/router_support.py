@@ -357,6 +357,9 @@ def _resolve_agent_loop_enabled(
     payload: dict | None = None,
 ) -> bool:
     """Choose the tool loop only for requests that need executable tool authority."""
+    composer = request.resource_composer_intent
+    if composer is not None and composer.mode == "analyze":
+        return False
     config = getattr(coaching_service, "_config", None)
     capabilities = getattr(config, "capabilities", None) if config is not None else None
     supports_tools = getattr(coaching_service, "supports_executable_tools", None)
@@ -443,6 +446,11 @@ def _request_requires_agent_tools(request: TurnRequest | SessionMessageRequest) 
 
 def _normalize_resource_turn_request(request: TurnRequest) -> TurnRequest:
     """Treat the Resources composer lane as a grounded coach turn internally."""
+    composer = request.resource_composer_intent
+    if composer is not None and composer.mode == "analyze":
+        return request.model_copy(update={
+            "intent": "coach", "formal_plan_mutation": False, "use_agent_loop": False,
+        })
     if request.intent != "resources":
         return request
     return request.model_copy(update={"intent": "coach"})

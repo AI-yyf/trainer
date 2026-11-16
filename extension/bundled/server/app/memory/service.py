@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import re
 from collections import Counter
 from collections.abc import Mapping
@@ -12,6 +13,13 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from ..core.event_ledger import (
+    EVENT_CARD_STATUS_TRANSITIONED,
+    EVENT_EVALUATION_FEEDBACK_RECORDED,
+    EVENT_PRACTICE_SUBMISSION_RECORDED,
+    EVENT_REVIEW_SCHEDULED,
+    EventLedgerService,
+)
 from ..core.models import (
     ActiveCardSelectionResult,
     CardStatusTransitionResponse,
@@ -30,6 +38,7 @@ from ..core.models import (
     GlobalMemoryGrowthRecord,
     MemoryShareCategory,
     MemoryShareGrant,
+    LearningActivityEntry,
     MemorySnapshot,
     ResourceRecord,
     ReviewArtifactHistoryEntry,
@@ -197,6 +206,9 @@ from .workspace_recovery import (
     select_training_record_for_scope,
     stamp_workspace_scope,
 )
+
+logger = logging.getLogger(__name__)
+
 
 _CJK_TEXT_CORRECT_THRESHOLD = 0.60
 
@@ -1427,8 +1439,10 @@ class MemoryService(
     TrainingHandoffReturnMixin,
     TrainingReliabilityMixin,
 ):
-    def __init__(self, repository: TrainerRepository, structured: StructuredMemoryService | None = None) -> None:
+    def __init__(self, repository: TrainerRepository, structured: StructuredMemoryService | None = None,
+                 *, event_ledger: EventLedgerService | None = None) -> None:
         self.repository = repository
+        self._event_ledger = event_ledger
         self._asset_library = AssetLibraryService(repository)
         self._structured_by_workspace: dict[str, StructuredMemoryService] = {}
         self._default_structured = structured
@@ -2296,6 +2310,38 @@ class MemoryService(
         structured._training_event_ledger = structured._training_event_ledger[-80:]
         return entry
 
+    def _record_persisted_card_activity(
+        self,
+        workspace_id: str,
+        card: TrainingCardCandidateSnapshot,
+        event_type: str,
+        event_key: str,
+        result: str = "",
+    ) -> None:
+        if self._event_ledger is None:
+            return
+        binding = card.plan_binding
+        try:
+            self._event_ledger.record_event(
+                event_type,
+                project_id=self._canonical_workspace_id(workspace_id),
+                scope="training",
+                actor="system" if event_type == EVENT_EVALUATION_FEEDBACK_RECORDED else "learner",
+                idempotency_key=f"{event_type}:{card.card_id}:{event_key}",
+                payload_ref={
+                    "card_id": card.card_id,
+                    "title": card.title,
+                    "result": result,
+                    "plan_id": binding.plan_id if binding else "",
+                    "stage_id": binding.stage_id if binding else "",
+                    "resource_id": card.resource_id,
+                    "resource_version_id": card.resource_version_id,
+                    "resource_content_hash": card.resource_content_hash,
+                },
+            )
+        except Exception:
+            logger.exception("Could not record persisted training activity in the event ledger")
+
     def _build_dependency_skill_map(
         self,
         structured: StructuredMemoryService,
@@ -2602,7 +2648,20 @@ class MemoryService(
         return self._structured_for(workspace_id)
 
     def snapshot(self, workspace_id: str) -> MemorySnapshot:
-        return build_memory_snapshot(self, workspace_id)
+        snapshot = build_memory_snapshot(self, workspace_id)
+        if self._event_ledger is not None:
+            snapshot.learning_activity = [
+                LearningActivityEntry(
+                    event_id=event.event_id,
+                    event_type=event.event_type,
+                    occurred_at=event.occurred_at,
+                    **{key: str(event.payload_ref.get(key) or "") for key in (
+                        "title", "card_id", "resource_id", "next_due", "trust_level", "result",
+                    )},
+                )
+                for event in self._event_ledger.recent_learning_activity(workspace_id)
+            ]
+        return snapshot
 
     def list_teaching_assets(
         self,
@@ -4047,6 +4106,16 @@ class MemoryService(
                 lapses=result.lapses,
             )
         self._persist_structured(workspace_id)
+        if result.next_due is not None and self._event_ledger is not None:
+            due_at = result.next_due.isoformat()
+            try:
+                self._event_ledger.record_event(
+                    EVENT_REVIEW_SCHEDULED, project_id=workspace_id, scope="learning",
+                    idempotency_key=f"review-scheduled:{cleaned_card_id}:{due_at}",
+                    payload_ref={"card_id": cleaned_card_id, "title": concept, "next_due": due_at},
+                )
+            except Exception:
+                logger.exception("Could not record review scheduling in the event ledger")
         return {
             "card_id": cleaned_card_id,
             "rating": rating_enum.name.lower(),
@@ -4963,7 +5032,7 @@ class MemoryService(
                 update={"learning_phase": "try", "updated_at": utc_now().isoformat()}
             )
             structured._training_cards[card_id] = updated
-            self._record_training_event(
+            event = self._record_training_event(
                 structured,
                 event_type="training_card_started",
                 payload={
@@ -4973,6 +5042,9 @@ class MemoryService(
                 },
             )
             self._persist_structured(workspace_id)
+            self._record_persisted_card_activity(
+                workspace_id, updated, EVENT_CARD_STATUS_TRANSITIONED, event["event_id"], "started",
+            )
             return CardStatusTransitionResponse(card=updated)
         allowed = {
             "candidate": {"active", "needs_primer", "skipped", "blocked"},
@@ -5069,7 +5141,7 @@ class MemoryService(
                         scoped = stamp_workspace_scope(runtime_record, workspace_id)
                         if scoped is not None:
                             structured.update_workspace(**{PLAN_RUNTIME_KEY: scoped})
-        self._record_training_event(
+        event = self._record_training_event(
             structured,
             event_type="training_card_status_changed",
             payload={
@@ -5079,6 +5151,10 @@ class MemoryService(
             },
         )
         self._persist_structured(workspace_id)
+        if new_status == "active":
+            self._record_persisted_card_activity(
+                workspace_id, updated, EVENT_CARD_STATUS_TRANSITIONED, event["event_id"], "started",
+            )
         return CardStatusTransitionResponse(card=updated, ledger_entry=ledger_entry)
 
     def enqueue_evidence(
@@ -5727,6 +5803,9 @@ class MemoryService(
         structured._recent_flash_attempts.insert(0, attempt)
         structured._recent_flash_attempts = structured._recent_flash_attempts[:16]
         self._persist_structured(workspace_id)
+        self._record_persisted_card_activity(
+            workspace_id, card, EVENT_PRACTICE_SUBMISSION_RECORDED, attempt.recorded_at,
+        )
         return attempt
 
     def build_scenario_lab(self, workspace_id: str) -> ScenarioLab | None:
@@ -7469,12 +7548,16 @@ class MemoryService(
             ["Complete Return to persist the verified result."],
             workspace_id=resolved_workspace_id,
         )
-        return self._persist_training_handoff_progress(
+        persisted = self._persist_training_handoff_progress(
             workspace_id=resolved_workspace_id,
             structured=structured,
             card=card,
             handoff=reflected,
         )
+        self._record_persisted_card_activity(
+            resolved_workspace_id, card, EVENT_PRACTICE_SUBMISSION_RECORDED, reflected.handoff_id,
+        )
+        return persisted
 
     def return_training_handoff(
         self,
@@ -8293,7 +8376,7 @@ class MemoryService(
                 "verification_artifact": dict(verification_artifact),
             }} if verification_artifact is not None else {}),
         )
-        self._record_training_event(
+        event = self._record_training_event(
             structured,
             event_type="practice_evaluation_recorded",
             payload={
@@ -8309,6 +8392,14 @@ class MemoryService(
             },
         )
         self._persist_structured(resolved_workspace_id)
+        activity_type = (
+            EVENT_EVALUATION_FEEDBACK_RECORDED
+            if verified_by_evaluator or verification_artifact is not None
+            else EVENT_PRACTICE_SUBMISSION_RECORDED
+        )
+        self._record_persisted_card_activity(
+            resolved_workspace_id, card, activity_type, event["event_id"],
+        )
         return dict(workspace_update)
 
     def record_learning_outcome(

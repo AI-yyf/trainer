@@ -173,7 +173,6 @@ test('in-view summary copy stays visually quieter than the view title track', ()
     '.resources-library-stat strong',
     '.training-active-card-route__factor strong',
     '.settings-field label',
-    '.coach-empty-state__starter-title',
     '.settings-sheet__simple-row > strong',
   ];
 

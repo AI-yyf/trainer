@@ -4184,6 +4184,15 @@ def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path
             project_name="trainer-training-resource-evidence",
         )
         managed_workspace_id = provisioning.context_id
+        version = runtime.resource_version_store.record_version(
+            workspace_id=managed_workspace_id,
+            resource_id=trusted_resource.id,
+            content=trusted_resource.knowledge_fragments[0]["snippet"],
+        )
+        trusted_resource = trusted_resource.model_copy(update={
+            "content_hash": version["content_hash"],
+            "version_id": version["version_id"],
+        })
         runtime.repository.save_resource(managed_workspace_id, trusted_resource)
 
         with patch.object(
@@ -4192,6 +4201,16 @@ def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path
             new_callable=AsyncMock,
             return_value=resource_content_completion(),
         ) as completion:
+            stale = client.post("/training/generate-card", json={
+                "workspace_id": managed_workspace_id,
+                "source": "resource_knowledge",
+                "resource_id": trusted_resource.id,
+                "expectedResourceVersion": {
+                    "versionId": "previous-version", "contentHash": version["content_hash"],
+                },
+            })
+            assert stale.status_code == 409, stale.text
+            completion.assert_not_awaited()
             response = client.post(
                 "/training/generate-card",
                 json={
@@ -4199,6 +4218,9 @@ def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path
                     "source": "resource_knowledge",
                     "card_type": "practice",
                     "resource_id": trusted_resource.id,
+                    "expectedResourceVersion": {
+                        "versionId": version["version_id"], "contentHash": version["content_hash"],
+                    },
                     "focus_area": "client-selected focus must not be used",
                     "context_hint": "https://attacker.invalid/raw-resource-context",
                     "resourceKnowledgeEvidence": {
@@ -4216,6 +4238,8 @@ def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path
     card_text = str(card)
     assert card["status"] == "candidate"
     assert card["scenario_pack"] == "resource_knowledge"
+    assert card["resource_version_id"] == version["version_id"]
+    assert card["resource_content_hash"] == version["content_hash"]
     assert any("fragment-trusted-timeout" in item for item in card["source_chain"])
     completion.assert_awaited_once()
     messages = completion.call_args.args[0]
@@ -4228,6 +4252,45 @@ def test_training_generate_card_projects_only_indexed_resource_evidence(tmp_path
     assert "client-selected focus" not in card_text
     assert "attacker.invalid" not in card_text
     assert "client-forged" not in card_text
+
+
+def test_training_card_does_not_persist_if_confirmed_resource_changes_during_generation(
+    tmp_path: Path,
+) -> None:
+    workspace_id = "workspace-training-version-race"
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        imported = client.post("/resources/capture", json={
+            "workspace_id": workspace_id,
+            "url": "https://example.com/transport",
+            "kind": "web",
+            "capture_mode": "selection",
+            "selection": "HTTPX separates connection timeouts from read timeouts.",
+        })
+        assert imported.status_code == 200, imported.text
+        source = imported.json()
+
+        async def replace_indexed_version(*args: object, **kwargs: object) -> str:
+            runtime.resource_version_store.record_version(
+                workspace_id=workspace_id,
+                resource_id=source["id"],
+                content="Updated source body with different limits.",
+            )
+            return resource_content_completion()
+
+        with patch.object(ProviderService, "chat_completion", side_effect=replace_indexed_version) as completion:
+            response = client.post("/training/generate-card", json={
+                "workspace_id": workspace_id,
+                "source": "plan_requirement",
+                "card_type": "practice",
+                "resource_id": source["id"],
+                "expected_resource_version": {
+                    "version_id": source["version_id"], "content_hash": source["content_hash"],
+                },
+            })
+        completion.assert_awaited_once()
+        assert response.status_code == 409, response.text
+        assert runtime.memory_service.get_cards(workspace_id) == []
 
 
 def test_training_generate_card_reuses_open_resource_card_before_creating_another(tmp_path: Path) -> None:

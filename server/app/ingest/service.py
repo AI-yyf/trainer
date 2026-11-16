@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from hashlib import sha256
 from pathlib import Path
 from typing import Protocol
 
@@ -76,6 +77,9 @@ class IngestService:
     ) -> tuple[str, list[str], dict[str, object]]:
         return self._extract_text_for_request(request, vision_enabled=vision_enabled)
 
+    def describe_url(self, request: IngestionRequest) -> tuple[str, list[str], dict[str, object]]:
+        return _extract_url(request, network_fetch_enabled=self.network_fetch_enabled)
+
     def _extract_text_for_request(
         self,
         request: IngestionRequest,
@@ -107,7 +111,7 @@ class IngestService:
             text, warnings = _extract_code(request)
             return text, warnings, {}
         if kind is ResourceKind.URL:
-            return _extract_url(request, network_fetch_enabled=self.network_fetch_enabled)
+            return self.describe_url(request)
         text, warnings = _extract_text(request)
         return text, warnings, {}
 
@@ -601,14 +605,16 @@ def _extract_url(
 
     markdown_text, _html_warnings = html_to_markdown(raw_text, response.final_url)
     extracted = markdown_text.strip() or _html_to_text(raw_text)
+    extracted = extracted or raw_text
     return (
-        extracted or raw_text,
+        extracted,
         [],
         {
             "status": "fetched",
             "final_url": response.final_url,
             "fetched_at": response.fetched_at,
             "content_type": response.content_type,
+            "source_content_hash": sha256(extracted.strip().encode("utf-8")).hexdigest(),
         },
     )
 

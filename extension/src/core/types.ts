@@ -1,3 +1,4 @@
+import type { LearningActivity, ResourceCaptureReceipt, ResourceVersionCheckResult } from "../../../shared/src/models";
 import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from '../../../shared/src/webviewSync';
 import type { TrainerCommandCatalogItem } from '../../../shared/src/commands';
 import type {
@@ -522,6 +523,7 @@ export interface PlanStageView {
   title: string;
   objective: string;
   status: 'done' | 'active' | 'queued';
+  resourceIds?: string[];
 }
 
 export interface SubPlanView {
@@ -825,6 +827,8 @@ export interface ResourceRecordView {
   freshness?: 'fresh' | 'stale' | 'unknown';
   indexState?: string;
   citationId?: string;
+  versionId?: string;
+  contentHash?: string;
   previewTier?: 'rich' | 'converted' | 'metadata';
   previewKind?: string;
   rankScore?: number;
@@ -1037,6 +1041,7 @@ export interface ActiveThreadView {
 }
 
 export interface MemorySnapshotView {
+  learningActivity?: LearningActivity[];
   currentFocus: string;
   weakSpots: string[];
   recentWins: string[];
@@ -2062,6 +2067,8 @@ type HostMessageBody =
         phase?: string;
         surface?: 'global' | 'stream';
         providerTest?: ProviderTestOutcomeSummary;
+        resourceCapture?: ResourceCaptureReceipt;
+        resourceVersionResults?: ResourceVersionCheckResult[];
       };
     }
   | { type: 'training/resourceHandoff'; payload: ResourceTrainingHandoffResult }

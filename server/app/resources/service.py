@@ -27,6 +27,7 @@ from ..ingest.models import IngestionRequest, IngestionResult, IngestionSummary
 from ..ingest.service import IngestService, ResourceIngestor
 from ..memory.semantic import SemanticMemory
 from .canonical import (
+    CANONICAL_PARSER_VERSION,
     CanonicalDocument,
     CanonicalParseError,
     build_canonical_document,
@@ -55,7 +56,15 @@ from .source_governance import (
 from .source_governance import (
     is_commercial_reuse_eligible as source_is_commercial_reuse_eligible,
 )
-from .versioning import ResourceVersionStore, provenance_payload
+from .version_check import (
+    ResourceVersionCheckResult,
+    VersionCheckBasis,
+    VersionCheckStatus,
+    captured_source_kind,
+    compare_captured_source,
+    effective_capture_tags,
+)
+from .versioning import ResourceVersionStore, compute_content_hash, provenance_payload
 
 
 def _count_markdown_tables(body: str) -> int:
@@ -397,6 +406,7 @@ class ResourceService:
         current = version or self.version_store.current_version(workspace_id, resource.id)
         if current is not None:
             resource.content_hash = current["content_hash"]
+            resource.version_id = current["version_id"]
         return current
 
     def upload(
@@ -478,6 +488,100 @@ class ResourceService:
             sandbox_service=sandbox_service,
         )
 
+    def check_source_version(
+        self,
+        workspace_id: str,
+        resource_id: str,
+        version_id: str,
+        content_hash: str,
+    ) -> ResourceVersionCheckResult:
+        resource = self.repository.get_resource(workspace_id, resource_id)
+        result = ResourceVersionCheckResult(
+            resource_id=resource_id,
+            version_id=version_id,
+            content_hash=content_hash,
+            status="missing",
+        )
+        if resource is None:
+            return result
+        if (resource.version_id or "", resource.content_hash or "") != (version_id, content_hash):
+            result.status = "stale"
+            return result
+
+        capture_kind = captured_source_kind(resource)
+        if capture_kind:
+            saved = self._read_captured_snapshot(workspace_id, resource) if capture_kind != "pdf" else ""
+            result.status, result.basis = compare_captured_source(
+                resource, capture_kind, saved, network_enabled=self.enable_network_fetch,
+            )
+        elif resource.kind == "url":
+            result.status, result.basis = self._check_indexed_url(resource), "indexed_url"
+        else:
+            result.status = "no_source"
+
+        current = self.repository.get_resource(workspace_id, resource_id)
+        if current is None:
+            result.status = "missing"
+        elif (current.version_id or "", current.content_hash or "") != (version_id, content_hash):
+            result.status = "stale"
+        return result
+
+    def _read_captured_snapshot(self, workspace_id: str, resource: ApiResourceRecord) -> str:
+        path = self._local_source_path(resource.source)
+        if path is None or not resource.content_hash:
+            return ""
+        try:
+            path = path.resolve(strict=True)
+            if not self._is_managed_inline_source(workspace_id, str(path)):
+                return ""
+            with path.open("rb") as file:
+                data = file.read(4 * 1024 * 1024 + 1)
+            if len(data) > 4 * 1024 * 1024 or compute_content_hash(data) != resource.content_hash:
+                return ""
+            return data.decode("utf-8")
+        except (OSError, UnicodeError, ValueError):
+            return ""
+
+    def _check_indexed_url(self, resource: ApiResourceRecord) -> VersionCheckStatus:
+        if (
+            not resource.version_id or not resource.content_hash or not resource.fetched_at
+            or resource.index_status != "indexed"
+            or (not resource.indexed_source_hash and resource.parser_version
+                and resource.parser_version != CANONICAL_PARSER_VERSION)
+        ):
+            return "no_baseline"
+        if not self.enable_network_fetch:
+            return "network_disabled"
+        request = IngestionRequest(
+            source_uri=resource.source, kind=ResourceKind.URL, enable_network=True,
+        )
+        text, _, provenance = self.ingest_service.describe_url(request)
+        if provenance.get("status") != "fetched" or not text.strip():
+            return "fetch_failed"
+        if resource.indexed_source_hash:
+            return (
+                "unchanged" if provenance.get("source_content_hash") == resource.indexed_source_hash
+                else "changed"
+            )
+        chunks = self.ingestor._chunk_text(
+            resource.id, text, request.chunk_size, request.chunk_overlap, kind=ResourceKind.URL,
+        )
+        indexed_text = "\n\n".join(chunk.text for chunk in chunks if chunk.text)
+        if resource.parser:
+            try:
+                document = build_canonical_from_text(
+                    indexed_text, resource_id=resource.id,
+                    original_filename=(
+                        PurePosixPath(resource.canonical_original_path).name
+                        if resource.canonical_original_path else self._url_snapshot_filename(resource.name)
+                    ),
+                )
+            except CanonicalParseError:
+                return "fetch_failed"
+            chunks, _ = self._canonical_chunks(resource, document, markdown_path="")
+            indexed_text = "\n\n".join(chunk.text for chunk in chunks if chunk.text)
+        return "unchanged" if compute_content_hash(indexed_text) == resource.content_hash else "changed"
+
     def index(self, workspace_id: str, request: ResourceIndexRequest) -> ApiResourceRecord:
         resource = self._require_workspace_resource(workspace_id, request.resource_id)
         self._ensure_registry_resource(resource)
@@ -501,6 +605,7 @@ class ResourceService:
             )
         network_allowed = self._network_fetch_enabled(request.enable_network)
         canonical_meta: dict[str, Any] = {}
+        initial_source_hash: str | None = None
         canonical_ingest = self._canonical_local_ingest(workspace_id, resource)
         if canonical_ingest is not None:
             ingest_result, canonical_meta = canonical_ingest
@@ -509,6 +614,8 @@ class ResourceService:
                 resource,
                 network_allowed=network_allowed,
             )
+            source_hash = (ingest_result.source_provenance or {}).get("source_content_hash")
+            initial_source_hash = source_hash if isinstance(source_hash, str) else None
             url_canonical = self._canonicalize_url_ingest(workspace_id, resource, ingest_result)
             if url_canonical is not None:
                 ingest_result, canonical_meta = url_canonical
@@ -701,6 +808,7 @@ class ResourceService:
                 "knowledge_fragments": knowledge_fragments,
                 "source_governance": source_governance,
                 "content_hash": (current_version or {}).get("content_hash") or resource.content_hash,
+                "indexed_source_hash": initial_source_hash if url_fetch_succeeded else None,
                 "content_language": detected_content_language or resource.content_language,
                 "canonical_markdown_path": canonical_field(
                     "canonical_markdown_path", resource.canonical_markdown_path
@@ -814,6 +922,7 @@ class ResourceService:
         if request.action == "rename":
             updates["name"] = self._normalize_resource_title(request.title)
         elif request.action == "set_tags":
+            updates["capture_provenance_tags"] = list(effective_capture_tags(resource))
             updates["tags"] = self._normalize_resource_tags(request.tags or [])
         elif request.action == "set_group":
             group_path, collection_root = self._group_resource_file(
@@ -1091,6 +1200,43 @@ class ResourceService:
                 pass
         content = self._search_index(workspace_id).document_content(record.id)
         return content or None
+
+    def read_indexed_fragment_text(
+        self, workspace_id: str, resource: ApiResourceRecord, fragment: dict[str, Any],
+    ) -> str:
+        """Use the original indexed span for a teaching question, with its version verified."""
+        location = fragment.get("location")
+        if not isinstance(location, dict) or not resource.version_id or not resource.content_hash:
+            return ""
+        start, end = location.get("line_start"), location.get("line_end")
+        if not isinstance(start, int) or start < 1:
+            return ""
+        if end is not None and (not isinstance(end, int) or end < start):
+            return ""
+        index = self._search_index(workspace_id)
+        metadata = index.document_metadata(resource.id)
+        if metadata.get("version_id") != resource.version_id or metadata.get("content_hash") != resource.content_hash:
+            return ""
+        if fragment.get("version_id") != resource.version_id or fragment.get("content_hash") != resource.content_hash:
+            return ""
+        content = index.document_content(resource.id)
+        content_length = metadata.get("content_length")
+        if isinstance(content_length, int) and content_length > 0:
+            content = content[:content_length]
+        lines = content.splitlines()
+        if end is None:
+            # Search locations can point to a single line. Use the indexed
+            # chunk containing that line, bounded to a short excerpt.
+            raw_anchors = metadata.get("canonical_anchors")
+            enclosing_ends = [
+                anchor["line_end"] for anchor in raw_anchors
+                if isinstance(anchor, dict)
+                and isinstance(anchor.get("line_start"), int)
+                and isinstance(anchor.get("line_end"), int)
+                and anchor["line_start"] <= start <= anchor["line_end"]
+            ] if isinstance(raw_anchors, list) else []
+            end = min(min(enclosing_ends, default=start), start + 11, len(lines))
+        return "\n".join(lines[start - 1:end]).strip()[:1600]
 
     def search_cache_stats(self) -> dict[str, Any]:
         """Cache evidence for the agent: hits/misses/TTL (token-cost transparency)."""
@@ -1746,14 +1892,7 @@ class ResourceService:
         current_version = self._record_resource_version(workspace_id, resource, text)
         version_id = str((current_version or {}).get("version_id") or "")
         content_hash = str((current_version or {}).get("content_hash") or "")
-        display_name = re.sub(
-            r'[<>:"/\\|?*\x00-\x1f]',
-            "-",
-            str(resource.name or "").strip(),
-        ).strip() or "capture"
-        if not display_name.lower().endswith(".md"):
-            display_name = f"{display_name}.md"
-        filename = display_name[:120]
+        filename = self._url_snapshot_filename(resource.name)
         try:
             document = build_canonical_from_text(
                 text,
@@ -1774,6 +1913,13 @@ class ResourceService:
             original_filename=filename,
             extra_provenance=dict(ingest_result.source_provenance or {}),
         )
+
+    @staticmethod
+    def _url_snapshot_filename(name: str) -> str:
+        display_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", name.strip()).strip() or "capture"
+        if not display_name.lower().endswith(".md"):
+            display_name = f"{display_name}.md"
+        return display_name[:120]
 
     def _canonical_result(
         self,
@@ -2094,6 +2240,7 @@ class ResourceService:
         *,
         max_items: int = 4,
         summary_chars: int = 220,
+        fragments_per_source: int = 2,
     ) -> dict[str, object]:
         normalized_ids: list[str] = []
         seen_ids: set[str] = set()
@@ -2149,7 +2296,7 @@ class ResourceService:
                     "item_count": len(resource.source_items),
                 }
             )
-            for fragment in resource.knowledge_fragments[:2]:
+            for fragment in resource.knowledge_fragments[:fragments_per_source]:
                 if isinstance(fragment, dict):
                     signature = self._fragment_signature(fragment)
                     if signature in seen_fragment_signatures:

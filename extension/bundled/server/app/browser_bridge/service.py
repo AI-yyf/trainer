@@ -116,9 +116,15 @@ class _PendingDraft:
     text: str
     client_id: str
     created_at: str
+    url: str = ""
+    title: str = ""
+    selection: str = ""
 
     def as_payload(self) -> dict[str, str]:
-        return {"id": self.id, "workspace_id": self.workspace_id, "text": self.text}
+        result = {"id": self.id, "workspace_id": self.workspace_id, "text": self.text}
+        if self.url:
+            result.update(url=self.url, title=self.title, selection=self.selection)
+        return result
 
 
 def _hashed(token: str) -> str:
@@ -227,6 +233,9 @@ class BrowserBridgeService:
                         text=text,
                         client_id=str(entry.get("client_id") or ""),
                         created_at=str(entry.get("created_at") or _utc_now_iso()),
+                        url=str(entry.get("url") or ""),
+                        title=str(entry.get("title") or ""),
+                        selection=str(entry.get("selection") or ""),
                     )
                 )
             self._pending_drafts = drafts
@@ -571,8 +580,12 @@ class BrowserBridgeService:
                 "A coach draft requires the workspace its selection was captured for.",
                 status_code=422,
             )
-        excerpt = " ".join(str(selection or "").split())
-        if not excerpt:
+        excerpt = str(selection or "").strip()
+        source_url = str(url or "").strip()
+        if not source_url.lower().startswith(("https://", "http://")):
+            source_url = ""
+        source_title = " ".join(str(title or "").split())[:_DRAFT_TITLE_LIMIT]
+        if not excerpt and not source_url:
             raise BrowserPairingError(
                 "empty_selection",
                 "A coach draft requires a non-empty selection.",
@@ -607,8 +620,8 @@ class BrowserBridgeService:
                 )
             text = build_coach_draft_text(
                 selection=excerpt,
-                url=str(url or "").strip(),
-                title=" ".join(str(title or "").split())[:_DRAFT_TITLE_LIMIT],
+                url=source_url,
+                title=source_title,
                 language=language,
             )
             draft = _PendingDraft(
@@ -617,6 +630,9 @@ class BrowserBridgeService:
                 text=text,
                 client_id=normalized_client_id,
                 created_at=_utc_now_iso(),
+                url=source_url,
+                title=source_title,
+                selection=excerpt,
             )
             self._pending_drafts.append(draft)
             self._write_state_locked()
@@ -746,12 +762,9 @@ def build_coach_draft_text(
     template = _draft_template(language)
     source_label = title or url or template["fallback_source"]
     quote = "\n".join(f"> {line}" if line else ">" for line in selection.splitlines())
-    lines = [
-        template["intro"].format(source=source_label),
-        "",
-        quote,
-        "",
-    ]
+    lines = [template["intro"].format(source=source_label), "", quote, ""] if quote else []
+    if not quote:
+        return f"{source_label}\n{template['source_line'].format(url=url)}"
     if url:
         lines.append(template["source_line"].format(url=url))
     lines.append("")

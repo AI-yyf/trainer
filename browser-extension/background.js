@@ -954,25 +954,24 @@ async function ensureAutoPair(options) {
     let candidateUrls = discoveredUrls;
     if (existing.credential && existing.baseUrl) {
       const existingReachable = discoveredUrls.includes(existing.baseUrl);
-      const focused = ranked[0];
-      if (!existingReachable) {
-        // The stored sidecar is gone (window closed / port changed). Move to
-        // a live workspace even if it has no focus signal yet.
-        if (!ranked.length) {
-          return { ok: true, auth: existing };
-        }
-        candidateUrls = ranked.map((candidate) => candidate.baseUrl);
+      const current = ranked.find((candidate) =>
+        candidate.baseUrl === existing.baseUrl && candidate.workspaceId === existing.workspaceId);
+      const lastFocus = Math.max(existing.workspaceFocusAt || 0, current?.focusAt || 0);
+      // A stopped sidecar has no live focus record. Keep its known workspace
+      // until it returns or another workspace gets newer explicit host focus.
+      const replacements = ranked.filter((candidate) =>
+        (candidate.workspaceId === existing.workspaceId && candidate.baseUrl !== existing.baseUrl) ||
+        (candidate.workspaceId !== existing.workspaceId && candidate.focusAt > lastFocus));
+      if (!existingReachable || !current) {
+        candidateUrls = replacements.map((candidate) => candidate.baseUrl);
+      } else if (replacements.length && replacements[0].focusAt > lastFocus) {
+        candidateUrls = [replacements[0].baseUrl];
       } else {
-        const shouldSwitch =
-          Boolean(focused) &&
-          focused.baseUrl !== existing.baseUrl &&
-          Number(focused.focusAt) > 0;
-        if (!shouldSwitch) {
-          return { ok: true, auth: existing };
+        if (lastFocus > existing.workspaceFocusAt) {
+          await TrainerCapture.saveAuth(existing.baseUrl, existing.credential, existing.workspaceId, lastFocus);
+          existing.workspaceFocusAt = lastFocus;
         }
-        // Only the focused window is a valid replacement; if re-pairing fails,
-        // keep the known-good credential rather than silently binding elsewhere.
-        candidateUrls = [focused.baseUrl];
+        return { ok: true, auth: existing };
       }
     } else if (ranked.length) {
       candidateUrls = ranked.map((candidate) => candidate.baseUrl);
@@ -983,7 +982,8 @@ async function ensureAutoPair(options) {
         const saved = await TrainerCapture.saveAuth(
           paired.baseUrl,
           paired.credential,
-          paired.workspaceId
+          paired.workspaceId,
+          ranked.find((candidate) => candidate.baseUrl === baseUrl && candidate.workspaceId === paired.workspaceId)?.focusAt || 0
         );
         await TrainerCapture.saveWorkspaceName(paired.workspaceName);
         await TrainerCapture.saveStatusCache(null);
@@ -1242,7 +1242,7 @@ async function clearQueueEntries() {
 async function coachDraft(info, tab) {
   const copy = dict();
   const selection = String(info.selectionText || '').trim();
-  if (!selection) {
+  if (!selection && info.pageContext !== true) {
     await notifyResult(copy.notifyDraftTitle, copy.coachEmptySelection, '');
     return { status: 'failed', message: copy.coachEmptySelection };
   }
@@ -1260,6 +1260,7 @@ async function coachDraft(info, tab) {
 
   if (!auth.credential || !auth.baseUrl) {
     const item = TrainerCapture.createDraftQueueItem({
+      clientDraftId: payload.client_id,
       selection,
       url: payload.url,
       title: payload.title,
@@ -1307,6 +1308,7 @@ async function coachDraft(info, tab) {
       resetAutoPairCache();
     }
     const item = TrainerCapture.createDraftQueueItem({
+      clientDraftId: payload.client_id,
       selection,
       url: payload.url,
       title: payload.title,
@@ -1375,6 +1377,20 @@ const MESSAGE_HANDLERS = {
     return { ok: result.ok, message: result.message || '', state: await buildState() };
   },
   'trainer:refresh': async () => ({ ok: true, state: await refreshState() }),
+  'trainer:send-tab-context': async () => {
+    const tab = await activeTab();
+    if (!tab || !TrainerCapture.httpUrlOnly(tab.url)) {
+      return { status: 'failed', message: dict().captureNoUrl };
+    }
+    // Content is read only when the learner clicks Send. On restricted pages
+    // Chrome may not expose a content script; the URL remains the source.
+    let selectionText = '';
+    if (Number.isInteger(tab.id)) {
+      const context = await chrome.tabs.sendMessage(tab.id, { type: 'trainer:read-selection' }).catch(() => undefined);
+      selectionText = typeof context?.selection === 'string' ? context.selection : '';
+    }
+    return coachDraft({ selectionText, pageContext: true, pageUrl: tab.url }, tab);
+  },
   'trainer:capture-tab': async (message) =>
     captureActiveTab({
       download: message && message.download === true,

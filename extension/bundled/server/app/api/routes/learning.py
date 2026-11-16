@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 
 from ...core.models import TeachingKnowledgeAsset
+from ...evidence.contract import pinned_card_resource
 from ...pedagogy.stage_material_state import stage_material_payload, stage_material_state
 from ...workspace.remote_identity import validate_remote_verification_artifact
 from ..runtime import TrainerRuntime
@@ -224,9 +225,9 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         # the card declares target files and the host bound an artifact file,
         # the artifact must be one of those targets (canonical comparison);
         # otherwise an unrelated passing test could mark this practice verified.
+        attest_card = runtime.memory_service.get_card(resolved_workspace_id, card_id)
         if verification_artifact is not None:
             artifact_path = str(verification_artifact.get("artifact_path") or verification_artifact.get("artifact_uri") or "")
-            attest_card = runtime.memory_service.get_card(resolved_workspace_id, card_id)
             card_targets = list(getattr(attest_card, "files_to_touch", []) or [])
             if artifact_path and card_targets:
                 from urllib.parse import unquote as _unquote
@@ -309,6 +310,7 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                         and item.get("runner_version") == runner_version
                         for item in items
                     ),
+                    **pinned_card_resource(attest_card),
                 )
                 if recorded is not None:
                     persist_skill_projection(runtime, resolved_workspace_id, attempt["attempt_id"])

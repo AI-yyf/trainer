@@ -13,9 +13,8 @@ for (const width of [340, 420, 460]) {
           await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
           const nav = page.locator('.app-shell-nav');
           await expect(nav.getByRole('button')).toHaveText(labels);
-          // Product ruling (lib/composerDock.ts): the persistent dock composer
-          // lives on Coach, Learning and Resources; Training/Progress/Settings do not dock.
-          await expect(page.locator('#coach-composer')).toHaveCount(['coach', 'plan', 'resources'].includes(route) ? 1 : 0);
+          const ownsComposer = route !== 'settings';
+          await expect(page.locator('#coach-composer')).toHaveCount(ownsComposer ? 1 : 0);
           const current = nav.locator('[aria-current="page"]');
           if (route === 'settings') await expect(current).toHaveCount(0);
           else await expect(current).toHaveAttribute('data-testid', `trainer-view-nav-${['training', 'progress'].includes(route) ? 'plan' : route}`);
@@ -35,20 +34,26 @@ test('surface switches retain the Coach draft and resource search without sharin
   await expect(page.locator('#coach-composer')).toBeVisible();
   await page.locator('#coach-composer').fill('Keep my question while I read');
   await page.getByTestId('trainer-view-nav-resources').click();
-  const search = page.getByRole('searchbox');
-  await search.fill('boundary');
+  await expect(page.locator('[data-surface=resources] input[type=search]')).toHaveCount(0);
+  await page.locator('#coach-composer').fill('/search boundary');
+  await page.locator('#coach-composer').press('Enter');
+  const search = page.locator('[data-clear-resource-search]');
+  await expect(search).toContainText('boundary');
   await page.getByTestId('trainer-view-nav-plan').click();
   await page.getByTestId('trainer-view-nav-resources').click();
-  await expect(search).toHaveValue('boundary');
+  await expect(search).toContainText('boundary');
   await page.getByTestId('trainer-view-nav-coach').click();
   await expect(page.locator('#coach-composer')).toHaveValue('Keep my question while I read');
+  await page.getByTestId('trainer-view-nav-plan').click();
+  const learning = page.locator('[data-primary-surface="plan"]');
+  await page.locator('#coach-composer').evaluate((input) => input.setAttribute('data-same-learning-input', 'true'));
+  await learning.evaluate((surface) => surface.setAttribute('data-same-learning-surface', 'true'));
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: { activeView: 'training' } }));
-  await expect(page.locator('#coach-composer')).toHaveCount(0);
-  // Training owns a concept-practice card here so the surface has both its own
-  // activity input and the single task-details disclosure (file-verified
-  // practice replaces the response with the verify action instead).
+  await expect(page.locator('#coach-composer')).toHaveAttribute('data-same-learning-input', 'true');
+  await expect(learning).toHaveAttribute('data-same-learning-surface', 'true');
   await page.evaluate(() => {
     const current = window.__TRAINER_BOOTSTRAP__;
+    const workspaceId = current.memory.workspace?.workspaceId ?? 'workspace-template-nav';
     const card = {
       cardId: 'card-template-nav', type: 'practice', title: 'Boundary check card',
       status: 'active', learningPhase: 'try', learningFamily: 'concept',
@@ -62,26 +67,27 @@ test('surface switches retain the Coach draft and resource search without sharin
       plan: null,
       planRuntimeStatus: { recovered: true, currentStep: '', reviewPoints: [] },
       memory: { ...current.memory, workspace: { ...current.memory.workspace,
-        workspaceId: 'workspace-template-nav',
-        liveTrainingSelection: { workspaceId: 'workspace-template-nav', cardId: card.cardId, selectedAt: '2026-10-02T03:00:00Z' } } },
-      workspaceTrainingState: { ...current.workspaceTrainingState, workspaceId: 'workspace-template-nav',
+        workspaceId,
+        liveTrainingSelection: { workspaceId, cardId: card.cardId, selectedAt: '2026-10-02T03:00:00Z' } } },
+      workspaceTrainingState: { ...current.workspaceTrainingState, workspaceId,
         selectedCardId: card.cardId, selectedCardType: 'practice', selectedCardTitle: card.title,
         selectedCardStatus: 'active', trainingCardCandidates: [card],
         activeTrainingCardRouting: { selectedCardId: card.cardId, selectedCard: card, selectionScore: 100 } },
     } });
   });
-  // One task-details disclosure per card; the flash response sits on the card
-  // face instead of a nested "Full acceptance" composer.
+  // Practice answers belong to the active card and keep their own draft.
   const cardDetails = page.locator('[data-training-card-details]');
   await expect(cardDetails).toHaveCount(1);
   await expect(cardDetails.locator(':scope > summary')).toContainText(/任务详情|Task details/);
   await expect(cardDetails).not.toHaveAttribute('open', '');
-  await expect(page.locator('#training-response')).toBeVisible();
-  await page.locator('#training-response').fill('My attempt note');
+  const practiceInput = page.locator('#coach-composer');
+  await expect(page.locator('textarea:visible')).toHaveCount(1);
+  await expect(practiceInput).toBeVisible();
+  await practiceInput.fill('My attempt note');
   await page.getByTestId('trainer-view-nav-coach').click();
   await expect(page.locator('#coach-composer')).toHaveValue('Keep my question while I read');
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: { activeView: 'training' } }));
-  await expect(page.locator('#training-response')).toHaveValue('My attempt note');
+  await expect(practiceInput).toHaveValue('My attempt note');
 });
 
 test('reload restores the same session draft and reading position; history returns keyboard focus', async ({ page }) => {

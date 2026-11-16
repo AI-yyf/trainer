@@ -45,11 +45,8 @@ test('the reading library opens one file directly and removes management panels'
   await expect(page.locator('.resources-knowledge')).toBeVisible();
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
-    const search = page.locator('.resources-knowledge__search input');
-    const icon = page.locator('.resources-knowledge__search > svg');
-    const fieldBounds = await search.boundingBox();
-    const iconBounds = await icon.boundingBox();
-    expect(Math.abs(fieldBounds.y + fieldBounds.height / 2 - iconBounds.y - iconBounds.height / 2)).toBeLessThanOrEqual(2);
+    await expect(page.locator('#coach-composer')).toBeVisible();
+    await expect(page.locator('.resources-knowledge input[type=search]')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
 });

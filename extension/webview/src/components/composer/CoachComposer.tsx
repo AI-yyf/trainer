@@ -16,7 +16,7 @@ import { useImageAttachmentStaging } from "../../lib/useImageAttachmentStaging";
 import { SystemState } from "../../templates/SystemState";
 import { AttachmentIcon, CheckMarkIcon, CloseIcon, PlusIcon, SendIcon, SquareIcon } from "../icons";
 import { ComposerIconButton } from "./ComposerIconButton";
-import { composerLocaleCopy, MAX_STAGED_ATTACHMENTS } from "../../lib/i18n/segments/coachInlineText";
+import { composerAddCopy, composerLocaleCopy, MAX_STAGED_ATTACHMENTS } from "../../lib/i18n/segments/coachInlineText";
 
 export interface ComposerActionItem {
   id: string;
@@ -24,7 +24,9 @@ export interface ComposerActionItem {
   icon: ReactNode;
   active?: boolean;
   disabled?: boolean;
-  pinned?: boolean;
+  description?: string;
+  group?: string;
+  focusComposer?: boolean;
   onClick?: () => void;
 }
 
@@ -55,7 +57,7 @@ export interface ComposerModeControl {
 }
 
 
-export type ComposerMentionKind = "resource" | "file";
+export type ComposerMentionKind = "resource" | "file" | "context";
 
 export interface ComposerMentionItem {
   id: string;
@@ -92,6 +94,7 @@ export interface CoachComposerProps {
   hintText?: string;
   shortcutHint?: string;
   leadingActions?: ComposerActionItem[];
+  onAddMenuOpen?: () => void;
   secondaryActions?: ComposerSecondaryAction[];
   modeControl?: ComposerModeControl;
   showCharCount?: boolean;
@@ -136,6 +139,7 @@ export function CoachComposer({
   hintText,
   shortcutHint,
   leadingActions,
+  onAddMenuOpen,
   secondaryActions,
   modeControl,
   showCharCount = true,
@@ -154,6 +158,7 @@ export function CoachComposer({
   onMentionSelect,
 }: CoachComposerProps) {
   const localizedCopy = composerLocaleCopy[language] ?? composerLocaleCopy["en-US"];
+  const addCopy = composerAddCopy[language];
   const resolvedPlaceholder = placeholder ?? localizedCopy.placeholder;
   const resolvedBusyLabel = busyLabel ?? localizedCopy.busyLabel;
   const resolvedCancelLabel = cancelLabel ?? localizedCopy.cancelLabel;
@@ -166,6 +171,7 @@ export function CoachComposer({
   const modeControlRef = useRef<HTMLDivElement | null>(null);
   const modeOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const plusControlRef = useRef<HTMLDivElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const plusOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const dragDepthRef = useRef(0);
   const sideButtonHandledRef = useRef<number | null>(null);
@@ -385,20 +391,27 @@ export function CoachComposer({
   // the composer drops its duplicate hint and keeps only the sr-only status.
   const primaryHelperText = busy ? "" : resolvedSummary ?? resolvedHintText;
   const resolvedShortcutHint = !busy && shortcutHint?.trim() ? shortcutHint : undefined;
-  const resolvedLeadingActions = leadingActions ?? [];
   const resolvedSecondaryActions = secondaryActions ?? [];
-  const pinnedLeadingActions = resolvedLeadingActions.filter((action) => action.pinned);
-  const plusMenuActions = resolvedLeadingActions.filter((action) => !action.pinned);
-  const hasLeadingActions = resolvedLeadingActions.length > 0;
-  const hasPinnedLeadingActions = pinnedLeadingActions.length > 0;
+  const plusMenuActions: ComposerActionItem[] = [
+    ...(attachmentsEnabled ? [{
+      id: "image-attachment",
+      label: addCopy.attachment,
+      icon: <AttachmentIcon size={16} />,
+      onClick: () => {
+        if (attachmentsInteractive) imageInputRef.current?.click();
+        else revealAttachmentCapabilityNote();
+      },
+    }] : []),
+    ...(leadingActions ?? []),
+  ];
   const hasPlusMenu = plusMenuActions.length > 0;
   const hasSecondaryActions = resolvedSecondaryActions.length > 0;
   const hasModeControl = Boolean(modeControl);
   const selectedModeOption = modeControl?.options.find((option) => option.value === modeControl.value) ?? modeControl?.options[0];
   const modeMenuId = `${modeControl?.id ?? textareaId}-menu`;
   const plusMenuId = `${textareaId}-plus-menu`;
-  const plusMenuAriaLabel = localizedCopy.plusMenu;
-  const showToolbarDivider = hasLeadingActions || hasSecondaryActions || hasModeControl;
+  const plusMenuAriaLabel = addCopy.heading;
+  const showToolbarDivider = hasPlusMenu || hasSecondaryActions || hasModeControl;
   const showHelperText = Boolean(
     resolvedSummary ||
       (resolvedHintText && trimmedValue.length > 0 && trimmedValue.length < 24) ||
@@ -408,7 +421,7 @@ export function CoachComposer({
     "composer",
     compactMode ? "composer--compact" : "",
     primaryHelperText || resolvedShortcutHint ? "composer--with-helper" : "composer--quiet",
-    hasLeadingActions ? "composer--with-leading-actions" : "",
+    hasPlusMenu ? "composer--with-leading-actions" : "",
     hasSecondaryActions ? "composer--with-secondary-actions" : "",
   ]
     .filter(Boolean)
@@ -556,22 +569,29 @@ export function CoachComposer({
     }
   }, [areActionsDisabled, modeControl?.disabled, modeControl?.id]);
 
-  const focusPlusOption = useCallback((index: number) => {
-    plusOptionRefs.current[index]?.focus();
+  const focusPlusOption = useCallback((index: number, step: number) => {
+    const options = plusOptionRefs.current;
+    for (let cursor = index; cursor >= 0 && cursor < options.length; cursor += step) {
+      const option = options[cursor];
+      if (option && !option.disabled) {
+        option.focus();
+        return;
+      }
+    }
   }, []);
 
   const openPlusMenu = useCallback(
-    (focusIndex?: number) => {
+    (fromEnd = false) => {
       if (!hasPlusMenu || areActionsDisabled) {
         return;
       }
-      const selectedIndex = plusMenuActions.findIndex((action) => action.active);
-      const nextIndex = focusIndex ?? Math.max(0, selectedIndex);
+      onAddMenuOpen?.();
+      setMentionMenu(null);
       setIsModeMenuOpen(false);
       setIsPlusMenuOpen(true);
-      window.requestAnimationFrame(() => focusPlusOption(nextIndex));
+      window.requestAnimationFrame(() => focusPlusOption(fromEnd ? plusMenuActions.length - 1 : 0, fromEnd ? -1 : 1));
     },
-    [areActionsDisabled, focusPlusOption, hasPlusMenu, plusMenuActions],
+    [areActionsDisabled, focusPlusOption, hasPlusMenu, onAddMenuOpen, plusMenuActions.length],
   );
 
   const closePlusMenu = useCallback((restoreFocus = false) => {
@@ -589,7 +609,8 @@ export function CoachComposer({
         return;
       }
       action.onClick?.();
-      closePlusMenu(true);
+      closePlusMenu(!action.focusComposer);
+      if (action.focusComposer) window.requestAnimationFrame(() => textareaRef.current?.focus());
     },
     [closePlusMenu],
   );
@@ -605,20 +626,10 @@ export function CoachComposer({
       }
       if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
         event.preventDefault();
-        const selectedIndex = plusMenuActions.findIndex((action) => action.active);
-        const lastIndex = Math.max(0, plusMenuActions.length - 1);
-        const targetIndex =
-          event.key === "ArrowUp"
-            ? Math.max(0, selectedIndex - 1)
-            : event.key === "End"
-              ? lastIndex
-              : event.key === "Home"
-                ? 0
-                : Math.min(lastIndex, selectedIndex + 1);
-        openPlusMenu(targetIndex);
+        openPlusMenu(event.key === "ArrowUp" || event.key === "End");
       }
     },
-    [closePlusMenu, openPlusMenu, plusMenuActions],
+    [closePlusMenu, openPlusMenu],
   );
 
   const handlePlusMenuKeyDown = useCallback(
@@ -633,16 +644,16 @@ export function CoachComposer({
       }
       event.preventDefault();
       const currentIndex = plusOptionRefs.current.findIndex((element) => element === document.activeElement);
-      const lastIndex = Math.max(0, plusMenuActions.length - 1);
+      const backwards = event.key === "ArrowUp" || event.key === "End";
       const nextIndex =
         event.key === "ArrowUp"
-          ? Math.max(0, currentIndex - 1)
+          ? currentIndex - 1
           : event.key === "End"
-            ? lastIndex
+            ? plusMenuActions.length - 1
             : event.key === "Home"
               ? 0
-              : Math.min(lastIndex, currentIndex + 1);
-      focusPlusOption(nextIndex);
+              : currentIndex + 1;
+      focusPlusOption(nextIndex, backwards ? -1 : 1);
     },
     [closePlusMenu, focusPlusOption, plusMenuActions],
   );
@@ -845,6 +856,20 @@ export function CoachComposer({
       }}
     >
       {accessory ? <div className="composer__accessory">{accessory}</div> : null}
+      {attachmentsInteractive ? (
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []);
+            event.currentTarget.value = "";
+            if (files.length) void handleAttachFiles(files);
+          }}
+        />
+      ) : null}
 
       <label className="sr-only" htmlFor={textareaId}>
         {resolvedAccessibilityLabel}
@@ -932,11 +957,11 @@ export function CoachComposer({
                     }
                     onClick={() => selectMention(item)}
                   >
-                    <span className="composer__mention-kind">
+                    {item.kind !== "context" ? <span className="composer__mention-kind">
                       {item.kind === "resource"
                         ? localizedCopy.mentionResource
                         : localizedCopy.mentionFile}
-                    </span>
+                    </span> : null}
                     <span className="composer__mention-label">{item.label}</span>
                     {item.detail ? (
                       <span className="composer__mention-detail">{item.detail}</span>
@@ -1016,48 +1041,53 @@ export function CoachComposer({
         )}
 
         <div className="composer__actions">
-          {hasPlusMenu || hasPinnedLeadingActions ? (
+          {hasPlusMenu ? (
             <div className="composer__leading-actions">
-              {hasPlusMenu ? (
-                <div className="composer__plus-control" ref={plusControlRef}>
-                  <button
-                    aria-controls={isPlusMenuOpen ? plusMenuId : undefined}
-                    aria-expanded={isPlusMenuOpen}
-                    aria-haspopup="menu"
+              <div className="composer__plus-control" ref={plusControlRef} onBlur={(event) => {
+                if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) closePlusMenu();
+              }}>
+                <button
+                  aria-controls={isPlusMenuOpen ? plusMenuId : undefined}
+                  aria-expanded={isPlusMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label={plusMenuAriaLabel}
+                  className={`icon-button composer-plus-control__trigger ${
+                    isPlusMenuOpen ? "is-open" : ""
+                  }`.trim()}
+                  disabled={areActionsDisabled}
+                  onClick={() => {
+                    if (isPlusMenuOpen) {
+                      closePlusMenu();
+                      return;
+                    }
+                    openPlusMenu();
+                  }}
+                  onKeyDown={handlePlusTriggerKeyDown}
+                  title={plusMenuAriaLabel}
+                  type="button"
+                >
+                  <span className="icon-button__glyph" aria-hidden="true">
+                    <PlusIcon size={16} />
+                  </span>
+                </button>
+                {isPlusMenuOpen ? (
+                  <div
                     aria-label={plusMenuAriaLabel}
-                    className={`icon-button composer-plus-control__trigger ${
-                      isPlusMenuOpen ? "is-open" : ""
-                    }`.trim()}
-                    disabled={areActionsDisabled}
-                    onClick={() => {
-                      if (isPlusMenuOpen) {
-                        closePlusMenu();
-                        return;
-                      }
-                      openPlusMenu();
-                    }}
-                    onKeyDown={handlePlusTriggerKeyDown}
-                    title={plusMenuAriaLabel}
-                    type="button"
+                    className="composer-mode-menu composer-plus-menu"
+                    id={plusMenuId}
+                    onKeyDown={handlePlusMenuKeyDown}
+                    role="menu"
                   >
-                    <span className="icon-button__glyph" aria-hidden="true">
-                      <PlusIcon size={16} />
-                    </span>
-                  </button>
-                  {isPlusMenuOpen ? (
-                    <div
-                      aria-label={plusMenuAriaLabel}
-                      className="composer-mode-menu composer-plus-menu"
-                      id={plusMenuId}
-                      onKeyDown={handlePlusMenuKeyDown}
-                      role="menu"
-                    >
-                      {plusMenuActions.map((action, index) => {
-                        const isActive = Boolean(action.active);
-                        return (
+                    <div className="composer-plus-menu__heading" aria-hidden="true">{addCopy.heading}</div>
+                    {plusMenuActions.map((action, index) => {
+                      const isActive = Boolean(action.active);
+                      return (
+                        <div key={action.id} role="none">
+                          {action.group && action.group !== plusMenuActions[index - 1]?.group ? (
+                            <div className="composer-plus-menu__heading" aria-hidden="true">{action.group}</div>
+                          ) : null}
                           <button
-                            key={action.id}
-                            aria-checked={isActive}
+                            aria-checked={action.active === undefined ? undefined : isActive}
                             className={`composer-mode-menu__option composer-plus-menu__option ${
                               isActive ? "is-active" : ""
                             }`}
@@ -1066,37 +1096,23 @@ export function CoachComposer({
                             ref={(element) => {
                               plusOptionRefs.current[index] = element;
                             }}
-                            role="menuitemcheckbox"
+                            role={action.active === undefined ? "menuitem" : "menuitemcheckbox"}
+                            tabIndex={-1}
                             type="button"
                           >
+                            <span className="composer-plus-menu__icon" aria-hidden="true">{action.icon}</span>
                             <span className="composer-mode-menu__copy">
                               <strong>{action.label}</strong>
+                              {action.description ? <span>{action.description}</span> : null}
                             </span>
-                            <span className="composer-mode-menu__state" aria-hidden="true">
-                              {isActive ? <CheckMarkIcon size={16} /> : null}
-                            </span>
+                            {isActive ? <span className="composer-mode-menu__state" aria-hidden="true"><CheckMarkIcon size={16} /></span> : null}
                           </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {hasPinnedLeadingActions ? (
-                <div className="composer-iconbar composer-iconbar--footer">
-                  {pinnedLeadingActions.map((action) => (
-                    <ComposerIconButton
-                      key={action.id}
-                      active={action.active}
-                      disabled={action.disabled || areActionsDisabled}
-                      icon={action.icon}
-                      label={action.label}
-                      onClick={action.onClick}
-                    />
-                  ))}
-                </div>
-              ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
 

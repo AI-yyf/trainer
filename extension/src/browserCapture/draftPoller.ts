@@ -23,6 +23,7 @@ export interface PendingBrowserDraft {
   id: string;
   text: string;
   workspaceId: string;
+  source?: { url: string; title: string; selection: string };
 }
 
 export const COACH_DRAFT_PREFILL_MESSAGE = 'ui/coachDraftPrefill';
@@ -71,10 +72,18 @@ export function parsePendingDrafts(payload: unknown): PendingBrowserDraft[] {
     const text = typeof record.text === 'string' ? record.text : '';
     const workspaceId = typeof record.workspace_id === 'string' ? record.workspace_id.trim() : '';
     if (id && text.trim()) {
-      parsed.push({ id, text, workspaceId });
+      const url = asTrimmedText(record.url);
+      const source = /^https?:\/\//i.test(url)
+        ? { url, title: asTrimmedText(record.title), selection: asTrimmedText(record.selection) }
+        : undefined;
+      parsed.push({ id, text, workspaceId, ...(source ? { source } : {}) });
     }
   }
   return parsed;
+}
+
+function asTrimmedText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 /**

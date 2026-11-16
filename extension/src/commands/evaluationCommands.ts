@@ -150,21 +150,23 @@ async function evaluateDocument(
   path: string,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
-  const providerConfig = context.providerStore.getConfig();
-  const apiKey = await context.providerStore.getApiKey();
-  if (!providerConfig || !apiKey?.trim()) {
-    return {
-      ok: false,
-      message: 'Trainer needs a saved provider and API key before evaluation can run.',
-    };
-  }
+  if (path === '/evaluate/snippet') {
+    const providerConfig = context.providerStore.getConfig();
+    const apiKey = await context.providerStore.getApiKey();
+    if (!providerConfig || !apiKey?.trim()) {
+      return {
+        ok: false,
+        message: 'Trainer needs a saved provider and API key before evaluation can run.',
+      };
+    }
 
-  const sendState = describeProviderSendState(context.getHostState().bootstrap.providerConfig, 'en-US');
-  if (sendState.blocked) {
-    return {
-      ok: false,
-      message: sendState.reason ?? 'Trainer evaluation is blocked until the provider state is ready.',
-    };
+    const sendState = describeProviderSendState(context.getHostState().bootstrap.providerConfig, 'en-US');
+    if (sendState.blocked) {
+      return {
+        ok: false,
+        message: sendState.reason ?? 'Trainer evaluation is blocked until the provider state is ready.',
+      };
+    }
   }
 
   const status = await context.sidecarManager.ensureRunning();
@@ -399,6 +401,18 @@ async function resolveTrainingVerifyDocument(input: {
     )
   ) {
     return input.editor?.document;
+  }
+  if (editorPath && input.workspaceFolder) {
+    // Compare real paths when VS Code opened the project through a filesystem alias.
+    const resolved = await Promise.all([
+      fs.promises.realpath(input.workspaceFolder),
+      fs.promises.realpath(editorPath),
+    ]).catch(() => undefined);
+    if (resolved && normalizedFiles.some((filePath) => trainingFileMatchesEditorPath({
+      filePath, editorPath: resolved[1], workspaceFolder: resolved[0],
+    }))) {
+      return input.editor?.document;
+    }
   }
   for (const filePath of normalizedFiles) {
     if (filePath.split("/").includes("..")) {

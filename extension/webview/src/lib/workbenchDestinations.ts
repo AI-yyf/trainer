@@ -19,7 +19,3 @@ export const WORKBENCH_DESTINATIONS: Record<ActiveWorkbenchView, {
 export function primaryDestinationForRoute(route: ActiveWorkbenchView): PrimaryDestination | null {
   return WORKBENCH_DESTINATIONS[route].primary;
 }
-
-export function ownsCoachComposer(route: ActiveWorkbenchView): boolean {
-  return route === "coach";
-}

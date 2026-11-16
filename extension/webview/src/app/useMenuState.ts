@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 
-export type ContextMenu = "context" | "resources" | "model" | "history" | undefined;
+export type ContextMenu = "context" | "resources" | "model" | "history" | "workflows" | undefined;
 
 /**
  * Manages which composer context menu is currently open.

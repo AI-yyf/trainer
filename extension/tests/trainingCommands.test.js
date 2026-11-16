@@ -472,7 +472,7 @@ test('trainingGenerateCardCommand preserves every supported non-English response
   }
 });
 
-test('trainingGenerateCardCommand forwards resource_id for resource_knowledge cards', async () => {
+test('trainingGenerateCardCommand forwards the confirmed source version and plan binding', async () => {
   const vscodeMock = { commands: { async executeCommand() { return undefined; } } };
   const { trainingGenerateCardCommand } = loadWithVscodeMock(
     trainingCommandsModulePath,
@@ -480,11 +480,15 @@ test('trainingGenerateCardCommand forwards resource_id for resource_knowledge ca
   );
   const context = createContext({ workspaceFolder: 'F:\\trainer-training' });
   prepareResourceTrainingContext(context);
+  const expectedResourceVersion = { versionId: 'version-1', contentHash: 'confirmed-hash' };
+  const planBinding = { planId: 'plan-1', stageId: 'stage-1', step: 'Check timeouts', revision: 4 };
 
   const result = await trainingGenerateCardCommand(context, {
     source: 'resource_knowledge',
     cardType: 'practice',
     resourceId: 'resource-42',
+    expectedResourceVersion,
+    planBinding,
   });
 
   assert.equal(result.ok, true);
@@ -493,6 +497,8 @@ test('trainingGenerateCardCommand forwards resource_id for resource_knowledge ca
   assert.equal(requestPath, '/training/generate-card/stream');
   assert.equal(requestBody.resource_id, 'resource-42');
   assert.equal(requestBody.source, 'resource_knowledge');
+  assert.deepEqual(requestBody.expected_resource_version, expectedResourceVersion);
+  assert.deepEqual(requestBody.plan_binding, planBinding);
 });
 
 test('trainingGenerateCardCommand accepts a trusted legacy resource without trustState', async () => {

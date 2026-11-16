@@ -52,6 +52,6 @@ test('provider settings actions and model menu use the complete locale copy', ()
   assert.doesNotMatch(providerStatus, /layout\.composerLanguage === "zh-CN"/);
 
   assert.match(modelMenu, /composerProviderCopy\.menu\.chooseModel/);
-  assert.match(modelMenu, /composerProviderCopy\.menu\.saveConnectionFirst/);
+  assert.match(modelMenu, /composerProviderCopy\.menu\.manageModels/);
   assert.doesNotMatch(modelMenu, /layout\.composerLanguage === "zh-CN"/);
 });

@@ -200,11 +200,11 @@ test('browser preview acknowledges only durable live training persistence comman
   assert.match(trainingAction, /target_plan_stage_id: browserPreviewString\(payload\?\.targetPlanStageId\)/);
   assert.match(
     trainingAction,
-    /await refreshLiveBrowserPreviewBootstrap\(\);[\s\S]*?emitBrowserPreviewTrainingPersistenceAck\(persistence, true, responseRecord\);/,
+    /await refreshLiveBrowserPreviewBootstrap\(\);[\s\S]*?emitBrowserPreviewTrainingPersistenceAck\(persistence, accepted, responseRecord, detail \|\| undefined\);/,
   );
   assert.ok(
     trainingAction.indexOf('await refreshLiveBrowserPreviewBootstrap();') <
-      trainingAction.indexOf('emitBrowserPreviewTrainingPersistenceAck(persistence, true, responseRecord);'),
+      trainingAction.indexOf('emitBrowserPreviewTrainingPersistenceAck(persistence, accepted, responseRecord, detail || undefined);'),
     'the acknowledgement must follow the refreshed durable snapshot',
   );
   assert.match(
@@ -405,9 +405,9 @@ test('vision-ready preview declares and verifies vision and tools truth for imag
   assert.match(readyBranch, /name: "tools", declared: true, observed: true, state: "verified"/);
   assert.match(readyBranch, /toolsReady: scenario === "vision-ready",/);
   assert.match(readyBranch, /toolProbeStatus: scenario === "vision-ready" \? \("verified" as const\) : \("unverified" as const\),/);
-  assert.match(appSource, /attachments=\{composerAttachments\}/);
-  assert.match(appSource, /onAttachmentsChange=\{setComposerAttachments\}/);
-  assert.match(appSource, /attachmentsAvailable=\{providerImageInputState\.supported\}/);
+  assert.match(appSource, /attachments=\{composerUsesTrainingFlow \? activityAttachments : composerAttachments\}/);
+  assert.match(appSource, /onAttachmentsChange=\{composerUsesTrainingFlow \? setActivityAttachments : setComposerAttachments\}/);
+  assert.match(appSource, /attachmentsAvailable=\{providerImageInputState\.supported && !\(composerUsesTrainingFlow && trainingComposerReflectMode\)\}/);
 });
 
 test('browser preview keeps saved coach defaults adaptive while runtime answer mode stays resolved', () => {

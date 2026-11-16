@@ -77,6 +77,46 @@ def test_upload_pins_sha256_content_hash(tmp_path: Path) -> None:
         assert store.current_content_hash(workspace_id, record["id"]) == expected
 
 
+def test_training_recall_keeps_the_card_source_version_after_reindex(tmp_path: Path) -> None:
+    from app.core.models import CardGenerationContext
+    from app.training.recall_evidence import record_recall_evidence
+
+    workspace_id = "workspace-card-source-version"
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        source = upload_resource(
+            client, workspace_id=workspace_id, content="# Original source\nCompare the workspace ID.",
+        )
+        card = runtime.card_generation_service.generate_card(
+            "conversation_gap",
+            CardGenerationContext(
+                workspace_id=workspace_id,
+                card_type="flash",
+                focus_area="Workspace identity",
+                resource_id=source["id"],
+                resource_version_id=source["version_id"],
+                resource_content_hash=source["content_hash"],
+            ),
+            allow_llm=False,
+        )
+        assert card.resource_version_id == source["version_id"]
+        assert card.resource_content_hash == source["content_hash"]
+        runtime.memory_service.upsert_card(workspace_id, card)
+        updated = runtime.resource_version_store.record_version(
+            workspace_id=workspace_id, resource_id=source["id"],
+            content="Use the project and workspace IDs.",
+        )
+        assert updated["version_id"] != card.resource_version_id
+        outcome = record_recall_evidence(
+            runtime, workspace_id=workspace_id, card_id=card.card_id, correct=True, source="flashcard",
+        )
+        assert outcome is not None
+        [attempt] = runtime.attempt_store.list_attempts(workspace_id=workspace_id, card_id=card.card_id)
+        evidence = find_evidence(runtime, attempt["attempt_id"], outcome["evidence_id"])
+        assert evidence["resource_version_id"] == source["version_id"]
+        assert evidence["resource_content_hash"] == source["content_hash"]
+
+
 def test_reupload_of_same_content_bumps_version(tmp_path: Path) -> None:
     workspace_id = "workspace-evidence-reupload"
     with build_client(tmp_path) as client:

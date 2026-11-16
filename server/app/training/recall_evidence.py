@@ -18,6 +18,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from ..evidence.contract import pinned_card_resource
 from ..training.attempt_store import content_hash
 from ..training.skill_projection import DELAYED_RECALL_MIN_DAYS
 
@@ -120,6 +121,7 @@ def record_recall_evidence(
         recall_delay_days=delay_days if dimension == "delayed_recall" else None,
         recall_rating=rating,
         failure_reason=None if correct else (detail or "The recall answer did not match the answer key."),
+        **pinned_card_resource(card_record),
     )
     if evidence is None:
         return None

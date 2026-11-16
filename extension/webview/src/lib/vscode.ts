@@ -4,6 +4,7 @@ import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
 import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
 import { trainerCommands } from "../../../../shared/src/commands";
+import { resourceVersionCheckBases, resourceVersionCheckStatuses } from "../../../../shared/src/models";
 
 import type {
   CoachDefaults,
@@ -53,6 +54,14 @@ const operationIdentitySchema = z.object({
 const scopeSchema = z.object({ generation: z.number().int().nonnegative(), revision: z.number().int().nonnegative(),
   messageId: z.string(), workspaceId: z.string(), sessionId: z.string() });
 const operationPhaseSchema = z.enum(["pending", "running", "succeeded", "failed", "interrupted", "cancelled"]);
+
+export const resourceVersionResultsSchema = z.array(z.object({
+  resource_id: z.string(),
+  version_id: z.string(),
+  content_hash: z.string(),
+  status: z.enum(resourceVersionCheckStatuses),
+  basis: z.enum(resourceVersionCheckBases).nullish(),
+})).max(4);
 const hostMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("remoteVerification/started"), payload: z.object({
     sessionId: z.string(), cardId: z.string().min(1).optional(),
@@ -161,6 +170,15 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       message: z.string(),
       phase: z.string().optional(),
       surface: z.enum(["global", "stream"]).optional(),
+      resourceCapture: z.object({
+        resourceId: z.string(),
+        title: z.string().optional(),
+        deduped: z.boolean(),
+        focusBinding: z.string().optional(),
+        versionId: z.string().optional(),
+        contentHash: z.string().optional(),
+      }).optional(),
+      resourceVersionResults: resourceVersionResultsSchema.optional(),
       providerTest: z
         .object({
           ok: z.boolean().nullish().transform((value) => value ?? undefined),
@@ -332,6 +350,8 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("ui/coachDraftPrefill"),
     text: z.string(),
     draftId: z.string().optional(),
+    workspaceId: z.string().optional(),
+    source: z.object({ url: z.string(), title: z.string(), selection: z.string() }).optional(),
   }),
   z.object({
     type: z.literal("resourceOrganization/pending"),

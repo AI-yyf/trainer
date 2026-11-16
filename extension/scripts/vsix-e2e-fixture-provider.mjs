@@ -82,13 +82,14 @@ export async function startVsixE2EFixtureProvider({
     responseSequence += 1;
     const responseId = `trainer-e2e-fixture-${responseSequence}`;
     const reply = fixtureReplyFor(payload);
+    const toolCall = fixtureToolCallFor(payload, requestedToolName);
     if (pathname === "/v1/responses") {
-      return sendJson(response, 200, buildResponsesResponse(responseId, payload, reply, requestedToolName));
+      return sendJson(response, 200, buildResponsesResponse(responseId, payload, reply, toolCall));
     }
     if (payload.stream === true) {
-      return sendChatCompletionStream(response, responseId, payload, reply);
+      return sendChatCompletionStream(response, responseId, payload, reply, toolCall);
     }
-    return sendJson(response, 200, buildChatCompletionResponse(responseId, payload, reply, requestedToolName));
+    return sendJson(response, 200, buildChatCompletionResponse(responseId, payload, reply, toolCall));
   });
 
   await listen(server, host, port);
@@ -207,7 +208,7 @@ function fixtureTrainingCard(systemText) {
     validation_method: verify,
     grading_rubric: base.acceptance_criteria,
     expected_symbols: ["workspace_id"],
-    files_to_touch: [],
+    files_to_touch: process.env.TRAINER_VSIX_E2E_FILE_FIXTURE === "1" ? ["unified-boundary.py"] : [],
   };
 }
 
@@ -254,8 +255,7 @@ function containsCjk(value) {
   return /[\u3400-\u9fff]/.test(value);
 }
 
-function buildChatCompletionResponse(responseId, payload, reply, toolName) {
-  const toolCall = toolName === "trainer_capability_probe" ? fixtureToolCall(toolName) : undefined;
+function buildChatCompletionResponse(responseId, payload, reply, toolCall) {
   return {
     id: responseId,
     object: "chat.completion",
@@ -274,8 +274,7 @@ function buildChatCompletionResponse(responseId, payload, reply, toolName) {
   };
 }
 
-function buildResponsesResponse(responseId, payload, reply, toolName) {
-  const toolCall = toolName === "trainer_capability_probe";
+function buildResponsesResponse(responseId, payload, reply, toolCall) {
   return {
     id: responseId,
     object: "response",
@@ -288,8 +287,8 @@ function buildResponsesResponse(responseId, payload, reply, toolName) {
             type: "function_call",
             id: `${responseId}-call-1`,
             call_id: `${responseId}-call-1`,
-            name: toolName,
-            arguments: '{"probe":"ok"}',
+            name: toolCall.function.name,
+            arguments: toolCall.function.arguments,
           },
         ]
       : [
@@ -303,20 +302,22 @@ function buildResponsesResponse(responseId, payload, reply, toolName) {
   };
 }
 
-function sendChatCompletionStream(response, responseId, payload, reply) {
+function sendChatCompletionStream(response, responseId, payload, reply, toolCall) {
   const firstChunk = {
     id: responseId,
     object: "chat.completion.chunk",
     created: 0,
     model: requestedModel(payload),
-    choices: [{ index: 0, delta: { role: "assistant", content: reply }, finish_reason: null }],
+    choices: [{ index: 0, delta: toolCall
+      ? { role: "assistant", tool_calls: [{ index: 0, ...toolCall }] }
+      : { role: "assistant", content: reply }, finish_reason: null }],
   };
   const finalChunk = {
     id: responseId,
     object: "chat.completion.chunk",
     created: 0,
     model: requestedModel(payload),
-    choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+    choices: [{ index: 0, delta: {}, finish_reason: toolCall ? "tool_calls" : "stop" }],
   };
   response.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
@@ -328,11 +329,28 @@ function sendChatCompletionStream(response, responseId, payload, reply) {
   response.end("data: [DONE]\n\n");
 }
 
-function fixtureToolCall(name) {
+function fixtureToolCallFor(payload, requestedName) {
+  if (requestedName === "trainer_capability_probe") return fixtureToolCall(requestedName, { probe: "ok" });
+  const planToolOffered = payload.tools?.some((tool) => (tool.function?.name ?? tool.name) === "save_formal_plan");
+  const alreadyCalled = payload.messages?.some((message) =>
+    message.role === "tool" || message.tool_calls?.some((call) => call.function?.name === "save_formal_plan"));
+  if (process.env.TRAINER_VSIX_E2E_FILE_FIXTURE !== "1" || !planToolOffered || alreadyCalled ||
+    !latestUserText(payload).includes("工作区范围验证")) return undefined;
+  return fixtureToolCall("save_formal_plan", {
+    title: "工作区范围验证",
+    summary: "核对异步返回所携带的工作区标识。",
+    current_step: "运行检查以验证不匹配的结果会被拒绝。",
+    verify_method: ["同名工作区接受结果，不同工作区拒绝结果。"],
+    stages: [{ id: "check-scope", title: "确认工作区范围", goal: "比较原始与返回的 workspace_id。",
+      outcomes: ["用项目测试验证匹配和不匹配的结果"], status: "active" }],
+  });
+}
+
+function fixtureToolCall(name, input) {
   return {
     id: "trainer-e2e-fixture-tool-call",
     type: "function",
-    function: { name, arguments: '{"probe":"ok"}' },
+    function: { name, arguments: JSON.stringify(input) },
   };
 }
 

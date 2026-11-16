@@ -265,6 +265,8 @@ test('analyzeSendIntent keeps resources and training views in coach mode by defa
 test('shouldAttachCurrentFile keeps ordinary coaching lean while preserving explicit code work', () => {
   assert.equal(shouldAttachCurrentFile('Explain the difference between a closure and a callback.', 'coach'), false);
   assert.equal(shouldAttachCurrentFile('Explain the current file.', 'coach'), true);
+  assert.equal(shouldAttachCurrentFile('Practice on the current Python file.', 'coach'), true);
+  assert.equal(shouldAttachCurrentFile('根据论文练习当前 Python 文件', 'coach'), true);
   assert.equal(shouldAttachCurrentFile('\u8bf7\u89e3\u91ca\u8fd9\u6bb5\u4ee3\u7801\u7684\u4f5c\u7528\u3002', 'coach'), true);
   assert.equal(shouldAttachCurrentFile('Find the next practice task.', 'task'), true);
   assert.equal(shouldAttachCurrentFile('Review this change.', 'review'), true);

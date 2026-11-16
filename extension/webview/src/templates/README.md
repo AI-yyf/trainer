@@ -7,11 +7,11 @@ facts and existing governed handlers.
 | Surface | Template | Input/action ownership |
 | --- | --- | --- |
 | Shell | AppShell | Three stable destinations; History/Settings utilities; all six routes remain valid |
-| Coach | Conversation, CoachReply, NextAction | CoachComposer only here; one next action; message utilities in OverflowActions |
+| Coach | Conversation, CoachReply, NextAction | Shared composer with a Coach-scoped draft and conversation |
 | Learning | LearningHome | Current learning/stage/action/completion first; review/route/growth/evidence closed by default |
-| Activity | FocusedPractice, PracticeResponse | Same card and attempt across LEARN/TRY/VERIFY/REFLECT/RETURN; dedicated answer or reflection |
+| Activity | LearningWorkspace, FocusedPractice | Same card and attempt across LEARN/TRY/VERIFY/REFLECT/RETURN; card-scoped draft in the shared composer |
 | Verification | VerificationResult | Use actual pass/fail facts; unknown/interrupted runs have no verdict; evidence/output in disclosure |
-| Growth | GrowthEvidence | Existing understanding/implementation/debugging/transfer bands and real evidence; enter through Learning |
+| Growth | LearningWorkspace, GrowthEvidence | Timeline from persisted events; expandable capability evidence and scheduled review |
 | Library | Library, ResourceReader | Search/folders/recent/trash; reader contextual actions return to Coach with resource IDs |
 | Settings | SettingsIndex, SettingsDetail | Connection, Coach/Skills, Workspace/Remote, Preferences/Advanced; no category tab bar |
 | Skills | CommandPalette | `$` in Coach; six default suggestions; searched catalog; management in Settings → Coach |

@@ -59,6 +59,8 @@ import {
   searchResourcesCommand,
   uploadResourceCommand,
   captureResourceCommand,
+  linkResourceToLearningCommand,
+  checkResourceVersionsCommand,
   organizeResourceCommand,
   exportResourceCommand,
 } from './resourceCommands';
@@ -502,6 +504,8 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     // `command/execute`. Registered last so the historical order above stays
     // byte-identical.
     { commandId: COMMAND_IDS.captureResource, register: (ctx, payload) => captureResourceCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.linkResourceToLearning, register: (ctx, payload) => linkResourceToLearningCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.checkResourceVersions, register: (ctx, payload) => checkResourceVersionsCommand(ctx, payload) },
     { commandId: COMMAND_IDS.organizeResource, register: (ctx, payload) => organizeResourceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.exportResource, register: (ctx, payload) => exportResourceCommand(ctx, payload) },
     // Local usage insights bridge: a read-only webview → sidecar round trip,

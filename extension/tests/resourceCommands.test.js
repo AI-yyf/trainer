@@ -1077,6 +1077,9 @@ test('searchResourcesCommand includes top-hit evidence in the summary message', 
           preview_tier: 'converted',
           preview_kind: 'document',
           citation_id: 'citation:resource-1',
+          version_id: 'version-1',
+          content_hash: 'indexed-hash',
+          location: { start_line: 12 },
           rank_score: 1.23,
           match_summary: 'matched title and freshness signals',
           can_inject_training_card: true,
@@ -1118,6 +1121,9 @@ test('searchResourcesCommand includes top-hit evidence in the summary message', 
   assert.equal(context.__patches[0].resourceSearch.requestId, 'resource-search-notes-1');
   assert.equal(context.__patches[0].resourceSearch.total, 2);
   assert.equal(context.__patches[0].resourceSearch.hits[0].citationId, 'citation:resource-1');
+  assert.equal(context.__patches[0].resourceSearch.hits[0].versionId, 'version-1');
+  assert.equal(context.__patches[0].resourceSearch.hits[0].contentHash, 'indexed-hash');
+  assert.deepEqual(context.__patches[0].resourceSearch.hits[0].location, { start_line: 12 });
   assert.equal(result.data.requestId, 'resource-search-notes-1');
 });
 

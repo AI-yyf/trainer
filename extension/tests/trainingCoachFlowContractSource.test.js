@@ -40,7 +40,7 @@ test('training answers and reflections keep authoritative commands before stream
       answerBranch.indexOf('sendTrainingFeedback('),
     'the authoritative answer persistence must complete before Coach feedback',
   );
-  assert.match(answerBranch, /handleSubmitTrainingEvidence\(normalizedDraft\)/);
+  assert.match(answerBranch, /handleSubmitTrainingEvidence\(normalizedDraft, unified\.kind === "blocker" \? "blocked" : "result"\)/);
   assert.match(answerBranch, /sendTrainingFeedback\(\{/);
   assert.match(answerBranch, /phase: trainingComposerReflectMode \? "reflection" : "evidence"/);
 });
@@ -59,6 +59,6 @@ test('utility surfaces avoid duplicate conversation panels', () => {
   assert.match(replyHelper, /message\.role !== "assistant"/);
   assert.match(replyHelper, /visibleReply\.body/);
   assert.match(replyHelper, /<CoachMessageBubble/);
-  assert.doesNotMatch(source, /renderViewAgentReply\("(?:resources|training)"\)/);
-  assert.doesNotMatch(source, /renderViewAgentReply\("plan"\)/);
+  assert.match(source, /renderViewAgentReply\("resources"\)/);
+  assert.match(source, /renderViewAgentReply\(view === "training" \? "training" : "plan"\)/);
 });

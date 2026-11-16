@@ -8,6 +8,12 @@
 
 import type { ComposerLanguage } from "../../types";
 
+export function resourceLibraryText(language: ComposerLanguage, key: ResourceTextKey): string {
+  if (language === "zh-CN") return resourceText[key].zh;
+  if (language === "en-US") return resourceText[key].en;
+  return resourceTextLocaleOverrides[language][key] ?? resourceText[key].en;
+}
+
 export const compactResourceSearchPlaceholder: Record<ComposerLanguage, string> = {
   "zh-CN": "\u641c\u7d22\u8d44\u6599",
   "en-US": "Search",

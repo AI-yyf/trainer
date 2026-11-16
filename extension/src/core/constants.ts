@@ -57,6 +57,8 @@ export const COMMAND_IDS = {
   nextTask: trainerCommands.nextTask,
   uploadResource: trainerCommands.uploadResource,
   captureResource: trainerCommands.captureResource,
+  linkResourceToLearning: trainerCommands.linkResourceToLearning,
+  checkResourceVersions: trainerCommands.checkResourceVersions,
   organizeResource: trainerCommands.organizeResource,
   exportResource: trainerCommands.exportResource,
   libraryFoldersList: trainerCommands.libraryFoldersList,

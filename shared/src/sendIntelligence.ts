@@ -276,10 +276,11 @@ function matchesAny(value: string, patterns: Array<RegExp>): boolean {
 
 const EXPLICIT_CURRENT_FILE_PATTERNS = [
   /\b(?:current|active|this)\s+(?:file|code|implementation)\b/i,
+  /\b(?:current|active|this)\s+[a-z][a-z0-9+#.-]*\s+(?:file|code)\b/i,
   /\b(?:look|check|inspect|explain|walk\s+me\s+through)\s+(?:the\s+)?(?:(?:current|active|this)\s+)?(?:file|code)\b/i,
   /\b(?:file|code)\s+(?:in|from)\s+(?:the\s+)?editor\b/i,
   /\b(?:the\s+)?(?:file|code)\s+(?:above|below|here)\b/i,
-  /\u5f53\u524d(?:\u6587\u4ef6|\u4ee3\u7801|\u51fd\u6570)/,
+  /\u5f53\u524d\s*(?:[a-z][a-z0-9+#.-]*\s*)?(?:\u6587\u4ef6|\u4ee3\u7801|\u51fd\u6570)/i,
   /\u8fd9(?:\u4e2a|\u6bb5)?(?:\u6587\u4ef6|\u4ee3\u7801|\u51fd\u6570)/,
   /(?:\u67e5\u770b|\u770b\u770b|\u89e3\u91ca|\u5206\u6790|\u68c0\u67e5)(?:\u4e00\u4e0b)?(?:\u5f53\u524d|\u8fd9(?:\u4e2a|\u6bb5)?)?(?:\u6587\u4ef6|\u4ee3\u7801|\u51fd\u6570)/,
 ];

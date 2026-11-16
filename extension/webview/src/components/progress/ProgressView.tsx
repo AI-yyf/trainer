@@ -29,7 +29,7 @@ export interface ProgressViewProps {
   language: ComposerLanguage;
   projection?: TrainingSkillProjection;
   onOpenTraining: () => void;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 /**

@@ -31,6 +31,7 @@ export interface CoachGoalBarProps {
   language: ComposerLanguage;
   title: string;
   paused: boolean;
+  pending?: boolean;
   onPause: () => void;
   onResume: () => void;
   onClear: () => void;
@@ -44,6 +45,7 @@ export function CoachGoalBar({
   language,
   title,
   paused,
+  pending = false,
   onPause,
   onResume,
   onClear,
@@ -56,18 +58,19 @@ export function CoachGoalBar({
       className="coach-goal-bar"
       data-goal-bar="true"
       data-goal-paused={paused ? "true" : "false"}
+      data-goal-pending={pending ? "true" : "false"}
     >
       <div className="coach-goal-bar__row">
         <span className="coach-goal-bar__icon" aria-hidden="true">
           <TargetIcon size={14} />
         </span>
-        <span className="coach-goal-bar__eyebrow">{copy.inProgress}</span>
+        <span className="coach-goal-bar__eyebrow">{pending ? copy.enter : copy.inProgress}</span>
         <strong className="coach-goal-bar__title" title={title || copy.waiting}>
           {title || copy.waiting}
         </strong>
         {paused ? <span className="coach-goal-bar__paused">{copy.paused}</span> : null}
         <div className="coach-goal-bar__actions">
-          <button
+          {!pending ? <button
             type="button"
             className="coach-goal-bar__action"
             aria-label={paused ? copy.resume : copy.pause}
@@ -75,12 +78,12 @@ export function CoachGoalBar({
             onClick={paused ? onResume : onPause}
           >
             <GoalGlyph kind={paused ? "play" : "pause"} />
-          </button>
+          </button> : null}
           <button
             type="button"
             className="coach-goal-bar__action"
-            aria-label={copy.clear}
-            title={copy.clear}
+            aria-label={pending ? copy.exit : copy.clear}
+            title={pending ? copy.exit : copy.clear}
             onClick={onClear}
           >
             <GoalGlyph kind="trash" />

@@ -91,6 +91,136 @@ def _readonly_response(body: bytes, url: str, content_type: str) -> ControlledFe
     )
 
 
+def _version_source(resource: dict) -> dict:
+    return {
+        "resource_id": resource["id"],
+        "version_id": resource["version_id"] or "",
+        "content_hash": resource["content_hash"] or "",
+    }
+
+
+def test_version_check_compares_source_content_without_reindexing(tmp_path, monkeypatch) -> None:
+    from app.resources import capture
+
+    workspace_id = "version-capture"
+    pdf_url = "https://example.com/source.pdf"
+    body = WEB_BODY
+    pdf = minimal_pdf(["Initial PDF content"])
+    timestamp = "2026-11-15T00:00:00+00:00"
+    requested_urls: list[str] = []
+
+    def extract(url: str, *, network_enabled: bool) -> ExtractedContent:
+        assert network_enabled
+        requested_urls.append(url)
+        if not body:
+            raise ConnectionError("source unavailable")
+        return ExtractedContent(title="Source", text=body, author=None, date=None, url=url)
+
+    monkeypatch.setattr(capture, "extract_from_url", extract)
+    monkeypatch.setattr(capture, "_utc_now_iso", lambda: timestamp)
+    monkeypatch.setattr(
+        capture, "fetch_url", lambda url, **kwargs: _readonly_response(pdf, url, "application/pdf"),
+    )
+
+    with build_client(tmp_path) as client:
+        session_id = _start_session(client, workspace_id)
+        scope = {"workspace_id": workspace_id, "session_id": session_id}
+
+        def save(**fields):
+            response = client.post("/resources/capture", json={**scope, **fields})
+            assert response.status_code == 200, response.text
+            return response.json()
+
+        page = save(kind="web", url=WEB_URL, title="Saved title")
+        paper = save(kind="pdf", url=pdf_url)
+        excerpt = save(kind="web", url=WEB_URL, capture_mode="selection", selection="Cookie")
+        tagged = client.post("/resource/organize", json={
+            **scope, "resource_id": page["id"], "action": "set_tags", "tags": ["study"],
+        })
+        assert tagged.status_code == 200, tagged.text
+        moved = client.post("/resource/organize", json={
+            **scope, "resource_id": page["id"], "action": "set_group", "group": "Study",
+        })
+        assert moved.status_code == 200, moved.text
+        page = moved.json()
+        assert page["tags"] == ["study"]
+        sources = [_version_source(item) for item in (page, paper, excerpt)]
+        revision = client.get("/browser/library-revision", params=scope).json()["revision"]
+
+        def check(*, request_scope=scope, requested=sources):
+            response = client.post(
+                "/resources/check-versions", json={**request_scope, "sources": requested},
+            )
+            assert response.status_code == 200, response.text
+            return [(item["status"], item["basis"]) for item in response.json()]
+
+        requested_urls.clear()
+        timestamp = "2026-11-16T00:00:00+00:00"
+        assert check() == [("unchanged", "page"), ("unchanged", "pdf"), ("no_baseline", None)]
+        assert requested_urls == [WEB_URL]
+        body = "Upstream changed the source instructions."
+        pdf = minimal_pdf(["Updated PDF content"])
+        assert check() == [("changed", "page"), ("changed", "pdf"), ("no_baseline", None)]
+        assert body not in Path(page["source"]).read_text(encoding="utf-8")
+        assert client.get("/browser/library-revision", params=scope).json()["revision"] == revision
+
+        body = ""
+        assert check(requested=sources[:1]) == [("fetch_failed", "page")]
+        assert check(requested=[{**sources[0], "version_id": "superseded"}]) == [("stale", None)]
+        foreign_workspace = "unrelated-version-workspace"
+        foreign_session = _start_session(client, foreign_workspace)
+        assert check(request_scope={
+            "workspace_id": foreign_workspace, "session_id": foreign_session,
+        }) == [("missing", None)] * 3
+        assert client.post("/resources/check-versions", json={
+            "workspace_id": foreign_workspace, "session_id": session_id, "sources": sources,
+        }).status_code == 409
+
+    requested_urls.clear()
+    with build_client(tmp_path, enable_network_fetch=False) as client:
+        session_id = _start_session(client, workspace_id)
+        response = client.post("/resources/check-versions", json={
+            "workspace_id": workspace_id, "session_id": session_id, "sources": sources,
+        })
+        assert response.status_code == 200, response.text
+        assert [item["status"] for item in response.json()] == [
+            "network_disabled", "network_disabled", "no_baseline",
+        ]
+        assert requested_urls == []
+
+
+def test_version_check_reproduces_the_regular_url_index_projection(tmp_path, monkeypatch) -> None:
+    workspace_id = "version-indexed-url"
+    text = "Resource description. " * 130
+    monkeypatch.setattr("app.ingest.service.fetch_url", lambda url, **kwargs: _readonly_response(
+        f"<article><h1>Notes</h1><p>{text}</p></article>".encode(), url, "text/html",
+    ))
+    with build_client(tmp_path) as client:
+        session_id = _start_session(client, workspace_id)
+        scope = {"workspace_id": workspace_id, "session_id": session_id}
+        uploaded = client.post("/resource/upload", json={
+            **scope, "kind": "url", "name": "Index source", "source": WEB_URL,
+        })
+        assert uploaded.status_code == 200, uploaded.text
+        indexed = client.post("/resource/index", json={
+            **scope, "resource_id": uploaded.json()["id"], "enable_network": True,
+        })
+        assert indexed.status_code == 200, indexed.text
+        request = {**scope, "sources": [_version_source(indexed.json())]}
+
+        consistent = client.post("/resources/check-versions", json=request)
+        assert consistent.status_code == 200, consistent.text
+        assert consistent.json()[0]["status"] == "unchanged"
+        assert consistent.json()[0]["basis"] == "indexed_url"
+        renamed = client.post("/resource/organize", json={
+            **scope, "resource_id": uploaded.json()["id"], "action": "rename", "title": "My notes",
+        })
+        assert renamed.status_code == 200, renamed.text
+        assert client.post("/resources/check-versions", json=request).json()[0]["status"] == "unchanged"
+        text += "The source added another paragraph."
+        assert client.post("/resources/check-versions", json=request).json()[0]["status"] == "changed"
+
+
 def test_web_capture_extracts_body_and_registers_it_in_the_library(tmp_path, monkeypatch) -> None:
     workspace_id = "workspace-capture-web"
     calls: list[tuple[str, bool]] = []
@@ -734,6 +864,55 @@ def test_capture_binds_a_known_learning_focus_and_ignores_an_unknown_one(
         assert "focus_binding:focus_not_found" in unknown.json()["warnings"]
         # The capture itself still landed.
         assert unknown.json()["index_status"] == "indexed"
+
+
+def test_link_learning_sources_requires_the_confirmed_plan_and_resource_versions(tmp_path) -> None:
+    from app.core.models import LearningPlan, PlanStage
+
+    workspace_id = "workspace-link-learning-sources"
+    with build_client(tmp_path, enable_network_fetch=False) as client:
+        runtime = client.app.state.runtime
+        runtime.repository.save_plan(
+            workspace_id,
+            LearningPlan(
+                id="plan-active",
+                title="Understand workspace scopes",
+                stages=[PlanStage(id="stage-scope", title="Check scopes",
+                                  goal="Compare project boundaries", outcomes=["Explain the comparison"],
+                                  status="active")],
+                current_stage_id="stage-scope",
+            ),
+        )
+        captured = client.post(
+            "/resources/capture",
+            json={"workspace_id": workspace_id, "url": WEB_URL, "kind": "web",
+                  "capture_mode": "selection", "selection": "Compare the two workspace scopes."},
+        )
+        assert captured.status_code == 200, captured.text
+        resource = captured.json()
+        version = runtime.resource_service.version_store.current_version(workspace_id, resource["id"])
+        assert version is not None
+        revision = runtime.repository.get_plan_revision(workspace_id, "plan-active")
+        request = {
+            "workspace_id": workspace_id, "plan_id": "plan-active",
+            "expected_revision": revision, "stage_id": "stage-scope",
+            "sources": [{"resource_id": resource["id"], "version_id": version["version_id"],
+                         "content_hash": resource["content_hash"]}],
+        }
+        invalid_version = {**request, "sources": [{**request["sources"][0], "version_id": "unconfirmed"}]}
+        assert client.post("/resources/link-learning", json=invalid_version).status_code == 409
+        foreign_session = _start_session(client, "workspace-unrelated-to-linked-source")
+        assert client.post("/resources/link-learning", json={**request, "session_id": foreign_session}).status_code == 409
+        advanced = {**request, "expected_revision": revision + 1}
+        assert client.post("/resources/link-learning", json=advanced).status_code == 409
+        response = client.post("/resources/link-learning", json=request)
+        assert response.json() == {"binding": "bound"}
+        assert client.post("/resources/link-learning", json=request).json() == {"binding": "already_bound"}
+        stage = runtime.repository.get_latest_plan(workspace_id).stages[0]
+        assert stage.resources == [resource["id"]]
+        rows = runtime.event_ledger.query(event_type="resource_linked", project_id=workspace_id)
+        assert len(rows) == 1
+        assert rows[0].payload_ref["content_hash"] == resource["content_hash"]
 
 
 def test_capture_rejects_a_credential_paired_to_another_workspace(tmp_path, monkeypatch) -> None:

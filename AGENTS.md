@@ -239,9 +239,11 @@ commands, deep links and restore actions.
 | `progress` | 学习 → 成长 | GrowthEvidence |
 | `settings` | header gear | SettingsIndex, SettingsDetail |
 
-`lib/workbenchDestinations.ts` owns route mapping. The full CoachComposer renders
-only in Coach; training owns PracticeResponse. Plan and Resource CTAs return
-structured context to Coach. Choose a `templates/` owner before adding feature
+`lib/workbenchDestinations.ts` owns route mapping. Coach, Learning, and Resources
+share the docked `CoachComposer`. Learning keeps the plan, practice, verification,
+and progress in the same workspace with one composer and card-specific answer
+drafts. Keep the composer's appearance, placement, and toolbar controls fixed
+unless the user explicitly asks for a design change. Choose a `templates/` owner before adding feature
 UI. Preserve governed state and actual verification identities. Use SystemState
 for product status, one primary action per initial viewport and disclosure for
 advanced facts. `scripts/verify-ui-geometry.mjs` checks the three destinations,

@@ -1026,6 +1026,7 @@ def build_core_router(
                 protocol=getattr(coaching_service._config, "protocol", None) if coaching_service._config else None,
                 history=core.build_conversation_history(
                     state.snapshot.messages,
+                    active_view=request.active_view,
                     drop_latest_user=True,
                 ),
             )
@@ -1108,6 +1109,7 @@ def build_core_router(
                         coach_context=dict(coach_turn["coach_context"]),
                         history=core.build_conversation_history(
                             state.snapshot.messages,
+                            active_view=request.active_view,
                             drop_latest_user=True,
                         ),
                     )
@@ -1154,6 +1156,7 @@ def build_core_router(
                 coach_context=dict(coach_turn["coach_context"]),
                 history=core.build_conversation_history(
                     state.snapshot.messages,
+                    active_view=request.active_view,
                     drop_latest_user=True,
                 ),
             )
@@ -2160,6 +2163,7 @@ def build_core_router(
                         protocol=getattr(coaching_service._config, "protocol", None) if coaching_service._config else None,
                         history=core.build_conversation_history(
                             state.snapshot.messages,
+                            active_view=request.active_view,
                             drop_latest_user=True,
                         ),
                         ):
@@ -2293,6 +2297,7 @@ def build_core_router(
                             coach_context=dict(coach_turn["coach_context"]),
                             history=core.build_conversation_history(
                                 state.snapshot.messages,
+                                active_view=request.active_view,
                                 drop_latest_user=True,
                             ),
                             cancel_event=core.stream_cancellation_events.get(stream_id),
@@ -3086,6 +3091,7 @@ def build_core_router(
                             ),
                             history=core.build_conversation_history(
                                 state.snapshot.messages,
+                                active_view=request.active_view,
                                 drop_latest_user=True,
                             ),
                         ):
@@ -3175,6 +3181,7 @@ def build_core_router(
                             coach_context=coach_context,
                             history=core.build_conversation_history(
                                 state.snapshot.messages,
+                                active_view=request.active_view,
                                 drop_latest_user=True,
                             ),
                             cancel_event=core.stream_cancellation_events.get(stream_id),
@@ -3512,6 +3519,7 @@ def build_core_router(
                         else None,
                         history=core.build_conversation_history(
                             state.snapshot.messages,
+                            active_view=request.active_view,
                             drop_latest_user=True,
                         ),
                         ):
@@ -3639,6 +3647,7 @@ def build_core_router(
                             coach_context=dict(coach_turn["coach_context"]),
                             history=core.build_conversation_history(
                                 state.snapshot.messages,
+                                active_view=request.active_view,
                                 drop_latest_user=True,
                             ),
                             cancel_event=core.stream_cancellation_events.get(stream_id),

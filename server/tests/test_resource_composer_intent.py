@@ -13,11 +13,12 @@ from app.core.models import (
     LearningPlan,
     PlanStage,
     ProviderConfig,
+    ResourceRecord,
     SessionMessageRequest,
     UserProfile,
 )
 from app.core.settings import AppSettings
-from app.llm.prompts import build_coaching_system_prompt
+from app.llm.prompts import build_coaching_messages, build_coaching_system_prompt
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 
@@ -80,7 +81,7 @@ def test_resource_composer_intent_is_semantic_only_and_alias_safe() -> None:
         )
 
 
-@pytest.mark.parametrize("mode", ["locate", "download", "organize", "cards"])
+@pytest.mark.parametrize("mode", ["locate", "analyze", "download", "organize", "cards"])
 def test_resource_composer_intent_accepts_each_supported_mode(mode: str) -> None:
     request = SessionMessageRequest.model_validate(
         {
@@ -91,6 +92,149 @@ def test_resource_composer_intent_accepts_each_supported_mode(mode: str) -> None
 
     assert request.resource_composer_intent is not None
     assert request.resource_composer_intent.mode == mode
+
+
+@pytest.mark.parametrize("selected", [False, True])
+@pytest.mark.parametrize("active_view", ["resources", "plan", "training", "progress"])
+def test_library_analysis_uses_distinct_versioned_sources_without_mutating_learning(
+    tmp_path: Path, selected: bool, active_view: str,
+) -> None:
+    workspace_id = "workspace-library-analysis"
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        provider = ProviderConfig(
+            name="resource-analysis-test",
+            base_url="http://127.0.0.1:9/v1",
+            api_key_ref="trainer.resource-composer",
+            model="gpt-4o-mini",
+            capabilities={"chat": True, "tools": True, "streaming": True},
+        )
+        runtime.provider_config = provider
+        runtime.provider_api_key = "sk-test-fake"
+        runtime.provider_service = ProviderService(config=provider, api_key="sk-test-fake")
+        runtime.provider_service_cache.clear()
+        seed_verified_capabilities(runtime, provider, "sk-test-fake", tools=True)
+        started = client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": "Library analysis",
+        })
+        assert started.status_code == 200, started.text
+        session_id = started.json()["session_id"]
+
+        sources = []
+        for slug, title, excerpt, scope in (
+            ("alpha", "自动驾驶路线 A", "自动驾驶路线 A 使用序列标记预测。", workspace_id),
+            ("beta", "自动驾驶路线 B", "自动驾驶路线 B 使用结构约束条件。" + (
+                "这里保留论文的限定条件，供读者结合本段研究背景理解。" * 10
+            ) + "第一阶段只学习约束，第二阶段预测未来状态。", workspace_id),
+            ("cooking", "Kitchen guide", "Pasta dough requires flour and water.", workspace_id),
+            ("private", "自动驾驶外部资料", "自动驾驶资料属于另一个工作区。", "foreign-library"),
+        ):
+            captured = client.post("/resources/capture", json={
+                "workspace_id": scope,
+                "url": f"https://example.com/{slug}",
+                "kind": "web",
+                "title": title,
+                "capture_mode": "selection",
+                "selection": excerpt,
+            })
+            assert captured.status_code == 200, captured.text
+            sources.append(captured.json())
+        expected = {source["id"]: source for source in sources[:2]}
+
+        with (
+            patch.object(ProviderService, "coaching_reply", new=AsyncMock(return_value=(
+                "先比较序列预测与结构约束，再练习写出条件、目标和检查项。"
+            ))) as reply,
+            patch.object(ProviderService, "coaching_reply_agentic", new=AsyncMock()) as agentic,
+        ):
+            response = client.post("/turn", json={
+                "workspace_id": workspace_id,
+                "session_id": session_id,
+                "active_view": active_view,
+                "message": "把资料库里自动驾驶相关论文找出来，比较它们的研究路线，并安排下一阶段学习。",
+                "intent": "plan",
+                "formal_plan_mutation": True,
+                "use_agent_loop": True,
+                "resource_composer_intent": {"mode": "analyze", "resource_ids": list(expected) if selected else []},
+                "response_language": "zh-CN",
+            })
+        assert response.status_code == 200, response.text
+        agentic.assert_not_awaited()
+        reply.assert_awaited_once()
+        prompt = build_coaching_system_prompt(
+            UserProfile(), coach_context=reply.await_args.kwargs["coach_context"],
+            message=reply.await_args.args[1],
+        )
+        assert "[1] 自动驾驶路线 " in prompt and "[2] 自动驾驶路线 " in prompt
+        assert "Kitchen guide" not in prompt and "属于另一个工作区" not in prompt
+        assert "第一阶段只学习约束，第二阶段预测未来状态。" in prompt
+        assert "two small work products" in prompt
+        response_metadata = response.json()["reply"]["metadata"]
+        assert response_metadata["active_view"] == active_view
+        citations = [part for part in response_metadata["parts"] if part["type"] == "citation"]
+        assert {part["resourceId"] for part in citations} == expected.keys()
+        assert [part["title"].split("]", 1)[0] for part in citations] == ["[1", "[2"]
+        for citation in citations:
+            indexed = expected[citation["resourceId"]]
+            assert citation["versionId"] == indexed["version_id"]
+            assert citation["contentHash"] == indexed["content_hash"]
+            assert citation["location"]
+        assert runtime.repository.get_latest_plan(workspace_id) is None
+        assert runtime.memory_service.get_cards(workspace_id) == []
+
+
+@pytest.mark.parametrize("suffix", ["", "不用安排练习。"])
+def test_library_comparison_exercise_uses_the_original_numbered_passages(suffix: str) -> None:
+    context = {
+        "resource_composer_intent": {"mode": "analyze"},
+        "resource_fragments": [
+            {"excerpt": "# 路线 A\n这是第一篇论文介绍的场景。\n> 将输入变成离散标记，再预测下一个标记。"},
+            {"excerpt": "先学习结构化交通约束，再预测未来状态。"},
+        ],
+    }
+    profile = UserProfile()
+    message = f"比较这两个研究路线，并安排下一阶段学习。{suffix}"
+    prompt = build_coaching_messages(profile, message, coach_context=context)[0]["content"]
+    assert ("two small work products" in prompt) == (not suffix)
+    result = ProviderService().finalize_coaching_reply(
+        "两条路线的预测目标不同。",
+        profile=profile, message=message, response_language="zh-CN", coach_context=context,
+    )
+    assert "两条路线的预测目标不同。" in result
+    if suffix:
+        assert "### 练习" not in result
+    else:
+        assert "按「先做什么 → 要学习或预测什么」各写一行" in result
+        assert "> [1] 将输入变成离散标记，再预测下一个标记。" in result
+        assert "> [2] 先学习结构化交通约束，再预测未来状态。" in result
+        assert "这是第一篇论文介绍的场景" not in result
+
+
+def test_training_excerpt_retains_both_sides_of_a_contrast_and_the_indexed_version(
+    tmp_path: Path,
+) -> None:
+    scope = "workspace-source-contrast"
+    with build_client(tmp_path) as client:
+        response = client.post("/resources/capture", json={
+            "workspace_id": scope,
+            "url": "https://example.com/episode-boundaries",
+            "kind": "web",
+            "capture_mode": "selection",
+            "title": "Distinguishing two ways an episode can stop",
+            "selection": (
+                "Termination is a state of the task. At a terminal state the agent cannot collect any "
+                "further reward and the value beyond that state is zero. For a run cut short by an "
+                "external time limit, the final state still has a continuation value."
+            ),
+        })
+        assert response.status_code == 200, response.text
+        resource = ResourceRecord.model_validate(response.json())
+        service = client.app.state.runtime.resource_service
+        fragment = resource.knowledge_fragments[0]
+        excerpt = service.read_indexed_fragment_text(scope, resource, fragment)
+        assert "the value beyond that state is zero" in excerpt
+        assert "the final state still has a continuation value" in excerpt
+        assert service.read_indexed_fragment_text(scope, resource, {**fragment, "version_id": "stale"}) == ""
 
 
 def test_resource_composer_prompt_is_advisory_and_keeps_governance_explicit() -> None:

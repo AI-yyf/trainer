@@ -10,6 +10,7 @@
 
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
+import { once } from 'node:events';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -126,8 +127,10 @@ async function main() {
     await sleep(60);
     await post(portB, tokenB, '/browser/host-focus', { workspace_id: 'workspace-b' });
 
+    const headless = process.env.TRAINER_BROWSER_E2E_HEADLESS === '1';
     context = await chromium.launchPersistentContext(profile, {
-      headless: process.env.TRAINER_BROWSER_E2E_HEADLESS === '1',
+      headless,
+      channel: process.env.TRAINER_BROWSER_E2E_CHANNEL || (headless ? 'chromium' : undefined),
       args: [
         `--disable-extensions-except=${extensionDir}`,
         `--load-extension=${extensionDir}`,
@@ -199,6 +202,56 @@ async function main() {
     console.log(
       `[PASS] focus ranking: B -> ${portB}/workspace-b, A -> ${portA}/workspace-a`,
     );
+    sidecarB = await startSidecar(portB, dataB, tokenB);
+    await post(portB, tokenB, '/session/start', { workspace_id: 'workspace-b', workspace_name: 'Workspace B' });
+    const exited = once(sidecarA, 'exit');
+    sidecarA.kill('SIGTERM');
+    await exited;
+
+    const sourceUrl = 'https://trainer-context.example.org/selection';
+    const article = await context.newPage();
+    const selection = 'A queued source belongs to the workspace where it was captured.';
+    await article.route(sourceUrl, (route) => route.fulfill({
+      contentType: 'text/html', body: `<title>Workspace scope</title><p>${selection}</p>`,
+    }));
+    await article.goto(sourceUrl);
+    await article.locator('p').evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+    });
+    await article.bringToFront();
+    const send = (type) => page.evaluate((message) => chrome.runtime.sendMessage({ type: message }), type);
+    const queued = await send('trainer:send-tab-context');
+    const browserState = await send('trainer:state');
+    const queuedDraft = browserState.drafts?.find((draft) => draft.selection === selection);
+    if (queued.status !== 'queued' || queuedDraft?.workspaceId !== 'workspace-a') {
+      throw new Error('The offline selection was not queued for workspace A.');
+    }
+    const pendingDrafts = async (port, token, workspaceId) => {
+      const response = await fetch(`http://127.0.0.1:${port}/browser/pending-drafts?workspace_id=${workspaceId}`, {
+        headers: { 'x-trainer-token': token },
+      });
+      if (!response.ok) throw new Error(`Could not read pending drafts for ${workspaceId}.`);
+      return (await response.json()).drafts;
+    };
+    await post(portB, tokenB, '/browser/host-focus', { workspace_id: 'workspace-b' });
+    await send('trainer:auto-pair');
+    await send('trainer:flush');
+    if ((await pendingDrafts(portB, tokenB, 'workspace-b')).length !== 0) {
+      throw new Error('Workspace B received the browser selection queued for A.');
+    }
+    sidecarA = await startSidecar(portA, dataA, tokenA);
+    await post(portA, tokenA, '/session/start', { workspace_id: 'workspace-a', workspace_name: 'Workspace A' });
+    await post(portA, tokenA, '/browser/host-focus', { workspace_id: 'workspace-a' });
+    await send('trainer:auto-pair');
+    await send('trainer:flush');
+    const delivered = await pendingDrafts(portA, tokenA, 'workspace-a');
+    if (delivered.length !== 1 || delivered[0].selection !== selection || delivered[0].url !== sourceUrl) {
+      throw new Error('The queued selection did not return to workspace A exactly once.');
+    }
+    console.log('[PASS] offline draft stayed in workspace A across a focus switch and restart');
   } finally {
     if (context) await context.close().catch(() => {});
     for (const proc of [sidecarA, sidecarB]) {

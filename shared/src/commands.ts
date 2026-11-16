@@ -55,6 +55,8 @@ export const trainerCommands = {
   nextTask: "trainer.task.next",
   uploadResource: "trainer.resource.upload",
   captureResource: "trainer.resource.capture",
+  linkResourceToLearning: "trainer.resource.linkLearning",
+  checkResourceVersions: "trainer.resource.checkVersions",
   organizeResource: "trainer.resource.organize",
   exportResource: "trainer.resource.export",
   libraryFoldersList: "trainer.library.folders.list",

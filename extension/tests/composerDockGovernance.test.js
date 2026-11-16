@@ -22,15 +22,13 @@ mod.paths = Module._nodeModulePaths(path.dirname(dockEntry));
 mod._compile(compiled.outputFiles[0].text, dockEntry);
 const dock = mod.exports;
 
-test('dock composer mounts exactly on the three primary destinations', () => {
+test('dock composer mounts only in the three primary destinations', () => {
   assert.deepEqual(dock.DOCK_SURFACES, ['coach', 'plan', 'resources']);
   assert.equal(dock.docksComposer('coach'), true);
   assert.equal(dock.docksComposer('plan'), true);
   assert.equal(dock.docksComposer('resources'), true);
-  // Training never docks: FocusedPractice owns phase inputs, the 5-phase
-  // state machine and the verification gate must not be bypassed.
-  assert.equal(dock.docksComposer('training'), false);
-  assert.equal(dock.docksComposer('progress'), false);
+  assert.equal(dock.docksComposer('training'), true);
+  assert.equal(dock.docksComposer('progress'), true);
   assert.equal(dock.docksComposer('settings'), false);
 });
 
@@ -39,8 +37,7 @@ test('draft scopes are surface-keyed; coach keeps the legacy session key', () =>
   assert.equal(dock.composerDockDraftScope('coach', sessionKey), sessionKey);
   assert.equal(dock.composerDockDraftScope('plan', sessionKey), `${sessionKey}\u0000dock:plan`);
   assert.equal(dock.composerDockDraftScope('resources', sessionKey), `${sessionKey}\u0000dock:resources`);
-  // Hidden surfaces resolve to the plain session key and never write drafts.
-  assert.equal(dock.composerDockDraftScope('training', sessionKey), sessionKey);
+  assert.equal(dock.composerDockDraftScope('training', sessionKey), dock.composerDockDraftScope('plan', sessionKey));
   // Surface scopes never collide with each other.
   assert.notEqual(
     dock.composerDockDraftScope('plan', sessionKey),
@@ -115,76 +112,16 @@ test('visible send-preference switch copy covers all eight UI languages', () => 
   assert.equal(fallback.label, 'After send');
 });
 
-test('App wiring: dock gate, surface-keyed scope effect, anchor chip, stay banner', () => {
+test('the shared composer writes scoped drafts and leaves results in the originating workspace', () => {
   const app = read('app/App.tsx');
-  const hook = read('app/useComposerDockAnchor.ts');
-  const types = read('lib/types.ts');
-  const state = read('app/useWorkbenchState.ts');
-
-  // Single shared composer instance gates on the dock rule (not coach-only).
   assert.match(app, /showComposerShell = docksComposer\(activeView\)/);
-  assert.doesNotMatch(app, /showComposerShell = ownsCoachComposer\(activeView\)/);
-
-  // Draft scope is selected per surface, and the effect re-runs on view change.
-  assert.match(app, /selectComposerDraftScope\(\s*composerDockDraftScope\(activeView, composerSessionKey\),?\s*\)/);
-  assert.match(app, /\[activeView, composerSessionKey, data\.sessionLabel, hasReceivedHostState\]/);
-
-  // Anchor chip strip renders only outside Coach and is removable.
-  assert.match(app, /dockAnchorControl\.anchor && activeView !== "coach" \? <div className="template-context" role="group" data-dock-anchor="true">/);
-  assert.match(app, /onClick=\{dockAnchorControl\.suppress\}/);
-
-  // Sends from Learning/Resources append the anchor line to the outgoing message.
+  assert.equal((app.match(/<CoachComposer\b/g) ?? []).length, 1);
+  assert.match(app, /selectComposerDraftScope\(composerDraftScope\)/);
+  assert.match(app, /<CoachComposer[\s\S]*?composerUsesTrainingFlow \? activityDraft : draft/);
+  assert.doesNotMatch(app, /<PracticeResponse\b/);
+  assert.match(app, /const activityDraftKey =/);
   assert.match(app, /const messageText = appendDockAnchor\(rawMessageText, dockAnchor\);/);
-  assert.match(app, /const dockAnchor = activeView === "coach" \? null : resolveDockContextAnchor\(/);
-
-  // Default jump-to-coach; stay mode records the surface in the store and the
-  // stream/complete reducer raises the actionable returnToSurface notice
-  // (§3.7) — batched fixture completions included.
-  assert.match(app, /dockSendNavigation\(dockSendPreference, activeView\) === "jump_to_coach"/);
-  assert.match(app, /markDockStaySend\(activeView\);/);
-  assert.match(app, /clearDockReturnNotice\(\)/);
-  assert.doesNotMatch(app, /dockStaySendRef/);
-  assert.doesNotMatch(app, /setDockReturnNotice/);
-  assert.match(state, /dockStaySendSurface: null,/);
-  assert.match(state, /dockReturnNotice: null,/);
-  assert.match(state, /markDockStaySend: \(surface\) => set\(\{ dockStaySendSurface: surface, dockReturnNotice: null \}\)/);
-  assert.match(state, /dockStaySurface && nextStreaming\.completionStopReason !== "cancelled"/);
-  assert.match(state, /dockReturnNotice: dockStaySurface, dockStaySendSurface: null/);
-  assert.match(state, /clearDockReturnNotice: \(\) => set\(\{ dockReturnNotice: null \}\)/);
-
-  // The send-preference decision lives once in Settings > Preferences, not in
-  // the dock strip on every Learning/Resources send.
-  assert.doesNotMatch(app, /<DockSendPreferenceSwitch/);
-  assert.doesNotMatch(app, /activeView === "plan" \|\| activeView === "resources" \? \(/);
-  const settingsView = read('components/settings/CoachSettingsView.tsx');
-  const settingsHook = read('components/settings/useCoachSettingsViewState.ts');
-  assert.match(settingsView, /data-settings-send-preference="true"/);
-  assert.match(settingsView, /dockSendPreferenceCopy\(language\)\.jump/);
-  assert.match(settingsView, /dockSendPreferenceCopy\(language\)\.stay/);
-  assert.match(settingsHook, /composerSendPreference/);
-  assert.match(settingsHook, /onComposerSendPreferenceChange/);
-
-  // The returnToSurface bar is injected into Learning's Now area (live and
-  // leftover branches) and the top of the Resources surface.
-  assert.match(app, /dockReturnNotice=\{dockReturnNotice === "plan" \? \(/);
-  assert.match(app, /dockReturnNotice === "resources" \? \(/);
-  const bar = read('components/composer/DockReturnToSurfaceBar.tsx');
-  assert.match(bar, /data-dock-return="true"/);
-  assert.match(bar, /data-dock-return-action="view"/);
-  assert.match(bar, /data-dock-return-action="stay"/);
-  assert.match(bar, /dockReturnBannerCopy\(language, surface\)/);
-  const planView = read('components/plan/CoachPlanView.tsx');
-  assert.match(planView, /dockReturnNotice\?: ReactNode;/);
-  assert.match(planView, /nextTools=\{<>\s*\{props\.dockReturnNotice\}\s*\{liveEvidenceDecisionRow\}/);
-  assert.match(planView, /props\.onPracticePlanStep \? \(/);
-  assert.match(planView, /\{props\.dockReturnNotice\}\n        \{leftoverNote/);
-
-  // Preference persists in the workbench layout state, default jump.
-  assert.match(app, /normalizeDockSendPreference\(layout\.composerSendPreference\)/);
-  assert.match(types, /composerSendPreference\?: "jump" \| "stay";/);
-  assert.match(state, /setComposerSendPreference: \(preference\) =>/);
-  assert.match(state, /composerSendPreference: "jump",/);
-
-  // Suppression is re-armed when the anchored context changes.
-  assert.match(hook, /useEffect\(\(\) => \{\s*setSuppressedId\(null\);\s*\}, \[anchorId\]\);/);
+  assert.match(app, /primaryDestinationForRoute\(message\.sourceView\) === destination/);
+  assert.match(app, /renderViewAgentReply\("resources"\)/);
+  assert.doesNotMatch(app, /dockSendNavigation\(/);
 });

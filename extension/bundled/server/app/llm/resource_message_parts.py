@@ -227,7 +227,9 @@ def _search_hit_parts(
     if not isinstance(raw_hits, list):
         return []
     parts: list[dict[str, Any]] = []
-    for raw in raw_hits[:_MAX_SEARCH_CITATIONS]:
+    analysis = result.get("mode") == "analyze"
+    limit = 4 if analysis else _MAX_SEARCH_CITATIONS
+    for number, raw in enumerate(raw_hits[:limit], start=1):
         hit = _as_dict(raw)
         resource_id = _as_text(hit.get("resource_id")) or _as_text(hit.get("id"))
         if not resource_id or resource_id in read_resource_ids:
@@ -244,7 +246,7 @@ def _search_hit_parts(
             "type": "citation",
             "resourceId": resource_id,
             "label": labels["library_match"],
-            "title": title,
+            "title": f"[{number}] {title}" if analysis else title,
             "referenceOrigin": "library_auto" if auto else "library",
         }
         source = _as_text(hit.get("source")) or _as_text(hit.get("path"))

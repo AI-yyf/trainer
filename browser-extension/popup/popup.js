@@ -240,7 +240,7 @@ async function capturePage() {
   setFeedback(elements.captureResult, t('captureBusy'), '');
   const focusId = elements.focusSelect.value || '';
   await TrainerCapture.saveFocusId(focusId);
-  const result = await send({ type: 'trainer:capture-tab' });
+  const result = await send({ type: 'trainer:send-tab-context' });
   const failed = result.status === 'failed' || result.status === 'unpaired';
   setFeedback(elements.captureResult, result.message || '', failed ? 'error' : '');
   if (!failed) {

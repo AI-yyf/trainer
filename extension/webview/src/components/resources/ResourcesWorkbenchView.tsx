@@ -52,7 +52,6 @@ import {
   PageIcon,
   PlusIcon,
   RefreshIcon,
-  SearchIcon,
   TrashIcon,
   UploadIcon,
 } from "../icons";
@@ -83,8 +82,7 @@ import {
   compactResourceSearchPlaceholder,
   englishSingularResourceMutationText,
   projectStructureCopy,
-  resourceText,
-  resourceTextLocaleOverrides,
+  resourceLibraryText as localize,
   resourceTrainingReadinessCopy,
   type ResourceTextKey,
 } from "../../lib/i18n/segments/resourcesInlineText";
@@ -111,7 +109,8 @@ export interface ResourcesWorkbenchViewProps {
   isBrowserPreview?: boolean;
   isLiveBrowserPreview?: boolean;
   onSearchResources?: (request: ResourceSearchRequest) => void | Promise<void>;
-  onSearchQueryChange?: (query: string) => void;
+  submittedSearchQuery?: string;
+  onClearSearch?: () => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
   onImportUrl?: () => void;
@@ -199,6 +198,8 @@ export interface ResourceCaptureInput {
   url: string;
   title?: string;
   focusId?: string;
+  planBinding?: { planId: string; revision: number };
+  browserSource?: { id: string; selection: string };
   /**
    * Also download the original bytes into the library's folder space
    * (`download` + `target_dir` in the capture contract): a PDF lands as the
@@ -225,6 +226,9 @@ export interface ResourceMutationOutcome {
   ok: boolean;
   message: string;
   resourceId?: string;
+  focusBinding?: string;
+  versionId?: string;
+  contentHash?: string;
   deduped?: boolean;
   /**
    * Path the requested download landed on (`saved_path` in the capture
@@ -262,16 +266,6 @@ type ResourceTrainingReadiness = {
   message: string;
   canRefresh: boolean;
 };
-
-function localize(language: ComposerLanguage, key: ResourceTextKey): string {
-  if (language === "zh-CN") {
-    return resourceText[key].zh;
-  }
-  if (language === "en-US") {
-    return resourceText[key].en;
-  }
-  return resourceTextLocaleOverrides[language][key] ?? resourceText[key].en;
-}
 
 function resourceReadOnlyNotice(language: ComposerLanguage): string {
   return localize(language, "readOnlyNotice");
@@ -1140,7 +1134,8 @@ export function ResourcesWorkbenchView({
   isBrowserPreview = false,
   isLiveBrowserPreview = false,
   onSearchResources,
-  onSearchQueryChange,
+  submittedSearchQuery = "",
+  onClearSearch,
   onImportFiles,
   onImportFolder,
   onImportUrl: onImportUrlAction,
@@ -1182,14 +1177,12 @@ export function ResourcesWorkbenchView({
   const importMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const importMenuRef = useRef<HTMLDivElement>(null);
   const importMenuId = useId();
-  const [query, setQuery] = useState("");
   const [projectStructureState, setProjectStructureState] = useState<{
     resourceId?: string;
     status: "idle" | "loading" | "ready" | "error";
     data?: ProjectStructure;
     message?: string;
   }>({ status: "idle" });
-  useEffect(() => { onSearchQueryChange?.(query); }, [onSearchQueryChange, query]);
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [urlImportOpen, setUrlImportOpen] = useState(false);
   const [urlImportValue, setUrlImportValue] = useState("");
@@ -1302,7 +1295,7 @@ export function ResourcesWorkbenchView({
     );
   };
 
-  const trimmedQuery = query.trim();
+  const trimmedQuery = submittedSearchQuery.trim();
   const normalizedQuery = normalizeSearchText(trimmedQuery);
   const hasSearchQuery = Boolean(normalizedQuery);
   const trashSnapshotAvailable = deletedResources !== undefined;
@@ -2604,17 +2597,12 @@ export function ResourcesWorkbenchView({
           the search/expand toolbar would be dead chrome until content exists. */}
       <Library hidden={false} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && !canWriteResources) ? null : (
       <div className="resources-knowledge__toolbar">
-        <label className="resources-search resources-search--hero resources-knowledge__search">
-          <span className="sr-only">{localize(language, "searchPlaceholder")}</span>
-          <SearchIcon size={14} aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={compactResourceSearchPlaceholder[language]}
-          />
-        </label>
-
+        {hasSearchQuery ? (
+          <button type="button" className="template-back" data-clear-resource-search onClick={onClearSearch}
+            title={localize(language, "searchPlaceholder")}>
+            {trimmedQuery} ×
+          </button>
+        ) : null}
         <div className="resources-knowledge__actions" aria-label={localize(language, "title")}>
           {/* One primary action per viewport: when the empty-state orientation
               card already carries the import CTA, the toolbar repeats it. */}

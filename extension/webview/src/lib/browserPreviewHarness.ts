@@ -102,6 +102,7 @@ const LIVE_TRAINING_COMMAND_IDS = new Set<string>([
   trainerCommands.trainingAttemptClose,
 ]);
 const LIVE_TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
+  trainerCommands.trainingGenerateCard,
   trainerCommands.trainingCardStatusTransition,
   trainerCommands.trainingFlashcardAnswer,
   trainerCommands.trainingTheoryDrillAnswer,
@@ -753,10 +754,13 @@ async function runBrowserPreviewLiveTrainingAction(
               target_skill: browserPreviewString(payload?.targetSkill),
               context_hint: browserPreviewString(payload?.contextHint),
               plan_stage_id: browserPreviewString(payload?.planStageId),
+              plan_binding: payload?.planBinding,
+              expected_resource_version: payload?.expectedResourceVersion,
               resource_id: browserPreviewString(payload?.resourceId),
               why_now: browserPreviewString(payload?.whyNow),
               response_language: language,
               stream_id: activeTrainingStream.messageId,
+              request_id: persistence?.requestId,
               ...(providerOverride
                 ? {
                     provider: providerOverride.provider,
@@ -1044,7 +1048,8 @@ async function runBrowserPreviewLiveTrainingAction(
     }
     const detail = await readLiveTrainingResponseDetail(response);
     const responseRecord = await readLiveTrainingResponseRecord(response);
-    emitBrowserPreviewTrainingPersistenceAck(persistence, true, responseRecord);
+    const accepted = commandId !== trainerCommands.trainingGenerateCard || responseRecord?.success === true;
+    emitBrowserPreviewTrainingPersistenceAck(persistence, accepted, responseRecord, detail || undefined);
     emitBrowserPreviewHostMessage({
       type: "operation/status",
       payload: {
@@ -1060,6 +1065,7 @@ async function runBrowserPreviewLiveTrainingAction(
   } catch (error) {
     if (activeTrainingStream?.controller.signal.aborted) {
       emitTrainingStreamCancelled();
+      emitBrowserPreviewTrainingPersistenceAck(persistence, false, undefined, "Training card stream cancelled.");
       if (resourceTrainingHandoff) {
         emitBrowserPreviewResourceTrainingHandoff(
           browserPreviewResourceTrainingHandoffFailure(resourceTrainingHandoff, "Training card stream cancelled."),

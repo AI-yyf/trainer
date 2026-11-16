@@ -216,9 +216,10 @@ async function main() {
     assert(focusResponse.ok, `Host focus failed: HTTP ${focusResponse.status}`);
     ok("host-focus", session.contextId);
 
+    const headless = process.env.TRAINER_BROWSER_E2E_HEADLESS === "1";
     context = await chromium.launchPersistentContext(profileDir, {
-      headless: process.env.TRAINER_BROWSER_E2E_HEADLESS === "1",
-      channel: process.env.TRAINER_BROWSER_E2E_CHANNEL || undefined,
+      headless,
+      channel: process.env.TRAINER_BROWSER_E2E_CHANNEL || (headless ? "chromium" : undefined),
       args: [
         `--disable-extensions-except=${extensionDir}`,
         `--load-extension=${extensionDir}`,

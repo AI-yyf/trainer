@@ -1,0 +1,33 @@
+import type { ComposerLanguage } from "../types";
+
+type UnifiedComposerCopy = {
+  context: string;
+  file: string;
+  selection: string;
+  task: string;
+  resources: string;
+  learningPrompt: string;
+  resourcePrompt: string;
+  activityPrompt: string;
+  filePracticePrompt: string;
+  history: string;
+  emptyHistory: string;
+  actionPreview: string;
+  selectResources: string;
+  selectIndexedSource: string;
+  linkedPracticeFailed: string;
+  confirm: string;
+  cancel: string;
+  stale: string;
+};
+
+export const unifiedComposerCopy: Record<ComposerLanguage, UnifiedComposerCopy> = {
+  "zh-CN": { context: "当前上下文", file: "当前文件", selection: "当前选区", task: "当前任务", resources: "资料", learningPrompt: "继续学习、安排练习或问一个问题", resourcePrompt: "搜索、阅读或整理资料", activityPrompt: "写下答案，提出问题，或描述阻塞", filePracticePrompt: "请求验证当前文件，或说说卡在哪里", history: "学习活动", emptyHistory: "这里会显示已记录的学习活动。", actionPreview: "请确认此操作", confirm: "确认并执行", selectResources: "先选中要操作的资料。", selectIndexedSource: "请选择一份已索引的资料来生成练习。", linkedPracticeFailed: "资料已加入学习计划，练习暂未生成。", cancel: "取消", stale: "学习上下文已变化。请重新发起请求。" },
+  "en-US": { context: "Current context", file: "Current file", selection: "Current selection", task: "Current task", resources: "Resources", learningPrompt: "Continue learning, start a practice, or ask a question", resourcePrompt: "Search, read, or organize resources", activityPrompt: "Answer, ask a question, or describe a blocker", filePracticePrompt: "Ask to verify the current file or describe a blocker", history: "Learning activity", emptyHistory: "Recorded learning activity will appear here.", actionPreview: "Confirm this action", confirm: "Confirm and run", selectResources: "Select the resources you want to change.", selectIndexedSource: "Select one indexed source for the practice.", linkedPracticeFailed: "The source was linked to the plan. The practice is still pending.", cancel: "Cancel", stale: "The learning context changed. Submit the request again." },
+  "es-ES": { context: "Contexto actual", file: "Archivo actual", selection: "Selección actual", task: "Tarea actual", resources: "Recursos", learningPrompt: "Sigue aprendiendo, practica o haz una pregunta", resourcePrompt: "Busca, lee u organiza recursos", activityPrompt: "Responde, pregunta o describe un bloqueo", filePracticePrompt: "Pide verificar el archivo actual o describe un bloqueo", history: "Actividad de aprendizaje", emptyHistory: "Aquí aparecerá la actividad registrada.", actionPreview: "Confirma esta acción", confirm: "Confirmar y ejecutar", selectResources: "Selecciona los recursos primero.", selectIndexedSource: "Selecciona una fuente indexada para el ejercicio.", linkedPracticeFailed: "La fuente se vinculó al plan. El ejercicio sigue pendiente.", cancel: "Cancelar", stale: "El contexto cambió. Envía la solicitud de nuevo." },
+  "fr-FR": { context: "Contexte actuel", file: "Fichier actuel", selection: "Sélection actuelle", task: "Tâche actuelle", resources: "Ressources", learningPrompt: "Continuez, lancez un exercice ou posez une question", resourcePrompt: "Recherchez, lisez ou organisez les ressources", activityPrompt: "Répondez, posez une question ou décrivez un blocage", filePracticePrompt: "Demandez une vérification du fichier ou décrivez un blocage", history: "Activité d’apprentissage", emptyHistory: "Les activités enregistrées apparaîtront ici.", actionPreview: "Confirmez cette action", confirm: "Confirmer et exécuter", selectResources: "Sélectionnez d’abord les ressources.", selectIndexedSource: "Sélectionnez une source indexée pour l’exercice.", linkedPracticeFailed: "La source a été liée au plan. L’exercice reste à créer.", cancel: "Annuler", stale: "Le contexte a changé. Renvoyez votre demande." },
+  "de-DE": { context: "Aktueller Kontext", file: "Aktuelle Datei", selection: "Aktuelle Auswahl", task: "Aktuelle Aufgabe", resources: "Ressourcen", learningPrompt: "Lerne weiter, starte eine Übung oder stelle eine Frage", resourcePrompt: "Ressourcen suchen, lesen oder organisieren", activityPrompt: "Antworte, stelle eine Frage oder beschreibe ein Hindernis", filePracticePrompt: "Lass die aktuelle Datei prüfen oder beschreibe ein Hindernis", history: "Lernaktivität", emptyHistory: "Hier erscheinen gespeicherte Lernaktivitäten.", actionPreview: "Aktion bestätigen", confirm: "Bestätigen und ausführen", selectResources: "Wähle zuerst die Ressourcen aus.", selectIndexedSource: "Wähle eine indexierte Quelle für die Übung aus.", linkedPracticeFailed: "Die Quelle wurde mit dem Plan verknüpft. Die Übung steht noch aus.", cancel: "Abbrechen", stale: "Der Lernkontext hat sich geändert. Sende die Anfrage erneut." },
+  "ja-JP": { context: "現在のコンテキスト", file: "現在のファイル", selection: "現在の選択範囲", task: "現在の課題", resources: "資料", learningPrompt: "学習を続ける、練習する、または質問する", resourcePrompt: "資料を検索、閲覧、整理する", activityPrompt: "回答や質問を書いたり、行き詰まりを説明したりする", filePracticePrompt: "現在のファイルの検証を依頼するか、行き詰まりを説明する", history: "学習アクティビティ", emptyHistory: "記録された学習アクティビティがここに表示されます。", actionPreview: "操作を確認", confirm: "確認して実行", selectResources: "先に資料を選択してください。", selectIndexedSource: "練習に使う索引済みの資料を1件選んでください。", linkedPracticeFailed: "資料を学習計画に追加しました。練習はまだ作成されていません。", cancel: "キャンセル", stale: "学習コンテキストが変わりました。もう一度送信してください。" },
+  "ko-KR": { context: "현재 컨텍스트", file: "현재 파일", selection: "현재 선택 영역", task: "현재 과제", resources: "자료", learningPrompt: "학습을 이어가거나, 연습을 시작하거나, 질문하세요", resourcePrompt: "자료를 검색하거나, 읽거나, 정리하세요", activityPrompt: "답하거나, 질문하거나, 막힌 부분을 설명하세요", filePracticePrompt: "현재 파일 검증을 요청하거나 막힌 부분을 설명하세요", history: "학습 활동", emptyHistory: "기록된 학습 활동이 여기에 표시됩니다.", actionPreview: "이 작업 확인", confirm: "확인 후 실행", selectResources: "먼저 자료를 선택하세요.", selectIndexedSource: "연습에 사용할 색인된 자료 하나를 선택하세요.", linkedPracticeFailed: "자료가 학습 계획에 추가되었습니다. 연습은 아직 생성되지 않았습니다.", cancel: "취소", stale: "학습 컨텍스트가 바뀌었습니다. 다시 요청해 주세요." },
+  "pt-BR": { context: "Contexto atual", file: "Arquivo atual", selection: "Seleção atual", task: "Tarefa atual", resources: "Recursos", learningPrompt: "Continue aprendendo, pratique ou faça uma pergunta", resourcePrompt: "Busque, leia ou organize recursos", activityPrompt: "Responda, pergunte ou descreva um bloqueio", filePracticePrompt: "Peça para verificar o arquivo atual ou descreva um bloqueio", history: "Atividade de aprendizagem", emptyHistory: "A atividade registrada aparecerá aqui.", actionPreview: "Confirme esta ação", confirm: "Confirmar e executar", selectResources: "Selecione os recursos primeiro.", selectIndexedSource: "Selecione uma fonte indexada para a prática.", linkedPracticeFailed: "A fonte foi vinculada ao plano. A prática ainda está pendente.", cancel: "Cancelar", stale: "O contexto de aprendizagem mudou. Envie a solicitação novamente." },
+};

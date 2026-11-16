@@ -13,3 +13,12 @@ Hard boundaries:
 - No silent modification of the user's project; writes follow explicit workspace authority.
 - Three permanent destinations: Coach, Learning, Resources. Training is a Learning context; Progress belongs to Learning; Settings/History are utilities.
 - Local Brain + Remote Hands: identity/memory/plans/evidence stay local; remote work goes through the WorkspaceGateway/Companion with local-only credentials.
+
+## Shared composer
+
+- The Coach, Learning and Resources work contexts use the same composer. Settings and History are utilities.
+- The input routes explicit practice, recall, verification and library actions. It shows a confirmation before changing a plan or moving or deleting library entries.
+- Drafts and source references retain workspace and session scope. Training answers additionally retain card scope. Coach, Learning and Resources use separate conversation histories within the workspace session.
+- Browser capture stages a page or selected text for the visible work context and requires its receipt before draining the queue. A separate learner submission starts model work.
+- Queued captures keep the workspace they were created for. New captures follow explicit host focus, and a stopped workspace resumes its queue when it returns.
+- Learning reads activity and review timing from persisted records. Only the existing verification and evidence paths can attest capability.

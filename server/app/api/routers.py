@@ -66,6 +66,7 @@ from ..core.models import (
     WorkspaceUnderstandingSnapshot,
 )
 from ..learner_state import learner_memory_snapshot
+from ..llm.conversation_scope import composer_conversation_scope
 from ..llm.prompts import infer_coaching_scenario as infer_message_coaching_scenario
 from ..llm.prompts import infer_learner_signal as infer_message_learner_signal
 from ..llm.provider.capability import _is_loopback_provider_url
@@ -138,6 +139,7 @@ from ..training.card_generator import (
 )
 from ..training.card_request import message_requests_explicit_training_card
 from ..training.plan_binding import validated_mint_binding
+from ..training.project_checks import project_python_checks
 from ..workspace.classifier import (
     classify_heuristic,
     is_code_like_current_file,
@@ -3710,6 +3712,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         raw_hits: object,
         *,
         limit: int,
+        require_current_version: bool = False,
     ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
         if not isinstance(raw_hits, list):
             return [], []
@@ -3732,6 +3735,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if index_state not in {"indexed", "ready", ""}:
                 continue
             if not snippet:
+                continue
+            if require_current_version and (
+                hit_payload.get("stale") or not hit_payload.get("content_hash")
+                or not hit_payload.get("version_id") or not hit_payload.get("location")
+            ):
                 continue
             seen_resource_ids.add(resource_id)
             raw_location = hit_payload.get("location")
@@ -3935,8 +3943,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         message: str | None,
         *,
         limit: int = 4,
+        analysis: bool = False,
     ) -> dict[str, object]:
-        if not message_deserves_library_probe(message):
+        if not analysis and not message_deserves_library_probe(message):
             return {}
         workspace_resources = runtime.repository.list_resources(workspace_id)
         if not workspace_resources:
@@ -3945,13 +3954,21 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         resource_fragments: list[dict[str, object]] = []
         selected_query = ""
         queries_tried: list[str] = []
-        for candidate in resource_lookup_query_candidates(message)[:6]:
+        candidates = resource_lookup_query_candidates(message)
+        if analysis:
+            first_clause = re.split(r"[，,。；;\n]", str(message or ""), maxsplit=1)[0]
+            topic = re.sub(r"^(?:请|帮我|请帮我)?(?:把|从|在)?(?:我的)?(?:资料库|资源库)[里中内]?", "", first_clause)
+            topic = re.sub(r"^(?:找出|搜索|查找|检索)(?:资料库[里中内]?)?(?:所有)?(?:关于)?", "", topic)
+            topic = re.sub(r"(?:(?:的)?相关)?(?:论文|文献|文章|资料)(?:找出来|找出|列出来|查出来)?$", "", topic).strip()
+            if topic and topic != first_clause:
+                candidates.insert(0, topic)
+        for candidate in dict.fromkeys(candidates[:6]):
             queries_tried.append(candidate)
             try:
                 search_response = runtime.resource_service.search_resources(
                     workspace_id,
                     candidate,
-                    top_k=max(limit * 2, limit + 2),
+                    top_k=24 if analysis else max(limit * 2, limit + 2),
                     project_scope=workspace_id,
                 )
             except Exception:
@@ -3959,6 +3976,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             requested_resources, resource_fragments = collect_auto_resource_search_hits(
                 getattr(search_response, "results", None),
                 limit=limit,
+                require_current_version=analysis,
             )
             if resource_fragments:
                 selected_query = candidate
@@ -4004,8 +4022,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         if not isinstance(raw_fragments, list) or not raw_fragments:
             return []
 
+        composer_intent = resource_context.get("resource_composer_intent")
+        analysis = isinstance(composer_intent, dict) and composer_intent.get("mode") == "analyze"
         hits: list[dict[str, object]] = []
-        for item in raw_fragments[:3]:
+        for item in raw_fragments[:4 if analysis else 3]:
             if not isinstance(item, dict):
                 continue
             resource_id = str(item.get("resource_id") or item.get("id") or "").strip()
@@ -4089,6 +4109,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             "hits": hits,
             "auto": True,
         }
+        if analysis:
+            result["mode"] = "analyze"
         queries_tried = resource_context.get("auto_resource_queries_tried")
         if isinstance(queries_tried, list) and queries_tried:
             result["queries_tried"] = [
@@ -4190,6 +4212,36 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         message: str | None = None,
         resource_composer_intent: ResourceComposerIntent | None = None,
     ) -> dict[str, object]:
+        if resource_composer_intent is not None and resource_composer_intent.mode == "analyze":
+            ids = resource_ids or resource_composer_intent.resource_ids
+            analysis_context = (runtime.resource_service.build_requested_resource_context(
+                workspace_id, ids[:4], fragments_per_source=1,
+            ) if ids else automatic_resource_context(workspace_id, message, analysis=True))
+            fragments = analysis_context.get("resource_fragments")
+            verified_fragments = []
+            store = runtime.resource_version_store
+            for item in fragments if isinstance(fragments, list) else []:
+                if not isinstance(item, dict) or not item.get("location") or store is None:
+                    continue
+                resource_id = str(item.get("resource_id") or "")
+                version = store.current_version(workspace_id, resource_id)
+                if not version or item.get("version_id") != version["version_id"] or (
+                    item.get("content_hash") != version["content_hash"]
+                ):
+                    continue
+                resource = runtime.repository.get_resource(workspace_id, resource_id)
+                if resource is None:
+                    continue
+                passage = runtime.resource_service.read_indexed_fragment_text(workspace_id, resource, item)
+                excerpt = redact_training_fact_text(passage, 900)
+                if excerpt:
+                    verified_fragments.append({**item, "excerpt": excerpt})
+            return {
+                **({} if ids else analysis_context),
+                "auto_resource_lookup": True,
+                "resource_fragments": verified_fragments,
+                **resource_composer_context(resource_composer_intent),
+            }
         requested = requested_resource_context(workspace_id, resource_ids)
         workspace_context = workspace_understanding_resource_context(workspace_id, resource_ids)
         auto_context = automatic_resource_context(workspace_id, message) if not requested else {}
@@ -4349,6 +4401,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if isinstance(resource_context, dict)
             else []
         )
+        composer_intent = resource_context.get("resource_composer_intent") if resource_context else None
+        if isinstance(composer_intent, dict) and composer_intent.get("mode") == "analyze":
+            return ([item for item in resource_fragments[:limit] if isinstance(item, dict)]
+                    if isinstance(resource_fragments, list) else [], [], [])
         curated_background_references = load_curated_background_references(
             workspace_id,
             focus_area=focus_area,
@@ -5429,6 +5485,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         messages: list[ChatMessage],
         *,
         drop_latest_user: bool = False,
+        active_view: str | None = None,
     ) -> list[dict[str, str]]:
         history_source = list(messages)
         if (
@@ -5439,8 +5496,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             history_source = history_source[:-1]
 
         history: list[dict[str, str]] = []
+        scope = composer_conversation_scope(active_view) if active_view else None
         for item in history_source:
             if item.role not in {"user", "assistant"}:
+                continue
+            if scope and composer_conversation_scope((item.metadata or {}).get("active_view")) != scope:
                 continue
             content = str(item.content or "").strip()
             if not content:
@@ -6965,7 +7025,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if isinstance(coach_context, dict):
                 external_references = coach_context.get("external_references")
                 if isinstance(external_references, list) and external_references:
-                    metadata["external_references"] = external_references[:3]
+                    composer_intent = coach_context.get("resource_composer_intent")
+                    analysis = isinstance(composer_intent, dict) and composer_intent.get("mode") == "analyze"
+                    metadata["external_references"] = external_references[:4 if analysis else 3]
                 else:
                     resource_fragments = coach_context.get("resource_fragments")
                     if isinstance(resource_fragments, list) and resource_fragments:
@@ -9409,6 +9471,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         root = normalize_training_path(workspace_root)
         if not root or not is_absolute_training_path(root):
             return ""
+        if path.startswith("/") and root.startswith("/") and not (
+            path.startswith("//") or root.startswith("//")
+        ):
+            try:
+                relative = Path(path).resolve().relative_to(Path(root).resolve())
+            except (OSError, RuntimeError, ValueError):
+                return ""
+            return relative.as_posix() if relative.parts else ""
         comparison_path = path.casefold() if re.match(r"^[a-z]:/", path, flags=re.IGNORECASE) else path
         comparison_root = root.casefold() if re.match(r"^[a-z]:/", root, flags=re.IGNORECASE) else root
         if comparison_path == comparison_root:
@@ -9606,6 +9676,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 # Nested IDE input is consumed into vetted fields below; never carry raw input onward.
                 "current_file": None,
                 "resource_knowledge_evidence": None,
+                "project_verification_steps": [],
                 "plan_stage_id": "",
                 **guided_training_workspace_facts(
                     workspace_id=request.workspace_id,
@@ -9823,12 +9894,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 else resource.kind
             )
             if fragment_id and focus_area and summary:
+                excerpt = redact_training_fact_text(
+                    runtime.resource_service.read_indexed_fragment_text(workspace_id, resource, fragment),
+                    1600,
+                )
                 return ResourceKnowledgeEvidence(
                     resourceId=resource.id,
                     fragmentId=fragment_id,
                     sourceType=source_type,
                     focusArea=focus_area,
                     summary=summary,
+                    excerpt=excerpt,
                 )
         return None
 
@@ -9923,9 +9999,32 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
         return resource
 
+    def require_expected_training_resource_version(request: CardGenerationRequest) -> None:
+        expected = request.expected_resource_version
+        if expected is None:
+            return
+        resource_id = request.resource_id.strip()
+        resource = runtime.repository.get_resource(request.workspace_id, resource_id)
+        version_store = runtime.resource_version_store
+        version = (version_store.current_version(request.workspace_id, resource_id) or {}
+                   if version_store is not None else {})
+        if (
+            resource is None
+            or version.get("version_id") != expected.version_id
+            or version.get("content_hash") != expected.content_hash
+            or resource.content_hash != expected.content_hash
+        ):
+            raise HTTPException(status_code=409, detail=localized_text(
+                "The linked source changed. Confirm the current version before practicing.",
+                "已关联的资料版本发生变化。请核对当前版本后再练习。",
+                request.response_language,
+            ))
+
     def prepare_training_card_request(request: CardGenerationRequest) -> CardGenerationRequest:
         """Apply the same redaction, locale, and resource trust projection to both routes."""
-        request_payload = request.model_copy(deep=True)
+        request_payload = request.model_copy(deep=True, update={
+            "resource_version_id": "", "resource_content_hash": "", "resource_location": {},
+        })
         request_payload = request_payload.model_copy(
             update={"plan_binding": current_training_plan_binding(request_payload)}
         )
@@ -9958,6 +10057,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             request_payload = request_payload.model_copy(
                 update={"resource_id": request_payload.resource_id.strip()}
             )
+        require_expected_training_resource_version(request_payload)
         mint_overlay = _workspace_training_mint_overlay(
             runtime,
             request_payload.workspace_id,
@@ -9971,10 +10071,32 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 request_payload.resource_id,
             )
             if resource is not None:
+                version = runtime.resource_version_store.current_version(
+                    request_payload.workspace_id, resource.id
+                ) if runtime.resource_version_store is not None else None
                 resource_evidence = trusted_resource_knowledge_evidence(
                     request_payload.workspace_id,
                     resource,
                 )
+                if request_payload.expected_resource_version is not None and resource_evidence is None:
+                    raise HTTPException(status_code=409, detail=localized_text(
+                        "The confirmed source needs indexed content before it can be used for practice.",
+                        "已确认的资料需要完成内容索引后才能用于练习。",
+                        request_payload.response_language,
+                    ))
+                project_checks: list[str] = []
+                if (
+                    resource_evidence is not None and request_payload.current_file_path
+                    and request_payload.card_type == "practice"
+                    and request_payload.source in {"plan_requirement", "conversation_gap"}
+                ):
+                    root = runtime.resolve_workspace_path(request_payload.workspace_id)
+                    if root:
+                        project_checks = [
+                            redact_training_fact_text(step, 280) for step in project_python_checks(
+                                Path(root), request_payload.current_file_path, request_payload.context_hint,
+                            )
+                        ]
                 request_payload = request_payload.model_copy(
                     update={
                         "resource_quality_flags": list(resource.quality_flags or []),
@@ -9982,6 +10104,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                         "resource_trust_state": resource_trust_state(resource),
                         "resource_freshness": str(resource.freshness or "unknown"),
                         "resource_knowledge_evidence": resource_evidence,
+                        "project_verification_steps": project_checks,
+                        "resource_version_id": str((version or {}).get("version_id") or ""),
+                        "resource_content_hash": str((version or {}).get("content_hash") or ""),
+                        "resource_location": (version or {}).get("location") or {},
                     }
                 )
             else:
@@ -9998,13 +10124,18 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         plan, recovered = leftover_runtime_for_workspace(request.workspace_id)
         revision = runtime.repository.get_plan_revision(request.workspace_id, plan.id) if plan else 0
         try:
-            return validated_mint_binding(
+            binding = validated_mint_binding(
                 request.plan_binding,
                 source=request.source,
                 plan=plan,
                 runtime=recovered,
                 revision=revision,
             )
+            if binding is not None and plan is not None and request.expected_resource_version is not None:
+                stage = next((stage for stage in plan.stages if stage.id == binding.stage_id), None)
+                if stage is None or request.resource_id not in stage.resources:
+                    raise ValueError("Link the confirmed source to the current plan stage before practicing.")
+            return binding
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -10017,6 +10148,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 for card in runtime.memory_service.get_cards(request_payload.workspace_id)
                 if card.created_from == "resource"
                 and card.resource_id == request_payload.resource_id
+                and card.resource_content_hash == request_payload.resource_content_hash
+                and (request_payload.expected_resource_version is None
+                    or card.resource_version_id == request_payload.resource_version_id)
+                and (request_payload.plan_binding is None or card.plan_binding == request_payload.plan_binding)
                 and card.card_type == request_payload.card_type
                 and card.status in {"candidate", "active", "needs_primer"}
             ),
@@ -10068,6 +10203,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
             # Recheck after the provider completes: a plan may change during generation.
             binding = current_training_plan_binding(request_payload)
+            require_expected_training_resource_version(request_payload)
             card = card.model_copy(update={
                 "plan_binding": binding,
                 "plan_links": [binding.stage_id] if binding else (

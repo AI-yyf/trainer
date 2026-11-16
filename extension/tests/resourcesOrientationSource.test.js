@@ -59,7 +59,7 @@ test('Resources view renders snapshot-backed orientation instead of inferred rea
   assert.match(viewSource, /<SystemState/);
   assert.match(viewSource, /selectedResource\.title/);
   assert.match(viewSource, /resources-knowledge__add-resource/);
-  assert.match(viewSource, /resources-knowledge__search/);
+  assert.match(viewSource, /submittedSearchQuery/);
   assert.doesNotMatch(viewSource, /className="resources-knowledge__more"/);
   assert.match(viewSource, /resources-library-tree__trash/);
   assert.doesNotMatch(viewSource, /CoachOrientationRail/);

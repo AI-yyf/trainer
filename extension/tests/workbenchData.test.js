@@ -3587,7 +3587,7 @@ test('mergeMemorySummarySnapshot paints a plan stamped for B as workspace B iden
         id: 'plan-1',
         title: 'Plan',
         frozen: false,
-        stages: [],
+        stages: [{ id: 'stage-1', title: 'Verify a rule', status: 'active', resources: ['rule.py', 'paper-1'] }],
         workspace_id: 'workspace-b',
       },
       current_task: {
@@ -3601,6 +3601,7 @@ test('mergeMemorySummarySnapshot paints a plan stamped for B as workspace B iden
 
   assert.equal(patch.plan.title, 'Plan');
   assert.equal(patch.plan.id, 'plan-1');
+  assert.deepEqual(patch.plan.stages[0].resourceIds, ['rule.py', 'paper-1']);
   assert.equal(patch.task.title, 'Generated task');
   assert.equal(patch.task.id, 'task-1');
   assert.notEqual(patch.plan.title, 'Keep the current stage');

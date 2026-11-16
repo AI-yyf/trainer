@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from ..evidence.contract import pinned_card_resource
 from ..training.attempt_store import content_hash
 from ..training.skill_projection import (
     DIMENSION_REGISTRY,
@@ -183,14 +184,14 @@ def record_executed_training_evidence(
     # a scenario/handoff. That is a real cross-context transfer fact; a normal
     # practice card is not.
     dimension = "transfer" if is_return_context else _card_capability_dimension(card)
-    resource_fields: dict[str, Any] = {}
+    resource_fields = pinned_card_resource(card)
     evidence_limitations = [
         f"{check.label}: {check.detail}"
         for check in report.dynamic_checks
         if check.status in {"skipped", "pending"}
     ]
     resource_id = str(getattr(card, "resource_id", "") or "").strip()
-    if resource_id:
+    if resource_id and not resource_fields:
         repository = getattr(runtime, "repository", None)
         resource_available = bool(
             repository is not None

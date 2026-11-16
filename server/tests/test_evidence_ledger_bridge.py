@@ -66,6 +66,27 @@ def test_evidence_records_a_ledger_event(tmp_path: Path) -> None:
     assert events[0]["payload"]["trust_level"] == "controlled_check"
 
 
+def test_started_card_and_answer_are_visible_in_scoped_learning_activity(tmp_path: Path) -> None:
+    from app.core.models import TrainingCardCandidateSnapshot
+
+    workspace = "workspace-learning-activity"
+    runtime = build_app(tmp_path).app.state.runtime
+    card = TrainingCardCandidateSnapshot(
+        card_id="card-recall", title="Workspace identity", card_type="flash",
+        status="active", learning_phase="learn", expected_answer="Compare the workspace ID.",
+    )
+    runtime.memory_service.upsert_card(workspace, card)
+    runtime.memory_service.transition_card_status(workspace, card.card_id, "active", reason="start_step")
+    runtime.memory_service.submit_flashcard_answer(workspace, card.card_id, "Compare the workspace ID.")
+
+    activity = runtime.memory_service.snapshot(workspace).learning_activity
+    assert [item.event_type for item in activity[:2]] == [
+        "practice_submission_recorded", "card_status_transitioned",
+    ]
+    assert all(item.card_id == card.card_id for item in activity[:2])
+    assert runtime.memory_service.snapshot("separate-workspace").learning_activity == []
+
+
 def test_evidence_event_is_idempotent_per_evidence_id(tmp_path: Path) -> None:
     client = build_app(tmp_path)
     store = client.app.state.runtime.attempt_store

@@ -1,22 +1,9 @@
-import { PRIMARY_DESTINATIONS } from "./workbenchDestinations";
+import { primaryDestinationForRoute } from "./workbenchDestinations";
 import type { ActiveWorkbenchView } from "./types";
 
 /**
- * Persistent dock composer governance (§3.7).
- *
- * Product ruling: Coach / Learning / Resources keep a persistent bottom
- * composer. One thread (the single coach conversation), one component (the
- * shared CoachComposer instance in the app footer), surface-keyed drafts,
- * automatic context anchor chips, and a send-jump/stay preference.
- *
- * Governance semantics that must never drift:
- * - Training never docks (FocusedPractice owns its phase inputs; the 5-phase
- *   state machine and the verification gate must not be bypassed by a free
- *   composer). Progress and Settings are utilities, not work surfaces.
- * - A hidden surface never writes a draft: each surface owns a separate
- *   draft scope key (red line 3; pins the App.tsx:5129-class overwrite bug).
- * - Streaming mutex: the dock is the SAME component instance as the coach
- *   composer, so the existing busy/read-only state covers every surface.
+ * The persistent composer belongs to the three primary destinations.
+ * Activity answers use the card-scoped draft bank inside Training.
  */
 
 export const DOCK_SURFACES = ["coach", "plan", "resources"] as const;
@@ -24,7 +11,7 @@ export type ComposerDockSurface = (typeof DOCK_SURFACES)[number];
 
 /** True when the persistent dock composer is mounted for this route. */
 export function docksComposer(route: ActiveWorkbenchView): boolean {
-  return (PRIMARY_DESTINATIONS as readonly string[]).includes(route);
+  return primaryDestinationForRoute(route) !== null;
 }
 
 /**
@@ -37,10 +24,11 @@ export function composerDockDraftScope(
   surface: ActiveWorkbenchView,
   composerSessionKey: string,
 ): string {
-  if (surface === "coach" || !docksComposer(surface)) {
+  if (surface === "coach" || surface === "settings") {
     return composerSessionKey;
   }
-  return `${composerSessionKey}\u0000dock:${surface}`;
+  const context = surface === "training" || surface === "progress" ? "plan" : surface;
+  return `${composerSessionKey}\u0000dock:${context}`;
 }
 
 /** Send-and-jump (default) versus send-and-stay, per §3.7 red line 5. */
@@ -97,7 +85,7 @@ export function resolveDockContextAnchor(
   if (suppressed) {
     return null;
   }
-  if (surface === "plan") {
+  if (surface === "plan" || surface === "training" || surface === "progress") {
     const stage = context.stageTitle?.trim();
     if (!stage) {
       return null;

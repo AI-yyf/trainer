@@ -23,7 +23,7 @@ import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import { trainerCommands } from "../../../../shared/src/commands";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
-import type { TrainingPlanBinding } from "../../../../shared/src/models";
+import type { ResourceCaptureReceipt, ResourceVersionCheckResult, TrainingPlanBinding } from "../../../../shared/src/models";
 import { isComposerLanguage } from "../../../../shared/src/types";
 import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import { analyzeSendIntent, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
@@ -198,7 +198,6 @@ import {
   CoachMessageBubble,
 } from "../components/coach";
 import { AppShell } from "../templates/AppShell";
-import { PracticeResponse } from "../templates/PracticeResponse";
 import { ActivityHeader } from "../templates/ActivityHeader";
 import { appendDockAnchor, composerDockDraftScope, dockSendNavigation, docksComposer, normalizeDockSendPreference, resolveDockContextAnchor } from "../lib/composerDock";
 import { useComposerDockAnchor } from "./useComposerDockAnchor";
@@ -366,6 +365,8 @@ export type ResourceOperationKind =
   | "index"
   | "upload"
   | "capture"
+  | "link-learning"
+  | "check-versions"
   | "organize"
   | "export";
 export type ResourceMutationOperationKind = "delete" | "restore";
@@ -376,6 +377,8 @@ export type PendingResourceOperation = {
   timeoutId: number;
   /** The (marker-stripped) status text that settled this operation. */
   statusMessage?: string;
+  onCapture?: (capture: ResourceCaptureReceipt) => void;
+  onVersionResults?: (results: ResourceVersionCheckResult[]) => void;
 };
 export type PendingResourceTrainingHandoff = {
   resourceId: string;
@@ -424,7 +427,7 @@ export const coachFirstComposerPlaceholder: Record<ComposerLanguage, string> = {
 };
 
 export const RESOURCE_OPERATION_STATUS_PATTERN =
-  /^\[\[trainer-resource-operation:(delete|restore|search|index|upload|capture|organize|export):([a-z0-9-]{1,96})\]\]\s*/i;
+  /^\[\[trainer-resource-operation:(delete|restore|search|index|upload|capture|link-learning|check-versions|organize|export):([a-z0-9-]{1,96})\]\]\s*/i;
 // Learning-feedback completion is a protocol acknowledgement, not a text
 // match: the host echoes the request id the UI generated inside a marker.
 export const LEARNING_FEEDBACK_STATUS_PATTERN =
@@ -453,6 +456,8 @@ export function parseResourceOperationStatus(
       kind !== "index" &&
       kind !== "upload" &&
       kind !== "capture" &&
+      kind !== "link-learning" &&
+      kind !== "check-versions" &&
       kind !== "organize" &&
       kind !== "export"
     ) ||

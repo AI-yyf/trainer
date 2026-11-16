@@ -407,7 +407,7 @@ test('formal Plan generation requires a current verified tools probe, not declar
   );
   assert.match(source, /formalPlanMutation: formalPlanSkill,/);
   assert.match(source, /formalPlanMutation: formalPlanGeneration && !previewPlanCandidateGeneration,/);
-  assert.match(source, /const intent = formalPlanGeneration \? "plan" : analyzedIntent;/);
+  assert.match(source, /const intent = resourceAnalysis \? "coach" : formalPlanGeneration \? "plan" : analyzedIntent;/);
 });
 
 test('coach composer does not gate sending on an unverified streaming probe', () => {
@@ -471,23 +471,12 @@ test('Plan next-step copy prefers the live current step before stale artifact te
   );
 });
 
-test('Coach first-run starters fill the draft and never auto-send', () => {
-  // §六十一 supersedes the v1.0.0 no-starters decision: the first-conversation
-  // empty state offers three ways to start, but they must only fill the
-  // composer draft — sending stays with the learner (no auto-coaching).
+test('Coach shows the welcome with its bottom composer available', () => {
   const source = readAppModuleSource();
-
-  assert.match(source, /coach-empty-state__starters/);
-  assert.match(source, /starters\.map\(\(starter\) =>/);
-  assert.doesNotMatch(source, /onboardingStarterPrompts/);
-  assert.doesNotMatch(source, /onboardingStarters/);
-
-  const startersStart = source.indexOf('const starters = (');
-  const draftWiring = source.indexOf('setComposerDraft(starter.prompt);', startersStart);
-  assert.ok(draftWiring > startersStart, 'starters must fill the composer draft');
-  // Everything between the starter array and the draft fill must not send.
-  const startersBlock = source.slice(startersStart, draftWiring);
-  assert.doesNotMatch(startersBlock, /sendTrainingCommand|trainerCommands\.sendMessage|handleSend/);
+  const welcome = source.slice(source.indexOf('if (coachWelcomeVisible)'), source.indexOf('const handleCoachArtifactOpen'));
+  assert.match(welcome, /coach-empty-state--conversation/);
+  assert.doesNotMatch(welcome, /<button|COACH_STARTER_PROMPTS/);
+  assert.match(source, /<footer className="composer-shell composer-shell--quiet">[\s\S]*?<CoachComposer/);
 });
 
 test('Coach first-run state starts from the learner goal before optional code context', () => {
@@ -546,7 +535,7 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
   // trigger and preserves any arguments the user already typed after it.
   assert.match(
     source,
-    /const selectSkillSuggestion = \(skill: LocalSkillSuggestion\) => \{[\s\S]*?normalizedDraft\.slice\(triggerToken\.length\)[\s\S]*?setComposerDraft\(remainder \? `\$\{skill\.trigger\} \$\{remainder\}` : `\$\{skill\.trigger\} `\)/,
+    /const selectSkillSuggestion = \(skill: LocalSkillSuggestion, preserveDraft = false\) => \{[\s\S]*?normalizedDraft\.slice\(triggerToken\.length\)[\s\S]*?setComposerDraft\(remainder \? `\$\{skill\.trigger\} \$\{remainder\}` : `\$\{skill\.trigger\} `\)/,
   );
   assert.doesNotMatch(source, /skill\.run\(\)/);
   assert.match(source, /availableSkillCatalog\.find\(\(skill\) =>/);
@@ -554,7 +543,7 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
   assert.match(source, /submittedSkill\.commandId === trainerCommands\.sendStreamMessage/);
   const submittedSkillDispatch = source.slice(
     source.indexOf("const submittedSkillTrigger"),
-    source.indexOf("if (composerUsesTrainingFlow)"),
+    source.indexOf("const saveCapturedSource"),
   );
   assert.match(
     submittedSkillDispatch,
@@ -582,7 +571,7 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
     submittedSkillDispatch,
     /else \{[\s\S]*?postMessage\(\{[\s\S]*?type: "command\/execute",[\s\S]*?commandId: submittedSkill\.commandId,[\s\S]*?payload: submittedSkill\.payload/,
   );
-  assert.match(keydown, /event\.key === "Escape" && \(hasCommandDeck \|\| hasSkillDeck\)/);
+  assert.match(keydown, /event\.key === "Escape" && \(hasCommandDeck \|\| hasSkillDeck \|\| unifiedCommandSuggestions\.length > 0\)/);
   assert.doesNotMatch(keydown, /event\.key === "Escape"[\s\S]*?setComposerDraft\(""\)/);
   assert.doesNotMatch(keydown, /insertDraftAtCursor/);
   assert.doesNotMatch(source, /const insertDraftAtCursor/);

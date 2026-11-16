@@ -62,7 +62,9 @@
           <svg class="icon row__plus" aria-hidden="true"><use href="#icon-plus"></use></svg>
         </button>
         <p id="capture-result" class="feedback" role="status" aria-live="polite"></p>
-        <select id="focus-select" class="select" data-copy-label="bindingLabel" data-copy-title="bindingHint"></select>
+        <details class="capture-options">
+          <summary data-copy="bindingLabel"></summary>
+          <select id="focus-select" class="select" data-copy-label="bindingLabel" data-copy-title="bindingHint"></select>
 
         <div id="download-block" class="dl" hidden>
           <input id="target-dir" type="text" spellcheck="false" autocomplete="off"
@@ -72,7 +74,8 @@
             <span class="visually-hidden" data-copy="downloadAction">Download to project folder</span>
           </button>
         </div>
-        <p id="download-feedback" class="feedback" role="status" aria-live="polite" hidden></p>
+          <p id="download-feedback" class="feedback" role="status" aria-live="polite" hidden></p>
+        </details>
       </section>
 
       <footer class="foot">

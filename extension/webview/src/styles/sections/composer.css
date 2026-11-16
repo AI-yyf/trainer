@@ -102,7 +102,7 @@
 }
 
 .composer-shell--quiet .composer__send-wrap {
-  margin-left: auto;
+  margin-inline-start: 0;
 }
 
 .composer-shell--quiet .composer-iconbar {
@@ -112,6 +112,14 @@
 .composer-shell--quiet .composer__leading-actions,
 .composer-shell--quiet .composer__buttons {
   align-items: center;
+}
+
+.composer-shell--quiet .composer__leading-actions {
+  margin-inline-end: auto;
+}
+
+.composer-shell--quiet .composer-plus-control__trigger {
+  background: var(--bg-2);
 }
 
 .composer-shell--quiet .composer__send,

@@ -43,6 +43,8 @@ const SILENT_SUCCESS_COMMAND_IDS = new Set<string>([
 ]);
 
 const TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
+  COMMAND_IDS.evaluateCurrentFile,
+  COMMAND_IDS.trainingGenerateCard,
   COMMAND_IDS.trainingFlashcardAnswer,
   COMMAND_IDS.trainingTheoryDrillAnswer,
   COMMAND_IDS.trainingPracticeReturn,
@@ -53,12 +55,16 @@ const TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
   COMMAND_IDS.trainingCardStatusTransition,
 ]);
 
-function resourceOperationStatusMessage(commandId: string, payload: unknown, message: string): string {
+export function resourceOperationStatusMessage(commandId: string, payload: unknown, message: string): string {
   const kind =
     commandId === COMMAND_IDS.uploadResource
       ? 'upload'
       : commandId === COMMAND_IDS.captureResource
       ? 'capture'
+      : commandId === COMMAND_IDS.linkResourceToLearning
+      ? 'link-learning'
+      : commandId === COMMAND_IDS.checkResourceVersions
+      ? 'check-versions'
       : commandId === COMMAND_IDS.organizeResource
       ? 'organize'
       : commandId === COMMAND_IDS.exportResource
@@ -107,7 +113,27 @@ function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function trainingPersistenceRequest(
+export function captureReceipt(commandId: string, data: unknown) {
+  if (commandId !== COMMAND_IDS.captureResource || !data || typeof data !== 'object') return undefined;
+  const record = data as Record<string, unknown>;
+  const resourceId = readNonEmptyString(record.resource_id);
+  if (!resourceId) return undefined;
+  const warnings: unknown[] = Array.isArray(record.warnings) ? record.warnings : [];
+  const binding = warnings.find((warning): warning is string => typeof warning === 'string' && warning.startsWith('focus_binding:'));
+  const versionId = readNonEmptyString(record.version_id);
+  const contentHash = readNonEmptyString(record.content_hash);
+  return { resourceId, title: readNonEmptyString(record.name) ?? readNonEmptyString(record.title), deduped: record.deduped === true,
+    focusBinding: binding?.slice('focus_binding:'.length),
+    ...(versionId ? { versionId } : {}), ...(contentHash ? { contentHash } : {}) };
+}
+
+export function resourceVersionResults(commandId: string, data: unknown) {
+  return commandId === COMMAND_IDS.checkResourceVersions && Array.isArray(data)
+    ? data as import('../../../shared/src/models').ResourceVersionCheckResult[]
+    : undefined;
+}
+
+export function trainingPersistenceRequest(
   commandId: string,
   payload: unknown,
 ): { requestId: string; commandId: string } | undefined {
@@ -138,7 +164,7 @@ function resourceTrainingHandoffRequest(
   return { requestId, resourceId };
 }
 
-function resourceTrainingHandoffResult(
+export function resourceTrainingHandoffResult(
   commandId: string,
   payload: unknown,
   result: { ok: boolean; data?: unknown; message?: string },
@@ -721,6 +747,8 @@ export class WorkbenchSidebarController
                 result.message ?? TRAINER_OPERATION_COMPLETED_MARKER,
               ),
               result.providerTest,
+              captureReceipt(command.commandId, result.data),
+              resourceVersionResults(command.commandId, result.data),
             ),
           );
         }

@@ -41,7 +41,7 @@ test('formal training handoff draft persists without forcing navigation to Coach
   assert.ok(handoffEffect.length > 0, 'expected the training handoff completion effect');
   assert.match(
     handoffEffect,
-    /if \(pending\.phase === "return"\) \{[\s\S]*?setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\)\);[\s\S]*?return;/,
+    /if \(pending\.phase === "return"\) \{[\s\S]*?setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\), composerSessionKey\);[\s\S]*?return;/,
   );
   assert.match(handoffEffect, /composeTrainingCoachBridgeDraft\(trainingCoachBridge\)/);
   assert.doesNotMatch(handoffEffect, /setActiveView\(/);
@@ -93,7 +93,7 @@ test('training return and evidence adopt do not mint a plan, card, or task turn'
   );
   // The return completes in place: the bridge draft is stored for Coach, but
   // no navigation, forced focus, or turn is minted.
-  assert.match(returnComplete, /setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\)\)/);
+  assert.match(returnComplete, /setComposerDraft\(composeTrainingCoachBridgeDraft\(trainingCoachBridge\), composerSessionKey\)/);
   assert.doesNotMatch(returnComplete, /setActiveView\("coach"\)/);
   assert.doesNotMatch(returnComplete, /sendTurn\(/);
   assert.doesNotMatch(returnComplete, /trainerCommands\.generatePlan/);

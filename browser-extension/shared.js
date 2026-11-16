@@ -67,6 +67,7 @@
     autoPairDisabled: 'trainerCapture.autoPairDisabled',
     focusId: 'trainerCapture.focusId',
     workspaceId: 'trainerCapture.workspaceId',
+    workspaceFocusAt: 'trainerCapture.workspaceFocusAt',
     targetDir: 'trainerCapture.targetDir',
     connection: 'trainerCapture.connection',
     statusCache: 'trainerCapture.statusCache',
@@ -1700,13 +1701,14 @@
   function createDraftQueueItem(input) {
     const source = input || {};
     const selection = String(source.selection || '').trim();
-    if (!selection) {
+    const url = String(source.url || '').trim();
+    if (!selection && !httpUrlOnly(url)) {
       return null;
     }
     return {
       clientDraftId: String(source.clientDraftId || createCoachDraftId()),
       selection,
-      url: normalizeCaptureUrl(source.url) || String(source.url || '').trim(),
+      url,
       title: String(source.title || '').trim(),
       workspaceId: String(source.workspaceId || '').trim(),
       createdAt: String(source.createdAt || new Date().toISOString()),
@@ -1842,10 +1844,10 @@
   function buildCoachDraftPayload(input) {
     const source = input || {};
     const selection = String(source.selection || '').trim();
-    if (!selection) {
+    const url = String(source.url || '').trim();
+    if (!selection && !httpUrlOnly(url)) {
       return null;
     }
-    const url = normalizeCaptureUrl(source.url) || String(source.url || '').trim();
     return {
       selection,
       url,
@@ -2326,16 +2328,18 @@
     const stored = await chrome.storage.local.get({
       [STORAGE_KEYS.baseUrl]: '',
       [STORAGE_KEYS.credential]: '',
-      [STORAGE_KEYS.workspaceId]: ''
+      [STORAGE_KEYS.workspaceId]: '',
+      [STORAGE_KEYS.workspaceFocusAt]: 0
     });
     return {
       baseUrl: normalizeBaseUrl(stored[STORAGE_KEYS.baseUrl]),
       credential: String(stored[STORAGE_KEYS.credential] || '').trim(),
-      workspaceId: String(stored[STORAGE_KEYS.workspaceId] || '').trim()
+      workspaceId: String(stored[STORAGE_KEYS.workspaceId] || '').trim(),
+      workspaceFocusAt: Number(stored[STORAGE_KEYS.workspaceFocusAt]) || 0
     };
   }
 
-  async function saveAuth(baseUrl, credential, workspaceId) {
+  async function saveAuth(baseUrl, credential, workspaceId, workspaceFocusAt) {
     const normalized = normalizeBaseUrl(baseUrl);
     const token = String(credential || '').trim();
     if (!normalized || !token) {
@@ -2350,14 +2354,18 @@
     if (workspaceId !== undefined) {
       updates[STORAGE_KEYS.workspaceId] = String(workspaceId || '').trim();
     }
+    if (workspaceFocusAt !== undefined) {
+      updates[STORAGE_KEYS.workspaceFocusAt] = Number(workspaceFocusAt) || 0;
+    }
     await chrome.storage.local.set(updates);
-    return { baseUrl: normalized, credential: token, workspaceId: String(workspaceId || '').trim() };
+    return loadAuth();
   }
 
   async function clearAuth() {
     await chrome.storage.local.remove([
       STORAGE_KEYS.baseUrl,
       STORAGE_KEYS.credential,
+      STORAGE_KEYS.workspaceFocusAt,
       STORAGE_KEYS.connection,
       STORAGE_KEYS.statusCache,
       STORAGE_KEYS.notice
@@ -2706,4 +2714,14 @@
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = globalThis.TrainerCapture;
+}
+
+
+if (typeof document !== 'undefined' && typeof chrome !== 'undefined' && chrome.runtime?.onMessage
+    && /^https?:$/.test(window.location.protocol)) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'trainer:read-selection' && sender.id === chrome.runtime.id) {
+      sendResponse({ selection: window.getSelection()?.toString() || '' });
+    }
+  });
 }

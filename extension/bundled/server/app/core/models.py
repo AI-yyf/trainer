@@ -764,6 +764,8 @@ class ResourceRecord(BaseModel):
     name: str
     source: str
     tags: list[str] = Field(default_factory=list)
+    # Preserve the capture identity when a learner edits the visible library tags.
+    capture_provenance_tags: list[str] = Field(default_factory=list)
     source_items: list[str] = Field(default_factory=list)
     content_language: str | None = None
     # Stable display path inside a resource collection. This is intentionally
@@ -793,6 +795,10 @@ class ResourceRecord(BaseModel):
     # TR-059: SHA-256 of the uploaded content, pinned at upload time so
     # evidence records can cite the exact content version they were built on.
     content_hash: str | None = None
+    version_id: str | None = None
+    # Fingerprint of the fetched URL text before the library adds a title
+    # and creates its canonical document and version.
+    indexed_source_hash: str | None = None
     # Canonical Markdown digest of this resource (workspace-relative POSIX
     # path). Search, the reader, training cards and agent context read this
     # document; the original file stays untouched next to it in the library.
@@ -1353,6 +1359,9 @@ class TrainingCardCandidateSnapshot(BaseModel):
     trust_state: TrainingCardTrustState = "unknown"
     trust_acknowledged: bool = False
     resource_id: str = ""
+    resource_version_id: str = ""
+    resource_content_hash: str = ""
+    resource_location: dict[str, Any] = Field(default_factory=dict)
     dependency_key: str = ""
     dependency_layer: str = ""
     question_style: str = ""
@@ -1506,6 +1515,7 @@ class ResourceKnowledgeEvidence(BaseModel):
     source_type: str = Field(default="", alias="sourceType")
     focus_area: str = Field(default="", alias="focusArea")
     summary: str = ""
+    excerpt: str = ""
 
 
 class DependencyUsageEvidence(BaseModel):
@@ -1531,6 +1541,9 @@ class CardGenerationContext(BaseModel):
     plan_stage_id: str = ""
     plan_binding: TrainingPlanBinding | None = Field(default=None, alias="planBinding")
     resource_id: str = ""
+    resource_version_id: str = ""
+    resource_content_hash: str = ""
+    resource_location: dict[str, Any] = Field(default_factory=dict)
     difficulty: str = "medium"
     hint_count: int | None = None
     code_reveal: str = ""
@@ -1562,6 +1575,7 @@ class CardGenerationContext(BaseModel):
         default_factory=list,
         alias="currentFileDiagnostics",
     )
+    project_verification_steps: list[str] = Field(default_factory=list)
     dependency_usage_evidence: list[DependencyUsageEvidence] = Field(
         default_factory=list,
         alias="dependencyUsageEvidence",
@@ -1584,11 +1598,21 @@ class CardGenerationContext(BaseModel):
         return source
 
 
+class ExpectedResourceVersion(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    version_id: str = Field(alias="versionId", min_length=1, max_length=128)
+    content_hash: str = Field(alias="contentHash", min_length=1, max_length=128)
+
+
 class CardGenerationRequest(CardGenerationContext):
     source: str = "conversation_gap"
     card_type: TrainingCardType = "practice"
     submode: str = ""
     current_file: dict[str, Any] | None = Field(default=None, alias="currentFile")
+    expected_resource_version: ExpectedResourceVersion | None = Field(
+        default=None, alias="expectedResourceVersion",
+    )
     # Stream cancel remint identity — same request_id must not double-mint.
     request_id: str = Field(default="", alias="requestId", max_length=128)
     provider: dict[str, Any] | None = None
@@ -2450,10 +2474,23 @@ class MemoryShareGrant(BaseModel):
         return self
 
 
+class LearningActivityEntry(BaseModel):
+    event_id: str
+    event_type: str
+    occurred_at: str
+    title: str = ""
+    card_id: str = ""
+    resource_id: str = ""
+    next_due: str = ""
+    trust_level: str = ""
+    result: str = ""
+
+
 class MemorySnapshot(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     profile: UserProfile | None = None
+    learning_activity: list[LearningActivityEntry] = Field(default_factory=list)
     global_memory: GlobalMemory | None = Field(default=None, alias="globalMemory")
     active_plan: LearningPlan | None = None
     subplans: list[SubPlan] = Field(default_factory=list)
@@ -2748,7 +2785,7 @@ class ResourceComposerIntent(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    mode: Literal["locate", "download", "organize", "cards"]
+    mode: Literal["locate", "analyze", "download", "organize", "cards"]
     resource_ids: list[str] = Field(default_factory=list, alias="resourceIds", max_length=12)
 
     @field_validator("resource_ids")
@@ -3268,6 +3305,8 @@ class ResourceCaptureRequest(BaseModel):
     # Optional learning-focus binding (a plan stage id). An unknown focus is
     # reported per-field instead of failing the whole capture.
     bind_focus_id: str | None = None
+    bind_plan_id: str | None = None
+    bind_plan_revision: int | None = None
     # Client-generated idempotency key: a retry with the same id replays the
     # original result instead of capturing twice.
     client_capture_id: str | None = None

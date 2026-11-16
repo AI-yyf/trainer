@@ -64,7 +64,7 @@ const recoveryCopySource = fs.readFileSync(
   );
   assert.match(
     source,
-    /showComposerBlockingNotice[\s\S]*?showComposerProviderPill[\s\S]*?showComposerProviderNote/,
+    /showComposerBlockingNotice \|\| showComposerProviderNote/,
   );
   assert.match(source, /className="composer-presencebar__blocked"/);
   const sendTurn = sourceSection(source, 'const sendTurn = (', 'const handleBrowserUploads');

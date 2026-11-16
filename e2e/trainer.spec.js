@@ -249,13 +249,16 @@ async function submitPlanComposerRequest(page, mode, message) {
     return false;
   }
   await action.click();
-  await expect(page.getByTestId('trainer-view-nav-coach')).toHaveAttribute('aria-current', 'page');
-  await expect(page.locator('.template-context')).toContainText(mode === 'generate' ? 'Generate' : 'Explain');
+  await expect(page.getByTestId('trainer-view-nav-plan')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.template-context:not([data-dock-anchor])')).toContainText(mode === 'generate' ? 'Generate' : 'Explain');
   const userCountBefore = await page.evaluate(() =>
     window.__TRAINER_BOOTSTRAP__?.conversation?.filter((entry) => entry.role === "user").length ?? 0,
   );
   await page.locator("#coach-composer").fill(message);
   await page.locator(".composer__send").click();
+  if (mode === 'generate') {
+    await page.locator('[data-unified-action-preview="plan"]').getByRole("button", { name: "Confirm and run" }).click();
+  }
   await expect.poll(() =>
     page.evaluate((previousCount) =>
       (window.__TRAINER_BOOTSTRAP__?.conversation?.filter((entry) => entry.role === "user").length ?? 0) > previousCount,
@@ -372,8 +375,6 @@ test.describe("Trainer three-destination shell", () => {
       await expectActiveView(page, "en-US", view);
       await expect(tabs.first()).toBeVisible();
       await expect(page.locator(".composer-shell")).toHaveCount(1);
-      // The send-preference decision lives in Settings > Preferences; no
-      // dock strip asks the learner to re-decide on every surface.
       await expect(page.locator("[data-dock-send-preference]")).toHaveCount(0);
     }
 
@@ -390,7 +391,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("dock send preference surfaces on Learning and the stay-mode return bar closes the loop", async ({ page }) => {
+  test("Learning replies stay in Learning and are kept out of the Coach conversation", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await openPreview(page, "plan", {
@@ -400,42 +401,56 @@ test.describe("Trainer three-destination shell", () => {
     });
     await expectActiveView(page, "en-US", "plan");
 
-    // Choose stay mode once in Settings; the dock no longer asks per send.
-    await page.getByTestId("trainer-view-nav-settings").click();
-    await expectActiveView(page, "en-US", "settings");
-    await openSettingsCategory(page, "preferences");
-    const sendPreference = page.locator('[data-settings-send-preference="true"]');
-    await expect(sendPreference).toBeVisible();
-    const sendPreferenceTrigger = sendPreference.locator(".settings-choice__trigger");
-    await expect(sendPreferenceTrigger).toContainText("View reply");
-    await sendPreferenceTrigger.click();
-    await sendPreference.getByRole("option", { name: "Stay here", exact: true }).click();
-    await expect(sendPreferenceTrigger).toContainText("Stay here");
-    await page.getByTestId("trainer-view-nav-plan").click();
-    await expectActiveView(page, "en-US", "plan");
-    await expect(page.locator("[data-dock-send-preference]")).toHaveCount(0);
-
-    // Stay-mode send keeps Learning in front and lands the actionable bar.
-    await page.locator("#coach-composer").fill("Stay-mode dock closure check.");
+    const prompt = "How should I reason about the current learning step?";
+    await page.locator("#coach-composer").fill(prompt);
     await page.locator(".composer__send").click();
     await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
-    const bar = page.locator("[data-dock-return]");
-    await expect(bar).toBeVisible({ timeout: 30000 });
-    await expect(bar).toContainText("Coach replied");
-
-    // "Back to Learning" clears the bar and keeps the surface.
-    await bar.locator('[data-dock-return-action="stay"]').click();
-    await expect(page.locator("[data-dock-return]")).toHaveCount(0);
-    await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
-
-    // A second stay-mode send lands the bar again; "View reply" jumps to Coach.
-    await page.locator("#coach-composer").fill("Second stay-mode send.");
-    await page.locator(".composer__send").click();
-    await expect(bar).toBeVisible({ timeout: 30000 });
-    await bar.locator('[data-dock-return-action="view"]').click();
+    await expect(page.locator('[data-view-agent-reply="plan"] .message-bubble__body')).toBeVisible({ timeout: 30000 });
+    await page.getByTestId("trainer-view-nav-coach").click();
     await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-    await expect(page.locator("[data-dock-return]")).toHaveCount(0);
+    await expect(page.locator('[data-surface="coach"]').getByText(prompt, { exact: true })).toHaveCount(0);
     await expectNoConsoleErrors(errors);
+  });
+
+  test("comparing library papers keeps the Learning composer and reply in place", async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 761 });
+    await openPreview(page, "plan", { lang: "en-US", scenario: "ready", connection: "connected" });
+    const input = page.locator('#coach-composer');
+    await input.evaluate((element) => element.dataset.libraryAnalysisProbe = "same-composer");
+    await input.fill("Search my library for papers about sequence modeling and compare their approaches.");
+    await page.locator(".composer__send").click();
+
+    const reply = page.locator('[data-view-agent-reply="plan"] .message-bubble__body');
+    await expect(reply).toBeVisible();
+    await expect(reply).toBeInViewport();
+    await expectActiveView(page, "en-US", "plan");
+    await expect(input).toHaveAttribute("data-library-analysis-probe", "same-composer");
+    const replyText = await reply.textContent();
+    expect(replyText.trim()).not.toBe("");
+
+    await page.getByTestId(viewNavigationTestId("resources")).click();
+    await expect(page.locator('[data-view-agent-reply="resources"] .message-bubble__body')).toHaveCount(0);
+    await page.getByTestId(viewNavigationTestId("plan")).click();
+    await expect(reply).toHaveText(replyText);
+  });
+
+  test("searching the library from Learning shows sources without navigating away", async ({ page }) => {
+    await page.setViewportSize({ width: 420, height: 761 });
+    await openPreview(page, "plan", { lang: "en-US", scenario: "resource-preview-loaded", connection: "connected" });
+    const input = page.locator('#coach-composer');
+    await input.evaluate((element) => element.dataset.librarySearchProbe = "same-composer");
+    await input.fill("/search Coach prompt patterns");
+    await page.locator(".composer__send").click();
+
+    const results = page.locator('[data-learning-library-search="true"]');
+    await expect(results.getByRole("button", { name: /open.*coach prompt patterns/i })).toBeVisible();
+    await expect(results.getByRole("button", { name: /open.*coach prompt patterns/i })).toBeInViewport();
+    await expectActiveView(page, "en-US", "plan");
+    await expect(input).toHaveAttribute("data-library-search-probe", "same-composer");
+    await input.fill("/search a source that definitely does not exist");
+    await page.locator(".composer__send").click();
+    await expect(results.getByText("No matching resources")).toBeVisible();
+    await expect(results.locator("[data-citation-part]")).toHaveCount(0);
   });
 
   test("keeps an explicit preview view authoritative over saved browser-preview state", async ({ page }) => {
@@ -514,7 +529,7 @@ test.describe("Trainer three-destination shell", () => {
       await expect.poll(() =>
         page.evaluate((expectedMessage) =>
           window.__TRAINER_BOOTSTRAP__?.conversation?.some(
-            (entry) => entry.role === "user" && entry.body === expectedMessage,
+            (entry) => entry.role === "user" && entry.body.includes(expectedMessage) && entry.sourceView === "plan",
           ) ?? false,
         message),
       ).toBe(true);
@@ -635,7 +650,7 @@ test.describe("Trainer three-destination shell", () => {
       await expectActiveView(page, language, "resources");
 
       const library = page.getByRole("region", { name: copy.library, exact: true });
-      const search = library.getByRole("searchbox", { name: copy.searchLabel, exact: true });
+      const search = page.locator("#coach-composer");
       const tree = library.getByRole("tree", { name: copy.library, exact: true });
       const toolbarButtons = library.locator(".resources-knowledge__actions").getByRole("button");
       const addResource = library.getByRole("button", {
@@ -644,7 +659,7 @@ test.describe("Trainer three-destination shell", () => {
       });
 
       await expect(search).toBeVisible();
-      await expect(search).toHaveAttribute("placeholder", copy.searchPlaceholder);
+      await expect(library.locator("input[type=search]")).toHaveCount(0);
       await expect(addResource).toBeVisible();
       // The toolbar is one action now — the standalone refresh-index button is gone.
       await expect(toolbarButtons).toHaveCount(1);
@@ -675,7 +690,8 @@ test.describe("Trainer three-destination shell", () => {
         primaryTreeItem.locator(".resources-library-tree__kind[data-resource-kind]"),
       ).toHaveCount(1);
 
-      await search.fill(copy.indexingResource);
+      await search.fill("/search " + copy.indexingResource);
+      await search.press("Enter");
       const indexingTreeItem = tree.getByRole("treeitem", {
         name: copy.indexingResource,
         exact: true,
@@ -684,10 +700,11 @@ test.describe("Trainer three-destination shell", () => {
       // Per-row index-status badges are gone; the reader holds the status line.
       await expect(indexingTreeItem.locator(".resources-library-tree__status")).toHaveCount(0);
 
-      await search.fill("no-resource-match");
+      await search.fill("/search no-resource-match");
+      await search.press("Enter");
       await expect(tree.getByRole("treeitem")).toHaveCount(0);
       await expect(tree).toContainText(copy.noMatchesLabel);
-      await search.fill("");
+      await page.locator("[data-clear-resource-search]").click();
       await expect(primaryTreeItem).toBeVisible();
 
       // Enter and Space both open the original source through the host; the
@@ -857,7 +874,7 @@ test.describe("Trainer three-destination shell", () => {
   }
 
   for (const language of ["zh-CN", "en-US"]) {
-    test(`keeps Training verification on the activity without a chat composer in ${language}`, async ({ page }) => {
+    test(`keeps Learning verification beside the shared composer in ${language}`, async ({ page }) => {
       const errors = attachConsoleErrorCollector(page);
       const copy = TRAINING_COPY[language];
 
@@ -872,8 +889,8 @@ test.describe("Trainer three-destination shell", () => {
       const composer = page.locator(".composer-shell");
       await expect(card).toHaveCount(1);
       await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
-      await expect(composer).toHaveCount(0);
-      await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
+      await expect(composer.locator('#coach-composer')).toBeVisible();
+      await expect(page.locator('textarea:visible')).toHaveCount(1);
       await expect(composer.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toHaveCount(0);
       await expectNoConsoleErrors(errors);
     });
@@ -931,17 +948,11 @@ test.describe("Trainer three-destination shell", () => {
       name: "Record the current training reflection",
       exact: true,
     });
-    const emptyReflectButton = page.getByRole("button", {
-      name: "Record training reflection",
-      exact: true,
-    });
+    const emptyReflectButton = page.locator('.composer__send[type="submit"]');
     await expect(reflectionInput).toBeEditable();
     await expect(emptyReflectButton).toBeDisabled();
     await reflectionInput.fill(reflection);
-    const reflectButton = page.getByRole("button", {
-      name: "Record training reflection",
-      exact: true,
-    });
+    const reflectButton = page.getByRole("button", { name: "Record training reflection", exact: true });
     await expect(reflectButton).toBeEnabled();
     await reflectButton.click();
     await expect.poll(() =>
@@ -1124,18 +1135,14 @@ test.describe("Trainer three-destination shell", () => {
     await revealTrainingCardDetails(card);
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
-    await expect(composer).toHaveCount(0);
-    // Practice stays on the card face, never in a duplicate shell composer.
-    // A try-phase card owns the note textarea; a filled/verify card owns the
-    // file-verification action instead.
+    await expect(composer.locator('#coach-composer')).toBeVisible();
+    await expect(page.locator('textarea:visible')).toHaveCount(1);
     const verifyButton = card.getByRole("button", {
       name: "Verificar archivo actual",
       exact: true,
     });
     if ((await verifyButton.count()) > 0) {
       await expect(verifyButton).toBeVisible();
-    } else {
-      await expect(card.locator("[data-template=PracticeResponse] textarea")).toBeVisible();
     }
     await expectNoConsoleErrors(errors);
   });
@@ -1207,7 +1214,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("sends a staged scratch-paper image through the local preview coach path", async ({ page }) => {
+  test("attaches a scratch-paper image from the Add menu and sends it to the preview coach", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
     const sidecarRequests = [];
 
@@ -1223,7 +1230,7 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    await page.locator(".composer__frame").evaluate(async (frame) => {
+    const image = await page.evaluate(() => {
       const canvas = document.createElement("canvas");
       canvas.width = 320;
       canvas.height = 80;
@@ -1233,24 +1240,12 @@ test.describe("Trainer three-destination shell", () => {
       context.fillStyle = "black";
       context.font = "24px monospace";
       context.fillText("HTTP 401: wrong password", 8, 40);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      const image = new File(
-        [blob],
-        "scratch-paper.png",
-        { type: "image/png" },
-      );
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(image);
-      for (const type of ["dragenter", "dragover", "drop"]) {
-        frame.dispatchEvent(
-          new DragEvent(type, {
-            bubbles: true,
-            cancelable: true,
-            dataTransfer,
-          }),
-        );
-      }
+      return canvas.toDataURL("image/png").split(",")[1];
     });
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    const fileChooser = page.waitForEvent("filechooser");
+    await page.getByRole("menuitem", { name: "Attachment", exact: true }).click();
+    await (await fileChooser).setFiles({ name: "scratch-paper.png", mimeType: "image/png", buffer: Buffer.from(image, "base64") });
     await expect(page.locator(".composer__attachment-chip")).toContainText("scratch-paper.png");
     await expect(page.locator(".composer__send")).toBeEnabled();
     await page.locator(".composer__send").click();
@@ -1284,7 +1279,7 @@ test.describe("Trainer three-destination shell", () => {
     await expect(page.locator(".composer__send")).toBeEnabled();
   });
 
-  test("opens the resource panel from the coach input shell", async ({ page }) => {
+  test("offers scoped context when @ is typed in the coach composer", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     for (const language of ["zh-CN", "en-US"]) {
@@ -1294,14 +1289,8 @@ test.describe("Trainer three-destination shell", () => {
         connection: "connected",
       });
 
-      const resourcesButton = page.locator(
-        '.composer__leading-actions button[aria-label="资料"], .composer__leading-actions button[aria-label="Resources"]',
-      );
-      await expect(resourcesButton).toHaveCount(1);
-      await expect(resourcesButton).toBeVisible();
-      await resourcesButton.click();
-      await expect(page.locator(".composer-menu-panel--resources")).toBeVisible();
-      await expect(page.locator(".composer-menu-panel--resources .menu-list__item")).toHaveCount(2);
+      await page.locator("#coach-composer").press("@");
+      await expect(page.locator(".composer__mention-item").first()).toBeVisible();
     }
 
     await expectNoConsoleErrors(errors);
@@ -1463,8 +1452,8 @@ test.describe("Trainer three-destination shell", () => {
     await openPlanGovernanceDisclosure(page);
     await page.getByRole('button', { name: '整理证据', exact: true }).click();
     await expect(page.locator('[data-plan-evidence-row="pending"]').filter({ visible: true })).toHaveCount(0);
-    await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".template-context")).toContainText(/证据|Evidence/);
+    await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".template-context:not([data-dock-anchor])")).toContainText(/证据|Evidence/);
     await expect(page.locator("#coach-composer")).toBeEditable();
     const visibleMore = page.locator("main summary").filter({ hasText: /^(更多|More)$/ });
     let visibleMoreCount = 0;
@@ -1597,11 +1586,7 @@ test.describe("Trainer three-destination shell", () => {
 
     await expect(page.locator("main")).not.toContainText("当前项目就绪");
     await expect(page.getByText("开始说", { exact: true })).toHaveCount(0);
-    // §六十一: starter chips instead of a claim that the project is ready.
     await expect(page.locator(".coach-empty-state")).toContainText("你在做什么？");
-    await expect(page.getByRole("button", { name: "解释这个项目", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "帮我调试", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "教我一点新东西", exact: true })).toBeVisible();
     await expect(page.locator("#coach-composer")).toBeVisible();
     await expectNoConsoleErrors(errors);
   });

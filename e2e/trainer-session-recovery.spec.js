@@ -217,7 +217,7 @@ test("empty Plan honors an explicit Generate plan action", async ({ page }) => {
   await page.locator('[data-learning-section=more] > summary').click();
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
   await expect(page.locator(".template-context")).toContainText("生成计划");
-  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("textbox")).toHaveValue(/生成正式计划/);
 });
 
@@ -308,9 +308,11 @@ test("Plan generate keeps an unsent Coach draft instead of overwriting it", asyn
   await page.getByTestId("trainer-view-nav-plan").click();
   await page.locator('[data-learning-section=more] > summary').click();
   await page.getByRole("button", { name: "生成计划", exact: true }).click();
+  await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".template-context")).toContainText("生成计划");
+  await page.getByTestId("trainer-view-nav-coach").click();
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("textbox")).toHaveValue("我的教练草稿");
-  await expect(page.locator(".template-context")).toContainText("生成计划");
 });
 
 test("training generation keeps raw card JSON out of the conversation surface", async ({ page }) => {
@@ -594,10 +596,10 @@ test('Start review opens the due queue while preserving the current practice car
   });
   const currentCard = page.locator('.training-current--single-card');
   await expect(currentCard.getByRole('heading', { name: '复习：元组赋值边界', exact: true })).toBeInViewport();
-  await expect(currentCard.getByText('不看笔记解释 tuple 槽位为何不可写。', { exact: true }).first()).toBeVisible();
+  await expect(currentCard.getByText('不看笔记解释 tuple 槽位为何不可写。', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await expect(currentCard.getByRole('button', { name: '验证当前文件', exact: true })).toHaveCount(0);
-  await expect(page.locator('[data-template=PracticeResponse] textarea')).toBeEditable();
-  await expect(page.locator('[data-template=PracticeResponse]')).toContainText('不看笔记解释 tuple 槽位为何不可写。');
+  await expect(page.locator('#coach-composer')).toBeEditable();
+  await expect(page.locator('[data-template=FocusedPractice]')).toContainText('不看笔记解释 tuple 槽位为何不可写。');
   expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.filter(
     (message) => message.payload?.commandId === 'trainer.training.attempt.start' &&
       message.payload.payload?.cardId === 'review-tuple-slot',
@@ -648,7 +650,7 @@ test('a recorded review resumes as recall without a coding verification or empty
   await expect(page.getByRole('heading', { name: '复习：元组槽位', exact: true })).toBeVisible();
   await expect(page.getByText('元组槽位不可写，内层列表仍可变。', { exact: true }).filter({ visible: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '问教练', exact: true })).toBeVisible();
-  await expect(page.locator('#coach-composer')).toHaveCount(0);
+  await expect(page.locator('#coach-composer')).toHaveCount(1);
   await expect(page.getByRole('button', { name: '完成训练回流', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '验证当前文件', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.filter(
@@ -663,6 +665,12 @@ test('an explicit saved-plan correction from Coach uses the formal mutation rout
     '请明确修正并保存当前正式学习计划。4/4是四种检查，不能虚构 pytest 用例数量。',
   );
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  const preview = page.locator('[data-unified-action-preview="plan"]');
+  await expect(preview).toBeVisible();
+  expect(await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.some(
+    (action) => action.type === 'session/sendStreamMessage',
+  ))).toBe(false);
+  await preview.getByRole('button', { name: '确认并执行' }).click();
   await expect.poll(async () => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.filter(
     (action) => action.type === 'session/sendStreamMessage',
   ).length)).toBe(1);

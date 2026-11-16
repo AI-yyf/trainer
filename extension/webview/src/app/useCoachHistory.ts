@@ -3,15 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { postMessage } from "../lib/vscode";
 import { trainerCommands } from "../../../../shared/src/commands";
 import type { CoachSessionSummary } from "../lib/types";
+import type { ContextMenu } from "./useMenuState";
 
 export type CoachHistoryStatus = "idle" | "loading" | "ready" | "error";
 
-export type ComposerContextMenu =
-  | "context"
-  | "resources"
-  | "model"
-  | "history"
-  | undefined;
+export type ComposerContextMenu = ContextMenu;
 
 export interface CoachSessionListPayload {
   sessions: CoachSessionSummary[];

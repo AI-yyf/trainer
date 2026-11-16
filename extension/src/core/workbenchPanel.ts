@@ -9,6 +9,10 @@ import { buildWorkbenchHtml } from './webviewContent';
 import { resolveWebviewCommand } from './webviewCommandRouting';
 import { WebviewStateTransport } from './webviewStateTransport';
 import { toBootstrapPayload, toOperationStatus } from './workbenchData';
+import {
+  captureReceipt, resourceOperationStatusMessage, resourceTrainingHandoffResult, resourceVersionResults,
+  trainingPersistenceRequest,
+} from './webviewBridge';
 import { getRuntimeWorkspaceContext } from '../commands/workspaceContext';
 
 /** The six internal routes can all surface in the editor panel. */
@@ -263,16 +267,31 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
         return;
       }
       const result = await this.commandRegistry.execute(command.commandId, command.payload);
+      await this.syncState();
+      const handoff = resourceTrainingHandoffResult(command.commandId, command.payload, result);
+      if (handoff) {
+        await this.postMessage({ type: 'training/resourceHandoff', payload: handoff });
+        return;
+      }
+      const persistence = trainingPersistenceRequest(command.commandId, command.payload);
+      if (persistence) {
+        await this.postMessage({ type: 'training/persistenceAck', payload: {
+          ...persistence, ok: result.ok && !result.cancelled, data: result.data,
+          message: result.message ? sanitizeErrorSurfaceText(result.message) : undefined,
+        } });
+      }
       if (!result.cancelled) {
         await this.postMessage(
           toOperationStatus(
             result.ok,
-            result.message ?? TRAINER_OPERATION_COMPLETED_MARKER,
+            resourceOperationStatusMessage(command.commandId, command.payload,
+              result.message ?? TRAINER_OPERATION_COMPLETED_MARKER),
             result.providerTest,
+            captureReceipt(command.commandId, result.data),
+            resourceVersionResults(command.commandId, result.data),
           ),
         );
       }
-      await this.syncState();
     } catch (error) {
       this.outputChannel.appendLine(
         `[workbench-panel] message handling failed: ${sanitizeErrorSurfaceText(error)}`,

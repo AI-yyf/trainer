@@ -16,13 +16,10 @@ test('goal mode reaches the sidecar only as an explicit opt-in flag', () => {
   // Webview: visible mode + payload flag; the copy is language-owned.
   assert.match(app, /GOAL_MODE_COPY/);
   assert.match(app, /goalMode: turnGoalMode === true/);
-  assert.match(app, /goalMode: intent === "coach" \? goalMode && !goalPaused : undefined/);
-  // Goal mode is entered from a reply ("设为目标"), not a composer toolbar icon.
-  assert.doesNotMatch(app, /id: "composer-goal-mode"/);
+  assert.match(app, /goalMode: turnView === "coach" && intent === "coach" \? startsGoal \|\| \(goalMode && !goalPaused\) : undefined/);
+  assert.match(app, /id: "composer-goal-mode"/);
   assert.match(app, /action === "set-goal"/);
   assert.match(app, /startGoal\(title\)/);
-  assert.match(app, /data-goal-entry="true"/);
-  assert.match(app, /startGoal\(""\)/);
 
   // Host: payload accepts the flag and both request paths forward it.
   assert.match(hostTypes, /goalMode\?: boolean;/);

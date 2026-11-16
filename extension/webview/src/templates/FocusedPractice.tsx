@@ -16,7 +16,7 @@ export function FocusedPractice({ parent, title, label, phase, phaseLabel, onBac
   details?: ReactNode;
 }) {
   return <section className="template-focused-practice" role="group" aria-label={label ?? title} data-template="FocusedPractice" data-training-phase={phase}>
-    <ActivityHeader parent={parent} title={title} phase={`${phaseLabel} · ${PHASE_ORDER.indexOf(phase) + 1}/5`} onBack={() => onBack?.()} />
+    <ActivityHeader parent={parent} title={title} phase={`${phaseLabel} · ${PHASE_ORDER.indexOf(phase) + 1}/5`} onBack={onBack} />
     <div className="template-focused-practice__phase">{children}</div>
     {details}
   </section>;

@@ -15,12 +15,27 @@ from typing import Any, Iterable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..core.models import EvidenceItem, utc_now_iso
+from ..core.models import EvidenceItem, TrainingCardCandidateSnapshot, utc_now_iso
 from ..training.handoff import EvidenceRecord
 
 EvidenceSourceStore = Literal["attempt", "handoff", "memory"]
 EvidenceTrustLevel = Literal["self_reported", "model_review", "static_analysis", "controlled_check"]
 EvidenceResult = Literal["passed", "failed", "partial", "unknown"]
+
+
+def pinned_card_resource(card: TrainingCardCandidateSnapshot | None) -> dict[str, Any]:
+    resource_id = getattr(card, "resource_id", "")
+    version_id = getattr(card, "resource_version_id", "")
+    content_hash = getattr(card, "resource_content_hash", "")
+    if not (resource_id and version_id and content_hash):
+        return {}
+    return {
+        "resource_id": resource_id,
+        "resource_version_id": version_id,
+        "resource_content_hash": content_hash,
+        "resource_location": getattr(card, "resource_location", {}) or {},
+    }
+
 
 _TRUST_LEVELS: dict[str, EvidenceTrustLevel] = {
     "self_reported": "self_reported",

@@ -6,14 +6,6 @@
   margin-bottom: 0;
 }
 
-.coach-empty-state__starters {
-  flex-wrap: wrap;
-}
-
-.coach-empty-state__starters .toolbar-button {
-  border-radius: var(--radius-full);
-}
-
 .coach-empty-state {
   display: flex;
   flex-direction: column;
@@ -423,50 +415,6 @@
   overflow-wrap: anywhere;
 }
 
-.coach-empty-state__starters {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 6px;
-  width: 100%;
-  max-width: 100%;
-}
-
-.coach-empty-state__starter {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 7px 0;
-  border-radius: 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 44%, transparent);
-  font-size: var(--trainer-font-xs);
-  color: var(--fg-1);
-  cursor: pointer;
-  transition:
-    background var(--motion-fast) var(--motion-ease),
-    border-color var(--motion-fast) var(--motion-ease),
-    color var(--motion-fast) var(--motion-ease);
-  text-align: left;
-  overflow: hidden;
-}
-
-.coach-empty-state__starter-title {
-  font-size: var(--trainer-font-xs);
-  color: var(--fg-0);
-}
-
-.coach-empty-state__starter:hover {
-  color: var(--fg-0);
-  background: transparent;
-  border-bottom-color: color-mix(in srgb, var(--fg-0) 42%, var(--line));
-  transform: none;
-}
-
 .coach-conversation-view--quiet-surface .coach-empty-state {
   align-items: flex-start;
   justify-content: flex-end;
@@ -484,32 +432,8 @@
   margin-bottom: 0;
 }
 
-.coach-conversation-view--quiet-surface .coach-empty-state__starters {
-  max-width: none;
-}
-
-
-/* Fresh-session goal entry: a quiet text action outside the composer. The
-   goal itself is not a composer toolbar icon. */
-.coach-empty-state__goal-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 2px;
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
+.coach-empty-state--conversation > p.coach-empty-state__lead {
   color: var(--fg-muted);
-  font: inherit;
-  font-size: var(--trainer-font-2xs);
-  cursor: pointer;
-}
-
-.coach-empty-state__goal-entry:hover {
-  color: var(--fg-0);
-}
-
-.coach-empty-state__goal-entry:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -1px;
+  font-size: var(--trainer-font-sm);
+  line-height: 1.5;
 }

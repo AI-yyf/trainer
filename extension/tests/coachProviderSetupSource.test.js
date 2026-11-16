@@ -232,14 +232,7 @@ test('coach recovery keeps workspace admission primary and exposes provider reco
     source,
     /<span>\s*\{workspaceSessionBlocked\s*\?\s*workspaceSessionBlockMessage\s*:\s*blockedComposerPresenceCopy\}\s*<\/span>/,
   );
-  assert.match(
-    source,
-    /const refinedUtilityComposerHint =\s*activeView === "coach" && providerCanCoachNow && !providerBlockReason/,
-  );
-  assert.match(
-    source,
-    /hintText=\{activeView === "coach" && !composerUsesTrainingFlow && Boolean\(laneAwareUtilityComposerHint\) \? laneAwareUtilityComposerHint : undefined\}/,
-  );
+
 });
 
 test('provider test action sends an unsaved draft to the isolated test path', () => {

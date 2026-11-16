@@ -2,7 +2,7 @@ import { FocusedPractice } from "../../templates/FocusedPractice";
 import { NextAction } from "../../templates/NextAction";
 import { VerificationResult } from "../../templates/VerificationResult";
 import { templateCopy } from "../../templates/templateCopy";
-import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
+import { useEffect, useRef, useMemo, type ReactNode } from "react";
 
 import {
   deriveTrainingExecutionState,
@@ -168,6 +168,7 @@ export interface TrainingWorkbenchViewProps {
   onStopRemoteVerification?: () => void;
   /** §五: record honest assistance usage when the learner reveals a hint. */
   onHintReveal?: (hintLevel: number) => void;
+  revealedHints?: number;
   onNextCard?: () => void;
   leftoverNote?: string;
   primaryAction?: ReactNode;
@@ -640,6 +641,7 @@ export function TrainingWorkbenchView({
   remoteVerification,
   onStopRemoteVerification,
   onHintReveal,
+  revealedHints = 0,
   onNextCard,
   leftoverNote,
   primaryAction,
@@ -649,7 +651,7 @@ export function TrainingWorkbenchView({
   onReviewQueueAction,
   reviewSummary,
 }: TrainingWorkbenchViewProps) {
-  const { onBackToLearning, remoteName, reviewQueueOpenRequest } = useTrainingWorkbenchViewState();
+  const { remoteName, reviewQueueOpenRequest } = useTrainingWorkbenchViewState();
   const {
     title,
     currentStep,
@@ -1092,7 +1094,6 @@ export function TrainingWorkbenchView({
                 title={displayTitle}
                 phase={trainingExecutionState.composerPhase === "answer" ? "try" : trainingExecutionState.composerPhase}
                 phaseLabel={activeLoopStep.label}
-                onBack={onBackToLearning}
                 details={cardTaskDetails}
               >
                 {degradedCard ? (
@@ -1155,13 +1156,18 @@ export function TrainingWorkbenchView({
                   ) : !isFlashCard && practiceVerificationMode === "file" ? (
                     <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
                   ) : response}
-                  {hintLadder.length && cardType === "practice" ? <HintLadderReveal hints={hintLadder} onReveal={onHintReveal} language={language} /> : null}
+                  {hintLadder.length && cardType === "practice" ? <HintLadderReveal hints={hintLadder} revealed={revealedHints} onReveal={onHintReveal} language={language} /> : null}
                 </> : trainingExecutionState.composerPhase === "verify" ? <>
                   {trainingExecutionState.verified || trainingExecutionState.blocked ? (
                     <VerificationResult language={language} verdict={trainingExecutionState.verified ? "passed" : "failed"} summary={latestVerifiedResult || latestLearningBlocker} />
                   ) : <MessageRichContent body={cardOnlyVerification || practiceSectionNote} language={language} />}
                   {onVerifyCurrentFile ? <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} action={{ label: trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: onVerifyCurrentFile }} /> : response}
-                </> : trainingExecutionState.composerPhase === "reflect" ? response : <>
+                </> : trainingExecutionState.composerPhase === "reflect" ? <>
+                  {trainingExecutionState.verified ? (
+                    <VerificationResult language={language} verdict="passed" summary={latestVerifiedResult} />
+                  ) : null}
+                  {response}
+                </> : <>
                   <MessageRichContent body={latestVerifiedResult || latestLearningBlocker || resolvedReturnWith || defaultReturnPath} language={language} />
                   {actions}
                   {nextCardButton}
@@ -1275,14 +1281,15 @@ export function TrainingWorkbenchView({
 
 function HintLadderReveal({
   hints,
+  revealed,
   onReveal,
   language,
 }: {
   hints: string[];
+  revealed: number;
   onReveal?: (hintLevel: number) => void;
   language: ComposerLanguage;
 }) {
-  const [revealed, setRevealed] = useState(0);
   const total = hints.length;
   const allRevealed = revealed >= total;
   return (
@@ -1307,7 +1314,6 @@ function HintLadderReveal({
           className="toolbar-button training-hint-reveal__button"
           onClick={() => {
             const next = Math.min(revealed + 1, total);
-            setRevealed(next);
             onReveal?.(next);
           }}
         >

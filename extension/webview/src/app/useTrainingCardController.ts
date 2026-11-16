@@ -246,6 +246,9 @@ export function useTrainingCardController(): TrainingCardController {
   const requestTrainingPersistence = useCallback(
     (commandId: string, payload: Record<string, unknown>): Promise<unknown> => {
       const requestId = `training-persistence-${Date.now().toString(36)}-${++trainingPersistenceSequenceRef.current}`;
+      const generatingPractice = commandId === trainerCommands.trainingGenerateCard;
+      const timeoutMs = generatingPractice ? 135_000
+        : commandId === trainerCommands.evaluateCurrentFile ? 85_000 : TRAINING_PERSISTENCE_TIMEOUT_MS;
       return new Promise<unknown>((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
           const pending = trainingPersistenceResolversRef.current.get(requestId);
@@ -267,7 +270,7 @@ export function useTrainingCardController(): TrainingCardController {
               },
             },
           });
-        }, TRAINING_PERSISTENCE_TIMEOUT_MS);
+        }, timeoutMs);
         trainingPersistenceResolversRef.current.set(requestId, {
           commandId,
           resolve,
@@ -282,6 +285,7 @@ export function useTrainingCardController(): TrainingCardController {
               commandId,
               payload: {
                 ...payload,
+                ...(generatingPractice ? { requestId } : {}),
                 __trainerTrainingPersistenceId: requestId,
               },
             },

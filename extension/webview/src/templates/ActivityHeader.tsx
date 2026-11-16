@@ -4,16 +4,16 @@ export interface ActivityHeaderProps {
   parent: string;
   title: string;
   phase?: string;
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function ActivityHeader({ parent, title, phase, onBack }: ActivityHeaderProps) {
   return (
     <header className="template-activity-header">
-      <button type="button" className="template-back" onClick={onBack}>
+      {onBack ? <button type="button" className="template-back" onClick={onBack}>
         <ChevronLeftIcon size={14} />
         <span>{parent}</span>
-      </button>
+      </button> : null}
       <h2>{title}</h2>
       {phase ? <p className="template-metadata template-activity-header__phase">{phase}</p> : null}
     </header>

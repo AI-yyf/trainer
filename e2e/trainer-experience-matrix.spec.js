@@ -247,11 +247,12 @@ async function exercisePlan(page, scenario) {
 
 async function exerciseResources(page, scenario) {
   await expectSingleVisible(page.locator(".resources-knowledge"));
-  const search = page.locator('.resources-knowledge__search input[type="search"]');
+  const search = page.locator('#coach-composer');
   await expectSingleVisible(search);
   const query = scenario.userAction.input;
-  await search.fill(query);
-  await expect(search).toHaveValue(query);
+  await search.fill("/search " + query);
+  await search.press("Enter");
+  await expect(page.locator('[data-clear-resource-search]')).toContainText(query);
   return { kind: scenario.userAction.kind, query };
 }
 
@@ -477,8 +478,8 @@ async function assertPersistenceContract(page, scenario, actionResult) {
       await expectSingleVisible(page.locator(".plan-view"));
       return;
     case "resource_query":
-      await expectSingleVisible(page.locator('.resources-knowledge__search input[type="search"]'));
-      await expect(page.locator('.resources-knowledge__search input[type="search"]')).toHaveValue(actionResult.query);
+      await expectSingleVisible(page.locator('#coach-composer'));
+      await expect(page.locator('[data-clear-resource-search]')).toContainText(actionResult.query);
       return;
     case "current_training_card":
       await expectTrainingCardFacts(page.locator(".training-pane--card-only"));

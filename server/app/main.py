@@ -89,6 +89,9 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
                     "trust_level": str(evidence.get("trust_level") or ""),
                     "dimension": str(evidence.get("dimension") or ""),
                     "evidence_kind": str(evidence.get("evidence_kind") or ""),
+                    "resource_id": str(evidence.get("resource_id") or ""),
+                    "resource_version_id": str(evidence.get("resource_version_id") or ""),
+                    "resource_content_hash": str(evidence.get("resource_content_hash") or ""),
                     "superseded_by": str(evidence.get("superseded_by_evidence_id") or ""),
                 },
                 reversibility="reversible",
@@ -115,8 +118,8 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     research_repository = ResearchRepository(research_db_path)
     qdrant_path = settings.qdrant_path if isinstance(settings, Settings) else data_dir / "qdrant"
     semantic_memory = SemanticMemory(qdrant_path)
-    memory_service = MemoryService(repository)
     event_ledger = EventLedgerService(EventLedgerStore(database_path))
+    memory_service = MemoryService(repository, event_ledger=event_ledger)
     provider_service = ProviderService()
     network_fetch_enabled = bool(getattr(settings, "enable_network_fetch", False))
     cost_ledger = CostLedger(data_dir / "cost-ledger")

@@ -102,6 +102,6 @@ test('coach composer accepts the full product language set and keeps drag attach
   assert.match(composerTableSource, /clear: "清空"/);
   assert.match(composerTableSource, /clear: "Clear"/);
   assert.match(source, /title=\{localizedCopy\.clear\}/);
-  assert.doesNotMatch(source, /type="file"/);
+  assert.match(source, /ref=\{imageInputRef\}\s+type="file"\s+accept="image\/\*"/);
   assert.doesNotMatch(source, /composer__attach-btn/);
 });

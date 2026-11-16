@@ -60,8 +60,73 @@ test("@ menu closes on a click outside the composer", async ({ page }) => {
 
 test("resource menu closes on an outside click", async ({ page }) => {
   await page.goto("/?scenario=ready&lang=zh-CN");
-  await page.locator('.composer__leading-actions button[aria-label="资料"]').first().click();
+  await page.getByRole("button", { name: "添加", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "资料", exact: true }).click();
   await expect(page.locator(".composer-menu-panel")).toBeVisible();
   await page.locator("body").click({ position: { x: 20, y: 20 } });
   await expect(page.locator(".composer-menu-panel")).toHaveCount(0);
+});
+
+test("the single Add menu exposes attachments, workflows, and skills directly", async ({ page }) => {
+  await page.setViewportSize({ width: 340, height: 640 });
+  await page.goto("/?scenario=ready&lang=en-US&theme=light");
+  const composer = page.locator("#coach-composer");
+  const add = page.getByRole("button", { name: "Add", exact: true });
+  const menu = page.getByRole("menu", { name: "Add", exact: true });
+  await expect(page.locator(".composer__leading-actions button")).toHaveCount(1);
+  await add.focus();
+  await add.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "Attachment" })).toBeFocused();
+  await expect(menu.getByRole("menuitem", { name: "Workflows" })).toBeVisible();
+  await expect(menu.getByText("Skills", { exact: true })).toBeAttached();
+  await expect(menu.getByText(/View all|See all/i)).toHaveCount(0);
+  const bounds = await menu.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(340);
+  await page.keyboard.press("Escape");
+  await expect(add).toBeFocused();
+
+  await composer.fill("threads and locks");
+  await add.click();
+  await menu.getByRole("menuitem", { name: "Workflows" }).click();
+  await page.getByRole("group", { name: "Workflows" }).getByRole("button", { name: "/search" }).click();
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue("/search threads and locks");
+
+  await composer.fill("threads and locks");
+  await add.click();
+  await menu.getByRole("menuitem", { name: /explain/i }).first().click();
+  await expect(composer).toHaveValue(/^\$[^ ]+ threads and locks$/);
+  await expect(menu).toHaveCount(0);
+});
+
+test("Goal mode keeps an existing draft and explicitly sends the first goal as coaching", async ({ page }) => {
+  await page.goto("/vscode-preview.html?view=coach&scenario=ready&lang=zh-CN&connection=connected");
+  const composer = page.locator("#coach-composer");
+  const goal = "制定学习计划来掌握 Python 锁";
+  const bar = page.locator("[data-goal-bar=true]");
+  const openGoalMode = async () => {
+    await page.getByRole("button", { name: "添加", exact: true }).click();
+    await page.getByRole("menuitemcheckbox", { name: "目标模式", exact: true }).click();
+  };
+  await composer.fill(goal);
+  await openGoalMode();
+  await expect(bar).toHaveAttribute("data-goal-pending", "true");
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue(goal);
+  await bar.getByRole("button", { name: "退出目标模式" }).click();
+  await expect(bar).toHaveCount(0);
+  await expect(composer).toHaveValue(goal);
+  await openGoalMode();
+  await composer.press("Enter");
+  await expect(bar).toHaveAttribute("data-goal-pending", "false");
+  await expect(bar).toContainText(goal);
+  await expect(page.locator("main").getByText(goal, { exact: true })).toBeVisible();
+  await bar.getByRole("button", { name: "暂停目标" }).click();
+  await expect(bar).toHaveAttribute("data-goal-paused", "true");
+  await bar.getByRole("button", { name: "继续目标" }).click();
+  await expect(bar).toHaveAttribute("data-goal-paused", "false");
+  await bar.getByRole("button", { name: "结束目标" }).click();
+  await expect(bar).toHaveCount(0);
 });

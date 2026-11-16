@@ -139,7 +139,7 @@ test('training structured guidance is wired from App into a collapsed single-car
   assert.doesNotMatch(appSource, /constraints=\{!reviewArtifactForeground && hasTrainingCard/);
   assert.match(appSource, /selfCheck: !reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "selfCheck", \(\) => trainingSelfCheck\) : \[\],/);
   assert.match(appSource, /filesToTouch: !reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "filesToTouch", \(\) => trainingFilesToTouch\) : \[\],/);
-  assert.match(appSource, /hintLadder: !reviewArtifactForeground && hasTrainingCard && !trainingComposerReturnMode \? readTrainingCardList\(boundTrainingCardFacts, "hintLadder", \(\) => trainingHintLadder\) : \[\],/);
+  assert.match(appSource, /hintLadder: trainingHintLadderForCard,/);
   assert.match(appSource, /commonMistakes: !reviewArtifactForeground && hasTrainingCard \? readTrainingCardList\(boundTrainingCardFacts, "commonMistakes", \(\) => trainingCommonMistakes\) : \[\],/);
   assert.match(appSource, /stuckRecovery: reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail : hasTrainingCard \? readTrainingCardText\(boundTrainingCardFacts, "stuckRecovery", \(\) => trainingStuckRecovery\) : undefined,/);
   assert.doesNotMatch(appSource, /reflectionPrompt=\{reviewArtifactForeground \? trainingState\?\.reviewArtifact\?\.guardrail/);
@@ -287,7 +287,7 @@ test('training return is an empty-draft command and handoff composer copy is loc
   assert.match(appSource, /if \(!normalizedDraft && !hasImageAttachments && !allowEmptyTrainingReturnSubmission\)/);
   assert.match(
     appSource,
-    /if \(allowEmptyTrainingReturnSubmission\) \{\s*try \{\s*await handleSubmitTrainingEvidence\(""\);/,
+    /if \(allowEmptyTrainingReturnSubmission && !normalizedDraft && !hasImageAttachments\) \{\s*try \{\s*await handleSubmitTrainingEvidence\(""\);/,
   );
   assert.match(appSource, /const shouldSubmitTrainingHandoffReturn =\s*trainingComposerReturnMode\s*&&\s*trainingHandoffReturnRequired/);
   assert.match(
@@ -295,8 +295,8 @@ test('training return is an empty-draft command and handoff composer copy is loc
     /requestTrainingPersistence\(trainerCommands\.trainingReturn,\s*\{\s*cardId: activeTrainingCardId,\s*handoffId: trainingHandoffId \?\? "",/,
   );
   assert.match(appSource, /allowEmptySubmit=\{allowEmptyTrainingReturnSubmission\}/);
-  assert.match(appSource, /inputReadOnly=\{allowEmptyTrainingReturnSubmission\}/);
-  assert.match(appSource, /submitAriaLabel=\{localizedTrainingComposerSubmitAriaLabel\}/);
+  assert.doesNotMatch(appSource, /inputReadOnly=\{allowEmptyTrainingReturnSubmission\}/);
+  assert.match(appSource, /submitAriaLabel=\{[\s\S]*?localizedTrainingComposerSubmitAriaLabel\}/);
 
   assert.match(composerSource, /allowEmptySubmit\?: boolean;/);
   assert.match(composerSource, /inputReadOnly\?: boolean;/);

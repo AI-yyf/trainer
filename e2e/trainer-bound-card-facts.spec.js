@@ -215,7 +215,15 @@ for (const language of ['zh-CN', 'en-US']) {
       const foreignAction = await seedRestoredScenario(page, language, true, verificationSteps, scenarioSummary, 'verify');
       const card = page.locator('[data-training-card-id]');
       await expect(card).toHaveAttribute('data-training-card-id', 'restored-scenario');
-      await card.getByRole('button', { name: language === 'zh-CN' ? '验证当前文件' : 'Verify current file', exact: true }).click();
+      if (language === 'zh-CN') {
+        const composer = page.locator('#coach-composer');
+        await expect(page.locator('textarea:visible')).toHaveCount(1);
+        await composer.fill('我已经在 VS Code 里完成了，帮我验证。');
+        await composer.press('Enter');
+        await expect(page.getByTestId('trainer-view-nav-plan')).toHaveAttribute('aria-current', 'page');
+      } else {
+        await card.getByRole('button', { name: 'Verify current file', exact: true }).click();
+      }
       await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.filter(message =>
         message.type === 'command/execute' && message.payload.commandId === 'trainer.evaluate.currentFile').length)).toBe(1);
       const posted = await page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.find(message =>

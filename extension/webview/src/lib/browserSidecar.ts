@@ -2237,6 +2237,7 @@ function fixturePreviewConversation(
       role: "user" as const,
       author: resolveCopy(language).you,
       body: request.text.trim(),
+      sourceView: request.activeView,
       timestamp,
     },
     {
@@ -2244,6 +2245,7 @@ function fixturePreviewConversation(
       role: "assistant" as const,
       author: "Trainer",
       body: reply.body,
+      sourceView: request.activeView,
       timestamp,
     },
   ];
@@ -4336,7 +4338,7 @@ function resolveBrowserPreviewTurnIntent(
 }
 
 function resourceComposerIntentPayload(request: SessionMessageRequest):
-  | { mode: "locate" | "download" | "organize" | "cards"; resource_ids: string[] }
+  | { mode: NonNullable<SessionMessageRequest["resourceComposerIntent"]>["mode"]; resource_ids: string[] }
   | undefined {
   const intent = request.resourceComposerIntent;
   if (!intent) {
@@ -4729,13 +4731,16 @@ function mapSnapshotToBootstrap(snapshot: unknown): BootstrapData {
       verifyMethod: asStringArray(plan?.verify_method) ?? undefined,
       blockedReason: normalizeCoachSurfaceText(plan?.blocked_reason) ?? undefined,
       nextAfterCurrent: normalizeCoachSurfaceText(plan?.next_after_current) ?? undefined,
+      revision: asNumber(plan?._plan_revision) ?? asNumber(plan?.revision) ?? undefined,
       stages: planStagesRaw.map((item, index) => {
         const stage = asRecord(item);
         const status = asString(stage?.status);
+        const resourceIds = asStringArray(stage?.resources);
         return {
           id: asString(stage?.id) ?? `stage-${index + 1}`,
           title: asString(stage?.title) ?? `Stage ${index + 1}`,
           objective: asString(stage?.goal) ?? "",
+          ...(resourceIds?.length ? { resourceIds } : {}),
           status: status === "active" ? "active" : status === "completed" ? "done" : "queued",
         } as const;
       }),
@@ -6400,6 +6405,8 @@ function normalizePreviewResourceSearchHit(
     freshness: normalizePreviewFreshness(asString(record.freshness)),
     indexState,
     citationId: asString(record.citation_id) ?? asString(record.citationId),
+    versionId: asString(record.version_id) ?? asString(record.versionId),
+    contentHash: asString(record.content_hash) ?? asString(record.contentHash),
     previewTier: normalizePreviewTier(asString(record.preview_tier) ?? asString(record.previewTier)),
     previewKind: asString(record.preview_kind) ?? asString(record.previewKind),
     rankScore: asNumber(record.rank_score) ?? asNumber(record.rankScore),

@@ -76,7 +76,6 @@ function navigation() {
     assert.equal((nav.match(/<button/g) || []).length, 3);
     assert.ok(html.includes('trainer-history-toggle'));
     assert.ok(html.includes('trainer-view-nav-settings'));
-    assert.equal(mapping.ownsCoachComposer(route), route === 'coach');
     assert.equal(mapping.primaryDestinationForRoute(route), route === 'settings' ? null : ['training', 'progress'].includes(route) ? 'plan' : route);
   }
 }
@@ -87,11 +86,10 @@ function practice() {
     assert.ok(html.includes('current-phase-content'));
     assert.ok(html.includes('Current card'));
   }
-  const form = render('templates/PracticeResponse.tsx', 'PracticeResponse', { language: 'en-US', label: 'Reflection', value: 'My response', submitLabel: 'Record', onChange() {}, onSubmit() {} });
-  assert.ok(form.includes('training-response'));
-  assert.equal((form.match(/data-primary-action="true"/g) || []).length, 1);
-  assert.ok(!form.includes('coach-composer'));
-  assert.ok(read('app/App.tsx').includes('activityDrafts?.[activityDraftKey]'));
+  const app = read('app/App.tsx');
+  assert.ok(app.includes('activityDrafts?.[activityDraftKey]'));
+  assert.match(app, /<CoachComposer[\s\S]*?composerUsesTrainingFlow \? activityDraft : draft/);
+  assert.doesNotMatch(read('components/training/TrainingWorkbenchView.tsx'), /<textarea/);
 }
 function learning() {
   const html = render('templates/LearningHome.tsx', 'LearningHome', { currentLabel: 'Current learning', title: 'Goal', stage: '2 / 4', next: {label: 'Next step', title: 'Repair mapping', detail: 'Done when checks pass', action: {label:'Continue',onClick(){}}}, ...Object.fromEntries(['proof','route','growth'].map(key => [key,{label:key,content:key+'-content'}])) });

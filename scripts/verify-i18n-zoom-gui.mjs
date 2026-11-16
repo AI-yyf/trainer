@@ -24,7 +24,8 @@ const repoRoot = path.resolve(__dirname, "..");
 const extensionDir = path.join(repoRoot, "extension");
 const packageJson = JSON.parse(fs.readFileSync(path.join(extensionDir, "package.json"), "utf8"));
 const extensionId = `${packageJson.publisher}.${packageJson.name}`;
-const vsixPath = path.join(extensionDir, `trainer-extension-${packageJson.version}-darwin-arm64.vsix`);
+const vsixPath = process.env.TRAINER_VSIX_OUTPUT_PATH ||
+  path.join(extensionDir, `trainer-extension-${packageJson.version}-darwin-arm64.vsix`);
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
 const electronBinary = requireVSCodeElectronBinary();
 if (!fs.existsSync(vsixPath)) {
@@ -367,6 +368,11 @@ try {
       overflow[view] = { clicked, ...(await measureOverflow(frame)) };
     }
     await clickLabel(frame, language.resources);
+    await frame.locator("#coach-composer").fill("/versions");
+    await frame.locator('.composer__send[type="submit"]').click();
+    const versionCheck = frame.locator("[data-resource-version-check]");
+    await versionCheck.waitFor({ timeout: 15_000 });
+    const versionCheckFits = await versionCheck.evaluate((panel) => panel.scrollWidth <= panel.clientWidth + 1);
     await page.waitForTimeout(700);
     const bodyText = (await frame.locator("body").innerText()).replace(/\s+/g, " ").trim();
     const navMetrics = await frame.evaluate(() =>
@@ -392,6 +398,7 @@ try {
         overflow.coach.clicked === true &&
         overflow.plan.clicked === true &&
         Object.values(overflow).every((entry) => entry.scrollWidth <= entry.clientWidth + 1) &&
+        versionCheckFits &&
         navSingleLine &&
         bodyText.includes(language.resources),
       language: language.code,
@@ -399,9 +406,11 @@ try {
       overflow,
       navMetrics,
       navSingleLine,
+      versionCheckFits,
       text: bodyText.slice(0, 300),
       screenshot: await screenshot(page, `zoom200-${language.code}`),
     });
+    await versionCheck.locator(".resource-version-header button").click();
     fs.writeFileSync(donePath, "done");
     await page.waitForTimeout(500);
   }

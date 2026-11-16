@@ -2169,6 +2169,8 @@ test('live browser Preview searches the real Sidecar and normalizes ranked hits'
               source: 'docs/provider.md',
               index_state: 'indexed',
               trust_state: 'trusted',
+              version_id: 'version-provider',
+              content_hash: 'provider-index-hash',
               rank_score: 0.91,
               rank_reasons: ['title_match'],
             },
@@ -2210,6 +2212,8 @@ test('live browser Preview searches the real Sidecar and normalizes ranked hits'
     assert.equal(result.message.payload.resourceSearch.query, 'provider');
     assert.equal(result.message.payload.resourceSearch.hits[0].status, 'ready');
     assert.equal(result.message.payload.resourceSearch.hits[0].trustState, 'trusted');
+    assert.equal(result.message.payload.resourceSearch.hits[0].versionId, 'version-provider');
+    assert.equal(result.message.payload.resourceSearch.hits[0].contentHash, 'provider-index-hash');
     assert.equal(result.message.payload.resourceSearch.hits[0].rankScore, 0.91);
   } finally {
     global.fetch = originalFetch;

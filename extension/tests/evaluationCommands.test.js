@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const { loadWithVscodeMock } = require('./helpers/loadWithVscodeMock');
@@ -324,6 +326,8 @@ test('evaluateCurrentFileCommand uses the managed workspace context for evaluati
     vscodeMock,
   );
   const context = createContext();
+  context.providerStore.getConfig = () => undefined;
+  context.providerStore.getApiKey = async () => undefined;
   const managedContextId = 'context-evaluation-123';
   context.getHostState().bootstrap.memory.workspace = {
     ...(context.getHostState().bootstrap.memory.workspace ?? {}),
@@ -340,12 +344,39 @@ test('evaluateCurrentFileCommand uses the managed workspace context for evaluati
 
   assert.equal(result.ok, true);
   assert.equal(context.__posts[0].body.workspace_id, managedContextId);
+  assert.equal(context.__posts[0].body.content, document.getText());
   assert.deepEqual(context.__gets, [
     {
       port: 34891,
       requestPath: `/memory/summary?workspace_id=${managedContextId}&session_id=session-1`,
     },
   ]);
+});
+
+test('Verify current file reads the unsaved editor when the project has a filesystem alias', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-verify-buffer-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, 'project');
+  const alias = path.join(root, 'alias');
+  fs.mkdirSync(project);
+  fs.symlinkSync(project, alias, 'junction');
+  fs.writeFileSync(path.join(project, 'receipt.py'), 'count = 0\n');
+  const document = { uri: { fsPath: path.join(alias, 'receipt.py') }, languageId: 'python', getText: () => 'count = 4\n' };
+  const vscodeMock = {
+    DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+    window: { activeTextEditor: { document } },
+    workspace: { getWorkspaceFolder: () => ({ uri: { fsPath: project } }) },
+    languages: { getDiagnostics: () => [] },
+  };
+  const { evaluateCurrentFileCommand } = loadWithVscodeMock(evaluationCommandsModulePath, vscodeMock);
+  const context = createContext();
+  const result = await evaluateCurrentFileCommand(context, {
+    source: 'training', cardId: 'receipt-card', filesToTouch: ['receipt.py'],
+  });
+  assert.equal(result.ok, true);
+  assert.equal(context.__posts[0].body.file_path, document.uri.fsPath);
+  assert.equal(context.__posts[0].body.content, 'count = 4\n');
+  assert.equal(fs.readFileSync(path.join(project, 'receipt.py'), 'utf8'), 'count = 0\n');
 });
 
 test('evaluateCurrentFileCommand keeps the evaluation result when training state refresh is temporarily unavailable', async () => {

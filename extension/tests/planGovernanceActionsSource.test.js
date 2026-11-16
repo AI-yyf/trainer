@@ -99,7 +99,7 @@ test('Plan composer uses complete eight-language copy for modes, placeholders, a
   assert.match(modesSource, /accessibilityLabel: evidenceMode\.accessibilityLabel,/);
   assert.match(modesSource, /accessibilityLabel: blockerMode\.accessibilityLabel,/);
   assert.doesNotMatch(modesSource, /"Explain"|"Generate"|"Evidence"|"Blocker"/);
-  assert.match(appSource, /activePlanComposerMode\.placeholder/);
+  assert.match(appSource, /appUiCopy\(layout\.composerLanguage, "写下这一步"\)/);
   assert.match(appSource, /activePlanComposerMode\.accessibilityLabel/);
 });
 
@@ -112,11 +112,9 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
   );
   assert.match(source, /if \(action === "generate_plan"\) \{\s*openPlanComposerMode\("generate"\);/);
   assert.match(source, /if \(action === "continue_without_plan"\) \{\s*setActiveView\("coach"\);\s*requestCoachComposerFocus\(\);/);
-  assert.match(source, /const planComposerSubmission = activeView === "plan" \|\| coachPlanContext !== undefined;/);
-  assert.match(
-    source,
-    /const formalPlanGeneration =\s*\(planComposerSubmission && submittedPlanMode === "generate"\) \|\|\s*\(activeView === "coach" && sendAnalysis.intent === "plan"\);/,
-  );
+  assert.match(source, /const formalPlanGeneration = !resourceAnalysis &&\s*\(unified.kind === "plan"/);
+  assert.match(source, /if \(!confirmedActionKey\) \{[\s\S]*?setComposerActionPreview\(/);
+  assert.match(source, /if \(confirmedActionKey !== key\)/);
   assert.match(source, /function providerHasVerifiedToolsProbe\([\s\S]*?lastTest\.toolsReady === true[\s\S]*?lastTest\.toolProbeStatus === "verified"[\s\S]*?toolsEvidence\?\.state === "verified"[\s\S]*?toolsEvidence\.observed === true/);
   assert.match(source, /const providerSupportsFormalPlanTools = providerHasVerifiedToolsProbe\(\{\s*lastTestResult: scopedProviderLastTest,\s*\}\);/);
   assert.match(source, /const providerCanMutateFormalPlan = capabilityVerdict\.formalPlan;/);
@@ -145,7 +143,7 @@ test('formal plan generation is explicit while Plan discussion stays conversatio
   assert.match(source, /const formalPlanSkill = submittedSkill\.commandId === trainerCommands\.generatePlan;/);
   assert.match(source, /if \(formalPlanSkill && !providerCanMutateFormalPlan\) \{/);
   assert.match(source, /formalPlanMutation: formalPlanSkill,/);
-  assert.match(source, /const intent = formalPlanGeneration \? "plan" : analyzedIntent;/);
+  assert.match(source, /const intent = resourceAnalysis \? "coach" : formalPlanGeneration \? "plan" : analyzedIntent;/);
   assert.match(source, /formalPlanMutation: formalPlanGeneration && !previewPlanCandidateGeneration,/);
   assert.doesNotMatch(
     source,
@@ -313,7 +311,7 @@ test('Learning resolves one governed primary action before rendering', () => {
   assert.match(source, /openPlanComposerMode\("evidence"\);/);
   assert.match(
     source,
-    /const waitingComposerEvidence =\s*\(activeView === "plan" \|\| coachPlanContext !== undefined\) &&\s*\(coachPlanContext \?\? resolvedPlanComposerMode\) === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
+    /const waitingComposerEvidence = !resourceAnalysis &&\s*activeView === "plan" && coachPlanContext === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
   );
   assert.match(source, /trainerCommands\.evidenceEnqueue/);
   assert.match(source, /waitingComposer: true,/);

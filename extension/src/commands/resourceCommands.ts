@@ -13,6 +13,7 @@ import {
   resolveResourceOpenTarget,
   resolveResourceOriginalCandidates,
 } from '../../../shared/src/resourceOpen';
+import type { ResourceVersionCheckResult } from '../../../shared/src/models';
 import type { CommandContext } from '../core/commandContext';
 import { attachPreviewAssetUris } from '../core/previewAssetUris';
 import type {
@@ -735,6 +736,8 @@ export async function captureResourceCommand(
   }
 
   const request = isResourceCapturePayloadRecord(payload);
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const sessionId = context.getSessionId();
   const url = asString(request.url)?.trim() ?? '';
   if (!url || !/^https?:\/\//i.test(url)) {
     return { ok: false, message: libraryCopy('captureInvalidUrl', resourceResponseLanguage(context)) };
@@ -744,9 +747,17 @@ export async function captureResourceCommand(
   if (status.lifecycle !== 'ready' || !status.port) {
     return { ok: false, message: libraryCopy('captureFetchFailed', resourceResponseLanguage(context), status.detail ?? 'sidecar unavailable') };
   }
+  if ((request.workspace_id && request.workspace_id !== workspaceId) || workspaceId !== getRuntimeWorkspaceId(context)) {
+    return { ok: false, message: 'The project changed. Submit the capture again.' };
+  }
 
   const title = asString(request.title)?.trim();
   const focusId = asString(request.bind_focus_id ?? request.bindFocusId)?.trim();
+  const selection = asString(request.selection)?.trim();
+  const captureMode = request.capture_mode === 'selection' || request.capture_mode === 'link'
+    ? request.capture_mode : undefined;
+  const planId = asString(request.bind_plan_id)?.trim();
+  const planRevision = request.bind_plan_revision;
   const targetDir = asString(request.target_dir ?? request.targetDir)?.trim();
   const clientCaptureId = asString(request.client_capture_id ?? request.clientCaptureId)?.trim() ||
     `library-capture-${Date.now().toString(36)}`;
@@ -755,12 +766,16 @@ export async function captureResourceCommand(
       status.port,
       '/resources/capture',
       {
-        session_id: context.getSessionId(),
-        workspace_id: getRuntimeWorkspaceId(context) || asString(request.workspace_id)?.trim() || undefined,
+        session_id: sessionId,
+        workspace_id: workspaceId || asString(request.workspace_id)?.trim() || undefined,
         url,
         kind: asString(request.kind)?.trim() || 'web',
         ...(title ? { title } : {}),
         ...(focusId ? { bind_focus_id: focusId } : {}),
+        ...(planId ? { bind_plan_id: planId } : {}),
+        ...(typeof planRevision === 'number' && Number.isInteger(planRevision) ? { bind_plan_revision: planRevision } : {}),
+        ...(captureMode ? { capture_mode: captureMode } : {}),
+        ...(selection ? { selection } : {}),
         ...(request.download === true ? { download: true } : {}),
         ...(targetDir ? { target_dir: targetDir } : {}),
         client_capture_id: clientCaptureId,
@@ -772,10 +787,21 @@ export async function captureResourceCommand(
     // The response doubles as the refreshed resource record (the sidecar
     // returns the full ResourceRecord shape plus capture extras), so one
     // patch puts it straight into the library snapshot the webview waits on.
-    await context.patchWorkbenchData(
-      mergeResourceRecords(context.getHostState().bootstrap, [captured]),
-    );
-    const capturedTitle = asString(record.title)?.trim() || url;
+    if (workspaceId === getRuntimeWorkspaceId(context) && sessionId === context.getSessionId()) {
+      await context.patchWorkbenchData(
+        mergeResourceRecords(context.getHostState().bootstrap, [captured]),
+      );
+    }
+    if (captureMode && workspaceId === getRuntimeWorkspaceId(context) && sessionId === context.getSessionId()) {
+      // Selection/link saves also update the learning ledger and can change a
+      // formal plan. Keep the resource receipt valid if a follow-up read fails.
+      try {
+        await refreshResourceLearningState(context, status.port);
+      } catch {
+        context.outputChannel.appendLine('[resources] Could not refresh the learning snapshot after capture.');
+      }
+    }
+    const capturedTitle = asString(record.name ?? record.title)?.trim() || url;
     return {
       ok: true,
       message: deduped
@@ -791,6 +817,78 @@ export async function captureResourceCommand(
       ok: false,
       message: libraryCopy('captureFetchFailed', resourceResponseLanguage(context), detail),
     };
+  }
+}
+
+async function refreshResourceLearningState(context: CommandContext, port: number): Promise<void> {
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const summary = await context.sidecarClient.getJson<unknown>(
+    port,
+    withWorkspaceQuery('/memory/summary', context, workspaceId),
+  );
+  if (workspaceId === getRuntimeWorkspaceId(context)) {
+    await context.patchWorkbenchData(
+      mergeMemorySummarySnapshot(context.getHostState().bootstrap, summary, workspaceId),
+    );
+  }
+}
+
+export async function checkResourceVersionsCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const request = isResourceCapturePayloadRecord(payload);
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const sessionId = context.getSessionId();
+  if (request.workspace_id !== workspaceId) {
+    return { ok: false, message: 'The project changed. Check its sources again.' };
+  }
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Sidecar unavailable.' };
+  }
+  if (workspaceId !== getRuntimeWorkspaceId(context) || sessionId !== context.getSessionId()) {
+    return { ok: false, message: 'The project changed. Check its sources again.' };
+  }
+  const results = await context.sidecarClient.postJson<ResourceVersionCheckResult[]>(
+    status.port, '/resources/check-versions',
+    { workspace_id: workspaceId, session_id: sessionId, sources: request.sources },
+    { timeoutMs: RESOURCE_CAPTURE_TIMEOUT_MS },
+  );
+  return { ok: true, data: results };
+}
+
+export async function linkResourceToLearningCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const admissionBlock = resourceMutationAdmissionBlock(context);
+  if (admissionBlock) return admissionBlock;
+  if (!(await context.trustGuard.ensureTrusted('link library sources to learning'))) {
+    return { ok: false, message: 'Workspace trust is required to link library sources.' };
+  }
+  const request = isResourceCapturePayloadRecord(payload);
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    return { ok: false, message: status.detail ?? 'Sidecar unavailable.' };
+  }
+  if (request.workspace_id && request.workspace_id !== getRuntimeWorkspaceId(context)) {
+    return { ok: false, message: 'The project changed. Confirm the learning link again.' };
+  }
+  try {
+    const linked = await context.sidecarClient.postJson(
+      status.port,
+      '/resources/link-learning',
+      { ...request, session_id: context.getSessionId(), workspace_id: getRuntimeWorkspaceId(context) },
+    );
+    try {
+      await refreshResourceLearningState(context, status.port);
+    } catch {
+      context.outputChannel.appendLine('[resources] Could not refresh the learning snapshot after linking.');
+    }
+    return { ok: true, data: linked };
+  } catch (error) {
+    return { ok: false, message: errorSidecarDetail(error) ?? 'The resource link could not be saved.' };
   }
 }
 
@@ -2996,6 +3094,8 @@ function normalizeResourceDetailRecord(value: unknown): ResourceDetailRecordView
     freshness: normalizeFreshness(asString(record.freshness)),
     indexState: asString(record.index_state) ?? asString(record.indexState),
     citationId: asString(record.citation_id) ?? asString(record.citationId),
+    versionId: asString(record.version_id) ?? asString(record.versionId),
+    contentHash: asString(record.content_hash) ?? asString(record.contentHash),
     previewTier:
       normalizePreviewTier(asString(record.preview_tier) ?? asString(record.previewTier)) ?? undefined,
     previewKind: asString(record.preview_kind) ?? asString(record.previewKind),

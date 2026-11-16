@@ -371,7 +371,9 @@ export interface WorkbenchStore {
   setContextDetail: (detail: "focused" | "balanced" | "full") => void;
   setFollowCurrentFile: (enabled: boolean) => void;
   setCoachDefaults: (defaults: Partial<CoachDefaults>) => void;
-  setComposerDraft: (draft: string) => void;
+  setComposerDraft: (draft: string, scope?: string) => void;
+  clearComposerBrowserSource: (scope: string, id: string) => void;
+  writeComposerResourceRefs: (scope: string, ids: string[], mode?: "merge" | "replace") => void;
   selectComposerDraftScope: (scope: string) => void;
   setComposerSendPreference: (preference: "jump" | "stay") => void;
   markDockStaySend: (surface: "plan" | "resources") => void;
@@ -828,6 +830,21 @@ function readGoalState(sessionId: string | undefined): PersistedGoal | undefined
   return resolvedSessionId ? readGoalStore()[resolvedSessionId] : undefined;
 }
 
+export function composerSessionKeyFor(data: WorkbenchBootstrapState): string {
+  const workspace = data.memory.workspace;
+  return `${workspace?.resourceSandbox?.effectivePath ?? workspace?.workspaceId ?? data.workspaceName}\u0000${data.sessionLabel}`;
+}
+
+function switchComposerScope(layout: PersistedWorkbenchState, scope: string): PersistedWorkbenchState {
+  if (layout.composerDraftScope === scope) return layout;
+  const previous = layout.composerDraftScope;
+  const drafts = previous
+    ? { ...layout.composerDrafts, [previous]: layout.composerDraft }
+    : layout.composerDrafts ?? {};
+  return { ...layout, composerDraftScope: scope, composerDrafts: drafts,
+    composerDraft: drafts[scope] ?? (previous ? "" : layout.composerDraft) };
+}
+
 export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   trainingReviewQueueRequested: false,
   // Both review entries are authoritative view moves: keep liveActiveView in
@@ -907,7 +924,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       return {
         trainingReviewQueueRequested: activeView === "training" && state.trainingReviewQueueRequested,
         layout: persistLayout({
-          ...state.layout,
+          ...switchComposerScope(state.layout, composerDockDraftScope(normalized, composerSessionKeyFor(state.data))),
           activeView: normalized,
         }),
       };
@@ -993,26 +1010,35 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         },
       }),
     })),
-  setComposerDraft: (composerDraft) =>
+  setComposerDraft: (composerDraft, requestedScope) =>
     set((state) => {
+      const selectedScope = state.layout.composerDraftScope;
+      const scope = requestedScope ?? selectedScope;
       const nextLayout: PersistedWorkbenchState = {
         ...state.layout,
-        composerDraft,
-        composerDrafts: state.layout.composerDraftScope
-          ? { ...state.layout.composerDrafts, [state.layout.composerDraftScope]: composerDraft }
+        composerDraft: scope === selectedScope ? composerDraft : state.layout.composerDraft,
+        composerDrafts: scope
+          ? { ...state.layout.composerDrafts, [scope]: composerDraft }
           : state.layout.composerDrafts,
       };
       scheduleComposerDraftPersist(() => get().layout);
       return { layout: nextLayout };
     }),
   selectComposerDraftScope: (scope) => set((state) => {
-    if (state.layout.composerDraftScope === scope) return state;
-    const previous = state.layout.composerDraftScope;
-    const drafts = previous
-      ? { ...state.layout.composerDrafts, [previous]: state.layout.composerDraft }
-      : state.layout.composerDrafts ?? {};
-    return { layout: persistLayout({ ...state.layout, composerDraftScope: scope,
-      composerDrafts: drafts, composerDraft: drafts[scope] ?? (previous ? "" : state.layout.composerDraft) }) };
+    const layout = switchComposerScope(state.layout, scope);
+    return layout === state.layout ? state : { layout: persistLayout(layout) };
+  }),
+  clearComposerBrowserSource: (scope, id) => set((state) => {
+    if (state.layout.composerBrowserSources?.[scope]?.id !== id) return state;
+    const sources = { ...state.layout.composerBrowserSources };
+    delete sources[scope];
+    return { layout: persistLayout({ ...state.layout, composerBrowserSources: sources }) };
+  }),
+  writeComposerResourceRefs: (scope, ids, mode = "merge") => set((state) => {
+    const references = state.layout.composerResourceRefs ?? {};
+    const retained = mode === "merge" ? references[scope] ?? [] : [];
+    const scoped = [...new Set([...retained, ...ids])].slice(-12);
+    return { layout: persistLayout({ ...state.layout, composerResourceRefs: { ...references, [scope]: scoped } }) };
   }),
   setComposerSendPreference: (preference) =>
     set((state) => ({
@@ -1186,23 +1212,23 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       // a draft id that is already in the composer is a no-op — except that
       // it still confirms delivery again.
       const draft = sanitizeVisibleText(message.text).trim();
+      const workspaceId = current.syncCursor.workspaceId || current.data.memory.workspace?.workspaceId;
+      if (message.workspaceId && message.workspaceId !== workspaceId) return;
       const draftId = typeof message.draftId === "string" ? message.draftId.trim() : "";
       const appliedDraftIds = current.layout.appliedDraftIds ?? [];
       const alreadyApplied = Boolean(draftId) && appliedDraftIds.includes(draftId);
       if (draft && !alreadyApplied) {
-        liveActiveView = "coach"; // authoritative move (T-0038)
+        const currentView = current.layout.activeView;
+        const targetView = !message.source || currentView === "settings" ? "coach"
+          : currentView === "training" || currentView === "progress" ? "plan" : currentView;
+        liveActiveView = targetView;
         set((state) => {
-          const coachScope = composerDockDraftScope(
-            "coach",
-            `${state.data.memory.workspace?.resourceSandbox?.effectivePath
-              ?? state.data.memory.workspace?.workspaceId
-              ?? state.data.workspaceName}\u0000${state.data.sessionLabel}`,
-          );
+          const targetScope = composerDockDraftScope(targetView, composerSessionKeyFor(state.data));
           const previousScope = state.layout.composerDraftScope;
           const drafts = previousScope
             ? { ...state.layout.composerDrafts, [previousScope]: state.layout.composerDraft }
             : { ...(state.layout.composerDrafts ?? {}) };
-          const existingDraft = String(drafts[coachScope] ?? "").trim();
+          const existingDraft = String(drafts[targetScope] ?? "").trim();
           // A browser selection must never destroy words the learner already
           // typed. Keep both, with the selection after the existing draft; a
           // retry of the same selection is idempotent.
@@ -1210,14 +1236,18 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             existingDraft && !existingDraft.includes(draft)
               ? `${existingDraft}\n\n${draft}`
               : existingDraft || draft;
-          drafts[coachScope] = nextDraft;
+          drafts[targetScope] = nextDraft;
           return {
             layout: persistLayout({
               ...state.layout,
-              activeView: "coach",
-              composerDraftScope: coachScope,
+              activeView: targetView,
+              composerDraftScope: targetScope,
               composerDrafts: drafts,
               composerDraft: nextDraft,
+              ...(message.source && draftId ? { composerBrowserSources: {
+                ...state.layout.composerBrowserSources,
+                [targetScope]: { ...message.source, id: draftId, prefill: draft },
+              } } : {}),
               ...(draftId
                 ? {
                     appliedDraftIds: [...(state.layout.appliedDraftIds ?? []), draftId].slice(

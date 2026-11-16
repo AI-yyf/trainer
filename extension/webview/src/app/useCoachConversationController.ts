@@ -18,6 +18,7 @@ export interface OptimisticTurn {
   id: string;
   body: string;
   baseLength: number;
+  sourceView: ActiveWorkbenchView;
   createdAt: number;
 }
 
@@ -39,7 +40,7 @@ export function useCoachConversationController({
   // value in a ref so the callback stays stable across renders.
   const conversationLengthRef = useRef(conversation.length);
   conversationLengthRef.current = conversation.length;
-  const appendOptimisticTurn = useCallback((body: string) => {
+  const appendOptimisticTurn = useCallback((body: string, sourceView: ActiveWorkbenchView = "coach") => {
     const trimmed = body.trim();
     if (!trimmed) {
       return;
@@ -49,6 +50,7 @@ export function useCoachConversationController({
       {
         id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         body: trimmed,
+        sourceView,
         baseLength: conversationLengthRef.current,
         createdAt: Date.now(),
       },

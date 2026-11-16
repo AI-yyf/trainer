@@ -97,7 +97,7 @@ test('App history uses only this session user sends and preserves a cursor plus 
   assert.match(hookSource, /setComposerDraft\(composerHistoryScratchDraftRef\.current\)/);
   assert.match(source, /useComposerHistoryNavigation\(\{/);
   assert.match(source, /conversation: data\.conversation/);
-  assert.match(source, /onNavigateHistory=\{navigateComposerHistory\}/);
+  assert.match(source, /onNavigateHistory=\{composerUsesTrainingFlow \? undefined : navigateComposerHistory\}/);
 });
 
 test('Composer side mouse buttons map to history and consume browser navigation events', () => {

@@ -262,15 +262,21 @@ class TestNewEventTypeConstants:
     def test_all_canonical_event_types_present(self) -> None:
         from app.core.event_ledger import (
             ALL_EVENT_TYPES,
+            EVENT_BROWSER_SOURCE_RECEIVED,
             EVENT_COACH_TURN_RECORDED,
             EVENT_EVENT_REVERSED,
             EVENT_GOAL_ACTIVITY_RECORDED,
             EVENT_GOAL_COMPLETED,
             EVENT_GOAL_STARTED,
+            EVENT_RESOURCE_LINKED,
+            EVENT_REVIEW_SCHEDULED,
             EVENT_TELEMETRY_CONSENT_CHANGED,
         )
 
-        assert len(ALL_EVENT_TYPES) == 49
+        assert len(ALL_EVENT_TYPES) == 52
+        assert EVENT_BROWSER_SOURCE_RECEIVED in ALL_EVENT_TYPES
+        assert EVENT_RESOURCE_LINKED in ALL_EVENT_TYPES
+        assert EVENT_REVIEW_SCHEDULED in ALL_EVENT_TYPES
         assert EVENT_TELEMETRY_CONSENT_CHANGED in ALL_EVENT_TYPES
         assert EVENT_EVENT_REVERSED in ALL_EVENT_TYPES
         assert EVENT_GOAL_STARTED in ALL_EVENT_TYPES
@@ -397,8 +403,8 @@ class TestNewEventConstants:
         assert EVENT_DEPENDENCY_MASTERY_UPDATED == "dependency_mastery_updated"
 
     def test_total_event_type_count(self) -> None:
-        """ALL_EVENT_TYPES includes agent checkpoints, telemetry, reversal and goals."""
-        assert len(ALL_EVENT_TYPES) == 49
+        """ALL_EVENT_TYPES includes cross-surface learning activity."""
+        assert len(ALL_EVENT_TYPES) == 52
 
     def test_record_new_event_types(self) -> None:
         """New event types can be recorded and queried back."""

@@ -1,5 +1,6 @@
 import { memo, Profiler, useEffect, useState, type ReactNode } from "react";
 import type { ActiveWorkbenchView } from "../lib/types";
+import { primaryDestinationForRoute } from "../lib/workbenchDestinations";
 import { recordSurfaceRender, surfaceProfiler } from './surfaceRuntimeMetrics';
 
 const SurfaceContent = memo(function SurfaceContent({ view, hidden, render }: {
@@ -29,8 +30,9 @@ export function WorkbenchSurfaces({ activeView, render }: {
   activeView: ActiveWorkbenchView;
   render: (view: ActiveWorkbenchView) => ReactNode;
 }) {
-  const [visited, setVisited] = useState<ActiveWorkbenchView[]>([activeView]);
-  if (!visited.includes(activeView)) setVisited([...visited, activeView]);
+  const surface = primaryDestinationForRoute(activeView) ?? activeView;
+  const [visited, setVisited] = useState<ActiveWorkbenchView[]>([surface]);
+  if (!visited.includes(surface)) setVisited([...visited, surface]);
   useEffect(() => {
     const addPreloaded = () => {
       setVisited((current) => {
@@ -49,9 +51,10 @@ export function WorkbenchSurfaces({ activeView, render }: {
     const timer = window.setTimeout(addPreloaded, 400);
     return () => window.clearTimeout(timer);
   }, []);
-  return <>{visited.map((view) => (
-    <div key={view} className="template-surface" data-surface={view} hidden={view !== activeView}>
-      <SurfaceContent view={view} hidden={view !== activeView} render={render} />
-    </div>
-  ))}</>;
+  return <>{visited.map((view) => {
+    const route = view === surface ? activeView : view;
+    return <div key={view} className="template-surface" data-surface={route} data-primary-surface={view} hidden={view !== surface}>
+      <SurfaceContent view={route} hidden={view !== surface} render={render} />
+    </div>;
+  })}</>;
 }

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from app.api.routers import _resolve_agent_loop_enabled
 from app.core.models import (
     ProviderCapabilityEvidence,
@@ -55,6 +57,78 @@ def _practice_model_card() -> str:
 
 def _sandbox_card_markdown(tmp_path: Path) -> list[Path]:
     return [path for path in tmp_path.rglob("*.md") if "cards" in path.parts]
+
+
+def test_indexed_practice_accepts_editor_path_through_project_alias(tmp_path: Path) -> None:
+    trainer_root = tmp_path / "trainer"
+    project = trainer_root / "project"
+    project.mkdir(parents=True)
+    target = project / "receipt.py"
+    code = "def parcel_details():\n    return ('label', 4)\n"
+    target.write_text(code, encoding="utf-8")
+    (project / "test_receipt.py").write_text(
+        "from pathlib import Path\nfrom runpy import run_path\n\n"
+        "def test_parcel():\n"
+        "    details = run_path(str(Path(__file__).with_name('receipt.py')))['parcel_details']\n"
+        "    assert details() == 'parcel label'\n",
+        encoding="utf-8",
+    )
+    alias = tmp_path / "project-alias"
+    try:
+        alias.symlink_to(project, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"Directory symlink unavailable: {error}")
+    with build_client(tmp_path) as client:
+        runtime = client.app.state.runtime
+        workspace_id = runtime.provision_project_adoption(
+            workspace_id="alias-practice", root_path=str(trainer_root),
+            project_path=str(project), project_name="Alias practice",
+        ).context_id
+        imported = client.post("/resources/capture", json={
+            "workspace_id": workspace_id, "url": "https://example.com/receipt",
+            "title": "One tuple", "kind": "web", "capture_mode": "selection",
+            "selection": "Unpack the first tuple value into the label and the second into the count.",
+        })
+        assert imported.status_code == 200, imported.text
+        source = imported.json()
+        answer = json.loads(_practice_model_card())
+        answer.update(
+            title="让调用方得到正确的包裹标签",
+            why_now="标签不对时，调用方无法找到对应包裹。",
+            scenario="调用方用返回的标签寻找包裹。",
+            problem_statement="调整 parcel_details 的返回值，使它符合项目已有的接口约定。",
+            deliverable="交付修改后的 receipt.py。",
+            validation_method="Run the existing pytest case for the parcel label.",
+            files_to_touch="unrelated.py",
+            expected_symbols=["test_receipt.py", "details"],
+            acceptance_criteria=["定义 `test_receipt.py` 并写入当前文件"],
+            verification_steps=["assert parcel_details() == 'wrong'"],
+        )
+        with patch.object(ProviderService, "chat_completion", return_value=json.dumps(answer)) as completion:
+            response = client.post("/training/generate-card", json={
+                "workspace_id": workspace_id, "source": "plan_requirement", "resource_id": source["id"],
+                "context_hint": "Repair parcel_details using the original note.",
+                "response_language": "zh-CN",
+                "expected_resource_version": {"version_id": source["version_id"], "content_hash": source["content_hash"]},
+                "current_file": {"path": str(alias / target.name), "language_id": "python", "content": code},
+                "project_verification_steps": ["assert parcel_details() == 'injected'"],
+            })
+        assert response.status_code == 200, response.text
+        card = response.json()["card"]
+        assert card["files_to_touch"] == [target.name]
+        assert card["why_now"] == answer["why_now"]
+        assert card["problem_statement"] == answer["problem_statement"]
+        assert card["validation_method"] != answer["validation_method"]
+        assert card["expected_symbols"] == ["parcel_details"]
+        assert card["acceptance_criteria"] == ["`parcel_details`"]
+        assert card["verification_steps"] == [
+            "`assert parcel_details() == 'parcel label'` · `test_receipt.py:6`",
+        ]
+        messages = completion.call_args.args[0]
+        assert "def parcel_details" in messages[-1]["content"]
+        assert "the second into the count" in messages[-1]["content"]
+        assert "'parcel label'" in messages[-1]["content"]
+        assert "injected" not in messages[-1]["content"]
 
 
 def _assert_sandbox_card_persisted(sandbox_root: Path, card_id: str) -> None:

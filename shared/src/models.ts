@@ -278,6 +278,30 @@ export type PlanRuntimeStatus = {
   revision?: number;
 };
 
+export const resourceVersionCheckStatuses = [
+  "unchanged", "changed", "no_source", "no_baseline", "network_disabled", "fetch_failed",
+  "stale", "missing",
+] as const;
+
+export const resourceVersionCheckBases = ["page", "pdf", "repository", "indexed_url"] as const;
+
+export type ResourceVersionCheckResult = {
+  resource_id: string;
+  version_id: string;
+  content_hash: string;
+  status: (typeof resourceVersionCheckStatuses)[number];
+  basis?: (typeof resourceVersionCheckBases)[number] | null;
+};
+
+export type ResourceVersionPin = { versionId: string; contentHash: string };
+
+export type ResourceCaptureReceipt = Partial<ResourceVersionPin> & {
+  resourceId: string;
+  title?: string;
+  deduped: boolean;
+  focusBinding?: string;
+};
+
 export type ResourceRecord = {
   id: string;
   kind:
@@ -847,4 +871,15 @@ export interface GoalSession {
   updatedAt: string;
   lastActivityAt?: string | null;
   completedAt?: string | null;
+}
+export interface LearningActivity {
+  id: string;
+  kind: string;
+  timestamp: string;
+  title?: string;
+  cardId?: string;
+  resourceId?: string;
+  nextDue?: string;
+  trustLevel?: string;
+  result?: string;
 }

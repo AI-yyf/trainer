@@ -29,7 +29,7 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
   const source = fs.readFileSync(resourcesPath, 'utf8');
 
   assert.match(source, /resources-pane--library resources-knowledge/);
-  assert.match(source, /className="resources-search resources-search--hero resources-knowledge__search"/);
+  assert.match(source, /data-clear-resource-search/);
   assert.match(source, /const visibleResources = useMemo/);
   assert.match(source, /function sourceChain\(resource: ResourceRecord\)/);
   assert.match(source, /resource\.trustState/);

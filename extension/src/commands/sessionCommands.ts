@@ -159,7 +159,7 @@ export async function invalidateActiveTrainerStreams(
 }
 
 type ResourceComposerIntentPayload = {
-  mode: 'locate' | 'download' | 'organize' | 'cards';
+  mode: 'locate' | 'analyze' | 'download' | 'organize' | 'cards';
   resourceIds?: string[];
 };
 
@@ -3767,6 +3767,7 @@ function extractResourceComposerIntent(value: unknown): ResourceComposerIntentPa
   const record = value as Record<string, unknown>;
   const mode =
     record.mode === 'locate' ||
+    record.mode === 'analyze' ||
     record.mode === 'download' ||
     record.mode === 'organize' ||
     record.mode === 'cards'
