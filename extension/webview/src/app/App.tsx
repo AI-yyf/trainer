@@ -10508,7 +10508,14 @@ export function App() {
               detail={trainingState?.reviewArtifact?.verifiedResult ?? trainingState?.reviewArtifact?.summary}
               action={{ label: templateCopy[layout.composerLanguage].askCoach, onClick: handleResumeTrainingInCoach }} />
           ) : trainingComposerReflectMode ? (
-            <MessageRichContent body={readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) ?? ""} language={layout.composerLanguage} />
+            <MessageRichContent body={
+              // P4 review artifact foreground: the review's own summary is the
+              // recall ask — show it as the reflection prompt instead of an
+              // empty body when no candidate reflection prompt exists.
+              reviewArtifactForeground && trainingState?.reviewArtifact?.summary?.trim()
+                ? trainingState.reviewArtifact.summary
+                : readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) ?? ""
+            } language={layout.composerLanguage} />
           ) : null}
           cardId={activeTrainingCardId}
           selectedCardStatus={effectiveSelectedTrainingCardStatus}

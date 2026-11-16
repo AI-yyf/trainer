@@ -70,7 +70,14 @@ async function renderTabLine() {
   const url = tab && tab.url ? String(tab.url) : '';
   const title = (tab && tab.title) || url;
   currentHttpUrl = TrainerCapture.httpUrlOnly(url) ? url : '';
-  elements.pageLine.textContent = currentHttpUrl ? title : t('captureNoUrl');
+  // P4: name the source kind — a PDF document or GitHub repo page asks with
+  // the same flow, and the learner sees what will be staged.
+  const kindLabel = currentHttpUrl
+    ? t(TrainerCapture.kindCopyKey(TrainerCapture.detectKind(url)))
+    : '';
+  elements.pageLine.textContent = currentHttpUrl
+    ? kindLabel ? `${title} · ${kindLabel}` : title
+    : t('captureNoUrl');
   elements.askSend.disabled = !currentHttpUrl;
 }
 

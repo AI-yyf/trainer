@@ -211,6 +211,53 @@ def test_research_brief_saves_lists_and_reads_as_a_library_asset(tmp_path: Path)
     assert all(item["assetType"] == "research_brief" for item in generic_items)
 
 
+def test_research_brief_auto_links_to_the_live_plan_when_unspecified(tmp_path: Path) -> None:
+    """P2.6: conclusions inherit the workspace's live plan and current stage."""
+    client = _client(tmp_path / "data")
+    context = _seed_context(client, tmp_path / "roots", "autolink")
+    # The seed provisions a formal plan for the context; give it an active
+    # stage so the auto-link can also pick the current stage.
+    plan_id = f"plan-autolink"
+    runtime = client.app.state.runtime
+    plan = runtime.repository.get_latest_plan(context.context_id)
+    assert plan is not None and plan.id == plan_id
+    from app.core.models import PlanStage
+    linked_plan = plan.model_copy(update={
+        "current_stage_id": "stage-2",
+        "stages": [
+            PlanStage(id="stage-1", title="Stage 1", goal="g", outcomes=[], status="completed"),
+            PlanStage(id="stage-2", title="Stage 2", goal="g", outcomes=[], status="active"),
+        ],
+    })
+    runtime.repository.save_plan(context.context_id, linked_plan)
+
+    response = client.post(
+        "/resource/research-brief",
+        json={
+            "title": "自动关联的简报",
+            "contextId": context.context_id,
+            "brief": _brief_payload(planId=None, stageId=None),
+            "sourceChain": [{"kind": "resource", "ref": "resource-world-models", "label": "World Models survey"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    brief = response.json()["brief"]
+    assert brief["planId"] == plan_id
+    assert brief["stageId"] == "stage-2"
+
+    # An explicitly stated plan is never overwritten.
+    explicit = client.post(
+        "/resource/research-brief",
+        json={
+            "title": "显式关联的简报",
+            "contextId": context.context_id,
+            "brief": _brief_payload(planId="plan-explicit", stageId=None),
+            "sourceChain": [{"kind": "resource", "ref": "resource-world-models", "label": "World Models survey"}],
+        },
+    )
+    assert explicit.json()["brief"]["planId"] == "plan-explicit"
+
+
 def test_research_brief_updates_in_place_and_keeps_one_asset(tmp_path: Path) -> None:
     client = _client(tmp_path / "data")
     context = _seed_context(client, tmp_path / "roots", "update")

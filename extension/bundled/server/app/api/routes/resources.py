@@ -442,6 +442,46 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         refresh_asset_sessions(asset)
         return {"asset": asset_response(asset)}
 
+    def resolve_active_plan_link(context: str | None) -> tuple[str, str]:
+        """P2.6: research conclusions auto-link to the workspace's live plan.
+
+        A Research Brief saved without an explicit plan/stage inherits the
+        workspace's latest formal plan and its current stage, so research
+        output lands where the learner is actually learning — no manual
+        linking step, and a second plan store is never invented.
+        """
+        if not context:
+            return "", ""
+        try:
+            plan = runtime.repository.get_latest_plan(context)
+        except Exception:
+            return "", ""
+        if plan is None:
+            return "", ""
+        plan_id = str(getattr(plan, "id", "") or getattr(plan, "plan_id", "") or "").strip()
+        if not plan_id:
+            return "", ""
+        stage_id = str(getattr(plan, "current_stage_id", None) or "").strip()
+        if not stage_id:
+            stage = next(
+                (item for item in (getattr(plan, "stages", None) or [])
+                 if getattr(item, "status", "") == "active"),
+                None,
+            )
+            stage_id = str(getattr(stage, "id", "") or "").strip() if stage else ""
+        return plan_id, stage_id
+
+    def link_brief_to_active_plan(brief: ResearchBrief, context: str | None) -> ResearchBrief:
+        if brief.plan_id:
+            return brief
+        plan_id, stage_id = resolve_active_plan_link(context)
+        if not plan_id:
+            return brief
+        return brief.model_copy(update={
+            "plan_id": plan_id,
+            "stage_id": stage_id or None,
+        })
+
     def research_brief_response(asset: LibraryAsset) -> dict[str, object]:
         payload = asset_response(asset)
         try:
@@ -454,6 +494,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
     def save_research_brief(request: ResearchBriefUpsertRequest) -> dict[str, object]:
         """Persist one research/lesson-prep result as a ``research_brief`` asset."""
         project_id, context_id = resolve_asset_context_identity(request.project_id, request.context_id)
+        brief = link_brief_to_active_plan(request.brief, context_id)
         upsert = LibraryAssetUpsertRequest(
             assetId=request.asset_id,
             assetType="research_brief",
@@ -462,7 +503,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             sourceChain=request.source_chain,
             projectId=project_id,
             contextId=context_id,
-            payload=request.brief.model_dump(by_alias=True, mode="json"),
+            payload=brief.model_dump(by_alias=True, mode="json"),
             approved=request.approved,
         )
         try:
@@ -689,6 +730,8 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
         if not request.save:
             return {"brief": brief.model_dump(by_alias=True, mode="json"), "saved": False}
 
+        # P2.6: the drafted conclusions inherit the workspace's live plan link.
+        brief = link_brief_to_active_plan(brief, context_id)
         title = request.title or (goal[:60] or "Research brief")
         upsert = LibraryAssetUpsertRequest(
             assetId=request.asset_id,

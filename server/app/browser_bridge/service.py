@@ -54,6 +54,7 @@ _MAX_ACKED_DRAFT_IDS = 200
 _DRAFT_SELECTION_LIMIT = 1200
 _DRAFT_TITLE_LIMIT = 160
 _DRAFT_QUESTION_LIMIT = 500
+_SOURCE_KINDS = frozenset({"web", "pdf", "github_repo"})
 # Workspace and client id are joined with NUL: repository paths never contain
 # it, so ("ws-a", "1") and ("ws-a\01", "") cannot collide.
 _DRAFT_DEDUPE_SEPARATOR = "\u0000"
@@ -121,6 +122,7 @@ class _PendingDraft:
     title: str = ""
     selection: str = ""
     question: str = ""
+    source_kind: str = ""
 
     def as_payload(self) -> dict[str, str]:
         result = {"id": self.id, "workspace_id": self.workspace_id, "text": self.text}
@@ -128,6 +130,8 @@ class _PendingDraft:
             result.update(url=self.url, title=self.title, selection=self.selection)
         if self.question:
             result["question"] = self.question
+        if self.source_kind and self.source_kind != "web":
+            result["source_kind"] = self.source_kind
         return result
 
 
@@ -577,6 +581,7 @@ class BrowserBridgeService:
         client_id: str = "",
         language: str | None = None,
         question: str = "",
+        source_kind: str = "",
     ) -> dict[str, object]:
         normalized_workspace = str(workspace_id or "").strip()
         if not normalized_workspace:
@@ -591,6 +596,9 @@ class BrowserBridgeService:
             source_url = ""
         source_title = " ".join(str(title or "").split())[:_DRAFT_TITLE_LIMIT]
         learner_question = " ".join(str(question or "").split())[:_DRAFT_QUESTION_LIMIT]
+        normalized_source_kind = str(source_kind or "").strip().lower()
+        if normalized_source_kind not in _SOURCE_KINDS:
+            normalized_source_kind = "web"
         if not excerpt and not source_url:
             raise BrowserPairingError(
                 "empty_selection",
@@ -630,6 +638,7 @@ class BrowserBridgeService:
                 title=source_title,
                 language=language,
                 question=learner_question,
+                source_kind=normalized_source_kind,
             )
             draft = _PendingDraft(
                 id=f"draft-{uuid4().hex[:12]}",
@@ -641,6 +650,7 @@ class BrowserBridgeService:
                 title=source_title,
                 selection=excerpt,
                 question=learner_question,
+                source_kind=normalized_source_kind,
             )
             self._pending_drafts.append(draft)
             self._write_state_locked()
@@ -694,48 +704,64 @@ _DRAFT_TEMPLATES: dict[str, dict[str, str]] = {
         "source_line": "来源：{url}",
         "ask": "请结合这段内容解释关键概念，并告诉我下一步该练什么。",
         "fallback_source": "选中的内容",
+        "pdf_source": "PDF 文档",
+        "github_source": "GitHub 仓库",
     },
     "en-US": {
         "intro": "Help me understand this excerpt (from \u201c{source}\u201d):",
         "source_line": "Source: {url}",
         "ask": "Explain the key ideas here and suggest what I should practise next.",
         "fallback_source": "the captured page",
+        "pdf_source": "PDF document",
+        "github_source": "GitHub repository",
     },
     "es-ES": {
         "intro": "Ayudame a entender este fragmento (de \u00ab{source}\u00bb):",
         "source_line": "Fuente: {url}",
         "ask": "Explica las ideas clave y sugiere que deberia practicar a continuacion.",
         "fallback_source": "la pagina capturada",
+        "pdf_source": "documento PDF",
+        "github_source": "repositorio de GitHub",
     },
     "fr-FR": {
         "intro": "Aide-moi a comprendre cet extrait (de \u00ab {source} \u00bb) :",
         "source_line": "Source : {url}",
         "ask": "Explique les idees cles et suggere ce que je devrais pratiquer ensuite.",
         "fallback_source": "la page capturee",
+        "pdf_source": "document PDF",
+        "github_source": "dépôt GitHub",
     },
     "de-DE": {
         "intro": "Hilf mir, diesen Ausschnitt zu verstehen (aus \u201e{source}\u201c):",
         "source_line": "Quelle: {url}",
         "ask": "Erklare die Kernideen und schlage vor, was ich als Nachstes uben sollte.",
         "fallback_source": "die erfasste Seite",
+        "pdf_source": "PDF-Dokument",
+        "github_source": "GitHub-Repository",
     },
     "ja-JP": {
         "intro": "この抜粋を理解したいです（出典：{source}）：",
         "source_line": "出典：{url}",
         "ask": "重要な考え方を説明し、次に何を練習すべきか教えてください。",
         "fallback_source": "取り込んだページ",
+        "pdf_source": "PDF ドキュメント",
+        "github_source": "GitHub リポジトリ",
     },
     "ko-KR": {
         "intro": "이 발췌를 이해하고 싶어요(출처: {source}):",
         "source_line": "출처: {url}",
         "ask": "핵심 개념을 설명하고 다음에 무엇을 연습해야 할지 알려 주세요.",
         "fallback_source": "캡처한 페이지",
+        "pdf_source": "PDF 문서",
+        "github_source": "GitHub 리포지토리",
     },
     "pt-BR": {
         "intro": "Ajude-me a entender este trecho (de \u201c{source}\u201d):",
         "source_line": "Fonte: {url}",
         "ask": "Explique as ideias principais e sugira o que devo praticar em seguida.",
         "fallback_source": "a pagina capturada",
+        "pdf_source": "documento PDF",
+        "github_source": "repositório do GitHub",
     },
 }
 
@@ -759,6 +785,7 @@ def build_coach_draft_text(
     title: str = "",
     language: str | None = None,
     question: str = "",
+    source_kind: str = "",
 ) -> str:
     """Compose the pre-filled, editable coach draft for one selection.
 
@@ -772,7 +799,14 @@ def build_coach_draft_text(
     """
 
     template = _draft_template(language)
-    source_label = title or url or template["fallback_source"]
+    source_label = title
+    if not source_label:
+        # P4: a PDF document or GitHub repo page without a title names its
+        # kind (not a bare URL), so the coach knows what it is looking at.
+        kind_key = {"pdf": "pdf_source", "github_repo": "github_source"}.get(
+            str(source_kind or "").strip().lower()
+        )
+        source_label = template.get(kind_key) or url or template["fallback_source"]
     ask_line = str(question or "").strip() or template["ask"]
     quote = "\n".join(f"> {line}" if line else ">" for line in selection.splitlines())
     lines = [template["intro"].format(source=source_label), "", quote, ""] if quote else []

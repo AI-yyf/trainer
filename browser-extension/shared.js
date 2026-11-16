@@ -1754,12 +1754,14 @@
     if (!selection && !httpUrlOnly(url)) {
       return null;
     }
+    const queuedKind = String(source.sourceKind || '').trim();
     return {
       clientDraftId: String(source.clientDraftId || createCoachDraftId()),
       selection,
       url,
       title: String(source.title || '').trim(),
       question: String(source.question || '').trim().slice(0, LIMITS.askQuestion),
+      sourceKind: queuedKind === 'pdf' || queuedKind === 'github_repo' ? queuedKind : '',
       workspaceId: String(source.workspaceId || '').trim(),
       createdAt: String(source.createdAt || new Date().toISOString()),
       attempts: Number.isFinite(source.attempts) ? Math.trunc(source.attempts) : 0,
@@ -1899,14 +1901,17 @@
       return null;
     }
     // Ask Trainer (P4): the learner's typed question rides with the staged
-    // page context and becomes the draft's ask line on the host side.
+    // page context and becomes the draft's ask line on the host side. The
+    // source kind (web / pdf / github_repo) tells Trainer what it is looking at.
     const question = String(source.question || '').trim().slice(0, LIMITS.askQuestion);
+    const kind = String(source.sourceKind || '').trim();
     return {
       selection,
       url,
       title: String(source.title || '').trim(),
       client_id: String(source.clientId || createCoachDraftId()),
-      ...(question ? { question } : {})
+      ...(question ? { question } : {}),
+      ...(kind === 'pdf' || kind === 'github_repo' ? { source_kind: kind } : {})
     };
   }
 

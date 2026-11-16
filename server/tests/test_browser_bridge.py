@@ -520,6 +520,74 @@ def test_ask_trainer_question_replaces_the_ask_line_and_rides_the_queue(tmp_path
     assert "Explain the key ideas here" in default_text
 
 
+def test_ask_trainer_source_kind_names_pdf_and_github_pages(tmp_path) -> None:
+    """P4: PDF documents and GitHub repos name their kind in the staged ask."""
+    with build_client(tmp_path) as client:
+        token = _pair(client, "workspace-ask-sources", code="667788")
+        headers = {"Authorization": f"Bearer {token}"}
+        pdf = client.post(
+            "/browser/coach-draft",
+            json={
+                "selection": "The loss saturates when the ratio clips.",
+                "url": "https://papers.example.com/ppo.pdf",
+                "client_id": "ask-pdf-1",
+                "question": "clip 在梯度中的作用是什么？",
+                "source_kind": "pdf",
+            },
+            headers=headers,
+        )
+        assert pdf.status_code == 200, pdf.text
+
+        github = client.post(
+            "/browser/coach-draft",
+            json={
+                "url": "https://github.com/example/repo",
+                "client_id": "ask-github-1",
+                "question": "这个仓库的训练入口在哪里？",
+                "source_kind": "github_repo",
+            },
+            headers=headers,
+        )
+        assert github.status_code == 200, github.text
+
+        pending = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-ask-sources"},
+        )
+        drafts = {draft.get("question", ""): draft for draft in pending.json()["drafts"]}
+        pdf_draft = drafts["clip 在梯度中的作用是什么？"]
+        assert pdf_draft["source_kind"] == "pdf"
+        # No title: the draft names the document kind in the draft language.
+        assert "PDF document" in pdf_draft["text"]
+
+        github_draft = drafts["这个仓库的训练入口在哪里？"]
+        assert github_draft["source_kind"] == "github_repo"
+        assert "GitHub repository" in github_draft["text"]
+        assert "https://github.com/example/repo" in github_draft["text"]
+
+        # An unknown kind falls back to web and stays out of the payload.
+        plain = client.post(
+            "/browser/coach-draft",
+            json={
+                "selection": "plain page",
+                "url": "https://docs.example.com",
+                "client_id": "ask-web-1",
+                "source_kind": "database",
+            },
+            headers=headers,
+        )
+        assert plain.status_code == 200, plain.text
+        pending = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-ask-sources"},
+        )
+        web_draft = next(
+            draft for draft in pending.json()["drafts"] if draft.get("question", "") == ""
+        )
+        assert "source_kind" not in web_draft
+        assert "Explain the key ideas here" in web_draft["text"]
+
+
 def test_coach_draft_route_uses_the_workspace_response_language(tmp_path) -> None:
     with build_client(tmp_path) as client:
         token = _pair(client, "workspace-bridge-draft-language", code="202020")

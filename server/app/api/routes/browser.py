@@ -348,8 +348,10 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
                 client_id=str(body.get("client_id") or body.get("clientId") or ""),
                 language=str(language) if language else None,
                 # Ask Trainer (P4): the learner's own question replaces the
-                # default ask line in the staged draft.
+                # default ask line in the staged draft; the source kind tells
+                # Trainer whether the page is a PDF document or a GitHub repo.
                 question=str(body.get("question") or body.get("learner_question") or ""),
+                source_kind=str(body.get("source_kind") or body.get("sourceKind") or ""),
             )
         except BrowserPairingError as exc:
             raise HTTPException(

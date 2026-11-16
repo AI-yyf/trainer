@@ -810,6 +810,7 @@ async function flushQueueLocked(options) {
       url: draft.url,
       title: draft.title,
       question: draft.question,
+      sourceKind: draft.sourceKind,
       clientId: draft.clientDraftId
     });
     const result = await TrainerCapture.sendCoachDraft(auth.baseUrl, auth.credential, payload);
@@ -1253,11 +1254,14 @@ async function coachDraft(info, tab) {
   if (auto.ok) {
     auth = auto.auth;
   }
+  const pageUrl = String(info.pageUrl || (tab && tab.url) || '');
   const payload = TrainerCapture.buildCoachDraftPayload({
     selection,
-    url: String(info.pageUrl || (tab && tab.url) || ''),
+    url: pageUrl,
     title: tab && tab.title ? String(tab.title) : '',
     question,
+    // P4: the Ask entry knows when the page is a PDF document or a GitHub repo.
+    sourceKind: TrainerCapture.detectKind(pageUrl),
     clientId: TrainerCapture.createCoachDraftId()
   });
 
@@ -1268,6 +1272,7 @@ async function coachDraft(info, tab) {
       url: payload.url,
       title: payload.title,
       question,
+      sourceKind: payload.source_kind || '',
       workspaceId: auth.workspaceId || ''
     });
     const enqueued = await withQueueLock(async () => {

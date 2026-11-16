@@ -452,9 +452,29 @@ test('ask trainer question rides the draft payload and the offline queue item', 
     clientDraftId: 'ask-q-1',
     selection: 'Selection text.',
     url: 'https://rl.example.com/third',
-    question: '为什么会这样？'
+    question: '为什么会这样？',
+    sourceKind: 'pdf'
   });
   assert.equal(queued.question, '为什么会这样？');
+  assert.equal(queued.sourceKind, 'pdf');
+  // P4: PDF and GitHub pages carry their source kind on the wire.
+  const pdfPayload = TrainerCapture.buildCoachDraftPayload({
+    selection: 'clip saturates',
+    url: 'https://papers.example.com/ppo.pdf',
+    sourceKind: TrainerCapture.detectKind('https://papers.example.com/ppo.pdf')
+  });
+  assert.equal(pdfPayload.source_kind, 'pdf');
+  const githubPayload = TrainerCapture.buildCoachDraftPayload({
+    url: 'https://github.com/example/repo',
+    sourceKind: TrainerCapture.detectKind('https://github.com/example/repo')
+  });
+  assert.equal(githubPayload.source_kind, 'github_repo');
+  const webPayload = TrainerCapture.buildCoachDraftPayload({
+    selection: 'plain page',
+    url: 'https://docs.example.com',
+    sourceKind: TrainerCapture.detectKind('https://docs.example.com')
+  });
+  assert.equal('source_kind' in webPayload, false);
   const queuedBare = TrainerCapture.createDraftQueueItem({
     clientDraftId: 'ask-q-2',
     selection: 'Selection text.'
