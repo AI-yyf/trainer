@@ -86,6 +86,11 @@ def message_requests_lecture_note_save(message: str | None) -> bool:
     )
     if any(re.search(pattern, lowered) for pattern in english_patterns):
         return True
+    chinese_patterns = (
+        r"(?:保存|存成|存为|存进|存入|存到|整理成|沉淀为|沉淀到|写成).{0,16}(?:资料库|笔记|讲稿|markdown|\.md)",
+    )
+    if any(re.search(pattern, lowered) for pattern in chinese_patterns):
+        return True
     chinese_phrases = (
         "\u6574\u7406\u6210\u7b14\u8bb0",
         "\u6574\u7406\u6210\u8bb2\u7a3f",

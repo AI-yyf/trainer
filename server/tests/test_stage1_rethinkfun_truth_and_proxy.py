@@ -215,3 +215,55 @@ def test_ignore_system_proxy_bypasses_trust_env_and_surfaces_proxy_hint(monkeypa
         response_language="zh-CN",
     )
     assert "忽略系统代理" not in detail_direct
+
+
+def test_english_system_prompt_contains_no_cjk_characters() -> None:
+    import re
+
+    profile = UserProfile(long_term_goal="Understand attention scaling")
+    for context in ({"context_tier": "minimal"}, {}):
+        prompt = build_coaching_system_prompt(
+            profile,
+            message="Explain why scaled dot-product attention divides by sqrt(d_k).",
+            response_language="en-US",
+            coach_context=context,
+            agent_loop_enabled=True,
+        )
+        assert not re.search(r"[\u3400-\u9fff]", prompt)
+
+
+def test_rethinkfun_deep_lecture_grants_generous_output_token_budget() -> None:
+    standard_cfg = ProviderConfig.model_validate(
+        {
+            "name": "std",
+            "baseUrl": "https://api.example.com/v1",
+            "apiKeyRef": "trainer.std",
+            "model": "gpt-4.1-mini",
+        }
+    )
+    minimax_cfg = ProviderConfig.model_validate(
+        {
+            "name": "mm",
+            "baseUrl": "https://api.example.com/v1",
+            "apiKeyRef": "trainer.mm",
+            "model": "MiniMax-M2.7",
+        }
+    )
+    std_svc = ProviderService(standard_cfg, api_key="sk-test")
+    mm_svc = ProviderService(minimax_cfg, api_key="sk-test")
+
+    # Fast Q&A stays on the compact default budget (None -> 1024).
+    assert std_svc._coaching_requested_output_tokens("with 退出时会释放锁吗？") is None
+    assert mm_svc._coaching_requested_output_tokens("with 退出时会释放锁吗？") is None
+
+    # Deep RethinkFun lecture grants headroom so reasoning + derivation + code never truncates.
+    lecture_prompt = "请用状态流方式彻底讲明白 Scaled Dot-Product Attention 的公式推导与代码实现"
+    assert std_svc._coaching_requested_output_tokens(lecture_prompt) == 4096
+    assert mm_svc._coaching_requested_output_tokens(lecture_prompt) == 8192
+    assert mm_svc._coaching_requested_output_tokens("帮我核查掌握进度的具体证据", agent_loop_enabled=True) == 4096
+
+    from app.api.router_support import _message_requests_single_composer_truth_or_note
+
+    assert _message_requests_single_composer_truth_or_note("帮我核查完整学习计划阶段和掌握进度的具体验证证据") is True
+    assert _message_requests_single_composer_truth_or_note("请把讲稿保存成我资料库里的 Markdown 笔记") is True
+    assert _message_requests_single_composer_truth_or_note("with 退出时会释放锁吗？") is False

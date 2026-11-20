@@ -6016,7 +6016,8 @@ export function App() {
         : providerSupportsFormalPlanTools &&
             (laneNeedsVerifiedTools ||
               data.resources.length > 0 ||
-              messageReferencesWorkspaceFile(text))
+              messageReferencesWorkspaceFile(text) ||
+              /完整(学习)?(计划|路线)|哪些阶段|完成了哪些|掌握(度|进度).{0,8}(证据|依据)|具体(验证)?证据|复习依据|(保存|存成|存进|整理成).{0,10}(资料库|笔记|markdown|\.?md)|(all|completed)\s+stages|learning\s+roadmap|mastery\s+evidence|save.{0,16}(lecture|study)?\s*note/i.test(text))
           ? true
           : undefined,
       requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,

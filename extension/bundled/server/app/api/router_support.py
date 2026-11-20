@@ -17,6 +17,7 @@ from ..learner_state import learner_memory_snapshot
 from ..llm.provider_service import (
     ProviderService,
 )
+from ..memory.note_request import message_requests_lecture_note_save
 from ..memory.workspace_recovery import (
     CURRENT_TASK_KEY,
     PLAN_RUNTIME_KEY,
@@ -425,9 +426,29 @@ def _resolve_agent_loop_enabled(
         # buffered and streaming paths. The previous non-streaming branch
         # accepted any keyed provider, then failed later inside tool binding.
         return bool(request.use_agent_loop) and provider_supports_tools
+    message_text = str(getattr(request, "message", "") or "")
+    if provider_supports_tools and _message_requests_single_composer_truth_or_note(message_text):
+        return True
     # Plan discussion and Training feedback stay on the model stream unless the
     # host asked for tools. Resources/library work is handled above.
     return False
+
+
+_SINGLE_COMPOSER_TRUTH_QUERY_RE = re.compile(
+    r"完整(?:学习)?(?:计划|路线)|哪些阶段|完成了哪些|掌握(?:度|进度).{0,8}(?:证据|依据)"
+    r"|具体(?:验证)?证据|复习依据|(?:all|completed)\s+stages|learning\s+roadmap|mastery\s+evidence",
+    re.IGNORECASE,
+)
+
+
+def _message_requests_single_composer_truth_or_note(message: str) -> bool:
+    text = str(message or "").strip()
+    if not text:
+        return False
+    return bool(
+        message_requests_lecture_note_save(text)
+        or _SINGLE_COMPOSER_TRUTH_QUERY_RE.search(text)
+    )
 
 
 def _request_requires_agent_tools(request: TurnRequest | SessionMessageRequest) -> bool:

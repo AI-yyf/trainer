@@ -109,6 +109,7 @@ from .library_practice import (
     remove_model_practice,
 )
 from .prompts import (
+    _is_rethinkfun_lecture_request,
     build_coaching_messages,
     extract_coaching_context,
     infer_learner_signal,
@@ -237,6 +238,7 @@ DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS = 45.0
 DEFAULT_OPENAI_CLIENT_MAX_RETRIES = 0
 MIN_OPENAI_CLIENT_TIMEOUT_SECONDS = 5.0
 FORMAL_PLAN_OUTPUT_TOKENS = 4096
+LECTURE_OUTPUT_TOKENS = 4096
 # Generation (chat completions, streams, agent turns) carries NO designed
 # read-time ceiling: reasoning-first models think for as long as the task
 # needs, and a fixed read cap converts long reasoning into a false timeout
@@ -1268,6 +1270,34 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         if self._config is not None and _model_looks_reasoning_first(self._config):
             return max(default, 8192)
         return default
+
+    def _coaching_requested_output_tokens(
+        self,
+        message: str,
+        coach_context: dict[str, Any] | None = None,
+        *,
+        analysis_requested: bool = False,
+        agent_loop_enabled: bool = False,
+    ) -> int | None:
+        """Grant sufficient output headroom for deep RethinkFun lectures,
+        formal-plan updates, library analysis, and reasoning-first agentic turns
+        without inflating fast Q&A."""
+        generous_model = (
+            self._config is not None and _needs_generous_visible_probe_budget(self._config)
+        )
+        if (coach_context or {}).get("formal_plan_mutation") is True:
+            base = FORMAL_PLAN_OUTPUT_TOKENS
+            if generous_model:
+                return max(base, 8192)
+            return self.recommended_generation_max_tokens(base)
+        if analysis_requested or _is_rethinkfun_lecture_request(message):
+            base = LECTURE_OUTPUT_TOKENS
+            if generous_model:
+                return max(base, 8192)
+            return self.recommended_generation_max_tokens(base)
+        if agent_loop_enabled and generous_model:
+            return 4096
+        return None
 
     @staticmethod
     def _escalated_chat_budget(requested: int | None) -> int | None:
@@ -3405,6 +3435,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             messages, max_tokens = self._prepare_context_budget(
                 messages,
                 model=model,
+                requested_max_tokens=self._coaching_requested_output_tokens(message, coach_context),
                 prefer_configured_output=True,
             )
             if self._plain_completion_uses_agent_binding():
@@ -4678,6 +4709,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             messages, max_tokens = self._prepare_context_budget(
                 messages,
                 model=model,
+                requested_max_tokens=self._coaching_requested_output_tokens(message, coach_context),
                 prefer_configured_output=True,
             )
             if self._plain_completion_uses_agent_binding():
@@ -5134,8 +5166,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         try:
             messages, max_tokens = self._prepare_context_budget(
                 messages,
-                requested_max_tokens=(
-                    FORMAL_PLAN_OUTPUT_TOKENS if (coach_context or {}).get("formal_plan_mutation") is True else None
+                requested_max_tokens=self._coaching_requested_output_tokens(
+                    message,
+                    coach_context,
+                    agent_loop_enabled=True,
                 ),
                 prefer_configured_output=True,
             )
@@ -5711,8 +5745,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         try:
             messages, max_tokens = self._prepare_context_budget(
                 messages,
-                requested_max_tokens=(
-                    FORMAL_PLAN_OUTPUT_TOKENS if (coach_context or {}).get("formal_plan_mutation") is True else None
+                requested_max_tokens=self._coaching_requested_output_tokens(
+                    message,
+                    coach_context,
+                    agent_loop_enabled=True,
                 ),
                 prefer_configured_output=True,
             )
@@ -6502,16 +6538,19 @@ async def _provider_service_coaching_reply_stream(
         and isinstance(resource_intent, dict)
         and resource_intent.get("mode") == "analyze"
     )
-    # Analyze turns can compare several passages and generate teaching checks in
-    # one reply. Keep the narrow default for conversations and library lookups.
-    output_budget = 4096 if analysis_requested else DEFAULT_COACHING_MAX_OUTPUT_TOKENS
+    output_budget = (
+        self._coaching_requested_output_tokens(
+            message,
+            coach_context,
+            analysis_requested=analysis_requested,
+        )
+        or self.recommended_generation_max_tokens(DEFAULT_COACHING_MAX_OUTPUT_TOKENS)
+    )
     try:
         messages, max_tokens = self._prepare_context_budget(
             messages,
             model=model,
-            requested_max_tokens=self.recommended_generation_max_tokens(
-                output_budget
-            ),
+            requested_max_tokens=output_budget,
             prefer_configured_output=True,
         )
         if self._plain_completion_uses_agent_binding():

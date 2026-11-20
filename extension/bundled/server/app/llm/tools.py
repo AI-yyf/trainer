@@ -7119,9 +7119,11 @@ def build_default_tool_registry(
                 "Read-only authoritative view of the learner's real learning state in "
                 "this workspace: full plan stages (completed, active, upcoming), active "
                 "goal, 4-dimension capability states, concrete verified evidence records, "
-                "FSRS due reviews with rationale, and active practice. Call this whenever "
+                "due reviews with rationale, and active practice. Call this whenever "
                 "the learner asks from the composer about their full roadmap, completed "
-                "stages, which evidence supports a capability rating, or why an item is due for review."
+                "stages, which evidence supports a capability rating, or why an item is due for review. "
+                "In your reply, translate internal schema keys into natural learner-facing language "
+                "(never echo raw keys like handoff, evidence_records, insufficient_evidence, fsrs, or internal IDs)."
             ),
             parameters={
                 "type": "object",
@@ -7148,7 +7150,8 @@ def build_default_tool_registry(
                 "Trainer Library (<LibraryRoot>/Trainer Library/, never into the user's "
                 "code repository) and index it immediately. Use only when the learner "
                 "explicitly asks to save a lecture, deep explanation, or study note into "
-                "their Resources library."
+                "their Resources library. After it succeeds, write your full learner-facing "
+                "explanation directly in plain text (do not call coach_finalize)."
             ),
             parameters={
                 "type": "object",
@@ -7308,11 +7311,12 @@ def build_default_tool_registry(
         ToolDefinition(
             name="coach_finalize",
             description=(
-                "Signal the end of the agent's tool-calling phase. Use it "
-                "last, once you already have enough evidence to close the "
-                "turn. Provide a short summary and a concrete next step, and "
-                "add grounded decision, blocker, teaching note, confidence, "
-                "resume thread, or evidence bullets when they will help the learner resume."
+                "Optional short structured close. Use it last ONLY when a brief 2-3 sentence "
+                "metadata summary is enough (such as after save_formal_plan). Do NOT call "
+                "coach_finalize for explanations, RethinkFun lectures, code diagnostics, or "
+                "learning-truth reports — calling it ends the turn with only its short "
+                "summary/decision/teaching_note fields; for full answers, reply directly in "
+                "plain text with no tool calls."
             ),
             parameters={
                 "type": "object",
