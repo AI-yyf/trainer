@@ -69,14 +69,15 @@ function learningPlan(action, extra = {}) {
 }
 function navigation() {
   const mapping = load('lib/workbenchDestinations.ts');
-  assert.deepEqual(mapping.PRIMARY_DESTINATIONS, ['coach', 'plan', 'resources']);
+  assert.deepEqual(mapping.PRIMARY_DESTINATIONS, ['coach', 'resources']);
   for (const route of ['coach', 'plan', 'resources', 'training', 'progress', 'settings']) {
-    const html = render('templates/AppShell.tsx', 'AppShell', { language: 'en-US', direction: 'ltr', activeView: route, historyOpen: false, onHistory() {}, onNavigate() {}, children: null });
+    const html = render('templates/AppShell.tsx', 'AppShell', { language: 'en-US', direction: 'ltr', activeView: route, historyOpen: false, onHistory() {}, onLearning() {}, onNavigate() {}, children: null });
     const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
-    assert.equal((nav.match(/<button/g) || []).length, 3);
+    assert.equal((nav.match(/<button/g) || []).length, 2);
+    assert.ok(html.includes('trainer-learning-toggle'));
     assert.ok(html.includes('trainer-history-toggle'));
     assert.ok(html.includes('trainer-view-nav-settings'));
-    assert.equal(mapping.primaryDestinationForRoute(route), route === 'settings' ? null : ['training', 'progress'].includes(route) ? 'plan' : route);
+    assert.equal(mapping.primaryDestinationForRoute(route), route === 'settings' ? null : route === 'resources' ? 'resources' : 'coach');
   }
 }
 function practice() {

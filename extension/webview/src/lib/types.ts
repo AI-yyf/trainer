@@ -1,4 +1,5 @@
 import type { LearningActivity, ResourceVersionCheckResult } from "../../../../shared/src/models";
+import type { ResearchBriefView, ResearchCitationPin, ResearchPreparation } from "../../../../shared/src/researchBrief";
 import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from "../../../../shared/src/webviewSync";
 import type { TrainerCommandCatalogItem } from "../../../../shared/src/commands";
 import type { CompanionInstallState } from "../../../../shared/src/companionInstallState";
@@ -941,6 +942,7 @@ export interface CoachingAdaptationView {
 
 export interface MemorySnapshot {
   learningActivity?: LearningActivity[];
+  researchBriefs?: ResearchBriefView[];
   currentFocus: string;
   weakSpots: string[];
   recentWins: string[];
@@ -1210,6 +1212,7 @@ export interface TrainingCardCandidate {
   title: string;
   whyNow?: string;
   status?: string;
+  reviewState?: "pending" | "deferred" | "saved" | "rejected";
   /** P1.4 candidate management: learner-controlled flags, server-owned. */
   important?: boolean;
   cardPriority?: number;
@@ -1516,6 +1519,8 @@ export interface ConversationMessage {
   body: string;
   timestamp: string;
   sourceView?: ActiveWorkbenchView;
+  sourceResourceIds?: string[];
+  researchPreparation?: ResearchPreparation;
   parts?: TrainerMessagePart[];
   attachments?: Array<{
     label: string;
@@ -1547,6 +1552,12 @@ export interface ConversationMessage {
     metadata?: Record<string, unknown>;
   }>;
   contextNote?: string;
+  /**
+   * The visible source footnote of a sent turn ("参考了当前 Python 文件上下文",
+   * the resources it drew on). It is a separate channel from `contextNote`:
+   * that one carries internal management context and never reaches the reader.
+   */
+  sourceNote?: string;
   /** Server-side turn metadata (coach focus / next step / review rhythm). */
   metadata?: Record<string, unknown>;
   support?: {
@@ -1647,21 +1658,30 @@ export const COACH_FIRST_SIDEBAR_VIEWS = WORKBENCH_ROUTES;
 export type SidebarView = (typeof WORKBENCH_ROUTES)[number];
 export type ActiveWorkbenchView = SidebarView;
 
+/** The three learning states live inside Chat, not in primary navigation. */
+export type LearningSection = "goal" | "practice" | "progress";
+
+/**
+ * Legacy learning routes still arrive from host restore, slash commands and
+ * deep links. They no longer select a surface; they open the learning drawer.
+ */
+export function normalizeLearningSection(
+  value: SidebarView | string | null | undefined,
+): LearningSection | null {
+  if (value === "plan") return "goal";
+  if (value === "training" || value === "practice") return "practice";
+  if (value === "progress") return "progress";
+  return null;
+}
+
 export function normalizeSidebarView(
   value: SidebarView | string | null | undefined,
 ): SidebarView {
-  if (value === "practice") {
-    return "training";
-  }
-  if (
-    value === "plan" ||
-    value === "resources" ||
-    value === "training" ||
-    value === "progress" ||
-    value === "settings"
-  ) {
+  if (value === "resources" || value === "settings" || value === "coach") {
     return value;
   }
+  // plan / training / progress / practice are compatibility aliases; the
+  // caller keeps the intent via normalizeLearningSection().
   return "coach";
 }
 
@@ -2015,6 +2035,9 @@ export interface UiLayoutState {
 }
 
 export interface PersistedWorkbenchState extends UiLayoutState {
+  /** The single learning drawer (goal / practice / progress) lives over Chat. */
+  learningDrawerOpen?: boolean;
+  learningSection?: LearningSection;
   composerDraft: string;
   composerDraftScope?: string;
   composerDrafts?: Record<string, string>;
@@ -2184,9 +2207,8 @@ type WebviewActionBody =
       type: "resource/open";
       payload: {
         resourceId: string;
-        openOriginal?: boolean;
-        openExternal?: boolean;
         line?: number;
+        researchCitation?: ResearchCitationPin;
       };
     }
   | { type: "ui/focus"; payload: { target: "conversation" | "task" | "evaluation" } }
@@ -2214,6 +2236,38 @@ export interface HostProviderTestSummary {
   errorCategory?: string;
   statusCode?: number;
   retryable?: boolean;
+}
+
+/**
+ * One Markdown-only library migration summary.
+ *
+ * `preview` is the dry-run: counts plus the backup manifest the server would
+ * write. `completed` is the finished migration, including the resources that
+ * failed — a failed resource is reported, never silently dropped.
+ */
+export interface LibraryMigrationSummary {
+  status?: "preview" | "confirmation_required" | "complete" | "partial";
+  workspace_id?: string;
+  dry_run?: boolean;
+  resources?: number;
+  originals_to_delete?: number;
+  records_to_mark?: number;
+  convertible?: number;
+  /** Originals kept because no canonical Markdown stands behind them. */
+  originals_kept?: number;
+  kept_originals?: string[];
+  manifest?: Array<Record<string, unknown>>;
+  manifest_path?: string;
+  failures?: Array<Record<string, unknown>>;
+}
+
+/** The host's answer to one migration request, correlated by `operationId`. */
+export interface LibraryMigrationHostAnswer {
+  ok: boolean;
+  message: string;
+  summary?: LibraryMigrationSummary;
+  /** No answer inside the bounded window: the migration is unconfirmed, not failed. */
+  unconfirmed?: boolean;
 }
 
 export type HostMessage = HostMessageBody & { scope?: WebviewSyncCursor; operation?: WebviewOperationIdentity; operationPhase?: WebviewOperationPhase };
@@ -2275,6 +2329,22 @@ type HostMessageBody =
   | {
       type: "library/folders";
       payload: { operationId?: string; ok: boolean; folders?: unknown; message?: string };
+    }
+  /**
+   * Answer to one Markdown-only library migration request. Correlated by the
+   * command payload's `operationId`, the same pattern as `library/folders`.
+   * The summary carries the dry-run preview (counts + backup manifest) or the
+   * finished migration, including the resources that failed instead of being
+   * deleted.
+   */
+  | {
+      type: "library/migration";
+      payload: {
+        operationId?: string;
+        ok: boolean;
+        message?: string;
+        summary?: LibraryMigrationSummary;
+      };
     }
   | {
       type: "resource/projectStructure";

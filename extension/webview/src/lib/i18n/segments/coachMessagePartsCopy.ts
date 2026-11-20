@@ -394,6 +394,15 @@ export const COACH_MESSAGE_PARTS_TEXT: Record<string, Record<string, string>> = 
     "ko-KR": "자료가 업데이트됨",
     "pt-BR": "recurso atualizado",
   },
+  "原文不可用": {
+    "en-US": "Source unavailable",
+    "es-ES": "Fuente no disponible",
+    "fr-FR": "Source indisponible",
+    "de-DE": "Quelle nicht verfügbar",
+    "ja-JP": "原文を利用できません",
+    "ko-KR": "원문을 사용할 수 없음",
+    "pt-BR": "Fonte indisponível",
+  },
   "资料已删除": {
     "en-US": "resource deleted",
     "es-ES": "recurso eliminado",

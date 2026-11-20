@@ -93,6 +93,9 @@ export function useOperationStatusController(): OperationStatusController {
   return {
     operationMessage,
     operationMessageSurface,
+    // "training" and "plan" notices belong to the learning surface, which now
+    // lives in the learning drawer over Chat. They are rendered by that
+    // section, so they never take over the global banner.
     operationMessageVisible:
       operationMessageSurface === "global" || operationMessageSurface === activeView,
     setOperationMessage,

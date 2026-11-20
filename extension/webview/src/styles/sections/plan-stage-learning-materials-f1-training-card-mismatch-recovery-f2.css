@@ -96,7 +96,7 @@
   margin: 0 0 var(--space-2);
   padding: 7px 10px;
   border: 1px solid color-mix(in srgb, var(--danger) 46%, transparent);
-  border-left: 2px solid color-mix(in srgb, var(--danger) 62%, transparent);
+  border-inline-start: 2px solid color-mix(in srgb, var(--danger) 62%, transparent);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }

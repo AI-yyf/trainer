@@ -170,7 +170,7 @@
   margin-top: var(--space-2);
   padding: 0 0 0 var(--space-2);
   border: 0;
-  border-left: 2px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-inline-start: 2px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: 0;
   background: transparent;
 }
@@ -220,7 +220,7 @@
 .coach-plan-view__main-card[data-plan-primary="true"] .coach-plan-view__now-card {
   margin-top: 0;
   padding-top: 0;
-  border-left: 0;
+  border-inline-start: 0;
   border-top: 0;
 }
 
@@ -363,7 +363,7 @@
 @media (max-width: 320px) {
 
   .coach-plan-view__read-rail-item {
-    padding-left: var(--space-1);
+    padding-inline-start: var(--space-1);
   }
 
   .coach-plan-view__read-rail-item em {
@@ -383,9 +383,9 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-left: var(--space-2);
+  margin-inline-start: var(--space-2);
   padding: 2px 0 0 var(--space-2);
-  border-left: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
+  border-inline-start: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
 }
 
 .coach-plan-view__empty-outline-row {
@@ -729,7 +729,7 @@
 .learning-today__copy h2 {
   margin: 0;
   color: var(--fg-0);
-  font-size: var(--trainer-font-lg);
+  font-size: calc(var(--trainer-font-lg) + 3px);
   font-weight: 400;
   line-height: 1.3;
   letter-spacing: -0.01em;
@@ -739,7 +739,7 @@
 .learning-today__detail {
   margin: 0;
   color: var(--fg-muted);
-  font-size: var(--trainer-font-2xs);
+  font-size: var(--trainer-font-sm);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -754,7 +754,7 @@
 }
 
 .learning-today__stats strong {
-  margin-right: 4px;
+  margin-inline-end: var(--space-1);
   color: var(--fg-0);
   font-size: var(--trainer-font-sm);
   font-weight: 400;
@@ -812,17 +812,9 @@
   }
 }
 
-.learning-today {
-  position: relative;
-}
-
-.learning-today__actions {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+.learning-today__heading {
   display: flex;
-}
-
-.learning-today__copy {
-  padding-right: 26px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
 }

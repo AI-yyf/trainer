@@ -35,7 +35,7 @@
   .composer-shell--quiet .composer--compact .composer__actions,
   .composer-shell--quiet .composer--compact.composer--with-secondary-actions .composer__actions {
     justify-content: flex-start;
-    margin-left: 0;
+    margin-inline-start: 0;
     width: 100%;
   }
 
@@ -222,9 +222,9 @@
 }
 
 .trainer-shell[dir="rtl"] .agent-activity-strip {
-  border-left: 0;
+  border-inline-start: 0;
   border-inline-start: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-  padding-left: 0;
+  padding-inline-start: 0;
   padding-inline-start: var(--space-2);
 }
 

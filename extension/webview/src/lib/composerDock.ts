@@ -2,11 +2,12 @@ import { primaryDestinationForRoute } from "./workbenchDestinations";
 import type { ActiveWorkbenchView } from "./types";
 
 /**
- * The persistent composer belongs to the three primary destinations.
- * Activity answers use the card-scoped draft bank inside Training.
+ * The persistent composer belongs to the two primary destinations. Learning
+ * no longer owns a dock composer: practice answers live inside the inline
+ * card, and Chat owns the conversation draft.
  */
 
-export const DOCK_SURFACES = ["coach", "plan", "resources"] as const;
+export const DOCK_SURFACES = ["coach", "resources"] as const;
 export type ComposerDockSurface = (typeof DOCK_SURFACES)[number];
 
 /** True when the persistent dock composer is mounted for this route. */
@@ -24,11 +25,12 @@ export function composerDockDraftScope(
   surface: ActiveWorkbenchView,
   composerSessionKey: string,
 ): string {
-  if (surface === "coach" || surface === "settings") {
-    return composerSessionKey;
+  // Legacy learning routes share the Chat draft scope; only Resources keeps a
+  // separate per-surface draft.
+  if (surface === "resources") {
+    return `${composerSessionKey}\u0000dock:resources`;
   }
-  const context = surface === "training" || surface === "progress" ? "plan" : surface;
-  return `${composerSessionKey}\u0000dock:${context}`;
+  return composerSessionKey;
 }
 
 /** Send-and-jump (default) versus send-and-stay, per §3.7 red line 5. */

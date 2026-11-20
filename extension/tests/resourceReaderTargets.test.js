@@ -1,23 +1,19 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveResourceOpenTarget, resolveResourceOriginalTarget } = require('../dist/shared/src/resourceOpen.js');
+const { resolveResourceOpenTarget } = require('../dist/shared/src/resourceOpen.js');
 
-test('reading opens captured URL content in VS Code and preserves uncaptured external URLs', () => {
+test('reading opens saved captures in VS Code', () => {
   // The /tmp/... values are opaque string fixtures for a pure mapping
   // function — resolveResourceOpenTarget never touches the filesystem — so
   // they stay platform-neutral and need no os.tmpdir() indirection.
-  // A captured URL's library item is its complete Markdown; the live page is
-  // the explicit original action.
   const captured = { kind: 'url', source: 'https://example.com/guide', sandboxPath: '/tmp/captured-guide.md' };
   assert.deepEqual(resolveResourceOpenTarget(captured),
     { kind: 'vscode', source: '/tmp/captured-guide.md' });
-  assert.deepEqual(resolveResourceOriginalTarget(captured),
-    { kind: 'browser', source: 'https://example.com/guide' });
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'https://example.com/guide' }),
-    { kind: 'browser', source: 'https://example.com/guide' });
+    { kind: 'unavailable', reason: 'capture_required' });
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'markdown', source: '/tmp/guide.md' }),
     { kind: 'vscode', source: '/tmp/guide.md' });
   assert.deepEqual(resolveResourceOpenTarget({ kind: 'url', source: 'invalid' }),
-    { kind: 'unavailable', reason: 'invalid_url' });
+    { kind: 'unavailable', reason: 'missing_source' });
 });

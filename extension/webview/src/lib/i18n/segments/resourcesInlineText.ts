@@ -119,10 +119,17 @@ export type ResourceTextKey =
   | "stale"
   | "unknown"
   | "openInVsCode"
-  | "openOriginal"
-  | "openWithDefaultApp"
+  | "migrateLibrary"
+  | "migrateLibraryTitle"
+  | "migrateLibrarySummary"
+  | "migrateLibraryBackupNote"
+  | "migrateLibraryConfirm"
+  | "migrateLibraryCancel"
+  | "migrateLibraryRunning"
+  | "migrateLibraryDone"
+  | "migrateLibraryFailed"
+  | "migrateLibraryUnconfirmed"
   | "emptyOpenHint"
-  | "openInBrowser"
   | "openUnavailable"
   | "sandboxTitle"
   | "sandboxReady"
@@ -163,6 +170,17 @@ export type ResourceTextKey =
   | "currentObject"
   | "resourceDetail"
   | "addUrlTitle"
+  | "captureToLibrary"
+  | "captureSource"
+  | "captureWebLink"
+  | "capturePdfFile"
+  | "capturePdfScan"
+  | "captureGithub"
+  | "captureGitee"
+  | "captureGitlab"
+  | "captureTarget"
+  | "captureLibraryRoot"
+  | "captureSubmit"
   | "addUrlPlaceholder"
   | "addUrlSubmit"
   | "addUrlFocusLabel"
@@ -260,10 +278,17 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   trustUnverified: { zh: "\u6765\u6e90\u5f85\u786e\u8ba4", en: "Source unverified" },
   fileActionsTitle: { zh: "\u6587\u4ef6\u64cd\u4f5c", en: "File actions" },
   openInVsCode: { zh: "\u5728 VS Code \u4e2d\u6253\u5f00", en: "Open in VS Code" },
-  openOriginal: { zh: "\u6253\u5f00\u539f\u59cb\u6587\u4ef6", en: "Open original file" },
-  openWithDefaultApp: { zh: "\u7528\u9ed8\u8ba4\u5e94\u7528\u6253\u5f00", en: "Open with default app" },
+  migrateLibrary: { zh: "\u8fc1\u79fb\u4e3a Markdown", en: "Migrate to Markdown" },
+  migrateLibraryTitle: { zh: "\u8fc1\u79fb\u9884\u89c8", en: "Migration preview" },
+  migrateLibrarySummary: { zh: "{resources} \u4efd\u8d44\u6599 \u00b7 \u5220\u9664 {originals} \u4e2a\u539f\u4ef6 \u00b7 \u6807\u8bb0 {records} \u6761\u8bb0\u5f55 \u00b7 \u4fdd\u7559 {kept} \u4e2a\u539f\u4ef6", en: "{resources} resources \u00b7 {originals} originals to delete \u00b7 {records} records to mark \u00b7 {kept} originals kept" },
+  migrateLibraryBackupNote: { zh: "\u8fc1\u79fb\u524d\u4f1a\u5148\u5199\u4e00\u4efd\u5907\u4efd\u6e05\u5355\uff1b\u8f6c\u6362\u5931\u8d25\u7684\u8d44\u6599\u4f1a\u88ab\u6807\u8bb0\uff0c\u539f\u4ef6\u4e0d\u4f1a\u88ab\u5220\u9664\u3002", en: "A backup manifest is written first; a resource that fails to convert is marked and keeps its original." },
+  migrateLibraryConfirm: { zh: "\u786e\u8ba4\u8fc1\u79fb", en: "Migrate now" },
+  migrateLibraryCancel: { zh: "\u53d6\u6d88", en: "Cancel" },
+  migrateLibraryRunning: { zh: "\u6b63\u5728\u8fc1\u79fb\u2026", en: "Migrating\u2026" },
+  migrateLibraryDone: { zh: "\u8fc1\u79fb\u5b8c\u6210\uff1a\u5220\u9664 {originals} \u4e2a\u539f\u4ef6\uff0c\u6807\u8bb0 {records} \u6761\u8bb0\u5f55\u3002", en: "Migration done: {originals} originals removed, {records} records marked." },
+  migrateLibraryFailed: { zh: "{n} \u4efd\u8d44\u6599\u8fc1\u79fb\u5931\u8d25\uff0c\u539f\u4ef6\u5df2\u4fdd\u7559\u3002", en: "{n} resources failed to migrate; their originals are kept." },
+  migrateLibraryUnconfirmed: { zh: "\u6ca1\u6709\u6536\u5230\u8fc1\u79fb\u7ed3\u679c\uff0c\u8d44\u6599\u5e93\u4fdd\u6301\u539f\u6837\u3002", en: "No migration result arrived; the library is unchanged." },
   emptyOpenHint: { zh: "\u9009\u4e2d\u8d44\u6599\u540e\u4f1a\u76f4\u63a5\u5728 VS Code \u4e2d\u6253\u5f00\u3002", en: "Select a resource to open it directly in VS Code." },
-  openInBrowser: { zh: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00", en: "Open in browser" },
   openUnavailable: { zh: "\u6ca1\u6709\u53ef\u6253\u5f00\u7684\u6765\u6e90", en: "No openable source" },
   sandboxTitle: { zh: "\u53d7\u63a7\u6c99\u7bb1", en: "Guarded sandbox" },
   sandboxReady: { zh: "\u6c99\u7bb1\u53ef\u7528", en: "Sandbox available" },
@@ -304,6 +329,17 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
   currentObject: { zh: "\u5f53\u524d\u5bf9\u8c61", en: "Current object" },
   resourceDetail: { zh: "\u8d44\u6599\u8be6\u60c5", en: "Resource detail" },
   addUrlTitle: { zh: "\u6309\u5730\u5740\u6dfb\u52a0", en: "Add by URL" },
+  captureToLibrary: { zh: "添加到资料库", en: "Add to the library" },
+  captureSource: { zh: "来源", en: "Source" },
+  captureWebLink: { zh: "网页链接", en: "Web link" },
+  capturePdfFile: { zh: "PDF 文件", en: "PDF file" },
+  capturePdfScan: { zh: "扫码 PDF", en: "Scan a PDF" },
+  captureGithub: { zh: "GitHub", en: "GitHub" },
+  captureGitee: { zh: "Gitee", en: "Gitee" },
+  captureGitlab: { zh: "GitLab", en: "GitLab" },
+  captureTarget: { zh: "目标知识库", en: "Target knowledge base" },
+  captureLibraryRoot: { zh: "资料库根目录", en: "Library root" },
+  captureSubmit: { zh: "加入资料库", en: "Add to library" },
   addUrlPlaceholder: { zh: "\u7c98\u8d34\u7f51\u9875\u6216 PDF \u94fe\u63a5", en: "Paste a webpage or PDF link" },
   addUrlSubmit: { zh: "\u6dfb\u52a0\u5230\u8d44\u6599\u5e93", en: "Add to library" },
   addUrlFocusLabel: { zh: "\u7ed1\u5b9a\u5b66\u4e60\u76ee\u6807\uff08\u53ef\u9009\uff09", en: "Bind a learning focus (optional)" },
@@ -409,6 +445,16 @@ export const resourceTextLocaleOverrides: Record<
   Partial<Record<ResourceTextKey, string>>
 > = {
   "es-ES": {
+    migrateLibrary: "Migrar a Markdown",
+    migrateLibraryTitle: "Vista previa de la migracion",
+    migrateLibrarySummary: "{resources} recursos \u00b7 {originals} originales a borrar \u00b7 {records} registros a marcar \u00b7 {kept} originales conservados",
+    migrateLibraryBackupNote: "Primero se escribe un manifiesto de copia de seguridad; los recursos que no se pueden convertir se marcan y conservan su original.",
+    migrateLibraryConfirm: "Migrar ahora",
+    migrateLibraryCancel: "Cancelar",
+    migrateLibraryRunning: "Migrando\u2026",
+    migrateLibraryDone: "Migracion terminada: {originals} originales borrados, {records} registros marcados.",
+    migrateLibraryFailed: "{n} recursos no se pudieron migrar; sus originales se conservan.",
+    migrateLibraryUnconfirmed: "No llego ningun resultado de migracion; la biblioteca sigue igual.",
     title: "Biblioteca de conocimientos",
     addResource: "Agregar recurso",
     searchPlaceholder: "Buscar por titulo, fuente o resumen",
@@ -438,8 +484,6 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Fuente sin confirmar",
     fileActionsTitle: "Acciones de archivo",
     openInVsCode: "Abrir en VS Code",
-    openOriginal: "Abrir archivo original",
-    openWithDefaultApp: "Abrir con la app predeterminada",
     emptyOpenHint: "Selecciona un recurso para abrirlo directamente en VS Code.",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponible",
@@ -539,6 +583,16 @@ export const resourceTextLocaleOverrides: Record<
     folderMoveToNew: "Nueva carpeta y mover",
   },
   "fr-FR": {
+    migrateLibrary: "Migrer vers Markdown",
+    migrateLibraryTitle: "Apercu de la migration",
+    migrateLibrarySummary: "{resources} ressources \u00b7 {originals} originaux a supprimer \u00b7 {records} enregistrements a marquer \u00b7 {kept} originaux conserves",
+    migrateLibraryBackupNote: "Un manifeste de sauvegarde est ecrit d'abord ; une ressource qui ne se convertit pas est marquee et garde son original.",
+    migrateLibraryConfirm: "Migrer maintenant",
+    migrateLibraryCancel: "Annuler",
+    migrateLibraryRunning: "Migration en cours\u2026",
+    migrateLibraryDone: "Migration terminee : {originals} originaux supprimes, {records} enregistrements marques.",
+    migrateLibraryFailed: "{n} ressources n'ont pas pu etre migrees ; leurs originaux sont conserves.",
+    migrateLibraryUnconfirmed: "Aucun resultat de migration n'est arrive ; la bibliotheque reste inchangee.",
     title: "Bibliotheque de connaissances",
     addResource: "Ajouter une ressource",
     searchPlaceholder: "Rechercher par titre, source ou resume",
@@ -568,8 +622,6 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Source non v\u00e9rifi\u00e9e",
     fileActionsTitle: "Actions de fichier",
     openInVsCode: "Ouvrir dans VS Code",
-    openOriginal: "Ouvrir le fichier original",
-    openWithDefaultApp: "Ouvrir avec l'application par défaut",
     emptyOpenHint: "Sélectionnez une ressource pour l'ouvrir directement dans VS Code.",
     sandboxTitle: "Sandbox protege",
     sandboxReady: "Sandbox disponible",
@@ -669,6 +721,16 @@ export const resourceTextLocaleOverrides: Record<
     folderMoveToNew: "Nouveau dossier et deplacer",
   },
   "de-DE": {
+    migrateLibrary: "Nach Markdown migrieren",
+    migrateLibraryTitle: "Migrationsvorschau",
+    migrateLibrarySummary: "{resources} Ressourcen \u00b7 {originals} Originale werden geloescht \u00b7 {records} Eintraege werden markiert \u00b7 {kept} Originale bleiben erhalten",
+    migrateLibraryBackupNote: "Zuerst wird ein Sicherungsmanifest geschrieben; eine Ressource, die nicht konvertiert werden kann, wird markiert und behaelt ihr Original.",
+    migrateLibraryConfirm: "Jetzt migrieren",
+    migrateLibraryCancel: "Abbrechen",
+    migrateLibraryRunning: "Migration laeuft\u2026",
+    migrateLibraryDone: "Migration abgeschlossen: {originals} Originale entfernt, {records} Eintraege markiert.",
+    migrateLibraryFailed: "{n} Ressourcen konnten nicht migriert werden; ihre Originale bleiben erhalten.",
+    migrateLibraryUnconfirmed: "Kein Migrationsergebnis eingetroffen; die Bibliothek bleibt unveraendert.",
     title: "Wissensbibliothek",
     addResource: "Ressource hinzufugen",
     searchPlaceholder: "Titel, Quelle oder Zusammenfassung suchen",
@@ -698,8 +760,6 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Quelle unbest\u00e4tigt",
     fileActionsTitle: "Dateiaktionen",
     openInVsCode: "In VS Code oeffnen",
-    openOriginal: "Originaldatei oeffnen",
-    openWithDefaultApp: "Mit Standard-App oeffnen",
     emptyOpenHint: "Wähle ein Material aus, um es direkt in VS Code zu öffnen.",
     sandboxTitle: "Geschuetzte Sandbox",
     sandboxReady: "Sandbox verfuegbar",
@@ -799,6 +859,16 @@ export const resourceTextLocaleOverrides: Record<
     folderMoveToNew: "Neuer Ordner und verschieben",
   },
   "ja-JP": {
+    migrateLibrary: "Markdown \u3078\u79fb\u884c",
+    migrateLibraryTitle: "\u79fb\u884c\u30d7\u30ec\u30d3\u30e5\u30fc",
+    migrateLibrarySummary: "\u8cc7\u6599 {resources} \u4ef6 \u00b7 \u539f\u4ef6 {originals} \u4e2a\u3092\u524a\u9664 \u00b7 \u8a18\u9332 {records} \u4ef6\u3092\u30de\u30fc\u30af \u00b7 \u4fdd\u7559 {kept} \u500b\u539f\u4ef6",
+    migrateLibraryBackupNote: "\u5148\u306b\u30d0\u30c3\u30af\u30a2\u30c3\u30d7\u30de\u30cb\u30d5\u30a7\u30b9\u30c8\u3092\u66f8\u304d\u307e\u3059\u3002\u5909\u63db\u3067\u304d\u306a\u3044\u8cc7\u6599\u306f\u30de\u30fc\u30af\u3057\u3066\u539f\u4ef6\u3092\u4fdd\u6301\u3057\u307e\u3059\u3002",
+    migrateLibraryConfirm: "\u79fb\u884c\u3092\u5b9f\u884c",
+    migrateLibraryCancel: "\u30ad\u30e3\u30f3\u30bb\u30eb",
+    migrateLibraryRunning: "\u79fb\u884c\u4e2d\u2026",
+    migrateLibraryDone: "\u79fb\u884c\u5b8c\u4e86\uff1a\u539f\u4ef6 {originals} \u4e2a\u3092\u524a\u9664\u3001\u8a18\u9332 {records} \u4ef6\u3092\u30de\u30fc\u30af\u3057\u307e\u3057\u305f\u3002",
+    migrateLibraryFailed: "{n} \u4ef6\u306e\u8cc7\u6599\u306f\u79fb\u884c\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u539f\u4ef6\u306f\u4fdd\u6301\u3055\u308c\u307e\u3059\u3002",
+    migrateLibraryUnconfirmed: "\u79fb\u884c\u306e\u7d50\u679c\u3092\u53d7\u3051\u53d6\u308c\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u30e9\u30a4\u30d6\u30e9\u30ea\u306f\u5909\u308f\u3063\u3066\u3044\u307e\u305b\u3093\u3002",
     title: "ナレッジライブラリ",
     addResource: "資料を追加",
     searchPlaceholder: "タイトル、ソース、要約を検索",
@@ -828,8 +898,6 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "来源待确认",
     fileActionsTitle: "文件操作",
     openInVsCode: "VS Code で開く",
-    openOriginal: "元のファイルを開く",
-    openWithDefaultApp: "既定のアプリで開く",
     emptyOpenHint: "資料を選ぶと VS Code で直接開きます。",
     sandboxTitle: "保護されたサンドボックス",
     sandboxReady: "サンドボックスを利用できます",
@@ -929,6 +997,16 @@ export const resourceTextLocaleOverrides: Record<
     folderMoveToNew: "\u65b0\u3057\u3044\u30d5\u30a9\u30eb\u30c0\u3092\u4f5c\u6210\u3057\u3066\u79fb\u52d5",
   },
   "ko-KR": {
+    migrateLibrary: "Markdown \ub85c \uc774\uc0c1",
+    migrateLibraryTitle: "\uc774\uc0c1 \uad00\uc5b4",
+    migrateLibrarySummary: "\uc790\ub8cc {resources} \uac1c \u00b7 \uc6d0\ubcf8 {originals} \uac1c \uc0ad\uc81c \u00b7 \ub4f1\ub85d {records} \uac1c \ud45c\uc2dc \u00b7 \uc6d0\ubcf8 {kept} \uac1c \ubcf4\uad00",
+    migrateLibraryBackupNote: "\uba54\uc2a4\ud2b8\ub9c1\ud0b0 \uc0dd\uc131\ud6a8 \ubc31\uc5c5 \ub9d8\uc77c\ud558\uba74 \ubcc0\ud658\ud56e\ub2e8 \uc790\ub8cc\uc740 \ud45c\uc2dc\ub41c\uc9c0 \uc6d0\ubcf8\uc744 \uc720\uc9c0\ud569\ub2c8\ub2e4.",
+    migrateLibraryConfirm: "\uc774\uc0c1 \uc2e4\ud589",
+    migrateLibraryCancel: "\ucd94\uc18c",
+    migrateLibraryRunning: "\uc774\uc0c1 \uc911\u2026",
+    migrateLibraryDone: "\uc774\uc0c1 \uc644\ub8cc: \uc6d0\ubcf8 {originals} \uac1c \uc0ad\uc81c, \ub4f1\ub85d {records} \uac1c \ud45c\uc2dc.",
+    migrateLibraryFailed: "\uc790\ub8cc {n} \uac1c\uc744 \uc774\uc0c1\ud558\uc9c0 \ubabb\ud588\uc73c\uba70 \uc6d0\ubcf8\uc740 \uc720\uc9c0\ub429\ub2c8\ub2e4.",
+    migrateLibraryUnconfirmed: "\uc774\uc0c1 \uacb0\uacfc\ub97c \ubc1b\uc9c0 \ubabb\ud588\uc73c\uba70 \ub77c\uc774\ube0c\ub7ec\ub9ac\ub294 \uadf8\ub300\ub85c \uc785\ub2c8\ub2e4.",
     title: "지식 라이브러리",
     addResource: "자료 추가",
     searchPlaceholder: "제목, 출처 또는 요약 검색",
@@ -958,8 +1036,6 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "출처 미확인",
     fileActionsTitle: "파일 작업",
     openInVsCode: "VS Code에서 열기",
-    openOriginal: "원본 파일 열기",
-    openWithDefaultApp: "기본 앱으로 열기",
     emptyOpenHint: "자료를 선택하면 VS Code에서 바로 열립니다.",
     sandboxTitle: "보호된 샌드박스",
     sandboxReady: "샌드박스를 사용할 수 있습니다",
@@ -1059,6 +1135,16 @@ export const resourceTextLocaleOverrides: Record<
     folderMoveToNew: "새 폴더 만들고 이동",
   },
   "pt-BR": {
+    migrateLibrary: "Migrar para Markdown",
+    migrateLibraryTitle: "Previa da migracao",
+    migrateLibrarySummary: "{resources} recursos \u00b7 {originals} originais a remover \u00b7 {records} registros a marcar \u00b7 {kept} originais preservados",
+    migrateLibraryBackupNote: "Um manifesto de backup e escrito primeiro; um recurso que nao converte e marcado e mantem seu original.",
+    migrateLibraryConfirm: "Migrar agora",
+    migrateLibraryCancel: "Cancelar",
+    migrateLibraryRunning: "Migrando\u2026",
+    migrateLibraryDone: "Migracao concluida: {originals} originais removidos, {records} registros marcados.",
+    migrateLibraryFailed: "{n} recursos nao puderam ser migrados; os originais foram mantidos.",
+    migrateLibraryUnconfirmed: "Nenhum resultado de migracao chegou; a biblioteca continua igual.",
     title: "Biblioteca de conhecimento",
     addResource: "Adicionar recurso",
     searchPlaceholder: "Pesquisar titulo, fonte ou resumo",
@@ -1088,8 +1174,6 @@ export const resourceTextLocaleOverrides: Record<
     trustUnverified: "Fonte n\u00e3o verificada",
     fileActionsTitle: "A\u00e7\u00f5es de arquivo",
     openInVsCode: "Abrir no VS Code",
-    openOriginal: "Abrir arquivo original",
-    openWithDefaultApp: "Abrir com o app padrão",
     emptyOpenHint: "Selecione um recurso para abri-lo diretamente no VS Code.",
     sandboxTitle: "Sandbox protegido",
     sandboxReady: "Sandbox disponivel",

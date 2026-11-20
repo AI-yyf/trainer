@@ -1,7 +1,6 @@
 export type ResourceOpenTarget =
-  | { kind: "browser"; source: string }
   | { kind: "vscode"; source: string }
-  | { kind: "unavailable"; reason: "missing_source" | "invalid_url" };
+  | { kind: "unavailable"; reason: "missing_source" | "capture_required" };
 
 type ResourceOpenRecord = {
   kind?: string;
@@ -53,90 +52,23 @@ export function resolveResourceReadCandidates(resource: ResourceOpenRecord): str
   );
 }
 
-/**
- * "Open the original" targets: the untouched copy kept in the library first,
- * then the sandbox snapshot/artifact, then the declared local source.
- */
-export function resolveResourceOriginalCandidates(resource: ResourceOpenRecord): string[] {
-  const original = localOrEmpty(resource.canonicalOriginalPath);
-  if (original) {
-    return [original];
-  }
-  const snapshots = [resource.sandboxPath?.trim(), resource.extractedArtifactPath?.trim()].filter(
-    (value): value is string => Boolean(value) && !URL_PATTERN.test(value!),
-  );
-  if (snapshots.length > 0) {
-    return snapshots;
-  }
-  if (resource.kind === "url") {
-    return [];
-  }
-  return [resource.source?.trim(), resource.canonicalSource?.trim()].filter(
-    (value): value is string => Boolean(value) && !URL_PATTERN.test(value!),
-  );
-}
-
-/** True when "open original" points somewhere other than the Markdown digest. */
-export function hasDistinctOriginal(resource: ResourceOpenRecord): boolean {
-  const read = resolveResourceReadCandidates(resource)[0]?.trim();
-  const original = resolveResourceOriginalCandidates(resource)[0]?.trim();
-  return Boolean(original) && original !== read;
-}
-
-/**
- * Backwards-compatible alias used by the open command: a row click opens the
- * canonical Markdown document, not the binary original.
- */
-export function resolveResourceLocalCandidates(resource: ResourceOpenRecord): string[] {
-  return resolveResourceReadCandidates(resource);
-}
-
 export function resolveResourceOpenTarget(resource: ResourceOpenRecord): ResourceOpenTarget {
   // The library's uniform artifact is the complete canonical Markdown: text,
   // structure, tables, images and notes all live there. Opening a row means
   // reading that document, not a summary record.
-  const readCandidates = resolveResourceReadCandidates(resource);
-  if (readCandidates.length > 0) {
-    return { kind: "vscode", source: readCandidates[0] };
-  }
-
-  const source = resource.source?.trim();
-  const canonicalSource = resource.canonicalSource?.trim();
-  const urlSource = [source, canonicalSource].find(
-    (value): value is string => Boolean(value) && URL_PATTERN.test(value!),
-  );
-  if (urlSource) {
-    return { kind: "browser", source: urlSource };
-  }
-
-  return {
-    kind: "unavailable",
-    reason: source || canonicalSource ? "invalid_url" : "missing_source",
-  };
+  return editorTarget(resource, resolveResourceReadCandidates(resource)[0]);
 }
 
-/**
- * The untouched source behind a library Markdown. This is a secondary action:
- * a web source keeps its live URL, a local file opens its original bytes (or
- * the managed sandbox copy when the original was not retained).
- */
-export function resolveResourceOriginalTarget(resource: ResourceOpenRecord): ResourceOpenTarget {
-  const source = resource.source?.trim();
-  const canonicalSource = resource.canonicalSource?.trim();
-  const urlSource = [source, canonicalSource].find(
-    (value): value is string => Boolean(value) && URL_PATTERN.test(value!),
+function editorTarget(resource: ResourceOpenRecord, source: string | undefined): ResourceOpenTarget {
+  if (source) {
+    return { kind: "vscode", source };
+  }
+
+  const hasWebSource = [resource.source, resource.canonicalSource].some(
+    (value) => URL_PATTERN.test(value?.trim() ?? ""),
   );
-  if (urlSource) {
-    return { kind: "browser", source: urlSource };
-  }
-
-  const originalCandidates = resolveResourceOriginalCandidates(resource);
-  if (originalCandidates.length > 0) {
-    return { kind: "vscode", source: originalCandidates[0] };
-  }
-
   return {
     kind: "unavailable",
-    reason: source || canonicalSource ? "invalid_url" : "missing_source",
+    reason: hasWebSource ? "capture_required" : "missing_source",
   };
 }

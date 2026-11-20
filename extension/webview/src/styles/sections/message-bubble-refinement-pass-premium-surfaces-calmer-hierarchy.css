@@ -158,7 +158,7 @@
   content: "";
   width: 5px;
   height: 5px;
-  border-right: 1px solid currentColor;
+  border-inline-end: 1px solid currentColor;
   border-bottom: 1px solid currentColor;
   transform: rotate(-45deg);
   transition: transform var(--motion-fast) var(--motion-ease);
@@ -179,7 +179,7 @@
   margin: 3px 0 0;
   padding: 0 0 0 10px;
   list-style: none;
-  border-left: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+  border-inline-start: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
 }
 
 .coach-work-trail__row {
@@ -513,7 +513,7 @@
 
 .message-bubble__tool-trail .agent-activity-strip {
   margin-top: var(--space-1);
-  border-left-color: var(--line);
+  border-inline-start-color: var(--line);
 }
 
 /* Phase-C navigation: Settings lives in the header as an icon-only gear. */

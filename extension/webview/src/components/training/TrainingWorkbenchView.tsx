@@ -1167,9 +1167,14 @@ export function TrainingWorkbenchView({
                   {cardOnlyBlockerDistinct ? <VerificationResult language={language} verdict={trainingExecutionState.blocked ? "failed" : "unknown"} summary={cardOnlyBlockerDistinct} /> : null}
                   {selectedCardStatus === "candidate" || !selectedCardStatus ? (
                     <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
-                  ) : !isFlashCard && practiceVerificationMode === "file" ? (
-                    <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
-                  ) : response}
+                  ) : (
+                    <>
+                      {!isFlashCard && practiceVerificationMode === "file" ? (
+                        <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
+                      ) : null}
+                      {response}
+                    </>
+                  )}
                   {hintLadder.length && cardType === "practice" ? <HintLadderReveal hints={hintLadder} revealed={revealedHints} onReveal={onHintReveal} language={language} /> : null}
                 </> : trainingExecutionState.composerPhase === "verify" ? <>
                   {trainingExecutionState.verified || trainingExecutionState.blocked ? (

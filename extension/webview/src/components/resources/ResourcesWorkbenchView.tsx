@@ -8,19 +8,22 @@ import { useTranslation } from "../../lib/i18n/useTranslation";
 import { resolveCopy } from "../../lib/i18n/copy";
 import { resolveResourceOrganizationConfirmCopy } from "../../lib/i18n/resourceComposerCopy";
 import {
-  hasDistinctOriginal,
   resolveResourceOpenTarget,
-  resolveResourceOriginalTarget,
 } from "../../../../../shared/src/resourceOpen";
 import {
   coachOrientationTone,
   type CoachOrientationState,
 } from "../../../../../shared/src/coachOrientationGovernance";
 import type { ResourcesOrientationRecord } from "../../../../../shared/src/resourcesOrientationGovernance";
+import type { ResearchBriefView } from "../../../../../shared/src/researchBrief";
+import { ResearchBriefLibrary } from "./ResearchBriefLibrary";
+import { ResourceCaptureDialog } from "./ResourceCaptureDialog";
 import type {
   ComposerLanguage,
   DebugVisibleResourcesFacts,
   DeletedResource,
+  LibraryMigrationHostAnswer,
+  LibraryMigrationSummary,
   ResourceRecord,
   ResourceSearchState,
   ResourceTrainingHandoffResult,
@@ -102,6 +105,8 @@ export interface ResourceWriteAccess {
 export interface ResourcesWorkbenchViewProps {
   language: ComposerLanguage;
   resources: ResourceRecord[];
+  researchBriefs?: ResearchBriefView[];
+  researchBriefToOpen?: { id: string };
   resourceSearch?: ResourceSearchState;
   deletedResources?: DeletedResource[];
   sandboxState?: SandboxState;
@@ -130,6 +135,11 @@ export interface ResourcesWorkbenchViewProps {
   /** Byte-for-byte export of the resource's owned snapshot to this machine. */
   onExportResource?: (resourceId: string) => Promise<ResourceMutationOutcome>;
   /**
+   * Markdown-only library migration. The view owns the two-step flow: a dry-run
+   * preview first, then one explicit confirmation on the same surface.
+   */
+  onMigrateLibrary?: (request: { dryRun: boolean; confirm: boolean }) => Promise<LibraryMigrationHostAnswer>;
+  /**
    * Real library folders (`GET /library/groups`): the tree the Library's
    * folder section renders and the pickers offer as a target. Absent means
    * the folders section falls back to the folders the resources already
@@ -144,7 +154,7 @@ export interface ResourcesWorkbenchViewProps {
   onDeleteLibraryFolder?: (path: string) => Promise<ResourceMutationOutcome>;
   /** Reveal a downloaded file path through the host's existing file-manager action. */
   onRevealSavedPath?: (path: string) => void;
-  onOpenResource?: (resourceId: string, options?: { openOriginal?: boolean; openExternal?: boolean; line?: number }) => void;
+  onOpenResource?: (resourceId: string, options?: { line?: number }) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
   onAskCoach?: (resourceIds: string[]) => void;
@@ -196,6 +206,9 @@ export interface ResourceRestoreContext {
 
 export interface ResourceCaptureInput {
   url: string;
+  /** An explicit capture kind. A local PDF or a scanned PDF has no URL to
+      infer from, so the dialog states the kind it means. */
+  kind?: "web" | "pdf" | "github_repo" | "gitee_repo" | "gitlab_repo";
   title?: string;
   focusId?: string;
   planBinding?: { planId: string; revision: number };
@@ -310,6 +323,18 @@ function localizeCount(language: ComposerLanguage, key: ResourceTextKey, count: 
 /** Fill the `{v}` slot used by the URL/organize/export feedback copy. */
 function localizeValue(language: ComposerLanguage, key: ResourceTextKey, value: string): string {
   return localize(language, key).replace("{v}", value);
+}
+
+/** Copy with several named placeholders (`{resources}`, `{originals}`, ...). */
+function localizeTemplate(
+  language: ComposerLanguage,
+  key: ResourceTextKey,
+  values: Record<string, string>,
+): string {
+  return Object.entries(values).reduce(
+    (text, [name, value]) => text.split(`{${name}}`).join(value),
+    localize(language, key),
+  );
 }
 
 /** Display-safe reason from a thrown value (library write feedback only). */
@@ -1127,6 +1152,8 @@ function orientationStateLabel(state: CoachOrientationState, language: ComposerL
 export function ResourcesWorkbenchView({
   language,
   resources,
+  researchBriefs,
+  researchBriefToOpen,
   resourceSearch,
   deletedResources,
   sandboxState,
@@ -1143,6 +1170,7 @@ export function ResourcesWorkbenchView({
   captureFocusOptions,
   onOrganizeResource,
   onExportResource,
+  onMigrateLibrary,
   onListLibraryFolders,
   onCreateLibraryFolder,
   onRenameLibraryFolder,
@@ -1185,6 +1213,9 @@ export function ResourcesWorkbenchView({
   }>({ status: "idle" });
   const [isImportMenuOpen, setIsImportMenuOpen] = useState(false);
   const [urlImportOpen, setUrlImportOpen] = useState(false);
+  const [captureDialogOpen, setCaptureDialogOpen] = useState(false);
+  const [captureDialogBusy, setCaptureDialogBusy] = useState(false);
+  const [captureDialogMessage, setCaptureDialogMessage] = useState<string | undefined>(undefined);
   const [urlImportValue, setUrlImportValue] = useState("");
   const [urlImportFocusId, setUrlImportFocusId] = useState("");
   const [urlImportDownload, setUrlImportDownload] = useState(false);
@@ -1209,6 +1240,17 @@ export function ResourcesWorkbenchView({
   const [organizeGroupValue, setOrganizeGroupValue] = useState("");
   const [exportState, setExportState] = useState<
     { phase: "busy" | "ok" | "failed"; message: string } | undefined
+  >(undefined);
+  // The Markdown-only migration is a two-step flow: preview, then one
+  // confirmation. The view keeps the preview so the confirmation always
+  // follows the numbers the learner just read.
+  const [migrationState, setMigrationState] = useState<
+    | {
+        phase: "preview" | "running" | "done" | "failed";
+        summary?: LibraryMigrationSummary;
+        message?: string;
+      }
+    | undefined
   >(undefined);
   const [libraryFolders, setLibraryFolders] = useState<LibraryFolderNode[] | undefined>(undefined);
   const [libraryFoldersState, setLibraryFoldersState] = useState<
@@ -1801,12 +1843,9 @@ export function ResourcesWorkbenchView({
 
   const openResourceInVsCode = (
     resource: ResourceRecord,
-    options?: { openOriginal?: boolean; openExternal?: boolean; line?: number },
+    options?: { line?: number },
   ) => {
-    // A library row is a native "open the source" action. The host resolves
-    // the original file (or the live URL); canonical Markdown is internal.
-    const line = options?.line;
-    onOpenResource?.(resource.id, { ...options, ...(line ? { line } : {}) });
+    onOpenResource?.(resource.id, options);
   };
 
   const openResourceRowMenu = (
@@ -2339,6 +2378,93 @@ export function ResourcesWorkbenchView({
       });
   };
 
+  const migrationBusy = migrationState?.phase === "running";
+  const migrationSummaryText = (summary?: LibraryMigrationSummary) =>
+    localizeTemplate(language, "migrateLibrarySummary", {
+      resources: String(summary?.resources ?? 0),
+      originals: String(summary?.originals_to_delete ?? 0),
+      records: String(summary?.records_to_mark ?? 0),
+      // Originals without a canonical Markdown behind them are kept: the
+      // preview says so instead of promising a deletion it will not do.
+      kept: String(summary?.originals_kept ?? 0),
+    });
+  const previewLibraryMigration = () => {
+    if (!onMigrateLibrary || migrationBusy) {
+      return;
+    }
+    setMigrationState({ phase: "running" });
+    void Promise.resolve()
+      .then(() => onMigrateLibrary({ dryRun: true, confirm: false }))
+      .then((answer) => {
+        if (answer.unconfirmed) {
+          setMigrationState({
+            phase: "failed",
+            message: localize(language, "migrateLibraryUnconfirmed"),
+          });
+          return;
+        }
+        if (!answer.ok) {
+          setMigrationState({
+            phase: "failed",
+            message: answer.message || localize(language, "migrateLibraryUnconfirmed"),
+          });
+          return;
+        }
+        setMigrationState({ phase: "preview", summary: answer.summary });
+      })
+      .catch(() => {
+        setMigrationState({
+          phase: "failed",
+          message: localize(language, "migrateLibraryUnconfirmed"),
+        });
+      });
+  };
+  const confirmLibraryMigration = () => {
+    if (!onMigrateLibrary || migrationBusy) {
+      return;
+    }
+    setMigrationState({ phase: "running", summary: migrationState?.summary });
+    void Promise.resolve()
+      .then(() => onMigrateLibrary({ dryRun: false, confirm: true }))
+      .then((answer) => {
+        if (answer.unconfirmed) {
+          setMigrationState({
+            phase: "failed",
+            message: localize(language, "migrateLibraryUnconfirmed"),
+          });
+          return;
+        }
+        if (!answer.ok) {
+          setMigrationState({
+            phase: "failed",
+            message: answer.message || localize(language, "migrateLibraryUnconfirmed"),
+          });
+          return;
+        }
+        const summary = answer.summary;
+        const failures = summary?.failures?.length ?? 0;
+        setMigrationState({
+          phase: "done",
+          summary,
+          message: failures > 0
+            ? localizeTemplate(language, "migrateLibraryFailed", { n: String(failures) })
+            : localizeTemplate(language, "migrateLibraryDone", {
+                originals: String(summary?.originals_to_delete ?? 0),
+                records: String(summary?.records_to_mark ?? 0),
+              }),
+        });
+      })
+      .catch(() => {
+        setMigrationState({
+          phase: "failed",
+          message: localize(language, "migrateLibraryUnconfirmed"),
+        });
+      });
+  };
+  const cancelLibraryMigration = () => {
+    setMigrationState(undefined);
+  };
+
   const exportSelectedResource = (resourceId: string, title?: string) => {
     if (!onExportResource || exportState?.phase === "busy") {
       return;
@@ -2479,12 +2605,6 @@ export function ResourcesWorkbenchView({
   const selectedResourceOpenTarget = selectedResource
     ? resolveResourceOpenTarget(selectedResource)
     : { kind: "unavailable" as const, reason: "missing_source" as const };
-  const selectedResourceOpenLabel =
-    selectedResourceOpenTarget.kind === "browser"
-      ? localize(language, "openInBrowser")
-      : selectedResourceOpenTarget.kind === "vscode"
-        ? localize(language, "openInVsCode")
-        : localize(language, "openUnavailable");
   const selectedResourceIndexNotice = selectedResource
     ? resourceIndexNotice(selectedResource, language)
     : undefined;
@@ -2644,7 +2764,51 @@ export function ResourcesWorkbenchView({
       </div>
       )}>
 
+      {migrationState ? (
+        <section
+          className="resources-knowledge__migration"
+          aria-label={localize(language, "migrateLibraryTitle")}
+          data-library-migration={migrationState.phase}
+        >
+          <strong>{localize(language, "migrateLibraryTitle")}</strong>
+          {migrationState.phase === "running" ? (
+            <p className="resources-knowledge__migration-note">{localize(language, "migrateLibraryRunning")}</p>
+          ) : (
+            <p className="resources-knowledge__migration-summary">
+              {migrationSummaryText(migrationState.summary)}
+            </p>
+          )}
+          <p className="resources-knowledge__migration-note">
+            {localize(language, "migrateLibraryBackupNote")}
+          </p>
+          {migrationState.message ? (
+            <p className="resources-knowledge__migration-message" role="status">
+              {migrationState.message}
+            </p>
+          ) : null}
+          {migrationState.phase === "preview" ? (
+            <div className="resources-knowledge__migration-actions">
+              <button
+                className="button button--accent button--compact"
+                type="button"
+                onClick={confirmLibraryMigration}
+                disabled={migrationBusy}
+              >
+                {localize(language, "migrateLibraryConfirm")}
+              </button>
+              <button
+                className="button button--ghost button--compact"
+                type="button"
+                onClick={cancelLibraryMigration}
+              >
+                {localize(language, "migrateLibraryCancel")}
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
+      {researchBriefs?.length ? <ResearchBriefLibrary briefs={researchBriefs} language={language} resources={resources} requestedBrief={researchBriefToOpen} /> : null}
 
       {leftoverStoredNote ? (
         <p
@@ -2719,6 +2883,44 @@ export function ResourcesWorkbenchView({
               </span>
             </button>
           ) : null}
+          {onMigrateLibrary ? (
+            <button
+              className="menu-list__item"
+              type="button"
+              role="menuitem"
+              data-migrate-entry="true"
+              onClick={() => {
+                closeImportMenu();
+                setMigrationState(undefined);
+                previewLibraryMigration();
+              }}
+            >
+              <span className="menu-list__icon" aria-hidden="true">
+                <RefreshIcon size={14} />
+              </span>
+              <span className="menu-list__body">
+                <strong>{localize(language, "migrateLibrary")}</strong>
+              </span>
+            </button>
+          ) : null}
+          <button
+            className="menu-list__item"
+            type="button"
+            role="menuitem"
+            data-capture-entry="true"
+            onClick={() => {
+              closeImportMenu();
+              setCaptureDialogMessage(undefined);
+              setCaptureDialogOpen(true);
+            }}
+          >
+            <span className="menu-list__icon" aria-hidden="true">
+              <PlusIcon size={14} />
+            </span>
+            <span className="menu-list__body">
+              <strong>{localize(language, "captureToLibrary")}</strong>
+            </span>
+          </button>
           <button
             className="menu-list__item"
             type="button"
@@ -2744,6 +2946,42 @@ export function ResourcesWorkbenchView({
             </span>
           </button>
         </div>
+      ) : null}
+
+      {captureDialogOpen && onCaptureResource && canWriteResources ? (
+        <ResourceCaptureDialog
+          language={language}
+          knowledgeBases={libraryFolders ?? []}
+          busy={captureDialogBusy}
+          message={captureDialogMessage}
+          onClose={() => {
+            if (!captureDialogBusy) {
+              setCaptureDialogOpen(false);
+              setCaptureDialogMessage(undefined);
+            }
+          }}
+          onSubmit={async (request) => {
+            setCaptureDialogBusy(true);
+            setCaptureDialogMessage(undefined);
+            try {
+              const outcome = await onCaptureResource({
+                url: request.url,
+                kind: request.kind,
+                title: request.title,
+                download: request.download,
+                targetDir: request.targetDir || undefined,
+              });
+              if (outcome.ok) {
+                setCaptureDialogOpen(false);
+                setCaptureDialogMessage(undefined);
+                return;
+              }
+              setCaptureDialogMessage(outcome.message || undefined);
+            } finally {
+              setCaptureDialogBusy(false);
+            }
+          }}
+        />
       ) : null}
 
       {urlImportOpen && onCaptureResource && canWriteResources ? (
@@ -3345,8 +3583,6 @@ export function ResourcesWorkbenchView({
         </div>
       ) : null}
 
-      {/* The library no longer opens a Reader page: a row opens the original
-          source directly, and the row menu owns secondary actions. */}
       {RESOURCE_READER_ENABLED && selectedResource ? (
         <ResourceReader
           parent={localize(language, "title")}
@@ -3360,18 +3596,6 @@ export function ResourcesWorkbenchView({
               ? {
                   label: localize(language, "openInVsCode"),
                   onClick: () => openResourceInVsCode(selectedResource),
-                }
-              : undefined
-          }
-          openExternally={
-            selectedResourceOpenTarget.kind !== "unavailable" && onOpenResource
-              ? {
-                  label:
-                    selectedResourceOpenTarget.kind === "browser"
-                      ? localize(language, "openInBrowser")
-                      : localize(language, "openWithDefaultApp"),
-                  onClick: () =>
-                    openResourceInVsCode(selectedResource, { openExternal: true }),
                 }
               : undefined
           }
@@ -3541,28 +3765,6 @@ export function ResourcesWorkbenchView({
               >
                 <RefreshIcon size={12} />
                 <span>{refreshResourcesLabel}</span>
-              </button>
-            ) : null}
-            <button
-              className="button button--ghost button--compact resources-knowledge__open-action"
-              type="button"
-              onClick={() => openResourceInVsCode(selectedResource)}
-              disabled={selectedResourceOpenTarget.kind === "unavailable"}
-              aria-label={`${selectedResourceOpenLabel}: ${selectedResource.title}`}
-              title={selectedResourceOpenLabel}
-            >
-              <ArrowRightIcon size={12} />
-              <span>{selectedResourceOpenLabel}</span>
-            </button>
-            {selectedResource.canonicalOriginalPath ? (
-              <button
-                className="button button--ghost button--compact resources-knowledge__open-original-action"
-                type="button"
-                onClick={() => openResourceInVsCode(selectedResource, { openOriginal: true })}
-                title={localize(language, "openOriginal")}
-              >
-                <FileIcon size={12} />
-                <span>{localize(language, "openOriginal")}</span>
               </button>
             ) : null}
             {onExportResource && canWriteResources ? (
@@ -3773,11 +3975,9 @@ export function ResourcesWorkbenchView({
       {rowMenu ? (() => {
         const resource = rowMenu.resource;
         const target = resolveResourceOpenTarget(resource);
-        const originalTarget = resolveResourceOriginalTarget(resource);
-        const distinctOriginal = hasDistinctOriginal(resource);
         const openLabel =
-          target.kind === "browser"
-            ? localize(language, "openInBrowser")
+          target.kind === "unavailable"
+            ? localize(language, "openUnavailable")
             : localize(language, "openInVsCode");
         return (
           <div
@@ -3790,6 +3990,7 @@ export function ResourcesWorkbenchView({
               className="menu-list__item"
               type="button"
               role="menuitem"
+              disabled={!onOpenResource || target.kind === "unavailable"}
               onClick={() => {
                 closeResourceRowMenu();
                 openResourceInVsCode(resource);
@@ -3797,45 +3998,6 @@ export function ResourcesWorkbenchView({
             >
               <span className="menu-list__body"><strong>{openLabel}</strong></span>
             </button>
-            {originalTarget.kind === "browser" && target.kind !== "browser" ? (
-              <button
-                className="menu-list__item"
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeResourceRowMenu();
-                  openResourceInVsCode(resource, { openExternal: true });
-                }}
-              >
-                <span className="menu-list__body"><strong>{localize(language, "openInBrowser")}</strong></span>
-              </button>
-            ) : null}
-            {originalTarget.kind === "vscode" && distinctOriginal ? (
-              <button
-                className="menu-list__item"
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeResourceRowMenu();
-                  openResourceInVsCode(resource, { openOriginal: true });
-                }}
-              >
-                <span className="menu-list__body"><strong>{localize(language, "openOriginal")}</strong></span>
-              </button>
-            ) : null}
-            {originalTarget.kind === "vscode" && distinctOriginal ? (
-              <button
-                className="menu-list__item"
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeResourceRowMenu();
-                  openResourceInVsCode(resource, { openOriginal: true, openExternal: true });
-                }}
-              >
-                <span className="menu-list__body"><strong>{localize(language, "openWithDefaultApp")}</strong></span>
-              </button>
-            ) : null}
             {onAskCoach ? (
               <button
                 className="menu-list__item"

@@ -337,6 +337,18 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       message: z.string().optional(),
     }),
   }),
+  // Markdown-only library migration answers, correlated by the request's
+  // operationId. Without this entry the schema silently dropped the host's
+  // answer and every migration request timed out as "unconfirmed".
+  z.object({
+    type: z.literal("library/migration"),
+    payload: z.object({
+      operationId: z.string().optional(),
+      ok: z.boolean(),
+      message: z.string().optional(),
+      summary: z.unknown().optional(),
+    }),
+  }),
   // Deep link (vscode://.../library/<id>): flat by contract with
   // `extension/src/browserCapture/deepLink.ts`.
   z.object({
@@ -542,6 +554,11 @@ export function subscribeToHostMessages(
       return;
     }
     const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    // The preview's own bootstrap follows the host's, so a preview-side mock
+    // action reads the same live state the webview is showing.
+    if (parsed.data.type === "bootstrap" && parsed.data.payload) {
+      window.__TRAINER_BOOTSTRAP__ = parsed.data.payload;
+    }
     const scope = scopeSchema.safeParse(raw.scope);
     const operation = operationIdentitySchema.safeParse(raw.operation);
     const operationPhase = operationPhaseSchema.safeParse(raw.operationPhase);

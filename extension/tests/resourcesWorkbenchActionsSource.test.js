@@ -75,7 +75,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl\?: \(\) => void;/);
   assert.match(
     viewSource,
-    /onOpenResource\?: \(resourceId: string, options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number \}\) => void;/,
+    /onOpenResource\?: \(resourceId: string, options\?: \{ line\?: number \}\) => void;/,
   );
   assert.match(viewSource, /onRefreshResources\?: \(\) => void \| Promise<void>;/);
   assert.match(inlineCopy, /pendingIndex: \{ zh: "\\u5f85\\u7d22\\u5f15", en: "Waiting to be indexed" \}/);
@@ -95,10 +95,12 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl/);
   assert.match(
     viewSource,
-    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number \},\s*\) =>/,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ line\?: number \},\s*\) =>/,
   );
-  assert.match(viewSource, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
-  assert.match(viewSource, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
+  assert.match(viewSource, /onOpenResource\?\.\(resource\.id, options\)/);
+  // md-only: the library never offers a second, binary artifact to open.
+  assert.doesNotMatch(viewSource, /openOriginal|open-original-action/);
+  assert.match(viewSource, /onClick: \(\) => openResourceInVsCode\(selectedResource\)/);
   assert.match(viewSource, /function buildResourceTree\(/);
   assert.match(viewSource, /sandboxState\?\.nodes/);
   const libraryPathsSource = fs.readFileSync(
@@ -226,7 +228,8 @@ test('Resources keeps the first screen focused and folds secondary governance ac
   const stylesSource = readStylesSource();
 
   assert.match(viewSource, /submittedSearchQuery/);
-  assert.match(viewSource, /resources-knowledge__open-action/);
+  // md-only: the first screen offers no "open original" action.
+  assert.doesNotMatch(viewSource, /resources-knowledge__open-original-action/);
   // Reading-first first screen: no batch-selection bar; per-resource delete
   // moved into the reader detail actions.
   assert.doesNotMatch(viewSource, /resources-knowledge__batch-actions/);
@@ -269,7 +272,7 @@ test('Resources makes library writes visibly unavailable without blocking search
   assert.match(viewSource, /function chooseWorkspaceRootLabel\(/);
 
   assert.match(viewSource, /onSearchResources\(\{ query: trimmedQuery, requestId \}\)/);
-  assert.match(viewSource, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
+  assert.match(viewSource, /onOpenResource\?\.\(resource\.id, options\)/);
   assert.match(appSource, /const resourceWriteAccess = trainerWorkspaceAdmission\s*\?/);
   assert.match(appSource, /allowed: trainerWorkspaceAdmission\.status === "managed"/);
   assert.match(appSource, /trainerWorkspaceAdmission\.status === "root-missing"\s*\? t\.workspaceAdmissionRootMissingDetail/);
@@ -320,8 +323,8 @@ test('Resources treats URL material as webpage snapshots without restoring statu
   assert.doesNotMatch(viewSource, /resources-file-toolbar/);
   assert.doesNotMatch(viewSource, /resources-knowledge__state/);
   assert.doesNotMatch(viewSource, /collectionSegmentPrefix}links/);
-  assert.match(stylesSource, /grid-template-columns: 20px minmax\(0, 1fr\);/);
-  assert.match(stylesSource, /padding: 0 8px 0 24px;/);
+  assert.match(stylesSource, /grid-template-columns: 20px minmax\(0, 1fr\) 22px;/);
+  assert.match(stylesSource, /padding-inline: 24px 8px;/);
   assert.doesNotMatch(stylesSource, /\.resources-library-tree__indent \{/);
   assert.match(stylesSource, /\.resources-knowledge__actions \.resources-knowledge__icon-button/);
   assert.doesNotMatch(stylesSource, /\.resources-knowledge__state/);
@@ -465,9 +468,10 @@ test('Resources preserves an explicit selection across views and records unmount
   assert.match(appSource, /resourceSelectionBySession\[composerSessionKey\]/);
   assert.match(appSource, /initialResourceContextIds=\{selectedResourceContextIds\}/);
   assert.match(appSource, /view === "resources" \? selectedResourceContextIds : \[\]/);
-  assert.match(appSource, /const resourceConversationContextLabel = useMemo\(/);
-  assert.match(appSource, /activeView === "coach" && resourceConversationContextLabel/);
-  assert.match(appSource, /setResourceConversationContextIds\(\[\]\);/);
+  // Resource context is no longer a pre-send bar above the composer. It is
+  // carried by the sent message and rendered by the bubble's support lines.
+  assert.doesNotMatch(appSource, /activeView === "coach" && resourceConversationContextLabel/);
+  assert.doesNotMatch(appSource, /"资料上下文"/);
   assert.match(appSource, /activeView: turnActiveView,/);
 });
 

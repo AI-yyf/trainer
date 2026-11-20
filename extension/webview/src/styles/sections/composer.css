@@ -9,6 +9,10 @@
   padding: var(--space-2) 10px var(--space-3);
 }
 
+/* With the learning drawer open the composer is not rendered at all: the
+   drawer is a modal sheet that owns the area under the header, so the two
+   never compete for the same space. */
+
 .composer-shell--quiet {
   --composer-dock-hit: 28px;
   --composer-dock-gap: 4px;
@@ -65,7 +69,7 @@
 }
 
 .composer-shell--quiet .composer__frame--with-count textarea {
-  padding-right: var(--space-3);
+  padding-inline-end: var(--space-3);
 }
 
 .composer-shell--quiet .composer__frame:focus-within {
@@ -95,7 +99,7 @@
 .composer-shell--quiet .composer__actions {
   display: flex;
   width: 100%;
-  margin-left: 0;
+  margin-inline-start: 0;
   justify-content: flex-start;
   align-items: center;
   gap: var(--composer-dock-gap);
@@ -460,7 +464,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-left: auto;
+  margin-inline-start: auto;
   pointer-events: auto;
 }
 
@@ -929,8 +933,8 @@
 
 .composer-presencebar__context {
   width: 100%;
-  padding-left: 7px;
-  border-left: 1px solid color-mix(in srgb, var(--warning) 18%, var(--line));
+  padding-inline-start: 7px;
+  border-inline-start: 1px solid color-mix(in srgb, var(--warning) 18%, var(--line));
 }
 
 .composer-presencebar__context .composer-presencebar__copy {
@@ -1653,7 +1657,7 @@
   display: flex;
   align-items: center;
   gap: 1px;
-  margin-left: auto;
+  margin-inline-start: auto;
   flex: none;
 }
 

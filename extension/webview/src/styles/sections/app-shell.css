@@ -47,6 +47,18 @@ body,
   background: none;
 }
 
+/* The body under the header: the conversation and the composer share one
+   positioned box, so the learning modal can cover both at once without
+   hardcoding the header height. */
+.trainer-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .trainer-shell > * {
   position: relative;
   z-index: 1;
@@ -68,12 +80,12 @@ body,
 }
 
 
-/* Row 2 — primary nav: three even columns, single line each. At very narrow
+/* Row 2 — primary nav: two even columns, single line each. At very narrow
    sidebars (e.g. 200% zoom) labels truncate with an ellipsis instead of
    wrapping mid-word; the full label stays in title/aria-label. */
 .app-shell-nav {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-1);
   min-width: 0;
   padding: 0 var(--trainer-gutter) var(--space-2);

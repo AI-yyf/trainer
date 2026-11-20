@@ -75,7 +75,7 @@
 }
 
 .composer__frame--with-count textarea {
-  padding-right: 10px;
+  padding-inline-end: 10px;
 }
 
 .composer__char-count {

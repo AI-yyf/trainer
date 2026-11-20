@@ -123,9 +123,13 @@ test('training-card action sends the reply through the real card generator', () 
   assert.ok(handlerStart > -1, 'expected handleCoachMessageAction');
   const handler = source.slice(handlerStart, handlerStart + 8000);
 
-  assert.match(handler, /commandId: trainerCommands\.trainingGenerateCard/);
+  assert.match(handler, /requestTrainingPersistence\(trainerCommands\.trainingGenerateCard/);
   assert.match(handler, /source: "conversation_gap"/);
-  assert.match(handler, /cardType: "practice"/);
+  // The card action mints a practice card by default and a flash card for the
+  // dedicated 闪记卡 action; both go through the same generator.
+  assert.match(handler, /const flashCard = action === "flash-card";/);
+  assert.match(handler, /cardType: flashCard \? "flash" : "practice"/);
+  assert.match(handler, /submode: flashCard \? "flash" : "practice"/);
   assert.match(handler, /prompt: excerpt/);
   assert.match(handler, /contextHint: excerpt/);
   assert.match(handler, /focusArea: replyDoc\.title/);
@@ -181,10 +185,10 @@ test('quick actions are wired into the coach conversation pane and docked reply'
   assert.match(pane, /onMessageAction=\{handleCoachMessageAction\}/);
   assert.match(pane, /pendingMessageAction=\{pendingMessageAction\}/);
 
-  const dockedStart = source.indexOf('const renderContextualResultRail');
-  assert.ok(dockedStart > -1, 'expected renderContextualResultRail');
-  const docked = source.slice(dockedStart, dockedStart + 9000);
-  assert.match(docked, /onMessageAction=\{handleCoachMessageAction\}/);
+  // Docked views no longer render a second reply bubble; the one conversation
+  // pane owns every assistant turn.
+  assert.doesNotMatch(source, /renderViewAgentReply/);
+  assert.doesNotMatch(source, /data-view-agent-reply/);
 });
 
 test('browser preview mirrors the inline upload and card generation paths', () => {

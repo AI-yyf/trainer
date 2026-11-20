@@ -1,4 +1,8 @@
-import { LearningWorkspace } from "../templates/LearningWorkspace";
+import { LearningDrawer } from "../components/learning/LearningDrawer";
+import { useLearningDrawerSections } from "../components/learning/useLearningDrawerSections";
+import { LearningStrip } from "../components/learning/LearningStrip";
+import { InlineProgressCard } from "../components/learning/InlineProgressCard";
+import { InlinePracticeAnswer } from "../components/learning/InlinePracticeAnswer";
 import { VerificationResult } from "../templates/VerificationResult";
 import { MessageRichContent } from "../components/coach/MessageRichContent";
 import { unifiedComposerCopy } from "../lib/i18n/unifiedComposerCopy";
@@ -26,6 +30,7 @@ import { reviewConceptLabel } from "../lib/reviewLabel";
 import { buildProviderSettingsActions } from "./providerSettingsActions";
 import { SettingsRoute } from "./SettingsRoute";
 import { goalTitleFromConversation } from "../lib/coachGoalTitle";
+import { researchBriefResourceIds, upsertResearchBrief } from "../../../../shared/src/researchBrief";
 import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
@@ -171,7 +176,6 @@ import {
   providerSetupSummary,
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
-import { CoachGoalBar } from "../components/coach/CoachGoalBar";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
 import { UtilityOverlay } from "../templates/UtilityOverlay";
 import { templateCopy } from "../templates/templateCopy";
@@ -208,8 +212,11 @@ import {
 } from "../components/coach";
 import { AppShell } from "../templates/AppShell";
 import { ActivityHeader } from "../templates/ActivityHeader";
-import { resolveLinkedPracticeSource, resolveUnifiedComposerIntent, unifiedComposerCommands } from "../lib/unifiedComposerIntent";
+import { resolveUnifiedComposerIntent, unifiedComposerCommands } from "../lib/unifiedComposerIntent";
 import { primaryDestinationForRoute } from "../lib/workbenchDestinations";
+import { deriveLearningSummary, isSameLearningFact } from "../lib/learningSummary";
+import { normalizeTrainingStateTextFields } from "../lib/hostText";
+import { useHostOperationResolver } from "../lib/useHostOperationResolver";
 import { appendDockAnchor, composerDockDraftScope, docksComposer, resolveDockContextAnchor } from "../lib/composerDock";
 import { useComposerDockAnchor } from "./useComposerDockAnchor";
 import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
@@ -266,6 +273,8 @@ import type {
   TrainingReviewItem,
   TrainingSummaryCard,
 } from "../components/training/TrainingWorkbenchView";
+import { TrainingCardLibrary, type TrainingCardLibraryAction } from "../components/training/TrainingCardLibrary";
+import { COACH_MESSAGE_ACTION_LABELS } from "../lib/i18n/segments/coachMessageBubbleCopy";
 import {
   ArrowRightIcon,
   CheckMarkIcon,
@@ -310,6 +319,8 @@ import type {
   HostMessage,
   HostProviderTestSummary,
   MessageAttachment,
+  LibraryMigrationHostAnswer,
+  LibraryMigrationSummary,
   PlanStage,
   ProviderConfigView,
   ResourceComposerIntent,
@@ -379,13 +390,13 @@ import {
   DirectoryInput,
   DockedView,
   LIBRARY_FOLDER_OPERATION_TIMEOUT_MS,
+  LIBRARY_MIGRATION_TIMEOUT_MS,
   LocalCommandSuggestion,
   LocalSkillSuggestion,
   OPEN_RESOURCE_SYNC_TIMEOUT_MS,
   ORGANIZE_CONFIRMATION_TIMEOUT_MS,
   PendingResourceOperation,
   PendingResourceTrainingHandoff,
-  ProgressView,
   RESOURCE_COMPOSER_MAX_IDS,
   RESOURCE_OPERATION_TIMEOUT_MS,
   RESOURCE_TRAINING_HANDOFF_TIMEOUT_MS,
@@ -498,6 +509,9 @@ export function App() {
     syncStatus,
     syncCursor,
     setActiveView,
+    openLearningDrawer,
+    closeLearningDrawer,
+    setLearningSection,
     setResourceRestoreContext,
     setComposerDraft,
     setComposerSendPreference,
@@ -537,6 +551,9 @@ export function App() {
       syncStatus: state.syncStatus,
       syncCursor: state.syncCursor,
       setActiveView: state.setActiveView,
+      openLearningDrawer: state.openLearningDrawer,
+      closeLearningDrawer: state.closeLearningDrawer,
+      setLearningSection: state.setLearningSection,
       setResourceRestoreContext: state.setResourceRestoreContext,
       setComposerDraft: state.setComposerDraft,
       setComposerSendPreference: state.setComposerSendPreference,
@@ -704,6 +721,7 @@ export function App() {
     setPendingGoalScope((scope) => goalMode || scope !== composerSessionKey ? undefined : scope);
   }, [composerSessionKey, goalMode]);
   const [resourceSelectionBySession, setResourceSelectionBySession] = useState<Record<string, string[]>>({});
+  const [researchBriefToOpen, setResearchBriefToOpen] = useState<{ id: string; workspaceId?: string }>();
   const selectedResourceContextIds = resourceSelectionBySession[composerSessionKey] ?? [];
   const setSelectedResourceContextIds = useCallback((ids: string[]) => {
     setResourceSelectionBySession((sessions) => ({ ...sessions, [composerSessionKey]: ids }));
@@ -727,6 +745,7 @@ export function App() {
   const coachAutoScrollPinnedRef = useRef(true);
   const coachWasStreamingRef = useRef(false);
   const coachViewIdentityRef = useRef<string | null>(null);
+  const coachConversationLengthRef = useRef(0);
   const pinCoachScrollToBottom = useCallback(() => {
     coachAutoScrollPinnedRef.current = true;
   }, []);
@@ -1023,9 +1042,7 @@ export function App() {
     },
     [layout.composerLanguage],
   );
-  // P2: one explicit learner action turns a finished Resources analysis into
-  // a traceable Research Brief library asset (server drafts, validates and
-  // pins the citations; the reply itself is never auto-briefed).
+  // Keep manual saving for ordinary analysis replies and recoverable failures.
   const requestCoachResearchBrief = useCallback(
     (message: ConversationMessage): Promise<void> => {
       const requestId = `resource-operation-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
@@ -1057,7 +1074,7 @@ export function App() {
               payload: {
                 researchGoal: researchGoal.slice(0, 300),
                 reply: message.body.slice(0, 12000),
-                resourceIds: selectedResourceContextIds.slice(0, 4),
+                resourceIds: researchBriefResourceIds(message),
                 __trainerResourceOperationId: requestId,
               },
             },
@@ -1074,10 +1091,19 @@ export function App() {
         }
       });
     },
-    [selectedResourceContextIds],
+    [],
   );
   const handleCoachMessageAction = useCallback(
     async (action: CoachMessageAction, message: ConversationMessage) => {
+      if (action === "open-research-brief") {
+        if (message.researchPreparation?.status === "saved") {
+          const workspaceId = useWorkbenchState.getState().data.memory.workspace?.workspaceId;
+          setResearchBriefToOpen({ id: message.researchPreparation.assetId, workspaceId });
+          setResourceRestoreContext(undefined);
+          setActiveView("resources");
+        }
+        return;
+      }
       if (action === "set-goal") {
         // The learner's preceding turn is the goal; the assistant reply is the
         // evidence/answer, not the thing to pursue. Fall back to the reply only
@@ -1199,29 +1225,37 @@ export function App() {
         return;
       }
       if (action === "save-research-brief") {
+        const scope = useWorkbenchState.getState();
+        const currentScope = () => {
+          const current = useWorkbenchState.getState();
+          return current.syncCursor.workspaceId === scope.syncCursor.workspaceId &&
+            current.syncCursor.sessionId === scope.syncCursor.sessionId &&
+            current.data.runtimeDataGeneration === scope.data.runtimeDataGeneration;
+        };
         try {
           if (isBrowserPreview) {
             const browserPreview = await loadBrowserPreviewModule();
-            const conversation = useWorkbenchState.getState().data.conversation;
-            const researchGoal = goalTitleFromConversation(conversation, message.id);
-            await browserPreview.saveBrowserPreviewResearchBrief({
+            if (!currentScope()) return;
+            const researchGoal = goalTitleFromConversation(scope.data.conversation, message.id);
+            const brief = await browserPreview.saveBrowserPreviewResearchBrief({
               researchGoal: researchGoal.slice(0, 300),
               reply: message.body.slice(0, 12000),
-              resourceIds: selectedResourceContextIds.slice(0, 4),
+              resourceIds: researchBriefResourceIds(message),
+              contextId: scope.data.memory.workspace?.workspaceId,
             }, previewSessionId);
-            setOperationMessage({
-              tone: "success",
-              message: appUiCopy(layout.composerLanguage, "备课简报已存入资料库。"),
-            });
+            if (!currentScope()) return;
+            const current = useWorkbenchState.getState();
+            const memory = current.data.memory;
+            current.patchData({ memory: { ...memory, researchBriefs: upsertResearchBrief(memory.researchBriefs, brief) } });
           } else {
             await requestCoachResearchBrief(message);
-            setOperationMessage({
-              tone: "success",
-              message: appUiCopy(layout.composerLanguage, "备课简报已存入资料库。"),
-            });
           }
+          if (currentScope()) setOperationMessage({
+            tone: "success",
+            message: appUiCopy(layout.composerLanguage, "备课简报已存入资料库。"),
+          });
         } catch (error) {
-          setOperationMessage({
+          if (currentScope()) setOperationMessage({
             tone: "error",
             message: `${appUiCopy(layout.composerLanguage, "这份回复没有生成备课简报。")} ${sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage)}`,
           });
@@ -1234,28 +1268,45 @@ export function App() {
         message.body.trim().length > COACH_REPLY_BODY_MAX_CHARS
           ? `${message.body.trim().slice(0, COACH_REPLY_BODY_MAX_CHARS)}…`
           : message.body.trim();
-      postMessage({
-        type: "command/execute",
-        payload: {
-          commandId: trainerCommands.trainingGenerateCard,
-          payload: {
-            source: "conversation_gap",
-            cardType: "practice",
-            prompt: excerpt,
-            // Live browser preview reads contextHint directly; the host rebuilds
-            // it from prompt. Send both so the reply reaches the card generator.
-            contextHint: excerpt,
-            focusArea: replyDoc.title,
-          },
-        },
-      });
+      const scope = useWorkbenchState.getState();
+      // A flash card (闪记) is the same evidence pipeline in a recall shape:
+      // the learner answers inside the card, exactly like a practice card.
+      const flashCard = action === "flash-card";
+      try {
+        await requestTrainingPersistence(trainerCommands.trainingGenerateCard, {
+          source: "conversation_gap",
+          cardType: flashCard ? "flash" : "practice",
+          submode: flashCard ? "flash" : "practice",
+          prompt: excerpt,
+          contextHint: excerpt,
+          focusArea: replyDoc.title,
+        });
+        const current = useWorkbenchState.getState();
+        if (scope.syncCursor.workspaceId === current.syncCursor.workspaceId &&
+          scope.syncCursor.sessionId === current.syncCursor.sessionId &&
+          scope.layout.activeView === current.layout.activeView) {
+          // The minted card renders inline in the conversation. A legacy
+          // training route would open the learning drawer on top of it, so the
+          // learner stays on Chat where the card itself is actionable.
+          setActiveView("coach");
+        }
+      } catch (error) {
+        setOperationMessage({
+          tone: "error",
+          message: sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage),
+        });
+      }
     },
     [
       isBrowserPreview,
       layout.composerLanguage,
       previewSessionId,
+      requestCoachResearchBrief,
       requestCoachReplyUpload,
+      requestTrainingPersistence,
+      setActiveView,
       setOperationMessage,
+      setResourceRestoreContext,
     ],
   );
   const requestResourceSearch = useCallback(
@@ -1425,38 +1476,45 @@ export function App() {
   // correlation pattern as `training/resourceHandoff`. A request that never
   // gets an answer inside its bounded window resolves as unconfirmed, so the
   // view never invents a folder write.
-  const libraryFolderResolversRef = useRef<
-    Map<string, { timeoutId: number; resolve: (answer: LibraryFolderHostAnswer) => void }>
-  >(new Map());
+  const libraryFolderOperations = useHostOperationResolver<LibraryFolderHostAnswer>({
+    ok: false, message: "", unconfirmed: true,
+  });
   const resolveLibraryFolderOperation = useCallback(
     (payload: { operationId?: string; ok: boolean; folders?: unknown; message?: string }) => {
       const operationId = String(payload.operationId ?? "").trim();
       if (!operationId) {
         return;
       }
-      const pending = libraryFolderResolversRef.current.get(operationId);
-      if (!pending) {
-        return;
-      }
-      libraryFolderResolversRef.current.delete(operationId);
-      window.clearTimeout(pending.timeoutId);
-      pending.resolve({
+      libraryFolderOperations.resolve(operationId, {
         ok: payload.ok,
         message: typeof payload.message === "string" ? payload.message.trim() : "",
         folders: payload.folders,
       });
     },
-    [],
+    [libraryFolderOperations],
   );
-  useEffect(() => {
-    return () => {
-      for (const pending of libraryFolderResolversRef.current.values()) {
-        window.clearTimeout(pending.timeoutId);
-        pending.resolve({ ok: false, message: "", unconfirmed: true });
+  // ------------------------------------------------------ library migration
+  // The Markdown-only migration answers with a `library/migration` message
+  // carrying the request's operationId — the same correlation pattern as the
+  // folder space. A request that never gets an answer inside its bounded
+  // window resolves as unconfirmed: the library is left as it was.
+  const libraryMigrationOperations = useHostOperationResolver<LibraryMigrationHostAnswer>({
+    ok: false, message: "", unconfirmed: true,
+  });
+  const resolveLibraryMigrationOperation = useCallback(
+    (payload: { operationId?: string; ok: boolean; message?: string; summary?: LibraryMigrationSummary }) => {
+      const operationId = String(payload.operationId ?? "").trim();
+      if (!operationId) {
+        return;
       }
-      libraryFolderResolversRef.current.clear();
-    };
-  }, []);
+      libraryMigrationOperations.resolve(operationId, {
+        ok: payload.ok,
+        message: typeof payload.message === "string" ? payload.message.trim() : "",
+        summary: payload.summary,
+      });
+    },
+    [libraryMigrationOperations],
+  );
   const applyHostMessage = useCallback(
     (message: HostMessage, isProviderActionOverride = false) => {
       hostMessageSequenceRef.current += 1;
@@ -1488,6 +1546,11 @@ export function App() {
       // Folder space answers (list/create/rename/delete) settle their request.
       if (message.type === "library/folders") {
         resolveLibraryFolderOperation(message.payload);
+        return;
+      }
+      // The Markdown-only migration answers settle their request the same way.
+      if (message.type === "library/migration") {
+        resolveLibraryMigrationOperation(message.payload);
         return;
       }
       if (message.type === "training/persistenceAck") {
@@ -2665,7 +2728,15 @@ export function App() {
     // their scroll position again so browsing history stays respected.
     const streamingStarted = streaming.isStreaming && !coachWasStreamingRef.current;
     coachWasStreamingRef.current = streaming.isStreaming;
-    coachAutoScrollPinnedRef.current = (streamingStarted && !viewChanged) || isPinnedToBottom();
+    // The learner's own turn must always be visible, even when the streaming
+    // edge was already consumed (a restored stream, or a mount that happened
+    // mid-turn). Otherwise the reply lands below the fold and the thread looks
+    // stuck.
+    const conversationGrew = data.conversation.length > coachConversationLengthRef.current;
+    coachConversationLengthRef.current = data.conversation.length;
+    const learnerTurn = conversationGrew && data.conversation[data.conversation.length - 1]?.role === "user";
+    coachAutoScrollPinnedRef.current =
+      (streamingStarted && !viewChanged) || learnerTurn || isPinnedToBottom();
     const scrollToBottom = () => {
       container.scrollTop = container.scrollHeight;
     };
@@ -2840,9 +2911,10 @@ export function App() {
           index < (streamBaseLengthRef.current ?? 0) || message.role === "user",
       );
     }
-    list = list.filter((message) => !message.sourceView || message.sourceView === "coach");
+    // Learning replies are no longer a separate lane: every turn belongs to
+    // the one conversation. sourceView remains provenance, not a filter.
     const now = Date.now();
-    const pendingTurns = optimisticTurns.filter((entry) => entry.sourceView === "coach" && now - entry.createdAt <= 120_000);
+    const pendingTurns = optimisticTurns.filter((entry) => now - entry.createdAt <= 120_000);
     const pendingMessages = pendingTurns
       .filter((entry) => {
         // Confirm against the raw server conversation; the localized list may
@@ -3965,7 +4037,10 @@ export function App() {
     layout.composerLanguage,
     resourceConversationContextIds,
   ]);
-  const trainingState = data.workspaceTrainingState;
+  // The training state crosses the host boundary, so its text fields are
+  // normalized once here: a malformed field must not blank the conversation
+  // at the moment a practice settles.
+  const trainingState = normalizeTrainingStateTextFields(data.workspaceTrainingState);
   const rawTrainingRouteCard = trainingState?.activeTrainingCardRouting?.selectedCard;
   const normalizedTrainingSubmode = normalizeSharedTrainingSubmode(
     trainingState?.latestTrainingSubmode,
@@ -3981,6 +4056,9 @@ export function App() {
   );
   const selectedTrainingCardCandidate = useMemo(() => {
     const restoredCard = restoredTrainingCardCandidate;
+    // An explicit restore target owns the foreground. The store retires that
+    // intent when a later patch selects another card, so a restored card never
+    // outlives the live selection it was restoring.
     if (trainingRestoreContext?.target && restoredCard) {
       return restoredCard;
     }
@@ -4547,10 +4625,15 @@ export function App() {
           : (trainingRestoreReplacesSelectedCard
             ? undefined
             : trainingState?.latestLearningBlocker),
-        learningPhase: reviewArtifactForeground || trainingRestoreReplacesSelectedCard
-          ? selectedTrainingCardCandidate?.learningPhase
-          : (trainingState?.latestTrainingHandoff?.learningPhase ??
-            selectedTrainingCardCandidate?.learningPhase),
+        learningPhase: reviewArtifactForeground
+          // A foreground review artifact is always a reflection: the learner
+          // records what they recalled. The review-artifact card is built with
+          // the reflect phase, so the card's own phase never contradicts it.
+          ? "reflect"
+          : trainingRestoreReplacesSelectedCard
+            ? selectedTrainingCardCandidate?.learningPhase
+            : (trainingState?.latestTrainingHandoff?.learningPhase ??
+              selectedTrainingCardCandidate?.learningPhase),
       }),
     [
       trainingCardType,
@@ -5683,7 +5766,9 @@ export function App() {
       setOperationMessage({ tone: "info", message: blockedComposerGuidance });
       return;
     }
-    setActiveView("training");
+    // The minted card is inline in the conversation: land on Chat instead of
+    // opening the learning drawer over the card the learner is about to use.
+    setActiveView("coach");
     handleGenerateTrainingCard(activePlanStage.title, step, {
       planId: data.plan.id,
       stageId: activePlanStage.id,
@@ -5883,7 +5968,9 @@ export function App() {
     streamResumeDraftRef.current = text;
     // Local echo: the user's turn shows up instantly; the server-confirmed
     // copy lands at the same list position when the snapshot merges.
-    appendOptimisticTurn(text, turnActiveView);
+    // Every reply belongs to the one conversation: the surface only decides
+    // where the learner reads it.
+    appendOptimisticTurn(text, "coach");
 
     if (isBrowserPreview) {
       if (stream) {
@@ -5950,12 +6037,14 @@ export function App() {
       openPlanComposerMode(action === "clear_blocker" ? "blocker" : "explain");
       return;
     }
-    setActiveView("plan");
+    // The plan resume is a Chat turn: the plan card lives in the learning
+    // drawer, so the answer belongs to the one conversation.
+    setActiveView("coach");
     requestCoachComposerFocus();
     sendTurn({
       text: recoveredPlanResumeMessage(resume, layout.composerLanguage),
       intent: "plan",
-      activeView: "plan",
+      activeView: "coach",
       stream: true,
       formalPlanMutation: false,
       planComposerMode: action === "clear_blocker" ? "blocker" : "explain",
@@ -6244,7 +6333,7 @@ export function App() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               url,
-              kind: captureTargetKind(url),
+              kind: input.kind ?? captureTargetKind(url),
               ...sourceFields,
               ...bindingFields,
               ...(title ? { title } : {}),
@@ -6316,7 +6405,7 @@ export function App() {
           commandId: "trainer.resource.capture",
           payload: {
             url,
-            kind: captureTargetKind(url),
+            kind: input.kind ?? captureTargetKind(url),
             ...sourceFields,
             ...bindingFields,
             ...(title ? { title } : {}),
@@ -6413,6 +6502,32 @@ export function App() {
     ],
   );
 
+  // ------------------------------------------------------- library migration
+  // The Markdown-only migration always goes through the host command: the
+  // destructive pass needs the host's trust and confirmation, so the browser
+  // preview never runs it.
+  const requestLibraryMigration = useCallback(
+    async (request: { dryRun: boolean; confirm: boolean }): Promise<LibraryMigrationHostAnswer> => {
+      const operationId = `library-migration-${Date.now().toString(36)}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      return libraryMigrationOperations.request({
+        operationId,
+        timeoutMs: LIBRARY_MIGRATION_TIMEOUT_MS,
+        send: () => {
+          postMessage({
+            type: "command/execute",
+            payload: {
+              commandId: trainerCommands.markdownOnlyMigration,
+              payload: { ...request, operationId },
+            },
+          });
+        },
+      });
+    },
+    [libraryMigrationOperations, postMessage],
+  );
+
   // ------------------------------------------------------------ library folders
   // One gateway for the folder space: the live preview lane calls the sidecar
   // directly, the VS Code lane posts the command on the existing
@@ -6423,29 +6538,18 @@ export function App() {
       const operationId = `library-folders-${Date.now().toString(36)}-${Math.random()
         .toString(36)
         .slice(2, 8)}`;
-      return new Promise((resolve) => {
-        const timeoutId = window.setTimeout(() => {
-          const pending = libraryFolderResolversRef.current.get(operationId);
-          if (!pending) {
-            return;
-          }
-          libraryFolderResolversRef.current.delete(operationId);
-          resolve({ ok: false, message: "", unconfirmed: true });
-        }, LIBRARY_FOLDER_OPERATION_TIMEOUT_MS);
-        libraryFolderResolversRef.current.set(operationId, { timeoutId, resolve });
-        try {
+      return libraryFolderOperations.request({
+        operationId,
+        timeoutMs: LIBRARY_FOLDER_OPERATION_TIMEOUT_MS,
+        send: () => {
           postMessage({
             type: "command/execute",
             payload: { commandId, payload: { ...payload, operationId } },
           });
-        } catch {
-          libraryFolderResolversRef.current.delete(operationId);
-          window.clearTimeout(timeoutId);
-          resolve({ ok: false, message: "", unconfirmed: true });
-        }
+        },
       });
     },
-    [postMessage],
+    [libraryFolderOperations, postMessage],
   );
 
   const mutatePreviewLibraryFolder = useCallback(
@@ -6606,8 +6710,6 @@ export function App() {
 
   const revealLibraryPath = useCallback(
     (path: string) => {
-      // The host's existing reveal action opens any path in the system file
-      // manager; no second reveal channel is introduced for downloads.
       postMessage({
         type: "command/execute",
         payload: { commandId: trainerCommands.revealSandboxPath, payload: { path } },
@@ -7000,32 +7102,6 @@ export function App() {
   const [learningFileVerification, setLearningFileVerification] = useState<{
     scope: string; report: BootstrapData["evaluation"]; passed: boolean;
   }>();
-  const [learningLibrarySearch, setLearningLibrarySearch] = useState<{
-    scope: string; requestId: string; query: string;
-    result?: BootstrapData["resourceSearch"]; failed?: boolean;
-  }>();
-  const pendingLearningLibraryReveal = useRef<{
-    scope: string; kind: "search" | "reply"; previousMessageId?: string;
-  }>();
-  useEffect(() => {
-    const pending = pendingLearningLibraryReveal.current;
-    if (!pending) return;
-    if (pending.scope !== surfaceInstanceKey || primaryDestinationForRoute(activeView) !== "plan") {
-      pendingLearningLibraryReveal.current = undefined;
-      return;
-    }
-    const latest = data.conversation.at(-1);
-    const replyArrived = latest?.role === "assistant" && latest.id !== pending.previousMessageId &&
-      latest.sourceView && primaryDestinationForRoute(latest.sourceView) === "plan";
-    if (pending.kind === "reply" && (streaming.isStreaming || !replyArrived)) return;
-    if (pending.kind === "search" && !learningLibrarySearch?.result && !learningLibrarySearch?.failed) return;
-    const scrollSurface = viewContentRef.current?.querySelector(`[data-surface="${activeView}"]`);
-    const result = scrollSurface?.querySelector(pending.kind === "search"
-      ? "[data-learning-library-search]" : "[data-view-agent-reply]");
-    if (!result) return;
-    pendingLearningLibraryReveal.current = undefined;
-    result.scrollIntoView({ block: "start", inline: "nearest" });
-  }, [activeView, data.conversation, learningLibrarySearch, streaming.isStreaming, surfaceInstanceKey]);
   const resourceVersionCheckRequest = useRef<AbortController>();
   useEffect(() => () => resourceVersionCheckRequest.current?.abort(), [composerSessionKey]);
   const linkingSourceInFlight = useRef(false);
@@ -7496,24 +7572,8 @@ export function App() {
     }
 
     if (!hasImageAttachments && unified.kind === "resource-search") {
-      if (primaryDestinationForRoute(activeView) === "plan") {
-        if (!unified.query) return;
-        const requestId = `learning-search-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
-        const query = unified.query;
-        pendingLearningLibraryReveal.current = { scope: surfaceInstanceKey, kind: "search" };
-        setLearningLibrarySearch({ scope: surfaceInstanceKey, requestId, query });
-        clearSubmission();
-        try {
-          await (isBrowserPreview ? requestBrowserPreviewResourceSearch : requestResourceSearch)({ query, requestId });
-          const result = useWorkbenchState.getState().data.resourceSearch;
-          setLearningLibrarySearch((pending) => pending?.requestId === requestId
-            ? { ...pending, result: result?.requestId === requestId ? result : undefined, failed: result?.requestId !== requestId }
-            : pending);
-        } catch {
-          setLearningLibrarySearch((pending) => pending?.requestId === requestId ? { ...pending, failed: true } : pending);
-        }
-        return;
-      }
+      // Resource search belongs to the Resources view. Chat no longer owns a
+      // separate learning-results disclosure.
       setActiveView("resources");
       if (unified.query) {
         setResourcesViewSearchQuery(unified.query);
@@ -7540,64 +7600,6 @@ export function App() {
     if (!hasImageAttachments && unified.kind === "review") {
       useWorkbenchState.getState().openTrainingReviewQueue();
       clearSubmission();
-      return;
-    }
-
-    // P0: outside the formal Training surface a practice request is instant
-    // practice — answer it inline in this conversation, never mint a card.
-    // The reply keeps its explicit "save as training card" action.
-    if (!hasImageAttachments && unified.kind === "practice" && activeView === "training") {
-      const resourceIds = activeComposerResourceIds;
-      const explicitlyUsesFile = shouldAttachCurrentFile(instruction) || /\.py\b|\.tsx?\b/i.test(instruction);
-      const step = recoveredDisplayFacts.currentStep?.trim();
-      const planBinding = formalPlanLive && !livePlanFrozen && activePlanStage?.id && data.plan.id && step
-        ? { planId: data.plan.id, stageId: activePlanStage.id, step, revision: data.plan.revision }
-        : undefined;
-      if (unified.referencesSource && resourceIds.length !== 1) {
-        const linked = planBinding && resourceIds.length === 0
-          ? resolveLinkedPracticeSource(activePlanStage?.resourceIds ?? [], data.resources) : undefined;
-        if (!planBinding || !linked) {
-          setOperationMessage({ tone: "info", message: unifiedComposerCopy[layout.composerLanguage].selectIndexedSource });
-          return;
-        }
-        const result = await requestResourceTrainingHandoff(linked.resourceId, "practice", instruction, {
-          expectedResourceVersion: { versionId: linked.versionId, contentHash: linked.contentHash },
-          planBinding,
-          filePractice: explicitlyUsesFile,
-        });
-        if (result.outcome === "ready") clearSubmission();
-      } else if (resourceIds.length === 1 && !browserPreviewFixture && !explicitlyUsesFile) {
-        const result = await requestResourceTrainingHandoff(resourceIds[0], "practice", instruction);
-        if (result.outcome === "ready") clearSubmission();
-      } else if (providerCanCoachNow && !providerBlockReason) {
-        const scope = useWorkbenchState.getState().syncCursor;
-        try {
-          const result = await requestTrainingPersistence(trainerCommands.trainingGenerateCard, {
-            focusArea: activePlanStage?.title,
-            cardType: "practice",
-            submode: "practice",
-            prompt: normalizedDraft,
-            contextHint: normalizedDraft,
-            ...(resourceIds.length === 1 ? { resourceId: resourceIds[0] } : {}),
-            ...(planBinding ? { source: "formal_plan_step", planBinding } : {}),
-          });
-          const current = useWorkbenchState.getState();
-          if (scope.workspaceId !== current.syncCursor.workspaceId || scope.sessionId !== current.syncCursor.sessionId) return;
-          const selectedCardId = current.data.workspaceTrainingState?.selectedCardId;
-          const generatedCardId = result && typeof result === "object" && "generatedCardId" in result
-            ? result.generatedCardId : undefined;
-          if (!selectedCardId || (generatedCardId && generatedCardId !== selectedCardId)) {
-            setOperationMessage({ tone: "info", message: t.trainingEmptyDescription });
-            return;
-          }
-          clearSubmission();
-          if (current.layout.activeView === activeView) setActiveView("training");
-        } catch (error) {
-          setOperationMessage({ tone: "error", message: sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage) });
-        }
-      } else {
-        setOperationMessage({ tone: "info", message: blockedComposerGuidance });
-      }
       return;
     }
 
@@ -7806,7 +7808,7 @@ export function App() {
     }
 
     const waitingComposerEvidence = !resourceAnalysis &&
-      activeView === "plan" && coachPlanContext === "evidence" &&
+      coachPlanContext === "evidence" &&
       recoveredRuntime &&
       planRuntimeStatus?.resumeState === "waiting" &&
       Boolean(planRuntimeStatus?.currentStep?.trim()) &&
@@ -7851,15 +7853,19 @@ export function App() {
     );
     const analyzedIntent = composerUsesTrainingFlow || startsGoal ? "coach" :
       sendAnalysis.intent === "local_command" ? "coach" : sendAnalysis.intent;
-    const contextualPlanMode = activeView === "plan" ? coachPlanContext : undefined;
+    // The plan composer intent is a state, not a destination: it is set when
+    // the learner picks an action on the plan card inside the learning drawer.
+    const contextualPlanMode = coachPlanContext;
     const formalPlanGeneration = !resourceAnalysis &&
       (unified.kind === "plan" || contextualPlanMode === "generate" || analyzedIntent === "plan");
     const planComposerSubmission = !resourceAnalysis &&
-      (formalPlanGeneration || activeView === "plan" || activeView === "progress");
+      (formalPlanGeneration || contextualPlanMode !== undefined);
     const submittedPlanMode = formalPlanGeneration ? "generate" : contextualPlanMode ?? "explain";
-    const analyzeInLearning = resourceAnalysis && primaryDestinationForRoute(activeView) === "plan";
+    // Learning is part of the conversation now; resource analysis no longer
+    // targets a separate learning surface.
+    const analyzeInLearning = false;
     const turnView = planComposerSubmission ? "plan"
-      : unified.kind === "resource-turn" && !analyzeInLearning ? "resources" : activeView;
+      : unified.kind === "resource-turn" && !unified.preparation && !analyzeInLearning ? "resources" : activeView;
     const resourceIds = activeComposerResourceIds;
     if (formalPlanGeneration) {
       const key = JSON.stringify([attachmentScope, composerSessionKey, data.plan?.id, data.plan?.revision,
@@ -7890,7 +7896,11 @@ export function App() {
       });
       return;
     }
-    if (turnView !== activeView && activeView !== "training") setActiveView(turnView);
+    // The reply lives in the one conversation, so the learner stays where the
+    // answer is read: Chat. A resource intent still carries its resources.
+    if (turnView !== activeView && activeView !== "training" && !resourceAnalysis) {
+      setActiveView(turnView);
+    }
     const intent = resourceAnalysis ? "coach" : formalPlanGeneration ? "plan" : analyzedIntent;
     const rawMessageText =
       (composerUsesTrainingFlow || startsGoal ? normalizedDraft : sendAnalysis.draftBody) ||
@@ -7904,11 +7914,6 @@ export function App() {
     if (startsGoal && browserPreviewFixture) {
       startGoal(instruction.slice(0, 240));
     }
-    if (analyzeInLearning) {
-      pendingLearningLibraryReveal.current = { scope: surfaceInstanceKey, kind: "reply",
-        previousMessageId: data.conversation.at(-1)?.id };
-    }
-
     sendTurn({
       text: capturedContext ? messageText + "\n\n" + capturedContext : messageText,
       intent,
@@ -9478,7 +9483,7 @@ export function App() {
       language={layout.composerLanguage}
       emptyState={embedded || workspaceSessionBlocked ? null : coachSuperEntryContent(false)}
       streamingMessage={
-        streaming.isStreaming && (!lastTurnView || lastTurnView === "coach")
+        streaming.isStreaming && (!lastTurnView || primaryDestinationForRoute(lastTurnView) === "coach")
           ? {
               // R3: the in-flight body comes from the view's own store
               // subscription; App never selects per-chunk content.
@@ -9496,6 +9501,24 @@ export function App() {
       pendingMessageAction={pendingMessageAction}
       turnNextStepRequiresConfirmation={coachTurnNextStepRequiresConfirmation}
       resources={data.resources}
+      footer={
+        hasTrainingCard ? (
+          <div className="inline-practice-slot" data-inline-practice="true">
+            {renderTrainingView(true)}
+            {trainingCardSettled ? (
+              <InlineProgressCard
+                language={layout.composerLanguage}
+                rows={learningSummary.progressRows}
+                evidenceCount={learningSummary.evidenceCount}
+                onOpen={() => {
+                  setOpenMenu(undefined);
+                  openLearningDrawer("progress");
+                }}
+              />
+            ) : null}
+          </div>
+        ) : undefined
+      }
     />
   );
 
@@ -9618,99 +9641,6 @@ export function App() {
     );
   };
 
-  const renderViewAgentReply = (view: "plan" | "resources" | "training") => {
-    const destination = primaryDestinationForRoute(view);
-    const isLastTurnForView = lastTurnView && primaryDestinationForRoute(lastTurnView) === destination;
-    let latestReply: ConversationMessage | undefined;
-    let latestUnscopedReply: ConversationMessage | undefined;
-    for (let index = localizedConversation.length - 1; index >= 0; index -= 1) {
-      const message = localizedConversation[index];
-      if (message.role !== "assistant") {
-        continue;
-      }
-      if (message.sourceView && primaryDestinationForRoute(message.sourceView) === destination) {
-        latestReply = message;
-        break;
-      }
-      if (!message.sourceView && !latestUnscopedReply) {
-        latestUnscopedReply = message;
-      }
-    }
-
-    if (!latestReply && isLastTurnForView) {
-      latestReply = latestUnscopedReply;
-    }
-
-    const isStreamingForView = streaming.isStreaming && isLastTurnForView;
-    const visibleReply = isStreamingForView
-      ? {
-          id: `streaming-${view}`,
-          role: "assistant" as const,
-          author: t.trainer,
-          // Same coarse-bucket read as the view rail: the banner summary
-          // truncates from the start, so the latest content is exact here.
-          body: streaming.streamMessageId?.startsWith("training_")
-            ? ""
-            : useWorkbenchState.getState().streaming.streamedContent || "",
-          timestamp: t.streaming,
-        }
-      : latestReply;
-    if (!visibleReply) {
-      return null;
-    }
-
-    const isZh = layout.composerLanguage === "zh-CN";
-    const viewLabel =
-      view === "plan"
-        ? planViewLabel(layout.composerLanguage)
-        : view === "resources"
-          ? resourcesViewLabel(layout.composerLanguage)
-          : trainingViewLabel(layout.composerLanguage);
-    const summary = isStreamingForView
-      ? appUiCopy(layout.composerLanguage, "正在回复")
-      : truncateInlineText(visibleReply.body, isZh ? 26 : 52) ??
-        (appUiCopy(layout.composerLanguage, "查看回复"));
-
-    return (
-      <details
-        className={`view-agent-reply view-agent-reply--${view}`}
-        data-view-agent-reply={view}
-        open={Boolean(isLastTurnForView)}
-      >
-        <summary>
-          <span>{appUiCopy(layout.composerLanguage, "{v} · 本次教练回复").replace("{v}", viewLabel)}</span>
-          <strong>{summary}</strong>
-        </summary>
-        <div className="view-agent-reply__body" aria-live={isStreamingForView ? "polite" : undefined}>
-          <CoachMessageBubble
-            isLatestAssistant
-            assistantLabel={t.trainer}
-            className={isStreamingForView ? "message-bubble--streaming" : undefined}
-            language={layout.composerLanguage}
-            message={visibleReply}
-            resources={data.resources}
-            openArtifactLabel={appUiCopy(layout.composerLanguage, "展开")}
-            systemLabel={appUiCopy(layout.composerLanguage, "系统")}
-            userLabel={t.you}
-            streaming={isStreamingForView}
-            onArtifactOpen={stableHandleCoachArtifactOpen}
-            onMessageAction={handleCoachMessageAction}
-            pendingMessageAction={pendingMessageAction}
-          />
-          {!isStreamingForView ? (
-            <UserFeedbackDisclosure
-              language={layout.composerLanguage}
-              busy={userFeedbackState.busy}
-              submittedKind={userFeedbackState.submittedKind}
-              error={userFeedbackState.error}
-              onSubmit={submitUserFeedback}
-            />
-          ) : null}
-        </div>
-      </details>
-    );
-  };
-
   const renderDockedView = (view: DockedView, content: ReactNode) => {
     return (
       <section
@@ -9746,6 +9676,17 @@ export function App() {
           ) : null}
         </>
       ) : null}
+      <LearningStrip
+        language={layout.composerLanguage}
+        goalTitle={learningSummary.goalTitle}
+        currentStep={learningSummary.goalStep}
+        goalText={goalMode || goalDraftPending ? goalText : undefined}
+        dueCount={learningSummary.dueCount}
+        onOpen={() => {
+          setOpenMenu(undefined);
+          openLearningDrawer(layout.learningSection ?? "goal");
+        }}
+      />
       {renderCoachConversationPane("coach-pane", false)}
     </section>
   );
@@ -10069,6 +10010,17 @@ export function App() {
   // command posts one management call to the sidecar; the card record and the
   // ledger stay server-owned. In preview the commands are observed but not
   // executed by the fixture.
+  const handleTrainingLibraryAction = (
+    cardId: string,
+    action: TrainingCardLibraryAction,
+    edits?: { prompt?: string; acceptanceCriteria?: string[] },
+  ) => {
+    void requestTrainingPersistence(trainerCommands.trainingCardLibrary, { cardId, action, ...edits })
+      .catch((error) => setOperationMessage({
+        tone: "error",
+        message: sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage),
+      }, "training"));
+  };
   const handleMarkCandidateImportant = useCallback((cardId: string, important: boolean) => {
     postMessage({
       type: "command/execute",
@@ -10207,6 +10159,8 @@ export function App() {
           <ResourcesWorkbenchView
           language={layout.composerLanguage}
           resources={liveResources}
+          researchBriefs={data.memory.researchBriefs}
+          researchBriefToOpen={researchBriefToOpen?.workspaceId === data.memory.workspace?.workspaceId ? researchBriefToOpen : undefined}
           resourceSearch={data.resourceSearch}
           submittedSearchQuery={resourcesViewSearchQuery}
           onClearSearch={() => setResourcesViewSearchQuery("")}
@@ -10317,7 +10271,17 @@ export function App() {
             })
           }
           onCaptureResource={
-            isBrowserPreview && browserPreviewFixture ? undefined : captureResourceIntoLibrary
+            isBrowserPreview && browserPreviewFixture
+              ? // The fixture preview shows the entry but refuses to change real
+                // resources: the dialog is reachable, the mutation is honest.
+                async () => ({
+                  ok: false,
+                  message: appUiCopy(
+                    layout.composerLanguage,
+                    "浏览器预览不会改变真实资料。请在 VS Code 侧栏中操作。",
+                  ),
+                })
+              : captureResourceIntoLibrary
           }
           captureFocusOptions={resourceCaptureFocusOptions}
           onOrganizeResource={
@@ -10325,6 +10289,9 @@ export function App() {
           }
           onExportResource={
             isBrowserPreview && browserPreviewFixture ? undefined : exportLibraryResource
+          }
+          onMigrateLibrary={
+            isBrowserPreview && browserPreviewFixture ? undefined : requestLibraryMigration
           }
           onListLibraryFolders={
             isBrowserPreview && browserPreviewFixture ? undefined : listLibraryFolders
@@ -10406,7 +10373,85 @@ export function App() {
     handleHintReveal(level);
   };
 
-  const renderTrainingView = () => {
+  /**
+   * The inline card owns practice submission now. This mirrors the training
+   * branch of handleSubmit without routing the answer through the dock
+   * composer; persistence and evidence semantics stay in the same handlers.
+   */
+  const submitInlinePracticeAnswer = async () => {
+    const answer = activityDraft.trim();
+    if (!answer || trainingPersistencePending) {
+      return;
+    }
+    if (!trainingComposerReflectMode && (!providerCanCoachNow || providerBlockReason)) {
+      setOperationMessage({ tone: "info", message: blockedComposerGuidance });
+      return;
+    }
+    try {
+      if (trainingComposerUsesAnswerMode) {
+        const selectedOptionIndex =
+          trainingComposerFlashMode === "choice"
+            ? normalizedTrainingFlashChoices.findIndex(
+                (choice) =>
+                  normalizeInlineComparisonText(choice) === normalizeInlineComparisonText(answer),
+              )
+            : -1;
+        await requestTrainingPersistence(
+          activeTheoryDrill?.id
+            ? trainerCommands.trainingTheoryDrillAnswer
+            : trainerCommands.trainingFlashcardAnswer,
+          activeTheoryDrill?.id
+            ? {
+                theoryDrillId: activeTheoryDrill.id,
+                questionId: flashQuestion?.id,
+                learnerAnswer: answer,
+                selectedOptionIndex: selectedOptionIndex >= 0 ? selectedOptionIndex : undefined,
+              }
+            : {
+                cardId: activeTrainingCardId,
+                learnerAnswer: answer,
+                selectedOptionIndex: selectedOptionIndex >= 0 ? selectedOptionIndex : undefined,
+              },
+        );
+        sendTrainingFeedback({
+          phase: "answer",
+          cardTitle: visibleTrainingCardTitle ?? liveTrainingTitle,
+          question: flashQuestion?.prompt ?? trainingFlashPrompt ?? trainingProblemStatement,
+          learnerAnswer: answer,
+          evidenceItems: authoritativeVerifyItems,
+        });
+      } else {
+        const shouldStartFeedback = await handleSubmitTrainingEvidence(answer, "result");
+        if (!shouldStartFeedback) {
+          setActivityDraft("");
+          return;
+        }
+        sendTrainingFeedback({
+          phase: trainingComposerReflectMode ? "reflection" : "evidence",
+          cardTitle: visibleTrainingCardTitle ?? liveTrainingTitle,
+          question: reviewArtifactForeground
+            ? trainingState?.reviewArtifact?.summary
+            : trainingComposerSelectedVerifyItem ?? trainingProblemStatement,
+          learnerAnswer: answer,
+          evidenceItems: reviewArtifactForeground
+            ? selectedTrainingCardCandidate?.verificationSteps ?? []
+            : authoritativeVerifyItems,
+        });
+      }
+      setActivityDraft("");
+    } catch {
+      setOperationMessage({
+        tone: "error",
+        message: trainingPersistenceFailureMessage(layout.composerLanguage),
+      });
+    }
+  };
+
+  const renderTrainingView = (inline = false) => {
+    const libraryCards = trainingState?.trainingCardCandidates ?? [];
+    const hasLibrary = (!isBrowserPreview || !browserPreviewFixture) && libraryCards.some(
+      (card) => !card.mergedInto && card.status !== "archived" && card.reviewState !== "rejected",
+    );
     const title = hasRenderableTrainingCard
       ? readTrainingCardText(boundTrainingCardFacts, "title", () => pickFirstText(
           visibleTrainingCardTitle,
@@ -10495,8 +10540,23 @@ export function App() {
         ))
       : undefined;
 
+    // The candidate library stays reachable in the inline card: reviewing a
+    // candidate is a decision the learner makes on the card itself.
+    const cardLibrary = hasLibrary ? (
+          <TrainingCardLibrary
+            language={layout.composerLanguage}
+            cards={libraryCards}
+            selectedCardId={activeTrainingCardId}
+            busy={trainingPersistencePending}
+            onAction={handleTrainingLibraryAction}
+            onImportance={handleMarkCandidateImportant}
+            onPriority={handleSetCandidatePriority}
+            onMerge={handleMergeCandidateDuplicates}
+          />
+    ) : null;
     return (
-      <section className="training-view">
+      <section className={`training-view${inline ? " training-view--inline" : ""}`}>
+        {!inline && !hasRenderableTrainingCard ? cardLibrary : null}
         <Suspense fallback={<ViewFallback label={t.training} language={layout.composerLanguage} />}>
           <TrainingWorkbenchView
           language={layout.composerLanguage}
@@ -10507,16 +10567,43 @@ export function App() {
             <SystemState kind="success" title={templateCopy[layout.composerLanguage].reviewRecorded}
               detail={trainingState?.reviewArtifact?.verifiedResult ?? trainingState?.reviewArtifact?.summary}
               action={{ label: templateCopy[layout.composerLanguage].askCoach, onClick: handleResumeTrainingInCoach }} />
-          ) : trainingComposerReflectMode ? (
-            <MessageRichContent body={
-              // P4 review artifact foreground: the review's own summary is the
-              // recall ask — show it as the reflection prompt instead of an
-              // empty body when no candidate reflection prompt exists.
-              reviewArtifactForeground && trainingState?.reviewArtifact?.summary?.trim()
-                ? trainingState.reviewArtifact.summary
-                : readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) ?? ""
-            } language={layout.composerLanguage} />
-          ) : null}
+          ) : (
+            <InlinePracticeAnswer
+              language={layout.composerLanguage}
+              value={activityDraft}
+              onChange={setActivityDraft}
+              onSubmit={() => { void submitInlinePracticeAnswer(); }}
+              busy={trainingPersistencePending}
+              placeholder={resolvedTrainingComposerPlaceholder}
+              // The card owns the phase, so the submit control names the phase
+              // action instead of a generic "submit".
+              submitLabel={
+                trainingComposerReflectMode
+                  ? trainingHandoffComposerTextCopy.reflectSubmitAriaLabel
+                  : trainingComposerUsesAnswerMode
+                    ? templateCopy[layout.composerLanguage].submitAnswer
+                    : undefined
+              }
+              // The card owns the phase's single primary action. When that
+              // action is the file-verification step, the answer stays a
+              // secondary input instead of competing for the accent.
+              submitTone={
+                trainingComposerFilePracticeMode && !trainingComposerReflectMode
+                  ? "ghost"
+                  : "accent"
+              }
+              prompt={trainingComposerReflectMode ? (
+                <MessageRichContent body={
+                  // P4 review artifact foreground: the review's own summary is the
+                  // recall ask — show it as the reflection prompt instead of an
+                  // empty body when no candidate reflection prompt exists.
+                  reviewArtifactForeground && trainingState?.reviewArtifact?.summary?.trim()
+                    ? trainingState.reviewArtifact.summary
+                    : readTrainingCardText(boundTrainingCardFacts, "reflectionPrompt", () => trainingReflectionPrompt) ?? ""
+                } language={layout.composerLanguage} />
+              ) : undefined}
+            />
+          )}
           cardId={activeTrainingCardId}
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
@@ -10653,6 +10740,9 @@ export function App() {
                     trainingState?.latestLearningFollowup,
                   ),
           }}
+          // The practice card lives inline in the conversation now, so the
+          // due-review queue it opens must live there too: "Start review" is
+          // reachable from the learning drawer's practice section.
           reviewItems={trainingReviewItems}
           onReviewQueueAction={(payload) => {
             if (payload.action === "accept") beginTrainingReview();
@@ -10681,14 +10771,15 @@ export function App() {
           leftoverNote={leftoverTrainingHandoffChromeNotLive ? t.leftoverNotLive : undefined}
           actions={hasTrainingCard ? trainingCoachAction : undefined}
           emptyState={
-            leftoverTrainingHandoffChromeNotLive ? undefined : (
+            leftoverTrainingHandoffChromeNotLive || (hasLibrary && !workspaceSessionBlocked) ? undefined : (
             <SystemState kind={workspaceSessionBlocked ? "workspace-required" : "empty"} title={t.trainingEmptyTitle} detail={workspaceSessionBlockMessage || t.trainingEmptyDescription}
-              action={{ label: workspaceSessionBlocked ? t.settings : t.startTraining, onClick: () => workspaceSessionBlocked ? openWorkspaceAdmission() : handleGenerateTrainingCard() }} />
+              action={{ label: workspaceSessionBlocked ? t.settings : COACH_MESSAGE_ACTION_LABELS[layout.composerLanguage]["training-card"], onClick: () => workspaceSessionBlocked ? openWorkspaceAdmission() : handleGenerateTrainingCard() }} />
             )
           }
           onNextCard={handleNextTrainingCard}
           />
         </Suspense>
+        {hasRenderableTrainingCard ? cardLibrary : null}
       </section>
     );
   };
@@ -10781,25 +10872,13 @@ export function App() {
       confirmStep: () => openPlanComposerMode("explain"),
     },
   );
-  const learningPracticeReadyToContinue = Boolean(
-    boundTrainingCardFacts?.bound !== false && boundTrainingCardFacts && trainingCardType === "practice" && recoveredRuntime &&
-    syncStatus === "current" && learningPrimaryAction.intent === "resume_training" &&
-    learningPrimaryAction.target.cardId === boundTrainingCardFacts.cardId &&
-    !learningPrimaryAction.disabled && !learningPrimaryAction.busy,
-  );
   const renderPlanView = () => (
     <section className="plan-view">
       <Suspense fallback={<ViewFallback label={t.plan} language={layout.composerLanguage} />}>
         <CoachPlanView
         plan={workspaceSessionBlocked ? null : visibleFormalPlan}
-        dockReturnNotice={dockReturnNotice === "plan" ? (
-          <DockReturnToSurfaceBar
-            language={layout.composerLanguage}
-            surface="plan"
-            onViewReply={handleDockReturnViewReply}
-            onDismiss={handleDockReturnDismiss}
-          />
-        ) : undefined}
+        showRoadmap={false}
+        variant="drawer"
         primaryAction={{
           label: templateCopy[layout.composerLanguage].nextAction,
           title: learningPrimaryAction.title,
@@ -10821,6 +10900,7 @@ export function App() {
         primaryEvidenceId={learningPrimaryAction.target.evidenceId}
         projection={data.workspaceTrainingState?.skillProjection}
         onNavigateToView={setActiveView}
+        onReviewQueueAction={handleReviewQueueAction}
         className="plan-pane"
         compactPrimary
         onExpandToEditor={canOpenInEditor ? () => openViewInEditor("plan") : undefined}
@@ -11122,6 +11202,35 @@ export function App() {
     </section>
   );
 
+  const learningSummary = useMemo(
+    () => deriveLearningSummary({
+      language: layout.composerLanguage,
+      planTitle: livePlanTitle,
+      currentStep: learningFacts.plan.currentStep,
+      frozen: livePlanFrozen,
+      dueCount: planReviewItems.filter((item) => item.surfaceMode === "due").length,
+      dueCardTitle: hasTrainingCard ? visibleTrainingCardTitle : undefined,
+      projection: data.workspaceTrainingState?.skillProjection,
+    }),
+    [
+      data.workspaceTrainingState?.skillProjection,
+      hasTrainingCard,
+      layout.composerLanguage,
+      learningFacts.plan.currentStep,
+      livePlanFrozen,
+      livePlanTitle,
+      planReviewItems,
+      visibleTrainingCardTitle,
+    ],
+  );
+
+  const learningPracticeReadyToContinue = Boolean(
+    boundTrainingCardFacts?.bound !== false && boundTrainingCardFacts && trainingCardType === "practice" && recoveredRuntime &&
+    syncStatus === "current" && learningPrimaryAction.intent === "resume_training" &&
+    learningPrimaryAction.target.cardId === boundTrainingCardFacts.cardId &&
+    !learningPrimaryAction.disabled && !learningPrimaryAction.busy,
+  );
+
   const providerSettingsActions = buildProviderSettingsActions({
     language: layout.composerLanguage,
     isBrowserPreview,
@@ -11176,55 +11285,51 @@ export function App() {
     />
   );
 
-  const renderProgressView = () => (
-    <section className="progress-view-section">
-      <Suspense fallback={<ViewFallback label={t.progress} language={layout.composerLanguage} />}>
-        <ProgressView
-          language={layout.composerLanguage}
-          projection={data.workspaceTrainingState?.skillProjection}
-          onOpenTraining={() => setActiveView("training")}
-        />
-      </Suspense>
-    </section>
-  );
-
-  const renderLearningWorkspace = (view: "plan" | "training" | "progress") => (
-    <LearningWorkspace
-      language={layout.composerLanguage}
-      activeTab={view}
-      onTabChange={(tab) => setActiveView(tab)}
-      goal={view === "plan" ? undefined : (visibleFormalPlan?.title || goalText)}
-      details={view === "plan" ? undefined : activePlanStage?.title}
-      activity={data.memory.learningActivity}
-      entries={leftoverTrainingHandoffChromeNotLive ? [] : trainingState?.trainingEventLedger ?? []}
-      onReview={planReviewItems.some((item) => item.surfaceMode === "due") ? useWorkbenchState.getState().openTrainingReviewQueue : undefined}
-      reviewLabel={templateCopy[layout.composerLanguage].startReview}
-      evidence={view === "progress" ? renderProgressView() : null}
-      overview={view === "training" && hasFormalPlan ? { label: planText.overviewLabel, content: renderPlanView() } : undefined}
-      librarySearch={learningLibrarySearch?.scope === surfaceInstanceKey ? learningLibrarySearch : undefined}
-      resources={data.resources}
-    >
-      {view === "training" ? renderTrainingView() : renderPlanView()}
-      {learningFileVerification?.scope === attachmentScope ? (
-        <VerificationResult language={layout.composerLanguage}
-          verdict={learningFileVerification.passed ? "passed" : learningFileVerification.report.checks.some((check) => check.status === "fail") ? "failed" : "unknown"}
-          summary={learningFileVerification.report.summary} checks={learningFileVerification.report.checks} />
-      ) : null}
-      {renderViewAgentReply(view === "training" ? "training" : "plan")}
-    </LearningWorkspace>
-  );
-
   const renderWorkbenchSurface = (view: ActiveWorkbenchView) => {
     switch (view) {
-      case "plan":
-      case "training":
-      case "progress": return renderDockedView("plan", renderLearningWorkspace(view));
-      case "resources": return renderDockedView("resources", <>{renderResourcesView()}{renderViewAgentReply("resources")}</>);
+      case "resources": return renderDockedView("resources", renderResourcesView());
       case "settings": return renderDockedView("settings", renderSettingsView());
       default: return renderCoachRootView();
     }
   };
 
+  // The learning drawer's content is assembled outside App: the shell file
+  // wires the workbench, the drawer owns its own cards.
+  const learningDrawerSections = useLearningDrawerSections({
+    language: layout.composerLanguage,
+    summary: learningSummary,
+    planDetail: renderPlanView(),
+    operationMessage,
+    operationMessageSurface,
+    goal: {
+      active: Boolean(goalMode || goalText.trim()),
+      paused: goalPaused,
+      onPause: () => {
+        pauseGoal();
+        requestGoalControl("pause");
+      },
+      onResume: () => {
+        resumeGoal();
+        requestGoalControl("resume");
+      },
+      onClear: () => {
+        clearGoal();
+      },
+    },
+    reviewItems: planReviewItems,
+    onReviewQueueStart: handleReviewQueueAction,
+    onOpenReviewQueue: () => {
+      useWorkbenchState.getState().openTrainingReviewQueue();
+    },
+  });
+
+  const trainingCardSettled = Boolean(
+    hasTrainingCard &&
+    (trainingState?.latestLearningVerifiedResult ||
+      trainingState?.latestLearningPartialProgress ||
+      trainingState?.latestLearningBlocker ||
+      normalizedTrainingNextHopStatus === "continued_in_chat"),
+  );
   const workbenchShell = (
       <AppShell
         language={layout.composerLanguage}
@@ -11232,7 +11337,21 @@ export function App() {
         activeView={activeView}
         context={data.workspaceName}
         historyOpen={openMenu === "history"}
-        onHistory={toggleComposerHistoryMenu}
+        onHistory={() => {
+          // One utility surface at a time: the history drawer and the learning
+          // drawer are both overlays, and two open overlays cover each other.
+          closeLearningDrawer();
+          toggleComposerHistoryMenu();
+        }}
+        learningOpen={layout.learningDrawerOpen === true}
+        onLearning={() => {
+          setOpenMenu(undefined);
+          if (layout.learningDrawerOpen) {
+            closeLearningDrawer();
+          } else {
+            openLearningDrawer(layout.learningSection ?? "goal");
+          }
+        }}
         onNavigate={setActiveView}
         surfaceControl={
           editorPanelSurface ? (
@@ -11292,7 +11411,11 @@ export function App() {
         </UtilityOverlay>
       ) : null}
 
-      {operationMessage && operationMessageVisible && !(operationMessageSurface === "global" && operationMessage.tone === "success" && activeView !== "coach" && activeView !== "settings") ? (
+
+      {operationMessage && operationMessageVisible
+        && operationMessageSurface !== "training"
+        && operationMessageSurface !== "plan"
+        && !(operationMessageSurface === "global" && operationMessage.tone === "success" && activeView !== "coach" && activeView !== "settings") ? (
         <div className="template-global-state">
           <SystemState kind={operationMessage.tone === "error" ? "recoverable-error" : operationMessage.tone === "success" ? "success" : "information"}
             title={sanitizeErrorSurfaceText(operationStatusMessageText(operationMessage, layout.composerLanguage), layout.composerLanguage)}>
@@ -11301,30 +11424,37 @@ export function App() {
         </div>
       ) : null}
 
+      {/* One positioned body under the header: the conversation and the
+          composer share it, so the learning modal can cover both. */}
+      <div className="trainer-body">
       <main
         className={`view-content${activeView === "coach" ? "" : " view-content--docked"}`}
         ref={viewContentRef}
       >
-        {hasReceivedHostState || isBrowserPreview || injectedBootstrapAvailable ? (
-          <WorkbenchSurfaces key={surfaceInstanceKey} activeView={activeView} render={renderWorkbenchSurface} />
-        ) : (
-          <SystemState kind="loading" title={appUiCopy(layout.composerLanguage, "正在加载{v}…").replace("{v}", "Trainer")} />
-        )}
-          {composerActionPreview?.scope === attachmentScope && !streaming.isStreaming ? (
-            <div className="unified-composer-preview" data-unified-action-preview={composerActionPreview.kind} role="group" aria-label={unifiedCopy.actionPreview}>
-              <strong>{unifiedCopy.actionPreview}</strong>
-              {composerActionPreview.detail ? <span className="template-metadata">{composerActionPreview.detail}</span> : null}
-              <p>{composerActionPreview.text}</p>
-              <div className="unified-composer-preview__actions">
-                <button className="button button--accent" type="button" onClick={() => { void handleSubmit(composerActionPreview.key); }}>{unifiedCopy.confirm}</button>
-                <button className="button button--ghost" type="button" onClick={() => setComposerActionPreview(undefined)}>{unifiedCopy.cancel}</button>
-              </div>
+      {hasReceivedHostState || isBrowserPreview || injectedBootstrapAvailable ? (
+        <WorkbenchSurfaces key={surfaceInstanceKey} activeView={activeView} render={renderWorkbenchSurface} />
+      ) : (
+        <SystemState kind="loading" title={appUiCopy(layout.composerLanguage, "正在加载{v}…").replace("{v}", "Trainer")} />
+      )}
+        {composerActionPreview?.scope === attachmentScope && !streaming.isStreaming ? (
+          <div className="unified-composer-preview" data-unified-action-preview={composerActionPreview.kind} role="group" aria-label={unifiedCopy.actionPreview}>
+            <strong>{unifiedCopy.actionPreview}</strong>
+            {composerActionPreview.detail ? <span className="template-metadata">{composerActionPreview.detail}</span> : null}
+            <p>{composerActionPreview.text}</p>
+            <div className="unified-composer-preview__actions">
+              <button className="button button--accent" type="button" onClick={() => { void handleSubmit(composerActionPreview.key); }}>{unifiedCopy.confirm}</button>
+              <button className="button button--ghost" type="button" onClick={() => setComposerActionPreview(undefined)}>{unifiedCopy.cancel}</button>
             </div>
-          ) : null}
+          </div>
+        ) : null}
       </main>
 
+      {/* The composer stays mounted under the learning modal: the sheet covers
+          it while the drawer is open, so the draft and the focus survive. */}
       {showComposerShell ? (
-      <footer className="composer-shell composer-shell--quiet">
+      <footer
+        className="composer-shell composer-shell--quiet"
+      >
           <div ref={composerShellRef}>
             {showComposerPresenceBar ? (
               <div className="composer-presencebar">
@@ -11378,86 +11508,6 @@ export function App() {
               </div>
             ) : null}
 
-            {!composerUsesTrainingFlow && activeView === "coach" && resourceConversationContextLabel ? (
-              <div
-                className="composer-presencebar"
-                aria-label={resourceConversationContextLabel}
-                role="group"
-              >
-                <div className="composer-presencebar__context">
-                  <div className="composer-presencebar__copy">
-                    <strong>{appUiCopy(layout.composerLanguage, "资料上下文")}</strong>
-                    <span>{resourceConversationContextLabel}</span>
-                  </div>
-                </div>
-                <div className="composer__buttons">
-                  <button
-                    className="button button--ghost composer-secondary-button"
-                    type="button"
-                    onClick={() => {
-                      setSelectedResourceContextIds([]);
-                      setResourceConversationContextIds([]);
-                    }}
-                  >
-                    <span className="composer-secondary-button__label">
-                      {appUiCopy(layout.composerLanguage, "清除")}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {(goalMode || goalDraftPending) && activeView === "coach" ? (
-              <CoachGoalBar
-                language={layout.composerLanguage}
-                title={goalText}
-                paused={goalPaused}
-                pending={goalDraftPending}
-                onPause={() => {
-                  pauseGoal();
-                  requestGoalControl("pause");
-                }}
-                onResume={() => {
-                  resumeGoal();
-                  requestGoalControl("resume");
-                }}
-                onClear={() => {
-                  if (goalDraftPending) {
-                    setPendingGoalScope(undefined);
-                    requestCoachComposerFocus();
-                    return;
-                  }
-                  clearGoal();
-                  requestGoalControl("complete");
-                }}
-              />
-            ) : null}
-            {activeView === "plan" && coachPlanContext ? <div className="template-context" role="group">
-              <span>{resolvePlanComposerCopy(layout.composerLanguage).modes[coachPlanContext].label}</span>
-              <button type="button" className="template-back" onClick={() => setCoachPlanContext(undefined)}>{appUiCopy(layout.composerLanguage, "清除")}</button>
-            </div> : null}
-            {dockAnchorControl.anchor && activeView !== "coach" ? <div className="template-context" role="group" data-dock-anchor="true">
-              <span>{dockAnchorControl.anchor.label}</span>
-              <button type="button" className="template-back" onClick={dockAnchorControl.suppress}>{appUiCopy(layout.composerLanguage, "清除")}</button>
-            </div> : null}
-            {browserComposerSource ? (
-              <div className="template-context" role="group" aria-label={unifiedCopy.context}>
-                <span title={browserComposerSource.url}>{browserComposerSource.title || browserComposerSource.url}</span>
-                <button type="button" className="template-back"
-                  onClick={() => useWorkbenchState.getState().clearComposerBrowserSource(composerDraftScope, browserComposerSource.id)}>
-                  {appUiCopy(layout.composerLanguage, "清除")}
-                </button>
-              </div>
-            ) : null}
-            {activeView !== "coach" && activeComposerResourceIds.length ? (
-              <div className="template-context" role="group" aria-label={unifiedCopy.resources}>
-                <span>{unifiedCopy.resources} · {activeComposerResourceIds.length}</span>
-                <button type="button" className="template-back" onClick={() => {
-                  useWorkbenchState.getState().writeComposerResourceRefs(composerResourceScopeFor(activeView), [], "replace");
-                  if (activeView === "resources") setSelectedResourceContextIds([]);
-                }}>{appUiCopy(layout.composerLanguage, "清除")}</button>
-              </div>
-            ) : null}
             <CoachComposer
               attachmentScope={composerUsesTrainingFlow ? `${attachmentScope}\u0000${activityDraftKey}\u0000${trainingComposerPhase}` : attachmentScope}
               density={composerModelActionDensity}
@@ -11535,7 +11585,6 @@ export function App() {
                     />
                   ) : null}
                   {renderComposerAccessory()}
-                  {renderTrainingComposerAccessory()}
                   {composerUsesTrainingFlow ? null : renderSkillDeck()}
                   {renderCommandDeck()}
                 </>
@@ -11786,6 +11835,29 @@ export function App() {
           </div>
         </footer>
       ) : null}
+
+      {/* The learning drawer is a modal sheet at the shell level: it covers
+          the conversation and the composer together, while the header (with
+          the navigation row and the utilities) stays above it and clickable. */}
+      {layout.learningDrawerOpen === true ? (
+        <UtilityOverlay
+          label={viewLabels[layout.composerLanguage].plan}
+          closeLabel={appUiCopy(layout.composerLanguage, "关闭")}
+          overlay="learning"
+          panelClassName="learning-drawer-panel"
+          onClose={closeLearningDrawer}
+        >
+          <LearningDrawer
+            language={layout.composerLanguage}
+            section={layout.learningSection ?? "goal"}
+            onSectionChange={setLearningSection}
+            goal={learningDrawerSections.goal}
+            practice={learningDrawerSections.practice}
+            progress={learningDrawerSections.progress}
+          />
+        </UtilityOverlay>
+      ) : null}
+      </div>
       </AppShell>
   );
 

@@ -1,7 +1,10 @@
 /**
- * §十二/§十五: Growth Evidence copy tables for ProgressView, in eight languages
- * (no zh/en binary). Moved verbatim from components/progress/ProgressView.tsx —
- * strings, languages, keys and constant names unchanged.
+ * §十二/§十五: growth copy tables in eight languages (no zh/en binary).
+ *
+ * The standalone Progress page is retired: these tables now serve the growth
+ * rows of the governed plan card (components/plan/CoachPlanView.tsx) and the
+ * progress section of the learning drawer (lib/learningSummary.ts). The
+ * strings, languages, keys and constant names are unchanged.
  */
 
 import type { ComposerLanguage, TrainingSkillDimensionKey, TrainingSkillDimensionState } from "../../types";

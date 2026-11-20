@@ -1,9 +1,4 @@
-/* Learning is a stack of cards, not a board frame.
- *
- * Each group label is a quiet eyebrow; every stage/review/evidence item is its
- * own compact card. Resources intentionally has no board: the library stays a
- * single rounded shell around the existing file-manager tree.
- */
+/* Learning groups share a single scroll surface. */
 
 .learning-cards {
   display: grid;
@@ -30,11 +25,24 @@
   gap: 2px;
 }
 
-.learning-cards__header h2 {
+.learning-cards > .learning-cards__header h2 {
   margin: 0;
-  font-size: var(--trainer-font-lg);
+  font-size: calc(var(--trainer-font-lg) + 3px);
   line-height: 1.35;
 }
+
+.learning-cards__summary {
+  margin: 0;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-sm);
+  line-height: 1.55;
+}
+
+.learning-cards--roadmap { gap: var(--space-3); }
+.learning-cards--roadmap > .learning-card-stack { gap: var(--space-3); }
+.learning-cards--roadmap [data-learning-card-group="route"] { gap: var(--space-2); }
+.learning-cards--roadmap .stage-row + .stage-row { margin-top: 0; }
+.learning-cards--roadmap [data-learning-card-group="route"] .learning-card-group__cards { gap: 0 var(--space-3); }
 
 .learning-cards__subhead {
   display: flex;
@@ -67,8 +75,11 @@
 }
 
 .learning-card--now {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-  background: color-mix(in srgb, var(--accent) 4%, var(--bg-1));
+  padding: var(--space-3) 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .learning-card-group {
@@ -149,15 +160,35 @@
 }
 
 .board-card--stage {
-  padding: 5px 6px;
-  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--bg-1) 38%, transparent);
+  padding: var(--space-1) 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
-.board-card--stage.stage-row--active {
-  border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
-  background: color-mix(in srgb, var(--accent) 5%, var(--bg-1));
+.board-card--stage:hover {
+  border-color: var(--line);
+  background: var(--bg-1);
+}
+
+.board-card--stage.stage-row--active::before {
+  content: none;
+}
+
+.board-card--stage .coach-plan-view__status {
+  margin-inline-start: var(--space-2);
+  padding: 0;
+  border: 0;
+  color: var(--fg-muted);
+}
+
+.board-card--stage.stage-row--active .stage-block__title-text {
+  color: var(--fg-0);
+}
+
+.board-card--stage.stage-row--active .coach-plan-view__status {
+  color: var(--accent);
 }
 
 .board-card--growth {
@@ -231,22 +262,22 @@
 }
 
 .learning-card--now .template-next-action {
-  padding-block: 2px 4px;
-  gap: 4px;
+  padding-block: 0;
+  gap: var(--space-1);
 }
 
 .learning-card--now .template-next-action h3 {
-  font-size: var(--trainer-font-sm);
+  font-size: var(--trainer-font-md);
   line-height: 1.35;
 }
 
 .learning-card--now .template-next-action__detail {
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.4;
+  font-size: var(--trainer-font-sm);
+  line-height: 1.5;
 }
 
 .learning-card--now .template-next-action > button {
-  margin-top: 0;
+  margin-top: var(--space-1);
   max-width: 100%;
   min-width: 0;
   white-space: normal;
@@ -288,20 +319,13 @@
   gap: 4px;
 }
 
-/* Resources: one rounded shell around the whole library (toolbar + tree). */
 .resources-pane .template-library {
   min-width: 0;
-  padding: 6px;
-  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-2) 16%, transparent);
+  padding-block: var(--space-1);
 }
 
 .resources-library-shell {
   min-width: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
 }
 
 .resources-library-shell .resources-knowledge__tree {
@@ -354,8 +378,14 @@
 }
 
 .board-card--evidence[data-evidence-disclosure="true"] > .coach-plan-view__details-group {
-  padding: 0 7px 6px;
+  padding: 0;
+}
+
+.board-card--evidence[data-evidence-disclosure="true"] .coach-plan-view__evidence-row {
+  padding: var(--space-2) 0;
   border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
   background: transparent;
 }
 

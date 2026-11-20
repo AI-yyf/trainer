@@ -238,8 +238,13 @@ function loadWorkbenchState({ injectedBootstrap, persisted } = {}) {
       }
       if (request === '../lib/types') {
         return {
+          normalizeLearningSection: (view) =>
+            view === 'plan' ? 'goal'
+              : view === 'training' || view === 'practice' ? 'practice'
+                : view === 'progress' ? 'progress'
+                  : null,
           normalizeSidebarView: (view) =>
-            view === 'training' || view === 'resources' ? view : 'coach',
+            view === 'resources' || view === 'settings' ? view : 'coach',
           normalizeTeachingStyle: (style) => style ?? 'auto',
         };
       }
@@ -384,6 +389,29 @@ function assertNoFixtureData(data) {
     'a neutral or sparse real bootstrap must not fall back to fixture fields',
   );
 }
+
+test('a plan or library patch does not reopen a completed composer stream', () => {
+  const state = loadWorkbenchState();
+  const messageId = 'plan-confirmation';
+  state.getState().applyHostMessage({ type: 'stream/start', payload: { messageId } });
+  state.getState().applyHostMessage({
+    type: 'state/patch',
+    payload: { streamingState: { isStreaming: true, streamMessageId: messageId } },
+  });
+  state.getState().applyHostMessage({
+    type: 'stream/complete',
+    payload: { messageId, tokens: 7, summary: 'Plan saved', reliabilityPhase: 'acked' },
+  });
+  assert.equal(state.getState().streaming.isStreaming, false);
+  state.getState().applyHostMessage({
+    type: 'state/patch',
+    payload: { stageMaterials: { foundations: [] } },
+  });
+  assert.deepEqual(state.getState().stageMaterials.foundations, []);
+  assert.equal(state.getState().streaming.isStreaming, false);
+  assert.equal(state.getState().streaming.reliabilityPhase, 'acked');
+  assert.equal(state.getState().streaming.completionSummary, 'Plan saved');
+});
 
 test('the initial VS Code empty state contains no browser fixture data', () => {
   const state = loadWorkbenchState();
@@ -838,7 +866,9 @@ test('a sparse Training bootstrap keeps a restored next hop visible', () => {
   });
 
   const resolved = state.getState();
-  assert.equal(resolved.layout.activeView, 'training');
+  assert.equal(resolved.layout.activeView, 'coach');
+  assert.equal(resolved.layout.learningDrawerOpen, true);
+  assert.equal(resolved.layout.learningSection, 'practice');
   assert.equal(resolved.trainingRestoreContext?.target, 'next_hop');
   assert.equal(resolved.data.workspaceTrainingState?.latestTrainingNextHop?.targetId, nextHop.targetId);
   assert.equal(resolved.data.workspaceTrainingState?.selectedCardTitle, nextHop.cardTitle);
@@ -917,10 +947,12 @@ test('a new runtime database drops restore targets even when its context ID is u
   assert.deepEqual(restored.stageMaterials, {});
 });
 
-test('review navigation opens Training and clears the request when leaving it', () => {
+test('review navigation opens Chat with the practice drawer and clears on leave', () => {
   const state = loadWorkbenchState();
   state.getState().openTrainingReviewQueue();
-  assert.equal(state.getState().layout.activeView, 'training');
+  assert.equal(state.getState().layout.activeView, 'coach');
+  assert.equal(state.getState().layout.learningDrawerOpen, true);
+  assert.equal(state.getState().layout.learningSection, 'practice');
   assert.equal(state.getState().trainingReviewQueueRequested, true);
   state.getState().setActiveView('coach');
   assert.equal(state.getState().trainingReviewQueueRequested, false);
@@ -936,7 +968,8 @@ test('accepting a review clears the previous restored training target', () => {
   state.getState().beginTrainingReview();
   assert.equal(state.getState().trainingRestoreContext, undefined);
   assert.equal(state.getState().trainingReviewQueueRequested, false);
-  assert.equal(state.getState().layout.activeView, 'training');
+  assert.equal(state.getState().layout.activeView, 'coach');
+  assert.equal(state.getState().layout.learningSection, 'practice');
 });
 
 test('stream/cancelled keeps composer draft and acks failure without clearing it', () => {

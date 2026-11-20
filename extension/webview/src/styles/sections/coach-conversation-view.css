@@ -87,8 +87,8 @@
   /* Copilot-style thread: no vertical rule beside every reply. Left
      alignment and spacing carry the grouping; the speaker rail is hidden on
      the quiet surface by design. */
-  border-left: 0;
-  padding-left: 0;
+  border-inline-start: 0;
+  padding-inline-start: 0;
 }
 
 .coach-conversation-view--quiet-surface .message-bubble--assistant .message-bubble__assistant-rail {
@@ -245,7 +245,7 @@
   padding: 3px 0 3px var(--space-2);
   background: transparent;
   border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
-  border-left: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  border-inline-start: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
 }
 
 .coach-thread-strip {
@@ -337,7 +337,10 @@
 
 .coach-conversation-view--quiet-surface .coach-conversation-view__list {
   flex: 1 1 auto;
-  min-height: 0;
+  /* The inline practice card lives in the same column as the thread. Without a
+     floor the card squeezes the conversation to a few pixels, and the learner
+     can no longer read what they just sent or what Coach answered. */
+  min-height: 140px;
   overflow: auto;
   width: 100%;
   max-width: var(--coach-content-max, 660px);
@@ -393,7 +396,7 @@
   gap: 2px;
   min-width: 0;
   padding: 0 0 0 var(--space-2);
-  border-left: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  border-inline-start: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
 }
 
 .coach-turn-recap__fact-value {

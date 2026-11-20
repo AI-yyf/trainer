@@ -16,19 +16,17 @@ const viewPath = path.resolve(
   'ResourcesWorkbenchView.tsx',
 );
 
-test('ResourceReader exposes VS Code and default-app open actions', () => {
+test('ResourceReader exposes the VS Code editor action', () => {
   const source = fs.readFileSync(readerPath, 'utf8');
   assert.match(source, /openInEditor\?: TemplateAction;/);
-  assert.match(source, /openExternally\?: TemplateAction;/);
-  assert.match(source, /data-reader-open=\{kind as string\}/);
+  assert.doesNotMatch(source, /openExternally/);
+  assert.match(source, /onClick=\{openInEditor.onClick\}/);
   assert.match(source, /className="template-reader-open-actions"/);
 });
 
 test('Resources wires the reader actions to the host open command', () => {
   const source = fs.readFileSync(viewPath, 'utf8');
   assert.match(source, /openInEditor=\{/);
-  assert.match(source, /openExternally=\{/);
+  assert.doesNotMatch(source, /openExternally|openWithDefaultApp|openExternal/);
   assert.match(source, /localize\(language, "openInVsCode"\)/);
-  assert.match(source, /localize\(language, "openWithDefaultApp"\)/);
-  assert.match(source, /openResourceInVsCode\(selectedResource, \{ openExternal: true \}\)/);
 });

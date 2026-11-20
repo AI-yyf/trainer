@@ -1683,10 +1683,13 @@ test('openResourceCommand opens the canonical Markdown by default and the origin
     resourceId: 'resource-1',
     openOriginal: true,
   });
+  // md-only: the original is no longer a library artifact, so a legacy
+  // "open original" request still opens the canonical Markdown.
   assert.equal(originalResult.ok, true);
-  assert.equal(openedExternal.length, 1);
-  assert.equal(openedExternal[0].fsPath, originalPath);
-  assert.notEqual(openedExternal[0].fsPath, markdownPath);
+  assert.equal(openedExternal.length, 0);
+  assert.equal(executedCommands.length, 2);
+  assert.equal(executedCommands[1][0], 'vscode.open');
+  assert.equal(executedCommands[1][1].fsPath, markdownPath);
 });
 
 test('openResourceCommand refuses a missing source instead of opening a broken tab', async () => {
@@ -2276,7 +2279,7 @@ test('browse and ignored admissions keep resource search available as a read-onl
   }
 });
 
-test('openResourceCommand opens a text file with the OS default app when requested', async () => {
+test('openResourceCommand keeps legacy external-open requests in VS Code', async () => {
   const executedCommands = [];
   const openedExternally = [];
   const vscodeMock = {
@@ -2316,7 +2319,45 @@ test('openResourceCommand opens a text file with the OS default app when request
   });
 
   assert.equal(result.ok, true);
-  assert.equal(executedCommands.length, 0);
-  assert.equal(openedExternally.length, 1);
-  assert.equal(openedExternally[0].fsPath, expectedPath);
+  assert.equal(executedCommands.length, 1);
+  assert.equal(executedCommands[0][0], 'vscode.open');
+  assert.equal(executedCommands[0][1].fsPath, expectedPath);
+  assert.equal(openedExternally.length, 0);
+});
+
+test('openResourceCommand requires a local capture for both webpage open actions', async () => {
+  const opened = [];
+  const { openResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, {
+    commands: { executeCommand: (...args) => opened.push(args) },
+    env: { openExternal: (...args) => opened.push(args) },
+    workspace: { workspaceFolders: [] },
+  });
+  const context = createContext();
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-resource-capture-'));
+  const bootstrap = context.getHostState().bootstrap;
+  context.getHostState = () => ({ bootstrap, workspace: { workspaceFolder: workspaceRoot } });
+  const resource = bootstrap.resources[0];
+  resource.kind = 'url';
+  resource.source = 'https://example.test/lesson';
+  resource.sandboxPath = undefined;
+  // md-only: there is no "open original" action any more. A legacy request
+  // that still carries the flag resolves to the canonical Markdown, exactly
+  // like a plain open.
+  for (const request of [
+    { resourceId: resource.id },
+    { resourceId: resource.id, openOriginal: true },
+  ]) {
+    const uncaptured = await openResourceCommand(context, request);
+    assert.equal(uncaptured.ok, false);
+    assert.match(uncaptured.message, /Import the webpage|导入资料库/);
+
+    resource.canonicalMarkdownPath = path.join(workspaceRoot, 'markdown.md');
+    resource.canonicalOriginalPath = path.join(workspaceRoot, 'capture.html');
+    const missing = await openResourceCommand(context, request);
+    assert.equal(missing.ok, false);
+    assert.match(missing.message, /not in the current workspace|不在当前工作区/);
+    resource.canonicalMarkdownPath = undefined;
+    resource.canonicalOriginalPath = undefined;
+  }
+  assert.deepEqual(opened, []);
 });

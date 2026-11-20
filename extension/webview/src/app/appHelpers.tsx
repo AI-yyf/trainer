@@ -740,10 +740,6 @@ export const TrainingWorkbenchView = lazy(async () => {
   const module = await import("../components/training/TrainingWorkbenchView");
   return { default: module.TrainingWorkbenchView };
 });
-export const ProgressView = lazy(async () => {
-  const module = await import("../components/progress/ProgressView");
-  return { default: module.ProgressView };
-});
 
 export let browserPreviewModulePromise: Promise<BrowserPreviewModule> | undefined;
 let bootstrapRequestSent = false;
@@ -1719,7 +1715,15 @@ export function normalizeInlineComparisonText(value: string | undefined): string
 }
 
 export function pickFirstText(...values: Array<string | undefined | null>): string | undefined {
-  return values.find((value) => Boolean(value?.trim()))?.trim();
+  // These candidates arrive from the host, so the runtime value can be
+  // something other than the declared string. A malformed field must not take
+  // the whole workbench down.
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
 }
 
 // Training evidence text (evaluator summaries, handoff templates, card-router
@@ -3385,14 +3389,22 @@ export const DirectoryInput = forwardRef<HTMLInputElement, DirectoryInputProps>(
 });
 
 /** Which capture kind the URL implies; the sidecar still validates for real. */
-export function captureTargetKind(url: string): "pdf" | "github_repo" | "web" {
-  const trimmed = url.trim();
-  if (/^https?:\/\/(?:www\.)?github\.com\/[^/]+\/[^/]+/i.test(trimmed)) {
-    return "github_repo";
-  }
+export function captureTargetKind(
+  url: string,
+): "pdf" | "github_repo" | "gitee_repo" | "gitlab_repo" | "web" {
   try {
-    const parsed = new URL(trimmed);
-    if (/\.pdf$/i.test(parsed.pathname)) {
+    const parsed = new URL(url.trim());
+    // GitHub, Gitee and GitLab share the owner/repo shape, so one lane covers
+    // every forge the learner adds from a URL.
+    const repoHost = /^(?:www\.)?(github|gitee|gitlab)\.com$/i.exec(parsed.hostname);
+    if (repoHost && /^\/[^/]+\/[^/]+\/?$/.test(parsed.pathname)) {
+      if (repoHost[1].toLowerCase() === "gitee") return "gitee_repo";
+      if (repoHost[1].toLowerCase() === "gitlab") return "gitlab_repo";
+      return "github_repo";
+    }
+    if (/\.pdf$/i.test(parsed.pathname) ||
+        (/^(?:(?:www|export)\.)?arxiv\.org$/i.test(parsed.hostname) &&
+          /^\/pdf\/[^/]+(?:\/[^/]+)?\/?$/i.test(parsed.pathname))) {
       return "pdf";
     }
   } catch {
@@ -3461,6 +3473,12 @@ export const CAPTURE_CONFIRMATION_TIMEOUT_MS = 30_000;
 export const ORGANIZE_CONFIRMATION_TIMEOUT_MS = 15_000;
 /** Folder list/create/rename/delete answers ride one host round-trip. */
 export const LIBRARY_FOLDER_OPERATION_TIMEOUT_MS = 8_000;
+
+/**
+ * The Markdown-only migration talks to the sidecar and may convert a whole
+ * library, so it gets a wider window than a folder write.
+ */
+export const LIBRARY_MIGRATION_TIMEOUT_MS = 120_000;
 
 export function delayHostWritePoll(): Promise<void> {
   return new Promise((resolve) => {

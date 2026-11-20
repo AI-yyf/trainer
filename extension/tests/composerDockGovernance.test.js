@@ -22,25 +22,26 @@ mod.paths = Module._nodeModulePaths(path.dirname(dockEntry));
 mod._compile(compiled.outputFiles[0].text, dockEntry);
 const dock = mod.exports;
 
-test('dock composer mounts only in the three primary destinations', () => {
-  assert.deepEqual(dock.DOCK_SURFACES, ['coach', 'plan', 'resources']);
+test('dock composer mounts only in the two primary destinations', () => {
+  assert.deepEqual(dock.DOCK_SURFACES, ['coach', 'resources']);
   assert.equal(dock.docksComposer('coach'), true);
-  assert.equal(dock.docksComposer('plan'), true);
   assert.equal(dock.docksComposer('resources'), true);
+  // Legacy learning routes redirect to Chat; they do not own a dock surface.
+  assert.equal(dock.docksComposer('plan'), true);
   assert.equal(dock.docksComposer('training'), true);
   assert.equal(dock.docksComposer('progress'), true);
   assert.equal(dock.docksComposer('settings'), false);
 });
 
-test('draft scopes are surface-keyed; coach keeps the legacy session key', () => {
+test('draft scopes share Chat for legacy learning routes; Resources stays isolated', () => {
   const sessionKey = '/workspace\u0000session-1';
   assert.equal(dock.composerDockDraftScope('coach', sessionKey), sessionKey);
-  assert.equal(dock.composerDockDraftScope('plan', sessionKey), `${sessionKey}\u0000dock:plan`);
+  assert.equal(dock.composerDockDraftScope('plan', sessionKey), sessionKey);
+  assert.equal(dock.composerDockDraftScope('training', sessionKey), sessionKey);
+  assert.equal(dock.composerDockDraftScope('progress', sessionKey), sessionKey);
   assert.equal(dock.composerDockDraftScope('resources', sessionKey), `${sessionKey}\u0000dock:resources`);
-  assert.equal(dock.composerDockDraftScope('training', sessionKey), dock.composerDockDraftScope('plan', sessionKey));
-  // Surface scopes never collide with each other.
   assert.notEqual(
-    dock.composerDockDraftScope('plan', sessionKey),
+    dock.composerDockDraftScope('coach', sessionKey),
     dock.composerDockDraftScope('resources', sessionKey),
   );
 });
@@ -121,7 +122,8 @@ test('the shared composer writes scoped drafts and leaves results in the origina
   assert.doesNotMatch(app, /<PracticeResponse\b/);
   assert.match(app, /const activityDraftKey =/);
   assert.match(app, /const messageText = appendDockAnchor\(rawMessageText, dockAnchor\);/);
-  assert.match(app, /primaryDestinationForRoute\(message\.sourceView\) === destination/);
-  assert.match(app, /renderViewAgentReply\("resources"\)/);
+  // Learning replies are no longer filtered into a separate view lane.
+  assert.doesNotMatch(app, /message\.sourceView === "coach"/);
+  assert.doesNotMatch(app, /renderViewAgentReply\("resources"\)/);
   assert.doesNotMatch(app, /dockSendNavigation\(/);
 });

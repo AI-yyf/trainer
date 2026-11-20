@@ -199,7 +199,7 @@ test('Resources restores one requested surface and keeps it through ordinary vie
   );
   assert.match(
     stateSource,
-    /trainingRestoreContext:\s*requestedView === "training" \? trainingRestoreContext : state\.trainingRestoreContext,/,
+    /trainingRestoreContext:\s*rawRequestedView === "training" \? trainingRestoreContext : state\.trainingRestoreContext,/,
   );
   assert.doesNotMatch(
     stateSource,

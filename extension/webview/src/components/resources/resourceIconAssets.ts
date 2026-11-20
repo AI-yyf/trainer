@@ -163,19 +163,11 @@ function sourceExtension(record: ResourceIconRecord): string {
 }
 
 /**
- * Map a library record to a Material Icon Theme glyph. The material icons
- * carry their own colour, so the tree stays native and readable in light/dark
- * without per-kind CSS.
+ * The library is Markdown-only: every row uses the same Markdown glyph. The
+ * original source format is provenance, never a visible library type.
  */
-export function resourceIconKey(record: ResourceIconRecord): ResourceIconKey {
-  const extension = sourceExtension(record);
-  if (record.kind === "pdf") return "pdf";
-  if (record.kind === "markdown") return "markdown";
-  if (record.kind === "url") return "url";
-  if (record.kind === "image") return "image";
-  if (record.kind === "video") return "video";
-  if (record.kind === "code") return CODE_ICONS[extension] ?? "document";
-  return EXTRA_ICONS[extension] ?? (record.kind === "text" ? "document" : "file");
+export function resourceIconKey(_record: ResourceIconRecord): ResourceIconKey {
+  return "markdown";
 }
 
 export function resourceIconUrl(record: ResourceIconRecord): string {

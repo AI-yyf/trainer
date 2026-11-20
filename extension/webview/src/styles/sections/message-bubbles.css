@@ -82,7 +82,9 @@
 
 .message-bubble__meta-main {
   display: flex;
-  align-items: center;
+  /* Role (12px) and timestamp (11px) share one baseline; centering different
+     font sizes is what made the meta line look 1px off in CJK/Latin mixes. */
+  align-items: baseline;
   gap: var(--space-1);
   min-width: 0;
   width: 100%;
@@ -263,7 +265,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-left: var(--space-4);
+  padding-inline-start: var(--space-4);
 }
 
 .message-part__checklist li,
@@ -335,7 +337,7 @@
 .file-preview-renderer__lang {
   display: inline-flex;
   align-items: center;
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 2px var(--space-2);
   border-radius: var(--radius-full);
   border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
@@ -463,7 +465,7 @@
 .message-bubble__details > summary::before {
   content: "▸";
   display: inline-block;
-  margin-right: 5px;
+  margin-inline-end: 5px;
   color: color-mix(in srgb, var(--fg-muted) 74%, transparent);
   transition: transform var(--motion-fast) var(--motion-ease);
 }
@@ -555,7 +557,10 @@
 .message-bubble__assistant-rail {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  /* The role (12px) and the timestamp (11px) share one text baseline:
+     centering two font sizes is what made the meta line look a pixel off in
+     CJK/Latin mixes. */
+  align-items: baseline;
   gap: 6px;
   margin-bottom: 2px;
   width: 100%;
@@ -656,7 +661,7 @@
   content: "|";
   animation: cursorBlink 1s step-end infinite;
   color: var(--accent);
-  margin-left: 2px;
+  margin-inline-start: 2px;
 }
 
 @keyframes cursorBlink {

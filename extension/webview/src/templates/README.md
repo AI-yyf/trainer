@@ -6,12 +6,12 @@ facts and existing governed handlers.
 
 | Surface | Template | Input/action ownership |
 | --- | --- | --- |
-| Shell | AppShell | Three stable destinations; History/Settings utilities; all six routes remain valid |
-| Coach | Conversation, CoachReply, NextAction | Shared composer with a Coach-scoped draft and conversation |
-| Learning | LearningHome | Current learning/stage/action/completion first; review/route/growth/evidence closed by default |
-| Activity | LearningWorkspace, FocusedPractice | Same card and attempt across LEARN/TRY/VERIFY/REFLECT/RETURN; card-scoped draft in the shared composer |
+| Shell | AppShell | Two stable destinations (Chat/Resources); Learning/History/Settings utilities; all six routes remain valid |
+| Coach | Conversation, CoachReply, NextAction | Shared composer with a Coach-scoped draft and conversation; per-reply actions: copy / share / save to library / save prep brief / draft a practice card / draft a flash card / set as goal / regenerate |
+| Learning | LearningHome | The governed plan card, hosted in the learning drawer's goal section; review/route/growth/evidence closed by default |
+| Activity | FocusedPractice | Same card and attempt across LEARN/TRY/VERIFY/REFLECT/RETURN, inline in the conversation; answers live in the card |
 | Verification | VerificationResult | Use actual pass/fail facts; unknown/interrupted runs have no verdict; evidence/output in disclosure |
-| Growth | LearningWorkspace, GrowthEvidence | Timeline from persisted events; expandable capability evidence and scheduled review |
+| Growth | (drawer progress section) | Four dimension states plus evidence count; expandable capability evidence and scheduled review |
 | Library | Library, ResourceReader | Search/folders/recent/trash; reader contextual actions return to Coach with resource IDs |
 | Settings | SettingsIndex, SettingsDetail | Connection, Coach/Skills, Workspace/Remote, Preferences/Advanced; no category tab bar |
 | Skills | CommandPalette | `$` in Coach; six default suggestions; searched catalog; management in Settings → Coach |

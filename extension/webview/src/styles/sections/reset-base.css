@@ -34,13 +34,15 @@ body {
 
 .trainer-shell,
 .trainer-shell * {
-  font-weight: 400 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
+  /* Do not flatten the whole shell: components own their semantic weight.
+     A global !important here erased headings, buttons and strong text and made
+     every surface look equally quiet. */
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .trainer-shell .training-current h2 {
-  font-weight: 500 !important;
+  font-weight: var(--trainer-font-weight-medium);
 }
 
 button,
@@ -89,7 +91,7 @@ select {
 .trainer-shell .coach-super-entry__copy h3,
 .trainer-shell .message-markdown strong {
   font-size: var(--trainer-font-xs);
-  font-weight: 400;
+  font-weight: var(--trainer-font-weight-strong);
 }
 
 

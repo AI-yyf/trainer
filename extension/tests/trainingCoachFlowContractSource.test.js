@@ -50,15 +50,14 @@ test('training card and Coach routes preserve separate drafts when the route cha
   require('./templateAssertions').practice();
 });
 
-test('utility surfaces avoid duplicate conversation panels', () => {
+test('learning replies stay in the one conversation', () => {
   const source = readAppModuleSource();
-  const replyHelper = sourceSection(source, 'const renderViewAgentReply =', 'const renderDockedView');
-
-  assert.match(replyHelper, /data-view-agent-reply/);
-  assert.match(replyHelper, /localizedConversation/);
-  assert.match(replyHelper, /message\.role !== "assistant"/);
-  assert.match(replyHelper, /visibleReply\.body/);
-  assert.match(replyHelper, /<CoachMessageBubble/);
-  assert.match(source, /renderViewAgentReply\("resources"\)/);
-  assert.match(source, /renderViewAgentReply\(view === "training" \? "training" : "plan"\)/);
+  // The old per-view reply panel is gone: every assistant turn is rendered by
+  // the single conversation pane.
+  assert.doesNotMatch(source, /renderViewAgentReply/);
+  assert.doesNotMatch(source, /data-view-agent-reply/);
+  assert.doesNotMatch(source, /message\.sourceView === "coach"/);
+  const conversation = sourceSection(source, 'const coachRenderConversation', 'const liveCoachTaskChrome');
+  assert.match(conversation, /localizedConversation/);
+  assert.match(conversation, /optimisticTurns/);
 });

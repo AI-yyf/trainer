@@ -55,7 +55,7 @@ test('training empty state creates the first small card without redirecting to C
   const emptyState = source.slice(emptyStateStart, emptyStateEnd);
 
   assert.match(emptyState, /onClick: \(\) => workspaceSessionBlocked \? openWorkspaceAdmission\(\) : handleGenerateTrainingCard\(\)/);
-  assert.match(emptyState, /t\.startTraining/);
+  assert.match(emptyState, /COACH_MESSAGE_ACTION_LABELS\[layout\.composerLanguage\]\["training-card"\]/);
   assert.doesNotMatch(emptyState, /trainingCoachAction/);
   assert.match(source, /actions=\{hasTrainingCard \? trainingCoachAction : undefined\}/);
 });

@@ -311,7 +311,9 @@ test('Learning resolves one governed primary action before rendering', () => {
   assert.match(source, /openPlanComposerMode\("evidence"\);/);
   assert.match(
     source,
-    /const waitingComposerEvidence = !resourceAnalysis &&\s*activeView === "plan" && coachPlanContext === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
+    // The plan intent is a state, not a destination: the evidence wait
+    // follows the plan context the learner opened from the plan card.
+    /const waitingComposerEvidence = !resourceAnalysis &&\s*coachPlanContext === "evidence" &&\s*recoveredRuntime &&\s*planRuntimeStatus\?\.resumeState === "waiting" &&\s*Boolean\(planRuntimeStatus\?\.currentStep\?\.trim\(\)\) &&\s*liveEvidenceQueue\.pending\.length === 0;/,
   );
   assert.match(source, /trainerCommands\.evidenceEnqueue/);
   assert.match(source, /waitingComposer: true,/);

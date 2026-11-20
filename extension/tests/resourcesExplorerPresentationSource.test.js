@@ -37,7 +37,7 @@ test('resource row click opens VS Code and does not switch the sidebar to the Re
   const end = view.indexOf('const focusFirstImportMenuItem', start);
   assert.ok(start >= 0 && end > start, 'expected the openResourceInVsCode handler');
   const handler = view.slice(start, end);
-  assert.match(handler, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
+  assert.match(handler, /onOpenResource\?\.\(resource\.id, options\)/);
   assert.doesNotMatch(handler, /resource\.location\?\.line_start/);
   assert.doesNotMatch(handler, /setSelectedResourceId/);
   assert.doesNotMatch(handler, /setResourceDetail/);
@@ -45,14 +45,17 @@ test('resource row click opens VS Code and does not switch the sidebar to the Re
   assert.match(view, /event\.key === " "[\s\S]*?onOpen\(node\.resource!\);/);
 });
 
-test('resource tree uses the vendored Material Icon Theme assets', () => {
+test('resource tree renders the Markdown-only library glyph', () => {
   const view = fs.readFileSync(viewPath, 'utf8');
   const assets = fs.readFileSync(iconAssetsPath, 'utf8');
   assert.match(view, /resourceIconUrl\(resource\)/);
   assert.match(view, /resourceFolderIconUrl/);
   assert.match(view, /resourceFolderOpenIconUrl/);
   assert.match(view, /data-resource-icon=\{resourceIconKey\(resource\)\}/);
-  assert.match(assets, /material-icons?|Material Icon Theme/i);
+  // md-only: every resource uses the Markdown glyph, regardless of the
+  // original source format.
+  assert.match(assets, /export function resourceIconKey\([^)]*\)[^{]*\{\s*return "markdown";/);
+  assert.doesNotMatch(assets, /CODE_ICONS\[extension\]/);
   for (const asset of [
     'LICENSE',
     'folder-resource.svg',
@@ -69,11 +72,12 @@ test('resource tree uses the vendored Material Icon Theme assets', () => {
   }
 });
 
-test('opening a resource editor tab resets the cursor to the top of the file', () => {
+test('opening a resource editor tab defaults to the top when no line is supplied', () => {
   const commands = fs.readFileSync(commandPath, 'utf8');
+  assert.match(commands, /let line = requestedLine;/);
   assert.match(
     commands,
-    /selection: new vscode\.Range\(requestedLine \? requestedLine - 1 : 0, 0, requestedLine \? requestedLine - 1 : 0, 0\)/,
+    /const startLine = line \? line - 1 : 0;[\s\S]*?selection: new vscode\.Range\(startLine, 0, startLine, 0\)/,
   );
   assert.match(commands, /preview: false/);
   assert.match(commands, /preserveFocus: false/);

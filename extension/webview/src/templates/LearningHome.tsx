@@ -26,6 +26,7 @@ export interface LearningHomeProps {
   title: string;
   stage?: string;
   today?: LearningTodayView;
+  roadmap?: { summary: string };
   next: NextActionProps;
   nextTools?: ReactNode;
   state?: ReactNode;
@@ -38,6 +39,12 @@ export interface LearningHomeProps {
   /** Label for the one disclosure that holds non-stage content. */
   moreLabel?: string;
   children?: ReactNode;
+  /**
+   * "drawer" is the compact form used inside the learning drawer: the drawer
+   * owns the growth and due-practice panels, so the card drops its duplicate
+   * growth group and folds its extra disclosures into the one "more" group.
+   */
+  variant?: "page" | "drawer";
 }
 
 function LearningCardGroup({
@@ -96,6 +103,7 @@ export function LearningHome({
   title,
   stage,
   today,
+  roadmap,
   next,
   nextTools,
   state,
@@ -105,38 +113,47 @@ export function LearningHome({
   headerActions,
   moreLabel,
   children,
+  variant = "page",
 }: LearningHomeProps) {
   return (
     <section
-      className="template-learning-home learning-cards"
+      className={`template-learning-home learning-cards${roadmap ? " learning-cards--roadmap" : ""}`}
       data-template="LearningHome"
       data-plan-primary="true"
     >
       {today ? (
         <section className="learning-today" data-learning-section="today" aria-label={today.eyebrow}>
-          {headerActions ? (
-            <div className="learning-today__actions">{headerActions}</div>
-          ) : null}
           <div className="learning-today__copy">
-            <p className="eyebrow">{today.eyebrow}</p>
+            <div className="learning-today__heading">
+              <p className="eyebrow">{today.eyebrow}</p>
+              {headerActions}
+            </div>
             <h2>{today.title}</h2>
             {today.detail ? <p className="learning-today__detail">{today.detail}</p> : null}
-            <div className="learning-today__stats">
-              <span><strong>{today.due}</strong>{today.dueLabel}</span>
-              <span><strong>{today.remaining}</strong>{today.remainingLabel}</span>
-            </div>
+            {variant === "drawer" ? null : (
+              // The drawer owns the due-practice card, so the hero's review
+              // counters would repeat it. The page form keeps them.
+              <div className="learning-today__stats">
+                <span><strong>{today.due}</strong>{today.dueLabel}</span>
+                <span><strong>{today.remaining}</strong>{today.remainingLabel}</span>
+              </div>
+            )}
           </div>
-          <div
+          {today.total > 0 ? <div
             className="learning-today__ring"
             style={{ "--learning-progress": `${today.progress}%` } as CSSProperties}
-            aria-label={`${today.done}/${today.total}`}
+            role="meter"
+            aria-label={route?.label ?? currentLabel}
+            aria-valuemin={0}
+            aria-valuemax={today.total}
+            aria-valuenow={today.done}
           >
             <span>{today.done}/{today.total}</span>
-          </div>
+          </div> : null}
         </section>
       ) : (
         <header className="learning-cards__header">
-          <p className="eyebrow">{currentLabel}</p>
+          {roadmap ? null : <p className="eyebrow">{currentLabel}</p>}
           <h2>{title}</h2>
           {stage || headerActions ? (
             <div className="learning-cards__subhead">
@@ -146,9 +163,13 @@ export function LearningHome({
               ) : null}
             </div>
           ) : null}
+          {roadmap?.summary && roadmap.summary !== title ? <p className="learning-cards__summary">{roadmap.summary}</p> : null}
         </header>
       )}
       <div className="learning-card-stack">
+        {roadmap && route ? <LearningCardGroup id="route" label={route.label} count={route.count}>
+          {route.content}
+        </LearningCardGroup> : null}
         <section
           className="learning-card learning-card--now"
           data-learning-section="current"
@@ -157,7 +178,26 @@ export function LearningHome({
           {state ? state : <NextAction {...next} />}
           {nextTools}
         </section>
-        {proof || route || growth || children ? (
+        {variant === "drawer" ? (
+          // Drawer mode: the plan's facts stay readable as plain rows. The
+          // catch-all disclosure is gone — every adjustment starts from the
+          // composer, so the card only carries facts.
+          <>
+            {proof ? (
+              <LearningCardGroup id="reviews" label={proof.label} count={proof.count}>
+                {proof.content}
+              </LearningCardGroup>
+            ) : null}
+            {route && !roadmap ? (
+              <LearningCardGroup id="route" label={route.label} count={route.count}>
+                {route.content}
+              </LearningCardGroup>
+            ) : null}
+            {children ? (
+              <div className="learning-card-stack learning-card-stack--more">{children}</div>
+            ) : null}
+          </>
+        ) : proof || route || growth || children ? (
           <details className="learning-focus-more" data-learning-focus-more="true">
             <summary>
               <span>{moreLabel ?? "More"}</span>
@@ -169,7 +209,7 @@ export function LearningHome({
                   {proof.content}
                 </LearningCardGroup>
               ) : null}
-              {route ? (
+              {route && !roadmap ? (
                 <LearningCardGroup id="route" label={route.label} count={route.count} collapsible>
                   {route.content}
                 </LearningCardGroup>

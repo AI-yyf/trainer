@@ -2047,7 +2047,7 @@
 
 .settings-api-key-input input {
   width: 100%;
-  padding-right: 30px;
+  padding-inline-end: 30px;
 }
 
 .settings-api-key-visibility {

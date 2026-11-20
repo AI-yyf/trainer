@@ -205,7 +205,8 @@ test('coach agent activity renders as a normalized lightweight progress rail', (
   assert.match(source, /agent-activity-strip__progress/);
   assert.doesNotMatch(source, /displayStep/);
   assert.doesNotMatch(source, /activityPills/);
-  assert.match(activityStrip[0], /border-left/);
+  // The rail's leading rule is a logical border so an RTL shell mirrors it.
+  assert.match(activityStrip[0], /border-inline-start/);
   assert.doesNotMatch(activityStrip[0], /border:\s*1px/);
   assert.ok(activityMeta, 'expected meta styles');
   assert.match(activityMeta[0], /display:\s*none/);
@@ -476,7 +477,7 @@ test('Coach shows the welcome with its bottom composer available', () => {
   const welcome = source.slice(source.indexOf('if (coachWelcomeVisible)'), source.indexOf('const handleCoachArtifactOpen'));
   assert.match(welcome, /coach-empty-state--conversation/);
   assert.doesNotMatch(welcome, /<button|COACH_STARTER_PROMPTS/);
-  assert.match(source, /<footer className="composer-shell composer-shell--quiet">[\s\S]*?<CoachComposer/);
+  assert.match(source, /<footer\s+className="composer-shell composer-shell--quiet"\s*>[\s\S]*?<CoachComposer/);
 });
 
 test('Coach first-run state starts from the learner goal before optional code context', () => {

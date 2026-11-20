@@ -1225,6 +1225,84 @@ export function runBrowserPreviewAction(
     };
   }
 
+  // Candidate governance (importance, priority, merge, library) is a decision
+  // the learner makes on the card. The browser preview records it locally so
+  // the card stays usable without a live sidecar.
+  if (
+    commandId === trainerCommands.trainingCardMarkImportant ||
+    commandId === trainerCommands.trainingCardSetPriority ||
+    commandId === trainerCommands.trainingCardMerge ||
+    commandId === trainerCommands.trainingCardLibrary
+  ) {
+    const payload =
+      action.type === "command/execute" &&
+      action.payload.payload &&
+      typeof action.payload.payload === "object"
+        ? (action.payload.payload as {
+            cardId?: string;
+            important?: boolean;
+            priority?: number;
+            keepCardId?: string;
+            duplicateCardIds?: string[];
+          })
+        : undefined;
+    const summary =
+      commandId === trainerCommands.trainingCardMarkImportant
+        ? `Mark the candidate card ${payload?.important ? "important" : "not important"}.`
+        : commandId === trainerCommands.trainingCardSetPriority
+          ? `Set the candidate card priority to ${payload?.priority ?? 0}.`
+          : commandId === trainerCommands.trainingCardMerge
+            ? "Merge the duplicate candidate cards."
+            : "Review the candidate card library.";
+    // The learner's decision applies to the local candidate list, so the card
+    // keeps its siblings and the next decision stays available.
+    const candidates = (bootstrap.workspaceTrainingState?.trainingCardCandidates ?? []).map((candidate) => {
+      if (candidate.cardId === payload?.cardId) {
+        return commandId === trainerCommands.trainingCardMarkImportant
+          ? { ...candidate, important: payload?.important }
+          : commandId === trainerCommands.trainingCardSetPriority
+            ? { ...candidate, cardPriority: payload?.priority }
+            : candidate;
+      }
+      if (commandId === trainerCommands.trainingCardMerge
+        && (payload?.duplicateCardIds ?? []).includes(candidate.cardId)) {
+        return { ...candidate, mergedInto: payload?.keepCardId };
+      }
+      return candidate;
+    });
+    return {
+      patch: {
+        ...buildPreviewTrainingActionPatch(bootstrap, language, {
+          eventType: "training_candidate_governance",
+          summary,
+          detail: "The browser preview only updates its local training state.",
+          selectedCardStatus: "candidate",
+          nextStep: uiCopy.trainingRecordStep,
+          coachScenario: "task",
+          learnerSignal: "curious",
+          followup: uiCopy.trainingRecordStep,
+          handoffStatus: "in_progress",
+          nextHopStatus: "accepted",
+          nextHopSummary: "The local candidate card decision was recorded in the preview.",
+        }),
+        workspaceTrainingState: {
+          ...bootstrap.workspaceTrainingState,
+          trainingCardCandidates: candidates,
+          // The decision applies to the card the learner is looking at, not to
+          // whatever card the preview fixture happens to carry.
+          ...(payload?.cardId || payload?.keepCardId
+            ? {
+                selectedCardId: payload.cardId ?? payload.keepCardId,
+                selectedCardStatus: "candidate",
+              }
+            : {}),
+        },
+      },
+      tone: "success",
+      message: "Browser-preview simulation: the candidate decision was recorded locally without touching a real workspace.",
+    };
+  }
+
   if (commandId === trainerCommands.trainingCardStatusTransition) {
     const payload =
       action.type === "command/execute" &&

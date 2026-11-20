@@ -1,13 +1,15 @@
 /* ==========================================================================
    Composer image attachments
-   Staged image chips above the textarea + paperclip button in actions row.
+   Staged image chips live inside the input frame, under the textarea. No
+   file/resource context is rendered above the composer.
    ========================================================================== */
 
 .composer__attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 2px 0 0;
+  padding: 6px 4px 2px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 38%, transparent);
 }
 
 .composer__capability-note {

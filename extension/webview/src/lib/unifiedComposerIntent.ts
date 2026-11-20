@@ -1,10 +1,11 @@
+import { preparationRequested } from "../../../../shared/src/researchBrief";
 import type { ActiveWorkbenchView, ResourceComposerIntentMode, ResourceRecord } from "./types";
 
 export type UnifiedComposerIntent =
   | { kind: "continue" | "review" | "verify" | "hint" | "help" | "blocker" }
   | { kind: "practice"; referencesSource?: true }
   | { kind: "resource-search"; query: string }
-  | { kind: "resource-turn"; mode: ResourceComposerIntentMode }
+  | { kind: "resource-turn"; mode: ResourceComposerIntentMode; preparation?: true }
   | { kind: "resource-delete" }
   | { kind: "resource-versions" }
   | { kind: "resource-link"; practiceAfterLink?: true }
@@ -60,6 +61,9 @@ export function resolveUnifiedComposerIntent(text: string, view: ActiveWorkbench
     const afterLink = clean.slice(resourceLink.index + resourceLink[0].length);
     const nextAction = /(?:然后|再|并且?|\b(?:and then|then|and)\b)\s*(.+)/iu.exec(afterLink);
     if (nextAction && PRACTICE_REQUEST.test(nextAction[1])) return { kind: "resource-link", practiceAfterLink: true };
+  }
+  if (!resourceLink && !training && preparationRequested(clean)) {
+    return { kind: "resource-turn", mode: "analyze", preparation: true };
   }
   const analysisRequested = RESOURCE_ANALYSIS_REQUEST.test(clean);
   if (!resourceLink && analysisRequested && (view === "resources" || /资料库|资源库|\blibrary\b/iu.test(clean))) {

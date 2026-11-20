@@ -1,3 +1,4 @@
+import { mapResearchBriefAsset, mapResearchBriefCatalog, mapResearchPreparation, type ResearchBriefView } from "../../../../shared/src/researchBrief";
 import type {
   ActiveWorkbenchView,
   BootstrapData,
@@ -4291,6 +4292,7 @@ export async function streamBrowserPreviewMessage(
 
 function usesSessionMessageRoute(request: SessionMessageRequest): boolean {
   return resolveBrowserPreviewTurnIntent(request) === "coach" &&
+    request.resourceComposerIntent?.mode !== "analyze" &&
     (!request.activeView || request.activeView === "coach");
 }
 
@@ -4586,10 +4588,11 @@ function isCompletedBrowserPreviewResourceIndex(resource: ResourceRecord): boole
  * stub only forwards the learner's goal, the reply and the attached ids.
  */
 export async function saveBrowserPreviewResearchBrief(
-  input: { researchGoal: string; reply: string; resourceIds?: string[] },
+  input: { researchGoal: string; reply: string; resourceIds: string[]; contextId?: string },
   sessionId?: string,
-): Promise<{ sessionId: string; saved: boolean }> {
+): Promise<ResearchBriefView> {
   const resolvedSessionId = await ensureBrowserPreviewSession(sessionId);
+  const providerOverride = buildPreviewProviderOverride();
   // The fixture never fabricates a brief: the request still goes to a live
   // sidecar, and without one the honest network failure surfaces as an error.
   const response = await fetchPreview(`${baseUrl()}/resource/research-brief/draft`, {
@@ -4598,10 +4601,12 @@ export async function saveBrowserPreviewResearchBrief(
     body: JSON.stringify({
       session_id: resolvedSessionId,
       workspace_id: previewWorkspaceId(),
-      context_id: previewWorkspaceId(),
+      context_id: input.contextId ?? previewWorkspaceId(),
       researchGoal: input.researchGoal,
       reply: input.reply,
-      resourceIds: input.resourceIds ?? [],
+      resourceIds: input.resourceIds,
+      responseLanguage: resolvePreviewLanguage(),
+      ...(providerOverride ? { provider: providerOverride.provider, api_key: providerOverride.apiKey } : {}),
       save: true,
     }),
   }, "upload");
@@ -4609,8 +4614,10 @@ export async function saveBrowserPreviewResearchBrief(
     const detail = await response.text().catch(() => "");
     throw new Error(detail.slice(0, 200) || `Research brief failed (${response.status})`);
   }
-  const payload = (await response.json()) as { saved?: boolean };
-  return { sessionId: resolvedSessionId, saved: payload.saved !== false };
+  const payload = asRecord(await response.json());
+  const brief = mapResearchBriefAsset(payload?.asset);
+  if (payload?.saved !== true || !brief) throw new Error("The saved research brief was not returned.");
+  return brief;
 }
 
 function mapSnapshotToBootstrap(snapshot: unknown): BootstrapData {
@@ -4799,6 +4806,7 @@ function mapSnapshotToBootstrap(snapshot: unknown): BootstrapData {
       nextStep: asString(evaluation?.next_step) ?? "",
     },
     memory: {
+      researchBriefs: mapResearchBriefCatalog(memory?.asset_catalog ?? memory?.assetCatalog),
       currentFocus:
         normalizeCoachSurfaceText(memory?.current_focus) ??
         normalizeCoachSurfaceText(memory?.recent_summary) ??
@@ -5341,6 +5349,7 @@ function mapTrainingCardCandidates(
     if (!cardId || !title || !type) {
       return items;
     }
+    const reviewState = record?.review_state ?? record?.reviewState;
     items.push({
       cardId,
       type,
@@ -5350,6 +5359,11 @@ function mapTrainingCardCandidates(
         normalizeCoachSurfaceText(record?.whyNow) ??
         undefined,
       status: asString(record?.status) ?? undefined,
+      reviewState: reviewState === "pending" || reviewState === "deferred" ||
+        reviewState === "saved" || reviewState === "rejected" ? reviewState : undefined,
+      important: asBoolean(record?.important),
+      cardPriority: asNumber(record?.card_priority ?? record?.cardPriority) ?? undefined,
+      mergedInto: asString(record?.merged_into ?? record?.mergedInto) ?? undefined,
       learningPhase:
         toTrainingLearningPhase(
           asString(record?.learning_phase) ?? asString(record?.learningPhase),
@@ -5362,6 +5376,12 @@ function mapTrainingCardCandidates(
 
 type TrainingCardVerificationFields = Pick<
   TrainingCardCandidateStateView,
+  | "question"
+  | "choices"
+  | "answerMode"
+  | "expectedAnswer"
+  | "learnerAnswer"
+  | "acceptanceCriteria"
   | "focusArea"
   | "targetSkill"
   | "scenario"
@@ -5389,6 +5409,12 @@ function mapTrainingCardVerificationFields(
     return fallback ?? {};
   }
   return {
+    question: asString(record.question) ?? fallback?.question,
+    choices: asStringArray(record.choices ?? record.options) ?? fallback?.choices,
+    answerMode: asString(record.answer_mode) ?? asString(record.answerMode) ?? fallback?.answerMode,
+    expectedAnswer: asString(record.expected_answer) ?? asString(record.expectedAnswer) ?? fallback?.expectedAnswer,
+    learnerAnswer: asString(record.learner_answer) ?? asString(record.learnerAnswer) ?? fallback?.learnerAnswer,
+    acceptanceCriteria: asStringArray(record.acceptance_criteria ?? record.acceptanceCriteria) ?? fallback?.acceptanceCriteria,
     focusArea: asString(record.focus_area) ?? asString(record.focusArea) ?? fallback?.focusArea,
     targetSkill: asString(record.target_skill) ?? asString(record.targetSkill) ?? fallback?.targetSkill,
     scenario: asString(record.scenario) ?? fallback?.scenario,
@@ -6333,6 +6359,8 @@ function mapResources(value: unknown): ResourceRecord[] {
         freshness: normalizePreviewFreshness(asString(item.freshness)),
         indexState: indexStatus,
         citationId: asString(item.citation_id) ?? asString(item.citationId) ?? undefined,
+        versionId: asString(item.version_id) ?? asString(item.versionId),
+        contentHash: asString(item.content_hash) ?? asString(item.contentHash),
         previewTier: normalizePreviewTier(asString(item.preview_tier) ?? asString(item.previewTier)),
         previewKind: asString(item.preview_kind) ?? asString(item.previewKind) ?? undefined,
         rankScore: asNumber(item.rank_score) ?? asNumber(item.rankScore) ?? undefined,
@@ -6489,9 +6517,12 @@ function mapConversationMessage(value: unknown, index: number): ConversationMess
     body: asString(message?.content) ?? "",
     timestamp: formatTimestamp(asString(message?.created_at) ?? asString(message?.timestamp)),
     sourceView: normalizeConversationSourceView(asString(metadata?.active_view)),
+    sourceResourceIds: asStringArray(metadata?.resource_ids),
+    researchPreparation: mapResearchPreparation(metadata?.research_preparation),
     parts: mapMessageParts(metadata),
     artifacts: mapArtifacts(metadata?.artifacts),
     contextNote: asString(metadata?.context_note) ?? undefined,
+    sourceNote: asString(metadata?.source_note) ?? undefined,
     support: buildSupport(metadata),
   };
 }

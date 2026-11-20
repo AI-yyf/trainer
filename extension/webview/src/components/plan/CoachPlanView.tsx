@@ -128,11 +128,25 @@ interface PlanDecisionStripState {
 
 export interface CoachPlanViewProps {
   plan: LearningPlan | null;
+  showRoadmap?: boolean;
+  /**
+   * "drawer" is the learning drawer's goal panel: the drawer owns growth and
+   * due practice, so the card drops its duplicate growth group and folds its
+   * secondary disclosures into one "more" group.
+   */
+  variant?: "page" | "drawer";
   /** Resolved by the domain controller; the view never ranks actions. */
   primaryAction: NextActionProps;
   primaryEvidenceId?: string;
   /** §30: navigate to internal routes (progress, training). */
   onNavigateToView?: (view: "coach" | "plan" | "resources" | "training" | "progress" | "settings") => void;
+  /** Governed review-queue action (start / accept / snooze / reset / skip / done). */
+  onReviewQueueAction?: (payload: {
+    concept: string;
+    action: string;
+    focusArea?: string;
+    taskHint?: string;
+  }) => void;
   className?: string;
   eyebrow?: string;
   title?: string;
@@ -840,11 +854,15 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     ) : null;
   const primaryIntent = typeof props.primaryAction.action.id === "string" ? props.primaryAction.action.id : "";
   const blockingKind = BLOCKING_SYSTEM_STATE_KIND[primaryIntent];
+  // The learning drawer is a modal sheet and hides the composer, so this card
+  // is the only place that explains the block. The detail always stays.
   const learningSystemState = blockingKind ? (
     <SystemState
       kind={blockingKind}
       title={props.primaryAction.title}
       detail={props.primaryAction.detail}
+      // A block's recovery action is a governed step, not an adjustment: it
+      // stays reachable from the card.
       action={blockingKind === "processing" ? undefined : { ...props.primaryAction.action }}
       actionTone="ghost"
     />
@@ -855,7 +873,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     return (
       <section className="template-learning-home" data-template="LearningHome" data-plan-leftover-not-live={leftoverNote ? "true" : undefined}>
         <header className="template-learning-home__header template-learning-home__header--row">
-          <p className="eyebrow">{templateCopy[language].currentLearning}</p>
+          <p className="eyebrow">{props.showRoadmap ? templateCopy[language].learningGoals : templateCopy[language].currentLearning}</p>
           {expandToEditorControl ? (
             <div className="coach-plan-view__surface-control">{expandToEditorControl}</div>
           ) : null}
@@ -863,14 +881,18 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         {learningSystemState ?? <NextAction {...props.primaryAction} />}
         {props.dockReturnNotice}
         {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
-        <div className="template-secondary-links template-secondary-links--learning" data-learning-navigation="practice-growth">
-          <button type="button" className="template-learning-route" data-learning-link="training" onClick={() => props.onNavigateToView?.("training")}>
-            {trainingViewLabel(language)}
-          </button>
-          <button type="button" className="template-learning-route" data-learning-link="progress" onClick={() => props.onNavigateToView?.("progress")}>
-            {templateCopy[language].growth}
-          </button>
-        </div>
+        {props.variant === "drawer" ? null : (
+          // The drawer owns the practice and growth sections as cards, so the
+          // plan card does not repeat them as links.
+          <div className="template-secondary-links template-secondary-links--learning" data-learning-navigation="practice-growth">
+            <button type="button" className="template-learning-route" data-learning-link="training" onClick={() => props.onNavigateToView?.("training")}>
+              {trainingViewLabel(language)}
+            </button>
+            <button type="button" className="template-learning-route" data-learning-link="progress" onClick={() => props.onNavigateToView?.("progress")}>
+              {templateCopy[language].growth}
+            </button>
+          </div>
+        )}
         {liveEvidenceDecisionRow}
         {verifiedReturns.length ? (
           <details className="template-disclosure" data-learning-section="evidence">
@@ -883,15 +905,17 @@ export function CoachPlanView(props: CoachPlanViewProps) {
             ))}</div>
           </details>
         ) : null}
-        <details className="template-disclosure" data-learning-section="template">
-          <summary>{templateCopy[language].startFromTemplate}</summary>
-          {/* P2 #16: cold start shows every built-in pack; literature ships three. */}
-          {starterTemplates.map((def) => (
-            <StarterTemplateArticle key={def.id} def={def} language={language} />
-          ))}
-        </details>
+        {props.variant === "drawer" ? null : (
+          <details className="template-disclosure" data-learning-section="template">
+            <summary>{templateCopy[language].startFromTemplate}</summary>
+            {/* P2 #16: cold start shows every built-in pack; literature ships three. */}
+            {starterTemplates.map((def) => (
+              <StarterTemplateArticle key={def.id} def={def} language={language} />
+            ))}
+          </details>
+        )}
         {renderComposerDraftReplacement("stage")}
-        {actions?.length || shouldShowGlobalPlanContext ? (
+        {props.variant === "drawer" ? null : actions?.length || shouldShowGlobalPlanContext ? (
           <details className="template-disclosure" data-learning-section="more">
             <summary>{planViewText.detailsSummaryLabel}</summary>
             <div className="template-learning-more">
@@ -1126,12 +1150,12 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const hasProofDetails = hasReviewDetails || evidenceDebtCount > 0;
   const hasSettledEvidence = hasEvidenceDetails && evidenceDebtCount === 0;
   const todayCopy = resolveLearningTodayCopy(language);
-  const todayTotal = Math.max(plan.stages.length, 1);
-  const todayProgress = Math.round((completedStages.length / todayTotal) * 100);
+  const todayTotal = plan.stages.length;
+  const todayProgress = Math.round((completedStages.length / Math.max(todayTotal, 1)) * 100);
   const learningToday = {
     eyebrow: todayCopy.eyebrow,
     title: activeStageTitle || plan.title,
-    detail: stageProgressText || plan.summary,
+    detail: [plan.title !== activeStageTitle ? plan.title : "", stageProgressText].filter(Boolean).join(" · ") || undefined,
     progress: Math.max(0, Math.min(100, todayProgress)),
     done: completedStages.length,
     total: todayTotal,
@@ -1229,12 +1253,14 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     </details>
   ) : null;
 
+  const visibleStages = props.showRoadmap ? plan.stages : visibleRouteStages;
   return (
     <LearningHome
-      currentLabel={templateCopy[language].currentLearning}
+      variant={props.variant ?? "page"}
+      currentLabel={props.showRoadmap ? templateCopy[language].learningGoals : templateCopy[language].currentLearning}
       title={plan.title}
-      stage={stageProgressText ? `${stageProgressText} · ${activeStageTitle}` : activeStageTitle}
-      today={learningToday}
+      today={props.showRoadmap ? undefined : learningToday}
+      roadmap={props.showRoadmap ? { summary: plan.summary } : undefined}
       headerActions={expandToEditorControl}
       state={learningSystemState}
       next={props.primaryAction}
@@ -1255,17 +1281,17 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           </div>
         ) : null}
       </>}
-      route={{ label: resolvedStagesLabel, count: routeStages.length, content: <>
+      route={visibleStages.length ? { label: props.showRoadmap ? planViewText.roadmapStages : resolvedStagesLabel, count: visibleStages.length + (props.showRoadmap ? 0 : remainingRouteStages.length), content: <>
         {renderComposerDraftReplacement("stage")}
-        {visibleRouteStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
-        {remainingRouteStages.length > 0 ? (
+        {visibleStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={liveStageIsCurrent && stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
+        {!props.showRoadmap && remainingRouteStages.length > 0 ? (
           <details className="template-disclosure" data-learning-section="more-route-stages">
             <summary>{planCopy(language, "moreLabel")} ({remainingRouteStages.length})</summary>
             {remainingRouteStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={false} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
           </details>
         ) : null}
-      </> }}
-      growth={{ label: templateCopy[language].growth, count: GROWTH_DIMENSION_KEYS.length, content: (
+      </> } : undefined}
+      growth={props.showRoadmap ? undefined : { label: templateCopy[language].growth, count: GROWTH_DIMENSION_KEYS.length, content: (
         <div className="board-card board-card--growth" data-board-card="growth">
           <div className="template-metadata" data-plan-growth-dots="true">
             {GROWTH_DIMENSION_KEYS.map((key) => {
@@ -1283,25 +1309,45 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       proof={hasProofDetails ? { label: `${templateCopy[language].proofPending} (${proofDebtCount})`, content: <>
         {reviewSupportRow ? <div className="learning-card-group__note" data-review-support-note="true">{renderNodeWithParagraph(reviewSupportRow.body)}</div> : null}
         {props.dueReviewItems?.slice(0, 2).map((item) => <article key={item.id} className="board-card board-card--review" data-board-card="review"><strong title={item.title}>{item.title}</strong><p title={compactReviewLane(item, language)}>{compactReviewLane(item, language)}</p></article>)}
-        <button type="button" className="template-back" onClick={() => useWorkbenchState.getState().openTrainingReviewQueue()}>{templateCopy[language].startReview}</button>
+        {props.variant === "drawer" ? null : (
+          <button type="button" className="template-back" onClick={() => {
+            // Starting the queue is a governed action: the host records it, and
+            // the learner lands in the drawer's practice section where the
+            // accept/snooze decisions live. Inside the drawer the practice
+            // card owns that action, so the plan card does not repeat it.
+            const first = props.dueReviewItems?.[0];
+            props.onReviewQueueAction?.({
+              concept: first?.title ?? "",
+              action: "start",
+              focusArea: first?.focusArea,
+              taskHint: first?.taskHint,
+            });
+            useWorkbenchState.getState().openTrainingReviewQueue();
+          }}>{templateCopy[language].startReview}</button>
+        )}
         {evidenceDebtCount > 0 ? evidenceDisclosure : null}
       </> } : undefined}
     >
       {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
       {renderComposerDraftReplacement("project-subplan")}
       {hasSettledEvidence ? evidenceDisclosure : null}
-      {completedStages.length > 0 ? (
+      {!props.showRoadmap && completedStages.length > 0 ? (
         <details className="template-disclosure" data-learning-section="completed-stages">
           <summary>{resolveStageStatusLabel("done", stageStatusLabels?.done, language)} ({completedStages.length})</summary>
           {completedStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={false} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
         </details>
       ) : null}
-      <details className="template-disclosure" data-learning-section="template">
-        <summary>{templateCopy[language].startFromTemplate}</summary>
-        {starterTemplateDefsFor(resolveStarterSubjectFamily(props.projection)).map((def) => (
-          <StarterTemplateArticle key={def.id} def={def} language={language} />
-        ))}
-      </details>
+      {/* Starter templates are a page-mode entry. In the drawer every
+          adjustment starts from the composer, so the card carries no template
+          gallery. */}
+      {props.variant === "drawer" ? null : (
+        <details className="template-disclosure" data-learning-section="template">
+          <summary>{templateCopy[language].startFromTemplate}</summary>
+          {starterTemplateDefsFor(resolveStarterSubjectFamily(props.projection)).map((def) => (
+            <StarterTemplateArticle key={def.id} def={def} language={language} />
+          ))}
+        </details>
+      )}
       <details className="template-disclosure" data-plan-more-plans="true">
         <summary>{templateCopy[language].morePlans}</summary>
         <div>
@@ -1313,7 +1359,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         </div>
       </details>
       <details className="template-disclosure" data-plan-governance-disclosure="true">
-        <summary>{resolvedDetailsSummaryLabel}</summary>
+        {/* The drawer has no catch-all "More": the plan's own panel is named. */}
+        <summary>{props.variant === "drawer" ? planCopy(language, "planActionsLabel") : resolvedDetailsSummaryLabel}</summary>
         <div>
           {backgroundRows.map((row) => <div key={row.id}>{renderNodeWithParagraph(row.body)}</div>)}
           {noteRows.map((row) => <p key={row.id}>{row.label}: {row.value}</p>)}
@@ -1426,7 +1473,7 @@ const BLOCKING_SYSTEM_STATE_KIND: Record<string, SystemStateKind> = {
   resolve_blocker: "recoverable-error",
 };
 
-/** Same dimension order as ProgressView; labels/states come from the shared segment. */
+/** Same dimension order as the learning drawer's growth section; labels/states come from the shared segment. */
 const GROWTH_DIMENSION_KEYS: DimensionKey[] = [
   "comprehension",
   "implementation",

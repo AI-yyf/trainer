@@ -10,7 +10,9 @@ const planView = fs.readFileSync(path.join(root, 'components/plan/CoachPlanView.
 assert.match(app, /const handleGeneratePlanStepCard = useCallback\(\(\) => \{/);
 assert.match(
   app,
-  /setActiveView\("training"\);\s*handleGenerateTrainingCard\(activePlanStage\.title, step, \{[\s\S]*?planId: data\.plan\.id,[\s\S]*?stageId: activePlanStage\.id,[\s\S]*?step,[\s\S]*?revision: data\.plan\.revision,/,
+  // The minted card renders inline in Chat, so the action lands on the
+  // conversation instead of a legacy training route.
+  /setActiveView\("coach"\);\s*handleGenerateTrainingCard\(activePlanStage\.title, step, \{[\s\S]*?planId: data\.plan\.id,[\s\S]*?stageId: activePlanStage\.id,[\s\S]*?step,[\s\S]*?revision: data\.plan\.revision,/,
 );
 assert.match(
   app,

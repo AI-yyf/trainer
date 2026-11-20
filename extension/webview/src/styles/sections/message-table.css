@@ -30,7 +30,7 @@
 .message-table-wrap th,
 .message-table-wrap td {
   padding: 6px var(--space-2);
-  border-right: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  border-inline-end: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
   text-align: left;
   vertical-align: top;
@@ -38,7 +38,7 @@
 
 .message-table-wrap th:last-child,
 .message-table-wrap td:last-child {
-  border-right: 0;
+  border-inline-end: 0;
 }
 
 .message-table-wrap th {

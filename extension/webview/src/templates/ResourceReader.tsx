@@ -3,17 +3,14 @@ import { ActivityHeader } from "./ActivityHeader";
 import type { TemplateAction } from "./NextAction";
 
 /** Source identity, reading content, then contextual tools in a stable order. */
-export function ResourceReader({ parent, title, source, updatedAt, onBack, askCoach, openInEditor, openExternally, generatePractice, joinLearning, children }: {
+export function ResourceReader({ parent, title, source, updatedAt, onBack, askCoach, openInEditor, generatePractice, joinLearning, children }: {
   parent: string;
   title: string;
   source?: string;
   updatedAt?: string;
   onBack: () => void;
   askCoach?: TemplateAction;
-  /** Open the original in VS Code (the editor remains the file owner). */
   openInEditor?: TemplateAction;
-  /** Open the original through the OS default application / browser. */
-  openExternally?: TemplateAction;
   generatePractice?: TemplateAction;
   joinLearning?: TemplateAction;
   children: ReactNode;
@@ -21,27 +18,17 @@ export function ResourceReader({ parent, title, source, updatedAt, onBack, askCo
   return <section className="template-resource-reader" data-template="ResourceReader">
     <ActivityHeader parent={parent} title={title} onBack={onBack} />
     {source || updatedAt ? <p className="template-metadata">{[source, updatedAt].filter(Boolean).join(" · ")}</p> : null}
-    {openInEditor || openExternally ? (
-      <div className="template-reader-open-actions" role="group">
-        {[
-          ["editor", openInEditor],
-          ["external", openExternally],
-        ].map(([kind, action]) => {
-          const item = action as TemplateAction | undefined;
-          return item ? (
-            <button
-              key={kind as string}
-              type="button"
-              className="button button--ghost button--compact"
-              data-reader-open={kind as string}
-              disabled={item.disabled || item.busy}
-              aria-busy={item.busy || undefined}
-              onClick={item.onClick}
-            >
-              {item.label}
-            </button>
-          ) : null;
-        })}
+    {openInEditor ? (
+      <div className="template-reader-open-actions">
+        <button
+          type="button"
+          className="button button--ghost button--compact"
+          disabled={openInEditor.disabled || openInEditor.busy}
+          aria-busy={openInEditor.busy || undefined}
+          onClick={openInEditor.onClick}
+        >
+          {openInEditor.label}
+        </button>
       </div>
     ) : null}
     {children}

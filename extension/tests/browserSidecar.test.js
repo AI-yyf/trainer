@@ -1479,7 +1479,12 @@ test('browser preview replaces provider failure details and diagnostics with saf
     const providerPatch = testResult.messages[0].payload.providerConfig;
     assert.equal(testResult.messages[1].payload.tone, 'error');
     assert.match(testResult.messages[1].payload.message, /key|access|settings/i);
-    assert.doesNotMatch(JSON.stringify(testResult), /traceback|secret_token|api_key|hidden|502/i);
+    // The preview must not echo raw provider failure internals. Timestamps are
+    // stripped first: an ISO millisecond field can read as "502" and fail the
+    // guard for reasons that have nothing to do with provider secrets.
+    const withoutTimestamps = JSON.stringify(testResult)
+      .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, "");
+    assert.doesNotMatch(withoutTimestamps, /traceback|secret_token|api_key|hidden|502/i);
     assert.equal(providerPatch.lastTestResult.status, 'failed');
     assert.equal(providerPatch.lastTestResult.errorCategory, 'invalid_key_or_permission');
 

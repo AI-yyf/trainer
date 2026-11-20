@@ -33,7 +33,7 @@
   content: "";
   width: 6px;
   height: 6px;
-  border-right: 1px solid currentColor;
+  border-inline-end: 1px solid currentColor;
   border-bottom: 1px solid currentColor;
   transform: rotate(-45deg);
   transform-origin: 50% 50%;
@@ -205,7 +205,7 @@ details[open] > :not(summary) {
   height: 100%;
   overflow: hidden;
   background: var(--bg-0);
-  border-right: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  border-inline-end: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
 }
 
 .trainer-preview-sidebar .trainer-shell {

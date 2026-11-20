@@ -55,6 +55,7 @@ export type PlanCopyKey =
   | "resumeInCoach"
   | "returnLabel"
   | "moreLabel"
+  | "planActionsLabel"
   | "followOneThread"
   | "currentThread"
   | "planStatusLabel"
@@ -135,6 +136,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "回到对话",
     returnLabel: "回流",
     moreLabel: "更多",
+    planActionsLabel: "计划与证据",
     followOneThread: "先只看这一条主线",
     currentThread: "当前主线",
     planStatusLabel: "计划状态",
@@ -214,6 +216,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "Resume in Coach",
     returnLabel: "Return",
     moreLabel: "More",
+    planActionsLabel: "Plan and evidence",
     followOneThread: "Follow one thread first",
     currentThread: "Current thread",
     planStatusLabel: "Plan status",
@@ -293,6 +296,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "Volver al coach",
     returnLabel: "Retorno",
     moreLabel: "Más",
+    planActionsLabel: "Plan y evidencia",
     followOneThread: "Sigue primero un solo hilo",
     currentThread: "Hilo actual",
     planStatusLabel: "Estado del plan",
@@ -373,6 +377,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "Reprendre dans Coach",
     returnLabel: "Retour",
     moreLabel: "Plus",
+    planActionsLabel: "Plan et preuves",
     followOneThread: "Suivez d’abord un seul fil",
     currentThread: "Fil courant",
     planStatusLabel: "Statut du plan",
@@ -453,6 +458,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "Im Coach fortsetzen",
     returnLabel: "Rückfluss",
     moreLabel: "Mehr",
+    planActionsLabel: "Plan und Nachweise",
     followOneThread: "Folgen Sie zuerst einem einzigen Pfad",
     currentThread: "Aktueller Pfad",
     planStatusLabel: "Planstatus",
@@ -533,6 +539,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "Coach に戻る",
     returnLabel: "回流",
     moreLabel: "さらに表示",
+    planActionsLabel: "計画と証拠",
     followOneThread: "まず一本の流れだけを見る",
     currentThread: "現在の流れ",
     planStatusLabel: "計画の状態",
@@ -613,6 +620,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "코치로 돌아가기",
     returnLabel: "회류",
     moreLabel: "더 보기",
+    planActionsLabel: "계획과 근거",
     followOneThread: "먼저 하나의 흐름만 보세요",
     currentThread: "현재 흐름",
     planStatusLabel: "계획 상태",
@@ -693,6 +701,7 @@ export const PLAN_COPY: Record<PlanLanguage, Record<PlanCopyKey, string>> = {
     resumeInCoach: "Voltar ao coach",
     returnLabel: "Retorno",
     moreLabel: "Mais",
+    planActionsLabel: "Plano e evidências",
     followOneThread: "Siga primeiro um único fluxo",
     currentThread: "Fluxo atual",
     planStatusLabel: "Status do plano",

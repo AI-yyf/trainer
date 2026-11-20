@@ -102,6 +102,7 @@ const LIVE_TRAINING_COMMAND_IDS = new Set<string>([
   trainerCommands.trainingAttemptClose,
 ]);
 const LIVE_TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
+  trainerCommands.trainingCardLibrary,
   trainerCommands.trainingGenerateCard,
   trainerCommands.trainingCardStatusTransition,
   trainerCommands.trainingFlashcardAnswer,
@@ -117,10 +118,6 @@ const LIVE_TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
   trainerCommands.trainingAttemptStart,
   trainerCommands.trainingAttemptRecover,
 ]);
-const LIVE_AGENT_HANDOFF_COMMAND_IDS = new Set<string>([
-  trainerCommands.openResource,
-]);
-
 let livePreviewSessionId: string | undefined;
 let livePreviewBootstrap: BootstrapData | undefined;
 
@@ -155,6 +152,11 @@ function mergeBrowserPreviewPatch(
 }
 
 function emitBrowserPreviewHostMessage(message: HostMessage): void {
+  // The preview's own bootstrap tracks host bootstraps, so a mock action reads
+  // the same live state the webview is showing.
+  if (message.type === "bootstrap" && message.payload) {
+    window.__TRAINER_BOOTSTRAP__ = message.payload;
+  }
   window.dispatchEvent(
     new CustomEvent(PREVIEW_HOST_MESSAGE_EVENT, {
       detail: message,
@@ -340,7 +342,9 @@ function browserPreviewResourceTrainingHandoffSuccess(
     browserPreviewString(snapshot.workspaceTrainingState?.activeTrainingCardRouting?.selectedCardId);
   const success = response?.success === true;
   const outcome =
-    success && generatedCardId && selectedCardId === generatedCardId
+    success && generatedCardId && !response?.active_routing
+      ? "ready"
+      : success && generatedCardId && selectedCardId === generatedCardId
       ? "ready"
       : success && selectedCardId
         ? "not-current"
@@ -728,6 +732,32 @@ async function runBrowserPreviewLiveTrainingAction(
   try {
     let response: Response;
     switch (commandId) {
+      case trainerCommands.trainingCardLibrary:
+        response = await requestFor("/training/card/library", {
+          workspace_id: workspaceId,
+          card_id: payload?.cardId,
+          action: payload?.action,
+          prompt: payload?.prompt,
+          acceptance_criteria: payload?.acceptanceCriteria,
+        });
+        break;
+      case trainerCommands.trainingCardMarkImportant:
+        response = await requestFor("/training/card/importance", {
+          workspace_id: workspaceId, card_id: payload?.cardId, important: payload?.important,
+        });
+        break;
+      case trainerCommands.trainingCardSetPriority:
+        response = await requestFor("/training/card/priority", {
+          workspace_id: workspaceId, card_id: payload?.cardId, priority: payload?.priority,
+        });
+        break;
+      case trainerCommands.trainingCardMerge:
+        response = await requestFor("/training/cards/merge", {
+          workspace_id: workspaceId,
+          keep_card_id: payload?.keepCardId,
+          duplicate_card_ids: payload?.duplicateCardIds,
+        });
+        break;
       case trainerCommands.trainingGenerateCard:
         {
           const requestedSubmode = browserPreviewString(payload?.submode);
@@ -1138,179 +1168,21 @@ function emitLivePreviewOperationStatus(
   });
 }
 
-function liveAgentHandoffPrompt(
+function handleBrowserPreviewResourceOpen(
   action: WebviewAction,
   language: ComposerLanguage,
-  bootstrap: BrowserPreviewBootstrap,
-): string | undefined {
-  const isOpenResourceAction =
-    action.type === "resource/open" ||
+): boolean {
+  const isResourceOpen = action.type === "resource/open" ||
     (action.type === "command/execute" && action.payload.commandId === trainerCommands.openResource);
-  if (isOpenResourceAction) {
-    const resourceId =
-      action.type === "resource/open"
-        ? browserPreviewString(action.payload.resourceId)
-        : browserPreviewString(browserPreviewActionPayload(action)?.resourceId);
-    const resource = resourceId
-      ? bootstrap.resources?.find((item) => item.id === resourceId)
-      : undefined;
-    const label =
-      resource?.title || resourceId || liveHandoffLabel(language, "当前资料");
-    return previewText(
-      language,
-      `请在资料视图中处理“${label}”：使用当前工作区和资料工具定位它，说明当前可见内容与下一步；不要声称已经在浏览器中打开本地文件。`,
-      `Handle "${label}" from the Resources view using the current workspace and resource tools. Explain what can be located and the next step; do not claim that a local file was opened in the browser.`,
-    );
-  }
-
-  if (action.type !== "command/execute") {
-    return undefined;
-  }
-  if (!LIVE_AGENT_HANDOFF_COMMAND_IDS.has(action.payload.commandId)) {
-    return undefined;
-  }
-
-  const commandLabel =
-    action.payload.commandId === trainerCommands.createGlobalPlan
-      ? liveHandoffLabel(language, "创建全局计划")
-      : action.payload.commandId === trainerCommands.linkCurrentProjectPlan
-        ? liveHandoffLabel(language, "关联当前项目计划")
-        : liveHandoffLabel(language, "处理当前资料");
-  return previewText(
-    language,
-    `我在${action.payload.commandId === trainerCommands.openResource ? "资料" : "学习"}视图请求${commandLabel}。请使用真实 Agent 工具检查当前状态，说明可执行的下一步；不要伪造已经完成的写入。`,
-    `I requested "${commandLabel}" from the ${action.payload.commandId === trainerCommands.openResource ? "Resources" : "Plan"} view. Use the real Agent tools to inspect the current state and explain the next executable step; do not claim a write completed unless it did.`,
-  );
-}
-
-/**
- * §十五: live agent handoff labels in eight languages (no zh/en binary).
- */
-const LIVE_HANDOFF_LABEL_TEXT: Record<string, Record<ComposerLanguage, string>> = {
-  "当前资料": {
-    "zh-CN": "当前资料",
-    "en-US": "the selected resource",
-    "es-ES": "el recurso seleccionado",
-    "fr-FR": "la ressource sélectionnée",
-    "de-DE": "die ausgewählte Ressource",
-    "ja-JP": "選択した資料",
-    "ko-KR": "선택한 자료",
-    "pt-BR": "o recurso selecionado",
-  },
-  "创建全局计划": {
-    "zh-CN": "创建全局计划",
-    "en-US": "create a global plan",
-    "es-ES": "crear un plan global",
-    "fr-FR": "créer un plan global",
-    "de-DE": "einen globalen Plan erstellen",
-    "ja-JP": "グローバルプランを作成",
-    "ko-KR": "전역 계획 만들기",
-    "pt-BR": "criar um plano global",
-  },
-  "关联当前项目计划": {
-    "zh-CN": "关联当前项目计划",
-    "en-US": "link the current project plan",
-    "es-ES": "vincular el plan del proyecto actual",
-    "fr-FR": "lier le plan du projet actuel",
-    "de-DE": "den aktuellen Projektplan verknüpfen",
-    "ja-JP": "現在のプロジェクトプランを関連付ける",
-    "ko-KR": "현재 프로젝트 계획 연결",
-    "pt-BR": "vincular o plano do projeto atual",
-  },
-  "处理当前资料": {
-    "zh-CN": "处理当前资料",
-    "en-US": "handle the current resource",
-    "es-ES": "gestionar el recurso actual",
-    "fr-FR": "traiter la ressource actuelle",
-    "de-DE": "die aktuelle Ressource bearbeiten",
-    "ja-JP": "現在の資料を処理",
-    "ko-KR": "현재 자료 처리",
-    "pt-BR": "tratar o recurso atual",
-  },
-};
-
-function liveHandoffLabel(language: ComposerLanguage, key: string): string {
-  return LIVE_HANDOFF_LABEL_TEXT[key]?.[language] ?? LIVE_HANDOFF_LABEL_TEXT[key]?.["en-US"] ?? key;
-}
-
-async function runBrowserPreviewLiveAgentHandoff(
-  action: WebviewAction,
-  language: ComposerLanguage,
-): Promise<boolean> {
-  const bootstrap = currentBrowserPreviewBootstrap();
-  const prompt = liveAgentHandoffPrompt(action, language, bootstrap);
-  if (!prompt) {
+  if (!isResourceOpen) {
     return false;
   }
 
-  await refreshLiveBrowserPreviewBootstrap();
-  const sessionId = livePreviewSessionId;
-  if (!sessionId) {
-    throw new Error("Live preview session is not available.");
-  }
-  const resourceId =
-    action.type === "resource/open"
-      ? browserPreviewString(action.payload.resourceId)
-      : action.type === "command/execute" && action.payload.commandId === trainerCommands.openResource
-        ? browserPreviewString(browserPreviewActionPayload(action)?.resourceId)
-        : undefined;
-  let completed = false;
-  let failed = false;
-  const request: SessionMessageRequest = {
-    text: prompt,
-    intent: action.type === "resource/open" ? "coach" : "plan",
-    activeView: action.type === "resource/open" ? "resources" : "plan",
-    resourceIds: resourceId ? [resourceId] : undefined,
-    responseLanguage: language,
-    contextDetail: "full",
-    includeCurrentFile: true,
-    includeSelection: true,
-    includeDiagnostics: true,
-    includeRelatedFiles: true,
-    useAgentLoop: true,
-  };
-
-  await streamBrowserPreviewMessage(request, sessionId, {
-    onStart: (message) => emitBrowserPreviewHostMessage(message),
-    onChunk: (message) => emitBrowserPreviewHostMessage(message),
-    onComplete: (message, nextSessionId) => {
-      livePreviewSessionId = nextSessionId;
-      if (message.type === "stream/complete") {
-        completed = true;
-      }
-      emitBrowserPreviewHostMessage(message);
-    },
-    onError: (message) => {
-      failed = true;
-      emitBrowserPreviewHostMessage(message);
-    },
-    onCancelled: (message) => {
-      failed = true;
-      emitBrowserPreviewHostMessage(message);
-    },
-  });
-
-  if (failed) {
-    emitLivePreviewOperationStatus(
-      action,
-      "error",
-      previewText(
-        language,
-        "Agent 没有完成这次转交；请根据流中的错误恢复或重试。",
-        "The Agent handoff did not complete; use the stream error to recover or retry.",
-      ),
-    );
-  } else if (completed) {
-    emitLivePreviewOperationStatus(
-      action,
-      "success",
-      previewText(
-        language,
-        "Agent 已接管这个视图动作，并把结果带回当前会话。",
-        "The Agent handled this view action and returned the result to the current session.",
-      ),
-    );
-  }
+  emitLivePreviewOperationStatus(
+    action,
+    "info",
+    previewText(language, "请在 VS Code 的资料页打开文件。", "Open the file from Resources in VS Code."),
+  );
   return true;
 }
 
@@ -1336,7 +1208,6 @@ async function runBrowserPreviewLiveAction(
   const isResourceSearch = commandId === trainerCommands.searchResources;
   const isResourceUpload = commandId === trainerCommands.uploadResource;
   const isResourceTrashRefresh = commandId === trainerCommands.refreshResourceTrash;
-  const isResourceOpen = action.type === "resource/open";
   const isUnsupportedCommand = action.type === "command/execute";
   if (
     !isPlanFreeze &&
@@ -1350,7 +1221,6 @@ async function runBrowserPreviewLiveAction(
     !isResourceSearch &&
     !isResourceUpload &&
     !isResourceTrashRefresh &&
-    !isResourceOpen &&
     !isUnsupportedCommand
   ) {
     return;
@@ -1836,26 +1706,6 @@ async function runBrowserPreviewLiveAction(
           `Loaded ${deletedResources.length} recoverable resource${deletedResources.length === 1 ? "" : "s"} from the real Sidecar.`,
         ),
       );
-      return;
-    }
-
-    if (isResourceOpen) {
-      if (await runBrowserPreviewLiveAgentHandoff(action, language)) {
-        return;
-      }
-      emitLivePreviewOperationStatus(
-        action,
-        "error",
-        previewText(
-          language,
-          "浏览器 live 预览不能打开本地资源路径；请使用资源对话或下载入口。",
-          "Live browser preview cannot open a local resource path. Use the resource conversation or download action.",
-        ),
-      );
-      return;
-    }
-
-    if (isUnsupportedCommand && (await runBrowserPreviewLiveAgentHandoff(action, language))) {
       return;
     }
 
@@ -5758,6 +5608,12 @@ function configureBrowserPreviewEnvironment(state: BrowserPreviewState): void {
     if (!isWebviewAction(action)) {
       return;
     }
+    // Mirror the fixture shim's debug log so the preview is equally
+    // observable in live mode: a reviewer can see which commands ran.
+    console.debug("[trainer:browser-preview]", action);
+    if (handleBrowserPreviewResourceOpen(action, state.composerLanguage)) {
+      return;
+    }
     if (action.type === "request/bootstrap") {
       if (isBrowserPreviewFixtureMode()) {
         emitBrowserPreviewHostMessage({
@@ -7037,7 +6893,7 @@ export function installBrowserPreviewHarness(): void {
     postMessage(message) {
       console.debug("[trainer:browser-preview]", message);
       if (isWebviewAction(message)) {
-        if (handleBrowserPreviewStreamCancel(message)) {
+        if (handleBrowserPreviewResourceOpen(message, state.composerLanguage) || handleBrowserPreviewStreamCancel(message)) {
           return;
         }
         if (

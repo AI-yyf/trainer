@@ -3,10 +3,12 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { CloseIcon } from "../components/icons";
 
 /** AppShell utilities keep focus inside the dialog and return it to their entry. */
-export function UtilityOverlay({ label, closeLabel, onClose, children }: {
+export function UtilityOverlay({ label, closeLabel, onClose, overlay = "history", panelClassName, children }: {
   label: string;
   closeLabel: string;
   onClose: () => void;
+  overlay?: "history" | "learning";
+  panelClassName?: string;
   children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -35,9 +37,9 @@ export function UtilityOverlay({ label, closeLabel, onClose, children }: {
     document.addEventListener("keydown", keydown);
     return () => { document.removeEventListener("keydown", keydown); if (previous?.isConnected) previous.focus(); };
   }, []);
-  return <div className="app-shell-overlay" data-overlay="history">
+  return <div className="app-shell-overlay" data-overlay={overlay}>
     <button type="button" tabIndex={-1} className="app-shell-overlay__backdrop" aria-label={closeLabel} onClick={onClose} />
-    <div ref={panel} className="app-shell-overlay__panel" role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
+    <div ref={panel} className={`app-shell-overlay__panel${panelClassName ? ` ${panelClassName}` : ""}`} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
       <button
         type="button"
         className="app-shell-overlay__close"

@@ -1,6 +1,7 @@
 import { CoachReply } from "../../templates/CoachReply";
 import { memo, useState, type ReactNode } from "react";
 import { resolveCopy } from "../../lib/i18n/copy";
+import { viewLabels } from "../../lib/viewLabels";
 
 import { TrainerIconBase } from "../icons/TrainerIconBase";
 
@@ -37,6 +38,21 @@ const GLYPH_CARD = (
     <path d="m9 14 2 2 4-4" />
   </>
 );
+const GLYPH_BRIEF = (
+  <>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+    <path d="M9 13h6M9 17h4" />
+  </>
+);
+// A flash (闪记) card reads as a bolt on a card, never as the same checklist
+// card as the practice card.
+const GLYPH_FLASH = (
+  <>
+    <rect x="3" y="4" width="18" height="16" rx="2.4" />
+    <path d="M13 8.5 9.5 13H12l-1 3 3.5-4.5H12z" />
+  </>
+);
 const GLYPH_RETRY = (
   <>
     <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
@@ -64,7 +80,7 @@ import {
 } from "../../lib/nextStepConfirmation";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { artifactBlockCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
-import { coachMessageBubbleCopy, COACH_MESSAGE_ACTION_LABELS } from "../../lib/i18n/segments/coachMessageBubbleCopy";
+import { coachMessageBubbleCopy, COACH_MESSAGE_ACTION_LABELS, OPEN_RESEARCH_PREPARATION_TEXT, RESEARCH_PREPARATION_TEXT } from "../../lib/i18n/segments/coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
 import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
 import { currentTrainerStage } from "../../lib/trainerStage";
@@ -80,7 +96,9 @@ export type CoachMessageAction =
   | "share"
   | "save-resource"
   | "save-research-brief"
+  | "open-research-brief"
   | "training-card"
+  | "flash-card"
   | "set-goal"
   | "retry";
 
@@ -128,29 +146,32 @@ function fallbackRoleLabel(message: ConversationMessage): string {
   return "Trainer";
 }
 
-function supportPreview(message: ConversationMessage): string | undefined {
-  if (message.support?.preview) {
-    return message.support.preview;
-  }
-  if (message.contextNote) {
-    return message.contextNote;
-  }
-  if (message.attachments?.length) {
-    return message.attachments[0]?.value;
-  }
-  return undefined;
-}
-
 function supportDetailLines(
   message: ConversationMessage,
   language: ComposerLanguage,
+  resources?: ResourceRecord[],
 ): string[] {
   if (message.role === "user") {
-    return (message.attachments ?? []).map((attachment) =>
+    const lines = (message.attachments ?? []).map((attachment) =>
       coachMessageBubbleCopy(language, "{label}：{value}")
         .replace("{label}", attachment.label)
         .replace("{value}", attachment.value),
     );
+    // The source belongs to the sent message, not to a pre-send chrome row:
+    // keep it auditable after the composer has cleared it. `contextNote` is a
+    // different channel — internal management context — and stays hidden.
+    const sourceNote = message.sourceNote?.trim();
+    if (sourceNote) {
+      lines.push(sourceNote);
+    }
+    const resourceIds = message.sourceResourceIds ?? [];
+    if (resourceIds.length > 0) {
+      const titles = resourceIds.map((id) =>
+        resources?.find((resource) => resource.id === id)?.title?.trim() || id,
+      );
+      lines.push(`${viewLabels[language].resources}: ${titles.join(", ")}`);
+    }
+    return [...new Set(lines.filter(Boolean))];
   }
   const lines: string[] = [];
   const seen = new Set<string>();
@@ -190,12 +211,17 @@ function compactTimestamp(value: string): string {
   return value.trim();
 }
 
-/** Part kinds that are agent-run bookkeeping, never part of the readable reply. */
+/**
+ * Part kinds that are agent-run bookkeeping, never part of the readable reply.
+ * training_card is rendered once as the live inline practice card in the
+ * conversation footer; the raw part is not repeated in the message body.
+ */
 const HIDDEN_ASSISTANT_PART_TYPES = new Set([
   "coach_visible_status",
   "tool_call",
   "tool_result",
   "reasoning",
+  "training_card",
 ]);
 
 function avatarGlyph(message: ConversationMessage): string {
@@ -301,7 +327,7 @@ function CoachMessageBubbleImpl({
   const showAuthor = message.role !== "assistant" && message.author.trim() !== resolvedRoleLabel.trim();
   const timestamp = compactTimestamp(message.timestamp);
   const showTimestampInline = !streaming && message.role !== "assistant" && timestamp.length > 0;
-  const supportDetails = supportDetailLines(message, language);
+  const supportDetails = supportDetailLines(message, language, resources);
   const hasSupportDetails =
     supportDetails.length > 0 || Boolean(message.support?.preview);
   const detailBlocks: ReactNode[] = [];
@@ -501,6 +527,18 @@ function CoachMessageBubbleImpl({
             resources={resources}
           />
         ) : null}
+        {!streaming && message.researchPreparation ? (
+          message.researchPreparation.status === "saved" && onMessageAction ? (
+            <button type="button" className="template-back" data-research-preparation="saved"
+              onClick={() => onMessageAction("open-research-brief", message)}>
+              {OPEN_RESEARCH_PREPARATION_TEXT[language]}
+            </button>
+          ) : (
+            <p className="template-metadata" data-research-preparation={message.researchPreparation.status}>
+              {RESEARCH_PREPARATION_TEXT[language][message.researchPreparation.status]}
+            </p>
+          )
+        ) : null}
         {artifactOwnsConfirmation && !streaming ? (
           // Single-shot allocation (see resolveNextStepConfirmationOwner): with
           // the artifacts disclosure gone, the artifact-owned downgrade renders
@@ -587,7 +625,7 @@ function CoachMessageBubbleImpl({
               >
                 <ActionGlyph glyphs={GLYPH_LIBRARY} />
               </button>
-              <button
+              {message.researchPreparation?.status !== "saved" ? <button
                 type="button"
                 className="message-bubble__icon-action"
                 data-message-quick-action="save-research-brief"
@@ -596,8 +634,8 @@ function CoachMessageBubbleImpl({
                 disabled={Boolean(pendingAssistantAction)}
                 onClick={() => onMessageAction?.("save-research-brief", message)}
               >
-                <ActionGlyph glyphs={GLYPH_CARD} />
-              </button>
+                <ActionGlyph glyphs={GLYPH_BRIEF} />
+              </button> : null}
               {isLatestAssistant ? (
                 <button
                   type="button"
@@ -621,6 +659,17 @@ function CoachMessageBubbleImpl({
                 onClick={() => onMessageAction?.("training-card", message)}
               >
                 <ActionGlyph glyphs={GLYPH_CARD} />
+              </button>
+              <button
+                type="button"
+                className="message-bubble__icon-action"
+                data-message-quick-action="flash-card"
+                data-action-label={messageActionLabels["flash-card"]}
+                aria-label={messageActionLabels["flash-card"]}
+                disabled={Boolean(pendingAssistantAction)}
+                onClick={() => onMessageAction?.("flash-card", message)}
+              >
+                <ActionGlyph glyphs={GLYPH_FLASH} />
               </button>
               {isLatestAssistant ? (
                 <button

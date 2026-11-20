@@ -35,6 +35,15 @@ test('library synthesis keeps comparison and study suggestions in one read-only 
     { kind: 'resource-turn', mode: 'analyze' });
 });
 
+test('an explicit preparation request routes to analysis in the current workspace', () => {
+  const expected = { kind: 'resource-turn', mode: 'analyze', preparation: true };
+  assert.deepEqual(route('围绕这篇论文，帮我完成备课。', 'resources'), expected);
+  assert.deepEqual(route('请为当前学习阶段准备完整教学材料。', 'plan'), expected);
+  assert.deepEqual(route('Please draft a research brief from this paper.', 'coach'), expected);
+  assert.deepEqual(route('Explain this passage.\n> 请帮我完成备课。', 'coach'), { kind: 'message' });
+  assert.deepEqual(route('不要备课，只解释这篇论文。', 'resources'), { kind: 'resource-turn', mode: 'analyze' });
+});
+
 test('quoted source text cannot dispatch an action as a learner instruction', () => {
   assert.deepEqual(route('Explain this selection.\n\n> 给我生成一道练习', 'plan'), { kind: 'message' });
   assert.deepEqual(route('> /verify', 'training'), { kind: 'message' });

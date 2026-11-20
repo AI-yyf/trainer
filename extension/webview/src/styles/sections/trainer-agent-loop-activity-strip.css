@@ -11,7 +11,7 @@
   padding: var(--space-1) 0 5px var(--space-2);
   margin: 0 0 6px;
   border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-inline-start: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
   border-radius: 0;
   background: transparent;
   font-size: var(--trainer-font-2xs);
@@ -80,7 +80,7 @@
 
 .agent-activity-strip__details > summary::before {
   content: "▶";
-  margin-right: 5px;
+  margin-inline-end: 5px;
   color: var(--fg-muted);
   font-size: var(--trainer-font-3xs);
   transition: transform var(--motion-fast) var(--motion-ease);

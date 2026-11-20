@@ -24,7 +24,7 @@ const browserPreviewHarnessPath = path.resolve(
   'browserPreviewHarness.ts',
 );
 
-test('Resources opens library files in VS Code or the default app without an in-Trainer content pane', () => {
+test('Resources opens library files only in VS Code without an in-Trainer content pane', () => {
   const source = fs.readFileSync(resourcesWorkbenchPath, 'utf8');
   const appSource = readAppModuleSource();
   const resourcesStart = appSource.indexOf('<ResourcesWorkbenchView');
@@ -33,17 +33,19 @@ test('Resources opens library files in VS Code or the default app without an in-
 
   assert.match(
     source,
-    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ openOriginal\?: boolean; openExternal\?: boolean; line\?: number \},\s*\) =>/,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ line\?: number \},\s*\) =>/,
   );
-  assert.match(source, /onOpenResource\?\.\(resource\.id, \{ \.\.\.options/);
-  assert.match(source, /onClick=\{\(\) => openResourceInVsCode\(selectedResource\)\}/);
+  assert.match(source, /onOpenResource\?\.\(resource\.id, options\)/);
+  assert.match(source, /onClick: \(\) => openResourceInVsCode\(selectedResource\)/);
   assert.match(source, /openInVsCode/);
-  assert.match(source, /openWithDefaultApp/);
+  // md-only: the library has no "open original" affordance any more.
+  assert.doesNotMatch(source, /openOriginal|open-original-action/);
+  assert.doesNotMatch(source, /openWithDefaultApp|openInBrowser/);
   assert.match(source, /<dl className="resources-knowledge__facts">/);
   assert.match(source, /resource\.status === "attention"/);
   assert.match(source, /<ResourceReader/);
   assert.match(source, /openInEditor=\{/);
-  assert.match(source, /openExternally=\{/);
+  assert.doesNotMatch(source, /openExternally|openExternal/);
 
   // No Trainer-owned content preview lives in the library surface: no reader
   // document, no sandbox HTML/Markdown body, no automatic preview request.

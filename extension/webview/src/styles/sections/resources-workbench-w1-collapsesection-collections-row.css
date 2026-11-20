@@ -32,12 +32,12 @@
   min-height: 28px;
   padding: var(--space-1) var(--space-2);
   gap: var(--space-1);
-  border-left: 1px solid transparent;
+  border-inline-start: 1px solid transparent;
 }
 
 .resources-knowledge__tree .collapse-section__header:hover {
   background: color-mix(in srgb, var(--bg-1) 72%, transparent);
-  border-left-color: color-mix(in srgb, var(--line) 62%, transparent);
+  border-inline-start-color: color-mix(in srgb, var(--line) 62%, transparent);
 }
 
 .resources-knowledge__tree .collapse-section__actions {
@@ -79,21 +79,21 @@
 
 .resources-row:hover {
   border-color: color-mix(in srgb, var(--line) 58%, transparent);
-  border-left-color: transparent;
+  border-inline-start-color: transparent;
   background: var(--surface-1);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
 }
 
 .resources-row.is-marked:hover {
   border-color: color-mix(in srgb, var(--line) 48%, transparent);
-  border-left-color: transparent;
+  border-inline-start-color: transparent;
   background: var(--bg-1);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
 }
 
 .resources-row.is-selected:hover {
   border-color: color-mix(in srgb, var(--line) 70%, transparent);
-  border-left-color: transparent;
+  border-inline-start-color: transparent;
   background: var(--bg-2);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 55%, transparent);
 }
@@ -145,10 +145,8 @@
   flex-direction: column;
   gap: var(--space-1);
   margin: var(--space-1) 0 var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
-  border-radius: var(--radius-md);
-  background: var(--bg-1);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--line);
 }
 
 .resources-knowledge__url-import-field {
@@ -208,14 +206,8 @@
 
 /* The reader's file actions group: same collapsed-section rhythm as the
    organize section so the reader reads as one primary row plus groups. */
-/* One framed reading surface: identity, source facts, actions and the
-   Markdown body share a single card instead of a loose vertical stack. */
 [data-template="ResourceReader"] {
-  margin: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+  padding-inline: var(--space-2);
 }
 
 .resources-knowledge__detail-object {
@@ -231,6 +223,48 @@
 
 .resources-knowledge__facts {
   margin: 0;
+}
+
+/* Markdown-only migration: a preview with exactly one confirmation. */
+.resources-knowledge__migration {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-1);
+  font-size: var(--trainer-font-2xs);
+}
+
+.resources-knowledge__migration-summary {
+  margin: 0;
+  color: var(--fg-1);
+}
+
+.resources-knowledge__migration-note {
+  margin: 0;
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+
+.resources-knowledge__migration-message {
+  margin: 0;
+  color: var(--fg-1);
+}
+
+.resources-knowledge__migration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.resources-knowledge__migrate-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .resources-knowledge__file-actions {
@@ -386,7 +420,7 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 24px;
-  padding-right: 6px;
+  padding-inline-end: 6px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -571,10 +605,7 @@
   align-items: flex-start;
   gap: 10px;
   margin: var(--space-2) 0;
-  padding: 14px 12px;
-  border: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--bg-1) 76%, var(--bg-0));
+  padding-block: var(--space-3);
 }
 
 .resources-empty-state__icon {
@@ -633,7 +664,7 @@
   padding: 0 8px;
   gap: 4px;
   border: 0;
-  border-left: 0;
+  border-inline-start: 0;
   background: transparent;
   color: var(--fg-1);
   font-size: 12px;
@@ -641,7 +672,7 @@
 
 .resources-knowledge__tree .collapse-section__header:hover {
   border: 0;
-  border-left: 0;
+  border-inline-start: 0;
   background: var(--vscode-list-hoverBackground, color-mix(in srgb, var(--bg-2) 56%, transparent));
 }
 
@@ -664,12 +695,14 @@
 }
 
 .resources-library-tree__node {
-  /* File rows sit under the folder row's icon, not one indent deeper per
-     nesting level. A single fixed inset keeps every file title on the same
-     optical line and removes the dead gutter between siblings. */
-  grid-template-columns: 20px minmax(0, 1fr);
-  min-height: 24px;
-  padding: 0 8px 0 24px;
+  /* File rows sit under the folder row's icon. One fixed inline inset keeps
+     every Markdown title on the same optical line; the row keeps a dedicated
+     action column so the menu can never create an implicit fourth grid track. */
+  grid-template-columns: 20px minmax(0, 1fr) 22px;
+  align-items: center;
+  min-height: 28px;
+  padding-block: 0;
+  padding-inline: 24px 8px;
   gap: 4px;
   border: 0;
   border-radius: 0;
@@ -702,24 +735,41 @@
 
 .resources-library-tree__copy {
   grid-column: 2;
+  display: flex;
+  align-items: center;
+  min-width: 0;
   gap: 0;
 }
 
 .resources-library-tree__node strong {
+  min-width: 0;
+  overflow: hidden;
   font-size: 12px;
-  line-height: 1.2;
+  line-height: 1.4;
   font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .resources-library-tree__kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 20px;
   min-width: 20px;
 }
 
-.resources-library-tree__kind svg {
-  width: 12px;
-  height: 12px;
+.resources-library-tree__kind svg,
+.resources-library-tree__file-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.resources-library-tree__menu {
+  grid-column: 3;
+  align-self: center;
+  justify-self: end;
 }
 
 .resources-library-tree__count,
@@ -810,3 +860,73 @@
 .template-reader-open-actions .button {
   min-height: 26px;
 }
+
+/* Add-to-library dialog: source first, then the knowledge base, then one
+   action. It reads like the capture dialogs people already know. */
+.resource-capture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-0);
+}
+.resource-capture__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.resource-capture__header h2 {
+  margin: 0;
+  color: var(--fg-0);
+  font-size: var(--trainer-font-lg);
+  line-height: 1.35;
+}
+.resource-capture__section { display: flex; flex-direction: column; gap: var(--space-1); }
+.resource-capture__legend {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: var(--trainer-font-2xs);
+}
+/* The capture entry recognizes its source: an address field and one file
+   field, no source picker. The recognized kind is reported as a hint. */
+.resource-capture__url,
+.resource-capture__file {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-1);
+  color: var(--fg-0);
+  font: inherit;
+  font-size: var(--trainer-font-2xs);
+}
+.resource-capture__file { margin-top: 4px; }
+.resource-capture__hint { margin: 0; color: var(--fg-2); font-size: var(--trainer-font-2xs); line-height: 1.5; }
+.resource-capture__section .resource-capture__legend + .resource-capture__hint { margin-top: 4px; }
+.resource-capture__targets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.resource-capture__target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 8px);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  cursor: pointer;
+}
+.resource-capture__target:hover { background: var(--bg-1); }
+.resource-capture__target input { accent-color: var(--accent); }
+.resource-capture__message { margin: 0; color: var(--fg-1); font-size: var(--trainer-font-2xs); line-height: 1.5; }
+.resource-capture__footer { display: flex; align-items: center; gap: var(--space-2); }

@@ -127,17 +127,23 @@ function humanizeToolName(name: string): string {
 }
 
 function citationStartLine(part: CitationPart): number | undefined {
-  const raw = part.location?.start_line ?? part.location?.startLine;
+  const raw = part.referenceOrigin === "research_brief" ? part.location?.line_start
+    : part.location?.start_line ?? part.location?.startLine;
   return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
 }
 
 function openCitationResource(part: CitationPart): void {
   const line = citationStartLine(part);
+  const researchCitation = part.referenceOrigin === "research_brief" && part.versionId && part.contentHash && part.snippet && line
+    ? { versionId: part.versionId, contentHash: part.contentHash, excerpt: part.snippet,
+        lineEnd: typeof part.location?.line_end === "number" ? part.location.line_end : line }
+    : undefined;
   postMessage({
     type: "resource/open",
     payload: {
       resourceId: part.resourceId,
       ...(line !== undefined ? { line } : {}),
+      ...(researchCitation ? { researchCitation } : {}),
     },
   });
 }
@@ -211,10 +217,12 @@ function CitationPartView({
       currentHash &&
       part.contentHash !== currentHash,
   );
-  const invalid = part.stale === true || resourceMissing || versionChanged || hashChanged;
-  const invalidLabel = resourceMissing
-    ? copy(language, "资料已删除")
-    : copy(language, "资料已更新");
+  const unconfirmedBriefPin = part.referenceOrigin === "research_brief" &&
+    (part.versionId !== currentVersion || part.contentHash !== currentHash);
+  const invalid = part.stale === true || resourceMissing || versionChanged || hashChanged || unconfirmedBriefPin;
+  const invalidLabel = part.referenceOrigin === "research_brief" && (resourceMissing || !currentVersion || !currentHash)
+    ? copy(language, "原文不可用")
+    : resourceMissing ? copy(language, "资料已删除") : copy(language, "资料已更新");
   const provenanceTitle = [
     provenance,
     currentVersion && currentVersion !== part.versionId
@@ -531,17 +539,11 @@ function renderPart(
       );
     }
     case "plan_update":
+      // The drawer owns plan management. The thread only needs the quiet
+      // acknowledgement; raw change objects and plan ids are debug data.
       return (
         <div key={`part-${index}`} className="message-part message-part--plan-update">
           <strong>{copy(language, "计划更新")}</strong>
-          <p className="message-part__meta">
-            <code>{part.planId}</code>
-          </p>
-          <ul className="message-part__list">
-            {part.changes.map((change, changeIndex) => (
-              <li key={`change-${changeIndex}`}>{renderSafeJson(change, language)}</li>
-            ))}
-          </ul>
         </div>
       );
     case "test_result":

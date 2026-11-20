@@ -43,13 +43,14 @@ import {
   postMessage,
   setPersistedState,
 } from "../lib/vscode";
-import { normalizeSidebarView } from "../lib/types";
+import { normalizeLearningSection, normalizeSidebarView } from "../lib/types";
 import { appUiCopy } from "../lib/i18n/appUiCopy";
 import type {
   ActiveWorkbenchView,
   BootstrapData,
   ComposerLanguage,
   CoachDefaults,
+  LearningSection,
   LearningSurfaceAlignment,
   HostMessage,
   PersistedWorkbenchState,
@@ -114,12 +115,22 @@ const defaultPersistedState: PersistedWorkbenchState = {
   composerSendPreference: "jump",
 };
 
+// A persisted legacy route (plan/training/progress) is a learning intent, not
+// a surface. Restore it as Chat + the matching drawer section.
+const persistedLegacyLearningSection = normalizeLearningSection(persisted?.activeView);
 const initialUi: PersistedWorkbenchState = {
   ...defaultPersistedState,
   ...persisted,
   composerDraft: sanitizeVisibleText(persisted?.composerDraft).trim(),
   learningSurfaceAlignment: persisted?.learningSurfaceAlignment === "right" ? "right" : "left",
   activeView: normalizeSidebarView(persisted?.activeView),
+  learningDrawerOpen: persistedLegacyLearningSection
+    ? true
+    : persisted?.learningDrawerOpen === true,
+  learningSection:
+    normalizeLearningSection(persisted?.learningSection) ??
+    persistedLegacyLearningSection ??
+    "goal",
 };
 
 function buildNeutralBootstrapData(): WorkbenchBootstrapState {
@@ -360,6 +371,10 @@ export interface WorkbenchStore {
   setThemePreference: (theme: ThemePreference) => void;
   setLearningSurfaceAlignment: (alignment: LearningSurfaceAlignment) => void;
   setActiveView: (view: ActiveWorkbenchView) => void;
+  /** Open the single learning drawer without leaving Chat. */
+  openLearningDrawer: (section?: LearningSection) => void;
+  closeLearningDrawer: () => void;
+  setLearningSection: (section: LearningSection) => void;
   setResourceRestoreContext: (context?: ResourceRestoreContext) => void;
   setComposerLanguage: (language: ComposerLanguage) => void;
   setComposerAnswerMode: (mode: "auto" | "coach-first" | "balanced" | "direct") => void;
@@ -421,6 +436,7 @@ function persistLayout(next: PersistedWorkbenchState): PersistedWorkbenchState {
   return next;
 }
 
+
 // Keep draft updates immediate while batching expensive layout persistence.
 // Page exit flushes the latest scoped layout, including keystrokes inside the
 // debounce window.
@@ -476,6 +492,9 @@ function operationBannerState(
 ): { operationMessage: OperationMessage | undefined; operationMessageSurface: OperationMessageSurface } {
   return {
     operationMessage,
+    // The caller may have resolved the scope from the RAW text (sanitization
+    // rewrites trainer markers into localized copy); an explicit scope wins,
+    // and marker detection still governs the message itself.
     operationMessageSurface: resolveOperationMessageSurface(operationMessage?.message, surface),
   };
 }
@@ -850,21 +869,31 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   // Both review entries are authoritative view moves: keep liveActiveView in
   // sync or a reload reopens the previous view (T-0038, T-0024 family).
   openTrainingReviewQueue: () => set((state) => {
-    liveActiveView = "training";
+    liveActiveView = "coach";
     return {
       trainingReviewQueueRequested: true,
-      layout: persistLayout({ ...state.layout, activeView: "training" }),
+      layout: persistLayout({
+        ...state.layout,
+        activeView: "coach",
+        learningDrawerOpen: true,
+        learningSection: "practice",
+      }),
     };
   }),
   settingsCategoryRequest: null,
   requestSettingsCategory: (category) => set({ settingsCategoryRequest: category }),
   consumeSettingsCategoryRequest: () => set({ settingsCategoryRequest: null }),
   beginTrainingReview: () => set((state) => {
-    liveActiveView = "training";
+    liveActiveView = "coach";
     return {
       trainingReviewQueueRequested: false,
       trainingRestoreContext: undefined,
-      layout: persistLayout({ ...state.layout, activeView: "training" }),
+      layout: persistLayout({
+        ...state.layout,
+        activeView: "coach",
+        learningDrawerOpen: true,
+        learningSection: "practice",
+      }),
     };
   }),
   data: initialData,
@@ -908,6 +937,9 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     })),
   setActiveView: (activeView) =>
     set((state) => {
+      // Legacy learning routes are intents: land on Chat and open the drawer
+      // on the matching section, never mount a Learning surface.
+      const legacySection = normalizeLearningSection(activeView);
       const normalized = normalizeSidebarView(activeView);
       liveActiveView = normalized;
       if (typeof window !== "undefined" && normalized === "settings") {
@@ -922,13 +954,31 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         }
       }
       return {
-        trainingReviewQueueRequested: activeView === "training" && state.trainingReviewQueueRequested,
+        trainingReviewQueueRequested: (activeView === "training" || legacySection === "practice") && state.trainingReviewQueueRequested,
         layout: persistLayout({
           ...switchComposerScope(state.layout, composerDockDraftScope(normalized, composerSessionKeyFor(state.data))),
           activeView: normalized,
+          learningDrawerOpen: legacySection ? true : false,
+          learningSection: legacySection ?? state.layout.learningSection ?? "goal",
         }),
       };
     }),
+  openLearningDrawer: (section) =>
+    set((state) => ({
+      layout: persistLayout({
+        ...state.layout,
+        learningDrawerOpen: true,
+        learningSection: section ?? state.layout.learningSection ?? "goal",
+      }),
+    })),
+  closeLearningDrawer: () =>
+    set((state) => ({
+      layout: persistLayout({ ...state.layout, learningDrawerOpen: false }),
+    })),
+  setLearningSection: (section) =>
+    set((state) => ({
+      layout: persistLayout({ ...state.layout, learningSection: section }),
+    })),
   setResourceRestoreContext: (resourceRestoreContext) => set({ resourceRestoreContext }),
   setComposerLanguage: (composerLanguage) =>
     set((state) => ({
@@ -1309,8 +1359,15 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             : undefined;
         const restoredTargetId = restoredNextHop?.targetId ?? restoredNextHop?.candidateId;
         const incomingTrainingState = nextData.workspaceTrainingState;
+        // Practice lives in Chat + the learning drawer now. A legacy training
+        // route is normalized before this point, so accept both shapes.
+        const practiceSurfaceActive =
+          nextLayout.activeView === "training" ||
+          (nextLayout.activeView === "coach" &&
+            nextLayout.learningDrawerOpen === true &&
+            nextLayout.learningSection === "practice");
         const shouldPreserveRestoredNextHop = Boolean(
-          !runtimeDataChanged && nextLayout.activeView === "training" &&
+          !runtimeDataChanged && practiceSurfaceActive &&
             restoredNextHop &&
             !incomingTrainingState?.latestTrainingNextHop &&
             (!incomingTrainingState?.selectedCardId ||
@@ -1379,10 +1436,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         const previousWorkspaceId = state.data.memory.workspace?.workspaceId;
         const incomingWorkspaceId = nextData.memory.workspace?.workspaceId;
         const effectiveWorkspaceId = incomingWorkspaceId ?? previousWorkspaceId;
-        const scopedPendingComposerLanguage = workspaceIdentityChanged(
-          effectiveWorkspaceId,
-          previousWorkspaceId,
-        )
+        const workspaceChanged = workspaceIdentityChanged(effectiveWorkspaceId, previousWorkspaceId);
+        const scopedPendingComposerLanguage = workspaceChanged
           ? undefined
           : state.pendingComposerLanguage;
         const nextLayout = syncLayoutFromBootstrap(
@@ -1395,10 +1450,13 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           scopedPendingComposerLanguage,
           nextData.memory.workspace?.responseLanguage,
         );
-        const nextStreaming = normalizeTrainerStreamingState(nextData.streamingState);
+        // Stream events can finish between host snapshots. An unrelated patch
+        // must not restore the older in-flight state from the last snapshot.
+        const nextStreaming = message.payload.streamingState !== undefined
+          ? normalizeTrainerStreamingState(message.payload.streamingState)
+          : workspaceChanged ? createEmptyTrainerStreamingState() : state.streaming;
         const patchedStageMaterials = message.payload.stageMaterials;
-        const stageScopeChanged = workspaceIdentityChanged(effectiveWorkspaceId, previousWorkspaceId)
-          || nextData.plan.id !== state.data.plan.id;
+        const stageScopeChanged = workspaceChanged || nextData.plan.id !== state.data.plan.id;
         return {
           data: nextData,
           layout: nextLayout,
@@ -1419,6 +1477,13 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           ),
           latestOperationRequests: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.latestOperationRequests,
           operations: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.operations,
+          // A patch that selects a different card retires the restore intent:
+          // the restored card is history once the live state names another.
+          trainingRestoreContext:
+            state.trainingRestoreContext &&
+            nextData.workspaceTrainingState?.selectedCardId !== state.data.workspaceTrainingState?.selectedCardId
+              ? undefined
+              : state.trainingRestoreContext,
           syncCursor: versionedState ? appliedWebviewSyncCursor(versionedState) : state.syncCursor,
           syncStatus: "current" as const,
           hasReceivedHostState: true,
@@ -1722,13 +1787,15 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
 
       if (message.type === "ui/restoreView") {
         const payload = sanitizeVisibleData(message.payload);
-        const requestedView =
+        const rawRequestedView =
           typeof payload.activeView === "string"
-            ? normalizeSidebarView(payload.activeView)
+            ? payload.activeView
             : state.layout.activeView;
+        const requestedSection = normalizeLearningSection(rawRequestedView);
+        const requestedView = normalizeSidebarView(rawRequestedView);
         const restoredNextHop = payload.latestTrainingNextHop;
         const restoredTrainingState =
-          requestedView === "training"
+          rawRequestedView === "training"
             ? {
                 ...state.data.workspaceTrainingState,
                 latestTrainingSubmode:
@@ -1754,7 +1821,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
               }
             : state.data.workspaceTrainingState;
         const trainingRestoreContext =
-          requestedView === "training" &&
+          rawRequestedView === "training" &&
           (payload.trainingRestoreTarget || restoredNextHop)
             ? {
                 target:
@@ -1794,10 +1861,13 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           resourceRestoreContext:
             requestedView === "resources" ? resourceRestoreContext : state.resourceRestoreContext,
           trainingRestoreContext:
-            requestedView === "training" ? trainingRestoreContext : state.trainingRestoreContext,
+            rawRequestedView === "training" ? trainingRestoreContext : state.trainingRestoreContext,
           layout: persistLayout({
             ...state.layout,
             activeView: requestedView,
+            // A legacy learning route opens the drawer instead of a surface.
+            learningDrawerOpen: requestedSection ? true : false,
+            learningSection: requestedSection ?? state.layout.learningSection ?? "goal",
             // restoreView IS an authoritative view move (ui/restoreView).
             // Keep liveActiveView in sync so later stale layout persists do
             // not flip the learner back (T-0024).
@@ -1826,6 +1896,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           layout: persistLayout({
             ...state.layout,
             activeView: "coach",
+            learningDrawerOpen: false,
             composerDraftScope: coachScope,
             composerDrafts: drafts,
             composerDraft: draft,
@@ -1858,6 +1929,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             layout: persistLayout({
               ...state.layout,
               activeView: "resources",
+              learningDrawerOpen: false,
             }),
             resourceRestoreContext: undefined,
           };
@@ -1872,6 +1944,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           layout: persistLayout({
             ...state.layout,
             activeView: "resources",
+            learningDrawerOpen: false,
           }),
         };
       }

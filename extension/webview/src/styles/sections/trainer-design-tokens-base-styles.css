@@ -36,6 +36,9 @@
   --trainer-font-lg: calc(var(--trainer-font-ui) + 3px);
   --trainer-font-xl: calc(var(--trainer-font-ui) + 6px);
   --trainer-font-2xl: calc(var(--trainer-font-ui) + 9px);
+  --trainer-font-weight-regular: 400;
+  --trainer-font-weight-medium: 500;
+  --trainer-font-weight-strong: 600;
 
   /* Deprecated legacy scale — do not use in new styles; the --space-* scale
      above is the single source (sizes 1-4 match values, 5/6 diverged). */

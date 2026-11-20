@@ -5,15 +5,12 @@ const assert = require('node:assert/strict');
 
 const {
   resolveResourceOpenTarget,
-  resolveResourceOriginalTarget,
   resolveResourceReadCandidates,
-  resolveResourceOriginalCandidates,
-  hasDistinctOriginal,
 } = require('../dist/shared/src/resourceOpen.js');
 
-test('document resources open the complete canonical Markdown by default', () => {
+test('document resources open the complete canonical Markdown and have no original', () => {
   const resource = {
-    kind: 'docx',
+    kind: 'markdown',
     source: '/workspace/docs/notes.docx',
     canonicalSource: '/workspace/docs/notes.docx',
     canonicalMarkdownPath: 'Trainer Library/resources/markdown/resource-1.md',
@@ -22,18 +19,10 @@ test('document resources open the complete canonical Markdown by default', () =>
   assert.deepEqual(resolveResourceReadCandidates(resource), [
     'Trainer Library/resources/markdown/resource-1.md',
   ]);
-  assert.deepEqual(resolveResourceOriginalCandidates(resource), [
-    'Trainer Library/resources/originals/resource-1/notes.docx',
-  ]);
   assert.deepEqual(resolveResourceOpenTarget(resource), {
     kind: 'vscode',
     source: 'Trainer Library/resources/markdown/resource-1.md',
   });
-  assert.deepEqual(resolveResourceOriginalTarget(resource), {
-    kind: 'vscode',
-    source: 'Trainer Library/resources/originals/resource-1/notes.docx',
-  });
-  assert.equal(hasDistinctOriginal(resource), true);
 });
 
 test('resources without a canonical digest keep the previous local priority', () => {
@@ -45,24 +34,18 @@ test('resources without a canonical digest keep the previous local priority', ()
   assert.deepEqual(resolveResourceReadCandidates(resource), [
     '/workspace/.trainer-sandbox/paper.pdf',
   ]);
-  assert.equal(hasDistinctOriginal(resource), false);
 });
 
-test('an uncaptured URL stays browser-openable and never claims a local file', () => {
+test('an uncaptured URL requires a local capture', () => {
   const resource = { kind: 'url', source: 'https://example.org/a', canonicalSource: 'https://example.org/a' };
   assert.deepEqual(resolveResourceReadCandidates(resource), []);
-  assert.deepEqual(resolveResourceOriginalCandidates(resource), []);
   assert.deepEqual(resolveResourceOpenTarget(resource), {
-    kind: 'browser',
-    source: 'https://example.org/a',
-  });
-  assert.deepEqual(resolveResourceOriginalTarget(resource), {
-    kind: 'browser',
-    source: 'https://example.org/a',
+    kind: 'unavailable',
+    reason: 'capture_required',
   });
 });
 
-test('a captured URL opens its complete Markdown, with the live URL as the original', () => {
+test('a captured URL opens its complete Markdown', () => {
   const resource = {
     kind: 'url',
     source: 'https://example.org/a',
@@ -75,9 +58,5 @@ test('a captured URL opens its complete Markdown, with the live URL as the origi
   assert.deepEqual(resolveResourceOpenTarget(resource), {
     kind: 'vscode',
     source: 'Trainer Library/resources/markdown/resource-2.md',
-  });
-  assert.deepEqual(resolveResourceOriginalTarget(resource), {
-    kind: 'browser',
-    source: 'https://example.org/a',
   });
 });

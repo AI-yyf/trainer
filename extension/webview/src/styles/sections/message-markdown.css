@@ -87,7 +87,7 @@
 .message-markdown ul,
 .message-markdown ol {
   margin-bottom: var(--space-2);
-  padding-left: 20px;
+  padding-inline-start: 20px;
 }
 
 .message-markdown ul ul,
@@ -96,7 +96,7 @@
 .message-markdown ol ul {
   margin-top: 2px;
   margin-bottom: 2px;
-  padding-left: 1.05em;
+  padding-inline-start: 1.05em;
 }
 
 .message-markdown li {
@@ -115,21 +115,24 @@
 }
 
 .message-markdown blockquote {
-  border-left: 3px solid var(--accent);
-  padding-left: var(--space-3);
+  border-inline-start: 3px solid var(--accent);
+  padding-inline-start: var(--space-3);
   margin: var(--space-2) 0;
   color: var(--fg-1);
 }
 
+/* Inline code stays an inline box: an inline-flex chip takes the flex
+   baseline instead of the text baseline and its own min-height grows the line
+   box, so the chip floats off the surrounding words. The chip's line box is
+   kept inside the paragraph's line height instead. */
 .message-markdown__inline-code {
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
+  display: inline;
+  line-height: 1.25;
   font-family: var(--font-mono);
   font-size: var(--trainer-font-xs);
   background: color-mix(in srgb, var(--bg-2) 88%, var(--bg-1));
   border: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
-  padding: 1px 6px;
+  padding: 0 5px;
   border-radius: var(--radius-sm);
   color: var(--fg-0);
   white-space: normal;

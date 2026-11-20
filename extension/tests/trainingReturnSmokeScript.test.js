@@ -16,6 +16,7 @@ function startMockTrainer({
   evaluationFailureBody = '',
 } = {}) {
   const sessions = new Map();
+  const cards = new Map();
   const turnBodies = [];
   const trainingCardBodies = [];
   const evaluateBodies = [];
@@ -86,15 +87,37 @@ function startMockTrainer({
           scenario_pack: 'remote_workspace',
           title: 'Practice: Verify the remote workspace boundary',
         };
+        cards.set(payload.workspace_id, { card, state: 'pending' });
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        response.end(JSON.stringify({
-          card,
-          active_routing: {
-            selected_card_id: card.card_id,
-            selected_card: card,
-          },
-        }));
+        response.end(JSON.stringify({ card }));
       });
+      return;
+    }
+
+    if (request.url === '/training/card/library' && request.method === 'POST') {
+      let body = '';
+      request.setEncoding('utf8');
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', () => {
+        const payload = JSON.parse(body);
+        const entry = cards.get(payload.workspace_id);
+        const valid = entry?.card.card_id === payload.card_id && (
+          (payload.action === 'save' && entry.state === 'pending') ||
+          (payload.action === 'start' && entry.state === 'saved')
+        );
+        if (valid) entry.state = payload.action === 'save' ? 'saved' : 'active';
+        response.writeHead(valid ? 200 : 409, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({ ok: valid }));
+      });
+      return;
+    }
+
+    if (request.url?.startsWith('/training/active-card?') && request.method === 'GET') {
+      const url = new URL(request.url, 'http://127.0.0.1');
+      const entry = cards.get(url.searchParams.get('workspace_id'));
+      const card = entry?.state === 'active' ? entry.card : undefined;
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ selected_card_id: card?.card_id, selected_card: card }));
       return;
     }
 

@@ -30,6 +30,18 @@
   transform: none;
 }
 
+/* Compact density: one deterministic height for every compact button, so a
+   row of them (reader file actions, the library toolbar) never mixes a 26px
+   icon button with a taller labelled one. The block padding is dropped and
+   the line height keeps CJK glyphs inside the box. */
+.button--compact {
+  min-height: 24px;
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+}
+
 /* Pressed feedback, mirroring the .action-button:active precedent (scale,
    no animation dependency — safe under prefers-reduced-motion). */
 .button:active:not(:disabled) {

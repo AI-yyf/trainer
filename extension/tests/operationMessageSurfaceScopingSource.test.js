@@ -53,10 +53,11 @@ test('operation message surface union and banner gate localize scoped messages t
     controller,
     /operationMessageSurface === "global" \|\| operationMessageSurface === activeView/,
   );
-  // The global banner renders only when the message is visible on the active view.
+  // The global banner renders only when the message is visible on the active
+  // view. Scoped learning notices render inside the learning drawer instead.
   assert.match(
     source,
-    /\{operationMessage && operationMessageVisible && !\(operationMessageSurface === "global" && operationMessage\.tone === "success" && activeView !== "coach" && activeView !== "settings"\) \? \(/,
+    /\{operationMessage && operationMessageVisible\s*&& operationMessageSurface !== "training"\s*&& operationMessageSurface !== "plan"\s*&& !\(operationMessageSurface === "global" && operationMessage\.tone === "success" && activeView !== "coach" && activeView !== "settings"\) \? \(/,
   );
   assert.doesNotMatch(
     source,

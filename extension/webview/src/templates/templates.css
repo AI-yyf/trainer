@@ -2,6 +2,15 @@
 .app-shell-header {
   flex: none;
   padding: 4px var(--trainer-gutter) 0;
+  position: relative;
+}
+/* While the learning drawer is open, the header utilities (learning toggle,
+   history, Settings) stay above its backdrop: a modal sheet that also swallows
+   the gear stranded the learner with no way out except the close button. The
+   elevation is scoped to the learning overlay — a global raise would also
+   cover the composer menu's outside-click target at the top of the shell. */
+.trainer-shell:has(.app-shell-overlay[data-overlay="learning"]) .app-shell-header {
+  z-index: 11;
 }
 .app-shell-header__identity {
   display: flex;
@@ -35,28 +44,6 @@
 .app-shell-header__utility:active { background: var(--bg-2); }
 .app-shell-header__utility[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .app-shell-header__utility:disabled { opacity: 0.45; cursor: default; background: transparent; color: var(--fg-muted); }
-.app-shell-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-.app-shell-nav__item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  min-height: 34px;
-  padding: 6px 2px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: var(--trainer-font-sm);
-  font-weight: 500;
-  line-height: 1.25;
-  cursor: pointer;
-  transition: color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
-}
-.app-shell-nav__item > span { min-width: 0; overflow-wrap: anywhere; text-align: center; }
-.app-shell-nav__item:hover { color: var(--fg-0); }
-.app-shell-nav__item[aria-current="page"] { color: var(--fg-0); border-bottom-color: color-mix(in srgb, var(--fg-0) 30%, transparent); }
 :where(.app-shell-header button, .template-back):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .template-metadata { overflow-wrap: anywhere; margin: 0; color: var(--fg-muted); font-size: var(--trainer-font-xs); line-height: 1.5; }
 .template-next-action { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-block: 16px; }
@@ -111,8 +98,293 @@
 .app-shell-overlay__close:hover { background: var(--bg-1); color: var(--fg-0); }
 .app-shell-overlay__close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .app-shell-overlay[data-overlay="history"] .app-shell-overlay__close { position: absolute; top: 8px; right: 8px; z-index: 2; margin: 0; }
+/* The learning sheet starts below the header, and the header stays above its
+   backdrop, so the close control rides the panel's own top-right corner
+   instead of the shell's (where the header would cover it). */
+.app-shell-overlay[data-overlay="learning"] .app-shell-overlay__close { position: absolute; top: 8px; right: 8px; z-index: 3; margin: 0; }
 .app-shell-overlay[data-overlay="history"] .composer-menu-panel__header { padding-right: 30px; }
 .app-shell-overlay[data-overlay="history"] .app-shell-overlay__backdrop { background: color-mix(in srgb, var(--bg-0) 26%, transparent); }
+/* The learning drawer is a modal sheet: it floats over the dimmed surface and
+   owns everything under the header. The composer is not rendered while it is
+   open, so the sheet covers the whole reading area. */
+.app-shell-overlay[data-overlay="learning"] {
+  /* The drawer lives inside the content area, so it covers exactly the space
+     under the header — no hardcoded header height, no overlap with the
+     navigation row it was opened from. */
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+}
+.app-shell-overlay[data-overlay="learning"] .app-shell-overlay__backdrop {
+  /* Opaque: the sheet covers the conversation and the composer together, and
+     a translucent backdrop would let the input box ghost through. */
+  background: var(--bg-0);
+}
+.app-shell-overlay[data-overlay="learning"] .app-shell-overlay__panel {
+  inset: 8px;
+  max-height: none;
+  overflow-y: auto;
+  padding: 12px var(--trainer-gutter) 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-0);
+  box-shadow: var(--shadow-md);
+}
+.inline-practice-slot {
+  width: calc(100% - (var(--trainer-gutter) * 2));
+  max-width: var(--coach-content-max, 660px);
+  margin: 10px auto 4px;
+}
+.inline-practice-slot .training-view { padding: 0; }
+.inline-practice-slot .training-pane {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+}
+.inline-practice-slot .template-activity-header { gap: 3px; padding-block: 0 8px; }
+.inline-practice-slot .template-activity-header h2 { font-size: var(--trainer-font-md); line-height: 1.4; }
+/* The candidate library stays reachable: candidate review is a governed
+   decision the learner makes on the card itself. */
+.inline-practice-slot .training-library { margin-block: 6px; }
+.inline-practice-slot .training-current { padding: 0; }
+.inline-practice-slot .training-current__actions { margin-top: 10px; }
+.inline-practice-answer { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: 10px; }
+.inline-practice-answer__label { color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.4; }
+.inline-practice-answer__input {
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 8px;
+  background: var(--bg-0);
+  color: var(--fg-0);
+  font: inherit;
+  font-size: var(--trainer-font-xs);
+  line-height: 1.55;
+  resize: vertical;
+}
+.inline-practice-answer__input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.inline-practice-answer__submit { align-self: flex-start; }
+.inline-progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-1) 52%, transparent);
+}
+.inline-progress-card__header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.inline-progress-card__header strong { color: var(--fg-0); font-size: var(--trainer-font-xs); line-height: 1.4; }
+.inline-progress-card__header span { flex: none; color: var(--fg-muted); font-size: var(--trainer-font-2xs); font-variant-numeric: tabular-nums; }
+.inline-progress-card__rows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.inline-progress-card__rows li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.inline-progress-card__rows span { color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.45; }
+.inline-progress-card__rows strong { color: var(--fg-1); font-size: var(--trainer-font-2xs); font-weight: 400; line-height: 1.45; }
+.inline-progress-card__open { align-self: flex-start; }
+.learning-strip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: calc(100% - (var(--trainer-gutter) * 2));
+  max-width: var(--coach-content-max, 660px);
+  min-height: 32px;
+  margin: 0 auto;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 48%, transparent);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.35;
+  text-align: start;
+  cursor: pointer;
+}
+.learning-strip:hover { color: var(--fg-1); }
+.learning-strip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 6px; }
+.learning-strip__icon { display: inline-flex; flex: none; align-items: center; color: currentColor; }
+.learning-strip__label { flex: none; color: var(--fg-muted); }
+/* Each of the three state fields keeps its own slot and truncates on its own,
+   so a long goal never hides the step or the due count. */
+.learning-strip__item { display: inline-flex; min-width: 0; align-items: baseline; gap: 4px; }
+.learning-strip__separator { flex: none; color: var(--fg-muted); }
+.learning-strip__title { min-width: 0; overflow: hidden; color: var(--fg-1); text-overflow: ellipsis; white-space: nowrap; }
+.learning-strip__due { flex: none; color: var(--fg-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.learning-strip__chevron { flex: none; margin-inline-start: auto; color: var(--fg-muted); font-size: var(--trainer-font-sm); line-height: 1; }
+.learning-drawer { display: flex; flex-direction: column; gap: var(--space-2); }
+.learning-drawer__header { padding: 2px 0 2px; }
+.learning-drawer__header h2 { margin: 0; color: var(--fg-0); font-size: var(--trainer-font-lg); line-height: 1.35; }
+/* Learning is a stack of cards, one grammar: a titled header with an optional
+   right-aligned metric, then the body, then at most one action. Each card is a
+   self-contained surface, so the learner reads one card at a time instead of
+   scrolling one continuous list. */
+.learning-drawer__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-hair);
+  border-radius: var(--radius-lg);
+  background: var(--bg-1);
+}
+.learning-drawer__card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.learning-drawer__card-title {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: var(--trainer-font-2xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.learning-drawer__card-metric {
+  flex: none;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  font-variant-numeric: tabular-nums;
+}
+.learning-drawer__card-body { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.learning-drawer__detail-label { color: var(--fg-2); margin-inline-end: 4px; }
+
+.learning-drawer__section { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-block: 14px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.learning-drawer__section:last-child { border-bottom: 0; }
+.learning-drawer__section h3 { margin: 0; color: var(--fg-muted); font-size: var(--trainer-font-2xs); font-weight: 500; line-height: 1.4; }
+.learning-drawer__title { color: var(--fg-0); font-size: var(--trainer-font-sm); font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
+.learning-drawer__detail { margin: 0; color: var(--fg-1); font-size: var(--trainer-font-xs); line-height: 1.55; overflow-wrap: anywhere; }
+.learning-drawer__meta { margin: 0; color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.45; font-variant-numeric: tabular-nums; }
+.learning-drawer__empty { margin: 0; color: var(--fg-muted); font-size: var(--trainer-font-xs); line-height: 1.55; }
+/* A practice-scoped notice belongs to its section, never to a global banner. */
+.learning-drawer__notice { width: 100%; }
+.learning-drawer__notice .template-global-state { margin: 0; }
+/* The growth heatmap: one column per capability, the filled cells say how far
+   the capability has come (a band, never a fake percentage). */
+.learning-drawer__heatmap {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.learning-drawer__heatmap-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+/* Square cells, like a contribution grid: three steps per capability. */
+.learning-drawer__heatmap-cells {
+  display: grid;
+  grid-template-rows: repeat(3, 8px);
+  gap: 3px;
+  width: 30px;
+}
+.learning-drawer__heatmap-cell {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--fg-1) 12%, transparent);
+  animation: learning-heat-cell-in 320ms var(--ease-out) both;
+  animation-delay: var(--heat-delay, 0ms);
+}
+/* One colour per band: the whole column reads at a glance. */
+.learning-drawer__heatmap-cell.is-filled { background: color-mix(in srgb, var(--accent) 38%, transparent); }
+.learning-drawer__heatmap-cell.is-filled[data-heat-level="2"] { background: color-mix(in srgb, var(--accent) 62%, transparent); }
+.learning-drawer__heatmap-cell.is-filled[data-heat-level="3"] { background: var(--accent); }
+.learning-drawer__heatmap-label {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.learning-drawer__heatmap-state {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.learning-drawer__heatmap-column .learning-drawer__meta { font-size: var(--trainer-font-3xs); }
+.learning-drawer__heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.35;
+}
+.learning-drawer__heatmap-ramp {
+  display: inline-flex;
+  gap: 2px;
+}
+.learning-drawer__heatmap-ramp .learning-drawer__heatmap-cell {
+  width: 8px;
+  height: 8px;
+  animation: none;
+}
+@keyframes learning-heat-cell-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .learning-drawer__heatmap-cell { animation: none; }
+}
+/* Each dimension is a small tile inside the growth card: one height, one label
+   edge, one state edge, so the four still scan as one set. */
+/* The governed plan card renders inside the drawer's goal section. It keeps
+   its own layout but must not read as a full-width page inside a panel. */
+.learning-drawer__detail-surface { width: 100%; }
+/* The goal card is already a card: the plan surface inside it drops its own
+   chrome, so the learner never reads a card inside a card. */
+.learning-drawer__detail-surface .learning-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.learning-drawer__detail-surface .learning-today {
+  padding: 0 0 var(--space-2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Goal controls (pause / resume / end) are secondary: they never take the
+   section's single accent action. */
+.learning-drawer__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.learning-drawer__goal-trace {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+}
+.learning-drawer__detail-surface .plan-view { padding: 0; }
+.learning-drawer__detail-surface .template-learning-home { padding: 0; }
+.learning-drawer__detail-surface .learning-cards__header h2 { font-size: var(--trainer-font-sm); line-height: 1.45; }
+.learning-drawer__detail-surface .learning-card-stack { gap: var(--space-2); }
 .template-settings-index { padding-block: 12px; }
 .template-settings-index h2 { margin: 0 0 12px; font-size: var(--trainer-font-lg); font-weight: 600; }
 .template-settings-index ul { margin: 0; padding: 0; list-style: none; }
@@ -177,16 +449,50 @@
 .template-disclosure { padding-block: 12px; border-top: 1px solid var(--line); }
 .template-disclosure > summary { color: var(--fg-1); font-size: var(--trainer-font-sm); cursor: pointer; }
 .template-disclosure > div { padding-block: 12px 4px; }
+.resource-briefs__body, .resource-briefs__findings { display: grid; gap: var(--space-3); }
+.resource-briefs__brief { padding-block: var(--space-2); border-top: 1px solid var(--line); }
+.resource-briefs__brief > summary { cursor: pointer; color: var(--fg-0); overflow-wrap: anywhere; }
+.resource-briefs__body { padding-block-start: var(--space-2); color: var(--fg-1); line-height: 1.55; overflow-wrap: anywhere; }
+.resource-briefs__body :is(h3, p, ol, figure, blockquote) { margin: 0; }
+.resource-briefs__body h3 { color: var(--fg-0); font-size: var(--trainer-font-sm); }
+.resource-briefs__body :is(ol, ul) { padding-inline-start: var(--space-4); }
+.resource-briefs__body ul { margin-block: var(--space-1) var(--space-2); white-space: pre-line; }
+.resource-briefs__findings > li + li { padding-block-start: var(--space-2); border-top: 1px solid var(--line); }
+.resource-briefs__citation { padding-block-start: var(--space-2); }
+.resource-briefs__citation blockquote { padding-inline-start: var(--space-2); border-inline-start: 1px solid var(--line); background: transparent; white-space: pre-wrap; }
+.resource-briefs__citation figcaption { display: grid; min-width: 0; margin-block-start: var(--space-1); }
+.resource-briefs__citation .resource-citation-chip { width: fit-content; padding: var(--space-1) 0; border: 0; border-radius: 0; background: transparent; }
+.resource-briefs__citation .resource-citation-chip__kind { display: none; }
+.resource-briefs summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.training-library { margin-block: var(--space-2); }
+.training-library > summary { padding-block: var(--space-1); font-weight: 600; }
+.training-library__counts { display: inline-flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin-inline-start: var(--space-2); color: var(--fg-muted); font-weight: 400; font-size: var(--trainer-font-xs); }
+.training-library h3 { margin: var(--space-2) 0 var(--space-1); color: var(--fg-muted); font-size: var(--trainer-font-xs); font-weight: 500; }
+.training-library__card { padding-block: var(--space-2); border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.training-library__card > summary { color: var(--fg-0); font-weight: 500; cursor: pointer; }
+.training-library__editor { display: grid; gap: var(--space-2); margin-block: var(--space-2); }
+.training-library__editor label { display: grid; gap: var(--space-1); font-size: var(--trainer-font-sm); }
+.training-library__editor textarea { width: 100%; box-sizing: border-box; padding: var(--space-2); border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--fg-0); background: var(--bg-0); font: inherit; line-height: 1.5; resize: vertical; }
+.training-library__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-block: var(--space-2); }
+.training-library__actions label { color: var(--fg-muted); font-size: var(--trainer-font-xs); }
+.training-library__actions select { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-0); color: var(--fg-0); font: inherit; }
+.training-library :is(summary, textarea, select):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .template-learning-more { display: grid; gap: 8px; }
 .template-learning-more__actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.template-learning-workspace { min-width: 0; overflow-wrap: anywhere; }
-/* P1: the Learning destination presents 进度 / 练习 / 长期规划 as three views. */
-.template-learning-tabs { display: flex; gap: 4px; padding-block: 4px 8px; }
-.template-learning-tab { min-height: 28px; padding: 4px 12px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--fg-1); font-size: var(--trainer-font-xs); }
-.template-learning-tab:hover { background: var(--bg-1); color: var(--fg-0); }
-.template-learning-tab.is-active { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); color: var(--accent); }
-.template-learning-workspace__goal { padding-block: 8px; }
-.template-learning-workspace__goal h2 { margin-block: 4px; font-size: var(--trainer-font-md); }
+.template-learning-workspace { flex: 1; align-self: flex-start; min-width: 0; min-height: 100%; max-width: 760px; margin-inline: auto; overflow-wrap: anywhere; }
+.template-learning-tabbar { position: sticky; z-index: 2; top: 0; padding-block: var(--space-1) var(--space-2); background: var(--bg-0); }
+.template-learning-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.template-learning-tab { min-height: 36px; min-width: 0; padding: var(--space-1); border: 0; border-block-end: 1px solid var(--line); background: transparent; color: var(--fg-1); font: inherit; font-size: var(--trainer-font-sm); line-height: 1.3; overflow-wrap: anywhere; cursor: pointer; }
+.template-learning-tab:hover { color: var(--fg-0); background: var(--bg-1); }
+.template-learning-tab[aria-selected="true"] { border-block-end-color: var(--accent); box-shadow: inset 0 -1px var(--accent); color: var(--fg-0); font-weight: 600; }
+.template-learning-tab:focus-visible, .template-learning-panel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.template-learning-panel { min-width: 0; padding-block: var(--space-1) var(--space-3); scroll-margin-block-start: 56px; }
+.template-learning-panel > .training-view { height: auto; overflow: visible; }
+.view-stack--plan .template-learning-panel > .plan-view { mask-image: none; }
+.view-stack--plan > .view-stack__primary:has(> .template-learning-workspace) { scroll-padding-block-start: 56px; }
+.view-stack--plan > .view-stack__primary .template-learning-panel .plan-pane { overflow: visible; }
+.template-learning-panel > .progress-view-section { padding: 0; overflow: visible; }
+.template-learning-panel .template-focused-practice > .template-activity-header h2 { font-size: calc(var(--trainer-font-lg) + 3px); }
 .template-learning-timeline { padding-inline-start: 16px; margin: 12px 0; }
 .template-learning-timeline li { padding-inline-start: 6px; margin-block: 8px; }
 .template-learning-timeline p { margin: 4px 0 0; }

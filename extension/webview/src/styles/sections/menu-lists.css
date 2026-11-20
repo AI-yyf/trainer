@@ -14,7 +14,10 @@
 
 .menu-list__item {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* A fixed icon column keeps every menu label on the same left edge, even
+     when an item carries no icon: auto placement used to drop the label into
+     the icon column and the trailing state into the flexible one. */
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   min-height: 30px;
@@ -48,6 +51,7 @@
 }
 
 .menu-list__icon {
+  grid-column: 1;
   width: 16px;
   height: 16px;
   display: inline-flex;
@@ -57,6 +61,7 @@
 }
 
 .menu-list__body {
+  grid-column: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -75,6 +80,7 @@
 }
 
 .menu-list__state {
+  grid-column: 3;
   min-width: 14px;
   min-height: 14px;
   display: inline-flex;

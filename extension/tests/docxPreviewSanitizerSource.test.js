@@ -100,7 +100,9 @@ test('conversation file_preview paints via CoachMessageParts only (registry is H
   assert.match(conversation, /import \{ CoachMessageBubble[, \w:]+\} from ["']\.\/CoachMessageBubble["']/);
   assert.match(conversation, /<CoachMessageBubble[\s\S]*message=\{item\.message\}/);
   assert.match(app, /<CoachConversationView/);
-  assert.match(app, /<CoachMessageBubble/);
+  // App delegates bubble painting to the single conversation component; it no
+  // longer renders a second per-view bubble.
+  assert.doesNotMatch(app, /<CoachMessageBubble/);
 
   // App/conversation must not route parts through shared HTML registry or React PartsRenderer
   assert.doesNotMatch(app, /partsRendererRegistry|PartsRenderer|getPartsRendererRegistry/);

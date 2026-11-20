@@ -8,6 +8,7 @@ export type PlanViewCopy = {
   currentStageHint: string;
   nextStepHint: string;
   stagesLabel: string;
+  roadmapStages: string;
   pathLabel: string;
   pathHint: string;
   whyNowLabel: string;
@@ -51,6 +52,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "先看你现在在哪一段。",
     nextStepHint: "先只做这一小步。",
     stagesLabel: "后面还会练什么",
+    roadmapStages: "学习路线",
     pathLabel: "后续阶段",
     pathHint: "看清你正在哪一段，以及后面还会练到什么。",
     whyNowLabel: "为什么现在做",
@@ -89,6 +91,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "Start by locating your current stage.",
     nextStepHint: "Keep this move small.",
     stagesLabel: "What comes later",
+    roadmapStages: "Learning path",
     pathLabel: "Later stages",
     pathHint: "See where you are now and what comes next.",
     whyNowLabel: "Why this now",
@@ -127,6 +130,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "Empieza por ubicar tu etapa actual.",
     nextStepHint: "Mantén este paso pequeño.",
     stagesLabel: "Lo que viene después",
+    roadmapStages: "Ruta de aprendizaje",
     pathLabel: "Etapas posteriores",
     pathHint: "Mira dónde estás ahora y qué viene después.",
     whyNowLabel: "Por qué ahora",
@@ -165,6 +169,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "Commencez par repérer votre étape actuelle.",
     nextStepHint: "Gardez cette étape petite.",
     stagesLabel: "La suite du parcours",
+    roadmapStages: "Parcours d’apprentissage",
     pathLabel: "Étapes suivantes",
     pathHint: "Voyez où vous en êtes et ce qui vient ensuite.",
     whyNowLabel: "Pourquoi maintenant",
@@ -203,6 +208,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "Finde zuerst deine aktuelle Phase.",
     nextStepHint: "Halte diesen Schritt klein.",
     stagesLabel: "Was danach kommt",
+    roadmapStages: "Lernpfad",
     pathLabel: "Spätere Phasen",
     pathHint: "Sieh, wo du gerade bist und was als Nächstes kommt.",
     whyNowLabel: "Warum jetzt",
@@ -241,6 +247,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "まず今いる段階を確認します。",
     nextStepHint: "この一歩を小さく保ちます。",
     stagesLabel: "この後に学ぶこと",
+    roadmapStages: "学習の道筋",
     pathLabel: "後続の段階",
     pathHint: "今いる段階と、その次に進む内容を確認します。",
     whyNowLabel: "なぜ今取り組むのか",
@@ -279,6 +286,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "먼저 현재 단계를 확인하세요.",
     nextStepHint: "이 단계를 작게 유지하세요.",
     stagesLabel: "이후에 배울 내용",
+    roadmapStages: "학습 경로",
     pathLabel: "이후 단계",
     pathHint: "현재 위치와 다음에 진행할 내용을 확인하세요.",
     whyNowLabel: "왜 지금 하는가",
@@ -317,6 +325,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     currentStageHint: "Comece localizando sua etapa atual.",
     nextStepHint: "Mantenha este passo pequeno.",
     stagesLabel: "O que vem depois",
+    roadmapStages: "Trilha de aprendizagem",
     pathLabel: "Etapas posteriores",
     pathHint: "Veja onde você está agora e o que vem a seguir.",
     whyNowLabel: "Por que agora",

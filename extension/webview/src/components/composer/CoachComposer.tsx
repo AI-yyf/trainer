@@ -691,7 +691,6 @@ export function CoachComposer({
 
   const handleTextareaKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      onKeyDown?.(event);
       // keyCode 229 is the legacy IME-composition marker; isComposing alone
       // misses the first Enter on some engines.
       if (event.nativeEvent.isComposing || event.keyCode === 229 || imComposingRef.current) {
@@ -700,6 +699,9 @@ export function CoachComposer({
         }
         return;
       }
+      // The mention picker owns Enter/Arrow while it is open. It must run
+      // before the parent key handler, which otherwise submits the draft on
+      // the same Enter and leaves the insertion operating on stale text.
       if (mentionMenu) {
         if (event.key === "Escape") {
           event.preventDefault();
@@ -733,6 +735,7 @@ export function CoachComposer({
           }
         }
       }
+      onKeyDown?.(event);
       if (
         event.defaultPrevented ||
         !onNavigateHistory ||
@@ -877,36 +880,6 @@ export function CoachComposer({
       <span className="sr-only" id={composerStatusId} aria-live="polite">
         {composerStatusText}
       </span>
-      {attachmentsEnabled && stagedAttachments.length > 0 ? (
-        <div className="composer__attachments" aria-label={attachmentCountLabel} aria-live="polite">
-          {stagedAttachments.map((attachment) => (
-            <span
-              key={attachment.id}
-              className="composer__attachment-chip"
-              title={`${attachment.name ?? attachment.id} (${attachment.mimeType})`}
-            >
-              <span className="composer__attachment-icon" aria-hidden="true">
-                <AttachmentIcon size={12} />
-              </span>
-              <span className="composer__attachment-label">
-                {attachment.name ?? localizedCopy.image}
-              </span>
-              <button
-                type="button"
-                className="composer__attachment-remove"
-                aria-label={localizedCopy.removeAttachment}
-                onClick={() => handleRemoveAttachment(attachment.id)}
-                disabled={isTextareaDisabled}
-              >
-                <CloseIcon size={12} />
-              </button>
-            </span>
-          ))}
-          <span className="composer__attachment-count" aria-hidden="true">
-            {stagedAttachments.length}/{MAX_STAGED_ATTACHMENTS}
-          </span>
-        </div>
-      ) : null}
       {imageStaging.error ? <SystemState kind="recoverable-error" title={imageStaging.error} /> : null}
       {attachmentsEnabled && showAttachmentCapabilityNote && attachmentCapabilityText ? (
         <div className="composer__capability-note" id={attachmentCapabilityNoteId} role="status">
@@ -1001,6 +974,33 @@ export function CoachComposer({
             onCompositionEnd={handleCompositionEnd}
             onPaste={attachmentsEnabled ? handlePaste : undefined}
           />
+          {attachmentsEnabled && stagedAttachments.length > 0 ? (
+            <div className="composer__attachments" aria-label={attachmentCountLabel} aria-live="polite">
+              {stagedAttachments.map((attachment) => (
+                <span
+                  key={attachment.id}
+                  className="composer__attachment-chip"
+                  title={`${attachment.name ?? attachment.id} (${attachment.mimeType})`}
+                >
+                  <span className="composer__attachment-icon" aria-hidden="true">
+                    <AttachmentIcon size={12} />
+                  </span>
+                  <span className="composer__attachment-label">
+                    {attachment.name ?? localizedCopy.image}
+                  </span>
+                  <button
+                    type="button"
+                    className="composer__attachment-remove"
+                    aria-label={localizedCopy.removeAttachment}
+                    onClick={() => handleRemoveAttachment(attachment.id)}
+                    disabled={isTextareaDisabled}
+                  >
+                    <CloseIcon size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           {isDragActive ? (
             <div
               className={`composer__drop-prompt ${

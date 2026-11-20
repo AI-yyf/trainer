@@ -2,11 +2,16 @@ import type { ReactNode } from "react";
 import type { ActiveWorkbenchView, ComposerLanguage } from "../lib/types";
 import { viewLabels } from "../lib/viewLabels";
 import { PRIMARY_DESTINATIONS, primaryDestinationForRoute } from "../lib/workbenchDestinations";
-import { HistoryIcon, SettingsIcon } from "../components/icons";
+import { HistoryIcon, LearningNavIcon, SettingsIcon } from "../components/icons";
 
 const NAV_LABEL: Record<ComposerLanguage, string> = {
   "zh-CN": "主导航", "en-US": "Primary navigation", "es-ES": "Navegación principal", "fr-FR": "Navigation principale",
   "de-DE": "Hauptnavigation", "ja-JP": "メインナビゲーション", "ko-KR": "기본 탐색", "pt-BR": "Navegação principal",
+};
+
+const LEARNING_LABEL: Record<ComposerLanguage, string> = {
+  "zh-CN": "学习", "en-US": "Learning", "es-ES": "Aprendizaje", "fr-FR": "Apprentissage",
+  "de-DE": "Lernen", "ja-JP": "学習", "ko-KR": "학습", "pt-BR": "Aprendizado",
 };
 
 const HISTORY_LABEL: Record<ComposerLanguage, string> = {
@@ -21,6 +26,8 @@ export interface AppShellProps {
   context?: string;
   historyOpen: boolean;
   onHistory: () => void;
+  learningOpen?: boolean;
+  onLearning?: () => void;
   onNavigate: (view: ActiveWorkbenchView) => void;
   /**
    * Surface control supplied by the app: on the editor-panel surface this is
@@ -31,7 +38,7 @@ export interface AppShellProps {
 }
 
 /** One identity row, three stable destinations, then the owning surface. */
-export function AppShell({ language, direction, activeView, context, historyOpen, onHistory, onNavigate, surfaceControl, children }: AppShellProps) {
+export function AppShell({ language, direction, activeView, context, historyOpen, onHistory, learningOpen, onLearning, onNavigate, surfaceControl, children }: AppShellProps) {
   const selected = primaryDestinationForRoute(activeView);
   const trimmedContext = context?.trim();
   return (
@@ -40,6 +47,20 @@ export function AppShell({ language, direction, activeView, context, historyOpen
         <div className="app-shell-header__identity">
           {trimmedContext ? <span className="app-shell-header__context" title={trimmedContext}>{trimmedContext}</span> : null}
           <div className="app-shell-header__utilities">
+            {onLearning ? (
+              <button
+                type="button"
+                className="app-shell-header__utility"
+                data-testid="trainer-learning-toggle"
+                aria-label={LEARNING_LABEL[language]}
+                title={LEARNING_LABEL[language]}
+                aria-haspopup="dialog"
+                aria-expanded={learningOpen === true}
+                onClick={onLearning}
+              >
+                <LearningNavIcon size={18} active={learningOpen === true} aria-hidden="true" />
+              </button>
+            ) : null}
             <button type="button" className="app-shell-header__utility" data-testid="trainer-history-toggle" aria-label={HISTORY_LABEL[language]} title={HISTORY_LABEL[language]} aria-expanded={historyOpen} onClick={onHistory}>
               <HistoryIcon size={18} aria-hidden="true" />
             </button>
