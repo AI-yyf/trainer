@@ -1,6 +1,7 @@
 # Trainer 产品契约 v2（locked）
 
 > 状态：2026-11-20 锁定，替代 v1（三目的地 / 三条独立会话历史），是**唯一的产品真相**。v1 全文见 git 历史 `e700e6f:.trainer-convergence/product-contract.md`。
+> 战略与存储总纲见 [`docs/STRATEGY.md`](../docs/STRATEGY.md)（所有数据、资料与记忆统一存储于 `<LibraryRoot>`，代码工程目录保持零污染）。
 > `SPEC.md`、`AGENTS.md` 和任何计划文档如果与本文冲突，以本文为准，并在同一个提交里修正冲突的那一方。
 
 ## 1. Trainer 是什么

@@ -5,7 +5,7 @@
 项目路径：本仓库根目录（`trainer/`）
 状态：P1 Release Candidate
 
-> 产品真相以 `.trainer-convergence/product-contract.md`（v2，2026-11-20 锁定）为准；本文描述规格与实现细节，与契约冲突时以契约为准并在同一提交中修正本文。
+> 产品真相以 `.trainer-convergence/product-contract.md`（v2，2026-11-20 锁定）与 [`docs/STRATEGY.md`](docs/STRATEGY.md) 为准；本文描述规格与实现细节，与契约冲突时以契约为准并在同一提交中修正本文。所有数据、资料与记忆统一保存在用户选定的资料库根目录 `<LibraryRoot>` 下。
 
 ## 1. 产品定位
 

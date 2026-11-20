@@ -4,7 +4,7 @@
 **Updated:** 2026-09-18 — refreshed structure, sizes, and test-stack notes
 **Branch:** codex/trainer-unified-learning (active)
 
-> **Product truth:** `.trainer-convergence/product-contract.md` (v2, locked 2026-11-20). If this file, `SPEC.md` or any plan disagrees with the contract, the contract wins — fix the other side in the same commit. Roadmap: two destinations + one conversation; learning is the conversation's memory; four learner-visible concepts (目标 / 练一下 / 会了吗 / 资料).
+> **Product truth:** `.trainer-convergence/product-contract.md` (v2, locked 2026-11-20) and strategy [`docs/STRATEGY.md`](docs/STRATEGY.md). If this file, `SPEC.md` or any plan disagrees with the contract, the contract wins — fix the other side in the same commit. Roadmap: two destinations + one conversation; learning is the conversation's memory; four learner-visible concepts (目标 / 练一下 / 会了吗 / 资料); all data, resources, and memory live under one unified `<LibraryRoot>`.
 
 ## OVERVIEW
 Desktop-first VS Code extension + FastAPI Python sidecar for conversation-driven coding training. Two-destination React workbench (`Chat / Resources`, with six internal routes where the three learning routes are compatibility aliases into the learning drawer) with keyboard-first navigation, ReAct coach agent loop, and FSRS-based spaced repetition.
