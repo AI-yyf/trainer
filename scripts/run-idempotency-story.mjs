@@ -26,6 +26,7 @@ const pythonBin = path.join(serverDir, ".venv", "bin", "python");
 const providerBase = (process.env.PROBE_PROVIDER_BASE_URL || "").trim();
 const providerKey = (process.env.PROBE_PROVIDER_API_KEY || "").trim();
 const providerModel = (process.env.PROBE_PROVIDER_MODEL || "MiniMax-M3.1-Flash").trim();
+const evidenceOutOverride = (process.env.IDEMPOTENCY_EVIDENCE_OUT || "").trim();
 
 const BANNED_LEARNER_TERMS = [
   "fsrs",
@@ -112,6 +113,7 @@ async function streamTurn(baseUrl, payload) {
   let visible = "";
   let rawEvents = "";
   let ttftMs = null;
+  let lastCompletePayload = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -131,19 +133,47 @@ async function streamTurn(baseUrl, payload) {
           }
           visible += parsed.chunk;
         }
+        if (parsed?.response && typeof parsed.response === "object") {
+          lastCompletePayload = parsed;
+        }
       } catch {
         // Ignore non-JSON heartbeat lines.
       }
     }
   }
   const totalTurnMs = Math.round(performance.now() - startedAt);
+  const completed = rawEvents.includes("event: complete");
+  const providerFallback =
+    /这次没能连上模型服务|could not reach the model provider/i.test(visible)
+    || Boolean(lastCompletePayload?.response?.provider_error);
   return {
     status: resp.status,
     ttftMs,
     totalTurnMs,
     visible,
-    completed: rawEvents.includes("event: complete"),
+    completed,
+    providerFallback,
+    providerError: lastCompletePayload?.response?.provider_error || null,
   };
+}
+
+async function streamLiveTurn(baseUrl, payload, label) {
+  let result = null;
+  let attempts = 0;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    attempts = attempt;
+    result = await streamTurn(baseUrl, payload);
+    if (result.completed && !result.providerFallback) {
+      assertNoBannedJargon(result.visible, label);
+      return { ...result, attempts };
+    }
+    if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  throw new Error(
+    `Live ${label} did not produce a verified model reply (attempts=${attempts}, completed=${result?.completed}, providerFallback=${result?.providerFallback}, providerError=${JSON.stringify(result?.providerError)}, preview=${JSON.stringify(result?.visible?.slice(0, 160))})`,
+  );
 }
 
 function assertNoBannedJargon(text, label) {
@@ -264,13 +294,20 @@ async function main() {
       model: providerModel,
       protocol: "openai_chat_completions_compatible",
     };
-    const providerTest = await requestJson(baseUrl, "/provider/test", "POST", {
-      provider: providerPayload,
-      api_key: providerKey,
-      response_language: "zh-CN",
-    });
-    if (providerTest.status !== 200 || providerTest.json?.ok !== true) {
-      throw new Error(`/provider/test failed: ${providerTest.status} ${providerTest.text.slice(0, 300)}`);
+    let providerTest = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      providerTest = await requestJson(baseUrl, "/provider/test", "POST", {
+        provider: providerPayload,
+        api_key: providerKey,
+        response_language: "zh-CN",
+      });
+      if (providerTest.status === 200 && providerTest.json?.ok === true) {
+        break;
+      }
+      if (!providerTest.json?.retryable || attempt === 3) {
+        throw new Error(`/provider/test failed: ${providerTest.status} ${providerTest.text.slice(0, 300)}`);
+      }
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     const uploaded = await requestJson(baseUrl, "/resource/upload", "POST", {
@@ -293,7 +330,18 @@ async function main() {
       throw new Error(`/resource/index failed: ${indexed.status} ${indexed.text.slice(0, 300)}`);
     }
 
-    const turn1 = await streamTurn(baseUrl, {
+    const turn0 = await streamLiveTurn(baseUrl, {
+      session_id: sessionId,
+      workspace_id: contextId,
+      message: "请用一句话解释什么是 HTTP 重试幂等性。",
+      intent: "coach",
+      response_language: "zh-CN",
+      provider: providerPayload,
+      api_key: providerKey,
+      last_test_result: providerTest.json,
+    }, "turn0");
+
+    const turn1 = await streamLiveTurn(baseUrl, {
       session_id: sessionId,
       workspace_id: contextId,
       message: "为什么 HTTP 重试幂等键不能只放在单个进程的内存 dict 里？请用一个具体故障场景带我判断。",
@@ -307,10 +355,9 @@ async function main() {
         language_id: "python",
         content: paymentsCode,
       },
-    });
-    assertNoBannedJargon(turn1.visible, "turn1");
+    }, "turn1");
 
-    const turn2 = await streamTurn(baseUrl, {
+    const turn2 = await streamLiveTurn(baseUrl, {
       session_id: sessionId,
       workspace_id: contextId,
       message: "如果进程重启或请求落到另一台实例，内存 dict 就丢了，对吧？那我接下来该怎么验证修复？",
@@ -324,8 +371,7 @@ async function main() {
         language_id: "python",
         content: paymentsCode,
       },
-    });
-    assertNoBannedJargon(turn2.visible, "turn2");
+    }, "turn2");
 
     const storageTruth = await requestJson(
       baseUrl,
@@ -345,7 +391,9 @@ async function main() {
       throw new Error(`Code repo polluted! Found: ${JSON.stringify(repoFiles)}`);
     }
 
-    const evidencePath = path.join(repoRoot, "output", "idempotency-story-evidence.json");
+    const evidencePath = evidenceOutOverride
+      ? path.resolve(repoRoot, evidenceOutOverride)
+      : path.join(repoRoot, "output", "idempotency-story-evidence.json");
     fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
     const evidence = {
       generatedAt: new Date().toISOString(),
@@ -357,24 +405,40 @@ async function main() {
       projectRepoFiles: repoFiles,
       turns: [
         {
+          turn: 0,
+          attempts: turn0.attempts,
+          providerFallback: turn0.providerFallback,
+          ttftMs: turn0.ttftMs,
+          totalTurnMs: turn0.totalTurnMs,
+          completed: turn0.completed,
+          replyLength: turn0.visible.length,
+          replyPreview: turn0.visible.slice(0, 160),
+        },
+        {
           turn: 1,
+          attempts: turn1.attempts,
+          providerFallback: turn1.providerFallback,
           ttftMs: turn1.ttftMs,
           totalTurnMs: turn1.totalTurnMs,
           completed: turn1.completed,
           replyLength: turn1.visible.length,
+          replyPreview: turn1.visible.slice(0, 160),
         },
         {
           turn: 2,
+          attempts: turn2.attempts,
+          providerFallback: turn2.providerFallback,
           ttftMs: turn2.ttftMs,
           totalTurnMs: turn2.totalTurnMs,
           completed: turn2.completed,
           replyLength: turn2.visible.length,
+          replyPreview: turn2.visible.slice(0, 160),
         },
       ],
     };
     fs.writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf-8");
     console.log(
-      `PASS idempotency-story-live model=${providerModel} turn1_ttft=${turn1.ttftMs}ms turn2_ttft=${turn2.ttftMs}ms evidence=${evidencePath}`,
+      `PASS idempotency-story-live model=${providerModel} turn0_ttft=${turn0.ttftMs}ms turn1_ttft=${turn1.ttftMs}ms turn2_ttft=${turn2.ttftMs}ms evidence=${evidencePath}`,
     );
   } finally {
     if (sidecar && !sidecar.killed) {

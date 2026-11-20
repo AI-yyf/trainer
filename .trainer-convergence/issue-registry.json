@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-25",
+  "updated": "2026-11-20",
   "baseline_commit": "e7e6f4161e929378c0186be5e3311e710b89fcf6",
   "issues": [
     {
@@ -249,7 +249,7 @@
       "priority": "P1",
       "area": "teaching",
       "status": "MEASURED",
-      "evidence": "Real provider glm-5.3 (linksub relay) @13d150d tree: first chunk 5.6-12.8s, total 10.9-19.0s across 5 samples (evidence/real-provider-latency-glm53-*.json). Earlier 398-508s samples were a different relay state; current relay is far inside budget. Single relay/model caveat recorded.",
+      "evidence": "1.5.0-rc direct live-provider probe via scripts/run-idempotency-story.mjs (ambient local proxy disabled; output/idempotency-story-m2.7.json & m3.1-flash.json, provider credentials kept out of repo): MiniMax-M2.7 short coaching turn0 TTFT=1183ms (within 2000ms budget, total 1283ms), code-grounded turn1=36619ms (2 attempts), turn2=17335ms; MiniMax-M3.1-Flash turn0 TTFT=3419ms (above 2000ms budget, total 3655ms), turn1=17380ms, turn2=16638ms. All 6 turns completed=true with providerFallback=false.",
       "acceptance": "First meaningful feedback measured separately; requires real provider runs"
     },
     {
@@ -270,8 +270,8 @@
       "priority": "P1",
       "area": "teaching",
       "status": "BLOCKED",
-      "evidence": "owner sign-off section empty in 2026-10-20 review",
-      "acceptance": "Owner completes review §6"
+      "evidence": "Owner human-only sign-off still pending; 15-minute trial & sign-off checklist published at docs/TRIAL-1.5.0-RC.md",
+      "acceptance": "Owner completes docs/TRIAL-1.5.0-RC.md §4 (T-0028) after hands-on VSIX trial"
     },
     {
       "id": "T-0029",
@@ -532,6 +532,28 @@
       "evidence": "extension/tests/browserCaptureOnboarding.test.js (gate matrix incl. defensive inputs, 8-locale copy completeness, per-browser launch composition) 4/4 after build; npm run check clean; full extension suite green",
       "resolved_at": "2026-10-25",
       "resolved_sha": "1c73222"
+    },
+    {
+      "id": "T-0051",
+      "title": "Journey F offline-to-online recovery resend retains stale Provider test failed state",
+      "priority": "P0",
+      "area": "provider",
+      "status": "FIXED_VALIDATED",
+      "discovered": "2026-11-04",
+      "resolution": "Cleared stale provider test failure caches and isolated loopback transport proxy env bypass across ProviderService and ProviderAgentBinding._async_http_client without breaking stubbed remote AsyncClient signatures.",
+      "resolved_at": "2026-11-20",
+      "resolved_sha": "5d77ae3 + 2e26c44"
+    },
+    {
+      "id": "T-0052",
+      "title": "OpenAI-compatible M3.1 SSE stream stays open after finish_reason",
+      "priority": "P0",
+      "area": "streaming",
+      "status": "FIXED_VALIDATED",
+      "discovered": "2026-11-02",
+      "resolution": "Bounded post-finish SSE drain via POST_FINISH_DRAIN_TIMEOUT_SECONDS in server/app/llm/provider/streaming.py; verified by mocked post-finish stall pytest coverage and 3/3 live MiniMax-M3.1-Flash streaming turns.",
+      "resolved_at": "2026-11-20",
+      "resolved_sha": "5d77ae3"
     }
   ]
 }

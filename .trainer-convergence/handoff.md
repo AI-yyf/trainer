@@ -661,3 +661,22 @@
     node scripts/run-idempotency-story.mjs
     ```
     Then record human owner review in `.trainer-convergence/acceptance-matrix.json` for `T-0028` (`teaching_acceptance`).
+
+## 2026-11-20 — 1.5.0-rc 工程收口、UI/资料库收敛与真模型直连实测
+- **核心修复提交**：
+  - `5d77ae3`：修复 Journey F 断网恢复后重发滞留旧 `Provider test failed` 状态与兼容接口 M3.1 SSE 尾包未关闭兜底（`POST_FINISH_DRAIN_TIMEOUT_SECONDS`），补齐行为测试并同步 `extension/bundled/server/`。
+  - `2e26c44`：将 `ProviderAgentBinding` 局部代理绕过收口到 `_async_http_client()`，仅对 loopback 地址传 `trust_env=False`，保持测试替身兼容与非环回请求签名不变。
+  - `5911cbf` & `0dd62f1`：将 `LearningDrawer` 底部能力展示收敛为**单一统一 4 段能力条**（8 语言正式化术语与文案），隐藏 `Resources` 冗余上下文恢复提示条、增加工具栏搜索框 `data-resource-search-input`，并默认对导入/同步资源仅输出 `.md` + 配套提取图片（`assets/<id>/*.png`）。
+  - `d2d6460`：修复含内联页脚卡片（`FocusedPractice` + `InlineProgressCard`）时 `App.tsx` 自动滚动把最新助手回复推离视口的问题，并对齐 4 个 Playwright spec。
+  - `b4c9e12`：在 `verify-vsix-e2e.mjs` 跨工作区重开真相校验前对生成候选卡执行 `save + start`，并重编最新 macOS PyInstaller `trainer-sidecar` 二进制（`bundle:sidecar:binary` + `verify:sidecar-runtime` 通过）。
+- **真模型多轮验证（已去除干扰性本机代理环境变量；仓库与报告不含密钥及私有地址）**：
+  - `MiniMax-M2.7`（`output/idempotency-story-m2.7.json`）：`turn0` 首字 `1183ms`（≤ 2000ms 达标，总耗时 `1283ms`），`turn1` `36619ms`（2 attempts，1775 字），`turn2` `17335ms`（960 字）；全部 `completed=true`、`providerFallback=false`。
+  - `MiniMax-M3.1-Flash`（`output/idempotency-story-m3.1-flash.json`）：`turn0` 首字 `3419ms`（略高于 2000ms 目标，总耗时 `3655ms`），`turn1` `17380ms`（1760 字），`turn2` `16638ms`（822 字）；全部 `completed=true`、`providerFallback=false`，验证了 M3.1 SSE 正常关闭。
+  - 两轮均验证 `all_under_library_root=true`、`outside_library_root=[]`、代码仓零污染（仅原始 `payments.py`）。
+- **全量门禁结果（截至 `d2d6460`）**：
+  - `ruff check server/app server/tests`：0 错误；`verify:server-pyright`：0 错误。
+  - `pytest server/tests -n 4 -q`：4185 passed，28 subtests passed（注：`-n auto` 高并发下 `test_turn_stream_overhead_under_budget_without_extra_preflight` 偶发争抢 728.9ms > 500ms，standalone 0.94s 与 `-n 4` 全量通过）。
+  - `npm run check && npm run build`、`npm run test:extension`、`npm run verify:version`、`npm run verify:credentials`（4998 files, 0 findings）、`npm run verify:copy-vocabulary`（59 files, 0 violations）、`npm run verify:ui-geometry`（288 passed）、`npm run verify:local-latency`（5 actions <= 1000ms）、Playwright 9 核心 spec（171 passed）。
+- **试用指南与诚实 BLOCKED 边界**：
+  - 新增 15 分钟本机试用与 `T-0028` 签收清单：[docs/TRIAL-1.5.0-RC.md](../docs/TRIAL-1.5.0-RC.md)。
+  - `T-0028`（`teaching_acceptance`）与 `remote_ssh_e2e` 保持诚实 `BLOCKED`；最终 VSIX 打包与 `verify-vsix-install` / `test:vsix-e2e` 在干净源码提交后执行并以 `chore(release)` 清单记录。

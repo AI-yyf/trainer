@@ -7,7 +7,7 @@
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "local packaged VSIX host E2E at bcb7cf6: 36/36 host steps, rebuiltCurrentVsix=true, fixture provider; evidence/vsix-e2e-bcb7cf6.json. Visual window capture is win32-only and skipped on macOS."
+      "evidence": "local packaged VSIX host E2E passed 36/36 steps at bcb7cf6 (evidence/vsix-e2e-bcb7cf6.json); macOS standalone trainer-sidecar binary rebuilt @2e26c44; 1.5.0-rc clean-HEAD verify-vsix-install + test:vsix-e2e executed immediately after clean source commit (see extension/trainer-extension-1.4.4-darwin-arm64.vsix.build.json). Visual window capture is win32-only and skipped on macOS."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
@@ -19,11 +19,11 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "Owner T-0028 sign-off is human-only. Machine evidence at bcb7cf6: real-model journey 10/10 (M2.7), installed-host E2E 36/36 with the same external provider, model switch to M3.1. One M3.1 tool-loop output-limit sample remains a residual provider risk. Do not convert human sign-off to PASS."
+      "evidence": "Owner T-0028 sign-off is human-only. Use docs/TRIAL-1.5.0-RC.md (15-min local VSIX trial checklist) for owner sign-off. Machine gates + direct live MiniMax-M2.7 and MiniMax-M3.1-Flash multi-turn probes passed with zero fallback and zero repo pollution, but do not convert human sign-off to PASS."
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "at 8e97664: coach first-run empty canvas centered with start hint and no stale task chip; screenshots refreshed; 471/471 geometry, 96/96 a11y (prior bcb7cf6 logs), matrix 200/200"
+      "evidence": "at d2d6460: LearningDrawer unified single 4-segment capability bar + formal learning copy across 8 locales (5911cbf); Resources toolbar search input + silent context restore + Markdown+images default (0dd62f1); 288 geometry assertions, 59 copy-vocab files clean, Playwright visual screenshots inspected"
     },
     "core_journey_structure": {
       "status": "PASS_STRUCTURAL",
@@ -70,12 +70,16 @@
       "evidence": "1c82a41: real GUI M2.7 reply read src/queue_lock.py + README via the verified tool loop"
     },
     "m3_1_stream_completion": {
-      "status": "PARTIAL",
-      "evidence": "1c82a41: correct visible text but stream did not close within 240s; not claimed as pass"
+      "status": "PASS",
+      "evidence": "5d77ae3 + live MiniMax-M3.1-Flash verification (output/idempotency-story-m3.1-flash.json): POST_FINISH_DRAIN_TIMEOUT_SECONDS post-finish stream drain closes cleanly; 3/3 live M3.1-Flash SSE turns completed=true with providerFallback=false"
+    },
+    "journey_f_offline_recovery": {
+      "status": "PASS",
+      "evidence": "5d77ae3 + 2e26c44: ProviderAgentBinding._async_http_client & ProviderService bypass ambient proxies only on loopback URLs and clear stale provider failure state upon recovered retry; unit & integration pytest PASS"
     },
     "local_e2e_full": {
       "status": "PASS",
-      "evidence": "Waves 1-4: 70/70 passed across trainer.spec.js, trainer-governance.spec.js, trainer-research-brief.spec.js, and trainer-settings-lifecycle.spec.js after aligning the two retired drawer-governance disclosure assertions with Contract v2 calm learning drawer"
+      "evidence": "d2d6460: 171/171 Playwright passed across 9 core specs (trainer, trainer-governance, trainer-settings-lifecycle, trainer-resources-visible-facts, trainer-bound-card-facts, trainer-inline-learning-cards, trainer-template-navigation, trainer-session-recovery, trainer-conversation-simplicity) with Coach reply auto-scroll kept in viewport above inline footer"
     },
     "real_vscode_training": {
       "status": "PASS",
@@ -99,15 +103,15 @@
     },
     "calm_ui_geometry": {
       "status": "PASS",
-      "evidence": "aba4c2de + Waves 2-4: npm run verify:ui-geometry PASS (287 geometry assertions passed across 340/420/460 dark/light zh-CN/en-US)"
+      "evidence": "d2d6460: npm run verify:ui-geometry PASS (288 geometry assertions passed across 340/420/460 dark/light zh-CN/en-US incl. unified capability bar and Resources search shell)"
     },
     "local_latency_2dest": {
       "status": "PASS",
-      "evidence": "589c3daf + Waves 3-4: npm run verify:local-latency PASS (5 actions within 1000ms: coach->learning-drawer, learning-drawer->resources, resources->settings, settings->teaching, settings->coach)"
+      "evidence": "d2d6460: npm run verify:local-latency PASS (5 actions within 1000ms: coach->learning-drawer, learning-drawer->resources, resources->settings, settings->teaching, settings->coach)"
     },
     "stage2_coaching_latency_and_productivity": {
       "status": "PASS",
-      "evidence": "Waves 3-4: server/tests/test_turn_stream_latency_budget.py + server/app/pedagogy/productivity.py + runtime transport cache PASS; npm run verify:server-pyright 0 errors"
+      "evidence": "Waves 3-4 + 2e26c44: server/tests/test_turn_stream_latency_budget.py PASS standalone (0.94s) & in full pytest -n 4; npm run verify:server-pyright 0 errors"
     },
     "stage3_proactive_budget": {
       "status": "PASS",
@@ -115,7 +119,11 @@
     },
     "idempotency_story_deterministic": {
       "status": "PASS",
-      "evidence": "Waves 1-4: server/tests/test_idempotency_story_acceptance.py (1 passed across TRAINER_TEST_NOW T0 -> T0+3d -> T0+17d + create_app restart); 7-suite pytest run 45 passed; full server pytest -n auto 4180 passed (28 subtests passed); npm run verify:server-pyright 0 errors; live external provider runner scripts/run-idempotency-story.mjs fails closed with exit 2 when keys are unset"
+      "evidence": "2e26c44: server/tests/test_idempotency_story_acceptance.py + Journey F + M3.1 stream close + PDF Markdown-only sandbox sync PASS; full server pytest -n 4 4185 passed (28 subtests passed); ruff 0 errors; npm run verify:server-pyright 0 errors"
+    },
+    "live_model_idempotency_story": {
+      "status": "PARTIAL",
+      "evidence": "Hardened direct live probe (output/idempotency-story-m2.7.json & m3.1-flash.json, no API keys stored): MiniMax-M2.7 turn0 TTFT 1183ms (<=2000ms target, total 1283ms), turn1 36619ms (2 attempts), turn2 17335ms; MiniMax-M3.1-Flash turn0 TTFT 3419ms (above 2000ms budget, total 3655ms), turn1 17380ms, turn2 16638ms. All 6 turns completed=true, providerFallback=false, all_under_library_root=true, zero code-repo pollution."
     }
   }
 }
