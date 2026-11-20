@@ -79,7 +79,6 @@ try {
   await page.waitForTimeout(1000);
 
   const results = [];
-  const nav = (name) => page.getByRole("button", { name, exact: true }).first();
   async function timed(name, action, check) {
     const started = performance.now();
     await action();
@@ -87,20 +86,45 @@ try {
     results.push({ name, ms: Math.round(performance.now() - started) });
   }
 
-  await timed("coach->learning", () => nav("学习").click(), () =>
-    page.getByText("今日学习", { exact: true }).first().waitFor({ timeout: 5000 }),
+  await timed(
+    "coach->learning-drawer",
+    () => page.getByTestId("trainer-learning-toggle").first().click(),
+    () => page.locator('[data-template="LearningDrawer"]').first().waitFor({ timeout: 5000 }),
   );
-  await timed("learning->resources", () => nav("资料").click(), () =>
-    page.getByText("资料库", { exact: true }).first().waitFor({ timeout: 5000 }),
+  await timed(
+    "learning-drawer->resources",
+    () => page.getByTestId("trainer-view-nav-resources").first().click(),
+    () => page.getByText("资料库", { exact: true }).first().waitFor({ timeout: 5000 }),
   );
-  await timed("resources->settings", () => nav("设置").click(), () =>
-    page.getByText("Trainer 设置", { exact: true }).first().waitFor({ timeout: 5000 }),
+  await timed(
+    "resources->settings",
+    () => page.getByTestId("trainer-view-nav-settings").first().click(),
+    () =>
+      page
+        .locator('[data-template="SettingsDetail"], [data-template="SettingsIndex"]')
+        .first()
+        .waitFor({ timeout: 5000 }),
   );
-  await timed("open-connection", () => page.locator("[data-settings-category=connection]").first().click(), () =>
-    page.getByText("连接", { exact: true }).first().waitFor({ timeout: 5000 }),
+  await timed(
+    "settings->teaching",
+    async () => {
+      const categoryRow = page.locator('[data-settings-category="teaching"]');
+      if ((await categoryRow.count()) === 0) {
+        const backButton = page.locator(
+          '[data-template="SettingsDetail"] .template-activity-header > .template-back',
+        );
+        if ((await backButton.count()) > 0) {
+          await backButton.first().click();
+        }
+      }
+      await categoryRow.first().click();
+    },
+    () => page.locator('[data-settings-detail="teaching"]').first().waitFor({ timeout: 5000 }),
   );
-  await timed("settings->coach", () => nav("对话").click(), () =>
-    page.locator("textarea").first().waitFor({ timeout: 5000 }),
+  await timed(
+    "settings->coach",
+    () => page.getByTestId("trainer-view-nav-coach").first().click(),
+    () => page.locator("textarea").first().waitFor({ timeout: 5000 }),
   );
 
   const overBudget = results.filter((result) => result.ms > BUDGET_MS);
