@@ -7,7 +7,7 @@ into endless explanation. Explicit ``direct_answer`` requests are exempt.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -124,7 +124,9 @@ def recent_ledger_learning_output(
         return (False, False)
     has_attempt_or_evidence = False
     has_review = False
-    for entry in entries or ():
+    if not isinstance(entries, Iterable):
+        return (False, False)
+    for entry in entries:
         event_type = str(getattr(entry, "event_type", "") or "").strip()
         if event_type not in {
             "practice_submission_recorded",

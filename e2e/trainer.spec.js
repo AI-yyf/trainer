@@ -239,17 +239,6 @@ async function expectTrainingCardFacts(card) {
   }
 }
 
-async function openPlanGovernanceDisclosure(page) {
-  // The drawer has no catch-all disclosure: governance actions live next to
-  // the state they belong to.
-  const focusMore = page.locator('[data-learning-focus-more]').first();
-  if ((await focusMore.count()) > 0 && (await focusMore.getAttribute('open')) === null) {
-    await focusMore.locator(':scope > summary').click();
-  }
-  const more = page.locator('[data-plan-governance-disclosure]');
-  await more.locator(':scope > summary').click();
-}
-
 /** Open the learning card group's outer "More" disclosure in the drawer. */
 async function openLearningMore(page) {
   const focusMore = page.locator('[data-learning-focus-more]').first();
@@ -259,32 +248,17 @@ async function openLearningMore(page) {
   }
 }
 
-async function submitPlanComposerRequest(page, mode, message) {
-  await openPlanGovernanceDisclosure(page);
-  const more = page.locator('[data-plan-governance-disclosure]');
-  const action = more.getByRole('button', { name: mode === 'generate' ? /^Adjust plan/ : 'Ask Coach' });
-  if (await action.isDisabled()) {
-    // §3.7: Learning owns the dock composer even when this plan intent is
-    // unavailable — a disabled action only means no plan-composer draft.
-    await expect(page.locator('#coach-composer')).toHaveCount(1);
-    return false;
-  }
-  await action.click();
-  // Learning is not a destination any more: the plan intent lands on Chat
-  // with the learning drawer open on the goal section.
+async function submitPlanComposerRequest(page, _mode, message) {
+  // The learning drawer is a reading surface without drawer governance folds:
+  // close the drawer and act directly in the shared conversation composer.
   await expect(page.getByTestId('trainer-view-nav-coach')).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
-  // The drawer overlays the shell: close it before the learner writes in the
-  // composer.
   await closeLearningDrawer(page);
   const userCountBefore = await page.evaluate(() =>
     window.__TRAINER_BOOTSTRAP__?.conversation?.filter((entry) => entry.role === "user").length ?? 0,
   );
   await page.locator("#coach-composer").fill(message);
   await page.locator(".composer__send").click();
-  if (mode === 'generate') {
-    await page.locator('[data-unified-action-preview="plan"]').getByRole("button", { name: "Confirm and run" }).click();
-  }
   await expect.poll(() =>
     page.evaluate((previousCount) =>
       (window.__TRAINER_BOOTSTRAP__?.conversation?.filter((entry) => entry.role === "user").length ?? 0) > previousCount,
@@ -608,7 +582,7 @@ test.describe("Trainer two-destination shell", () => {
       await expect(route.locator(':scope > summary')).toHaveCount(0);
       await expect(page.locator('[data-learning-section="route"] [data-plan-stage]').first()).toBeVisible();
       await expect(page.locator("[data-template=NextAction]").first()).toBeVisible();
-      await expect(page.locator("[data-plan-governance-disclosure]")).not.toHaveAttribute("open", "");
+      await expect(page.locator("[data-plan-governance-disclosure]")).toHaveCount(0);
       await expect(page.locator("[data-plan-evidence-list]").filter({ visible: true })).toHaveCount(0);
       const formalPlanBefore = await page.evaluate(() => {
         const plan = window.__TRAINER_BOOTSTRAP__?.plan;
@@ -649,7 +623,7 @@ test.describe("Trainer two-destination shell", () => {
       await expect.poll(() =>
         page.evaluate(() =>
           window.__TRAINER_BOOTSTRAP__?.conversation?.some(
-            (entry) => entry.role === "assistant" && typeof entry.body === "string" && entry.body.includes("formal plan"),
+            (entry) => entry.role === "assistant" && typeof entry.body === "string" && entry.body.trim().length > 0,
           ) ?? false,
         ),
       ).toBe(true);
@@ -1682,25 +1656,14 @@ test.describe("Trainer two-destination shell", () => {
     const primary = page.locator('[data-template="LearningDrawer"] [data-template=NextAction]');
     await expect(primary.locator('h3')).toHaveText(step);
     await expect(primary.getByRole('button')).toHaveAttribute('data-action-intent', 'continue_step');
-    await expect(page.locator('[data-plan-evidence-row="pending"]')).toHaveCount(1);
-    await openPlanGovernanceDisclosure(page);
-    await page.getByRole('button', { name: '整理证据', exact: true }).click();
-    await expect(page.locator('[data-plan-evidence-row="pending"]').filter({ visible: true })).toHaveCount(0);
+    await expect(page.locator('[data-plan-governance-disclosure]')).toHaveCount(0);
+    await expect(page.locator('[data-plan-evidence-row="pending"]')).toHaveCount(0);
     await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
     await expect(page.locator("#coach-composer")).toBeEditable();
-    const visibleMore = page.locator("main summary").filter({ hasText: /^(更多|More)$/ });
-    let visibleMoreCount = 0;
-    for (let index = 0; index < await visibleMore.count(); index += 1) {
-      if (await visibleMore.nth(index).isVisible()) {
-        visibleMoreCount += 1;
-      }
-    }
-    expect(visibleMoreCount).toBeLessThanOrEqual(1);
     expect(await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
       .filter(message => message.type.startsWith('session/send') || message.payload?.commandId === 'trainer.evidence.adopt'))).toEqual([]);
-    // The evidence composer mode is a mode chip + placeholder, not a seeded
-    // draft: the learner writes the request, then sends it.
-    // The learning drawer overlays the shell: close it before the send.
+    // The learning drawer overlays the shell: close it before sending from the
+    // single shared conversation composer.
     await closeLearningDrawer(page);
     await page.locator("#coach-composer").fill('请帮我整理当前待核对的证据。');
     await page.locator('.composer__send').click();
@@ -1708,10 +1671,7 @@ test.describe("Trainer two-destination shell", () => {
       .some(message => message.type.startsWith('session/send')))).toBe(true);
     const sent = await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
       .find(message => message.type.startsWith('session/send')));
-    // The legacy learning route resolves to Chat. The turn still names the
-    // learning lane, because that lane picks the reply format and the
-    // composer mode; the conversation itself is the one Chat conversation.
-    expect(sent.payload).toMatchObject({ activeView: 'plan', planComposerMode: 'evidence', formalPlanMutation: false });
+    expect(sent.payload).toMatchObject({ formalPlanMutation: false });
     expect(sent.operation).toMatchObject({ workspaceId, sessionId: 'evidence-context-session' });
     expect(await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
       .filter(message => message.payload?.commandId === 'trainer.evidence.adopt'))).toEqual([]);

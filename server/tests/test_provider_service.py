@@ -4237,6 +4237,9 @@ async def test_agentic_reply_routes_history_and_loop_mode_into_agent_loop(monkey
     assert context.extra["denied_tool_names"] == [
         "apply_patch",
         "edit_file",
+        "execute_command",
+        "insert_code",
+        "run_command",
         "write_file",
         "generate_training_card",
         "save_formal_plan",

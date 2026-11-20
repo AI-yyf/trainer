@@ -2112,7 +2112,7 @@ class ResourceService:
             current_version = self._record_resource_version(workspace_id, resource, md_bytes)
             version_id = str((current_version or {}).get("version_id") or "")
             document.version_id = version_id
-            if (current_version or {}).get("content_hash"):
+            if current_version and current_version.get("content_hash"):
                 document.content_hash = f"sha256:{current_version['content_hash']}"
             if workspace_root is None:
                 item["error"] = "workspace_root_unavailable"

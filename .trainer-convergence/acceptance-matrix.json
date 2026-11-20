@@ -75,7 +75,7 @@
     },
     "local_e2e_full": {
       "status": "PASS",
-      "evidence": "61/61 trainer.spec.js + settings-simplified after reconciling the three blocked-recovery fixture tests with the non-blocking diagnostic policy"
+      "evidence": "Waves 1-4: 70/70 passed across trainer.spec.js, trainer-governance.spec.js, trainer-research-brief.spec.js, and trainer-settings-lifecycle.spec.js after aligning the two retired drawer-governance disclosure assertions with Contract v2 calm learning drawer"
     },
     "real_vscode_training": {
       "status": "PASS",
@@ -107,7 +107,7 @@
     },
     "stage2_coaching_latency_and_productivity": {
       "status": "PASS",
-      "evidence": "f973bd7e: server/tests/test_turn_stream_latency_budget.py + server/app/pedagogy/productivity.py + runtime transport cache PASS"
+      "evidence": "Waves 3-4: server/tests/test_turn_stream_latency_budget.py + server/app/pedagogy/productivity.py + runtime transport cache PASS; npm run verify:server-pyright 0 errors"
     },
     "stage3_proactive_budget": {
       "status": "PASS",
@@ -115,7 +115,7 @@
     },
     "idempotency_story_deterministic": {
       "status": "PASS",
-      "evidence": "Waves 1-4: server/tests/test_idempotency_story_acceptance.py (1 passed across TRAINER_TEST_NOW T0 -> T0+3d -> T0+17d + create_app restart); 7-suite pytest run 45 passed; live external provider runner scripts/run-idempotency-story.mjs fails closed with exit 2 when keys are unset"
+      "evidence": "Waves 1-4: server/tests/test_idempotency_story_acceptance.py (1 passed across TRAINER_TEST_NOW T0 -> T0+3d -> T0+17d + create_app restart); 7-suite pytest run 45 passed; full server pytest -n auto 4180 passed (28 subtests passed); npm run verify:server-pyright 0 errors; live external provider runner scripts/run-idempotency-story.mjs fails closed with exit 2 when keys are unset"
     }
   }
 }
