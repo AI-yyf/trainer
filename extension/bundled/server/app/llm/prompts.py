@@ -107,7 +107,7 @@ Core boundaries & RethinkFun style:
 - Explain, analyze, guide, and verify; leave the learner's project files for the learner to author (short standalone examples may illustrate a concept).
 - Answer the learner's explicit question directly in the requested format, language, length, and directness before adding anything else; do not append an unsolicited plan or exercise to a bounded answer.
 - Lead with the concrete state, failure, or gap rather than textbook definitions; keep every sentence doing one job (phenomenon, gap, reason, inference, or conclusion).
-- Write concise, natural prose in the learner's language (in Chinese when they write in Chinese, keeping exact code/API identifiers literal). Never use filler clichés ("大家都知道", "显然", "其实很简单", "换句话说", "接下来我们来看一下", "非常巧妙", "希望对你有帮助", "obviously", "everyone knows", "simply put") and never narrate internal tooling, retrieval, or coaching machinery unless asked.
+- Write concise, natural prose in the learner's language (keeping exact code/API identifiers literal). Never use filler clichés ("obviously", "everyone knows", "actually simple", "in other words", "very clever", "hope this helps", "simply put") and never narrate internal tooling, retrieval, or coaching machinery unless asked.
 """
 
 CARD_PRACTICE_SYSTEM = """You are generating one learn-first grounded training card for Trainer.
@@ -379,7 +379,7 @@ def _guided_mode_requirements(response_language: str | None) -> str:
             "- 让对象被需要出来：每引入一个新函数、参数、分支或 API，先说清为什么现在需要它、"
             "缺失会怎样，不要先给定义再补解释。\n"
             "- 结尾用一句话收束：说清现在已知什么、下一步验证或落笔什么；收束是总结，不是追加新练习。\n"
-            "- 不用“显然”“其实很简单”这类空话：每个判断都给出可检验的依据。"
+            "- 严禁使用空洞垫词与套话（如“大家都知道”“众所周知”“显然”“其实很简单”“换句话说”“接下来我们来看一下”“非常巧妙”“非常优雅”“经典方法”“强大的模型”“让我们来看看”“这一步关键是”“代入即得”“易得”“希望对你有帮助”）：每个判断都给出可检验的依据。"
             "\n"
             "- 数学公式用 $...$（行内）或 $$...$$（独立一行）包裹，不要用 \\( \\) 或 \\[ \\]，"
             "也不要用反引号代码包公式（反引号会按代码原样显示，下划线不会排成下标）；"
@@ -799,17 +799,24 @@ def _is_rethinkfun_lecture_request(message: str | None) -> bool:
 def _build_state_driven_teaching_block(
     message: str | None,
     coach_context: dict[str, Any] | None = None,
+    *,
+    response_language: str | None = None,
 ) -> str:
+    is_zh = str(response_language or "").strip().lower().startswith("zh")
     lines = [
         "\n\n## State-Driven Teaching (RethinkFun)",
         "- For an explanation or derivation, do not open with a definition. Start from the current state: what is known, what is still missing, the goal, and the obstacle.",
         "- Introduce a new object only because the current state cannot move without it. State where it comes from, what role it plays, what it connects to, and what breaks if it is removed. Explain auxiliary concepts in 1-3 sentences at first use.",
-        "- Let formulas arrive late. Before a formula, establish the goal, variables (origin, role, consequence of removal), and constraints; after it, explain why it can only take that shape. Derive non-trivial steps in 3-5 steps that each eliminate a gap, never 'substitute and get' / '代入即得'.",
+        "- Let formulas arrive late. Before a formula, establish the goal, variables (origin, role, consequence of removal), and constraints; after it, explain why it can only take that shape. Derive non-trivial steps in 3-5 steps that each eliminate a gap, never 'substitute and get'.",
         "- Put code after the theory, never before it. Say what state and invariant the code maintains, then map functions, variables, shapes/types, and failure points back to the theory.",
         "- Every 2-3 new objects, recycle the state in one short sentence: known, unknown, goal, obstacle.",
         "- Every sentence must perform exactly one job: phenomenon, gap/problem, reason, inference, or conclusion — cut all padding.",
-        "- Include at least one contrast, one boundary/failure case, one non-obvious key point, and one minimal runnable example. Prefer short declarative prose; strictly ban filler clichés ('大家都知道', '显然', '其实很简单', '换句话说', '接下来我们来看一下', '非常巧妙', '非常优雅', '经典方法', '强大的模型', '让我们来看看', '这一步关键是', '希望对你有帮助', 'obviously', 'everyone knows', 'actually simple', 'in other words', 'very clever', 'hope this helps').",
+        "- Include at least one contrast, one boundary/failure case, one non-obvious key point, and one minimal runnable example. Prefer short declarative prose; strictly ban filler clichés ('obviously', 'everyone knows', 'actually simple', 'in other words', 'very clever', 'hope this helps').",
     ]
+    if is_zh:
+        lines.append(
+            "- 中文回答严禁使用空洞垫词与套话（'大家都知道'、'众所周知'、'显然'、'其实很简单'、'换句话说'、'接下来我们来看一下'、'非常巧妙'、'非常优雅'、'经典方法'、'强大的模型'、'让我们来看看'、'这一步关键是'、'代入即得'、'易得'、'希望对你有帮助'）。"
+        )
     is_review = isinstance(coach_context, dict) and (
         bool(coach_context.get("review_artifact"))
         or str(coach_context.get("scenario") or "").strip().lower() == "review"
@@ -873,6 +880,11 @@ def build_coaching_system_prompt(
         target_project=profile.target_project or "Not specified",
         libraries=", ".join(profile.preferred_libraries) if profile.preferred_libraries else "None specified",
     )
+    if use_minimal_template and str(response_language or "").strip().lower().startswith("zh"):
+        system_prompt += (
+            "\n- 中文回答严禁使用空洞垫词与套话（“大家都知道”“众所周知”“显然”“其实很简单”"
+            "“换句话说”“接下来我们来看一下”“非常巧妙”“代入即得”“希望对你有帮助”）。\n"
+        )
     # This flag is stamped by the server only after checking a completed Return
     # against the current file path/hash and current controlled-check evidence.
     # It must survive context compaction: the learner's pasted summary is not
@@ -1032,6 +1044,7 @@ def build_coaching_system_prompt(
         system_prompt += _build_state_driven_teaching_block(
             message,
             coach_context if isinstance(coach_context, dict) else None,
+            response_language=response_language,
         )
 
     if agent_loop_enabled:

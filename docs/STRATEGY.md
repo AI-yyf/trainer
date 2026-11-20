@@ -1,7 +1,7 @@
 # Trainer 产品与工程战略（Strategy）
 
-> 生效日期：2026-11-20 · 分支：`codex/trainer-unified-learning`
-> 配套产品契约：[.trainer-convergence/product-contract.md](file:///Users/Apple/Desktop/trainer/.trainer-convergence/product-contract.md)（v2，locked）
+> 生效日期：2026-11-21 · 分支：`codex/trainer-unified-learning`
+> 配套产品契约：[.trainer-convergence/product-contract.md](file:///Users/Apple/Desktop/trainer/.trainer-convergence/product-contract.md)（v2.1，locked）
 
 ---
 
