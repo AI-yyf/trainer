@@ -2645,6 +2645,16 @@ writeProgress();
         if (!routedCardId) {
           throw new Error("Installed-state reopen smoke did not return the routed card id.");
         }
+        await postJson(port, "/training/card/library", {
+          workspace_id: newWorkspaceId,
+          card_id: routedCardId,
+          action: "save",
+        });
+        await postJson(port, "/training/card/library", {
+          workspace_id: newWorkspaceId,
+          card_id: routedCardId,
+          action: "start",
+        });
 
         const upload = await postJson(port, "/resource/upload", {
           workspace_id: newWorkspaceId,
