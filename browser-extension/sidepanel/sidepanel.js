@@ -27,6 +27,8 @@ const CHAT_COPY = {
     progressUpdated: '进度已更新', evidenceCount: '{n} 条证据', viewGrowth: '查看成长',
     dimensionComprehension: '理解', dimensionImplementation: '实现', dimensionDebugging: '调试', dimensionTransfer: '迁移',
     stateNotVerified: '还未验证', stateAssisted: '有辅助完成', stateIndependent: '独立完成', stateRepeatVerified: '反复验证', stateNeedsReview: '需要回顾',
+    close: '关闭',
+    statusActive: '进行中', statusPending: '待开始', statusCompleted: '已完成', statusNeedsReview: '需要回顾', statusSkipped: '已跳过', statusDraft: '草稿',
   },
   'en-US': {
     practiceAnswerLabel: 'Your answer',
@@ -44,6 +46,8 @@ const CHAT_COPY = {
     progressUpdated: 'Progress updated', evidenceCount: '{n} evidence', viewGrowth: 'View growth',
     dimensionComprehension: 'Comprehension', dimensionImplementation: 'Implementation', dimensionDebugging: 'Debugging', dimensionTransfer: 'Transfer',
     stateNotVerified: 'Not verified yet', stateAssisted: 'Completed with hints', stateIndependent: 'Independent', stateRepeatVerified: 'Repeatedly verified', stateNeedsReview: 'Needs review',
+    close: 'Close',
+    statusActive: 'In progress', statusPending: 'Pending', statusCompleted: 'Completed', statusNeedsReview: 'Needs review', statusSkipped: 'Skipped', statusDraft: 'Draft',
   },
   'es-ES': {
     practiceAnswerLabel: 'Tu respuesta',
@@ -61,6 +65,8 @@ const CHAT_COPY = {
     progressUpdated: 'Progreso actualizado', evidenceCount: '{n} evidencias', viewGrowth: 'Ver progreso',
     dimensionComprehension: 'Comprensión', dimensionImplementation: 'Implementación', dimensionDebugging: 'Depuración', dimensionTransfer: 'Transferencia',
     stateNotVerified: 'Aún sin verificar', stateAssisted: 'Completado con ayudas', stateIndependent: 'Independiente', stateRepeatVerified: 'Verificado repetidamente', stateNeedsReview: 'Necesita repaso',
+    close: 'Cerrar',
+    statusActive: 'En curso', statusPending: 'Pendiente', statusCompleted: 'Completada', statusNeedsReview: 'Necesita repaso', statusSkipped: 'Omitida', statusDraft: 'Borrador',
   },
   'fr-FR': {
     practiceAnswerLabel: 'Votre réponse',
@@ -78,6 +84,8 @@ const CHAT_COPY = {
     progressUpdated: 'Progression mise à jour', evidenceCount: '{n} preuves', viewGrowth: 'Voir la progression',
     dimensionComprehension: 'Compréhension', dimensionImplementation: 'Implémentation', dimensionDebugging: 'Débogage', dimensionTransfer: 'Transfert',
     stateNotVerified: 'Pas encore vérifié', stateAssisted: 'Terminé avec aides', stateIndependent: 'Indépendant', stateRepeatVerified: 'Vérifié à plusieurs reprises', stateNeedsReview: 'À revoir',
+    close: 'Fermer',
+    statusActive: 'En cours', statusPending: 'En attente', statusCompleted: 'Terminée', statusNeedsReview: 'À revoir', statusSkipped: 'Ignorée', statusDraft: 'Brouillon',
   },
   'de-DE': {
     practiceAnswerLabel: 'Deine Antwort',
@@ -95,6 +103,8 @@ const CHAT_COPY = {
     progressUpdated: 'Fortschritt aktualisiert', evidenceCount: '{n} Nachweise', viewGrowth: 'Fortschritt ansehen',
     dimensionComprehension: 'Verständnis', dimensionImplementation: 'Implementierung', dimensionDebugging: 'Fehlersuche', dimensionTransfer: 'Transfer',
     stateNotVerified: 'Noch nicht überprüft', stateAssisted: 'Mit Hinweisen abgeschlossen', stateIndependent: 'Selbstständig', stateRepeatVerified: 'Mehrfach überprüft', stateNeedsReview: 'Braucht Wiederholung',
+    close: 'Schließen',
+    statusActive: 'Aktiv', statusPending: 'Ausstehend', statusCompleted: 'Abgeschlossen', statusNeedsReview: 'Braucht Wiederholung', statusSkipped: 'Übersprungen', statusDraft: 'Entwurf',
   },
   'ja-JP': {
     practiceAnswerLabel: 'あなたの回答',
@@ -112,6 +122,8 @@ const CHAT_COPY = {
     progressUpdated: '進捗を更新しました', evidenceCount: '{n} 件の証拠', viewGrowth: '成長を見る',
     dimensionComprehension: '理解', dimensionImplementation: '実装', dimensionDebugging: 'デバッグ', dimensionTransfer: '転移',
     stateNotVerified: 'まだ検証なし', stateAssisted: 'ヒント付きで完了', stateIndependent: '自力で完了', stateRepeatVerified: '繰り返し検証済み', stateNeedsReview: '要復習',
+    close: '閉じる',
+    statusActive: '進行中', statusPending: '未開始', statusCompleted: '完了', statusNeedsReview: '要復習', statusSkipped: 'スキップ', statusDraft: '下書き',
   },
   'ko-KR': {
     practiceAnswerLabel: '내 답변',
@@ -129,6 +141,8 @@ const CHAT_COPY = {
     progressUpdated: '진행 상황이 업데이트되었습니다', evidenceCount: '증거 {n}개', viewGrowth: '성장 보기',
     dimensionComprehension: '이해', dimensionImplementation: '구현', dimensionDebugging: '디버깅', dimensionTransfer: '전이',
     stateNotVerified: '아직 검증 안 됨', stateAssisted: '힌트로 완료', stateIndependent: '독립 완료', stateRepeatVerified: '반복 검증됨', stateNeedsReview: '복습 필요',
+    close: '닫기',
+    statusActive: '진행 중', statusPending: '대기 중', statusCompleted: '완료', statusNeedsReview: '복습 필요', statusSkipped: '건너뜀', statusDraft: '초안',
   },
   'pt-BR': {
     practiceAnswerLabel: 'Sua resposta',
@@ -146,6 +160,8 @@ const CHAT_COPY = {
     progressUpdated: 'Progresso atualizado', evidenceCount: '{n} evidências', viewGrowth: 'Ver progresso',
     dimensionComprehension: 'Compreensão', dimensionImplementation: 'Implementação', dimensionDebugging: 'Depuração', dimensionTransfer: 'Transferência',
     stateNotVerified: 'Ainda não verificado', stateAssisted: 'Concluído com dicas', stateIndependent: 'Independente', stateRepeatVerified: 'Verificado repetidamente', stateNeedsReview: 'Precisa de revisão',
+    close: 'Fechar',
+    statusActive: 'Em andamento', statusPending: 'Pendente', statusCompleted: 'Concluída', statusNeedsReview: 'Precisa de revisão', statusSkipped: 'Ignorada', statusDraft: 'Rascunho',
   },
 };
 
@@ -172,6 +188,27 @@ function capabilityStateLabel(value) {
   return labelKey ? t(labelKey) : key.replace(/_/g, ' ');
 }
 
+const PRACTICE_STATUS_KEYS = {
+  active: 'statusActive',
+  in_progress: 'statusActive',
+  ready: 'statusActive',
+  due: 'statusActive',
+  pending: 'statusPending',
+  completed: 'statusCompleted',
+  done: 'statusCompleted',
+  passed: 'statusCompleted',
+  needs_review: 'statusNeedsReview',
+  skipped: 'statusSkipped',
+  draft: 'statusDraft',
+};
+
+function practiceStatusLabel(raw) {
+  const normalized = String(raw || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const key = PRACTICE_STATUS_KEYS[normalized];
+  if (key) return t(key);
+  return normalized.replace(/_/g, ' ');
+}
+
 const language = T.copyFor(T.browserLocale()) ? T.resolveLanguageTag(T.browserLocale()) : 'en';
 const copy = CHAT_COPY[T.browserLocale()] || CHAT_COPY['en-US'];
 const responseLanguage = Object.keys(CHAT_COPY).find((key) => key === T.browserLocale()) || 'en-US';
@@ -192,6 +229,7 @@ const elements = {
   practiceNotice: document.getElementById('practice-notice'),
   practiceStatus: document.getElementById('practice-status'),
   practiceStart: document.getElementById('practice-start'),
+  practiceAnswerLabel: document.getElementById('practice-answer-label'),
   practiceAnswer: document.getElementById('practice-answer'),
   practiceSubmit: document.getElementById('practice-submit'),
   composer: document.getElementById('composer'),
@@ -227,6 +265,8 @@ const state = {
   busy: false,
   /** The live card the practice panel is answering. */
   practiceCardId: '',
+  /** Last card whose answer was recorded in this sidepanel session. */
+  recordedCardId: '',
   practiceFocus: '',
   practiceNotice: '',
   /** The progress receipt a recorded practice leaves in the conversation. */
@@ -255,6 +295,18 @@ function applyCopy() {
   elements.practiceSubmit.textContent = t('practiceSubmit');
   elements.practiceAnswer.placeholder = t('practiceAnswerPlaceholder');
   elements.practiceAnswer.setAttribute('aria-label', t('practiceAnswerLabel'));
+  elements.practiceCard.setAttribute('aria-label', t('practiceFallback'));
+  elements.learningToggle.setAttribute('aria-label', t('learning'));
+  elements.learningToggle.title = t('learning');
+  elements.historyToggle.setAttribute('aria-label', t('history'));
+  elements.historyToggle.title = t('history');
+  elements.openTrainer.setAttribute('aria-label', t('openTrainer'));
+  elements.openTrainer.title = t('openTrainer');
+  elements.historyOverlay.querySelector('.overlay__panel')?.setAttribute('aria-label', t('history'));
+  elements.learningOverlay.querySelector('.overlay__panel')?.setAttribute('aria-label', t('learning'));
+  for (const closeButton of document.querySelectorAll('[data-close]')) {
+    closeButton.setAttribute('aria-label', t('close'));
+  }
   elements.newChat.textContent = t('newChat');
 }
 
@@ -519,6 +571,9 @@ function renderPractice() {
   const title = cardTitle || String(pick(training, 'latestTrainingNextHop.title', 'latest_training_next_hop.title') || '').trim();
   const cardId = String(pick(training, 'selectedCardId', 'selected_card_id') || '').trim();
   state.practiceCardId = cardId;
+  if (cardId && state.recordedCardId && cardId !== state.recordedCardId) {
+    state.recordedCardId = '';
+  }
   if (!title) {
     elements.practiceCard.hidden = true;
     return;
@@ -534,7 +589,14 @@ function renderPractice() {
   elements.practiceFocus.textContent = focus;
   elements.practiceNotice.textContent = state.practiceNotice;
   elements.practiceNotice.hidden = !state.practiceNotice;
-  elements.practiceStatus.textContent = String(pick(training, 'selectedCardStatus', 'selected_card_status') || '').replace(/_/g, ' ');
+  const rawStatus = pick(training, 'selectedCardStatus', 'selected_card_status') || '';
+  elements.practiceStatus.textContent = practiceStatusLabel(rawStatus);
+  const settled = Boolean(cardId && state.recordedCardId === cardId);
+  if (elements.practiceAnswerLabel) {
+    elements.practiceAnswerLabel.hidden = settled;
+  }
+  elements.practiceAnswer.hidden = settled;
+  elements.practiceSubmit.hidden = settled;
   elements.practiceStart.disabled = state.busy;
   elements.practiceStart.onclick = () => {
     void sendMessage(t('practicePrompt', title));
@@ -542,8 +604,9 @@ function renderPractice() {
   // The practice card owns its answer: typing and submitting happen in the
   // panel, not in the generic chat box. The submitted turn stays a coaching
   // turn, so the transcript records what the learner actually wrote.
-  elements.practiceSubmit.disabled = state.busy;
+  elements.practiceSubmit.disabled = state.busy || settled;
   elements.practiceSubmit.onclick = () => {
+    if (settled) return;
     const answer = String(elements.practiceAnswer.value || '').trim();
     if (!answer || state.busy) return;
     elements.practiceAnswer.value = '';
@@ -629,6 +692,7 @@ async function recordPracticeAnswer(answer) {
       evidence_source: 'learner_return',
     });
     state.practiceNotice = t('practiceRecorded');
+    state.recordedCardId = cardId;
     await bootstrap(state.sessionId);
     state.receipt = receiptFromSnapshot();
     renderConversation();

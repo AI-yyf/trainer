@@ -65,7 +65,7 @@
       </header>
 
       <button id="learning-strip" class="learning-strip" type="button" hidden>
-        <span class="learning-strip__label" data-copy="learningLabel">Learning</span>
+        <span class="learning-strip__label" data-copy="learning">Learning</span>
         <span id="learning-strip-title" class="learning-strip__title"></span>
         <span id="learning-strip-due" class="learning-strip__due"></span>
         <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-chevron"></use></svg>
@@ -84,13 +84,13 @@
 
       <section id="practice-card" class="practice-card" hidden aria-label="Current practice">
         <header class="practice-card__header">
-          <span data-copy="practiceLabel">Practice</span>
+          <span data-copy="practice">Practice</span>
           <span id="practice-status" class="practice-card__status"></span>
         </header>
         <strong id="practice-title" class="practice-card__title"></strong>
         <p id="practice-focus" class="practice-card__focus"></p>
         <p id="practice-notice" class="practice-card__notice" role="status" aria-live="polite" hidden></p>
-        <label class="practice-card__answer-label" for="practice-answer" data-copy="practiceAnswerLabel">Your answer</label>
+        <label id="practice-answer-label" class="practice-card__answer-label" for="practice-answer" data-copy="practiceAnswerLabel">Your answer</label>
         <textarea id="practice-answer" class="practice-card__answer" rows="3" data-copy-placeholder="practiceAnswerPlaceholder" placeholder="Answer inside the card"></textarea>
         <div class="practice-card__actions">
           <button id="practice-submit" class="primary-button" type="button">Submit answer</button>
@@ -113,7 +113,7 @@
       <button class="overlay__backdrop" type="button" aria-label="Close" data-close="history"></button>
       <div class="overlay__panel" role="dialog" aria-modal="true" aria-label="History">
         <header class="overlay__header">
-          <strong>History</strong>
+          <strong data-copy="history">History</strong>
           <button class="chat-utility" type="button" aria-label="Close" data-close="history">
             <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-close"></use></svg>
           </button>
@@ -127,22 +127,22 @@
       <button class="overlay__backdrop" type="button" aria-label="Close" data-close="learning"></button>
       <div class="overlay__panel" role="dialog" aria-modal="true" aria-label="Learning">
         <header class="overlay__header">
-          <strong data-copy="learningLabel">Learning</strong>
+          <strong data-copy="learning">Learning</strong>
           <button class="chat-utility" type="button" aria-label="Close" data-close="learning">
             <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-close"></use></svg>
           </button>
         </header>
         <section class="learning-section">
-          <h2 data-copy="learningGoal">Current goal</h2>
+          <h2 data-copy="goal">Current goal</h2>
           <p id="learning-goal-title" class="learning-section__title"></p>
           <p id="learning-goal-step" class="learning-section__detail"></p>
         </section>
         <section class="learning-section">
-          <h2 data-copy="learningPractice">Due practice</h2>
+          <h2 data-copy="duePractice">Due practice</h2>
           <p id="learning-practice-detail" class="learning-section__detail"></p>
         </section>
         <section class="learning-section">
-          <h2 data-copy="learningProgress">Growth</h2>
+          <h2 data-copy="progress">Growth</h2>
           <ul id="learning-progress" class="learning-progress"></ul>
         </section>
       </div>
