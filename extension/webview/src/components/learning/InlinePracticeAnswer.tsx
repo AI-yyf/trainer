@@ -3,14 +3,14 @@ import type { ReactNode } from "react";
 import type { ComposerLanguage } from "../../lib/types";
 
 const COPY: Record<ComposerLanguage, { label: string; submit: string; busy: string }> = {
-  "zh-CN": { label: "你的作答", submit: "提交", busy: "保存中…" },
-  "en-US": { label: "Your answer", submit: "Submit", busy: "Saving…" },
-  "es-ES": { label: "Tu respuesta", submit: "Enviar", busy: "Guardando…" },
-  "fr-FR": { label: "Votre réponse", submit: "Envoyer", busy: "Enregistrement…" },
-  "de-DE": { label: "Deine Antwort", submit: "Senden", busy: "Speichern…" },
-  "ja-JP": { label: "あなたの回答", submit: "送信", busy: "保存中…" },
-  "ko-KR": { label: "내 답변", submit: "제출", busy: "저장 중…" },
-  "pt-BR": { label: "Sua resposta", submit: "Enviar", busy: "Salvando…" },
+  "zh-CN": { label: "作答内容", submit: "提交作答", busy: "正在提交…" },
+  "en-US": { label: "Response", submit: "Submit response", busy: "Submitting…" },
+  "es-ES": { label: "Respuesta", submit: "Enviar respuesta", busy: "Enviando…" },
+  "fr-FR": { label: "Réponse", submit: "Envoyer la réponse", busy: "Envoi…" },
+  "de-DE": { label: "Antwort", submit: "Antwort senden", busy: "Wird gesendet…" },
+  "ja-JP": { label: "回答内容", submit: "回答を提出", busy: "送信中…" },
+  "ko-KR": { label: "답안 내용", submit: "답안 제출", busy: "제출 중…" },
+  "pt-BR": { label: "Resposta", submit: "Enviar resposta", busy: "Enviando…" },
 };
 
 export interface InlinePracticeAnswerProps {

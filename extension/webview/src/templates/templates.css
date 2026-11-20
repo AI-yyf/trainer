@@ -268,48 +268,59 @@
 /* A practice-scoped notice belongs to its section, never to a global banner. */
 .learning-drawer__notice { width: 100%; }
 .learning-drawer__notice .template-global-state { margin: 0; }
-/* Horizontal 3-step mastery ladder per capability — scannable rows without percentages. */
-.learning-drawer__mastery-list {
+/* Single unified multi-segment capability bar + formal two-column breakdown. */
+.learning-drawer__mastery-bar {
   display: grid;
-  grid-template-columns: max-content 54px minmax(0, 1fr);
-  row-gap: 8px;
-  column-gap: 10px;
+  grid-template-columns: repeat(var(--capability-count, 4), minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  padding: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-1) 10%, transparent);
+}
+.learning-drawer__mastery-segment {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-1) 12%, transparent);
+}
+.learning-drawer__mastery-segment[data-capability-state="needs_review"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning, var(--fg-1)) 55%, transparent);
+}
+.learning-drawer__mastery-segment.is-filled[data-capability-level="1"] {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.learning-drawer__mastery-segment.is-filled[data-capability-level="2"] {
+  background: color-mix(in srgb, var(--accent) 68%, transparent);
+}
+.learning-drawer__mastery-segment.is-filled[data-capability-level="3"] {
+  background: color-mix(in srgb, var(--accent) 92%, transparent);
+}
+.learning-drawer__mastery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
   margin: 2px 0 0;
   padding: 0;
   list-style: none;
 }
 .learning-drawer__mastery-row {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(3.2em, auto) 54px minmax(0, 1fr);
-  grid-template-columns: subgrid;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   min-height: 22px;
+  width: 100%;
 }
 .learning-drawer__mastery-label {
+  flex: none;
   color: var(--fg-0);
   font-size: var(--trainer-font-xs);
   line-height: 1.4;
   white-space: nowrap;
 }
-.learning-drawer__mastery-track {
-  display: inline-grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  width: 54px;
-}
-.learning-drawer__mastery-step {
-  height: 5px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--fg-1) 14%, transparent);
-}
-.learning-drawer__mastery-step.is-filled { background: color-mix(in srgb, var(--accent) 42%, transparent); }
-.learning-drawer__mastery-step.is-filled[data-step-level="2"] { background: color-mix(in srgb, var(--accent) 66%, transparent); }
-.learning-drawer__mastery-step.is-filled[data-step-level="3"] { background: color-mix(in srgb, var(--accent) 90%, transparent); }
 .learning-drawer__mastery-status {
-  justify-self: end;
-  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   color: var(--fg-1);
   font-size: var(--trainer-font-2xs);

@@ -516,7 +516,7 @@ test('restored trusted verification advances to reflection and carries its full 
   // overlays the shell: close it so the practice card is reachable again.
   await closeLearningDrawer(page);
   // The reflection now lives in the card's own answer field.
-  const reflectionInput = page.getByRole('textbox', { name: '你的作答', exact: true });
+  const reflectionInput = page.getByRole('textbox', { name: '作答内容', exact: true });
   await expect(reflectionInput).toBeEditable();
   await expect(reflectionInput).toHaveAttribute('placeholder', '写下你刚确认的规则，以及下次如何复用它。');
   await page.evaluate((reflection) => {
@@ -585,11 +585,11 @@ test('same-context backups isolate growth evidence and unsent drafts by database
   const progress = page.locator('[data-template="LearningDrawer"] [data-learning-section="progress"]');
   const growthRow = progress.locator('li').filter({ hasText: '实现' });
   await expect(growthRow).toBeVisible();
-  await expect(growthRow).toContainText('需提示');
+  await expect(growthRow).toContainText('需辅助');
   await expect(growthRow).toContainText('1 次');
   await switchDatabase('/backup/data', 'backup-one', false);
   // The backup database carries no projection: no proven dimension remains.
-  await expect(progress.getByText('需提示', { exact: true })).toHaveCount(0);
+  await expect(progress.getByText('需辅助', { exact: true })).toHaveCount(0);
   await expect(progress.getByText('1 次', { exact: true })).toHaveCount(0);
   await closeLearningDrawer(page);
   await expect(input).toHaveValue('');

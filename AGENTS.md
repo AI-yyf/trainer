@@ -240,7 +240,7 @@ commands, deep links and restore actions stay valid.
 | `plan` | alias → 对话 + 学习抽屉"当前目标" | LearningHome (inside the drawer) |
 | `resources` | 资料 / Resources | Library, ResourceReader |
 | `training` | alias → 对话 + 学习抽屉"到期练习" | FocusedPractice (inline card) |
-| `progress` | alias → 对话 + 学习抽屉"会了吗" | inline progress card |
+| `progress` | alias → 对话 + 学习抽屉"掌握进度" | inline progress card |
 | `settings` | header gear | SettingsIndex, SettingsDetail |
 
 `lib/workbenchDestinations.ts` owns route mapping; `plan/training/progress` are
@@ -251,20 +251,20 @@ together (the composer stays mounted underneath, so its draft and focus
 survive), while the header — identity row, navigation row and utilities —
 stays above it and clickable. Its content is a stack of three same-grammar
 **cards** (`.learning-drawer__card`: titled header + optional right-aligned
-metric + body + at most one action) for 当前目标 / 到期练习 / 会了吗 — it is
+metric + body + at most one action) for 当前目标 / 到期练习 / 掌握进度 — it is
 not a tab set. Each card owns one fact and says it once: the goal card names
 the plan step, so the practice card drops a title that repeats it
 (`isSameLearningFact` in `lib/learningSummary.ts`), and the drawer keeps one
 accent action (the goal card's) while the other cards stay secondary. The
-progress card («会了吗») is a **compact horizontal 3-step mastery ladder, never a
-percentage**: one plain-language summary sentence followed by one row per
-capability dimension (`理解 / 实现 / 调试 / 迁移`), each showing a 3-step pill
-track mapped 1:1 to server projection states (`capabilityLevel` in
+progress card («掌握进度») renders **one single unified 4-segment capability bar**
+above formal 2-column capability rows (`理解 / 实现 / 调试 / 迁移`), **never a
+percentage**: one plain-language summary sentence followed by the single bar
+whose segments map 1:1 to server projection states (`capabilityLevel` in
 `lib/learningSummary.ts`: `not_verified`/`needs_review` → 0, `assisted` → 1,
-`independent` → 2, `repeat_verified` → 3), its plain status label (`未练过 /
-需提示 / 能独立做 / 已稳固 / 待巩固`), and its check count. Filled steps use the
-neutral accent ramp (`color-mix` over `--accent`), never a hardcoded brand
-color.
+`independent` → 2, `repeat_verified` → 3), and formal status rows (`未验证 /
+需辅助 / 独立完成 / 稳定掌握 / 待巩固` with verification counts). Filled
+segments use the neutral accent ramp (`color-mix` over `--accent`), never a
+hardcoded brand color.
 `templates/LearningHome.tsx` takes `variant="drawer"` for that compact form: the
 plan's stages and evidence stay as plain rows (no catch-all 「更多」), the starter
 template gallery is gone, and every adjustment starts in the composer — the

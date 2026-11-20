@@ -90,52 +90,52 @@ const TOPIC_SENTENCE_TEMPLATES: Record<
   Record<Exclude<CapabilityState, "not_verified">, (topic: string, count: number) => string>
 > = {
   "zh-CN": {
-    repeat_verified: (topic, count) => `「${topic}」已连续 ${count} 次独立通过。`,
-    independent: (topic) => `已能独立完成「${topic}」。`,
-    assisted: (topic) => `在提示下完成了「${topic}」，下次试试独立做。`,
-    needs_review: (topic) => `「${topic}」还不算稳，建议再回顾一次。`,
+    repeat_verified: (topic, count) => `「${topic}」已连续 ${count} 次独立验证通过。`,
+    independent: (topic) => `已独立完成「${topic}」。`,
+    assisted: (topic) => `已在辅助下完成「${topic}」，下一步建议尝试独立完成。`,
+    needs_review: (topic) => `「${topic}」掌握尚不稳固，建议安排复习巩固。`,
   },
   "en-US": {
-    repeat_verified: (topic, count) => `Independently verified "${topic}" ${count} times in a row.`,
+    repeat_verified: (topic, count) => `Independently verified "${topic}" across ${count} consecutive assessments.`,
     independent: (topic) => `Independently completed "${topic}".`,
-    assisted: (topic) => `Completed "${topic}" with hints — try it solo next.`,
-    needs_review: (topic) => `"${topic}" isn't solid yet — review it once more.`,
+    assisted: (topic) => `Completed "${topic}" with assistance; independent verification is recommended next.`,
+    needs_review: (topic) => `Mastery of "${topic}" requires further consolidation; schedule a review.`,
   },
   "es-ES": {
-    repeat_verified: (topic, count) => `Verificaste "${topic}" sin ayuda ${count} veces seguidas.`,
-    independent: (topic) => `Completaste "${topic}" sin ayuda.`,
-    assisted: (topic) => `Completaste "${topic}" con pistas; intenta hacerlo solo la próxima vez.`,
-    needs_review: (topic) => `"${topic}" aún no está firme; conviene repasarlo.`,
+    repeat_verified: (topic, count) => `"${topic}" verificado de forma independiente en ${count} evaluaciones consecutivas.`,
+    independent: (topic) => `"${topic}" completado de forma independiente.`,
+    assisted: (topic) => `"${topic}" completado con asistencia; se recomienda intentar la verificación independiente.`,
+    needs_review: (topic) => `El dominio de "${topic}" aún requiere consolidación; se sugiere repasar.`,
   },
   "fr-FR": {
-    repeat_verified: (topic, count) => `Vous avez réussi « ${topic} » sans aide ${count} fois de suite.`,
-    independent: (topic) => `Vous avez réussi « ${topic} » en autonomie.`,
-    assisted: (topic) => `Vous avez terminé « ${topic} » avec des indices ; essayez sans aide la prochaine fois.`,
-    needs_review: (topic) => `« ${topic} » reste fragile ; à revoir une fois.`,
+    repeat_verified: (topic, count) => `« ${topic} » validé de manière autonome lors de ${count} vérifications consécutives.`,
+    independent: (topic) => `« ${topic} » réalisé de manière autonome.`,
+    assisted: (topic) => `« ${topic} » réalisé avec assistance ; une validation autonome est recommandée ensuite.`,
+    needs_review: (topic) => `La maîtrise de « ${topic} » reste à consolider ; une révision est recommandée.`,
   },
   "de-DE": {
-    repeat_verified: (topic, count) => `Du hast „${topic}“ ${count}-mal in Folge selbstständig geschafft.`,
-    independent: (topic) => `Du hast „${topic}“ selbstständig abgeschlossen.`,
-    assisted: (topic) => `Du hast „${topic}“ mit Hinweisen geschafft – probier es als Nächstes allein.`,
-    needs_review: (topic) => `„${topic}“ sitzt noch nicht fest – bitte noch einmal wiederholen.`,
+    repeat_verified: (topic, count) => `„${topic}“ wurde ${count}-mal in Folge selbstständig nachgewiesen.`,
+    independent: (topic) => `„${topic}“ wurde selbstständig abgeschlossen.`,
+    assisted: (topic) => `„${topic}“ wurde mit Hilfestellung abgeschlossen; als Nächstes wird eine selbstständige Prüfung empfohlen.`,
+    needs_review: (topic) => `Die Beherrschung von „${topic}“ ist noch nicht gefestigt; eine Wiederholung wird empfohlen.`,
   },
   "ja-JP": {
-    repeat_verified: (topic, count) => `「${topic}」を ${count} 回連続で自力達成しました。`,
-    independent: (topic) => `「${topic}」を独力で達成しました。`,
-    assisted: (topic) => `ヒント付きで「${topic}」を終えました。次は自力で試してみましょう。`,
-    needs_review: (topic) => `「${topic}」はまだ定着途中なので、もう一度見直しましょう。`,
+    repeat_verified: (topic, count) => `「${topic}」は ${count} 回連続で独力による検証に合格しました。`,
+    independent: (topic) => `「${topic}」を独力で完了しました。`,
+    assisted: (topic) => `補助のもと「${topic}」を完了しました。次は独力での検証を推奨します。`,
+    needs_review: (topic) => `「${topic}」の定着が十分ではないため、復習による補強を推奨します。`,
   },
   "ko-KR": {
-    repeat_verified: (topic, count) => `「${topic}」을(를) ${count}회 연속 혼자서 통과했습니다.`,
-    independent: (topic) => `「${topic}」을(를) 혼자서 해결했습니다.`,
-    assisted: (topic) => `힌트로 「${topic}」을(를) 마쳤습니다. 다음엔 혼자 시도해 보세요.`,
-    needs_review: (topic) => `「${topic}」은(는) 아직 단단하지 않으니 한 번 더 복습하세요.`,
+    repeat_verified: (topic, count) => `「${topic}」을(를) ${count}회 연속 독립 검증으로 통과했습니다.`,
+    independent: (topic) => `「${topic}」을(를) 독립적으로 완료했습니다.`,
+    assisted: (topic) => `보조를 받아 「${topic}」을(를) 완료했습니다. 다음에는 독립 수행을 권장합니다.`,
+    needs_review: (topic) => `「${topic}」의 숙달이 아직 안정적이지 않아 복습을 통한 보강이 필요합니다.`,
   },
   "pt-BR": {
-    repeat_verified: (topic, count) => `Você validou "${topic}" sem ajuda ${count} vezes seguidas.`,
-    independent: (topic) => `Você concluiu "${topic}" sem ajuda.`,
-    assisted: (topic) => `Você concluiu "${topic}" com dicas; tente sem ajuda na próxima.`,
-    needs_review: (topic) => `"${topic}" ainda não está sólido — vale revisar mais uma vez.`,
+    repeat_verified: (topic, count) => `"${topic}" verificado de forma independente em ${count} avaliações consecutivas.`,
+    independent: (topic) => `"${topic}" concluído de forma independente.`,
+    assisted: (topic) => `"${topic}" concluído com assistência; recomenda-se tentar a verificação independente a seguir.`,
+    needs_review: (topic) => `O domínio de "${topic}" ainda requer consolidação; recomenda-se revisar.`,
   },
 };
 
@@ -175,127 +175,127 @@ function summarizeDimensionsOverview(
 
   if (language === "zh-CN") {
     if (review.length > 0) {
-      return `${reviewText}还不算稳，建议先回顾一次。`;
+      return `${reviewText}掌握尚不稳固，建议优先复习巩固。`;
     }
     if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
       const rest = [
-        assisted.length > 0 ? `${assistedText}还需提示` : "",
-        untried.length > 0 ? `${untriedText}尚未实测` : "",
+        assisted.length > 0 ? `${assistedText}仍需辅助` : "",
+        untried.length > 0 ? `${untriedText}尚未验证` : "",
       ]
         .filter(Boolean)
         .join("，");
-      return `${strongText}已能独立把关；${rest}。`;
+      return `${strongText}已达独立完成标准；${rest}。`;
     }
     if (strong.length > 0) {
-      return `${strongText}均已能独立完成。`;
+      return `${strongText}均已达到独立完成标准。`;
     }
     if (assisted.length > 0) {
-      return `${assistedText}已在提示下练过，下一步试试独立完成。`;
+      return `${assistedText}已在辅助下完成，下一步建议尝试独立验证。`;
     }
     return undefined;
   }
 
   if (language === "es-ES") {
-    if (review.length > 0) return `${reviewText} necesita un repaso.`;
+    if (review.length > 0) return `${reviewText} requiere consolidación prioritaria.`;
     if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
       const rest = [
-        assisted.length > 0 ? `${assistedText} con pistas` : "",
-        untried.length > 0 ? `${untriedText} sin practicar` : "",
+        assisted.length > 0 ? `${assistedText} con asistencia` : "",
+        untried.length > 0 ? `${untriedText} sin verificar` : "",
       ].filter(Boolean).join(", ");
-      return `Completaste ${strongText} sin ayuda; ${rest}.`;
+      return `${strongText} alcanzado de forma independiente; ${rest}.`;
     }
-    if (strong.length > 0) return `Completaste ${strongText} sin ayuda.`;
-    if (assisted.length > 0) return `Practicaste ${assistedText} con pistas; inténtalo solo luego.`;
+    if (strong.length > 0) return `${strongText} alcanzado de forma independiente.`;
+    if (assisted.length > 0) return `${assistedText} completado con asistencia; se recomienda verificación independiente.`;
     return undefined;
   }
 
   if (language === "fr-FR") {
-    if (review.length > 0) return `${reviewText} demande une révision.`;
+    if (review.length > 0) return `${reviewText} nécessite une consolidation prioritaire.`;
     if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
       const rest = [
-        assisted.length > 0 ? `${assistedText} avec indices` : "",
-        untried.length > 0 ? `${untriedText} pas encore pratiqué` : "",
+        assisted.length > 0 ? `${assistedText} avec assistance` : "",
+        untried.length > 0 ? `${untriedText} non vérifié` : "",
       ].filter(Boolean).join(", ");
       return `Autonomie acquise sur ${strongText} ; ${rest}.`;
     }
     if (strong.length > 0) return `Autonomie acquise sur ${strongText}.`;
-    if (assisted.length > 0) return `Pratiqué ${assistedText} avec indices ; essayez sans aide ensuite.`;
+    if (assisted.length > 0) return `${assistedText} réalisé avec assistance ; validation autonome recommandée.`;
     return undefined;
   }
 
   if (language === "de-DE") {
-    if (review.length > 0) return `${reviewText} braucht noch eine Wiederholung.`;
+    if (review.length > 0) return `${reviewText} erfordert eine vorrangige Wiederholung.`;
     if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
       const rest = [
-        assisted.length > 0 ? `${assistedText} noch mit Hinweisen` : "",
-        untried.length > 0 ? `${untriedText} noch ungeübt` : "",
+        assisted.length > 0 ? `${assistedText} mit Hilfestellung` : "",
+        untried.length > 0 ? `${untriedText} nicht überprüft` : "",
       ].filter(Boolean).join(", ");
-      return `Selbstständig bei ${strongText}; ${rest}.`;
+      return `Selbstständig erreicht in ${strongText}; ${rest}.`;
     }
-    if (strong.length > 0) return `Selbstständig bei ${strongText}.`;
-    if (assisted.length > 0) return `Mit Hinweisen geübt: ${assistedText} — als Nächstes allein testen.`;
+    if (strong.length > 0) return `Selbstständig erreicht in ${strongText}.`;
+    if (assisted.length > 0) return `${assistedText} mit Hilfestellung abgeschlossen; selbstständige Prüfung empfohlen.`;
     return undefined;
   }
 
   if (language === "ja-JP") {
-    if (review.length > 0) return `${reviewText}はまだ定着途中なので、もう一度見直しましょう。`;
+    if (review.length > 0) return `${reviewText}の定着が不十分なため、優先的な復習を推奨します。`;
     if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
       const rest = [
-        assisted.length > 0 ? `${assistedText}はヒントあり` : "",
-        untried.length > 0 ? `${untriedText}は未練習` : "",
+        assisted.length > 0 ? `${assistedText}は補助あり` : "",
+        untried.length > 0 ? `${untriedText}は未検証` : "",
       ].filter(Boolean).join("、");
-      return `${strongText}は独力で到達、${rest}です。`;
+      return `${strongText}は独力達成水準に到達しており、${rest}です。`;
     }
-    if (strong.length > 0) return `${strongText}はいずれも独力で完了済みです。`;
-    if (assisted.length > 0) return `${assistedText}はヒント付きで完了済みです。次は自力で試してみましょう。`;
+    if (strong.length > 0) return `${strongText}はいずれも独力達成水準に到達しています。`;
+    if (assisted.length > 0) return `${assistedText}は補助ありで完了済みです。次は独力での検証を推奨します。`;
     return undefined;
   }
 
   if (language === "ko-KR") {
-    if (review.length > 0) return `${reviewText}은(는) 한 번 더 복습이 필요합니다.`;
+    if (review.length > 0) return `${reviewText}의 숙달이 불충분하여 우선 복습이 필요합니다.`;
     if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
       const rest = [
-        assisted.length > 0 ? `${assistedText}은(는) 힌트 사용` : "",
-        untried.length > 0 ? `${untriedText}은(는) 미연습` : "",
+        assisted.length > 0 ? `${assistedText}은(는) 보조 완료` : "",
+        untried.length > 0 ? `${untriedText}은(는) 미검증` : "",
       ].filter(Boolean).join(", ");
-      return `${strongText}은(는) 혼자 해결할 수 있고, ${rest} 상태입니다.`;
+      return `${strongText}은(는) 독립 수행 기준에 도달했으며, ${rest} 상태입니다.`;
     }
-    if (strong.length > 0) return `${strongText} 모두 혼자서 완료했습니다.`;
-    if (assisted.length > 0) return `힌트로 ${assistedText}을(를) 마쳤습니다. 다음엔 혼자 시도해 보세요.`;
+    if (strong.length > 0) return `${strongText} 모두 독립 수행 기준에 도달했습니다.`;
+    if (assisted.length > 0) return `${assistedText}을(를) 보조하에 완료했습니다. 다음 단계로 독립 검증을 권장합니다.`;
     return undefined;
   }
 
   if (language === "pt-BR") {
-    if (review.length > 0) return `${reviewText} precisa de mais uma revisão.`;
+    if (review.length > 0) return `${reviewText} requer consolidação prioritária.`;
     if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
       const rest = [
-        assisted.length > 0 ? `${assistedText} com dicas` : "",
-        untried.length > 0 ? `${untriedText} sem prática` : "",
+        assisted.length > 0 ? `${assistedText} com assistência` : "",
+        untried.length > 0 ? `${untriedText} não verificado` : "",
       ].filter(Boolean).join(", ");
-      return `Concluiu ${strongText} sem ajuda; ${rest}.`;
+      return `Autonomia atingida em ${strongText}; ${rest}.`;
     }
-    if (strong.length > 0) return `Concluiu ${strongText} sem ajuda.`;
-    if (assisted.length > 0) return `Praticou ${assistedText} com dicas; tente sem ajuda depois.`;
+    if (strong.length > 0) return `Autonomia atingida em ${strongText}.`;
+    if (assisted.length > 0) return `${assistedText} concluído com assistência; recomenda-se verificação independente.`;
     return undefined;
   }
 
   if (review.length > 0) {
-    return `${reviewText} needs another review pass.`;
+    return `${reviewText} requires prioritized review and consolidation.`;
   }
   if (strong.length > 0 && (assisted.length > 0 || untried.length > 0)) {
     const rest = [
-      assisted.length > 0 ? `${assistedText} with hints` : "",
-      untried.length > 0 ? `${untriedText} not practiced yet` : "",
+      assisted.length > 0 ? `${assistedText} assisted` : "",
+      untried.length > 0 ? `${untriedText} unverified` : "",
     ]
       .filter(Boolean)
       .join(", ");
-    return `Independently completed ${strongText}; ${rest}.`;
+    return `Independent proficiency verified in ${strongText}; ${rest}.`;
   }
   if (strong.length > 0) {
-    return `Independently completed ${strongText}.`;
+    return `Independent proficiency verified in ${strongText}.`;
   }
   if (assisted.length > 0) {
-    return `Practiced ${assistedText} with hints — try independently next.`;
+    return `${assistedText} completed with assistance; independent verification recommended next.`;
   }
   return undefined;
 }

@@ -70,7 +70,7 @@ test("a repeatedly verified dimension never draws as an empty column", async () 
   });
   const byState = Object.fromEntries(summary.progressRows.map((row) => [row.stateKey, row]));
   assert.equal(byState.repeat_verified.level, 3);
-  assert.equal(byState.repeat_verified.state, "已稳固");
+  assert.equal(byState.repeat_verified.state, "稳定掌握");
   assert.equal(byState.repeat_verified.evidenceCount, 9);
   assert.equal(byState.independent.level, 2);
   assert.equal(byState.assisted.level, 1);

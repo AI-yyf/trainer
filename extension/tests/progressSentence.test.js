@@ -36,10 +36,10 @@ test("all five projection states map honestly with traceable evidence ID and zer
   const { deriveProgressSentence } = await loadSummary();
 
   const cases = [
-    ["repeat_verified", "ev-repeat", 3, /3 次独立/],
-    ["independent", "ev-indep", 1, /已能独立完成/],
-    ["assisted", "ev-assist", 1, /在提示下完成了/],
-    ["needs_review", "ev-review", 1, /还不算稳/],
+    ["repeat_verified", "ev-repeat", 3, /连续 3 次独立验证通过/],
+    ["independent", "ev-indep", 1, /已独立完成/],
+    ["assisted", "ev-assist", 1, /已在辅助下完成/],
+    ["needs_review", "ev-review", 1, /掌握尚不稳固/],
   ];
 
   for (const [state, evidenceId, verifiedCount, pattern] of cases) {
@@ -100,7 +100,7 @@ test("malformed non-string evidence fields degrade safely without throwing", asy
   });
   assert.ok(result);
   assert.equal(result.evidenceId, undefined);
-  assert.match(result.sentence, /independently completed/i);
+  assert.match(result.sentence, /Independent proficiency verified/i);
 });
 
 test("all eight supported languages produce natural sentences for each active state", async () => {
@@ -135,7 +135,7 @@ test("dimension overview avoids robotic 'completed Comprehension' phrasing when 
   });
   assert.ok(zh);
   assert.doesNotMatch(zh.sentence, /独立完成「理解」/);
-  assert.match(zh.sentence, /理解、调试已能独立把关/);
-  assert.match(zh.sentence, /实现还需提示/);
-  assert.match(zh.sentence, /迁移尚未实测/);
+  assert.match(zh.sentence, /理解、调试已达独立完成标准/);
+  assert.match(zh.sentence, /实现仍需辅助/);
+  assert.match(zh.sentence, /迁移尚未验证/);
 });

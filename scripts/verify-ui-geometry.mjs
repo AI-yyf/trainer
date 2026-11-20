@@ -448,59 +448,76 @@ async function main() {
   await page.getByTestId("trainer-learning-toggle").click();
   await page.waitForTimeout(600);
   const progress = await page.evaluate(() => {
+    const bars = [...document.querySelectorAll(".learning-drawer__mastery-bar")];
+    if (bars.length !== 1) return { error: `expected 1 unified bar, found ${bars.length}` };
+    const bar = bars[0];
+    const segments = [...bar.querySelectorAll(".learning-drawer__mastery-segment")];
+    if (segments.length < 4) return { error: "no capability segments" };
+    const segTops = segments.map((seg) => Math.round(seg.getBoundingClientRect().top));
+    const segHeights = segments.map((seg) => Math.round(seg.getBoundingClientRect().height));
     const rows = [...document.querySelectorAll(".learning-drawer__mastery-row")];
     if (rows.length < 4) return { error: "no capability rows" };
     const heights = rows.map((row) => Math.round(row.getBoundingClientRect().height));
-    // Horizontal mastery rows stack vertically in order with uniform step tracks.
     const tops = rows.map((row) => Math.round(row.getBoundingClientRect().top));
-    const stepCounts = rows.map((row) => row.querySelectorAll(".learning-drawer__mastery-step").length);
-    const labelCenters = rows.map((row) => {
-      const label = row.querySelector(".learning-drawer__mastery-label");
-      if (!label) return null;
-      const box = label.getBoundingClientRect();
-      return Math.round(box.left + box.width / 2);
-    });
     const overflow = Math.max(
+      bar.scrollWidth - bar.clientWidth,
       ...rows.map((row) => row.scrollWidth - row.clientWidth),
     );
-    // Semantics, not just layout: the filled steps must equal the band the
-    // server projection names (assisted 1 · independent 2 · repeat_verified 3).
+    // Semantics, not just layout: the segment's level and fill must match the
+    // server projection band (assisted 1 · independent 2 · repeat_verified 3).
     const expectedFill = { not_verified: 0, needs_review: 0, assisted: 1, independent: 2, repeat_verified: 3 };
-    const bands = rows.map((row) => {
-      const state = row.getAttribute("data-capability-state") ?? "";
+    const bands = segments.map((seg) => {
+      const state = seg.getAttribute("data-capability-state") ?? "";
+      const expected = Object.prototype.hasOwnProperty.call(expectedFill, state) ? expectedFill[state] : null;
+      const level = Number(seg.getAttribute("data-capability-level") ?? "-1");
+      const filled = seg.classList.contains("is-filled");
       return {
         state,
-        expected: Object.prototype.hasOwnProperty.call(expectedFill, state) ? expectedFill[state] : null,
-        filled: row.querySelectorAll(".learning-drawer__mastery-step.is-filled").length,
+        expected,
+        level,
+        filledMatch: expected !== null && level === expected && filled === (expected > 0),
       };
     });
     const stacked = tops.every((top, index) => index === 0 || top > tops[index - 1]);
-    return { heights, tops, stacked, cellCounts: stepCounts, labelCenters, overflow, bands };
+    return {
+      barCount: bars.length,
+      segmentCount: segments.length,
+      segTops,
+      segHeights,
+      heights,
+      tops,
+      stacked,
+      overflow,
+      bands,
+    };
   });
+  check(
+    !progress.error && progress.barCount === 1 && progress.segmentCount >= 4,
+    `growth: exactly one unified capability bar renders all ${progress.segmentCount ?? 0} dimensions`,
+  );
+  check(
+    !progress.error && new Set(progress.segTops).size === 1 && new Set(progress.segHeights).size === 1,
+    `growth: all segments share one top edge (${[...new Set(progress.segTops ?? [])].join("/")}px) and height (${[...new Set(progress.segHeights ?? [])].join("/")}px)`,
+  );
   check(
     !progress.error && new Set(progress.heights).size === 1,
     `growth: all ${progress.heights?.length} capability rows share one height ` +
-      `(${[...new Set(progress.heights ?? [])].join("/")}px) so the ladder scans cleanly`,
+      `(${[...new Set(progress.heights ?? [])].join("/")}px) so the breakdown scans cleanly`,
   );
   check(
     !progress.error && progress.stacked === true,
     `growth: capability rows stack downward cleanly (${(progress.tops ?? []).join("/")}px)`,
   );
   check(
-    !progress.error && new Set(progress.cellCounts).size === 1,
-    `growth: every capability row carries the same number of steps ` +
-      `(${[...new Set(progress.cellCounts ?? [])].join("/")})`,
-  );
-  check(
     !progress.error && (progress.overflow ?? 0) <= 1,
-    `growth: the mastery ladder does not overflow its card (${progress.overflow ?? "n/a"}px)`,
+    `growth: the unified capability bar and rows do not overflow the card (${progress.overflow ?? "n/a"}px)`,
   );
   check(
     !progress.error &&
       progress.bands.length > 0 &&
-      progress.bands.every((band) => band.expected !== null && band.filled === band.expected),
-    `growth: every row fills exactly the steps its band names ` +
-      `(${(progress.bands ?? []).map((band) => `${band.state || "?"}=${band.filled}/${band.expected ?? "?"}`).join(", ")})`,
+      progress.bands.every((band) => band.filledMatch),
+    `growth: every bar segment matches its server band 1:1 ` +
+      `(${(progress.bands ?? []).map((band) => `${band.state || "?"}=${band.level}/${band.expected ?? "?"}`).join(", ")})`,
   );
   if (keepShots) await page.screenshot({ path: path.join(shotDir, "progress.png") });
 

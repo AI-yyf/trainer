@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef } from "react";
 
-import type { LearningProgressAchievement } from "../../lib/learningSummary";
+import { MAX_CAPABILITY_LEVEL, type LearningProgressAchievement } from "../../lib/learningSummary";
 import type { ComposerLanguage, LearningSection } from "../../lib/types";
 
 const COPY: Record<ComposerLanguage, {
@@ -21,59 +21,59 @@ const COPY: Record<ComposerLanguage, {
   currentCard: string;
 }> = {
   "zh-CN": {
-    title: "学习", goal: "当前目标", practice: "到期练习", progress: "会了吗",
-    emptyGoal: "还没有正式计划。", emptyPractice: "现在没有到期练习。",
-    emptyProgress: "动手完成一次练习后，这里会记录你的掌握情况。", due: "{n} 张待复习",
-    evidence: "{n} 次", totalChecks: "实测 {n} 次", open: "打开",
+    title: "学习", goal: "当前目标", practice: "到期练习", progress: "掌握进度",
+    emptyGoal: "尚未制定正式学习计划。", emptyPractice: "当前暂无到期练习。",
+    emptyProgress: "完成并验证一次练习后，此处将记录各维度的掌握进度。", due: "{n} 项待复习",
+    evidence: "{n} 次", totalChecks: "已验证 {n} 次", open: "打开",
     currentCard: "当前练习：",
   },
   "en-US": {
     title: "Learning", goal: "Current goal", practice: "Due practice", progress: "Mastery",
-    emptyGoal: "No formal plan yet.", emptyPractice: "Nothing is due right now.",
-    emptyProgress: "Complete one practice to see what's solid.", due: "{n} due",
-    evidence: "{n}×", totalChecks: "{n} checks", open: "Open",
-    currentCard: "Current card:",
+    emptyGoal: "No formal learning plan yet.", emptyPractice: "No due practice items.",
+    emptyProgress: "Complete a verified practice to record mastery across dimensions.", due: "{n} due",
+    evidence: "{n}×", totalChecks: "{n} verified", open: "Open",
+    currentCard: "Current exercise:",
   },
   "es-ES": {
     title: "Aprendizaje", goal: "Objetivo actual", practice: "Práctica pendiente", progress: "Dominio",
-    emptyGoal: "Aún no hay un plan formal.", emptyPractice: "No hay práctica pendiente.",
-    emptyProgress: "El progreso aparece tras una práctica.", due: "{n} pendientes",
-    evidence: "{n}×", totalChecks: "{n} pruebas", open: "Abrir",
+    emptyGoal: "Aún no hay un plan de aprendizaje formal.", emptyPractice: "No hay práctica pendiente.",
+    emptyProgress: "Tras completar una práctica verificada, aquí se registrará el dominio.", due: "{n} pendientes",
+    evidence: "{n}×", totalChecks: "{n} verificadas", open: "Abrir",
     currentCard: "Ejercicio actual:",
   },
   "fr-FR": {
     title: "Apprentissage", goal: "Objectif actuel", practice: "Pratique à faire", progress: "Maîtrise",
-    emptyGoal: "Pas encore de plan formel.", emptyPractice: "Rien à faire pour le moment.",
-    emptyProgress: "La progression apparaît après une pratique.", due: "{n} à revoir",
+    emptyGoal: "Aucun plan d'apprentissage formel pour le moment.", emptyPractice: "Aucune pratique à réviser.",
+    emptyProgress: "Après une pratique vérifiée, la maîtrise s'affichera ici.", due: "{n} à revoir",
     evidence: "{n}×", totalChecks: "{n} vérif.", open: "Ouvrir",
     currentCard: "Exercice actuel :",
   },
   "de-DE": {
     title: "Lernen", goal: "Aktuelles Ziel", practice: "Fällige Übung", progress: "Beherrschung",
-    emptyGoal: "Noch kein formeller Plan.", emptyPractice: "Gerade nichts fällig.",
-    emptyProgress: "Fortschritt erscheint nach einer Übung.", due: "{n} fällig",
-    evidence: "{n}×", totalChecks: "{n} Prüf.", open: "Öffnen",
+    emptyGoal: "Noch kein formeller Lernplan vorhanden.", emptyPractice: "Derzeit keine fälligen Übungen.",
+    emptyProgress: "Nach einer überprüften Übung wird hier der Fortschritt erfasst.", due: "{n} fällig",
+    evidence: "{n}×", totalChecks: "{n} geprüft", open: "Öffnen",
     currentCard: "Aktuelle Übung:",
   },
   "ja-JP": {
-    title: "学習", goal: "現在の目標", practice: "期限の練習", progress: "定着度",
-    emptyGoal: "正式な計画はまだありません。", emptyPractice: "今は期限の練習がありません。",
-    emptyProgress: "練習を1回終えると進捗が表示されます。", due: "{n} 件",
-    evidence: "{n} 回", totalChecks: "実測 {n} 回", open: "開く",
-    currentCard: "現在の練習：",
+    title: "学習", goal: "現在の目標", practice: "期限の練習", progress: "習得状況",
+    emptyGoal: "正式な学習計画はまだ作成されていません。", emptyPractice: "現在、期限の練習はありません。",
+    emptyProgress: "検証済みの練習を完了すると、各領域の習得状況がここに記録されます。", due: "{n} 件",
+    evidence: "{n} 回", totalChecks: "検証 {n} 回", open: "開く",
+    currentCard: "現在の課題：",
   },
   "ko-KR": {
-    title: "학습", goal: "현재 목표", practice: "예정된 연습", progress: "숙련도",
-    emptyGoal: "아직 공식 계획이 없습니다.", emptyPractice: "지금은 예정된 연습이 없습니다.",
-    emptyProgress: "연습을 한 번 마치면 진행 상황이 표시됩니다.", due: "{n}개",
+    title: "학습", goal: "현재 목표", practice: "예정된 연습", progress: "숙달 현황",
+    emptyGoal: "아직 공식 학습 계획이 수립되지 않았습니다.", emptyPractice: "현재 예정된 복습 과제가 없습니다.",
+    emptyProgress: "검증된 연습을 완료하면 각 영역의 숙달 현황이 여기에 기록됩니다.", due: "{n}개",
     evidence: "{n}회", totalChecks: "검증 {n}회", open: "열기",
-    currentCard: "현재 연습:",
+    currentCard: "현재 과제:",
   },
   "pt-BR": {
     title: "Aprendizado", goal: "Objetivo atual", practice: "Prática pendente", progress: "Domínio",
-    emptyGoal: "Ainda não há um plano formal.", emptyPractice: "Nada pendente agora.",
-    emptyProgress: "O progresso aparece após uma prática.", due: "{n} pendentes",
-    evidence: "{n}×", totalChecks: "{n} testes", open: "Abrir",
+    emptyGoal: "Ainda não há um plano formal de aprendizado.", emptyPractice: "Nenhuma prática pendente no momento.",
+    emptyProgress: "Após concluir uma prática verificada, o domínio será registrado aqui.", due: "{n} pendentes",
+    evidence: "{n}×", totalChecks: "{n} verificadas", open: "Abrir",
     currentCard: "Exercício atual:",
   },
 };
@@ -125,15 +125,12 @@ export interface LearningDrawerPractice {
 export interface LearningDrawerProgressRow {
   label: string;
   state: string;
-  /** The band position on the heatmap scale (0 = nothing yet, 3 = repeatedly verified). */
+  /** The band position on the 0..3 capability scale (0 = unverified/needs review, 3 = repeatedly verified). */
   /** The server projection state the band was drawn from. */
   stateKey?: string;
   level: number;
   evidenceCount: number;
 }
-
-/** The heatmap's scale: three cells, from "nothing yet" to "repeatedly verified". */
-const HEATMAP_LEVELS = [0, 1, 2];
 
 export interface LearningDrawerProgress {
   rows: LearningDrawerProgressRow[];
@@ -260,10 +257,37 @@ export function LearningDrawer({ language, section, onSectionChange, goal, pract
                 {progress.achievement.sentence}
               </p>
             ) : null}
-            {/* Horizontal 3-step mastery ladder per capability — maps 1:1 to server projection bands without percentages. */}
+            {/* Single unified multi-segment capability bar mapped 1:1 to server projection bands without percentages. */}
+            <div
+              className="learning-drawer__mastery-bar"
+              role="img"
+              data-capability-bar="true"
+              style={{ "--capability-count": progress.rows.length } as CSSProperties}
+              aria-label={progress.rows
+                .map(
+                  (row) =>
+                    `${row.label}: ${row.state}${
+                      row.evidenceCount > 0 ? ` (${format(copy.evidence, row.evidenceCount)})` : ""
+                    }`,
+                )
+                .join("；")}
+            >
+              {progress.rows.map((row) => {
+                const clampedLevel = Math.min(Math.max(row.level, 0), MAX_CAPABILITY_LEVEL);
+                return (
+                  <span
+                    key={row.label}
+                    className={`learning-drawer__mastery-segment${clampedLevel > 0 ? " is-filled" : ""}`}
+                    data-capability-state={row.stateKey}
+                    data-capability-level={clampedLevel}
+                    title={`${row.label}：${row.state}`}
+                  />
+                );
+              })}
+            </div>
             <ul className="learning-drawer__mastery-list">
               {progress.rows.map((row) => {
-                const clampedLevel = Math.min(Math.max(row.level, 0), HEATMAP_LEVELS.length);
+                const clampedLevel = Math.min(Math.max(row.level, 0), MAX_CAPABILITY_LEVEL);
                 return (
                   <li
                     key={row.label}
@@ -272,22 +296,6 @@ export function LearningDrawer({ language, section, onSectionChange, goal, pract
                     data-capability-level={clampedLevel}
                   >
                     <span className="learning-drawer__mastery-label">{row.label}</span>
-                    <span
-                      className="learning-drawer__mastery-track"
-                      role="img"
-                      aria-label={`${row.label}: ${row.state}${row.evidenceCount > 0 ? `, ${format(copy.evidence, row.evidenceCount)}` : ""}`}
-                    >
-                      {HEATMAP_LEVELS.map((stepIndex) => {
-                        const filled = stepIndex < clampedLevel;
-                        return (
-                          <span
-                            key={stepIndex}
-                            className={`learning-drawer__mastery-step${filled ? " is-filled" : ""}`}
-                            data-step-level={filled ? clampedLevel : undefined}
-                          />
-                        );
-                      })}
-                    </span>
                     <span className="learning-drawer__mastery-status">
                       <span className="learning-drawer__mastery-state">{row.state}</span>
                       {row.evidenceCount > 0 ? (

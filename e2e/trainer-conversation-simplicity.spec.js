@@ -84,7 +84,7 @@ test('the single Learning action adopts only current step evidence and respects 
   // learner does before reading the single primary action.
   await openLearningDrawer(page, 'goal');
   const primary = page.locator('[data-plan-primary="true"] [data-template=NextAction] > button');
-  await expect(primary).toHaveText('确认采用这条证据');
+  await expect(primary).toHaveText('确认采纳该验证记录');
   await expect(primary).toHaveAttribute('data-action-intent', 'adopt_evidence');
   await expect(primary.locator('..').locator('h3')).toHaveText(evidence.summary);
   await primary.click();

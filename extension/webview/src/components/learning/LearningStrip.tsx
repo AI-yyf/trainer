@@ -2,14 +2,14 @@ import type { ComposerLanguage } from "../../lib/types";
 import { LearningNavIcon } from "../icons";
 
 const COPY: Record<ComposerLanguage, { learning: string; due: string; open: string }> = {
-  "zh-CN": { learning: "学习", due: "{n} 张待复习", open: "打开学习" },
-  "en-US": { learning: "Learning", due: "{n} due", open: "Open learning" },
-  "es-ES": { learning: "Aprendizaje", due: "{n} pendientes", open: "Abrir aprendizaje" },
-  "fr-FR": { learning: "Apprentissage", due: "{n} à revoir", open: "Ouvrir l'apprentissage" },
-  "de-DE": { learning: "Lernen", due: "{n} fällig", open: "Lernen öffnen" },
-  "ja-JP": { learning: "学習", due: "{n} 件", open: "学習を開く" },
-  "ko-KR": { learning: "학습", due: "{n}개", open: "학습 열기" },
-  "pt-BR": { learning: "Aprendizado", due: "{n} pendentes", open: "Abrir aprendizado" },
+  "zh-CN": { learning: "学习", due: "{n} 项待复习", open: "打开学习概览" },
+  "en-US": { learning: "Learning", due: "{n} due", open: "Open learning overview" },
+  "es-ES": { learning: "Aprendizaje", due: "{n} pendientes", open: "Abrir resumen de aprendizaje" },
+  "fr-FR": { learning: "Apprentissage", due: "{n} à revoir", open: "Ouvrir le résumé d'apprentissage" },
+  "de-DE": { learning: "Lernen", due: "{n} fällig", open: "Lernübersicht öffnen" },
+  "ja-JP": { learning: "学習", due: "{n} 件", open: "学習概要を開く" },
+  "ko-KR": { learning: "학습", due: "{n}개", open: "학습 개요 열기" },
+  "pt-BR": { learning: "Aprendizado", due: "{n} pendentes", open: "Abrir resumo de aprendizado" },
 };
 
 export interface LearningStripProps {

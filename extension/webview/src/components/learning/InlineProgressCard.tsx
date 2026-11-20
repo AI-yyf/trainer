@@ -2,14 +2,14 @@ import type { ComposerLanguage } from "../../lib/types";
 import type { LearningProgressAchievement, LearningProgressRow } from "../../lib/learningSummary";
 
 const COPY: Record<ComposerLanguage, { title: string; evidence: string; open: string }> = {
-  "zh-CN": { title: "会了吗", evidence: "实测 {n} 次", open: "查看详情" },
-  "en-US": { title: "Mastery", evidence: "{n} checks", open: "Details" },
-  "es-ES": { title: "Dominio", evidence: "{n} pruebas", open: "Detalles" },
+  "zh-CN": { title: "掌握进度", evidence: "已验证 {n} 次", open: "查看详情" },
+  "en-US": { title: "Mastery", evidence: "{n} verified", open: "Details" },
+  "es-ES": { title: "Dominio", evidence: "{n} verificadas", open: "Detalles" },
   "fr-FR": { title: "Maîtrise", evidence: "{n} vérif.", open: "Détails" },
-  "de-DE": { title: "Beherrschung", evidence: "{n} Prüf.", open: "Details" },
-  "ja-JP": { title: "定着度", evidence: "実測 {n} 回", open: "詳細" },
-  "ko-KR": { title: "숙련도", evidence: "검증 {n}회", open: "자세히" },
-  "pt-BR": { title: "Domínio", evidence: "{n} testes", open: "Detalhes" },
+  "de-DE": { title: "Beherrschung", evidence: "{n} geprüft", open: "Details" },
+  "ja-JP": { title: "習得状況", evidence: "検証 {n} 回", open: "詳細" },
+  "ko-KR": { title: "숙달 현황", evidence: "검증 {n}회", open: "자세히" },
+  "pt-BR": { title: "Domínio", evidence: "{n} verificadas", open: "Detalhes" },
 };
 
 export interface InlineProgressCardProps {

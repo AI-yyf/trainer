@@ -267,10 +267,10 @@ for (const language of ['zh-CN', 'en-US']) {
 }
 
 const linkLabels = {
-  'zh-CN': ['到期练习', '会了吗'], 'en-US': ['Due practice', 'Mastery'],
+  'zh-CN': ['到期练习', '掌握进度'], 'en-US': ['Due practice', 'Mastery'],
   'es-ES': ['Práctica pendiente', 'Dominio'], 'fr-FR': ['Pratique à faire', 'Maîtrise'],
-  'de-DE': ['Fällige Übung', 'Beherrschung'], 'ja-JP': ['期限の練習', '定着度'],
-  'ko-KR': ['예정된 연습', '숙련도'], 'pt-BR': ['Prática pendente', 'Domínio'],
+  'de-DE': ['Fällige Übung', 'Beherrschung'], 'ja-JP': ['期限の練習', '習得状況'],
+  'ko-KR': ['예정된 연습', '숙달 현황'], 'pt-BR': ['Prática pendente', 'Domínio'],
 };
 const continueCopy = {
   'zh-CN': '可以继续当前练习。', 'en-US': 'You can continue the current practice.',
