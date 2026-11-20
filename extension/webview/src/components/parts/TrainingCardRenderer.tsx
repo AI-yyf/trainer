@@ -51,12 +51,12 @@ function getLabel(language: ComposerLanguage, key: string, vars?: Record<string,
 /**
  * Rating configuration with dynamic labels based on language
  */
-function getRatingConfig(language: ComposerLanguage) {
+function getRatingConfig() {
   return {
-    again: { icon: "A", labelKey: "ratingAgain" },
-    hard: { icon: "H", labelKey: "ratingHard" },
-    good: { icon: "G", labelKey: "ratingGood" },
-    easy: { icon: "E", labelKey: "ratingEasy" },
+    again: { labelKey: "ratingAgain" },
+    hard: { labelKey: "ratingHard" },
+    good: { labelKey: "ratingGood" },
+    easy: { labelKey: "ratingEasy" },
   };
 }
 
@@ -84,14 +84,6 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
     successSignal,
     fallbackAction,
     nextAfterCompletion,
-    dueAt,
-    intervalDays,
-    masteryScore,
-    stability,
-    fsrsDifficulty,
-    retrievability,
-    fsrsState,
-    reviewSource,
     hintLadder,
     verificationSteps,
     sourceChain,
@@ -111,10 +103,6 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
   };
   const difficultyKey = difficulty ?? "medium";
   const diffConfig = difficultyConfig[difficultyKey];
-
-  // FSRS metrics
-  const masteryPercent = masteryScore != null ? Math.round(masteryScore * 100) : null;
-  const retrievabilityPercent = retrievability != null ? Math.round(retrievability * 100) : null;
 
   // Hint ladder handlers
   const handleRevealNextHint = useCallback(() => {
@@ -166,7 +154,7 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
   const hasHintLadder = hintLadder && hintLadder.length > 0;
   const visibleHints = hasHintLadder ? hintLadder.slice(0, hintsRevealed) : [];
   const remainingHints = hasHintLadder ? hintLadder.length - hintsRevealed : 0;
-  const ratingConfig = getRatingConfig(language);
+  const ratingConfig = getRatingConfig();
 
   return (
     <div
@@ -181,9 +169,6 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
       {/* Header */}
       <div className="card-header">
         <div className="card-type-badge">
-          <span className="card-type-icon">
-            {cardType === "flash" ? "F" : "P"}
-          </span>
           <span className="card-type-label">
             {cardType === "flash" ? getLabel(language, "cardTypeFlash") : getLabel(language, "cardTypePractice")}
           </span>
@@ -242,7 +227,6 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
       {hasHintLadder && isActive && !isRated && (
         <div className="card-hint-ladder">
           <div className="hint-ladder-header">
-            <span className="hint-icon">H</span>
             <span className="hint-title">{getLabel(language, "hintLadder")}</span>
             {remainingHints > 0 && (
               <span className="hint-count">
@@ -327,7 +311,6 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
           </div>
           <div className="rating-buttons">
             {(Object.keys(ratingConfig) as TrainingRating[]).map((rating) => {
-              const config = ratingConfig[rating];
               return (
                 <button
                   key={rating}
@@ -336,8 +319,7 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
                   onClick={() => handleRate(rating)}
                   disabled={!canTransitionCardStatus}
                 >
-                  <span className="rating-icon">{config.icon}</span>
-                  <span className="rating-label">{getLabel(language, config.labelKey)}</span>
+                  <span className="rating-label">{getLabel(language, ratingConfig[rating].labelKey)}</span>
                 </button>
               );
             })}
@@ -347,61 +329,6 @@ export const TrainingCardRenderer: React.FC<TrainingCardRendererProps> = ({
           </div>
         </div>
       )}
-
-      {/* FSRS Metrics */}
-      <div className="card-metrics">
-        {masteryPercent !== null && (
-          <div className="metric mastery">
-            <span className="metric-label"><strong>{getLabel(language, "mastery")}:</strong></span>
-            <div className="metric-bar">
-              <div className="metric-fill" style={{ width: `${masteryPercent}%` }} />
-            </div>
-            <span className="metric-value">{masteryPercent}%</span>
-          </div>
-        )}
-        {retrievabilityPercent !== null && (
-          <div className="metric retrievability">
-            <span className="metric-label">R:</span>
-            <div className="metric-bar">
-              <div
-                className="metric-fill"
-                style={{
-                  width: `${retrievabilityPercent}%`,
-                  backgroundColor: retrievabilityPercent > 50 ? "var(--success-color)" : "var(--warning-color)",
-                }}
-              />
-            </div>
-            <span className="metric-value">{retrievabilityPercent}%</span>
-          </div>
-        )}
-        {stability != null && (
-          <div className="metric stability">
-            <span className="metric-label">S:</span>
-            <span className="metric-value">{stability.toFixed(2)}</span>
-          </div>
-        )}
-        {fsrsDifficulty != null && (
-          <div className="metric difficulty">
-            <span className="metric-label">D:</span>
-            <span className="metric-value">{fsrsDifficulty.toFixed(2)}</span>
-          </div>
-        )}
-        {fsrsState && (
-          <div className="metric state">
-            <span className="metric-label"><strong>{getLabel(language, "state")}:</strong></span>
-            <span className="metric-value">{fsrsState}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Due/Interval Info */}
-      <div className="card-timing">
-        {dueAt && <span className="timing-due"><strong>{getLabel(language, "due")}:</strong> {dueAt}</span>}
-        {intervalDays != null && (
-          <span className="timing-interval"><strong>{getLabel(language, "intervalDays", { n: intervalDays })}</strong></span>
-        )}
-        {reviewSource && <span className="timing-source"><strong>{getLabel(language, "source")}:</strong> {reviewSource}</span>}
-      </div>
 
       {/* Verification Steps */}
       {verificationSteps && verificationSteps.length > 0 && (

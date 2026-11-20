@@ -35,6 +35,8 @@ export interface LearningDrawerReviewItem {
 export interface LearningDrawerSectionsInput {
   language: ComposerLanguage;
   summary: LearningSummary;
+  /** The primary action title already displayed inside Card 1 ("当前目标"). */
+  goalActionTitle?: string;
   /** The governed plan card: the goal's own reading surface. */
   planDetail: ReactNode;
   operationMessage?: TrainerOperationMessage;
@@ -100,7 +102,8 @@ export function useLearningDrawerSections(input: LearningDrawerSectionsInput): L
   // practice card drops the title — and with it the action that would start
   // the very same card.
   const practiceAddsSomething = Boolean(summary.dueCardTitle) &&
-    !isSameLearningFact(summary.dueCardTitle, summary.goalStep);
+    !isSameLearningFact(summary.dueCardTitle, summary.goalStep) &&
+    !isSameLearningFact(summary.dueCardTitle, input.goalActionTitle);
 
   const goalControls = input.goal.active ? (
     <>

@@ -1156,12 +1156,19 @@ export function TrainingWorkbenchView({
                   <MessageRichContent body={learnFirstDetail ?? cardOnlyTask ?? ""} language={language} />
                   <NextAction label={templateCopy[language].nextAction} title={cardOnlyTask || displayTitle} action={{ label: trainingSurfaceLabel(language, "startStep"), disabled: !onCardStatusTransition || !cardId || reliabilityInFlight, onClick: () => { if (cardId) onCardStatusTransition?.(cardId, "active", "start_step"); } }} />
                 </> : trainingExecutionState.composerPhase === "try" || trainingExecutionState.composerPhase === "answer" ? <>
-                  <MessageRichContent body={isFlashCard ? flashPrompt || cardOnlyTask : cardOnlyTask} language={language} />
+                  {(isFlashCard || !cardOnlyTask || normalizeCardText(cardOnlyTask) !== normalizeCardText(displayTitle)) ? (
+                    <MessageRichContent body={isFlashCard ? flashPrompt || cardOnlyTask : cardOnlyTask} language={language} />
+                  ) : null}
                   {resolvedFilesToTouch.length ? (
                     <p className="template-metadata training-card-files" data-training-files="true">
-                      {resolvedFilesToTouch.map((file) => (
-                        <span key={file} className="training-card-files__item">{file}</span>
-                      ))}
+                      {resolvedFilesToTouch.map((file) => {
+                        const basename = file.split(/[\\/]/).pop() || file;
+                        return (
+                          <code key={file} className="training-card-files__item" title={file}>
+                            {basename}
+                          </code>
+                        );
+                      })}
                     </p>
                   ) : null}
                   {cardOnlyBlockerDistinct ? <VerificationResult language={language} verdict={trainingExecutionState.blocked ? "failed" : "unknown"} summary={cardOnlyBlockerDistinct} /> : null}
@@ -1170,7 +1177,7 @@ export function TrainingWorkbenchView({
                   ) : (
                     <>
                       {!isFlashCard && practiceVerificationMode === "file" ? (
-                        <NextAction label={templateCopy[language].nextAction} title={trainingSurfaceLabel(language, "verifyStepTitle")} detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
+                        <NextAction label="" title="" detail={deliverablesListNode ? <><span className="template-metadata">{templateCopy[language].complete}: </span>{deliverablesListNode}</> : `${templateCopy[language].complete}: ${cardOnlyDeliverable}`} action={{ label: remoteName ? remoteVerifyCopy(language).verifyOn(remoteName) : trainingSurfaceLabel(language, "verifyCurrentFile"), disabled: !onVerifyCurrentFile || Boolean(remoteVerification?.running) || reliabilityInFlight, onClick: () => onVerifyCurrentFile?.() }} />
                       ) : null}
                       {response}
                     </>

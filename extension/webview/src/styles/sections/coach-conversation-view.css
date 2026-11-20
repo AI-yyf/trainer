@@ -405,16 +405,13 @@
 
 .coach-conversation-view--quiet-surface .coach-conversation-view__list {
   flex: 1 1 auto;
-  /* The inline practice card lives in the same column as the thread. Without a
-     floor the card squeezes the conversation to a few pixels, and the learner
-     can no longer read what they just sent or what Coach answered. */
-  min-height: 140px;
+  min-height: 0;
   overflow: auto;
   width: 100%;
   max-width: var(--coach-content-max, 660px);
   margin-inline: auto;
   box-sizing: border-box;
-  padding: var(--space-1) var(--coach-gutter, 16px) 6px;
+  padding: var(--space-1) var(--coach-gutter, 16px) 10px;
 }
 
 .coach-conversation-view__list--empty {
@@ -438,8 +435,8 @@
 }
 
 .coach-conversation-view__footer {
-  padding: 5px var(--space-1);
-  border-top: 1px solid color-mix(in srgb, var(--line) 44%, transparent);
+  padding: 4px 0 8px;
+  border-top: 0;
   background: transparent;
 }
 

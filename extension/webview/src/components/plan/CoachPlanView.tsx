@@ -859,7 +859,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const learningSystemState = blockingKind ? (
     <SystemState
       kind={blockingKind}
-      title={props.primaryAction.title}
+      title={props.primaryAction.title ?? ""}
       detail={props.primaryAction.detail}
       // A block's recovery action is a governed step, not an adjustment: it
       // stays reachable from the card.
@@ -1270,7 +1270,7 @@ export function CoachPlanView(props: CoachPlanViewProps) {
       nextTools={<>
         {props.dockReturnNotice}
         {liveEvidenceDecisionRow}
-        {props.onPracticePlanStep ? (
+        {!isDrawer && props.onPracticePlanStep ? (
           <div className="plan-step-card-action" data-plan-step-card-action="true">
             <button
               type="button"

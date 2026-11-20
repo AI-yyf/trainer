@@ -1747,21 +1747,45 @@ writeProgress();
         });
         await sleep(600);
 
-        const activeCard = await getJson(
+        const resolveActiveCardId = (cardPayload) =>
+          cardPayload &&
+          (cardPayload.selected_card_id ||
+            cardPayload.selectedCardId ||
+            (cardPayload.selected_card &&
+              (cardPayload.selected_card.card_id || cardPayload.selected_card.cardId)) ||
+            (cardPayload.selectedCard &&
+              (cardPayload.selectedCard.card_id || cardPayload.selectedCard.cardId)));
+
+        let activeCard = await getJson(
           port,
           "/training/active-card?workspace_id=" +
             encodeURIComponent(managedContextId) +
             "&session_id=" +
             encodeURIComponent(sessionId),
         );
-        const activeCardId =
-          activeCard &&
-          (activeCard.selected_card_id ||
-            activeCard.selectedCardId ||
-            (activeCard.selected_card &&
-              (activeCard.selected_card.card_id || activeCard.selected_card.cardId)) ||
-            (activeCard.selectedCard &&
-              (activeCard.selectedCard.card_id || activeCard.selectedCard.cardId)));
+        let resolvedCardId = resolveActiveCardId(activeCard);
+        if (!resolvedCardId) {
+          await postProviderBoundJson(port, "/training/generate-card", {
+            workspace_id: managedContextId,
+            session_id: sessionId,
+            source: "coach_turn",
+            card_type: "practice",
+            focus_area: "FastAPI Depends 边界",
+            response_language: "zh-CN",
+            provider: providerTransportConfig(),
+            api_key: providerApiKey,
+          });
+          await sleep(300);
+          activeCard = await getJson(
+            port,
+            "/training/active-card?workspace_id=" +
+              encodeURIComponent(managedContextId) +
+              "&session_id=" +
+              encodeURIComponent(sessionId),
+          );
+          resolvedCardId = resolveActiveCardId(activeCard);
+        }
+        const activeCardId = resolvedCardId;
         if (!activeCardId) {
           throw new Error("Next-hop smoke did not create an active training card.");
         }

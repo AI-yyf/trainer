@@ -131,9 +131,9 @@
   box-shadow: var(--shadow-md);
 }
 .inline-practice-slot {
-  width: calc(100% - (var(--trainer-gutter) * 2));
+  width: 100%;
   max-width: var(--coach-content-max, 660px);
-  margin: 10px auto 4px;
+  margin: 8px auto 4px;
 }
 .inline-practice-slot .training-view { padding: 0; }
 .inline-practice-slot .training-pane {
@@ -144,6 +144,7 @@
 }
 .inline-practice-slot .template-activity-header { gap: 3px; padding-block: 0 8px; }
 .inline-practice-slot .template-activity-header h2 { font-size: var(--trainer-font-md); line-height: 1.4; }
+.inline-practice-slot .template-next-action { padding-block: 6px; gap: 6px; }
 /* The candidate library stays reachable: candidate review is a governed
    decision the learner makes on the card itself. */
 .inline-practice-slot .training-library { margin-block: 6px; }
@@ -153,7 +154,7 @@
 .inline-practice-answer__label { color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.4; }
 .inline-practice-answer__input {
   width: 100%;
-  min-height: 64px;
+  min-height: 48px;
   box-sizing: border-box;
   padding: 8px 9px;
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
@@ -286,26 +287,28 @@
   align-items: center;
   gap: 3px;
 }
-/* Square cells, like a contribution grid: three steps per capability. */
+/* Square cells, centered above each capability label: three steps per capability. */
 .learning-drawer__heatmap-cells {
   display: grid;
   grid-template-rows: repeat(3, 8px);
+  justify-items: center;
   gap: 3px;
-  width: 30px;
+  width: auto;
+  margin-inline: auto;
 }
 .learning-drawer__heatmap-cell {
   display: block;
-  width: 8px;
+  width: 10px;
   height: 8px;
   border-radius: 2px;
   background: color-mix(in srgb, var(--fg-1) 12%, transparent);
   animation: learning-heat-cell-in 320ms var(--ease-out) both;
   animation-delay: var(--heat-delay, 0ms);
 }
-/* One colour per band: the whole column reads at a glance. */
-.learning-drawer__heatmap-cell.is-filled { background: color-mix(in srgb, var(--accent) 38%, transparent); }
-.learning-drawer__heatmap-cell.is-filled[data-heat-level="2"] { background: color-mix(in srgb, var(--accent) 62%, transparent); }
-.learning-drawer__heatmap-cell.is-filled[data-heat-level="3"] { background: var(--accent); }
+/* One colour per band: soft accent ramp so the column reads cleanly without glare. */
+.learning-drawer__heatmap-cell.is-filled { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.learning-drawer__heatmap-cell.is-filled[data-heat-level="2"] { background: color-mix(in srgb, var(--accent) 56%, transparent); }
+.learning-drawer__heatmap-cell.is-filled[data-heat-level="3"] { background: color-mix(in srgb, var(--accent) 86%, transparent); }
 .learning-drawer__heatmap-label {
   max-width: 100%;
   overflow: hidden;
@@ -339,7 +342,7 @@
   gap: 2px;
 }
 .learning-drawer__heatmap-ramp .learning-drawer__heatmap-cell {
-  width: 8px;
+  width: 10px;
   height: 8px;
   animation: none;
 }
@@ -388,6 +391,8 @@
 .learning-drawer__detail-surface .template-learning-home { padding: 0; }
 .learning-drawer__detail-surface .learning-cards__header h2 { font-size: var(--trainer-font-sm); line-height: 1.45; }
 .learning-drawer__detail-surface .learning-card-stack { gap: var(--space-2); }
+.learning-drawer__plan-context { margin: 0 0 var(--space-2); color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.45; }
+.learning-drawer .learning-card-group__header h3 { font-size: var(--trainer-font-2xs); color: var(--fg-muted); font-weight: 400; letter-spacing: 0.02em; text-transform: none; }
 .template-settings-index { padding-block: 12px; }
 .template-settings-index h2 { margin: 0 0 12px; font-size: var(--trainer-font-lg); font-weight: 600; }
 .template-settings-index ul { margin: 0; padding: 0; list-style: none; }

@@ -119,6 +119,7 @@ function CoachConversationViewImpl({
     .join(" ");
   const showHeader = Boolean(eyebrow || title || subtitle);
   const hasMessages = messages.length > 0 || Boolean(streamingMessage);
+  const hasListContent = hasMessages || Boolean(footer);
 
   // One flat, append-only list. Keys are positional so the streaming slot and
   // the server-confirmed assistant message that later lands at the same index
@@ -172,11 +173,11 @@ function CoachConversationViewImpl({
 
       <div
         className={`message-list coach-conversation-view__list ${
-          hasMessages ? "coach-conversation-view__list--active" : "coach-conversation-view__list--empty"
+          hasListContent ? "coach-conversation-view__list--active" : "coach-conversation-view__list--empty"
         }`}
       >
         {listHead}
-        {messages.length === 0 && !streamingMessage && emptyState ? emptyState : null}
+        {messages.length === 0 && !streamingMessage && !footer && emptyState ? emptyState : null}
 
         {items.map((item, itemIndex) => (
           <div
@@ -221,9 +222,8 @@ function CoachConversationViewImpl({
             </div>
           </div>
         ))}
+        {footer ? <div className="coach-conversation-view__footer">{footer}</div> : null}
       </div>
-
-      {footer ? <div className="coach-conversation-view__footer">{footer}</div> : null}
     </Conversation>
   );
 }

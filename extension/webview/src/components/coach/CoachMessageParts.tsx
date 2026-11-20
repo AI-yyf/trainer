@@ -527,11 +527,6 @@ function renderPart(
       return (
         <div key={`part-${index}`} className="message-part message-part--training-card">
           <strong>{title || copy(language, "训练卡片")}</strong>
-          <p className="message-part__meta">
-            <code>{part.cardId}</code>
-            {part.cardType ? <span>{` | ${part.cardType}`}</span> : null}
-            {part.difficulty ? <span>{` | ${part.difficulty}`}</span> : null}
-          </p>
           {whyNow ? <p>{whyNow}</p> : null}
           {deliverable ? <p>{deliverable}</p> : null}
           {validationMethod ? <p className="message-part__meta">{validationMethod}</p> : null}

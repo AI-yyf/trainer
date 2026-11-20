@@ -11,8 +11,8 @@ export interface TemplateAction {
 }
 
 export interface NextActionProps {
-  label: string;
-  title: string;
+  label?: string;
+  title?: string;
   detail?: ReactNode;
   action: TemplateAction;
 }
@@ -23,10 +23,11 @@ export interface NextActionProps {
  * completion criteria never collapse into a titleless "···" fold.
  */
 export function NextAction({ label, title, detail, action }: NextActionProps) {
+  const ariaLabel = label?.trim() || title?.trim() || action.label;
   return (
-    <section className="template-next-action" data-template="NextAction" aria-label={label}>
-      <p className="template-metadata">{label}</p>
-      <h3>{title}</h3>
+    <section className="template-next-action" data-template="NextAction" aria-label={ariaLabel}>
+      {label?.trim() ? <p className="template-metadata">{label}</p> : null}
+      {title?.trim() ? <h3>{title}</h3> : null}
       {detail ? <div className="template-next-action__detail">{detail}</div> : null}
       <button type="button" className="button button--accent" data-primary-action="true" data-action-intent={action.id} disabled={action.disabled || action.busy} aria-busy={action.busy || undefined} onClick={action.onClick}>
         <span className="button__icon" aria-hidden="true"><ArrowRightIcon size={14} /></span>

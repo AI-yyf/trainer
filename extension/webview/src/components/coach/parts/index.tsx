@@ -112,29 +112,6 @@ function asNumberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function formatDateTime(value: string | undefined): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatPercent(value: number | undefined): string | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return undefined;
-  }
-  return `${Math.round(value * 100)}%`;
-}
-
 function MarkdownPartRenderer({ part, context }: { part: MarkdownPart; context?: PartRenderContext }) {
   return <MessageRichContent body={part.content} language={context?.language ?? "en-US"} />;
 }
@@ -610,8 +587,6 @@ function ReasoningPartRenderer({ part, context }: { part: ReasoningPart; context
 }
 
 function TrainingCardPartRenderer({ part, context }: { part: TrainingCardPart; context?: PartRenderContext }) {
-  const difficultyTone =
-    part.difficulty === "hard" ? "fail" : part.difficulty === "medium" ? "warn" : "pass";
   const statusTone =
     part.status === "blocked"
       ? "fail"
@@ -628,24 +603,6 @@ function TrainingCardPartRenderer({ part, context }: { part: TrainingCardPart; c
     part.fallbackAction,
     part.nextAfterCompletion,
   ].filter(Boolean) as string[];
-  const reviewMeta = [
-    part.reviewSurfaceMode ? `${label(context?.language, "Surface")}: ${part.reviewSurfaceMode}` : undefined,
-    part.reviewSource ? `${label(context?.language, "Source")}: ${part.reviewSource}` : undefined,
-    part.dueAt ? `${label(context?.language, "Due")}: ${formatDateTime(part.dueAt)}` : undefined,
-    typeof part.intervalDays === "number"
-      ? `${label(context?.language, "Interval")}: ${part.intervalDays}d`
-      : undefined,
-    typeof part.stability === "number"
-      ? `${label(context?.language, "Stability")}: ${part.stability.toFixed(2)}`
-      : undefined,
-    typeof part.fsrsDifficulty === "number"
-      ? `${label(context?.language, "Difficulty")}: ${part.fsrsDifficulty.toFixed(2)}`
-      : undefined,
-    typeof part.retrievability === "number"
-      ? `${label(context?.language, "Recall")}: ${formatPercent(part.retrievability)}`
-      : undefined,
-    part.fsrsState ? `${label(context?.language, "FSRS")}: ${part.fsrsState}` : undefined,
-  ].filter(Boolean) as string[];
 
   return (
     <div className="message-part message-part--training-card">
@@ -653,20 +610,9 @@ function TrainingCardPartRenderer({ part, context }: { part: TrainingCardPart; c
         <strong>{part.title || label(context?.language, "Training card")}</strong>
         {part.status ? <StatusPill tone={statusTone}>{part.status}</StatusPill> : null}
       </div>
-      <p className="message-part__meta">
-        <code>{part.cardId}</code>
-        {part.cardType ? <span>{` | ${part.cardType}`}</span> : null}
-        {part.difficulty ? (
-          <>
-            <span> | </span>
-            <StatusPill tone={difficultyTone}>{part.difficulty}</StatusPill>
-          </>
-        ) : null}
-      </p>
       {primaryMeta ? <p className="message-part__meta">{primaryMeta}</p> : null}
       {part.whyNow ? <p>{part.whyNow}</p> : null}
       {part.reviewReason ? <p className="message-part__meta">{part.reviewReason}</p> : null}
-      {reviewMeta.length > 0 ? <p className="message-part__meta">{reviewMeta.join(" | ")}</p> : null}
       {part.problemStatement ? <p>{part.problemStatement}</p> : null}
       {actionItems.length > 0 ? (
         <ul className="message-part__list">

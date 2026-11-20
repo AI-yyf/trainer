@@ -121,7 +121,13 @@ export function LearningHome({
       data-template="LearningHome"
       data-plan-primary="true"
     >
-      {today ? (
+      {variant === "drawer" ? (
+        today?.detail || (title && title !== next.title) ? (
+          <p className="template-metadata learning-drawer__plan-context">
+            {today?.detail ?? title}
+          </p>
+        ) : null
+      ) : today ? (
         <section className="learning-today" data-learning-section="today" aria-label={today.eyebrow}>
           <div className="learning-today__copy">
             <div className="learning-today__heading">
@@ -130,14 +136,10 @@ export function LearningHome({
             </div>
             <h2>{today.title}</h2>
             {today.detail ? <p className="learning-today__detail">{today.detail}</p> : null}
-            {variant === "drawer" ? null : (
-              // The drawer owns the due-practice card, so the hero's review
-              // counters would repeat it. The page form keeps them.
-              <div className="learning-today__stats">
-                <span><strong>{today.due}</strong>{today.dueLabel}</span>
-                <span><strong>{today.remaining}</strong>{today.remainingLabel}</span>
-              </div>
-            )}
+            <div className="learning-today__stats">
+              <span><strong>{today.due}</strong>{today.dueLabel}</span>
+              <span><strong>{today.remaining}</strong>{today.remainingLabel}</span>
+            </div>
           </div>
           {today.total > 0 ? <div
             className="learning-today__ring"
@@ -175,7 +177,7 @@ export function LearningHome({
           data-learning-section="current"
           data-learning-card-group="current"
         >
-          {state ? state : <NextAction {...next} />}
+          {state ? state : <NextAction {...next} label={variant === "drawer" ? "" : next.label} />}
           {nextTools}
         </section>
         {variant === "drawer" ? (
@@ -189,7 +191,7 @@ export function LearningHome({
               </LearningCardGroup>
             ) : null}
             {route && !roadmap ? (
-              <LearningCardGroup id="route" label={route.label} count={route.count}>
+              <LearningCardGroup id="route" label={route.label} count={undefined}>
                 {route.content}
               </LearningCardGroup>
             ) : null}

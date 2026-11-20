@@ -71,7 +71,7 @@ export function InlinePracticeAnswer({
         id="inline-practice-answer-input"
         className="inline-practice-answer__input"
         value={value}
-        rows={3}
+        rows={2}
         disabled={busy}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}

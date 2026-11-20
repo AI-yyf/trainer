@@ -1788,9 +1788,11 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       if (message.type === "ui/restoreView") {
         const payload = sanitizeVisibleData(message.payload);
         const rawRequestedView =
-          typeof payload.activeView === "string"
-            ? payload.activeView
-            : state.layout.activeView;
+          payload.activeView === "practice"
+            ? "training"
+            : typeof payload.activeView === "string"
+              ? payload.activeView
+              : state.layout.activeView;
         const requestedSection = normalizeLearningSection(rawRequestedView);
         const requestedView = normalizeSidebarView(rawRequestedView);
         const restoredNextHop = payload.latestTrainingNextHop;

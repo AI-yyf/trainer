@@ -1823,9 +1823,10 @@ export function App() {
   }, [activeView, normalizedDraft]);
 
   const applyPlanComposerGuidance = (targetTitle: string) => {
-    setActiveView("plan");
+    closeLearningDrawer();
+    setActiveView("coach");
     setPendingPlanComposerDraftReplacement(undefined);
-    setComposerDraft(planText.stageGuidancePrompt(targetTitle), composerDockDraftScope("plan", composerSessionKey));
+    setComposerDraft(planText.stageGuidancePrompt(targetTitle), composerDockDraftScope("coach", composerSessionKey));
     requestCoachComposerFocus();
   };
   const requestPlanComposerGuidance = (
@@ -2816,9 +2817,16 @@ export function App() {
     selectedCardId: data.workspaceTrainingState?.selectedCardId,
     selection: data.memory.workspace?.liveTrainingSelection,
   });
+  const explicitTrainingRestoreLive = Boolean(
+    trainingRestoreContext?.target &&
+      restoredTrainingCard(
+        normalizeTrainingStateTextFields(data.workspaceTrainingState),
+        trainingRestoreContext,
+      ),
+  );
   const leftoverTrainingHandoffChromeNotLive = leftoverTrainingHandoffChromeIsNotLive(
     leftoverChromeIdentity,
-  ) && !independentTrainingSelectionLive;
+  ) && !independentTrainingSelectionLive && !explicitTrainingRestoreLive;
   const leftoverResourceSelectedDetailNotLive = leftoverResourceSelectedDetailIsNotLive(
     leftoverChromeIdentity,
   );
@@ -3666,10 +3674,11 @@ export function App() {
     coachContextTransition.conversationLength === data.conversation.length;
   const openPlanComposerMode = useCallback(
     (mode: PlanComposerMode) => {
-      const learningScope = composerDockDraftScope("plan", composerSessionKey);
+      const learningScope = composerDockDraftScope("coach", composerSessionKey);
       const existingLearningDraft = (layout.composerDraftScope === learningScope
         ? draft : layout.composerDrafts?.[learningScope] ?? "").trim();
-      setActiveView("plan");
+      closeLearningDrawer();
+      setActiveView("coach");
       setPlanComposerMode(mode);
       setCoachPlanContext(mode);
       // Never destroy an unsent Learning draft. The plan context chip still tells
@@ -3685,6 +3694,7 @@ export function App() {
     },
     [
       activeView,
+      closeLearningDrawer,
       composerSessionKey,
       draft,
       layout.composerDrafts,
@@ -5004,8 +5014,9 @@ export function App() {
   const hasTrainingCard = leftoverTrainingHandoffChromeNotLive
     ? false
     : Boolean(
-        trainingState?.selectedCardId?.trim() &&
-          (selectedTrainingCardCandidate || rawTrainingRouteCard),
+        (trainingState?.selectedCardId?.trim() &&
+          (selectedTrainingCardCandidate || rawTrainingRouteCard)) ||
+          (trainingRestoreContext?.target && restoredTrainingCardCandidate),
       );
   const hasRenderableTrainingCard = leftoverTrainingHandoffChromeNotLive
     ? false
@@ -5036,7 +5047,12 @@ export function App() {
   }, [hasTrainingCard, syncStatus, reviewArtifactForeground, trainingCardType,
     activeTrainingCardId, selectedTrainingCardCandidate, selectedTrainingRouteCard]);
   useEffect(() => {
-    if (activeView !== "training") {
+    const shouldPublishTrainingFacts =
+      activeView === "coach" &&
+      (hasTrainingCard ||
+        Boolean(trainingRestoreContext?.target) ||
+        (layout.learningDrawerOpen === true && layout.learningSection === "practice"));
+    if (!shouldPublishTrainingFacts) {
       return;
     }
     const scenarioLabVisible = Boolean(
@@ -5119,6 +5135,9 @@ export function App() {
     postDebugVisibleFacts({ activeView: "training", training: facts });
   }, [
     activeView,
+    hasTrainingCard,
+    layout.learningDrawerOpen,
+    layout.learningSection,
     selectedTrainingCardCandidate?.cardId,
     selectedTrainingCardCandidate?.title,
     trainingCardType,
@@ -9502,7 +9521,7 @@ export function App() {
       turnNextStepRequiresConfirmation={coachTurnNextStepRequiresConfirmation}
       resources={data.resources}
       footer={
-        hasTrainingCard ? (
+        hasTrainingCard || (trainingReviewQueueRequested && trainingReviewItems.length > 0) ? (
           <div className="inline-practice-slot" data-inline-practice="true">
             {renderTrainingView(true)}
             {trainingCardSettled ? (
@@ -10853,23 +10872,44 @@ export function App() {
       chooseWorkspace: openWorkspaceAdmission,
       configureProvider: openProviderSetup,
       restoreState: () => postMessage({ type: "request/bootstrap" }),
-      openTraining: () => setActiveView("training"),
+      openTraining: () => {
+        closeLearningDrawer();
+        setActiveView("coach");
+        window.requestAnimationFrame(() => {
+          document
+            .querySelector('[data-inline-practice="true"]')
+            ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      },
       resumePlan: () => handlePlanOrientationAction("unfreeze_plan"),
       resolveBlocker: () => handlePlanOrientationAction("clear_blocker"),
       adoptEvidence: (evidenceId) => postMessage({ type: "command/execute", payload: {
         commandId: trainerCommands.evidenceAdopt, payload: { evidenceId },
       } }),
       continueStep: (step) => {
+        closeLearningDrawer();
         if (planRuntimeStatus?.recovered && planRuntimeStatus.currentStep?.trim() === step) {
           handlePlanOrientationAction("continue_step");
         } else {
           requestPlanComposerGuidance(step, "stage");
         }
       },
-      continueWithoutPlan: () => handlePlanOrientationAction("continue_without_plan"),
-      startReview: () => useWorkbenchState.getState().openTrainingReviewQueue(),
-      returnToCoach: handleResumeTrainingInCoach,
-      generatePlan: () => handlePlanOrientationAction("generate_plan"),
+      continueWithoutPlan: () => {
+        closeLearningDrawer();
+        handlePlanOrientationAction("continue_without_plan");
+      },
+      startReview: () => {
+        useWorkbenchState.getState().openTrainingReviewQueue();
+        closeLearningDrawer();
+      },
+      returnToCoach: () => {
+        closeLearningDrawer();
+        handleResumeTrainingInCoach();
+      },
+      generatePlan: () => {
+        closeLearningDrawer();
+        handlePlanOrientationAction("generate_plan");
+      },
       confirmStep: () => openPlanComposerMode("explain"),
     },
   );
@@ -11299,6 +11339,7 @@ export function App() {
   const learningDrawerSections = useLearningDrawerSections({
     language: layout.composerLanguage,
     summary: learningSummary,
+    goalActionTitle: learningPrimaryAction.title,
     planDetail: renderPlanView(),
     operationMessage,
     operationMessageSurface,
@@ -11321,6 +11362,7 @@ export function App() {
     onReviewQueueStart: handleReviewQueueAction,
     onOpenReviewQueue: () => {
       useWorkbenchState.getState().openTrainingReviewQueue();
+      closeLearningDrawer();
     },
   });
 
