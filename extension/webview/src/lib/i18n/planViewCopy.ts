@@ -78,7 +78,7 @@ const planViewCopy: Record<ComposerLanguage, PlanViewCopy> = {
     subplanComplete: "这条子计划已完成。",
     subplanArchived: "这条子计划已归档。",
     projectSubplansLabel: "项目子计划",
-    practiceRecordsLabel: "练习记录确认",
+    practiceRecordsLabel: "练习记录",
     practiceStepLabel: "用训练卡练这一步",
     practiceStepDetail: "按当前计划步骤生成一张带验收的训练卡。",
     viewGrowth: "查看成长",

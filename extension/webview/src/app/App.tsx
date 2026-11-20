@@ -9510,6 +9510,7 @@ export function App() {
                 language={layout.composerLanguage}
                 rows={learningSummary.progressRows}
                 evidenceCount={learningSummary.evidenceCount}
+                achievement={learningSummary.latestAchievement}
                 onOpen={() => {
                   setOpenMenu(undefined);
                   openLearningDrawer("progress");
@@ -11208,7 +11209,7 @@ export function App() {
       planTitle: livePlanTitle,
       currentStep: learningFacts.plan.currentStep,
       frozen: livePlanFrozen,
-      dueCount: planReviewItems.filter((item) => item.surfaceMode === "due").length,
+      dueCount: planReviewItems.filter((item) => item.surfaceMode !== "ahead" && item.surfaceMode !== "digest").length,
       dueCardTitle: hasTrainingCard ? visibleTrainingCardTitle : undefined,
       projection: data.workspaceTrainingState?.skillProjection,
     }),

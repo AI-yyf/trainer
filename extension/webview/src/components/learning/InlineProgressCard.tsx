@@ -1,5 +1,5 @@
 import type { ComposerLanguage } from "../../lib/types";
-import type { LearningProgressRow } from "../../lib/learningSummary";
+import type { LearningProgressAchievement, LearningProgressRow } from "../../lib/learningSummary";
 
 const COPY: Record<ComposerLanguage, { title: string; evidence: string; open: string }> = {
   "zh-CN": { title: "进度已更新", evidence: "{n} 条证据", open: "查看成长" },
@@ -16,18 +16,25 @@ export interface InlineProgressCardProps {
   language: ComposerLanguage;
   rows: LearningProgressRow[];
   evidenceCount: number;
+  achievement?: LearningProgressAchievement;
   onOpen: () => void;
 }
 
 /**
- * The conversation's compact receipt for a completed practice. It does not
- * repeat the full growth page; it names the dimensions that now have evidence
- * and hands management to the learning drawer.
+ * The conversation's compact receipt for a completed practice. It leads with a
+ * single plain sentence traced to real evidence and hands heatmap drilldown to
+ * the learning drawer.
  */
-export function InlineProgressCard({ language, rows, evidenceCount, onOpen }: InlineProgressCardProps) {
+export function InlineProgressCard({
+  language,
+  rows,
+  evidenceCount,
+  achievement,
+  onOpen,
+}: InlineProgressCardProps) {
   const copy = COPY[language];
   const proven = rows.filter((row) => row.evidenceCount > 0);
-  if (proven.length === 0) {
+  if (proven.length === 0 && !achievement) {
     return null;
   }
   return (
@@ -36,14 +43,25 @@ export function InlineProgressCard({ language, rows, evidenceCount, onOpen }: In
         <strong>{copy.title}</strong>
         <span>{copy.evidence.replace("{n}", String(evidenceCount))}</span>
       </header>
-      <ul className="inline-progress-card__rows">
-        {proven.map((row) => (
-          <li key={row.label}>
-            <span>{row.label}</span>
-            <strong>{row.state}</strong>
-          </li>
-        ))}
-      </ul>
+      {achievement ? (
+        <p
+          className="inline-progress-card__sentence"
+          data-progress-sentence="true"
+          data-evidence-id={achievement.evidenceId}
+        >
+          {achievement.sentence}
+        </p>
+      ) : null}
+      {proven.length > 0 ? (
+        <ul className="inline-progress-card__rows">
+          {proven.map((row) => (
+            <li key={row.label}>
+              <span>{row.label}</span>
+              <strong>{row.state}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <button type="button" className="button button--ghost inline-progress-card__open" onClick={onOpen}>
         {copy.open}
       </button>

@@ -345,6 +345,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .learning-drawer .learning-card-group[data-learning-section="route"] .learning-card-group__cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .learning-card-group[data-learning-section="route"] .board-card--stage:has(details[open]) {
     grid-column: 1 / -1;
   }

@@ -1254,6 +1254,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   ) : null;
 
   const visibleStages = props.showRoadmap ? plan.stages : visibleRouteStages;
+  const pendingPlanChanges = planChangeCandidates.filter((candidate) => candidate.status === "pending");
+  const isDrawer = props.variant === "drawer";
   return (
     <LearningHome
       variant={props.variant ?? "page"}
@@ -1281,10 +1283,10 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           </div>
         ) : null}
       </>}
-      route={visibleStages.length ? { label: props.showRoadmap ? planViewText.roadmapStages : resolvedStagesLabel, count: visibleStages.length + (props.showRoadmap ? 0 : remainingRouteStages.length), content: <>
+      route={visibleStages.length ? { label: props.showRoadmap ? planViewText.roadmapStages : resolvedStagesLabel, count: visibleStages.length + (props.showRoadmap || isDrawer ? 0 : remainingRouteStages.length), content: <>
         {renderComposerDraftReplacement("stage")}
         {visibleStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={liveStageIsCurrent && stage.id === activeStage?.id} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
-        {!props.showRoadmap && remainingRouteStages.length > 0 ? (
+        {!props.showRoadmap && !isDrawer && remainingRouteStages.length > 0 ? (
           <details className="template-disclosure" data-learning-section="more-route-stages">
             <summary>{planCopy(language, "moreLabel")} ({remainingRouteStages.length})</summary>
             {remainingRouteStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={false} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
@@ -1306,74 +1308,80 @@ export function CoachPlanView(props: CoachPlanViewProps) {
           <button type="button" className="template-back" data-plan-growth-link="progress" onClick={() => props.onNavigateToView?.("progress")}>{planViewText.viewGrowth}</button>
         </div>
       ) }}
-      proof={hasProofDetails ? { label: `${templateCopy[language].proofPending} (${proofDebtCount})`, content: <>
+      proof={isDrawer ? undefined : hasProofDetails ? { label: `${templateCopy[language].proofPending} (${proofDebtCount})`, content: <>
         {reviewSupportRow ? <div className="learning-card-group__note" data-review-support-note="true">{renderNodeWithParagraph(reviewSupportRow.body)}</div> : null}
         {props.dueReviewItems?.slice(0, 2).map((item) => <article key={item.id} className="board-card board-card--review" data-board-card="review"><strong title={item.title}>{item.title}</strong><p title={compactReviewLane(item, language)}>{compactReviewLane(item, language)}</p></article>)}
-        {props.variant === "drawer" ? null : (
-          <button type="button" className="template-back" onClick={() => {
-            // Starting the queue is a governed action: the host records it, and
-            // the learner lands in the drawer's practice section where the
-            // accept/snooze decisions live. Inside the drawer the practice
-            // card owns that action, so the plan card does not repeat it.
-            const first = props.dueReviewItems?.[0];
-            props.onReviewQueueAction?.({
-              concept: first?.title ?? "",
-              action: "start",
-              focusArea: first?.focusArea,
-              taskHint: first?.taskHint,
-            });
-            useWorkbenchState.getState().openTrainingReviewQueue();
-          }}>{templateCopy[language].startReview}</button>
-        )}
+        <button type="button" className="template-back" onClick={() => {
+          const first = props.dueReviewItems?.[0];
+          props.onReviewQueueAction?.({
+            concept: first?.title ?? "",
+            action: "start",
+            focusArea: first?.focusArea,
+            taskHint: first?.taskHint,
+          });
+          useWorkbenchState.getState().openTrainingReviewQueue();
+        }}>{templateCopy[language].startReview}</button>
         {evidenceDebtCount > 0 ? evidenceDisclosure : null}
       </> } : undefined}
     >
       {leftoverNote ? <p className="template-metadata" data-plan-leftover-note="true" role="status" aria-live="polite">{leftoverNote}</p> : null}
       {renderComposerDraftReplacement("project-subplan")}
-      {hasSettledEvidence ? evidenceDisclosure : null}
-      {!props.showRoadmap && completedStages.length > 0 ? (
-        <details className="template-disclosure" data-learning-section="completed-stages">
-          <summary>{resolveStageStatusLabel("done", stageStatusLabels?.done, language)} ({completedStages.length})</summary>
-          {completedStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={false} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
-        </details>
-      ) : null}
-      {/* Starter templates are a page-mode entry. In the drawer every
-          adjustment starts from the composer, so the card carries no template
-          gallery. */}
-      {props.variant === "drawer" ? null : (
-        <details className="template-disclosure" data-learning-section="template">
-          <summary>{templateCopy[language].startFromTemplate}</summary>
-          {starterTemplateDefsFor(resolveStarterSubjectFamily(props.projection)).map((def) => (
-            <StarterTemplateArticle key={def.id} def={def} language={language} />
-          ))}
-        </details>
+      {isDrawer ? (
+        pendingPlanChanges.length > 0 ? (
+          <div className="coach-plan-view__pending-changes" data-plan-pending-changes="true">
+            {pendingPlanChanges.map((candidate) => (
+              <div key={candidate.id} className="board-card">
+                <p>{sanitizeErrorSurfaceText(candidate.reason, language)}</p>
+                <div className="coach-plan-view__evidence-actions">
+                  <ActionButton tone="ghost" label={planCopy(language, "adoptAdjustment")} onClick={() => onAcknowledgePlanChange?.(candidate.id)} />
+                  <ActionButton tone="ghost" label={planCopy(language, "dismissAdjustment")} onClick={() => onRejectPlanChange?.(candidate.id)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null
+      ) : (
+        <>
+          {hasSettledEvidence ? evidenceDisclosure : null}
+          {!props.showRoadmap && completedStages.length > 0 ? (
+            <details className="template-disclosure" data-learning-section="completed-stages">
+              <summary>{resolveStageStatusLabel("done", stageStatusLabels?.done, language)} ({completedStages.length})</summary>
+              {completedStages.map((stage) => <PlanStageSection key={stage.id} stage={stage} planId={plan.id} isActive={false} statusLabel={resolveStageStatusLabel(stage.status, stageStatusLabels?.[stage.status], language)} />)}
+            </details>
+          ) : null}
+          <details className="template-disclosure" data-learning-section="template">
+            <summary>{templateCopy[language].startFromTemplate}</summary>
+            {starterTemplateDefsFor(resolveStarterSubjectFamily(props.projection)).map((def) => (
+              <StarterTemplateArticle key={def.id} def={def} language={language} />
+            ))}
+          </details>
+          <details className="template-disclosure" data-plan-more-plans="true">
+            <summary>{templateCopy[language].morePlans}</summary>
+            <div>
+              <details className="template-disclosure"><summary>{t("globalPlanLabel")}</summary><div>{globalPlanContext}</div></details>
+              {projectSubplans.length > 0 ? <details className="template-disclosure coach-plan-view__project-subplans"><summary>{`${resolvedProjectSubplansLabel} (${projectSubplans.length})`}</summary><div>{projectSubplans.map((subplan) => {
+                const detail = projectSubplanDetail(subplan, language);
+                return <button key={subplan.id} type="button" className="template-back" disabled={!props.onProjectSubplanSelect} onClick={() => props.onProjectSubplanSelect?.(subplan)}><span>{subplan.title}</span>{detail ? <span className="template-metadata"> · {detail}</span> : null}</button>;
+              })}</div></details> : null}
+            </div>
+          </details>
+          <details className="template-disclosure" data-plan-governance-disclosure="true">
+            <summary>{resolvedDetailsSummaryLabel}</summary>
+            <div>
+              {backgroundRows.map((row) => <div key={row.id}>{renderNodeWithParagraph(row.body)}</div>)}
+              {noteRows.map((row) => <p key={row.id}>{row.label}: {row.value}</p>)}
+              {(actions ?? []).map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} detail={action.detail} disabled={action.disabled} onClick={action.onClick} />)}
+              {planChangeCandidates.map((candidate) => <div key={candidate.id}>
+                <p>{sanitizeErrorSurfaceText(candidate.reason, language)}</p>
+                {candidate.status === "pending" ? <>
+                  <ActionButton tone="ghost" label={planCopy(language, "adoptAdjustment")} onClick={() => onAcknowledgePlanChange?.(candidate.id)} />
+                  <ActionButton tone="ghost" label={planCopy(language, "dismissAdjustment")} onClick={() => onRejectPlanChange?.(candidate.id)} />
+                </> : null}
+              </div>)}
+            </div>
+          </details>
+        </>
       )}
-      <details className="template-disclosure" data-plan-more-plans="true">
-        <summary>{templateCopy[language].morePlans}</summary>
-        <div>
-          <details className="template-disclosure"><summary>{t("globalPlanLabel")}</summary><div>{globalPlanContext}</div></details>
-          {projectSubplans.length > 0 ? <details className="template-disclosure coach-plan-view__project-subplans"><summary>{`${resolvedProjectSubplansLabel} (${projectSubplans.length})`}</summary><div>{projectSubplans.map((subplan) => {
-            const detail = projectSubplanDetail(subplan, language);
-            return <button key={subplan.id} type="button" className="template-back" disabled={!props.onProjectSubplanSelect} onClick={() => props.onProjectSubplanSelect?.(subplan)}><span>{subplan.title}</span>{detail ? <span className="template-metadata"> · {detail}</span> : null}</button>;
-          })}</div></details> : null}
-        </div>
-      </details>
-      <details className="template-disclosure" data-plan-governance-disclosure="true">
-        {/* The drawer has no catch-all "More": the plan's own panel is named. */}
-        <summary>{props.variant === "drawer" ? planCopy(language, "planActionsLabel") : resolvedDetailsSummaryLabel}</summary>
-        <div>
-          {backgroundRows.map((row) => <div key={row.id}>{renderNodeWithParagraph(row.body)}</div>)}
-          {noteRows.map((row) => <p key={row.id}>{row.label}: {row.value}</p>)}
-          {(actions ?? []).map((action) => <ActionButton key={action.id} tone="ghost" label={action.label} detail={action.detail} disabled={action.disabled} onClick={action.onClick} />)}
-          {planChangeCandidates.map((candidate) => <div key={candidate.id}>
-            <p>{sanitizeErrorSurfaceText(candidate.reason, language)}</p>
-            {candidate.status === "pending" ? <>
-              <ActionButton tone="ghost" label={planCopy(language, "adoptAdjustment")} onClick={() => onAcknowledgePlanChange?.(candidate.id)} />
-              <ActionButton tone="ghost" label={planCopy(language, "dismissAdjustment")} onClick={() => onRejectPlanChange?.(candidate.id)} />
-            </> : null}
-          </div>)}
-        </div>
-      </details>
     </LearningHome>
   );
 }

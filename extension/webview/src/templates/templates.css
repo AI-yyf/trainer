@@ -180,6 +180,7 @@
 .inline-progress-card__header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .inline-progress-card__header strong { color: var(--fg-0); font-size: var(--trainer-font-xs); line-height: 1.4; }
 .inline-progress-card__header span { flex: none; color: var(--fg-muted); font-size: var(--trainer-font-2xs); font-variant-numeric: tabular-nums; }
+.inline-progress-card__sentence { margin: 0; color: var(--fg-0); font-size: var(--trainer-font-sm); line-height: 1.45; }
 .inline-progress-card__rows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .inline-progress-card__rows li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .inline-progress-card__rows span { color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.45; }
@@ -210,7 +211,8 @@
 .learning-strip__label { flex: none; color: var(--fg-muted); }
 /* Each of the three state fields keeps its own slot and truncates on its own,
    so a long goal never hides the step or the due count. */
-.learning-strip__item { display: inline-flex; min-width: 0; align-items: baseline; gap: 4px; }
+.learning-strip__item { display: inline-flex; flex: 0 1 auto; min-width: 0; overflow: hidden; align-items: baseline; gap: 4px; }
+.learning-strip__item[data-learning-strip-item="due"] { flex: none; overflow: visible; }
 .learning-strip__separator { flex: none; color: var(--fg-muted); }
 .learning-strip__title { min-width: 0; overflow: hidden; color: var(--fg-1); text-overflow: ellipsis; white-space: nowrap; }
 .learning-strip__due { flex: none; color: var(--fg-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -252,6 +254,7 @@
   font-variant-numeric: tabular-nums;
 }
 .learning-drawer__card-body { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.learning-drawer__progress-sentence { margin: 0; color: var(--fg-0); font-size: var(--trainer-font-sm); line-height: 1.45; }
 .learning-drawer__detail-label { color: var(--fg-2); margin-inline-end: 4px; }
 
 .learning-drawer__section { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-block: 14px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }

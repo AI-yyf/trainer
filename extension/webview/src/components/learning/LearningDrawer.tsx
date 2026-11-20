@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
+import type { LearningProgressAchievement } from "../../lib/learningSummary";
 import type { ComposerLanguage, LearningSection } from "../../lib/types";
 
 const COPY: Record<ComposerLanguage, {
@@ -154,6 +155,7 @@ const HEATMAP_LEVELS = [0, 1, 2];
 export interface LearningDrawerProgress {
   rows: LearningDrawerProgressRow[];
   evidenceCount: number;
+  achievement?: LearningProgressAchievement;
   actionLabel?: string;
   onAction?: () => void;
 }
@@ -263,6 +265,15 @@ export function LearningDrawer({ language, section, onSectionChange, goal, pract
         <div className="learning-drawer__card-body">
         {progress?.rows.length ? (
           <>
+            {progress.achievement ? (
+              <p
+                className="learning-drawer__progress-sentence"
+                data-progress-sentence="true"
+                data-evidence-id={progress.achievement.evidenceId}
+              >
+                {progress.achievement.sentence}
+              </p>
+            ) : null}
             {/* One heatmap: a column per dimension, the filled cells show how far
                 the capability has come (a band, never a fake percentage). */}
             <ul className="learning-drawer__heatmap">

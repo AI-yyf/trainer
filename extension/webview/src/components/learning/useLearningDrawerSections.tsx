@@ -5,7 +5,7 @@ import { templateCopy } from "../../templates/templateCopy";
 import { GOAL_MODE_COPY } from "../../lib/i18n/segments/coachInlineText";
 import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 import { operationStatusMessageText, type OperationMessageSurface } from "../../lib/operationMessageGovernance";
-import { isSameLearningFact, type LearningSummary } from "../../lib/learningSummary";
+import { isSameLearningFact, type LearningProgressAchievement, type LearningSummary } from "../../lib/learningSummary";
 import type { ComposerLanguage } from "../../lib/types";
 import type { TrainerOperationMessage } from "../../../../../shared/src/protocol";
 
@@ -68,6 +68,7 @@ export interface LearningDrawerSections {
   progress: {
     rows: LearningSummary["progressRows"];
     evidenceCount: number;
+    achievement?: LearningProgressAchievement;
   };
 }
 
@@ -160,6 +161,7 @@ export function useLearningDrawerSections(input: LearningDrawerSectionsInput): L
     progress: {
       rows: summary.progressRows,
       evidenceCount: summary.evidenceCount,
+      achievement: summary.latestAchievement,
     },
   };
 }
