@@ -1,4 +1,5 @@
 const { test, expect } = require("playwright/test");
+const { closeLearningDrawer } = require("./workbench-navigation");
 
 async function clickPracticeAction(page) {
   const action = page.getByRole('button', { name: '下一步：设为练习', exact: true });
@@ -103,7 +104,10 @@ test("a new practice stays unverified when an older card has completed Return", 
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }), {
     ...current, ...patch, conversation: [], sessionHistoryRestored: true,
   });
-  await expect(page.getByRole('heading', { name: '验证不可哈希边界', exact: true })).toBeVisible();
+  // The drawer's goal card carries the same title now; the inline practice
+  // card is the one that owns the verification action.
+  const inlineCard = page.locator('[data-training-card-id]');
+  await expect(inlineCard.getByRole('heading', { name: '验证不可哈希边界', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '验证当前文件', exact: true })).toBeVisible();
   await expect(page.getByPlaceholder('无需填写内容。核对可信验证结果后，点击完成回流。')).toHaveCount(0);
   await expect(page.getByText('OLD_TRUSTED_PROOF', { exact: true })).toHaveCount(0);
@@ -128,6 +132,9 @@ test('training reads Markdown and keeps Next below the card without management s
     },
   };
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }), data);
+  // The legacy training route opens the learning drawer; the inline card sits
+  // behind it, so the drawer is dismissed before reading the card itself.
+  await closeLearningDrawer(page);
   for (const [widthIndex, width] of [300, 360, 800].entries()) {
     await page.setViewportSize({ width, height: 760 });
     const face = page.locator('.template-focused-practice__phase');

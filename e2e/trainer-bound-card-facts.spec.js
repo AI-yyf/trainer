@@ -1,4 +1,16 @@
 const { test, expect } = require('playwright/test');
+const { closeLearningDrawer, openLearningDrawer } = require('./workbench-navigation');
+
+/**
+ * Learning is no longer a destination: the plan card lives in the learning
+ * drawer, which the learner opens from the header icon beside the history
+ * utility. The drawer overlays the shell, so it is closed before it is
+ * reopened on the goal section.
+ */
+async function openLearningGoal(page) {
+  await closeLearningDrawer(page);
+  await openLearningDrawer(page, 'goal');
+}
 
 // Authored values mirror the installed native mixed-language fixture. This
 // tests presentation/identity boundaries, never model or mastery quality.
@@ -49,6 +61,9 @@ async function seed(page, language, recovered, mode = 'matching') {
       },
     } });
   }, { author, recovered, mode });
+  // The legacy Training route opens the learning drawer, and the drawer
+  // overlays the shell: close it so the practice card is reachable again.
+  await closeLearningDrawer(page);
 }
 
 for (const language of ['zh-CN', 'en-US']) {
@@ -70,7 +85,7 @@ for (const language of ['zh-CN', 'en-US']) {
       const screenshot = test.info().outputPath('actual-mixed-author-card.png');
       await page.screenshot({ path: screenshot, animations: 'disabled' });
       await test.info().attach('actual-mixed-author-card', { path: screenshot, contentType: 'image/png' });
-      await page.locator('.app-shell-nav').getByRole('button', { name: language === 'zh-CN' ? '学习' : 'Learning', exact: true }).click();
+      await openLearningGoal(page);
       const primary = page.locator('[data-template=NextAction]').filter({ has: page.locator('[data-action-intent=resume_training]') });
       await expect(primary).toContainText(author.title);
       await primary.locator('[data-action-intent=resume_training]').click();
@@ -84,15 +99,19 @@ for (const mode of ['foreign', 'missing', 'stale']) {
   test(`unbound ${mode} practice cannot promote authored card facts`, async ({ page }) => {
     await seed(page, 'en-US', true, mode);
     const card = page.locator('.training-pane');
-    await expect(card).toBeVisible();
-    if (mode === 'missing') {
-      await expect(card).not.toHaveAttribute('data-training-card-id', /.+/);
+    if (mode === 'missing' || mode === 'stale') {
+      // No live selection: the Chat surface promotes no practice card at all.
+      await expect(card).toHaveCount(0);
     } else {
+      // The foreign card is not promoted: the slot keeps the empty face.
+      await expect(card).toBeVisible();
       await expect(card).toHaveAttribute('data-training-card-id', 'author-card');
+      await expect(card).not.toContainText(author.title);
     }
-    if (mode === 'stale') await expect(card).toHaveAttribute('data-training-leftover-not-live', 'true');
-    await expect(page.locator('.template-surface[data-surface=training]')).not.toContainText(author.title);
-    await expect(page.locator('.template-surface[data-surface=training]')).not.toContainText(author.deliverable);
+    // The practice card is inline in the Chat surface now; an unbound card
+    // never promotes the authored facts into it.
+    await expect(page.locator('[data-surface=coach]')).not.toContainText(author.title);
+    await expect(page.locator('[data-surface=coach]')).not.toContainText(author.deliverable);
   });
 }
 
@@ -162,6 +181,9 @@ async function seedRestoredScenario(page, language, nativeHost = false, verifica
   await page.evaluate(() => window.postMessage({ type: 'ui/restoreView', payload: {
     activeView: 'training', trainingRestoreTarget: 'scenario_lab', scenarioLabId: 'restored-scenario',
   } }, location.origin));
+  // The restored legacy route opens the learning drawer, and the drawer
+  // overlays the shell: close it so the practice card is reachable again.
+  await closeLearningDrawer(page);
   return foreignAction;
 }
 
@@ -190,7 +212,7 @@ for (const language of ['zh-CN', 'en-US']) {
     await expect(card).not.toContainText('foreign_workspace_id');
     await expect(details.locator('[data-training-card-fact=deliverable]')).toHaveText(scenarioSummary);
     await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('FastAPI receipt');
-    await page.locator('.app-shell-nav').getByRole('button', { name: language === 'zh-CN' ? '学习' : 'Learning', exact: true }).click();
+    await openLearningGoal(page);
     const next = page.locator('[data-template=NextAction]').filter({ has: page.locator('[data-action-intent=resume_training]') });
     await expect(next).toContainText('Scenario lab: FastAPI receipt');
     await next.locator('[data-action-intent=resume_training]').click();
@@ -216,11 +238,16 @@ for (const language of ['zh-CN', 'en-US']) {
       const card = page.locator('[data-training-card-id]');
       await expect(card).toHaveAttribute('data-training-card-id', 'restored-scenario');
       if (language === 'zh-CN') {
-        const composer = page.locator('#coach-composer');
         await expect(page.locator('textarea:visible')).toHaveCount(1);
-        await composer.fill('我已经在 VS Code 里完成了，帮我验证。');
-        await composer.press('Enter');
-        await expect(page.getByTestId('trainer-view-nav-plan')).toHaveAttribute('aria-current', 'page');
+        // The card owns the verification action now: a bound evaluation is
+        // always started from the card, never from the dock composer.
+        await card.getByRole('button', { name: '验证当前文件', exact: true }).click();
+        // Learning is not a destination: the conversation keeps the learner
+        // and the learning content lives in the drawer.
+        await expect(page.getByTestId('trainer-view-nav-coach')).toHaveAttribute('aria-current', 'page');
+        await openLearningDrawer(page, 'practice');
+        await expect(page.locator('[data-learning-section="practice"]')).toBeVisible();
+        await closeLearningDrawer(page);
       } else {
         await card.getByRole('button', { name: 'Verify current file', exact: true }).click();
       }
@@ -240,10 +267,10 @@ for (const language of ['zh-CN', 'en-US']) {
 }
 
 const linkLabels = {
-  'zh-CN': ['训练', '成长'], 'en-US': ['Training', 'Growth'],
-  'es-ES': ['Entrenamiento', 'Crecimiento'], 'fr-FR': ['Entraînement', 'Progression'],
-  'de-DE': ['Training', 'Entwicklung'], 'ja-JP': ['訓練', '成長'],
-  'ko-KR': ['훈련', '성장'], 'pt-BR': ['Treinamento', 'Crescimento'],
+  'zh-CN': ['到期练习', '成长进度'], 'en-US': ['Due practice', 'Growth'],
+  'es-ES': ['Práctica pendiente', 'Progreso'], 'fr-FR': ['Pratique à faire', 'Progression'],
+  'de-DE': ['Fällige Übung', 'Fortschritt'], 'ja-JP': ['期限の練習', '成長'],
+  'ko-KR': ['예정된 연습', '성장'], 'pt-BR': ['Prática pendente', 'Progresso'],
 };
 const continueCopy = {
   'zh-CN': '可以继续当前练习。', 'en-US': 'You can continue the current practice.',
@@ -255,33 +282,41 @@ for (const language of Object.keys(continueCopy)) {
   test(`current recovered practice note and independent Learning links ${language}`, async ({ page }) => {
     await page.setViewportSize({ width: 340, height: 820 });
     await seed(page, language, true);
-    await page.locator('[data-testid=trainer-view-nav-plan]').click();
+    await openLearningGoal(page);
     const primary = page.locator('[data-action-intent=resume_training]');
     await expect(primary).toBeEnabled();
     await expect(page.locator('[data-plan-leftover-note]')).toHaveText(continueCopy[language]);
-    const links = page.locator('[data-learning-navigation=practice-growth]');
-    await expect(links.getByRole('button')).toHaveCount(2);
-    const practice = links.locator('[data-learning-link=training]');
-    const growth = links.locator('[data-learning-link=progress]');
-    await expect(practice).toHaveAccessibleName(linkLabels[language][0]);
-    await expect(growth).toHaveAccessibleName(linkLabels[language][1]);
-    const bounds = await links.evaluate(el => {
-      const [first, second] = Array.from(el.querySelectorAll('button')).map(button => button.getBoundingClientRect());
-      return { gap: second.x - first.right, sameRow: Math.abs(second.y - first.y) < 1,
-        display: getComputedStyle(el).display, scrollWidth: el.scrollWidth, width: el.clientWidth };
+    // Practice and growth are two sections of the one learning drawer now:
+    // the plan card does not repeat them as links.
+    const practice = page.locator('[data-learning-section="practice"]');
+    const growth = page.locator('[data-learning-section="progress"]');
+    await expect(practice).toBeVisible();
+    await expect(growth).toBeVisible();
+    await expect(practice.getByRole('heading')).toHaveText(linkLabels[language][0]);
+    await expect(growth.getByRole('heading')).toHaveText(linkLabels[language][1]);
+    const bounds = await page.evaluate(() => {
+      const cards = ['practice', 'progress'].map(key =>
+        document.querySelector(`[data-learning-section="${key}"]`));
+      const headings = cards.map(card => card.querySelector('.learning-drawer__card-title'));
+      const [first, second] = headings.map(node => node.getBoundingClientRect());
+      return {
+        leftEdges: headings.map(node => Math.round(node.getBoundingClientRect().left)),
+        sameColumn: Math.abs(first.x - second.x) < 1,
+        overflow: cards.map(card => card.scrollWidth - card.clientWidth),
+      };
     });
-    expect(bounds.display).toBe('flex'); expect(bounds.sameRow).toBe(true); expect(bounds.gap).toBeGreaterThanOrEqual(11.5);
-    expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width);
+    expect(bounds.sameColumn).toBe(true);
+    expect(new Set(bounds.leftEdges).size).toBe(1);
+    expect(Math.max(...bounds.overflow)).toBeLessThanOrEqual(0);
     if (language === 'zh-CN' || language === 'en-US') {
       const shot = test.info().outputPath('current-practice-note-and-links.png');
       await page.screenshot({ path: shot, animations: 'disabled' });
       await test.info().attach('current-practice-note-and-links', { path: shot, contentType: 'image/png' });
     }
-    await practice.click();
+    // The practice card stays the learner's foreground work, and growth stays
+    // one drawer section away.
     await expect(page.locator('[data-training-card-id]')).toHaveAttribute('data-training-card-id', 'author-card');
-    await page.locator('[data-testid=trainer-view-nav-plan]').click();
-    await growth.click();
-    await expect(page.locator('[data-template=GrowthEvidence]')).toBeVisible();
+    await expect(growth).toBeVisible();
   });
 }
 
@@ -305,7 +340,7 @@ for (const blocked of ['stale', 'busy', 'return_pending', 'no_live_card']) {
         } });
       }
     }, blocked);
-    await page.locator('[data-testid=trainer-view-nav-plan]').click();
+    await openLearningGoal(page);
     await expect(page.locator('[data-plan-leftover-note]')).not.toHaveText(continueCopy['en-US']);
   });
 }
@@ -350,6 +385,9 @@ async function seedRemoteScenario(page, language) {
   }, { scope: remoteScope, summary: scenarioSummary });
   await expect.poll(() => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.some(message =>
     message.type === 'state/ack' && message.payload.status === 'applied' && message.payload.messageId === 'remote-fixture-1'))).toBe(true);
+  // The restored legacy route opens the learning drawer, and the drawer
+  // overlays the shell: close it so the practice card is reachable again.
+  await closeLearningDrawer(page);
   await expect(page.locator('[data-training-card-id]')).toHaveAttribute('data-training-card-id', 'restored-scenario');
 }
 async function remoteClick(page) {
@@ -388,16 +426,24 @@ for (const language of Object.keys(mismatchCopy)) {
       payload: { tone: 'error', message: '[[trainer-training-verification-target-mismatch]]' } }, location.origin), posted.operation);
     const card = page.locator('[data-training-card-id=restored-scenario]');
     await expect(card.getByRole('button', { name: /fixture-ssh/ })).toBeEnabled();
-    await expect(page.locator('.template-global-state')).toContainText(mismatchCopy[language]);
+    // The mismatch notice is Training-scoped. Training now lives in the
+    // learning drawer's practice section, so that is where the notice must
+    // appear — never as a global error.
+    await openLearningDrawer(page, 'practice');
+    await expect(page.locator('[data-template="LearningDrawer"] [data-learning-section="practice"]')).toContainText(mismatchCopy[language]);
     await expect(page.locator('[data-template=VerificationResult]')).toHaveCount(0);
     await expect(page.locator('#root')).not.toContainText('[[trainer-');
     if (language === 'zh-CN' || language === 'en-US') {
-      await page.locator('.template-global-state').scrollIntoViewIfNeeded();
+      // The notice lives in the drawer's practice section, so that is what the
+      // visual record must capture.
+      await page.locator('[data-template="LearningDrawer"] [data-learning-section="practice"]').scrollIntoViewIfNeeded();
       const shot = test.info().outputPath('remote-mismatch-current-training.png');
       await page.screenshot({ path: shot, animations: 'disabled' });
       await test.info().attach('remote-mismatch-current-training', { path: shot, contentType: 'image/png' });
     }
+    await closeLearningDrawer(page);
     await page.locator('[data-testid=trainer-view-nav-coach]').click();
+    // The notice must never fall back to a global error banner.
     await expect(page.locator('.template-global-state')).toHaveCount(0);
     await expect(page.locator('[data-surface=coach]')).not.toContainText(mismatchCopy[language]);
   });
@@ -445,6 +491,9 @@ test('remote A-B-A ignores old same-card events and failure without cancelling a
             learningFamily: 'code', filesToTouch: ['receipt.py'], focusArea: 'FastAPI receipt' } } } }, location.origin);
       window.postMessage({ type: 'ui/restoreView', payload: { activeView: 'training', trainingRestoreTarget: 'scenario_lab', scenarioLabId: cardId } }, location.origin);
     }, { revision, cardId, scope: remoteScope, summary: scenarioSummary });
+    // The restored legacy route opens the learning drawer, and the drawer
+    // overlays the shell: close it so the card is reachable again.
+    await closeLearningDrawer(page);
     await expect(page.locator('[data-training-card-id]')).toHaveAttribute('data-training-card-id', cardId);
     await expect(page.locator('[data-training-card-id]').getByRole('button', { name: /fixture-ssh/ })).toBeEnabled();
   }

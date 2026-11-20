@@ -108,28 +108,42 @@ test("Goal mode keeps an existing draft and explicitly sends the first goal as c
   await page.goto("/vscode-preview.html?view=coach&scenario=ready&lang=zh-CN&connection=connected");
   const composer = page.locator("#coach-composer");
   const goal = "制定学习计划来掌握 Python 锁";
-  const bar = page.locator("[data-goal-bar=true]");
+  // Goal state is learning state: it reads in the learning strip and its
+  // controls live in the learning drawer. The bar above the composer is gone.
+  const strip = page.locator('[data-learning-strip="true"]');
   const openGoalMode = async () => {
     await page.getByRole("button", { name: "添加", exact: true }).click();
     await page.getByRole("menuitemcheckbox", { name: "目标模式", exact: true }).click();
   };
+  const openGoalSection = async () => {
+    await page.getByTestId("trainer-learning-toggle").click();
+    await expect(page.locator('[data-learning-section="goal"]')).toBeVisible();
+  };
+  const closeDrawer = async () => {
+    await page.locator(".app-shell-overlay__close").first().click();
+    await expect(page.locator('[data-template="LearningDrawer"]')).toHaveCount(0);
+  };
   await composer.fill(goal);
   await openGoalMode();
-  await expect(bar).toHaveAttribute("data-goal-pending", "true");
+  // Goal mode keeps the learner's own words in the composer. The removed
+  // goal bar was the only pending indicator; the strip reads *learning*
+  // state, so it is asserted once the goal is actually recorded.
   await expect(composer).toBeFocused();
   await expect(composer).toHaveValue(goal);
-  await bar.getByRole("button", { name: "退出目标模式" }).click();
-  await expect(bar).toHaveCount(0);
-  await expect(composer).toHaveValue(goal);
-  await openGoalMode();
   await composer.press("Enter");
-  await expect(bar).toHaveAttribute("data-goal-pending", "false");
-  await expect(bar).toContainText(goal);
+  await expect(composer).toHaveValue("");
   await expect(page.locator("main").getByText(goal, { exact: true })).toBeVisible();
-  await bar.getByRole("button", { name: "暂停目标" }).click();
-  await expect(bar).toHaveAttribute("data-goal-paused", "true");
-  await bar.getByRole("button", { name: "继续目标" }).click();
-  await expect(bar).toHaveAttribute("data-goal-paused", "false");
-  await bar.getByRole("button", { name: "结束目标" }).click();
-  await expect(bar).toHaveCount(0);
+  await openGoalSection();
+  await page.locator('[data-goal-control="pause"]').click();
+  await closeDrawer();
+  await openGoalSection();
+  await expect(page.locator('[data-goal-control="resume"]')).toBeVisible();
+  await page.locator('[data-goal-control="resume"]').click();
+  await closeDrawer();
+  await openGoalSection();
+  await expect(page.locator('[data-goal-control="pause"]')).toBeVisible();
+  await page.locator('[data-goal-control="clear"]').click();
+  await closeDrawer();
+  // The goal is ended: the learning strip no longer carries it.
+  await expect(strip).not.toContainText(goal);
 });

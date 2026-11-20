@@ -1,13 +1,21 @@
 const { openSettingsCategory } = require("./template-navigation");
 const { planOnlyFixture } = require('./learning-fixtures');
+const {
+  closeLearningDrawer,
+  expectTwoPrimaryDestinations: expectTwoPrimaryDestinationContract,
+  openLearningDrawer,
+} = require("./workbench-navigation");
 /**
- * Trainer E2E acceptance coverage for the three-destination sidebar shell with six internal routes.
+ * Trainer E2E acceptance coverage for the two-destination sidebar shell with six internal routes.
  * Run: npx playwright test e2e/trainer.spec.js
  */
 
 const { test, expect } = require("playwright/test");
 
 const PREVIEW_PATH = "/vscode-preview.html";
+
+/** Legacy learning routes resolve to Chat with the learning drawer open. */
+const LEGACY_LEARNING_ROUTES = ["plan", "training", "progress"];
 
 const VIEW_LABELS = {
   "zh-CN": {
@@ -121,26 +129,30 @@ async function openPreview(page, view, params = {}) {
   await expect(page.locator("body")).toBeVisible();
 }
 
-async function expectActiveView(page, language, view) {
-  const destination = ["training", "progress"].includes(view) ? "plan" : view;
+async function expectActiveView(page, language, view, options = {}) {
+  // Legacy learning routes resolve to Chat with the learning drawer open.
+  const destination = LEGACY_LEARNING_ROUTES.includes(view) ? "coach" : view;
   const navigationItem = page.getByTestId(viewNavigationTestId(destination));
   await expect(navigationItem).toHaveAttribute("aria-current", "page");
   await expect(navigationItem).toHaveAttribute(
     "aria-label",
     VIEW_LABELS[language][destination],
   );
+  // A test that closed the drawer to work in the conversation opts out.
+  if (LEGACY_LEARNING_ROUTES.includes(view) && !options.drawerClosed) {
+    await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  }
 }
 
-async function expectThreePrimaryDestinations(page, language) {
-  const views = ["coach", "plan", "resources"];
+async function expectTwoPrimaryDestinations(page, language) {
+  await expectTwoPrimaryDestinationContract(page);
+  const views = ["coach", "resources"];
   const tabs = page.locator(".app-shell-nav button");
-  await expect(tabs).toHaveCount(3);
   for (let i = 0; i < views.length; i++) {
     await expect(tabs.nth(i)).toBeVisible();
     await expect(tabs.nth(i)).toHaveAttribute("aria-label", VIEW_LABELS[language][views[i]]);
   }
   await expect(page.getByTestId("trainer-view-nav-settings")).toHaveAttribute("aria-label", VIEW_LABELS[language].settings);
-  await expect(page.getByTestId("trainer-history-toggle")).toBeVisible();
 }
 
 async function expectHeaderLabelsVisible(page) {
@@ -228,14 +240,23 @@ async function expectTrainingCardFacts(card) {
 }
 
 async function openPlanGovernanceDisclosure(page) {
-  // Learning folds governance under "More" now; open that outer disclosure
-  // before touching the plan-intent summary.
+  // The drawer has no catch-all disclosure: governance actions live next to
+  // the state they belong to.
   const focusMore = page.locator('[data-learning-focus-more]').first();
   if ((await focusMore.count()) > 0 && (await focusMore.getAttribute('open')) === null) {
     await focusMore.locator(':scope > summary').click();
   }
   const more = page.locator('[data-plan-governance-disclosure]');
   await more.locator(':scope > summary').click();
+}
+
+/** Open the learning card group's outer "More" disclosure in the drawer. */
+async function openLearningMore(page) {
+  const focusMore = page.locator('[data-learning-focus-more]').first();
+  if ((await focusMore.count()) === 0) return;
+  if ((await focusMore.getAttribute('open')) === null) {
+    await focusMore.locator(':scope > summary').click();
+  }
 }
 
 async function submitPlanComposerRequest(page, mode, message) {
@@ -249,8 +270,13 @@ async function submitPlanComposerRequest(page, mode, message) {
     return false;
   }
   await action.click();
-  await expect(page.getByTestId('trainer-view-nav-plan')).toHaveAttribute('aria-current', 'page');
-  await expect(page.locator('.template-context:not([data-dock-anchor])')).toContainText(mode === 'generate' ? 'Generate' : 'Explain');
+  // Learning is not a destination any more: the plan intent lands on Chat
+  // with the learning drawer open on the goal section.
+  await expect(page.getByTestId('trainer-view-nav-coach')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  // The drawer overlays the shell: close it before the learner writes in the
+  // composer.
+  await closeLearningDrawer(page);
   const userCountBefore = await page.evaluate(() =>
     window.__TRAINER_BOOTSTRAP__?.conversation?.filter((entry) => entry.role === "user").length ?? 0,
   );
@@ -278,9 +304,9 @@ async function submitPlanComposerRequest(page, mode, message) {
   return true;
 }
 
-test.describe("Trainer three-destination shell", () => {
+test.describe("Trainer two-destination shell", () => {
   for (const language of ["zh-CN", "en-US"]) {
-    test(`exposes the three localized primary destinations in ${language}`, async ({ page }) => {
+    test(`exposes the two localized primary destinations in ${language}`, async ({ page }) => {
       const errors = attachConsoleErrorCollector(page);
 
       await openPreview(page, "coach", {
@@ -289,7 +315,7 @@ test.describe("Trainer three-destination shell", () => {
         connection: "connected",
       });
 
-      await expectThreePrimaryDestinations(page, language);
+      await expectTwoPrimaryDestinations(page, language);
       await expectActiveView(page, language, "coach");
       await expectNoHorizontalOverflow(page);
       await expectNoConsoleErrors(errors);
@@ -307,7 +333,7 @@ test.describe("Trainer three-destination shell", () => {
     await expect.poll(() =>
       page.evaluate(() => window.__TRAINER_BOOTSTRAP__?.connection?.state),
     ).toBe("connected");
-    await expect(page.getByRole("textbox")).toBeEnabled();
+    await expect(page.locator("#coach-composer")).toBeEnabled();
     await expectNoConsoleErrors(errors);
   });
 
@@ -356,7 +382,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("keeps three primary destinations, persists the active view, and omits the Settings composer", async ({ page }) => {
+  test("keeps two primary destinations, persists the active view, and omits the Settings composer", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await openPreview(page, undefined, {
@@ -365,11 +391,11 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    for (const view of ["coach", "plan", "resources"]) {
+    for (const view of ["coach", "resources"]) {
       const tabs = page
         .locator(".app-shell-nav")
-        .getByTestId(/^trainer-view-nav-(coach|plan|resources|training)$/);
-      await expectThreePrimaryDestinations(page, "en-US");
+        .getByTestId(/^trainer-view-nav-(coach|resources)$/);
+      await expectTwoPrimaryDestinations(page, "en-US");
 
       await page.getByTestId(viewNavigationTestId(view)).click();
       await expectActiveView(page, "en-US", view);
@@ -378,6 +404,15 @@ test.describe("Trainer three-destination shell", () => {
       await expect(page.locator("[data-dock-send-preference]")).toHaveCount(0);
     }
 
+    // The legacy learning route is not a destination: it resolves to Chat with
+    // the learning drawer open on the goal section.
+    await page.getByTestId(viewNavigationTestId("coach")).click();
+    await openLearningDrawer(page, "goal");
+    await expectActiveView(page, "en-US", "plan");
+    await expect(page.locator(".composer-shell")).toHaveCount(1);
+    await expect(page.locator("[data-dock-send-preference]")).toHaveCount(0);
+    await closeLearningDrawer(page);
+
     // Settings lives in the header gear and is not a chat surface.
     await page.getByTestId("trainer-view-nav-settings").click();
     await expectActiveView(page, "en-US", "settings");
@@ -385,13 +420,13 @@ test.describe("Trainer three-destination shell", () => {
 
     await page.reload();
     await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-    await expectThreePrimaryDestinations(page, "en-US");
+    await expectTwoPrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "settings");
     await expect(page.locator(".composer-shell")).toHaveCount(0);
     await expectNoConsoleErrors(errors);
   });
 
-  test("Learning replies stay in Learning and are kept out of the Coach conversation", async ({ page }) => {
+  test("learning replies land in the Chat conversation and stay there", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await openPreview(page, "plan", {
@@ -401,14 +436,16 @@ test.describe("Trainer three-destination shell", () => {
     });
     await expectActiveView(page, "en-US", "plan");
 
+    // The learning drawer overlays the shell: close it to work in the
+    // conversation.
+    await closeLearningDrawer(page);
     const prompt = "How should I reason about the current learning step?";
     await page.locator("#coach-composer").fill(prompt);
     await page.locator(".composer__send").click();
-    await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
-    await expect(page.locator('[data-view-agent-reply="plan"] .message-bubble__body')).toBeVisible({ timeout: 30000 });
-    await page.getByTestId("trainer-view-nav-coach").click();
-    await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-    await expect(page.locator('[data-surface="coach"]').getByText(prompt, { exact: true })).toHaveCount(0);
+    // Learning replies live in the main conversation flow now.
+    await expect(page.locator('[data-surface="coach"] .message-bubble__body').last()).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('[data-surface="coach"]').getByText(prompt, { exact: true })).toHaveCount(1);
+    await expectActiveView(page, "en-US", "coach");
     await expectNoConsoleErrors(errors);
   });
 
@@ -424,6 +461,7 @@ test.describe("Trainer three-destination shell", () => {
     const cardBefore = await page.evaluate(
       () => window.__TRAINER_BOOTSTRAP__?.workspaceTrainingState?.selectedCardId ?? null,
     );
+    const inlineCardsBefore = await page.locator('[data-template="FocusedPractice"]').count();
 
     await page.locator("#coach-composer").fill("Give me a practice exercise about thread locks.");
     const bubblesBefore = await page.locator(".message-bubble__body").count();
@@ -436,7 +474,9 @@ test.describe("Trainer three-destination shell", () => {
       { timeout: 30000 },
     ).toBeGreaterThan(bubblesBefore);
     await expectActiveView(page, "en-US", "coach");
-    await expect(page.locator('[data-template="FocusedPractice"]')).toHaveCount(0);
+    // The practice card that already lives in Chat is untouched: the exercise
+    // request minted no new one.
+    expect(await page.locator('[data-template="FocusedPractice"]').count()).toBe(inlineCardsBefore);
     const cardAfter = await page.evaluate(
       () => window.__TRAINER_BOOTSTRAP__?.workspaceTrainingState?.selectedCardId ?? null,
     );
@@ -444,7 +484,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("Learning presents progress, practice, and long-term plan as three in-place views", async ({ page }) => {
+  test("Learning presents progress, practice, and goals as three drawer sections", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await openPreview(page, "plan", {
@@ -454,58 +494,65 @@ test.describe("Trainer three-destination shell", () => {
     });
     await expectActiveView(page, "zh-CN", "plan");
 
-    // P1: 进度 / 练习 / 长期规划 are three views of one Learning stream.
-    const tablist = page.getByRole("tablist", { name: "当前学习" });
-    await expect(tablist).toBeVisible();
-    await expect(tablist.getByRole("tab", { name: "长期规划", exact: true })).toHaveAttribute("aria-selected", "true");
+    // P1: 进度 / 练习 / 目标 are three sections of one learning drawer, not
+    // three tabs and not three destinations.
+    const drawer = page.locator('[data-template="LearningDrawer"]');
+    await expect(drawer).toBeVisible();
+    for (const section of ["goal", "practice", "progress"]) {
+      await expect(page.locator(`[data-template="LearningDrawer"] > [data-learning-section="${section}"]`)).toBeVisible();
+    }
+    await expect(page.getByRole("tablist", { name: "当前学习" })).toHaveCount(0);
 
-    await tablist.getByRole("tab", { name: "进度", exact: true }).click();
-    await expectActiveView(page, "zh-CN", "progress");
-    await expect(tablist.getByRole("tab", { name: "进度", exact: true })).toHaveAttribute("aria-selected", "true");
-
-    await tablist.getByRole("tab", { name: "练习", exact: true }).click();
-    await expectActiveView(page, "zh-CN", "training");
-    await expect(tablist.getByRole("tab", { name: "练习", exact: true })).toHaveAttribute("aria-selected", "true");
-
-    // Three views, one unified composer.
+    // Three sections, one unified composer.
     await expect(page.locator("#coach-composer")).toHaveCount(1);
     await expectNoConsoleErrors(errors);
   });
 
-  test("comparing library papers keeps the Learning composer and reply in place", async ({ page }) => {
+  test("comparing library papers keeps the shared composer and reply in place", async ({ page }) => {
     await page.setViewportSize({ width: 420, height: 761 });
     await openPreview(page, "plan", { lang: "en-US", scenario: "ready", connection: "connected" });
+    // The learning drawer overlays the shell: close it to work in the
+    // conversation.
+    await closeLearningDrawer(page);
     const input = page.locator('#coach-composer');
     await input.evaluate((element) => element.dataset.libraryAnalysisProbe = "same-composer");
     await input.fill("Search my library for papers about sequence modeling and compare their approaches.");
     await page.locator(".composer__send").click();
 
-    const reply = page.locator('[data-view-agent-reply="plan"] .message-bubble__body');
-    await expect(reply).toBeVisible();
+    const reply = page.locator('[data-surface="coach"] .message-bubble__body').filter({ visible: true }).last();
+    await expect(reply).toBeVisible({ timeout: 30000 });
     await expect(reply).toBeInViewport();
-    await expectActiveView(page, "en-US", "plan");
+    await expectActiveView(page, "en-US", "coach");
     await expect(input).toHaveAttribute("data-library-analysis-probe", "same-composer");
     const replyText = await reply.textContent();
     expect(replyText.trim()).not.toBe("");
 
+    // The drawer overlays the shell: close it before using the nav.
+    await closeLearningDrawer(page);
     await page.getByTestId(viewNavigationTestId("resources")).click();
-    await expect(page.locator('[data-view-agent-reply="resources"] .message-bubble__body')).toHaveCount(0);
-    await page.getByTestId(viewNavigationTestId("plan")).click();
+    await expect(page.locator('[data-surface="resources"] .message-bubble__body')).toHaveCount(0);
+    // The reply belongs to the one conversation: it comes back unchanged.
+    await page.getByTestId(viewNavigationTestId("coach")).click();
+    await expect(reply).toHaveText(replyText);
+    await openLearningDrawer(page, "goal");
     await expect(reply).toHaveText(replyText);
   });
 
-  test("searching the library from Learning shows sources without navigating away", async ({ page }) => {
+  test("searching the library from the composer shows the sources in Resources", async ({ page }) => {
     await page.setViewportSize({ width: 420, height: 761 });
     await openPreview(page, "plan", { lang: "en-US", scenario: "resource-preview-loaded", connection: "connected" });
+    // The learning drawer overlays the shell: close it to work in the
+    // conversation.
+    await closeLearningDrawer(page);
     const input = page.locator('#coach-composer');
     await input.evaluate((element) => element.dataset.librarySearchProbe = "same-composer");
     await input.fill("/search Coach prompt patterns");
     await page.locator(".composer__send").click();
 
-    const results = page.locator('[data-learning-library-search="true"]');
-    await expect(results.getByRole("button", { name: /open.*coach prompt patterns/i })).toBeVisible();
-    await expect(results.getByRole("button", { name: /open.*coach prompt patterns/i })).toBeInViewport();
-    await expectActiveView(page, "en-US", "plan");
+    // The library search belongs to the Resources destination now.
+    const results = page.locator('[data-surface="resources"]');
+    await expect(results.getByRole("button", { name: /coach prompt patterns/i }).first()).toBeVisible();
+    await expectActiveView(page, "en-US", "resources");
     await expect(input).toHaveAttribute("data-library-search-probe", "same-composer");
     await input.fill("/search a source that definitely does not exist");
     await page.locator(".composer__send").click();
@@ -527,7 +574,7 @@ test.describe("Trainer three-destination shell", () => {
 
     await page.reload();
     await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-    await expectThreePrimaryDestinations(page, "en-US");
+    await expectTwoPrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "coach");
     await expect(page.locator(".composer-shell")).toBeVisible();
     await expectNoConsoleErrors(errors);
@@ -553,7 +600,13 @@ test.describe("Trainer three-destination shell", () => {
       await expectActiveView(page, "en-US", "plan");
 
       await expect(page.locator("[data-template=LearningHome]").first()).toBeVisible();
-      await expect(page.getByRole("region", { name: "Today's learning", exact: true })).toBeVisible();
+      // The route group is a collapsible card inside the learning drawer.
+      await openLearningMore(page);
+      const route = page.locator('[data-learning-section="route"]');
+      // The route group is a plain row group in the drawer: the live stages are
+      // readable without opening a fold.
+      await expect(route.locator(':scope > summary')).toHaveCount(0);
+      await expect(page.locator('[data-learning-section="route"] [data-plan-stage]').first()).toBeVisible();
       await expect(page.locator("[data-template=NextAction]").first()).toBeVisible();
       await expect(page.locator("[data-plan-governance-disclosure]")).not.toHaveAttribute("open", "");
       await expect(page.locator("[data-plan-evidence-list]").filter({ visible: true })).toHaveCount(0);
@@ -589,7 +642,7 @@ test.describe("Trainer three-destination shell", () => {
       await expect.poll(() =>
         page.evaluate((expectedMessage) =>
           window.__TRAINER_BOOTSTRAP__?.conversation?.some(
-            (entry) => entry.role === "user" && entry.body.includes(expectedMessage) && entry.sourceView === "plan",
+            (entry) => entry.role === "user" && entry.body.includes(expectedMessage),
           ) ?? false,
         message),
       ).toBe(true);
@@ -615,7 +668,7 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    await expectThreePrimaryDestinations(page, "en-US");
+    await expectTwoPrimaryDestinations(page, "en-US");
     await expectActiveView(page, "en-US", "coach");
     // ProviderStatus contract: a historical failed test is a diagnostic, not a
     // send gate. The first real send is the live confirmation.
@@ -665,7 +718,7 @@ test.describe("Trainer three-destination shell", () => {
 
   for (const language of ["zh-CN", "en-US"]) {
     for (const width of [300, 360, 420]) {
-      test(`keeps three readable primary destinations at ${width}px in ${language}`, async ({ page }) => {
+      test(`keeps two readable primary destinations at ${width}px in ${language}`, async ({ page }) => {
         const errors = attachConsoleErrorCollector(page);
 
         await page.setViewportSize({ width, height: 800 });
@@ -675,7 +728,7 @@ test.describe("Trainer three-destination shell", () => {
           connection: "connected",
         });
 
-        await expectThreePrimaryDestinations(page, language);
+        await expectTwoPrimaryDestinations(page, language);
         await expectActiveView(page, language, "coach");
         // Usability contract at any width: the switcher either shows readable
         // labels or swaps to icons — every entry stays reachable either way.
@@ -732,7 +785,11 @@ test.describe("Trainer three-destination shell", () => {
         exact: true,
       });
       await expect(importMenu).toBeVisible();
-      await expect(importMenu.getByRole("menuitem")).toHaveCount(3);
+      // The menu is the library's only entry point: add files, add a folder,
+      // add to the library (link / PDF / scan / repo) and — where the host can
+      // run it — migrate an old library to Markdown.
+      await expect(importMenu.getByRole("menuitem")).toHaveCount(4);
+      await expect(importMenu.locator("[data-capture-entry='true']")).toHaveCount(1);
       await addResource.click();
       await expect(importMenu).toHaveCount(0);
       // Rows are plain entries: no multi-select tree and no checkboxes.
@@ -842,7 +899,11 @@ test.describe("Trainer three-destination shell", () => {
 
     for (const view of ["training", "settings", "resources"]) {
       if (view === "training") await openFocusedTraining(page, "zh-CN");
-      else await page.getByTestId(viewNavigationTestId(view)).click();
+      else {
+        // The learning drawer overlays the shell: close it before the header.
+        await closeLearningDrawer(page);
+        await page.getByTestId(viewNavigationTestId(view)).click();
+      }
       await expectActiveView(page, "zh-CN", view);
     }
 
@@ -865,6 +926,8 @@ test.describe("Trainer three-destination shell", () => {
     await expect(card).toBeVisible();
     await expect(returnAction).toBeVisible();
 
+    // The learning drawer overlays the shell: close it before the Chat nav.
+    await closeLearningDrawer(page);
     await page.getByRole("button", { name: "Chat", exact: true }).click();
     await expectActiveView(page, "en-US", "coach");
     await openFocusedTraining(page);
@@ -950,7 +1013,9 @@ test.describe("Trainer three-destination shell", () => {
       await expect(card).toHaveCount(1);
       await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
       await expect(composer.locator('#coach-composer')).toBeVisible();
-      await expect(page.locator('textarea:visible')).toHaveCount(1);
+      // One Chat composer plus the practice card's own answer field.
+      await expect(page.locator('#coach-composer')).toHaveCount(1);
+      await expect(page.locator('[data-template="FocusedPractice"] textarea')).toHaveCount(1);
       await expect(composer.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toHaveCount(0);
       await expectNoConsoleErrors(errors);
     });
@@ -966,6 +1031,9 @@ test.describe("Trainer three-destination shell", () => {
       scenario: "training-debug",
       connection: "connected",
     });
+    // The learning drawer overlays the shell: close it so the practice card is
+    // reachable again.
+    await closeLearningDrawer(page);
     let card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
@@ -1000,19 +1068,24 @@ test.describe("Trainer three-destination shell", () => {
       submode: "review",
       connection: "offline",
     });
+    // The learning drawer overlays the shell: close it so the practice card is
+    // reachable again.
+    await closeLearningDrawer(page);
     let card = page.getByRole("group", { name: "Current training card", exact: true });
     await expectTrainingLoop(card, "reflect");
     await expectTrainingCardFacts(card);
     const reflection = "The focused check proves the boundary before the result can return.";
+    // The reflection lives in the practice card's own answer field now.
     const reflectionInput = page.getByRole("textbox", {
-      name: "Record the current training reflection",
+      name: "Your answer",
       exact: true,
     });
-    const emptyReflectButton = page.locator('.composer__send[type="submit"]');
+    // The reflection is submitted from the practice card's own answer form.
+    const emptyReflectButton = page.locator('[data-inline-practice-answer="true"] button[type="submit"]');
     await expect(reflectionInput).toBeEditable();
     await expect(emptyReflectButton).toBeDisabled();
     await reflectionInput.fill(reflection);
-    const reflectButton = page.getByRole("button", { name: "Record training reflection", exact: true });
+    const reflectButton = page.locator('[data-inline-practice-answer="true"] button[type="submit"]');
     await expect(reflectButton).toBeEnabled();
     await reflectButton.click();
     await expect.poll(() =>
@@ -1082,7 +1155,7 @@ test.describe("Trainer three-destination shell", () => {
     await expect(complete).toContainText("Done");
     await expect(complete).toContainText("Your result is with the coach");
     await expect(complete.locator('[data-training-next-card="true"]')).toBeVisible();
-    await expectActiveView(page, "en-US", "training");
+    await expectActiveView(page, "en-US", "training", { drawerClosed: true });
     await expectNoConsoleErrors(errors);
   });
 
@@ -1095,6 +1168,9 @@ test.describe("Trainer three-destination shell", () => {
       scenario: "training-remote",
       connection: "connected",
     });
+    // The learning drawer overlays the shell: close it so the practice card is
+    // reachable again.
+    await closeLearningDrawer(page);
 
     const training = page.locator(".training-pane--card-only");
     await expect(training.locator(".template-activity-header h2")).toBeVisible();
@@ -1155,6 +1231,9 @@ test.describe("Trainer three-destination shell", () => {
         scenario: scenario.preview,
         connection: "connected",
       });
+      // The learning drawer overlays the shell: close it so the practice card
+      // is reachable again.
+      await closeLearningDrawer(page);
 
       const card = page.getByRole("group", { name: "Current training card", exact: true });
       await expect(card.getByRole("heading", { name: scenario.title, exact: true })).toBeVisible();
@@ -1172,9 +1251,8 @@ test.describe("Trainer three-destination shell", () => {
         if (scenario.rawPlaceholder) {
           await expect(card).not.toContainText(scenario.rawPlaceholder);
         }
-        await expect(
-          page.locator(".composer-shell").getByText("Submit the current training note"),
-        ).toBeVisible();
+        // A manual practice answers in the practice card's own answer field.
+        await expect(page.locator('[data-inline-practice-answer="true"]')).toBeVisible();
         await expect(card.getByRole("button", { name: "Verify current file", exact: true })).toHaveCount(0);
       } else {
         await expect(card.getByRole("button", { name: "Verify current file", exact: true })).toBeVisible();
@@ -1235,10 +1313,15 @@ test.describe("Trainer three-destination shell", () => {
       } });
     });
 
+    // The learning drawer overlays the shell: close it before working with the
+    // card, then open the candidate-management disclosure on the card itself.
+    await closeLearningDrawer(page);
     const card = page.getByRole("group", { name: "Current training card", exact: true });
     const manage = card.locator("[data-candidate-management=true]");
     await expect(manage).toBeVisible();
     await manage.locator(":scope > summary").click();
+    await expect(manage).toHaveAttribute("open", "");
+    await expect(manage.locator("[data-candidate-merge='card-dup-e2e']")).toBeVisible();
 
     // The learner's decisions travel to the host as management commands; the
     // sidecar owns the card records and the ledger.
@@ -1258,7 +1341,7 @@ test.describe("Trainer three-destination shell", () => {
       command?.payload?.commandId === "trainer.trainingCard.merge" &&
       command?.payload?.payload?.keepCardId === "card-candidate-e2e" &&
       JSON.stringify(command?.payload?.payload?.duplicateCardIds) === JSON.stringify(["card-dup-e2e"]))).toBe(true);
-    await expectActiveView(page, "en-US", "training");
+    await expectActiveView(page, "en-US", "training", { drawerClosed: true });
     await expectNoConsoleErrors(errors);
   });
 
@@ -1271,8 +1354,10 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    await expectThreePrimaryDestinations(page, "es-ES");
+    await expectTwoPrimaryDestinations(page, "es-ES");
     await expectActiveView(page, "es-ES", "training");
+    // The learning drawer overlays the shell: close it to work with the card.
+    await closeLearningDrawer(page);
     const card = page.getByRole("group", { name: "Tarjeta de entrenamiento actual", exact: true });
     const composer = page.locator(".composer-shell");
     await expect(card.getByRole("heading", { name: /Práctica: espacio de trabajo remoto de VS Code/ })).toBeVisible();
@@ -1280,7 +1365,9 @@ test.describe("Trainer three-destination shell", () => {
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
     await expect(composer.locator('#coach-composer')).toBeVisible();
-    await expect(page.locator('textarea:visible')).toHaveCount(1);
+    // One Chat composer plus the practice card's own answer field.
+    await expect(page.locator('#coach-composer')).toHaveCount(1);
+    await expect(page.locator('[data-template="FocusedPractice"] textarea')).toHaveCount(1);
     const verifyButton = card.getByRole("button", {
       name: "Verificar archivo actual",
       exact: true,
@@ -1589,15 +1676,17 @@ test.describe("Trainer three-destination shell", () => {
         } });
     }, { payload, workspaceId });
     await page.goto('/');
-    const primary = page.locator('[data-surface=plan] [data-template=NextAction]');
+    // Learning is not a destination any more: the legacy learning route
+    // resolves to Chat with the learning drawer opened on the goal section.
+    await openLearningDrawer(page, 'goal');
+    const primary = page.locator('[data-template="LearningDrawer"] [data-template=NextAction]');
     await expect(primary.locator('h3')).toHaveText(step);
     await expect(primary.getByRole('button')).toHaveAttribute('data-action-intent', 'continue_step');
     await expect(page.locator('[data-plan-evidence-row="pending"]')).toHaveCount(1);
     await openPlanGovernanceDisclosure(page);
     await page.getByRole('button', { name: '整理证据', exact: true }).click();
     await expect(page.locator('[data-plan-evidence-row="pending"]').filter({ visible: true })).toHaveCount(0);
-    await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".template-context:not([data-dock-anchor])")).toContainText(/证据|Evidence/);
+    await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
     await expect(page.locator("#coach-composer")).toBeEditable();
     const visibleMore = page.locator("main summary").filter({ hasText: /^(更多|More)$/ });
     let visibleMoreCount = 0;
@@ -1611,12 +1700,17 @@ test.describe("Trainer three-destination shell", () => {
       .filter(message => message.type.startsWith('session/send') || message.payload?.commandId === 'trainer.evidence.adopt'))).toEqual([]);
     // The evidence composer mode is a mode chip + placeholder, not a seeded
     // draft: the learner writes the request, then sends it.
+    // The learning drawer overlays the shell: close it before the send.
+    await closeLearningDrawer(page);
     await page.locator("#coach-composer").fill('请帮我整理当前待核对的证据。');
     await page.locator('.composer__send').click();
     await expect.poll(() => page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
       .some(message => message.type.startsWith('session/send')))).toBe(true);
     const sent = await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
       .find(message => message.type.startsWith('session/send')));
+    // The legacy learning route resolves to Chat. The turn still names the
+    // learning lane, because that lane picks the reply format and the
+    // composer mode; the conversation itself is the one Chat conversation.
     expect(sent.payload).toMatchObject({ activeView: 'plan', planComposerMode: 'evidence', formalPlanMutation: false });
     expect(sent.operation).toMatchObject({ workspaceId, sessionId: 'evidence-context-session' });
     expect(await page.evaluate(() => window.__EVIDENCE_CONTEXT_ACTIONS__
@@ -1649,6 +1743,9 @@ test.describe("Trainer three-destination shell", () => {
       scenario: "training-debug",
       connection: "connected",
     });
+    // The learning drawer overlays the shell: close it so the practice card is
+    // reachable again.
+    await closeLearningDrawer(page);
 
     await page.getByRole("button", { name: "验证当前文件", exact: true }).click();
     await expect(page.locator("[data-template=VerificationResult]")).toContainText(/没有可验证的当前文件|预览不能验|验证未通过/);
@@ -1735,7 +1832,7 @@ test.describe("Trainer three-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
-  test("360px training keeps three primary destinations and one action with no overflow", async ({ page }) => {
+  test("360px training keeps two primary destinations and one action with no overflow", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 
     await page.setViewportSize({ width: 360, height: 800 });
@@ -1745,7 +1842,7 @@ test.describe("Trainer three-destination shell", () => {
       connection: "connected",
     });
 
-    await expectThreePrimaryDestinations(page, "zh-CN");
+    await expectTwoPrimaryDestinations(page, "zh-CN");
     await expectHeaderLabelsVisible(page);
     await expect(page.getByRole("button", { name: "验证当前文件", exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
@@ -1779,6 +1876,9 @@ test.describe("Trainer three-destination shell", () => {
       scenario: "training-debug",
       connection: "connected",
     });
+    // The learning drawer overlays the shell: close it so the practice card is
+    // reachable again.
+    await closeLearningDrawer(page);
 
     // §五: hidden by default, advanced one step at a time.
     const revealGroup = page.getByRole("group", { name: "提示阶梯" });
@@ -1802,16 +1902,19 @@ test.describe("Trainer three-destination shell", () => {
 
     await openPreview(page, "progress", { lang: "zh-CN", connection: "connected" });
 
-    await expect(page.getByRole("region", { name: "你的成长" })).toBeVisible();
-    await expect(page.getByText("理解", { exact: true })).toBeVisible();
-    await expect(page.getByText("反复验证", { exact: true })).toBeVisible();
-    await expect(page.getByText("调试", { exact: true })).toBeVisible();
-    await expect(page.getByText("独立完成", { exact: true })).toBeVisible();
-    await expect(page.getByText("迁移", { exact: true })).toBeVisible();
+    // Growth is the learning drawer's progress section now — the separate
+    // Growth page is gone.
+    const progress = page.locator('[data-template="LearningDrawer"] [data-learning-section="progress"]');
+    await expect(progress).toBeVisible();
+    await expect(progress.getByText("理解", { exact: true })).toBeVisible();
+    await expect(progress.getByText("反复验证", { exact: true })).toBeVisible();
+    await expect(progress.getByText("调试", { exact: true })).toBeVisible();
+    await expect(progress.getByText("独立完成", { exact: true })).toBeVisible();
+    await expect(progress.getByText("迁移", { exact: true })).toBeVisible();
     // §25: evidence counts are expressed as coaching language.
-    await expect(page.getByText("9 次验证通过", { exact: true })).toBeVisible();
+    await expect(progress.getByText("9 条证据", { exact: true })).toBeVisible();
     // §66 restraint: no gamified score bars on this surface.
-    await expect(page.locator(".progress-view__dimensions .progress-bar")).toHaveCount(0);
+    await expect(progress.locator(".progress-bar")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
     await expectNoConsoleErrors(errors);
   });

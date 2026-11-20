@@ -1,4 +1,5 @@
 const { openSettingsCategory } = require("./template-navigation");
+const { closeLearningDrawer, openLearningDrawer } = require("./workbench-navigation");
 const { test, expect } = require("playwright/test");
 const { SCENARIOS } = require("./trainer-experience-matrix");
 
@@ -71,8 +72,15 @@ const VIEW_LABELS = {
 };
 const PREVIEW_SWITCH_MODEL = "gpt-4.1";
 const PREVIEW_DEFAULT_MODEL = "gpt-4.1-mini-compatible";
-const TOP_LEVEL_VIEW_TEST_ID = /^trainer-view-nav-(coach|plan|resources|training|settings)$/;
+const TOP_LEVEL_VIEW_TEST_ID = /^trainer-view-nav-(coach|resources)$/;
 const ACTIVE_TOP_LEVEL_VIEW_SELECTOR = '[data-testid^="trainer-view-nav-"][aria-current="page"]';
+/**
+ * Phase-0 IA: the learning routes are no longer destinations. They resolve to
+ * Chat with the learning drawer opened on the matching section, and the
+ * persisted primary destination is Chat.
+ */
+const LEGACY_ROUTE_DESTINATIONS = { plan: "coach", training: "coach", progress: "coach" };
+const LEGACY_ROUTE_SECTIONS = { plan: "goal", training: "practice", progress: "progress" };
 
 async function expectSingleVisible(locator) {
   await expect(locator).toHaveCount(1);
@@ -138,15 +146,16 @@ async function openScenario(page, scenario) {
 }
 
 async function expectPrimaryNavigation(page) {
-  // Phase-C IA: three daily tabs (training appears on activity) plus the
-  // Settings gear in the header.
+  // Phase-0 IA: two primary destinations (Chat, Resources) plus the learning,
+  // history and settings utilities in the header.
   const switcher = page.locator(".app-shell-nav");
   await expect(switcher.getByTestId("trainer-view-nav-coach")).toBeVisible();
-  await expect(switcher.getByTestId("trainer-view-nav-plan")).toBeVisible();
   await expect(switcher.getByTestId("trainer-view-nav-resources")).toBeVisible();
+  await expect(page.getByTestId("trainer-learning-toggle")).toBeVisible();
+  await expect(page.getByTestId("trainer-history-toggle")).toBeVisible();
   await expect(page.getByTestId("trainer-view-nav-settings")).toBeVisible();
   const switcherTabs = switcher.getByTestId(TOP_LEVEL_VIEW_TEST_ID);
-  expect(await switcherTabs.count()).toBe(3);
+  expect(await switcherTabs.count()).toBe(2);
 }
 
 async function assertVisibleContract(page, scenario, contract) {
@@ -356,9 +365,11 @@ async function exerciseSettings(page, scenario) {
 
 async function exerciseCrossView(page, scenario) {
   const destination = scenario.userAction.targetView;
+  const legacyDestination = Object.prototype.hasOwnProperty.call(LEGACY_ROUTE_DESTINATIONS, destination);
   if (destination === "training") {
-    // Training is an internal route without a top-level tab: the host restores
-    // it through ui/restoreView (the growth section has no Training button).
+    // Training is a legacy route without a top-level tab: the host restores
+    // it through ui/restoreView, which resolves to Chat with the learning
+    // drawer open on the practice section.
     // Re-apply while polling: the preview bootstrap can land after the first
     // apply and reset the persisted view, so one shot is not authoritative.
     await expect.poll(async () => {
@@ -389,7 +400,8 @@ async function exerciseCrossView(page, scenario) {
         const raw = key ? window.localStorage.getItem(key) : undefined;
         return {
           persisted: raw ? JSON.parse(raw).activeView : null,
-          planCurrent: document.querySelector('[data-testid="trainer-view-nav-plan"]')?.getAttribute("aria-current") || null,
+          coachCurrent: document.querySelector('[data-testid="trainer-view-nav-coach"]')?.getAttribute("aria-current") || null,
+          practiceSection: !!document.querySelector('[data-template="LearningDrawer"] [data-learning-section="practice"]'),
         };
       });
       if (process.env.TRAINER_X11_DEBUG === "1") {
@@ -399,21 +411,35 @@ async function exerciseCrossView(page, scenario) {
         }
         console.log("[x11-probe]", JSON.stringify(apply));
       }
-      return apply.planCurrent;
-    }, { timeout: 5_000 }).toBe("page");
+      return { coachCurrent: apply.coachCurrent, practiceSection: apply.practiceSection };
+    }, { timeout: 5_000 }).toEqual({ coachCurrent: "page", practiceSection: true });
+  } else if (legacyDestination) {
+    // A legacy learning route resolves to Chat with the learning drawer opened
+    // on the matching section. The drawer overlays the shell, so it is closed
+    // before Chat is selected and the drawer is reopened from the header.
+    await closeLearningDrawer(page);
+    const coach = page.getByTestId("trainer-view-nav-coach");
+    await expect(coach).toHaveCount(1);
+    await coach.click();
+    await openLearningDrawer(page, LEGACY_ROUTE_SECTIONS[destination]);
+    await expect(page.locator(`[data-learning-section="${LEGACY_ROUTE_SECTIONS[destination]}"]`)).toBeVisible();
   } else {
+    // The learning drawer overlays the nav: close it before switching primary
+    // destinations.
+    await closeLearningDrawer(page);
     const target = page.getByTestId(`trainer-view-nav-${destination}`);
     await expect(target).toHaveCount(1);
     await target.click();
   }
-  await expect(page.getByTestId(`trainer-view-nav-${destination === 'training' ? 'plan' : destination}`)).toHaveAttribute("aria-current", "page");
+  const primaryDestination = legacyDestination ? LEGACY_ROUTE_DESTINATIONS[destination] : destination;
+  await expect(page.getByTestId(`trainer-view-nav-${primaryDestination}`)).toHaveAttribute("aria-current", "page");
   await expect.poll(() =>
     page.evaluate(() => {
       const key = window.__TRAINER_PREVIEW_STORAGE_KEY__;
       const raw = key ? window.localStorage.getItem(key) : undefined;
       return raw ? JSON.parse(raw).activeView : undefined;
     }),
-  ).toBe(scenario.userAction.targetView);
+  ).toBe(primaryDestination);
   if (process.env.TRAINER_X11_DEBUG === "1") {
     const stacks = await page.evaluate(() => ({
       app: (window.__TRAINER_SETTINGS_WRITER_STACKS__ || []).slice(0, 2),
@@ -494,7 +520,12 @@ async function assertPersistenceContract(page, scenario, actionResult) {
           const raw = key ? window.localStorage.getItem(key) : undefined;
           return raw ? JSON.parse(raw).activeView : undefined;
         }),
-      ).toBe(actionResult.targetView);
+      ).toBe(LEGACY_ROUTE_DESTINATIONS[actionResult.targetView] ?? actionResult.targetView);
+      // A legacy learning route keeps its intent in the learning drawer.
+      if (LEGACY_ROUTE_SECTIONS[actionResult.targetView]) {
+        await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+        await expect(page.locator(`[data-learning-section="${LEGACY_ROUTE_SECTIONS[actionResult.targetView]}"]`)).toBeVisible();
+      }
       return;
     case "provider_profile":
       await expect(actionResult.profile).toHaveAttribute("aria-pressed", "true");
@@ -519,7 +550,7 @@ async function assertForbiddenContracts(page, scenario, consoleErrors) {
         const extraViews = page
           .locator(".app-shell-nav")
           .getByTestId(TOP_LEVEL_VIEW_TEST_ID);
-        expect(await extraViews.count()).toBe(3);
+        expect(await extraViews.count()).toBe(2);
         await expect(page.getByTestId("trainer-view-nav-settings")).toBeVisible();
         break;
       }

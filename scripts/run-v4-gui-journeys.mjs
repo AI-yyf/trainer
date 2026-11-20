@@ -381,7 +381,7 @@ try {
     const text = await bodyText(frame);
     const nav = await frame.locator(".app-shell-nav button").allTextContents();
     const composer = await frame.locator('textarea, [contenteditable="true"]').count();
-    return { ok: /对话/.test(text) && /学习/.test(text) && /资料/.test(text) && composer > 0, nav, chars: text.length, screenshot: await screenshot(page, "j01-first-run") };
+    return { ok: /对话/.test(text) && /资料/.test(text) && composer > 0, nav, chars: text.length, screenshot: await screenshot(page, "j01-first-run") };
   });
 
   await runJourney(2, "随口提问，不产生不必要长期目标", async () => {

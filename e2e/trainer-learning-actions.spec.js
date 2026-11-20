@@ -1,5 +1,6 @@
 const { test, expect } = require('playwright/test');
 const { openSettingsCategory } = require('./template-navigation');
+const { closeLearningDrawer, openLearningDrawer } = require('./workbench-navigation');
 
 // Preview proves action semantics and state wiring, never real learning evidence.
 async function openLearning(page, language = 'en-US') {
@@ -54,7 +55,13 @@ async function openLearning(page, language = 'en-US') {
     });
   }, { payload, language, workspaceId });
   await page.goto('/');
-  await expect(page.locator('[data-surface=plan] [data-action-intent=continue_step]')).toBeVisible();
+  // Learning is not a destination any more: the legacy learning route
+  // resolves to Chat with the learning drawer open on the goal section. The
+  // governed plan card lives inside that drawer.
+  if (!(await page.locator('[data-template="LearningDrawer"]').count())) {
+    await openLearningDrawer(page, 'goal');
+  }
+  await expect(page.locator('[data-template="LearningDrawer"] [data-action-intent=continue_step]')).toBeVisible();
   return { payload, step };
 }
 
@@ -71,11 +78,11 @@ for (const [language, label] of [
   payload.memory.evidenceQueue = { pending: [{ id: 'e1', summary: 'Unconfirmed test report',
     outcome: 'self_reported', targetPlanStep: step, timestamp: '2026-10-08T08:00:00Z' }], adopted: [], deferred: [], rejected: [], totalCount: 1 };
   await apply(page, payload);
-  const next = page.locator('[data-surface=plan] [data-template=NextAction]');
+  const next = page.locator('[data-template="LearningDrawer"] [data-template=NextAction]');
   await expect(next.locator('h3')).toHaveText(step);
   await expect(next.getByRole('button')).toHaveText(label);
   await expect(next.getByRole('button')).toBeEnabled();
-  await expect(page.locator('[data-surface=plan] [data-primary-action=true]')).toHaveCount(1);
+  await expect(page.locator('[data-template="LearningDrawer"] [data-primary-action=true]')).toHaveCount(1);
   await next.getByRole('button').click();
   await expect(page.locator('[data-surface=coach]')).toBeVisible();
   const actions = await page.evaluate(() => window.__ACTION_TEST_HOST_ACTIONS__);
@@ -92,7 +99,7 @@ test('a bound evidence gate approves the visible candidate; blocker and frozen s
   payload.planRuntimeStatus.resumeState = 'waiting';
   payload.memory.workspace.latestPlanRuntime = { ...payload.planRuntimeStatus, evidenceBinding: 'e1' };
   await apply(page, payload);
-  const surface = page.locator('[data-surface=plan]');
+  const surface = page.locator('[data-template="LearningDrawer"]');
   const next = surface.locator('[data-template=NextAction]').filter({ visible: true });
   await expect(next.locator('h3')).toHaveText('Actual result to inspect');
   await expect(next.getByRole('button')).toHaveText('Approve this evidence');
@@ -107,23 +114,23 @@ test('a bound evidence gate approves the visible candidate; blocker and frozen s
   payload.planRuntimeStatus.blockedReason = 'The project test runner is missing';
   payload.memory.workspace.latestPlanRuntime = { ...payload.planRuntimeStatus, evidenceBinding: 'e1' };
   await apply(page, payload);
-  const blocker = page.locator('[data-surface=plan] [role=alert]');
+  const blocker = page.locator('[data-template="LearningDrawer"] [role=alert]');
   await expect(blocker.getByRole('heading', { name: 'Resolve the current blocker', exact: true })).toBeVisible();
   await expect(blocker.getByRole('button', { name: 'Resolve with coach', exact: true })).toBeVisible();
   await expect(blocker).toContainText('The project test runner is missing');
   payload.plan.frozen = true;
   await apply(page, payload);
-  await expect(page.locator('[data-surface=plan]').getByRole('button', { name: 'Resume plan', exact: true })).toBeVisible();
-  await expect(page.locator('[data-surface=plan]').getByRole('heading', { name: 'The plan is paused', exact: true })).toBeVisible();
+  await expect(page.locator('[data-template="LearningDrawer"]').getByRole('button', { name: 'Resume plan', exact: true })).toBeVisible();
+  await expect(page.locator('[data-template="LearningDrawer"]').getByRole('heading', { name: 'The plan is paused', exact: true })).toBeVisible();
 });
 
 test('stale Learning cannot start work and offers a full state refresh', async ({ page }) => {
   await openLearning(page);
   await page.evaluate(() => window.postMessage({ type: 'state/syncStatus', payload: { generation: 1, status: 'stale' } }, location.origin));
-  const button = page.locator('[data-surface=plan] [data-action-intent=restore_state]');
+  const button = page.locator('[data-template="LearningDrawer"] [data-action-intent=restore_state]');
   await expect(button).toHaveText('Refresh state');
   await button.click();
-  await expect(page.locator('[data-surface=plan] [data-action-intent=continue_step]')).toBeVisible();
+  await expect(page.locator('[data-template="LearningDrawer"] [data-action-intent=continue_step]')).toBeVisible();
   expect(await page.evaluate(() => window.__ACTION_TEST_HOST_ACTIONS__
     .filter(message => message.type.startsWith('session/send')).length)).toBe(0);
 });
@@ -132,7 +139,7 @@ test('an idle sidecar preserves current work for a verified provider', async ({ 
   const { payload, step } = await openLearning(page);
   payload.connection.state = 'offline';
   await apply(page, payload);
-  const button = page.locator('[data-surface=plan] [data-action-intent=continue_step]');
+  const button = page.locator('[data-template="LearningDrawer"] [data-action-intent=continue_step]');
   await expect(button).toBeEnabled();
   await button.click();
   const resume = await page.evaluate(() => window.__ACTION_TEST_HOST_ACTIONS__
@@ -142,17 +149,17 @@ test('an idle sidecar preserves current work for a verified provider', async ({ 
 
 test('an earlier notice exit cannot dismiss the new notice; delivery uncertainty belongs to Training', async ({ page }) => {
   await openLearning(page);
+  // The learning drawer overlays the shell: close it so the global notice is
+  // reachable again.
+  await closeLearningDrawer(page);
   const post = message => page.evaluate(message => window.postMessage(message, location.origin), message);
   await post({ type: 'operation/status', payload: { tone: 'error', message: 'first failure' } });
   const notice = page.locator('.template-global-state');
   await expect(notice).toBeVisible();
   await notice.getByRole('button').click();
-  await post({ type: 'operation/status', payload: { tone: 'error', message: '[[trainer-attestation-undelivered]] hidden backend exception' } });
-  await expect(notice).toHaveCount(0);
-  await page.evaluate(() => window.postMessage({ type: 'ui/restoreView', payload: { activeView: 'training' } }, location.origin));
-  await expect(notice).toContainText('has not been confirmed as saved');
-  await expect(notice).not.toContainText('hidden backend exception');
-  await expect(notice).not.toContainText('[[trainer-attestation-undelivered]]');
+  // A later notice owns its dismissal: the earlier exit must not remove it.
+  await post({ type: 'operation/status', payload: { tone: 'error', message: 'second failure' } });
+  await expect(notice).toBeVisible();
   // Wait beyond the actual exit animation by polling a stable browser-frame window.
   await notice.evaluate(async node => {
     const until = performance.now() + 250;
@@ -160,10 +167,26 @@ test('an earlier notice exit cannot dismiss the new notice; delivery uncertainty
     if (!node.isConnected) throw new Error('A prior dismissal removed the current notice');
   });
   await expect(notice).toBeVisible();
+  // Delivery uncertainty belongs to the Training scope, never the global
+  // notice, and the raw backend text never leaks.
+  await post({ type: 'operation/status', payload: { tone: 'error', message: '[[trainer-attestation-undelivered]] hidden backend exception' } });
+  await expect(notice).toHaveCount(0);
+  await page.evaluate(() => window.postMessage({ type: 'ui/restoreView', payload: { activeView: 'training' } }, location.origin));
+  // The legacy Training route resolves to Chat with the learning drawer open
+  // on the practice section: that is where the Training-scoped notice belongs.
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  const practiceScope = page.locator('[data-template="LearningDrawer"] [data-learning-section="practice"]');
+  await expect(practiceScope).toBeVisible();
+  await expect(practiceScope).toContainText('has not been confirmed as saved');
+  await expect(page.locator('body')).not.toContainText('hidden backend exception');
+  await expect(page.locator('body')).not.toContainText('[[trainer-attestation-undelivered]]');
 });
 
 test('a new host scope clears an unfinished Settings action and retains the connection draft', async ({ page }) => {
   const { payload } = await openLearning(page);
+  // The learning drawer overlays the shell: close it so the header utilities
+  // are reachable again.
+  await closeLearningDrawer(page);
   payload.workspace = { ...payload.workspace, trusted: true };
   await apply(page, payload);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();

@@ -2,17 +2,17 @@
 //
 // Real-model chain against a live provider:
 //   01 session + provider test
-//   02 ingest the paper (markdown upload -> resource library -> indexed)
+//   02 ingest the primary paper and a related note into the indexed library
 //   03 lesson-prep ask in the Resources lane (analyze mode + resource ids):
-//      the reply must build on the paper's own concepts (grounded analysis)
-//   04 lesson-prep output: /resource/research-brief/draft turns the reply
-//      into a saved research_brief asset; P2.6 auto-links the live plan and
-//      sourced findings stay traceable
+//      the reply must compare the two definitions of a time boundary
+//   04 lesson-prep output: the requested preparation saves a research_brief
+//      with the live plan and traceable findings in the same turn
 //   05 candidate card: /training/generate-card from the resource
 //      (source=resource_knowledge) -> status candidate with pinned provenance
 //
 // Requires PROBE_PROVIDER_BASE_URL / PROBE_PROVIDER_API_KEY (+
 // PROBE_PROVIDER_MODEL, default MiniMax-M2.7).
+// --public-sources captures a versioned arXiv PDF and a commit-pinned GitHub file.
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -25,6 +25,18 @@ const baseUrl = "http://127.0.0.1:34982";
 const providerBase = process.env.PROBE_PROVIDER_BASE_URL ?? "";
 const providerKey = process.env.PROBE_PROVIDER_API_KEY ?? "";
 const model = process.env.PROBE_PROVIDER_MODEL ?? "MiniMax-M2.7";
+const usePublicSources = process.argv.includes("--public-sources");
+const publicPaper = {
+  kind: "pdf",
+  title: "Gymnasium: A Standard Interface for Reinforcement Learning Environments",
+  url: "https://arxiv.org/pdf/2407.17032v3#page=5",
+  page: 5,
+};
+const publicTutorial = {
+  kind: "web",
+  title: "Gymnasium: Handling Time Limits",
+  url: "https://github.com/Farama-Foundation/Gymnasium/blob/5b6c5280e1e23a6f41b3cdfb297a26e349f6ef73/docs/tutorials/gymnasium_basics/handling_time_limits.py",
+};
 const outDir =
   process.env.JOURNEY_OUT_DIR ??
   path.join(repoRoot, "output/maturity", `scenario2-${new Date().toISOString().replace(/[:.]/g, "-")}`);
@@ -70,6 +82,18 @@ const PAPER_MARKDOWN = [
   "",
   "## 4. Related work divergence",
   "Earlier agent papers stopped the gradient at imagined states to stabilize training; later work lets gradients flow through the whole imagination trajectory but clips the value loss. The two lines disagree on where the value bootstrap should stop.",
+].join("\n");
+const RELATED_MARKDOWN = [
+  "# Finite-horizon task semantics",
+  "",
+  "## When time is part of the task",
+  "In a finite-horizon task, reaching the task's declared final decision step is a termination because the task itself is complete. The remaining time must be part of the observed state for the dynamics to remain Markovian.",
+  "",
+  "## Budget cutoffs outside the task",
+  "Stopping collection with an external budget is a truncation even when a wall-clock timeout caused it. Such a cutoff preserves the value estimate of the last observed state.",
+  "",
+  "## Teaching check",
+  "Give two examples with identical step counts, one declared by the task and one imposed by a collector. Have the learner classify each boundary and say whether to bootstrap.",
 ].join("\n");
 
 function sidecarProc() {
@@ -125,10 +149,7 @@ async function streamTurn(body) {
     }),
   });
   const text = await r.text();
-  const chunks = [...text.matchAll(/"chunk"\s*:\s*"((?:\\.|[^"\\])*)"/g)]
-    .map((m) => { try { return JSON.parse(`"${m[1]}"`); } catch { return ""; } })
-    .join("");
-  return { status: r.status, text, visible: chunks };
+  return { status: r.status, text };
 }
 
 function step(name, data, { fail = false } = {}) {
@@ -148,6 +169,44 @@ async function snapshot(workspaceId, sessionId) {
   const r = await fetch(`${baseUrl}/snapshot?${query.toString()}`);
   const payload = await r.json().catch(() => null);
   return { status: r.status, json: payload?.snapshot ?? payload };
+}
+
+async function ingestSource(sessionId, contextId, name, filename, content) {
+  const upload = await post("/resource/upload", {
+    session_id: sessionId, workspace_id: contextId, kind: "markdown", name,
+    source: filename, content, content_encoding: "utf-8", tags: ["world-models"],
+  });
+  const id = upload.json?.id;
+  if (upload.status !== 200 || !id) throw new Error(`Could not upload the source ${name}: ${upload.status}`);
+  const index = await post("/resource/index", {
+    session_id: sessionId, workspace_id: contextId, resource_id: id,
+  });
+  if (index.status !== 200) throw new Error(`Could not index the source ${name}: ${index.status}`);
+  let record = index.json?.resource ?? index.json;
+  for (let poll = 0; poll < 15 && record?.index_status !== "indexed"; poll += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const current = (await snapshot(contextId, sessionId)).json;
+    record = (current?.memory?.resources ?? current?.resources ?? []).find((item) => item.id === id) ?? record;
+  }
+  return { id, name, content, record };
+}
+
+async function capturePublicSource(sessionId, contextId, workspace, source) {
+  const { kind, title, url, page } = source;
+  const { status, json: record, text } = await post("/resources/capture", {
+    session_id: sessionId, workspace_id: contextId, kind, title, url,
+  }, { attempts: 1 });
+  if (status !== 200 || !record?.canonical_markdown_path) {
+    throw new Error(`Could not capture ${url}: ${status} ${errorDetail(text)}`);
+  }
+  const markdown = fs.readFileSync(path.resolve(workspace, record.canonical_markdown_path), "utf8");
+  const frontMatter = markdown.match(/^---\n([\s\S]*?)\n---\n\n/u);
+  const sourceLine = frontMatter?.[1].split("\n").find((line) => line.startsWith("source_url: "));
+  const recordedUrl = sourceLine?.slice("source_url: ".length);
+  if (recordedUrl !== url && recordedUrl !== JSON.stringify(url)) {
+    throw new Error(`Canonical Markdown lost its original location: ${url} (${recordedUrl})`);
+  }
+  return { id: record.id, name: record.name, record, content: markdown.slice(frontMatter[0].length), url, page };
 }
 
 // ---------------------------------------------------------------- journey --
@@ -193,90 +252,117 @@ try {
   }, { fail: start.status !== 200 || !sessionId || providerTest.json?.ok !== true });
 
 
-  // 02 — 获取原始论文：ingest the paper into the resource library
-  fs.writeFileSync(path.join(dataDir, "paper-episode-boundaries.md"), PAPER_MARKDOWN);
-  const upload = await post("/resource/upload", {
-    session_id: sessionId,
-    workspace_id: "scenario2-ws",
-    kind: "markdown",
-    name: "Episode Boundaries in World-Model Rollouts",
-    source: "papers.example.com/episode-boundaries",
-    content: PAPER_MARKDOWN,
-    content_encoding: "utf-8",
-    tags: ["paper", "world-models"],
-  });
-  const resourceId = upload.json?.id ?? "";
-  // Index the paper so the analyze lane has verified excerpts to ground on.
-  let indexed = "";
-  if (resourceId) {
-    const index = await post("/resource/index", {
-      session_id: sessionId,
-      workspace_id: "scenario2-ws",
-      resource_id: resourceId,
-    });
-    indexed = String(index.json?.index_status ?? index.json?.resource?.index_status ?? "");
-    for (let poll = 0; poll < 15 && indexed !== "indexed"; poll += 1) {
-      await new Promise((r) => setTimeout(r, 1000));
-      const snap = await snapshot(contextId, sessionId);
-      const record = (snap.json?.resources ?? []).find((item) => item.id === resourceId);
-      indexed = String(record?.index_status ?? indexed);
-    }
-  }
+  const [primary, related] = usePublicSources
+    ? await Promise.all([publicPaper, publicTutorial].map((source) => capturePublicSource(sessionId, contextId, wsDir, source)))
+    : [
+      await ingestSource(sessionId, contextId, "Episode Boundaries in World-Model Rollouts",
+        "paper-episode-boundaries.md", PAPER_MARKDOWN),
+      await ingestSource(sessionId, contextId, "Finite-horizon task semantics",
+        "notes-finite-horizon.md", RELATED_MARKDOWN),
+    ];
+  const sourceById = new Map([primary, related].map((source) => [source.id, source]));
+  const resourceIds = [...sourceById.keys()];
+  const resourceId = primary.id;
   step("03-paper-ingested", {
-    status: upload.status,
-    resource_id: resourceId,
-    index_status: indexed,
-  }, { fail: upload.status !== 200 || !resourceId });
+    sources: [...sourceById.values()].map(({ id, name, record, url, page }) => ({
+      id, name, url, page, index_status: record?.index_status,
+      version_id: record?.version_id, content_hash: record?.content_hash,
+    })),
+  }, { fail: [...sourceById.values()].some(({ record }) => record?.index_status !== "indexed" ||
+    !record?.version_id || !record?.content_hash) });
 
   // 03 — 备课 ask：analyze mode bound to the paper
-  const prep = await streamTurn({
+  const prepRequest = {
     session_id: sessionId,
     workspace_id: "scenario2-ws",
-    message: "围绕这篇论文，帮我完成备课，重点研究它的技术原理、相关工作和关键创新。",
+    message: usePublicSources
+      ? "围绕 Gymnasium 论文第 5 页的第 4.2 节和官方 Handling Time Limits 教程，帮我完成备课。比较 termination、truncation、finite horizon 和 external time limit，说明何时 value bootstrapping。请在同一条核心结论中引用两份资料的简短原文，附上一个课堂检查问题。"
+      : "围绕这篇论文和附上的有限时域笔记，帮我完成备课。比较任务内时间上限和采集预算截断，说明何时价值自举，并设计一题检验区别。引用两份资料中的原文依据。",
     intent: "coach",
     active_view: "resources",
-    resource_composer_intent: { mode: "analyze", resource_ids: resourceId ? [resourceId] : [] },
-    resource_ids: resourceId ? [resourceId] : [],
-  });
-  const prepText = prep.visible;
+    request_id: "scenario2-prepare-lesson",
+    resource_ids: resourceIds,
+    response_language: "zh-CN",
+  };
+  const prep = await streamTurn(prepRequest);
+  const savedTurn = await snapshot(contextId, sessionId);
+  const savedReply = savedTurn.json?.messages?.findLast((item) => item.role === "assistant");
+  const replyStatus = savedReply?.metadata?.coach_visible_status;
+  const prepText = savedReply?.content ?? "";
   // Grounded analysis: the reply must name concepts that exist in the paper.
   const grounded = ["termination", "truncation", "终止", "截断", "一步预测", "rollout", "imagination", "value"]
     .filter((token) => prepText.toLowerCase().includes(token.toLowerCase()));
-  const prepOk = prep.status === 200 && prepText.length >= 200 && grounded.length >= 2;
+  const comparedIds = new Set(savedReply?.metadata?.resource_ids ?? []);
+  const citations = (savedReply?.metadata?.parts ?? []).filter(({ type }) => type === "citation");
+  const hasExpectedCitations = !usePublicSources || [...sourceById.values()].every(({ id, page, record }) =>
+    citations.some(({ resourceId, location, versionId, contentHash }) => resourceId === id &&
+      Boolean(location?.anchor_id) && (!page || location.page === page) &&
+      versionId === record.version_id && contentHash === record.content_hash));
+  const prepOk = prep.status === 200 && savedTurn.status === 200 && prepText.length >= 200 &&
+    grounded.length >= 2 && resourceIds.every((id) => comparedIds.has(id)) &&
+    hasExpectedCitations && replyStatus?.status === "done";
   step("04-lesson-prep-ask", {
     status: prep.status,
     visible_chars: prepText.length,
+    reply_status: replyStatus?.status,
+    stop_reason: replyStatus?.stopReason,
+    attached_sources: [...comparedIds],
+    citations: citations.map(({ resourceId, location }) => ({ resource_id: resourceId, location })),
     grounded_tokens: grounded,
     preview: prepText.slice(0, 220),
     ...(prep.status !== 200 ? { error_detail: errorDetail(prep.text) } : {}),
   }, { fail: !prepOk });
 
-  // 04 — 备课产出：draft -> saved research brief (P2.6 plan link included)
-  const draft = await post("/resource/research-brief/draft", {
-    session_id: sessionId,
-    workspace_id: "scenario2-ws",
-    context_id: contextId,
-    researchGoal: "围绕《Episode Boundaries in World-Model Rollouts》完成备课",
-    reply: prepText.slice(0, 12000),
-    resourceIds: resourceId ? [resourceId] : [],
-    responseLanguage: "zh-CN",
-    title: "备课简报：Episode Boundaries",
-    save: true,
-    provider: providerPayload,
-    api_key: providerKey,
-  });
-  const brief = draft.json?.brief ?? {};
-  const briefOk = draft.status === 200 && draft.json?.saved === true &&
-    Array.isArray(brief.keyQuestions) &&
-    (brief.findings ?? []).length > 0 &&
-    Boolean(brief.researchGoal);
+  // 04 — The conversational result identifies the saved brief. Reopen it
+  // from Resources and check whether replaying the original request duplicates it.
+  const preparation = savedReply?.metadata?.research_preparation;
+  const catalog = savedTurn.json?.memory?.asset_catalog ?? savedTurn.json?.memory?.assetCatalog;
+  const catalogHasBrief = catalog?.active?.some(({ asset }) => asset.id === preparation?.asset_id);
+  const scopeQuery = new URLSearchParams({ context_id: contextId });
+  const stored = preparation?.asset_id ? await fetch(`${baseUrl}/resource/research-briefs/${preparation.asset_id}?${scopeQuery}`) : null;
+  const saved = stored?.ok ? await stored.json() : null;
+  const replay = preparation?.asset_id ? await streamTurn(prepRequest) : null;
+  const listResponse = await fetch(`${baseUrl}/resource/research-briefs?${scopeQuery}`);
+  const listed = listResponse.ok ? await listResponse.json() : null;
+  const brief = saved?.brief ?? {};
+  const findings = Array.isArray(brief.findings) ? brief.findings : [];
+  const sourcedFindings = findings.filter((finding) => finding.claimStatus === "sourced");
+  const pinnedFindings = sourcedFindings.filter((finding) => finding.sourceRefs?.length > 0 &&
+    finding.sourceRefs.every(({ ref, metadata }) => {
+      const location = metadata?.location;
+      const source = sourceById.get(ref);
+      if (!source || !location || !Number.isInteger(location.line_start) || !Number.isInteger(location.line_end) ||
+        location.line_start < 1 || location.line_end < location.line_start) return false;
+      const body = source.content.split("\n").slice(location.line_start - 1, location.line_end).join("\n");
+      return metadata.resource_id === ref && metadata.version_id === source.record?.version_id &&
+        metadata.content_hash === source.record?.content_hash && Boolean(location.anchor_id &&
+          metadata.excerpt && body.includes(metadata.excerpt));
+    }));
+  const comparisons = pinnedFindings.filter((finding) =>
+    [...sourceById.values()].every(({ id, page }) => finding.sourceRefs.some(({ ref, metadata }) =>
+      ref === id && (!page || metadata.location.page === page))));
+  const replayedSameBrief = replay?.status === 200 && replay.text.includes(preparation?.asset_id) &&
+    listed?.total === 1 && listed.items?.[0]?.asset?.id === preparation?.asset_id;
+  const briefOk = preparation?.status === "saved" && saved?.asset?.scope === "project" &&
+    catalogHasBrief && replayedSameBrief && brief.keyQuestions?.length > 0 && brief.checkQuestions?.length > 0 &&
+    comparisons.length > 0 && pinnedFindings.length === sourcedFindings.length &&
+    brief.planId === "plan-scenario2-ws" && brief.stageId === "stage-foundations";
   step("05-research-brief-saved", {
-    status: draft.status,
-    error_detail: draft.status !== 200 ? errorDetail(draft.text) : undefined,
-    saved: draft.json?.saved ?? false,
+    status: stored?.status,
+    preparation_status: preparation?.status,
+    asset_id: preparation?.asset_id,
+    present_in_catalog_snapshot: catalogHasBrief === true,
+    replayed_same_brief: replayedSameBrief,
     plan_id: brief.planId ?? "",
     stage_id: brief.stageId ?? "",
-    findings: (brief.findings ?? []).map((f) => ({ status: f.claimStatus, statement: f.statement?.slice(0, 60) })),
+    findings: findings.map((f) => ({
+      status: f.claimStatus, statement: f.statement,
+      source_locations: f.sourceRefs?.map(({ ref, metadata }) => ({ ref, location: metadata.location })),
+    })),
+    sourced_findings_checked_against_paper: pinnedFindings.length,
+    verified_cross_source_findings: comparisons.length,
+    verified_comparison_sources: comparisons[0]?.sourceRefs.map(({ ref, metadata }) => ({ ref, location: metadata.location })),
+    reopened_saved_asset: stored?.ok === true,
     check_questions: (brief.checkQuestions ?? []).length,
   }, { fail: !briefOk });
 
@@ -324,8 +410,10 @@ try {
     api_key: providerKey,
   });
   const cardJson = card.json?.card ?? {};
-  const candidateOk = card.status === 200 && (cardJson.status ?? "candidate") === "candidate";
-  const provenanceOk = (cardJson.resource_id ?? "") === resourceId;
+  const candidateOk = card.status === 200 && cardJson.review_state === "pending" && !card.json?.active_routing;
+  const provenanceOk = cardJson.resource_id === resourceId &&
+    cardJson.resource_version_id === primary.record.version_id &&
+    cardJson.resource_content_hash === primary.record.content_hash;
   // The unified ledger surfaces intake as learning activity; poll briefly so
   // a just-recorded event is visible to the snapshot read.
   let ledgerOk = false;
@@ -334,10 +422,18 @@ try {
     const snap = await snapshot(contextId, sessionId);
     const learningActivity = snap.json?.memory?.learning_activity ?? [];
     ledgerOk = learningActivity.some(
-      (entry) => (entry.eventType ?? entry.event_type) === "card_candidate_created",
+      (entry) => (entry.card_id ?? entry.cardId) === cardJson.card_id &&
+        (entry.eventType ?? entry.event_type) === "card_candidate_created",
     );
   }
   const lastSnap = await snapshot(contextId, sessionId);
+  const pendingCandidate = lastSnap.json?.memory?.training_card_candidates?.some(
+    (item) => item.card_id === cardJson.card_id && item.review_state === "pending",
+  );
+  const startedEarly = lastSnap.json?.memory?.learning_activity?.some((entry) =>
+    (entry.card_id ?? entry.cardId) === cardJson.card_id &&
+    (entry.eventType ?? entry.event_type) === "card_status_transitioned" && entry.result === "started",
+  );
   step("06-resource-candidate-card", {
     status: card.status,
     card_id: cardJson.card_id ?? "",
@@ -345,12 +441,14 @@ try {
     resource_pinned: provenanceOk,
     ledger_event: ledgerOk,
     activity_kinds: (lastSnap.json?.memory?.learning_activity ?? []).map((a) => a.eventType ?? a.event_type),
-    candidates_len: (lastSnap.json?.workspaceTrainingState?.trainingCardCandidates ?? []).length,
+    persisted_pending_candidate: pendingCandidate === true,
+    started_early: startedEarly === true,
     ...(card.status !== 200 ? { error_detail: errorDetail(card.text) } : {}),
-  }, { fail: !candidateOk || !provenanceOk || !ledgerOk });
+  }, { fail: !candidateOk || !provenanceOk || !ledgerOk || !pendingCandidate || startedEarly });
 
   const summary = {
     scenario: "13-场景二：研究与备课",
+    public_sources: usePublicSources,
     failures,
     outDir,
   };

@@ -6,9 +6,9 @@
  * imports a real DOCX, PPTX, PDF and Markdown note through the extension's
  * own `trainer.resource.upload` command (the same handler the webview's import
  * menu calls), then drives the installed webview with Playwright Electron:
- * verify the library lists every file, prove a row opens the original source
- * in a real editor tab (never a Reader detail page), verify the canonical
- * Markdown artifacts on disk, and search. Screenshots are written to
+ * verify the library lists every file, open a canonical Markdown and retained
+ * binary originals in editor tabs, verify the artifacts on disk, and follow
+ * two pinned Research Brief sources into their editor selections. Screenshots are written to
  * `output/canonical-gui/<stamp>/`.
  *
  * No provider is required: everything here is local library work.
@@ -20,23 +20,22 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
+import { resolveVsixOutputPath } from "../extension/scripts/package-vsix.mjs";
 import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
+import { ensureFreshVsixOrExit } from "../extension/scripts/prepare-current-vsix.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const extensionDir = path.join(repoRoot, "extension");
 const packageJson = JSON.parse(fs.readFileSync(path.join(extensionDir, "package.json"), "utf8"));
 const extensionId = `${packageJson.publisher}.${packageJson.name}`;
-const vsixPath = path.join(
-  extensionDir,
-  `trainer-extension-${packageJson.version}-darwin-arm64.vsix`,
-);
+const vsixPath = resolveVsixOutputPath({ extensionDir, packageJson });
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
 const electronBinary = requireVSCodeElectronBinary();
 
-if (!fs.existsSync(vsixPath)) {
-  throw new Error(`Packaged VSIX not found: ${vsixPath}. Run npm run package:vsix first.`);
-}
+// The gate installs the packaged artifact, so a stale artifact would make the
+// report describe code the sources no longer match.
+ensureFreshVsixOrExit({ vsixPath, reason: "the canonical GUI gate verifies the delivered artifact" });
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const outDir = path.join(repoRoot, "output", "canonical-gui", stamp);
@@ -50,6 +49,8 @@ const driverDir = path.join(root, "driver");
 const reportPath = path.join(root, "report.json");
 const pokePath = path.join(root, "state-poke");
 const stateOutPath = path.join(root, "state-after.json");
+const seedBriefPath = path.join(root, "seed-research-brief.py");
+const fixturePython = path.join(repoRoot, "server", ".venv", "bin", "python");
 for (const dir of [
   path.join(userDataDir, "User"),
   extensionsDir,
@@ -258,7 +259,7 @@ open(os.path.join(workspace_docs,"storage-paper.pdf"),"wb").write(pdf.tobytes())
 print("fixtures ready")
 `,
   );
-  const result = spawnSync(path.join(repoRoot, "server", ".venv", "bin", "python"), [script], {
+  const result = spawnSync(fixturePython, [script], {
     encoding: "utf8",
   });
   if (result.status !== 0) {
@@ -266,6 +267,49 @@ print("fixtures ready")
   }
 }
 runFixtureBuilder();
+
+fs.writeFileSync(seedBriefPath, String.raw`
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, ${JSON.stringify(path.join(repoRoot, "server"))})
+from fastapi.testclient import TestClient
+from app.core.config import Settings
+from app.main import create_app
+
+data_dir, context_id = Path(sys.argv[1]), sys.argv[2]
+if not (data_dir / "trainer.sqlite3").is_file():
+    raise SystemExit("Installed sidecar database not found")
+app = create_app(Settings(data_dir=data_dir, enable_network_fetch=False))
+resources = {item.name: item for item in app.state.runtime.repository.list_resources(context_id)}
+sources = [
+    ("Storage Paper", "Storage chapter two: quorum acknowledgement."),
+    ("Open Source Note", "OPEN_SOURCE_DIRECT"),
+]
+refs = [{"kind": "resource", "ref": resources[title].id, "metadata": {"excerpt": quote}}
+        for title, quote in sources]
+with TestClient(app) as client:
+    response = client.post("/resource/research-brief", json={
+        "contextId": context_id, "title": "Canonical citation check",
+        "brief": {"researchGoal": "Trace both notes to their indexed sources", "findings": [
+            {"statement": "The PDF discusses quorum acknowledgement, and the note has a direct source marker.",
+             "claimStatus": "sourced", "sourceRefs": refs},
+        ]},
+    })
+    response.raise_for_status()
+    asset = response.json()
+    findings = asset["brief"]["findings"]
+    pins = findings[0]["sourceRefs"]
+    assert findings[0]["claimStatus"] == "sourced" and len(pins) == 2, findings
+    assert pins[0]["metadata"]["location"]["page"] == 2, pins[0]
+    print(json.dumps({"id": asset["asset"]["id"], "pins": [
+        {"resourceId": pin["ref"], "title": title, "excerpt": quote,
+         "bodyLine": pin["metadata"]["location"]["line_start"],
+         "canonicalPath": resources[title].canonical_markdown_path}
+        for pin, (title, quote) in zip(pins, sources, strict=True)
+    ]}))
+`);
 
 function writeDriverExtension() {
   fs.writeFileSync(
@@ -288,6 +332,8 @@ function writeDriverExtension() {
     path.join(driverDir, "extension.js"),
     String.raw`
 const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const vscode = require("vscode");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -330,13 +376,30 @@ async function activate() {
     }
     await sleep(2500);
     const data = Array.isArray(uploaded.data) ? uploaded.data : [];
-    const firstId = data[0] && (data[0].id || data[0].resource_id);
     report.steps.push({
       step: "resource-ids",
       ok: data.length >= fixtures.length,
       count: data.length,
       ids: data.map((item) => item && (item.id || item.resource_id)).filter(Boolean),
     });
+    const snapshot = target.exports.getDebugState();
+    report.originals = snapshot.bootstrap.resources
+      .filter((resource) => resource.canonicalOriginalPath)
+      .map((resource) => ({ title: resource.title, path: resource.canonicalOriginalPath }));
+    const memoryWorkspace = snapshot.bootstrap.memory.workspace;
+    const contextId = memoryWorkspace.workspaceId;
+    const dataDir = fs.realpathSync(memoryWorkspace.resourceSandbox.effectivePath);
+    const isolatedRoot = fs.realpathSync(path.dirname(reportPath));
+    if (!dataDir.startsWith(isolatedRoot + path.sep)) throw new Error("Citation test requires its isolated sidecar database");
+    const stopped = await vscode.commands.executeCommand("trainer.sidecar.stop");
+    if (!stopped?.ok) throw new Error("Could not stop the isolated sidecar");
+    const seeded = spawnSync(process.env.CANONICAL_GUI_PYTHON,
+      [process.env.CANONICAL_GUI_BRIEF_SEED, dataDir, contextId], { encoding: "utf8" });
+    if (seeded.status !== 0) throw new Error("Brief save failed: " + seeded.stderr);
+    const brief = JSON.parse(seeded.stdout.trim().split("\n").at(-1));
+    const restored = await vscode.commands.executeCommand("trainer.memory.refresh", { silent: true });
+    if (!restored?.ok) throw new Error("Could not reload the saved brief: " + restored?.message);
+    report.brief = brief;
     await vscode.commands.executeCommand("trainer.openWorkbench");
     await sleep(2500);
     const pokePath = process.env.CANONICAL_GUI_POKE;
@@ -351,6 +414,9 @@ async function activate() {
             : null;
           const bootstrap = (exportedState && exportedState.bootstrap) || {};
           const memory = bootstrap.memory || {};
+          const editor = vscode.window.activeTextEditor;
+          const tabInput = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+          const lineIndex = editor?.selection.active.line;
           fs.writeFileSync(
             stateOut,
             JSON.stringify(
@@ -362,6 +428,10 @@ async function activate() {
                 previewHead: memory.sandboxPreview && typeof memory.sandboxPreview.content === "string"
                   ? memory.sandboxPreview.content.slice(0, 80)
                   : null,
+                editorPath: editor?.document.fileName,
+                activeFileTab: tabInput?.uri?.scheme === "file" ? tabInput.uri.fsPath : null,
+                selectionLine: lineIndex === undefined ? null : lineIndex + 1,
+                selectionText: editor && lineIndex !== undefined ? editor.document.lineAt(lineIndex).text : null,
               },
               null,
               2,
@@ -446,6 +516,8 @@ const app = await _electron.launch({
     CANONICAL_GUI_PROJECT_PATH: workspaceDir,
     CANONICAL_GUI_POKE: pokePath,
     CANONICAL_GUI_STATE_OUT: stateOutPath,
+    CANONICAL_GUI_PYTHON: fixturePython,
+    CANONICAL_GUI_BRIEF_SEED: seedBriefPath,
   },
   timeout: 120_000,
 });
@@ -508,6 +580,16 @@ async function selectDestination(frame, label) {
   }
   throw new Error(`Destination not found: ${label}`);
 }
+
+async function readEditorState(page) {
+  fs.rmSync(stateOutPath, { force: true });
+  fs.writeFileSync(pokePath, "editor");
+  const deadline = Date.now() + 4_000;
+  while ((!fs.existsSync(stateOutPath) || fs.existsSync(pokePath)) && Date.now() < deadline) {
+    await page.waitForTimeout(100);
+  }
+  return JSON.parse(fs.readFileSync(stateOutPath, "utf8"));
+}
 try {
   const page = await app.firstWindow({ timeout: 120_000 });
   await page.waitForTimeout(8000);
@@ -569,10 +651,10 @@ try {
     { title: "Storage Paper", key: "pdf-reader" },
   ];
   for (const check of readerChecks) {
-    await waitFor(frame, new RegExp(check.title));
     const item = frame.getByRole("treeitem", { name: check.title, exact: true });
+    await item.waitFor({ state: "visible", timeout: 15_000 });
     record(check.key, {
-      ok: (await item.count()) > 0,
+      ok: true,
       screenshot: await screenshot(page, `library-${check.key}-dark`),
       note: "The library lists the file; opening is a native source-open action, not a Reader page.",
     });
@@ -585,9 +667,7 @@ try {
   // canonical Markdown in a real VS Code editor tab (front matter + body +
   // table + image reference), never a Reader detail page.
   const docxItem = frame.getByRole("treeitem", { name: "Distributed Systems Notes", exact: true });
-  if (!(await docxItem.isVisible())) {
-    throw new Error("The DOCX row is not visible.");
-  }
+  await docxItem.waitFor({ state: "visible", timeout: 15_000 });
   await docxItem.focus();
   await docxItem.press("Enter");
   await page.waitForTimeout(2500);
@@ -603,26 +683,65 @@ try {
     throw new Error("The retired Reader detail page is still rendered.");
   }
 
-  // Search across the library and open the hit at its cited Markdown line.
-  const search = frame.locator('input[type="search"], input[placeholder*="搜索"], input[placeholder*="Search"]').first();
-  if (await search.count()) {
-    await search.click();
-    await search.fill("quorum acknowledgement");
-    await page.waitForTimeout(3500);
-    const text = await bodyText(frame);
-    record("library-search", {
-      ok: /Quorum Ack|Storage|Distributed Systems Notes/.test(text),
-      screenshot: await screenshot(page, "05-search-dark"),
-      text: text.slice(0, 800),
+  for (const { title, key } of readerChecks) {
+    const original = driverReport.originals.find((resource) => resource.title === title);
+    if (!original) throw new Error(`Missing retained original for ${title}`);
+    const originalPath = fs.realpathSync(path.resolve(workspaceDir, original.path));
+    await frame.getByRole("treeitem", { name: title, exact: true }).click({ button: "right" });
+    const menu = frame.locator(".resources-row-menu");
+    await menu.getByRole("menuitem", { name: /在 VS Code 中打开原始文件|Open original file in VS Code/ }).click();
+    let activeFileTab;
+    let matched = false;
+    const deadline = Date.now() + 8_000;
+    do {
+      ({ activeFileTab } = await readEditorState(page));
+      matched = Boolean(activeFileTab && fs.existsSync(activeFileTab) && fs.realpathSync(activeFileTab) === originalPath);
+    } while (!matched && Date.now() < deadline);
+    record(`original-in-editor-${key}`, {
+      ok: matched, title, activeFileTab, screenshot: await screenshot(page, `original-${key}`),
     });
-    const hit = frame.locator('[role="treeitem"]').filter({ hasText: /Distributed Systems Notes|Storage Paper/ }).first();
-    record("search-hit-present", {
-      ok: (await hit.count()) > 0,
-      screenshot: await screenshot(page, "06-search-hit-present-dark"),
-    });
-  } else {
-    record("library-search", { ok: false, reason: "search input not found" });
   }
+
+  const briefLibrary = frame.locator("[data-research-briefs]");
+  await briefLibrary.locator(":scope > summary").click();
+  const brief = briefLibrary.locator(`[data-research-brief-id="${driverReport.brief.id}"]`);
+  await brief.locator(":scope > summary").click();
+  for (const pin of driverReport.brief.pins) {
+    const canonicalPath = fs.realpathSync(path.resolve(workspaceDir, pin.canonicalPath));
+    const matches = fs.readFileSync(canonicalPath, "utf8").split(/\r?\n/u)
+      .flatMap((line, index) => line.includes(pin.excerpt) ? [index + 1] : []);
+    if (matches.length !== 1) throw new Error(`Expected one occurrence of citation: ${pin.title}`);
+    const citation = brief.locator(`[data-citation-part][data-resource-id="${pin.resourceId}"] button`);
+    await citation.click();
+    let editor;
+    let matched = false;
+    const deadline = Date.now() + 8_000;
+    do {
+      editor = await readEditorState(page);
+      matched = Boolean(editor.editorPath && fs.existsSync(editor.editorPath) && fs.realpathSync(editor.editorPath) === canonicalPath &&
+        editor.selectionLine === matches[0] && editor.selectionText?.includes(pin.excerpt));
+    } while (!matched && Date.now() < deadline);
+    record("research-brief-citation", {
+      ok: matched, source: pin.title, indexedBodyLine: pin.bodyLine, expectedEditorLine: matches[0], editor,
+      screenshot: await screenshot(page, `brief-citation-${pin.resourceId}`),
+    });
+  }
+  record("brief-layout", { ok: true, screenshot: await screenshot(page, "brief-layout-dark") });
+  await briefLibrary.locator(":scope > summary").click();
+
+  // The Resources composer owns search. Require a result from the matching PDF.
+  const query = "quorum acknowledgement";
+  const search = frame.locator("#coach-composer");
+  await search.fill(`/search ${query}`);
+  await search.press("Enter");
+  await frame.locator("[data-clear-resource-search]").filter({ hasText: query }).waitFor();
+  const hit = frame.getByRole("treeitem", { name: "Storage Paper", exact: true });
+  await hit.waitFor();
+  record("library-search", {
+    ok: (await hit.count()) === 1,
+    screenshot: await screenshot(page, "05-search-dark"),
+    text: (await bodyText(frame)).slice(0, 800),
+  });
 
   // Light theme pass for the warm-neutral visual requirement.
   await commandPalette(page, "Preferences: Color Theme");

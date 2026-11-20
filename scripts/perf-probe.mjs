@@ -6,7 +6,7 @@
  * suite serves, playwright.config.js webServer on http://127.0.0.1:4175):
  *   1. Long-session navigation latency — bootstrap 300 conversation messages,
  *      then click through the primary destinations and time click → target
- *      surface unhides (`data-surface` losing `hidden`). Cold = first visit of
+ *      destination unhides (`data-primary-surface` losing `hidden`). Cold = first visit of
  *      each surface (lazy chunk load included); warm = surfaces already kept
  *      alive by WorkbenchSurfaces.
  *   2. Streaming overhead — inject `stream/start` + 300 chunks × 100 chars at
@@ -14,7 +14,7 @@
  *      (exposed at extension/webview/src/lib/vscode.ts, e2e precedent
  *      e2e/trainer-template-navigation.spec.js:42), and count main-thread
  *      long tasks (>50ms) during the burst, in two configurations:
- *      coach-only visited vs all five surfaces kept alive.
+ *      coach-only visited vs all destinations and Settings kept alive.
  *   3. Nav latency while a stream is running (in-page rAF measurement).
  *
  * Budgets (regression red lines, evaluated into `budgets`):
@@ -193,7 +193,6 @@ async function openProbePage(browser, baseUrl) {
 
 const NAV_SELECTORS = {
   coach: '[data-testid="trainer-view-nav-coach"]',
-  plan: '[data-testid="trainer-view-nav-plan"]',
   resources: '[data-testid="trainer-view-nav-resources"]',
   settings: '[data-testid="trainer-view-nav-settings"]',
 };
@@ -203,7 +202,7 @@ async function navLatency(page, target) {
   await page.click(NAV_SELECTORS[target]);
   await page.waitForFunction(
     (view) => {
-      const surface = document.querySelector(`div[data-surface="${view}"]`);
+      const surface = document.querySelector(`div[data-primary-surface="${view}"]`);
       return Boolean(surface) && !surface.hidden;
     },
     target,
@@ -256,12 +255,14 @@ async function runStreamBurst(page, { navDuringStreamAt }) {
       apply({ type: "stream/chunk", payload: { messageId, chunk: text } });
       if (i === navAt) {
         const navStarted = performance.now();
-        const button = document.querySelector('[data-testid="trainer-view-nav-plan"]');
+        // Learning is a drawer over Chat, so the measured navigation is the
+        // learning toggle that opens it.
+        const button = document.querySelector('[data-testid="trainer-learning-toggle"]');
         button.click();
         await new Promise((resolve) => {
           const check = () => {
-            const surface = document.querySelector('div[data-surface="plan"]');
-            if (surface && !surface.hidden) {
+            const drawer = document.querySelector('[data-template="LearningDrawer"]');
+            if (drawer) {
               resolve();
             } else {
               requestAnimationFrame(check);
@@ -317,17 +318,17 @@ function percentile(samples, ratio) {
 
     // ---- 1. Long-session navigation latency (cold first visits vs warm) ----
     const cold = {};
-    const warmSamples = { plan: [], resources: [], training: [], settings: [] };
+    const warmSamples = { resources: [], training: [], settings: [] };
     {
       const page = await openProbePage(browser, baseUrl);
-      for (const target of ["plan", "resources", "settings"]) {
+      for (const target of ["resources", "settings"]) {
         cold[target] = await navLatency(page, target);
         await navLatency(page, "coach");
       }
       cold.training = await visitViaHost(page, "training");
       await navLatency(page, "coach");
       for (let round = 0; round < NAV_SAMPLE_ROUNDS; round++) {
-        for (const target of ["plan", "resources", "settings"]) {
+        for (const target of ["resources", "settings"]) {
           warmSamples[target].push(await navLatency(page, target));
           await navLatency(page, "coach");
         }
@@ -343,7 +344,7 @@ function percentile(samples, ratio) {
     await page.close();
 
     const pageAll = await openProbePage(browser, baseUrl);
-    for (const target of ["plan", "resources", "settings"]) {
+    for (const target of ["resources", "settings"]) {
       await navLatency(pageAll, target);
       await navLatency(pageAll, "coach");
     }

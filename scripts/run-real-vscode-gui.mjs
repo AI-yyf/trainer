@@ -371,7 +371,7 @@ try {
 
   const firstRunText = await bodyText(frame);
   record("01-first-run", {
-    ok: /对话/.test(firstRunText) && /学习/.test(firstRunText) && /资料/.test(firstRunText),
+    ok: /对话/.test(firstRunText) && /资料/.test(firstRunText),
     screenshot: await screenshot(page, "01-first-run"),
     text: firstRunText.slice(0, 500),
   });

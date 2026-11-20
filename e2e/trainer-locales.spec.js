@@ -12,24 +12,20 @@ const PROGRESS_LABELS = { "es-ES": "Progreso", "fr-FR": "Progrès", "de-DE": "Fo
   "ja-JP": "成長", "ko-KR": "성장", "pt-BR": "Progresso" };
 
 const VIEW_LABELS = {
-  "es-ES": ["Chat", "Plan", "Recursos", "Entrenamiento", "Ajustes"],
-  "fr-FR": ["Chat", "Plan", "Ressources", "Entra\u00eenement", "Param\u00e8tres"],
-  "de-DE": ["Chat", "Plan", "Materialien", "Training", "Einstellungen"],
-  "ja-JP": [
-    "\u5bfe\u8a71",
-    "\u8a08\u753b",
-    "\u8cc7\u6599",
-    "\u8a13\u7df4",
-    "\u8a2d\u5b9a",
-  ],
-  "ko-KR": [
-    "\ub300\ud654",
-    "\uacc4\ud68d",
-    "\uc790\ub8cc",
-    "\ud6c8\ub828",
-    "\uc124\uc815",
-  ],
-  "pt-BR": ["Chat", "Plano", "Recursos", "Treinamento", "Configura\u00e7\u00f5es"],
+  "es-ES": { coach: "Chat", resources: "Recursos", settings: "Ajustes" },
+  "fr-FR": { coach: "Chat", resources: "Ressources", settings: "Param\u00e8tres" },
+  "de-DE": { coach: "Chat", resources: "Materialien", settings: "Einstellungen" },
+  "ja-JP": {
+    coach: "\u5bfe\u8a71",
+    resources: "\u8cc7\u6599",
+    settings: "\u8a2d\u5b9a",
+  },
+  "ko-KR": {
+    coach: "\ub300\ud654",
+    resources: "\uc790\ub8cc",
+    settings: "\uc124\uc815",
+  },
+  "pt-BR": { coach: "Chat", resources: "Recursos", settings: "Configura\u00e7\u00f5es" },
 };
 
 const COMPLETION_COPY = {
@@ -74,19 +70,25 @@ async function openStandaloneTrainingPreview(page, language, width) {
   await expect(page.locator('[data-template=FocusedPractice]')).toBeVisible();
 }
 
-async function expectThreeLocalizedPrimaryDestinations(page, language) {
+async function expectTwoLocalizedPrimaryDestinations(page, language) {
   const tabs = page.locator(".app-shell-nav button");
-  await expect(tabs).toHaveCount(3);
-  expect(await tabs.evaluateAll(nodes => nodes.map(node => node.getAttribute("aria-label")))).toEqual(VIEW_LABELS[language].slice(0, 3));
-  await expect(tabs.nth(1)).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("trainer-view-nav-settings")).toHaveAttribute("aria-label", VIEW_LABELS[language][4]);
+  await expect(tabs).toHaveCount(2);
+  expect(await tabs.evaluateAll(nodes => nodes.map(node => node.getAttribute("aria-label")))).toEqual([VIEW_LABELS[language].coach, VIEW_LABELS[language].resources]);
+  // The legacy Training route resolves to Chat with the learning drawer open.
+  await expect(tabs.nth(0)).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("trainer-learning-toggle")).toBeVisible();
+  await expect(page.getByTestId("trainer-history-toggle")).toBeVisible();
+  await expect(page.getByTestId("trainer-view-nav-settings")).toHaveAttribute("aria-label", VIEW_LABELS[language].settings);
 }
 async function expectCurrentTrainingCardFacts(page) {
   const card = page.locator('[data-template=FocusedPractice]');
   await expect(card.locator('.template-activity-header h2')).toContainText(/\S/);
   await expect(card.locator('.template-activity-header .template-metadata')).toContainText(/[1-5]\/5/);
   expect(await card.locator('[data-primary-action="true"]:visible').count()).toBeLessThanOrEqual(1);
-  await expect(page.locator('.composer-shell')).toHaveCount(0);
+  // The practice card lives inside Chat now, so it shares the one docked
+  // Chat composer instead of owning a separate surface.
+  await expect(page.locator('.composer-shell')).toHaveCount(1);
+  await expect(page.locator('.composer-shell #coach-composer')).toBeVisible();
   const details = card.locator('details');
   for (let i = 0; i < await details.count(); i++) await expect(details.nth(i)).not.toHaveAttribute("open", "");
 }
@@ -124,7 +126,7 @@ for (const [language] of Object.entries(VIEW_LABELS)) {
   for (const width of VIEWPORT_WIDTHS) {
     test(`renders the standalone ${language} Training Preview at ${width}px`, async ({ page }) => {
       await openStandaloneTrainingPreview(page, language, width);
-      await expectThreeLocalizedPrimaryDestinations(page, language);
+      await expectTwoLocalizedPrimaryDestinations(page, language);
       await expectCurrentTrainingCardFacts(page);
       await expectNoHorizontalOverflow(page);
 

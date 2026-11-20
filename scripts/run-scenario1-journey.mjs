@@ -265,21 +265,51 @@ try {
   const afterCandidate = await snapshot("scenario1-ws", sessionId);
   // The unified ledger surfaces card intake as memory.learning_activity.
   const learningActivity = afterCandidate.json?.memory?.learning_activity ?? [];
-  const candidateOk = card.status === 200 &&
-    (cardJson.status ?? "candidate") === "candidate" &&
-    Boolean(cardJson.card_id ?? "");
-  const ledgerHasCandidate = learningActivity.some(
-    (entry) => entry.eventType === "card_candidate_created" ||
-      entry.event_type === "card_candidate_created"
+  const persistedCandidate = afterCandidate.json?.memory?.training_card_candidates?.find(
+    (item) => item.card_id === cardJson.card_id,
   );
+  const candidateOk = card.status === 200 &&
+    cardJson.review_state === "pending" &&
+    persistedCandidate?.review_state === "pending" &&
+    !card.json?.active_routing;
+  const isCardActivity = (entry) => (entry.card_id ?? entry.cardId) === cardJson.card_id;
+  const ledgerHasCandidate = learningActivity.some(
+    (entry) => isCardActivity(entry) &&
+      (entry.eventType ?? entry.event_type) === "card_candidate_created",
+  );
+  const startedEarly = learningActivity.some((entry) => isCardActivity(entry) &&
+    (entry.eventType ?? entry.event_type) === "card_status_transitioned" && entry.result === "started");
   step("06-candidate-card", {
     status: card.status,
     card_id: cardJson.card_id ?? "",
     card_status: cardJson.status ?? "",
+    review_state: persistedCandidate?.review_state ?? "",
+    started_early: startedEarly,
     ledger_event: ledgerHasCandidate,
     activity_dump: learningActivity.slice(0, 6),
     ...(card.status !== 200 ? { error_detail: errorDetail(card.text) } : {}),
-  }, { fail: !candidateOk || !ledgerHasCandidate });
+  }, { fail: !candidateOk || !ledgerHasCandidate || startedEarly });
+
+  if (cardJson.card_id) {
+    const action = { workspace_id: "scenario1-ws", card_id: cardJson.card_id };
+    const saved = await post("/training/card/library", { ...action, action: "save" });
+    const savedSnapshot = await snapshot("scenario1-ws", sessionId);
+    const selectedAfterSave = savedSnapshot.json?.memory?.active_training_card_routing?.selected_card_id;
+    const started = await post("/training/card/library", { ...action, action: "start" });
+    const startedSnapshot = await snapshot("scenario1-ws", sessionId);
+    const selectedAfterStart = startedSnapshot.json?.memory?.active_training_card_routing?.selected_card_id;
+    step("06b-save-and-select", {
+      save_status: saved.status,
+      review_state: saved.json?.card?.review_state,
+      selected_after_save: selectedAfterSave ?? null,
+      start_status: started.status,
+      selected_after_start: selectedAfterStart ?? null,
+    }, {
+      fail: saved.status !== 200 || saved.json?.card?.review_state !== "saved" ||
+        selectedAfterSave === cardJson.card_id || started.status !== 200 ||
+        selectedAfterStart !== cardJson.card_id,
+    });
+  }
 
   // 07 — 证据：a real learning signal records the practice outcome
   const signal = await post("/learning/signal", {

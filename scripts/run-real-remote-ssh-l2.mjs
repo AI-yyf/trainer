@@ -353,7 +353,7 @@ try {
   // Step 2 — activity bar / Coach sidebar.
   const step2Text = await bodyText(frame);
   record("l2-02-coach-sidebar", {
-    ok: step2Text.includes("对话") && step2Text.includes("学习") && step2Text.includes("资料"),
+    ok: step2Text.includes("对话") && step2Text.includes("资料"),
     text: step2Text.slice(0, 600),
     pageTitle: await page.title(),
     screenshot: await pageScreenshot(page, "02-coach-sidebar"),

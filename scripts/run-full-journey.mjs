@@ -473,12 +473,22 @@ try {
   const cardId = cardData?.card_id ?? "";
   const degraded = cardData?.degraded === true || card.json?.degraded === true;
   const cardRows = cardId ? dbRows(`SELECT payload FROM structured_memory WHERE payload LIKE '%${cardId}%' LIMIT 1`) : [];
+  let cardOpened = false;
+  if (cardId && cardData?.review_state === "pending" && !degraded) {
+    const identity = { workspace_id: "full-journey-ws", card_id: cardId };
+    const saved = await post("/training/card/library", { ...identity, action: "save" });
+    if (saved.status === 200 && saved.json?.card?.review_state === "saved") {
+      const opened = await post("/training/card/library", { ...identity, action: "start" });
+      cardOpened = opened.status === 200 && opened.json?.card?.card_id === cardId;
+    }
+  }
   step("05-training-card", {
     status: card.status,
     card_id: cardId,
     title: cardData?.title ?? "",
     degraded,
     persisted: cardRows.length > 0,
+    opened_after_review: cardOpened,
     retry_of: cardRetryOf,
     ...(card.status !== 200 && !degraded ? { error_detail: errorDetail(card.text) } : {}),
     // Red line: a degraded card must never pass as model-authored. Record the
@@ -498,7 +508,7 @@ try {
         }
       : {}),
   }, {
-    fail: card.status !== 200 || !cardId || degraded,
+    fail: card.status !== 200 || !cardId || degraded || !cardOpened,
   });
 
   // The card's own target file governs the downstream identity checks: a real

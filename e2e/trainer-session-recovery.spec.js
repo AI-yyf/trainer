@@ -1,16 +1,26 @@
 const { openSettingsCategory } = require("./template-navigation");
 const { test, expect } = require("playwright/test");
 const { planOnlyFixture } = require('./learning-fixtures');
+const { closeLearningDrawer, openLearningDrawer } = require('./workbench-navigation');
 
+/**
+ * Learning is no longer a destination: the plan card lives in the learning
+ * drawer, which the learner opens from the header icon beside the history
+ * utility. The drawer overlays the shell, so it is closed before it is
+ * reopened on the goal section.
+ */
+async function openLearningGoal(page) {
+  await closeLearningDrawer(page);
+  await openLearningDrawer(page, 'goal');
+}
+
+/** Legacy learning route → the learning drawer section it opens. */
+const LEGACY_ROUTE_SECTIONS = { plan: 'goal', training: 'practice', progress: 'progress' };
+
+// The learning drawer has no catch-all disclosure any more: the plan's stages
+// and evidence are plain rows, and every adjustment starts in the composer.
 async function openLearningMore(page) {
-  const more = page.locator('[data-learning-focus-more]').first();
-  if ((await more.count()) === 0) {
-    await more.waitFor({ state: 'visible' });
-  }
-  await expect(more).toBeVisible();
-  if ((await more.getAttribute('open')) === null) {
-    await more.locator(':scope > summary').click();
-  }
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
 }
 
 test("an English recovery step does not hide its matching formal plan in Chinese", async ({ page }) => {
@@ -34,7 +44,7 @@ test("an English recovery step does not hide its matching formal plan in Chinese
   await expect(page.locator('[data-learning-section=route]')).toBeVisible();
 });
 
-test("compact Plan keeps its stages reachable from a dedicated disclosure", async ({ page }) => {
+test("compact Goals view shows its learning path on entry", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=compact-stages");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
   await page.evaluate(() => {
@@ -51,14 +61,17 @@ test("compact Plan keeps its stages reachable from a dedicated disclosure", asyn
       planRuntimeStatus: { recovered: false, currentStep: "运行可变性验证", reviewPoints: [] },
     } });
   });
-  await openLearningMore(page);
   const stages = page.locator('[data-learning-section=route]');
+  await openLearningMore(page);
   await expect(stages).toBeVisible();
-  await stages.locator(':scope > summary').click();
+  // The route group is a plain row group inside the drawer: the learning path
+  // is readable without opening a fold.
+  await expect(stages.locator(':scope > summary')).toHaveCount(0);
   await expect(stages.getByText('验证元组内列表', { exact: true })).toBeVisible();
-  const moreStages = stages.locator('[data-learning-section=more-route-stages]');
-  await moreStages.locator(':scope > summary').click();
   await expect(stages.getByText('实现嵌套求和', { exact: true })).toBeVisible();
+  // The third stage stays behind the group's own "more" disclosure.
+  await expect(stages.getByText('覆盖异常边界', { exact: true })).toHaveCount(1);
+  await stages.locator('[data-learning-section="more-route-stages"] > summary').click();
   await expect(stages.getByText('覆盖异常边界', { exact: true })).toBeVisible();
   await expect(stages.locator('[data-stage-status]')).toHaveCount(3);
 });
@@ -143,7 +156,7 @@ test("flash training shows the question before generic practice instructions", a
     } });
   });
   await expect(page.getByText("Can a list inside a tuple still change?", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Tuple mutability", exact: true })).toBeVisible();
+  await expect(page.locator('[data-training-card-id]').getByRole("heading", { name: "Tuple mutability", exact: true })).toBeVisible();
 });
 
 test("Chinese flash questions keep inline code identifiers visible", async ({ page }) => {
@@ -179,7 +192,7 @@ test("Chinese flash questions keep inline code identifiers visible", async ({ pa
   await expect(question).toBeVisible();
   await expect(question).toContainText('各自的结果是什么？');
   await expect(question.locator('code')).toHaveText(['pair = ([1, 2], 3)', 'pair[0].append(4)', 'pair[1] = 9']);
-  await expect(page.getByRole("heading", { name: "元组中嵌套列表的可变性边界", exact: true })).toBeVisible();
+  await expect(page.locator('[data-training-card-id]').getByRole("heading", { name: "元组中嵌套列表的可变性边界", exact: true })).toBeVisible();
 });
 
 
@@ -214,17 +227,27 @@ test("empty Plan honors an explicit Generate plan action", async ({ page }) => {
     } });
   });
   await expect(page.getByText(/先启用一组可用连接/)).toHaveCount(0);
-  await page.locator('[data-learning-section=more] > summary').click();
-  await page.getByRole("button", { name: "生成计划", exact: true }).click();
-  await expect(page.locator(".template-context")).toContainText("生成计划");
-  await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("textbox")).toHaveValue(/生成正式计划/);
+  // Every adjustment starts in the one composer: the learner types the plan
+  // request, the intent is recognized, and the confirmation stays governed.
+  // The learning drawer is a modal sheet: the composer is reachable once it is
+  // closed. Every adjustment starts there.
+  await closeLearningDrawer(page);
+  await page.locator("#coach-composer").fill("生成正式学习计划");
+  await page.locator(".composer__send").click();
+  const planPreview = page.locator('[data-unified-action-preview="plan"]');
+  await planPreview.waitFor();
+  await planPreview.getByRole("button", { name: "确认并执行" }).click();
+  // Learning is not a destination any more: the plan intent lands on Chat
+  // with the learning drawer open on the goal section.
+  await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  await expect(page.locator('[data-learning-section="goal"]')).toBeVisible();
 });
 
-test("browser selection prefill lands in Coach and preserves the Learning draft", async ({ page }) => {
+test("browser selection prefill lands in Coach and keeps the shared draft in the learning drawer", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=en-US&connection=connected&scenario=ready");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-  const textbox = page.getByRole("textbox");
+  const textbox = page.locator("#coach-composer");
   await textbox.fill("MY PLAN DRAFT");
   await page.evaluate(() => {
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
@@ -234,9 +257,12 @@ test("browser selection prefill lands in Coach and preserves the Learning draft"
     });
   });
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("textbox")).toHaveValue("BROWSER SELECTION");
-  await page.getByTestId("trainer-view-nav-plan").click();
-  await expect(page.getByRole("textbox")).toHaveValue("MY PLAN DRAFT");
+  // A browser selection never destroys the words the learner already typed.
+  await expect(textbox).toHaveValue("MY PLAN DRAFT\n\nBROWSER SELECTION");
+  // The learning drawer is a surface over Chat: it shares the one Chat draft.
+  await openLearningGoal(page);
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  await expect(textbox).toHaveValue("MY PLAN DRAFT\n\nBROWSER SELECTION");
 });
 
 test("Ask Trainer draft with a learner question lands in the shared Coach composer", async ({ page }) => {
@@ -244,10 +270,10 @@ test("Ask Trainer draft with a learner question lands in the shared Coach compos
   // through the existing coach-draft channel. With a source attached the
   // staged ask follows the visible work context — opened on Coach it lands
   // in the Coach conversation, the question replaces the default ask line,
-  // and the Learning draft keeps its own scope.
+  // and the learning drawer shares that one draft.
   await page.goto("/vscode-preview.html?view=coach&lang=en-US&connection=connected&scenario=ready");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-  const textbox = page.getByRole("textbox");
+  const textbox = page.locator("#coach-composer");
   await textbox.fill("MY COACH DRAFT");
   await page.evaluate(() => {
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
@@ -277,18 +303,20 @@ test("Ask Trainer draft with a learner question lands in the shared Coach compos
   await expect(textbox).toHaveValue(/Source: https:\/\/rl\.example\.com\/episodes/);
   // The learner's own words replace the default ask template.
   await expect(textbox).not.toHaveValue(/Explain the key ideas here/);
-  // Drafts keep their per-surface scope inside one shared workspace session:
-  // the Learning composer never saw the ask, and Coach keeps it after switching.
-  await page.getByTestId("trainer-view-nav-plan").click();
-  await expect(page.getByRole("textbox")).toHaveValue("");
-  await page.getByTestId("trainer-view-nav-coach").click();
+  // The learning drawer is a surface over Chat: there is one shared draft, so
+  // the staged ask survives opening and closing the drawer.
+  await openLearningGoal(page);
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  await expect(textbox).toHaveValue(/Explain truncation versus termination/);
+  await closeLearningDrawer(page);
   await expect(textbox).toHaveValue(/Explain truncation versus termination/);
 });
 
-test("host coach prompt lands in Coach without leaking into the Learning draft", async ({ page }) => {
+test("host coach prompt lands in the shared Coach composer", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=en-US&connection=connected&scenario=ready");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-  await page.getByRole("textbox").fill("PLAN DRAFT");
+  const textbox = page.locator("#coach-composer");
+  await textbox.fill("PLAN DRAFT");
   await page.evaluate(() => {
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
       type: "ui/coachPrompt",
@@ -296,15 +324,18 @@ test("host coach prompt lands in Coach without leaking into the Learning draft",
     });
   });
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("textbox")).toHaveValue("HOST PROMPT");
-  await page.getByTestId("trainer-view-nav-plan").click();
-  await expect(page.getByRole("textbox")).toHaveValue("PLAN DRAFT");
+  await expect(textbox).toHaveValue("HOST PROMPT");
+  // There is one shared Chat draft now, so the learning drawer shows the same
+  // host prompt instead of a second, separate Learning draft.
+  await openLearningGoal(page);
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  await expect(textbox).toHaveValue("HOST PROMPT");
 });
 
 test("browser selection prefill appends to an unsent Coach draft", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=coach&lang=en-US&connection=connected&scenario=ready");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
-  await page.getByRole("textbox").fill("MY COACH DRAFT");
+  await page.locator("#coach-composer").fill("MY COACH DRAFT");
   await page.evaluate(() => {
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
       type: "ui/coachDraftPrefill",
@@ -312,13 +343,13 @@ test("browser selection prefill appends to an unsent Coach draft", async ({ page
       text: "BROWSER SELECTION",
     });
   });
-  await expect(page.getByRole("textbox")).toHaveValue(
+  await expect(page.locator("#coach-composer")).toHaveValue(
     "MY COACH DRAFT\n\nBROWSER SELECTION",
   );
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
 });
 
-test("Plan generate keeps an unsent Coach draft instead of overwriting it", async ({ page }) => {
+test("the learning drawer keeps an unsent Coach draft instead of overwriting it", async ({ page }) => {
   await page.goto("/vscode-preview.html?view=plan&lang=zh-CN&connection=connected&run=first-plan");
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
   await page.evaluate(() => {
@@ -349,16 +380,17 @@ test("Plan generate keeps an unsent Coach draft instead of overwriting it", asyn
     } });
   });
   await expect(page.getByText(/先启用一组可用连接/)).toHaveCount(0);
+  // The learning drawer overlays the shell: close it before Chat is selected.
+  await closeLearningDrawer(page);
   await page.getByTestId("trainer-view-nav-coach").click();
-  await page.getByRole("textbox").fill("我的教练草稿");
-  await page.getByTestId("trainer-view-nav-plan").click();
-  await page.locator('[data-learning-section=more] > summary').click();
-  await page.getByRole("button", { name: "生成计划", exact: true }).click();
-  await expect(page.getByTestId("trainer-view-nav-plan")).toHaveAttribute("aria-current", "page");
-  await expect(page.locator(".template-context")).toContainText("生成计划");
-  await page.getByTestId("trainer-view-nav-coach").click();
+  await page.locator("#coach-composer").fill("我的教练草稿");
+  await openLearningGoal(page);
+  // The learning drawer is a reading surface: opening and closing it never
+  // overwrites the learner's unsent Coach draft.
+  await expect(page.locator("#coach-composer")).toHaveValue("我的教练草稿");
+  await closeLearningDrawer(page);
   await expect(page.getByTestId("trainer-view-nav-coach")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("textbox")).toHaveValue("我的教练草稿");
+  await expect(page.locator("#coach-composer")).toHaveValue("我的教练草稿");
 });
 
 test("training generation keeps raw card JSON out of the conversation surface", async ({ page }) => {
@@ -373,7 +405,7 @@ test("training generation keeps raw card JSON out of the conversation surface", 
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
     type: 'stream/cancelled', payload: { messageId: 'training_raw_card' },
   }));
-  await expect(page.getByRole("textbox")).toBeEnabled();
+  await expect(page.locator('#coach-composer')).toBeEnabled();
 });
 
 test("stage materials live inside per-stage disclosures and old plan materials clear", async ({ page }) => {
@@ -395,18 +427,18 @@ test("stage materials live inside per-stage disclosures and old plan materials c
       })) },
     } });
   });
-  await openLearningMore(page);
   const stages = page.locator('[data-learning-section=route]');
-  await stages.locator(':scope > summary').click();
-  // The roadmap is quiet text rows: the progress ring and material badges are gone.
+  await openLearningMore(page);
+  // The route group holds the live stages; the finished one moved into the
+  // completed-stages disclosure.
   await expect(stages.locator('[data-plan-stage]')).toHaveCount(1);
-  await expect(stages.getByRole('img', { name: /阶段完成度/ })).toHaveCount(0);
+  const completed = page.locator('[data-learning-section="completed-stages"]');
+  await expect(completed.locator('[data-plan-stage="stage-2"]')).toHaveCount(1);
+  await expect(stages.getByRole('meter')).toHaveCount(0);
   await expect(stages.locator('[title^="已生成资料"]')).toHaveCount(0);
   const active = stages.locator('[data-plan-stage="stage-1"]');
   await expect(active).toHaveAttribute('data-stage-status', 'active');
-  const completedStages = page.locator('[data-learning-section=completed-stages]');
-  await completedStages.locator(':scope > summary').click();
-  const done = completedStages.locator('[data-plan-stage="stage-2"]');
+  const done = completed.locator('[data-plan-stage="stage-2"]');
   await expect(done).toHaveAttribute('data-stage-status', 'done');
   // Stage details are user-controlled now: open the active stage to reach its
   // objective, 生成资料 action and generated materials.
@@ -441,9 +473,6 @@ test("stage materials live inside per-stage disclosures and old plan materials c
       })) },
     } });
   });
-  if (!(await stages.evaluate((el) => el.open))) {
-    await stages.locator(':scope > summary').click();
-  }
   const reopenedDetails = stages.locator('[data-plan-stage="stage-1"]').locator('details');
   if (!(await reopenedDetails.evaluate((el) => el.open))) {
     await reopenedDetails.locator(':scope > summary').click();
@@ -483,7 +512,13 @@ test('restored trusted verification advances to reflection and carries its full 
     window.__TRAINER_BOOTSTRAP__ = payload;
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload });
   });
-  await expect(page.getByRole('textbox', { name: '记录当前训练复盘', exact: true })).toBeEditable();
+  // The legacy Training route opens the learning drawer, and the drawer
+  // overlays the shell: close it so the practice card is reachable again.
+  await closeLearningDrawer(page);
+  // The reflection now lives in the card's own answer field.
+  const reflectionInput = page.getByRole('textbox', { name: '你的作答', exact: true });
+  await expect(reflectionInput).toBeEditable();
+  await expect(reflectionInput).toHaveAttribute('placeholder', '写下你刚确认的规则，以及下次如何复用它。');
   await page.evaluate((reflection) => {
     const current = window.__TRAINER_BOOTSTRAP__;
     const state = current.workspaceTrainingState;
@@ -515,7 +550,7 @@ test('switching conversations isolates unsent drafts and restores each one when 
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'state/patch', payload: { sessionLabel } });
   }, id);
   await switchSession('session-draft-a');
-  const input = page.getByRole('textbox');
+  const input = page.locator('#coach-composer');
   await input.fill('Tuple reflection, still unsent.\nKeep this output intact.');
   await switchSession('session-draft-b');
   await expect(input).toHaveValue('');
@@ -544,14 +579,19 @@ test('same-context backups isolate growth evidence and unsent drafts by database
   const input = page.getByRole('textbox', { name: '消息输入框', exact: true });
   await switchDatabase('/original/data', 'original-one', true);
   await input.fill('原目录草稿，尚未发送。');
-  await page.getByTestId('trainer-view-nav-plan').click();
-  await openLearningMore(page);
-  await page.locator('[data-learning-section=growth] .template-back').first().click();
-  await expect(page.getByRole('button', { name: '实现 有辅助完成 1 次验证通过', exact: true })).toBeVisible();
+  await openLearningGoal(page);
+  // Growth is the drawer's progress section now — the separate Growth page is
+  // gone.
+  const progress = page.locator('[data-template="LearningDrawer"] [data-learning-section="progress"]');
+  const growthRow = progress.locator('li').filter({ hasText: '实现' });
+  await expect(growthRow).toBeVisible();
+  await expect(growthRow).toContainText('有辅助完成');
+  await expect(growthRow).toContainText('1 条证据');
   await switchDatabase('/backup/data', 'backup-one', false);
-  await expect(page.getByText('完成一次练习的验证后，这里会显示你在理解、实现、调试、迁移和延迟回忆上的真实成长。', { exact: true })).toBeVisible();
-  await expect(page.getByText('1 次验证通过', { exact: true })).toHaveCount(0);
-  await page.getByTestId('trainer-view-nav-coach').click();
+  // The backup database carries no projection: no proven dimension remains.
+  await expect(progress.getByText('有辅助完成', { exact: true })).toHaveCount(0);
+  await expect(progress.getByText('1 条证据', { exact: true })).toHaveCount(0);
+  await closeLearningDrawer(page);
   await expect(input).toHaveValue('');
   await input.fill('恢复目录的另一份草稿。');
   await switchDatabase('/original/data', 'original-two', true);
@@ -611,28 +651,31 @@ test('Start review opens the due queue while preserving the current practice car
   });
   await openLearningMore(page);
   await page.getByRole('button', { name: '开始复习', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '保留当前元组练习', exact: true })).toBeVisible();
-  const queue = page.locator('[data-training-review-queue="true"]');
-  await expect(queue).toHaveAttribute('open', '');
-  await expect(queue.getByRole('heading', { name: '元组赋值边界', exact: true })).toBeVisible();
-  await queue.locator('.training-review-row__actions-details > summary').click();
-  await expect(queue.getByRole('button', { name: '开始复习', exact: true })).toBeVisible();
-  await expect(queue.getByRole('button', { name: '开始复习', exact: true })).toBeInViewport();
-  const geometry = await page.evaluate(() => {
-    const card = document.querySelector('.training-current--single-card').getBoundingClientRect();
-    const queue = document.querySelector('[data-training-review-queue="true"]').getBoundingClientRect();
-    return { cardBottom: card.bottom, queueTop: queue.top };
-  });
-  expect(geometry.queueTop).toBeGreaterThanOrEqual(geometry.cardBottom);
+  // The due queue has no Training panel any more: "Start review" opens the
+  // learning drawer on the practice section and keeps the practice card.
+  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+  await expect(page.locator('[data-learning-section="practice"]')).toBeVisible();
+  await expect(page.locator('[data-training-card-id]').getByRole('heading', { name: '保留当前元组练习', exact: true })).toBeVisible();
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: {
     activeView: 'training', trainingRestoreTarget: 'next_hop',
     latestTrainingNextHop: { targetId: 'card-due-review', cardType: 'practice', title: '旧恢复卡' },
   } }));
-  await queue.getByRole('button', { name: '开始复习', exact: true }).click();
+  // The restored route opens the learning drawer; close it so the practice
+  // card is reachable again.
+  await closeLearningDrawer(page);
   await page.evaluate(() => {
     const current = window.__TRAINER_BOOTSTRAP__;
+    const artifact = { cardId: 'review-tuple-slot', type: 'practice', title: '复习：元组赋值边界',
+      status: 'active', learningPhase: 'recall', focusArea: '元组赋值边界' };
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'state/patch', payload: {
       workspaceTrainingState: { ...current.workspaceTrainingState, latestTrainingSubmode: 'review_queue',
+        // The review artifact is the foreground card: the due-queue panel
+        // that used to promote it is gone with the Training surface.
+        selectedCardId: artifact.cardId,
+        selectedCardTitle: artifact.title,
+        selectedCardStatus: 'active',
+        trainingCardCandidates: [...(current.workspaceTrainingState.trainingCardCandidates ?? []), artifact],
+        activeTrainingCardRouting: { selectedCardId: artifact.cardId, selectedCard: artifact },
         reviewArtifact: { id: 'review-tuple-slot', title: '复习：元组赋值边界', focusArea: '元组赋值边界',
           source: 'review_queue', status: 'active', summary: '不看笔记解释 tuple 槽位为何不可写。',
           guardrail: '先闭卷回忆，再用例子核对。', recommendedActions: ['用一句话说明预期异常。'], nextSelfImplementationRule: '先回忆，再核对例子。',
@@ -641,6 +684,9 @@ test('Start review opens the due queue while preserving the current practice car
     } });
   });
   const currentCard = page.locator('.training-current--single-card');
+  // The conversation keeps its reading position: bring the card into view
+  // before asserting that the review card is what the learner reads.
+  await currentCard.scrollIntoViewIfNeeded();
   await expect(currentCard.getByRole('heading', { name: '复习：元组赋值边界', exact: true })).toBeInViewport();
   await expect(currentCard.getByText('不看笔记解释 tuple 槽位为何不可写。', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await expect(currentCard.getByRole('button', { name: '验证当前文件', exact: true })).toHaveCount(0);
@@ -657,7 +703,9 @@ test('Start review opens the due queue while preserving the current practice car
     type: 'training/persistenceAck', payload: { commandId: accept.payload.commandId, ok: true,
       requestId: accept.payload.payload.__trainerTrainingPersistenceId },
   });
-  await page.getByRole('textbox').last().fill('元组槽位不能替换，但它引用的列表仍然可变。');
+  // The reflection is recorded in the card's own answer field, not in the
+  // dock composer.
+  await page.locator('[data-inline-practice-answer="true"] textarea').fill('元组槽位不能替换，但它引用的列表仍然可变。');
   await page.getByRole('button', { name: '记录训练复盘', exact: true }).click();
   await expect.poll(async () => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.find(
     (message) => message.payload?.commandId === 'trainer.training.reviewArtifactAction',
@@ -767,6 +815,11 @@ async function loadHostFixture(page, view, run) {
   ))).toBe(true);
   await page.evaluate(() => window.postMessage({ type: 'bootstrap', payload: window.__TRAINER_BOOTSTRAP__ }, window.location.origin));
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+  // Learning is not a destination any more: a legacy learning route resolves
+  // to Chat with the learning drawer opened on the matching section.
+  if (LEGACY_ROUTE_SECTIONS[view]) {
+    await openLearningDrawer(page, LEGACY_ROUTE_SECTIONS[view]);
+  }
 }
 
 for (const language of ['zh-CN', 'en-US']) {
@@ -801,6 +854,9 @@ for (const language of ['zh-CN', 'en-US']) {
             activeTrainingCardRouting: { selectedCardId: card.cardId, selectedCard: card, selectionScore: 100 } },
         } });
       }, { language, recovered });
+      // The legacy Training route opens the learning drawer, and the drawer
+      // overlays the shell: close it so the practice card is reachable again.
+      await closeLearningDrawer(page);
       const card = page.locator('[data-training-card-id]');
       await expect(card).toHaveAttribute('data-training-card-id', `restored-technical-focus-${language}`);
       const details = page.locator('[data-training-card-details=true]');
@@ -808,8 +864,10 @@ for (const language of ['zh-CN', 'en-US']) {
       await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('workspace_id isolation');
       await expect(details).not.toContainText('OLD_');
       await page.getByTestId('trainer-view-nav-resources').click();
-      await page.getByTestId('trainer-view-nav-plan').click();
-      await page.locator('[data-surface=plan] [data-template=NextAction] button').click();
+      // Learning is not a destination any more: the learner comes back to
+      // Chat and reopens the learning drawer on the goal section.
+      await openLearningGoal(page);
+      await page.locator('[data-template="LearningDrawer"] [data-template=NextAction] button').click();
       await expect(card).toHaveAttribute('data-training-card-id', `restored-technical-focus-${language}`);
       await expect(details.locator('[data-training-card-fact=focus]')).toHaveText('workspace_id isolation');
       await expect(details).not.toContainText('OLD_');

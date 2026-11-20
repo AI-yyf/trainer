@@ -5,10 +5,8 @@
 //   02 first explanation of a concept (baseline: a detailed reply)
 //   03 the simplification ask — Trainer re-explains in an easier way about
 //      the SAME concept
-//   04 the learner records the feedback via /memory/feedback (too_hard)
-//   05 the teaching-adaptation loop: the feedback lands in the persisted
-//      teaching strategy effectiveness record (last_outcome=user_feedback)
-//      and the workspace feedback state carries the learner's words
+//   04 feedback spoken in the conversation lands in memory as a dated
+//      observation, without a separate feedback action or mastery claim
 //
 // Requires PROBE_PROVIDER_BASE_URL / PROBE_PROVIDER_API_KEY (+
 // PROBE_PROVIDER_MODEL, default MiniMax-M2.7).
@@ -44,6 +42,7 @@ let sidecar = null;
 let providerTestResult = null;
 let sidecarLog = "";
 let failures = 0;
+const revisionAsk = "你这次解释得太复杂了，换一种容易理解的方式。用类比，不要太长。";
 
 const providerPayload = {
   name: "scenario3",
@@ -175,50 +174,51 @@ try {
   const second = await streamTurn({
     session_id: sessionId,
     workspace_id: "scenario3-ws",
-    message: "你这次解释得太复杂了，换一种容易理解的方式。用类比，不要太长。",
+    message: revisionAsk,
     intent: "coach",
     active_view: "coach",
   });
   const shortened = second.visible.length > 0 &&
     second.visible.length < Math.max(first.visible.length, 400);
-  const sameTopic = /潜在空间|latent|类比|比喻|像|好比/iu.test(second.visible);
+  const sameTopic = /潜在空间|隐空间|潜变量|latent/iu.test(second.visible);
+  const usesAnalogy = /类比|比喻|像|好比|想象|比如/iu.test(second.visible);
+  const checksUnderstanding = /[？?]/u.test(second.visible);
+  const asksForRepeat = /(?:再贴|贴一下|重新贴|重新发|再发|发给我|提供).{0,12}(?:原文|刚才|上文|那段)|(?:刚才|原文|那段).{0,15}(?:再贴|贴一下|重新贴|重新发)/u.test(second.visible);
   step("03-easier-re-explanation", {
     status: second.status,
     first_chars: first.visible.length,
     second_chars: second.visible.length,
     shortened,
     same_topic: sameTopic,
+    uses_analogy: usesAnalogy,
+    checks_understanding: checksUnderstanding,
+    asks_for_repeat: asksForRepeat,
     preview: second.visible.slice(0, 220),
     ...(second.status !== 200 ? { error_detail: errorDetail(second.text) } : {}),
-  }, { fail: second.status !== 200 || !sameTopic || !shortened });
-
-  // 04 — the learner records the feedback through the governed feedback path
-  const feedback = await post("/memory/feedback", {
-    session_id: sessionId,
-    workspace_id: "scenario3-ws",
-    kind: "too_hard",
-    message: "解释太复杂了。下次用类比先讲直觉，再讲细节。",
-    focus_area: "潜在空间",
-    scenario: "general",
+  }, {
+    fail: second.status !== 200 || !sameTopic || !shortened ||
+      !usesAnalogy || !checksUnderstanding || asksForRepeat,
   });
-  step("04-feedback-recorded", {
-    status: feedback.status,
-    ok: feedback.json?.ok === true || feedback.status === 200,
-  }, { fail: feedback.status !== 200 });
 
-  // 05 — the teaching-adaptation loop persists the strategy record
+  // 04 — verify the conversational feedback without a manual feedback POST.
   const snap = await snapshot("scenario3-ws", sessionId);
-  const strategies = snap.json?.memory?.teaching_strategy_effectiveness ?? [];
-  const feedbackRecord = strategies.find((item) => item.last_outcome === "user_feedback");
-  const workspace = snap.json?.memory?.workspace ?? {};
-  const feedbackCarried =
-    (workspace.latest_user_feedback ?? workspace.latest_user_feedback_kind ?? "") !== "";
-  step("05-strategy-effectiveness-persisted", {
+  const memory = snap.json?.memory ?? {};
+  const strategies = memory.teaching_strategy_effectiveness ?? [];
+  const feedbackRecord = strategies.find((item) =>
+    item.scenario === "explanation_revision" && item.last_outcome === "user_feedback"
+  );
+  const observation = (memory.userFeedback ?? memory.user_feedback ?? []).find((item) =>
+    item.kind === "too_hard" && item.message === revisionAsk && item.reply_message_id
+  );
+  const masteryUnaffected = feedbackRecord?.total_count === 0 &&
+    !(memory.learning_outcomes ?? []).some((item) => item.action_type === "user_feedback");
+  step("04-conversational-feedback-persisted", {
+    status: snap.status,
     strategy_records: strategies.length,
     has_user_feedback_record: Boolean(feedbackRecord),
-    feedback_bias: feedbackRecord?.next_step_bias ?? "",
-    workspace_feedback_carried: feedbackCarried,
-  }, { fail: !feedbackRecord });
+    reply_message_id: observation?.reply_message_id ?? "",
+    mastery_unaffected: masteryUnaffected,
+  }, { fail: snap.status !== 200 || !observation || !masteryUnaffected });
 
   const summary = {
     scenario: "13-场景三：个性化教学",

@@ -1,13 +1,58 @@
 const { test, expect } = require('playwright/test');
 const { openSettingsCategory } = require('./template-navigation');
+const { closeLearningDrawer, openLearningDrawer } = require('./workbench-navigation');
+
+test('Learning reads saved flash prompts and candidate criteria from sidecar records', async ({ page }) => {
+  const workspaceId = 'learning-sidecar-preview';
+  const current = {
+    card_id: 'saved-flash', card_type: 'flash', title: 'Value targets',
+    status: 'active', review_state: 'saved', learning_phase: 'try', answer_mode: 'text',
+    question: 'What value should follow a true terminal state?',
+  };
+  const candidate = {
+    card_id: 'pending-flash', card_type: 'flash', title: 'Model inputs',
+    status: 'candidate', review_state: 'pending', question: 'What goes into the dynamics model?',
+    answer_mode: 'text', acceptance_criteria: ['Name the current latent state.', 'Name the executed action.'],
+  };
+  await page.addInitScript((id) => sessionStorage.setItem('trainer:webview:preview:workspace-id', id), workspaceId);
+  await page.route('http://127.0.0.1:34907/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/session/start') return route.fulfill({ json: { session_id: 'learning-session' } });
+    if (path === '/memory/summary') return route.fulfill({ json: { memory: {
+      workspace: {
+        workspace_id: workspaceId, selected_card_id: current.card_id,
+        selected_card_status: 'active', selected_card_title: current.title, latest_training_submode: 'flash',
+        live_training_selection: { workspace_id: workspaceId, card_id: current.card_id, selected_at: '2026-10-01T00:00:00Z' },
+      },
+      training_card_candidates: [current, candidate],
+      active_training_card_routing: { selected_card_id: current.card_id, selected_card: current },
+    } } });
+    return route.fulfill({ json: { status: 'ok' } });
+  });
+  await page.setViewportSize({ width: 340, height: 820 });
+  await page.goto('/vscode-preview.html?view=training&live=1&lang=en-US&sidecarPort=34907');
+  await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
+  // The legacy training route opens the learning drawer over the conversation;
+  // the practice card itself lives inline in the message flow.
+  await closeLearningDrawer(page);
+  const practice = page.locator('[data-template=FocusedPractice]');
+  await expect(practice.getByText(current.question, { exact: true })).toBeVisible();
+  const library = page.locator('[data-training-library]');
+  await expect(library).toHaveJSProperty('open', false);
+  await library.locator(':scope > summary').click();
+  const review = library.locator('[data-candidate-id=pending-flash]');
+  await review.locator('summary').click();
+  await expect(review.getByRole('textbox', { name: 'Prompt', exact: true })).toHaveValue(candidate.question);
+  await expect(review.getByRole('textbox', { name: 'Acceptance criteria (one per line)' })).toHaveValue(candidate.acceptance_criteria.join('\n'));
+});
 
 // Deterministic fixtures validate presentation and navigation, not real evidence.
 for (const width of [340, 420, 460]) {
   for (const theme of ['dark', 'light']) {
     for (const language of ['zh-CN', 'en-US']) {
-      test(`three stable destinations and composer ownership: ${width}/${theme}/${language}`, async ({ page }) => {
+      test(`two stable destinations and composer ownership: ${width}/${theme}/${language}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 800 });
-        const labels = language === 'zh-CN' ? ['对话', '学习', '资料'] : ['Chat', 'Learning', 'Resources'];
+        const labels = language === 'zh-CN' ? ['对话', '资料'] : ['Chat', 'Resources'];
         for (const route of ['coach', 'plan', 'resources', 'training', 'progress', 'settings']) {
           await page.goto(`/vscode-preview.html?view=${route}&scenario=ready&connection=connected&theme=${theme}&lang=${language}`);
           await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();
@@ -17,8 +62,19 @@ for (const width of [340, 420, 460]) {
           await expect(page.locator('#coach-composer')).toHaveCount(ownsComposer ? 1 : 0);
           const current = nav.locator('[aria-current="page"]');
           if (route === 'settings') await expect(current).toHaveCount(0);
-          else await expect(current).toHaveAttribute('data-testid', `trainer-view-nav-${['training', 'progress'].includes(route) ? 'plan' : route}`);
+          // Resources keeps its own destination; every legacy learning route
+          // resolves to Chat with the learning drawer open.
+          else await expect(current).toHaveAttribute(
+            'data-testid',
+            route === 'resources' ? 'trainer-view-nav-resources' : 'trainer-view-nav-coach',
+          );
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+          // A legacy learning route opens the learning drawer. It is modal, so
+          // its backdrop covers the header utilities until it is closed.
+          if (['plan', 'training', 'progress'].includes(route)) {
+            await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
+            await closeLearningDrawer(page);
+          }
           await page.getByTestId('trainer-history-toggle').click();
           await expect(page.locator('.app-shell-overlay__panel')).toBeVisible();
           await page.locator('.app-shell-overlay__backdrop').click({ position: { x: 2, y: 2 } });
@@ -39,18 +95,23 @@ test('surface switches retain the Coach draft and resource search without sharin
   await page.locator('#coach-composer').press('Enter');
   const search = page.locator('[data-clear-resource-search]');
   await expect(search).toContainText('boundary');
-  await page.getByTestId('trainer-view-nav-plan').click();
+  await openLearningDrawer(page, 'goal');
+  // The drawer is modal: close it before using the nav.
+  await closeLearningDrawer(page);
   await page.getByTestId('trainer-view-nav-resources').click();
   await expect(search).toContainText('boundary');
   await page.getByTestId('trainer-view-nav-coach').click();
   await expect(page.locator('#coach-composer')).toHaveValue('Keep my question while I read');
-  await page.getByTestId('trainer-view-nav-plan').click();
-  const learning = page.locator('[data-primary-surface="plan"]');
+  // Learning is a drawer over Chat, not a surface of its own: the composer
+  // and the drawer survive a legacy route restore unchanged.
+  await openLearningDrawer(page, 'goal');
+  const learning = page.locator('[data-template="LearningDrawer"]');
   await page.locator('#coach-composer').evaluate((input) => input.setAttribute('data-same-learning-input', 'true'));
   await learning.evaluate((surface) => surface.setAttribute('data-same-learning-surface', 'true'));
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: { activeView: 'training' } }));
   await expect(page.locator('#coach-composer')).toHaveAttribute('data-same-learning-input', 'true');
   await expect(learning).toHaveAttribute('data-same-learning-surface', 'true');
+  await expect(page.locator('[data-learning-section="practice"]')).toBeVisible();
   await page.evaluate(() => {
     const current = window.__TRAINER_BOOTSTRAP__;
     const workspaceId = current.memory.workspace?.workspaceId ?? 'workspace-template-nav';
@@ -80,10 +141,14 @@ test('surface switches retain the Coach draft and resource search without sharin
   await expect(cardDetails).toHaveCount(1);
   await expect(cardDetails.locator(':scope > summary')).toContainText(/任务详情|Task details/);
   await expect(cardDetails).not.toHaveAttribute('open', '');
-  const practiceInput = page.locator('#coach-composer');
-  await expect(page.locator('textarea:visible')).toHaveCount(1);
-  await expect(practiceInput).toBeVisible();
+  const practiceInput = page.locator('[data-inline-practice-answer="true"] textarea');
+  // The practice card's own answer field is a second textarea: it belongs to
+  // the card, not to the dock composer.
+  await expect(page.locator('#coach-composer')).toBeVisible();
+  await expect(page.locator('textarea:visible')).toHaveCount(2);
   await practiceInput.fill('My attempt note');
+  // The drawer is modal: close it before using the nav.
+  await closeLearningDrawer(page);
   await page.getByTestId('trainer-view-nav-coach').click();
   await expect(page.locator('#coach-composer')).toHaveValue('Keep my question while I read');
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: { activeView: 'training' } }));
@@ -127,8 +192,10 @@ test('reload restores the same session draft and reading position; history retur
     }
     throw new Error('Reading position did not settle after the wheel gesture');
   });
-  await page.getByTestId('trainer-view-nav-plan').click();
-  await page.getByTestId('trainer-view-nav-coach').click();
+  // Learning is a drawer over Chat now: switching to it and back must keep
+  // the thread's reading position.
+  await openLearningDrawer(page, 'goal');
+  await closeLearningDrawer(page);
   await expect.poll(() => content.evaluate(node => node.scrollTop)).toBeCloseTo(saved, 0);
   await page.reload();
   await expect(input).toHaveValue('Unsent question in this session');

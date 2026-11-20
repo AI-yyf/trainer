@@ -241,17 +241,12 @@ if __name__ == "__main__":
             if status != 200 or not card_id:
                 raise RuntimeError(f"generate-card failed: {status} {generated}")
 
-            _request(
-                port,
-                "POST",
-                "/training/card-status",
-                {
-                    "workspace_id": workspace_id,
-                    "card_id": card_id,
-                    "new_status": "active",
-                    "reason": "real learning loop verification",
-                },
-            )
+            for action in ("save", "start"):
+                status, decision = _request(port, "POST", "/training/card/library", {
+                    "workspace_id": workspace_id, "card_id": card_id, "action": action,
+                })
+                if status != 200:
+                    raise RuntimeError(f"card library {action} failed: {status} {decision}")
             status, evaluation = _request(
                 port,
                 "POST",

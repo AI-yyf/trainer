@@ -30,8 +30,9 @@ test("RTL preview keeps the 360px Trainer shell readable and bounded", async ({ 
   await expect(page.locator("body")).toHaveAttribute("dir", "rtl");
   const rtlSwitcher = page.locator(".app-shell-nav");
   await expect(rtlSwitcher.getByTestId("trainer-view-nav-coach")).toBeVisible();
-  await expect(rtlSwitcher.getByTestId("trainer-view-nav-plan")).toBeVisible();
   await expect(rtlSwitcher.getByTestId("trainer-view-nav-resources")).toBeVisible();
+  // Learning is no longer a destination: it is the header drawer utility.
+  await expect(page.getByTestId("trainer-learning-toggle")).toBeVisible();
   await expect(page.locator(".composer-shell textarea").first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 

@@ -29,6 +29,7 @@ import {
   buildVsixE2EProviderSavePayloadTemplate,
   resolveVsixE2EProviderConfiguration,
 } from "../extension/scripts/vsix-e2e-provider-config.mjs";
+import { ensureFreshVsixOrExit } from "../extension/scripts/prepare-current-vsix.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -41,9 +42,15 @@ const electronBinary = [
   "/Applications/Visual Studio Code.app/Contents/MacOS/Electron",
   "/Applications/Visual Studio Code.app/Contents/MacOS/Code",
 ].find((candidate) => fs.existsSync(candidate));
-if (!fs.existsSync(vsixPath) || !electronBinary) {
-  throw new Error("Run npm run package:vsix first (VSIX or VS Code Electron missing).");
+if (!electronBinary) {
+  throw new Error("VS Code Electron is missing; the grounding GUI gate cannot run.");
 }
+// The gate installs the packaged artifact, so a stale artifact would make the
+// report describe code the sources no longer match.
+ensureFreshVsixOrExit({
+  vsixPath,
+  reason: "the resource grounding GUI gate verifies the delivered artifact",
+});
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const outDir = path.join(repoRoot, "output", "resource-grounding-gui", stamp);

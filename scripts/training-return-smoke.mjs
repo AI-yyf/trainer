@@ -327,7 +327,6 @@ async function runProbe({ name, diagnosticsInput, expectPassed, fixture, diagnos
       status: generated.response.status,
     });
   }
-  await assertPracticeRouting(generated.json, `${name}_generate_card`, diagnostics);
   const card = generated.json?.card;
   const trainingCardId = compact(card?.card_id ?? card?.cardId);
   const trainingCardTitle = compact(card?.title);
@@ -340,6 +339,28 @@ async function runProbe({ name, diagnosticsInput, expectPassed, fixture, diagnos
         preview: JSON.stringify(generated.json),
       });
   }
+
+  for (const action of ["save", "start"]) {
+    const decision = await postJson("/training/card/library", {
+      workspace_id: workspaceId, card_id: trainingCardId, action,
+    });
+    if (!decision.response.ok) {
+      return failure({
+        step: `${name}_${action}_card`,
+        category: "card_library_action_failed",
+        detail: `Card library action failed with HTTP ${decision.response.status}.`,
+        diagnostics,
+      });
+    }
+  }
+  const routing = await getJson(`/training/active-card?workspace_id=${encodeURIComponent(workspaceId)}`);
+  if (!routing.response.ok || routing.json?.selected_card_id !== trainingCardId) {
+    return failure({
+      step: `${name}_start_card`, category: "missing_training_card",
+      detail: "The saved card was not selected for practice.", diagnostics,
+    });
+  }
+  await assertPracticeRouting({ active_routing: routing.json }, `${name}_start_card`, diagnostics);
 
   const evaluation = await postJson("/evaluate/current-file", {
     session_id: sessionId,

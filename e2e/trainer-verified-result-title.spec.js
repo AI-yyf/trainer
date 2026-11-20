@@ -1,5 +1,6 @@
 const { test, expect } = require('playwright/test');
 const { planOnlyFixture } = require('./learning-fixtures');
+const { openLearningDrawer } = require('./workbench-navigation');
 
 for (const [language, title] of [['zh-CN', '确认这次验证结果'], ['en-US', 'Confirm this verification result']]) {
   test(`verified training return uses a clear ${language} primary title and keeps raw evidence in disclosure`, async ({ page }) => {
@@ -30,7 +31,12 @@ for (const [language, title] of [['zh-CN', '确认这次验证结果'], ['en-US'
       });
     }, { payload, language });
     await page.goto('/');
-    const primary = page.locator('[data-surface=plan] [data-template=NextAction]');
+    // Learning is not a destination: the governed plan card lives in the
+    // learning drawer's goal section.
+    await openLearningDrawer(page, 'goal');
+    // The drawer's goal section owns the governed plan card; with no formal
+    // plan it still carries the single adopt action for the pending evidence.
+    const primary = page.locator('[data-learning-section="goal"] [data-template=NextAction]');
     await expect(primary.locator('h3')).toHaveText(title);
     await expect(primary.getByRole('button')).toHaveAttribute('data-action-intent', 'adopt_evidence');
     const evidence = page.locator('[data-learning-section=evidence]');

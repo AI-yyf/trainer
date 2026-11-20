@@ -207,6 +207,12 @@ def main() -> int:
             if status != 200:
                 raise RuntimeError(f"generate-card failed: {status} {generated}")
             card_id = str(generated["card"]["card_id"])
+            for action in ("save", "start"):
+                status, decision = _request(port, "POST", "/training/card/library", {
+                    "workspace_id": workspace_id, "card_id": card_id, "action": action,
+                })
+                if status != 200:
+                    raise RuntimeError(f"card library {action} failed: {status} {decision}")
             first = evaluate()
         finally:
             sidecar.stop()

@@ -1,5 +1,6 @@
 const { test, expect } = require('playwright/test');
 const { planOnlyFixture } = require('./learning-fixtures');
+const { openLearningDrawer } = require('./workbench-navigation');
 
 test('Coach shows the reply and usable next actions without duplicate explanations or management', async ({ page }) => {
   await page.goto('/vscode-preview.html?view=coach&lang=zh-CN&connection=connected&run=concise-coach');
@@ -79,6 +80,9 @@ test('the single Learning action adopts only current step evidence and respects 
     await page.evaluate(data => window.postMessage({ type: 'bootstrap', payload: data }, location.origin), payload);
   }
   await apply();
+  // The governed plan card is the drawer's goal section: open it the way the
+  // learner does before reading the single primary action.
+  await openLearningDrawer(page, 'goal');
   const primary = page.locator('[data-plan-primary="true"] [data-template=NextAction] > button');
   await expect(primary).toHaveText('确认采用这条证据');
   await expect(primary).toHaveAttribute('data-action-intent', 'adopt_evidence');
@@ -107,11 +111,9 @@ test('long stage titles wrap without generation buttons or empty material panels
   await page.evaluate(data => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'bootstrap', payload: data }),
     { ...current, plan: { ...current.plan, stages: [{ id: 'long-stage', title, status: 'active' },
       { id: 'later-stage', title: '实现 sum_nested', status: 'queued' }] } });
-  const focusMore = page.locator('[data-learning-focus-more]').first();
-  if ((await focusMore.count()) > 0 && (await focusMore.getAttribute('open')) === null) {
-    await focusMore.locator(':scope > summary').click();
-  }
-  await page.locator('[data-learning-section=route] > summary').click();
+  // The drawer carries the plan's stages as plain rows: no catch-all
+  // disclosure and no per-group fold to open first.
+  await expect(page.locator('[data-learning-section=route] > summary')).toHaveCount(0);
   await expect(page.locator('.stage-row')).toHaveCount(2);
   await expect(page.locator('.stage-row').getByText(title, { exact: true })).toBeVisible();
   await expect(page.locator('.stage-row')).toHaveCount(2);

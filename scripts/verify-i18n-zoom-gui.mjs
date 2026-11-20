@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron } from "playwright";
 import { requireVSCodeElectronBinary } from "./vscode-electron.mjs";
+import { ensureFreshVsixOrExit } from "../extension/scripts/prepare-current-vsix.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -28,9 +29,9 @@ const vsixPath = process.env.TRAINER_VSIX_OUTPUT_PATH ||
   path.join(extensionDir, `trainer-extension-${packageJson.version}-darwin-arm64.vsix`);
 const codeCli = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
 const electronBinary = requireVSCodeElectronBinary();
-if (!fs.existsSync(vsixPath)) {
-  throw new Error(`Packaged VSIX not found: ${vsixPath}. Run npm run package:vsix first.`);
-}
+// The gate installs the packaged artifact, so a stale artifact would make the
+// report describe code the sources no longer match.
+ensureFreshVsixOrExit({ vsixPath, reason: "the i18n zoom GUI gate verifies the delivered artifact" });
 
 const LANGUAGES = [
   { code: "zh-CN", resources: "资料", coach: "对话", plan: "学习" },
