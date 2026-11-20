@@ -1,7 +1,7 @@
 """Durable append-only storage for the unified event ledger.
 
-The in-memory :class:`~app.core.event_ledger.EventLedgerService` stays the hot
-path for queries; this store gives it two properties it did not have before:
+The store owns durable history and identity for
+:class:`~app.core.event_ledger.EventLedgerService`:
 
 * **restart-safe history** — recorded events survive a sidecar restart;
 * **idempotent replay** — the same ``(workspace, idempotency_key)`` pair yields
@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Collection
+from contextlib import closing, nullcontext
 from pathlib import Path
 from typing import Any, cast
 
@@ -41,6 +43,11 @@ CREATE TABLE IF NOT EXISTS event_ledger (
 );
 CREATE INDEX IF NOT EXISTS idx_event_ledger_workspace_time
     ON event_ledger(workspace_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_event_ledger_project_time
+    ON event_ledger(project_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_event_ledger_reversed_event
+    ON event_ledger(event_type, json_extract(payload_ref_json, '$.reversed_event_id'))
+    WHERE event_type = 'event_reversed';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_ledger_idempotency
     ON event_ledger(workspace_id, idempotency_key)
     WHERE idempotency_key <> '';
@@ -127,6 +134,7 @@ class EventLedgerStore:
         *,
         workspace_id: str = "",
         idempotency_key: str = "",
+        transaction: sqlite3.Connection | None = None,
     ) -> tuple[EventLedgerEntry, bool]:
         """Append ``entry``; replay the stored entry for a repeated key.
 
@@ -135,8 +143,10 @@ class EventLedgerStore:
         """
         key = idempotency_key.strip()
         workspace = workspace_id or entry.project_id
-        connection = self._connect()
-        try:
+        connection_scope = (
+            nullcontext(transaction) if transaction is not None else closing(self._connect())
+        )
+        with connection_scope as connection:
             cursor = connection.execute(
                 _INSERT_SQL,
                 (
@@ -168,9 +178,8 @@ class EventLedgerStore:
                         "Event ledger reported a replay conflict without a stored entry."
                     )
                 return entry_from_row(row), False
-            connection.commit()
-        finally:
-            connection.close()
+            if transaction is None:
+                connection.commit()
         return entry, True
 
     def load_recent(self, *, limit: int = 2000) -> list[EventLedgerEntry]:
@@ -187,32 +196,108 @@ class EventLedgerStore:
             connection.close()
         return [entry_from_row(row) for row in reversed(rows)]
 
-    def count(self, *, workspace_id: str | None = None) -> int:
-        connection = self._connect()
-        try:
-            if workspace_id is None:
-                row = connection.execute("SELECT COUNT(*) AS n FROM event_ledger").fetchone()
-            else:
-                row = connection.execute(
-                    "SELECT COUNT(*) AS n FROM event_ledger WHERE workspace_id = ?",
-                    (workspace_id,),
-                ).fetchone()
-        finally:
-            connection.close()
+    def find_event(self, event_id: str) -> tuple[str, EventLedgerEntry] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM event_ledger WHERE event_id = ?", (event_id,)
+            ).fetchone()
+        return (str(row["workspace_id"]), entry_from_row(row)) if row is not None else None
+
+    def find_reversal(self, event_id: str) -> EventLedgerEntry | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM event_ledger
+                WHERE event_type = 'event_reversed'
+                  AND json_extract(payload_ref_json, '$.reversed_event_id') = ?
+                ORDER BY rowid LIMIT 1
+                """,
+                (event_id,),
+            ).fetchone()
+        return entry_from_row(row) if row is not None else None
+
+    def query(
+        self,
+        *,
+        event_type: str | None = None,
+        event_types: Collection[str] | None = None,
+        project_id: str | None = None,
+        scope: str | None = None,
+        actor: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        effective: bool = False,
+        newest_first: bool = False,
+    ) -> list[EventLedgerEntry]:
+        filters = [
+            ("event_type", event_type),
+            ("project_id", project_id),
+            ("scope", scope),
+            ("actor", actor),
+        ]
+        clauses = [f"entry.{name} = ?" for name, value in filters if value is not None]
+        args: list[Any] = [value for _, value in filters if value is not None]
+        if event_types is not None:
+            types = tuple(event_types)
+            if not types:
+                return []
+            placeholders = ", ".join("?" for _ in types)
+            clauses.append(f"entry.event_type IN ({placeholders})")
+            args.extend(types)
+        if effective:
+            clauses.extend([
+                "entry.event_type <> 'event_reversed'",
+                """NOT EXISTS (
+                    SELECT 1 FROM event_ledger AS reversal
+                    WHERE reversal.event_type = 'event_reversed'
+                      AND json_extract(reversal.payload_ref_json, '$.reversed_event_id') = entry.event_id
+                )""",
+            ])
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        order = (
+            "ORDER BY entry.occurred_at DESC, entry.rowid DESC"
+            if newest_first
+            else "ORDER BY entry.occurred_at, entry.rowid"
+        )
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT entry.* FROM event_ledger AS entry"
+                + where + f" {order} LIMIT ? OFFSET ?",
+                (*args, -1 if limit is None else max(0, limit), max(0, offset)),
+            ).fetchall()
+        return [entry_from_row(row) for row in rows]
+
+    def count(
+        self,
+        *,
+        workspace_id: str | None = None,
+        project_id: str | None = None,
+        event_type: str | None = None,
+    ) -> int:
+        filters = [("workspace_id", workspace_id), ("project_id", project_id), ("event_type", event_type)]
+        clauses = [f"{name} = ?" for name, value in filters if value is not None]
+        args = [value for _, value in filters if value is not None]
+        with closing(self._connect()) as connection:
+            where = " WHERE " + " AND ".join(clauses) if clauses else ""
+            row = connection.execute("SELECT COUNT(*) AS n FROM event_ledger" + where, args).fetchone()
         return int(row["n"]) if row is not None else 0
 
     def find_by_idempotency_key(
-        self, *, workspace_id: str, idempotency_key: str
+        self,
+        *,
+        workspace_id: str,
+        idempotency_key: str,
+        transaction: sqlite3.Connection | None = None,
     ) -> EventLedgerEntry | None:
         key = idempotency_key.strip()
         if not key:
             return None
-        connection = self._connect()
-        try:
+        connection_scope = (
+            nullcontext(transaction) if transaction is not None else closing(self._connect())
+        )
+        with connection_scope as connection:
             row = connection.execute(
                 "SELECT * FROM event_ledger WHERE workspace_id = ? AND idempotency_key = ?",
                 (workspace_id, key),
             ).fetchone()
-        finally:
-            connection.close()
         return entry_from_row(row) if row is not None else None
