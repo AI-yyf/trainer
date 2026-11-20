@@ -65,6 +65,7 @@ type SaveProviderPayload = {
   maxOutputTokens?: number | null;
   modelTokenLimits?: ProviderConfig['modelTokenLimits'];
   credentialMode?: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   catalogModels?: string[];
   allowedModels?: string[];
   deniedModels?: string[];
@@ -86,6 +87,7 @@ type ProviderModelDiscoveryDraft = {
   model?: string;
   apiKey?: string;
   credentialMode?: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   allowedModels?: string[];
   deniedModels?: string[];
   capabilities?: Partial<CapabilityFlags>;
@@ -669,6 +671,10 @@ export async function saveProviderFromWebviewCommand(
     }),
     capabilities,
     credentialMode,
+    ignoreSystemProxy:
+      typeof input.ignoreSystemProxy === 'boolean'
+        ? input.ignoreSystemProxy
+        : Boolean(existing?.ignoreSystemProxy),
     catalogModels: mergeCatalogModels(
       input.catalogModels,
       sameConnection ? existing?.catalogModels : undefined,
@@ -1277,6 +1283,7 @@ async function resolveDraftProviderModelLookup(
     protocol,
     apiKeyRef: 'trainer.provider.draft',
     credentialMode,
+    ignoreSystemProxy: Boolean(input?.ignoreSystemProxy),
     allowedModels: asStringArray(input?.allowedModels),
     deniedModels: asStringArray(input?.deniedModels),
     capabilities: draftCapabilities(protocol, input?.capabilities),

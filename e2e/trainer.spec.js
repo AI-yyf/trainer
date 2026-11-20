@@ -685,7 +685,8 @@ test.describe("Trainer two-destination shell", () => {
     await expect(page.locator(".coach-workspace-admission")).toBeVisible();
     await expect(page.getByRole("button", { name: "加入 Trainer", exact: true })).toBeVisible();
     await expect(page.locator(".composer-presencebar__blocked")).toHaveCount(0);
-    await expect(page.locator(".composer-shell textarea")).toBeDisabled();
+    // Zero-friction cold start: the single composer stays editable on project-found.
+    await expect(page.locator(".composer-shell textarea")).toBeEditable();
     await expectNoHorizontalOverflow(page);
     await expectNoConsoleErrors(errors);
   });
@@ -994,9 +995,9 @@ test.describe("Trainer two-destination shell", () => {
       await expect(card).toHaveCount(1);
       await expect(card.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toBeVisible();
       await expect(composer.locator('#coach-composer')).toBeVisible();
-      // One Chat composer plus the practice card's own answer field.
+      // Single-composer sovereignty: one docked Chat composer, zero competing textarea in the card.
       await expect(page.locator('#coach-composer')).toHaveCount(1);
-      await expect(page.locator('[data-template="FocusedPractice"] textarea')).toHaveCount(1);
+      await expect(page.locator('[data-template="FocusedPractice"] textarea')).toHaveCount(0);
       await expect(composer.getByRole("button", { name: copy.verifyCurrentFile, exact: true })).toHaveCount(0);
       await expectNoConsoleErrors(errors);
     });
@@ -1056,17 +1057,13 @@ test.describe("Trainer two-destination shell", () => {
     await expectTrainingLoop(card, "reflect");
     await expectTrainingCardFacts(card);
     const reflection = "The focused check proves the boundary before the result can return.";
-    // The reflection lives in the practice card's own answer field now.
-    const reflectionInput = page.getByRole("textbox", {
-      name: "Response",
-      exact: true,
-    });
-    // The reflection is submitted from the practice card's own answer form.
-    const emptyReflectButton = page.locator('[data-inline-practice-answer="true"] button[type="submit"]');
+    // Single-composer sovereignty: reflection submits via the one docked CoachComposer.
+    await expect(page.locator('[data-inline-practice-answer="true"] textarea')).toHaveCount(0);
+    const reflectionInput = page.locator("#coach-composer");
+    const reflectButton = page.locator(".composer__send");
     await expect(reflectionInput).toBeEditable();
-    await expect(emptyReflectButton).toBeDisabled();
+    await expect(reflectButton).toBeDisabled();
     await reflectionInput.fill(reflection);
-    const reflectButton = page.locator('[data-inline-practice-answer="true"] button[type="submit"]');
     await expect(reflectButton).toBeEnabled();
     await reflectButton.click();
     await expect.poll(() =>
@@ -1294,34 +1291,20 @@ test.describe("Trainer two-destination shell", () => {
       } });
     });
 
-    // The learning drawer overlays the shell: close it before working with the
-    // card, then open the candidate-management disclosure on the card itself.
+    // Single-composer sovereignty & calm inline card: candidate management CRUD
+    // (importance/priority/merge) stays out of the inline conversation card,
+    // while the card remains collapsible and clean.
     await closeLearningDrawer(page);
     const card = page.getByRole("group", { name: "Current training card", exact: true });
-    const manage = card.locator("[data-candidate-management=true]");
-    await expect(manage).toBeVisible();
-    await manage.locator(":scope > summary").click();
-    await expect(manage).toHaveAttribute("open", "");
-    await expect(manage.locator("[data-candidate-merge='card-dup-e2e']")).toBeVisible();
-
-    // The learner's decisions travel to the host as management commands; the
-    // sidecar owns the card records and the ledger.
-    await manage.locator("[data-candidate-action=important]").click();
-    await expect.poll(() => commands.some((command) =>
-      command?.payload?.commandId === "trainer.trainingCard.markImportant" &&
-      command?.payload?.payload?.cardId === "card-candidate-e2e" &&
-      command?.payload?.payload?.important === true)).toBe(true);
-
-    await manage.locator("[data-candidate-priority=true] select").selectOption("-1");
-    await expect.poll(() => commands.some((command) =>
-      command?.payload?.commandId === "trainer.trainingCard.setPriority" &&
-      command?.payload?.payload?.priority === -1)).toBe(true);
-
-    await manage.locator("[data-candidate-merge='card-dup-e2e']").click();
-    await expect.poll(() => commands.some((command) =>
-      command?.payload?.commandId === "trainer.trainingCard.merge" &&
-      command?.payload?.payload?.keepCardId === "card-candidate-e2e" &&
-      JSON.stringify(command?.payload?.payload?.duplicateCardIds) === JSON.stringify(["card-dup-e2e"]))).toBe(true);
+    await expect(card).toBeVisible();
+    await expect(card.locator("[data-candidate-management=true]")).toHaveCount(0);
+    await expect(page.locator("[data-training-library]")).toHaveCount(0);
+    const toggle = page.locator('[data-inline-practice-toggle="true"]');
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await toggle.click();
+    await expect(page.locator('[data-inline-practice-collapsed="true"]')).toBeVisible();
+    await page.locator('[data-inline-practice-toggle="true"]').click();
+    await expect(card).toBeVisible();
     await expectActiveView(page, "en-US", "training", { drawerClosed: true });
     await expectNoConsoleErrors(errors);
   });
@@ -1346,9 +1329,9 @@ test.describe("Trainer two-destination shell", () => {
     await expectTrainingLoop(card, "try");
     await expectTrainingCardFacts(card);
     await expect(composer.locator('#coach-composer')).toBeVisible();
-    // One Chat composer plus the practice card's own answer field.
+    // Single-composer sovereignty: one docked Chat composer, zero competing textarea in the card.
     await expect(page.locator('#coach-composer')).toHaveCount(1);
-    await expect(page.locator('[data-template="FocusedPractice"] textarea')).toHaveCount(1);
+    await expect(page.locator('[data-template="FocusedPractice"] textarea')).toHaveCount(0);
     const verifyButton = card.getByRole("button", {
       name: "Verificar archivo actual",
       exact: true,

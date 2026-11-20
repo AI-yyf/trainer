@@ -740,6 +740,7 @@ export function App() {
     setPendingGoalScope((scope) => goalMode || scope !== composerSessionKey ? undefined : scope);
   }, [composerSessionKey, goalMode]);
   const [resourceSelectionBySession, setResourceSelectionBySession] = useState<Record<string, string[]>>({});
+  const [inlinePracticeCollapsed, setInlinePracticeCollapsed] = useState(false);
   const [researchBriefToOpen, setResearchBriefToOpen] = useState<{ id: string; workspaceId?: string }>();
   const selectedResourceContextIds = resourceSelectionBySession[composerSessionKey] ?? [];
   const setSelectedResourceContextIds = useCallback((ids: string[]) => {
@@ -801,12 +802,12 @@ export function App() {
     coachSessionIdentityRef.current = nextSessionId;
     if (nextSessionId) {
       if (inVsCodeWebview()) {
-        applyServerGoal(undefined);
+        applyServerGoal(data.goal);
       } else {
         restoreGoalForSession(nextSessionId);
       }
     }
-  }, [applyServerGoal, clearOptimisticTurns, restoreGoalForSession, syncCursor.sessionId]);
+  }, [applyServerGoal, clearOptimisticTurns, data.goal, restoreGoalForSession, syncCursor.sessionId]);
   // The server snapshot owns goal truth in VS Code. Browser preview keeps its
   // local fixture goal because no sidecar snapshot exists there.
   useEffect(() => {
@@ -1741,6 +1742,8 @@ export function App() {
   const trainerWorkspaceAdmission = workspaceSettings?.trainerWorkspace;
   const canCaptureGoalBeforeWorkspaceSetup =
     trainerWorkspaceAdmission?.status === "root-missing";
+  const canChatBeforeProjectAdmission =
+    trainerWorkspaceAdmission?.status === "project-found";
   const workspaceAuthority = data.memory.sandboxState?.authority;
   const resourceWriteAccess = trainerWorkspaceAdmission
     ? {
@@ -2755,8 +2758,12 @@ export function App() {
     const conversationGrew = data.conversation.length > coachConversationLengthRef.current;
     coachConversationLengthRef.current = data.conversation.length;
     const learnerTurn = conversationGrew && data.conversation[data.conversation.length - 1]?.role === "user";
+    const previouslyPinned = coachAutoScrollPinnedRef.current;
     coachAutoScrollPinnedRef.current =
-      (streamingStarted && !viewChanged) || learnerTurn || isPinnedToBottom();
+      (streamingStarted && !viewChanged) ||
+      learnerTurn ||
+      (conversationGrew && !viewChanged && previouslyPinned) ||
+      isPinnedToBottom();
     const scrollToBottom = () => {
       container.scrollTop = resolveCoachBottomScrollTop(container);
     };
@@ -5171,8 +5178,11 @@ export function App() {
     trainingState?.theoryDrill,
     visibleTrainingCardTitle,
   ]);
-  const trainingComposerEnabled = activeView === "training" && hasTrainingCard;
+  useEffect(() => {
+    setInlinePracticeCollapsed(false);
+  }, [activeTrainingCardId, trainingReviewQueueRequested]);
   const resolvedReviewArtifact = reviewArtifactForeground && trainingState?.reviewArtifact?.status === "resolved";
+  const trainingComposerEnabled = activeView === "training" && hasTrainingCard;
   const trainingComposerTalkMode = false; // Explicit requests are routed directly from the shared input.
   const trainingComposerUsesAnswerMode = trainingComposerPhase === "answer";
   const trainingComposerPracticeInputMode =
@@ -5183,6 +5193,12 @@ export function App() {
     trainingComposerPracticeInputMode && trainingPracticeVerificationMode === "file";
   const trainingComposerReflectMode = trainingComposerPhase === "reflect";
   const trainingComposerReturnMode = trainingComposerPhase === "return";
+  const inlinePracticeAwaitingComposerSubmission =
+    activeView === "coach" &&
+    hasTrainingCard &&
+    !inlinePracticeCollapsed &&
+    !resolvedReviewArtifact &&
+    (trainingComposerUsesAnswerMode || trainingComposerReflectMode);
   useEffect(() => {
     const pending = pendingTrainingHandoffSubmissionRef.current;
     if (!pending || pending.cardId !== trainingState?.selectedCardId) {
@@ -5677,19 +5693,22 @@ export function App() {
     () => filterTrainerSkills("$", trainerSkillContext, availableSkillCatalog.length, availableSkillCatalog),
     [availableSkillCatalog, trainerSkillContext],
   );
+  const activeSkillDraft = (
+    trainingComposerEnabled && !trainingComposerTalkMode ? activityDraft : draft
+  ).trim();
   const matchingLocalSkills = useMemo<LocalSkillSuggestion[]>(() => {
     // Only the first `$token` selects a skill — text after it is arguments
     // handed to the skill on submit. Filtering on the full draft would drop
     // the resolved skill (and falsely offer to re-create it) once the user
     // starts typing arguments.
-    const triggerToken = trainerSkillTriggerToken(normalizedDraft);
+    const triggerToken = trainerSkillTriggerToken(activeSkillDraft);
     if (triggerToken === undefined) {
       return [];
     }
 
     return filterTrainerSkills(triggerToken, trainerSkillContext, triggerToken === "$" ? 6 : 10, availableSkillCatalog);
   }, [
-    normalizedDraft,
+    activeSkillDraft,
     trainerSkillContext,
     availableSkillCatalog,
   ]);
@@ -7186,6 +7205,28 @@ export function App() {
       return;
     }
 
+    if (canChatBeforeProjectAdmission && normalizedDraft) {
+      // Zero-friction cold start: gently bind this project inside <LibraryRoot>
+      // (zero writes inside the code repo) while preserving the learner's draft.
+      if (!isBrowserPreview) {
+        postMessage({
+          type: "command/execute",
+          payload: {
+            commandId: trainerCommands.adoptWorkspaceProject,
+            payload: { adoptionMode: "managed" },
+          },
+        });
+      }
+      setOperationMessage({
+        tone: "info",
+        message: appUiCopy(
+          layout.composerLanguage,
+          "正在将当前项目关联到学习文件夹，完成后即可继续对话。",
+        ),
+      });
+      return;
+    }
+
     if (workspaceSessionBlocked) {
       openWorkspaceAdmission();
       setOperationMessage({
@@ -7222,7 +7263,7 @@ export function App() {
 
     const submittedSkillTrigger = normalizedDraft.split(/\s+/, 1)[0] ?? "";
     const submittedSkill =
-      !composerUsesTrainingFlow && submittedSkillTrigger.startsWith("$")
+      submittedSkillTrigger.startsWith("$")
         ? availableSkillCatalog.find((skill) =>
             skill.trigger.toLowerCase() === submittedSkillTrigger.toLowerCase() &&
             (!skill.when || skill.when(trainerSkillContext)),
@@ -7688,10 +7729,11 @@ export function App() {
       }
     }
 
-    const submitsActivity = composerUsesTrainingFlow && !trainingComposerReturnMode &&
+    const submitsActivity =
+      ((composerUsesTrainingFlow && !trainingComposerReturnMode) || inlinePracticeAwaitingComposerSubmission) &&
       (hasImageAttachments || unified.kind === "blocker" || (unified.kind === "message" &&
         (trainingComposerUsesAnswerMode || trainingComposerReflectMode ||
-          trainingComposerPracticeInputMode || interpretTrainingComposerCardCommand(normalizedDraft))));
+          (composerUsesTrainingFlow && (trainingComposerPracticeInputMode || interpretTrainingComposerCardCommand(normalizedDraft))))));
     if (submitsActivity) {
       if (trainingPersistencePending) {
         return;
@@ -7813,7 +7855,7 @@ export function App() {
           learnerAnswer: normalizedAnswer,
           evidenceItems: authoritativeVerifyItems,
         });
-        setActivityDraft("");
+        clearSubmission();
       } else {
         let shouldStartFeedback = false;
         try {
@@ -7826,7 +7868,7 @@ export function App() {
           return;
         }
         if (!shouldStartFeedback) {
-          setActivityDraft("");
+          clearSubmission();
           return;
         }
         sendTrainingFeedback({
@@ -7840,7 +7882,7 @@ export function App() {
             ? selectedTrainingCardCandidate?.verificationSteps ?? []
             : authoritativeVerifyItems,
         });
-        setActivityDraft("");
+        clearSubmission();
       }
       return;
     }
@@ -8964,10 +9006,15 @@ export function App() {
   const selectSkillSuggestion = (skill: LocalSkillSuggestion, preserveDraft = false) => {
     // Replace only the typed `$token` — text after it is skill arguments and
     // must survive autocomplete ("$exp notes" → "$explain notes").
-    const triggerToken = trainerSkillTriggerToken(normalizedDraft);
+    const triggerToken = trainerSkillTriggerToken(activeSkillDraft);
     const remainder =
-      triggerToken !== undefined ? normalizedDraft.slice(triggerToken.length).trim() : preserveDraft ? normalizedDraft : "";
-    setComposerDraft(remainder ? `${skill.trigger} ${remainder}` : `${skill.trigger} `);
+      triggerToken !== undefined ? activeSkillDraft.slice(triggerToken.length).trim() : preserveDraft ? activeSkillDraft : "";
+    const nextValue = remainder ? `${skill.trigger} ${remainder}` : `${skill.trigger} `;
+    if (composerUsesTrainingFlow) {
+      setActivityDraft(nextValue);
+    } else {
+      setComposerDraft(nextValue);
+    }
     setDismissedComposerDeck("skill");
     setOpenMenu(undefined);
     setSelectedCommandIndex(0);
@@ -9113,8 +9160,8 @@ export function App() {
     <button type="button" className="button button--ghost" disabled={!skillImportText.trim()} onClick={installCustomSkillFromPaste}>{appUiCopy(layout.composerLanguage, "安装技能")}</button>
   </div></details>;
   const renderSkillDeck = () => {
-    if (dismissedComposerDeck === "skill" || !normalizedDraft.startsWith("$")) return null;
-    const draftTriggerToken = trainerSkillTriggerToken(normalizedDraft) ?? "$";
+    if (dismissedComposerDeck === "skill" || !activeSkillDraft.startsWith("$")) return null;
+    const draftTriggerToken = trainerSkillTriggerToken(activeSkillDraft) ?? "$";
     const creatableTrigger = draftTriggerToken.length > 1 && !availableSkillCatalog.some((skill) => skill.trigger.toLowerCase() === draftTriggerToken.toLowerCase()) ? draftTriggerToken : undefined;
     const customSkillIds = new Set(customSkills.map((skill) => skill.id));
     return <CommandPalette containerRef={composerDeckRef} label={appUiCopy(layout.composerLanguage, "技能")}
@@ -9541,20 +9588,57 @@ export function App() {
       resources={data.resources}
       footer={
         hasTrainingCard || (trainingReviewQueueRequested && trainingReviewItems.length > 0) ? (
-          <div className="inline-practice-slot" data-inline-practice="true">
-            {renderTrainingView(true)}
-            {trainingCardSettled ? (
-              <InlineProgressCard
-                language={layout.composerLanguage}
-                rows={learningSummary.progressRows}
-                evidenceCount={learningSummary.evidenceCount}
-                achievement={learningSummary.latestAchievement}
-                onOpen={() => {
-                  setOpenMenu(undefined);
-                  openLearningDrawer("progress");
-                }}
-              />
-            ) : null}
+          <div
+            className="inline-practice-slot"
+            data-inline-practice="true"
+            data-inline-practice-collapsed={inlinePracticeCollapsed ? "true" : "false"}
+          >
+            {inlinePracticeCollapsed ? (
+              <div className="inline-practice-slot__header">
+                <span className="inline-practice-slot__summary">
+                  {appUiCopy(layout.composerLanguage, "当前练习")}
+                  {visibleTrainingCardTitle || liveTrainingTitle
+                    ? ` · ${visibleTrainingCardTitle || liveTrainingTitle}`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  className="inline-practice-slot__toggle"
+                  data-inline-practice-toggle="true"
+                  aria-expanded="false"
+                  onClick={() => setInlinePracticeCollapsed(false)}
+                >
+                  {appUiCopy(layout.composerLanguage, "展开练习")}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="inline-practice-slot__header inline-practice-slot__header--expanded">
+                  <button
+                    type="button"
+                    className="inline-practice-slot__toggle"
+                    data-inline-practice-toggle="true"
+                    aria-expanded="true"
+                    onClick={() => setInlinePracticeCollapsed(true)}
+                  >
+                    {appUiCopy(layout.composerLanguage, "收起练习")}
+                  </button>
+                </div>
+                {renderTrainingView(true)}
+                {trainingCardSettled ? (
+                  <InlineProgressCard
+                    language={layout.composerLanguage}
+                    rows={learningSummary.progressRows}
+                    evidenceCount={learningSummary.evidenceCount}
+                    achievement={learningSummary.latestAchievement}
+                    onOpen={() => {
+                      setOpenMenu(undefined);
+                      openLearningDrawer("progress");
+                    }}
+                  />
+                ) : null}
+              </>
+            )}
           </div>
         ) : undefined
       }
@@ -9813,7 +9897,7 @@ export function App() {
     sendBlocked
       ? blockedComposerFallback
       : activeView === "resources"
-        ? appUiCopy(layout.composerLanguage, "找资料")
+        ? appUiCopy(layout.composerLanguage, "围绕资料提问或生成讲稿")
         : activeView === "training"
           ? trainingComposerModeTextCopy.genericPlaceholder
           : activeView === "plan"
@@ -9821,7 +9905,7 @@ export function App() {
             : blockedComposerFallback;
   const refinedUtilityComposerPlaceholder =
     activeView === "resources"
-      ? appUiCopy(layout.composerLanguage, "找资料")
+      ? appUiCopy(layout.composerLanguage, "围绕资料提问或生成讲稿")
       : activeView === "plan"
         ? appUiCopy(layout.composerLanguage, "写下这一步")
         : compactUtilityComposerPlaceholder;
@@ -9859,7 +9943,7 @@ export function App() {
       : composerUsesTrainingFlow && !composerSendBlocked
       ? resolvedTrainingComposerPlaceholder
       : activeView === "resources"
-        ? appUiCopy(layout.composerLanguage, "找资料")
+        ? appUiCopy(layout.composerLanguage, "围绕资料提问或生成讲稿")
         : activeView === "plan"
           ? appUiCopy(layout.composerLanguage, "写下这一步")
           : refinedUtilityComposerPlaceholder;
@@ -10405,80 +10489,6 @@ export function App() {
     handleHintReveal(level);
   };
 
-  /**
-   * The inline card owns practice submission now. This mirrors the training
-   * branch of handleSubmit without routing the answer through the dock
-   * composer; persistence and evidence semantics stay in the same handlers.
-   */
-  const submitInlinePracticeAnswer = async () => {
-    const answer = activityDraft.trim();
-    if (!answer || trainingPersistencePending) {
-      return;
-    }
-    if (!trainingComposerReflectMode && (!providerCanCoachNow || providerBlockReason)) {
-      setOperationMessage({ tone: "info", message: blockedComposerGuidance });
-      return;
-    }
-    try {
-      if (trainingComposerUsesAnswerMode) {
-        const selectedOptionIndex =
-          trainingComposerFlashMode === "choice"
-            ? normalizedTrainingFlashChoices.findIndex(
-                (choice) =>
-                  normalizeInlineComparisonText(choice) === normalizeInlineComparisonText(answer),
-              )
-            : -1;
-        await requestTrainingPersistence(
-          activeTheoryDrill?.id
-            ? trainerCommands.trainingTheoryDrillAnswer
-            : trainerCommands.trainingFlashcardAnswer,
-          activeTheoryDrill?.id
-            ? {
-                theoryDrillId: activeTheoryDrill.id,
-                questionId: flashQuestion?.id,
-                learnerAnswer: answer,
-                selectedOptionIndex: selectedOptionIndex >= 0 ? selectedOptionIndex : undefined,
-              }
-            : {
-                cardId: activeTrainingCardId,
-                learnerAnswer: answer,
-                selectedOptionIndex: selectedOptionIndex >= 0 ? selectedOptionIndex : undefined,
-              },
-        );
-        sendTrainingFeedback({
-          phase: "answer",
-          cardTitle: visibleTrainingCardTitle ?? liveTrainingTitle,
-          question: flashQuestion?.prompt ?? trainingFlashPrompt ?? trainingProblemStatement,
-          learnerAnswer: answer,
-          evidenceItems: authoritativeVerifyItems,
-        });
-      } else {
-        const shouldStartFeedback = await handleSubmitTrainingEvidence(answer, "result");
-        if (!shouldStartFeedback) {
-          setActivityDraft("");
-          return;
-        }
-        sendTrainingFeedback({
-          phase: trainingComposerReflectMode ? "reflection" : "evidence",
-          cardTitle: visibleTrainingCardTitle ?? liveTrainingTitle,
-          question: reviewArtifactForeground
-            ? trainingState?.reviewArtifact?.summary
-            : trainingComposerSelectedVerifyItem ?? trainingProblemStatement,
-          learnerAnswer: answer,
-          evidenceItems: reviewArtifactForeground
-            ? selectedTrainingCardCandidate?.verificationSteps ?? []
-            : authoritativeVerifyItems,
-        });
-      }
-      setActivityDraft("");
-    } catch {
-      setOperationMessage({
-        tone: "error",
-        message: trainingPersistenceFailureMessage(layout.composerLanguage),
-      });
-    }
-  };
-
   const renderTrainingView = (inline = false) => {
     const libraryCards = trainingState?.trainingCardCandidates ?? [];
     const hasLibrary = (!isBrowserPreview || !browserPreviewFixture) && libraryCards.some(
@@ -10572,9 +10582,7 @@ export function App() {
         ))
       : undefined;
 
-    // The candidate library stays reachable in the inline card: reviewing a
-    // candidate is a decision the learner makes on the card itself.
-    const cardLibrary = hasLibrary ? (
+    const cardLibrary = !inline && hasLibrary ? (
           <TrainingCardLibrary
             language={layout.composerLanguage}
             cards={libraryCards}
@@ -10602,28 +10610,8 @@ export function App() {
           ) : (
             <InlinePracticeAnswer
               language={layout.composerLanguage}
-              value={activityDraft}
-              onChange={setActivityDraft}
-              onSubmit={() => { void submitInlinePracticeAnswer(); }}
-              busy={trainingPersistencePending}
-              placeholder={resolvedTrainingComposerPlaceholder}
-              // The card owns the phase, so the submit control names the phase
-              // action instead of a generic "submit".
-              submitLabel={
-                trainingComposerReflectMode
-                  ? trainingHandoffComposerTextCopy.reflectSubmitAriaLabel
-                  : trainingComposerUsesAnswerMode
-                    ? templateCopy[layout.composerLanguage].submitAnswer
-                    : undefined
-              }
-              // The card owns the phase's single primary action. When that
-              // action is the file-verification step, the answer stays a
-              // secondary input instead of competing for the accent.
-              submitTone={
-                trainingComposerFilePracticeMode && !trainingComposerReflectMode
-                  ? "ghost"
-                  : "accent"
-              }
+              reflectMode={trainingComposerReflectMode}
+              onFocusComposer={focusComposerInput}
               prompt={trainingComposerReflectMode ? (
                 <MessageRichContent body={
                   // P4 review artifact foreground: the review's own summary is the
@@ -10640,7 +10628,7 @@ export function App() {
           selectedCardStatus={effectiveSelectedTrainingCardStatus}
           onCardStatusTransition={leftoverTrainingHandoffChromeNotLive ? undefined : handleTrainingCardStatusTransition}
           siblingCandidates={
-            leftoverTrainingHandoffChromeNotLive
+            inline || leftoverTrainingHandoffChromeNotLive
               ? undefined
               : (trainingState?.trainingCardCandidates ?? []).filter((candidate) =>
                   candidate.cardId !== activeTrainingCardId &&
@@ -10649,9 +10637,9 @@ export function App() {
           }
           cardImportant={selectedTrainingCardCandidate?.important ?? false}
           cardPriorityValue={selectedTrainingCardCandidate?.cardPriority ?? 0}
-          onMarkImportant={handleMarkCandidateImportant}
-          onSetPriority={handleSetCandidatePriority}
-          onMergeDuplicates={handleMergeCandidateDuplicates}
+          onMarkImportant={inline ? undefined : handleMarkCandidateImportant}
+          onSetPriority={inline ? undefined : handleSetCandidatePriority}
+          onMergeDuplicates={inline ? undefined : handleMergeCandidateDuplicates}
           onVerifyCurrentFile={reviewArtifactForeground ? undefined : handleVerifyCurrentFileFromCard}
           remoteVerification={remoteVerification}
           onStopRemoteVerification={handleStopRemoteVerification}
@@ -10811,7 +10799,7 @@ export function App() {
           onNextCard={handleNextTrainingCard}
           />
         </Suspense>
-        {hasRenderableTrainingCard ? cardLibrary : null}
+        {!inline && hasRenderableTrainingCard ? cardLibrary : null}
       </section>
     );
   };
@@ -11582,9 +11570,9 @@ export function App() {
               onMentionSelect={handleComposerMentionSelect}
               onNavigateHistory={composerUsesTrainingFlow ? undefined : navigateComposerHistory}
               placeholder={
-                composerUsesTrainingFlow && !workspaceSessionBlocked
+                (composerUsesTrainingFlow || inlinePracticeAwaitingComposerSubmission) && !workspaceSessionBlocked
                   ? resolvedTrainingComposerPlaceholder
-                  : workspaceSessionBlocked && !canCaptureGoalBeforeWorkspaceSetup
+                  : workspaceSessionBlocked && !canCaptureGoalBeforeWorkspaceSetup && !canChatBeforeProjectAdmission
                   ? workspaceSessionBlockMessage ?? ""
                   : activeView !== "coach" && !normalizedDraft
                     ? resolvedCompactUtilityComposerPlaceholder
@@ -11592,9 +11580,13 @@ export function App() {
                       ? goalModeCopy.placeholder
                       : blockedComposerFallback
               }
-              disabled={workspaceSessionBlocked && !canCaptureGoalBeforeWorkspaceSetup}
+              disabled={
+                workspaceSessionBlocked &&
+                !canCaptureGoalBeforeWorkspaceSetup &&
+                !canChatBeforeProjectAdmission
+              }
               submitDisabled={
-                canCaptureGoalBeforeWorkspaceSetup
+                canCaptureGoalBeforeWorkspaceSetup || canChatBeforeProjectAdmission
                   ? !normalizedDraft || imageAttachmentSendBlocked
                   : composerSendBlocked || imageAttachmentSendBlocked
               }
@@ -11611,10 +11603,13 @@ export function App() {
               }
               submitLabel=""
               accessibilityLabel={localizedTrainingComposerAccessibilityLabel}
-              submitAriaLabel={composerUsesTrainingFlow && trainingComposerReflectMode
-                ? templateCopy[layout.composerLanguage].recordReflection : localizedTrainingComposerSubmitAriaLabel}
+              submitAriaLabel={
+                (composerUsesTrainingFlow || inlinePracticeAwaitingComposerSubmission) && trainingComposerReflectMode
+                  ? templateCopy[layout.composerLanguage].recordReflection
+                  : localizedTrainingComposerSubmitAriaLabel
+              }
               emptySubmitAriaLabel={
-                !trainingComposerTalkMode && composerUsesTrainingFlow && trainingComposerReflectMode
+                !trainingComposerTalkMode && (composerUsesTrainingFlow || inlinePracticeAwaitingComposerSubmission) && trainingComposerReflectMode
                   ? trainingHandoffComposerTextCopy.reflectEmptySubmitAriaLabel
                   : undefined
               }
@@ -11640,7 +11635,7 @@ export function App() {
                     />
                   ) : null}
                   {renderComposerAccessory()}
-                  {composerUsesTrainingFlow ? null : renderSkillDeck()}
+                  {renderSkillDeck()}
                   {renderCommandDeck()}
                 </>
               }

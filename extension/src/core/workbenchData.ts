@@ -1621,6 +1621,7 @@ function toProviderConfigView(
     profileLabel: provider?.profileLabel,
     profileMode: provider?.profileMode,
     credentialMode: provider?.credentialMode,
+    ignoreSystemProxy: Boolean(provider?.ignoreSystemProxy),
     availableModels: provider?.availableModels ?? [],
     catalogModels: provider?.catalogModels ?? [],
     allowedModels: provider?.allowedModels ?? [],

@@ -883,13 +883,19 @@ async function main() {
           const r = el.getBoundingClientRect();
           return r.width > 0 && r.height > 0 && r.top < innerHeight && r.bottom > 0;
         });
+        const visibleTextareas = [...document.querySelectorAll('textarea')].filter(el => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.top < innerHeight && r.bottom > 0;
+        });
         return {
           overflow: document.documentElement.scrollWidth - innerWidth,
           primary: new Set(visible).size,
+          textareas: visibleTextareas.length,
         };
       });
       check(metrics.overflow <= 1, `${view}/${width}/${theme}/${lang}: no horizontal overflow`);
       check(metrics.primary <= 1, `${view}/${width}/${theme}/${lang}: ${metrics.primary} primary page action(s) in the first viewport`);
+      check(metrics.textareas <= 1, `${view}/${width}/${theme}/${lang}: single-composer sovereignty (${metrics.textareas} visible textarea(s))`);
       if (keepShots) await page.screenshot({ path: path.join(shotDir, `${view}-${width}-${theme}-${lang}.png`) });
     }
   }

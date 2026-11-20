@@ -536,7 +536,7 @@ test('Composer candidate decks keep Codex-style draft ownership and keyboard dis
   // trigger and preserves any arguments the user already typed after it.
   assert.match(
     source,
-    /const selectSkillSuggestion = \(skill: LocalSkillSuggestion, preserveDraft = false\) => \{[\s\S]*?normalizedDraft\.slice\(triggerToken\.length\)[\s\S]*?setComposerDraft\(remainder \? `\$\{skill\.trigger\} \$\{remainder\}` : `\$\{skill\.trigger\} `\)/,
+    /const selectSkillSuggestion = \(skill: LocalSkillSuggestion, preserveDraft = false\) => \{[\s\S]*?activeSkillDraft\.slice\(triggerToken\.length\)[\s\S]*?setComposerDraft\(nextValue\)/,
   );
   assert.doesNotMatch(source, /skill\.run\(\)/);
   assert.match(source, /availableSkillCatalog\.find\(\(skill\) =>/);

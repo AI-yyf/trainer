@@ -1295,6 +1295,7 @@ export async function openResourceCommand(
   const payloadRecord = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
   const resourceId = payloadRecord?.resourceId;
   const researchCitation = asRecord(payloadRecord?.researchCitation);
+  const openSource = payloadRecord?.openSource === true;
   const requestedLine =
     typeof payloadRecord?.line === 'number' && Number.isFinite(payloadRecord.line)
       ? Math.max(1, Math.floor(payloadRecord.line))
@@ -1357,6 +1358,21 @@ export async function openResourceCommand(
     }
   }
   const startLine = line ? line - 1 : 0;
+  const isMarkdownDocument = /\.(?:md|markdown)$/i.test(targetUri.path);
+  if (isMarkdownDocument && !openSource && line === undefined) {
+    try {
+      await vscode.commands.executeCommand('markdown.showPreview', targetUri);
+      return {
+        ok: true,
+        message:
+          language === 'zh-CN'
+            ? `已打开预览：${resource.title}`
+            : `Opened preview for ${resource.title}.`,
+      };
+    } catch {
+      // Fall back to opening the source document if Markdown preview is unavailable.
+    }
+  }
   await vscode.commands.executeCommand('vscode.open', targetUri, {
     preview: false,
     preserveFocus: false,

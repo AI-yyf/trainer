@@ -19,6 +19,7 @@ const COPY: Record<ComposerLanguage, {
   /** Labels the subject line of the practice panel, so a card title never
       appears as a stray line. */
   currentCard: string;
+  composerHint: string;
 }> = {
   "zh-CN": {
     title: "学习", goal: "当前目标", practice: "到期练习", progress: "掌握进度",
@@ -26,6 +27,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "完成并验证一次练习后，此处将记录各维度的掌握进度。", due: "{n} 项待复习",
     evidence: "{n} 次", totalChecks: "已验证 {n} 次", open: "打开",
     currentCard: "当前练习：",
+    composerHint: "如需查看完整阶段、核查具体验证证据或调整计划，请直接在下方输入框询问教练。",
   },
   "en-US": {
     title: "Learning", goal: "Current goal", practice: "Due practice", progress: "Mastery",
@@ -33,6 +35,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "Complete a verified practice to record mastery across dimensions.", due: "{n} due",
     evidence: "{n}×", totalChecks: "{n} verified", open: "Open",
     currentCard: "Current exercise:",
+    composerHint: "Ask the coach in the input box below to inspect all stages, review concrete evidence, or adjust your plan.",
   },
   "es-ES": {
     title: "Aprendizaje", goal: "Objetivo actual", practice: "Práctica pendiente", progress: "Dominio",
@@ -40,6 +43,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "Tras completar una práctica verificada, aquí se registrará el dominio.", due: "{n} pendientes",
     evidence: "{n}×", totalChecks: "{n} verificadas", open: "Abrir",
     currentCard: "Ejercicio actual:",
+    composerHint: "Pregunta al entrenador en el cuadro inferior para ver todas las etapas, revisar evidencias o ajustar el plan.",
   },
   "fr-FR": {
     title: "Apprentissage", goal: "Objectif actuel", practice: "Pratique à faire", progress: "Maîtrise",
@@ -47,6 +51,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "Après une pratique vérifiée, la maîtrise s'affichera ici.", due: "{n} à revoir",
     evidence: "{n}×", totalChecks: "{n} vérif.", open: "Ouvrir",
     currentCard: "Exercice actuel :",
+    composerHint: "Utilisez la zone de saisie ci-dessous pour consulter toutes les étapes, vérifier les preuves ou ajuster le plan.",
   },
   "de-DE": {
     title: "Lernen", goal: "Aktuelles Ziel", practice: "Fällige Übung", progress: "Beherrschung",
@@ -54,6 +59,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "Nach einer überprüften Übung wird hier der Fortschritt erfasst.", due: "{n} fällig",
     evidence: "{n}×", totalChecks: "{n} geprüft", open: "Öffnen",
     currentCard: "Aktuelle Übung:",
+    composerHint: "Nutzen Sie das Eingabefeld unten, um alle Phasen, konkrete Nachweise oder Planänderungen abzufragen.",
   },
   "ja-JP": {
     title: "学習", goal: "現在の目標", practice: "期限の練習", progress: "習得状況",
@@ -61,6 +67,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "検証済みの練習を完了すると、各領域の習得状況がここに記録されます。", due: "{n} 件",
     evidence: "{n} 回", totalChecks: "検証 {n} 回", open: "開く",
     currentCard: "現在の課題：",
+    composerHint: "全段階の確認、具体的な検証根拠の参照、計画の調整は下の入力欄からコーチに質問できます。",
   },
   "ko-KR": {
     title: "학습", goal: "현재 목표", practice: "예정된 연습", progress: "숙달 현황",
@@ -68,6 +75,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "검증된 연습을 완료하면 각 영역의 숙달 현황이 여기에 기록됩니다.", due: "{n}개",
     evidence: "{n}회", totalChecks: "검증 {n}회", open: "열기",
     currentCard: "현재 과제:",
+    composerHint: "전체 단계, 구체적인 검증 근거 확인 및 계획 조정은 아래 입력창에서 코치에게 바로 질문하세요.",
   },
   "pt-BR": {
     title: "Aprendizado", goal: "Objetivo atual", practice: "Prática pendente", progress: "Domínio",
@@ -75,6 +83,7 @@ const COPY: Record<ComposerLanguage, {
     emptyProgress: "Após concluir uma prática verificada, o domínio será registrado aqui.", due: "{n} pendentes",
     evidence: "{n}×", totalChecks: "{n} verificadas", open: "Abrir",
     currentCard: "Exercício atual:",
+    composerHint: "Use a caixa de entrada abaixo para consultar todas as etapas, verificar evidências ou ajustar seu plano.",
   },
 };
 
@@ -318,6 +327,9 @@ export function LearningDrawer({ language, section, onSectionChange, goal, pract
         ) : <p className="learning-drawer__empty">{copy.emptyProgress}</p>}
         </div>
       </section>
+      <p className="learning-drawer__meta" data-learning-drawer-composer-hint="true">
+        {copy.composerHint}
+      </p>
     </div>
   );
 }

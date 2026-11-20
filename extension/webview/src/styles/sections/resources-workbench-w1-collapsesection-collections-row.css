@@ -698,7 +698,7 @@
   /* File rows sit under the folder row's icon. One fixed inline inset keeps
      every Markdown title on the same optical line; the row keeps a dedicated
      action column so the menu can never create an implicit fourth grid track. */
-  grid-template-columns: 20px minmax(0, 1fr) 22px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
   align-items: center;
   min-height: 28px;
   padding-block: 0;
@@ -736,7 +736,10 @@
 .resources-library-tree__copy {
   grid-column: 2;
   display: flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: flex-start;
+  text-align: start;
   min-width: 0;
   gap: 0;
 }
@@ -766,14 +769,22 @@
   height: 18px;
 }
 
-.resources-library-tree__menu {
+.resources-library-tree__actions {
   grid-column: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
   align-self: center;
   justify-self: end;
 }
 
+.resources-library-tree__menu {
+  grid-column: auto;
+  align-self: center;
+}
+
 .resources-library-tree__count,
-.resources-library-tree__actions,
 .resources-library-tree__meta {
   display: none;
 }

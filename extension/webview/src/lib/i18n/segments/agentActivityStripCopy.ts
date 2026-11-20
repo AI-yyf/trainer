@@ -131,6 +131,16 @@ export const TOOL_LABELS: Record<string, Record<ComposerLanguage, string>> = {
     "fr-FR": "Inspecter le plan", "de-DE": "Plan prüfen",
     "ja-JP": "プランを確認", "ko-KR": "계획 검사", "pt-BR": "Inspecionar plano",
   },
+  inspect_learning_truth: {
+    "zh-CN": "查阅学习档案", "en-US": "Inspect learning state", "es-ES": "Consultar progreso",
+    "fr-FR": "Consulter l'état d'apprentissage", "de-DE": "Lernstand prüfen",
+    "ja-JP": "学習状況を確認", "ko-KR": "학습 현황 확인", "pt-BR": "Consultar progresso",
+  },
+  save_lecture_note: {
+    "zh-CN": "保存讲稿到资料库", "en-US": "Save lecture note", "es-ES": "Guardar apunte",
+    "fr-FR": "Enregistrer la note", "de-DE": "Notiz speichern",
+    "ja-JP": "講義ノートを保存", "ko-KR": "강의 노트 저장", "pt-BR": "Salvar nota",
+  },
   save_formal_plan: {
     "zh-CN": "保存计划", "en-US": "Save plan", "es-ES": "Guardar plan",
     "fr-FR": "Enregistrer le plan", "de-DE": "Plan speichern",

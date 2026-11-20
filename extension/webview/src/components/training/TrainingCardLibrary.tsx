@@ -2,7 +2,7 @@ import type { FormEvent } from "react";
 import type { ComposerLanguage, TrainingCardCandidate } from "../../lib/types";
 
 const labels: Record<ComposerLanguage, readonly string[]> = {
-  "zh-CN": ["训练卡库", "待审阅", "已入库", "题目", "验收标准（每行一项）", "确认入库", "暂缓", "拒绝", "打开练习", "归档", "标记重要", "取消重要标记", "优先级", "合并到这张卡", "已暂缓"],
+  "zh-CN": ["练习记录", "待确认", "已保存", "题目", "验收标准（每行一项）", "保存练习", "暂缓", "拒绝", "打开练习", "归档", "标记重要", "取消重要标记", "优先级", "合并到此练习", "已暂缓"],
   "en-US": ["Training cards", "Awaiting review", "Saved cards", "Prompt", "Acceptance criteria (one per line)", "Save to library", "Defer", "Reject", "Open practice", "Archive", "Mark important", "Remove importance", "Priority", "Merge into this card", "Deferred"],
   "es-ES": ["Tarjetas de práctica", "Pendientes de revisión", "Tarjetas guardadas", "Pregunta", "Criterios de aceptación (uno por línea)", "Guardar", "Posponer", "Rechazar", "Abrir práctica", "Archivar", "Marcar como importante", "Quitar marca", "Prioridad", "Combinar con esta tarjeta", "Pospuesta"],
   "fr-FR": ["Cartes d’exercice", "À examiner", "Cartes enregistrées", "Question", "Critères d’acceptation (un par ligne)", "Enregistrer", "Reporter", "Refuser", "Ouvrir l’exercice", "Archiver", "Marquer comme importante", "Retirer la marque", "Priorité", "Fusionner dans cette carte", "Reportée"],

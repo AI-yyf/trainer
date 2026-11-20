@@ -74,6 +74,7 @@ export interface ProviderConfig {
   connectionType?: string;
   capabilities: CapabilityFlags;
   credentialMode?: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   availableModels?: string[];
   catalogModels?: string[];
   allowedModels?: string[];
@@ -266,6 +267,7 @@ export interface ProviderConfigView {
   profileLabel?: string;
   profileMode?: string;
   credentialMode?: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   availableModels: string[];
   catalogModels?: string[];
   allowedModels?: string[];
@@ -1895,7 +1897,12 @@ type TrainerWebviewMessageBody =
     }
   | {
       type: 'resource/open';
-      payload: { resourceId: string; line?: number; researchCitation?: ResearchCitationPin };
+      payload: {
+        resourceId: string;
+        line?: number;
+        openSource?: boolean;
+        researchCitation?: ResearchCitationPin;
+      };
     }
   | { type: 'ui/focus'; payload: { target: 'conversation' | 'task' | 'evaluation' } }
   /**

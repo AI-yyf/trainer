@@ -403,6 +403,7 @@ type PreviewProviderDraftInput = {
   maxOutputTokens?: number | null;
   modelTokenLimits?: ProviderConfigView["modelTokenLimits"];
   credentialMode?: ProviderConfigView["credentialMode"];
+  ignoreSystemProxy?: boolean;
   allowedModels?: string[];
   deniedModels?: string[];
   catalogModels?: string[];
@@ -1102,6 +1103,7 @@ function buildPreviewProviderView(value: unknown): ProviderConfigView | undefine
     requestDefaults,
     thinkingConfig,
     protocol,
+    ignoreSystemProxy: asBoolean(record.ignoreSystemProxy) ?? false,
     protocolFamily:
       asString(record.protocolFamily) ?? providerProtocolFamily(protocol),
     credentialMode:
@@ -1251,6 +1253,7 @@ function buildPreviewProviderTransport(
       modelTokenLimits: providerConfig.modelTokenLimits,
       protocol: providerConfig.protocol,
       apiKeyRef: `${providerKey}.default`,
+      ignoreSystemProxy: Boolean(providerConfig.ignoreSystemProxy),
       requestDefaults: normalizePreviewRequestDefaults(providerConfig, providerConfig.requestDefaults),
       capabilities: providerConfig.capabilities,
     },
@@ -1273,6 +1276,7 @@ function buildPreviewProfileRecord(
     requestDefaults?: Record<string, unknown>;
     mode?: string;
     credentialMode?: ProviderConfigView["credentialMode"];
+  ignoreSystemProxy?: boolean;
     modelAliases?: ProviderConfigView["modelAliases"];
     taskBindings?: ProviderConfigView["taskBindings"];
     allowedModels?: string[];
@@ -1291,6 +1295,7 @@ function buildPreviewProfileRecord(
     protocol: input.protocol,
     mode: input.mode ?? "direct",
     credentialMode: input.credentialMode ?? "ui_proxy",
+    ignoreSystemProxy: Boolean(input.ignoreSystemProxy),
     baseUrl: input.baseUrl,
     apiKeyRef: `${input.id}.default`,
     model: input.model,
@@ -1475,6 +1480,10 @@ function buildPreviewDraftProvider(
     deniedModels: draft.deniedModels ?? current?.deniedModels,
     capabilities: draft.capabilities ?? current?.capabilities,
     requestDefaults: draft.requestDefaults ?? current?.requestDefaults,
+    ignoreSystemProxy:
+      typeof draft.ignoreSystemProxy === "boolean"
+        ? draft.ignoreSystemProxy
+        : Boolean(current?.ignoreSystemProxy),
     thinkingConfig:
       draft.thinkingConfig ?? (sameTransportAsCurrent ? current?.thinkingConfig : undefined),
   });
@@ -2875,6 +2884,10 @@ async function saveBrowserPreviewProviderCore(
     thinkingConfig,
     mode: profileMode,
     credentialMode,
+    ignoreSystemProxy:
+      typeof draft.ignoreSystemProxy === "boolean"
+        ? draft.ignoreSystemProxy
+        : Boolean(current?.ignoreSystemProxy),
     modelAliases: current?.modelAliases,
     taskBindings: current?.taskBindings,
     allowedModels,
@@ -2930,6 +2943,10 @@ async function saveBrowserPreviewProviderCore(
     protocol,
     protocolFamily: providerProtocolFamily(protocol),
     credentialMode,
+    ignoreSystemProxy:
+      typeof draft.ignoreSystemProxy === "boolean"
+        ? draft.ignoreSystemProxy
+        : Boolean(current?.ignoreSystemProxy),
     capabilities,
     requestDefaults,
     allowedModels,
@@ -3177,6 +3194,7 @@ export async function switchBrowserPreviewProviderProfile(
       asString(target.credentialMode) === "workspace_secret"
         ? "workspace_secret"
         : "ui_proxy",
+    ignoreSystemProxy: asBoolean(target.ignoreSystemProxy) ?? false,
     capabilities,
     requestDefaults: normalizePreviewRequestDefaults(
       { name, baseUrl, model },

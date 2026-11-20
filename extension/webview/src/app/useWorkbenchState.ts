@@ -351,10 +351,11 @@ export interface WorkbenchStore {
    * surface ("View reply" follows the answer into Coach). Transient.
    */
   dockReturnNotice: "plan" | "resources" | null;
-  /** Goal mode: one small active-learning goal. UI-only, never persisted. */
+  /** Active learning goal mirrored from server GoalSession truth. */
   goalMode: boolean;
   goalText: string;
   goalPaused: boolean;
+  goalStartedAt: string | null;
   resourceOrganizationPending?: { pending: true; operationCount?: number };
   resourceRestoreContext?: ResourceRestoreContext;
   trainingRestoreContext?: TrainingRestoreContext;
@@ -906,6 +907,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   goalMode: false,
   goalText: "",
   goalPaused: false,
+  goalStartedAt: null,
   resourceOrganizationPending: undefined,
   resourceRestoreContext: undefined,
   trainingRestoreContext: undefined,
@@ -1098,15 +1100,19 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
   clearDockReturnNotice: () => set({ dockReturnNotice: null }),
   startGoal: (goalText) =>
     set((state) => {
-      persistGoalState(state.syncCursor.sessionId, {
-        goalMode: true,
-        goalText,
-        goalPaused: false,
-      });
+      const startedAt = new Date().toISOString();
+      if (!inVsCodeWebview()) {
+        persistGoalState(state.syncCursor.sessionId, {
+          goalMode: true,
+          goalText,
+          goalPaused: false,
+        });
+      }
       return {
         goalMode: true,
         goalText,
         goalPaused: false,
+        goalStartedAt: startedAt,
       };
     }),
   pauseGoal: () =>
@@ -1114,11 +1120,13 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       if (!state.goalMode || state.goalPaused) {
         return {};
       }
-      persistGoalState(state.syncCursor.sessionId, {
-        goalMode: state.goalMode,
-        goalText: state.goalText,
-        goalPaused: true,
-      });
+      if (!inVsCodeWebview()) {
+        persistGoalState(state.syncCursor.sessionId, {
+          goalMode: state.goalMode,
+          goalText: state.goalText,
+          goalPaused: true,
+        });
+      }
       return { goalPaused: true };
     }),
   resumeGoal: () =>
@@ -1126,30 +1134,38 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       if (!state.goalMode || !state.goalPaused) {
         return {};
       }
-      persistGoalState(state.syncCursor.sessionId, {
-        goalMode: state.goalMode,
-        goalText: state.goalText,
-        goalPaused: false,
-      });
+      if (!inVsCodeWebview()) {
+        persistGoalState(state.syncCursor.sessionId, {
+          goalMode: state.goalMode,
+          goalText: state.goalText,
+          goalPaused: false,
+        });
+      }
       return {
         goalPaused: false,
       };
     }),
   clearGoal: () =>
     set((state) => {
-      persistGoalState(state.syncCursor.sessionId, {
-        goalMode: false,
-        goalText: "",
-        goalPaused: false,
-      });
+      if (!inVsCodeWebview()) {
+        persistGoalState(state.syncCursor.sessionId, {
+          goalMode: false,
+          goalText: "",
+          goalPaused: false,
+        });
+      }
       return {
         goalMode: false,
         goalText: "",
         goalPaused: false,
+        goalStartedAt: null,
       };
     }),
   restoreGoalForSession: (sessionId) =>
     set((state) => {
+      if (inVsCodeWebview()) {
+        return {};
+      }
       const stored = readGoalState(sessionId);
       if (!stored) {
         if (!state.goalMode && !state.goalText) {
@@ -1159,6 +1175,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           goalMode: false,
           goalText: "",
           goalPaused: false,
+          goalStartedAt: null,
         };
       }
       if (
@@ -1179,10 +1196,12 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       const activeGoal = goal && goal.status !== "completed" ? goal : undefined;
       const paused = activeGoal?.status === "paused";
       const title = activeGoal?.title ?? "";
+      const startedAt = activeGoal?.startedAt ?? null;
       if (
         state.goalMode === Boolean(activeGoal) &&
         state.goalText === title &&
-        state.goalPaused === paused
+        state.goalPaused === paused &&
+        state.goalStartedAt === startedAt
       ) {
         return {};
       }
@@ -1190,6 +1209,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         goalMode: Boolean(activeGoal),
         goalText: title,
         goalPaused: paused,
+        goalStartedAt: startedAt,
       };
     }),
   rememberSurfaceScroll: (key, position) => set((state) => ({

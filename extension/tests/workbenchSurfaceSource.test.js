@@ -64,7 +64,7 @@ test('skill deck resolves on the trigger token so arguments keep the match', () 
   const skillsStart = source.indexOf('const matchingLocalSkills');
   assert.ok(skillsStart > -1, 'expected matchingLocalSkills declaration');
   const skillsBlock = source.slice(skillsStart, skillsStart + 1200);
-  assert.match(skillsBlock, /trainerSkillTriggerToken\(normalizedDraft\)/);
+  assert.match(skillsBlock, /trainerSkillTriggerToken\(activeSkillDraft\)/);
   assert.match(skillsBlock, /filterTrainerSkills\(triggerToken/);
   assert.doesNotMatch(skillsBlock, /filterTrainerSkills\(normalizedDraft/);
 
@@ -73,14 +73,14 @@ test('skill deck resolves on the trigger token so arguments keep the match', () 
   const deckStart = source.indexOf('const renderSkillDeck');
   assert.ok(deckStart > -1, 'expected renderSkillDeck');
   const deckBlock = source.slice(deckStart, deckStart + 2500);
-  assert.match(deckBlock, /trainerSkillTriggerToken\(normalizedDraft\)/);
+  assert.match(deckBlock, /trainerSkillTriggerToken\(activeSkillDraft\)/);
   assert.match(deckBlock, /availableSkillCatalog\.some/);
 
   // Autocomplete replaces only the typed token; arguments survive.
   const selectStart = source.indexOf('const selectSkillSuggestion');
   assert.ok(selectStart > -1, 'expected selectSkillSuggestion');
   const selectBlock = source.slice(selectStart, selectStart + 800);
-  assert.match(selectBlock, /normalizedDraft\.slice\(triggerToken\.length\)/);
+  assert.match(selectBlock, /activeSkillDraft\.slice\(triggerToken\.length\)/);
 });
 
 test('enter submits a resolved skill with args instead of refilling the composer', () => {

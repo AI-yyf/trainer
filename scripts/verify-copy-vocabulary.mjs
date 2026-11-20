@@ -8,6 +8,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCAN_TARGETS = [
   "extension/webview/src/lib/i18n",
   "extension/webview/src/components/learning",
+  "extension/webview/src/components/training",
+  "extension/webview/src/components/settings/settingsText.ts",
   "extension/webview/src/templates/templateCopy.ts",
   "browser-extension/sidepanel/sidepanel.js",
 ];
@@ -19,6 +21,10 @@ const BANNED_TERMS = [
   { term: "能力投影", regex: /能力投影/g },
   { term: "计划修订号", regex: /计划修订号/g },
   { term: "候选卡库", regex: /候选卡库/g },
+  { term: "训练卡库", regex: /训练卡库/g },
+  { term: "确认入库", regex: /确认入库/g },
+  { term: "后续和回看", regex: /后续和回看/g },
+  { term: "UI proxy", regex: /\bUI proxy\b/g },
   { term: "event ledger", regex: /\bevent ledger\b/gi },
   { term: "skill projection", regex: /\bskill projection\b/gi },
   { term: "plan revision", regex: /\bplan revision\b/gi },

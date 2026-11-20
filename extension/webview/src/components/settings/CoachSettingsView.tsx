@@ -677,6 +677,7 @@ export interface ProviderDraft {
   maxOutputTokens?: number;
   modelTokenLimits?: Record<string, ProviderModelTokenLimit>;
   credentialMode?: ProviderConfigView["credentialMode"];
+  ignoreSystemProxy?: boolean;
   catalogModels?: string[];
   allowedModels?: string[];
   deniedModels?: string[];
@@ -2760,6 +2761,7 @@ function CoachSettingsViewSheet({
       providerModelTokenLimitsKey(provider.modelTokenLimits) ||
     (providerDraft.credentialMode ?? provider.credentialMode ?? "ui_proxy") !==
       (provider.credentialMode ?? "ui_proxy") ||
+    Boolean(providerDraft.ignoreSystemProxy) !== Boolean(provider.ignoreSystemProxy) ||
     stringArrayKey(providerDraft.catalogModels ?? provider.catalogModels) !==
       stringArrayKey(provider.catalogModels) ||
     stringArrayKey(providerDraft.allowedModels ?? provider.allowedModels) !==
@@ -3373,7 +3375,7 @@ function CoachSettingsViewSheet({
   const localizedCredentialModeLabel =
     settingsText(language, "Credential mode", "Credential mode");
   const localizedCredentialModeUiProxy =
-    settingsText(language, "UI proxy", "UI proxy");
+    settingsText(language, "本地宿主转发", "Local host relay");
   const localizedCredentialModeWorkspaceSecret =
     settingsText(language, "Workspace secret", "Workspace secret");
   const localizedAllowedModelsInputDetail =
@@ -5945,6 +5947,31 @@ function CoachSettingsViewSheet({
                 </div>
                 </div>
 
+                <div className="settings-field" data-ignore-system-proxy-toggle="true">
+                  <span>{settingsText(language, "网络代理", "Network proxy")}</span>
+                  <ChoiceList
+                    active={providerDraft.ignoreSystemProxy ? "direct" : "system"}
+                    items={[
+                      {
+                        label: settingsText(language, "跟随系统代理", "Use system proxy"),
+                        value: "system",
+                      },
+                      {
+                        label: settingsText(language, "忽略系统代理（直连）", "Ignore system proxy (Direct)"),
+                        value: "direct",
+                      },
+                    ]}
+                    onChange={(value) => onProviderDraftChange({ ignoreSystemProxy: value === "direct" })}
+                  />
+                  <p className="settings-sheet__note settings-sheet__note--compact">
+                    {settingsText(
+                      language,
+                      "若本机代理环境变量导致 502 或超时，请切换为直连。",
+                      "Switch to direct connection if local proxy variables cause 502 or timeouts.",
+                    )}
+                  </p>
+                </div>
+
                 {providerPasteHint ? (
                   <p className="settings-sheet__note settings-sheet__note--compact settings-sheet__note--warning">
                     {providerPasteHint}
@@ -7346,7 +7373,7 @@ function CoachSettingsViewSheet({
               open={usageInsightsPinned ?? false}
               onToggle={handleUsageInsightsToggle}
               title={<span className="eyebrow">{settingsText(language, "使用洞察", "Usage insights")}</span>}
-              subtitle={<span className="settings-sheet__defaults-preview">{settingsText(language, "只汇总本机事件账本，只读、不联网。", "Local ledger, read-only. Nothing leaves this machine.")}</span>}
+              subtitle={<span className="settings-sheet__defaults-preview">{settingsText(language, "只汇总本机使用记录，只读、不联网。", "Local usage history, read-only. Nothing leaves this machine.")}</span>}
             >
               <div className="settings-sheet__minor-body" data-settings-subsection="usage-insights">
                 <div className="settings-grid settings-grid--compact settings-grid--tight">

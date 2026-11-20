@@ -466,4 +466,75 @@ test.describe("Trainer Settings provider lifecycle", () => {
     });
     expect(consoleErrors).toEqual([]);
   });
+
+  test("network proxy direct-connect toggle renders in connection settings and forwards ignoreSystemProxy", async ({ page }) => {
+    const consoleErrors = collectConsoleErrors(page);
+    const providerTestPayloads = [];
+
+    await page.route("**/health", async (route) => {
+      await route.fulfill(jsonResponse({ status: "ok" }));
+    });
+    await page.route("**/session/start", async (route) => {
+      await route.fulfill(jsonResponse({ session_id: "settings-proxy-toggle-session" }));
+    });
+    await page.route("**/memory/settings", async (route) => {
+      await route.fulfill(jsonResponse({}));
+    });
+    await page.route("**/memory/summary**", async (route) => {
+      await route.fulfill(jsonResponse({}));
+    });
+    await page.route("**/provider/test", async (route) => {
+      providerTestPayloads.push(JSON.parse(route.request().postData() || "{}"));
+      await route.fulfill(
+        jsonResponse({
+          ok: true,
+          status: "connected",
+          error_category: null,
+          status_code: null,
+          retryable: null,
+          diagnostics: ["Direct transport accepted."],
+          capability_evidence: [
+            { name: "tools", declared: true, observed: true, state: "verified" },
+            { name: "streaming", declared: true, observed: true, state: "verified" },
+          ],
+          tools_ready: true,
+          streaming_ready: true,
+        }),
+      );
+    });
+
+    await page.goto(buildPreviewUrl({ live: true }));
+    await page.waitForLoadState("networkidle");
+    await expectPreviewHarness(page);
+    await openSettingsCategory(page, "connection");
+    const templateEntry = page.locator('[data-settings-template-entry="true"]');
+    if (await templateEntry.count()) {
+      await templateEntry.click();
+      await page
+        .locator(".settings-provider-directory__item")
+        .filter({ hasText: "Custom (OpenAI-compatible)" })
+        .click();
+    }
+    const detail = await openProviderDetails(page);
+
+    const proxyToggle = page.locator('[data-ignore-system-proxy-toggle="true"]');
+    await expect(proxyToggle).toBeVisible();
+    await proxyToggle.getByRole("button").first().click();
+    await page.getByRole("option", { name: /Ignore system proxy/i }).click();
+
+    await providerConnectionFields(detail).getByLabel("Service root").fill("https://provider.invalid/v1");
+    await setProviderModel(detail, "gpt-4.1-mini");
+    await providerConnectionFields(detail).getByLabel("API Key", { exact: true }).fill(`sk-proxy-toggle-${randomUUID()}`);
+    await page.getByRole("button", { name: "Save and use this connection", exact: true }).click();
+
+    const testRequest = page.waitForRequest(
+      (request) => new URL(request.url()).pathname === "/provider/test",
+    );
+    await providerTestButton(page).click();
+    await testRequest;
+
+    expect(providerTestPayloads).toHaveLength(1);
+    expect(providerTestPayloads[0].provider.ignoreSystemProxy).toBe(true);
+    expect(consoleErrors).toEqual([]);
+  });
 });

@@ -124,7 +124,7 @@ try {
   await timed(
     "settings->coach",
     () => page.getByTestId("trainer-view-nav-coach").first().click(),
-    () => page.locator("textarea").first().waitFor({ timeout: 5000 }),
+    () => page.locator("#coach-composer, .composer-shell textarea").first().waitFor({ timeout: 5000 }),
   );
 
   const overBudget = results.filter((result) => result.ms > BUDGET_MS);

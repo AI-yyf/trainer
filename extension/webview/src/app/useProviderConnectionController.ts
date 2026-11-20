@@ -86,6 +86,11 @@ const DRAFT_FIELDS: readonly DraftFieldDescriptor[] = [
     differs: (value, facts) => value !== (facts.credentialMode ?? "ui_proxy"),
   },
   {
+    key: "ignoreSystemProxy",
+    fromFacts: (facts) => Boolean(facts.ignoreSystemProxy),
+    differs: (value, facts) => Boolean(value) !== Boolean(facts.ignoreSystemProxy),
+  },
+  {
     key: "catalogModels",
     fromFacts: (facts) => facts.catalogModels ?? [],
     differs: (value, facts) =>
@@ -152,6 +157,7 @@ export function providerDraftFromFacts(facts: ProviderConfigView): ProviderDraft
     baseUrl: "",
     model: "",
     credentialMode: "ui_proxy",
+    ignoreSystemProxy: false,
     catalogModels: [],
     allowedModels: [],
     deniedModels: [],
@@ -279,6 +285,7 @@ export function useProviderConnectionController({
       maxOutputTokens: providerDraft.maxOutputTokens ?? null,
       modelTokenLimits: providerDraft.modelTokenLimits,
       credentialMode: providerDraft.credentialMode,
+      ignoreSystemProxy: Boolean(providerDraft.ignoreSystemProxy),
       catalogModels: providerDraft.catalogModels ?? [],
       allowedModels: providerDraft.allowedModels ?? [],
       deniedModels: providerDraft.deniedModels ?? [],

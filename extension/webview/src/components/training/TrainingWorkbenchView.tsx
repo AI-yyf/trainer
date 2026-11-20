@@ -388,7 +388,7 @@ interface TrainingLoopStep {
 
 function trainingLoopStepLabel(step: TrainingLoopStepKey, language: ComposerLanguage): string {
   const labels: Record<ComposerLanguage, Record<TrainingLoopStepKey, string>> = {
-    "zh-CN": { learn: "\u5b66\u4e60", try: "\u52a8\u624b", verify: "\u9a8c\u8bc1", reflect: "\u590d\u76d8", return: "\u56de\u6d41" },
+    "zh-CN": { learn: "\u5b66\u4e60", try: "\u5b9e\u8df5", verify: "\u9a8c\u8bc1", reflect: "\u590d\u76d8", return: "\u603b\u7ed3" },
     "en-US": { learn: "Learn", try: "Try", verify: "Verify", reflect: "Reflect", return: "Return" },
     "es-ES": { learn: "Aprender", try: "Intentar", verify: "Verificar", reflect: "Reflexionar", return: "Volver" },
     "fr-FR": { learn: "Apprendre", try: "Essayer", verify: "Verifier", reflect: "Reflechir", return: "Retour" },

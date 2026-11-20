@@ -34,6 +34,7 @@ export interface ProviderProfileConfig {
   protocol: ProviderProtocol;
   mode: 'direct' | 'gateway';
   credentialMode: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   baseUrl: string;
   apiKeyRef: string;
   model: string;

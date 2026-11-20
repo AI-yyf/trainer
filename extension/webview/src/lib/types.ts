@@ -131,6 +131,7 @@ export interface ProviderConfigView {
   protocolFamily?: string;
   connectionType?: string;
   credentialMode?: "workspace_secret" | "ui_proxy";
+  ignoreSystemProxy?: boolean;
   profileId?: string;
   profileLabel?: string;
   profileMode?: string;
@@ -178,6 +179,7 @@ export interface ProviderConfig {
   label?: string;
   mode?: 'direct' | 'gateway';
   credentialMode?: 'workspace_secret' | 'ui_proxy';
+  ignoreSystemProxy?: boolean;
   capabilities: CapabilityFlags;
   availableModels?: string[];
   catalogModels?: string[];
@@ -2208,6 +2210,7 @@ type WebviewActionBody =
       payload: {
         resourceId: string;
         line?: number;
+        openSource?: boolean;
         researchCitation?: ResearchCitationPin;
       };
     }

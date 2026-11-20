@@ -75,7 +75,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl\?: \(\) => void;/);
   assert.match(
     viewSource,
-    /onOpenResource\?: \(resourceId: string, options\?: \{ line\?: number \}\) => void;/,
+    /onOpenResource\?: \(resourceId: string, options\?: \{ line\?: number; openSource\?: boolean \}\) => void;/,
   );
   assert.match(viewSource, /onRefreshResources\?: \(\) => void \| Promise<void>;/);
   assert.match(inlineCopy, /pendingIndex: \{ zh: "\\u5f85\\u7d22\\u5f15", en: "Waiting to be indexed" \}/);
@@ -95,7 +95,7 @@ test('Resources uses real knowledge records and opens them through the existing 
   assert.match(viewSource, /onImportUrl/);
   assert.match(
     viewSource,
-    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ line\?: number \},\s*\) =>/,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ line\?: number; openSource\?: boolean \},\s*\) =>/,
   );
   assert.match(viewSource, /onOpenResource\?\.\(resource\.id, options\)/);
   // md-only: the library never offers a second, binary artifact to open.
@@ -323,7 +323,7 @@ test('Resources treats URL material as webpage snapshots without restoring statu
   assert.doesNotMatch(viewSource, /resources-file-toolbar/);
   assert.doesNotMatch(viewSource, /resources-knowledge__state/);
   assert.doesNotMatch(viewSource, /collectionSegmentPrefix}links/);
-  assert.match(stylesSource, /grid-template-columns: 20px minmax\(0, 1fr\) 22px;/);
+  assert.match(stylesSource, /grid-template-columns: 20px minmax\(0, 1fr\) auto;/);
   assert.match(stylesSource, /padding-inline: 24px 8px;/);
   assert.doesNotMatch(stylesSource, /\.resources-library-tree__indent \{/);
   assert.match(stylesSource, /\.resources-knowledge__actions \.resources-knowledge__icon-button/);

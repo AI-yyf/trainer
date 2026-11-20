@@ -96,6 +96,33 @@ test('a settled practice leaves its progress receipt inside the conversation', a
   await expect(page.locator('.app-shell-nav button')).toHaveCount(2);
 });
 
+test('inline practice keeps single-composer sovereignty and collapses cleanly', async ({ page }) => {
+  await seedSettledPractice(page);
+
+  // Single-composer sovereignty: only the bottom #coach-composer textarea exists.
+  await expect(page.locator('textarea')).toHaveCount(1);
+  await expect(page.locator('[data-inline-practice="true"] textarea')).toHaveCount(0);
+  // No card-library CRUD chrome inside the inline chat slot.
+  await expect(page.locator('[data-inline-practice="true"] .training-card-library')).toHaveCount(0);
+
+  // Clicking the calm cue focuses the sole bottom composer.
+  const cue = page.locator('[data-single-composer-cue="true"]');
+  await expect(cue).toBeVisible();
+  await cue.click();
+  await expect(page.locator('#coach-composer')).toBeFocused();
+
+  // The inline practice card collapses and expands cleanly without disturbing the composer.
+  const toggle = page.locator('[data-inline-practice-toggle="true"]');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('[data-training-card-id="author-card"]')).toHaveCount(0);
+  await expect(page.locator('#coach-composer')).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('[data-training-card-id="author-card"]')).toBeVisible();
+});
+
 test('a sent message keeps its source as an auditable footnote and hides internal context', async ({ page }) => {
   await page.goto('/vscode-preview.html?view=coach&lang=zh-CN&connection=connected&run=message-footnote');
   await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();

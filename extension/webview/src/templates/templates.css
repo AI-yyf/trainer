@@ -135,6 +135,47 @@
   max-width: var(--coach-content-max, 660px);
   margin: 8px auto 4px;
 }
+.inline-practice-slot__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+}
+.inline-practice-slot__header--expanded {
+  justify-content: flex-end;
+  padding: 0 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.inline-practice-slot__summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-1);
+  font-size: var(--trainer-font-xs);
+  font-weight: 500;
+}
+.inline-practice-slot__toggle {
+  flex: none;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--trainer-font-2xs);
+  cursor: pointer;
+}
+.inline-practice-slot__toggle:hover {
+  color: var(--fg-0);
+  background: color-mix(in srgb, var(--fg-0) 7%, transparent);
+}
 .inline-practice-slot .training-view { padding: 0; }
 .inline-practice-slot .training-pane {
   padding: 12px;
@@ -145,29 +186,21 @@
 .inline-practice-slot .template-activity-header { gap: 3px; padding-block: 0 8px; }
 .inline-practice-slot .template-activity-header h2 { font-size: var(--trainer-font-md); line-height: 1.4; }
 .inline-practice-slot .template-next-action { padding-block: 6px; gap: 6px; }
-/* The candidate library stays reachable: candidate review is a governed
-   decision the learner makes on the card itself. */
-.inline-practice-slot .training-library { margin-block: 6px; }
 .inline-practice-slot .training-current { padding: 0; }
 .inline-practice-slot .training-current__actions { margin-top: 10px; }
-.inline-practice-answer { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: 10px; }
-.inline-practice-answer__label { color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.4; }
-.inline-practice-answer__input {
-  width: 100%;
-  min-height: 48px;
-  box-sizing: border-box;
-  padding: 8px 9px;
-  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
-  border-radius: 8px;
-  background: var(--bg-0);
-  color: var(--fg-0);
-  font: inherit;
-  font-size: var(--trainer-font-xs);
-  line-height: 1.55;
-  resize: vertical;
+.inline-practice-answer { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: 8px; }
+.inline-practice-answer__cue {
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.5;
+  cursor: pointer;
 }
-.inline-practice-answer__input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
-.inline-practice-answer__submit { align-self: flex-start; }
+.inline-practice-answer__cue:hover {
+  color: var(--fg-1);
+}
 .inline-progress-card {
   display: flex;
   flex-direction: column;

@@ -510,10 +510,11 @@ test('restored trusted verification advances to reflection and carries its full 
   // The legacy Training route opens the learning drawer, and the drawer
   // overlays the shell: close it so the practice card is reachable again.
   await closeLearningDrawer(page);
-  // The reflection now lives in the card's own answer field.
-  const reflectionInput = page.getByRole('textbox', { name: '作答内容', exact: true });
+  // Single-composer sovereignty: reflection routes through the single Coach composer.
+  const reflectionInput = page.locator('#coach-composer');
   await expect(reflectionInput).toBeEditable();
   await expect(reflectionInput).toHaveAttribute('placeholder', '写下你刚确认的规则，以及下次如何复用它。');
+  await expect(page.locator('[data-inline-practice-answer="true"] textarea')).toHaveCount(0);
   await page.evaluate((reflection) => {
     const current = window.__TRAINER_BOOTSTRAP__;
     const state = current.workspaceTrainingState;
@@ -698,10 +699,10 @@ test('Start review opens the due queue while preserving the current practice car
     type: 'training/persistenceAck', payload: { commandId: accept.payload.commandId, ok: true,
       requestId: accept.payload.payload.__trainerTrainingPersistenceId },
   });
-  // The reflection is recorded in the card's own answer field, not in the
-  // dock composer.
-  await page.locator('[data-inline-practice-answer="true"] textarea').fill('元组槽位不能替换，但它引用的列表仍然可变。');
-  await page.getByRole('button', { name: '记录训练复盘', exact: true }).click();
+  // Single-composer sovereignty: reflection is submitted through the single bottom composer.
+  await expect(page.locator('[data-inline-practice-answer="true"] textarea')).toHaveCount(0);
+  await page.locator('#coach-composer').fill('元组槽位不能替换，但它引用的列表仍然可变。');
+  await page.locator('.composer__send').click();
   await expect.poll(async () => page.evaluate(() => window.__TRAINER_E2E_HOST_ACTIONS__.find(
     (message) => message.payload?.commandId === 'trainer.training.reviewArtifactAction',
   )?.payload.payload)).toMatchObject({

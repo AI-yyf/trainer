@@ -1037,7 +1037,7 @@ export const trainingWorkbenchTextCopy: Record<
     acceptanceMethod: "验收方式",
     landSmallResultFirst: "先拿到一个最小可验证结果，再决定要不要扩展范围。",
     returnPath: "回流去向",
-    followUpReview: "后续和回看",
+    followUpReview: "后续复习",
     fsrsInterval: "间隔",
     fsrsMastery: "掌握度",
     noRecallEvidence: "无回忆证据",

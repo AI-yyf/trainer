@@ -54,7 +54,7 @@ test('provider draft sync only follows stable provider transport fields', () => 
   const fieldKeys = [...source.matchAll(/^\s{2,4}key: "([a-zA-Z]+)",/gm)].map((match) => match[1]);
   assert.deepEqual(fieldKeys, [
     'name', 'protocol', 'baseUrl', 'model', 'contextWindowTokens', 'maxOutputTokens',
-    'modelTokenLimits', 'credentialMode', 'catalogModels', 'allowedModels', 'deniedModels',
+    'modelTokenLimits', 'credentialMode', 'ignoreSystemProxy', 'catalogModels', 'allowedModels', 'deniedModels',
     'embeddingModel', 'catalogSource', 'cacheTtlSeconds', 'requestDefaults', 'capabilities',
     'thinkingConfig',
   ]);

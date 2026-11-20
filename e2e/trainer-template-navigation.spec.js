@@ -37,13 +37,11 @@ test('Learning reads saved flash prompts and candidate criteria from sidecar rec
   await closeLearningDrawer(page);
   const practice = page.locator('[data-template=FocusedPractice]');
   await expect(practice.getByText(current.question, { exact: true })).toBeVisible();
-  const library = page.locator('[data-training-library]');
-  await expect(library).toHaveJSProperty('open', false);
-  await library.locator(':scope > summary').click();
-  const review = library.locator('[data-candidate-id=pending-flash]');
-  await review.locator('summary').click();
-  await expect(review.getByRole('textbox', { name: 'Prompt', exact: true })).toHaveValue(candidate.question);
-  await expect(review.getByRole('textbox', { name: 'Acceptance criteria (one per line)' })).toHaveValue(candidate.acceptance_criteria.join('\n'));
+  // Product contract v2.1: inline conversation stays calm without card-library CRUD chrome
+  // and routes answers through the single bottom composer.
+  await expect(page.locator('[data-training-library]')).toHaveCount(0);
+  await expect(page.locator('[data-inline-practice-answer="true"] textarea')).toHaveCount(0);
+  await expect(page.locator('#coach-composer')).toBeVisible();
 });
 
 // Deterministic fixtures validate presentation and navigation, not real evidence.
@@ -137,23 +135,22 @@ test('surface switches retain the Coach draft and resource search without sharin
         activeTrainingCardRouting: { selectedCardId: card.cardId, selectedCard: card, selectionScore: 100 } },
     } });
   });
-  // Practice answers belong to the active card and keep their own draft.
+  // Single-composer sovereignty: no second competing textarea inside the card.
   const cardDetails = page.locator('[data-training-card-details]');
   await expect(cardDetails).toHaveCount(1);
   await expect(cardDetails.locator(':scope > summary')).toContainText(/任务详情|Task details/);
   await expect(cardDetails).not.toHaveAttribute('open', '');
-  const practiceInput = page.locator('[data-inline-practice-answer="true"] textarea');
-  // The practice card's own answer field is a second textarea: it belongs to
-  // the card, not to the dock composer.
+  await expect(page.locator('[data-inline-practice-answer="true"] textarea')).toHaveCount(0);
   await expect(page.locator('#coach-composer')).toBeVisible();
-  await expect(page.locator('textarea:visible')).toHaveCount(2);
-  await practiceInput.fill('My attempt note');
+  await expect(page.locator('textarea:visible')).toHaveCount(1);
   // The drawer is modal: close it before using the nav.
   await closeLearningDrawer(page);
   await page.getByTestId('trainer-view-nav-coach').click();
   await expect(page.locator('#coach-composer')).toHaveValue('Keep my question while I read');
-  await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: { activeView: 'training' } }));
-  await expect(practiceInput).toHaveValue('My attempt note');
+  const toggle = page.locator('[data-inline-practice-toggle="true"]');
+  await toggle.click();
+  await expect(page.locator('[data-inline-practice-collapsed="true"]')).toBeVisible();
+  await expect(page.locator('#coach-composer')).toHaveValue('Keep my question while I read');
 });
 
 test('reload restores the same session draft and reading position; history returns keyboard focus', async ({ page }) => {

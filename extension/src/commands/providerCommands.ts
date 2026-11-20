@@ -103,6 +103,7 @@ type CreateProviderProfileFromDraftPayload = {
   deniedModels?: string[];
   apiKey?: string;
   credentialMode?: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   capabilities?: Partial<CapabilityFlags>;
   requestDefaults?: Record<string, unknown>;
   thinkingConfig?: unknown;
@@ -119,6 +120,7 @@ type ProviderDraftTestInput = {
   maxOutputTokens?: number | null;
   modelTokenLimits?: ProviderConfig['modelTokenLimits'];
   credentialMode?: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   catalogModels?: string[];
   allowedModels?: string[];
   deniedModels?: string[];
@@ -525,6 +527,10 @@ function buildDraftTestConfig(
       input.credentialMode ??
       existing?.credentialMode ??
       defaultProviderCredentialMode(context.getHostState().workspace),
+    ignoreSystemProxy:
+      typeof input.ignoreSystemProxy === 'boolean'
+        ? input.ignoreSystemProxy
+        : Boolean(existing?.ignoreSystemProxy),
     capabilities: protocolChanged
       ? defaultCapabilitiesForProtocol(protocol)
       : {
@@ -1676,6 +1682,10 @@ export async function createProviderProfileFromDraftCommand(
     apiKeyRef: createProviderApiKeyRef(),
     mode: sameConnection ? existing?.mode : 'direct',
     credentialMode,
+    ignoreSystemProxy:
+      typeof input.ignoreSystemProxy === 'boolean'
+        ? input.ignoreSystemProxy
+        : Boolean(existing?.ignoreSystemProxy),
     capabilities,
     requestDefaults: normalizeProviderRequestDefaults(
       {

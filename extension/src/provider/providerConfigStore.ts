@@ -1040,6 +1040,10 @@ export class ProviderConfigStore implements vscode.Disposable {
         workspaceCredentialMode === 'workspace_secret' || workspaceCredentialMode === 'ui_proxy'
           ? workspaceCredentialMode
           : fallback.credentialMode,
+      ignoreSystemProxy:
+        typeof providerRecord.ignoreSystemProxy === 'boolean'
+          ? providerRecord.ignoreSystemProxy
+          : fallback.ignoreSystemProxy,
       capabilities,
       requestDefaults,
       thinkingConfig: normalizeProviderThinkingConfig(
@@ -1087,6 +1091,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       mode: normalized.mode,
       connectionType: normalizeProviderConnectionType(normalized.connectionType),
       credentialMode: normalized.credentialMode,
+      ignoreSystemProxy: Boolean(normalized.ignoreSystemProxy),
       capabilities: { ...normalized.capabilities },
       requestDefaults: normalizeProviderRequestDefaults(
         {
@@ -1187,6 +1192,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       mode: profile.mode,
       connectionType: profile.connectionType,
       credentialMode: profile.credentialMode,
+      ignoreSystemProxy: Boolean(profile.ignoreSystemProxy),
       baseUrl: this.normalizeBaseUrl(profile.baseUrl),
       apiKeyRef: profile.apiKeyRef,
       model: profile.model,
@@ -1253,6 +1259,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       mode: normalized.mode === 'gateway' ? 'gateway' : 'direct',
       connectionType: normalizeProviderConnectionType(normalized.connectionType),
       credentialMode: normalized.credentialMode === 'workspace_secret' ? 'workspace_secret' : 'ui_proxy',
+      ignoreSystemProxy: Boolean(normalized.ignoreSystemProxy),
       baseUrl: normalized.baseUrl,
       apiKeyRef: normalized.apiKeyRef,
       model: normalized.model,
@@ -1459,6 +1466,10 @@ export class ProviderConfigStore implements vscode.Disposable {
       connectionType:
         normalizeProviderConnectionType(nextConfig.connectionType) ?? currentProfile.connectionType,
       credentialMode: nextConfig.credentialMode ?? currentProfile.credentialMode,
+      ignoreSystemProxy:
+        typeof nextConfig.ignoreSystemProxy === 'boolean'
+          ? nextConfig.ignoreSystemProxy
+          : Boolean(currentProfile.ignoreSystemProxy),
       baseUrl: nextConfig.baseUrl,
       apiKeyRef: nextConfig.apiKeyRef,
       model: nextConfig.model,
@@ -1573,6 +1584,8 @@ export class ProviderConfigStore implements vscode.Disposable {
       ),
       credentialMode:
         this.readString(record, 'credentialMode') === 'workspace_secret' ? 'workspace_secret' : 'ui_proxy',
+      ignoreSystemProxy:
+        record.ignoreSystemProxy === true || record.ignore_system_proxy === true,
       baseUrl: this.normalizeBaseUrl(baseUrl),
       apiKeyRef: apiKeyRef.trim(),
       model: model.trim(),

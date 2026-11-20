@@ -15,14 +15,36 @@ export function resourceLibraryText(language: ComposerLanguage, key: ResourceTex
 }
 
 export const compactResourceSearchPlaceholder: Record<ComposerLanguage, string> = {
-  "zh-CN": "\u641c\u7d22\u8d44\u6599",
-  "en-US": "Search",
-  "es-ES": "Buscar recursos",
-  "fr-FR": "Rechercher",
-  "de-DE": "Suchen",
-  "ja-JP": "\u8cc7\u6599\u3092\u691c\u7d22",
-  "ko-KR": "\uc790\ub8cc \uac80\uc0c9",
-  "pt-BR": "Pesquisar",
+  "zh-CN": "筛选资料",
+  "en-US": "Filter resources",
+  "es-ES": "Filtrar recursos",
+  "fr-FR": "Filtrer les ressources",
+  "de-DE": "Ressourcen filtern",
+  "ja-JP": "資料を絞り込む",
+  "ko-KR": "자료 필터",
+  "pt-BR": "Filtrar recursos",
+};
+
+export const resourceRowOpenSourceLabel: Record<ComposerLanguage, string> = {
+  "zh-CN": "打开源文件",
+  "en-US": "Open source",
+  "es-ES": "Abrir código fuente",
+  "fr-FR": "Ouvrir la source",
+  "de-DE": "Quelldatei öffnen",
+  "ja-JP": "ソースを開く",
+  "ko-KR": "원본 파일 열기",
+  "pt-BR": "Abrir fonte",
+};
+
+export const resourceRowOpenPreviewLabel: Record<ComposerLanguage, string> = {
+  "zh-CN": "打开预览",
+  "en-US": "Open preview",
+  "es-ES": "Abrir vista previa",
+  "fr-FR": "Ouvrir l'aperçu",
+  "de-DE": "Vorschau öffnen",
+  "ja-JP": "プレビューを開く",
+  "ko-KR": "미리 보기 열기",
+  "pt-BR": "Abrir visualização",
 };
 
 export const englishSingularResourceMutationText: Partial<Record<ResourceTextKey, string>> = {

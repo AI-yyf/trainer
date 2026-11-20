@@ -49,6 +49,7 @@ import {
 import {
   ArrowRightIcon,
   ChevronDownIcon,
+  ComposeIcon,
   FileIcon,
   FolderIcon,
   LinkIcon,
@@ -86,6 +87,8 @@ import {
   englishSingularResourceMutationText,
   projectStructureCopy,
   resourceLibraryText as localize,
+  resourceRowOpenPreviewLabel,
+  resourceRowOpenSourceLabel,
   resourceTrainingReadinessCopy,
   type ResourceTextKey,
 } from "../../lib/i18n/segments/resourcesInlineText";
@@ -155,7 +158,7 @@ export interface ResourcesWorkbenchViewProps {
   onDeleteLibraryFolder?: (path: string) => Promise<ResourceMutationOutcome>;
   /** Reveal a downloaded file path through the host's existing file-manager action. */
   onRevealSavedPath?: (path: string) => void;
-  onOpenResource?: (resourceId: string, options?: { line?: number }) => void;
+  onOpenResource?: (resourceId: string, options?: { line?: number; openSource?: boolean }) => void;
   onStartTrainingFromResource?: (resourceId: string) => Promise<ResourceTrainingHandoffResult>;
   onOpenTraining?: () => void;
   onAskCoach?: (resourceIds: string[]) => void;
@@ -970,6 +973,7 @@ interface ResourceTreeItemProps {
   activeTreeItemId: string | null;
   onToggle: (id: string) => void;
   onOpen: (resource: ResourceRecord) => void;
+  onAsk?: (resource: ResourceRecord) => void;
   onMenu: (resource: ResourceRecord, event: React.MouseEvent<HTMLElement>) => void;
   onActiveTreeItemChange: (id: string) => void;
   onMoveTreeFocus: (id: string) => void;
@@ -985,6 +989,7 @@ function ResourceTreeItem({
   activeTreeItemId,
   onToggle,
   onOpen,
+  onAsk,
   onMenu,
   onActiveTreeItemChange,
   onMoveTreeFocus,
@@ -1037,18 +1042,35 @@ function ResourceTreeItem({
         <span className="resources-library-tree__copy">
           <strong>{displayTitle}</strong>
         </span>
-        <button
-          className="resources-library-tree__open resources-library-tree__menu"
-          type="button"
-          aria-label={`${localize(language, "fileActionsTitle")}: ${displayTitle}`}
-          title={localize(language, "fileActionsTitle")}
-          onClick={(event) => {
-            event.stopPropagation();
-            onMenu(node.resource!, event);
-          }}
-        >
-          <span aria-hidden="true">⋯</span>
-        </button>
+        <span className="resources-library-tree__actions">
+          {onAsk ? (
+            <button
+              className="resources-library-tree__preview"
+              type="button"
+              data-resource-quick-ask="true"
+              aria-label={`${templateCopy[language].askCoach}: ${displayTitle}`}
+              title={templateCopy[language].askCoach}
+              onClick={(event) => {
+                event.stopPropagation();
+                onAsk(node.resource!);
+              }}
+            >
+              <ComposeIcon size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+          <button
+            className="resources-library-tree__open resources-library-tree__menu"
+            type="button"
+            aria-label={`${localize(language, "fileActionsTitle")}: ${displayTitle}`}
+            title={localize(language, "fileActionsTitle")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onMenu(node.resource!, event);
+            }}
+          >
+            <span aria-hidden="true">⋯</span>
+          </button>
+        </span>
       </div>
     );
   }
@@ -1123,6 +1145,7 @@ function ResourceTreeItem({
                 activeTreeItemId={activeTreeItemId}
                 onToggle={onToggle}
                 onOpen={onOpen}
+                onAsk={onAsk}
                 onMenu={onMenu}
                 onActiveTreeItemChange={onActiveTreeItemChange}
                 onMoveTreeFocus={onMoveTreeFocus}
@@ -1859,7 +1882,7 @@ export function ResourcesWorkbenchView({
 
   const openResourceInVsCode = (
     resource: ResourceRecord,
-    options?: { line?: number },
+    options?: { line?: number; openSource?: boolean },
   ) => {
     onOpenResource?.(resource.id, options);
   };
@@ -3172,6 +3195,7 @@ export function ResourcesWorkbenchView({
                 activeTreeItemId={resolvedActiveTreeItemId}
                 onToggle={toggleCollection}
                 onOpen={openResourceInVsCode}
+                onAsk={onAskCoach ? (resource) => onAskCoach([resource.id]) : undefined}
                 onMenu={openResourceRowMenu}
                 onActiveTreeItemChange={(id) => setActiveTreeItemId(id)}
                 onMoveTreeFocus={moveTreeFocus}
@@ -3918,10 +3942,13 @@ export function ResourcesWorkbenchView({
       {rowMenu ? (() => {
         const resource = rowMenu.resource;
         const target = resolveResourceOpenTarget(resource);
+        const isMarkdownResource = resource.kind !== "image";
         const openLabel =
           target.kind === "unavailable"
             ? localize(language, "openUnavailable")
-            : localize(language, "openInVsCode");
+            : isMarkdownResource
+              ? resourceRowOpenPreviewLabel[language]
+              : localize(language, "openInVsCode");
         return (
           <div
             className="menu-list is-compact resources-row-menu"
@@ -3941,6 +3968,19 @@ export function ResourcesWorkbenchView({
             >
               <span className="menu-list__body"><strong>{openLabel}</strong></span>
             </button>
+            {isMarkdownResource && onOpenResource && target.kind !== "unavailable" ? (
+              <button
+                className="menu-list__item"
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeResourceRowMenu();
+                  openResourceInVsCode(resource, { openSource: true });
+                }}
+              >
+                <span className="menu-list__body"><strong>{resourceRowOpenSourceLabel[language]}</strong></span>
+              </button>
+            ) : null}
             {onAskCoach ? (
               <button
                 className="menu-list__item"

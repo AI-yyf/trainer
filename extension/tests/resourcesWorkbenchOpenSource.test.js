@@ -33,7 +33,7 @@ test('Resources opens library files only in VS Code without an in-Trainer conten
 
   assert.match(
     source,
-    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ line\?: number \},\s*\) =>/,
+    /const openResourceInVsCode = \(\s*resource: ResourceRecord,\s*options\?: \{ line\?: number; openSource\?: boolean \},\s*\) =>/,
   );
   assert.match(source, /onOpenResource\?\.\(resource\.id, options\)/);
   assert.match(source, /onClick: \(\) => openResourceInVsCode\(selectedResource\)/);

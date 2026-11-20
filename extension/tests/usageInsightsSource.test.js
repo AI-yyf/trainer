@@ -29,7 +29,7 @@ const sharedCommandsSource = read('..', 'shared', 'src', 'commands.ts');
 // resolves inline). Guards pin both halves per phrase.
 const USAGE_INSIGHTS_PHRASES = [
   ['使用洞察', 'Usage insights'],
-  ['只汇总本机事件账本，只读、不联网。', 'Local ledger, read-only. Nothing leaves this machine.'],
+  ['只汇总本机使用记录，只读、不联网。', 'Local usage history, read-only. Nothing leaves this machine.'],
   ['近 7 天', 'Last 7 days'],
   ['近 30 天', 'Last 30 days'],
   ['统计区间', 'Window'],

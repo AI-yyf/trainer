@@ -1676,7 +1676,7 @@ test('openResourceCommand opens the canonical Markdown by default and the origin
   assert.equal(defaultResult.ok, true);
   assert.equal(openedExternal.length, 0);
   assert.equal(executedCommands.length, 1);
-  assert.equal(executedCommands[0][0], 'vscode.open');
+  assert.equal(executedCommands[0][0], 'markdown.showPreview');
   assert.equal(executedCommands[0][1].fsPath, markdownPath);
 
   const originalResult = await openResourceCommand(context, {
@@ -1684,12 +1684,22 @@ test('openResourceCommand opens the canonical Markdown by default and the origin
     openOriginal: true,
   });
   // md-only: the original is no longer a library artifact, so a legacy
-  // "open original" request still opens the canonical Markdown.
+  // "open original" request still opens the canonical Markdown preview.
   assert.equal(originalResult.ok, true);
   assert.equal(openedExternal.length, 0);
   assert.equal(executedCommands.length, 2);
-  assert.equal(executedCommands[1][0], 'vscode.open');
+  assert.equal(executedCommands[1][0], 'markdown.showPreview');
   assert.equal(executedCommands[1][1].fsPath, markdownPath);
+
+  const sourceResult = await openResourceCommand(context, {
+    resourceId: 'resource-1',
+    openSource: true,
+  });
+  // Explicit openSource opens the raw Markdown file in the text editor.
+  assert.equal(sourceResult.ok, true);
+  assert.equal(executedCommands.length, 3);
+  assert.equal(executedCommands[2][0], 'vscode.open');
+  assert.equal(executedCommands[2][1].fsPath, markdownPath);
 });
 
 test('openResourceCommand refuses a missing source instead of opening a broken tab', async () => {
@@ -2320,7 +2330,7 @@ test('openResourceCommand keeps legacy external-open requests in VS Code', async
 
   assert.equal(result.ok, true);
   assert.equal(executedCommands.length, 1);
-  assert.equal(executedCommands[0][0], 'vscode.open');
+  assert.equal(executedCommands[0][0], 'markdown.showPreview');
   assert.equal(executedCommands[0][1].fsPath, expectedPath);
   assert.equal(openedExternally.length, 0);
 });

@@ -23,6 +23,6 @@ test('training flash answers use the persisted learnerAnswer contract before fee
   assert.match(answerHandler, /theoryDrillId: activeTheoryDrill\.id,/);
   assert.match(answerHandler, /learnerAnswer: normalizedAnswer,/);
   assert.match(answerHandler, /await requestTrainingPersistence\([\s\S]*?sendTrainingFeedback\(/);
-  assert.match(answerHandler, /sendTrainingFeedback\([\s\S]*?setActivityDraft\(""\);/);
+  assert.match(answerHandler, /sendTrainingFeedback\([\s\S]*?(?:setActivityDraft\(""\)|clearSubmission\(\));/);
   assert.doesNotMatch(answerHandler, /answer: normalizedAnswer,/);
 });

@@ -2,83 +2,93 @@ import type { ReactNode } from "react";
 
 import type { ComposerLanguage } from "../../lib/types";
 
-const COPY: Record<ComposerLanguage, { label: string; submit: string; busy: string }> = {
-  "zh-CN": { label: "作答内容", submit: "提交作答", busy: "正在提交…" },
-  "en-US": { label: "Response", submit: "Submit response", busy: "Submitting…" },
-  "es-ES": { label: "Respuesta", submit: "Enviar respuesta", busy: "Enviando…" },
-  "fr-FR": { label: "Réponse", submit: "Envoyer la réponse", busy: "Envoi…" },
-  "de-DE": { label: "Antwort", submit: "Antwort senden", busy: "Wird gesendet…" },
-  "ja-JP": { label: "回答内容", submit: "回答を提出", busy: "送信中…" },
-  "ko-KR": { label: "답안 내용", submit: "답안 제출", busy: "제출 중…" },
-  "pt-BR": { label: "Resposta", submit: "Enviar resposta", busy: "Enviando…" },
+const COPY: Record<ComposerLanguage, { cue: string; reflectCue: string; focusAction: string }> = {
+  "zh-CN": {
+    cue: "请在下方输入框作答、追问提示或提交说明。",
+    reflectCue: "请在下方输入框写下复盘结论并提交。",
+    focusAction: "前往输入框",
+  },
+  "en-US": {
+    cue: "Answer, ask for a hint, or describe your result in the input box below.",
+    reflectCue: "Write your reflection in the input box below to record it.",
+    focusAction: "Focus input",
+  },
+  "es-ES": {
+    cue: "Responde, pide una pista o describe tu resultado en el cuadro inferior.",
+    reflectCue: "Escribe tu reflexión en el cuadro inferior para registrarla.",
+    focusAction: "Ir al cuadro",
+  },
+  "fr-FR": {
+    cue: "Répondez, demandez un indice ou décrivez votre résultat dans la zone de saisie ci-dessous.",
+    reflectCue: "Rédigez votre réflexion dans la zone de saisie ci-dessous pour l'enregistrer.",
+    focusAction: "Aller à la saisie",
+  },
+  "de-DE": {
+    cue: "Antworten, einen Hinweis anfordern oder das Ergebnis im Eingabefeld unten eintragen.",
+    reflectCue: "Reflexion im Eingabefeld unten eintragen und absenden.",
+    focusAction: "Zum Eingabefeld",
+  },
+  "ja-JP": {
+    cue: "下の入力欄から回答、ヒントの質問、または結果の報告を行ってください。",
+    reflectCue: "下の入力欄に振り返りを記入して送信してください。",
+    focusAction: "入力欄へ移動",
+  },
+  "ko-KR": {
+    cue: "아래 입력창에서 답안 제출, 힌트 요청 또는 결과 보고를 진행하세요.",
+    reflectCue: "아래 입력창에 회고 내용을 작성해 제출하세요.",
+    focusAction: "입력창으로 이동",
+  },
+  "pt-BR": {
+    cue: "Responda, peça uma dica ou relate seu resultado na caixa de entrada abaixo.",
+    reflectCue: "Escreva sua reflexão na caixa de entrada abaixo para registrá-la.",
+    focusAction: "Ir para a entrada",
+  },
 };
 
 export interface InlinePracticeAnswerProps {
   language: ComposerLanguage;
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: () => void;
-  busy?: boolean;
-  placeholder?: string;
+  reflectMode?: boolean;
   prompt?: ReactNode;
-  /**
-   * The submit control is an input affordance, not always the phase's primary
-   * action. When the card already owns a primary action for this phase (the
-   * file-verification step), the answer stays secondary so the phase keeps
-   * exactly one accent.
-   */
-  submitTone?: "accent" | "ghost";
-  /**
-   * Localized label for the phase's own submit action. The card owns the
-   * phase, so the label names that action (record a reflection, submit an
-   * answer) instead of a generic "submit".
-   */
-  submitLabel?: string;
+  onFocusComposer?: () => void;
 }
 
 /**
- * Practice answers live inside the card. The dock composer keeps serving the
- * conversation; sending a practice answer never routes through it.
+ * Single-composer sovereignty: the inline practice card never mounts a second
+ * competing textarea. Answers, hints, and reflections route through the single
+ * docked CoachComposer at the bottom of the workbench.
  */
 export function InlinePracticeAnswer({
   language,
-  value,
-  onChange,
-  onSubmit,
-  busy = false,
-  placeholder,
+  reflectMode = false,
   prompt,
-  submitTone = "accent",
-  submitLabel,
+  onFocusComposer,
 }: InlinePracticeAnswerProps) {
-  const copy = COPY[language];
-  const canSubmit = value.trim().length > 0 && !busy;
-  const resolvedSubmitLabel = submitLabel?.trim() || copy.submit;
+  const copy = COPY[language] ?? COPY["en-US"];
   return (
-    <form
+    <div
       className="inline-practice-answer"
       data-inline-practice-answer="true"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (canSubmit) onSubmit();
-      }}
+      data-single-composer-cue="true"
     >
       {prompt}
-      <label className="inline-practice-answer__label" htmlFor="inline-practice-answer-input">
-        {copy.label}
-      </label>
-      <textarea
-        id="inline-practice-answer-input"
-        className="inline-practice-answer__input"
-        value={value}
-        rows={2}
-        disabled={busy}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <button type="submit" className={`button button--${submitTone} inline-practice-answer__submit`} disabled={!canSubmit}>
-        {busy ? copy.busy : resolvedSubmitLabel}
-      </button>
-    </form>
+      <p
+        className="inline-practice-answer__cue"
+        onClick={onFocusComposer}
+        role={onFocusComposer ? "button" : undefined}
+        tabIndex={onFocusComposer ? 0 : undefined}
+        onKeyDown={
+          onFocusComposer
+            ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onFocusComposer();
+                }
+              }
+            : undefined
+        }
+      >
+        {reflectMode ? copy.reflectCue : copy.cue}
+      </p>
+    </div>
   );
 }
