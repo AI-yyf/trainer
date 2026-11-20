@@ -1394,9 +1394,10 @@ function resourceOpenRoots(context: CommandContext): string[] {
     if (!looksLikeWindowsAbsolutePath(trimmed) && !path.isAbsolute(trimmed)) return;
     roots.add(normalizeFsPath(trimmed));
   };
+  add(context.trainerWorkspace?.getRoot());
+  add(admission?.rootPath);
   add(state.workspace.activeWorkspaceRoot);
   add(state.workspace.workspaceFolder);
-  add(admission?.rootPath);
   add(admission?.projectPath);
   add(admission?.canonicalProjectPath);
   add(sandbox?.rootPath);

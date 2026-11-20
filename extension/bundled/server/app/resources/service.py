@@ -382,6 +382,7 @@ class ResourceService:
         self.registry = ResourceRegistry()
         self.ingestor = ResourceIngestor(self.registry, ingest_service)
         self._workspace_path_resolver: Callable[[str], str | None] | None = None
+        self._library_root_resolver: Callable[[str], Path | None] | None = None
         self._search_indexes: dict[str, SearchIndex] = {}
         self._resource_restore_locks: dict[tuple[str, str], Any] = {}
         # Canonicalize stages (analyze -> materialize -> index) reuse one parse
@@ -403,6 +404,12 @@ class ResourceService:
         resolver: Callable[[str], str | None] | None,
     ) -> None:
         self._workspace_path_resolver = resolver
+
+    def set_library_root_resolver(
+        self,
+        resolver: Callable[[str], Path | None] | None,
+    ) -> None:
+        self._library_root_resolver = resolver
 
     def close(self) -> None:
         close = getattr(self.semantic_memory, "close", None)
@@ -436,13 +443,18 @@ class ResourceService:
     ) -> ApiResourceRecord:
         explicit_workspace_root = self._resolved_workspace_root(workspace_path)
         resolved_workspace_root = explicit_workspace_root or self._resolved_workspace_path(workspace_id)
+        allowed_roots = [
+            root
+            for root in (resolved_workspace_root, self._resolved_library_root(workspace_id))
+            if root is not None
+        ]
         original_source = str(request.source or "").strip()
         had_inline_content = bool(request.content)
         request = self._materialize_inline_content(workspace_id, request)
-        if resolved_workspace_root is not None and original_source and not had_inline_content:
-            self._validate_source_within_workspace(
+        if allowed_roots and original_source and not had_inline_content:
+            self._validate_source_within_allowed_roots(
                 original_source,
-                resolved_workspace_root,
+                allowed_roots,
                 source_type=request.source_type,
             )
         self._validate_source(request.source, source_type=request.source_type)
@@ -574,13 +586,13 @@ class ResourceService:
                         return data.decode("utf-8")
             except (OSError, UnicodeError, ValueError):
                 pass
-        markdown_relative = str(resource.canonical_markdown_path or "").strip()
-        workspace_root = self._resolved_workspace_path(workspace_id)
-        if markdown_relative and workspace_root is not None:
+        markdown_path = self._resolve_canonical_markdown_file(
+            workspace_id,
+            resource.canonical_markdown_path,
+        )
+        if markdown_path is not None:
             try:
-                return strip_front_matter(
-                    (workspace_root / markdown_relative).read_text(encoding="utf-8")
-                )
+                return strip_front_matter(markdown_path.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError):
                 pass
         return ""
@@ -630,13 +642,18 @@ class ResourceService:
         self._ensure_registry_resource(resource)
         effective_source_type = "folder" if self._is_folder_resource(resource) else resource.source_type
         workspace_root = self._resolved_workspace_path(workspace_id)
-        if workspace_root is not None and not self._is_managed_inline_source(
+        allowed_roots = [
+            root
+            for root in (workspace_root, self._resolved_library_root(workspace_id))
+            if root is not None
+        ]
+        if allowed_roots and not self._is_managed_inline_source(
             workspace_id,
             resource.source,
         ) and not self._is_managed_sandbox_source(workspace_id, resource.source):
-            self._validate_source_within_workspace(
+            self._validate_source_within_allowed_roots(
                 resource.source,
-                workspace_root,
+                allowed_roots,
                 source_type=effective_source_type,
             )
         self._validate_source(resource.source, source_type=effective_source_type)
@@ -1411,13 +1428,12 @@ class ResourceService:
     def _canonical_export_target(
         self, workspace_id: str, resource: ApiResourceRecord
     ) -> dict[str, Any] | None:
-        canonical_markdown = str(resource.canonical_markdown_path or "").strip()
-        if not canonical_markdown:
+        markdown_path = self._resolve_canonical_markdown_file(
+            workspace_id,
+            resource.canonical_markdown_path,
+        )
+        if markdown_path is None:
             return None
-        workspace_root = self._resolved_workspace_path(workspace_id)
-        markdown_path = Path(canonical_markdown)
-        if not markdown_path.is_absolute() and workspace_root is not None:
-            markdown_path = workspace_root / markdown_path
         try:
             if not markdown_path.is_file():
                 return None
@@ -1529,10 +1545,11 @@ class ResourceService:
         """
 
         record = self._require_workspace_resource(workspace_id, resource_id)
-        markdown_relative = str(record.canonical_markdown_path or "").strip()
-        workspace_root = self._resolved_workspace_path(workspace_id)
-        if markdown_relative and workspace_root is not None:
-            path = workspace_root / markdown_relative
+        path = self._resolve_canonical_markdown_file(
+            workspace_id,
+            record.canonical_markdown_path,
+        )
+        if path is not None:
             try:
                 return strip_front_matter(path.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError):
@@ -2136,12 +2153,19 @@ class ResourceService:
         return results
 
     def _canonical_writable_root(self, workspace_id: str) -> Path | None:
-        """Return the workspace root only when it is a real local directory.
+        """Return the local library root (or standalone workspace root) when writable.
 
-        Remote SSH roots are registered by path but never exist on the sidecar
-        disk. Writing canonical artifacts under a drive-relative reinterpretation
-        of such a path would fabricate local state for a remote workspace.
+        Prefers the Trainer Library Root resolved via ``_library_root_resolver``
+        so canonical Markdown and assets never pollute the user's code repo.
+        Remote SSH paths without a local library root stay non-writable.
         """
+        library_root = self._resolved_library_root(workspace_id)
+        if library_root is not None:
+            try:
+                if library_root.exists() and library_root.is_dir():
+                    return library_root
+            except OSError:
+                pass
 
         resolved = self._resolved_workspace_path(workspace_id)
         if resolved is None:
@@ -2856,6 +2880,41 @@ class ResourceService:
             return None
         return Path(normalized).expanduser().resolve(strict=False)
 
+    def _resolved_library_root(self, workspace_id: str) -> Path | None:
+        if self._library_root_resolver is None:
+            return None
+        resolved = self._library_root_resolver(workspace_id)
+        if resolved is None:
+            return None
+        return Path(resolved).expanduser().resolve(strict=False)
+
+    def _resolve_canonical_markdown_file(
+        self,
+        workspace_id: str,
+        canonical_markdown_path: str | None,
+    ) -> Path | None:
+        """Resolve a canonical Markdown file under ``<LibraryRoot>`` first, then legacy project fallback."""
+        markdown = str(canonical_markdown_path or "").strip()
+        if not markdown:
+            return None
+        path = Path(markdown)
+        if path.is_absolute():
+            return path
+        candidates: list[Path] = []
+        library_root = self._resolved_library_root(workspace_id)
+        if library_root is not None:
+            candidates.append(library_root / path)
+        workspace_root = self._resolved_workspace_path(workspace_id)
+        if workspace_root is not None and workspace_root != library_root:
+            candidates.append(workspace_root / path)
+        for candidate in candidates:
+            try:
+                if candidate.is_file():
+                    return candidate
+            except OSError:
+                continue
+        return candidates[0] if candidates else None
+
     def _search_index_path(self, workspace_id: str) -> Path:
         safe_workspace = self._safe_slug(workspace_id) or "workspace"
         return self.data_root / "search-indexes" / safe_workspace / "index.sqlite3"
@@ -2881,14 +2940,10 @@ class ResourceService:
         resource: ApiResourceRecord,
     ) -> Path | None:
         """Where the canonical document of one resource lives, if it is named."""
-        markdown = str(resource.canonical_markdown_path or "").strip()
-        if not markdown:
-            return None
-        path = Path(markdown)
-        if path.is_absolute():
-            return path
-        root = self._resolved_workspace_path(workspace_id)
-        return (root / path) if root is not None else None
+        return self._resolve_canonical_markdown_file(
+            workspace_id,
+            resource.canonical_markdown_path,
+        )
 
     def _discard_managed_inline_source(
         self,
@@ -3096,10 +3151,10 @@ class ResourceService:
             return None
         return root
 
-    def _validate_source_within_workspace(
+    def _validate_source_within_allowed_roots(
         self,
         source: str,
-        workspace_root: Path,
+        allowed_roots: list[Path],
         *,
         source_type: str = "file",
     ) -> None:
@@ -3109,14 +3164,31 @@ class ResourceService:
         if not local_path.exists():
             raise FileNotFoundError(f"Local resource source does not exist: {local_path}")
         normalized = local_path.resolve(strict=False)
-        try:
-            normalized.relative_to(workspace_root.resolve(strict=False))
-        except ValueError as exc:
+        for root in allowed_roots:
+            try:
+                normalized.relative_to(root.resolve(strict=False))
+                break
+            except ValueError:
+                continue
+        else:
             raise PermissionError(
                 f"Resource source must stay within the active workspace root: {normalized}"
-            ) from exc
+            )
         if source_type == "folder" and not normalized.is_dir():
             raise NotADirectoryError(f"Local resource source must point to a folder: {normalized}")
+
+    def _validate_source_within_workspace(
+        self,
+        source: str,
+        workspace_root: Path,
+        *,
+        source_type: str = "file",
+    ) -> None:
+        self._validate_source_within_allowed_roots(
+            source,
+            [workspace_root],
+            source_type=source_type,
+        )
 
     def _materialize_inline_content(
         self,

@@ -46,6 +46,7 @@ export interface ManagedDataFolderConfigureOptions {
 
 export interface ManagedDataRootScope {
   rootId?: string;
+  rootPath?: string;
   legacyWorkspaceFolder?: string;
 }
 
@@ -56,6 +57,7 @@ export class SidecarProcessManager implements vscode.Disposable {
   private readonly managedDataFolderFallback = new Map<string, string | undefined>();
 
   private managedDataRootId?: string;
+  private managedDataRootPath?: string;
   private managedDataLegacyWorkspaceFolder?: string;
   private managedDataScopeRestartPending = false;
 
@@ -97,16 +99,27 @@ export class SidecarProcessManager implements vscode.Disposable {
 
   async setManagedDataRootScope(scope: ManagedDataRootScope = {}): Promise<boolean> {
     const rootId = normalizeOptionalRootId(scope.rootId);
+    const rootPath = normalizeOptionalDirectoryPath(scope.rootPath);
     const legacyWorkspaceFolder = normalizeOptionalDirectoryPath(scope.legacyWorkspaceFolder);
     const scopeChanged =
       this.managedDataRootId !== rootId ||
-      (!rootId && this.managedDataLegacyWorkspaceFolder !== legacyWorkspaceFolder);
+      this.managedDataRootPath !== rootPath ||
+      (!rootId && !rootPath && this.managedDataLegacyWorkspaceFolder !== legacyWorkspaceFolder);
 
     this.managedDataRootId = rootId;
+    this.managedDataRootPath = rootPath;
     this.managedDataLegacyWorkspaceFolder = legacyWorkspaceFolder;
 
     if (rootId) {
       await this.migrateLegacyManagedDataFolderPointer(rootId, legacyWorkspaceFolder);
+    }
+    if (
+      this.managedDataRootPath &&
+      !this.process &&
+      this.status.lifecycle !== 'ready' &&
+      this.status.lifecycle !== 'starting'
+    ) {
+      this.migrateGlobalStorageToLibraryRootIfNeeded();
     }
     if (scopeChanged && (this.process || this.status.lifecycle === 'ready' || this.status.lifecycle === 'starting')) {
       this.managedDataScopeRestartPending = true;
@@ -404,6 +417,9 @@ export class SidecarProcessManager implements vscode.Disposable {
     // Phase-A metric: engine process starts must stay at zero during pure UI
     // activity (visibility toggles, view switches, state syncs).
     recordSidecarStart();
+    if (this.managedDataRootPath) {
+      this.migrateGlobalStorageToLibraryRootIfNeeded();
+    }
     const port = await this.resolveLaunchPort();
     const candidates = this.buildLaunchCandidates(port);
     if (candidates.length === 0) {
@@ -733,12 +749,61 @@ export class SidecarProcessManager implements vscode.Disposable {
   }
 
   private resolveDefaultSidecarDataDirectory(): string {
+    if (this.managedDataRootPath && isUsableLocalDataDirectory(this.managedDataRootPath)) {
+      const libraryRuntimePath = path.join(this.managedDataRootPath, '.trainer', 'runtime');
+      fs.mkdirSync(libraryRuntimePath, { recursive: true });
+      return libraryRuntimePath;
+    }
     const globalStoragePath = this.extensionContext.globalStorageUri.fsPath;
     const sidecarDataPath = this.managedDataRootId
       ? path.join(globalStoragePath, 'sidecar', 'roots', encodeURIComponent(this.managedDataRootId))
       : path.join(globalStoragePath, 'sidecar');
     fs.mkdirSync(sidecarDataPath, { recursive: true });
     return sidecarDataPath;
+  }
+
+  private migrateGlobalStorageToLibraryRootIfNeeded(): void {
+    if (!this.managedDataRootPath || !isUsableLocalDataDirectory(this.managedDataRootPath)) {
+      return;
+    }
+    const targetRuntimeDir = path.join(this.managedDataRootPath, '.trainer', 'runtime');
+    if (fs.existsSync(path.join(targetRuntimeDir, 'trainer.db'))) {
+      return;
+    }
+    const globalStoragePath = this.extensionContext?.globalStorageUri?.fsPath;
+    if (!globalStoragePath) {
+      return;
+    }
+    const candidates = [
+      this.managedDataRootId
+        ? path.join(globalStoragePath, 'sidecar', 'roots', encodeURIComponent(this.managedDataRootId))
+        : undefined,
+      path.join(globalStoragePath, 'sidecar'),
+    ].filter((candidate): candidate is string => Boolean(candidate));
+
+    const source = candidates.find(
+      (candidate) =>
+        !pathsEqual(candidate, targetRuntimeDir) &&
+        !isNestedPath(candidate, targetRuntimeDir) &&
+        !isNestedPath(targetRuntimeDir, candidate) &&
+        fs.existsSync(path.join(candidate, 'trainer.db')),
+    );
+    if (!source) {
+      return;
+    }
+
+    fs.mkdirSync(targetRuntimeDir, { recursive: true });
+    if (directoryIsEmpty(targetRuntimeDir)) {
+      this.migrateManagedDataFolder(source, targetRuntimeDir);
+      return;
+    }
+    for (const childName of fs.readdirSync(source)) {
+      const childSource = path.join(source, childName);
+      const childTarget = path.join(targetRuntimeDir, childName);
+      if (!fs.existsSync(childTarget)) {
+        fs.cpSync(childSource, childTarget, { recursive: true });
+      }
+    }
   }
 
   private async migrateLegacyManagedDataFolderPointer(

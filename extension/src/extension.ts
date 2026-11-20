@@ -104,7 +104,11 @@ export async function activate(
     initialTrainerWorkspaceAdmission,
     initialTrainerProjectsList,
   );
-  const initialRuntimeWorkspace = await applyManagedDataRootScope(sidecarManager, hostState);
+  const initialRuntimeWorkspace = await applyManagedDataRootScope(
+    sidecarManager,
+    hostState,
+    trainerWorkspace.getRoot(),
+  );
   hostState = withManagedDataFolderSnapshot(
     hostState,
     sidecarManager,
@@ -193,7 +197,11 @@ export async function activate(
       trainerWorkspaceAdmission,
       trainerProjectsList,
     );
-    const runtimeWorkspace = await applyManagedDataRootScope(sidecarManager, derivedState);
+    const runtimeWorkspace = await applyManagedDataRootScope(
+      sidecarManager,
+      derivedState,
+      trainerWorkspace.getRoot(),
+    );
     hostState = withManagedDataFolderSnapshot(
       derivedState,
       sidecarManager,
@@ -727,12 +735,16 @@ function withManagedDataFolderSnapshot(
 async function applyManagedDataRootScope(
   sidecarManager: SidecarProcessManager,
   state: TrainerHostState,
+  configuredRootPath?: string,
 ) {
   const runtimeWorkspace = getRuntimeWorkspaceContext({
     getHostState: () => state,
   });
+  const rootPath =
+    configuredRootPath ?? state.bootstrap.memory?.workspace?.trainerWorkspace?.rootPath;
   await sidecarManager.setManagedDataRootScope({
     rootId: runtimeWorkspace.rootId,
+    rootPath,
     legacyWorkspaceFolder: runtimeWorkspace.legacyWorkspaceId,
   });
   return runtimeWorkspace;

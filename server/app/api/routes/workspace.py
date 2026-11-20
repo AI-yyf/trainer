@@ -614,4 +614,8 @@ def build_workspace_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             ),
         }
 
+    @router.get("/workspace/storage-truth", response_model=None)
+    def workspace_storage_truth(workspace_id: str | None = None) -> dict[str, object]:
+        return runtime.storage_truth_snapshot(workspace_id)
+
     return router

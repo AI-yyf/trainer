@@ -593,8 +593,12 @@ export async function rehydrateWorkbenchRuntime(
     recordRuntimeRehydration();
     let status = context.sidecarManager.getStatus();
     const runtimeWorkspace = getRuntimeWorkspaceContext(context);
+    const configuredRootPath =
+      context.trainerWorkspace?.getRoot() ??
+      context.getHostState().bootstrap.memory?.workspace?.trainerWorkspace?.rootPath;
     await context.sidecarManager.setManagedDataRootScope?.({
       rootId: runtimeWorkspace.rootId,
+      rootPath: configuredRootPath,
       legacyWorkspaceFolder: runtimeWorkspace.legacyWorkspaceId,
     });
     const workspaceAdmissionBlocked = Boolean(trainerSessionBlockReason(context));

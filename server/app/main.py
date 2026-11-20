@@ -167,6 +167,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         workspace_authority_resolver=runtime.workspace_authority,
     )
     resource_service.set_workspace_path_resolver(runtime.resolve_workspace_path)
+    resource_service.set_library_root_resolver(runtime.resolve_library_carrier_root)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

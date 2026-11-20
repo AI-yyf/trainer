@@ -59,13 +59,15 @@ def provision_workspace(
     trusted: bool = True,
     remote_name: str = "",
     workspace_id: str = PROJECT_WORKSPACE,
+    project_dirname: str = "project",
+    root_dirname: str = "trainer-root",
 ) -> tuple[str, Path, Path]:
     """Adopt a real project folder and pin its host trust attestation."""
 
     runtime = client.app.state.runtime
-    project = tmp_path / "project"
+    project = tmp_path / project_dirname
     project.mkdir(exist_ok=True)
-    trainer_root = tmp_path / "trainer-root"
+    trainer_root = tmp_path / root_dirname
     trainer_root.mkdir(exist_ok=True)
     provisioning = runtime.provision_project_adoption(
         workspace_id=workspace_id,
@@ -103,7 +105,7 @@ def test_pdf_download_saves_the_original_bytes_and_creates_the_target_dir(
     )
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         response = client.post(
             "/resources/capture",
             json={
@@ -119,17 +121,18 @@ def test_pdf_download_saves_the_original_bytes_and_creates_the_target_dir(
         assert response.status_code == 200, response.text
         payload = response.json()
         assert payload["saved_path"] == "Trainer Library/Papers/Deep/Session rotation.pdf"
-        saved = project / "Trainer Library" / "Papers" / "Deep" / "Session rotation.pdf"
-        # The original bytes — not the markdown snapshot — landed in the folder.
+        saved = trainer_root / "Trainer Library" / "Papers" / "Deep" / "Session rotation.pdf"
+        # The original bytes — not the markdown snapshot — landed under the unified library root.
         assert saved.is_file()
         assert saved.read_bytes() == pdf_body
-        # The library resource is md-only; the explicit project download is
-        # the user-requested original copy, not a retained library original.
+        # The library resource is md-only; the explicit download is the
+        # user-requested original copy, and the code repo stays untouched.
         assert payload["library_paths"] == ["Trainer Library/Papers/Deep/Session rotation.pdf"]
         assert payload["kind"] == "markdown"
         assert not Path(payload["source"]).exists()
-        assert (project / payload["canonical_markdown_path"]).is_file()
-        assert_no_temp_leftovers(project)
+        assert (trainer_root / payload["canonical_markdown_path"]).is_file()
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
+        assert_no_temp_leftovers(trainer_root)
 
 
 def test_pdf_download_into_the_default_folder_reuses_identical_bytes(tmp_path, monkeypatch) -> None:
@@ -141,7 +144,7 @@ def test_pdf_download_into_the_default_folder_reuses_identical_bytes(tmp_path, m
     )
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         first = client.post(
             "/resources/capture",
             json={
@@ -172,7 +175,8 @@ def test_pdf_download_into_the_default_folder_reuses_identical_bytes(tmp_path, m
         assert payload["deduped"] is True
         assert payload["saved_path"] == "Trainer Library/Default folder.pdf"
         assert any(item.startswith("download:warning_existing_reused") for item in payload["warnings"])
-        assert (project / "Trainer Library" / "Default folder.pdf").read_bytes() == pdf_body
+        assert (trainer_root / "Trainer Library" / "Default folder.pdf").read_bytes() == pdf_body
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
 
 
 def test_pdf_download_keeps_a_user_edited_file_and_saves_beside_it(tmp_path, monkeypatch) -> None:
@@ -184,8 +188,8 @@ def test_pdf_download_keeps_a_user_edited_file_and_saves_beside_it(tmp_path, mon
     )
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
-        target = project / LIBRARY_DIRECTORY_NAME / "Edited.pdf"
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
+        target = trainer_root / LIBRARY_DIRECTORY_NAME / "Edited.pdf"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"%PDF-1.4 user edited copy that must survive\n")
 
@@ -206,8 +210,9 @@ def test_pdf_download_keeps_a_user_edited_file_and_saves_beside_it(tmp_path, mon
         assert saved_name != "Edited.pdf"
         assert saved_name.startswith("Edited-") and saved_name.endswith(".pdf")
         assert target.read_bytes().startswith(b"%PDF-1.4 user edited copy")
-        assert (project / LIBRARY_DIRECTORY_NAME / saved_name).read_bytes() == pdf_body
+        assert (trainer_root / LIBRARY_DIRECTORY_NAME / saved_name).read_bytes() == pdf_body
         assert any(item.startswith("download:warning_collision_renamed") for item in payload["warnings"])
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
 
 
 # --------------------------------------------------------------- GitHub download
@@ -251,7 +256,7 @@ def test_github_download_prefers_git_clone(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(downloads.subprocess, "run", fake_run)
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         response = client.post(
             "/resources/capture",
             json={
@@ -268,7 +273,8 @@ def test_github_download_prefers_git_clone(tmp_path, monkeypatch) -> None:
         assert len(clone_calls) == 1
         assert clone_calls[0][1:3] == ["clone", "--depth"]
         assert clone_calls[0][-2] == "https://github.com/example-org/session-tools.git"
-        assert (project / LIBRARY_DIRECTORY_NAME / "session-tools" / "README.md").is_file()
+        assert (trainer_root / LIBRARY_DIRECTORY_NAME / "session-tools" / "README.md").is_file()
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
         assert not any(item.startswith("download:warning_") for item in payload["warnings"])
 
 
@@ -300,7 +306,7 @@ def test_github_download_falls_back_to_the_zip_archive_without_git(tmp_path, mon
     monkeypatch.setattr(downloads.shutil, "which", lambda name: None)
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         response = client.post(
             "/resources/capture",
             json={
@@ -318,13 +324,14 @@ def test_github_download_falls_back_to_the_zip_archive_without_git(tmp_path, mon
         assert archive_urls == [
             "https://codeload.github.com/example-org/session-tools/zip/refs/heads/main"
         ]
-        repo_dir = project / LIBRARY_DIRECTORY_NAME / "repos" / "session-tools"
+        repo_dir = trainer_root / LIBRARY_DIRECTORY_NAME / "repos" / "session-tools"
         # The archive's single top-level folder is stripped: the repo contents
         # land directly in the target folder.
         assert (repo_dir / "README.md").read_text(encoding="utf-8") == readme
         assert (repo_dir / "src" / "app.py").is_file()
         assert any(item.startswith("download:warning_git_unavailable") for item in payload["warnings"])
-        assert_no_temp_leftovers(project)
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
+        assert_no_temp_leftovers(trainer_root)
 
 
 def test_github_download_refuses_a_traversal_archive_without_polluting_the_workspace(
@@ -358,7 +365,7 @@ def test_github_download_refuses_a_traversal_archive_without_polluting_the_works
     monkeypatch.setattr(downloads.shutil, "which", lambda name: None)
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         response = client.post(
             "/resources/capture",
             json={
@@ -371,8 +378,10 @@ def test_github_download_refuses_a_traversal_archive_without_polluting_the_works
 
         assert response.status_code == 502, response.text
         assert response.json()["detail"]["code"] == "download_failed"
+        assert not (trainer_root / "Trainer Library" / "evil-repo").exists()
         assert not (project / "Trainer Library" / "evil-repo").exists()
         assert not (tmp_path / "escape.txt").exists()
+        assert not (trainer_root / "escape.txt").exists()
         assert not (project / "escape.txt").exists()
 
 
@@ -400,7 +409,7 @@ def test_download_failure_reports_honestly_and_registers_nothing(tmp_path, monke
     monkeypatch.setattr(downloads.shutil, "which", lambda name: None)
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         response = client.post(
             "/resources/capture",
             json={
@@ -412,7 +421,8 @@ def test_download_failure_reports_honestly_and_registers_nothing(tmp_path, monke
         )
         assert response.status_code == 502, response.text
         assert response.json()["detail"]["code"] == "download_failed"
-        assert not (project / LIBRARY_DIRECTORY_NAME).joinpath("unreachable").exists()
+        assert not (trainer_root / LIBRARY_DIRECTORY_NAME).joinpath("unreachable").exists()
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
         # The capture itself was not registered: a failed download fails the
         # request instead of quietly landing half-done.
         library = client.get(
@@ -439,7 +449,7 @@ def test_github_download_is_refused_while_network_fetch_is_disabled(tmp_path, mo
     )
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         captured = client.post(
             "/resources/capture",
             json={"workspace_id": workspace_id, "url": repo_url, "kind": "github_repo"},
@@ -450,7 +460,7 @@ def test_github_download_is_refused_while_network_fetch_is_disabled(tmp_path, mo
         # while a deduped capture that only needs the download is refused with
         # the download-specific message — and creates nothing.
         client.app.state.runtime.resource_service.enable_network_fetch = False
-        library_root = project / LIBRARY_DIRECTORY_NAME
+        library_root = trainer_root / LIBRARY_DIRECTORY_NAME
         before_refusal = (
             sorted(path.relative_to(library_root).as_posix() for path in library_root.rglob("*"))
             if library_root.exists()
@@ -486,10 +496,10 @@ def test_download_refuses_a_target_outside_the_workspace_root(tmp_path, monkeypa
     )
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, _project, trainer_root = provision_workspace(client, tmp_path)
         outside = tmp_path / "outside"
         outside.mkdir()
-        (project / "link-out").symlink_to(outside, target_is_directory=True)
+        (trainer_root / "link-out").symlink_to(outside, target_is_directory=True)
 
         traversal = client.post(
             "/resources/capture",
@@ -517,7 +527,7 @@ def test_download_refuses_a_target_outside_the_workspace_root(tmp_path, monkeypa
         assert absolute.status_code == 422, absolute.text
         assert absolute.json()["detail"]["code"] == "invalid_target_dir"
 
-        # A symlink inside the workspace pointing outside it is caught by the
+        # A symlink inside the library root pointing outside it is caught by the
         # workspace authority boundary check, not by string matching.
         symlinked = client.post(
             "/resources/capture",
@@ -543,7 +553,7 @@ def test_download_requires_a_trusted_local_workspace(tmp_path, monkeypatch) -> N
     )
 
     with build_client(tmp_path) as client:
-        untrusted_id, project, _ = provision_workspace(client, tmp_path, trusted=False)
+        untrusted_id, project, trainer_root = provision_workspace(client, tmp_path, trusted=False)
         untrusted = client.post(
             "/resources/capture",
             json={
@@ -555,27 +565,61 @@ def test_download_requires_a_trusted_local_workspace(tmp_path, monkeypatch) -> N
         )
         assert untrusted.status_code == 403, untrusted.text
         assert untrusted.json()["detail"]["code"] == "library_not_writable"
+        assert not (trainer_root / LIBRARY_DIRECTORY_NAME).exists()
         assert not (project / LIBRARY_DIRECTORY_NAME).exists()
 
-        remote_id, _, _ = provision_workspace(
+        # Local Brain + Remote Hands: a trusted Remote SSH session WITH a local
+        # Library Root stores captures and canonical Markdown ONLY in the local
+        # Library Root — never touching the remote/project folder.
+        remote_id, remote_project, remote_trainer_root = provision_workspace(
             client,
             tmp_path,
+            trusted=True,
             remote_name="ssh-remote",
-            workspace_id="workspace-library-remote",
+            workspace_id="workspace-library-remote-with-root",
+            project_dirname="remote-project",
+            root_dirname="remote-trainer-root",
         )
-        remote = client.post(
+        remote_local = client.post(
             "/resources/capture",
             json={
                 "workspace_id": remote_id,
                 "url": pdf_url,
                 "kind": "pdf",
+                "title": "Trust",
                 "download": True,
             },
         )
-        assert remote.status_code == 403, remote.text
-        assert remote.json()["detail"]["code"] == "library_not_writable"
+        assert remote_local.status_code == 200, remote_local.text
+        assert (remote_trainer_root / LIBRARY_DIRECTORY_NAME / "Trust.pdf").read_bytes() == pdf_body
+        assert (remote_trainer_root / remote_local.json()["canonical_markdown_path"]).is_file()
+        assert not (remote_project / LIBRARY_DIRECTORY_NAME).exists()
 
-        # No local project root at all: refused honestly instead of guessing.
+        # A remote workspace with NO local Library Root fails closed.
+        remote_only_session = _start_session(client, "workspace-library-remote-no-root")
+        client.app.state.runtime.memory_service.update_workspace_state(
+            "workspace-library-remote-no-root",
+            workspace_trusted=True,
+            remote_name="ssh-remote",
+            is_remote_workspace=True,
+        )
+        remote_only = client.post(
+            "/resources/capture",
+            json={
+                "session_id": remote_only_session,
+                "workspace_id": "workspace-library-remote-no-root",
+                "url": pdf_url,
+                "kind": "pdf",
+                "download": True,
+            },
+        )
+        assert remote_only.status_code in (403, 409), remote_only.text
+        assert remote_only.json()["detail"]["code"] in {
+            "library_not_writable",
+            "library_root_unavailable",
+        }
+
+        # No local library/project root at all: refused honestly instead of guessing.
         session_id = _start_session(client, "workspace-library-rootless")
         rootless = client.post(
             "/resources/capture",
@@ -662,8 +706,8 @@ def test_group_crud_creates_lists_renames_and_trashes_real_folders(tmp_path, mon
     )
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
-        library_root = project / LIBRARY_DIRECTORY_NAME
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
+        library_root = trainer_root / LIBRARY_DIRECTORY_NAME
 
         created = client.post("/library/groups", json={"workspace_id": workspace_id, "path": "Papers"})
         assert created.status_code == 200, created.text
@@ -734,7 +778,8 @@ def test_group_crud_creates_lists_renames_and_trashes_real_folders(tmp_path, mon
         assert not (library_root / "Reading" / "2026").exists()
         trash_path = Path(payload["trash_path"])
         assert trash_path.parts[0:2] == (LIBRARY_DIRECTORY_NAME, LIBRARY_TRASH_DIRECTORY_NAME)
-        assert (project / trash_path).is_dir()
+        assert (trainer_root / trash_path).is_dir()
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
 
         after = client.get("/library/groups", params={"workspace_id": workspace_id}).json()
         assert [node["path"] for node in after["groups"]] == ["Reading"]
@@ -766,7 +811,7 @@ def test_group_resource_counts_follow_downloads_renames_and_trash(tmp_path, monk
     )
 
     with build_client(tmp_path) as client:
-        workspace_id, project, _ = provision_workspace(client, tmp_path)
+        workspace_id, project, trainer_root = provision_workspace(client, tmp_path)
         captured = client.post(
             "/resources/capture",
             json={
@@ -816,20 +861,22 @@ def test_group_resource_counts_follow_downloads_renames_and_trash(tmp_path, monk
         )
 
         # The recoverable bytes are still on disk under the recycle bin.
-        trashed_file = project / trashed.json()["trash_path"] / "Counted paper.pdf"
+        trashed_file = trainer_root / trashed.json()["trash_path"] / "Counted paper.pdf"
         assert len(Path(trashed.json()["trash_path"]).parts) >= 3
         assert trashed_file.is_file()
+        assert not (project / LIBRARY_DIRECTORY_NAME).exists()
 
 
 def test_groups_require_a_trusted_local_workspace(tmp_path) -> None:
     with build_client(tmp_path) as client:
-        untrusted_id, project, _ = provision_workspace(client, tmp_path, trusted=False)
+        untrusted_id, project, trainer_root = provision_workspace(client, tmp_path, trusted=False)
         created = client.post(
             "/library/groups",
             json={"workspace_id": untrusted_id, "path": "Papers"},
         )
         assert created.status_code == 403, created.text
         assert created.json()["detail"]["code"] == "library_not_writable"
+        assert not (trainer_root / LIBRARY_DIRECTORY_NAME).exists()
         assert not (project / LIBRARY_DIRECTORY_NAME).exists()
 
         listed = client.get("/library/groups", params={"workspace_id": untrusted_id})

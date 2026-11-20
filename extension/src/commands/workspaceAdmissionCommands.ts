@@ -377,6 +377,32 @@ export async function chooseTrainerWorkspaceRootCommand(
 
   let manifest: TrainerWorkspaceManifest;
   let restartedSidecar: boolean;
+  const workspaceFolder = context.getHostState().workspace.workspaceFolder;
+  const previousDataFolder = context.sidecarManager
+    ?.getManagedDataFolderSnapshot?.(workspaceFolder)
+    ?.effectivePath;
+  const targetDefaultRuntime = runtimeDataRootUnder(rootPath);
+  const globalStorageFsPath = context.extensionContext?.globalStorageUri?.fsPath;
+  const globalStorageSidecarRoot = globalStorageFsPath
+    ? path.join(globalStorageFsPath, 'sidecar')
+    : undefined;
+  const normalizedPrev = previousDataFolder ? normalizeFsPath(previousDataFolder) : undefined;
+  const normalizedGlobalSidecar = globalStorageSidecarRoot
+    ? normalizeFsPath(globalStorageSidecarRoot)
+    : undefined;
+  const prevInsideGlobalStorage = Boolean(
+    normalizedPrev &&
+      normalizedGlobalSidecar &&
+      (normalizedPrev === normalizedGlobalSidecar ||
+        normalizedPrev.startsWith(`${normalizedGlobalSidecar}${path.sep}`) ||
+        normalizedPrev.startsWith(`${normalizedGlobalSidecar}/`)),
+  );
+  const shouldMigrateFromGlobalStorage = Boolean(
+    previousDataFolder &&
+      prevInsideGlobalStorage &&
+      fs.existsSync(path.join(previousDataFolder, 'trainer.db')) &&
+      !fs.existsSync(path.join(targetDefaultRuntime, 'trainer.db')),
+  );
   try {
     const selection = await runWithQuiescentManagedData(
       context,
@@ -384,7 +410,7 @@ export async function chooseTrainerWorkspaceRootCommand(
       (selectedManifest) => context.extensionContext.globalState.get<string>(
         runtimeDataPointerKey(selectedManifest.rootPath),
       ) ?? runtimeDataRootUnder(selectedManifest.rootPath),
-      { copyExistingData: false },
+      { copyExistingData: shouldMigrateFromGlobalStorage },
     );
     manifest = selection.result;
     restartedSidecar = selection.restartedSidecar;
@@ -539,6 +565,7 @@ async function runWithQuiescentManagedData<T>(
       const nextManifest = await context.trainerWorkspace.readWorkspaceManifest();
       await context.sidecarManager.setManagedDataRootScope?.({
         rootId: nextManifest?.rootId,
+        rootPath: nextManifest?.rootPath ?? context.trainerWorkspace.getRoot(),
         legacyWorkspaceFolder: workspaceFolder,
       });
       await context.sidecarManager.configureManagedDataFolder(nextManagedDataRoot, workspaceFolder, {
@@ -561,6 +588,7 @@ async function runWithQuiescentManagedData<T>(
         const previousManifest = await context.trainerWorkspace.readWorkspaceManifest();
         await context.sidecarManager.setManagedDataRootScope?.({
           rootId: previousManifest?.rootId,
+          rootPath: previousManifest?.rootPath ?? previousWorkspaceRoot,
           legacyWorkspaceFolder: workspaceFolder,
         });
         await context.sidecarManager.configureManagedDataFolder(currentData.effectivePath, workspaceFolder, {

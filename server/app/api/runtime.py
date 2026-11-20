@@ -330,6 +330,7 @@ class TrainerRuntime:
     provider_capability_cache: dict[str, dict[str, str]] = field(default_factory=dict)
     workspace_paths: dict[str, str] = field(default_factory=dict)
     workspace_authorities: dict[str, "WorkspaceAuthority"] = field(default_factory=dict)
+    library_authorities: dict[str, "WorkspaceAuthority"] = field(default_factory=dict)
     # Workspace → monotonically increasing snapshot revision for slim payloads.
     snapshot_revisions: dict[str, int] = field(default_factory=dict)
     sandbox_root_overrides: dict[str, str] = field(default_factory=dict)
@@ -1902,6 +1903,212 @@ class TrainerRuntime:
             workspace_trusted=(bool(trusted_value) if trusted_value is not None else None),
         )
         return authority
+
+    def resolve_library_carrier_root(self, workspace_id: str | None) -> Path | None:
+        """Return the local library root (``<LibraryRoot>``) that owns all Trainer data.
+
+        Resolution order keeps user code repositories untouched whenever a
+        Trainer Library Root exists:
+        1. Adopted project's registered ``provisioning.root_path`` (local dir).
+        2. Runtime data dir parent when ``TRAINER_DATA_DIR`` sits at
+           ``<LibraryRoot>/.trainer/runtime``.
+        3. Unprovisioned standalone local workspace path fallback (for direct
+           tests/sessions without an adopted project root).
+        """
+        resolved_workspace_id = (
+            (self.repository.resolve_context_id(workspace_id) or workspace_id)
+            if workspace_id
+            else ""
+        )
+        if resolved_workspace_id:
+            provisioning = self.repository.get_project_provisioning(resolved_workspace_id)
+            if provisioning is not None:
+                local_root = self._local_filesystem_root(provisioning.root_path)
+                if local_root:
+                    return Path(local_root)
+
+        data_dir = self.repository.database_path.parent.resolve(strict=False)
+        if data_dir.name == "runtime" and data_dir.parent.name == ".trainer":
+            candidate = data_dir.parent.parent
+            if candidate.is_dir():
+                return candidate
+
+        if resolved_workspace_id:
+            fallback = self._local_filesystem_root(
+                self.resolve_workspace_path(resolved_workspace_id)
+            )
+            if fallback:
+                return Path(fallback)
+        return None
+
+    def library_carrier_authority(self, workspace_id: str | None) -> WorkspaceAuthority | None:
+        """Authority for the local ``Trainer Library/`` carrier root.
+
+        Separate from ``workspace_authority`` (which stays scoped to the user's
+        code project) so library captures, downloads, groups, and canonical
+        Markdown write to ``<LibraryRoot>/Trainer Library`` instead of polluting
+        the project directory — including for Remote SSH sessions whose
+        ``provisioning.root_path`` lives on the local UI host.
+        """
+        if not workspace_id:
+            return None
+        resolved_workspace_id = self.repository.resolve_context_id(workspace_id) or workspace_id
+        provisioning = self.repository.get_project_provisioning(resolved_workspace_id)
+        data_dir = self.repository.database_path.parent.resolve(strict=False)
+        dedicated_library_root = bool(
+            (provisioning is not None and self._local_filesystem_root(provisioning.root_path))
+            or (
+                data_dir.name == "runtime"
+                and data_dir.parent.name == ".trainer"
+                and data_dir.parent.parent.is_dir()
+            )
+        )
+        carrier_root = self.resolve_library_carrier_root(resolved_workspace_id)
+        raw_project_root = self.resolve_workspace_path(resolved_workspace_id)
+        workspace = self.memory_service.snapshot(resolved_workspace_id).workspace
+        remote_name = ""
+        trusted_value = None
+        if isinstance(workspace, dict):
+            remote_name = str(workspace.get("remote_name") or "").strip()
+            if not remote_name and workspace.get("is_remote_workspace"):
+                remote_name = "remote"
+            trusted_value = workspace.get("workspace_trusted")
+
+        # If we only fell back to a project path (no local library root) on a
+        # remote workspace, fail closed as remote instead of treating any local
+        # collision path as writable.
+        effective_remote_name = "" if dedicated_library_root else remote_name
+        if carrier_root is None or (effective_remote_name and not dedicated_library_root):
+            if not remote_name and not raw_project_root:
+                return None
+            authority = self.library_authorities.get(resolved_workspace_id)
+            if authority is None or authority.active_workspace_root:
+                authority = WorkspaceAuthority()
+                self.library_authorities[resolved_workspace_id] = authority
+            authority.set_workspace_context(
+                remote_name=remote_name,
+                replace_remote=True,
+                workspace_trusted=(bool(trusted_value) if trusted_value is not None else None),
+            )
+            return authority
+
+        carrier_str = str(carrier_root)
+        authority = self.library_authorities.get(resolved_workspace_id)
+        if authority is None or not authority.active_workspace_root:
+            authority = WorkspaceAuthority(
+                root_path=carrier_str, initial_permission=PermissionLevel.INSPECT
+            )
+            self.library_authorities[resolved_workspace_id] = authority
+        elif authority.active_workspace_root != carrier_str:
+            authority.set_active_workspace(carrier_str)
+        authority.set_workspace_context(
+            remote_name=effective_remote_name,
+            replace_remote=True,
+            workspace_trusted=(bool(trusted_value) if trusted_value is not None else None),
+        )
+        return authority
+
+    def storage_truth_snapshot(self, workspace_id: str | None = None) -> dict[str, Any]:
+        """Report where every Trainer data, resource, and memory store resides."""
+        resolved_workspace_id = (
+            (self.repository.resolve_context_id(workspace_id) or workspace_id)
+            if workspace_id
+            else ""
+        )
+        data_dir = self.repository.database_path.parent.resolve(strict=False)
+        library_root = self.resolve_library_carrier_root(resolved_workspace_id or None)
+        if library_root is None and data_dir.name == "runtime" and data_dir.parent.name == ".trainer":
+            candidate = data_dir.parent.parent.resolve(strict=False)
+            if candidate.is_dir():
+                library_root = candidate
+
+        semantic = getattr(self.resource_service, "semantic_memory", None)
+        qdrant_path = getattr(semantic, "storage_path", None) or (data_dir / "qdrant")
+        research_db_path = (
+            getattr(self.research_repository, "database_path", None)
+            or (data_dir / "research.db")
+        )
+        cost_ledger_dir = (
+            getattr(self.cost_ledger, "_storage_dir", None)
+            or (data_dir / "cost-ledger")
+        )
+        telemetry_path = getattr(self.telemetry_service, "_path", None)
+        telemetry_dir = Path(telemetry_path).parent if telemetry_path else (data_dir / "telemetry")
+        bridge_path = getattr(self.browser_bridge, "_state_path", None) or (
+            data_dir / "browser_bridge.json"
+        )
+        skills_dir = data_dir / "skills"
+
+        if resolved_workspace_id:
+            search_index_path: Path | None = self.resource_service._search_index_path(
+                resolved_workspace_id
+            )
+            inline_resources_dir: Path = self.resource_service._inline_resource_root(
+                resolved_workspace_id
+            )
+            if self.sandbox_service is not None:
+                sandbox_root: Path = (
+                    self.sandbox_service.sandboxes_root
+                    / self.sandbox_service._safe_workspace_slug(resolved_workspace_id)
+                )
+            else:
+                sandbox_root = data_dir / "sandboxes"
+        else:
+            search_index_path = None
+            inline_resources_dir = data_dir / "inline-resources"
+            sandbox_root = (
+                self.sandbox_service.sandboxes_root
+                if self.sandbox_service is not None
+                else (data_dir / "sandboxes")
+            )
+
+        library_folder_root = (library_root / "Trainer Library") if library_root else None
+        canonical_markdown_root = (
+            (library_root / "Trainer Library" / ".trainer-resources" / "markdown")
+            if library_root
+            else None
+        )
+
+        raw_stores: dict[str, Path | None] = {
+            "runtime_data_dir": data_dir,
+            "database_path": self.repository.database_path,
+            "research_database_path": Path(research_db_path),
+            "qdrant_path": Path(qdrant_path),
+            "search_index_path": search_index_path,
+            "canonical_markdown_root": canonical_markdown_root,
+            "library_folder_root": library_folder_root,
+            "inline_resources_dir": inline_resources_dir,
+            "sandbox_root": sandbox_root,
+            "cost_ledger_dir": Path(cost_ledger_dir),
+            "telemetry_dir": telemetry_dir,
+            "browser_bridge_path": Path(bridge_path),
+            "skills_dir": skills_dir,
+        }
+
+        stores: dict[str, str | None] = {}
+        outside: list[str] = []
+        resolved_root = library_root.resolve(strict=False) if library_root else None
+        for name, path in raw_stores.items():
+            if path is None:
+                stores[name] = None
+                continue
+            resolved_path = Path(path).resolve(strict=False)
+            stores[name] = str(resolved_path)
+            if resolved_root is not None:
+                try:
+                    resolved_path.relative_to(resolved_root)
+                except ValueError:
+                    outside.append(name)
+
+        return {
+            "workspace_id": resolved_workspace_id or None,
+            "library_root": str(resolved_root) if resolved_root is not None else None,
+            "runtime_data_dir": str(data_dir),
+            "stores": stores,
+            "all_under_library_root": bool(resolved_root is not None and not outside),
+            "outside_library_root": outside,
+            "secrets_in_keychain_only": True,
+        }
 
     cost_ledger: Any | None = None
     # P3 Skill 生态: lazily created cross-workspace SkillRegistry

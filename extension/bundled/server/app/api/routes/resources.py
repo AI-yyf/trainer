@@ -163,7 +163,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
 
     library = LibraryService(
         runtime.repository,
-        workspace_authority_resolver=runtime.workspace_authority,
+        workspace_authority_resolver=runtime.library_carrier_authority,
     )
 
     def library_language(workspace_id: str, text: str | None = None) -> str | None:
