@@ -9,11 +9,11 @@ import {
   resourceSearchModeRequest,
 } from '../../../shared/src/resourceSearch';
 import {
-  resolveResourceLocalCandidates,
   resolveResourceOpenTarget,
-  resolveResourceOriginalCandidates,
+  resolveResourceReadCandidates,
 } from '../../../shared/src/resourceOpen';
 import type { ResourceVersionCheckResult } from '../../../shared/src/models';
+import { mapResearchBriefAsset, resolveResearchCitationLine, upsertResearchBrief } from '../../../shared/src/researchBrief';
 import type { CommandContext } from '../core/commandContext';
 import { attachPreviewAssetUris } from '../core/previewAssetUris';
 import type {
@@ -653,9 +653,11 @@ type LibraryCopyKey =
   | 'exportSaveFailed'
   | 'exportSucceeded'
   | 'serviceUnavailable'
+  | 'migrationFailed'
+  | 'migrationConfirmationRequired'
   | 'openMissingSource'
   | 'openMissingFile'
-  | 'openInvalidSource';
+  | 'openCaptureRequired';
 
 /**
  * Curated, path-free library copy in the workspace response language. Failure
@@ -703,6 +705,16 @@ function libraryCopy(key: LibraryCopyKey, language?: string, detail?: string): s
       return isChinese ? `已导出：${detail ?? ''}` : `Exported: ${detail ?? ''}`;
     case 'serviceUnavailable':
       return failure('资料服务暂时不可用。稍后再试。', 'The resource service is unavailable right now. Try again shortly.');
+    case 'migrationFailed':
+      return failure(
+        `资料库迁移没有完成${detail ? `（${detail}）` : ''}。资料保持原样，可以稍后再试。`,
+        `The library migration did not finish${detail ? ` (${detail})` : ''}. The library is unchanged; try again later.`,
+      );
+    case 'migrationConfirmationRequired':
+      return failure(
+        '这次迁移需要先预览、再确认一次。',
+        'This migration needs a preview and one explicit confirmation.',
+      );
     case 'openMissingSource':
       return failure('这份资料没有可打开的原文。', 'This resource has no source to open.');
     case 'openMissingFile':
@@ -710,8 +722,8 @@ function libraryCopy(key: LibraryCopyKey, language?: string, detail?: string): s
         '这份资料的原文不在当前工作区或资料库里，暂时不能打开。请重新导入原文后再打开。',
         "This resource's source file is not in the current workspace or library, so it cannot be opened. Import the original again before opening it.",
       );
-    case 'openInvalidSource':
-      return failure('这份资料的原文地址无效，无法打开。', 'This resource has an invalid source and cannot be opened.');
+    case 'openCaptureRequired':
+      return failure('请先把网页导入资料库，再在 VS Code 中打开。', 'Import the webpage into the library before opening it in VS Code.');
   }
 }
 
@@ -911,6 +923,11 @@ export async function saveResearchBriefCommand(
       message: 'A research goal and the analysis reply are required to prepare a brief.',
     };
   }
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const sessionId = context.getSessionId();
+  const generation = context.getHostState().bootstrap.runtimeDataGeneration;
+  const currentScope = () => getRuntimeWorkspaceId(context) === workspaceId &&
+    context.getSessionId() === sessionId && context.getHostState().bootstrap.runtimeDataGeneration === generation;
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
     return { ok: false, message: status.detail ?? 'Sidecar unavailable.' };
@@ -922,6 +939,9 @@ export async function saveResearchBriefCommand(
         .slice(0, 4)
     : [];
   try {
+    const provider = context.providerStore.getConfig();
+    const apiKey = await context.providerStore.getApiKey();
+    if (!currentScope()) return { ok: false, message: 'The workspace changed before preparing the brief.' };
     const result = await context.sidecarClient.postJson(
       status.port,
       '/resource/research-brief/draft',
@@ -930,11 +950,20 @@ export async function saveResearchBriefCommand(
         reply: reply.slice(0, 12000),
         resourceIds,
         responseLanguage: resourceResponseLanguage(context),
-        contextId: getRuntimeWorkspaceId(context),
+        contextId: workspaceId,
+        provider,
+        api_key: apiKey,
         save: true,
         __trainerResourceOperationId: request.__trainerResourceOperationId,
       },
     );
+    const payload = asRecord(result);
+    const brief = mapResearchBriefAsset(payload?.asset);
+    if (payload?.saved !== true || !brief) return { ok: false, message: 'The saved research brief was not returned.' };
+    if (currentScope()) {
+      const memory = context.getHostState().bootstrap.memory;
+      await context.patchWorkbenchData({ memory: { ...memory, researchBriefs: upsertResearchBrief(memory.researchBriefs, brief) } });
+    }
     return { ok: true, data: result };
   } catch (error) {
     return {
@@ -1104,6 +1133,90 @@ export async function exportResourceCommand(
   return { ok: true, message: libraryCopy('exportSucceeded', language, sanitize(filename)), data: { path: target.fsPath } };
 }
 
+/** One Markdown-only library migration step: preview first, then one confirmation. */
+export interface MarkdownOnlyMigrationSummary {
+  status: 'preview' | 'confirmation_required' | 'complete' | 'partial';
+  workspace_id?: string;
+  dry_run?: boolean;
+  resources?: number;
+  originals_to_delete?: number;
+  records_to_mark?: number;
+  convertible?: number;
+  /** Originals kept because no canonical Markdown stands behind them. */
+  originals_kept?: number;
+  kept_originals?: string[];
+  manifest?: Array<Record<string, unknown>>;
+  manifest_path?: string;
+  failures?: Array<Record<string, unknown>>;
+}
+
+/**
+ * Markdown-only library migration bridge.
+ *
+ * The webview posts one `command/execute` carrying a per-request
+ * `operationId`; the host answers with a `library/migration` message that
+ * carries the same id — the same correlation pattern as `library/folders`.
+ * The dry-run is the default: the destructive pass only runs when the same
+ * surface that showed the preview confirms it once.
+ */
+export async function markdownOnlyMigrationCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const request = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
+  const operationId = typeof request?.operationId === 'string' ? request.operationId.trim() : '';
+  const dryRun = request?.dryRun !== false;
+  const confirm = request?.confirm === true;
+  const language = resourceResponseLanguage(context);
+
+  const answer = async (ok: boolean, message: string, summary?: MarkdownOnlyMigrationSummary) => {
+    if (!operationId) {
+      return;
+    }
+    await context.workbench.postMessage({
+      type: 'library/migration',
+      payload: { operationId, ok, message, ...(summary ? { summary } : {}) },
+    });
+  };
+
+  if (!dryRun && !confirm) {
+    // The server refuses an unconfirmed destructive pass. Say so locally
+    // instead of asking the sidecar for a pass it will reject.
+    const message = libraryCopy('migrationConfirmationRequired', language);
+    await answer(false, message);
+    return { ok: false, message };
+  }
+
+  const status = await context.sidecarManager.ensureRunning();
+  if (status.lifecycle !== 'ready' || !status.port) {
+    const message = libraryCopy('serviceUnavailable', language);
+    await answer(false, message);
+    return { ok: false, message };
+  }
+
+  const workspaceId = getRuntimeWorkspaceId(context);
+  const sessionId = context.getSessionId();
+  try {
+    const summary = await context.sidecarClient.postJson<MarkdownOnlyMigrationSummary>(
+      status.port,
+      '/resource/md-only/migrate',
+      {
+        workspace_id: workspaceId,
+        session_id: sessionId,
+        dry_run: dryRun,
+        confirm,
+      },
+      { timeoutMs: RESOURCE_CAPTURE_TIMEOUT_MS },
+    );
+    await answer(true, '', summary);
+    return { ok: true, data: summary };
+  } catch (error) {
+    const message = libraryCopy('migrationFailed', language, errorSidecarDetail(error));
+    await answer(false, message);
+    return { ok: false, message };
+  }
+}
+
 export async function indexResourcesCommand(  context: CommandContext,
 ): Promise<CommandExecutionResult> {
   const admissionBlock = resourceMutationAdmissionBlock(context);
@@ -1181,8 +1294,7 @@ export async function openResourceCommand(
 ): Promise<CommandExecutionResult> {
   const payloadRecord = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : undefined;
   const resourceId = payloadRecord?.resourceId;
-  const openOriginal = payloadRecord?.openOriginal === true;
-  const openExternal = payloadRecord?.openExternal === true;
+  const researchCitation = asRecord(payloadRecord?.researchCitation);
   const requestedLine =
     typeof payloadRecord?.line === 'number' && Number.isFinite(payloadRecord.line)
       ? Math.max(1, Math.floor(payloadRecord.line))
@@ -1197,115 +1309,63 @@ export async function openResourceCommand(
   if (!resource) {
     return { ok: false, message: 'The selected resource could not be found.' };
   }
-
-  // An explicit external open goes to the live web source when one exists;
-  // otherwise it opens the original bytes with the OS default app.
-  if (openExternal) {
-    const liveUrl = [resource.source, resource.canonicalSource]
-      .map((value) => value?.trim())
-      .find((value): value is string => Boolean(value) && /^https?:\/\//i.test(value!));
-    if (liveUrl) {
-      await vscode.env.openExternal(vscode.Uri.parse(liveUrl));
-      return {
-        ok: true,
-        message: language === 'zh-CN' ? `已打开：${resource.title}` : `Opened ${resource.title}.`,
-      };
-    }
+  const unavailablePin = () => ({ ok: false, message: language === 'zh-CN'
+    ? '找不到该引文对应的资料版本和位置。' : 'The cited version or location could not be opened.' });
+  if (researchCitation && (!requestedLine || !resource.versionId || !resource.contentHash ||
+    resource.versionId !== researchCitation.versionId || resource.contentHash !== researchCitation.contentHash)) {
+    return unavailablePin();
   }
 
+  // The library is Markdown-only: a row opens the canonical Markdown
+  // document. There is no original binary to open.
   const target = resolveResourceOpenTarget(resource);
   if (target.kind === 'unavailable') {
+    if (researchCitation) return unavailablePin();
     return {
       ok: false,
       message:
         target.reason === 'missing_source'
           ? libraryCopy('openMissingSource', language)
-          : libraryCopy('openInvalidSource', language),
+          : libraryCopy('openCaptureRequired', language),
     };
   }
 
-  if (target.kind === 'browser') {
-    await vscode.env.openExternal(vscode.Uri.parse(target.source));
-    return {
-      ok: true,
-      message: language === 'zh-CN' ? `已打开：${resource.title}` : `Opened ${resource.title}.`,
-    };
-  }
-
-  // The default is the complete canonical Markdown library artifact; the
-  // explicit "open original" action resolves the untouched source instead.
   const targetUri = await resolveExistingResourceUri(
     context,
-    openOriginal
-      ? resolveResourceOriginalCandidates(resource)
-      : resolveResourceLocalCandidates(resource),
+    resolveResourceReadCandidates(resource),
   );
   if (!targetUri) {
-    const urlFallback = [resource.source, resource.canonicalSource]
-      .map((value) => value?.trim())
-      .find((value): value is string => Boolean(value) && /^https?:\/\//i.test(value!));
-    if (resource.kind === 'url' && urlFallback) {
-      // A URL whose captured copy disappeared still has an honest destination:
-      // the live source. Opening a broken local tab would be worse.
-      await vscode.env.openExternal(vscode.Uri.parse(urlFallback));
-      return {
-        ok: true,
-        message:
-          language === 'zh-CN'
-            ? `本地快照不可用，已在浏览器打开来源：${resource.title}`
-            : `The local snapshot is unavailable; opened the source for ${resource.title} in your browser.`,
-      };
-    }
+    if (researchCitation) return unavailablePin();
     return { ok: false, message: libraryCopy('openMissingFile', language) };
   }
 
-  const extension = path.extname(targetUri.path).toLowerCase();
-  if (
-    targetUri.scheme === 'file' &&
-    (openExternal || isNativeOpenExtension(extension))
-  ) {
-    // Explicit "open with default app" plus PDF/Office/archive/media binaries:
-    // the OS default app is the honest path; text files stay in VS Code
-    // unless the learner explicitly asked for the external app.
-    await vscode.env.openExternal(targetUri);
-  } else {
-    await vscode.commands.executeCommand('vscode.open', targetUri, {
-      preview: false,
-      preserveFocus: false,
-      // Open at the requested line when a search hit names one; otherwise at
-      // the start — a library row click should reveal the file, not a stale
-      // scroll position or selection from an earlier visit.
-      selection: new vscode.Range(requestedLine ? requestedLine - 1 : 0, 0, requestedLine ? requestedLine - 1 : 0, 0),
-    });
+  let line = requestedLine;
+  if (researchCitation && requestedLine) {
+    if (typeof researchCitation.excerpt !== 'string' || typeof researchCitation.lineEnd !== 'number') {
+      return unavailablePin();
+    }
+    try {
+      const document = await vscode.workspace.openTextDocument(targetUri);
+      const canonical = resource.canonicalMarkdownPath?.replace(/\\/g, '/');
+      const isCanonicalFile = Boolean(canonical && targetUri.path.toLowerCase().endsWith(`/${canonical.replace(/^\/+/, '').toLowerCase()}`));
+      line = resolveResearchCitationLine(document.getText(), requestedLine, {
+        excerpt: researchCitation.excerpt, lineEnd: researchCitation.lineEnd,
+      }, isCanonicalFile);
+      if (line === undefined) return unavailablePin();
+    } catch {
+      return unavailablePin();
+    }
   }
+  const startLine = line ? line - 1 : 0;
+  await vscode.commands.executeCommand('vscode.open', targetUri, {
+    preview: false,
+    preserveFocus: false,
+    selection: new vscode.Range(startLine, 0, startLine, 0),
+  });
   return {
     ok: true,
     message: language === 'zh-CN' ? `已打开：${resource.title}` : `Opened ${resource.title}.`,
   };
-}
-
-/**
- * Extensions a text editor cannot meaningfully render (binary documents,
- * archives, audio/video). They open with the platform's default app instead.
- */
-function isNativeOpenExtension(extension: string): boolean {
-  return new Set([
-    '.pdf',
-    '.doc',
-    '.docx',
-    '.ppt',
-    '.pptx',
-    '.xls',
-    '.xlsx',
-    '.epub',
-    '.zip',
-    '.mp3',
-    '.wav',
-    '.m4a',
-    '.mp4',
-    '.mov',
-    '.webm',
-  ]).has(extension);
 }
 
 function expandResourceHomePath(value: string): string {
@@ -2499,12 +2559,12 @@ export async function revealSandboxPathCommand(
   try {
     await vscode.commands.executeCommand('revealFileInOS', targetUri);
   } catch {
-    await vscode.env.openExternal(targetUri);
+    return { ok: false, message: `Could not reveal ${basenameFs(targetPath) || targetPath} in the file manager.` };
   }
 
   return {
     ok: true,
-    message: `Opened sandbox path ${basenameFs(targetPath) || targetPath}.`,
+    message: `Revealed ${basenameFs(targetPath) || targetPath} in the file manager.`,
   };
 }
 

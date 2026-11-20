@@ -155,6 +155,10 @@
         "title": "Trainer: Export Resource to Local File"
       },
       {
+        "command": "trainer.resource.markdownOnlyMigration",
+        "title": "Trainer: Migrate Library to Markdown Only"
+      },
+      {
         "command": "trainer.resource.index",
         "title": "Trainer: Index Resources"
       },

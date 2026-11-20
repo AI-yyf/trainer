@@ -43,6 +43,7 @@ const SILENT_SUCCESS_COMMAND_IDS = new Set<string>([
 ]);
 
 const TRAINING_PERSISTENCE_COMMAND_IDS = new Set<string>([
+  COMMAND_IDS.trainingCardLibrary,
   COMMAND_IDS.evaluateCurrentFile,
   COMMAND_IDS.trainingGenerateCard,
   COMMAND_IDS.trainingFlashcardAnswer,
@@ -189,7 +190,9 @@ export function resourceTrainingHandoffResult(
     ? 'failed'
     : generationSucceeded && generatedCardId && selectedCardId === generatedCardId
       ? 'ready'
-      : generationSucceeded && selectedCardId
+      : generationSucceeded && generatedCardId && !selectedCardId
+        ? 'ready'
+        : generationSucceeded && selectedCardId
         ? 'not-current'
         : 'blocked';
   const rawReason = [readNonEmptyString(result.message), readNonEmptyString(data?.reason)]

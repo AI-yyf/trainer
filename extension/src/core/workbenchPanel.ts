@@ -50,7 +50,7 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
   private panel?: vscode.WebviewPanel;
   private ready = false;
   private pendingFocusView?: WorkbenchPanelView;
-  private focusedView: WorkbenchPanelView = 'plan';
+  private focusedView: WorkbenchPanelView = 'coach';
   private disposed = false;
   private draftPrefillReceiptHandler?: (draftId: string) => void;
   private readonly stateTransport: WebviewStateTransport;
@@ -96,7 +96,7 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
     if (this.disposed) {
       return;
     }
-    const target = normalizeWorkbenchPanelView(view) ?? 'plan';
+    const target = normalizeWorkbenchPanelView(view) ?? 'coach';
     this.focusedView = target;
 
     if (!this.panel) {

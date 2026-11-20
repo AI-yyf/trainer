@@ -4184,10 +4184,11 @@ function normalizeAnswerMode(
 }
 
 function usesSessionMessageRoute(
-  payload: SessionMessagePayload | undefined,
+  payload: ResourceComposerSessionMessagePayload | undefined,
 ): boolean {
   return (
     (!payload?.intent || payload.intent === 'coach') &&
+    payload?.resourceComposerIntent?.mode !== 'analyze' &&
     (!payload?.activeView || payload.activeView === 'coach')
   );
 }

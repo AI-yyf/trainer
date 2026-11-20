@@ -1,4 +1,5 @@
 import type { LearningActivity, ResourceCaptureReceipt, ResourceVersionCheckResult } from "../../../shared/src/models";
+import type { ResearchBriefView, ResearchCitationPin, ResearchPreparation } from "../../../shared/src/researchBrief";
 import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from '../../../shared/src/webviewSync';
 import type { TrainerCommandCatalogItem } from '../../../shared/src/commands';
 import type {
@@ -1042,6 +1043,7 @@ export interface ActiveThreadView {
 
 export interface MemorySnapshotView {
   learningActivity?: LearningActivity[];
+  researchBriefs?: ResearchBriefView[];
   currentFocus: string;
   weakSpots: string[];
   recentWins: string[];
@@ -1252,6 +1254,10 @@ export interface TrainingCardCandidateView {
   title: string;
   whyNow?: string;
   status?: string;
+  reviewState?: 'pending' | 'deferred' | 'saved' | 'rejected';
+  important?: boolean;
+  cardPriority?: number;
+  mergedInto?: string;
   learningPhase?: 'learn' | 'try' | 'verify' | 'reflect' | 'return';
   question?: string;
   choices?: string[];
@@ -1542,6 +1548,8 @@ export interface ConversationMessageView {
   body: string;
   timestamp: string;
   sourceView?: 'coach' | 'plan' | 'resources' | 'training' | 'settings';
+  sourceResourceIds?: string[];
+  researchPreparation?: ResearchPreparation;
   parts?: TrainerMessagePart[];
   attachments?: ConversationAttachmentView[];
   artifacts?: ConversationArtifactView[];
@@ -1887,7 +1895,7 @@ type TrainerWebviewMessageBody =
     }
   | {
       type: 'resource/open';
-      payload: { resourceId: string; openOriginal?: boolean; openExternal?: boolean; line?: number };
+      payload: { resourceId: string; line?: number; researchCitation?: ResearchCitationPin };
     }
   | { type: 'ui/focus'; payload: { target: 'conversation' | 'task' | 'evaluation' } }
   /**

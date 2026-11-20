@@ -21,6 +21,7 @@ export const BROWSER_CAPTURE_REQUIRED_ENTRIES = [
   "background.js",
   "shared.js",
   "popup/popup.html",
+  "sidepanel/sidepanel.html",
   "README.md",
 ];
 

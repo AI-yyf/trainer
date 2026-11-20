@@ -883,6 +883,29 @@ export async function trainingCardMarkImportantCommand(
   );
 }
 
+export async function trainingCardLibraryCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const record = readPayloadRecord(payload);
+  const cardId = readNonEmptyString(record.cardId);
+  const action = readNonEmptyString(record.action);
+  if (!cardId || !action) {
+    return { ok: false, message: "Choose a training card and an action." };
+  }
+  return postCardManagement(
+    context,
+    "/training/card/library",
+    {
+      card_id: cardId,
+      action,
+      prompt: record.prompt,
+      acceptance_criteria: record.acceptanceCriteria,
+    },
+    `${action} ${cardId}`,
+  );
+}
+
 export async function trainingCardSetPriorityCommand(
   context: CommandContext,
   payload?: unknown,

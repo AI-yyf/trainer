@@ -9,6 +9,7 @@ import {
   normalizeTrainerMessageParts,
 } from '../../../shared/src/protocol';
 import { normalizeResourceSearchMode } from '../../../shared/src/resourceSearch';
+import { mapResearchBriefCatalog, mapResearchPreparation } from '../../../shared/src/researchBrief';
 import { deriveResourceTrustState } from '../../../shared/src/resourceTrust';
 import { resourceRecordIsAcknowledgedUpload } from '../../../shared/src/resourceWorkbenchGovernance';
 import {
@@ -3533,6 +3534,8 @@ function mapMemory(
         ? []
         : fallback.recentWins);
   return {
+    researchBriefs: mapResearchBriefCatalog(record.asset_catalog ?? record.assetCatalog) ??
+      (workspaceChanged ? undefined : fallback.researchBriefs),
     learningActivity: Array.isArray(record.learning_activity)
       ? record.learning_activity.flatMap((value: unknown) => {
           const activity = asRecord(value);
@@ -5259,12 +5262,18 @@ function mapTrainingCardCandidates(
     if (!cardId || !title || !type) {
       return items;
     }
+    const reviewState = record?.review_state ?? record?.reviewState;
     items.push({
       cardId,
       type,
       title,
       whyNow: asString(record?.why_now) ?? asString(record?.whyNow) ?? undefined,
       status: asString(record?.status) ?? undefined,
+      reviewState: reviewState === "pending" || reviewState === "deferred" ||
+        reviewState === "saved" || reviewState === "rejected" ? reviewState : undefined,
+      important: asBoolean(record?.important),
+      cardPriority: asNumber(record?.card_priority ?? record?.cardPriority) ?? undefined,
+      mergedInto: asString(record?.merged_into ?? record?.mergedInto) ?? undefined,
       learningPhase:
         toTrainingLearningPhase(
           asString(record?.learning_phase) ?? asString(record?.learningPhase),
@@ -6748,6 +6757,8 @@ function mapConversation(
       body: asString(record?.content) ?? '',
       timestamp: formatTimestamp(asString(record?.timestamp)),
       sourceView: normalizeConversationSourceView(metadata?.active_view),
+      sourceResourceIds: asStringArray(metadata?.resource_ids),
+      researchPreparation: mapResearchPreparation(metadata?.research_preparation),
       parts: mapConversationParts(metadata),
       // Context provenance (intent / mode / strategy / selection / file) stays
       // in the raw metadata for diagnostics, but the thread no longer prints

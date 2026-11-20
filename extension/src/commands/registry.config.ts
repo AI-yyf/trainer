@@ -64,6 +64,7 @@ import {
   checkResourceVersionsCommand,
   organizeResourceCommand,
   exportResourceCommand,
+  markdownOnlyMigrationCommand,
 } from './resourceCommands';
 import {
   libraryFoldersListCommand,
@@ -125,6 +126,7 @@ import {
   evidenceRefreshQueueCommand,
   evidenceRejectCommand,
   trainingCardMarkImportantCommand,
+  trainingCardLibraryCommand,
   trainingCardMergeCommand,
   trainingCardSetPriorityCommand,
   trainingCardStatusTransitionCommand,
@@ -416,6 +418,10 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
       register: (ctx, payload) => trainingCardSetPriorityCommand(ctx, payload),
     },
     {
+      commandId: COMMAND_IDS.trainingCardLibrary,
+      register: (ctx, payload) => trainingCardLibraryCommand(ctx, payload),
+    },
+    {
       commandId: COMMAND_IDS.trainingCardMerge,
       register: (ctx, payload) => trainingCardMergeCommand(ctx, payload),
     },
@@ -525,6 +531,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.checkResourceVersions, register: (ctx, payload) => checkResourceVersionsCommand(ctx, payload) },
     { commandId: COMMAND_IDS.organizeResource, register: (ctx, payload) => organizeResourceCommand(ctx, payload) },
     { commandId: COMMAND_IDS.exportResource, register: (ctx, payload) => exportResourceCommand(ctx, payload) },
+    { commandId: COMMAND_IDS.markdownOnlyMigration, register: (ctx, payload) => markdownOnlyMigrationCommand(ctx, payload) },
     // Local usage insights bridge: a read-only webview → sidecar round trip,
     // registered last so the historical order above stays byte-identical.
     { commandId: COMMAND_IDS.refreshLocalUsage, register: (ctx, payload) => refreshLocalUsageCommand(ctx, payload) },

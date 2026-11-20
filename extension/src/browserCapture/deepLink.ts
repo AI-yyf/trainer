@@ -23,10 +23,32 @@ export interface TrainerLibraryDeepLink {
   resourceId: string;
 }
 
-const RESOURCE_ID_PATTERN = /^[A-Za-z0-9._~:@+-]{1,256}$/;
+export interface TrainerWorkbenchDeepLink {
+  kind: 'workbench';
+  activeView: 'coach' | 'plan' | 'training' | 'progress';
+}
 
-export function parseTrainerDeepLink(uri: { path?: string; query?: string }): TrainerLibraryDeepLink | undefined {
+export type TrainerDeepLink = TrainerLibraryDeepLink | TrainerWorkbenchDeepLink;
+
+const RESOURCE_ID_PATTERN = /^[A-Za-z0-9._~:@+-]{1,256}$/;
+const WORKBENCH_DEEP_LINKS: Record<string, TrainerWorkbenchDeepLink['activeView']> = {
+  coach: 'coach',
+  chat: 'coach',
+  learning: 'plan',
+  plan: 'plan',
+  training: 'training',
+  progress: 'progress',
+};
+
+export function parseTrainerDeepLink(uri: { path?: string; query?: string }): TrainerDeepLink | undefined {
   const rawPath = typeof uri.path === 'string' ? uri.path : '';
+  // The capture popup and side panel use this to focus the workbench. Keep the
+  // routes as compatibility aliases; the webview turns them into Chat +
+  // learning drawer as needed.
+  const workbenchMatch = /^\/([a-z]+)\/?$/.exec(rawPath);
+  if (workbenchMatch && WORKBENCH_DEEP_LINKS[workbenchMatch[1]]) {
+    return { kind: 'workbench', activeView: WORKBENCH_DEEP_LINKS[workbenchMatch[1]] };
+  }
   const match = /^\/library\/([^/]+)\/?$/.exec(rawPath);
   let candidate = match?.[1];
   if (!candidate) {
@@ -36,6 +58,12 @@ export function parseTrainerDeepLink(uri: { path?: string; query?: string }): Tr
     candidate = params.get('resourceId') ?? undefined;
   }
   if (!candidate) {
+    // A bare root deep link (`vscode://local.trainer-extension/`) is what the
+    // capture panel and the side panel mint when they only want to focus
+    // Trainer. It opens the workbench, never nothing.
+    if (!rawPath || rawPath === "/") {
+      return { kind: "workbench", activeView: "coach" };
+    }
     return undefined;
   }
   let resourceId: string;
@@ -126,6 +154,22 @@ export async function handleTrainerDeepLink(
     return { handled: false };
   }
   await deps.workbench.show();
+  if (target.kind === 'workbench') {
+    // Retry because the webview may still be resolving after show().
+    for (let attempt = 0; attempt < MAX_DELIVERY_ATTEMPTS; attempt += 1) {
+      await deps.workbench.postMessage({
+        type: 'ui/restoreView',
+        payload: { activeView: target.activeView },
+      });
+      if (deps.workbench.isVisible?.() !== false) {
+        return { handled: true, deliveryAttempts: attempt + 1 };
+      }
+      if (attempt < MAX_DELIVERY_ATTEMPTS - 1) {
+        await (deps.delayFn ?? delay)(DELIVERY_RETRY_MS);
+      }
+    }
+    return { handled: true, deliveryAttempts: MAX_DELIVERY_ATTEMPTS };
+  }
   const deliveryAttempts = await deliverOpenResource(deps, target.resourceId);
   deps.outputChannel.appendLine(
     `[browser-capture] ${logCopy(deps)('deepLinkOpenedLog', {
