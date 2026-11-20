@@ -105,3 +105,8 @@ docs/plans/
 ds*.jpg
 extension/test-results/
 scripts/gen_subimages.py
+
+# Local build lock and agent scratch plans
+extension/.vsix-build.lock
+.zcode/
+*.tmp.mjs
