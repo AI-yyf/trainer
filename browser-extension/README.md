@@ -1,8 +1,8 @@
 # Trainer Capture（浏览器拓展）
 
-把**当前网页 / PDF / GitHub 仓库**一键加入 Trainer 资料库，把 **PDF / GitHub 仓库下载到项目文件夹**，并把**划词**送进 Trainer 教练输入框的 Chromium MV3 拓展。
+把**当前网页 / PDF / GitHub 仓库**一键加入 Trainer 资料库，把 **PDF / GitHub 仓库下载到资料库**，并把**划词**送进 Trainer 教练输入框的 Chromium MV3 拓展。
 
-拓展只有一个归宿：**资料库**。它没有「待学队列」之类的概念——离线时进入的是「待投递队列」（等待网络恢复后原样投递给 sidecar），投递完成后即出队。下载是采集的**附加动作**（同一个来源既可以入资料库，也可以落到项目文件夹），不是替代路径。
+拓展只有一个归宿：**资料库**。它没有「待学队列」之类的概念——离线时进入的是「待投递队列」（等待网络恢复后原样投递给 sidecar），投递完成后即出队。下载是采集的**附加动作**（同一个来源既可以入资料库，也可以落到资料库里），不是替代路径。
 
 ## 设计边界
 
@@ -34,25 +34,25 @@ Trainer 尚未启动时，采集入口**不会要求先配对**：内容直接�
 | --- | --- |
 | 页面右键「加入 Trainer 资料库」 | 采集当前页面（自动识别 `.pdf` / GitHub 仓库地址） |
 | 链接右键「加入资料库（链接）」 | 采集链接地址，`.pdf` 按 PDF 处理 |
-| PDF 页右键「PDF 选项」子菜单 | 「加入资料库（PDF）」/「下载 PDF 到项目文件夹」 |
+| PDF 页右键「PDF 选项」子菜单 | 「加入资料库（PDF）」/「下载 PDF 到资料库」 |
 | PDF 链接右键「PDF 选项」子菜单 | 同上，针对被右键的链接地址 |
 | GitHub 仓库页右键「加入资料库（GitHub 仓库）」 | 子项「README+结构」/「含 docs/」/「下载项目到文件夹」分别提交 `include_docs:false/true` 与 `download:true` |
 | 选中文本右键「问 Trainer 教练」 | `POST /browser/coach-draft`，通知「已送入 Trainer 输入框」——**不自动发送**，预填由宿主侧完成 |
 | PDF 页面角落浮出按钮「加入 Trainer」 | 仅当 `document.contentType === 'application/pdf'` 时出现 |
 | 弹窗「将当前页面加入资料库」 | 采集当前标签页，并可先在下拉里**可选**绑定学习目标 |
-| 弹窗「下载到项目文件夹」 | 仅对 PDF / GitHub 仓库出现；目标文件夹可编辑（默认 `Trainer Library/`），选择即成为右键菜单下载的默认值 |
+| 弹窗「下载到资料库」 | 仅对 PDF / GitHub 仓库出现；目标由服务端给出（`/browser/status` → `download_target`，恒为资料库根 `Trainer Library/`），弹窗只读显示 |
 
 **绑定学习目标**：下拉选项来自 `GET /browser/status` 的 `focus_options`，可留空不绑；弹窗里的选择同时作为右键菜单采集的默认绑定（存 `chrome.storage.local`）。
 
 **幂等**：每次捕获都带 `client_capture_id`，离线重投不会产生重复记录；服务端返回 `deduped=true` 时提示「已在资料库」并给出深链。
 
-## 下载到项目文件夹
+## 下载到资料库
 
 下载是采集的附加选项，捕获进资料库仍是一切的基础动作：
 
 - 请求体在捕获字段之上追加 `download: true` 与 `target_dir`（项目内相对路径，默认 `Trainer Library/`，服务端实时创建目录）。
-- PDF（页面或链接）与 GitHub 仓库各有一个「下载…到项目文件夹」入口；网页没有单一可下载文件，因此不提供该入口。
-- 目标文件夹由弹窗维护（存 `chrome.storage.local`），右键菜单下载沿用最近一次设置；弹窗里输入绝对路径、`~`、盘符或含 `..` 的路径会当场拒绝（校验在 `shared.js` 的 `normalizeTargetDir`，不会把可逃逸路径发给 sidecar）。
+- PDF（页面或链接）与 GitHub 仓库各有一个「下载…到资料库」入口；网页没有单一可下载文件，因此不提供该入口。
+- 目标文件夹恒为**资料库根**：服务端在 `/browser/status` 的 `download_target` 里给出，弹窗与右键菜单都用它，弹窗只读显示、不接受输入（校验仍在 `shared.js` 的 `normalizeTargetDir`，不会把可逃逸路径发给 sidecar）。
 - 完成通知显示服务端返回的 `saved_path`，并附「在 VS Code 打开」深链（点击通知即打开）。
 - 离线时下载请求与普通采集一样入队（队列项保存 `download` / `targetDir`），恢复后按原字段自动投递，仍然幂等。
 
@@ -149,8 +149,13 @@ browser-extension/
 │                          # 第 2 节：薄 chrome 封装（storage / fetch / locale / 连通性快照）
 │                          # 第 3 节：PDF 浮出按钮（manifest 里声明的 content script，非 PDF 页面立即返回）
 ├── background.js          # 右键菜单（含 PDF/GitHub 下载子菜单）、自动配对、采集管线、双队列投递、告警、角标、通知
-├── popup/                 # 280px 单卡片：采集 + 下载；无配对码、无状态页、无历史列表
+├── popup/                 # 280px 单卡片：快速采集 + 下载；无配对码、无状态页、无历史列表
+├── sidepanel/             # 完整 Trainer 对话客户端：会话/流式/历史/学习条/练习卡/进度
 └── icons/                 # 手绘 SVG 源 + 由 PyMuPDF 渲染的 16/32/48/128 PNG
 ```
+
+**Side panel（完整对话）**：点击扩展的「Open Trainer」打开。它复用浏览器凭证连接本地 `/browser/chat/*`，提供会话历史、流式回复、学习条、当前练习卡与进度；不显示 provider key，也不接触 sidecar 的 per-instance token。Trainer 未运行时显示明确的连接态与重连入口。原先的短「问 Trainer」表单已移除；右键选中文本仍可通过 `POST /browser/coach-draft` 预填宿主 composer。
+
+**侧栏完成练习**：练习卡里的作答不是一句闲聊，而是走完整训练链路——`/browser/chat/training/attempt/start` 起一次 attempt，`attempt/update` 记下学习者写的内容，`attempt/evidence` 把证据绑定到这段作答（浏览器端没有 runner 与 verifier，证据的信任级别由服务端判定为 `self_reported`，不会推进可执行能力），最后 `training/practice-return` 关闭这次练习。任一步失败时面板如实提示「这次练习没有被记录」，不出现进度收据、也不会把它说成已完成。记录成功后，对话流里出现一张进度收据，列出已有证据的能力维度，成长明细仍在学习浮层里。
 
 纯逻辑可用 `node --test extension/tests/browserCaptureShared.test.js` 直接测试（`shared.js` 不依赖 chrome，可在 Node 里 `require`）。同一套测试还静态守卫：8 语言 copy 键齐全性与前缀匹配、下载字段与目标路径校验、弹窗无配对 UI、`data-copy` 键完整性、图标 PNG 与 manifest 引用一致、打包白名单覆盖 manifest 引用的每个文件。

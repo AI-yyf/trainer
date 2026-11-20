@@ -72,12 +72,50 @@ test('library deep links parse the resource id and reject everything else', () =
     { path: '/library' },
     { path: '/library/a/b' },
     { path: '/training/card-1' },
-    { path: '' },
     { path: '/library/%2F' },
     { path: '/library/bad id' },
   ]) {
     assert.equal(parseTrainerDeepLink(uri), undefined, JSON.stringify(uri));
   }
+});
+
+test('a bare root deep link opens the workbench instead of being ignored', () => {
+  const { parseTrainerDeepLink } = loadDeepLink();
+
+  // The capture panel and the side panel mint `vscode://local.trainer-extension/`
+  // when they only want to focus Trainer.
+  assert.deepEqual(parseTrainerDeepLink({ path: '' }), {
+    kind: 'workbench',
+    activeView: 'coach',
+  });
+  assert.deepEqual(parseTrainerDeepLink({ path: '/' }), {
+    kind: 'workbench',
+    activeView: 'coach',
+  });
+});
+
+test('workbench deep links open a compatibility route without a resource', async () => {
+  const { parseTrainerDeepLink, handleTrainerDeepLink } = loadDeepLink();
+  assert.deepEqual(parseTrainerDeepLink({ path: '/coach' }), {
+    kind: 'workbench',
+    activeView: 'coach',
+  });
+  assert.deepEqual(parseTrainerDeepLink({ path: '/learning' }), {
+    kind: 'workbench',
+    activeView: 'plan',
+  });
+
+  const { deps, events } = createDeps();
+  const result = await handleTrainerDeepLink(deps, {
+    path: '/coach',
+    toString: () => 'vscode://local.trainer-extension/coach',
+  });
+  assert.deepEqual(result, { handled: true, deliveryAttempts: 1 });
+  assert.deepEqual(events, [
+    'show',
+    'postMessage',
+    { type: 'ui/restoreView', payload: { activeView: 'coach' } },
+  ]);
 });
 
 test('handling a library deep link focuses the workbench and posts ui/openResource', async () => {

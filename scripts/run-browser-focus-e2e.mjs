@@ -211,8 +211,9 @@ async function main() {
     const sourceUrl = 'https://trainer-context.example.org/selection';
     const article = await context.newPage();
     const selection = 'A queued source belongs to the workspace where it was captured.';
+    const question = 'Where should this queued selection be delivered?';
     await article.route(sourceUrl, (route) => route.fulfill({
-      contentType: 'text/html', body: `<title>Workspace scope</title><p>${selection}</p>`,
+      contentType: 'text/html', body: `<title>Workspace scope</title><p id="scope">${selection}</p>`,
     }));
     await article.goto(sourceUrl);
     await article.locator('p').evaluate((element) => {
@@ -221,14 +222,66 @@ async function main() {
       getSelection().removeAllRanges();
       getSelection().addRange(range);
     });
+    const panel = await context.newPage();
+    await panel.goto(`chrome-extension://${id}/sidepanel/sidepanel.html`);
+    const worker = context.serviceWorkers()[0];
+    await worker.evaluate(() => {
+      const originalSend = chrome.tabs.sendMessage.bind(chrome.tabs);
+      globalThis.trainerSelectionReads = [];
+      chrome.tabs.sendMessage = (tab, message, ...args) => {
+        if (message.type === 'trainer:read-selection') {
+          globalThis.trainerSelectionReads.push(message.url);
+        }
+        return originalSend(tab, message, ...args);
+      };
+    });
     await article.bringToFront();
+    // The side panel is the full conversation client now; the short "Ask
+    // Trainer" form must be gone.
+    await panel.locator('.chat-shell').waitFor({ timeout: 10_000 });
+    await panel.locator('#conversation').waitFor();
+    await panel.locator('#message-input').waitFor();
+    if (await panel.locator('#ask-question, #ask-send').count()) {
+      throw new Error('The removed short Ask form is still rendered in the side panel.');
+    }
+    const reads = () => worker.evaluate(() => globalThis.trainerSelectionReads);
+    if ((await reads()).length) throw new Error('Opening the side panel read the selection.');
+    const stale = await panel.evaluate(async (url) => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      return chrome.runtime.sendMessage({ type: 'trainer:send-tab-context', tabId: tab.id, url });
+    }, sourceUrl + '-old');
+    if (stale.status !== 'failed' || (await reads()).length) {
+      throw new Error('A changed page reached the selection reader.');
+    }
+    if ((await article.evaluate(() => window.getSelection()?.toString())) !== selection) {
+      throw new Error('The fixture lost its selected passage before sending context.');
+    }
+    const queued = await panel.evaluate(async ({ url, question: learnerQuestion }) => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      return chrome.runtime.sendMessage({
+        type: 'trainer:send-tab-context', tabId: tab.id, url, question: learnerQuestion,
+      });
+    }, { url: sourceUrl, question });
+    if (queued.status !== 'sent' && queued.status !== 'queued') {
+      throw new Error('The page context did not reach the draft lane: ' + JSON.stringify(queued));
+    }
+    if (JSON.stringify(await reads()) !== JSON.stringify([sourceUrl])) {
+      throw new Error('The page context did not read the displayed selection once.');
+    }
     const send = (type) => page.evaluate((message) => chrome.runtime.sendMessage({ type: message }), type);
-    const queued = await send('trainer:send-tab-context');
     const browserState = await send('trainer:state');
     const queuedDraft = browserState.drafts?.find((draft) => draft.selection === selection);
-    if (queued.status !== 'queued' || queuedDraft?.workspaceId !== 'workspace-a') {
-      throw new Error('The offline selection was not queued for workspace A.');
+    if (queuedDraft?.workspaceId !== 'workspace-a' || queuedDraft.question !== question ||
+      queuedDraft.url !== sourceUrl + '#scope') {
+      const drafts = browserState.drafts?.map((draft) => ({
+        workspaceId: draft.workspaceId,
+        selectionMatched: draft.selection === selection,
+        questionMatched: draft.question === question,
+        locationMatched: draft.url === sourceUrl + '#scope'
+      }));
+      throw new Error('The offline selection was not queued for workspace A: ' + JSON.stringify(drafts));
     }
+    console.log('[PASS] Side panel is the full chat client; page context reads only on explicit send');
     const pendingDrafts = async (port, token, workspaceId) => {
       const response = await fetch(`http://127.0.0.1:${port}/browser/pending-drafts?workspace_id=${workspaceId}`, {
         headers: { 'x-trainer-token': token },
@@ -248,7 +301,8 @@ async function main() {
     await send('trainer:auto-pair');
     await send('trainer:flush');
     const delivered = await pendingDrafts(portA, tokenA, 'workspace-a');
-    if (delivered.length !== 1 || delivered[0].selection !== selection || delivered[0].url !== sourceUrl) {
+    if (delivered.length !== 1 || delivered[0].selection !== selection || delivered[0].url !== sourceUrl + '#scope' ||
+      !delivered[0].text.includes(question)) {
       throw new Error('The queued selection did not return to workspace A exactly once.');
     }
     console.log('[PASS] offline draft stayed in workspace A across a focus switch and restart');

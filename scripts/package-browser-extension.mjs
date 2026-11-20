@@ -26,6 +26,7 @@ const INCLUDE_ROOTS = [
   'background.js',
   'shared.js',
   'popup',
+  'sidepanel',
   'icons',
   '_locales',
   'README.md'
@@ -146,6 +147,7 @@ function assertManifestReferences() {
   const referenced = [
     manifest.background?.service_worker,
     manifest.action?.default_popup,
+    manifest.side_panel?.default_path,
     ...Object.values(manifest.icons ?? {}),
     ...Object.values(manifest.action?.default_icon ?? {})
   ].filter((value) => typeof value === 'string' && value.length > 0);

@@ -39,6 +39,7 @@ function createFixture() {
   writeFile(path.join(sourceDir, 'background.js'), '// service worker\n');
   writeFile(path.join(sourceDir, 'shared.js'), '// shared\n');
   writeFile(path.join(sourceDir, 'popup', 'popup.html'), '<html></html>\n');
+  writeFile(path.join(sourceDir, 'sidepanel', 'sidepanel.html'), '<html></html>\n');
   writeFile(path.join(sourceDir, 'icons', 'icon16.png'), 'png');
   writeFile(path.join(sourceDir, 'README.md'), '# Trainer Capture\n');
   // Packaging junk must never be staged into the VSIX.
@@ -70,13 +71,14 @@ test('syncBrowserCaptureExtension stages the unpacked extension with a version m
     });
 
     assert.equal(result.staged, true);
-    assert.equal(result.fileCount, 6);
+    assert.equal(result.fileCount, 7);
     assert.equal(result.version, '0.1.0');
     for (const relative of [
       'manifest.json',
       'background.js',
       'shared.js',
       'popup/popup.html',
+      'sidepanel/sidepanel.html',
       'icons/icon16.png',
       'README.md',
     ]) {
@@ -96,7 +98,7 @@ test('syncBrowserCaptureExtension stages the unpacked extension with a version m
       schemaVersion: 1,
       name: 'trainer-capture',
       version: '0.1.0',
-      fileCount: 6,
+      fileCount: 7,
       generatedFrom: 'browser-extension',
     });
 
@@ -277,6 +279,7 @@ test('the staged bundle mirrors the browser extension packaging include list', a
     'background.js',
     'shared.js',
     'popup/popup.html',
+    'sidepanel/sidepanel.html',
     'README.md',
   ]);
 });

@@ -2,41 +2,151 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Trainer Capture</title>
+    <title>Trainer</title>
     <link rel="stylesheet" href="../popup/popup.css" />
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
     <!--
-      Ask Trainer side panel (P4): one question box over the current page
-      context. Content (title/URL/selection) is read only when the learner
-      clicks Ask — nothing is collected by merely opening the panel. The
-      staged draft lands in the shared Trainer composer via the existing
-      browser-capture channel; it is never sent as chat by itself.
+      The side panel is the full Trainer conversation client: sessions,
+      streaming, history, learning state and the current practice card. It is
+      paired to the local Trainer sidecar with the same browser credential the
+      capture lane uses; no provider key or instance token reaches this page.
     -->
 
-    <main class="card ask-card">
-      <h1 class="card-title" data-copy="askPanelHeading">Ask Trainer</h1>
-      <p class="ask-label" data-copy="askPanelPageLabel">Current page</p>
-      <p id="ask-page-line" class="ask-page-line"></p>
-      <textarea
-        id="ask-question"
-        class="ask-question"
-        rows="4"
-        data-copy-placeholder="askPanelQuestionPlaceholder"
-      ></textarea>
-      <p class="ask-hint" data-copy="askPanelSelectionHint"></p>
-      <button id="ask-send" class="row row--action ask-send" type="button">
-        <span class="row__title" data-copy="askPanelSend">Ask Trainer</span>
-      </button>
-      <p id="ask-result" class="feedback" role="status" aria-live="polite"></p>
+    <svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0">
+      <defs>
+        <symbol id="icon-book" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 5.2C8.5 4 6.6 3.5 4 3.5v10.2c2.6 0 4.5.5 6 1.7 1.5-1.2 3.4-1.7 6-1.7V3.5c-2.6 0-4.5.5-6 1.7z" />
+          <path d="M10 5.2v10.2" />
+        </symbol>
+        <symbol id="icon-clock" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="10" cy="10" r="6.5" />
+          <path d="M10 6.2V10l2.5 1.5" />
+        </symbol>
+        <symbol id="icon-external" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11.4 4.4h4.2v4.2" /><path d="M15.6 4.4 9.8 10.2" />
+          <path d="M14.6 11.7v3.2a1.3 1.3 0 0 1-1.3 1.3H5.1a1.3 1.3 0 0 1-1.3-1.3V6.7a1.3 1.3 0 0 1 1.3-1.3h3.2" />
+        </symbol>
+        <symbol id="icon-close" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5.4 5.4l9.2 9.2M14.6 5.4l-9.2 9.2" />
+        </symbol>
+        <symbol id="icon-send" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3.6 10 16.4 4l-3.8 12-3-4.6-6-1.4z" />
+          <path d="m9.6 11.4 3.4-3.3" />
+        </symbol>
+        <symbol id="icon-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m7.6 5.2 4.8 4.8-4.8 4.8" />
+        </symbol>
+      </defs>
+    </svg>
 
-      <footer class="foot">
-        <button id="open-trainer" class="pill" type="button">
-          <span data-copy="openTrainer">Open Trainer</span>
-        </button>
-      </footer>
+    <main class="chat-shell">
+      <header class="chat-header">
+        <div class="chat-identity">
+          <span class="chat-identity__mark" aria-hidden="true">T</span>
+          <div class="chat-identity__copy">
+            <strong id="workspace-name">Trainer</strong>
+            <span id="page-context" class="chat-identity__page"></span>
+          </div>
+          <span id="connection-dot" class="connection-dot" data-state="offline" aria-hidden="true"></span>
+        </div>
+        <div class="chat-utilities">
+          <button id="learning-toggle" class="chat-utility" type="button" aria-label="Learning" title="Learning" aria-expanded="false">
+            <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg>
+          </button>
+          <button id="history-toggle" class="chat-utility" type="button" aria-label="History" title="History" aria-expanded="false">
+            <svg class="icon" aria-hidden="true"><use href="#icon-clock"></use></svg>
+          </button>
+          <button id="open-trainer" class="chat-utility" type="button" aria-label="Open Trainer" title="Open Trainer">
+            <svg class="icon" aria-hidden="true"><use href="#icon-external"></use></svg>
+          </button>
+        </div>
+      </header>
+
+      <button id="learning-strip" class="learning-strip" type="button" hidden>
+        <span class="learning-strip__label" data-copy="learningLabel">Learning</span>
+        <span id="learning-strip-title" class="learning-strip__title"></span>
+        <span id="learning-strip-due" class="learning-strip__due"></span>
+        <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-chevron"></use></svg>
+      </button>
+
+      <section id="connection-state" class="connection-state" hidden>
+        <h1 id="connection-title">Trainer is not running</h1>
+        <p id="connection-detail"></p>
+        <div class="connection-state__actions">
+          <button id="connection-retry" class="primary-button" type="button">Reconnect</button>
+          <button id="connection-open" class="text-button" type="button">Open Trainer</button>
+        </div>
+      </section>
+
+      <section id="conversation" class="conversation" aria-live="polite" aria-label="Conversation"></section>
+
+      <section id="practice-card" class="practice-card" hidden aria-label="Current practice">
+        <header class="practice-card__header">
+          <span data-copy="practiceLabel">Practice</span>
+          <span id="practice-status" class="practice-card__status"></span>
+        </header>
+        <strong id="practice-title" class="practice-card__title"></strong>
+        <p id="practice-focus" class="practice-card__focus"></p>
+        <p id="practice-notice" class="practice-card__notice" role="status" aria-live="polite" hidden></p>
+        <label class="practice-card__answer-label" for="practice-answer" data-copy="practiceAnswerLabel">Your answer</label>
+        <textarea id="practice-answer" class="practice-card__answer" rows="3" data-copy-placeholder="practiceAnswerPlaceholder" placeholder="Answer inside the card"></textarea>
+        <div class="practice-card__actions">
+          <button id="practice-submit" class="primary-button" type="button">Submit answer</button>
+          <button id="practice-start" class="ghost-button" type="button">Ask in chat</button>
+        </div>
+      </section>
+
+      <form id="composer" class="composer" autocomplete="off">
+        <textarea id="message-input" rows="2" placeholder="Message Trainer…" aria-label="Message Trainer"></textarea>
+        <div class="composer__footer">
+          <span id="composer-status" class="composer__status"></span>
+          <button id="send" class="send-button" type="submit" aria-label="Send" title="Send" disabled>
+            <svg class="icon" aria-hidden="true"><use href="#icon-send"></use></svg>
+          </button>
+        </div>
+      </form>
     </main>
+
+    <div id="history-overlay" class="overlay" hidden>
+      <button class="overlay__backdrop" type="button" aria-label="Close" data-close="history"></button>
+      <div class="overlay__panel" role="dialog" aria-modal="true" aria-label="History">
+        <header class="overlay__header">
+          <strong>History</strong>
+          <button class="chat-utility" type="button" aria-label="Close" data-close="history">
+            <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </header>
+        <div id="history-list" class="overlay__list"></div>
+        <button id="new-chat" class="text-button overlay__footer-action" type="button">New chat</button>
+      </div>
+    </div>
+
+    <div id="learning-overlay" class="overlay" hidden>
+      <button class="overlay__backdrop" type="button" aria-label="Close" data-close="learning"></button>
+      <div class="overlay__panel" role="dialog" aria-modal="true" aria-label="Learning">
+        <header class="overlay__header">
+          <strong data-copy="learningLabel">Learning</strong>
+          <button class="chat-utility" type="button" aria-label="Close" data-close="learning">
+            <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-close"></use></svg>
+          </button>
+        </header>
+        <section class="learning-section">
+          <h2 data-copy="learningGoal">Current goal</h2>
+          <p id="learning-goal-title" class="learning-section__title"></p>
+          <p id="learning-goal-step" class="learning-section__detail"></p>
+        </section>
+        <section class="learning-section">
+          <h2 data-copy="learningPractice">Due practice</h2>
+          <p id="learning-practice-detail" class="learning-section__detail"></p>
+        </section>
+        <section class="learning-section">
+          <h2 data-copy="learningProgress">Growth</h2>
+          <ul id="learning-progress" class="learning-progress"></ul>
+        </section>
+      </div>
+    </div>
 
     <script src="../shared.js"></script>
     <script src="sidepanel.js"></script>

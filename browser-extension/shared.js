@@ -77,9 +77,19 @@
 
   const CAPTURE_KINDS = ['web', 'pdf', 'github_repo'];
 
-  // Kinds the sidecar can save into the project folder (task 二). Web pages
+  // Kinds the sidecar can save into the library (task 二). Web pages
   // stay library-only: a page has no single canonical file to download.
-  const DOWNLOAD_KINDS = ['pdf', 'github_repo'];
+  const DOWNLOAD_KINDS = ['pdf', 'github_repo', 'gitee_repo', 'gitlab_repo'];
+  // GitHub, Gitee and GitLab share the owner/repo shape, so one lane covers
+  // every forge the learner adds from a URL.
+  const REPO_KINDS = {
+    'github.com': 'github_repo',
+    'www.github.com': 'github_repo',
+    'gitee.com': 'gitee_repo',
+    'www.gitee.com': 'gitee_repo',
+    'gitlab.com': 'gitlab_repo',
+    'www.gitlab.com': 'gitlab_repo'
+  };
 
   /** Default download folder, relative to the workspace root. */
   const DEFAULT_TARGET_DIR = 'Trainer Library/';
@@ -138,6 +148,8 @@
       askPanelSelectionHint: '提问时会一并读取页面上的选中文本。',
       askPanelSend: '问 Trainer',
       askPanelBusy: '正在送入 Trainer…',
+      askPanelPageChanged: '网页已切换。请核对当前网页后再提问。',
+      askPanelUnavailable: '暂时无法送入 Trainer。请再试一次。',
       appTitle: 'Trainer 采集',
       checking: '正在检查…',
       detecting: '正在探测本机 Trainer…',
@@ -166,11 +178,75 @@
       openTrainer: '打开 Trainer',
       close: '关闭',
       captureHeading: '加入资料库',
-      capturePage: '将当前页面加入资料库',
+      capturePage: '将当前页面加入资料库',      
+      scanQr: '读取二维码',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: '正在添加…',
-      bindingLabel: '绑定学习目标（可选）',
-      bindingHint: '该选择同时作为右键菜单采集的默认绑定。',
-      bindingNone: '不绑定',
       queueHeading: '待投递',
       queueCount: '{count} 条等待投递',
       queueRetry: '立即重试',
@@ -244,18 +320,15 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF 选项',
       menuPdfLibrary: '加入资料库（PDF）',
-      menuPdfDownload: '下载 PDF 到项目文件夹',
-      menuGithubDownload: '下载项目到文件夹',
-      downloadHeading: '下载到项目文件夹',
+      menuPdfDownload: '下载 PDF 到资料库',
+      menuGithubDownload: '下载项目到资料库',
+      downloadHeading: '下载到资料库',
       downloadLabel: '目标文件夹',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: '保存在当前项目内；文件夹不存在时会自动创建。',
-      downloadAction: '下载到项目文件夹',
+      downloadAction: '下载到资料库',
       downloadBusy: '正在下载…',
-      downloadInvalidFolder: '请填写项目内的相对文件夹（不要绝对路径，也不要包含「..」）。',
       downloadUnsupported: '下载功能适用于 PDF 与 GitHub 仓库。',
       captureDownloaded: '已下载到 {path}',
-      captureDownloadedDeduped: '该文件已在项目文件夹：{path}',
+      captureDownloadedDeduped: '该文件已在资料库：{path}',
       captureDownloadQueued: 'Trainer 未能完成下载，已排队（{count} 条待投递）',
       captureQueueFull: '待投递队列已满（100 条）。请先连接 Trainer 完成投递，再采集新内容。',
       notifyDownloadTitle: 'Trainer 下载',
@@ -278,6 +351,8 @@
       askPanelSelectionHint: 'Asking also reads the text you selected on the page.',
       askPanelSend: 'Ask Trainer',
       askPanelBusy: 'Sending to Trainer…',
+      askPanelPageChanged: 'The page changed. Review the current page, then ask again.',
+      askPanelUnavailable: 'Could not reach Trainer. Try again.',
       appTitle: 'Trainer Capture',
       checking: 'Checking…',
       detecting: 'Looking for Trainer on this machine…',
@@ -307,10 +382,22 @@
       close: 'Close',
       captureHeading: 'Add to library',
       capturePage: 'Add this page to the library',
+      scanQr: 'Read the QR code',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: 'Adding…',
-      bindingLabel: 'Bind a learning focus (optional)',
-      bindingHint: 'This choice also becomes the default for right-click captures.',
-      bindingNone: 'No binding',
       queueHeading: 'Pending delivery',
       queueCount: '{count} waiting to be delivered',
       queueRetry: 'Retry now',
@@ -384,15 +471,12 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF actions',
       menuPdfLibrary: 'Add to library (PDF)',
-      menuPdfDownload: 'Download PDF to project folder',
-      menuGithubDownload: 'Download repo to project folder',
-      downloadHeading: 'Download to project folder',
+      menuPdfDownload: 'Download PDF to library',
+      menuGithubDownload: 'Download repo to library',
+      downloadHeading: 'Download to library',
       downloadLabel: 'Target folder',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: 'Saved inside the current project. The folder is created if it does not exist.',
-      downloadAction: 'Download to project folder',
+      downloadAction: 'Download to library',
       downloadBusy: 'Downloading…',
-      downloadInvalidFolder: 'Use a relative folder inside the project (no "..", no absolute path).',
       downloadUnsupported: 'Downloading is available for PDFs and GitHub repositories.',
       captureDownloaded: 'Downloaded to {path}',
       captureDownloadedDeduped: 'Already downloaded to {path}',
@@ -418,6 +502,8 @@
       askPanelSelectionHint: 'Al preguntar también se lee el texto seleccionado en la página.',
       askPanelSend: 'Preguntar',
       askPanelBusy: 'Enviando a Trainer…',
+      askPanelPageChanged: 'La página ha cambiado. Revísala y vuelve a preguntar.',
+      askPanelUnavailable: 'No se pudo conectar con Trainer. Inténtalo de nuevo.',
       appTitle: 'Captura de Trainer',
       checking: 'Comprobando…',
       detecting: 'Buscando Trainer en este equipo…',
@@ -447,10 +533,22 @@
       close: 'Cerrar',
       captureHeading: 'Añadir a la biblioteca',
       capturePage: 'Añadir esta página a la biblioteca',
+      scanQr: 'Leer el código QR',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: 'Añadiendo…',
-      bindingLabel: 'Vincular un objetivo de aprendizaje (opcional)',
-      bindingHint: 'Esta elección también es el vínculo predeterminado para las capturas del menú contextual.',
-      bindingNone: 'Sin vincular',
       queueHeading: 'Pendientes de entrega',
       queueCount: '{count} en espera de entrega',
       queueRetry: 'Reintentar ahora',
@@ -524,15 +622,12 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'Acciones de PDF',
       menuPdfLibrary: 'Añadir a la biblioteca (PDF)',
-      menuPdfDownload: 'Descargar el PDF a la carpeta del proyecto',
-      menuGithubDownload: 'Descargar el repositorio a la carpeta',
-      downloadHeading: 'Descargar a la carpeta del proyecto',
+      menuPdfDownload: 'Descargar el PDF a la biblioteca',
+      menuGithubDownload: 'Descargar el repositorio a la biblioteca',
+      downloadHeading: 'Descargar a la biblioteca',
       downloadLabel: 'Carpeta de destino',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: 'Se guarda dentro del proyecto actual; la carpeta se crea si no existe.',
-      downloadAction: 'Descargar a la carpeta del proyecto',
+      downloadAction: 'Descargar a la biblioteca',
       downloadBusy: 'Descargando…',
-      downloadInvalidFolder: 'Usa una carpeta relativa dentro del proyecto (sin «..» ni rutas absolutas).',
       downloadUnsupported: 'La descarga está disponible para PDF y repositorios de GitHub.',
       captureDownloaded: 'Descargado en {path}',
       captureDownloadedDeduped: 'Ya está descargado en {path}',
@@ -558,6 +653,8 @@
       askPanelSelectionHint: 'Demander lit aussi le texte sélectionné sur la page.',
       askPanelSend: 'Demander',
       askPanelBusy: 'Envoi vers Trainer…',
+      askPanelPageChanged: 'La page a changé. Vérifiez la page actuelle, puis posez de nouveau votre question.',
+      askPanelUnavailable: 'Trainer est inaccessible. Réessayez.',
       appTitle: 'Capture Trainer',
       checking: 'Vérification…',
       detecting: 'Recherche de Trainer sur cet ordinateur…',
@@ -587,10 +684,22 @@
       close: 'Fermer',
       captureHeading: 'Ajouter à la bibliothèque',
       capturePage: 'Ajouter cette page à la bibliothèque',
+      scanQr: 'Lire le code QR',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: 'Ajout…',
-      bindingLabel: 'Associer un objectif d’apprentissage (facultatif)',
-      bindingHint: 'Ce choix devient aussi l’association par défaut des captures par menu contextuel.',
-      bindingNone: 'Aucune association',
       queueHeading: 'File d’attente',
       queueCount: '{count} en attente d’envoi',
       queueRetry: 'Réessayer maintenant',
@@ -664,15 +773,12 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'Actions PDF',
       menuPdfLibrary: 'Ajouter à la bibliothèque (PDF)',
-      menuPdfDownload: 'Télécharger le PDF dans le dossier du projet',
-      menuGithubDownload: 'Télécharger le dépôt dans le dossier',
-      downloadHeading: 'Télécharger dans le dossier du projet',
+      menuPdfDownload: 'Télécharger le PDF dans la bibliothèque',
+      menuGithubDownload: 'Télécharger le dépôt dans la bibliothèque',
+      downloadHeading: 'Télécharger dans la bibliothèque',
       downloadLabel: 'Dossier de destination',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: 'Enregistré dans le projet actuel ; le dossier est créé au besoin.',
-      downloadAction: 'Télécharger dans le dossier du projet',
+      downloadAction: 'Télécharger dans la bibliothèque',
       downloadBusy: 'Téléchargement…',
-      downloadInvalidFolder: 'Utilisez un dossier relatif dans le projet (sans « .. » ni chemin absolu).',
       downloadUnsupported: 'Le téléchargement concerne les PDF et les dépôts GitHub.',
       captureDownloaded: 'Téléchargé dans {path}',
       captureDownloadedDeduped: 'Déjà téléchargé dans {path}',
@@ -698,6 +804,8 @@
       askPanelSelectionHint: 'Beim Fragen wird auch der markierte Text der Seite gelesen.',
       askPanelSend: 'Fragen',
       askPanelBusy: 'Wird an Trainer gesendet…',
+      askPanelPageChanged: 'Die Seite hat gewechselt. Prüfe die aktuelle Seite und frage erneut.',
+      askPanelUnavailable: 'Trainer ist nicht erreichbar. Versuche es erneut.',
       appTitle: 'Trainer-Erfassung',
       checking: 'Wird geprüft…',
       detecting: 'Trainer wird auf diesem Rechner gesucht…',
@@ -727,10 +835,22 @@
       close: 'Schließen',
       captureHeading: 'Zur Bibliothek hinzufügen',
       capturePage: 'Diese Seite zur Bibliothek hinzufügen',
+      scanQr: 'QR-Code lesen',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: 'Wird hinzugefügt…',
-      bindingLabel: 'Ein Lernziel binden (optional)',
-      bindingHint: 'Diese Auswahl ist zugleich die Standardbindung für Erfassungen über das Kontextmenü.',
-      bindingNone: 'Keine Bindung',
       queueHeading: 'Ausstehende Übertragung',
       queueCount: '{count} warten auf Übertragung',
       queueRetry: 'Jetzt erneut versuchen',
@@ -804,15 +924,12 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF-Aktionen',
       menuPdfLibrary: 'Zur Bibliothek hinzufügen (PDF)',
-      menuPdfDownload: 'PDF in den Projektordner laden',
-      menuGithubDownload: 'Repository in den Ordner laden',
-      downloadHeading: 'In den Projektordner laden',
+      menuPdfDownload: 'PDF in die Bibliothek laden',
+      menuGithubDownload: 'Repository in die Bibliothek laden',
+      downloadHeading: 'In die Bibliothek laden',
       downloadLabel: 'Zielordner',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: 'Wird im aktuellen Projekt gespeichert; der Ordner wird bei Bedarf angelegt.',
-      downloadAction: 'In den Projektordner laden',
+      downloadAction: 'In die Bibliothek laden',
       downloadBusy: 'Wird geladen…',
-      downloadInvalidFolder: 'Verwende einen relativen Ordner im Projekt (kein „..“, kein absoluter Pfad).',
       downloadUnsupported: 'Das Herunterladen gilt für PDFs und GitHub-Repositories.',
       captureDownloaded: 'Nach {path} geladen',
       captureDownloadedDeduped: 'Bereits nach {path} geladen',
@@ -838,6 +955,8 @@
       askPanelSelectionHint: '質問時にページ内の選択テキストも読み取ります。',
       askPanelSend: '質問する',
       askPanelBusy: 'Trainer に送信中…',
+      askPanelPageChanged: 'ページが切り替わりました。現在のページを確認してから、もう一度質問してください。',
+      askPanelUnavailable: 'Trainer に接続できませんでした。もう一度お試しください。',
       appTitle: 'Trainer キャプチャ',
       checking: '確認中…',
       detecting: 'この PC 上の Trainer を探しています…',
@@ -867,10 +986,22 @@
       close: '閉じる',
       captureHeading: 'ライブラリに追加',
       capturePage: 'このページをライブラリに追加',
+      scanQr: 'QRコード を読む',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: '追加中…',
-      bindingLabel: '学習目標を紐付け（任意）',
-      bindingHint: 'この選択は右クリックメニューでのキャプチャの既定の紐付けにもなります。',
-      bindingNone: '紐付けなし',
       queueHeading: '配信待ち',
       queueCount: '{count} 件が配信待ち',
       queueRetry: '今すぐ再試行',
@@ -944,15 +1075,12 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF の操作',
       menuPdfLibrary: 'ライブラリに追加（PDF）',
-      menuPdfDownload: 'PDF をプロジェクトフォルダーにダウンロード',
-      menuGithubDownload: 'リポジトリをフォルダーにダウンロード',
-      downloadHeading: 'プロジェクトフォルダーにダウンロード',
+      menuPdfDownload: 'PDF をライブラリにダウンロード',
+      menuGithubDownload: 'リポジトリをライブラリにダウンロード',
+      downloadHeading: 'ライブラリにダウンロード',
       downloadLabel: '保存先フォルダー',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: '現在のプロジェクト内に保存します。フォルダーがなければ作成します。',
-      downloadAction: 'プロジェクトフォルダーにダウンロード',
+      downloadAction: 'ライブラリにダウンロード',
       downloadBusy: 'ダウンロード中…',
-      downloadInvalidFolder: 'プロジェクト内の相対フォルダーを指定してください（「..」や絶対パスは使えません）。',
       downloadUnsupported: 'ダウンロードは PDF と GitHub リポジトリで利用できます。',
       captureDownloaded: '{path} にダウンロードしました',
       captureDownloadedDeduped: 'すでに {path} にあります',
@@ -978,6 +1106,8 @@
       askPanelSelectionHint: '질문 시 페이지에서 선택한 텍스트도 함께 읽어 옵니다.',
       askPanelSend: '질문하기',
       askPanelBusy: 'Trainer에 전송 중…',
+      askPanelPageChanged: '페이지가 바뀌었습니다. 현재 페이지를 확인하고 다시 질문하세요.',
+      askPanelUnavailable: 'Trainer에 연결하지 못했습니다. 다시 시도하세요.',
       appTitle: 'Trainer 캡처',
       checking: '확인 중…',
       detecting: '이 컴퓨터에서 Trainer를 찾는 중…',
@@ -1007,10 +1137,22 @@
       close: '닫기',
       captureHeading: '라이브러리에 추가',
       capturePage: '이 페이지를 라이브러리에 추가',
+      scanQr: 'QR 코드 읽기',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: '추가 중…',
-      bindingLabel: '학습 목표 연결(선택)',
-      bindingHint: '이 선택은 마우스 오른쪽 버튼 메뉴 캡처의 기본 연결로도 사용됩니다.',
-      bindingNone: '연결 안 함',
       queueHeading: '전송 대기',
       queueCount: '{count}개 전송 대기 중',
       queueRetry: '지금 재시도',
@@ -1084,15 +1226,12 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'PDF 작업',
       menuPdfLibrary: '라이브러리에 추가(PDF)',
-      menuPdfDownload: 'PDF를 프로젝트 폴더로 다운로드',
-      menuGithubDownload: '리포지토리를 폴더로 다운로드',
-      downloadHeading: '프로젝트 폴더로 다운로드',
+      menuPdfDownload: 'PDF를 라이브러리로 다운로드',
+      menuGithubDownload: '리포지토리를 라이브러리로 다운로드',
+      downloadHeading: '라이브러리로 다운로드',
       downloadLabel: '대상 폴더',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: '현재 프로젝트 안에 저장합니다. 폴더가 없으면 새로 만듭니다.',
-      downloadAction: '프로젝트 폴더로 다운로드',
+      downloadAction: '라이브러리로 다운로드',
       downloadBusy: '다운로드 중…',
-      downloadInvalidFolder: '프로젝트 내부의 상대 폴더를 입력하세요(".."나 절대 경로는 사용할 수 없습니다).',
       downloadUnsupported: '다운로드는 PDF와 GitHub 리포지토리에서 사용할 수 있습니다.',
       captureDownloaded: '{path}에 다운로드했습니다',
       captureDownloadedDeduped: '이미 {path}에 있습니다',
@@ -1118,6 +1257,8 @@
       askPanelSelectionHint: 'Ao perguntar, o texto selecionado na página também é lido.',
       askPanelSend: 'Perguntar',
       askPanelBusy: 'Enviando ao Trainer…',
+      askPanelPageChanged: 'A página mudou. Confira a página atual e pergunte novamente.',
+      askPanelUnavailable: 'Não foi possível acessar o Trainer. Tente novamente.',
       appTitle: 'Captura do Trainer',
       checking: 'Verificando…',
       detecting: 'Procurando o Trainer neste computador…',
@@ -1147,10 +1288,22 @@
       close: 'Fechar',
       captureHeading: 'Adicionar à biblioteca',
       capturePage: 'Adicionar esta página à biblioteca',
+      scanQr: 'Ler o código QR',
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       captureBusy: 'Adicionando…',
-      bindingLabel: 'Vincular uma meta de aprendizado (opcional)',
-      bindingHint: 'Esta escolha também vira o vínculo padrão para capturas pelo menu de contexto.',
-      bindingNone: 'Sem vínculo',
       queueHeading: 'Pendentes de entrega',
       queueCount: '{count} aguardando entrega',
       queueRetry: 'Tentar novamente',
@@ -1224,15 +1377,12 @@
       // Download-to-project-folder entries (task 二).
       menuPdfGroup: 'Ações de PDF',
       menuPdfLibrary: 'Adicionar à biblioteca (PDF)',
-      menuPdfDownload: 'Baixar o PDF para a pasta do projeto',
-      menuGithubDownload: 'Baixar o repositório para a pasta',
-      downloadHeading: 'Baixar para a pasta do projeto',
+      menuPdfDownload: 'Baixar o PDF para a biblioteca',
+      menuGithubDownload: 'Baixar o repositório para a biblioteca',
+      downloadHeading: 'Baixar para a biblioteca',
       downloadLabel: 'Pasta de destino',
-      downloadPlaceholder: 'Trainer Library/',
-      downloadHint: 'Salvo dentro do projeto atual; a pasta é criada se não existir.',
-      downloadAction: 'Baixar para a pasta do projeto',
+      downloadAction: 'Baixar para a biblioteca',
       downloadBusy: 'Baixando…',
-      downloadInvalidFolder: 'Use uma pasta relativa dentro do projeto (sem ".." nem caminho absoluto).',
       downloadUnsupported: 'O download está disponível para PDFs e repositórios do GitHub.',
       captureDownloaded: 'Baixado para {path}',
       captureDownloadedDeduped: 'Já está baixado em {path}',
@@ -1382,7 +1532,7 @@
    * Dedup key: canonical URL with parameters sorted, scoped by capture kind and
    * by the capture *action* — so the "README + structure" and "with docs/"
    * GitHub variants never collapse into one entry, and a download into the
-   * project folder is never masked by an earlier add-to-library capture of the
+   * library folder is never masked by an earlier add-to-library capture of the
    * same source (and vice versa). A download also carries its target folder:
    * the same PDF saved into two folders is two legitimate actions, while a
    * repeat into the same folder is a duplicate.
@@ -1501,7 +1651,14 @@
   }
 
   function isPdfUrl(url) {
-    return /\.pdf(?:$|[?#])/i.test(String(url || ''));
+    try {
+      const parsed = new URL(String(url || ''));
+      return /\.pdf$/i.test(parsed.pathname) ||
+        (/^(?:(?:www|export)\.)?arxiv\.org$/i.test(parsed.hostname) &&
+          /^\/pdf\/[^/]+(?:\/[^/]+)?\/?$/i.test(parsed.pathname));
+    } catch {
+      return false;
+    }
   }
 
   function githubRepoLabel(url) {
@@ -1523,13 +1680,60 @@
   }
 
   function detectKind(url) {
-    if (githubRepoLabel(url) && /^https?:\/\/(?:www\.)?github\.com\/[^/?#]+\/[^/?#]+\/?(?:[?#]|$)/i.test(url)) {
-      return 'github_repo';
+    const raw = String(url || '').trim();
+    const host = String((raw.match(/^https?:\/\/([^/?#]+)/i) || [])[1] || '').toLowerCase();
+    if (host === 'github.com' || host === 'www.github.com') {
+      // GitHub reserves top-level paths (settings, marketplace, ...), so the
+      // repository root is the only repo shape.
+      if (githubRepoLabel(url) && /^https?:\/\/(?:www\.)?github\.com\/[^/?#]+\/[^/?#]+\/?(?:[?#]|$)/i.test(raw)) {
+        return 'github_repo';
+      }
+      return isPdfUrl(url) ? 'pdf' : 'web';
+    }
+    if (host === 'gitee.com' || host === 'www.gitee.com') {
+      if (/^https?:\/\/(?:www\.)?gitee\.com\/[^/?#]+\/[^/?#]+\/?(?:[?#]|$)/i.test(raw)) {
+        return 'gitee_repo';
+      }
+      return isPdfUrl(url) ? 'pdf' : 'web';
+    }
+    if (host === 'gitlab.com' || host === 'www.gitlab.com') {
+      // GitLab nests groups: the repository is the last segment before the
+      // reserved `/-/` paths.
+      if (/^https?:\/\/(?:www\.)?gitlab\.com\/[^/?#]+(?:\/[^/?#]+)+\/?(?:[?#]|$)/i.test(raw) && !/\/-\//.test(raw)) {
+        return 'gitlab_repo';
+      }
+      return isPdfUrl(url) ? 'pdf' : 'web';
     }
     if (isPdfUrl(url)) {
       return 'pdf';
     }
     return 'web';
+  }
+
+  /**
+   * Read a QR code from an image file with the browser's own detector. The
+   * platform API needs no extra dependency and never sends the image anywhere.
+   */
+  async function readQrCode(file) {
+    const Detector = globalThis.BarcodeDetector;
+    if (!Detector) {
+      throw new Error('qr_unsupported');
+    }
+    const bitmap = await createImageBitmap(file);
+    try {
+      const codes = await new Detector({ formats: ['qr_code'] }).detect(bitmap);
+      const value = codes
+        .map((code) => (code && typeof code.rawValue === 'string' ? code.rawValue.trim() : ''))
+        .find((item) => item);
+      if (!value) {
+        throw new Error('qr_empty');
+      }
+      return value;
+    } finally {
+      if (bitmap && typeof bitmap.close === 'function') {
+        bitmap.close();
+      }
+    }
   }
 
   function buildDeepLink(resourceId) {
@@ -1939,6 +2143,7 @@
     return {
       workspaceId: String(source.workspace_id || source.workspaceId || '').trim(),
       workspaceName: String(source.workspace_name || source.workspaceName || '').trim(),
+      downloadTarget: String(source.download_target || source.downloadTarget || '').trim(),
       libraryCount: Number.isFinite(count) ? count : 0,
       focusOptions: rawOptions
         .map((option) => ({
@@ -2675,6 +2880,7 @@
     STORAGE_KEYS,
     DEFAULT_TARGET_DIR,
     DOWNLOAD_KINDS,
+    readQrCode,
     DEEP_LINK_PREFIX,
     HOST_DEEP_LINK,
     resolveLocale,
@@ -2779,8 +2985,16 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof document !== 'undefined' && typeof chrome !== 'undefined' && chrome.runtime?.onMessage
     && /^https?:$/.test(window.location.protocol)) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message?.type === 'trainer:read-selection' && sender.id === chrome.runtime.id) {
-      sendResponse({ selection: window.getSelection()?.toString() || '' });
+    if (message?.type === 'trainer:read-selection' && sender.id === chrome.runtime.id
+        && message.url === window.location.href) {
+      const selection = window.getSelection();
+      const text = selection?.toString() || '';
+      const common = text && selection.rangeCount === 1
+        ? selection.getRangeAt(0).commonAncestorContainer
+        : null;
+      const element = common instanceof Element ? common : common?.parentElement;
+      const anchor = element?.closest('[id]')?.id;
+      sendResponse({ selection: text, anchor: anchor && anchor.length <= 200 ? anchor : undefined });
     }
   });
 }

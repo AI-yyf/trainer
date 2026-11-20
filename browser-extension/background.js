@@ -15,7 +15,7 @@
  * learning queue" concept anywhere in this extension.
  *
  * Two capture actions per source: "add to the library" (the base action) and,
- * for PDFs and GitHub repositories, "download into the project folder"
+ * for PDFs and GitHub repositories, "download into the library"
  * (`download: true` + `target_dir`). Downloads queue offline exactly like
  * library captures and replay with the same client_capture_id.
  */
@@ -1056,6 +1056,9 @@ async function buildState() {
       storedWorkspaceName ||
       '',
     libraryCount: cached.libraryCount,
+    // The sidecar owns the download target: the library folder that belongs
+    // to this project. The popup never types a path.
+    downloadTarget: (cached && cached.downloadTarget) || '',
     focusOptions: cached.focusOptions,
     focusId,
     targetDir: targetDir || TrainerCapture.DEFAULT_TARGET_DIR,
@@ -1241,6 +1244,36 @@ async function clearQueueEntries() {
   return { ok: true, remaining: 0, state: await buildState() };
 }
 
+async function queueCoachDraft(payload, workspaceId) {
+  const copy = dict();
+  const item = TrainerCapture.createDraftQueueItem({
+    clientDraftId: payload.client_id,
+    selection: payload.selection,
+    url: payload.url,
+    title: payload.title,
+    question: payload.question,
+    sourceKind: payload.source_kind,
+    workspaceId
+  });
+  const enqueued = await withQueueLock(async () => {
+    const fresh = await TrainerCapture.loadDraftQueue();
+    const next = TrainerCapture.enqueueDraft(fresh, item, TrainerCapture.LIMITS.queue);
+    if (!next.rejectedFull) {
+      await TrainerCapture.saveDraftQueue(next.queue);
+    }
+    return next;
+  });
+  if (enqueued.rejectedFull) {
+    await notifyResult(copy.notifyDraftTitle, copy.coachQueueFull, '');
+    await updateBadge();
+    return { status: 'failed', message: copy.coachQueueFull };
+  }
+  const message = TrainerCapture.formatCopy(copy.coachQueued, { count: enqueued.queue.length });
+  await notifyResult(copy.notifyDraftTitle, message, '');
+  await updateBadge();
+  return { status: 'queued', message, queueLength: enqueued.queue.length };
+}
+
 async function coachDraft(info, tab) {
   const copy = dict();
   const selection = String(info.selectionText || '').trim();
@@ -1266,35 +1299,7 @@ async function coachDraft(info, tab) {
   });
 
   if (!auth.credential || !auth.baseUrl) {
-    const item = TrainerCapture.createDraftQueueItem({
-      clientDraftId: payload.client_id,
-      selection,
-      url: payload.url,
-      title: payload.title,
-      question,
-      sourceKind: payload.source_kind || '',
-      workspaceId: auth.workspaceId || ''
-    });
-    const enqueued = await withQueueLock(async () => {
-      const fresh = await TrainerCapture.loadDraftQueue();
-      const next = TrainerCapture.enqueueDraft(fresh, item, TrainerCapture.LIMITS.queue);
-      if (!next.rejectedFull) {
-        await TrainerCapture.saveDraftQueue(next.queue);
-      }
-      return next;
-    });
-    if (enqueued.rejectedFull) {
-      const message = copy.coachQueueFull;
-      await notifyResult(copy.notifyDraftTitle, message, '');
-      await updateBadge();
-      return { status: 'failed', message };
-    }
-    const message = TrainerCapture.formatCopy(copy.coachQueued, {
-      count: enqueued.queue.length
-    });
-    await notifyResult(copy.notifyDraftTitle, message, '');
-    await updateBadge();
-    return { status: 'queued', message, queueLength: enqueued.queue.length };
+    return queueCoachDraft(payload, auth.workspaceId);
   }
 
   const result = await TrainerCapture.sendCoachDraft(auth.baseUrl, auth.credential, payload);
@@ -1316,33 +1321,7 @@ async function coachDraft(info, tab) {
       await TrainerCapture.clearAuth();
       resetAutoPairCache();
     }
-    const item = TrainerCapture.createDraftQueueItem({
-      clientDraftId: payload.client_id,
-      selection,
-      url: payload.url,
-      title: payload.title,
-      workspaceId: auth.workspaceId || ''
-    });
-    const enqueued = await withQueueLock(async () => {
-      const fresh = await TrainerCapture.loadDraftQueue();
-      const next = TrainerCapture.enqueueDraft(fresh, item, TrainerCapture.LIMITS.queue);
-      if (!next.rejectedFull) {
-        await TrainerCapture.saveDraftQueue(next.queue);
-      }
-      return next;
-    });
-    if (enqueued.rejectedFull) {
-      const message = copy.coachQueueFull;
-      await notifyResult(copy.notifyDraftTitle, message, '');
-      await updateBadge();
-      return { status: 'failed', message };
-    }
-    const message = TrainerCapture.formatCopy(copy.coachQueued, {
-      count: enqueued.queue.length
-    });
-    await notifyResult(copy.notifyDraftTitle, message, '');
-    await updateBadge();
-    return { status: 'queued', message, queueLength: enqueued.queue.length };
+    return queueCoachDraft(payload, auth.workspaceId);
   }
 
   const message = TrainerCapture.formatCopy(copy.coachFailed, { message: result.message });
@@ -1387,23 +1366,34 @@ const MESSAGE_HANDLERS = {
   },
   'trainer:refresh': async () => ({ ok: true, state: await refreshState() }),
   'trainer:send-tab-context': async (message) => {
-    const tab = await activeTab();
-    if (!tab || !TrainerCapture.httpUrlOnly(tab.url)) {
-      return { status: 'failed', message: dict().captureNoUrl };
+    const { tabId, url } = message;
+    const copy = dict();
+    if (!Number.isInteger(tabId) || typeof url !== 'string' || !TrainerCapture.httpUrlOnly(url)) {
+      return { status: 'failed', message: copy.captureNoUrl };
     }
-    // Content is read only when the learner clicks Ask/Send. On restricted
-    // pages Chrome may not expose a content script; the URL remains the source.
-    let selectionText = '';
-    if (Number.isInteger(tab.id)) {
-      const context = await chrome.tabs.sendMessage(tab.id, { type: 'trainer:read-selection' }).catch(() => undefined);
-      selectionText = typeof context?.selection === 'string' ? context.selection : '';
+    const tab = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (!tab?.active || tab.url !== url) {
+      return { status: 'failed', message: copy.askPanelPageChanged };
+    }
+    // Restricted pages such as the PDF viewer can still stage their URL.
+    const context = await chrome.tabs.sendMessage(tabId, {
+      type: 'trainer:read-selection',
+      url
+    }, { frameId: 0 }).catch(() => undefined);
+    const current = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (!current?.active || current.url !== url) {
+      return { status: 'failed', message: copy.askPanelPageChanged };
+    }
+    const source = new URL(url);
+    if (!source.hash && typeof context?.anchor === 'string' && context.anchor) {
+      source.hash = encodeURIComponent(context.anchor);
     }
     return coachDraft(
       {
-        selectionText,
+        selectionText: typeof context?.selection === 'string' ? context.selection : '',
         pageContext: true,
-        pageUrl: tab.url,
-        question: String((message && message.question) || '')
+        pageUrl: source.href,
+        question: typeof message.question === 'string' ? message.question : ''
       },
       tab
     );

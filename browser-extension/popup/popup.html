@@ -62,20 +62,14 @@
           <svg class="icon row__plus" aria-hidden="true"><use href="#icon-plus"></use></svg>
         </button>
         <p id="capture-result" class="feedback" role="status" aria-live="polite"></p>
-        <details class="capture-options">
-          <summary data-copy="bindingLabel"></summary>
-          <select id="focus-select" class="select" data-copy-label="bindingLabel" data-copy-title="bindingHint"></select>
-
         <div id="download-block" class="dl" hidden>
-          <input id="target-dir" type="text" spellcheck="false" autocomplete="off"
-            data-copy-placeholder="downloadPlaceholder" data-copy-title="downloadHint" />
+          <span id="download-target" class="dl__target"></span>
           <button id="capture-download" class="iconbtn" type="button" data-copy-label="downloadAction">
             <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-folder-check"></use></svg>
-            <span class="visually-hidden" data-copy="downloadAction">Download to project folder</span>
+            <span class="visually-hidden" data-copy="downloadAction">Download to library</span>
           </button>
         </div>
-          <p id="download-feedback" class="feedback" role="status" aria-live="polite" hidden></p>
-        </details>
+        <p id="download-feedback" class="feedback" role="status" aria-live="polite" hidden></p>
       </section>
 
       <footer class="foot">
@@ -84,10 +78,6 @@
           <span data-copy="openTrainer">Open Trainer</span>
         </button>
         <span class="foot__spacer"></span>
-        <button id="open-ask-panel" class="pill" type="button">
-          <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-target"></use></svg>
-          <span data-copy="askPanelSend">Ask Trainer</span>
-        </button>
         <button id="revoke" class="iconbtn" type="button" data-copy-label="pairRevoke">
           <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-unlink"></use></svg>
           <span class="visually-hidden" data-copy="pairRevoke">Revoke pairing</span>

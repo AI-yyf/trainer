@@ -19,22 +19,20 @@ const TrainerCapture = self.TrainerCapture;
 const elements = {
   capturePanel: document.getElementById('capture-panel'),
   pageLine: document.getElementById('page-line'),
-  focusSelect: document.getElementById('focus-select'),
   capturePage: document.getElementById('capture-page'),
   captureResult: document.getElementById('capture-result'),
   downloadBlock: document.getElementById('download-block'),
-  targetDir: document.getElementById('target-dir'),
+  downloadTarget: document.getElementById('download-target'),
   captureDownload: document.getElementById('capture-download'),
   downloadFeedback: document.getElementById('download-feedback'),
   revoke: document.getElementById('revoke'),
   openTrainer: document.getElementById('open-trainer'),
-  openAskPanel: document.getElementById('open-ask-panel'),
   notice: document.getElementById('notice'),
   close: document.getElementById('popup-close')
 };
 
 const copy = TrainerCapture.copyFor(TrainerCapture.browserLocale());
-let currentTab = { url: '', title: '', kind: 'web' };
+let currentTab = { id: undefined, url: '', title: '', kind: 'web' };
 let lastTabUrl = '';
 
 function t(key, values) {
@@ -145,22 +143,6 @@ function setFeedback(node, message, tone) {
 
 // ------------------------------------------------------------------ render --
 
-function renderFocusOptions(state) {
-  elements.focusSelect.textContent = '';
-  const none = document.createElement('option');
-  none.value = '';
-  none.textContent = t('bindingNone');
-  elements.focusSelect.appendChild(none);
-  for (const option of state.focusOptions || []) {
-    const item = document.createElement('option');
-    item.value = option.id;
-    item.textContent = option.label;
-    elements.focusSelect.appendChild(item);
-  }
-  const known = (state.focusOptions || []).some((option) => option.id === state.focusId);
-  elements.focusSelect.value = known ? state.focusId : '';
-}
-
 function revealCapturePanel() {
   if (!elements.capturePanel.hidden) {
     return;
@@ -178,11 +160,9 @@ function renderState(state) {
   revealCapturePanel();
   elements.revoke.hidden = !paired;
 
-  renderFocusOptions(state || {});
-
-  if (state && state.targetDir && document.activeElement !== elements.targetDir) {
-    elements.targetDir.value = state.targetDir;
-  }
+  // The sidecar owns the destination: the library folder that belongs to this
+  // project. The popup only shows it.
+  elements.downloadTarget.textContent = String((state && state.downloadTarget) || '');
 
   if (state && state.notice) {
     elements.notice.hidden = false;
@@ -207,6 +187,7 @@ async function renderTabLine() {
   const title = (tab && tab.title) || url;
   const http = TrainerCapture.httpUrlOnly(url);
   currentTab = {
+    id: tab?.id,
     url,
     title,
     kind: http ? TrainerCapture.detectKind(url) : 'web'
@@ -218,14 +199,10 @@ async function renderTabLine() {
   const downloadable = http && TrainerCapture.supportsDownload(currentTab.kind);
   elements.downloadBlock.hidden = !downloadable;
   elements.captureDownload.disabled = !downloadable;
-  if (downloadable) {
-    if (!elements.targetDir.value) {
-      elements.targetDir.value = TrainerCapture.DEFAULT_TARGET_DIR;
-    }
-    if (lastTabUrl !== url) {
-      revealPanel(elements.downloadBlock);
-    }
+  if (downloadable && lastTabUrl !== url) {
+    revealPanel(elements.downloadBlock);
   }
+  elements.downloadBlock.hidden = !downloadable;
   lastTabUrl = url;
 }
 
@@ -237,11 +214,17 @@ async function refreshStateFromHost() {
 }
 
 async function capturePage() {
+  const { id, url, title } = currentTab;
   elements.capturePage.disabled = true;
   setFeedback(elements.captureResult, t('captureBusy'), '');
-  const focusId = elements.focusSelect.value || '';
-  await TrainerCapture.saveFocusId(focusId);
-  const result = await send({ type: 'trainer:send-tab-context' });
+  // The primary row means exactly what it says: add this page to the library.
+  // Chat lives in the side panel, never behind this capture action.
+  const result = await send({
+    type: 'trainer:capture',
+    url,
+    kind: TrainerCapture.detectKind(url),
+    title: title || ''
+  });
   const failed = result.status === 'failed' || result.status === 'unpaired';
   setFeedback(elements.captureResult, result.message || '', failed ? 'error' : '');
   if (!failed) {
@@ -254,29 +237,15 @@ async function capturePage() {
 }
 
 async function downloadToProject() {
-  const raw = elements.targetDir.value;
-  if (!TrainerCapture.targetDirIsValid(raw)) {
-    elements.targetDir.setAttribute('aria-invalid', 'true');
-    setFeedback(elements.downloadFeedback, t('downloadInvalidFolder'), 'error');
-    return;
-  }
-  elements.targetDir.removeAttribute('aria-invalid');
+  const target = String(elements.downloadTarget.textContent || '').trim()
+    || TrainerCapture.DEFAULT_TARGET_DIR;
   elements.captureDownload.disabled = true;
   setFeedback(elements.downloadFeedback, t('downloadBusy'), '');
-
-  const saved = await send({ type: 'trainer:set-target-dir', targetDir: raw });
-  if (saved.ok === false) {
-    elements.captureDownload.disabled = false;
-    elements.targetDir.setAttribute('aria-invalid', 'true');
-    setFeedback(elements.downloadFeedback, saved.message || t('downloadInvalidFolder'), 'error');
-    return;
-  }
-  elements.targetDir.value = saved.targetDir || raw;
 
   const result = await send({
     type: 'trainer:capture-tab',
     download: true,
-    targetDir: elements.targetDir.value
+    targetDir: target
   });
   const failed = result.status === 'failed' || result.status === 'unpaired';
   setFeedback(elements.downloadFeedback, result.message || '', failed ? 'error' : '');
@@ -304,7 +273,6 @@ async function init() {
   // Do not wait for the auto-pair probe: the card is usable (and queues)
   // immediately, even when Trainer is not running yet.
   revealCapturePanel();
-  renderFocusOptions({});
   const state = await send({ type: 'trainer:state' });
   renderState(state);
   await renderTabLine();
@@ -332,21 +300,6 @@ elements.captureDownload.addEventListener('click', () => {
   void downloadToProject();
 });
 
-elements.targetDir.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    void downloadToProject();
-  }
-});
-
-elements.targetDir.addEventListener('input', () => {
-  elements.targetDir.removeAttribute('aria-invalid');
-});
-
-elements.focusSelect.addEventListener('change', () => {
-  void send({ type: 'trainer:set-focus', focusId: elements.focusSelect.value || '' });
-});
-
 elements.revoke.addEventListener('click', () => {
   void disconnectAndRepair();
 });
@@ -356,12 +309,8 @@ if (elements.close) {
 }
 
 elements.openTrainer.addEventListener('click', () => {
-  void send({ type: 'trainer:open', url: TrainerCapture.HOST_DEEP_LINK });
-});
-
-// P4: the Ask Trainer side panel. The click is the user gesture that lets the
-// worker open the panel; the panel itself reads page content only on Ask.
-elements.openAskPanel.addEventListener('click', () => {
+  // Opens the full conversation side panel. The previous "Ask Trainer" short
+  // form was removed; this click is the user gesture the panel API requires.
   void send({ type: 'trainer:open-ask-panel' }).then((result) => {
     if (result && result.ok === false) {
       setFeedback(elements.captureResult, result.message || '', 'error');

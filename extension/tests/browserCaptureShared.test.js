@@ -120,12 +120,16 @@ test('buildDedupKey separates kinds and GitHub capture variants', () => {
 test('detectKind classifies PDFs, GitHub repositories and plain pages', () => {
   assert.equal(TrainerCapture.detectKind('https://example.com/paper.pdf'), 'pdf');
   assert.equal(TrainerCapture.detectKind('https://example.com/paper.PDF?download=1'), 'pdf');
+  assert.equal(TrainerCapture.detectKind('https://arxiv.org/pdf/2407.17032v3#page=5'), 'pdf');
+  assert.equal(TrainerCapture.detectKind('https://arxiv.org/abs/2407.17032v3'), 'web');
+  assert.equal(TrainerCapture.detectKind('https://arxiv.org.example.com/pdf/2407.17032v3'), 'web');
   assert.equal(TrainerCapture.detectKind('https://example.com/docs'), 'web');
   assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool'), 'github_repo');
   assert.equal(TrainerCapture.detectKind('https://www.github.com/acme/tool.git'), 'github_repo');
   // A deep GitHub page is a page capture; only the repository root is a repo capture.
   assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool/tree/main/src'), 'web');
   assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool/blob/main/README.md'), 'web');
+  assert.equal(TrainerCapture.detectKind('https://github.com/acme/tool/blob/5b6c5280e1e23a6f41b3cdfb297a26e349f6ef73/docs/guide.py#L20'), 'web');
   assert.equal(TrainerCapture.detectKind('https://github.com/settings/profile'), 'web');
   assert.equal(TrainerCapture.detectKind('https://github.com/marketplace/actions/checkout'), 'web');
 });
@@ -554,6 +558,7 @@ test('normalizeStatusPayload maps /browser/status and filters bad focus options'
     {
       workspaceId: '',
       workspaceName: 'Trainer Repo',
+      downloadTarget: '',
       libraryCount: 12,
       focusOptions: [
         { id: 'f1', label: 'Async Rust' },
@@ -564,6 +569,7 @@ test('normalizeStatusPayload maps /browser/status and filters bad focus options'
   assert.deepEqual(TrainerCapture.normalizeStatusPayload(null), {
     workspaceId: '',
     workspaceName: '',
+    downloadTarget: '',
     libraryCount: 0,
     focusOptions: []
   });
@@ -1203,11 +1209,8 @@ test('every download/offline/queue copy key exists in all eight languages', () =
     'menuGithubDownload',
     'downloadHeading',
     'downloadLabel',
-    'downloadPlaceholder',
-    'downloadHint',
     'downloadAction',
     'downloadBusy',
-    'downloadInvalidFolder',
     'downloadUnsupported',
     'captureDownloaded',
     'captureDownloadedDeduped',
@@ -1225,19 +1228,19 @@ test('every download/offline/queue copy key exists in all eight languages', () =
     'queueAttempts'
   ];
   const markers = {
-    zh: { menuPdfDownload: '下载 PDF 到项目文件夹', statusOffline: 'Trainer 未运行', queueClear: '清空队列' },
-    en: { menuPdfDownload: 'Download PDF to project folder', statusOffline: 'Trainer is not running', queueClear: 'Clear queue' },
-    es: { menuPdfDownload: 'Descargar el PDF a la carpeta del proyecto', statusOffline: 'Trainer no está en ejecución', queueClear: 'Vaciar la cola' },
-    fr: { menuPdfDownload: 'Télécharger le PDF dans le dossier du projet', statusOffline: 'Trainer n’est pas démarré', queueClear: 'Vider la file' },
-    de: { menuPdfDownload: 'PDF in den Projektordner laden', statusOffline: 'Trainer läuft nicht', queueClear: 'Warteschlange leeren' },
-    ja: { menuPdfDownload: 'PDF をプロジェクトフォルダーにダウンロード', statusOffline: 'Trainer が起動していません', queueClear: 'キューを空にする' },
-    ko: { menuPdfDownload: 'PDF를 프로젝트 폴더로 다운로드', statusOffline: 'Trainer가 실행 중이 아닙니다', queueClear: '대기열 비우기' },
-    pt: { menuPdfDownload: 'Baixar o PDF para a pasta do projeto', statusOffline: 'O Trainer não está em execução', queueClear: 'Limpar a fila' }
+    zh: { menuPdfDownload: '下载 PDF 到资料库', statusOffline: 'Trainer 未运行', queueClear: '清空队列' },
+    en: { menuPdfDownload: 'Download PDF to library', statusOffline: 'Trainer is not running', queueClear: 'Clear queue' },
+    es: { menuPdfDownload: 'Descargar el PDF a la biblioteca', statusOffline: 'Trainer no está en ejecución', queueClear: 'Vaciar la cola' },
+    fr: { menuPdfDownload: 'Télécharger le PDF dans la bibliothèque', statusOffline: 'Trainer n’est pas démarré', queueClear: 'Vider la file' },
+    de: { menuPdfDownload: 'PDF in die Bibliothek laden', statusOffline: 'Trainer läuft nicht', queueClear: 'Warteschlange leeren' },
+    ja: { menuPdfDownload: 'PDF をライブラリにダウンロード', statusOffline: 'Trainer が起動していません', queueClear: 'キューを空にする' },
+    ko: { menuPdfDownload: 'PDF를 라이브러리로 다운로드', statusOffline: 'Trainer가 실행 중이 아닙니다', queueClear: '대기열 비우기' },
+    pt: { menuPdfDownload: 'Baixar o PDF para a biblioteca', statusOffline: 'O Trainer não está em execução', queueClear: 'Limpar a fila' }
   };
   // Keys that may legitimately equal English in a given locale: the folder
   // placeholder is a literal path, and pt-BR keeps the webview glossary's
   // "Workspace" (lib/i18n/copy.ts) instead of translating it.
-  const englishIdentical = new Set(['downloadPlaceholder', 'pt.workspaceLabel']);
+  const englishIdentical = new Set(['pt.workspaceLabel']);
   for (const locale of SUPPORTED_LOCALES) {
     const dict = TrainerCapture.COPY[locale];
     for (const key of keys) {
@@ -1255,8 +1258,9 @@ test('every download/offline/queue copy key exists in all eight languages', () =
       assert.equal(dict[key], value, `${locale}.${key}`);
     }
   }
-  // The default download folder is a copy key placeholder value too.
-  assert.equal(TrainerCapture.COPY.en.downloadPlaceholder, TrainerCapture.DEFAULT_TARGET_DIR);
+  // The download folder comes from the sidecar and is always the library
+  // root, so the copy map carries no path placeholder.
+  assert.equal(TrainerCapture.COPY.en.downloadPlaceholder, undefined);
 });
 
 test('queued copy describes an unfinished capture, not an offline Trainer', () => {
@@ -1305,7 +1309,8 @@ test('the popup has no pairing UI and lets the worker connect by itself', () => 
     'capture-panel',
     'capture-page',
     'download-block',
-    'target-dir',
+    // The destination is derived by the sidecar, never typed here.
+    'download-target',
     'capture-download',
     'popup-close'
   ]) {
@@ -1327,7 +1332,10 @@ test('the popup has no pairing UI and lets the worker connect by itself', () => 
   }
 
   const js = fs.readFileSync(POPUP_JS_PATH, 'utf8');
-  assert.match(js, /trainer:set-target-dir/);
+  // The destination is resolved by the sidecar (the library folder that
+  // belongs to this project): the popup never stores or types a path.
+  assert.doesNotMatch(js, /trainer:set-target-dir/);
+  assert.doesNotMatch(js, /getElementById\('target-dir'\)/);
   assert.match(js, /trainer:capture-tab',[\s\S]{0,80}download: true/);
   assert.match(js, /function renderState\(/);
   assert.doesNotMatch(js, /pair-code|pairSidecar|trainer:auto-pair/);
@@ -1345,7 +1353,7 @@ test('every data-copy key used by the popup exists in the copy map', () => {
   for (const match of html.matchAll(/data-copy(?:-placeholder|-title|-label)?="([A-Za-z0-9_]+)"/g)) {
     used.add(match[1]);
   }
-  assert.ok(used.size >= 8, 'the popup must drive its copy through data-copy attributes');
+  assert.ok(used.size >= 5, 'the popup must drive its copy through data-copy attributes');
   for (const key of used) {
     assert.ok(
       Object.prototype.hasOwnProperty.call(TrainerCapture.COPY.en, key),
