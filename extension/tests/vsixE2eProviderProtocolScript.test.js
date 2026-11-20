@@ -411,7 +411,7 @@ test('VSIX E2E asserts no in-Trainer preview command and the sandbox context rea
   assert.match(sandboxSource, /data\.restoreSucceeded === true/);
   assert.match(sandboxSource, /data\.activeSurface === "sandbox"/);
   assert.match(sandboxSource, /data\.selectedSandboxPath === data\.sandboxPath/);
-  assert.match(sandboxSource, /data\.detailPaneVisible === true/);
+  assert.match(sandboxSource, /data\.detailPaneVisible === false/);
   assert.match(sandboxSource, /data\.sandboxPaneVisible === false/);
   assert.match(sandboxSource, /data\.previewPaneVisible === false/);
   assert.doesNotMatch(sandboxSource, /data\.activeSurface === "detail"/);
