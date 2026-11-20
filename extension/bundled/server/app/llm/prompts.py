@@ -1035,6 +1035,24 @@ def build_coaching_system_prompt(
             "micro-attempt the learner can try right now, or offer to schedule a quick recall check — "
             "do not open another long lecture, and do not fabricate a formal task or evidence."
         )
+    raw_diag_hint = (
+        coach_context.get("diagnostic_weakness_hint")
+        if isinstance(coach_context, dict)
+        else None
+    )
+    if (
+        isinstance(raw_diag_hint, dict)
+        and str(raw_diag_hint.get("concept") or "").strip()
+        and raw_answer_policy != "direct"
+    ):
+        hint_concept = _compact_text(raw_diag_hint.get("concept"), 80)
+        hint_diag = _compact_text(raw_diag_hint.get("diagnostic"), 140)
+        system_prompt += (
+            "\n\n## Weakness Recall Cue\n"
+            f"Live IDE diagnostic ({hint_diag}) touches a previously recorded weakness around \"{hint_concept}\". "
+            "When relevant to the learner's question, connect this symptom back to that concept in one calm sentence "
+            "and suggest one small verification step; do not nag or interrupt if they asked about something else."
+        )
     if response_language:
         system_prompt += f"\n\n## Language\n{_language_instruction(response_language)}"
     return system_prompt

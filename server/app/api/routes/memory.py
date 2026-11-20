@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from ...core.models import (
     CoachSettingsRequest,
@@ -17,8 +21,20 @@ from ...core.models import (
     WorkbenchSnapshot,
 )
 from ...learner_state import collect_unified_evidence
+from ...memory.proactive_budget import evaluate_proactive_opportunity
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
+
+
+class ProactiveEvaluateRequest(BaseModel):
+    session_id: str | None = None
+    workspace_id: str | None = None
+    diagnostics: list[Any] = Field(default_factory=list)
+    message: str = ""
+    response_language: str | None = None
+    learner_actively_typing: bool = False
+    record: bool = False
+    now: str | None = None
 
 
 def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
@@ -319,4 +335,60 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             runtime.save_session_state(state.session_id)
 
         return current_snapshot(session_id=request.session_id, workspace_id=workspace_id)
+
+    @router.post("/proactive/evaluate", response_model=None)
+    def proactive_evaluate(request: ProactiveEvaluateRequest) -> dict[str, object]:
+        workspace_id = current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
+        memory_snapshot = runtime.memory_service.snapshot(workspace_id)
+        moment = datetime.now(timezone.utc)
+        if request.now:
+            try:
+                parsed_now = datetime.fromisoformat(str(request.now).strip().replace("Z", "+00:00"))
+                moment = (
+                    parsed_now.replace(tzinfo=timezone.utc)
+                    if parsed_now.tzinfo is None
+                    else parsed_now.astimezone(timezone.utc)
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail="now must be a valid ISO-8601 timestamp.") from exc
+        response_language = str(
+            deps.effective_response_language(
+                workspace_id,
+                request.response_language,
+                request.message,
+            )
+            or "zh"
+        )
+        weakness_items: list[Any] = (
+            runtime.memory_service.weakness_records(workspace_id)
+            or list(memory_snapshot.weaknesses)
+        )
+        whisper = evaluate_proactive_opportunity(
+            memory_snapshot.workspace,
+            now=moment,
+            diagnostics=request.diagnostics,
+            weaknesses=weakness_items,
+            due_reviews=memory_snapshot.due_reviews,
+            due_count=memory_snapshot.due_review_count,
+            session_id=request.session_id or "",
+            message=request.message,
+            response_language=response_language,
+            learner_actively_typing=bool(request.learner_actively_typing),
+        )
+        if request.record and whisper.should_nudge:
+            runtime.memory_service.record_proactive_nudge(
+                workspace_id,
+                kind=whisper.kind,
+                dedup_key=whisper.dedup_key,
+                session_id=request.session_id or "",
+                now=moment,
+            )
+            if whisper.kind == "review_gap":
+                runtime.memory_service.record_review_offer(
+                    workspace_id,
+                    session_id=request.session_id or "",
+                    now=moment,
+                )
+        return whisper.to_payload()
+
     return router

@@ -52,6 +52,7 @@ from ..llm.turn_grounding import (
 )
 from ..memory.conversation_feedback import explanation_feedback
 from ..memory.note_request import message_requests_explicit_learning_note
+from ..memory.proactive_budget import match_diagnostic_to_weakness
 from ..memory.review_intervention import derive_review_budget
 from ..memory.workspace_recovery import (
     PLAN_RUNTIME_KEY,
@@ -5615,6 +5616,25 @@ def resolve_coach_turn(deps: CoachSupportDeps,
     )
     if productivity.should_converge:
         coach_context["productivity_convergence"] = productivity.to_payload()
+    if context_tier != "minimal":
+        raw_cf = request.current_file
+        raw_diagnostics = (
+            raw_cf.get("diagnostics")
+            if isinstance(raw_cf, dict)
+            else getattr(raw_cf, "diagnostics", None)
+        )
+        live_diagnostics = list(raw_diagnostics or []) if raw_cf is not None else []
+        recorded_weaknesses: list[Any] = (
+            deps.runtime.memory_service.weakness_records(state.workspace_id)
+            or list(getattr(memory, "weaknesses", None) or [])
+        )
+        diagnostic_hit = match_diagnostic_to_weakness(live_diagnostics, recorded_weaknesses)
+        if diagnostic_hit is not None:
+            hint_concept, hint_diag = diagnostic_hit
+            coach_context["diagnostic_weakness_hint"] = {
+                "concept": hint_concept,
+                "diagnostic": hint_diag[:160],
+            }
     if deps.pressure_without_live_object_blocks_mint(
         state.workspace_id,
         snapshot=state.snapshot,

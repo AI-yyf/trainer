@@ -10,6 +10,7 @@ import { getRuntimeWorkspaceContext } from './commands/workspaceContext';
 import { COMMAND_IDS, CONTEXT_KEYS, OUTPUT_CHANNEL_NAME, STORAGE_KEYS } from './core/constants';
 import type { CommandContext } from './core/commandContext';
 import { BootstrapSnapshotCache } from './core/bootstrapSnapshotCache';
+import { CodingGapTracker } from './core/codingGapTracker';
 import { SidecarHttpClient } from './core/httpClient';
 import { SidecarProcessManager } from './core/sidecarProcessManager';
 import type { TrainerHostState } from './core/types';
@@ -50,6 +51,7 @@ type TrainerExtensionDebugApi = {
     cachedBootstrap?: TrainerHostState['bootstrap'];
     hostState: TrainerHostState;
     workbench: ReturnType<WorkbenchSidebarController['getDebugSnapshot']>;
+    isActivelyTyping?: boolean;
   };
 };
 
@@ -62,6 +64,7 @@ export async function activate(
   const sidecarManager = new SidecarProcessManager(extensionContext, outputChannel);
   sidecarClient.setInstanceTokenProvider(() => sidecarManager.getInstanceToken());
   const trustGuard = new WorkspaceTrustGuard();
+  const codingGapTracker = new CodingGapTracker();
   const trainerWorkspace = new TrainerWorkspaceService(extensionContext);
   const bootstrapCache = new BootstrapSnapshotCache(extensionContext);
   bootstrapCacheRef = bootstrapCache;
@@ -480,6 +483,9 @@ export async function activate(
       scheduleSyncLiveContext(workbench);
     }),
     vscode.workspace.onDidChangeTextDocument((event) => {
+      if (event.contentChanges.length > 0) {
+        codingGapTracker.recordEdit();
+      }
       trustGuard.rememberDocumentEdit(event.document);
       scheduleSyncLiveContext(workbench);
     }),
@@ -692,6 +698,7 @@ export async function activate(
         visibleFacts: workbenchSnapshot.lastVisibleFactsPayload,
         hostState: snapshot,
         workbench: workbenchSnapshot,
+        isActivelyTyping: codingGapTracker.isActivelyTyping(),
       };
     },
   };

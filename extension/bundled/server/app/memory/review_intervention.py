@@ -34,7 +34,7 @@ _REFUSAL_PATTERN = re.compile(
     r"i'?m busy|i am busy|busy right now|in the middle of (something|work|debugging|a bug)|"
     r"i'?m debugging|debugging this|fixing this bug|focus mode|"
     r"debugging right now|focusing on (this|the) (bug|debug|fix)|"
-    r"现在(很|太)?忙|没空|稍后|待会|晚点|先不(复习|看)|不想复习|不要复习|"
+    r"现在(很|太|正)?忙|没空|稍后|待会|晚点|先不(复习|看)|不想复习|不要复习|别复习|先跳过|"
     r"别提醒|别打扰|正在调试|在调试|调试这个|排查这个错误|先专注|正在专注|专注中|回头再说"
     r")",
     re.IGNORECASE,
@@ -128,6 +128,7 @@ def derive_review_budget(
     now: datetime,
     session_id: str = "",
     message: str = "",
+    learner_actively_typing: bool = False,
 ) -> ReviewInterventionBudget:
     """Decide whether this turn may proactively surface review."""
     state = _intervention_state(workspace)
@@ -171,6 +172,8 @@ def derive_review_budget(
         return budget(False, f"message_{message_refusal}", CURATED_VISIBLE_LIMIT)
     if refused_until_dt is not None and refused_until_dt > now:
         return budget(False, "refused", CURATED_VISIBLE_LIMIT)
+    if learner_actively_typing:
+        return budget(False, "learner_typing", NORMAL_VISIBLE_LIMIT)
     active_thread = (workspace or {}).get("active_thread")
     if isinstance(active_thread, dict) and str(active_thread.get("blocker") or "").strip():
         # The focused task may still surface related review in Learning, but

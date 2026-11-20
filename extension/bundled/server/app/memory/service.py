@@ -108,6 +108,12 @@ from .models import (
     MemorySnapshot as LaneMemorySnapshot,
 )
 from .onboarding_extraction import OnboardingExtractionMixin
+from .proactive_budget import (
+    PROACTIVE_BUDGET_KEY,
+)
+from .proactive_budget import (
+    record_proactive_nudge as merge_proactive_nudge,
+)
 from .remote_artifact_recovery import restore_return_artifact
 from .review_intervention import (
     REVIEW_INTERVENTION_KEY,
@@ -3330,6 +3336,9 @@ class MemoryService(
     def weaknesses(self, workspace_id: str) -> list[str]:
         return self.snapshot(workspace_id).weaknesses
 
+    def weakness_records(self, workspace_id: str) -> list[WeaknessRecord]:
+        return list(self._structured_for(workspace_id)._weaknesses.values())
+
     def reviews(self, workspace_id: str) -> list[str]:
         snapshot = self.snapshot(workspace_id)
         if snapshot.due_reviews:
@@ -3423,6 +3432,33 @@ class MemoryService(
             last_active_at=moment.isoformat(),
         )
         self._persist_structured(workspace_id)
+
+    def record_proactive_nudge(
+        self,
+        workspace_id: str,
+        *,
+        kind: str,
+        dedup_key: str,
+        session_id: str = "",
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        moment = now or utc_now()
+        structured = self._structured_for(workspace_id)
+        state = merge_proactive_nudge(
+            structured._workspace.get(PROACTIVE_BUDGET_KEY),
+            now=moment,
+            kind=kind,
+            dedup_key=dedup_key,
+            session_id=session_id,
+        )
+        structured.update_workspace(
+            **{
+                PROACTIVE_BUDGET_KEY: state,
+                "last_active_at": moment.isoformat(),
+            }
+        )
+        self._persist_structured(workspace_id)
+        return state
 
     def record_review_refusal(
         self,
