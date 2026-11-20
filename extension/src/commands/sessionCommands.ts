@@ -2588,6 +2588,33 @@ export async function sendStreamMessageCommand(
     }
     if (replyFailure) {
       await markProviderReplyUnusable(context, providerConfig, replyFailure);
+    } else if (
+      providerConfig &&
+      reliability.outcome !== 'failure' &&
+      (completionResponse as { provider_failure_detected?: unknown }).provider_failure_detected !== true &&
+      (completionResponse as { agent?: { fell_back?: unknown } }).agent?.fell_back !== true
+    ) {
+      const currentView = context.getHostState().bootstrap.providerConfig;
+      const hadFailedTest = currentView.lastTestResult?.ok === false;
+      const hadErrorStatus = currentView.modelListStatus === 'error';
+      if (hadFailedTest || hadErrorStatus) {
+        if (hadFailedTest && typeof context.providerStore.clearLastTestResult === 'function') {
+          await context.providerStore.clearLastTestResult(providerConfig, {
+            workspaceId: getRuntimeWorkspaceId(context),
+          });
+        }
+        await context.patchWorkbenchData({
+          providerConfig: {
+            ...currentView,
+            lastTestResult: hadFailedTest ? undefined : currentView.lastTestResult,
+            modelListStatus: hadErrorStatus ? 'idle' : currentView.modelListStatus,
+            modelListDetail: hadErrorStatus ? undefined : currentView.modelListDetail,
+            modelErrorCategory: undefined,
+            modelStatusCode: undefined,
+            modelRetryable: undefined,
+          },
+        });
+      }
     }
     if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
       return { ok: true, message: 'Stream invalidated.' };

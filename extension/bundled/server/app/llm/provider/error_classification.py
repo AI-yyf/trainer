@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import socket
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import httpx
@@ -13,6 +14,17 @@ from ..coaching_recovery import _localized_text
 from .errors import ProviderRuntimeResponseError, provider_error_quota_exhausted
 from .quota_copy import provider_quota_reply
 from .redaction import redact_provider_error
+
+
+def _iter_exception_chain(error: BaseException, *, max_depth: int = 6) -> Iterator[BaseException]:
+    seen: set[int] = set()
+    current: BaseException | None = error
+    depth = 0
+    while current is not None and id(current) not in seen and depth < max_depth:
+        seen.add(id(current))
+        yield current
+        depth += 1
+        current = current.__cause__ or current.__context__
 
 
 class ErrorClassificationMixin:
@@ -105,15 +117,31 @@ class ErrorClassificationMixin:
             return ("malformed_response", False, status_code, True, None)
         if status_code == 429 or "rate limit" in lowered or "too many requests" in lowered:
             return ("rate_limit", True, status_code or 429, True, None)
+        chain = list(_iter_exception_chain(error))
+        chain_lowered = " | ".join(str(item).strip().lower() for item in chain if str(item).strip())
+        chain_names = {type(item).__name__ for item in chain}
         if (
-            isinstance(error, (TimeoutError, socket.timeout, httpx.TimeoutException))
-            or "timeout" in lowered
+            any(isinstance(item, (TimeoutError, socket.timeout, httpx.TimeoutException)) for item in chain)
+            or "APITimeoutError" in chain_names
+            or "timeout" in chain_lowered
+            or "timed out" in chain_lowered
         ):
             return ("timeout", True, status_code, False, None)
         if (
-            isinstance(error, (OSError, httpx.NetworkError))
-            or "connection refused" in lowered
-            or "name or service not known" in lowered
+            any(isinstance(item, (OSError, httpx.TransportError)) for item in chain)
+            or "APIConnectionError" in chain_names
+            or any(
+                marker in chain_lowered
+                for marker in (
+                    "connection refused",
+                    "connection error",
+                    "connection reset",
+                    "server disconnected",
+                    "all connection attempts failed",
+                    "name or service not known",
+                    "temporary failure in name resolution",
+                )
+            )
         ):
             return ("network", True, status_code, False, None)
         if "malformed" in lowered or "invalid json" in lowered or "unexpected response" in lowered:

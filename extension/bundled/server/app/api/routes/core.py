@@ -2671,6 +2671,13 @@ def build_core_router(
                     for message in state.snapshot.messages
                     if message.role == "assistant" and message.id not in preexisting_assistant_ids
                 )
+                if (
+                    coaching_service is not None
+                    and not provider_failure_detected
+                    and (final_agent_meta or {}).get("fell_back") is not True
+                    and token_count > 0
+                ):
+                    runtime.mark_provider_live_turn_succeeded(coaching_service)
                 runtime.save_session_state(state.session_id)
                 stream_committed = True
                 response_data = _publish_stream_session_response(response_data)
@@ -3419,6 +3426,13 @@ def build_core_router(
                             provider_failure_detected=True,
                         )
                         return
+                    if (
+                        coaching_service is not None
+                        and not provider_failure_detected
+                        and (final_agent_meta or {}).get("fell_back") is not True
+                        and token_count > 0
+                    ):
+                        runtime.mark_provider_live_turn_succeeded(coaching_service)
                     runtime.save_session_state(state.session_id)
                     response_data = _publish_stream_turn_response(response_data)
                     stream_singleflight_published = True
@@ -4063,6 +4077,13 @@ def build_core_router(
                     for message in state.snapshot.messages
                     if message.role == "assistant" and message.id not in preexisting_assistant_ids
                 )
+                if (
+                    coaching_service is not None
+                    and not provider_failure_detected
+                    and (final_agent_meta or {}).get("fell_back") is not True
+                    and token_count > 0
+                ):
+                    runtime.mark_provider_live_turn_succeeded(coaching_service)
                 runtime.save_session_state(state.session_id)
                 stream_committed = True
                 if not provider_failure_detected and await finish_research_preparation(

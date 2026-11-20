@@ -51,6 +51,11 @@ import httpx
 
 from .agent_loop import AgentProvider, CoachAgentLoop
 from .provider.errors import ContextBudgetExhaustedError
+from .provider.streaming import (
+    STREAM_IDLE_TIMEOUT_SECONDS,
+    _iterate_provider_stream_with_cancellation,
+    extract_non_sse_json_stream_payload,
+)
 from .provider.text import ReasoningBlockFilter
 from .provider_protocols import (
     _finish_reason_is_truncated,
@@ -71,13 +76,22 @@ from .vision_payload import openai_responses_input_image_parts
 logger = logging.getLogger("trainer.llm.agent_binding")
 
 
-async def _iterate_and_close_provider_stream(stream: Any) -> AsyncIterator[Any]:
-    """Consume a provider stream and explicitly release its HTTP response."""
+async def _iterate_and_close_provider_stream(
+    stream: Any,
+    *,
+    finish_seen: Callable[[], bool] | None = None,
+) -> AsyncIterator[Any]:
+    """Consume a provider stream with post-finish drain bounds and release its HTTP response."""
     try:
-        async for chunk in stream:
+        async for chunk in _iterate_provider_stream_with_cancellation(
+            stream,
+            None,
+            idle_timeout=STREAM_IDLE_TIMEOUT_SECONDS,
+            finish_seen=finish_seen,
+        ):
             yield chunk
     finally:
-        close = getattr(stream, "close", None) or getattr(stream, "aclose", None)
+        close = getattr(stream, "aclose", None) or getattr(stream, "close", None)
         if close is not None:
             result = close()
             if isawaitable(result):
@@ -1244,7 +1258,11 @@ class ProviderAgentBinding:
             )
         )
         endpoint = self._gemini_endpoint(model)
-        async with httpx.AsyncClient(timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS) as client:
+        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
+        async with httpx.AsyncClient(
+            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
+            trust_env=trust_env,
+        ) as client:
             response = await client.post(
                 endpoint,
                 json=payload,
@@ -1275,7 +1293,11 @@ class ProviderAgentBinding:
             )
         )
         endpoint = self._gemini_endpoint(model, stream=True)
-        async with httpx.AsyncClient(timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS) as client:
+        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
+        async with httpx.AsyncClient(
+            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
+            trust_env=trust_env,
+        ) as client:
             async with client.stream(
                 "POST",
                 endpoint,
@@ -1652,7 +1674,14 @@ class ProviderAgentBinding:
 
         tool_call_state: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
-        async for chunk in _iterate_and_close_provider_stream(stream):
+
+        def _finish_seen() -> bool:
+            return finish_reason is not None
+
+        async for chunk in _iterate_and_close_provider_stream(
+            stream,
+            finish_seen=_finish_seen,
+        ):
             choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
             if choice is None:
                 continue
@@ -1691,6 +1720,25 @@ class ProviderAgentBinding:
             for item in tool_call_state.values()
             if item["name"]
         ]
+        if not text_buffer.strip() and not tool_calls:
+            json_fallback = extract_non_sse_json_stream_payload(stream)
+            if json_fallback is not None:
+                parsed_json = _parse_openai_chat_response(json_fallback)
+                json_text = _normalize_stream_chunk(str(parsed_json.get("content") or ""))
+                json_tools = list(parsed_json.get("tool_calls") or [])
+                if json_text.strip() or json_tools:
+                    if json_text:
+                        yield {"type": "delta", "delta": json_text}
+                    yield {
+                        "type": "final",
+                        "content": json_text,
+                        "tool_calls": json_tools,
+                        "stop_reason": str(
+                            parsed_json.get("stop_reason")
+                            or ("tool_calls" if json_tools else "stop")
+                        ),
+                    }
+                    return
         if not text_buffer.strip() and not tool_calls:
             retry_result = await self._openai_visible_retry_result(
                 client,
@@ -1846,7 +1894,11 @@ class ProviderAgentBinding:
         payload = self._apply_anthropic_request_defaults(payload)
         payload = self._apply_nonofficial_anthropic_thinking_default(payload)
         payload = self._flatten_raw_http_thinking(payload)
-        async with httpx.AsyncClient(timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS) as client:
+        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
+        async with httpx.AsyncClient(
+            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
+            trust_env=trust_env,
+        ) as client:
             async with client.stream(
                 "POST",
                 f"{self._anthropic_base_url}/v1/messages",
@@ -1887,7 +1939,16 @@ class ProviderAgentBinding:
 
                 tool_block_states: dict[int, dict[str, Any]] = {}
                 stop_reason: str | None = None
-                async for raw_line in response.aiter_lines():
+
+                def _stop_seen() -> bool:
+                    return bool(stop_reason)
+
+                async for raw_line in _iterate_provider_stream_with_cancellation(
+                    response.aiter_lines(),
+                    None,
+                    idle_timeout=STREAM_IDLE_TIMEOUT_SECONDS,
+                    finish_seen=_stop_seen,
+                ):
                     if not raw_line or not raw_line.startswith("data:"):
                         continue
                     data_text = raw_line[5:].strip()
@@ -2012,7 +2073,11 @@ class ProviderAgentBinding:
         api_key: str,
     ) -> httpx.Response:
         payload = self._flatten_raw_http_thinking(payload)
-        async with httpx.AsyncClient(timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS) as client:
+        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
+        async with httpx.AsyncClient(
+            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
+            trust_env=trust_env,
+        ) as client:
             return await client.post(
                 f"{self._anthropic_base_url}/v1/messages",
                 json=payload,

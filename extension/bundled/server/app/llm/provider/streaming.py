@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
+from inspect import isawaitable
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -12,49 +14,91 @@ logger = logging.getLogger(__name__)
 # (observed with MiniMax M3.1). Without an idle bound the UI stays in
 # "streaming" forever even though the visible answer is complete.
 STREAM_IDLE_TIMEOUT_SECONDS = 30.0
+POST_FINISH_DRAIN_TIMEOUT_SECONDS = 1.0
 
 
 def _stream_cancel_event(value: object | None) -> asyncio.Event | None:
     return value if isinstance(value, asyncio.Event) else None
 
 
+def extract_non_sse_json_stream_payload(stream: object) -> dict[str, Any] | None:
+    """Recover a complete JSON payload when an OpenAI-compatible proxy ignores stream=true."""
+    response = getattr(stream, "response", None)
+    if response is None:
+        return None
+    headers = getattr(response, "headers", None)
+    content_type = str(headers.get("content-type") or "").lower() if headers is not None else ""
+    if "application/json" not in content_type:
+        return None
+    try:
+        payload = response.json()
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 async def _iterate_provider_stream_with_cancellation(
     stream: object,
     cancel_event: asyncio.Event | None,
     idle_timeout: float | None = STREAM_IDLE_TIMEOUT_SECONDS,
+    *,
+    finish_seen: Callable[[], bool] | None = None,
+    post_finish_timeout: float | None = None,
 ):
     """Iterate an upstream async stream while promptly closing it on cancel.
 
-    A stream that stops producing chunks for ``idle_timeout`` seconds is
+    A stream that stops producing chunks for ``idle_timeout`` seconds (or
+    ``post_finish_timeout`` seconds once ``finish_seen()`` becomes true) is
     treated as ended, so a missing [DONE] cannot pin the turn in streaming.
     """
 
     iterator = stream.__aiter__()  # type: ignore[attr-defined]
     iterator_closed = False
     iterator_exhausted = False
+    resolved_post_finish = (
+        POST_FINISH_DRAIN_TIMEOUT_SECONDS
+        if post_finish_timeout is None
+        else post_finish_timeout
+    )
+
+    async def _close_target(target: object | None) -> None:
+        if target is None:
+            return
+        close = getattr(target, "aclose", None) or getattr(target, "close", None)
+        if close is None:
+            return
+        try:
+            outcome = close()
+            if isawaitable(outcome):
+                await outcome
+        except RuntimeError as exc:
+            if "asynchronous generator is already running" not in str(exc):
+                raise
 
     async def close_iterator() -> None:
         nonlocal iterator_closed
-        if iterator_closed or iterator_exhausted:
+        if iterator_closed:
             return
         iterator_closed = True
-        close = getattr(iterator, "aclose", None)
-        if close is not None:
-            try:
-                await close()
-            except RuntimeError as exc:
-                if "asynchronous generator is already running" not in str(exc):
-                    raise
+        if not iterator_exhausted:
+            await _close_target(iterator)
+        if stream is not iterator:
+            await _close_target(stream)
 
     try:
         while True:
+            effective_timeout = (
+                resolved_post_finish
+                if (finish_seen is not None and finish_seen())
+                else idle_timeout
+            )
             if cancel_event is None:
                 try:
-                    if idle_timeout is None:
+                    if effective_timeout is None:
                         item = await iterator.__anext__()
                     else:
                         item = await asyncio.wait_for(
-                            iterator.__anext__(), timeout=idle_timeout
+                            iterator.__anext__(), timeout=effective_timeout
                         )
                 except StopAsyncIteration:
                     iterator_exhausted = True
@@ -62,7 +106,7 @@ async def _iterate_provider_stream_with_cancellation(
                 except asyncio.TimeoutError:
                     logger.warning(
                         "[provider] stream idle for %ss without closing; treating as end",
-                        idle_timeout,
+                        effective_timeout,
                     )
                     await close_iterator()
                     return
@@ -77,13 +121,13 @@ async def _iterate_provider_stream_with_cancellation(
             try:
                 done, _ = await asyncio.wait(
                     {next_item, cancellation},
-                    timeout=idle_timeout,
+                    timeout=effective_timeout,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
                 if not done:
                     logger.warning(
                         "[provider] stream idle for %ss without closing; treating as end",
-                        idle_timeout,
+                        effective_timeout,
                     )
                     next_item.cancel()
                     await asyncio.gather(next_item, return_exceptions=True)

@@ -475,3 +475,78 @@ test('P0 redirect: sendStreamMessageCommand starts the stream despite historical
   assert.equal(result.ok, true);
   assert.equal(context.__sessionIds.at(-1), 'session-provider-state-stream-after-history');
 });
+
+test('sendStreamMessageCommand clears stale failed lastTestResult and error status after a clean stream turn', async () => {
+  const vscodeMock = {
+    commands: {
+      async executeCommand() {
+        return undefined;
+      },
+    },
+  };
+  const clearedConfigs = [];
+  const { sendStreamMessageCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
+  const context = createContext({
+    initialSessionId: 'session-provider-recovery-clear',
+    sidecarClient: {
+      async *fetchSSE(port, requestPath) {
+        assert.equal(port, 34891);
+        assert.equal(requestPath, '/session/message/stream');
+        yield {
+          event: 'complete',
+          data: JSON.stringify({
+            tokens: 1,
+            reliability: { phase: 'acked', outcome: 'success' },
+            response: {
+              session_id: 'session-provider-recovery-cleared',
+              reliability: { phase: 'acked', outcome: 'success' },
+              reply: {
+                role: 'assistant',
+                content: 'Recovered over SSE.',
+                metadata: {},
+              },
+              snapshot: {
+                messages: [],
+                memory: {},
+                plan: { id: 'plan-1', title: 'Plan', frozen: false, stages: [] },
+              },
+            },
+          }),
+        };
+      },
+    },
+  });
+  context.providerStore.clearLastTestResult = async (providerConfig, options) => {
+    clearedConfigs.push({ providerConfig, options });
+  };
+  const bootstrapProvider = context.getHostState().bootstrap.providerConfig;
+  bootstrapProvider.modelListStatus = 'error';
+  bootstrapProvider.modelErrorCategory = 'network';
+  bootstrapProvider.lastTestResult = {
+    ok: false,
+    status: 'network',
+    errorCategory: 'network',
+    detail: 'Provider test failed: connection refused',
+    retryable: true,
+    checkedAt: new Date().toISOString(),
+    providerName: 'Local Compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'demo-model',
+    protocol: 'openai_chat_completions_compatible',
+  };
+
+  const result = await sendStreamMessageCommand(context, {
+    text: 'Retry after reconnect',
+    intent: 'coach',
+    stream: true,
+    responseLanguage: 'en-US',
+    includeCurrentFile: false,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(clearedConfigs.length, 1);
+  const providerPatch = context.__patches.find((patch) => patch.providerConfig);
+  assert.ok(providerPatch, 'Expected patchWorkbenchData to clear stale provider error state');
+  assert.equal(providerPatch.providerConfig.lastTestResult, undefined);
+  assert.equal(providerPatch.providerConfig.modelListStatus, 'idle');
+});

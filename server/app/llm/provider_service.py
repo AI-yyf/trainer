@@ -197,6 +197,7 @@ from .provider.streaming import (
     _await_provider_stream_with_cancellation,
     _iterate_provider_stream_with_cancellation,
     _stream_cancel_event,
+    extract_non_sse_json_stream_payload,
 )
 from .provider.text import (
     _QUESTION_RUN_PATTERN,
@@ -710,6 +711,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             retryable,
             _compact_text(detail, limit=400),
         )
+        if category in {"network", "timeout", "upstream_unavailable", "unknown"}:
+            self.reset_transport_client()
         self._last_reply_failure.set(
             {
                 "error_category": category,
@@ -853,6 +856,31 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 client_kwargs["http_client"] = httpx.AsyncClient(trust_env=False)
             self._client = async_openai_cls(**client_kwargs)
         return self._client
+
+    def reset_transport_client(self) -> None:
+        """Drop the pooled async HTTP client after a transport/connection failure."""
+        client = self._client
+        self._client = None
+        if client is None:
+            return
+        close_fn = getattr(client, "aclose", None) or getattr(client, "close", None)
+        if not callable(close_fn):
+            return
+        try:
+            result = close_fn()
+        except Exception:
+            return
+        if not asyncio.iscoroutine(result):
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            result.close()
+        else:
+            task = loop.create_task(result)
+            task.add_done_callback(
+                lambda finished: finished.exception() if not finished.cancelled() else None
+            )
 
     def _create_sync_client(self, provider: ProviderConfig, api_key: str) -> Any:
         openai_cls = self._get_sync_openai_class()
@@ -4528,7 +4556,15 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
             raw_content = ""
             finish_reason: str | None = None
-            async for chunk in _iterate_provider_stream_with_cancellation(stream, cancel_event):
+
+            def _finish_seen() -> bool:
+                return finish_reason is not None
+
+            async for chunk in _iterate_provider_stream_with_cancellation(
+                stream,
+                cancel_event,
+                finish_seen=_finish_seen,
+            ):
                 choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
                 candidate_finish_reason = getattr(choice, "finish_reason", None)
                 if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
@@ -4545,6 +4581,19 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if tail:
                 raw_content += tail
                 yield tail
+            if not raw_content.strip():
+                json_fallback = extract_non_sse_json_stream_payload(stream)
+                if json_fallback is not None:
+                    recovered_json_text = _require_provider_runtime_response(
+                        "openai_chat_completions",
+                        json_fallback,
+                        api_key=self._api_key,
+                        allow_local_empty_fallback=True,
+                    )
+                    if recovered_json_text.strip():
+                        raw_content = recovered_json_text
+                        finish_reason = "stop"
+                        yield recovered_json_text
             if not raw_content.strip():
                 # Nothing visible was emitted, so an escalated retry cannot
                 # duplicate content: recover reasoning-first truncation here
@@ -4690,7 +4739,15 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
             raw_content = ""
             finish_reason: str | None = None
-            async for chunk in stream:
+
+            def _finish_seen() -> bool:
+                return finish_reason is not None
+
+            async for chunk in _iterate_provider_stream_with_cancellation(
+                stream,
+                cancel_event,
+                finish_seen=_finish_seen,
+            ):
                 choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
                 candidate_finish_reason = getattr(choice, "finish_reason", None)
                 if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
@@ -4714,6 +4771,18 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             tail = _normalize_stream_chunk(reasoning_filter.flush())
             if tail:
                 raw_content += tail
+            if not raw_content.strip():
+                json_fallback = extract_non_sse_json_stream_payload(stream)
+                if json_fallback is not None:
+                    recovered_json_text = _require_provider_runtime_response(
+                        "openai_chat_completions",
+                        json_fallback,
+                        api_key=self._api_key,
+                        allow_local_empty_fallback=True,
+                    )
+                    if recovered_json_text.strip():
+                        raw_content = recovered_json_text
+                        finish_reason = "stop"
             reply_corruption_detail = _mixed_script_reply_corruption_detail(
                 raw_content,
                 message=message,
@@ -4824,6 +4893,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
         def record_transport_failure(error: Exception) -> None:
             category, retryable, status, reachable, supported = self._classify_error(error)
+            if category in {"network", "timeout", "upstream_unavailable", "unknown"}:
+                self.reset_transport_client()
             provider_obj.last_failure = {
                 "error_category": category,
                 "retryable": retryable,
@@ -4922,6 +4993,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         content = self.provider_failure_reply(category, summary, response_language)
         # Restore only classified, safe facts in the request owner's task.
         # Never let the local teaching scaffold conceal an upstream failure.
+        if category in {"network", "timeout", "upstream_unavailable", "unknown"}:
+            self.reset_transport_client()
         self._last_reply_failure.set({**failure, "detail": content, "error": summary})
         return {
             "content": content,
@@ -5761,7 +5834,6 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 if (
                     not native_stream_available
                     or tool_events
-                    or current_file
                     or not _should_preserve_visible_reply(
                         message,
                         answer_mode=answer_mode,
@@ -6544,7 +6616,15 @@ async def _provider_service_coaching_reply_stream(
         pending_visible = ""
         holdback_chars = _stream_holdback_chars(response_language)
         finish_reason: str | None = None
-        async for chunk in _iterate_provider_stream_with_cancellation(stream, cancel_event):
+
+        def _finish_seen() -> bool:
+            return finish_reason is not None
+
+        async for chunk in _iterate_provider_stream_with_cancellation(
+            stream,
+            cancel_event,
+            finish_seen=_finish_seen,
+        ):
             choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
             candidate_finish_reason = getattr(choice, "finish_reason", None)
             if isinstance(candidate_finish_reason, str) and candidate_finish_reason.strip():
@@ -6585,6 +6665,19 @@ async def _provider_service_coaching_reply_stream(
         if tail:
             raw_content += tail
             pending_visible += tail
+        if not raw_content.strip() and finish_reason is None:
+            json_fallback = extract_non_sse_json_stream_payload(stream)
+            if json_fallback is not None:
+                recovered_json_text = _require_provider_runtime_response(
+                    "openai_chat_completions",
+                    json_fallback,
+                    api_key=self._api_key,
+                    allow_local_empty_fallback=True,
+                )
+                if recovered_json_text.strip():
+                    raw_content = recovered_json_text
+                    pending_visible = recovered_json_text
+                    finish_reason = "stop"
         reply_corruption_detail = _mixed_script_reply_corruption_detail(
             raw_content,
             message=message,

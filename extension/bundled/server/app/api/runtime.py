@@ -221,8 +221,7 @@ def _provider_test_record_matches(record: dict[str, Any], config: Any) -> bool:
     return True
 
 
-def _provider_test_checked_at(record: dict[str, Any]) -> datetime | None:
-    raw = record.get("checkedAt") or record.get("checked_at")
+def _parse_utc_timestamp(raw: object) -> datetime | None:
     if not isinstance(raw, str) or not raw.strip():
         return None
     try:
@@ -232,6 +231,10 @@ def _provider_test_checked_at(record: dict[str, Any]) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def _provider_test_checked_at(record: dict[str, Any]) -> datetime | None:
+    return _parse_utc_timestamp(record.get("checkedAt") or record.get("checked_at"))
 
 
 def _provider_capability_cache_key(
@@ -1653,6 +1656,13 @@ class TrainerRuntime:
         states: dict[str, str] = {
             "connection": "verified" if live_ok else "unverified",
         }
+        checked_at_raw = (
+            (result.get("checked_at") or result.get("checkedAt"))
+            if isinstance(result, dict)
+            else (getattr(result, "checked_at", None) or getattr(result, "checkedAt", None))
+        )
+        if isinstance(checked_at_raw, str) and checked_at_raw.strip():
+            states["checked_at"] = checked_at_raw.strip()
         if live_ok:
             for item in evidence:
                 if isinstance(item, dict):
@@ -1665,6 +1675,7 @@ class TrainerRuntime:
                     states[name] = state
             if states.get("vision") == "verified":
                 states["vision_probe_version"] = VISION_PROBE_VERSION
+            states["verified_at"] = datetime.now(UTC).isoformat()
         # Failed/unknown/never must not leave sibling transport keys marking tools ready.
         error_category = str(
             (result.get("error_category") if isinstance(result, dict) else getattr(result, "error_category", ""))
@@ -1708,6 +1719,25 @@ class TrainerRuntime:
             if oldest_key != key:
                 self.provider_capability_cache.pop(oldest_key, None)
         self._overlay_last_test_on_matching_services(provider_config, api_key, states)
+
+    def mark_provider_live_turn_succeeded(self, provider_service: ProviderService) -> None:
+        """Promote capability cache after a real turn succeeds so stale failed tests cannot linger."""
+        config = getattr(provider_service, "_config", None)
+        api_key = getattr(provider_service, "_api_key", None)
+        if config is None:
+            return
+        key = _provider_capability_cache_key(config, api_key)
+        existing = self.provider_capability_cache.get(key)
+        states: dict[str, str] = dict(existing) if isinstance(existing, dict) else {}
+        states["connection"] = "verified"
+        states["streaming"] = "verified"
+        states["verified_at"] = datetime.now(UTC).isoformat()
+        self.provider_capability_cache[key] = states
+        try:
+            self.repository.save_provider_capability(key, states)
+        except Exception:
+            logger.warning("[provider] live turn capability persistence failed", exc_info=True)
+        self._overlay_last_test_on_matching_services(config, api_key, states)
 
     PROVIDER_TEST_EVIDENCE_MAX_AGE_SECONDS = 30 * 60
 
@@ -1776,6 +1806,25 @@ class TrainerRuntime:
             return False
         return test_base == config_base and test_model == config_model
 
+    def _should_apply_rehydrated_record(
+        self,
+        provider_config: ProviderConfig,
+        api_key: str | None,
+        record: dict[str, Any],
+    ) -> bool:
+        if record.get("ok") is True:
+            return True
+        cached = self.provider_capability_cache.get(
+            _provider_capability_cache_key(provider_config, api_key)
+        )
+        if not isinstance(cached, dict) or cached.get("connection") != "verified":
+            return True
+        verified_at = _parse_utc_timestamp(cached.get("verified_at"))
+        if verified_at is None:
+            return True
+        checked_at = _provider_test_checked_at(record)
+        return checked_at is not None and checked_at > verified_at
+
     def rehydrate_last_test(
         self,
         provider_config: ProviderConfig | None,
@@ -1794,7 +1843,8 @@ class TrainerRuntime:
         if isinstance(last_test, dict) and self._last_test_targets_provider(
             provider_config, last_test
         ):
-            self.remember_provider_capability_test(provider_config, api_key, last_test)
+            if self._should_apply_rehydrated_record(provider_config, api_key, last_test):
+                self.remember_provider_capability_test(provider_config, api_key, last_test)
             return
         workspace = str(workspace_id or "").strip()
         if not workspace:
@@ -1808,7 +1858,8 @@ class TrainerRuntime:
         if isinstance(raw_workspace, dict):
             record = raw_workspace.get(PROVIDER_CAPABILITY_KEY)
         if isinstance(record, dict) and self._last_test_targets_provider(provider_config, record):
-            self.remember_provider_capability_test(provider_config, api_key, record)
+            if self._should_apply_rehydrated_record(provider_config, api_key, record):
+                self.remember_provider_capability_test(provider_config, api_key, record)
 
     def provider_capability_state_for(self, provider_service: ProviderService, name: str) -> str:
         """Return the last observed state for a service, never a declared claim."""
