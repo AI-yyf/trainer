@@ -426,6 +426,82 @@ def canonicalizable(path: str | Path) -> bool:
     return source_type_for_path(path) is not None
 
 
+_H1_LINE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+_HEADING_LINE = re.compile(r"^(#{1,6})\s+")
+
+
+def normalize_canonical_body(body: str, title: str = "") -> str:
+    """Make one canonical Markdown body worth reading and citing.
+
+    The parsers already produce structure; this pass removes conversion noise
+    and gives every document the same shape: one H1, no duplicate title line,
+    no triple blank runs, no trailing whitespace, stable line endings.
+    """
+
+    normalized = (
+        body.replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\ufeff", "")
+        .replace("\u200b", "")
+    )
+    lines = [line.rstrip() for line in normalized.split("\n")]
+    # Collapse runs of blank lines to one separator (two newlines).
+    compact: list[str] = []
+    blank = False
+    for line in lines:
+        if not line.strip():
+            if not blank and compact:
+                compact.append("")
+            blank = True
+            continue
+        compact.append(line)
+        blank = False
+    normalized = "\n".join(compact).strip()
+
+    h1_matches = list(_H1_LINE.finditer(normalized))
+    if not h1_matches:
+        heading = title.strip() or "Untitled"
+        normalized = f"# {heading}\n\n{normalized}".strip()
+        h1_matches = list(_H1_LINE.finditer(normalized))
+    elif len(h1_matches) > 1:
+        # Keep the first H1; demote later H1s so the document has one title.
+        first_start = h1_matches[0].start()
+        head = normalized[:first_start]
+        tail_lines = normalized[first_start:].split("\n")
+        for index in range(1, len(tail_lines)):
+            if re.match(r"^#\s+", tail_lines[index]):
+                tail_lines[index] = "#" + tail_lines[index]
+        normalized = head + "\n".join(tail_lines)
+
+    # A parser frequently emits the title twice: as H1 and as the first body
+    # paragraph. Keep the heading only.
+    lines = normalized.split("\n")
+    if lines and _H1_LINE.match(lines[0]):
+        title_text = _H1_LINE.match(lines[0]).group(1).strip()  # type: ignore[union-attr]
+        cursor = 1
+        while cursor < len(lines) and not lines[cursor].strip():
+            cursor += 1
+        if cursor < len(lines) and lines[cursor].strip() == title_text:
+            lines.pop(cursor)
+            while cursor < len(lines) and not lines[cursor].strip():
+                lines.pop(cursor)
+    return "\n".join(lines).strip()
+
+
+def derive_markdown_summary(body: str, *, max_chars: int = 240) -> str:
+    """First readable paragraph, used as the library's one-line summary."""
+
+    for block in body.split("\n\n"):
+        text = block.strip()
+        if not text or text.startswith(("#", "|", "```", ">", "---")):
+            continue
+        text = re.sub(r"[*_`~]", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        if text:
+            return text[:max_chars].rstrip()
+    return ""
+
+
 def build_canonical_document(
     path: str | Path,
     *,
@@ -470,11 +546,23 @@ def build_canonical_document(
         body, warnings, assets, page_count, slide_count = _parse_image(raw, filename)
     elif source_type == "markdown":
         body, warnings, assets, page_count, slide_count = _parse_text_like(raw, filename, markdown=True)
+        if not source_url:
+            metadata = read_front_matter(raw.decode("utf-8-sig", errors="replace"))
+            captured_source = metadata.get("source")
+            if (
+                metadata.get("captured_at")
+                and metadata.get("capture_kind") in ("web", "pdf", "github_repo")
+                and isinstance(captured_source, str)
+                and captured_source.lower().startswith(("http://", "https://"))
+            ):
+                source_url = captured_source
     else:
         body, warnings, assets, page_count, slide_count = _parse_text_like(raw, filename, markdown=False)
 
     body = _qualify_asset_refs(body, resource_id)
+    body = normalize_canonical_body(body, filename.rsplit(".", 1)[0])
     anchors = anchors_for_body(body, source_type)
+    markdown_hash = f"sha256:{_sha256_hex(body.encode('utf-8'))}"
 
     if not body.strip():
         detail = warnings[0] if warnings else "The parser produced no readable text."
@@ -489,7 +577,8 @@ def build_canonical_document(
         original_filename=filename,
         original_mime=MIME_BY_SUFFIX.get(suffix, "application/octet-stream"),
         original_size=len(raw),
-        content_hash=content_hash or f"sha256:{_sha256_hex(raw)}",
+        # md-only: identity is the canonical Markdown, not the binary source.
+        content_hash=markdown_hash,
         imported_at=imported,
         version_id=version_id,
         source_url=source_url,
@@ -524,6 +613,8 @@ def build_canonical_from_text(
             warnings=list(warnings or []),
         )
     filename = _safe_original_name(original_filename)
+    body = normalize_canonical_body(body, filename.rsplit(".", 1)[0])
+    markdown_hash = f"sha256:{_sha256_hex(body.encode('utf-8'))}"
     return CanonicalDocument(
         resource_id=resource_id,
         source_type=source_type,
@@ -533,7 +624,7 @@ def build_canonical_from_text(
         original_filename=filename,
         original_mime=MIME_BY_SUFFIX.get(Path(filename).suffix.lower(), "text/markdown"),
         original_size=len(body.encode("utf-8")),
-        content_hash=content_hash or f"sha256:{_sha256_hex(body.encode('utf-8'))}",
+        content_hash=markdown_hash,
         imported_at=imported_at or datetime.now(timezone.utc).isoformat(),
         version_id=version_id,
         source_url=source_url,

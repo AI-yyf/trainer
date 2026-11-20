@@ -37,7 +37,7 @@ def training_card_is_live_for_verify(runtime: Any, workspace_id: str, card_id: s
     if not requested:
         return False
     card = runtime.memory_service.get_card(workspace_id, requested)
-    if card is None:
+    if card is None or card.review_state != "saved":
         return False
     card_status = str(getattr(card, "status", "") or "").strip().lower()
     if card_status in {"skipped", "archived", "implemented", "completed", "reviewed", "fed_back"}:
@@ -45,6 +45,8 @@ def training_card_is_live_for_verify(runtime: Any, workspace_id: str, card_id: s
     live_id = runtime.memory_service.live_selected_training_card_id(workspace_id)
     if live_id:
         return requested == live_id
+    if card.reviewed_at:
+        return False
     leftover_runtime = leftover_runtime_overlay(runtime, workspace_id)
     return not leftover_runtime
 
@@ -156,11 +158,16 @@ def require_live_selected_card_for_status(runtime: Any, workspace_id: str, card_
     No leftover overlay keeps stored-card-id persist for unbound sessions.
     """
     requested = str(card_id or "").strip()
+    card = runtime.memory_service.get_card(workspace_id, requested)
+    if getattr(card, "review_state", "saved") != "saved":
+        raise HTTPException(status_code=409, detail="Save this card to the library before practicing.")
     live_id = runtime.memory_service.live_selected_training_card_id(workspace_id)
     if live_id:
         if requested == live_id:
             return
         raise HTTPException(status_code=409, detail=_LEFTOVER_NOT_LIVE_MISMATCH)
+    if getattr(card, "reviewed_at", "") and getattr(card, "status", "") == "candidate":
+        raise HTTPException(status_code=409, detail="Open this card for practice first.")
     workspace = runtime.memory_service.snapshot(workspace_id).workspace
     completed_handoff = workspace.get("latest_training_handoff")
     if (

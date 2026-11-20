@@ -55,7 +55,8 @@ def upload_and_index_markdown(client: TestClient, *, workspace_id: str, text: st
 def test_resource_version_is_recorded_once_and_hash_is_persisted(tmp_path: Path) -> None:
     workspace_id = "workspace-resource-version-once"
     content = "# Stable resource\nThe same content must not create another version.\n"
-    expected_hash = compute_content_hash(content)
+    # md-only: the normalized canonical body is the version identity.
+    expected_hash = compute_content_hash(content.strip())
     with build_client(tmp_path) as client:
         uploaded = client.post(
             "/resource/upload",

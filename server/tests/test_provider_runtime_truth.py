@@ -160,6 +160,57 @@ async def test_openai_binding_rejects_truncated_visible_text() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_openai_binding_retries_truncated_formal_plan_arguments(streaming: bool) -> None:
+    config = _config().model_copy(update={"max_output_tokens": 6144})
+    service = ProviderService(config=config, api_key="sk-runtime-secret")
+    tool_name = "save_formal_plan"
+    incomplete_args = '{"title":"An incomplete plan'
+    complete_args = '{"title":"A complete plan","stages":[{"title":"Practice","goal":"Run a check"}]}'
+
+    def tool_call(arguments: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            index=0, id="plan-save", type="function",
+            function=SimpleNamespace(name=tool_name, arguments=arguments),
+        )
+
+    def response(arguments: str, finish_reason: str) -> SimpleNamespace:
+        return SimpleNamespace(choices=[SimpleNamespace(
+            message=SimpleNamespace(content=None, tool_calls=[tool_call(arguments)]),
+            finish_reason=finish_reason,
+        )])
+
+    async def stream():
+        yield SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content=None, tool_calls=[tool_call(incomplete_args)]),
+            finish_reason="length",
+        )])
+
+    create = AsyncMock(side_effect=[
+        stream() if streaming else response(incomplete_args, "length"),
+        response(complete_args, "tool_calls"),
+    ])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    binding = ProviderAgentBinding(provider_service=service, max_tokens=1024)
+    provider = binding.build_agent_provider()
+    messages = [{"role": "user", "content": "Save the plan I confirmed."}]
+    tools = [{"type": "function", "function": {"name": tool_name}}]
+    with patch.object(service, "_get_client", return_value=client):
+        if streaming:
+            events = [event async for event in provider.call_stream(messages, tools)]
+            assert [event["type"] for event in events] == ["final"]
+            result = events[0]
+        else:
+            result = await provider.call(messages, tools)
+    assert result["tool_calls"] == [{"id": "plan-save", "name": tool_name, "arguments": complete_args}]
+    first, retry = create.await_args_list
+    assert first.kwargs["max_tokens"] == 1024
+    assert retry.kwargs["max_tokens"] == 6144
+    assert first.kwargs["messages"] == retry.kwargs["messages"]
+    assert first.kwargs["tools"] == retry.kwargs["tools"]
+
+
+@pytest.mark.asyncio
 async def test_openai_binding_stream_does_not_emit_a_final_event_for_truncated_output() -> None:
     service = ProviderService(config=_config(), api_key="sk-runtime-secret")
 
@@ -192,7 +243,7 @@ async def test_openai_binding_stream_does_not_emit_a_final_event_for_truncated_o
 
 
 @pytest.mark.asyncio
-async def test_coaching_reply_stream_recovers_from_truncated_output_without_exposing_it() -> None:
+async def test_coaching_reply_stream_keeps_failed_retry_out_of_visible_output() -> None:
     service = ProviderService(config=_config(), api_key="sk-runtime-secret")
 
     async def _stream():
@@ -206,7 +257,10 @@ async def test_coaching_reply_stream_recovers_from_truncated_output_without_expo
         )
 
     client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(return_value=_stream())))
+        chat=SimpleNamespace(completions=SimpleNamespace(create=AsyncMock(side_effect=[
+            _stream(),
+            _openai_response("second partial answer", "length"),
+        ])))
     )
 
     with patch.object(service, "_get_client", return_value=client):
@@ -222,6 +276,69 @@ async def test_coaching_reply_stream_recovers_from_truncated_output_without_expo
     assert failure is not None
     assert failure["error_category"] == "truncated_or_empty"
     assert "partial visible answer" not in "".join(chunks)
+    assert "second partial answer" not in "".join(chunks)
+    assert client.chat.completions.create.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("partial", "should_retry"), [("Held prefix", True), ("Visible prefix " * 4, False)])
+async def test_coaching_reply_stream_retries_truncation_only_before_visible_text(
+    partial: str, should_retry: bool,
+) -> None:
+    service = ProviderService(config=_config(), api_key="sk-runtime-secret")
+
+    async def _stream():
+        yield SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content=partial), finish_reason="length",
+        )])
+
+    complete = "A task horizon ends the task. A collection cutoff preserves the value estimate."
+    create = AsyncMock(side_effect=[_stream(), _openai_response(complete)])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    with patch.object(service, "_get_client", return_value=client):
+        chunks = [chunk async for chunk in service.coaching_reply_stream(
+            _profile(), "How do task horizons differ from collection cutoffs?", response_language="en-US",
+        )]
+
+    visible = "".join(chunks)
+    if should_retry:
+        assert create.await_count == 2
+        assert create.await_args_list[1].kwargs["max_tokens"] > create.await_args_list[0].kwargs["max_tokens"]
+        assert visible.count(complete) == 1
+        assert partial not in visible
+        assert service.peek_last_reply_failure() is None
+    else:
+        assert create.await_count == 1
+        assert complete not in visible
+        assert service.peek_last_reply_failure()["error_category"] == "truncated_or_empty"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("mode", "provider_limit", "expected_tokens"), [
+    ("analyze", None, 4096),
+    ("analyze", 1536, 1536),
+    ("search", None, 1024),
+])
+async def test_resources_analysis_has_room_for_comparisons_within_provider_limit(
+    mode: str, provider_limit: int | None, expected_tokens: int,
+) -> None:
+    config = _config().model_copy(update={"max_output_tokens": provider_limit})
+    service = ProviderService(config=config, api_key="sk-runtime-secret")
+
+    async def _stream():
+        yield SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content="A complete research reply."), finish_reason="stop",
+        )])
+
+    create = AsyncMock(return_value=_stream())
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    with patch.object(service, "_get_client", return_value=client):
+        async for _ in service.coaching_reply_stream(
+            _profile(), "Compare these learning resources.",
+            coach_context={"active_view": "resources", "resource_composer_intent": {"mode": mode}},
+        ):
+            pass
+    assert create.await_args.kwargs["max_tokens"] == expected_tokens
 
 
 def test_binding_http_error_redacts_upstream_body_and_credentials() -> None:

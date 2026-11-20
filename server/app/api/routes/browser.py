@@ -37,6 +37,7 @@ from pydantic import BaseModel
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential, BrowserPairingError
 from ...core.event_ledger import EVENT_BROWSER_SOURCE_RECEIVED
+from ...resources.library import LibraryService
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 
@@ -307,6 +308,26 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             "last_host_focus_at": bridge.host_focus_for(latest.workspace_id),
         }
 
+    def download_target(workspace_id: str) -> str:
+        """Where a browser download belongs: the library root.
+
+        The download always lands in the library root, so every capture shows
+        up in one place instead of being scattered over per-project folders.
+        The popup never asks the learner for a path.
+        """
+
+        managed_root = "Trainer Library"
+        try:
+            library = LibraryService(
+                runtime.repository,
+                workspace_authority_resolver=runtime.workspace_authority,
+            )
+            groups = library.list_groups(workspace_id)
+            managed_root = str(groups.managed_root or managed_root)
+        except Exception:
+            logger.debug("Could not resolve the browser download target", exc_info=True)
+        return managed_root
+
     @router.get("/browser/status")
     def browser_status(request: Request) -> dict[str, object]:
         credential = _require_browser_credential(runtime, request)
@@ -324,6 +345,7 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             ),
             "focus_options": _focus_options(runtime, workspace_id),
             "library_count": library_count,
+            "download_target": download_target(workspace_id),
         }
 
     @router.post("/browser/coach-draft")

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.api.runtime import TrainerRuntime
 from app.core.models import ProviderCapabilityEvidence, ProviderConfig, ProviderTestResponse
 from app.core.settings import AppSettings
+from app.llm.prompts import build_coaching_messages
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 
@@ -376,6 +377,83 @@ def test_coach_routes_keep_resolved_scenario_available_to_streaming_paths(tmp_pa
         assert turn_stream.status_code == 200
         assert "NameError" not in turn_stream.text
         assert completed_stream_response(turn_stream.text)["coach_turn"]["scenario"] == "remote_workspace"
+
+
+def test_explanation_feedback_from_chat_survives_restart_without_mastery(tmp_path: Path) -> None:
+    first_reply = "Latent space stores the information a model needs to predict a next state."
+    revision_prompts = []
+
+    async def simpler_reply(_self, profile, message, current_file, **kwargs):
+        if kwargs["coach_context"].get("active_view") == "coach":
+            revision_prompts.append(build_coaching_messages(
+                profile, message, current_file,
+                coach_context=kwargs["coach_context"], history=kwargs["history"],
+            ))
+        yield "Think of latent space as a compact map. Which detail would you keep to predict a turn?"
+
+    with (
+        patch.object(ProviderService, "coaching_reply", new=AsyncMock(return_value=first_reply)),
+        patch.object(ProviderService, "coaching_reply_stream", new=simpler_reply),
+        build_client(tmp_path) as client,
+    ):
+        start = client.post("/session/start", json={
+            "workspace_id": "explanation-feedback", "workspace_name": "Explanation feedback",
+        })
+        assert start.status_code == 200
+        request = {
+            "workspace_id": "explanation-feedback",
+            "session_id": start.json()["session_id"],
+            "response_language": "en-US",
+            "use_agent_loop": False,
+        }
+        first = client.post("/session/message", json={
+            **request, "active_view": "coach", "message": "Explain latent space.",
+        })
+        assert first.status_code == 200
+        prior_assistant = first.json()["snapshot"]["messages"][-1]
+        assert prior_assistant["role"] == "assistant"
+        feedback = {
+            **request,
+            "intent": "coach",
+            "active_view": "coach",
+            "request_id": "simpler-explanation",
+            "message": "Your explanation was too complicated. Use an analogy.",
+        }
+        for _ in range(2):
+            stream = client.post("/turn/stream", json=feedback)
+            assert stream.status_code == 200
+            response = completed_stream_response(stream.text)
+            assert "reply" in response, stream.text
+            assert "compact map" in response["reply"]["content"]
+        [prompt] = revision_prompts
+        assert {"role": "assistant", "content": prior_assistant["content"]} in prompt
+
+        # A new conversation destination cannot refer back to the Coach
+        # explanation just because it shares the same workspace and session.
+        other = client.post("/turn/stream", json={
+            **feedback, "active_view": "resources", "request_id": "different-destination",
+        })
+        assert other.status_code == 200
+
+    with build_client(tmp_path) as client:
+        restored = client.get("/snapshot", params={
+            "workspace_id": request["workspace_id"], "session_id": request["session_id"],
+        })
+        assert restored.status_code == 200
+        body = restored.json()
+        memory = body.get("snapshot", body)["memory"]
+        [record] = memory["user_feedback"]
+        assert record["kind"] == "too_hard"
+        assert record["reply_message_id"] == prior_assistant["id"]
+        assert record["message"] == feedback["message"]
+        assert "latest_user_feedback_kind" not in memory["workspace"]
+        assert not any(item.get("action_type") == "user_feedback" for item in memory["learning_outcomes"])
+        [strategy] = [
+            item for item in memory["teaching_strategy_effectiveness"]
+            if item["scenario"] == "explanation_revision"
+        ]
+        assert strategy["last_outcome"] == "user_feedback"
+        assert strategy["total_count"] == 0
 
 
 @pytest.mark.parametrize("path", ["/session/message/stream", "/turn/stream"])

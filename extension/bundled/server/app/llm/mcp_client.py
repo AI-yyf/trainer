@@ -225,8 +225,8 @@ def classify_mcp_tool_operation(tool_name: str) -> str:
     """Map an MCP tool name to a workspace ``OperationType`` string.
 
     Fail-closed: a tool whose name carries no recognizable read verb is
-    treated as a write (``write``), which the default permission ladder
-    denies. Only explicit view/query verbs open the read-only fast path.
+    treated as a write (``write``). Only explicit view/query verbs
+    qualify for Coach's read-only tool surface.
     """
     from ..workspace.authority import OperationType
 
@@ -896,7 +896,7 @@ def _tool_description(server_name: str, tool: dict[str, Any]) -> str:
         raw = f"MCP tool {tool.get('name')!r} from server {server_name!r}."
     provenance = (
         f"[MCP server: {server_name}. Calls run on the external MCP server and are "
-        "gated by the workspace permission ladder.]"
+        "limited to read-only operations.]"
     )
     return f"{raw[:MAX_TOOL_DESCRIPTION_LENGTH]} {provenance}"
 
@@ -931,27 +931,11 @@ def _gate_mcp_tool_call(
                 details={"actor": "mcp", "server": server_name, "tool": tool_name, "arguments": arguments},
             )
         return None
-    if authority is None:
-        return {
-            "ok": False,
-            "error": "workspace_authority_unavailable",
-            "detail": (
-                f"MCP tool {tool_name!r} on server {server_name!r} is a write-class operation, "
-                "but no workspace authority is available to approve it."
-            ),
-        }
-    allowed = authority.check_permission(operation, authority.active_workspace_root or target)
-    if allowed:
-        return None
     return {
         "ok": False,
-        "error": "workspace_permission_denied",
-        "detail": (
-            f"MCP tool {tool_name!r} on server {server_name!r} maps to workspace operation "
-            f"{operation!r}, which the current permission level does not allow."
-        ),
+        "error": "teaching_boundary",
+        "detail": "Coach can use external tools only to read and observe.",
         "required_operation": operation,
-        "current_permission_level": authority.permission_level.name,
     }
 
 
@@ -974,8 +958,7 @@ async def build_coach_mcp_tools(
     if not resolved_configs:
         return []
     if runtime is None:
-        # Without a runtime there is no persistent session owner and no
-        # workspace authority to gate writes; MCP tools stay unavailable.
+        # Without a runtime there is no persistent session owner.
         logger.warning("mcp_tools_skipped_without_runtime", extra={"server_count": len(resolved_configs)})
         return []
     manager = mcp_manager_for(runtime)
@@ -990,8 +973,13 @@ async def build_coach_mcp_tools(
             raw_tool_name = str(tool.get("name") or "").strip()
             if not raw_tool_name:
                 continue
-            registration_name = _registration_name(config.name, raw_tool_name, used_names)
             operation = classify_mcp_tool_operation(raw_tool_name)
+            annotations = tool.get("annotations")
+            if operation != "read" or (
+                isinstance(annotations, dict) and annotations.get("readOnlyHint") is False
+            ):
+                continue
+            registration_name = _registration_name(config.name, raw_tool_name, used_names)
 
             def _make_handler(
                 server_name: str,

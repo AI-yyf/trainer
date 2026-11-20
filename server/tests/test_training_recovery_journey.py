@@ -16,6 +16,7 @@ from app.evaluator.models import CheckCommand, CheckResult, CheckStatus
 from app.evaluator.service import EvaluationPipeline, EvaluatorService
 from app.llm.provider_service import ProviderService
 from app.main import create_app
+from tests.training_card_fixtures import open_generated_training_card
 
 
 class _DeterministicRunner:
@@ -210,6 +211,7 @@ def test_agent_card_current_file_recovery_reflect_and_return_are_continuous(
         assert created_card["card_type"] == "practice"
         assert learning_loop["completion_requires_verification"] is True
         assert all(learning_loop[key] for key in ("learn", "try", "verify", "reflect", "return"))
+        open_generated_training_card(client, workspace_id, card_id)
         assert (
             client.app.state.runtime.memory_service.live_selected_training_card_id(workspace_id)
             == card_id

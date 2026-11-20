@@ -586,6 +586,12 @@ def test_ask_trainer_source_kind_names_pdf_and_github_pages(tmp_path) -> None:
         )
         assert "source_kind" not in web_draft
         assert "Explain the key ideas here" in web_draft["text"]
+    with build_client(tmp_path) as client:
+        restored = client.get(
+            "/browser/pending-drafts",
+            params={"workspace_id": "workspace-ask-sources"},
+        )
+        assert restored.json()["drafts"] == pending.json()["drafts"]
 
 
 def test_coach_draft_route_uses_the_workspace_response_language(tmp_path) -> None:

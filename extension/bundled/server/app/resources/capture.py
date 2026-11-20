@@ -58,6 +58,16 @@ GITHUB_README_API = "https://api.github.com/repos/{owner}/{repo}/readme"
 GITHUB_CONTENTS_API = "https://api.github.com/repos/{owner}/{repo}/contents/{path}"
 _GITHUB_REPO_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
 _GITHUB_REPO_HOSTS = frozenset({"github.com", "www.github.com"})
+# Gitee and GitLab speak the same repository shape as GitHub (owner/repo), so
+# the same capture lane covers all three forges.
+_SOURCE_REPO_HOSTS = {
+    "github.com": "github_repo",
+    "www.github.com": "github_repo",
+    "gitee.com": "gitee_repo",
+    "www.gitee.com": "gitee_repo",
+    "gitlab.com": "gitlab_repo",
+    "www.gitlab.com": "gitlab_repo",
+}
 _HTTP_STATUS_IN_DETAIL = re.compile(r"HTTP (\d{3})")
 _MAX_TITLE_CHARS = 200
 _MAX_TAG_CHARS = 240
@@ -126,7 +136,11 @@ class CapturedSource:
             source=f"inline://trainer-capture/{self.kind}/{_slug(self.title)}",
             content=self.content,
             content_encoding=self.content_encoding,
-            tags=list(self.tags),
+            tags=(
+                [*self.tags, f"capture-content:{self.content_hash}"]
+                if self.content_hash
+                else list(self.tags)
+            ),
         )
 
 
@@ -181,6 +195,12 @@ def capture_url_key(url: str) -> str:
     if not normalized:
         return ""
     return f"capture-key:{sha256(normalized.encode('utf-8')).hexdigest()[:24]}"
+
+
+def capture_location_tag(url: str) -> str:
+    """Retain the source fragment for links and excerpts independently of URL dedup."""
+    fragment = unquote(url.partition("#")[2])
+    return f"capture-location:{sha256(fragment.encode('utf-8')).hexdigest()[:24]}" if fragment else ""
 
 
 def capture_url_from_tags(tags: list[str] | tuple[str, ...]) -> str:
@@ -246,6 +266,7 @@ def capture_source(
             selection=excerpt if capture_mode == "selection" else None,
             extra_sections=(),
         )
+        location_tag = capture_location_tag(url)
         tags = (
             *_capture_tags(
                 kind=kind,
@@ -254,6 +275,7 @@ def capture_source(
                 selection=bool(excerpt),
             ),
             capture_intent_tag(capture_mode, excerpt),
+            *((location_tag,) if location_tag else ()),
         )
         return CapturedSource(
             kind=kind,
@@ -280,8 +302,8 @@ def capture_source(
         return _capture_web(normalized_url, title_hint, selection=selection)
     if kind == "pdf":
         return _capture_pdf(normalized_url, title_hint)
-    if kind == "github_repo":
-        return _capture_github_repo(
+    if kind in {"github_repo", "gitee_repo", "gitlab_repo", "repo"}:
+        return _capture_source_repo(
             normalized_url,
             title_hint,
             include_docs=include_docs,
@@ -502,6 +524,109 @@ def _capture_github_repo(
     )
 
 
+def _capture_source_repo(
+    url: str,
+    title_hint: str | None,
+    *,
+    include_docs: bool = False,
+) -> CapturedSource:
+    """Capture a repository from GitHub, Gitee or GitLab.
+
+    Every forge uses the same ``owner/repo`` shape, so the snapshot is the
+    README plus (optionally) the docs listing, and the download clones the
+    repository. Only the README endpoint differs per host.
+    """
+
+    parsed = parse_source_repo(url)
+    if parsed is None:
+        if url.split("/")[2].lower().endswith("github.com"):
+            raise CaptureError(
+                "not_a_github_repo",
+                "A GitHub capture requires a repository URL: "
+                "https://github.com/<owner>/<repo>.",
+                status_code=422,
+            )
+        raise CaptureError(
+            "not_a_repo",
+            "A repository capture requires a repository URL: "
+            "https://<host>/<owner>/<repo> (GitHub, Gitee or GitLab).",
+            status_code=422,
+        )
+    kind, owner, name, canonical_url = parsed
+    readme_text, readme_name = _fetch_repo_readme(canonical_url, owner, name)
+    warnings: list[str] = []
+    extra_sections: tuple[tuple[str, str], ...] = ()
+    if include_docs:
+        docs_listing = _fetch_github_docs_listing(owner, name)
+        if docs_listing:
+            extra_sections = (("Repository docs/ layout", docs_listing),)
+        else:
+            warnings.append(
+                "The repository docs/ listing could not be read; the snapshot keeps the README only."
+            )
+    title = title_hint or f"{owner}/{name}"
+    snapshot = _compose_markdown_snapshot(
+        title=title,
+        source_url=canonical_url,
+        kind=kind,
+        body=readme_text,
+        selection=None,
+        extra_sections=extra_sections,
+    )
+    upload_kind: Literal["markdown", "text"] = (
+        "markdown" if readme_name.lower().endswith(".md") else "text"
+    )
+    return CapturedSource(
+        kind=kind,
+        source_url=canonical_url,
+        title=title,
+        content=snapshot,
+        content_encoding=None,
+        upload_kind=upload_kind,
+        tags=_capture_tags(
+            kind=kind,
+            display_url=canonical_url,
+            url_keys=(canonical_url,),
+            selection=False,
+        ),
+        capture_url=normalize_capture_url(canonical_url),
+        content_hash=compute_content_hash(snapshot),
+        selection_present=False,
+        source_domain=_source_domain(canonical_url),
+        captured_at=_utc_now_iso(),
+        warnings=tuple(warnings),
+    )
+
+
+def _fetch_repo_readme(canonical_url: str, owner: str, name: str) -> tuple[str, str]:
+    """Read the repository README, whatever forge hosts it.
+
+    GitHub keeps its readme API; Gitee and GitLab both serve the raw file on
+    the default branch, so one raw path covers them.
+    """
+
+    host = urlsplit(canonical_url).hostname or ""
+    if host.endswith("github.com"):
+        return _fetch_github_readme(owner, name)
+    for branch in ("HEAD", "master", "main"):
+        raw_url = f"https://{host}/{owner}/{name}/raw/{branch}/README.md"
+        try:
+            response = _fetch(raw_url)
+        except CaptureError:
+            continue
+        try:
+            body = response.body.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        if body.strip():
+            return body, "README.md"
+    raise CaptureError(
+        "readme_not_found",
+        f"Trainer could not find a README for {owner}/{name}.",
+        status_code=404,
+    )
+
+
 def _fetch_github_readme(owner: str, name: str) -> tuple[str, str]:
     """Read the default-branch README through the GitHub readme API.
 
@@ -708,9 +833,26 @@ def parse_github_repo(url: str) -> tuple[str, str, str] | None:
     Returns None when the URL is not a GitHub repository address. The canonical
     URL is the identity used for capturing, deduplication and downloads.
     """
+    parsed = parse_source_repo(url)
+    if parsed is None or parsed[0] != "github_repo":
+        return None
+    _, owner, repo, canonical_url = parsed
+    return owner, repo, canonical_url
+
+
+def parse_source_repo(url: str) -> tuple[str, str, str, str] | None:
+    """Parse a repository URL into ``(kind, owner, repo, canonical_url)``.
+
+    GitHub, Gitee and GitLab all use the ``owner/repo`` shape, so one lane
+    covers every forge the learner asks for. ``kind`` is the capture kind the
+    rest of the library uses (``github_repo`` / ``gitee_repo`` /
+    ``gitlab_repo``); the canonical URL is the identity used for capturing,
+    deduplication and downloads.
+    """
     parsed = urlsplit(url)
     host = (parsed.hostname or "").lower().rstrip(".")
-    if host not in _GITHUB_REPO_HOSTS:
+    kind = _SOURCE_REPO_HOSTS.get(host)
+    if kind is None:
         return None
     segments = [segment for segment in parsed.path.split("/") if segment]
     if len(segments) < 2:
@@ -720,7 +862,7 @@ def parse_github_repo(url: str) -> tuple[str, str, str] | None:
         repo = repo[: -len(".git")]
     if not _GITHUB_REPO_SEGMENT.match(owner) or not _GITHUB_REPO_SEGMENT.match(repo):
         return None
-    return owner, repo, f"https://github.com/{owner}/{repo}"
+    return kind, owner, repo, f"https://{host}/{owner}/{repo}"
 
 
 def _capture_tags(

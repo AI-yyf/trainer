@@ -39,9 +39,9 @@ from ..core.models import (
     GlobalMemory,
     GlobalMemoryCapability,
     GlobalMemoryGrowthRecord,
+    LearningActivityEntry,
     MemoryShareCategory,
     MemoryShareGrant,
-    LearningActivityEntry,
     MemorySnapshot,
     ResourceRecord,
     ReviewArtifactHistoryEntry,
@@ -838,8 +838,13 @@ class StructuredMemoryService:
         scenario: str = "",
         training_card_id: str = "",
         plan_id: str = "",
+        reply_message_id: str = "",
     ) -> UserFeedbackRecord:
         normalized_kind = kind.strip().lower()
+        if reply_message_id:
+            for existing in self._user_feedback:
+                if existing.reply_message_id == reply_message_id and existing.kind == normalized_kind:
+                    return existing
         record = UserFeedbackRecord(
             kind=normalized_kind,
             message=message.strip(),
@@ -847,6 +852,7 @@ class StructuredMemoryService:
             scenario=scenario.strip(),
             training_card_id=training_card_id.strip(),
             plan_id=plan_id.strip(),
+            reply_message_id=reply_message_id,
         )
         self._user_feedback.insert(0, record)
         self._user_feedback = self._user_feedback[:24]
@@ -861,6 +867,21 @@ class StructuredMemoryService:
         challenge, hints, urgency, explanation, next_bias = bias.get(
             normalized_kind, ("steady", "guided", "normal", "grounded", "steady")
         )
+        if reply_message_id:
+            # A request to reshape one explanation is a dated observation,
+            # not evidence of mastery, a failure streak, or a standing preference.
+            self.remember_teaching_strategy_effectiveness(
+                scenario=record.scenario,
+                focus_area=record.focus_area,
+                challenge_level=challenge,
+                hint_depth=hints,
+                review_urgency=urgency,
+                explanation_mode=explanation,
+                next_step_bias=next_bias,
+                outcome="user_feedback",
+                summary=record.message,
+            )
+            return record
         self.update_workspace(
             latest_user_feedback_kind=normalized_kind,
             latest_user_feedback=record.message,
@@ -4901,7 +4922,7 @@ class MemoryService(
         cards = [
             item
             for item in structured._training_cards.values()
-            if item.status not in {"archived"}
+            if item.status != "archived" and item.review_state != "rejected"
         ]
         return sorted(
             cards,
@@ -4920,6 +4941,8 @@ class MemoryService(
         ).strip()
         if selected_card is not None:
             existing = self.get_card(workspace_id, selected_card.card_id)
+            if (existing or selected_card).review_state != "saved":
+                raise ValueError("Save this card to the library before starting practice.")
             if existing is None:
                 existing = self.upsert_card(workspace_id, selected_card)
             target_status = (
@@ -5017,11 +5040,14 @@ class MemoryService(
         reason: str = "",
         *,
         verified_by_evaluator: bool = False,
+        archive_from_library: bool = False,
     ) -> CardStatusTransitionResponse:
         structured = self._structured_for(workspace_id)
         card = self.get_card(workspace_id, card_id)
         if card is None:
             raise ValueError(f"Card {card_id!r} not found")
+        if card.review_state != "saved":
+            raise ValueError("Save this card to the library before changing its practice status.")
         # A selected card is already `active` while it still sits at Learn.
         # The Training surface's "start" action sends active -> active with
         # reason=start_step; that is a phase advance, not a status conflict.
@@ -5064,13 +5090,15 @@ class MemoryService(
             "skipped": {"active"},
             "archived": set(),
         }
-        if new_status not in allowed.get(card.status, set()):
+        archive = archive_from_library and new_status == "archived" and card.status != "archived"
+        if not archive and new_status not in allowed.get(card.status, set()):
             raise ValueError(f"Invalid transition from {card.status} to {new_status}")
         if new_status in {"implemented", "completed"} and not verified_by_evaluator:
             raise ValueError(
                 "A training card can only be marked implemented or completed after server-side verification."
             )
-        if card.card_type == "practice" and new_status in {"reviewed", "fed_back", "archived"}:
+        if (card.card_type == "practice" and not archive
+                and new_status in {"reviewed", "fed_back", "archived"}):
             has_verified_evidence = any(
                 evidence.verified and evidence.source_card_id == card_id
                 for evidence in structured._evidence_items.values()
@@ -5159,6 +5187,45 @@ class MemoryService(
                 workspace_id, updated, EVENT_CARD_STATUS_TRANSITIONED, event["event_id"], "started",
             )
         return CardStatusTransitionResponse(card=updated, ledger_entry=ledger_entry)
+
+    def review_card_candidate(
+        self,
+        workspace_id: str,
+        card: TrainingCardCandidateSnapshot,
+        *,
+        state: Literal["saved", "deferred", "rejected"],
+        prompt: str | None = None,
+        acceptance_criteria: list[str] | None = None,
+    ) -> TrainingCardCandidateSnapshot:
+        if card.review_state == state:
+            return card
+        if card.status not in {"candidate", "needs_primer"} or card.review_state not in {"pending", "deferred"}:
+            raise ValueError("Only candidates awaiting review can be updated.")
+        updates: dict[str, object] = {"review_state": state, "updated_at": utc_now().isoformat()}
+        if state == "saved":
+            updates["reviewed_at"] = updates["updated_at"]
+        if prompt is not None:
+            if not prompt.strip() or (card.card_type == "flash" and card.answer_mode != "text"):
+                raise ValueError("Only a nonempty text prompt can be saved.")
+            updates["question" if card.card_type == "flash" else "problem_statement"] = prompt.strip()
+        if acceptance_criteria is not None:
+            criteria = [item.strip() for item in acceptance_criteria if item.strip()]
+            if not criteria:
+                raise ValueError("Keep at least one acceptance criterion.")
+            updates["acceptance_criteria"] = criteria
+            updates["grading_rubric"] = criteria
+            if card.card_type == "flash":
+                updates["rubric"] = criteria
+        updated = card.model_copy(update=updates)
+        structured = self._structured_for(workspace_id)
+        structured._training_cards[card.card_id] = updated
+        self._record_training_event(
+            structured,
+            event_type=f"training_candidate_{state}",
+            payload={"candidate_id": card.card_id, "card_candidate_title": card.title},
+        )
+        self._persist_structured(workspace_id)
+        return updated
 
     # --------------------------------------------------------------
     # P1.4 candidate management: merge / mark important / priority.
@@ -5260,7 +5327,7 @@ class MemoryService(
         merged_mistakes = list(keeper.common_mistakes)
         merged_plan_links = list(keeper.plan_links)
         merged_hint_ladder = list(keeper.hint_ladder)
-        archived_count = 0
+        duplicates = []
         for duplicate_id in wanted:
             duplicate = self.get_card(workspace_id, duplicate_id)
             if duplicate is None:
@@ -5269,6 +5336,9 @@ class MemoryService(
                 raise ValueError(
                     f"Only candidate cards can be merged; {duplicate_id!r} is {duplicate.status!r}"
                 )
+            duplicates.append(duplicate)
+        archived_count = 0
+        for duplicate in duplicates:
             merged_sources.extend(
                 source for source in duplicate.source_chain if source not in merged_sources
             )
@@ -5284,7 +5354,7 @@ class MemoryService(
             merged_hint_ladder.extend(
                 hint for hint in duplicate.hint_ladder if hint not in merged_hint_ladder
             )
-            structured._training_cards[duplicate_id] = duplicate.model_copy(
+            structured._training_cards[duplicate.card_id] = duplicate.model_copy(
                 update={
                     "status": "archived",
                     "merged_into": keep_card_id,
@@ -5705,6 +5775,10 @@ class MemoryService(
         structured = self._structured_for(workspace_id)
         self._sync_dependency_training_views(structured)
         card = self.get_card(workspace_id, card_id)
+        if card is not None and (card.review_state != "saved" or card.status == "archived"):
+            raise HTTPException(status_code=409, detail="Select an available card from your library.")
+        if card is not None and card.reviewed_at and self.live_selected_training_card_id(workspace_id) != card_id:
+            raise HTTPException(status_code=409, detail="Open this card for practice before answering.")
         answer_text = learner_answer.strip()
         selected_indices = sorted(
             {
@@ -8054,6 +8128,10 @@ class MemoryService(
         card = self.get_card(resolved_workspace_id, cleaned_card_id)
         if card is None:
             raise ValueError(f"Training card {cleaned_card_id!r} not found")
+        if card.review_state != "saved" or card.status == "archived":
+            raise HTTPException(status_code=409, detail="Select an available card from your library.")
+        if card.reviewed_at and card.status == "candidate":
+            raise HTTPException(status_code=409, detail="Open this card for practice before verifying.")
 
         # Late-result fence (T-0014): an older verification that STARTED before
         # the learner's selection moved may still update its own card/evidence,

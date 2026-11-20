@@ -103,7 +103,11 @@ from .coaching_scaffold import (
     _scaffold_teaching_note,
 )
 from .harness import estimate_tokens, extract_provider_usage
-from .library_practice import build_library_practice, library_practice_requested, remove_model_practice
+from .library_practice import (
+    build_library_practice,
+    library_practice_requested,
+    remove_model_practice,
+)
 from .prompts import (
     build_coaching_messages,
     extract_coaching_context,
@@ -231,6 +235,7 @@ logger = logging.getLogger("trainer.provider")
 DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS = 45.0
 DEFAULT_OPENAI_CLIENT_MAX_RETRIES = 0
 MIN_OPENAI_CLIENT_TIMEOUT_SECONDS = 5.0
+FORMAL_PLAN_OUTPUT_TOKENS = 4096
 # Generation (chat completions, streams, agent turns) carries NO designed
 # read-time ceiling: reasoning-first models think for as long as the task
 # needs, and a fixed read cap converts long reasoning into a false timeout
@@ -4999,6 +5004,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         try:
             messages, max_tokens = self._prepare_context_budget(
                 messages,
+                requested_max_tokens=(
+                    FORMAL_PLAN_OUTPUT_TOKENS if (coach_context or {}).get("formal_plan_mutation") is True else None
+                ),
                 prefer_configured_output=True,
             )
         except ContextBudgetExhaustedError:
@@ -5573,6 +5581,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         try:
             messages, max_tokens = self._prepare_context_budget(
                 messages,
+                requested_max_tokens=(
+                    FORMAL_PLAN_OUTPUT_TOKENS if (coach_context or {}).get("formal_plan_mutation") is True else None
+                ),
                 prefer_configured_output=True,
             )
         except ContextBudgetExhaustedError:
@@ -6356,12 +6367,21 @@ async def _provider_service_coaching_reply_stream(
         history=history,
     )
     model = self._resolve_model()
+    resource_intent = coach_context.get("resource_composer_intent") if coach_context else None
+    analysis_requested = (
+        _coaching_active_view_name(coach_context) == "resources"
+        and isinstance(resource_intent, dict)
+        and resource_intent.get("mode") == "analyze"
+    )
+    # Analyze turns can compare several passages and generate teaching checks in
+    # one reply. Keep the narrow default for conversations and library lookups.
+    output_budget = 4096 if analysis_requested else DEFAULT_COACHING_MAX_OUTPUT_TOKENS
     try:
         messages, max_tokens = self._prepare_context_budget(
             messages,
             model=model,
             requested_max_tokens=self.recommended_generation_max_tokens(
-                DEFAULT_COACHING_MAX_OUTPUT_TOKENS
+                output_budget
             ),
             prefer_configured_output=True,
         )
@@ -6533,23 +6553,33 @@ async def _provider_service_coaching_reply_stream(
                     if reply_override:
                         yield reply_override
             return
-        if not raw_content.strip() and not yielded_visible:
-            # Reasoning-first models can exhaust the stream budget on hidden
-            # reasoning (finish_reason=length, nothing visible). Nothing was
-            # emitted, so one escalated non-stream retry cannot duplicate text.
+        def stream_response() -> dict[str, Any]:
+            return {"choices": [{"message": {"content": raw_content}, "finish_reason": finish_reason}]}
+
+        assessment = normalize_provider_response(
+            "openai_chat_completions", stream_response(), api_key=self._api_key,
+        )
+        if not yielded_visible and (assessment.truncated or not raw_content.strip()):
+            # The held-back prefix has not been emitted. A single retry can
+            # replace it without duplicating text in the learner's reply.
             escalated = self._escalated_chat_budget(max_tokens)
             if escalated is not None:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise asyncio.CancelledError
                 logger.warning(
-                    "[provider] coaching stream empty; retrying once with max_tokens=%s",
-                    escalated,
+                    "[provider] coaching stream %s; retrying once with max_tokens=%s",
+                    assessment.outcome, escalated,
                 )
                 try:
-                    retry_response, _ = await self._create_chat_completion(
-                        client=self._get_client(),
-                        model=model,
-                        messages=messages,
-                        temperature=0.7,
-                        max_tokens=escalated,
+                    retry_response, _ = await _await_provider_stream_with_cancellation(
+                        self._create_chat_completion(
+                            client=client,
+                            model=model,
+                            messages=messages,
+                            temperature=0.7,
+                            max_tokens=escalated,
+                        ),
+                        cancel_event,
                     )
                     retry_text = _require_provider_runtime_response(
                         "openai_chat_completions",
@@ -6575,14 +6605,7 @@ async def _provider_service_coaching_reply_stream(
                         return
         _require_provider_runtime_response(
             "openai_chat_completions",
-            {
-                "choices": [
-                    {
-                        "message": {"content": raw_content},
-                        "finish_reason": finish_reason,
-                    }
-                ]
-            },
+            stream_response(),
             api_key=self._api_key,
             allow_local_empty_fallback=True,
         )

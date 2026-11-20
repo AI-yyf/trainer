@@ -11,10 +11,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.models import ProviderConfig
+from app.core.models import ProviderConfig, TrainingCardCandidateSnapshot
 from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
+from app.training.card_generator import CardGenerationService
 from tests.test_leftover_training_card_identity import _seed_leftover_card_not_live
 from tests.test_router_stream_scenarios import mark_provider_capabilities_verified
 
@@ -71,6 +72,61 @@ def _parse_sse_complete_response(body: str) -> dict[str, object]:
                 assert isinstance(response, dict)
                 return response
     raise AssertionError(f"no SSE complete frame in: {body[:500]}")
+
+
+def test_generation_review_and_practice_are_distinct_across_restart(tmp_path: Path) -> None:
+    workspace_id = "card-review"
+    proposed = TrainingCardCandidateSnapshot(
+        card_id="candidate-1", title="Compare two retry policies",
+        problem_statement="Compare the policies.",
+        acceptance_criteria=["Identify one trade-off."],
+    )
+    app = _build_app(tmp_path)
+    runtime = app.state.runtime
+    with TestClient(app) as client, patch.object(CardGenerationService, "generate_card", return_value=proposed):
+        assert client.post("/session/start", json={
+            "workspace_id": workspace_id, "workspace_name": "Card review",
+        }).status_code == 200
+        mark_provider_capabilities_verified(
+            runtime, runtime.provider_config, runtime.provider_api_key, tools=False,
+        )
+        generated = client.post("/training/generate-card", json={"workspace_id": workspace_id})
+        assert generated.status_code == 200, generated.text
+        assert generated.json()["active_routing"] is None
+        assert generated.json()["card"]["review_state"] == "pending"
+        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == ""
+        assert runtime.memory_service.get_card(workspace_id, proposed.card_id).status == "candidate"
+
+        body = {"workspace_id": workspace_id, "card_id": proposed.card_id}
+        assert client.post("/training/card/library", json={**body, "action": "start"}).status_code == 409
+        assert client.post("/training/attempt/start", json=body).status_code == 409
+        deferred = client.post("/training/card/library", json={**body, "action": "defer"})
+        assert deferred.json()["card"]["review_state"] == "deferred"
+
+    app = _build_app(tmp_path)
+    runtime = app.state.runtime
+    with TestClient(app) as client:
+        assert runtime.memory_service.get_card(workspace_id, proposed.card_id).review_state == "deferred"
+        save = client.post("/training/card/library", json={
+            **body, "action": "save", "prompt": "Which retry policy prevents a thundering herd?",
+            "acceptance_criteria": ["Explain what jitter changes."],
+        })
+        assert save.status_code == 200, save.text
+        assert save.json()["card"]["review_state"] == "saved"
+        assert save.json()["card"]["status"] == "candidate"
+        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == ""
+        save_again = client.post("/training/card/library", json={**body, "action": "save"})
+        assert save_again.json() == save.json()
+        practice = client.post("/training/card/library", json={**body, "action": "start"})
+        assert practice.status_code == 200, practice.text
+        assert practice.json()["card"]["status"] == "active"
+        assert practice.json()["card"]["problem_statement"] == "Which retry policy prevents a thundering herd?"
+        assert practice.json()["card"]["acceptance_criteria"] == ["Explain what jitter changes."]
+        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == proposed.card_id
+        archived = client.post("/training/card/library", json={**body, "action": "archive"})
+        assert archived.status_code == 200, archived.text
+        assert archived.json()["card"]["status"] == "archived"
+        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == ""
 
 
 def test_resource_generation_stream_explains_missing_project_admission(tmp_path: Path) -> None:
@@ -378,10 +434,10 @@ async def test_generate_card_stream_concurrent_same_request_id_executes_once(
         }
         assert leftover_card_id in still
         assert still[leftover_card_id] == cards_before[leftover_card_id]
-        live_id = runtime.memory_service.live_selected_training_card_id(workspace_id)
-        assert live_id
-        assert live_id != leftover_card_id
-        assert live_id == card1.get("card_id")
+        proposed_id = card1["card_id"]
+        assert proposed_id != leftover_card_id
+        assert runtime.memory_service.get_card(workspace_id, proposed_id).review_state == "pending"
+        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == ""
 
 
 @pytest.mark.asyncio
@@ -475,7 +531,7 @@ async def test_generate_card_stream_concurrent_same_request_id_failure_complete(
 
 
 @pytest.mark.asyncio
-async def test_generate_card_stream_success_still_binds_and_distinct_ids_mint(
+async def test_generate_card_stream_distinct_requests_store_separate_candidates(
     tmp_path: Path,
 ) -> None:
     """Success still binds a live card; distinct request_ids must not collapse."""
@@ -562,9 +618,9 @@ async def test_generate_card_stream_success_still_binds_and_distinct_ids_mint(
 
     with TestClient(app) as probe:
         runtime = probe.app.state.runtime
-        live_id = runtime.memory_service.live_selected_training_card_id(workspace_id)
-        assert live_id
-        assert live_id != leftover_card_id
-        card_ids = {card.card_id for card in runtime.memory_service.get_cards(workspace_id)}
-        assert leftover_card_id in card_ids
-        assert live_id in card_ids
+        cards = {card.card_id: card for card in runtime.memory_service.get_cards(workspace_id)}
+        assert leftover_card_id in cards
+        assert card1["card_id"] != card2["card_id"]
+        assert cards[card1["card_id"]].review_state == "pending"
+        assert cards[card2["card_id"]].review_state == "pending"
+        assert runtime.memory_service.live_selected_training_card_id(workspace_id) == ""

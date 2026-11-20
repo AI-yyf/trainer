@@ -50,6 +50,7 @@ from urllib.parse import quote
 import httpx
 
 from .agent_loop import AgentProvider, CoachAgentLoop
+from .provider.errors import ContextBudgetExhaustedError
 from .provider.text import ReasoningBlockFilter
 from .provider_protocols import (
     _finish_reason_is_truncated,
@@ -116,10 +117,7 @@ ANTHROPIC_AUTH_MISMATCH_MARKERS = (
     "unsupported",
 )
 OPENAI_VISIBLE_REPLY_RETRY_ATTEMPTS = 2
-#: Reasoning-first models can spend the entire coaching output budget on hidden
-#: reasoning and end with finish_reason="length" and no visible text. One
-#: escalation retry (4x base, capped here) recovers them without changing the
-#: normal budget for everyone else.
+#: Ceiling for recovering truncated reasoning or tool arguments in one retry.
 OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS = 32768
 OPENAI_VISIBLE_REPLY_RETRY_HINT = (
     "Return at least one visible user-facing coaching sentence outside any <think>...</think> block. "
@@ -1480,17 +1478,19 @@ class ProviderAgentBinding:
     ) -> dict[str, Any] | None:
         """Retry once with a larger output budget after a truncated reply.
 
-        A reasoning-first gateway can consume the whole ``max_tokens`` on
-        hidden reasoning, ending with ``finish_reason="length"`` and no visible
-        text. Escalating the budget (4x, capped) is the only recovery that
-        keeps the model usable; adaptive, so it costs nothing for models that
-        answer within the normal budget.
+        Reasoning and tool arguments can exhaust the initial budget. Respect
+        the configured model and context limits for the replacement request.
         """
-        escalated = min(
-            max(int(self._max_tokens) * 4, OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS),
-            OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS,
-        )
-        if escalated <= int(self._max_tokens):
+        escalated = OPENAI_TRUNCATED_OUTPUT_RETRY_MAX_TOKENS
+        budget = getattr(self._provider_service, "_effective_output_token_budget", None)
+        if callable(budget):
+            try:
+                configured = budget(messages, model=model, requested_max_tokens=escalated)
+            except ContextBudgetExhaustedError:
+                return None
+            if isinstance(configured, int):
+                escalated = min(escalated, configured)
+        if escalated <= self._max_tokens:
             return None
         kwargs: dict[str, Any] = {
             "messages": messages,
@@ -1563,7 +1563,8 @@ class ProviderAgentBinding:
                     raise
                 continue
             parsed = _parse_openai_chat_response(response)
-            if not str(parsed.get("content") or "").strip() and not parsed.get("tool_calls"):
+            empty = not str(parsed.get("content") or "").strip() and not parsed.get("tool_calls")
+            if empty:
                 retry_result = await self._openai_visible_retry_result(
                     client,
                     messages=formatted,
@@ -1572,6 +1573,7 @@ class ProviderAgentBinding:
                 )
                 if retry_result is not None:
                     return retry_result
+            if empty or (tools and parsed.get("stop_reason") == "length"):
                 budget_result = await self._openai_truncated_budget_retry(
                     client,
                     messages=formatted,
@@ -1708,9 +1710,9 @@ class ProviderAgentBinding:
                     "stop_reason": "tool_calls" if retry_tool_calls else "stop",
                 }
                 return
-            # Reasoning-first models can exhaust the stream budget on hidden
-            # reasoning; nothing visible was yielded, so a single escalated
-            # retry is safe (and replays as one delta).
+        if not text_buffer.strip() and (not tool_calls or _finish_reason_is_truncated(finish_reason)):
+            # Neither learner-visible text nor usable tool calls escaped this
+            # response. Retry the same step without replaying earlier tools.
             budget_result = await self._openai_truncated_budget_retry(
                 client,
                 messages=formatted,

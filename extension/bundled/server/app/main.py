@@ -213,6 +213,10 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
 
     def browser_lane_request(request: Request) -> bool:
         path = request.url.path.rstrip("/") or "/"
+        # The full browser chat client authenticates with the same paired
+        # Bearer credential; the router enforces that credential itself.
+        if path.startswith("/browser/chat/") and request.headers.get("authorization"):
+            return str(request.headers.get("authorization") or "").strip().lower().startswith("bearer ")
         if path == "/browser/pair":
             # T-0045: the exemption is method-scoped. The browser's code
             # exchange (POST) and a Bearer-authenticated self-revoke (DELETE)
@@ -261,7 +265,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"^http://(127\.0\.0\.1|localhost):\d+$",
+        allow_origin_regex=r"^(http://(127\.0\.0\.1|localhost):\d+|chrome-extension://[a-p]{32})$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

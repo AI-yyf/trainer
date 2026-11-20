@@ -26,6 +26,7 @@ from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 from app.memory.workspace_recovery import leftover_formal_plan_is_live_for_fill
+from tests.training_card_fixtures import open_generated_training_card
 
 
 def _settings(data_dir: Path) -> AppSettings:
@@ -238,7 +239,9 @@ def test_class_human_learn_try_verify_reflect_return_closed_loop(tmp_path: Path)
         card_id = str(card.get("card_id") or card.get("cardId") or "").strip()
         card_title = str(card.get("title") or "").strip()
         assert card_id
-        routing = card_payload.get("active_routing") or card_payload.get("activeRouting") or {}
+        assert card_payload["active_routing"] is None
+        open_generated_training_card(client, workspace_id, card_id)
+        routing = client.get("/training/active-card", params={"workspace_id": workspace_id}).json()
         selected = routing.get("selected_card") or routing.get("selectedCard") or {}
         selected_id = str(
             routing.get("selected_card_id")

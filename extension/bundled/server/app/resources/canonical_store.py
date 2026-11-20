@@ -2,12 +2,12 @@
 
 Layout (relative to the Trainer Library root)::
 
-    <Trainer Library>/.trainer-resources/originals/<resource_id>/<original filename>
     <Trainer Library>/.trainer-resources/markdown/<resource_id>.md
     <Trainer Library>/.trainer-resources/markdown/assets/<resource_id>/<asset filename>
 
-The original file is copied once and never modified; the Markdown document is
-rewritten when the source, the parser version or the content hash changes.
+The Markdown document is the only library artifact. Original binaries are
+never persisted; any legacy ``originals/`` directory is removed after a
+successful Markdown write.
 """
 
 from __future__ import annotations
@@ -68,13 +68,14 @@ def write_canonical_artifact(
     workspace_root: Path,
     document: CanonicalDocument,
     *,
-    original_bytes: bytes | None,
-    original_filename: str,
+    original_bytes: bytes | None = None,
+    original_filename: str = "",
 ) -> CanonicalArtifact:
-    """Persist the Markdown document, its assets and the untouched original.
+    """Persist the Markdown document and its assets.
 
-    Returns the resolved artifact locations. Existing files are replaced
-    atomically so a reader never observes a half-written document.
+    ``original_bytes`` is accepted for call-site compatibility but never
+    written: the library is Markdown-only. Any legacy originals for this
+    resource are removed after the new Markdown is safely on disk.
     """
 
     resource_id = _safe_segment(document.resource_id)
@@ -87,29 +88,33 @@ def write_canonical_artifact(
         for asset in document.assets:
             target = assets_dir / _safe_asset_name(asset.filename)
             _write_bytes_atomic(target, asset.data)
-    elif assets_dir.is_dir():
+
+    _write_bytes_atomic(markdown_path, document.render().encode("utf-8"))
+
+    if not document.assets and assets_dir.is_dir():
         # A previous parse may have produced assets that the new parse does not
         # reference; leaving them would make stale images reachable by URL.
+        # The new Markdown is already on disk, so nothing can point at them.
         for child in assets_dir.iterdir():
             if child.is_file():
                 child.unlink(missing_ok=True)
 
-    _write_bytes_atomic(markdown_path, document.render().encode("utf-8"))
-
-    original_path: Path | None = None
-    original_relative: str | None = None
-    if original_bytes is not None:
-        original_dir = original_dir_for(workspace_root, resource_id)
-        original_dir.mkdir(parents=True, exist_ok=True)
-        original_path = original_dir / _safe_original_name(original_filename)
-        _write_bytes_atomic(original_path, original_bytes)
-        original_relative = workspace_relative(workspace_root, original_path)
+    # md-only: remove the legacy original directory after a successful write.
+    original_dir = original_dir_for(workspace_root, resource_id)
+    if original_dir.is_dir():
+        for child in original_dir.rglob("*"):
+            if child.is_file():
+                child.unlink(missing_ok=True)
+        for child in sorted(original_dir.rglob("*"), reverse=True):
+            if child.is_dir():
+                child.rmdir()
+        original_dir.rmdir()
 
     return CanonicalArtifact(
         markdown_path=markdown_path,
         markdown_relative=workspace_relative(workspace_root, markdown_path),
-        original_path=original_path,
-        original_relative=original_relative,
+        original_path=None,
+        original_relative=None,
         assets_dir=assets_dir,
         created=True,
     )

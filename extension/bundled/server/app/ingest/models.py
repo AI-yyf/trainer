@@ -47,3 +47,4 @@ class IngestionResult:
     warnings: list[str] = field(default_factory=list)
     vision_payload: VisionPayload | None = None
     source_provenance: dict[str, Any] = field(default_factory=dict)
+    canonical_body: str | None = None

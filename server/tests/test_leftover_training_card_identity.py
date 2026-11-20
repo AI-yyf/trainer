@@ -25,6 +25,7 @@ from app.llm.provider_service import ProviderService
 from app.llm.tools import ToolContext, build_default_tool_registry
 from app.main import create_app
 from app.memory.workspace_recovery import PLAN_RUNTIME_KEY
+from tests.training_card_fixtures import open_generated_training_card
 
 
 def _settings(data_dir: Path) -> AppSettings:
@@ -416,8 +417,8 @@ def test_explicit_generate_card_binds_new_live_id_without_clobber_on_failure(
         new_id = str((body.get("card") or {}).get("card_id") or "").strip()
         assert new_id
         assert new_id != leftover_card_id
-        routing = body.get("active_routing") or {}
-        assert str(routing.get("selected_card_id") or "").strip() == new_id
+        assert body["active_routing"] is None
+        open_generated_training_card(client, workspace_id, new_id)
         assert runtime.memory_service.live_selected_training_card_id(workspace_id) == new_id
         assert runtime.memory_service.get_card(workspace_id, leftover_card_id) is not None
 
@@ -1277,8 +1278,8 @@ def test_training_return_live_card_does_not_paint_foreign_workspace(tmp_path: Pa
         new_card_id = str(new_card.get("card_id") or new_card.get("id") or "").strip()
         assert new_card_id
         assert new_card_id != live_card_id
-        routing = card_payload.get("active_routing") or {}
-        assert str(routing.get("selected_card_id") or "").strip() == new_card_id
+        assert card_payload["active_routing"] is None
+        open_generated_training_card(client, workspace_b, new_card_id)
         assert memory.live_selected_training_card_id(workspace_b) == new_card_id
         assert memory.get_card(workspace_b, live_card_id) is None
         assert memory.live_selected_training_card_id(workspace_a) == live_card_id

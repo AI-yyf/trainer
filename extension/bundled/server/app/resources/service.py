@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import re
@@ -36,7 +37,8 @@ from .canonical import (
     plain_text_preview,
     strip_front_matter,
 )
-from .canonical_store import write_canonical_artifact
+from .canonical_store import original_dir_for, write_canonical_artifact
+from .capture import capture_url_from_tags
 from .models import (
     IndexStatus,
     IngestStatus,
@@ -58,13 +60,29 @@ from .source_governance import (
 )
 from .version_check import (
     ResourceVersionCheckResult,
-    VersionCheckBasis,
     VersionCheckStatus,
     captured_source_kind,
     compare_captured_source,
     effective_capture_tags,
 )
 from .versioning import ResourceVersionStore, compute_content_hash, provenance_payload
+
+
+def _canonical_version_bytes(document: CanonicalDocument) -> bytes:
+    """Stable content identity for the Markdown body.
+
+    Asset references are qualified with the resource id for storage, but that
+    id must not make two byte-identical imports look like different content.
+    """
+
+    body = document.body.replace(f"assets/{document.resource_id}/", "assets/")
+    return body.encode("utf-8")
+
+
+def _captured_pdf_source_url(resource: ApiResourceRecord) -> str:
+    if resource.kind != "pdf":
+        return ""
+    return capture_url_from_tags(effective_capture_tags(resource))
 
 
 def _count_markdown_tables(body: str) -> int:
@@ -461,15 +479,25 @@ class ResourceService:
             source_declaration=request.source_declaration,
             source_governance=source_governance,
         )
+        # md-only: pin the same normalized Markdown identity index() will
+        # record, so an upload→index sequence does not create two versions.
         source_path = self._local_source_path(resource.source)
         if source_path is not None and source_path.is_file():
             try:
-                self._record_resource_version(
-                    workspace_id,
-                    resource,
-                    source_path.read_bytes(),
-                )
-            except (OSError, ValueError):
+                if canonicalizable(source_path):
+                    document = build_canonical_document(
+                        source_path,
+                        resource_id=resource.id,
+                        original_name=source_path.name,
+                    )
+                    self._record_resource_version(
+                        workspace_id, resource, _canonical_version_bytes(document)
+                    )
+                else:
+                    self._record_resource_version(
+                        workspace_id, resource, source_path.read_bytes()
+                    )
+            except (OSError, CanonicalParseError, ValueError):
                 pass
         self.repository.save_resource(workspace_id, resource)
         self._ensure_registry_resource(resource)
@@ -527,20 +555,35 @@ class ResourceService:
         return result
 
     def _read_captured_snapshot(self, workspace_id: str, resource: ApiResourceRecord) -> str:
+        """Read the capture baseline.
+
+        The managed inline snapshot is preferred while it still exists. After
+        md-only cleanup, the canonical Markdown file is the durable baseline;
+        the search index is intentionally not used here because its stored
+        content also contains title/path/summary metadata.
+        """
+
         path = self._local_source_path(resource.source)
-        if path is None or not resource.content_hash:
-            return ""
-        try:
-            path = path.resolve(strict=True)
-            if not self._is_managed_inline_source(workspace_id, str(path)):
-                return ""
-            with path.open("rb") as file:
-                data = file.read(4 * 1024 * 1024 + 1)
-            if len(data) > 4 * 1024 * 1024 or compute_content_hash(data) != resource.content_hash:
-                return ""
-            return data.decode("utf-8")
-        except (OSError, UnicodeError, ValueError):
-            return ""
+        if path is not None:
+            try:
+                path = path.resolve(strict=True)
+                if self._is_managed_inline_source(workspace_id, str(path)):
+                    with path.open("rb") as file:
+                        data = file.read(4 * 1024 * 1024 + 1)
+                    if len(data) <= 4 * 1024 * 1024:
+                        return data.decode("utf-8")
+            except (OSError, UnicodeError, ValueError):
+                pass
+        markdown_relative = str(resource.canonical_markdown_path or "").strip()
+        workspace_root = self._resolved_workspace_path(workspace_id)
+        if markdown_relative and workspace_root is not None:
+            try:
+                return strip_front_matter(
+                    (workspace_root / markdown_relative).read_text(encoding="utf-8")
+                )
+            except (OSError, UnicodeDecodeError):
+                pass
+        return ""
 
     def _check_indexed_url(self, resource: ApiResourceRecord) -> VersionCheckStatus:
         if (
@@ -606,6 +649,14 @@ class ResourceService:
         network_allowed = self._network_fetch_enabled(request.enable_network)
         canonical_meta: dict[str, Any] = {}
         initial_source_hash: str | None = None
+        # Capture the original source digest before canonicalization mutates
+        # the record's content_hash to the Markdown body hash.
+        local_source = self._local_source_path(resource.source)
+        if local_source is not None and local_source.is_file():
+            try:
+                initial_source_hash = compute_content_hash(local_source.read_bytes())
+            except OSError:
+                initial_source_hash = None
         canonical_ingest = self._canonical_local_ingest(workspace_id, resource)
         if canonical_ingest is not None:
             ingest_result, canonical_meta = canonical_ingest
@@ -616,6 +667,13 @@ class ResourceService:
             )
             source_hash = (ingest_result.source_provenance or {}).get("source_content_hash")
             initial_source_hash = source_hash if isinstance(source_hash, str) else None
+            if initial_source_hash is None:
+                local_source = self._local_source_path(resource.source)
+                if local_source is not None and local_source.is_file():
+                    try:
+                        initial_source_hash = compute_content_hash(local_source.read_bytes())
+                    except OSError:
+                        initial_source_hash = None
             url_canonical = self._canonicalize_url_ingest(workspace_id, resource, ingest_result)
             if url_canonical is not None:
                 ingest_result, canonical_meta = url_canonical
@@ -630,13 +688,29 @@ class ResourceService:
         ]
         combined_text = "\n\n".join(chunk.text for chunk in normalized_chunks if chunk.text)
         version_content: str | bytes = combined_text
-        source_path = self._local_source_path(resource.source)
-        if not self._is_folder_resource(resource) and source_path is not None and source_path.is_file():
-            try:
-                version_content = source_path.read_bytes()
-            except OSError:
-                pass
-        current_version = self._record_resource_version(workspace_id, resource, version_content)
+        if ingest_result.canonical_body is not None:
+            # md-only: the Markdown body is the versioned artifact. Asset
+            # references are resource-qualified for storage, so neutralize the
+            # id before hashing two identical imports.
+            version_content = ingest_result.canonical_body.replace(
+                f"assets/{resource.id}/", "assets/"
+            ).encode("utf-8")
+        else:
+            source_path = self._local_source_path(resource.source)
+            if not self._is_folder_resource(resource) and source_path is not None and source_path.is_file():
+                try:
+                    version_content = source_path.read_bytes()
+                except OSError:
+                    pass
+        if ingest_result.canonical_body is not None:
+            # Canonicalization already recorded the Markdown version. Recording
+            # the chunk-joined fallback would create a second, semantically
+            # equivalent version on every reindex.
+            current_version = self.version_store.current_version(workspace_id, resource.id)
+        else:
+            current_version = self._record_resource_version(
+                workspace_id, resource, version_content
+            )
         source_provenance = getattr(ingest_result, "source_provenance", {})
         if not isinstance(source_provenance, dict):
             source_provenance = {}
@@ -685,13 +759,15 @@ class ResourceService:
             duplicate_key,
             exclude_id=resource.id,
         )
-        if canonical_duplicate is None and resource.content_hash:
+        dedupe_content_hash = initial_source_hash or resource.content_hash
+        if canonical_duplicate is None and dedupe_content_hash:
             # Identical bytes imported under a different path/name are the same
             # source content; reuse the first indexed copy instead of creating a
-            # second knowledge projection.
+            # second knowledge projection. md-only records keep the source
+            # digest in indexed_source_hash.
             canonical_duplicate = self._canonical_resource_for_content_hash(
                 workspace_id,
-                resource.content_hash,
+                dedupe_content_hash,
                 exclude_id=resource.id,
             )
         if canonical_duplicate is not None:
@@ -751,7 +827,7 @@ class ResourceService:
             summary=ingest_result.summary.text_preview or resource.summary,
             metadata_updates={
                 "workspace_id": workspace_id,
-                "kind": resource.kind,
+                "kind": "markdown" if canonical_meta.get("canonical_markdown_path") else resource.kind,
                 "name": resource.name,
                 "chunk_count": len(normalized_chunks),
                 "character_count": ingest_result.summary.extracted_characters,
@@ -792,12 +868,19 @@ class ResourceService:
                 combined_text[:4000],
                 {"workspace_id": workspace_id, "kind": resource.kind, "name": resource.name},
             )
+        canonical_markdown_path = str(
+            canonical_field("canonical_markdown_path", resource.canonical_markdown_path) or ""
+        ).strip()
+        md_only = bool(canonical_markdown_path)
         updated = resource.model_copy(
             update={
                 "parse_status": "failed" if indexing_failed else "parsed",
                 "index_status": "failed" if indexing_failed else "indexed",
                 "summary": canonical_duplicate.summary if canonical_duplicate and canonical_duplicate.summary else ingest_result.summary.text_preview or resource.summary,
-                "source_type": self._source_type(resource.kind, resource.source),
+                # The library's identity is Markdown; the original format is
+                # provenance, not a library artifact.
+                "kind": "markdown" if md_only else resource.kind,
+                "source_type": "markdown" if md_only else self._source_type(resource.kind, resource.source),
                 "canonical_source": canonical_source,
                 "fetched_at": fetched_at,
                 "trust_score": trust_score,
@@ -808,14 +891,13 @@ class ResourceService:
                 "knowledge_fragments": knowledge_fragments,
                 "source_governance": source_governance,
                 "content_hash": (current_version or {}).get("content_hash") or resource.content_hash,
-                "indexed_source_hash": initial_source_hash if url_fetch_succeeded else None,
+                # Keep the source digest for dedupe/version checks even though
+                # the record's content_hash now identifies the Markdown.
+                "indexed_source_hash": initial_source_hash or resource.indexed_source_hash,
                 "content_language": detected_content_language or resource.content_language,
-                "canonical_markdown_path": canonical_field(
-                    "canonical_markdown_path", resource.canonical_markdown_path
-                ),
-                "canonical_original_path": canonical_field(
-                    "canonical_original_path", resource.canonical_original_path
-                ),
+                "canonical_markdown_path": canonical_markdown_path,
+                # md-only: the original binary is never a library artifact.
+                "canonical_original_path": "",
                 "parser": canonical_field("parser", resource.parser),
                 "parser_version": canonical_field("parser_version", resource.parser_version),
                 "page_count": canonical_field("page_count", resource.page_count),
@@ -839,6 +921,7 @@ class ResourceService:
                 updated,
                 combined_text=combined_text,
                 chunks=normalized_chunks,
+                canonical_body=ingest_result.canonical_body,
                 document_anchors=(
                     list(document_anchors)
                     if isinstance(document_anchors, list)
@@ -848,6 +931,228 @@ class ResourceService:
         else:
             self._search_index(workspace_id).delete_document(updated.id)
         return updated
+
+    @staticmethod
+    def _has_readable_markdown(markdown_path: Path | None) -> bool:
+        """A canonical document that can stand behind the originals.
+
+        A missing or empty file replaces nothing, so the originals it would
+        replace stay.
+        """
+        if markdown_path is None:
+            return False
+        try:
+            return markdown_path.is_file() and markdown_path.stat().st_size > 0
+        except OSError:
+            return False
+
+    def _remove_originals_behind_markdown(
+        self,
+        workspace_root: Path,
+        resource: ApiResourceRecord,
+    ) -> tuple[bool, str]:
+        """Remove the legacy originals of one resource — behind a document.
+
+        This is the only place the library drops an original, and it refuses
+        unless a readable canonical Markdown stands behind it. The originals
+        are then a leftover duplicate; without one they are the last copy of
+        the learner's file, and they stay.
+
+        Returns ``(removed, reason)``. The caller must not report a clean run
+        when ``removed`` is false.
+        """
+        markdown = str(resource.canonical_markdown_path or "").strip()
+        markdown_path = Path(markdown) if markdown else None
+        if markdown_path is not None and not markdown_path.is_absolute():
+            markdown_path = workspace_root / markdown_path
+        if not self._has_readable_markdown(markdown_path):
+            return False, "The canonical Markdown is missing; the originals were kept."
+        original_dir = original_dir_for(workspace_root, resource.id)
+        if not original_dir.is_dir():
+            return True, ""
+        for path in original_dir.rglob("*"):
+            if path.is_file():
+                path.unlink(missing_ok=True)
+        for path in sorted(original_dir.rglob("*"), reverse=True):
+            if path.is_dir():
+                path.rmdir()
+        original_dir.rmdir()
+        return True, ""
+
+    def markdown_only_migration(
+        self,
+        workspace_id: str,
+        *,
+        dry_run: bool = True,
+        confirm: bool = False,
+    ) -> dict[str, Any]:
+        """Convert and clean an existing library into the Markdown-only shape.
+
+        Dry-run is the default. The destructive pass requires ``confirm=True``,
+        writes a manifest before deleting anything, and never deletes an
+        original unless a readable canonical Markdown already exists.
+        """
+
+        workspace_root = self._canonical_writable_root(workspace_id)
+        resources = self.repository.list_resources(workspace_id)
+        manifest: list[dict[str, Any]] = []
+        convertible: list[str] = []
+        failures: list[dict[str, str]] = []
+        # Resources whose legacy originals are the only copy of the resource:
+        # no readable canonical Markdown stands behind them, so the migration
+        # keeps them and reports them.
+        unbacked_originals: list[str] = []
+
+        for resource in resources:
+            markdown = str(resource.canonical_markdown_path or "").strip()
+            markdown_path = Path(markdown) if markdown else None
+            if markdown_path is not None and not markdown_path.is_absolute() and workspace_root is not None:
+                markdown_path = workspace_root / markdown_path
+            has_markdown = bool(markdown_path and markdown_path.is_file())
+            if has_markdown:
+                # A readable canonical document: an empty file stands behind
+                # nothing, so it cannot replace the originals.
+                has_markdown = self._has_readable_markdown(markdown_path)
+            if not has_markdown and resource.source_type != "folder":
+                source_path = self._local_source_path(resource.source)
+                if source_path is not None and source_path.is_file() and canonicalizable(source_path):
+                    convertible.append(resource.id)
+            if workspace_root is None:
+                continue
+            original_dir = original_dir_for(workspace_root, resource.id)
+            original_files = (
+                [path for path in original_dir.rglob("*") if path.is_file()]
+                if original_dir.is_dir()
+                else []
+            )
+            if original_files:
+                if has_markdown:
+                    # A readable canonical Markdown stands behind these
+                    # originals, so they are a leftover duplicate. The
+                    # destructive pass still re-checks that document before it
+                    # removes anything (`_remove_originals_behind_markdown`).
+                    manifest.append(
+                        {
+                            "resource_id": resource.id,
+                            "action": "delete_originals",
+                            "files": [
+                                {
+                                    "path": str(path.relative_to(workspace_root)),
+                                    "size": path.stat().st_size,
+                                }
+                                for path in original_files
+                            ],
+                        }
+                    )
+                else:
+                    # Nothing readable stands behind these originals, so they
+                    # are the last copy of the resource. A convertible resource
+                    # replaces them with its canonical Markdown (and only then
+                    # drops them); anything else keeps them and is reported.
+                    unbacked_originals.append(resource.id)
+            if has_markdown and (
+                resource.kind != "markdown"
+                or resource.canonical_original_path
+                or resource.source_type != "markdown"
+            ):
+                manifest.append(
+                    {
+                        "resource_id": resource.id,
+                        "action": "mark_markdown",
+                        "previous_kind": resource.kind,
+                        "previous_source_type": resource.source_type,
+                    }
+                )
+
+        summary = {
+            "workspace_id": workspace_id,
+            "dry_run": dry_run,
+            "resources": len(resources),
+            "originals_to_delete": sum(
+                1 for item in manifest if item["action"] == "delete_originals"
+            ),
+            "records_to_mark": sum(
+                1 for item in manifest if item["action"] == "mark_markdown"
+            ),
+            "convertible": len(convertible),
+            "originals_kept": len(unbacked_originals),
+            "kept_originals": unbacked_originals[:200],
+            "manifest": manifest[:200],
+        }
+        if dry_run:
+            return {"status": "preview", **summary}
+        if not confirm:
+            return {"status": "confirmation_required", **summary}
+
+        if workspace_root is not None and manifest:
+            manifest_dir = (
+                self.data_root
+                / "library-migrations"
+                / (self._safe_slug(workspace_id) or "workspace")
+            )
+            manifest_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = manifest_dir / f"{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            summary["manifest_path"] = str(manifest_path)
+
+        # Convert first. A conversion writes the canonical Markdown and only
+        # then drops the originals it replaced (the canonical store keeps that
+        # order), so a failed conversion leaves the originals untouched.
+        # Deleting first would destroy the only copy of a resource whose
+        # conversion later fails.
+        converted = 0
+        for resource_id in convertible:
+            try:
+                self.index(
+                    workspace_id,
+                    ResourceIndexRequest(resource_id=resource_id, enable_network=False),
+                )
+                converted += 1
+            except Exception as exc:  # noqa: BLE001 - report per-resource, never abort the batch
+                failures.append({"resource_id": resource_id, "error": str(exc)})
+        summary["converted"] = converted
+
+        for item in manifest:
+            resource = next(
+                (candidate for candidate in resources if candidate.id == item["resource_id"]),
+                None,
+            )
+            if resource is None:
+                continue
+            if item["action"] == "delete_originals" and workspace_root is not None:
+                # One chokepoint: the originals only go behind a readable
+                # canonical document, and a refusal is reported.
+                removed, reason = self._remove_originals_behind_markdown(
+                    workspace_root, resource
+                )
+                if not removed:
+                    failures.append({"resource_id": resource.id, "error": reason})
+            if item["action"] == "mark_markdown":
+                updated = resource.model_copy(
+                    update={
+                        "kind": "markdown",
+                        "source_type": "markdown",
+                        "canonical_original_path": "",
+                    }
+                )
+                self.repository.save_resource(workspace_id, updated)
+
+        for resource_id in unbacked_originals:
+            failures.append(
+                {
+                    "resource_id": resource_id,
+                    "error": (
+                        "No canonical Markdown and no readable source; "
+                        "the only copy of the original was kept."
+                    ),
+                }
+            )
+        summary["failures"] = failures
+        summary["status"] = "complete" if not failures else "partial"
+        return summary
 
     def refresh_organized_resource(
         self,
@@ -1074,41 +1379,88 @@ class ResourceService:
     def export_resource(self, workspace_id: str, resource_id: str) -> dict[str, Any]:
         """Resolve the bytes that "download/export" hands to the user.
 
-        The library's own snapshot is exported byte-for-byte: managed inline
-        files, sandbox-synced snapshots and versioned local copies qualify.
-        URL-only records without a local snapshot are refused honestly instead
-        of exporting a placeholder.
+        The library is Markdown-only: the export is the canonical Markdown
+        document. A record that predates the Markdown-only library is converted
+        once and then exported as Markdown; a record with no readable source is
+        refused honestly instead of exporting a binary original.
         """
 
         resource = self._require_workspace_resource(workspace_id, resource_id)
-        candidates: list[Path] = []
-        sandbox_path = str(resource.sandbox_path or "").strip()
-        if sandbox_path:
-            candidates.append(Path(sandbox_path))
-        candidates.append(Path(str(resource.source or "")))
-        canonical = str(resource.canonical_source or "").strip()
-        if canonical and "://" not in canonical:
-            candidates.append(Path(canonical))
-        for candidate in candidates:
-            try:
-                if candidate.is_file():
-                    return {
-                        "path": str(candidate),
-                        "filename": self._export_filename(resource, candidate),
-                        "media_type": self._export_media_type(resource, candidate),
-                    }
-            except OSError:
-                continue
+        resolved = self._canonical_export_target(workspace_id, resource)
+        if resolved is not None:
+            return resolved
+        # A legacy record may still lack its canonical document. Convert it
+        # once, then export the Markdown: the export never hands back a binary
+        # original.
+        try:
+            self.analyze_canonical(workspace_id, [resource.id])
+            self.materialize_canonical(workspace_id, [resource.id])
+        except Exception:  # noqa: BLE001 - conversion failure is reported below
+            pass
+        refreshed = self._require_workspace_resource(workspace_id, resource_id)
+        resolved = self._canonical_export_target(workspace_id, refreshed)
+        if resolved is not None:
+            return resolved
+        text_snapshot = self._text_snapshot_export_target(workspace_id, refreshed)
+        if text_snapshot is not None:
+            return text_snapshot
         raise ValueError(
-            "This resource has no local snapshot to export; open the source or re-index it first."
+            "This resource has no canonical Markdown to export; convert or index it first."
         )
 
-    @staticmethod
-    def _export_filename(resource: ApiResourceRecord, path: Path) -> str:
-        name = ResourceService._safe_export_name(path.name)
-        if name:
-            return name
-        return ResourceService._safe_export_name(resource.name) or "resource"
+    def _canonical_export_target(
+        self, workspace_id: str, resource: ApiResourceRecord
+    ) -> dict[str, Any] | None:
+        canonical_markdown = str(resource.canonical_markdown_path or "").strip()
+        if not canonical_markdown:
+            return None
+        workspace_root = self._resolved_workspace_path(workspace_id)
+        markdown_path = Path(canonical_markdown)
+        if not markdown_path.is_absolute() and workspace_root is not None:
+            markdown_path = workspace_root / markdown_path
+        try:
+            if not markdown_path.is_file():
+                return None
+        except OSError:
+            return None
+        stem = self._safe_export_name(resource.name) or markdown_path.stem
+        if not stem.lower().endswith(".md"):
+            stem = f"{stem}.md"
+        return {
+            "path": str(markdown_path),
+            "filename": stem,
+            "media_type": "text/markdown",
+        }
+
+    def _text_snapshot_export_target(
+        self, workspace_id: str, resource: ApiResourceRecord
+    ) -> dict[str, Any] | None:
+        """Export a legacy text snapshot as Markdown.
+
+        A capture taken before the Markdown-only library has no canonical
+        document yet, but its managed snapshot *is* plain Markdown text. It is
+        exported as `.md`; a binary snapshot (a captured PDF) never is.
+        """
+
+        if str(resource.kind or "").strip().lower() == "pdf":
+            return None
+        path = self._local_source_path(resource.source)
+        if path is None or not path.is_file():
+            return None
+        if not self._is_managed_inline_source(workspace_id, str(path)):
+            return None
+        try:
+            path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
+        stem = self._safe_export_name(resource.name) or path.stem
+        if not stem.lower().endswith(".md"):
+            stem = f"{stem}.md"
+        return {
+            "path": str(path),
+            "filename": stem,
+            "media_type": "text/markdown",
+        }
 
     @staticmethod
     def _safe_export_name(value: str) -> str:
@@ -1120,19 +1472,6 @@ class ResourceService:
             for character in text
         ).strip(" .")
         return cleaned[:120]
-
-    @staticmethod
-    def _export_media_type(resource: ApiResourceRecord, path: Path) -> str:
-        suffix = path.suffix.lower()
-        return {
-            ".pdf": "application/pdf",
-            ".md": "text/markdown",
-            ".markdown": "text/markdown",
-            ".txt": "text/plain",
-            ".json": "application/json",
-            ".html": "text/html",
-            ".htm": "text/html",
-        }.get(suffix, "application/octet-stream")
 
     def search_resources(
         self,
@@ -1237,6 +1576,32 @@ class ResourceService:
             ] if isinstance(raw_anchors, list) else []
             end = min(min(enclosing_ends, default=start), start + 11, len(lines))
         return "\n".join(lines[start - 1:end]).strip()[:1600]
+
+    def indexed_source_text(
+        self, workspace_id: str, resource: ApiResourceRecord,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Read the canonical indexed body and its document anchors for the current version."""
+        if resource.index_status != "indexed" or not resource.version_id or not resource.content_hash:
+            return "", []
+        version = self.version_store.current_version(workspace_id, resource.id) or {}
+        if version.get("version_id") != resource.version_id or version.get("content_hash") != resource.content_hash:
+            return "", []
+        content, metadata = self._search_index(workspace_id).indexed_document(resource.id)
+        if metadata.get("version_id") != resource.version_id or metadata.get("content_hash") != resource.content_hash:
+            return "", []
+        length = metadata.get("content_length")
+        if not isinstance(length, int) or length <= 0 or length > len(content):
+            return "", []
+        raw_anchors = metadata.get("document_anchors")
+        anchors = [anchor for anchor in raw_anchors if isinstance(anchor, dict)] if isinstance(raw_anchors, list) else []
+        if metadata.get("canonical_text") is not True:
+            # Older indexes joined overlapping chunks. Reuse a recorded reader
+            # body only when it matches an intact prefix of the pinned index.
+            canonical = self.read_canonical_text(workspace_id, resource.id) if resource.canonical_markdown_path else None
+            if not canonical or not content[:length].startswith(canonical.strip()):
+                return "", []
+            return canonical.strip(), anchors
+        return content[:length], anchors
 
     def search_cache_stats(self) -> dict[str, Any]:
         """Cache evidence for the agent: hits/misses/TTL (token-cost transparency)."""
@@ -1646,6 +2011,7 @@ class ResourceService:
                     source_path,
                     resource_id=resource.id,
                     content_hash=f"sha256:{content_hash}",
+                    source_url=_captured_pdf_source_url(resource),
                     original_name=_original_filename_for(resource, source_path),
                 )
             except (OSError, CanonicalParseError) as exc:
@@ -1718,15 +2084,19 @@ class ResourceService:
                         source_path,
                         resource_id=resource.id,
                         content_hash=f"sha256:{content_hash}",
+                        source_url=_captured_pdf_source_url(resource),
                         original_name=_original_filename_for(resource, source_path),
                     )
                 except (OSError, CanonicalParseError) as exc:
                     item["error"] = str(exc)
                     results.append(item)
                     continue
-            current_version = self._record_resource_version(workspace_id, resource, raw)
+            md_bytes = _canonical_version_bytes(document)
+            current_version = self._record_resource_version(workspace_id, resource, md_bytes)
             version_id = str((current_version or {}).get("version_id") or "")
             document.version_id = version_id
+            if (current_version or {}).get("content_hash"):
+                document.content_hash = f"sha256:{current_version['content_hash']}"
             if workspace_root is None:
                 item["error"] = "workspace_root_unavailable"
                 results.append(item)
@@ -1821,15 +2191,14 @@ class ResourceService:
         if not canonicalizable(source_path):
             return None
         try:
-            raw = source_path.read_bytes()
+            # Probe the source: an unreadable file fails here, before a
+            # document is prepared from it.
+            source_path.read_bytes()
         except OSError as exc:
             return self._canonical_failure(
                 resource,
                 [f"Could not read the source file: {exc}"],
             ), {}
-        current_version = self._record_resource_version(workspace_id, resource, raw)
-        version_id = str((current_version or {}).get("version_id") or "")
-        content_hash = str((current_version or {}).get("content_hash") or "")
         prepared = self._prepared_canonical.get(resource.id)
         prepared_document = (
             prepared.get("document") if isinstance(prepared, dict) else None
@@ -1837,37 +2206,54 @@ class ResourceService:
         if (
             isinstance(prepared, dict)
             and isinstance(prepared_document, CanonicalDocument)
-            and str(prepared.get("hash") or "") == content_hash
+            and prepared.get("materialized") is True
         ):
             document = prepared_document
-            document.version_id = version_id
-            if prepared.get("materialized") is True:
-                # analyze + materialize already parsed and wrote this exact
-                # content; indexing must not repeat either.
-                return self._canonical_result(
-                    workspace_id,
-                    resource,
-                    document,
-                    original_bytes=raw,
-                    original_filename=_original_filename_for(resource, source_path),
-                    prewritten=prepared,
-                )
-        else:
-            try:
-                document = build_canonical_document(
-                    source_path,
-                    resource_id=resource.id,
-                    version_id=version_id,
-                    content_hash=f"sha256:{content_hash}" if content_hash else "",
-                    original_name=_original_filename_for(resource, source_path),
-                )
-            except CanonicalParseError as exc:
-                return self._canonical_failure(resource, [str(exc), *exc.warnings]), {}
+            md_bytes = _canonical_version_bytes(document)
+            current_version = self._record_resource_version(
+                workspace_id, resource, md_bytes
+            )
+            document.version_id = str((current_version or {}).get("version_id") or "")
+            document.content_hash = (
+                f"sha256:{str((current_version or {}).get('content_hash') or '')}"
+                if (current_version or {}).get("content_hash")
+                else document.content_hash
+            )
+            # analyze + materialize already parsed and wrote this exact
+            # content; indexing must not repeat either.
+            return self._canonical_result(
+                workspace_id,
+                resource,
+                document,
+                original_bytes=md_bytes,
+                original_filename=_original_filename_for(resource, source_path),
+                prewritten=prepared,
+            )
+        try:
+            document = build_canonical_document(
+                source_path,
+                resource_id=resource.id,
+                source_url=_captured_pdf_source_url(resource),
+                original_name=_original_filename_for(resource, source_path),
+            )
+        except CanonicalParseError as exc:
+            return self._canonical_failure(resource, [str(exc), *exc.warnings]), {}
+        # md-only: the version identity is the canonical Markdown body, not
+        # the binary source or resource-specific front matter.
+        md_bytes = _canonical_version_bytes(document)
+        current_version = self._record_resource_version(
+            workspace_id, resource, md_bytes
+        )
+        version_id = str((current_version or {}).get("version_id") or "")
+        content_hash = str((current_version or {}).get("content_hash") or "")
+        document.version_id = version_id
+        if content_hash:
+            document.content_hash = f"sha256:{content_hash}"
         return self._canonical_result(
             workspace_id,
             resource,
             document,
-            original_bytes=raw,
+            original_bytes=md_bytes,
             original_filename=_original_filename_for(resource, source_path),
         )
 
@@ -1889,9 +2275,6 @@ class ResourceService:
             return None
         final_url = str(provenance.get("final_url") or resource.source)
         fetched_at = str(provenance.get("fetched_at") or "").strip() or None
-        current_version = self._record_resource_version(workspace_id, resource, text)
-        version_id = str((current_version or {}).get("version_id") or "")
-        content_hash = str((current_version or {}).get("content_hash") or "")
         filename = self._url_snapshot_filename(resource.name)
         try:
             document = build_canonical_from_text(
@@ -1900,16 +2283,22 @@ class ResourceService:
                 original_filename=filename,
                 source_url=final_url,
                 imported_at=fetched_at,
-                version_id=version_id,
-                content_hash=f"sha256:{content_hash}" if content_hash else "",
             )
         except CanonicalParseError:
             return None
+        md_bytes = _canonical_version_bytes(document)
+        current_version = self._record_resource_version(
+            workspace_id, resource, md_bytes
+        )
+        document.version_id = str((current_version or {}).get("version_id") or "")
+        content_hash = str((current_version or {}).get("content_hash") or "")
+        if content_hash:
+            document.content_hash = f"sha256:{content_hash}"
         return self._canonical_result(
             workspace_id,
             resource,
             document,
-            original_bytes=text.encode("utf-8"),
+            original_bytes=md_bytes,
             original_filename=filename,
             extra_provenance=dict(ingest_result.source_provenance or {}),
         )
@@ -1948,9 +2337,8 @@ class ResourceService:
                     "canonical_markdown_path": str(
                         prewritten.get("canonical_markdown_path") or ""
                     ),
-                    "canonical_original_path": str(
-                        prewritten.get("canonical_original_path") or ""
-                    ),
+                    # md-only: never expose a retained binary artifact.
+                    "canonical_original_path": "",
                 }
             )
         workspace_root = None if prewritten is not None else self._resolved_workspace_path(workspace_id)
@@ -1977,7 +2365,7 @@ class ResourceService:
                 )
             else:
                 canonical_meta["canonical_markdown_path"] = artifact.markdown_relative
-                canonical_meta["canonical_original_path"] = artifact.original_relative or ""
+                canonical_meta["canonical_original_path"] = ""
         chunks, paragraph_anchors = self._canonical_chunks(
             resource,
             document,
@@ -2010,6 +2398,7 @@ class ResourceService:
             warnings=[*document.warnings, *store_warnings],
             vision_payload=None,
             source_provenance=source_provenance,
+            canonical_body=document.body,
         )
         return result, canonical_meta
 
@@ -2486,6 +2875,47 @@ class ResourceService:
             return False
         return True
 
+    def _canonical_markdown_path(
+        self,
+        workspace_id: str,
+        resource: ApiResourceRecord,
+    ) -> Path | None:
+        """Where the canonical document of one resource lives, if it is named."""
+        markdown = str(resource.canonical_markdown_path or "").strip()
+        if not markdown:
+            return None
+        path = Path(markdown)
+        if path.is_absolute():
+            return path
+        root = self._resolved_workspace_path(workspace_id)
+        return (root / path) if root is not None else None
+
+    def _discard_managed_inline_source(
+        self,
+        workspace_id: str,
+        resource: ApiResourceRecord,
+    ) -> None:
+        """Remove a Trainer-owned inline upload — only behind a readable document.
+
+        The inline copy is the last one of an upload, so it goes only once the
+        canonical Markdown stands behind it. A missing or empty document leaves
+        the upload in place.
+        """
+
+        local_path = self._local_source_path(resource.source)
+        if local_path is None or not local_path.is_file():
+            return
+        if not self._is_managed_inline_source(workspace_id, resource.source):
+            return
+        if not self._has_readable_markdown(
+            self._canonical_markdown_path(workspace_id, resource)
+        ):
+            return
+        try:
+            local_path.unlink(missing_ok=True)
+        except OSError:
+            logger.warning("Could not remove inline source %s", local_path, exc_info=True)
+
     def _is_managed_sandbox_source(self, workspace_id: str, source: str) -> bool:
         """Allow indexing files previously copied into Trainer's own sandbox."""
 
@@ -2521,10 +2951,27 @@ class ResourceService:
         combined_text: str,
         chunks: list[ResourceChunk],
         document_anchors: list[dict[str, Any]] | None = None,
+        canonical_body: str | None = None,
     ) -> None:
         preview_tier, preview_kind, source_extension = self._search_preview_metadata(resource)
+        search_index = self._search_index(workspace_id)
+        if canonical_body is None and document_anchors is None:
+            previous, metadata = search_index.indexed_document(resource.id)
+            length = metadata.get("content_length")
+            if (
+                metadata.get("canonical_text") is True
+                and metadata.get("version_id") == resource.version_id
+                and metadata.get("content_hash") == resource.content_hash
+                and isinstance(length, int)
+                and 0 < length <= len(previous)
+            ):
+                canonical_body = previous[:length]
+                previous_anchors = metadata.get("document_anchors")
+                if isinstance(previous_anchors, list):
+                    document_anchors = previous_anchors
         content = (
-            combined_text.strip()
+            canonical_body
+            or combined_text.strip()
             or "\n\n".join(chunk.text for chunk in chunks if chunk.text).strip()
             or resource.summary
             or resource.name
@@ -2536,7 +2983,7 @@ class ResourceService:
             or ""
         )
         current_version = self.version_store.current_version(workspace_id, resource.id)
-        self._search_index(workspace_id).index_document(
+        search_index.index_document(
             path=search_path,
             title=resource.name,
             content=content,
@@ -2562,6 +3009,7 @@ class ResourceService:
                 "version_id": current_version.get("version_id") if current_version else "",
                 "content_hash": resource.content_hash or "",
                 "content_length": len(content),
+                "canonical_text": bool(canonical_body),
                 "canonical_anchors": _compact_anchors(chunks),
                 "document_anchors": list(document_anchors or []),
                 "location": {
@@ -2575,6 +3023,8 @@ class ResourceService:
         )
 
     def _search_file_type(self, resource: ApiResourceRecord) -> str:
+        if resource.canonical_markdown_path:
+            return "md"
         suffix = self._source_extension(resource.sandbox_path or resource.source)
         if suffix:
             return suffix.lstrip(".")
@@ -2599,6 +3049,8 @@ class ResourceService:
         return "unverified"
 
     def _search_preview_metadata(self, resource: ApiResourceRecord) -> tuple[str, str, str]:
+        if resource.canonical_markdown_path:
+            return "rich", "markdown", ".md"
         suffix = self._source_extension(resource.source)
         preview_kind = "text"
         preview_tier = "rich"
@@ -3277,6 +3729,10 @@ class ResourceService:
             if item.id == exclude_id or item.index_status != "indexed":
                 continue
             if str(item.content_hash or "").strip() == wanted:
+                return item
+            # md-only: the record's content_hash is the Markdown digest; the
+            # original source digest stays available for duplicate detection.
+            if str(item.indexed_source_hash or "").strip() == wanted:
                 return item
         return None
 

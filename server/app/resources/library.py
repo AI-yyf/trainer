@@ -46,7 +46,7 @@ from ..workspace.authority import (
     PermissionLevel,
     WorkspaceAuthority,
 )
-from .capture import parse_github_repo
+from .capture import parse_source_repo
 from .library_copy import library_message
 from .library_downloads import (
     ArtifactNote,
@@ -408,9 +408,10 @@ class LibraryService:
         fetches the same file twice.
         """
 
-        if kind not in {"pdf", "github_repo"}:
+        repo_kinds = {"github_repo", "gitee_repo", "gitlab_repo", "repo"}
+        if kind not in {"pdf", *repo_kinds}:
             raise LibraryError("download_kind_unsupported", status_code=422)
-        if kind == "github_repo" and not network_enabled:
+        if kind in repo_kinds and not network_enabled:
             # A repository can only be downloaded from the network; refuse
             # before creating any folder.
             raise LibraryError("download_network_disabled", status_code=409)
@@ -481,10 +482,10 @@ class LibraryService:
             artifact = save_pdf_artifact(directory, file_name=name, content=content)
             return artifact
 
-        repository = parse_github_repo(url)
+        repository = parse_source_repo(url)
         if repository is None:
             raise LibraryError("download_kind_unsupported", status_code=422)
-        owner, repo, canonical_url = repository
+        _repo_kind, owner, repo, canonical_url = repository
         intended = directory / safe_artifact_name(repo, fallback="repository")
         self._authorize(
             workspace_id,

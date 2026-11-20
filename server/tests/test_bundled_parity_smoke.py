@@ -695,7 +695,15 @@ def test_bundled_conversation_gap_generation_switches_active_training_lane(tmp_p
                     },
                 )
                 assert response.status_code == 200, response.text
-                return response.json()
+                payload = response.json()
+                assert payload["active_routing"] is None
+                assert payload["card"]["review_state"] == "pending"
+                identity = {"workspace_id": workspace_id, "card_id": payload["card"]["card_id"]}
+                for action in ("save", "start"):
+                    transition = client.post("/training/card/library", json={**identity, "action": action})
+                    assert transition.status_code == 200, transition.text
+                payload["active_routing"] = client.get("/training/active-card", params={"workspace_id": workspace_id}).json()
+                return payload
 
             remote = generate(
                 "VS Code remote workspace",

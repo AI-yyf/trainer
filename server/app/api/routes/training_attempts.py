@@ -81,6 +81,12 @@ def build_training_attempts_router(runtime: TrainerRuntime) -> APIRouter:
     @router.post("/training/attempt/start")
     def start_attempt(request: AttemptStartRequest) -> dict:
         # Idempotent: entering a card twice resumes the same attempt.
+        card = runtime.memory_service.get_card(request.workspace_id, request.card_id)
+        if card is not None and (card.review_state != "saved" or card.status == "archived"):
+            raise HTTPException(status_code=409, detail="Select an available card from your library.")
+        if (card is not None and card.reviewed_at
+                and runtime.memory_service.live_selected_training_card_id(request.workspace_id) != request.card_id):
+            raise HTTPException(status_code=409, detail="Open this card for practice first.")
         store = require_store()
         kwargs: dict = {}
         if request.file_path is not None:

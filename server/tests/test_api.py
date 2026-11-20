@@ -28,6 +28,7 @@ from app.core.settings import AppSettings
 from app.llm.provider_service import ProviderService
 from app.main import create_app
 from app.network_fetch import ControlledFetchResponse
+from tests.training_card_fixtures import open_generated_training_card
 
 
 def build_client(tmp_path: Path, *, configure_provider: bool = True) -> TestClient:
@@ -3895,7 +3896,8 @@ def test_training_generate_card_keeps_explicit_flash_mode_for_conversation_gap(t
         assert payload["card"]["card_type"] == "flash"
         assert payload["card"]["scenario_pack"] == "remote_workspace"
         assert payload["card"]["question"]
-        assert payload["active_routing"]["selected_card"]["card_type"] == "flash"
+        assert payload["active_routing"] is None
+        open_generated_training_card(client, "workspace-training-flash-mode", payload["card"]["card_id"])
         runtime = client.app.state.runtime
         sandbox_root = runtime.sandbox_service.ensure_workspace_root("workspace-training-flash-mode")
         assert (sandbox_root / "cards" / "flash" / f"{payload['card']['card_id']}.md").exists()
@@ -4371,6 +4373,7 @@ def test_training_generate_card_reuses_open_resource_card_before_creating_anothe
             first_card_id
         ]
 
+        open_generated_training_card(client, managed_workspace_id, first_card_id)
         runtime.memory_service.transition_card_status(
             managed_workspace_id,
             first_card_id,
@@ -4620,7 +4623,7 @@ def test_training_generate_card_dependency_requires_verified_file_evidence(tmp_p
         assert "verified import, call, or declaration" in card["return_with"]
 
 
-def test_training_active_card_prefers_same_topic_practice_before_flash(tmp_path: Path) -> None:
+def test_training_generated_flash_keeps_selected_practice_card(tmp_path: Path) -> None:
     with build_client(tmp_path) as client:
         start_response = client.post(
             "/session/start",
@@ -4651,7 +4654,8 @@ def test_training_active_card_prefers_same_topic_practice_before_flash(tmp_path:
         )
         assert practice_response.status_code == 200
         practice_payload = practice_response.json()
-        assert practice_payload["active_routing"]["selected_card"]["card_type"] == "practice"
+        assert practice_payload["active_routing"] is None
+        open_generated_training_card(client, "workspace-training-learn-first", practice_payload["card"]["card_id"])
 
         flash_response = client.post(
             "/training/generate-card",
@@ -4668,12 +4672,12 @@ def test_training_active_card_prefers_same_topic_practice_before_flash(tmp_path:
         assert flash_response.status_code == 200
         flash_payload = flash_response.json()
         assert flash_payload["card"]["card_type"] == "flash"
-        assert flash_payload["active_routing"]["selected_card"]["card_type"] == "practice"
-        assert flash_payload["active_routing"]["candidate_count"] == 2
+        assert flash_payload["active_routing"] is None
+        assert flash_payload["card"]["review_state"] == "pending"
         runtime = client.app.state.runtime
         sandbox_root = runtime.sandbox_service.ensure_workspace_root("workspace-training-learn-first")
         assert (sandbox_root / "cards" / "scenario" / f"{practice_payload['card']['card_id']}.md").exists()
-        assert list((sandbox_root / "cards" / "flash").glob("*.md"))
+        assert not list((sandbox_root / "cards" / "flash").glob("*.md"))
         assert (sandbox_root / "cards" / "current" / "active.md").exists()
 
         active_response = client.get(
@@ -4684,8 +4688,7 @@ def test_training_active_card_prefers_same_topic_practice_before_flash(tmp_path:
         active_payload = active_response.json()
         assert active_payload["selected_card"]["card_type"] == "practice"
         assert active_payload["selected_card"]["scenario_pack"] == "remote_workspace"
-        assert active_payload["candidate_count"] == 2
-        assert any("Flash: Remote workspace boundary" in reason for reason in active_payload["why_not_others"])
+        assert active_payload["candidate_count"] == 1
 
         runtime = client.app.state.runtime
         cards = runtime.memory_service.get_cards("workspace-training-learn-first")

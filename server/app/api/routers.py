@@ -23,6 +23,8 @@ from ..core.models import (
     CardGenerationContext,
     CardGenerationRequest,
     CardGenerationResponse,
+    CardLibraryActionRequest,
+    CardStatusTransitionResponse,
     ChatMessage,
     CoachArtifact,
     CoachDefaults,
@@ -34,6 +36,7 @@ from ..core.models import (
     EvaluateSnippetRequest,
     EvaluationCheck,
     EvaluationReport,
+    ExpectedResourceVersion,
     FirstLookSummary,
     ImplementationGuide,
     LearnerState,
@@ -132,6 +135,7 @@ from ..memory.workspace_recovery import (
     select_latest_current_task,
     select_plan_runtime_for_scope,
 )
+from ..resources.research_brief import BriefPassage, brief_passages, preparation_for_active_stage
 from ..training.card_generator import (
     CardGenerationProviderFailure,
     CardGenerationService,
@@ -195,6 +199,7 @@ from .router_support import (
 )
 from .routes._deps import RouterDeps
 from .routes.browser import build_browser_router
+from .routes.browser_chat import build_browser_chat_router
 from .routes.core import CoreRouteDeps, build_core_router
 from .routes.goal import build_goal_router
 from .routes.learning import build_learning_router
@@ -273,8 +278,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
 
     router = APIRouter()
     action_id_counter = 0
-    resource_training_card_locks: dict[str, Lock] = {}
-    resource_training_card_locks_guard = Lock()
+    training_card_locks: dict[str, Lock] = {}
+    training_card_locks_guard = Lock()
 
     # Stream cancellation is deliberately scoped to this router/runtime. The
     # sidecar is a local process, so an in-memory registry gives the active
@@ -362,11 +367,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             event = stream_cancellation_events.get(stream_id)
             return bool(event and event.is_set())
 
-    def resource_training_card_lock(workspace_id: str) -> Lock:
-        """Keep one workspace's resource-card route and active selection in sync."""
+    def training_card_lock(workspace_id: str) -> Lock:
+        """Serialize changes to a workspace’s card library."""
 
-        with resource_training_card_locks_guard:
-            return resource_training_card_locks.setdefault(workspace_id, Lock())
+        with training_card_locks_guard:
+            return training_card_locks.setdefault(workspace_id, Lock())
 
 
     def extract_coach_turn_payload(value: object) -> CoachTurnPayload:
@@ -4214,10 +4219,21 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     ) -> dict[str, object]:
         if resource_composer_intent is not None and resource_composer_intent.mode == "analyze":
             ids = resource_ids or resource_composer_intent.resource_ids
+            if not ids and preparation_for_active_stage(message or ""):
+                stage = active_plan_stage(runtime.repository.get_latest_plan(workspace_id))
+                if stage is not None:
+                    ids = [
+                        resource.id for resource_id in stage.resources
+                        if (resource := runtime.repository.get_resource(workspace_id, resource_id)) is not None
+                        and resource.index_status == "indexed"
+                    ]
             analysis_context = (runtime.resource_service.build_requested_resource_context(
                 workspace_id, ids[:4], fragments_per_source=1,
             ) if ids else automatic_resource_context(workspace_id, message, analysis=True))
             fragments = analysis_context.get("resource_fragments")
+            use_page_hint = isinstance(fragments, list) and sum(
+                isinstance(item, dict) and item.get("kind") == "pdf" for item in fragments
+            ) == 1
             verified_fragments = []
             store = runtime.resource_version_store
             for item in fragments if isinstance(fragments, list) else []:
@@ -4232,6 +4248,31 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 resource = runtime.repository.get_resource(workspace_id, resource_id)
                 if resource is None:
                     continue
+                if ids:
+                    body, anchors = runtime.resource_service.indexed_source_text(workspace_id, resource)
+                    passages = brief_passages(
+                        BriefPassage(resource, body, 1, anchors), message or "",
+                        passage_length=900, limit=1, use_page_hint=use_page_hint,
+                    )
+                    if passages:
+                        selected = passages[0]
+                        passage = selected.text.lstrip()
+                        excerpt = redact_training_fact_text(passage, 900)
+                        if excerpt:
+                            leading = selected.text[:len(selected.text) - len(passage)]
+                            start = selected.first_line + leading.count("\n")
+                            ref = selected.reference(passage.rstrip(), start)
+                            citation = store.record_citation(
+                                workspace_id=workspace_id, resource_id=resource_id,
+                                version_id=resource.version_id, content_hash=resource.content_hash,
+                                location=ref.metadata["location"],
+                            )
+                            verified_fragments.append({
+                                **citation, "title": resource.name, "kind": resource.kind,
+                                "source": resource.canonical_source or resource.source,
+                                "snippet": excerpt, "excerpt": excerpt,
+                            })
+                            continue
                 passage = runtime.resource_service.read_indexed_fragment_text(workspace_id, resource, item)
                 excerpt = redact_training_fact_text(passage, 900)
                 if excerpt:
@@ -5367,6 +5408,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 if not prefers_chinese(request.response_language)
                 else f"\u5df2\u9644\u5e26 {current_file.language_id} \u6587\u4ef6\u4e0a\u4e0b\u6587"
             )
+            # The visible source footnote travels on its own channel: the
+            # reader may see where the turn came from, while `context_note`
+            # stays the internal management context.
+            metadata["source_note"] = metadata["context_note"]
         apply_attachment_delivery_metadata(metadata, attachment_delivery)
         if stream_id:
             metadata["stream_id"] = stream_id
@@ -6904,6 +6949,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         }
         if request.active_view:
             metadata["active_view"] = request.active_view
+        if request.resource_ids:
+            metadata["resource_ids"] = request_resource_ids(request)
         artifact_entries: list[dict[str, object]] = []
         for kind, artifact in artifacts.items():
             if isinstance(artifact, dict):
@@ -8802,7 +8849,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
 
     def select_active_training_card(workspace_id: str) -> ActiveCardSelectionResult:
-        cards = runtime.memory_service.get_cards(workspace_id)
+        cards = [card for card in runtime.memory_service.get_cards(workspace_id)
+                 if card.review_state == "saved"]
         live_id = runtime.memory_service.live_selected_training_card_id(workspace_id)
         response_language = workspace_response_language(workspace_id)
         zh = prefers_chinese(response_language)
@@ -10171,7 +10219,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             event_ledger=getattr(configured_service, "_event_ledger", None),
         )
 
-    def training_generate_and_route_card(
+    def training_generate_candidate(
         request: CardGenerationRequest,
         generated_card: TrainingCardCandidateSnapshot | None = None,
         provider_service_override: ProviderService | None = None,
@@ -10185,6 +10233,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             card = generated_card or generator.generate_card(request_payload.source, request_payload)
             card = card.model_copy(
                 update={
+                    "review_state": "pending",
                     "resource_id": request_payload.resource_id or card.resource_id,
                     "trust_state": request_payload.resource_trust_state or card.trust_state,
                     "difficulty": request_payload.difficulty or card.difficulty,
@@ -10215,74 +10264,77 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         def existing_open_resource_card() -> TrainingCardCandidateSnapshot | None:
             return existing_open_resource_training_card(request_payload)
 
-        def route_stored_card(stored_card: TrainingCardCandidateSnapshot) -> CardGenerationResponse:
-            leftover_plan, leftover_runtime = leftover_runtime_for_workspace(request_payload.workspace_id)
-            active_card = stored_card
-            if stored_card.card_type == "flash":
-                topic = {str(value or "").strip().lower() for value in (stored_card.scenario_pack, stored_card.target_skill, stored_card.focus_area) if str(value or "").strip()}
-                # Only an open practice card may remain the live handoff when
-                # a flash card is minted.  Answered cards are intentionally
-                # retained for review, but cannot transition back to active.
-                active_card = next((card for card in runtime.memory_service.get_cards(request_payload.workspace_id) if card.card_type == "practice" and card.status in {"candidate", "active", "needs_primer"} and topic.intersection({str(value or "").strip().lower() for value in (card.scenario_pack, card.target_skill, card.focus_area) if str(value or "").strip()})), stored_card)
-            # (same pattern as leftover /plan/generate). Do not let leftover pool
-            # title-match replace the newly minted card.
-            selection = runtime.memory_service.persist_active_card_selection(
-                request_payload.workspace_id,
-                ActiveCardSelectionResult(
-                    selected_card=active_card,
-                    selected_card_id=active_card.card_id,
-                    selection_score=100.0,
-                    why_this_card=live_training_why_this_card(
-                        plan=leftover_plan,
-                        runtime=leftover_runtime,
-                        existing=leftover_runtime,
-                        card_title=active_card.title,
-                        why_now=active_card.why_now,
-                        kind="next",
-                    )
-                    or "This is the next training card.",
-                    fallback_action="Return to coach with the exact blocker and verification output.",
-                    next_after_completion="Update evidence, then route the next card.",
-                    candidate_count=len(runtime.memory_service.get_cards(request_payload.workspace_id)),
-                    eligible_count=sum(1 for card in runtime.memory_service.get_cards(request_payload.workspace_id) if card.status not in {"implemented", "reviewed", "fed_back", "archived", "skipped"}),
-                ),
-            )
-            persist_training_card_to_sandbox(
-                request_payload.workspace_id,
-                stored_card,
-                mark_current=False,
-            )
-            persist_training_card_to_sandbox(
-                request_payload.workspace_id,
-                selection.selected_card or stored_card,
-                mark_current=True,
-            )
+        def candidate_response(card: TrainingCardCandidateSnapshot) -> CardGenerationResponse:
             refresh_workspace_sessions(request_payload.workspace_id)
-            return CardGenerationResponse(
-                card=stored_card,
-                score=selection.selection_score,
-                success=True,
-                reason="",
-                active_routing=selection,
-            )
+            return CardGenerationResponse(card=card)
 
-        if request_payload.source == "resource_knowledge" and request_payload.resource_id:
-            with resource_training_card_lock(request_payload.workspace_id):
-                try:
-                    return route_stored_card(
+        try:
+            if request_payload.source == "resource_knowledge" and request_payload.resource_id:
+                with training_card_lock(request_payload.workspace_id):
+                    return candidate_response(
                         existing_open_resource_card() or store_generated_card(generated_card)
                     )
-                except (CardGenerationProviderFailure, HTTPException):
-                    raise
-                except Exception as exc:
-                    # Explicit generate failure must not clobber leftover storage.
-                    raise HTTPException(status_code=502, detail=str(exc)) from exc
-        try:
-            return route_stored_card(store_generated_card(generated_card))
+            return candidate_response(store_generated_card(generated_card))
         except (CardGenerationProviderFailure, HTTPException):
             raise
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    def training_card_library_action(request: CardLibraryActionRequest) -> CardStatusTransitionResponse:
+        workspace_id, card_id = request.workspace_id, request.card_id
+        memory = runtime.memory_service
+        with training_card_lock(workspace_id):
+            card = memory.get_card(workspace_id, card_id)
+            if card is None:
+                raise HTTPException(status_code=404, detail="Training card not found.")
+            if request.action == "start":
+                if card.review_state != "saved" or card.status not in {
+                    "candidate", "active", "needs_primer", "blocked", "skipped",
+                }:
+                    raise ValueError("Select an available card from your library.")
+                if memory.live_selected_training_card_id(workspace_id) != card_id:
+                    if card.trust_state in {"untrusted", "stale"} and not card.trust_acknowledged:
+                        raise ValueError("Refresh or acknowledge the card's source before practicing.")
+                    if card.resource_id and card.resource_version_id and card.resource_content_hash:
+                        require_expected_training_resource_version(CardGenerationRequest(
+                            workspace_id=workspace_id,
+                            resource_id=card.resource_id,
+                            expectedResourceVersion=ExpectedResourceVersion(
+                                versionId=card.resource_version_id,
+                                contentHash=card.resource_content_hash,
+                            ),
+                        ))
+                    selection = memory.persist_active_card_selection(
+                        workspace_id,
+                        ActiveCardSelectionResult(
+                            selected_card=card,
+                            selected_card_id=card_id,
+                            why_this_card=card.why_now,
+                        ),
+                    )
+                    card = selection.selected_card or card
+                    persist_training_card_to_sandbox(workspace_id, card)
+            elif request.action == "archive":
+                if card.status != "archived":
+                    card = memory.transition_card_status(
+                        workspace_id, card_id, "archived",
+                        reason="Archived from the training library.",
+                        archive_from_library=True,
+                    ).card
+            else:
+                review_state: dict[str, Literal["saved", "deferred", "rejected"]] = {
+                    "save": "saved", "defer": "deferred", "reject": "rejected",
+                }
+                card = memory.review_card_candidate(
+                    workspace_id, card,
+                    state=review_state[request.action],
+                    prompt=request.prompt,
+                    acceptance_criteria=request.acceptance_criteria,
+                )
+                if request.action == "save":
+                    persist_training_card_to_sandbox(workspace_id, card, mark_current=False)
+            refresh_workspace_sessions(workspace_id)
+            return CardStatusTransitionResponse(card=card)
 
     def requested_training_card_type(message: str | None) -> Literal["practice", "flash"]:
         lowered = " ".join(str(message or "").strip().lower().split())
@@ -11044,7 +11096,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 current_file=current_file_payload,
             )
         )
-        return training_generate_and_route_card(
+        return training_generate_candidate(
             request_payload,
             provider_service_override=provider_service_override,
         )
@@ -11306,7 +11358,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             )
         )
         try:
-            training_generate_and_route_card(
+            training_generate_candidate(
                 fallback_request,
                 provider_service_override=ProviderService(),
             )
@@ -13781,7 +13833,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         task_training_concepts=task_training_concepts,
         teaching_strategy_context_from_snapshot=teaching_strategy_context_from_snapshot,
         to_json_payload=to_json_payload,
-        training_generate_and_route_card=training_generate_and_route_card,
+        training_generate_candidate=training_generate_candidate,
+        training_card_library_action=training_card_library_action,
+        training_card_lock=training_card_lock,
         training_practice_blocked_report=training_practice_blocked_report,
         trusted_training_card_request_from_api=trusted_training_card_request_from_api,
         turn_history_text=turn_history_text,
@@ -13795,14 +13849,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         workspace_preferences=workspace_preferences,
         workspace_response_language=workspace_response_language,
     )
-    router.include_router(build_core_router(runtime, deps, core_route_seed))
+    resources_router, prepare_research_turn = build_resources_router(runtime, deps)
+    router.include_router(build_core_router(runtime, deps, core_route_seed, prepare_research_turn))
     router.include_router(build_workspace_router(runtime, deps))
     router.include_router(build_project_router(runtime, deps))
     router.include_router(build_memory_router(runtime, deps))
     router.include_router(build_learning_router(runtime, deps))
     router.include_router(build_goal_router(runtime, deps))
-    router.include_router(build_resources_router(runtime, deps))
+    router.include_router(resources_router)
     router.include_router(build_browser_router(runtime, deps))
+    router.include_router(build_browser_chat_router(runtime, deps))
     router.include_router(build_provider_router(runtime, deps))
     router.include_router(build_sandbox_router(runtime, deps))
     router.include_router(build_plan_router(runtime, deps))

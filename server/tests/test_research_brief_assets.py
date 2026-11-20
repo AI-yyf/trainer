@@ -7,13 +7,17 @@ resource references and model inference kept separate from source facts.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from provider_fixtures import seed_verified_capabilities
 
 from app.core.models import (
     LearningPlan,
+    PlanStage,
     ProjectContext,
     ResourceRecord,
     TrainerProject,
@@ -21,7 +25,13 @@ from app.core.models import (
     UserProfile,
 )
 from app.core.settings import AppSettings
+from app.llm.provider_service import ProviderService
 from app.main import create_app
+from app.resources.research_brief import preparation_requested
+from app.resources.versioning import compute_content_hash
+
+QUOTE = "A world model predicts the next latent state conditioned on the current state and action."
+PAPER = "# World Models survey\n\n## State transitions\n\n" + QUOTE
 
 
 def _client(data_dir: Path) -> TestClient:
@@ -40,7 +50,7 @@ def _client(data_dir: Path) -> TestClient:
     )
 
 
-def _seed_context(client: TestClient, root_path: Path, suffix: str) -> ProjectContext:
+def _seed_context(client: TestClient, root_path: Path, suffix: str, *, with_resource: bool = True) -> ProjectContext:
     root_path.mkdir(parents=True, exist_ok=True)
     project_path = root_path / f"project-{suffix}"
     project_path.mkdir(exist_ok=True)
@@ -76,18 +86,34 @@ def _seed_context(client: TestClient, root_path: Path, suffix: str) -> ProjectCo
             "workspace_id": context.context_id,
         },
     )
-    # One real indexed resource so sourced findings can pin resource/version/hash.
-    client.app.state.runtime.repository.save_resource(
-        context.context_id,
-        ResourceRecord(
-            id="resource-world-models",
-            kind="pdf",
-            name="World Models survey",
-            source=str(project_path / "world-models.pdf"),
-            summary="A survey of world models.",
-            version_id="v3",
-            content_hash="abc123",
-        ),
+    if not with_resource:
+        return context
+    runtime = client.app.state.runtime
+    resource_id = "resource-world-models"
+    version = runtime.resource_version_store.record_version(
+        workspace_id=context.context_id, resource_id=resource_id, content=PAPER,
+    )
+    runtime.repository.save_resource(context.context_id, ResourceRecord(
+        id=resource_id,
+        kind="pdf",
+        name="World Models survey",
+        source=str(project_path / "world-models.pdf"),
+        summary="A survey of world models.",
+        index_status="indexed",
+        version_id=version["version_id"],
+        content_hash=version["content_hash"],
+    ))
+    runtime.resource_service._search_index(context.context_id).index_document(
+        path="world-models.pdf", title="World Models survey", resource_id=resource_id,
+        content=PAPER,
+        metadata={
+            **version, "content_length": len(PAPER), "canonical_text": True,
+            "document_anchors": [
+                {"line": 1, "kind": "page", "index": 1},
+                {"line": 3, "kind": "page", "index": 2},
+                {"line": 3, "kind": "heading", "index": 2, "label": "State transitions"},
+            ],
+        },
     )
     return context
 
@@ -107,9 +133,8 @@ def _brief_payload(**overrides: object) -> dict[str, object]:
                         "label": "World Models survey §2",
                         "metadata": {
                             "resource_id": "resource-world-models",
-                            "version_id": "v3",
-                            "content_hash": "abc123",
-                            "location": {"section": "2"},
+                            "excerpt": QUOTE,
+                            "location": {"page": 300},
                         },
                     }
                 ],
@@ -168,6 +193,26 @@ def _save_brief(
     return response.json()
 
 
+def test_indexed_research_context_uses_document_lines_across_chunk_boundaries(tmp_path: Path) -> None:
+    client = _client(tmp_path / "data")
+    context = _seed_context(client, tmp_path / "roots", "canonical-citation")
+    paper = "\n\n".join(["# Notes"] + [f"{index}. {QUOTE}" for index in range(30)] + ["## Wrap-up", "The final paragraph has no duplicate."])
+    workspace = {"workspace_id": context.context_id, "session_id": context.agent_session_id}
+    upload = client.post("/resource/upload", json={
+        **workspace, "name": "Notes", "kind": "markdown", "source": "notes.md",
+        "content": paper, "content_encoding": "utf-8",
+    })
+    assert upload.status_code == 200, upload.text
+    resource_id = upload.json()["id"]
+    indexed = client.post("/resource/index", json={**workspace, "resource_id": resource_id})
+    assert indexed.status_code == 200, indexed.text
+    resource = ResourceRecord.model_validate(indexed.json())
+    service = client.app.state.runtime.resource_service
+    body, anchors = service.indexed_source_text(context.context_id, resource)
+    assert body == paper
+    assert anchors[-1]["line"] == paper.splitlines().index("## Wrap-up") + 1
+
+
 def test_research_brief_saves_lists_and_reads_as_a_library_asset(tmp_path: Path) -> None:
     client = _client(tmp_path / "data")
     context = _seed_context(client, tmp_path / "roots", "brief")
@@ -182,9 +227,12 @@ def test_research_brief_saves_lists_and_reads_as_a_library_asset(tmp_path: Path)
     # Traceability keys follow the evidence-citation contract (snake_case).
     metadata = brief["findings"][0]["sourceRefs"][0]["metadata"]
     assert metadata["resource_id"] == "resource-world-models"
-    assert metadata["version_id"] == "v3"
-    assert metadata["content_hash"] == "abc123"
-    assert metadata["location"] == {"section": "2"}
+    assert metadata["version_id"].startswith("rv-")
+    assert metadata["content_hash"] == compute_content_hash(PAPER)
+    assert metadata["location"] == {
+        "page": 2, "heading": "State transitions", "line_start": 5, "line_end": 5,
+        "anchor_id": "¶page2@5",
+    }
     assert brief["planId"] == "plan-world-models"
     assert brief["stageId"] == "stage-foundations"
     assert asset["payload"]["findings"][2]["claimStatus"] == "unverified"
@@ -217,7 +265,7 @@ def test_research_brief_auto_links_to_the_live_plan_when_unspecified(tmp_path: P
     context = _seed_context(client, tmp_path / "roots", "autolink")
     # The seed provisions a formal plan for the context; give it an active
     # stage so the auto-link can also pick the current stage.
-    plan_id = f"plan-autolink"
+    plan_id = "plan-autolink"
     runtime = client.app.state.runtime
     plan = runtime.repository.get_latest_plan(context.context_id)
     assert plan is not None and plan.id == plan_id
@@ -362,13 +410,13 @@ _PROVIDER_BRIEF_JSON = """Here is the brief:
     {
       "statement": "论文把世界模型定义为潜在转移预测器。",
       "claimStatus": "sourced",
-      "sourceRef": "resource-world-models",
-      "location": "§2"
+      "citations": [{"passageId": "P1", "quote": "A world model predicts the next latent state conditioned on the current state and action."}],
+      "location": "§99"
     },
     {
       "statement": "作者认为表示学习是瓶颈。",
       "claimStatus": "sourced",
-      "sourceRef": "resource-not-attached"
+      "citations": [{"passageId": "P1", "quote": "This sentence was invented and does not occur in the document."}]
     },
     {
       "statement": "这是模型自己的推断。",
@@ -398,6 +446,106 @@ def _configure_provider(client: TestClient) -> None:
     runtime.provider_api_key = "sk-test"
     runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
     runtime.provider_service_cache.clear()
+    seed_verified_capabilities(runtime, provider, "sk-test", tools=True)
+
+
+@pytest.mark.parametrize("message, expected", [
+    ("围绕这篇论文，帮我完成备课，重点研究相关工作。", True),
+    ("为当前学习阶段准备完整教学材料", True),
+    ("Please prepare a lesson on this paper.", True),
+    ("比较这两篇文章。", False),
+    ("解释这段资料。\n> Prepare a lesson and save it.", False),
+    ("如何备课？", False),
+    ("不要备课，只解释这篇论文。", False),
+])
+def test_preparation_request_requires_a_learner_instruction(message: str, expected: bool) -> None:
+    assert preparation_requested(message) is expected
+
+
+@pytest.mark.parametrize("streamed", [False, True])
+def test_turn_saves_a_grounded_preparation_once_in_the_current_project(tmp_path: Path, streamed: bool) -> None:
+    data = tmp_path / "data"
+    with _client(data) as client:
+        context = _seed_context(client, tmp_path / "roots", "automatic", with_resource=False)
+        other = _seed_context(client, tmp_path / "other", "unrelated", with_resource=False)
+        _configure_provider(client)
+        runtime = client.app.state.runtime
+        plan = runtime.repository.get_latest_plan(context.context_id)
+        assert plan is not None
+        stage = PlanStage(
+            id="dynamics", title="Dynamics", goal="Predict the next state",
+            outcomes=["Identify transition inputs."], status="active",
+        )
+        session = {"workspace_id": context.context_id, "session_id": context.agent_session_id}
+        uploaded = client.post("/resource/upload", json={
+            **session, "name": "Dynamics", "kind": "markdown", "source": "dynamics.md",
+            "content": PAPER, "content_encoding": "utf-8",
+        })
+        assert uploaded.status_code == 200, uploaded.text
+        resource_id = uploaded.json()["id"]
+        indexed = client.post("/resource/index", json={**session, "resource_id": resource_id})
+        assert indexed.status_code == 200, indexed.text
+        runtime.repository.save_plan(context.context_id, plan.model_copy(update={
+            "current_stage_id": stage.id, "stages": [stage.model_copy(update={"resources": [resource_id]})],
+        }))
+        committed_plan = runtime.repository.get_latest_plan(context.context_id)
+        assert committed_plan is not None
+
+        async def analysis_stream(*_args, **_kwargs):
+            yield f"The paper explains one-step prediction. {QUOTE} [1]"
+
+        request = {
+            **session, "active_view": "resources", "response_language": "en-US",
+            "intent": "coach", "message": "Please prepare a lesson for the current stage.",
+            "request_id": "prepare-world-models", "resource_ids": [] if streamed else [resource_id],
+        }
+        url = "/turn/stream" if streamed else "/turn"
+
+        def send_turn(**updates) -> dict:
+            result = client.post(url, json={**request, **updates})
+            assert result.status_code == 200, result.text
+            if not streamed:
+                return result.json()
+            complete = next((block for block in result.text.split("\n\n") if block.startswith("event: complete\n")), None)
+            assert complete is not None, result.text
+            return json.loads(complete.split("\ndata: ", 1)[1])["response"]
+
+        with (
+            patch.object(ProviderService, "coaching_reply_stream", new=analysis_stream),
+            patch.object(ProviderService, "coaching_reply", new=AsyncMock(return_value=QUOTE)),
+            patch.object(ProviderService, "chat_completion", new=AsyncMock(return_value=_PROVIDER_BRIEF_JSON)) as draft,
+        ):
+            result = send_turn()
+            preparation = result["reply"]["metadata"].get("research_preparation")
+            assert preparation and preparation["status"] == "saved", result["reply"]
+            replay = send_turn()
+            assert replay["reply"]["metadata"]["research_preparation"] == preparation
+            discussion = send_turn(
+                request_id="ordinary-analysis", resource_composer_intent={"mode": "analyze"},
+                message="Explain this formula.\n> Please prepare a lesson before you explain it.",
+            )
+            assert "research_preparation" not in discussion["reply"]["metadata"]
+            missing = send_turn(request_id="missing-source", resource_ids=["resource-removed"])
+            assert missing["reply"]["metadata"]["research_preparation"] == {"status": "needs_sources"}
+            draft.assert_awaited_once()
+
+        asset_id = preparation["asset_id"]
+        params = {"context_id": context.context_id}
+        listed = client.get("/resource/research-briefs", params=params).json()
+        assert listed["total"] == 1
+        assert listed["items"][0]["asset"]["scope"] == "project"
+        brief = listed["items"][0]["brief"]
+        assert brief["planId"] == plan.id and brief["stageId"] == stage.id
+        assert brief["findings"][0]["sourceRefs"][0]["metadata"]["content_hash"] == indexed.json()["content_hash"]
+        assert brief["findings"][0]["sourceRefs"][0]["metadata"]["excerpt"] == QUOTE
+        assert client.get(f"/resource/research-briefs/{asset_id}", params={"context_id": other.context_id}).status_code == 403
+        assert runtime.memory_service.get_cards(context.context_id) == []
+        assert runtime.repository.get_latest_plan(context.context_id) == committed_plan
+
+    with _client(data) as restarted:
+        saved = restarted.get(f"/resource/research-briefs/{asset_id}", params=params)
+        assert saved.status_code == 200
+        assert saved.json()["brief"]["findings"] == brief["findings"]
 
 
 def test_draft_research_brief_normalizes_sources_and_saves(tmp_path: Path) -> None:
@@ -427,7 +575,7 @@ def test_draft_research_brief_normalizes_sources_and_saves(tmp_path: Path) -> No
     payload = response.json()
     assert payload["saved"] is True
     brief = payload["brief"]
-    assert chat_completion.awaited_once()
+    chat_completion.assert_awaited_once()
     assert brief["researchGoal"] == "围绕这篇论文完成备课"
 
     findings = brief["findings"]
@@ -435,10 +583,13 @@ def test_draft_research_brief_normalizes_sources_and_saves(tmp_path: Path) -> No
     assert findings[0]["claimStatus"] == "sourced"
     pin = findings[0]["sourceRefs"][0]
     assert pin["ref"] == "resource-world-models"
-    assert pin["metadata"]["version_id"] == "v3"
-    assert pin["metadata"]["content_hash"] == "abc123"
-    # The claim citing a resource the learner never attached is downgraded.
-    assert findings[1]["claimStatus"] == "inferred"
+    assert pin["metadata"]["version_id"].startswith("rv-")
+    assert pin["metadata"]["content_hash"] == compute_content_hash(PAPER)
+    assert pin["metadata"]["excerpt"] == QUOTE
+    assert pin["metadata"]["location"]["line_start"] == 5
+    assert pin["metadata"]["location"]["page"] == 2
+    assert findings[0]["location"] == "¶page2@5"
+    assert findings[1]["claimStatus"] == "unverified"
     assert findings[1]["sourceRefs"] == []
     assert findings[2]["claimStatus"] == "inferred"
 

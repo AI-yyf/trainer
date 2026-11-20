@@ -3038,6 +3038,23 @@ def test_nonofficial_anthropic_intake_keeps_tools_for_resource_grounding() -> No
     assert "allowed_tool_names" not in extra
 
 
+def test_confirmed_formal_plan_can_research_and_save_without_practice_tools() -> None:
+    extra = _build_agent_tool_context_extra(
+        coach_context={"active_view": "plan", "formal_plan_mutation": True},
+        attachment_delivery={},
+        answer_mode="direct",
+        current_file={"path": "learning.py"},
+    )
+
+    assert extra["allow_coach_only_tools"] is True
+    available = set(extra["allowed_tool_names"]) - set(extra["denied_tool_names"])
+    assert {
+        "inspect_plan", "recall_memory", "read_workspace_file", "search_learning_materials",
+        "assess_research_evidence", "read_resource_excerpt", "save_formal_plan",
+    } <= available
+    assert available.isdisjoint({"run_diagnostics", "verify_practice_current_file", "generate_training_card"})
+
+
 def test_pressure_blocks_denies_generate_training_card_even_when_explicitly_asked() -> None:
     from app.llm.provider_service import _build_agent_tool_context_extra
 

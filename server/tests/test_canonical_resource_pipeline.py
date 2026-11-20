@@ -106,11 +106,12 @@ def test_docx_becomes_canonical_markdown_and_is_searchable(tmp_path: Path) -> No
         assert "## Replication" in markdown
         assert "| Quorum | Meaning |" in markdown
 
-        original_relative = indexed["canonical_original_path"]
-        assert original_relative.startswith("Trainer Library/.trainer-resources/originals/")
-        original = workspace_root / original_relative
-        assert original.is_file()
-        assert original.read_bytes() == docx_path.read_bytes()
+        # md-only: the library keeps the canonical Markdown, never a binary
+        # copy. The learner's own source file outside the library is untouched.
+        assert indexed["kind"] == "markdown"
+        assert indexed["canonical_original_path"] == ""
+        originals = workspace_root / "Trainer Library/.trainer-resources/originals"
+        assert not originals.exists() or not any(originals.rglob("*"))
 
         search = client.post(
             "/resource/search",
@@ -165,7 +166,7 @@ def test_pptx_citations_point_to_slide_anchors(tmp_path: Path) -> None:
         markdown = (workspace_root / indexed["canonical_markdown_path"]).read_text(encoding="utf-8")
         front = read_front_matter(markdown)
         assert front["slide_count"] == 3
-        assert {"kind": "slide", "index": 1, "line": 1, "label": "Consensus"} in front["anchors"]
+        assert {"kind": "slide", "index": 1, "line": 3, "label": "Consensus"} in front["anchors"]
         assert "## Slide 2 — Draft appendix" in markdown
         assert any("Slide 2 is hidden" in warning for warning in indexed["warnings"])
 

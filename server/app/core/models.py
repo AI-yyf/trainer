@@ -1544,6 +1544,9 @@ class TrainingCardCandidateSnapshot(BaseModel):
     important: bool = False
     card_priority: int = Field(default=0, alias="cardPriority")
     merged_into: str = Field(default="", alias="mergedInto")
+    # Cards from before the review flow retain their existing library status.
+    review_state: Literal["pending", "deferred", "saved", "rejected"] = "saved"
+    reviewed_at: str = ""
 
     @model_validator(mode="after")
     def sync_training_defaults(self) -> "TrainingCardCandidateSnapshot":
@@ -1844,6 +1847,16 @@ class CardStatusTransitionRequest(TrainingReliabilityRequestFields):
     card_id: str
     new_status: TrainingCardStatus
     reason: str = ""
+
+
+class CardLibraryActionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    workspace_id: str = Field(min_length=1)
+    card_id: str = Field(min_length=1)
+    action: Literal["save", "defer", "reject", "start", "archive"]
+    prompt: str | None = Field(default=None, max_length=8000)
+    acceptance_criteria: list[str] | None = Field(default=None, max_length=20)
 
 
 class CardImportanceRequest(BaseModel):
@@ -3494,7 +3507,7 @@ class ResourceCaptureRequest(BaseModel):
     session_id: str | None = None
     workspace_id: str | None = None
     url: str
-    kind: Literal["web", "pdf", "github_repo"]
+    kind: Literal["web", "pdf", "github_repo", "gitee_repo", "gitlab_repo", "repo"]
     title: str | None = None
     capture_mode: Literal["snapshot", "link", "selection"] = "snapshot"
     # Selection captures still store the full readable body; the excerpt is kept

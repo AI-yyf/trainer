@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 from unittest.mock import AsyncMock, PropertyMock, patch
 
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 from provider_fixtures import seed_verified_capabilities
@@ -181,6 +183,62 @@ def test_library_analysis_uses_distinct_versioned_sources_without_mutating_learn
             assert citation["location"]
         assert runtime.repository.get_latest_plan(workspace_id) is None
         assert runtime.memory_service.get_cards(workspace_id) == []
+
+
+def test_selected_pdf_analysis_retrieves_the_requested_page(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    workspace = {
+        "workspace_id": "pdf-analysis",
+        "workspace_name": "PDF analysis",
+        "workspace_path": str(workspace_root),
+    }
+    page_one = "The introduction outlines the study design."
+    page_two = "An external timeout ends sampling without terminating the task."
+    with pymupdf.open() as pdf:
+        for passage in (page_one, page_two):
+            pdf.new_page().insert_text((72, 72), passage)
+        content = base64.b64encode(pdf.tobytes()).decode("ascii")
+
+    with build_client(tmp_path) as client:
+        started = client.post("/session/start", json=workspace)
+        assert started.status_code == 200, started.text
+        session = {"workspace_id": workspace["workspace_id"], "session_id": started.json()["session_id"]}
+        upload = client.post("/resource/upload", json={
+            **session, "kind": "pdf", "name": "Boundary study.pdf", "source": "study.pdf",
+            "content": content, "content_encoding": "base64",
+        })
+        assert upload.status_code == 200, upload.text
+        resource_id = upload.json()["id"]
+        indexed = client.post("/resource/index", json={**session, "resource_id": resource_id})
+        assert indexed.status_code == 200, indexed.text
+        expected_resource = ResourceRecord.model_validate(indexed.json())
+        runtime = client.app.state.runtime
+        provider = ProviderConfig(
+            name="pdf-analysis-test", base_url="http://127.0.0.1:9/v1",
+            api_key_ref="pdf-analysis-test", model="gpt-4o-mini",
+        )
+        runtime.provider_config = provider
+        runtime.provider_api_key = "sk-test-fake"
+        runtime.provider_service = ProviderService(config=provider, api_key="sk-test-fake")
+        seed_verified_capabilities(runtime, provider, "sk-test-fake", tools=True)
+
+        with patch.object(ProviderService, "coaching_reply", new=AsyncMock(return_value=page_two)) as reply:
+            response = client.post("/turn", json={
+                **session, "active_view": "resources", "intent": "coach", "response_language": "en-US",
+                "message": "What does page 2 of the source say?",
+                "resource_composer_intent": {"mode": "analyze", "resource_ids": [resource_id]},
+            })
+        assert response.status_code == 200, response.text
+        reply.assert_awaited_once()
+        fragments = reply.await_args.kwargs["coach_context"]["resource_fragments"]
+        assert len(fragments) == 1
+        assert page_two in fragments[0]["excerpt"]
+        assert page_one not in fragments[0]["excerpt"]
+        citation = next(part for part in response.json()["reply"]["metadata"]["parts"] if part["type"] == "citation")
+        assert citation["location"]["page"] == 2
+        assert citation["versionId"] == expected_resource.version_id
+        assert citation["contentHash"] == expected_resource.content_hash
 
 
 @pytest.mark.parametrize("suffix", ["", "不用安排练习。"])

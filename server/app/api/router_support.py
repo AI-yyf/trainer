@@ -9,6 +9,7 @@ from typing import TypedDict, cast
 
 from ..core.models import (
     CardGenerationRequest,
+    ResourceComposerIntent,
     SessionMessageRequest,
     TurnRequest,
 )
@@ -26,6 +27,7 @@ from ..memory.workspace_recovery import (
     normalize_latest_current_task,
     select_plan_runtime_for_scope,
 )
+from ..resources.research_brief import preparation_requested
 from .runtime import TrainerRuntime
 
 logger = logging.getLogger(__name__)
@@ -447,6 +449,19 @@ def _request_requires_agent_tools(request: TurnRequest | SessionMessageRequest) 
 def _normalize_resource_turn_request(request: TurnRequest) -> TurnRequest:
     """Treat the Resources composer lane as a grounded coach turn internally."""
     composer = request.resource_composer_intent
+    if (
+        not request.formal_plan_mutation
+        and request.intent in {"coach", "resources"}
+        and request.active_view in {None, "coach", "plan", "progress", "resources"}
+        and (composer is None or composer.mode in {"locate", "analyze"})
+        and preparation_requested(request.message)
+    ):
+        request = request.model_copy(update={
+            "resource_composer_intent": ResourceComposerIntent(
+                mode="analyze", resourceIds=composer.resource_ids if composer else request.resource_ids,
+            ),
+        })
+        composer = request.resource_composer_intent
     if composer is not None and composer.mode == "analyze":
         return request.model_copy(update={
             "intent": "coach", "formal_plan_mutation": False, "use_agent_loop": False,

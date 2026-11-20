@@ -50,6 +50,7 @@ from ..llm.turn_grounding import (
     GroundingDecision,
     sanitize_memory_anchor,
 )
+from ..memory.conversation_feedback import explanation_feedback
 from ..memory.note_request import message_requests_explicit_learning_note
 from ..memory.review_intervention import derive_review_budget
 from ..memory.workspace_recovery import (
@@ -5001,6 +5002,22 @@ def resolve_coach_turn(deps: CoachSupportDeps,
     force_scenario: str | None = None,
     stream: bool = False,
 ) -> CoachTurnPayload:
+    feedback = None
+    if getattr(request, "intent", "coach") == "coach":
+        feedback = explanation_feedback(
+            state.snapshot.messages,
+            message=request.message,
+            active_view=request.active_view,
+        )
+        if feedback:
+            kind, reply_message_id = feedback
+            deps.runtime.memory_service.record_user_feedback(
+                workspace_id=state.workspace_id,
+                kind=kind,
+                message=request.message.strip()[:1000],
+                scenario="explanation_revision",
+                reply_message_id=reply_message_id,
+            )
     learner_signal = deps.infer_learner_signal(message, getattr(request, "current_file", None))
     requested_scenario = force_scenario or deps.infer_coaching_scenario(
         request,
@@ -5556,6 +5573,12 @@ def resolve_coach_turn(deps: CoachSupportDeps,
         plan_runtime_recovery=getattr(request, "plan_runtime_recovery", None),
         context_tier=context_tier,
     )
+    if feedback:
+        # The standard fresh-lane prompt drops history. A revision explicitly
+        # depends on the prior reply in this same conversation.
+        coach_context["history_mode"] = "resume"
+        coach_context["relationship_stage"] = "active"
+        coach_context["first_turn_priority"] = ""
     if getattr(request, "goal_mode", False):
         coach_context["goal_mode"] = True
     if completed_return and current_evaluation is not None and current_evaluation.passed:

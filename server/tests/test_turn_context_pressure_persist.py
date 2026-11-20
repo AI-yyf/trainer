@@ -2270,8 +2270,8 @@ def test_explicit_generate_card_under_pressure_still_mints(tmp_path: Path) -> No
         card = payload.get("card") or {}
         card_id = str(card.get("card_id") or card.get("id") or "").strip()
         assert card_id
-        routing = payload.get("active_routing") or {}
-        assert str(routing.get("selected_card_id") or "").strip() == card_id
+        assert payload["active_routing"] is None
+        assert card["review_state"] == "pending"
 
 
 _URGENT_NO_INVENT = (

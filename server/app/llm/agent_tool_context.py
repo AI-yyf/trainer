@@ -14,6 +14,12 @@ from .coaching_patches import _compatibility_intake_is_tool_free
 from .prompts import normalize_answer_policy
 from .provider.redaction import _compact_text
 
+_FORMAL_PLAN_TOOLS = (
+    "inspect_plan", "recall_memory", "inspect_current_file", "list_workspace_files",
+    "read_workspace_file", "list_resources", "search_resources", "read_resource_excerpt",
+    "search_learning_materials", "assess_research_evidence", "save_formal_plan", "coach_finalize",
+)
+
 
 def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
     from .tools import PROJECT_WRITE_TOOL_NAMES
@@ -199,6 +205,7 @@ def _build_agent_tool_context_extra(
         # able to call the commit tool even when the learner's default answer
         # policy is guided and would otherwise hide coach-only writes.
         extra["allow_coach_only_tools"] = True
+        extra["allowed_tool_names"] = list(_FORMAL_PLAN_TOOLS)
 
     if coach_context.get("pressure_blocks_live_object_mint") is True:
         extra["pressure_blocks_live_object_mint"] = True

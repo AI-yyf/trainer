@@ -123,9 +123,12 @@ def test_pdf_download_saves_the_original_bytes_and_creates_the_target_dir(
         # The original bytes — not the markdown snapshot — landed in the folder.
         assert saved.is_file()
         assert saved.read_bytes() == pdf_body
-        # The library resource still owns its snapshot and records the folder.
+        # The library resource is md-only; the explicit project download is
+        # the user-requested original copy, not a retained library original.
         assert payload["library_paths"] == ["Trainer Library/Papers/Deep/Session rotation.pdf"]
-        assert Path(payload["source"]).read_bytes() == pdf_body
+        assert payload["kind"] == "markdown"
+        assert not Path(payload["source"]).exists()
+        assert (project / payload["canonical_markdown_path"]).is_file()
         assert_no_temp_leftovers(project)
 
 

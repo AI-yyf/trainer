@@ -16,6 +16,7 @@ from app.core.models import (
 from app.llm.provider_service import ProviderService
 from tests.test_api import build_client
 from tests.test_unconfigured_provider_gate import build_client as build_unconfigured_client
+from tests.training_card_fixtures import open_generated_training_card
 
 KIMI_COMPATIBLE_PROVIDER = {
     "name": "Kimi",
@@ -319,6 +320,7 @@ def test_generate_card_with_live_provider_persists_contract_fields(tmp_path: Pat
             assert card["return_with"]
             runtime = client.app.state.runtime
             sandbox_root = runtime.sandbox_service.ensure_workspace_root(workspace_id)
+            open_generated_training_card(client, workspace_id, card["card_id"])
             _assert_sandbox_card_persisted(sandbox_root, card["card_id"])
             assert (sandbox_root / "cards" / "practice" / f"{card['card_id']}.md").is_file()
 
@@ -362,6 +364,7 @@ def test_generate_card_stream_with_live_provider_persists_contract_fields(
     assert card["verification_steps"]
     assert card["success_signal"]
     assert card["return_with"]
+    open_generated_training_card(client, workspace_id, str(card["card_id"]))
     _assert_sandbox_card_persisted(sandbox_root, str(card["card_id"]))
 
 
@@ -503,6 +506,7 @@ def test_provider_test_overlays_tools_on_default_compatible_profile(
         assert card["success_signal"]
         assert card["return_with"]
         sandbox_root = runtime.sandbox_service.ensure_workspace_root(workspace_id)
+        open_generated_training_card(client, workspace_id, card["card_id"])
         _assert_sandbox_card_persisted(sandbox_root, card["card_id"])
         assert provider.protocol == "openai_chat_completions_compatible"
 
@@ -570,6 +574,7 @@ def test_generate_card_rehydrates_host_last_test_when_sidecar_cache_is_empty(
         assert card["deliverable"]
         assert runtime.provider_service.supports_executable_tools() is True
         sandbox_root = runtime.sandbox_service.ensure_workspace_root(workspace_id)
+        open_generated_training_card(client, workspace_id, card["card_id"])
         _assert_sandbox_card_persisted(sandbox_root, card["card_id"])
 
 

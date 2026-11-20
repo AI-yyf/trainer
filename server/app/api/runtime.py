@@ -602,6 +602,15 @@ class TrainerRuntime:
                 indexed.sandbox_path
                 and (str(indexed.sandbox_path) != before_path or not before_path)
             )
+            if indexed.canonical_markdown_path and indexed.kind == "markdown":
+                # md-only cleanup happens after the sandbox copy exists; the
+                # sandbox keeps the project-readable artifact while the
+                # library itself retains only Markdown. The service checks
+                # that the canonical document is readable before it drops the
+                # upload.
+                self.resource_service._discard_managed_inline_source(
+                    resolved_workspace_id, indexed
+                )
 
         assets = self.memory_service.record_teaching_assets_from_resource(
             resolved_workspace_id,

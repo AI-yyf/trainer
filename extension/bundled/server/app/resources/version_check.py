@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from ..core.models import ResourceRecord
+from .canonical import normalize_canonical_body
 from .capture import CaptureError, capture_source, capture_url_from_tags, capture_url_key
 
 VersionCheckStatus = Literal[
@@ -37,7 +38,7 @@ _REPOSITORY_DOCS = "\n\n## Repository docs/ layout\n\n"
 def is_capture_provenance_tag(tag: str) -> bool:
     return tag in {"capture-selection", "docs-supplemented"} or tag.startswith((
         "trainer-capture:", "captured-from:", "capture-key:", "capture-domain:",
-        "captured-at:", "capture-intent:",
+        "captured-at:", "capture-intent:", "capture-location:", "capture-content:",
     ))
 
 
@@ -70,17 +71,29 @@ def compare_captured_source(
     if not url or capture_url_key(url) not in tags:
         url = ""
     body = ""
-    if kind == "pdf" and resource.kind == "pdf":
+    if kind == "pdf":
         basis: VersionCheckBasis = "pdf"
-        saved_fingerprint = resource.content_hash
+        # md-only stores the Markdown digest as record.content_hash; the
+        # captured PDF digest remains in the provenance tag.
+        saved_fingerprint = next(
+            (tag.removeprefix("capture-content:") for tag in tags
+             if tag.startswith("capture-content:")),
+            "",
+        )
     elif kind in {"web", "github_repo"}:
         basis = "repository" if kind == "github_repo" else "page"
         snapshot = _SNAPSHOT.fullmatch(saved_snapshot.replace("\r\n", "\n"))
-        if not snapshot or snapshot["kind"] != kind:
-            return "no_baseline", None
-        url = url or snapshot["url"]
-        body = snapshot["body"].strip()
-        saved_fingerprint = body
+        if snapshot and snapshot["kind"] == kind:
+            url = url or snapshot["url"]
+            body = snapshot["body"].strip()
+        else:
+            # md-only: the durable baseline is the canonical Markdown body,
+            # not the deleted capture snapshot. The snapshot's fingerprint
+            # starts after its H1, so strip the canonical H1 too.
+            body = re.sub(r"\A#\s+[^\n]+\n+", "", saved_snapshot.strip(), count=1)
+        if not body:
+            return "no_baseline", basis
+        saved_fingerprint = normalize_canonical_body(body, "")
     else:
         return "no_baseline", None
 
@@ -102,5 +115,5 @@ def compare_captured_source(
         current = _SNAPSHOT.fullmatch(captured.content.replace("\r\n", "\n"))
         if not current or (include_docs and captured.warnings):
             return "fetch_failed", basis
-        current_fingerprint = current["body"].strip()
+        current_fingerprint = normalize_canonical_body(current["body"].strip(), "")
     return ("unchanged" if current_fingerprint == saved_fingerprint else "changed"), basis

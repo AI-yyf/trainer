@@ -371,6 +371,23 @@ class SearchIndex:
             return {}
         return self._parse_json_metadata(row["metadata_json"])
 
+    def indexed_document(self, resource_id: str) -> tuple[str, dict[str, Any]]:
+        """Read the content and its provenance in one SQLite statement."""
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """SELECT doc.content, meta.metadata_json
+                   FROM resource_search AS doc
+                   JOIN search_metadata AS meta ON meta.resource_id = doc.resource_id
+                   WHERE doc.resource_id = ?""",
+                (resource_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row is None:
+            return "", {}
+        return str(row["content"] or ""), self._parse_json_metadata(row["metadata_json"])
+
     def index_from_manifest(
         self,
         manifest: ResourceSearchManifest,

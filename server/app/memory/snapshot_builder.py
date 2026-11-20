@@ -445,6 +445,7 @@ def build_memory_snapshot(service: Any, workspace_id: str) -> MemorySnapshot:
             "training_card_id": item.training_card_id,
             "plan_id": item.plan_id,
             "created_at": item.created_at.isoformat(),
+            **({"reply_message_id": item.reply_message_id} if item.reply_message_id else {}),
         }
         for item in active_lane_snapshot.user_feedback[:8]
     ]

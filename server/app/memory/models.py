@@ -162,6 +162,7 @@ class UserFeedbackRecord:
     training_card_id: str = ""
     plan_id: str = ""
     created_at: datetime = field(default_factory=utc_now)
+    reply_message_id: str = ""
 
 
 @dataclass(slots=True)

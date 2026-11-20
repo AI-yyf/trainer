@@ -894,9 +894,9 @@ class CardStatusTransitionAPITests(unittest.TestCase):
         assert summary.status_code == 200
         memory = summary.json()["memory"]
         assert memory["training_card_candidates"][0]["card_id"] == card["card_id"]
-        assert memory["workspace"]["selected_card_id"] == card["card_id"]
-        assert memory["workspace"]["selected_card_status"] == "active"
-        assert memory["active_training_card_routing"]["selected_card_id"] == card["card_id"]
+        assert memory["training_card_candidates"][0]["review_state"] == "pending"
+        assert not memory["workspace"].get("selected_card_id")
+        assert memory["active_training_card_routing"] is None
         assert len(memory["training_event_ledger"]) >= 1
 
     def test_generate_flash_card_does_not_reactivate_answered_practice_card(self) -> None:
@@ -973,7 +973,8 @@ class CardStatusTransitionAPITests(unittest.TestCase):
         assert response.status_code == 200, response.text
         payload = response.json()
         assert payload["card"]["card_type"] == "flash"
-        assert payload["active_routing"]["selected_card_id"] == payload["card"]["card_id"]
+        assert payload["active_routing"] is None
+        assert payload["card"]["review_state"] == "pending"
         stored_answered = self.runtime.memory_service.get_card(
             workspace_id,
             answered_practice.card_id,

@@ -245,6 +245,12 @@ def _infer_blockers(
     ``_localized_text``.
     """
     reasons: list[str] = []
+    if card.review_state != "saved":
+        reasons.append(_localized_text(
+            "save the card to the library before practicing",
+            "请先确认训练卡入库",
+            response_language,
+        ))
 
     # Untrusted/stale source without explicit acknowledgment
     if card.trust_state in ("untrusted", "stale") and not card.trust_acknowledged:

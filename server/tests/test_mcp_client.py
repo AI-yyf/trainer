@@ -211,7 +211,8 @@ async def test_build_tools_registers_prefixed_names(monkeypatch: pytest.MonkeyPa
         tools = await build_coach_mcp_tools(runtime, "ws-1")
         names = [tool.name for tool in tools]
         assert "mcp_dev_get_repo_info" in names
-        assert "mcp_dev_create_issue" in names
+        assert "mcp_dev_list_issues" in names
+        assert "mcp_dev_create_issue" not in names
         assert all(name.startswith("mcp_dev_") for name in names)
 
         # The MCP inputSchema is mapped to the agent tool parameters,
@@ -262,40 +263,40 @@ async def test_read_tool_allowed_by_default_write_denied(tmp_path: Path, monkeyp
 
         write_result = await registry.invoke(context, "mcp_dev_create_issue", {"title": "doc"})
         assert write_result["ok"] is False
-        assert write_result["error"] == "workspace_permission_denied"
-        assert write_result["required_operation"] == "generate"
+        assert write_result["error"] == "unknown_tool"
 
         delete_result = await registry.invoke(context, "mcp_dev_delete_branch", {"branch": "wip"})
         assert delete_result["ok"] is False
-        assert delete_result["error"] == "workspace_permission_denied"
+        assert delete_result["error"] == "unknown_tool"
     finally:
         await aclose_runtime_mcp_sessions(runtime)
 
 
-async def test_granted_permission_opens_write_ladder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_coach_mcp_stays_read_only_with_full_workspace_permission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv(
         MCP_SERVERS_ENV_VAR,
         json.dumps([{"name": "dev", "command": sys.executable, "args": [str(STUB_SERVER)]}]),
     )
     authority = _trusted_authority(tmp_path, PermissionLevel.INSPECT)
+    authority.grant_permission(PermissionLevel.DESTRUCTIVE)
     runtime = _FakeRuntime(authority)
     try:
         tools = await build_coach_mcp_tools(runtime, "ws-1")
         registry = build_default_tool_registry(extra_tools=tools)
         context = _context(runtime)
 
-        authority.grant_permission(PermissionLevel.GENERATE)
+        names = {tool.name for tool in tools}
+        assert "mcp_dev_get_repo_info" in names
+        assert "mcp_dev_create_issue" not in names
+        assert "mcp_dev_delete_branch" not in names
+
         create_result = await registry.invoke(context, "mcp_dev_create_issue", {"title": "doc"})
-        assert create_result["ok"] is True
-        assert "created issue: doc" in create_result["content"]
+        assert create_result["error"] == "unknown_tool"
 
         delete_result = await registry.invoke(context, "mcp_dev_delete_branch", {"branch": "wip"})
-        assert delete_result["ok"] is False  # delete needs DESTRUCTIVE, still denied
-
-        authority.grant_permission(PermissionLevel.DESTRUCTIVE)
-        delete_result = await registry.invoke(context, "mcp_dev_delete_branch", {"branch": "wip"})
-        assert delete_result["ok"] is True
-        assert "deleted branch: wip" in delete_result["content"]
+        assert delete_result["error"] == "unknown_tool"
     finally:
         await aclose_runtime_mcp_sessions(runtime)
 
@@ -316,7 +317,7 @@ async def test_untrusted_workspace_blocks_write_even_when_granted(tmp_path: Path
 
         write_result = await registry.invoke(context, "mcp_dev_create_issue", {"title": "doc"})
         assert write_result["ok"] is False
-        assert write_result["error"] == "workspace_permission_denied"
+        assert write_result["error"] == "unknown_tool"
     finally:
         await aclose_runtime_mcp_sessions(runtime)
 
@@ -337,7 +338,7 @@ async def test_missing_authority_allows_read_denies_write(monkeypatch: pytest.Mo
 
         write_result = await registry.invoke(context, "mcp_dev_create_issue", {"title": "doc"})
         assert write_result["ok"] is False
-        assert write_result["error"] == "workspace_authority_unavailable"
+        assert write_result["error"] == "unknown_tool"
     finally:
         await aclose_runtime_mcp_sessions(runtime)
 

@@ -70,7 +70,8 @@ def test_upload_pins_sha256_content_hash(tmp_path: Path) -> None:
         content = "# Cited source\nStable content for hash pinning.\n"
         record = upload_resource(client, workspace_id=workspace_id, content=content)
 
-        expected = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        # md-only: the pin is the normalized canonical Markdown body.
+        expected = hashlib.sha256(content.strip().encode("utf-8")).hexdigest()
         assert record["content_hash"] == expected
         store = runtime.resource_version_store
         assert store is not None
@@ -270,7 +271,8 @@ def test_index_pins_hash_for_legacy_file_resource_without_version(tmp_path: Path
             json={"workspace_id": workspace_id, "resource_id": resource_id, "enable_network": False},
         )
         assert indexed.status_code == 200, indexed.text
-        expected = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        # md-only: the pinned hash is the normalized canonical body.
+        expected = hashlib.sha256(content.strip().encode("utf-8")).hexdigest()
         assert indexed.json()["content_hash"] == expected
         assert store.current_content_hash(workspace_id, resource_id) == expected
 

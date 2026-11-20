@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.core.settings import AppSettings
 from app.main import create_app
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse
+from app.resources.canonical import read_front_matter
 from app.resources.capture import PDF_FETCH_TIMEOUT_SECONDS, PDF_MAX_RESPONSE_BYTES
 from app.resources.ingest import ExtractedContent
 
@@ -288,7 +289,9 @@ def test_web_capture_extracts_body_and_registers_it_in_the_library(tmp_path, mon
 
 def test_pdf_capture_downloads_bounded_bytes_and_uses_existing_pdf_ingest(tmp_path, monkeypatch) -> None:
     workspace_id = "workspace-capture-pdf"
-    pdf_url = "https://files.example.com/papers/session-rotation.pdf"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    pdf_url = "https://arxiv.org/pdf/2407.17032v3#page=1"
     pdf_body = minimal_pdf(["Trainer capture PDF ingest marker 4471."])
     fetch_calls: list[tuple[str, int | None, float | None]] = []
 
@@ -301,11 +304,19 @@ def test_pdf_capture_downloads_bounded_bytes_and_uses_existing_pdf_ingest(tmp_pa
     monkeypatch.setattr("app.resources.capture.fetch_url", fake_fetch)
 
     with build_client(tmp_path) as client:
-        session_id = _start_session(client, workspace_id)
+        session = client.post(
+            "/session/start",
+            json={
+                "workspace_id": workspace_id,
+                "workspace_name": "Browser capture",
+                "workspace_path": str(workspace_root),
+            },
+        )
+        assert session.status_code == 200, session.text
         response = client.post(
             "/resources/capture",
             json={
-                "session_id": session_id,
+                "session_id": session.json()["session_id"],
                 "workspace_id": workspace_id,
                 "url": pdf_url,
                 "kind": "pdf",
@@ -315,14 +326,16 @@ def test_pdf_capture_downloads_bounded_bytes_and_uses_existing_pdf_ingest(tmp_pa
         assert response.status_code == 200, response.text
         payload = response.json()
         assert fetch_calls == [(pdf_url, PDF_MAX_RESPONSE_BYTES, PDF_FETCH_TIMEOUT_SECONDS)]
-        assert payload["kind"] == "pdf"
-        assert payload["name"].endswith(".pdf")
+        # md-only: the captured PDF is converted to canonical Markdown and the
+        # inline binary upload is removed after indexing.
+        assert payload["kind"] == "markdown"
         assert payload["index_status"] == "indexed"
         assert f"captured-from:{pdf_url}" in payload["tags"]
-        # The downloaded bytes were materialized byte-for-byte, then read by the
-        # existing PyMuPDF ingest path.
-        assert Path(payload["source"]).read_bytes() == pdf_body
+        assert not Path(payload["source"]).exists()
+        assert payload["canonical_original_path"] == ""
         assert "Trainer capture PDF ingest marker 4471" in payload["summary"]
+        markdown = (workspace_root / payload["canonical_markdown_path"]).read_text("utf-8")
+        assert read_front_matter(markdown)["source_url"] == pdf_url
 
 
 def test_pdf_capture_rejects_non_pdf_payloads(tmp_path, monkeypatch) -> None:
@@ -392,6 +405,48 @@ def test_github_repo_capture_records_repo_url_and_reads_readme(tmp_path, monkeyp
         assert "trainer-capture:github_repo" in payload["tags"]
         assert f"captured-from:{repo_url}" in payload["tags"]
         assert "Rotate signing keys" in Path(payload["source"]).read_text(encoding="utf-8")
+
+
+def test_gitee_and_gitlab_repo_capture_read_the_default_branch_readme(
+    tmp_path, monkeypatch,
+) -> None:
+    """One repository lane covers every forge: Gitee and GitLab serve the raw
+    README on the default branch, exactly like GitHub serves its API copy."""
+
+    workspace_id = "workspace-capture-forges"
+    cases = (
+        ("gitee_repo", "https://gitee.com/example-org/session-tools", "gitee.com"),
+        ("gitlab_repo", "https://gitlab.com/example-org/session-tools", "gitlab.com"),
+    )
+    readme = "# Session Tools\n\nRotate signing keys before the deploy window.\n"
+    fetched: list[str] = []
+
+    def fake_fetch(url: str, **kwargs):
+        fetched.append(url)
+        return _readonly_response(readme.encode("utf-8"), url, "text/markdown")
+
+    monkeypatch.setattr("app.resources.capture.fetch_url", fake_fetch)
+
+    with build_client(tmp_path) as client:
+        session_id = _start_session(client, workspace_id)
+        for kind, repo_url, host in cases:
+            response = client.post(
+                "/resources/capture",
+                json={
+                    "session_id": session_id,
+                    "workspace_id": workspace_id,
+                    "url": repo_url,
+                    "kind": kind,
+                },
+            )
+            assert response.status_code == 200, response.text
+            payload = response.json()
+            assert payload["name"] == "example-org/session-tools"
+            assert payload["kind"] == "markdown"
+            assert f"trainer-capture:{kind}" in payload["tags"]
+            assert f"captured-from:{repo_url}" in payload["tags"]
+            assert "Rotate signing keys" in Path(payload["source"]).read_text(encoding="utf-8")
+            assert fetched[-1] == f"https://{host}/example-org/session-tools/raw/HEAD/README.md"
 
 
 def test_github_capture_requires_a_repository_url_but_allows_any_github_url(tmp_path, monkeypatch) -> None:
@@ -1191,6 +1246,8 @@ def test_link_capture_is_honest_and_deduped_within_its_intent(tmp_path) -> None:
 def test_selection_capture_keeps_its_excerpt_and_does_not_collide_with_other_intents(
     tmp_path,
 ) -> None:
+    from app.resources.canonical import build_canonical_document
+
     workspace_id = "workspace-capture-selection-intent"
     with build_client(tmp_path, enable_network_fetch=False) as client:
         session_id = _start_session(client, workspace_id)
@@ -1223,6 +1280,32 @@ def test_selection_capture_keeps_its_excerpt_and_does_not_collide_with_other_int
         assert different.status_code == 200, different.text
         assert different.json()["deduped"] is False
         assert different.json()["id"] != payload["id"]
+
+        anchor_ids = set()
+        for anchor in ("setup", "retry"):
+            url = body["url"] + "#" + anchor
+            anchored = client.post(
+                "/resources/capture",
+                json={**body, "url": url, "client_capture_id": f"section-{anchor}"},
+            )
+            assert anchored.status_code == 200, anchored.text
+            record = anchored.json()
+            assert record["deduped"] is False
+            assert record["id"] != payload["id"]
+            source = Path(record["source"])
+            assert url in source.read_text(encoding="utf-8")
+            canonical = build_canonical_document(source, resource_id=record["id"])
+            assert canonical.source_url == url
+            assert body["selection"] in canonical.body
+            anchor_ids.add(record["id"])
+            repeat = client.post(
+                "/resources/capture",
+                json={**body, "url": url, "client_capture_id": f"section-repeat-{anchor}"},
+            )
+            assert repeat.status_code == 200, repeat.text
+            assert repeat.json()["deduped"] is True
+            assert repeat.json()["id"] == record["id"]
+        assert len(anchor_ids) == 2
 
         missing = client.post(
             "/resources/capture",

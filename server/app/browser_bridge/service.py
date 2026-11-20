@@ -244,6 +244,8 @@ class BrowserBridgeService:
                         url=str(entry.get("url") or ""),
                         title=str(entry.get("title") or ""),
                         selection=str(entry.get("selection") or ""),
+                        question=str(entry.get("question") or ""),
+                        source_kind=str(entry.get("source_kind") or ""),
                     )
                 )
             self._pending_drafts = drafts
@@ -806,7 +808,7 @@ def build_coach_draft_text(
         kind_key = {"pdf": "pdf_source", "github_repo": "github_source"}.get(
             str(source_kind or "").strip().lower()
         )
-        source_label = template.get(kind_key) or url or template["fallback_source"]
+        source_label = (template.get(kind_key) if kind_key else None) or url or template["fallback_source"]
     ask_line = str(question or "").strip() or template["ask"]
     quote = "\n".join(f"> {line}" if line else ">" for line in selection.splitlines())
     lines = [template["intro"].format(source=source_label), "", quote, ""] if quote else []

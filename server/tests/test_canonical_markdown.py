@@ -401,7 +401,7 @@ def test_html_text_builder_keeps_source_url() -> None:
     assert front["source_type"] == "html"
 
 
-def test_store_writes_originals_markdown_and_assets(tmp_path: Path) -> None:
+def test_store_writes_markdown_and_assets_without_originals(tmp_path: Path) -> None:
     source = tmp_path / "notes.docx"
     source.write_bytes(_docx_bytes())
     document = build_canonical_document(source, resource_id="resource-abc")
@@ -412,17 +412,17 @@ def test_store_writes_originals_markdown_and_assets(tmp_path: Path) -> None:
         original_filename="notes.docx",
     )
     expected_markdown = markdown_path_for(tmp_path / "workspace", "resource-abc")
-    expected_original = original_dir_for(tmp_path / "workspace", "resource-abc") / "notes.docx"
+    expected_original_dir = original_dir_for(tmp_path / "workspace", "resource-abc")
     assert artifact.markdown_path == expected_markdown
     assert expected_markdown.is_file()
-    assert expected_original.is_file()
+    assert not expected_original_dir.exists()
+    assert artifact.original_path is None
+    assert artifact.original_relative is None
     assert (artifact.assets_dir / "docx-image-001.png").is_file()
     stored_markdown = read_text(expected_markdown)
     assert "![docx-image-001](assets/resource-abc/docx-image-001.png)" in stored_markdown
     assert stored_markdown.startswith("---\n")
     assert artifact.markdown_relative.startswith("Trainer Library/.trainer-resources/markdown/")
-    assert artifact.original_relative is not None
-    assert artifact.original_relative.startswith("Trainer Library/.trainer-resources/originals/")
 
 
 def read_text(path: Path) -> str:

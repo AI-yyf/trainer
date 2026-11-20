@@ -12,7 +12,7 @@ import hashlib
 import json
 import logging
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +30,7 @@ from ...core.models import (
     CardGenerationRequest,
     CardGenerationResponse,
     CardImportanceRequest,
+    CardLibraryActionRequest,
     CardMergeRequest,
     CardPriorityRequest,
     CardStatusTransitionRequest,
@@ -77,6 +78,7 @@ from ...memory.workspace_recovery import (
     select_plan_runtime_for_scope,
     stamp_produced_workspace_record,
 )
+from ...resources.research_brief import preparation_requested
 from ...training.card_generator import (
     CardGenerationProviderFailure,
 )
@@ -107,6 +109,7 @@ from ..router_support import (
     reset_provider_scheme_cache as reset_provider_scheme_cache,
 )
 from ..routes._deps import RouterDeps
+from ..routes.resources import PrepareResearchTurn
 from ..runtime import SessionState, TrainerRuntime
 from ..training_card_identity import (
     prepare_training_file_evaluation,
@@ -238,7 +241,9 @@ class CoreRouteDeps:
     task_training_concepts: Any
     teaching_strategy_context_from_snapshot: Any
     to_json_payload: Any
-    training_generate_and_route_card: Any
+    training_generate_candidate: Any
+    training_card_library_action: Any
+    training_card_lock: Any
     training_practice_blocked_report: Any
     trusted_training_card_request_from_api: Any
     turn_history_text: Any
@@ -342,9 +347,30 @@ def build_core_router(
     runtime: TrainerRuntime,
     deps: RouterDeps,
     seed: CoreRouteDeps,
+    prepare_research_turn: PrepareResearchTurn,
 ) -> APIRouter:
     router = APIRouter()
     core = seed
+
+    async def finish_research_preparation(
+        request: TurnRequest,
+        response: SessionMessageResponse,
+        workspace_id: str,
+        provider: ProviderService,
+        is_cancelled: Callable[[], Awaitable[bool]] | None = None,
+    ) -> bool:
+        if not await prepare_research_turn(request, response, workspace_id, provider, is_cancelled):
+            return False
+        evidence = response.reply.metadata["research_preparation"]
+        state = runtime.ensure_session(response.session_id, workspace_id=workspace_id)
+        catalog = runtime.memory_service.snapshot(workspace_id).asset_catalog
+        for snapshot in (state.snapshot, response.snapshot):
+            snapshot.memory = snapshot.memory.model_copy(update={"asset_catalog": catalog})
+            for message in snapshot.messages:
+                if message.id == response.reply.id:
+                    message.metadata["research_preparation"] = evidence
+        runtime.save_session_state(state.session_id)
+        return True
 
     def observe_goal_for_request(request: Any, workspace_id: str) -> Any:
         """Persist an explicit goal (or a conservative detection) for this turn."""
@@ -1705,6 +1731,10 @@ def build_core_router(
 
         response, artifacts, _ = await coach_support.execute_turn(core.coach_support_deps, request, payload)
         if isinstance(response, SessionMessageResponse):
+            if preparation_requested(request.message):
+                await finish_research_preparation(
+                    request, response, workspace_id, core.build_coaching_service(payload),
+                )
             response.snapshot.memory = core.repair_guided_lane_memory_snapshot_for_response(
                 runtime.memory_service.snapshot(workspace_id),
                 scenario=response.coach_turn.scenario if response.coach_turn else None,
@@ -3972,20 +4002,20 @@ def build_core_router(
                         final_agent_meta,
                         auto_resource_events,
                     )
-                response_data = json_response_payload(
-                    coach_support.build_session_response(core.coach_support_deps, 
-                        state=state,
-                        request=request,
-                        reply_content=full_content,
-                        artifacts=dict(coach_turn["artifacts"]),
-                        suggested_actions=list(coach_turn["suggested_actions"]),
-                        scenario=str(coach_turn["scenario"]),
-                        learner_signal=str(coach_turn["learner_signal"]),
-                        coach_turn_data=core.coach_turn_mapping(coach_turn),
-                        agent_meta=final_agent_meta or None,
-                        attachment_delivery=attachment_delivery,
-                    )
+                response = coach_support.build_session_response(
+                    core.coach_support_deps,
+                    state=state,
+                    request=request,
+                    reply_content=full_content,
+                    artifacts=dict(coach_turn["artifacts"]),
+                    suggested_actions=list(coach_turn["suggested_actions"]),
+                    scenario=str(coach_turn["scenario"]),
+                    learner_signal=str(coach_turn["learner_signal"]),
+                    coach_turn_data=core.coach_turn_mapping(coach_turn),
+                    agent_meta=final_agent_meta or None,
+                    attachment_delivery=attachment_delivery,
                 )
+                response_data = json_response_payload(response)
                 response_data["artifacts"] = dict(coach_turn["artifacts"])
                 response_data["intent"] = original_intent
                 reply_record = response_data.get("reply")
@@ -4035,6 +4065,11 @@ def build_core_router(
                 )
                 runtime.save_session_state(state.session_id)
                 stream_committed = True
+                if not provider_failure_detected and await finish_research_preparation(
+                    request, response, workspace_id, coaching_service, stream_cancelled,
+                ):
+                    updated_response = json_response_payload(response)
+                    response_data.update(reply=updated_response["reply"], snapshot=updated_response["snapshot"])
 
                 response_data = _publish_stream_turn_response(response_data)
                 stream_singleflight_published = True
@@ -4549,11 +4584,12 @@ def build_core_router(
     def training_card_importance(request: CardImportanceRequest) -> CardStatusTransitionResponse:
         """P1.4: the learner marks (or unmarks) a candidate as important."""
         try:
-            card = runtime.memory_service.set_card_importance(
-                request.workspace_id,
-                request.card_id,
-                request.important,
-            )
+            with core.training_card_lock(request.workspace_id):
+                card = runtime.memory_service.set_card_importance(
+                    request.workspace_id,
+                    request.card_id,
+                    request.important,
+                )
         except ValueError as exc:
             message = str(exc)
             status_code = 404 if "not found" in message else 422
@@ -4565,11 +4601,12 @@ def build_core_router(
     def training_card_priority(request: CardPriorityRequest) -> CardStatusTransitionResponse:
         """P1.4: the learner adjusts a candidate's practice priority."""
         try:
-            card = runtime.memory_service.set_card_priority(
-                request.workspace_id,
-                request.card_id,
-                request.priority,
-            )
+            with core.training_card_lock(request.workspace_id):
+                card = runtime.memory_service.set_card_priority(
+                    request.workspace_id,
+                    request.card_id,
+                    request.priority,
+                )
         except ValueError as exc:
             message = str(exc)
             status_code = 404 if "not found" in message else 422
@@ -4581,17 +4618,25 @@ def build_core_router(
     def training_cards_merge(request: CardMergeRequest) -> CardStatusTransitionResponse:
         """P1.4: merge duplicate candidates into the keeper the learner chose."""
         try:
-            card = runtime.memory_service.merge_training_cards(
-                request.workspace_id,
-                request.keep_card_id,
-                request.duplicate_card_ids,
-            )
+            with core.training_card_lock(request.workspace_id):
+                card = runtime.memory_service.merge_training_cards(
+                    request.workspace_id,
+                    request.keep_card_id,
+                    request.duplicate_card_ids,
+                )
         except ValueError as exc:
             message = str(exc)
             status_code = 404 if "not found" in message else 422
             raise HTTPException(status_code=status_code, detail=message) from exc
         core.refresh_workspace_sessions(request.workspace_id)
         return card
+
+    @router.post("/training/card/library", response_model=CardStatusTransitionResponse)
+    def training_card_library(request: CardLibraryActionRequest) -> CardStatusTransitionResponse:
+        try:
+            return core.training_card_library_action(request)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @router.post("/training/generate-card", response_model=CardGenerationResponse)
     def training_generate_card(request: CardGenerationRequest) -> CardGenerationResponse:
@@ -4617,7 +4662,7 @@ def build_core_router(
             getattr(request, "response_language", None),
         )
         try:
-            return core.training_generate_and_route_card(
+            return core.training_generate_candidate(
                 core.trusted_training_card_request_from_api(request),
                 provider_service_override=coaching_service,
             )
@@ -4629,7 +4674,7 @@ def build_core_router(
         request: CardGenerationRequest,
         http_request: Request,
     ) -> StreamingResponse:
-        """Stream visible card-generation text, then persist and route the card."""
+        """Stream visible card-generation text, then store a candidate for review."""
 
         try:
             raw_payload = await http_request.json()
@@ -4806,9 +4851,9 @@ def build_core_router(
                         async for _abort_frame in _abort_fail_closed():
                             yield _abort_frame
                         return
-                    response = core.training_generate_and_route_card(
+                    response = await asyncio.to_thread(
+                        core.training_generate_candidate,
                         trusted_request,
-                        generated_card=existing_card,
                         provider_service_override=training_provider_service,
                     )
                     response_data = response.model_dump(mode="json")
@@ -4849,7 +4894,7 @@ def build_core_router(
                     return
                 if generated_card is None:
                     raise RuntimeError("Card generation stream ended without a card.")
-                response = core.training_generate_and_route_card(
+                response = core.training_generate_candidate(
                     trusted_request,
                     generated_card=generated_card,
                     provider_service_override=training_provider_service,
