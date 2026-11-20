@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.settings import AppSettings
@@ -507,3 +508,48 @@ def test_identical_search_within_ttl_reuses_cached_response(tmp_path: Path) -> N
             json={"workspace_id": workspace_id, "query": "quorum", "top_k": 5},
         )
         assert search_calls["count"] > calls_after_first
+
+
+def test_pdf_with_image_syncs_only_markdown_and_images_into_sandbox(tmp_path: Path) -> None:
+    """Indexing a PDF containing an embedded image must sync only .md + assets/*.png into the sandbox."""
+
+    pymupdf = pytest.importorskip("pymupdf")
+    workspace_root = tmp_path / "workspace"
+    workspace_id = "workspace-pdf-md-sandbox"
+    pdf_path = workspace_root / "docs" / "architecture-guide.pdf"
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Idempotency architecture overview", fontsize=12)
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 12, 12), 0)
+    pixmap.set_rect(pixmap.irect, (0, 128, 255))
+    page.insert_image(pymupdf.Rect(72, 100, 172, 200), pixmap=pixmap)
+    pdf_path.write_bytes(document.tobytes())
+    document.close()
+
+    with build_client(tmp_path) as client:
+        start_session(client, workspace_root, workspace_id)
+        indexed = upload_and_index(
+            client,
+            workspace_id=workspace_id,
+            kind="pdf",
+            name="Architecture Guide",
+            source=pdf_path,
+        )
+        runtime = client.app.state.runtime
+        sandbox_root = runtime.sandbox_service.ensure_workspace_root(workspace_id)
+
+    sandbox_path = Path(str(indexed["sandbox_path"]))
+    assert sandbox_path.suffix == ".md"
+    assert sandbox_path.is_file()
+    sandbox_text = sandbox_path.read_text(encoding="utf-8")
+    assert "Idempotency architecture overview" in sandbox_text
+    assert f"assets/{indexed['id']}/" in sandbox_text
+
+    assert list(sandbox_root.rglob("*.pdf")) == []
+    assert list(sandbox_root.rglob("*.png")), "expected extracted PNG companion image in sandbox"
+
+    library_root = workspace_root / "Trainer Library"
+    assert list(library_root.rglob("*.pdf")) == []
+    assert list((library_root / ".trainer-resources" / "markdown" / "assets" / indexed["id"]).glob("*.png"))

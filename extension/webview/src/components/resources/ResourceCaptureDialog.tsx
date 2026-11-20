@@ -75,7 +75,7 @@ const COPY: Record<
     urlPlaceholder: "粘贴网页链接、PDF 地址或代码仓库地址",
     detected: "已识别",
     pickFile: "选择文件",
-    fileHint: "可选：PDF 文件，或含链接的二维码图片；Trainer 会自己判断。",
+    fileHint: "可选：选择文档或二维码图片；资料将默认转为 Markdown 文档与配套图片。",
     target: "目标知识库",
     root: "资料库根目录",
     submit: "加入资料库",
@@ -95,7 +95,7 @@ const COPY: Record<
     urlPlaceholder: "Paste a web link, a PDF address or a repository address",
     detected: "Detected",
     pickFile: "Choose a file",
-    fileHint: "Optional: a PDF file, or a QR image that carries the link. Trainer recognizes it.",
+    fileHint: "Optional: choose a document or QR image; Trainer stores resources as Markdown and images.",
     target: "Target knowledge base",
     root: "Library root",
     submit: "Add to library",
@@ -323,14 +323,14 @@ export function ResourceCaptureDialog({
         });
         return;
       }
-      // A local PDF has no URL: the browser capture lane takes the file's
-      // bytes, so the file is read here and handed over as a data URL.
+      // Convert uploaded documents directly into canonical Markdown + images
+      // without storing a raw PDF copy in the library folder.
       const dataUrl = await readFileAsDataUrl(file);
       await onSubmit({
         kind: "pdf",
         url: dataUrl,
         title: file.name,
-        download: true,
+        download: false,
         targetDir,
       });
       return;

@@ -90,11 +90,12 @@ test('surface switches retain the Coach draft and resource search without sharin
   await expect(page.locator('#coach-composer')).toBeVisible();
   await page.locator('#coach-composer').fill('Keep my question while I read');
   await page.getByTestId('trainer-view-nav-resources').click();
-  await expect(page.locator('[data-surface=resources] input[type=search]')).toHaveCount(0);
+  await expect(page.locator('[data-surface=resources] input[type=search]')).toHaveCount(1);
   await page.locator('#coach-composer').fill('/search boundary');
   await page.locator('#coach-composer').press('Enter');
   const search = page.locator('[data-clear-resource-search]');
   await expect(search).toContainText('boundary');
+  await expect(page.locator('[data-surface=resources] input[type=search]')).toHaveValue('boundary');
   await openLearningDrawer(page, 'goal');
   // The drawer is modal: close it before using the nav.
   await closeLearningDrawer(page);

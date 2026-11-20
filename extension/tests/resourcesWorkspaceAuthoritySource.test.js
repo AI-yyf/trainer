@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadTsModule } = require('./helpers/loadTsModule');
 
 const resourcesPath = path.resolve(
   __dirname,
@@ -53,7 +54,12 @@ test('Resources puts searchable knowledge records in a resource-only navigation 
   const treeIndex = source.indexOf('className="resources-knowledge__tree"');
   const restoreContextIndex = source.indexOf('className="resources-inline-context"');
   assert.ok(treeIndex >= 0, 'expected a knowledge-resource tree');
-  assert.ok(restoreContextIndex >= 0, 'expected guarded sandbox restore context');
+  assert.equal(
+    restoreContextIndex,
+    -1,
+    'sandbox restore stays silent without rendering a context-recovery banner',
+  );
+  assert.match(source, /data-resource-search-input="true"/);
 });
 
 test('the sandbox copy keeps the project-workspace boundary explicit', () => {
@@ -74,4 +80,18 @@ test('the sandbox copy keeps the project-workspace boundary explicit', () => {
   assert.match(librarySource, /nodeKind === "directory"/);
   assert.doesNotMatch(source, /onOpenSandboxNode/);
   assert.doesNotMatch(source, /managedRoots/);
+});
+
+test('library resource capture defaults PDF and URL imports away from raw binary artifact downloads', async () => {
+  const { captureKindIsArtifact } = await loadTsModule(
+    path.resolve(__dirname, '..', 'webview', 'src', 'lib', 'captureSourceKind.ts'),
+  );
+  assert.equal(captureKindIsArtifact('pdf'), false);
+  assert.equal(captureKindIsArtifact('web'), false);
+  assert.equal(captureKindIsArtifact('repo'), true);
+  assert.equal(captureKindIsArtifact('folder'), true);
+  assert.equal(captureKindIsArtifact('file'), true);
+
+  const source = fs.readFileSync(resourcesPath, 'utf8');
+  assert.match(source, /type="search"[\s\S]*?data-resource-search-input="true"/);
 });

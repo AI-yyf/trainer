@@ -794,15 +794,41 @@
 }
 
 .resources-knowledge__search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
   min-height: 26px;
-  border-color: color-mix(in srgb, var(--line) 46%, transparent);
+  padding-inline: 8px 4px;
+  border: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
   border-radius: 4px;
   background: var(--bg-1);
 }
 
-.resources-knowledge__search input {
+.resources-knowledge__search input,
+.resources-knowledge__search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
   min-height: 24px;
+  padding: 2px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--fg-0);
   font-size: 12px;
+}
+
+.resources-knowledge__search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.resources-knowledge__search-clear {
+  flex: none;
+  padding: 0 4px;
+  line-height: 1;
 }
 
 .resources-knowledge__add-resource {

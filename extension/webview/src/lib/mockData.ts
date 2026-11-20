@@ -804,14 +804,14 @@ export const mockBootstrapData: BootstrapData = {
     {
       id: "res-2",
       title: "当前文件错误处理笔记",
-      kind: "pdf",
+      kind: "markdown",
       status: "indexing",
-      summary: "当前文件里登录失败分支的改动记录。",
+      summary: "当前文件里登录失败分支的改动记录（含配套截图）。",
     },
     {
       id: "res-3",
       title: "失败登录检查清单",
-      kind: "text",
+      kind: "markdown",
       status: "ready",
       summary: "改完后用错的账号登一次，看提示对不对。",
     },

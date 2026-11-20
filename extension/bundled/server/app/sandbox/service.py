@@ -59,6 +59,7 @@ from ..memory.workspace_recovery import (
     live_plan_snapshot_persist_chrome,
     live_training_card_title,
 )
+from ..resources.canonical import strip_front_matter
 from ..resources.preview import (
     PreviewService,
     _convert_archive_to_markdown,
@@ -396,6 +397,7 @@ class SandboxService:
         workspace_path_resolver: Any | None = None,
         workspace_sandbox_root_resolver: Callable[..., str | None] | None = None,
         workspace_authority_resolver: Callable[[str], "WorkspaceAuthority | None"] | None = None,
+        library_root_resolver: Callable[[str], Path | None] | None = None,
     ) -> None:
         self.data_root = data_root
         self.sandboxes_root = self.data_root / "sandboxes"
@@ -406,6 +408,7 @@ class SandboxService:
         self._workspace_path_resolver = workspace_path_resolver
         self._workspace_sandbox_root_resolver = workspace_sandbox_root_resolver
         self._workspace_authority_resolver = workspace_authority_resolver
+        self._library_root_resolver = library_root_resolver
         self._preview_service = PreviewService()
 
     def set_workspace_path_resolver(self, resolver: Any | None) -> None:
@@ -422,6 +425,79 @@ class SandboxService:
         resolver: Callable[[str], "WorkspaceAuthority | None"] | None,
     ) -> None:
         self._workspace_authority_resolver = resolver
+
+    def set_library_root_resolver(
+        self,
+        resolver: Callable[[str], Path | None] | None,
+    ) -> None:
+        self._library_root_resolver = resolver
+
+    def _resolved_library_root(self, workspace_id: str) -> Path | None:
+        if self._library_root_resolver is None:
+            return None
+        resolved = self._library_root_resolver(workspace_id)
+        if resolved is None:
+            return None
+        return Path(resolved).expanduser().resolve(strict=False)
+
+    def _resolve_canonical_markdown_file(
+        self,
+        workspace_id: str,
+        canonical_markdown_path: str | None,
+    ) -> Path | None:
+        markdown = str(canonical_markdown_path or "").strip()
+        if not markdown:
+            return None
+        path = Path(markdown)
+        if path.is_absolute():
+            return path if self._path_is_file(path) else None
+        candidates: list[Path] = []
+        library_root = self._resolved_library_root(workspace_id)
+        if library_root is not None:
+            candidates.append(library_root / path)
+        workspace_root = self._resolved_workspace_path(workspace_id)
+        if workspace_root is not None and workspace_root != library_root:
+            candidates.append(workspace_root / path)
+        for candidate in candidates:
+            if self._path_is_file(candidate):
+                return candidate
+        return None
+
+    def _canonical_sandbox_markdown(
+        self,
+        workspace_id: str,
+        resource: ResourceRecord,
+        source_path: Path | None,
+    ) -> Path | None:
+        if resource.source_items or resource.kind == "image":
+            return None
+        if source_path is not None and source_path.suffix.lower() in {".md", ".markdown"}:
+            return None
+        return self._resolve_canonical_markdown_file(
+            workspace_id,
+            resource.canonical_markdown_path,
+        )
+
+    def _sync_canonical_markdown_with_assets(
+        self,
+        target_path: Path,
+        markdown_path: Path,
+    ) -> None:
+        markdown_text = strip_front_matter(
+            self._read_text(markdown_path, encoding="utf-8", errors="replace")
+        )
+        self._ensure_directory(target_path.parent)
+        self._write_text(target_path, markdown_text, encoding="utf-8")
+        assets_dir = markdown_path.parent / "assets" / markdown_path.stem
+        if not self._path_is_dir(assets_dir):
+            return
+        target_assets_dir = target_path.parent / "assets" / markdown_path.stem
+        if self._path_exists(target_assets_dir):
+            self._remove_tree(target_assets_dir, ignore_errors=True)
+        self._ensure_directory(target_assets_dir)
+        for asset in self._iterdir_paths(assets_dir):
+            if self._path_is_file(asset):
+                self._copy_file(asset, target_assets_dir / asset.name)
 
     def _resolved_workspace_path(self, workspace_id: str) -> Path | None:
         if self._workspace_path_resolver is None:
@@ -696,20 +772,36 @@ class SandboxService:
         force: bool = False,
     ) -> ResourceRecord:
         root = self.ensure_workspace_root(workspace_id)
+        source_path = self._local_path(resource.source)
+        canonical_markdown = self._canonical_sandbox_markdown(
+            workspace_id,
+            resource,
+            source_path,
+        )
         relative_target = self._resource_relative_path(resource)
+        if canonical_markdown is not None and not relative_target.lower().endswith(".md"):
+            relative_target = str(PurePosixPath(relative_target).with_suffix(".md"))
         if resource.sandbox_path:
             try:
                 target_path = self._resolve_within_root(root, resource.sandbox_path, allow_missing=True)
             except ValueError:
                 target_path = self._materialize_target(root, relative_target)
+            if canonical_markdown is not None and target_path.suffix.lower() != ".md":
+                stale_target = target_path
+                target_path = target_path.with_suffix(".md")
+                if self._path_exists(stale_target) and self._path_is_file(stale_target):
+                    self._unlink_path(stale_target)
             preserve_existing = not force and self._path_exists(target_path)
         else:
             target_path = self._materialize_target(root, relative_target)
             preserve_existing = False
-        source_path = self._local_path(resource.source)
         synced = False
 
-        if resource.kind == "url":
+        if canonical_markdown is not None:
+            if not preserve_existing:
+                self._sync_canonical_markdown_with_assets(target_path, canonical_markdown)
+                synced = True
+        elif resource.kind == "url":
             if not preserve_existing:
                 body = self._url_resource_body(resource)
                 self._write_text(target_path, body, encoding="utf-8")

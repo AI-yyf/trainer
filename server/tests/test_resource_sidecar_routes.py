@@ -1379,15 +1379,19 @@ def test_workspace_path_keeps_managed_artifacts_under_sidecar_data_root(tmp_path
         sandbox_path = Path(indexed_payload["sandbox_path"]).resolve(strict=False)
         expected_sandbox_root = (data_root / "sandboxes" / workspace_id).resolve(strict=False)
         sandbox_path.relative_to(expected_sandbox_root)
+        assert sandbox_path.suffix == ".md"
         assert (data_root / "search-indexes" / workspace_id / "index.sqlite3").exists()
         assert not (workspace_root / ".trainer" / "search" / "index.sqlite3").exists()
+
+        csv_preview_path = sandbox_path.with_name("coach-table.csv")
+        csv_preview_path.write_text("name,value\ncoach,1\n", encoding="utf-8")
 
         state = client.get(
             "/sandbox/state",
             params={
                 "workspace_id": workspace_id,
-                "selected_path": str(sandbox_path),
-                "preview_path": str(sandbox_path),
+                "selected_path": str(csv_preview_path),
+                "preview_path": str(csv_preview_path),
             },
         )
 

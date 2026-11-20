@@ -62,7 +62,7 @@ export function detectCaptureSourceKind(rawUrl: string): CaptureSourceKind {
   return isPdfCaptureUrl(raw) ? "pdf" : "web";
 }
 
-/** True when the kind stores an owned artifact (a PDF or a repository clone). */
+/** True when the kind stores an owned artifact other than Markdown/images (repositories). */
 export function captureKindIsArtifact(kind: CaptureSourceKind): boolean {
-  return kind !== "web";
+  return kind !== "web" && kind !== "pdf";
 }

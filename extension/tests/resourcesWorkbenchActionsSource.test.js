@@ -361,7 +361,8 @@ test('Resources keeps folder counts recursive and moves deletion into the reader
   assert.match(collectionSource, /resourceIdsInTreeNode\(node\)/);
   assert.match(collectionSource, /resourceIdsInTreeNode\(node\)/);
   assert.doesNotMatch(collectionSource, /node\.children\.length/);
-  assert.match(treeItemSource, /aria-label=\{node\.resource\.title\}/);
+  assert.match(treeItemSource, /const displayTitle = formatLibraryResourceTitle\(node\.resource\);/);
+  assert.match(treeItemSource, /aria-label=\{displayTitle\}/);
   assert.match(treeItemSource, /aria-current=\{isSelected \? "true" : undefined\}/);
   assert.match(collectionSource, /aria-label=\{node\.label\}/);
   assert.doesNotMatch(viewSource, /aria-multiselectable="true"/);

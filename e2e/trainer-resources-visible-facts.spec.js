@@ -59,13 +59,12 @@ for (const mode of ['missing', 'wrong-path', 'embedded', 'standalone']) {
     expect(facts.sandboxPreviewVisible).toBeUndefined();
     expect(facts.sandboxPreviewEmbedded).toBeUndefined();
     expect(facts.sandboxPreviewPath).toBeUndefined();
-    // The shipped library has no Reader detail page at all; every mode keeps
-    // the logical restore scope without rendering resource content.
+    // The shipped library has no Reader detail page and never renders a
+    // visible context-recovery banner; every mode keeps logical restore scope quietly.
     await expect(reader).toHaveCount(0);
-    if (mode === 'standalone') {
-      await expect(page.locator('.resources-inline-context')).toBeVisible();
-    } else {
-      await expect(page.locator('.resources-knowledge')).toBeVisible();
+    await expect(page.locator('.resources-inline-context')).toHaveCount(0);
+    await expect(page.locator('.resources-knowledge')).toBeVisible();
+    if (mode !== 'standalone') {
       await expect(page.getByRole('treeitem', { name: 'preview-proof.md', exact: true })).toBeVisible();
     }
   });

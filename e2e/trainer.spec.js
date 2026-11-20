@@ -738,6 +738,7 @@ test.describe("Trainer two-destination shell", () => {
 
       const library = page.getByRole("region", { name: copy.library, exact: true });
       const search = page.locator("#coach-composer");
+      const librarySearchInput = library.locator("input[type=search]");
       const tree = library.getByRole("tree", { name: copy.library, exact: true });
       const toolbarButtons = library.locator(".resources-knowledge__actions").getByRole("button");
       const addResource = library.getByRole("button", {
@@ -746,7 +747,8 @@ test.describe("Trainer two-destination shell", () => {
       });
 
       await expect(search).toBeVisible();
-      await expect(library.locator("input[type=search]")).toHaveCount(0);
+      await expect(librarySearchInput).toHaveCount(1);
+      await expect(librarySearchInput).toBeVisible();
       await expect(addResource).toBeVisible();
       // The toolbar is one action now — the standalone refresh-index button is gone.
       await expect(toolbarButtons).toHaveCount(1);
@@ -781,12 +783,17 @@ test.describe("Trainer two-destination shell", () => {
         primaryTreeItem.locator(".resources-library-tree__kind[data-resource-kind]"),
       ).toHaveCount(1);
 
-      await search.fill("/search " + copy.indexingResource);
-      await search.press("Enter");
+      await librarySearchInput.fill(copy.indexingResource);
       const indexingTreeItem = tree.getByRole("treeitem", {
         name: copy.indexingResource,
         exact: true,
       });
+      await expect(indexingTreeItem).toBeVisible();
+      await page.locator("[data-clear-resource-search]").click();
+      await expect(librarySearchInput).toHaveValue("");
+
+      await search.fill("/search " + copy.indexingResource);
+      await search.press("Enter");
       await expect(indexingTreeItem).toBeVisible();
       // Per-row index-status badges are gone; the reader holds the status line.
       await expect(indexingTreeItem.locator(".resources-library-tree__status")).toHaveCount(0);
@@ -1866,10 +1873,11 @@ test.describe("Trainer two-destination shell", () => {
     // Growth page is gone.
     const progress = page.locator('[data-template="LearningDrawer"] [data-learning-section="progress"]');
     await expect(progress).toBeVisible();
+    await expect(progress.locator('[data-capability-bar="true"]')).toHaveCount(1);
     await expect(progress.getByText("理解", { exact: true })).toBeVisible();
-    await expect(progress.getByText("已稳固", { exact: true })).toBeVisible();
+    await expect(progress.getByText("稳定掌握", { exact: true })).toBeVisible();
     await expect(progress.getByText("调试", { exact: true })).toBeVisible();
-    await expect(progress.getByText("能独立做", { exact: true })).toBeVisible();
+    await expect(progress.getByText("独立完成", { exact: true })).toBeVisible();
     await expect(progress.getByText("迁移", { exact: true })).toBeVisible();
     // §25: evidence counts are expressed as coaching language.
     await expect(progress.getByText("9 次", { exact: true })).toBeVisible();

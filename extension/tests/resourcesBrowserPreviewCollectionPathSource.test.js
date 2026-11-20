@@ -37,11 +37,11 @@ test('Resources browser preview uses explicit case-preserving collection paths',
   );
   assert.match(
     fixture,
-    /collectionPath: "knowledge\/docs\/training\/evidence\/training-matrix\.csv"/,
+    /collectionPath: "knowledge\/docs\/training\/evidence\/training-matrix\.md"/,
   );
   assert.match(
     fixture,
-    /collectionPath: "projects\/Refactor\/briefs\/refactor-brief\.pdf"/,
+    /collectionPath: "projects\/Refactor\/briefs\/refactor-brief\.md"/,
   );
 
   assert.match(
@@ -50,6 +50,6 @@ test('Resources browser preview uses explicit case-preserving collection paths',
   );
   assert.match(
     fixture,
-    /sandboxPath: "H:\/trainer_final\/\.trainer\/sandbox\/knowledge\/training\/evidence\/training-matrix\.csv"/,
+    /sandboxPath: "H:\/trainer_final\/\.trainer\/sandbox\/knowledge\/training\/evidence\/training-matrix\.md"/,
   );
 });

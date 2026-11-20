@@ -115,6 +115,7 @@ export interface ResourcesWorkbenchViewProps {
   isLiveBrowserPreview?: boolean;
   onSearchResources?: (request: ResourceSearchRequest) => void | Promise<void>;
   submittedSearchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
   onClearSearch?: () => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
@@ -294,20 +295,6 @@ function chooseWorkspaceRootLabel(language: ComposerLanguage): string {
     "ja-JP": "Trainer のワークスペースを選択",
     "ko-KR": "Trainer 작업 공간 선택",
     "pt-BR": "Escolher espaço de trabalho do Trainer",
-  };
-  return labels[language];
-}
-
-function restoredSandboxContextTitle(language: ComposerLanguage): string {
-  const labels: Record<ComposerLanguage, string> = {
-    "zh-CN": "\u6c99\u7bb1\u4e0a\u4e0b\u6587\u5df2\u6062\u590d",
-    "en-US": "Sandbox context restored",
-    "es-ES": "Contexto del sandbox restaurado",
-    "fr-FR": "Contexte du sandbox restaure",
-    "de-DE": "Sandbox-Kontext wiederhergestellt",
-    "ja-JP": "\u30b5\u30f3\u30c9\u30dc\u30c3\u30af\u30b9\u306e\u30b3\u30f3\u30c6\u30ad\u30b9\u30c8\u3092\u5fa9\u5143",
-    "ko-KR": "\uc0cc\ub4dc\ubc15\uc2a4 \ucee8\ud14d\uc2a4\ud2b8\uac00 \ubcf5\uc6d0\ub428",
-    "pt-BR": "Contexto do sandbox restaurado",
   };
   return labels[language];
 }
@@ -949,9 +936,26 @@ function ResourceKindIcon({ resource }: { resource: ResourceRecord }) {
   );
 }
 
+const NON_MARKDOWN_DOC_EXTENSION_PATTERN =
+  /\.(?:pdf|docx|docm|doc|pptx|pptm|ppt|xlsx|xls|csv|tsv|txt|rst|html|htm|xhtml|epub|rtf)$/i;
+
+function formatLibraryResourceTitle(resource: ResourceRecord): string {
+  const title = resource.title;
+  if (resource.kind === "image") {
+    return title;
+  }
+  return NON_MARKDOWN_DOC_EXTENSION_PATTERN.test(title)
+    ? title.replace(NON_MARKDOWN_DOC_EXTENSION_PATTERN, ".md")
+    : title;
+}
+
 function resourceRowMeta(resource: ResourceRecord): string | undefined {
-  const kind = resource.kind ? resource.kind.toUpperCase() : "";
-  const context = resource.collectionPath?.trim() || resource.source?.trim() || "";
+  const kind = resource.kind === "image" ? "IMAGE" : "MD";
+  const rawContext = resource.collectionPath?.trim() || resource.source?.trim() || "";
+  const context =
+    resource.kind !== "image" && NON_MARKDOWN_DOC_EXTENSION_PATTERN.test(rawContext)
+      ? rawContext.replace(NON_MARKDOWN_DOC_EXTENSION_PATTERN, ".md")
+      : rawContext;
   const meta = [kind, context].filter(Boolean).join(" \u00b7 ");
   return meta ? meta.slice(0, 96) : undefined;
 }
@@ -987,6 +991,7 @@ function ResourceTreeItem({
 }: ResourceTreeItemProps) {
   if (node.kind === "resource" && node.resource) {
     const isSelected = selectedResourceId === node.resource.id;
+    const displayTitle = formatLibraryResourceTitle(node.resource);
     return (
       <div
         className={`resources-library-tree__node resources-library-tree__node--resource resources-row ${
@@ -994,11 +999,11 @@ function ResourceTreeItem({
         }`}
         role="treeitem"
         aria-level={depth + 1}
-        aria-label={node.resource.title}
+        aria-label={displayTitle}
         aria-current={isSelected ? "true" : undefined}
         data-resource-tree-item-id={node.id}
         tabIndex={activeTreeItemId === node.id ? 0 : -1}
-        title={[node.resource.title, resourceRowMeta(node.resource)].filter(Boolean).join(" — ")}
+        title={[displayTitle, resourceRowMeta(node.resource)].filter(Boolean).join(" — ")}
         onFocus={() => onActiveTreeItemChange(node.id)}
         onMouseDown={(event) => event.currentTarget.focus()}
         onClick={() => onOpen(node.resource!)}
@@ -1030,12 +1035,12 @@ function ResourceTreeItem({
           <ResourceKindIcon resource={node.resource} />
         </span>
         <span className="resources-library-tree__copy">
-          <strong>{node.resource.title}</strong>
+          <strong>{displayTitle}</strong>
         </span>
         <button
           className="resources-library-tree__open resources-library-tree__menu"
           type="button"
-          aria-label={`${localize(language, "fileActionsTitle")}: ${node.resource.title}`}
+          aria-label={`${localize(language, "fileActionsTitle")}: ${displayTitle}`}
           title={localize(language, "fileActionsTitle")}
           onClick={(event) => {
             event.stopPropagation();
@@ -1162,6 +1167,7 @@ export function ResourcesWorkbenchView({
   isLiveBrowserPreview = false,
   onSearchResources,
   submittedSearchQuery = "",
+  onSearchQueryChange,
   onClearSearch,
   onImportFiles,
   onImportFolder,
@@ -1218,8 +1224,10 @@ export function ResourcesWorkbenchView({
   const [captureDialogMessage, setCaptureDialogMessage] = useState<string | undefined>(undefined);
   const [urlImportValue, setUrlImportValue] = useState("");
   const [urlImportFocusId, setUrlImportFocusId] = useState("");
-  const [urlImportDownload, setUrlImportDownload] = useState(false);
-  const [urlImportTargetDir, setUrlImportTargetDir] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState(submittedSearchQuery);
+  useEffect(() => {
+    setLocalSearchQuery(submittedSearchQuery);
+  }, [submittedSearchQuery]);
   const [urlImportState, setUrlImportState] = useState<
     {
       phase: "idle" | "busy" | "ok" | "failed";
@@ -1270,8 +1278,6 @@ export function ResourcesWorkbenchView({
         value: string;
         /** When set, a successful create also moves this resource into the new folder. */
         moveResourceId?: string;
-        /** When set, a successful create becomes the pending capture's target folder. */
-        assignCaptureTarget?: boolean;
       }
     | undefined
   >(undefined);
@@ -1337,7 +1343,17 @@ export function ResourcesWorkbenchView({
     );
   };
 
-  const trimmedQuery = submittedSearchQuery.trim();
+  const effectiveSearchQuery = onSearchQueryChange ? submittedSearchQuery : localSearchQuery;
+  const handleSearchQueryChange = (nextQuery: string) => {
+    setLocalSearchQuery(nextQuery);
+    onSearchQueryChange?.(nextQuery);
+  };
+  const handleClearSearch = () => {
+    setLocalSearchQuery("");
+    onSearchQueryChange?.("");
+    onClearSearch?.();
+  };
+  const trimmedQuery = effectiveSearchQuery.trim();
   const normalizedQuery = normalizeSearchText(trimmedQuery);
   const hasSearchQuery = Boolean(normalizedQuery);
   const trashSnapshotAvailable = deletedResources !== undefined;
@@ -1955,8 +1971,6 @@ export function ResourcesWorkbenchView({
     setUrlImportState(undefined);
     setUrlImportValue("");
     setUrlImportFocusId("");
-    setUrlImportDownload(false);
-    setUrlImportTargetDir("");
   };
 
   const submitUrlImport = () => {
@@ -1968,19 +1982,16 @@ export function ResourcesWorkbenchView({
       setUrlImportState({ phase: "failed", message: localize(language, "addUrlInvalid") });
       return;
     }
-    const download = urlImportDownload;
-    const targetDir = download ? normalizeLibraryFolderPath(urlImportTargetDir) : "";
     setUrlImportState({
       phase: "busy",
-      message: localize(language, download ? "addUrlDownloadBusy" : "addUrlBusy"),
+      message: localize(language, "addUrlBusy"),
     });
     void Promise.resolve()
       .then(() =>
         onCaptureResource({
           url,
           focusId: urlImportFocusId || undefined,
-          download,
-          targetDir: download ? targetDir : undefined,
+          download: false,
         }),
       )
       .then((outcome) => {
@@ -1988,16 +1999,9 @@ export function ResourcesWorkbenchView({
           const captured = outcome.deduped
             ? localizeValue(language, "addUrlDeduped", outcome.message)
             : localizeValue(language, "addUrlSucceeded", outcome.message);
-          const savedPath = outcome.savedPath?.trim() || "";
           setUrlImportState({
             phase: "ok",
-            message: savedPath
-              ? `${captured} ${localizeValue(language, "addUrlSavedPath", savedPath)}`
-              : captured,
-            // A requested download with no reported path is stated honestly
-            // instead of claiming the file landed somewhere.
-            downloadUnconfirmed: download && !savedPath,
-            savedPath: savedPath || undefined,
+            message: captured,
             resourceId: outcome.resourceId,
           });
           setUrlImportValue("");
@@ -2007,9 +2011,7 @@ export function ResourcesWorkbenchView({
         setUrlImportState({
           phase: "failed",
           message: outcome.unconfirmed
-            ? download
-              ? localize(language, "addUrlUnconfirmedDownload")
-              : localize(language, "addUrlUnconfirmed")
+            ? localize(language, "addUrlUnconfirmed")
             : localizeValue(language, "addUrlFailed", outcome.message),
         });
       })
@@ -2126,7 +2128,6 @@ export function ResourcesWorkbenchView({
   const openFolderCreatePrompt = (
     parentPath = "",
     moveResourceId?: string,
-    assignCaptureTarget = false,
   ) => {
     if (!canWriteResources || !onCreateLibraryFolder) {
       return;
@@ -2137,7 +2138,6 @@ export function ResourcesWorkbenchView({
       parentPath: normalizeLibraryFolderPath(parentPath),
       value: "",
       moveResourceId,
-      assignCaptureTarget,
     });
   };
 
@@ -2244,10 +2244,6 @@ export function ResourcesWorkbenchView({
           // the folder listing in the background.
           refreshResources();
           loadLibraryFolders({ quiet: true });
-        }
-        if (prompt.assignCaptureTarget) {
-          setUrlImportDownload(true);
-          setUrlImportTargetDir(targetPath);
         }
         if (prompt.moveResourceId) {
           runOrganizeAction({ action: "set_group", group: targetPath }, prompt.moveResourceId);
@@ -2640,14 +2636,6 @@ export function ResourcesWorkbenchView({
     selectedResourceIndexNotice
       ? selectedResourceIndexNotice.label
       : (selectedResourceSourceLabel || undefined);
-  const restoreContextPath = restoreContext?.sandboxPath?.trim() || undefined;
-  const restoreContextPreviewPath = restoreContext?.previewPath?.trim() || undefined;
-  const restoreContextMeta = restoreContext
-    ? [restoreContext.focusArea, restoreContextPath]
-        .map((value) => value?.trim())
-        .filter((value): value is string => Boolean(value))
-        .join(" | ")
-    : "";
   const leftoverStoredNote = leftoverNote?.trim() || "";
   const omitLeftoverLibrary = Boolean(leftoverStoredNote) && resources.length === 0
     && resourceWriteAccess?.allowed !== true;
@@ -2715,14 +2703,37 @@ export function ResourcesWorkbenchView({
       </div>
       {/* The orientation card owns the only import CTA on an empty library, so
           the search/expand toolbar would be dead chrome until content exists. */}
-      <Library hidden={false} toolbar={omitLeftoverLibrary || (resources.length === 0 && Boolean(orientationState) && !canWriteResources) ? null : (
+      <Library hidden={false} toolbar={omitLeftoverLibrary || (resources.length === 0 && !hasSearchQuery && Boolean(orientationState) && !canWriteResources) ? null : (
       <div className="resources-knowledge__toolbar">
-        {hasSearchQuery ? (
-          <button type="button" className="template-back" data-clear-resource-search onClick={onClearSearch}
-            title={localize(language, "searchPlaceholder")}>
-            {trimmedQuery} ×
-          </button>
-        ) : null}
+        <div className="resources-knowledge__search">
+          <input
+            type="search"
+            className="resources-knowledge__search-input"
+            data-resource-search-input="true"
+            value={effectiveSearchQuery}
+            onChange={(event) => handleSearchQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && effectiveSearchQuery) {
+                event.preventDefault();
+                handleClearSearch();
+              }
+            }}
+            placeholder={compactResourceSearchPlaceholder[language]}
+            aria-label={localize(language, "searchPlaceholder")}
+          />
+          {hasSearchQuery ? (
+            <button
+              type="button"
+              className="template-back resources-knowledge__search-clear"
+              data-clear-resource-search
+              onClick={handleClearSearch}
+              title={localize(language, "searchPlaceholder")}
+            >
+              <span className="sr-only">{trimmedQuery}</span>
+              <span aria-hidden="true">×</span>
+            </button>
+          ) : null}
+        </div>
         <div className="resources-knowledge__actions" aria-label={localize(language, "title")}>
           {/* One primary action per viewport: when the empty-state orientation
               card already carries the import CTA, the toolbar repeats it. */}
@@ -3025,59 +3036,6 @@ export function ResourcesWorkbenchView({
               </select>
             </label>
           ) : null}
-          <div className="resources-knowledge__url-import-check">
-            <button
-              className="button button--ghost button--compact"
-              type="button"
-              role="switch"
-              aria-checked={urlImportDownload}
-              onClick={() => setUrlImportDownload((current) => !current)}
-              disabled={urlImportState?.phase === "busy"}
-            >
-              <span>{localize(language, "addUrlDownloadLabel")}</span>
-            </button>
-          </div>
-          {urlImportDownload ? (
-            libraryFolderEntries.length > 0 ? (
-              <label className="resources-knowledge__url-import-field">
-                <span>{localize(language, "addUrlTargetFolderLabel")}</span>
-                <select
-                  value={urlImportTargetDir}
-                  onChange={(event) => {
-                    if (event.target.value === "__new-library-folder__") {
-                      openFolderCreatePrompt("", undefined, true);
-                      return;
-                    }
-                    setUrlImportTargetDir(event.target.value);
-                  }}
-                  aria-label={localize(language, "addUrlTargetFolderLabel")}
-                  disabled={urlImportState?.phase === "busy"}
-                >
-                  <option value="">{localize(language, "addUrlTargetFolderRoot")}</option>
-                  {libraryFolderEntries.map((entry) => (
-                    <option key={entry.path} value={entry.path}>
-                      {`${"  ".repeat(entry.depth + 1)}${entry.name} (${entry.resourceCount})`}
-                    </option>
-                  ))}
-                  <option value="__new-library-folder__">
-                    {localize(language, "addUrlTargetFolderNew")}
-                  </option>
-                </select>
-              </label>
-            ) : (
-              <label className="resources-knowledge__url-import-field">
-                <span>{localize(language, "addUrlTargetFolderLabel")}</span>
-                <input
-                  type="text"
-                  value={urlImportTargetDir}
-                  onChange={(event) => setUrlImportTargetDir(event.target.value)}
-                  placeholder={localize(language, "addUrlTargetFolderPlaceholder")}
-                  aria-label={localize(language, "addUrlTargetFolderLabel")}
-                  disabled={urlImportState?.phase === "busy"}
-                />
-              </label>
-            )
-          ) : null}
           <div className="resources-knowledge__url-import-actions">
             <button
               className="button button--accent button--compact"
@@ -3141,21 +3099,6 @@ export function ResourcesWorkbenchView({
             ) : null}
           </div>
         </form>
-      ) : null}
-
-      {omitLeftoverLibrary ? null : restoreContext?.surface === "sandbox" ? (
-        <div className="resources-inline-context" role="status">
-          <strong className="resources-inline-context__title">
-            {restoredSandboxContextTitle(language)}
-          </strong>
-          {restoreContextPreviewPath ? <p>{restoreContextPreviewPath}</p> : null}
-          {!restoreContextPreviewPath && restoreContext.summary?.trim() ? (
-            <p>{restoreContext.summary}</p>
-          ) : null}
-          {restoreContextMeta ? (
-            <p className="resources-inline-context__meta">{restoreContextMeta}</p>
-          ) : null}
-        </div>
       ) : null}
 
       {searchStatus ? <SystemState kind={searchStatus.tone === "failed" ? "recoverable-error" : searchStatus.tone === "pending" ? "processing" : "information"} title={searchStatus.label} /> : null}

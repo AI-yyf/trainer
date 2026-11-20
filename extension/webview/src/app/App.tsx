@@ -10165,14 +10165,6 @@ export function App() {
             ) : null}
           </section>
         ) : null}
-        {dockReturnNotice === "resources" ? (
-          <DockReturnToSurfaceBar
-            language={layout.composerLanguage}
-            surface="resources"
-            onViewReply={handleDockReturnViewReply}
-            onDismiss={handleDockReturnDismiss}
-          />
-        ) : null}
         <Suspense
           fallback={<ViewFallback label={resourcesViewLabel(layout.composerLanguage)} language={layout.composerLanguage} />}
         >
@@ -10183,6 +10175,7 @@ export function App() {
           researchBriefToOpen={researchBriefToOpen?.workspaceId === data.memory.workspace?.workspaceId ? researchBriefToOpen : undefined}
           resourceSearch={data.resourceSearch}
           submittedSearchQuery={resourcesViewSearchQuery}
+          onSearchQueryChange={setResourcesViewSearchQuery}
           onClearSearch={() => setResourcesViewSearchQuery("")}
           orientation={
             leftoverResourceLibraryListNotLive && resourcesOrientation
