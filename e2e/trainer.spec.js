@@ -1058,7 +1058,7 @@ test.describe("Trainer two-destination shell", () => {
     const reflection = "The focused check proves the boundary before the result can return.";
     // The reflection lives in the practice card's own answer field now.
     const reflectionInput = page.getByRole("textbox", {
-      name: "Your answer",
+      name: "Response",
       exact: true,
     });
     // The reflection is submitted from the practice card's own answer form.

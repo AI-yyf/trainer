@@ -489,6 +489,25 @@ import {
 const injectedBootstrapAvailable = Boolean(getInjectedBootstrapState());
 const RESOURCE_VERSION_CHECK_TIMEOUT_MS = 125_000;
 
+/**
+ * Scroll target for Coach auto-follow: keep the latest message visible even when
+ * inline learning/practice footer cards sit beneath the thread.
+ */
+function resolveCoachBottomScrollTop(container: HTMLElement): number {
+  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+  if (!container.querySelector(".coach-conversation-view__footer")) {
+    return maxScrollTop;
+  }
+  const items = container.querySelectorAll<HTMLElement>(".coach-conversation-view__item");
+  const lastItem = items.length > 0 ? items[items.length - 1] : undefined;
+  if (!lastItem) {
+    return maxScrollTop;
+  }
+  const itemBottom =
+    container.scrollTop + (lastItem.getBoundingClientRect().bottom - container.getBoundingClientRect().top);
+  return Math.max(0, Math.min(maxScrollTop, itemBottom - container.clientHeight + 16));
+}
+
 export function App() {
   useEffect(() => {
     performance.mark("trainer:app-mounted");
@@ -2717,7 +2736,7 @@ export function App() {
     // Stick-to-bottom only while the reader is already at (or near) the
     // bottom; scrolling up during a stream must stay respected.
     const isPinnedToBottom = () =>
-      container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+      resolveCoachBottomScrollTop(container) - container.scrollTop < 120;
 
     const handleScroll = () => {
       coachAutoScrollPinnedRef.current = isPinnedToBottom();
@@ -2739,7 +2758,7 @@ export function App() {
     coachAutoScrollPinnedRef.current =
       (streamingStarted && !viewChanged) || learnerTurn || isPinnedToBottom();
     const scrollToBottom = () => {
-      container.scrollTop = container.scrollHeight;
+      container.scrollTop = resolveCoachBottomScrollTop(container);
     };
     const handle = window.requestAnimationFrame(() => {
       if (coachAutoScrollPinnedRef.current) {
@@ -2778,7 +2797,7 @@ export function App() {
       if (!container) {
         return;
       }
-      container.scrollTop = container.scrollHeight;
+      container.scrollTop = resolveCoachBottomScrollTop(container);
     });
   }, []);
 

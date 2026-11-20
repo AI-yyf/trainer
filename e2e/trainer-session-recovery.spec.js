@@ -69,11 +69,10 @@ test("compact Goals view shows its learning path on entry", async ({ page }) => 
   await expect(stages.locator(':scope > summary')).toHaveCount(0);
   await expect(stages.getByText('验证元组内列表', { exact: true })).toBeVisible();
   await expect(stages.getByText('实现嵌套求和', { exact: true })).toBeVisible();
-  // The third stage stays behind the group's own "more" disclosure.
-  await expect(stages.getByText('覆盖异常边界', { exact: true })).toHaveCount(1);
-  await stages.locator('[data-learning-section="more-route-stages"] > summary').click();
-  await expect(stages.getByText('覆盖异常边界', { exact: true })).toBeVisible();
-  await expect(stages.locator('[data-stage-status]')).toHaveCount(3);
+  // Drawer mode caps the calm path preview to the active + next upcoming stage
+  // without nested disclosure folds.
+  await expect(stages.locator('[data-learning-section="more-route-stages"]')).toHaveCount(0);
+  await expect(stages.locator('[data-stage-status]')).toHaveCount(2);
 });
 
 test("restored workspace settings show saved custom skills without a formal plan", async ({ page }) => {
@@ -429,17 +428,14 @@ test("stage materials live inside per-stage disclosures and old plan materials c
   });
   const stages = page.locator('[data-learning-section=route]');
   await openLearningMore(page);
-  // The route group holds the live stages; the finished one moved into the
-  // completed-stages disclosure.
+  // The route group keeps only live stages in the calm drawer; completed stages
+  // stay out of the drawer disclosure stack.
   await expect(stages.locator('[data-plan-stage]')).toHaveCount(1);
-  const completed = page.locator('[data-learning-section="completed-stages"]');
-  await expect(completed.locator('[data-plan-stage="stage-2"]')).toHaveCount(1);
+  await expect(page.locator('[data-learning-section="completed-stages"]')).toHaveCount(0);
   await expect(stages.getByRole('meter')).toHaveCount(0);
   await expect(stages.locator('[title^="已生成资料"]')).toHaveCount(0);
   const active = stages.locator('[data-plan-stage="stage-1"]');
   await expect(active).toHaveAttribute('data-stage-status', 'active');
-  const done = completed.locator('[data-plan-stage="stage-2"]');
-  await expect(done).toHaveAttribute('data-stage-status', 'done');
   // Stage details are user-controlled now: open the active stage to reach its
   // objective, 生成资料 action and generated materials.
   const activeDetails = active.locator('details');
@@ -447,7 +443,6 @@ test("stage materials live inside per-stage disclosures and old plan materials c
     await activeDetails.locator(':scope > summary').click();
   }
   await expect(activeDetails).toHaveJSProperty('open', true);
-  await expect(done.locator('details')).toHaveJSProperty('open', false);
   // CSS locator on purpose: role queries skip content inside a closed details.
   await expect(activeDetails.locator('button:has-text("生成资料0")')).toHaveCount(1);
   // Old plan materials clear when the formal plan is replaced.
@@ -651,10 +646,10 @@ test('Start review opens the due queue while preserving the current practice car
   });
   await openLearningMore(page);
   await page.getByRole('button', { name: '开始复习', exact: true }).click();
-  // The due queue has no Training panel any more: "Start review" opens the
-  // learning drawer on the practice section and keeps the practice card.
-  await expect(page.locator('[data-template="LearningDrawer"]')).toBeVisible();
-  await expect(page.locator('[data-learning-section="practice"]')).toBeVisible();
+  // Clicking "Start review" closes the learning drawer and opens the inline due
+  // queue inside Chat while preserving the current practice card.
+  await expect(page.locator('[data-template="LearningDrawer"]')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '元组赋值边界', exact: true })).toBeVisible();
   await expect(page.locator('[data-training-card-id]').getByRole('heading', { name: '保留当前元组练习', exact: true })).toBeVisible();
   await page.evaluate(() => window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({ type: 'ui/restoreView', payload: {
     activeView: 'training', trainingRestoreTarget: 'next_hop',

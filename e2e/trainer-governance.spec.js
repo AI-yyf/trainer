@@ -170,7 +170,7 @@ test.describe("Trainer preview plan governance", () => {
     const cases = [
       {
         language: "zh-CN",
-        title: "先解决当前阻塞",
+        title: "请先处理当前阻塞项",
         blocker: "当前文件的验证证据还无法支撑该计划步骤。",
         action: "与教练解决阻塞",
         leak: "The current file verification does not yet support this plan step.",

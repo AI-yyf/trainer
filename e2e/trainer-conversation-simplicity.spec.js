@@ -26,7 +26,11 @@ test('Coach shows the reply and usable next actions without duplicate explanatio
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
     await expect(page.locator('.message-bubble strong').filter({ hasText: '边界检查' })).toHaveCount(1);
-    await expect(page.getByRole('button', { name: '下一步', exact: true })).toBeVisible();
+    const moreActionsButton = page.getByRole('button', { name: '更多操作', exact: true });
+    await expect(moreActionsButton).toBeVisible();
+    await moreActionsButton.click();
+    await expect(page.getByRole('menuitem', { name: '下一步', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.getByText(/HIDDEN_/).filter({ visible: true })).toHaveCount(0);
     await expect(page.locator('.message-bubble__tool-trail, .skill-projection-strip')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
