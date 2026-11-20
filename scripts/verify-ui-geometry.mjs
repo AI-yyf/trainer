@@ -464,7 +464,19 @@ async function main() {
     const overflow = Math.max(
       ...columns.map((column) => column.scrollWidth - column.clientWidth),
     );
-    return { heights, tops, cellCounts, labelCenters, overflow };
+    // Semantics, not just layout: the filled cells must equal the band the
+    // server projection names (assisted 1 · independent 2 · repeat_verified 3).
+    const expectedFill = { not_verified: 0, needs_review: 0, assisted: 1, independent: 2, repeat_verified: 3 };
+    const bands = columns.map((column) => {
+      const cells = column.querySelector("[data-capability-state]");
+      const state = cells?.getAttribute("data-capability-state") ?? "";
+      return {
+        state,
+        expected: Object.prototype.hasOwnProperty.call(expectedFill, state) ? expectedFill[state] : null,
+        filled: column.querySelectorAll(".learning-drawer__heatmap-cell.is-filled").length,
+      };
+    });
+    return { heights, tops, cellCounts, labelCenters, overflow, bands };
   });
   check(
     !progress.error && new Set(progress.heights).size === 1,
@@ -484,6 +496,13 @@ async function main() {
   check(
     !progress.error && (progress.overflow ?? 0) <= 1,
     `growth: the heatmap does not overflow its card (${progress.overflow ?? "n/a"}px)`,
+  );
+  check(
+    !progress.error &&
+      progress.bands.length > 0 &&
+      progress.bands.every((band) => band.expected !== null && band.filled === band.expected),
+    `growth: every column fills exactly the cells its band names ` +
+      `(${(progress.bands ?? []).map((band) => `${band.state || "?"}=${band.filled}/${band.expected ?? "?"}`).join(", ")})`,
   );
   if (keepShots) await page.screenshot({ path: path.join(shotDir, "progress.png") });
 

@@ -16,7 +16,7 @@ const COPY: Record<ComposerLanguage, {
   /** Labels the subject line of the practice panel, so a card title never
       appears as a stray line. */
   currentCard: string;
-  /** The heatmap legend: from "not verified yet" to "independent". */
+  /** The heatmap legend: from "not verified yet" to "repeatedly verified". */
   less: string;
   more: string;
 }> = {
@@ -141,12 +141,14 @@ export interface LearningDrawerPractice {
 export interface LearningDrawerProgressRow {
   label: string;
   state: string;
-  /** The band position on the heatmap scale (0 = nothing yet, 3 = independent). */
+  /** The band position on the heatmap scale (0 = nothing yet, 3 = repeatedly verified). */
+  /** The server projection state the band was drawn from. */
+  stateKey?: string;
   level: number;
   evidenceCount: number;
 }
 
-/** The heatmap's scale: three cells, from "nothing yet" to "independent". */
+/** The heatmap's scale: three cells, from "nothing yet" to "repeatedly verified". */
 const HEATMAP_LEVELS = [0, 1, 2];
 
 export interface LearningDrawerProgress {
@@ -269,6 +271,8 @@ export function LearningDrawer({ language, section, onSectionChange, goal, pract
                   <div
                     className="learning-drawer__heatmap-cells"
                     role="img"
+                    data-capability-state={row.stateKey}
+                    data-capability-level={Math.min(Math.max(row.level, 0), HEATMAP_LEVELS.length)}
                     aria-label={`${row.label}: ${row.state}, ${format(copy.evidence, row.evidenceCount)}`}
                     title={`${row.label} · ${row.state}`}
                   >
