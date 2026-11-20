@@ -1867,12 +1867,12 @@ test.describe("Trainer two-destination shell", () => {
     const progress = page.locator('[data-template="LearningDrawer"] [data-learning-section="progress"]');
     await expect(progress).toBeVisible();
     await expect(progress.getByText("理解", { exact: true })).toBeVisible();
-    await expect(progress.getByText("反复验证", { exact: true })).toBeVisible();
+    await expect(progress.getByText("已稳固", { exact: true })).toBeVisible();
     await expect(progress.getByText("调试", { exact: true })).toBeVisible();
-    await expect(progress.getByText("独立完成", { exact: true })).toBeVisible();
+    await expect(progress.getByText("能独立做", { exact: true })).toBeVisible();
     await expect(progress.getByText("迁移", { exact: true })).toBeVisible();
     // §25: evidence counts are expressed as coaching language.
-    await expect(progress.getByText("9 条证据", { exact: true })).toBeVisible();
+    await expect(progress.getByText("9 次", { exact: true })).toBeVisible();
     // §66 restraint: no gamified score bars on this surface.
     await expect(progress.locator(".progress-bar")).toHaveCount(0);
     await expectNoHorizontalOverflow(page);

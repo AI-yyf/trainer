@@ -1,4 +1,5 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useRef } from "react";
 
 import type { LearningProgressAchievement } from "../../lib/learningSummary";
 import type { ComposerLanguage, LearningSection } from "../../lib/types";
@@ -13,85 +14,67 @@ const COPY: Record<ComposerLanguage, {
   emptyProgress: string;
   due: string;
   evidence: string;
+  totalChecks: string;
   open: string;
   /** Labels the subject line of the practice panel, so a card title never
       appears as a stray line. */
   currentCard: string;
-  /** The heatmap legend: from "not verified yet" to "repeatedly verified". */
-  less: string;
-  more: string;
 }> = {
   "zh-CN": {
-    title: "学习", goal: "当前目标", practice: "到期练习", progress: "成长进度",
+    title: "学习", goal: "当前目标", practice: "到期练习", progress: "会了吗",
     emptyGoal: "还没有正式计划。", emptyPractice: "现在没有到期练习。",
-    emptyProgress: "完成一次练习后，这里会出现进度。", due: "{n} 张待复习",
-    evidence: "{n} 条证据", open: "打开",
+    emptyProgress: "动手完成一次练习后，这里会记录你的掌握情况。", due: "{n} 张待复习",
+    evidence: "{n} 次", totalChecks: "实测 {n} 次", open: "打开",
     currentCard: "当前练习：",
-    less: "少",
-    more: "多",
   },
   "en-US": {
-    title: "Learning", goal: "Current goal", practice: "Due practice", progress: "Growth",
+    title: "Learning", goal: "Current goal", practice: "Due practice", progress: "Mastery",
     emptyGoal: "No formal plan yet.", emptyPractice: "Nothing is due right now.",
-    emptyProgress: "Progress appears after one practice.", due: "{n} due",
-    evidence: "{n} evidence", open: "Open",
+    emptyProgress: "Complete one practice to see what's solid.", due: "{n} due",
+    evidence: "{n}×", totalChecks: "{n} checks", open: "Open",
     currentCard: "Current card:",
-    less: "Less",
-    more: "More",
   },
   "es-ES": {
-    title: "Aprendizaje", goal: "Objetivo actual", practice: "Práctica pendiente", progress: "Progreso",
+    title: "Aprendizaje", goal: "Objetivo actual", practice: "Práctica pendiente", progress: "Dominio",
     emptyGoal: "Aún no hay un plan formal.", emptyPractice: "No hay práctica pendiente.",
     emptyProgress: "El progreso aparece tras una práctica.", due: "{n} pendientes",
-    evidence: "{n} evidencias", open: "Abrir",
+    evidence: "{n}×", totalChecks: "{n} pruebas", open: "Abrir",
     currentCard: "Ejercicio actual:",
-    less: "Menos",
-    more: "Más",
   },
   "fr-FR": {
-    title: "Apprentissage", goal: "Objectif actuel", practice: "Pratique à faire", progress: "Progression",
+    title: "Apprentissage", goal: "Objectif actuel", practice: "Pratique à faire", progress: "Maîtrise",
     emptyGoal: "Pas encore de plan formel.", emptyPractice: "Rien à faire pour le moment.",
     emptyProgress: "La progression apparaît après une pratique.", due: "{n} à revoir",
-    evidence: "{n} preuves", open: "Ouvrir",
+    evidence: "{n}×", totalChecks: "{n} vérif.", open: "Ouvrir",
     currentCard: "Exercice actuel :",
-    less: "Moins",
-    more: "Plus",
   },
   "de-DE": {
-    title: "Lernen", goal: "Aktuelles Ziel", practice: "Fällige Übung", progress: "Fortschritt",
+    title: "Lernen", goal: "Aktuelles Ziel", practice: "Fällige Übung", progress: "Beherrschung",
     emptyGoal: "Noch kein formeller Plan.", emptyPractice: "Gerade nichts fällig.",
     emptyProgress: "Fortschritt erscheint nach einer Übung.", due: "{n} fällig",
-    evidence: "{n} Nachweise", open: "Öffnen",
+    evidence: "{n}×", totalChecks: "{n} Prüf.", open: "Öffnen",
     currentCard: "Aktuelle Übung:",
-    less: "Weniger",
-    more: "Mehr",
   },
   "ja-JP": {
-    title: "学習", goal: "現在の目標", practice: "期限の練習", progress: "成長",
+    title: "学習", goal: "現在の目標", practice: "期限の練習", progress: "定着度",
     emptyGoal: "正式な計画はまだありません。", emptyPractice: "今は期限の練習がありません。",
     emptyProgress: "練習を1回終えると進捗が表示されます。", due: "{n} 件",
-    evidence: "{n} 件の証拠", open: "開く",
+    evidence: "{n} 回", totalChecks: "実測 {n} 回", open: "開く",
     currentCard: "現在の練習：",
-    less: "少",
-    more: "多",
   },
   "ko-KR": {
-    title: "학습", goal: "현재 목표", practice: "예정된 연습", progress: "성장",
+    title: "학습", goal: "현재 목표", practice: "예정된 연습", progress: "숙련도",
     emptyGoal: "아직 공식 계획이 없습니다.", emptyPractice: "지금은 예정된 연습이 없습니다.",
     emptyProgress: "연습을 한 번 마치면 진행 상황이 표시됩니다.", due: "{n}개",
-    evidence: "증거 {n}개", open: "열기",
+    evidence: "{n}회", totalChecks: "검증 {n}회", open: "열기",
     currentCard: "현재 연습:",
-    less: "적음",
-    more: "많음",
   },
   "pt-BR": {
-    title: "Aprendizado", goal: "Objetivo atual", practice: "Prática pendente", progress: "Progresso",
+    title: "Aprendizado", goal: "Objetivo atual", practice: "Prática pendente", progress: "Domínio",
     emptyGoal: "Ainda não há um plano formal.", emptyPractice: "Nada pendente agora.",
     emptyProgress: "O progresso aparece após uma prática.", due: "{n} pendentes",
-    evidence: "{n} evidências", open: "Abrir",
+    evidence: "{n}×", totalChecks: "{n} testes", open: "Abrir",
     currentCard: "Exercício atual:",
-    less: "Menos",
-    more: "Mais",
   },
 };
 
@@ -261,6 +244,9 @@ export function LearningDrawer({ language, section, onSectionChange, goal, pract
       <section className="learning-drawer__card learning-drawer__card--progress" {...sectionProps("progress")}>
         <header className="learning-drawer__card-header">
           <h3 className="learning-drawer__card-title">{copy.progress}</h3>
+          {progress?.evidenceCount ? (
+            <span className="learning-drawer__card-metric">{format(copy.totalChecks, progress.evidenceCount)}</span>
+          ) : null}
         </header>
         <div className="learning-drawer__card-body">
         {progress?.rows.length ? (
@@ -274,51 +260,47 @@ export function LearningDrawer({ language, section, onSectionChange, goal, pract
                 {progress.achievement.sentence}
               </p>
             ) : null}
-            {/* One heatmap: a column per dimension, the filled cells show how far
-                the capability has come (a band, never a fake percentage). */}
-            <ul className="learning-drawer__heatmap">
-              {progress.rows.map((row, columnIndex) => (
-                <li key={row.label} className="learning-drawer__heatmap-column">
-                  <div
-                    className="learning-drawer__heatmap-cells"
-                    role="img"
+            {/* Horizontal 3-step mastery ladder per capability — maps 1:1 to server projection bands without percentages. */}
+            <ul className="learning-drawer__mastery-list">
+              {progress.rows.map((row) => {
+                const clampedLevel = Math.min(Math.max(row.level, 0), HEATMAP_LEVELS.length);
+                return (
+                  <li
+                    key={row.label}
+                    className="learning-drawer__mastery-row"
                     data-capability-state={row.stateKey}
-                    data-capability-level={Math.min(Math.max(row.level, 0), HEATMAP_LEVELS.length)}
-                    aria-label={`${row.label}: ${row.state}, ${format(copy.evidence, row.evidenceCount)}`}
-                    title={`${row.label} · ${row.state}`}
+                    data-capability-level={clampedLevel}
                   >
-                    {/* The cells fill from the bottom up, like a bar that grows. */}
-                    {HEATMAP_LEVELS.map((level) => {
-                      const filled = level >= HEATMAP_LEVELS.length - row.level;
-                      return (
-                        <span
-                          key={level}
-                          className={`learning-drawer__heatmap-cell${filled ? " is-filled" : ""}`}
-                          data-heat-level={filled ? row.level : undefined}
-                          style={{ "--heat-delay": `${columnIndex * 60 + (HEATMAP_LEVELS.length - level) * 40}ms` } as CSSProperties}
-                        />
-                      );
-                    })}
-                  </div>
-                  <span className="learning-drawer__heatmap-label">{row.label}</span>
-                  <span className="learning-drawer__heatmap-state">{row.state}</span>
-                  <span className="learning-drawer__meta">{format(copy.evidence, row.evidenceCount)}</span>
-                </li>
-              ))}
+                    <span className="learning-drawer__mastery-label">{row.label}</span>
+                    <span
+                      className="learning-drawer__mastery-track"
+                      role="img"
+                      aria-label={`${row.label}: ${row.state}${row.evidenceCount > 0 ? `, ${format(copy.evidence, row.evidenceCount)}` : ""}`}
+                    >
+                      {HEATMAP_LEVELS.map((stepIndex) => {
+                        const filled = stepIndex < clampedLevel;
+                        return (
+                          <span
+                            key={stepIndex}
+                            className={`learning-drawer__mastery-step${filled ? " is-filled" : ""}`}
+                            data-step-level={filled ? clampedLevel : undefined}
+                          />
+                        );
+                      })}
+                    </span>
+                    <span className="learning-drawer__mastery-status">
+                      <span className="learning-drawer__mastery-state">{row.state}</span>
+                      {row.evidenceCount > 0 ? (
+                        <span className="learning-drawer__mastery-count">
+                          {" · "}
+                          <span>{format(copy.evidence, row.evidenceCount)}</span>
+                        </span>
+                      ) : null}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
-            <p className="learning-drawer__heatmap-legend">
-              <span>{copy.less}</span>
-              <span className="learning-drawer__heatmap-ramp" aria-hidden="true">
-                {[0, 1, 2, 3].map((level) => (
-                  <span
-                    key={level}
-                    className={`learning-drawer__heatmap-cell${level > 0 ? " is-filled" : ""}`}
-                    data-heat-level={level > 0 ? level : undefined}
-                  />
-                ))}
-              </span>
-              <span>{copy.more}</span>
-            </p>
             {progress.actionLabel && progress.onAction ? (
               <button type="button" className="button button--ghost" onClick={() => { onSectionChange?.("progress"); progress.onAction?.(); }}>
                 {progress.actionLabel}

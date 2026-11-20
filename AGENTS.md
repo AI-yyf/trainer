@@ -240,7 +240,7 @@ commands, deep links and restore actions stay valid.
 | `plan` | alias → 对话 + 学习抽屉"当前目标" | LearningHome (inside the drawer) |
 | `resources` | 资料 / Resources | Library, ResourceReader |
 | `training` | alias → 对话 + 学习抽屉"到期练习" | FocusedPractice (inline card) |
-| `progress` | alias → 对话 + 学习抽屉"成长进度" | inline progress card |
+| `progress` | alias → 对话 + 学习抽屉"会了吗" | inline progress card |
 | `settings` | header gear | SettingsIndex, SettingsDetail |
 
 `lib/workbenchDestinations.ts` owns route mapping; `plan/training/progress` are
@@ -251,17 +251,18 @@ together (the composer stays mounted underneath, so its draft and focus
 survive), while the header — identity row, navigation row and utilities —
 stays above it and clickable. Its content is a stack of three same-grammar
 **cards** (`.learning-drawer__card`: titled header + optional right-aligned
-metric + body + at most one action) for 当前目标 / 到期练习 / 成长进度 — it is
+metric + body + at most one action) for 当前目标 / 到期练习 / 会了吗 — it is
 not a tab set. Each card owns one fact and says it once: the goal card names
 the plan step, so the practice card drops a title that repeats it
 (`isSameLearningFact` in `lib/learningSummary.ts`), and the drawer keeps one
 accent action (the goal card's) while the other cards stay secondary. The
-progress card is a **heatmap, never a percentage**: one column per capability
-dimension, three cells filling from the bottom up by band
-(`capabilityLevel` in `lib/learningSummary.ts` maps not_verified / emerging /
-assisted / independent onto 0–3), each column showing the band name and its
-evidence count, plus a 「少→多」 legend ramp. Cells fade in on a staggered
-`--heat-delay` and honour `prefers-reduced-motion`; filled cells use the
+progress card («会了吗») is a **compact horizontal 3-step mastery ladder, never a
+percentage**: one plain-language summary sentence followed by one row per
+capability dimension (`理解 / 实现 / 调试 / 迁移`), each showing a 3-step pill
+track mapped 1:1 to server projection states (`capabilityLevel` in
+`lib/learningSummary.ts`: `not_verified`/`needs_review` → 0, `assisted` → 1,
+`independent` → 2, `repeat_verified` → 3), its plain status label (`未练过 /
+需提示 / 能独立做 / 已稳固 / 待巩固`), and its check count. Filled steps use the
 neutral accent ramp (`color-mix` over `--accent`), never a hardcoded brand
 color.
 `templates/LearningHome.tsx` takes `variant="drawer"` for that compact form: the

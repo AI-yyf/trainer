@@ -585,12 +585,12 @@ test('same-context backups isolate growth evidence and unsent drafts by database
   const progress = page.locator('[data-template="LearningDrawer"] [data-learning-section="progress"]');
   const growthRow = progress.locator('li').filter({ hasText: '实现' });
   await expect(growthRow).toBeVisible();
-  await expect(growthRow).toContainText('有辅助完成');
-  await expect(growthRow).toContainText('1 条证据');
+  await expect(growthRow).toContainText('需提示');
+  await expect(growthRow).toContainText('1 次');
   await switchDatabase('/backup/data', 'backup-one', false);
   // The backup database carries no projection: no proven dimension remains.
-  await expect(progress.getByText('有辅助完成', { exact: true })).toHaveCount(0);
-  await expect(progress.getByText('1 条证据', { exact: true })).toHaveCount(0);
+  await expect(progress.getByText('需提示', { exact: true })).toHaveCount(0);
+  await expect(progress.getByText('1 次', { exact: true })).toHaveCount(0);
   await closeLearningDrawer(page);
   await expect(input).toHaveValue('');
   await input.fill('恢复目录的另一份草稿。');

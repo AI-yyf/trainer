@@ -180,13 +180,13 @@
 }
 .inline-progress-card__header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .inline-progress-card__header strong { color: var(--fg-0); font-size: var(--trainer-font-xs); line-height: 1.4; }
-.inline-progress-card__header span { flex: none; color: var(--fg-muted); font-size: var(--trainer-font-2xs); font-variant-numeric: tabular-nums; }
+.inline-progress-card__count { color: var(--fg-muted); font-weight: 400; font-size: var(--trainer-font-2xs); font-variant-numeric: tabular-nums; }
 .inline-progress-card__sentence { margin: 0; color: var(--fg-0); font-size: var(--trainer-font-sm); line-height: 1.45; }
-.inline-progress-card__rows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.inline-progress-card__rows li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.inline-progress-card__rows { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
+.inline-progress-card__rows li { display: inline-flex; align-items: baseline; gap: 4px; }
 .inline-progress-card__rows span { color: var(--fg-muted); font-size: var(--trainer-font-2xs); line-height: 1.45; }
 .inline-progress-card__rows strong { color: var(--fg-1); font-size: var(--trainer-font-2xs); font-weight: 400; line-height: 1.45; }
-.inline-progress-card__open { align-self: flex-start; }
+.inline-progress-card__open { flex: none; padding: 2px 0; font-size: var(--trainer-font-2xs); }
 .learning-strip {
   display: flex;
   align-items: center;
@@ -268,93 +268,63 @@
 /* A practice-scoped notice belongs to its section, never to a global banner. */
 .learning-drawer__notice { width: 100%; }
 .learning-drawer__notice .template-global-state { margin: 0; }
-/* The growth heatmap: one column per capability, the filled cells say how far
-   the capability has come (a band, never a fake percentage). */
-.learning-drawer__heatmap {
+/* Horizontal 3-step mastery ladder per capability — scannable rows without percentages. */
+.learning-drawer__mastery-list {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: var(--space-1);
+  grid-template-columns: max-content 54px minmax(0, 1fr);
+  row-gap: 8px;
+  column-gap: 10px;
   width: 100%;
-  margin: 0;
+  margin: 2px 0 0;
   padding: 0;
   list-style: none;
 }
-.learning-drawer__heatmap-column {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-}
-/* Square cells, centered above each capability label: three steps per capability. */
-.learning-drawer__heatmap-cells {
+.learning-drawer__mastery-row {
   display: grid;
-  grid-template-rows: repeat(3, 8px);
-  justify-items: center;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(3.2em, auto) 54px minmax(0, 1fr);
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 22px;
+}
+.learning-drawer__mastery-label {
+  color: var(--fg-0);
+  font-size: var(--trainer-font-xs);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.learning-drawer__mastery-track {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 3px;
-  width: auto;
-  margin-inline: auto;
+  width: 54px;
 }
-.learning-drawer__heatmap-cell {
-  display: block;
-  width: 10px;
-  height: 8px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--fg-1) 12%, transparent);
-  animation: learning-heat-cell-in 320ms var(--ease-out) both;
-  animation-delay: var(--heat-delay, 0ms);
+.learning-drawer__mastery-step {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-1) 14%, transparent);
 }
-/* One colour per band: soft accent ramp so the column reads cleanly without glare. */
-.learning-drawer__heatmap-cell.is-filled { background: color-mix(in srgb, var(--accent) 30%, transparent); }
-.learning-drawer__heatmap-cell.is-filled[data-heat-level="2"] { background: color-mix(in srgb, var(--accent) 56%, transparent); }
-.learning-drawer__heatmap-cell.is-filled[data-heat-level="3"] { background: color-mix(in srgb, var(--accent) 86%, transparent); }
-.learning-drawer__heatmap-label {
+.learning-drawer__mastery-step.is-filled { background: color-mix(in srgb, var(--accent) 42%, transparent); }
+.learning-drawer__mastery-step.is-filled[data-step-level="2"] { background: color-mix(in srgb, var(--accent) 66%, transparent); }
+.learning-drawer__mastery-step.is-filled[data-step-level="3"] { background: color-mix(in srgb, var(--accent) 90%, transparent); }
+.learning-drawer__mastery-status {
+  justify-self: end;
   max-width: 100%;
   overflow: hidden;
   color: var(--fg-1);
   font-size: var(--trainer-font-2xs);
-  line-height: 1.35;
+  line-height: 1.4;
+  text-align: end;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.learning-drawer__heatmap-state {
-  max-width: 100%;
-  overflow: hidden;
+.learning-drawer__mastery-row[data-capability-state="not_verified"] .learning-drawer__mastery-status {
   color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.learning-drawer__heatmap-column .learning-drawer__meta { font-size: var(--trainer-font-3xs); }
-.learning-drawer__heatmap-legend {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 2px 0 0;
+.learning-drawer__mastery-count {
   color: var(--fg-muted);
-  font-size: var(--trainer-font-3xs);
-  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
 }
-.learning-drawer__heatmap-ramp {
-  display: inline-flex;
-  gap: 2px;
-}
-.learning-drawer__heatmap-ramp .learning-drawer__heatmap-cell {
-  width: 10px;
-  height: 8px;
-  animation: none;
-}
-@keyframes learning-heat-cell-in {
-  from { opacity: 0; transform: scale(0.6); }
-  to { opacity: 1; transform: scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .learning-drawer__heatmap-cell { animation: none; }
-}
-/* Each dimension is a small tile inside the growth card: one height, one label
-   edge, one state edge, so the four still scan as one set. */
 /* The governed plan card renders inside the drawer's goal section. It keeps
    its own layout but must not read as a full-width page inside a panel. */
 .learning-drawer__detail-surface { width: 100%; }

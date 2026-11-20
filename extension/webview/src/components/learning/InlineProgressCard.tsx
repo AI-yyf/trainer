@@ -2,14 +2,14 @@ import type { ComposerLanguage } from "../../lib/types";
 import type { LearningProgressAchievement, LearningProgressRow } from "../../lib/learningSummary";
 
 const COPY: Record<ComposerLanguage, { title: string; evidence: string; open: string }> = {
-  "zh-CN": { title: "进度已更新", evidence: "{n} 条证据", open: "查看成长" },
-  "en-US": { title: "Progress updated", evidence: "{n} evidence", open: "View growth" },
-  "es-ES": { title: "Progreso actualizado", evidence: "{n} evidencias", open: "Ver progreso" },
-  "fr-FR": { title: "Progression mise à jour", evidence: "{n} preuves", open: "Voir la progression" },
-  "de-DE": { title: "Fortschritt aktualisiert", evidence: "{n} Nachweise", open: "Fortschritt ansehen" },
-  "ja-JP": { title: "進捗を更新しました", evidence: "{n} 件の証拠", open: "成長を見る" },
-  "ko-KR": { title: "진행 상황 업데이트", evidence: "증거 {n}개", open: "성장 보기" },
-  "pt-BR": { title: "Progresso atualizado", evidence: "{n} evidências", open: "Ver progresso" },
+  "zh-CN": { title: "会了吗", evidence: "实测 {n} 次", open: "查看详情" },
+  "en-US": { title: "Mastery", evidence: "{n} checks", open: "Details" },
+  "es-ES": { title: "Dominio", evidence: "{n} pruebas", open: "Detalles" },
+  "fr-FR": { title: "Maîtrise", evidence: "{n} vérif.", open: "Détails" },
+  "de-DE": { title: "Beherrschung", evidence: "{n} Prüf.", open: "Details" },
+  "ja-JP": { title: "定着度", evidence: "実測 {n} 回", open: "詳細" },
+  "ko-KR": { title: "숙련도", evidence: "검증 {n}회", open: "자세히" },
+  "pt-BR": { title: "Domínio", evidence: "{n} testes", open: "Detalhes" },
 };
 
 export interface InlineProgressCardProps {
@@ -40,8 +40,13 @@ export function InlineProgressCard({
   return (
     <section className="inline-progress-card" data-inline-progress="true" aria-label={copy.title}>
       <header className="inline-progress-card__header">
-        <strong>{copy.title}</strong>
-        <span>{copy.evidence.replace("{n}", String(evidenceCount))}</span>
+        <strong>
+          {copy.title}
+          {evidenceCount > 0 ? <span className="inline-progress-card__count"> · {copy.evidence.replace("{n}", String(evidenceCount))}</span> : null}
+        </strong>
+        <button type="button" className="template-back inline-progress-card__open" onClick={onOpen}>
+          {copy.open}
+        </button>
       </header>
       {achievement ? (
         <p
@@ -62,9 +67,6 @@ export function InlineProgressCard({
           ))}
         </ul>
       ) : null}
-      <button type="button" className="button button--ghost inline-progress-card__open" onClick={onOpen}>
-        {copy.open}
-      </button>
     </section>
   );
 }

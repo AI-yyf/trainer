@@ -1765,16 +1765,34 @@ writeProgress();
         );
         let resolvedCardId = resolveActiveCardId(activeCard);
         if (!resolvedCardId) {
-          await postProviderBoundJson(port, "/training/generate-card", {
+          const generated = await postProviderBoundJson(port, "/training/generate-card", {
             workspace_id: managedContextId,
             session_id: sessionId,
-            source: "coach_turn",
+            source: "conversation_gap",
             card_type: "practice",
             focus_area: "FastAPI Depends 边界",
+            target_skill: "FastAPI Depends 边界",
+            context_hint: "先给我一张不替我写代码的最小实战卡，聚焦 FastAPI Depends 边界。",
             response_language: "zh-CN",
             provider: providerTransportConfig(),
             api_key: providerApiKey,
           });
+          const generatedCardId =
+            generated &&
+            generated.card &&
+            (generated.card.card_id || generated.card.cardId);
+          if (generatedCardId) {
+            await postJson(port, "/training/card/library", {
+              workspace_id: managedContextId,
+              card_id: generatedCardId,
+              action: "save",
+            });
+            await postJson(port, "/training/card/library", {
+              workspace_id: managedContextId,
+              card_id: generatedCardId,
+              action: "start",
+            });
+          }
           await sleep(300);
           activeCard = await getJson(
             port,

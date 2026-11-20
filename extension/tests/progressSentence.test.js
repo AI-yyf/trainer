@@ -36,10 +36,10 @@ test("all five projection states map honestly with traceable evidence ID and zer
   const { deriveProgressSentence } = await loadSummary();
 
   const cases = [
-    ["repeat_verified", "ev-repeat", 3, /3 次独立完成/],
-    ["independent", "ev-indep", 1, /独立完成/],
-    ["assisted", "ev-assist", 1, /提示下完成/],
-    ["needs_review", "ev-review", 1, /还需要一次回顾/],
+    ["repeat_verified", "ev-repeat", 3, /3 次独立/],
+    ["independent", "ev-indep", 1, /已能独立完成/],
+    ["assisted", "ev-assist", 1, /在提示下完成了/],
+    ["needs_review", "ev-review", 1, /还不算稳/],
   ];
 
   for (const [state, evidenceId, verifiedCount, pattern] of cases) {
@@ -121,4 +121,21 @@ test("all eight supported languages produce natural sentences for each active st
       assert.doesNotMatch(result.sentence, /%/);
     }
   }
+});
+
+test("dimension overview avoids robotic 'completed Comprehension' phrasing when topic is absent", async () => {
+  const { deriveProgressSentence } = await loadSummary();
+  const zh = deriveProgressSentence("zh-CN", {
+    dimensions: {
+      comprehension: { state: "repeat_verified", verifiedCount: 9 },
+      implementation: { state: "assisted", verifiedCount: 4 },
+      debugging: { state: "independent", verifiedCount: 6 },
+      transfer: { state: "not_verified", verifiedCount: 0 },
+    },
+  });
+  assert.ok(zh);
+  assert.doesNotMatch(zh.sentence, /独立完成「理解」/);
+  assert.match(zh.sentence, /理解、调试已能独立把关/);
+  assert.match(zh.sentence, /实现还需提示/);
+  assert.match(zh.sentence, /迁移尚未实测/);
 });
