@@ -1018,14 +1018,22 @@ class ProviderAgentBinding:
         config = getattr(self._provider_service, "_config", None)
         return _is_loopback_provider_url(getattr(config, "base_url", None))
 
+    def _should_bypass_system_proxy(self) -> bool:
+        """Return whether HTTP requests should bypass ambient proxy environment variables."""
+        probe = getattr(self._provider_service, "_should_bypass_system_proxy", None)
+        if callable(probe):
+            return bool(probe())
+        config = getattr(self._provider_service, "_config", None)
+        return bool(getattr(config, "ignore_system_proxy", False)) or self._uses_loopback_transport()
+
     def _async_http_client(
         self,
         *,
         timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
     ) -> httpx.AsyncClient:
-        """Construct an async HTTP client bypassing ambient proxies only for loopback URLs."""
+        """Construct an async HTTP client bypassing ambient proxies for loopback or direct mode."""
         client_kwargs: dict[str, Any] = {"timeout": timeout}
-        if self._uses_loopback_transport():
+        if self._should_bypass_system_proxy():
             client_kwargs["trust_env"] = False
         return httpx.AsyncClient(**client_kwargs)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import socket
 from collections.abc import Iterator
@@ -14,6 +15,52 @@ from ..coaching_recovery import _localized_text
 from .errors import ProviderRuntimeResponseError, provider_error_quota_exhausted
 from .quota_copy import provider_quota_reply
 from .redaction import redact_provider_error
+
+_PROXY_ENV_KEYS = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+)
+
+
+def detect_ambient_proxy_env_keys() -> list[str]:
+    """Return active proxy env variable names without reading or exposing values."""
+    seen: list[str] = []
+    for key in _PROXY_ENV_KEYS:
+        if str(os.environ.get(key) or "").strip():
+            upper = key.upper()
+            if upper not in seen:
+                seen.append(upper)
+    return seen
+
+
+def ambient_proxy_conflict_hint(
+    *,
+    provider: ProviderConfig | None,
+    response_language: str | None = None,
+    bypass_enabled: bool = False,
+) -> str | None:
+    if bypass_enabled or bool(getattr(provider, "ignore_system_proxy", False)):
+        return None
+    active_keys = detect_ambient_proxy_env_keys()
+    if not active_keys:
+        return None
+    names = " / ".join(active_keys)
+    return _localized_text(
+        (
+            f"Detected active system proxy environment variable ({names}), which may be "
+            "intercepting requests. Enable 'Ignore system proxy (Direct connection)' in "
+            "Settings -> Connection and retry."
+        ),
+        (
+            f"检测到当前环境启用了系统代理变量（{names}），请求可能被本机代理拦截。"
+            "请在「设置 → 模型连接」中开启「忽略系统代理（直连）」后重试。"
+        ),
+        response_language,
+    )
 
 
 def _iter_exception_chain(error: BaseException, *, max_depth: int = 6) -> Iterator[BaseException]:
@@ -215,10 +262,24 @@ class ErrorClassificationMixin:
             )
         if category == "rate_limit":
             return f"Provider rate limited the request. Wait a moment and retry. {error_message}".strip()
+        proxy_bypass = False
+        bypass_probe = getattr(self, "_should_bypass_system_proxy", None)
+        if callable(bypass_probe):
+            proxy_bypass = bool(bypass_probe(provider))
+        proxy_hint = ambient_proxy_conflict_hint(
+            provider=provider,
+            response_language=response_language,
+            bypass_enabled=proxy_bypass,
+        )
         if category == "timeout":
-            return f"Provider request timed out before the endpoint replied. {error_message}".strip()
+            base = f"Provider request timed out before the endpoint replied. {error_message}".strip()
+            return f"{base} {proxy_hint}".strip() if proxy_hint else base
         if category == "network":
-            return f"Trainer could not reach the provider endpoint. Check the base URL and network path. {error_message}".strip()
+            base = f"Trainer could not reach the provider endpoint. Check the base URL and network path. {error_message}".strip()
+            return f"{base} {proxy_hint}".strip() if proxy_hint else base
+        if category == "upstream_unavailable":
+            base = f"Provider endpoint returned an upstream error. {error_message}".strip()
+            return f"{base} {proxy_hint}".strip() if proxy_hint else base
         if category == "malformed_response":
             return f"Provider responded with an unexpected or malformed payload. {error_message}".strip()
         if category == "model_unsupported":

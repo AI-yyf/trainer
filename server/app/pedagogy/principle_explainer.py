@@ -110,12 +110,12 @@ class PrincipleExplainerService:
         memory_snapshot: MemorySnapshot | None,
     ) -> str:
         if focus_area:
-            return f"Keep {focus_area} grounded in one observable behavior before abstracting."
+            return f"Anchor {focus_area} to the failing state and invariant before abstracting."
         if current_file is not None and current_file.diagnostics:
-            return "Anchor explanation to the failing mechanism before proposing broader fixes."
+            return "Start from the live failing state and constraint before changing code."
         if memory_snapshot and memory_snapshot.current_focus:
-            return f"Use {memory_snapshot.current_focus} as the anchor for explaining tradeoffs."
-        return "Explain the mechanism by tying it to one concrete behavior and one concrete boundary."
+            return f"Reconstruct {memory_snapshot.current_focus} from its concrete failure mode and constraint."
+        return "Start from the current state gap and invariant before naming the abstraction."
 
     def _why_this_approach(
         self,

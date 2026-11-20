@@ -4,7 +4,7 @@
 **Updated:** 2026-09-18 — refreshed structure, sizes, and test-stack notes
 **Branch:** codex/trainer-unified-learning (active)
 
-> **Product truth:** `.trainer-convergence/product-contract.md` (v2, locked 2026-11-20) and strategy [`docs/STRATEGY.md`](docs/STRATEGY.md). If this file, `SPEC.md` or any plan disagrees with the contract, the contract wins — fix the other side in the same commit. Roadmap: two destinations + one conversation; learning is the conversation's memory; four learner-visible concepts (目标 / 练一下 / 会了吗 / 资料); all data, resources, and memory live under one unified `<LibraryRoot>`.
+> **Product truth:** `.trainer-convergence/product-contract.md` (v2.1, locked 2026-11-21) and strategy [`docs/STRATEGY.md`](docs/STRATEGY.md). If this file, `SPEC.md` or any plan disagrees with the contract, the contract wins — fix the other side in the same commit. Roadmap: two destinations + one conversation + single-composer sovereignty; RethinkFun state-flow pedagogy kernel; learning is the conversation's read-only memory; four formal learner-visible concepts (目标 / 练习 / 掌握进度 / 资料); all data, resources, and memory live under one unified `<LibraryRoot>`.
 
 ## OVERVIEW
 Desktop-first VS Code extension + FastAPI Python sidecar for conversation-driven coding training. Two-destination React workbench (`Chat / Resources`, with six internal routes where the three learning routes are compatibility aliases into the learning drawer) with keyboard-first navigation, ReAct coach agent loop, and FSRS-based spaced repetition.
@@ -266,16 +266,18 @@ whose segments map 1:1 to server projection states (`capabilityLevel` in
 segments use the neutral accent ramp (`color-mix` over `--accent`), never a
 hardcoded brand color.
 `templates/LearningHome.tsx` takes `variant="drawer"` for that compact form: the
-plan's stages and evidence stay as plain rows (no catch-all 「更多」), the starter
-template gallery is gone, and every adjustment starts in the composer — the
-drawer is a reading surface, so a learner closes it and acts in the one input
-box. Chat and Resources share the docked `CoachComposer`; practice answers live
-inside the inline card, not in the composer. Keep the composer's appearance, placement, and toolbar controls fixed
-unless the user explicitly asks for a design change. Choose a `templates/` owner
-before adding feature UI. Preserve governed state and actual verification
-identities. Use SystemState for product status, one primary action per initial
-viewport and disclosure for advanced facts. `scripts/verify-ui-geometry.mjs`
-checks the two destinations, the learning drawer sections, composer ownership,
+plan's stages and evidence stay as plain read-only rows, the starter
+template gallery is gone, and every adjustment or detail inquiry happens in the
+single docked `CoachComposer` — the drawer is a read-only reference surface, and
+the inline practice card is a calm collapsible action/verification card with no
+second textarea and no card-library CRUD chrome; practice answers, reflections,
+and detail queries all route through the single `CoachComposer`. Keep the
+composer's appearance, placement, and toolbar controls fixed unless the user
+explicitly asks for a design change. Choose a `templates/` owner before adding
+feature UI. Preserve governed state and actual verification identities. Use
+SystemState for product status, one primary action per initial viewport and
+disclosure for advanced facts. `scripts/verify-ui-geometry.mjs` checks the two
+destinations, the learning drawer sections, single-composer sovereignty,
 overflow and primary-action budget at 340/420/460 across dark/light and
 Chinese/English. Browser fixtures prove layout, not real evidence.
 

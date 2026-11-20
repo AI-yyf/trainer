@@ -303,6 +303,7 @@ class ProviderConfig(BaseModel):
     mode: Literal["direct", "gateway"] | None = None
     connection_type: str | None = Field(default=None, alias="connectionType")
     credential_mode: ProviderCredentialMode | None = Field(default=None, alias="credentialMode")
+    ignore_system_proxy: bool = Field(default=False, alias="ignoreSystemProxy")
     available_models: list[str] = Field(default_factory=list, alias="availableModels")
     allowed_models: list[str] = Field(default_factory=list, alias="allowedModels")
     denied_models: list[str] = Field(default_factory=list, alias="deniedModels")

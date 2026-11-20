@@ -138,6 +138,8 @@ TOOL_OUTPUT_LIMITS: dict[str, int] = {
     "organize_resources": 20_000,
     "import_resource_url": 16_000,
     "save_formal_plan": 16_000,
+    "inspect_learning_truth": 24_000,
+    "save_lecture_note": 8_000,
     "coach_finalize": 8_000,
 }
 DEFAULT_TOOL_OUTPUT_LIMIT = 30_000
@@ -154,6 +156,7 @@ READ_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "read_workspace_file",
         "inspect_current_file",
         "inspect_plan",
+        "inspect_learning_truth",
         "recall_memory",
         "run_diagnostics",
         "verify_practice_current_file",

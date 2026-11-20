@@ -207,6 +207,7 @@ class ToolRegistry:
             denied.add("save_formal_plan")
         if explicit_learning_note_request is not True:
             denied.add("record_learning_note")
+            denied.add("save_lecture_note")
         if live_formal_plan_for_task_mint is not True:
             denied.add("specify_task")
             denied.add("next_task")
@@ -304,6 +305,15 @@ class ToolRegistry:
                 "detail": (
                     "record_learning_note is only available when the learner "
                     "explicitly asked to record or save a learning note."
+                ),
+            }
+        if name == "save_lecture_note" and not _explicit_lecture_note_save_allowed(context):
+            return {
+                "ok": False,
+                "error": "explicit_lecture_note_save_required",
+                "detail": (
+                    "save_lecture_note is only available when the learner "
+                    "explicitly asked to save a lecture or study note into their library."
                 ),
             }
         parsed_arguments = _coerce_arguments(arguments)
@@ -440,6 +450,21 @@ def _explicit_learning_note_request_allowed(context: ToolContext) -> bool:
     from ..memory.note_request import message_requests_explicit_learning_note
 
     return message_requests_explicit_learning_note(extra.get("learner_message"))
+
+
+def _explicit_lecture_note_save_allowed(context: ToolContext) -> bool:
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    if extra.get("explicit_lecture_note_save_request") is True or extra.get("explicit_learning_note_request") is True:
+        return True
+    from ..memory.note_request import (
+        message_requests_explicit_learning_note,
+        message_requests_lecture_note_save,
+    )
+
+    learner_message = extra.get("learner_message")
+    return message_requests_lecture_note_save(learner_message) or message_requests_explicit_learning_note(
+        learner_message
+    )
 
 
 def resource_write_explicitly_requested(extra: dict[str, Any] | None, *, mode: str) -> bool:
@@ -5146,16 +5171,226 @@ async def _handle_inspect_plan(context: ToolContext, _: dict[str, Any]) -> dict[
 def _summarize_plan(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
-    stages = payload.get("stages") or []
+    stages = [stage for stage in (payload.get("stages") or []) if isinstance(stage, dict)]
+    completed_stages = [
+        {
+            "id": stage.get("id"),
+            "title": stage.get("title"),
+            "goal": stage.get("goal"),
+            "status": stage.get("status"),
+        }
+        for stage in stages
+        if str(stage.get("status") or "").strip().lower() in {"done", "completed"}
+    ]
     active = next(
-        (stage for stage in stages if isinstance(stage, dict) and stage.get("status") == "active"),
+        (stage for stage in stages if str(stage.get("status") or "").strip().lower() == "active"),
         None,
     )
+    upcoming_stages = [
+        {
+            "id": stage.get("id"),
+            "title": stage.get("title"),
+            "goal": stage.get("goal"),
+            "status": stage.get("status"),
+        }
+        for stage in stages
+        if str(stage.get("status") or "").strip().lower() not in {"done", "completed", "active"}
+    ]
     return {
         "title": payload.get("title"),
         "stage_count": len(stages),
+        "completed_stage_count": len(completed_stages),
+        "completed_stages": completed_stages,
         "active_stage": active,
+        "upcoming_stages": upcoming_stages,
         "next_step": payload.get("next_step"),
+    }
+
+
+def _slug_markdown_filename(title: str) -> str:
+    cleaned = re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", title).strip()
+    cleaned = re.sub(r"\s+", "-", cleaned).strip(".-")
+    if not cleaned:
+        cleaned = "lecture-note"
+    if len(cleaned) > 72:
+        cleaned = cleaned[:72].rstrip(".-")
+    return cleaned if cleaned.lower().endswith(".md") else f"{cleaned}.md"
+
+
+async def _handle_inspect_learning_truth(
+    context: ToolContext,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    """Read-only unified view of plan stages, capability evidence, reviews, and active goal."""
+    runtime = context.runtime
+    workspace_id = context.workspace_id
+    section = str(args.get("section") or "all").strip().lower() or "all"
+    try:
+        evidence_limit = max(1, min(int(args.get("evidence_limit") or 20), 50))
+    except (TypeError, ValueError):
+        evidence_limit = 20
+
+    result: dict[str, Any] = {"ok": True, "workspace_id": workspace_id, "section": section}
+
+    repository = getattr(runtime, "repository", None)
+    memory_service = getattr(runtime, "memory_service", None)
+    learner_state_service = getattr(runtime, "learner_state_service", None)
+
+    if section in {"all", "plan", "goal"} and repository is not None:
+        if hasattr(repository, "get_current_goal"):
+            try:
+                goal = repository.get_current_goal(workspace_id)
+                result["active_goal"] = (
+                    goal.model_dump(mode="json") if goal is not None and hasattr(goal, "model_dump") else None
+                )
+            except Exception as exc:
+                result["active_goal_error"] = str(exc)
+        if hasattr(repository, "get_latest_plan"):
+            try:
+                plan = repository.get_latest_plan(workspace_id)
+                if plan is None:
+                    result["plan"] = None
+                else:
+                    plan_payload = plan.model_dump(mode="json") if hasattr(plan, "model_dump") else plan
+                    result["plan"] = {
+                        "summary": _summarize_plan(plan_payload),
+                        "stages": plan_payload.get("stages") if isinstance(plan_payload, dict) else [],
+                        "current_stage_id": (
+                            plan_payload.get("current_stage_id") if isinstance(plan_payload, dict) else None
+                        ),
+                    }
+            except Exception as exc:
+                result["plan_error"] = str(exc)
+
+    if section in {"all", "evidence", "progress", "mastery"}:
+        if learner_state_service is not None and hasattr(learner_state_service, "snapshot"):
+            try:
+                state_payload = learner_state_service.snapshot(
+                    workspace_id,
+                    evidence_limit=evidence_limit,
+                ).to_payload()
+                if isinstance(state_payload, dict):
+                    for key in ("projection", "capabilities", "mastery", "evidence", "summary", "counts"):
+                        if key in state_payload and state_payload[key] is not None:
+                            result[f"learner_{key}"] = state_payload[key]
+            except Exception as exc:
+                result["learner_state_error"] = str(exc)
+        if memory_service is not None:
+            try:
+                from ..learner_state import collect_unified_evidence
+
+                unified = collect_unified_evidence(
+                    memory_service=memory_service,
+                    attempt_store=getattr(runtime, "attempt_store", None),
+                    workspace_id=workspace_id,
+                    limit=evidence_limit,
+                )
+                result["evidence_records"] = [
+                    item.model_dump(mode="json") if hasattr(item, "model_dump") else item
+                    for item in unified
+                ]
+            except Exception as exc:
+                result["evidence_error"] = str(exc)
+
+    if section in {"all", "review", "practice"} and memory_service is not None:
+        try:
+            snapshot = memory_service.snapshot(workspace_id)
+            snap_data = snapshot.model_dump(mode="json") if hasattr(snapshot, "model_dump") else {}
+            due_reviews = snap_data.get("due_reviews") or []
+            result["due_reviews"] = due_reviews
+            result["weaknesses"] = snap_data.get("weaknesses") or []
+            result["current_focus"] = snap_data.get("current_focus") or ""
+            result["learning_outcomes"] = (snap_data.get("learning_outcomes") or [])[-8:]
+            get_cards = getattr(memory_service, "get_cards", None)
+            if callable(get_cards):
+                raw_cards = get_cards(workspace_id)
+                cards = list(raw_cards) if isinstance(raw_cards, (list, tuple, set)) else []
+                active_cards = [
+                    {
+                        "card_id": getattr(card, "card_id", ""),
+                        "title": getattr(card, "title", ""),
+                        "focus_area": getattr(card, "focus_area", ""),
+                        "problem_statement": getattr(card, "problem_statement", ""),
+                        "status": getattr(card, "status", ""),
+                    }
+                    for card in cards
+                    if getattr(card, "status", "") not in {"archived", "completed"}
+                ][:5]
+                result["active_practice_cards"] = active_cards
+        except Exception as exc:
+            result["memory_error"] = str(exc)
+
+    return result
+
+
+async def _handle_save_lecture_note(
+    context: ToolContext,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    """Save a structured RethinkFun Markdown lecture note into `<LibraryRoot>/Trainer Library/`."""
+    if not _explicit_lecture_note_save_allowed(context):
+        return {
+            "ok": False,
+            "error": "explicit_lecture_note_save_required",
+            "detail": (
+                "save_lecture_note is only available when the learner explicitly asked "
+                "to save a lecture or study note into their library."
+            ),
+        }
+    runtime = context.runtime
+    resource_service = getattr(runtime, "resource_service", None)
+    if resource_service is None:
+        return {"ok": False, "error": "service_unavailable", "detail": "resource_service is unavailable."}
+
+    title = " ".join(str(args.get("title") or "").split()).strip()
+    markdown_content = str(args.get("markdown_content") or "").strip()
+    if not title:
+        return {"ok": False, "error": "missing_title", "detail": "title must be non-empty."}
+    if not markdown_content:
+        return {"ok": False, "error": "missing_content", "detail": "markdown_content must be non-empty."}
+
+    folder = " ".join(str(args.get("folder") or "").split()).strip()
+    if not folder:
+        folder = "学习讲稿" if _prefers_chinese(context.response_language) else "Lecture Notes"
+    tags = _tool_text_list(args.get("tags"), limit=8, item_limit=48)
+    if "lecture-note" not in tags:
+        tags.append("lecture-note")
+
+    filename = _slug_markdown_filename(title)
+    if not markdown_content.lstrip().startswith("#"):
+        markdown_content = f"# {title}\n\n{markdown_content}\n"
+
+    from ..core.models import ResourceIndexRequest, ResourceUploadRequest
+
+    upload_req = ResourceUploadRequest(
+        workspace_id=context.workspace_id,
+        kind="markdown",
+        name=filename,
+        source=filename,
+        content=markdown_content,
+        content_encoding="utf-8",
+        tags=tags,
+        source_type="file",
+        content_language=context.response_language,
+    )
+    try:
+        uploaded = resource_service.upload(context.workspace_id, upload_req)
+        indexed = resource_service.index(
+            context.workspace_id,
+            ResourceIndexRequest(workspace_id=context.workspace_id, resource_id=uploaded.id),
+        )
+    except Exception as exc:
+        return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+
+    return {
+        "ok": True,
+        "resource_id": indexed.id,
+        "title": title,
+        "name": indexed.name,
+        "folder": folder,
+        "canonical_markdown_path": getattr(indexed, "canonical_markdown_path", None),
+        "status": getattr(indexed, "status", "indexed"),
+        "stored_under_library_root": True,
     }
 
 
@@ -6868,12 +7103,69 @@ def build_default_tool_registry(
         ToolDefinition(
             name="inspect_plan",
             description=(
-                "Read the active learning plan and its stages, including the "
-                "currently active stage and the next step. Use before "
-                "proposing changes to the plan."
+                "Read the active learning plan and its stages, including completed, "
+                "active, and upcoming stages plus the next step. Use before answering "
+                "plan questions or proposing plan changes."
             ),
             parameters={"type": "object", "properties": {}},
             handler=_handle_inspect_plan,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="inspect_learning_truth",
+            description=(
+                "Read-only authoritative view of the learner's real learning state in "
+                "this workspace: full plan stages (completed, active, upcoming), active "
+                "goal, 4-dimension capability states, concrete verified evidence records, "
+                "FSRS due reviews with rationale, and active practice. Call this whenever "
+                "the learner asks from the composer about their full roadmap, completed "
+                "stages, which evidence supports a capability rating, or why an item is due for review."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "section": _enum(
+                        "Which subset of learning truth to inspect.",
+                        ["all", "plan", "goal", "evidence", "progress", "mastery", "review", "practice"],
+                    ),
+                    "evidence_limit": {
+                        "type": "integer",
+                        "description": "Maximum number of recent unified evidence records to include (1-50).",
+                    },
+                },
+            },
+            handler=_handle_inspect_learning_truth,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="save_lecture_note",
+            description=(
+                "Persist a structured Markdown lecture or study note into the learner's "
+                "Trainer Library (<LibraryRoot>/Trainer Library/, never into the user's "
+                "code repository) and index it immediately. Use only when the learner "
+                "explicitly asks to save a lecture, deep explanation, or study note into "
+                "their Resources library."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "title": _string("Concise title of the lecture or study note."),
+                    "markdown_content": _string(
+                        "Complete, clean Markdown lecture body (formulas in KaTeX/LaTeX, runnable code blocks)."
+                    ),
+                    "folder": _string(
+                        "Optional folder inside Trainer Library (defaults to '学习讲稿' or 'Lecture Notes')."
+                    ),
+                    "tags": _string_array("Optional short topic tags."),
+                },
+                "required": ["title", "markdown_content"],
+            },
+            handler=_handle_save_lecture_note,
+            coach_only=True,
         )
     )
 

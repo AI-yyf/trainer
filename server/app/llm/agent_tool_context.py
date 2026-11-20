@@ -15,7 +15,7 @@ from .prompts import normalize_answer_policy
 from .provider.redaction import _compact_text
 
 _FORMAL_PLAN_TOOLS = (
-    "inspect_plan", "recall_memory", "inspect_current_file", "list_workspace_files",
+    "inspect_plan", "inspect_learning_truth", "recall_memory", "inspect_current_file", "list_workspace_files",
     "read_workspace_file", "list_resources", "search_resources", "read_resource_excerpt",
     "search_learning_materials", "assess_research_evidence", "save_formal_plan", "coach_finalize",
 )
@@ -38,6 +38,11 @@ def _denied_auto_mint_tool_names(extra: dict[str, Any]) -> list[str]:
         denied.append("save_formal_plan")
     if extra.get("explicit_learning_note_request") is not True:
         denied.append("record_learning_note")
+    if (
+        extra.get("explicit_lecture_note_save_request") is not True
+        and extra.get("explicit_learning_note_request") is not True
+    ):
+        denied.append("save_lecture_note")
     # The learner works with the library (Resources view, sandbox work or an
     # explicit ask) far more often than not, so the flags are stamped above;
     # every other turn stays read-only instead of auto-minting write tools.
@@ -80,13 +85,20 @@ def _stamp_explicit_write_tool_flags(
     coach_context: dict[str, Any] | None,
     learner_message: str | None,
 ) -> None:
-    from ..memory.note_request import message_requests_explicit_learning_note
+    from ..memory.note_request import (
+        message_requests_explicit_learning_note,
+        message_requests_lecture_note_save,
+    )
     from .tools import resource_write_explicitly_requested
 
     extra["explicit_learning_note_request"] = (
         isinstance(coach_context, dict)
         and coach_context.get("explicit_learning_note_request") is True
     ) or message_requests_explicit_learning_note(learner_message)
+    extra["explicit_lecture_note_save_request"] = (
+        isinstance(coach_context, dict)
+        and coach_context.get("explicit_lecture_note_save_request") is True
+    ) or message_requests_lecture_note_save(learner_message)
     extra["explicit_resource_import"] = (
         isinstance(coach_context, dict)
         and coach_context.get("explicit_resource_import") is True

@@ -793,11 +793,17 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         config = provider or self._config
         return _is_loopback_provider_url(getattr(config, "base_url", None))
 
+    def _should_bypass_system_proxy(self, provider: ProviderConfig | None = None) -> bool:
+        config = provider or self._config
+        return bool(getattr(config, "ignore_system_proxy", False)) or self._uses_loopback_transport(
+            config
+        )
+
     def _direct_http_client(self, provider: ProviderConfig, *, timeout: float) -> httpx.Client:
         return httpx.Client(
             timeout=timeout,
-            # A local model or gateway must not be sent to an ambient corporate proxy.
-            trust_env=not self._uses_loopback_transport(provider),
+            # Bypass ambient proxy for loopback endpoints or when direct connection is configured.
+            trust_env=not self._should_bypass_system_proxy(provider),
         )
 
     def _normalized_openai_compatible_base_url(
@@ -852,7 +858,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 "timeout": GENERATION_CLIENT_TIMEOUT,
                 "max_retries": self._provider_client_max_retries(),
             }
-            if self._uses_loopback_transport():
+            if self._should_bypass_system_proxy():
                 client_kwargs["http_client"] = httpx.AsyncClient(trust_env=False)
             self._client = async_openai_cls(**client_kwargs)
         return self._client
@@ -891,7 +897,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             "timeout": self._probe_client_timeout_seconds(provider),
             "max_retries": self._provider_client_max_retries(provider),
         }
-        if self._uses_loopback_transport(provider):
+        if self._should_bypass_system_proxy(provider):
             client_kwargs["http_client"] = httpx.Client(trust_env=False)
         return openai_cls(**client_kwargs)
 

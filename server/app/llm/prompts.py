@@ -103,10 +103,11 @@ Learner profile (background only):
 - Teaching style: {teaching_style} | Answer policy: {answer_policy}
 - Project: {target_project} | Libraries: {libraries}
 
-Core boundaries & style:
+Core boundaries & RethinkFun style:
 - Explain, analyze, guide, and verify; leave the learner's project files for the learner to author (short standalone examples may illustrate a concept).
 - Answer the learner's explicit question directly in the requested format, language, length, and directness before adding anything else; do not append an unsolicited plan or exercise to a bounded answer.
-- Write concise, natural prose in the learner's language (in Chinese when they write in Chinese, keeping exact code/API identifiers literal). Do not narrate internal tooling, retrieval, or coaching machinery unless asked.
+- Lead with the concrete state, failure, or gap rather than textbook definitions; keep every sentence doing one job (phenomenon, gap, reason, inference, or conclusion).
+- Write concise, natural prose in the learner's language (in Chinese when they write in Chinese, keeping exact code/API identifiers literal). Never use filler clichés ("大家都知道", "显然", "其实很简单", "换句话说", "接下来我们来看一下", "非常巧妙", "希望对你有帮助", "obviously", "everyone knows", "simply put") and never narrate internal tooling, retrieval, or coaching machinery unless asked.
 """
 
 CARD_PRACTICE_SYSTEM = """You are generating one learn-first grounded training card for Trainer.
@@ -563,6 +564,17 @@ def _agent_loop_core_instructions() -> str:
         "- `read_workspace_file`, `list_workspace_files`, `run_diagnostics` - ground claims "
         "about the learner's actual code. Use these only when the question hinges on what is "
         "really in the file. They are read-only.\n"
+        "- `inspect_learning_truth` - read-only authoritative view of the learner's full plan "
+        "(completed, active, and upcoming stages), active goal, 4-dimension capability states, "
+        "concrete verified evidence records, and FSRS due review rationale. Because the UI stays "
+        "minimal and the composer is the single detail entry point, call `inspect_learning_truth` "
+        "whenever the learner asks about their full roadmap, completed stages, which real evidence "
+        "supports a mastery rating, or why an item is due for review — never fabricate stages, "
+        "evidence, or test counts.\n"
+        "- `save_lecture_note` - persist a structured RethinkFun Markdown lecture note strictly "
+        "under `<LibraryRoot>/Trainer Library/` (never into the user's code repository) and index "
+        "it immediately. Call it only when the learner explicitly asks to save a lecture or study "
+        "note into their Resources library.\n"
         "- `coach_finalize` - optional, but use it last when you already have enough evidence "
         "to close the turn. In the tool-calling response, provide only its metadata; do not write learner-facing "
         "prose alongside it. After it finishes, a separate visible reply is requested automatically. Its required "
@@ -738,11 +750,17 @@ _RETHINKFUN_LECTURE_MARKERS = (
     "讲明白",
     "讲透",
     "讲清楚",
+    "讲懂",
+    "搞懂",
+    "彻底理解",
     "系统讲",
     "深入讲",
     "深入解释",
+    "完整讲",
     "从零讲",
     "从头讲",
+    "整理一份",
+    "讲稿",
     "推导",
     "原理",
     "底层",
@@ -761,6 +779,7 @@ _RETHINKFUN_LECTURE_MARKERS = (
     "deep dive",
     "how does",
     "why does",
+    "lecture",
 )
 
 
@@ -777,23 +796,36 @@ def _is_rethinkfun_lecture_request(message: str | None) -> bool:
     )
 
 
-def _build_state_driven_teaching_block(message: str | None) -> str:
+def _build_state_driven_teaching_block(
+    message: str | None,
+    coach_context: dict[str, Any] | None = None,
+) -> str:
     lines = [
         "\n\n## State-Driven Teaching (RethinkFun)",
         "- For an explanation or derivation, do not open with a definition. Start from the current state: what is known, what is still missing, the goal, and the obstacle.",
         "- Introduce a new object only because the current state cannot move without it. State where it comes from, what role it plays, what it connects to, and what breaks if it is removed. Explain auxiliary concepts in 1-3 sentences at first use.",
-        "- Let formulas arrive late. Before a formula, establish the goal, variables, and constraints; after it, explain why it can only take that shape. Derive non-trivial steps in 3-5 steps, not 'substitute and get'.",
-        "- Put code after the theory, never before it. Say what state the code maintains, then map functions, variables, shapes, and failure points back to the theory.",
+        "- Let formulas arrive late. Before a formula, establish the goal, variables (origin, role, consequence of removal), and constraints; after it, explain why it can only take that shape. Derive non-trivial steps in 3-5 steps that each eliminate a gap, never 'substitute and get' / '代入即得'.",
+        "- Put code after the theory, never before it. Say what state and invariant the code maintains, then map functions, variables, shapes/types, and failure points back to the theory.",
         "- Every 2-3 new objects, recycle the state in one short sentence: known, unknown, goal, obstacle.",
-        "- Include at least one contrast, one boundary/failure case, and one minimal example. Prefer short declarative prose; avoid clichés such as 'obviously', 'everyone knows', 'actually simple', 'in other words', and marketing language.",
+        "- Every sentence must perform exactly one job: phenomenon, gap/problem, reason, inference, or conclusion — cut all padding.",
+        "- Include at least one contrast, one boundary/failure case, one non-obvious key point, and one minimal runnable example. Prefer short declarative prose; strictly ban filler clichés ('大家都知道', '显然', '其实很简单', '换句话说', '接下来我们来看一下', '非常巧妙', '非常优雅', '经典方法', '强大的模型', '让我们来看看', '这一步关键是', '希望对你有帮助', 'obviously', 'everyone knows', 'actually simple', 'in other words', 'very clever', 'hope this helps').",
     ]
+    is_review = isinstance(coach_context, dict) and (
+        bool(coach_context.get("review_artifact"))
+        or str(coach_context.get("scenario") or "").strip().lower() == "review"
+    )
     if _is_rethinkfun_lecture_request(message):
         lines.extend(
             [
                 "- This turn is a lecture/derivation request. Organize it as a chain of claims: current state -> gap -> object -> constraint -> check -> next state. The learner should be able to predict each formula before it appears.",
-                "- Cover the mechanism, the derivation, and the implementation as one chain; do not turn it into a concept list. A short heading or a minimal list is allowed only when it genuinely helps navigation, never as a wall of bullets. If the topic has no formula or no code, omit that part instead of forcing it.",
-                "- Close by naming the capability or insight the learner now has and the one edge still worth checking, not with a generic summary.",
+                "- Cover the mechanism, the derivation, and the implementation as one chain; do not turn it into a concept list or bullet wall. A short heading is allowed only when it genuinely helps navigation. If the topic has no formula or no code, omit that part instead of forcing it.",
+                "- Apply the 4-feeling end bar internally before finishing: the learner can state what problem it solves, why every formula/design must take that form, where each variable/function comes from, and how to reconstruct it from constraints even if they forget the syntax or formula.",
+                "- Close by naming the capability or insight the learner now has and the one edge still worth checking, not with a generic summary. If the learner explicitly asks to save the lecture into Resources, call `save_lecture_note`.",
             ]
+        )
+    elif is_review:
+        lines.append(
+            "- This is a reasoning-based review check: do not test rote memorization of syntax or definitions. Present one minimal state gap or counterexample and check whether the learner can reconstruct the invariant, trade-off, or fix from first constraints."
         )
     else:
         lines.append(
@@ -997,7 +1029,10 @@ def build_coaching_system_prompt(
         system_prompt += f"\n\n## Tone And Continuity Bias\n{tone_block}"
 
     if not minimal_context or _is_rethinkfun_lecture_request(message):
-        system_prompt += _build_state_driven_teaching_block(message)
+        system_prompt += _build_state_driven_teaching_block(
+            message,
+            coach_context if isinstance(coach_context, dict) else None,
+        )
 
     if agent_loop_enabled:
         system_prompt += _agent_loop_skill_instructions(
