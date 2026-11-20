@@ -3,7 +3,7 @@
 生成：2026-10-07 · 分支 product-final-polish · v1.3.4。本文由 product / visual / arch / platform 四领域只读审计收敛而成，是收口计划的唯一现状依据。背景：docs/information-flow-report.md、docs/information-flow-audit.md。证据为 path:line（webview 根 = extension/webview/src）；标注〔复核〕的条目为规划员本会话实跑命令二次确认，其余为审计员实读/实测记录。完整验证套件由编排脚本统一运行，本文不重复。
 
 ## 产品现状
-- 三目的地 shell：品牌行 + History/Settings 双 utility + 对话/学习/资料导航（templates/AppShell.tsx:29-53，标签 lib/viewLabels.ts:17）；六路由→目的地映射唯一定义于 lib/workbenchDestinations.ts:9-17（training/progress→学习，settings→header），ownsCoachComposer 限定 composer 只在 coach（同文件:19-20）。单一 webview view + 65 命令〔复核：python3 解析 extension/package.json → commands:65、views: trainer.sidebar〕。
+- 两目的地 shell：品牌行 + 学习/History/Settings 三 utility + 对话/资料导航（templates/AppShell.tsx:60-80，标签 lib/viewLabels.ts:17）；六路由→目的地映射唯一定义于 lib/workbenchDestinations.ts:9-26（plan/training/progress→对话 + 学习抽屉对应段，settings→header），composer 只在对话/资料两个目的地挂载（lib/composerDock.ts:10-15）。学习不再是目的地：对话顶部学习条 + Header 学习图标打开的单一三段抽屉（当前目标/到期练习/成长进度），受治理的 plan 卡片就宿在抽屉的「当前目标」段内（components/learning/LearningDrawer.tsx）。单一 webview view + 65 命令〔复核：python3 解析 extension/package.json → commands:65、views: trainer.sidebar〕。
 - Coach 阻塞面单一仲裁：resolveCoachBlockingSurface〔复核：App.tsx:1613〕，workspace-admission > provider-setup > provider-notice > recovering，同一结果驱动 pane 与 composer presence 条（App.tsx:8816-8831）。
 - 操作消息原子归位：setOperationMessage〔复核：App.tsx:4043〕(消息, surface)，非 error 5 秒自清（App.tsx:5852-5858）；但 77 个调用点仅约 9 个显式 scoped，provider/settings 域默认 global，错误仍会出现在无关表面（信息流报告 §9③ 记录为有意保留的债务）。
 - 「发送权在用户」基本落地：suggested actions/artifact 一律预填草稿+聚焦、不发送（App.tsx:9387-9444）；两处 sendTurn 直发〔复核：App.tsx:9030、13516〕性质不同：「下一任务」是普通 intent 合成消息（可安全改预填）；「开始：X」计划恢复直发携带 buildRecoveredPlanResumeTurn 的 planRuntimeRecovery 治理载荷（App.tsx:9016-9039，经 handlePlanOrientationAction("continue_step") 触发：App.tsx:6876-6877、13455〔复核〕），服务端 persist_plan_runtime_recovery 落库供 Learning 恢复状态回读（server/app/api/routers.py:11187-11192,16465〔复核〕），改预填将断恢复闭环——保留为治理例外，其形态被 extension/tests/planGovernanceActionsSource.test.js:355-356 逐字锁定〔复核〕。
@@ -11,17 +11,18 @@
 - 死代码层：2,478 行零引用组件+copy（QuickActions/HumanizedEmptyStates/CoachGuidance/CoachActionPill/MemoryLayerSummary/WorkspaceAuthorityFacts 及 3 个 copy 模块）〔复核：wc -l 合计 2478；精确符号 grep 全仓库 0 消费者，唯一外部引用是 components/common/index.ts barrel；App.tsx:5084 blockedCoachGuidance 为局部变量名、非组件引用〕；copy.ts 术语死键（planDashboardReviewTitle:993、trainingHandoffMismatchHint:1000、resourcesSandboxLedger:1527 等，tsx 零渲染引用〔复核〕，且残留在 CopyKey 联合类型 632/769/778）。
 
 ## 一级入口
-- 恰好 3 个导航按钮 + 2 个 header utility，无第四入口（AppShell.tsx:35-52）；导航为纯文字 tab，无品牌图标。
+- 恰好 2 个导航按钮（对话 / 资料）+ 3 个 header utility（学习 / 会话历史 / 设置），无第三入口（AppShell.tsx:60-80）；导航为纯文字 tab，无品牌图标。
+- 学习不再是入口而是状态：对话顶部一条学习条（当前目标 · 当前步骤 · 待复习数），Header 学习图标打开单一学习抽屉（当前目标 / 到期练习 / 成长进度三张卡片，每张至多一个动作）。抽屉是**模态浮层**：浮在对话与输入框之上（输入框保留在下面，草稿与焦点不丢），顶部识别行 / 导航行 / 工具按钮仍可点；内部三张同构卡片（`.learning-drawer__card`：标题 + 右侧指标 + 内容 + 至多一个动作），次要事实收进**一个**披露（components/learning/LearningDrawer.tsx、templates/LearningHome.tsx `variant="drawer"`）。三张卡各说各的：目标卡说计划与下一步，练习卡不重复同一步骤的标题（`isSameLearningFact`），成长卡不重复总数；整张抽屉只留一个 accent 动作。抽屉内没有「更多」总折叠，也没有模板画廊：阶段与证据平铺，所有调整从输入框发起（抽屉是阅读面，关掉它再在唯一的输入框里说）。成长卡是**热力格**而非百分比：每个能力维度一列、3 个方块按档位自下而上填充（`capabilityLevel` 把 not_verified / emerging / assisted / independent 映射到 0–3），列下给出档位名与证据条数，底部一条「少→多」图例；方块渐次淡入并尊重 `prefers-reduced-motion`，填充色走中性 accent 色阶（不引入品牌色）。
 - 两处稀释一级注意力的重复：①冷启动 root-missing 时 OnboardingWizard 与 WorkspaceAdmissionPanel 同屏叠放、两个模块同时要求「选择工作区根目录」（App.tsx:12389-12392〔复核：两渲染分支条件可同时为真〕）；②provider-send-blocked 时 Coach 同屏两处同源提示：pane 顶 coach-inline-notice（App.tsx:12404-12413〔复核〕）+ composer presence bar blocked 按钮（App.tsx:14363-14401），同条件同动作（均跳 Settings Connection）。
 
 ## 各 Surface 首屏
 - 冷启动：3 步梯子 workspace_root→trust_window→connect_model〔复核：shared/src/onboarding.ts:11,40-42〕，仅真冷启动触发（App.tsx:11770-11772），完成即自动消失。
 - Coach：训练恢复一行 + 至多一个阻塞面 + 会话流 + composer（App.tsx:12377-12413）；首聊空态「你在做什么？」+3 个 starter，只预填不发送（App.tsx:11953-11979）。
-- Learning：LearningHome = 标题+阶段+状态条+唯一 NextAction+4 个默认关闭折叠（templates/LearningHome.tsx:19-32）；次级动作收进「详情」折叠（CoachPlanView.tsx:1977-1993）；头部 goalSummary 不复制 nextStep 文案（App.tsx:13340-13343）。
-- Training：单卡 FocusedPractice（App.tsx:13086 cardOnly=true），面包屑父级「学习」（TrainingWorkbenchView.tsx:2762-2768），卡外仅一个默认关闭「任务详情」折叠、无第二 composer（同文件:2681-2698）。
-- Resources：hero 搜索+添加菜单+列表（ResourcesWorkbenchView.tsx:2642-2784）；reader 提供 Ask Coach/加入学习/生成练习 + 返回（同文件:3011-3025）。
+- Learning 抽屉：唯一学习表面，三段式（当前目标 / 到期练习 / 成长进度）共享一次滚动；它是内容区内的平面表面（不是带边框圆角阴影的浮层卡片，也不压住导航行），关闭按钮在面板右上角，输入框留在下方并用一条细线与抽屉分开（components/learning/LearningDrawer.tsx）；当前目标段承载受治理的 plan 卡片（LearningHome），次级动作收进「详情」折叠；plan/training/progress 三个旧路由是兼容 alias，统一落到对话 + 对应抽屉段（lib/workbenchDestinations.ts）。
+- Training：单卡 FocusedPractice 出现在对话消息流内（App.tsx inline-practice-slot），面包屑父级「学习」，卡外仅一个默认关闭「任务详情」折叠、无第二 composer。
+- Resources：hero 搜索+添加菜单+列表（ResourcesWorkbenchView.tsx:2642-2784）；reader 提供 Ask Coach/加入学习/生成练习 + 返回（同文件:3011-3025）。资料库 md-only：canonical Markdown 是唯一产物，行内只开 md、没有「打开原件」（shared/src/resourceOpen.ts 只导出 resolveResourceOpenTarget）；旧库迁移走 `trainer.resource.markdownOnlyMigration`——先 dry-run 预览（数量 + 备份清单），再一次确认才执行，失败的资源被标记而不是静默删除（server/app/resources/service.py markdown_only_migration）。
 - Settings：Index（4 类+一句话状态）→Detail；7 处深链全部先 requestSettingsCategory（App.tsx:4029 等），已配置连接直接落 Connection 详情（CoachSettingsView.tsx:4190-4193）。
-- Progress：GrowthEvidence 四维（理解/实现/调试/迁移）状态行+全页唯一 accent（ProgressView.tsx:343-430）。
+- Progress：成长进度是学习抽屉第三段的四维（理解/实现/调试/迁移）**热力格**——每维一列、3 格按档位自下而上填充（档位名 + 证据数 + 「少→多」图例，渐次淡入动画，尊重 reduced-motion）；独立的 Growth 页面已退役。
 - 隐藏表面保活：路由切换只切 hidden 不卸载（app/WorkbenchSurfaces.tsx:9-15〔复核：文件位于 app/ 目录〕），导航不丢状态。
 
 ## 闭环与断点
@@ -38,7 +39,7 @@
 - e2e 体验矩阵硬校验恰 200 场景〔复核：e2e/trainer-experience-matrix.js:700 `SCENARIOS.length !== 200`〕，全部运行在 browser-preview fixture 层；真实 sidecar 端到端仅 1 条 authored journey（server/tests/test_real_sidecar_experience_matrix.py:273）；异常恢复组合（流中 crash、401/429 中段、409 并发、断线重连）无真服务端对应物。
 - Remote-SSH L1 e2e 仅 Linux CI 生效（scripts/run-remote-ssh-e2e.mjs:36-37），macOS 开发机恒 SKIP；约 12 处 POSIX 风格 /tmp fixture 抽读均为不触 fs 的 opaque 值（Windows 实机未验证，非缺陷断言）。
 - Remote Companion：tsc --noEmit 退出码 0〔复核：本会话实跑〕；build:remote-companion 退出码 0 且构建后工作树干净（platform 审计实跑）。
-- geometry 门（scripts/verify-ui-geometry.mjs 规则 1-8）锁三目的地稳定/composer 归属唯一/主按钮≤1/横向溢出≤1px；无人钉住的缺口：无垂直密度断言（首屏 93-98% 纯背景照样全绿）、无 $ 面板内部项完整断言（skill-deck.png 半行裁切漏过）、无 CSS 选择器合法性校验（损坏选择器全绿通过）。
+- geometry 门（scripts/verify-ui-geometry.mjs，279 条断言）锁两目的地稳定/composer 归属唯一/主按钮≤1/横向溢出≤1px，并新增对齐断言：资料行 icon 与标题同中心线（≤1px）、所有菜单标签共用一条左边线（图标列固定宽度而非 auto）、行内代码保持 inline 且不撑高行框、CJK 行高 ≥1.4、RTL 下行图标镜像且不溢出。仍未钉住的缺口：无垂直密度断言（首屏 93-98% 纯背景照样全绿）、无 $ 面板内部项完整断言（skill-deck.png 半行裁切漏过）、无 CSS 选择器合法性校验（损坏选择器全绿通过）、RTL 用逻辑属性镜像（样式段已无物理 margin/padding/border-left/right）、消息元信息（角色 + 时间戳）共一条基线而非居中对齐。仍未钉住的缺口：无垂直密度断言（首屏 93-98% 纯背景照样全绿）、无 $ 面板内部项完整断言（skill-deck.png 半行裁切漏过）、无 CSS 选择器合法性校验（损坏选择器全绿通过）；Settings 行 / 卡片 badge 在预览 fixture 里不可见，只能静态核对 CSS，无法进门禁。
 
 ## 架构现状
 - App.tsx 14,737 行〔复核：wc -l〕= 模块层 L362-3812（约 133 个 helper + 3 个内联小组件）+ App() 本体（39 useState / 39 useEffect / 67 useMemo / 49 useCallback，grep 实测）。

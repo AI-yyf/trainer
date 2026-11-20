@@ -5,7 +5,7 @@
 **Branch:** main
 
 ## OVERVIEW
-Desktop-first VS Code extension + FastAPI Python sidecar for conversation-driven coding training. Three-destination React workbench (`Coach / Learning / Resources`, with six internal routes) with keyboard-first navigation, ReAct coach agent loop, and FSRS-based spaced repetition.
+Desktop-first VS Code extension + FastAPI Python sidecar for conversation-driven coding training. Two-destination React workbench (`Chat / Resources`, with six internal routes where the three learning routes are compatibility aliases into the learning drawer) with keyboard-first navigation, ReAct coach agent loop, and FSRS-based spaced repetition.
 
 ## STRUCTURE
 
@@ -226,29 +226,55 @@ trainer/                            # Repository root
 
 ## SIDEBAR IA (SHIPPED)
 
-Three stable primary destinations: **Coach / Learning / Resources**. History and
-Settings are permanent header utilities. Keep all six internal routes and their
-commands, deep links and restore actions.
+Two stable primary destinations: **Chat / Resources**. Learning is not a
+destination — it is a drawer opened from the header icon beside the session
+history, plus a one-line learning strip above the conversation. History and
+Settings are permanent header utilities. All six internal routes and their
+commands, deep links and restore actions stay valid.
 
 | Route | UI destination | Template |
 | --- | --- | --- |
 | `coach` | 对话 / Chat | Conversation, CoachReply, NextAction |
-| `plan` | 学习 / Learning | LearningHome |
+| `plan` | alias → 对话 + 学习抽屉"当前目标" | LearningHome (inside the drawer) |
 | `resources` | 资料 / Resources | Library, ResourceReader |
-| `training` | 学习内部 | FocusedPractice, VerificationResult |
-| `progress` | 学习 → 成长 | GrowthEvidence |
+| `training` | alias → 对话 + 学习抽屉"到期练习" | FocusedPractice (inline card) |
+| `progress` | alias → 对话 + 学习抽屉"成长进度" | inline progress card |
 | `settings` | header gear | SettingsIndex, SettingsDetail |
 
-`lib/workbenchDestinations.ts` owns route mapping. Coach, Learning, and Resources
-share the docked `CoachComposer`. Learning keeps the plan, practice, verification,
-and progress in the same workspace with one composer and card-specific answer
-drafts. Keep the composer's appearance, placement, and toolbar controls fixed
-unless the user explicitly asks for a design change. Choose a `templates/` owner before adding feature
-UI. Preserve governed state and actual verification identities. Use SystemState
-for product status, one primary action per initial viewport and disclosure for
-advanced facts. `scripts/verify-ui-geometry.mjs` checks the three destinations,
-composer ownership, overflow and primary-action budget at 340/420/460 across
-dark/light and Chinese/English. Browser fixtures prove layout, not real evidence.
+`lib/workbenchDestinations.ts` owns route mapping; `plan/training/progress` are
+compatibility aliases that resolve to Chat with the learning drawer opened on
+the matching section (`normalizeLearningSection`). The drawer is a **modal
+sheet** at the shell level: it floats over the conversation and the composer
+together (the composer stays mounted underneath, so its draft and focus
+survive), while the header — identity row, navigation row and utilities —
+stays above it and clickable. Its content is a stack of three same-grammar
+**cards** (`.learning-drawer__card`: titled header + optional right-aligned
+metric + body + at most one action) for 当前目标 / 到期练习 / 成长进度 — it is
+not a tab set. Each card owns one fact and says it once: the goal card names
+the plan step, so the practice card drops a title that repeats it
+(`isSameLearningFact` in `lib/learningSummary.ts`), and the drawer keeps one
+accent action (the goal card's) while the other cards stay secondary. The
+progress card is a **heatmap, never a percentage**: one column per capability
+dimension, three cells filling from the bottom up by band
+(`capabilityLevel` in `lib/learningSummary.ts` maps not_verified / emerging /
+assisted / independent onto 0–3), each column showing the band name and its
+evidence count, plus a 「少→多」 legend ramp. Cells fade in on a staggered
+`--heat-delay` and honour `prefers-reduced-motion`; filled cells use the
+neutral accent ramp (`color-mix` over `--accent`), never a hardcoded brand
+color.
+`templates/LearningHome.tsx` takes `variant="drawer"` for that compact form: the
+plan's stages and evidence stay as plain rows (no catch-all 「更多」), the starter
+template gallery is gone, and every adjustment starts in the composer — the
+drawer is a reading surface, so a learner closes it and acts in the one input
+box. Chat and Resources share the docked `CoachComposer`; practice answers live
+inside the inline card, not in the composer. Keep the composer's appearance, placement, and toolbar controls fixed
+unless the user explicitly asks for a design change. Choose a `templates/` owner
+before adding feature UI. Preserve governed state and actual verification
+identities. Use SystemState for product status, one primary action per initial
+viewport and disclosure for advanced facts. `scripts/verify-ui-geometry.mjs`
+checks the two destinations, the learning drawer sections, composer ownership,
+overflow and primary-action budget at 340/420/460 across dark/light and
+Chinese/English. Browser fixtures prove layout, not real evidence.
 
 ## WHERE TO LOOK
 
@@ -285,7 +311,7 @@ dark/light and Chinese/English. Browser fixtures prove layout, not real evidence
 
 | Symbol | File | Role |
 |--------|------|------|
-| `App` | `extension/webview/src/app/App.tsx` | Root workbench — renders the three destinations and all six internal routes |
+| `App` | `extension/webview/src/app/App.tsx` | Root workbench — renders the two destinations, the learning drawer and all six internal routes |
 | `useWorkbenchState` | `extension/webview/src/app/useWorkbenchState.ts` | Zustand store — workbench data + actions |
 | `CoachConversationView` | `extension/webview/src/components/coach/` | Coach message history + streaming |
 | `CoachPlanView` | `extension/webview/src/components/plan/` | Plan stages, current task, evidence |
@@ -381,6 +407,9 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 - **Messages**: webview→extension via `postMessage`, extension→webview via `HostMessage`
 - **i18n**: 8 languages (zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP, ko-KR, pt-BR), keyed via `CopyKey`
 - **Training**: FSRS-based spaced repetition (`py-fsrs`), dual definition in Python and TS
+- **Host payloads are untrusted at runtime**: the webview declares precise types, but a field can arrive as a record, a number or blank text. Text that the view treats as text is normalized once, at the boundary (`lib/hostText.ts` for the training state), so a malformed field degrades instead of throwing inside a render and blanking the whole workbench with the error boundary. Never call `.trim()` / `.replace()` on a host value that has not been normalized.
+- **App.tsx is wiring only**: `extension/webview/src/app/App.tsx` stays an orchestrator. New behavior goes into its own owner — `lib/learningSummary.ts` + `components/learning/*` for learning, `lib/useHostOperationResolver.ts` for host operation correlation, `components/<area>/*` for a surface. When a feature needs logic inside App.tsx, extract it instead of appending; re-measure the line count before claiming the file did not grow.
+- **GUI gates verify the delivered artifact**: the real-VS Code gates (`verify:coach-gui`, `verify:canonical-gui`, `verify:i18n-zoom-gui`, `verify:resource-grounding-gui`) install the packaged VSIX, so they first call `ensureFreshVsix` (`extension/scripts/prepare-current-vsix.mjs`): it repackages under the shared build lock and proves the artifact still matches the sources it packages (`scripts/vsix-freshness.mjs`). A stale artifact stops the gate instead of producing a report about code the tree no longer contains. `TRAINER_SKIP_VSIX_REBUILD=1` skips the repackage and then refuses to run with a stale artifact.
 
 ## UNIQUE PATTERNS
 - **Local Brain + Remote Hands**: identity/memory/plans/resources/evidence stay on the local UI host; remote project access goes through the `WorkspaceGateway` (`extension/src/workspace/`) and the separate workspace-kind Companion (`remote-extension/`, `trainer.remote.capabilities` / `trainer.remote.request`)
@@ -389,6 +418,15 @@ FastAPI sidecar (port 8765, extension-managed range 34891-34911):
 - Evidence honesty: `/training/attempt/evidence` always records `self_reported` (client `trust_level` is ignored); host-trusted evidence only via `/training/verification/attest`; evidence citations resolve `resource_id`/`version_id`/`content_hash`/`location` server-side, and a deleted source flags citations until a same-hash re-index clears them
 - Host attestation delivery (R1): `/training/verification/attest` accepts an optional `idempotency_key`; remote verification sends `remote-verify:{companionSessionId}:{cardId}` (`attestationIdempotencyKey`, `extension/src/testing/trainingAttestation.ts`) so a resend replays via the training-reliability ledger instead of double-recording. Delivery failures are classified (`classifyAttestationDeliveryFailure`): `not_arrived` (typed pre-send guard `AttestationNotArrivedError`, connect/DNS-class error codes) is resent once; `ambiguous` (timeout, lost response, HTTP error) never auto-resends and surfaces the language-neutral marker `[[trainer-attestation-undelivered]]`, which the webview maps to eight-language Training-scoped copy (`operationMessageGovernance.ts`). Boundary: the replay window is the workspace's single-slot `latest_training_reliability` record — once another training save replaces it, a same-key retry executes again. Fail-closed unchanged for runs that never persisted: interrupted/cancelled/timed-out runs whose `work()` did not complete record NO evidence. A cancel/timeout that races a *completed* persistence keeps the already-written evidence and the ledger records `outcome=success` annotated with `cancel_after`/`timeout_after` (`server/app/training/reliability.py` `mark_succeeded`; `memory/training_reliability_mixin.py` `_cancel_raced_work`) instead of rewriting it as failed/cancelled — the client is never told a persisted save failed.
 - Typed Parts Registry: 16+ message artifact kinds, rendered via `shared/src/partsRendererRegistry.ts`
+- The Chrome popup is a quick-capture card: it captures the current page and, for a downloadable source (PDF, repository), it also offers "download to the library". The destination is resolved by the sidecar (`/browser/status` → `download_target`) and is **always the library root** (`Trainer Library/`) — never a per-project folder — so every capture lands in one place; the popup shows that target read-only and never types or stores a path, and there is no "other sources" or focus-binding section in it. The Chrome right-click menu still covers links, PDF pages and repositories, and the side panel carries the conversation. The VS Code capture entry (`components/resources/ResourceCaptureDialog.tsx`) recognizes its own source: an address (web / PDF / GitHub / Gitee / GitLab via `lib/captureSourceKind.ts`) or one file (a PDF, or a QR image whose link is read with the platform `BarcodeDetector` — no extra dependency), plus the target knowledge base. The forge lane is shared by `parse_source_repo` (GitHub, Gitee, GitLab)
+- The library is Markdown-only: the canonical document (`server/app/resources/canonical_store.py`) is the only artifact — `resolveResourceOpenTarget` opens it, there is no "open original" action, and the legacy originals directory is removed only after a verified Markdown write. The migration bridge (`trainer.resource.markdownOnlyMigration`) previews first, writes a backup manifest, and only runs the destructive pass after one explicit confirmation; a resource that fails to convert is marked, never silently deleted. The destructive pass converts **before** it deletes: an original is only removed behind a readable, non-empty canonical Markdown, and a resource whose originals are the only copy keeps them and is reported as a failure (`originals_kept`, `status: "partial"`) instead of being deleted behind a promise it cannot keep.
+- The library never drops the last copy of a resource: every path that removes bytes checks the replacement first. `ResourceService._remove_originals_behind_markdown` is the **only** place the migration drops legacy originals, and it refuses unless the canonical document is readable and non-empty (`_has_readable_markdown`); `_discard_managed_inline_source` applies the same rule to the inline upload copy. A download rollback removes only the artifact the capture itself created (`download.created`). When a new path deletes a file, it has to name the artifact that stands behind it.
+- The alignment gate (`scripts/verify-ui-geometry.mjs`) locks the visible rules, not just the overflow: library rows keep their icon and title on one center line (≤1px), every menu label shares one left edge (the icon column is fixed, not `auto`), inline code stays an inline box inside the paragraph's line height, CJK lines keep a readable line height, the message meta (role + timestamp) shares one baseline instead of being centred against each other, and RTL mirrors the row icon without overflowing. The style sections use logical properties (`margin-inline-start`, `border-inline-start`, …) so an RTL shell mirrors without a second set of overrides
+- The Chrome side panel is a real conversation client over the paired credential: `/browser/chat/*` (`server/app/api/routes/browser_chat.py`) is a bearer-authenticated proxy over the existing `/session/*` routes, so the browser never sees the sidecar token or a provider key, and provider overrides from the browser are stripped. The side panel only captures in the popup; the side panel carries the session, the streamed reply, the history and the practice card.
+- The browser panel completes a practice, it does not merely talk about one: an answer typed in the panel's practice card travels the server's training lane (`/browser/chat/training/attempt/start` → `attempt/update` → `attempt/evidence` → `training/practice-return`), and the credential — not the client — names the workspace. The panel has no runner and no verifier, so the evidence is a self report: the server fixes its trust level (`self_reported`), which keeps it visible in the drilldown without attesting executable capability. A refused recording is reported as "not recorded" — no progress receipt, no coaching turn, no claim of completion.
+- Learning cards are minted from a reply with one click each: a practice card (动手) and a flash card (闪记). Both land inline in the conversation, where the learner answers, verifies and reflects inside the card — the flash card carries its own bolt glyph so the two never read as the same action
+- One conversation, two lanes: learning is not a destination, so `plan/training/progress` are reply-lane markers (`active_view`) while the destination is Chat. `composer_conversation_scope` (`server/app/llm/conversation_scope.py`) therefore maps only `resources` to its own scope — learning turns read and write the one coach conversation, and the webview never filters the conversation by `sourceView`
+- Explicit restore targets own the training foreground (`trainingRestoreContext`); the store retires that intent when a later `state/patch` selects another card, so a restored card never outlives the live selection it was restoring
 - Coach agent loop: ReAct pattern with tool calling (`server/app/llm/agent_loop.py`)
 - Training handoff state machine: card generation → routing → feedback → next card
 - Research uses `dataclass(slots=True)`, core uses `BaseModel` (Pydantic) — intentional separation
