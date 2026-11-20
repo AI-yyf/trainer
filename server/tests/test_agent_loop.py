@@ -5560,3 +5560,32 @@ async def test_coaching_reply_agentic_falls_back_when_provider_raises() -> None:
     # outcome is acceptable as long as we get a usable string back.
     assert isinstance(outcome["content"], str)
     assert outcome["content"]
+
+
+def test_agent_binding_async_client_sets_trust_env_false_only_for_loopback_stubs() -> None:
+    loopback_stub = SimpleNamespace(
+        _config=SimpleNamespace(base_url="http://127.0.0.1:9999/v1"),
+    )
+    remote_stub = SimpleNamespace(
+        _config=SimpleNamespace(base_url="https://api.anthropic.com/v1"),
+    )
+
+    loopback_binding = ProviderAgentBinding(
+        provider_service=loopback_stub,
+        protocol="anthropic_messages",
+    )
+    remote_binding = ProviderAgentBinding(
+        provider_service=remote_stub,
+        protocol="anthropic_messages",
+    )
+
+    with patch("app.llm.agent_binding.httpx.AsyncClient") as async_client:
+        loopback_binding._async_http_client()  # noqa: SLF001
+    async_client.assert_called_once_with(
+        timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        trust_env=False,
+    )
+
+    with patch("app.llm.agent_binding.httpx.AsyncClient") as async_client:
+        remote_binding._async_http_client()  # noqa: SLF001
+    async_client.assert_called_once_with(timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS)

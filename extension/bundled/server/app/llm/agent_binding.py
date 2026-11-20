@@ -50,6 +50,7 @@ from urllib.parse import quote
 import httpx
 
 from .agent_loop import AgentProvider, CoachAgentLoop
+from .provider.capability import _is_loopback_provider_url
 from .provider.errors import ContextBudgetExhaustedError
 from .provider.streaming import (
     STREAM_IDLE_TIMEOUT_SECONDS,
@@ -1009,6 +1010,25 @@ class ProviderAgentBinding:
         api_key = getattr(self._provider_service, "_api_key", None)
         return api_key if isinstance(api_key, str) and api_key else None
 
+    def _uses_loopback_transport(self) -> bool:
+        """Return whether the bound provider targets a local loopback host."""
+        probe = getattr(self._provider_service, "_uses_loopback_transport", None)
+        if callable(probe):
+            return bool(probe())
+        config = getattr(self._provider_service, "_config", None)
+        return _is_loopback_provider_url(getattr(config, "base_url", None))
+
+    def _async_http_client(
+        self,
+        *,
+        timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    ) -> httpx.AsyncClient:
+        """Construct an async HTTP client bypassing ambient proxies only for loopback URLs."""
+        client_kwargs: dict[str, Any] = {"timeout": timeout}
+        if self._uses_loopback_transport():
+            client_kwargs["trust_env"] = False
+        return httpx.AsyncClient(**client_kwargs)
+
     def _validated_result(
         self,
         response: object | None,
@@ -1258,11 +1278,7 @@ class ProviderAgentBinding:
             )
         )
         endpoint = self._gemini_endpoint(model)
-        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
-        async with httpx.AsyncClient(
-            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
-            trust_env=trust_env,
-        ) as client:
+        async with self._async_http_client() as client:
             response = await client.post(
                 endpoint,
                 json=payload,
@@ -1293,11 +1309,7 @@ class ProviderAgentBinding:
             )
         )
         endpoint = self._gemini_endpoint(model, stream=True)
-        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
-        async with httpx.AsyncClient(
-            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
-            trust_env=trust_env,
-        ) as client:
+        async with self._async_http_client() as client:
             async with client.stream(
                 "POST",
                 endpoint,
@@ -1894,11 +1906,7 @@ class ProviderAgentBinding:
         payload = self._apply_anthropic_request_defaults(payload)
         payload = self._apply_nonofficial_anthropic_thinking_default(payload)
         payload = self._flatten_raw_http_thinking(payload)
-        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
-        async with httpx.AsyncClient(
-            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
-            trust_env=trust_env,
-        ) as client:
+        async with self._async_http_client() as client:
             async with client.stream(
                 "POST",
                 f"{self._anthropic_base_url}/v1/messages",
@@ -2073,11 +2081,7 @@ class ProviderAgentBinding:
         api_key: str,
     ) -> httpx.Response:
         payload = self._flatten_raw_http_thinking(payload)
-        trust_env = not self._provider_service._uses_loopback_transport()  # noqa: SLF001
-        async with httpx.AsyncClient(
-            timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS,
-            trust_env=trust_env,
-        ) as client:
+        async with self._async_http_client() as client:
             return await client.post(
                 f"{self._anthropic_base_url}/v1/messages",
                 json=payload,
