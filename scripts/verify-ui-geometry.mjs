@@ -555,6 +555,78 @@ async function main() {
     stripFields !== null && stripFields.overflow <= 1,
     `learning: the strip never overflows its line (${stripFields ? stripFields.overflow : "n/a"}px)`,
   );
+  const drawerGoalOverflow = await page.evaluate(() => {
+    const goalSection = document.querySelector('[data-template="LearningDrawer"] [data-learning-section="goal"]');
+    if (!goalSection) return { morePlans: -1, governance: -1 };
+    return {
+      morePlans: goalSection.querySelectorAll('[data-plan-more-plans]').length,
+      governance: goalSection.querySelectorAll('[data-plan-governance-disclosure]').length,
+    };
+  });
+  check(
+    drawerGoalOverflow.morePlans === 0 && drawerGoalOverflow.governance === 0,
+    `learning: drawer goal card hides more-plans (${drawerGoalOverflow.morePlans}) and governance (${drawerGoalOverflow.governance}) disclosures`,
+  );
+  const drawerProgressSentence = await page.evaluate(() => {
+    const progressSection = document.querySelector('[data-template="LearningDrawer"] [data-learning-section="progress"]');
+    if (!progressSection) return { missingSection: true };
+    const verifiedStates = [...progressSection.querySelectorAll('[data-capability-state]')].filter((el) => {
+      const state = el.getAttribute('data-capability-state') ?? '';
+      return state === 'assisted' || state === 'independent' || state === 'repeat_verified';
+    });
+    const sentence = progressSection.querySelector('[data-progress-sentence="true"]');
+    return {
+      missingSection: false,
+      hasVerifiedEvidence: verifiedStates.length > 0,
+      hasSentence: Boolean(sentence && sentence.textContent && sentence.textContent.trim().length > 0),
+    };
+  });
+  check(
+    !drawerProgressSentence.missingSection && (!drawerProgressSentence.hasVerifiedEvidence || drawerProgressSentence.hasSentence),
+    `learning: drawer progress card leads with a plain progress sentence when verified evidence exists (${JSON.stringify(drawerProgressSentence)})`,
+  );
+  for (const width of [340, 420]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${base}?view=coach&scenario=ready&lang=zh-CN`, { waitUntil: "networkidle" });
+    await page.locator('#root[data-trainer-app-ready="true"]').waitFor();
+    const coachCalm = await page.evaluate(() => {
+      const strip = document.querySelector('[data-learning-strip="true"]');
+      const due = strip?.querySelector('.learning-strip__due');
+      let dueUnclipped = true;
+      let dueDetail = "none";
+      if (strip && due) {
+        const dueRect = due.getBoundingClientRect();
+        const stripRect = strip.getBoundingClientRect();
+        const selfUnclipped = due.scrollWidth <= due.clientWidth + 1;
+        const fitsInStrip = dueRect.right <= stripRect.right + 1;
+        dueUnclipped = selfUnclipped && fitsInStrip;
+        dueDetail = `scroll=${due.scrollWidth}/${due.clientWidth},right=${Math.round(dueRect.right)}/${Math.round(stripRect.right)}`;
+      }
+      const quickToolGroups = [...document.querySelectorAll('.message-bubble__quick-tools')];
+      const counts = quickToolGroups.map((group) => {
+        const directIcons = [...group.querySelectorAll(':scope > .message-bubble__icon-action, :scope > .message-bubble__more-wrap > .message-bubble__icon-action')].filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        });
+        return directIcons.length;
+      });
+      return {
+        dueUnclipped,
+        dueDetail,
+        quickToolGroupCount: quickToolGroups.length,
+        maxPersistentIcons: counts.length ? Math.max(...counts) : 0,
+      };
+    });
+    check(
+      coachCalm.dueUnclipped,
+      `coach/${width}: learning strip due count is unclipped (${coachCalm.dueDetail})`,
+    );
+    check(
+      coachCalm.quickToolGroupCount > 0 && coachCalm.maxPersistentIcons <= 3,
+      `coach/${width}: every reply shows at most 3 persistent quick actions (${coachCalm.maxPersistentIcons} max across ${coachCalm.quickToolGroupCount} replies)`,
+    );
+  }
+  await page.setViewportSize({ width: 420, height: 900 });
   if (keepShots) await page.screenshot({ path: path.join(shotDir, "learning-drawer.png"), fullPage: true });
 
   // ---- 6. alignment: key rows keep their icon and text on one line ------
