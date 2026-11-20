@@ -88,6 +88,34 @@
     "evaluator_string_literal_acceptance": {
       "status": "PASS",
       "evidence": "string-literal returns now matched from comment-masked source; real GUI 10/10; unit tests pass"
+    },
+    "unified_library_root_storage": {
+      "status": "PASS",
+      "evidence": "434f3903: GET /workspace/storage-truth + test_unified_library_root_storage.py + unifiedLibraryRootStorage.test.js PASS; zero pollution in user code repository"
+    },
+    "copy_vocabulary_gate": {
+      "status": "PASS",
+      "evidence": "aba4c2de: npm run verify:copy-vocabulary PASS (scanned 59 files, 0 banned-term violations)"
+    },
+    "calm_ui_geometry": {
+      "status": "PASS",
+      "evidence": "aba4c2de + Waves 2-4: npm run verify:ui-geometry PASS (287 geometry assertions passed across 340/420/460 dark/light zh-CN/en-US)"
+    },
+    "local_latency_2dest": {
+      "status": "PASS",
+      "evidence": "589c3daf + Waves 3-4: npm run verify:local-latency PASS (5 actions within 1000ms: coach->learning-drawer, learning-drawer->resources, resources->settings, settings->teaching, settings->coach)"
+    },
+    "stage2_coaching_latency_and_productivity": {
+      "status": "PASS",
+      "evidence": "f973bd7e: server/tests/test_turn_stream_latency_budget.py + server/app/pedagogy/productivity.py + runtime transport cache PASS"
+    },
+    "stage3_proactive_budget": {
+      "status": "PASS",
+      "evidence": "58c02e0b: server/tests/test_proactive_budget.py (3 passed) + extension/tests/codingGapTracker.test.js (1 passed)"
+    },
+    "idempotency_story_deterministic": {
+      "status": "PASS",
+      "evidence": "Waves 1-4: server/tests/test_idempotency_story_acceptance.py (1 passed across TRAINER_TEST_NOW T0 -> T0+3d -> T0+17d + create_app restart); 7-suite pytest run 45 passed; live external provider runner scripts/run-idempotency-story.mjs fails closed with exit 2 when keys are unset"
     }
   }
 }

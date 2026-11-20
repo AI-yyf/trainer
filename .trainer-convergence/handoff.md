@@ -642,3 +642,22 @@
 - **Valid goal-mode mastery run** (goal bar active throughout): the coach refused the learner’s “I’ve mastered it, mark it done” with `还不能直接标记完成` and asked for a migration check; after a teach-back + RLock transfer it acknowledged the explanation and asked one more concrete check, **without** saying `目标完成/已掌握`. Evidence `235-goal-clean2.png` … `239-goal-teachback2.png`. The final mastery closure still needs one more correct response, but the refusal-to-fake-done behavior is PASS.
 - **Journey F — offline provider**: with the mock provider killed, the real installed VSIX showed `Trainer 当前卡在 provider path` + `Provider request failed`, no fabricated reply, composer re-enabled, turn not claimed successful (`240-offline-error.png`).
 - **Journey F — recovery: BLOCKED**. After restarting the mock (now with `/health` 200 and `/v1/models` 200), resend still failed with the same `Provider test failed: Provider request failed` (`241-offline-recovered.png`, `242-offline-recovered-health.png`). Sidecar log: `[provider] reply failure category=unknown status=None retryable=False detail=Provider test failed: Provider request failed.` The mock received a normal chat POST. This is either a stale provider-test/connection state or a mock-provider mismatch; not yet root-caused. Wrong-key, timeout, and port-conflict paths remain NOT_EXECUTED.
+
+## 2026-11-20 — Unified Learning Waves 1–4 Complete (Ready for T-0028 Owner Sign-Off)
+- **Branch & archived reliability reference**: work landed cleanly on `codex/trainer-unified-learning`; selective verification-branch fixes were ported and the old verification branch is archived at tag `archive/trainer-convergence-verification-2026-11-20` -> `1512c070`.
+- **Key Waves 1–4 commits**:
+  - Wave 1 (Strategy & Unified `<LibraryRoot>`): `40ac5f77` (`docs/STRATEGY.md`), `434f3903` (single `<LibraryRoot>` runtime/resources/memory + `GET /workspace/storage-truth` + zero code-repo pollution).
+  - Wave 2 (Calm UX & Copy Vocabulary): `d9aecc1c` (plain progress sentence + drawer declutter), `b214497c` (3-button calm message action bar), `aba4c2de` (`verify:copy-vocabulary` + expanded `verify:ui-geometry`), `edb7c6dc` (browser sidepanel localization & settled practice card).
+  - Wave 3 (Selective Reliability Ports, Latency & Productivity Convergence): `ba3f6d87` (sidecar port-race retry), `52faf066` (atomic SQLite evidence + ledger transaction), `f973bd7e` (`PROJECT_WRITE_TOOL_NAMES` denylist, `MINIMAL_COACHING_SYSTEM_TEMPLATE`, shared transport language-integrity store, `pedagogy/productivity.py`), `589c3daf` (branch archive + 2-destination `verify:local-latency`).
+  - Wave 4 (Budgeted Proactivity & Idempotency Story): `58c02e0b` (`proactive_budget.py`, `POST /proactive/evaluate`, `learner_actively_typing` guard + `CodingGapTracker`, weakness-diagnostic `## Weakness Recall Cue`), followed by `server/tests/test_idempotency_story_acceptance.py`, `scripts/run-idempotency-story.mjs`, and convergence matrix updates.
+- **Bundled server & native binary note**: `extension/bundled/server/` is kept synchronized with `server/` via `node extension/scripts/sync-bundled-server.mjs`. Note that standalone native binaries under `extension/bundled/bin/` (e.g. `extension/bundled/bin/darwin-arm64/trainer-sidecar`) are rebuilt in CI PyInstaller packaging rather than inside local JS/Python test commits.
+- **Live external provider validation & `T-0028` sign-off (still BLOCKED — human-only)**:
+  - No live provider keys are stored in the repository (`verify:credentials` scanned 4,889 files, 0 findings), and `scripts/run-idempotency-story.mjs` fails closed with exit code `2` when `PROBE_PROVIDER_BASE_URL` / `PROBE_PROVIDER_API_KEY` are unset.
+  - Owner sign-off command (supply live credentials):
+    ```bash
+    PROBE_PROVIDER_BASE_URL="https://api.example.com/v1" \
+    PROBE_PROVIDER_API_KEY="sk-..." \
+    PROBE_PROVIDER_MODEL="MiniMax-M3.1-Flash" \
+    node scripts/run-idempotency-story.mjs
+    ```
+    Then record human owner review in `.trainer-convergence/acceptance-matrix.json` for `T-0028` (`teaching_acceptance`).
