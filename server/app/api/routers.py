@@ -1553,7 +1553,20 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             and probe_result.provider_reachable is True
             and isinstance(probe_result.status_code, int)
         ):
+            coaching_service.clear_language_integrity_success(
+                message=message,
+                response_language=response_language,
+                provider_config=provider_config,
+                api_key=provider_api_key,
+            )
             return probe_result
+        if probe_result.ok is True and not getattr(probe_result, "error_category", None):
+            coaching_service.mark_language_integrity_success(
+                message=message,
+                response_language=response_language,
+                provider_config=provider_config,
+                api_key=provider_api_key,
+            )
         return None
 
     def isolate_preflight_language_corruption_turn(

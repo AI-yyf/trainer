@@ -95,6 +95,11 @@ from ..memory.workspace_recovery import (
     resource_record_is_acknowledged_upload,
     stamp_produced_workspace_record,
 )
+from ..pedagogy.productivity import (
+    assess_conversation_productivity,
+    recent_ledger_learning_output,
+    trailing_unproductive_streak_start,
+)
 from ..training.card_request import message_requests_explicit_training_card
 from ._helpers import (
     localized_text,
@@ -5588,6 +5593,28 @@ def resolve_coach_turn(deps: CoachSupportDeps,
         coach_context["formal_plan_mutation"] = True
         coach_context["allow_coach_only_tools"] = True
     _stamp_library_sandbox_work(coach_context, request)
+    streak_start = trailing_unproductive_streak_start(state.snapshot.messages)
+    ledger_attempt, ledger_review = recent_ledger_learning_output(
+        getattr(deps.runtime, "event_ledger", None),
+        workspace_id=state.workspace_id,
+        since=streak_start,
+    )
+    effective_answer_mode = str(
+        request.answer_mode or (profile.answer_policy if profile else "") or ""
+    ).strip().lower()
+    decision_mode = (
+        "direct_answer"
+        if effective_answer_mode == "direct"
+        else str(getattr(pedagogy_decision_raw, "mode", "") or "teach")
+    )
+    productivity = assess_conversation_productivity(
+        messages=state.snapshot.messages,
+        turn_mode=decision_mode,
+        has_recent_attempt_or_evidence=bool(completed_return) or ledger_attempt,
+        has_recent_review_action=ledger_review or scenario == "review",
+    )
+    if productivity.should_converge:
+        coach_context["productivity_convergence"] = productivity.to_payload()
     if deps.pressure_without_live_object_blocks_mint(
         state.workspace_id,
         snapshot=state.snapshot,

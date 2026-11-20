@@ -465,6 +465,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         self._models_cache: dict[tuple[str, str], tuple[float, ProviderModelsResponse]] = {}
         self._capability_truth: dict[str, str] = {}
         self._language_integrity_success: dict[str, float] = {}
+        self._shared_language_integrity_resolver: (
+            Callable[[ProviderConfig | None, str | None], dict[str, float] | None] | None
+        ) = None
         self._last_reply_failure: ContextVar[dict[str, Any] | None] = ContextVar(
             f"provider_service_last_reply_failure_{id(self)}",
             default=None,
@@ -571,11 +574,33 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             return "cjk"
         return None
 
+    def bind_language_integrity_store(
+        self,
+        resolver: Callable[[ProviderConfig | None, str | None], dict[str, float] | None] | None,
+    ) -> None:
+        self._shared_language_integrity_resolver = resolver
+
+    def _language_integrity_store(
+        self,
+        *,
+        provider_config: ProviderConfig | None = None,
+        api_key: str | None = None,
+    ) -> dict[str, float]:
+        config = provider_config if provider_config is not None else self._config
+        resolved_key = api_key if api_key is not None else self._api_key
+        if self._shared_language_integrity_resolver is not None:
+            bucket = self._shared_language_integrity_resolver(config, resolved_key)
+            if isinstance(bucket, dict):
+                return bucket
+        return self._language_integrity_success
+
     def has_recent_language_integrity_success(
         self,
         *,
         message: str | None = None,
         response_language: str | None = None,
+        provider_config: ProviderConfig | None = None,
+        api_key: str | None = None,
     ) -> bool:
         cache_key = self._language_integrity_cache_key(
             message=message,
@@ -583,11 +608,15 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         )
         if not cache_key:
             return False
-        cached_at = self._language_integrity_success.get(cache_key)
+        store = self._language_integrity_store(
+            provider_config=provider_config,
+            api_key=api_key,
+        )
+        cached_at = store.get(cache_key)
         if cached_at is None:
             return False
         if monotonic() - cached_at > self._LANGUAGE_INTEGRITY_SUCCESS_TTL_SECONDS:
-            self._language_integrity_success.pop(cache_key, None)
+            store.pop(cache_key, None)
             return False
         return True
 
@@ -596,6 +625,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         *,
         message: str | None = None,
         response_language: str | None = None,
+        provider_config: ProviderConfig | None = None,
+        api_key: str | None = None,
     ) -> None:
         cache_key = self._language_integrity_cache_key(
             message=message,
@@ -603,13 +634,22 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         )
         if not cache_key:
             return
-        self._language_integrity_success[cache_key] = monotonic()
+        store = self._language_integrity_store(
+            provider_config=provider_config,
+            api_key=api_key,
+        )
+        now = monotonic()
+        store[cache_key] = now
+        if cache_key == "zh":
+            store["cjk"] = now
 
     def clear_language_integrity_success(
         self,
         *,
         message: str | None = None,
         response_language: str | None = None,
+        provider_config: ProviderConfig | None = None,
+        api_key: str | None = None,
     ) -> None:
         cache_key = self._language_integrity_cache_key(
             message=message,
@@ -617,7 +657,14 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         )
         if not cache_key:
             return
-        self._language_integrity_success.pop(cache_key, None)
+        store = self._language_integrity_store(
+            provider_config=provider_config,
+            api_key=api_key,
+        )
+        store.pop(cache_key, None)
+        if cache_key in {"zh", "cjk"}:
+            store.pop("zh", None)
+            store.pop("cjk", None)
 
     def peek_last_reply_failure(self) -> dict[str, Any] | None:
         failure = self._last_reply_failure.get()
@@ -3109,6 +3156,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     self.clear_language_integrity_success(
                         message=probe_message,
                         response_language=response_language,
+                        provider_config=provider,
+                        api_key=api_key,
                     )
                     diagnostics.append(f"Probe response preview: {preview}")
                     if probe_category == "language_corruption":
@@ -3174,6 +3223,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 self.mark_language_integrity_success(
                     message=probe_message,
                     response_language=response_language,
+                    provider_config=provider,
+                    api_key=api_key,
                 )
                 success_detail = (
                     probe_detail

@@ -80,9 +80,14 @@ def _localized_text(english: str, chinese: str, language: str | None) -> str:
 
 # Learning OS fail-closed: coach agent must never silently write user business code.
 # These names stay unregistered and are always denied even if hallucinated or re-added.
-PROJECT_WRITE_TOOL_NAMES: frozenset[str] = frozenset(
-    {"write_file", "apply_patch", "edit_file"}
-)
+PROJECT_WRITE_TOOL_NAMES: frozenset[str] = frozenset({
+    "write_file",
+    "apply_patch",
+    "edit_file",
+    "insert_code",
+    "execute_command",
+    "run_command",
+})
 
 JsonSchema = dict[str, Any]
 ToolHandler = Callable[["ToolContext", dict[str, Any]], Any]

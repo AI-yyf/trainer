@@ -96,6 +96,19 @@ Request precedence:
 4. If background conflicts with the final learner message, follow the final learner message. Do not mention unrelated older context just to explain the switch.
 """
 
+MINIMAL_COACHING_SYSTEM_TEMPLATE = """You are Trainer, a focused technical coding coach inside VS Code.
+
+Learner profile (background only):
+- Goal: {goal} | Background: {background} | Weekly hours: {weekly_hours}h
+- Teaching style: {teaching_style} | Answer policy: {answer_policy}
+- Project: {target_project} | Libraries: {libraries}
+
+Core boundaries & style:
+- Explain, analyze, guide, and verify; leave the learner's project files for the learner to author (short standalone examples may illustrate a concept).
+- Answer the learner's explicit question directly in the requested format, language, length, and directness before adding anything else; do not append an unsolicited plan or exercise to a bounded answer.
+- Write concise, natural prose in the learner's language (in Chinese when they write in Chinese, keeping exact code/API identifiers literal). Do not narrate internal tooling, retrieval, or coaching machinery unless asked.
+"""
+
 CARD_PRACTICE_SYSTEM = """You are generating one learn-first grounded training card for Trainer.
 
 Output valid JSON only. No markdown. Use snake_case keys.
@@ -804,7 +817,22 @@ def build_coaching_system_prompt(
     raw_answer_policy = answer_mode or profile.answer_policy
     answer_policy = _answer_policy_label(raw_answer_policy)
     teaching_style = _teaching_style_label(profile.teaching_style)
-    system_prompt = COACHING_SYSTEM_TEMPLATE.format(
+    # Minimal tier: a pure conversational Q&A turn. Keep identity, hard teaching
+    # boundary, and request precedence without archive/lecture bloat.
+    minimal_context = isinstance(coach_context, dict) and (
+        coach_context.get("context_tier") == "minimal"
+    )
+    use_minimal_template = minimal_context and not (
+        isinstance(coach_context, dict)
+        and (
+            coach_context.get("goal_mode") is True
+            or coach_context.get("completed_training_return_feedback") is True
+        )
+    )
+    template = (
+        MINIMAL_COACHING_SYSTEM_TEMPLATE if use_minimal_template else COACHING_SYSTEM_TEMPLATE
+    )
+    system_prompt = template.format(
         goal=profile.long_term_goal or "Not specified",
         background=profile.background or "Not specified",
         weekly_hours=profile.weekly_hours,
@@ -834,12 +862,6 @@ def build_coaching_system_prompt(
         message,
         current_file,
         coach_context,
-    )
-    # Minimal tier: a pure conversational Q&A turn. The coaching identity plus
-    # the request-priority rules are enough — the archive, plan machinery, and
-    # per-run pedagogy sections stay out of the prompt.
-    minimal_context = isinstance(coach_context, dict) and (
-        coach_context.get("context_tier") == "minimal"
     )
     coaching_context = _prioritize_current_request_context(
         extract_coaching_context(message, current_file, coach_context)
@@ -974,7 +996,8 @@ def build_coaching_system_prompt(
     if tone_block:
         system_prompt += f"\n\n## Tone And Continuity Bias\n{tone_block}"
 
-    system_prompt += _build_state_driven_teaching_block(message)
+    if not minimal_context or _is_rethinkfun_lecture_request(message):
+        system_prompt += _build_state_driven_teaching_block(message)
 
     if agent_loop_enabled:
         system_prompt += _agent_loop_skill_instructions(
@@ -993,6 +1016,24 @@ def build_coaching_system_prompt(
             "- Never declare the goal complete, never say the learner has mastered it, and never accept a self-claim such as \"I've got it\" or \"mark it done\". Even after a correct teach-back and transfer, name the capability and ask whether they want to end the goal; the learner ends it with the goal control. If they ask to finish before both checks, refuse and ask for the missing explanation or variation.\n"
             "- Keep each reply under about 120 words. One action per turn. In each micro-step, state the current known/unknown/goal/obstacle in one short sentence before the action, and recycle it after the learner's attempt; no lecture.\n"
             "- Do not claim formal evidence, do not write files, and do not create a plan unless the learner explicitly asks."
+        )
+    raw_productivity = (
+        coach_context.get("productivity_convergence")
+        if isinstance(coach_context, dict)
+        else None
+    )
+    if (
+        isinstance(raw_productivity, dict)
+        and raw_productivity.get("should_converge") is True
+        and raw_answer_policy != "direct"
+    ):
+        unproductive_turns = int(raw_productivity.get("consecutive_unproductive_turns") or 2)
+        system_prompt += (
+            "\n\n## Conversation Productivity Convergence\n"
+            f"This learning thread has spent {unproductive_turns} turns explaining without a learner attempt, "
+            "verified evidence, or a scheduled review. Keep any explanation brief and end with ONE concrete "
+            "micro-attempt the learner can try right now, or offer to schedule a quick recall check — "
+            "do not open another long lecture, and do not fabricate a formal task or evidence."
         )
     if response_language:
         system_prompt += f"\n\n## Language\n{_language_instruction(response_language)}"

@@ -328,6 +328,7 @@ class TrainerRuntime:
     # Capability observations are request-gating truth, not provider declarations.
     # Keys include only a serialized provider config and a one-way API-key digest.
     provider_capability_cache: dict[str, dict[str, str]] = field(default_factory=dict)
+    provider_language_integrity_cache: dict[str, dict[str, float]] = field(default_factory=dict)
     workspace_paths: dict[str, str] = field(default_factory=dict)
     workspace_authorities: dict[str, "WorkspaceAuthority"] = field(default_factory=dict)
     library_authorities: dict[str, "WorkspaceAuthority"] = field(default_factory=dict)
@@ -422,6 +423,9 @@ class TrainerRuntime:
                 config=self.provider_config,
                 api_key=self.provider_api_key,
             )
+        bind_integrity = getattr(self.provider_service, "bind_language_integrity_store", None)
+        if callable(bind_integrity):
+            bind_integrity(self._language_integrity_bucket_for)
         if self.research_repository is not None:
             self.research_service = ResearchOrchestratorService(
                 repository=self.research_repository,
@@ -1544,6 +1548,22 @@ class TrainerRuntime:
             self.register_workspace_path(context.context_id, updated.project_path)
         return updated
 
+    def _language_integrity_bucket_for(
+        self,
+        provider_config: ProviderConfig | None,
+        api_key: str | None,
+    ) -> dict[str, float]:
+        key = _provider_capability_cache_key(provider_config, api_key)
+        bucket = self.provider_language_integrity_cache.get(key)
+        if bucket is None:
+            bucket = {}
+            self.provider_language_integrity_cache[key] = bucket
+            if len(self.provider_language_integrity_cache) > 32:
+                oldest_key = next(iter(self.provider_language_integrity_cache))
+                if oldest_key != key:
+                    self.provider_language_integrity_cache.pop(oldest_key, None)
+        return bucket
+
     def overlay_last_test_on_service(self, provider_service: ProviderService) -> ProviderService:
         """Stamp last-test capability truth onto a live ProviderService.
 
@@ -1551,6 +1571,9 @@ class TrainerRuntime:
         connection test must overlay that pin on the default runtime service
         used by coach send and generate-card, not only on a cache clone.
         """
+        bind_integrity = getattr(provider_service, "bind_language_integrity_store", None)
+        if callable(bind_integrity):
+            bind_integrity(self._language_integrity_bucket_for)
         config = getattr(provider_service, "_config", None)
         api_key = getattr(provider_service, "_api_key", None)
         states = self.provider_capability_cache.get(
@@ -1643,6 +1666,22 @@ class TrainerRuntime:
             if states.get("vision") == "verified":
                 states["vision_probe_version"] = VISION_PROBE_VERSION
         # Failed/unknown/never must not leave sibling transport keys marking tools ready.
+        error_category = str(
+            (result.get("error_category") if isinstance(result, dict) else getattr(result, "error_category", ""))
+            or ""
+        ).strip().lower()
+        if not live_ok or error_category == "language_corruption":
+            base_url, model, api_key_fingerprint = _provider_capability_transport_markers(
+                provider_config, api_key
+            )
+            for integrity_key in list(self.provider_language_integrity_cache):
+                if api_key_fingerprint and api_key_fingerprint not in integrity_key:
+                    continue
+                if base_url and base_url not in integrity_key:
+                    continue
+                if model and model not in integrity_key:
+                    continue
+                self.provider_language_integrity_cache.pop(integrity_key, None)
         if not live_ok:
             base_url, model, api_key_fingerprint = _provider_capability_transport_markers(
                 provider_config, api_key
