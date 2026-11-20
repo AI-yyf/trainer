@@ -680,3 +680,21 @@
 - **试用指南与诚实 BLOCKED 边界**：
   - 新增 15 分钟本机试用与 `T-0028` 签收清单：[docs/TRIAL-1.5.0-RC.md](../docs/TRIAL-1.5.0-RC.md)。
   - `T-0028`（`teaching_acceptance`）与 `remote_ssh_e2e` 保持诚实 `BLOCKED`；最终 VSIX 打包与 `verify-vsix-install` / `test:vsix-e2e` 在干净源码提交后执行并以 `chore(release)` 清单记录。
+
+## 2026-11-21 — 体验极简收敛、唯一输入框主权、RethinkFun 状态流教学内核与四层反自欺验收
+- **产品契约锁定 v2.1 与原子提交**：
+  - `33570c0`：锁定 `.trainer-convergence/product-contract.md`（v2.1）、`docs/STRATEGY.md`、`AGENTS.md`；统一 `prompts.py`、`skills/builtin.py`、`pedagogy/principle_explainer.py` 的 RethinkFun 状态流内核与禁词纪律；新增只读工具 `inspect_learning_truth` 与显式资料库落盘工具 `save_lecture_note`（严格写入 `<LibraryRoot>/Trainer Library/`，零代码仓污染）；新增 `ProviderConfig.ignoreSystemProxy` 直连绕过与环境代理冲突人话提示。
+  - `bb44434`：修复英文系统提示词混入 CJK 字符的问题（将中文禁词表严格限定在 `zh-*` 语境注入），并同步 `test_provider_service.py` 拒绝工具清单。
+  - `7acebbe`：落地唯一输入框主权与界面减法——消除 `InlinePracticeAnswer` 第二 `<textarea>` 并移除对话流内 `TrainingCardLibrary` CRUD 面板，给内联练习卡增加 `收起练习 / 展开练习` 折叠条；统一 `Goal mode` 至服务端目标真相并取消 webview `localStorage` 双份目标态；实现 `project-found` 冷启动零拦截（先通过唯一输入框对话，首次持久化温和绑定 `<LibraryRoot>`）；彻底分离资料页顶部 `筛选资料` 与底部 `围绕资料提问或生成讲稿`，点击 `.md` 默认调用 VS Code `markdown.showPreview` 图文预览（次要保留“打开源文件”与行内快捷提问）；Settings → 连接详情补齐 8 语言“网络代理 / 忽略系统代理（直连）”开关并修通 `browserSidecar.ts` 与 `App.tsx` 自动滚动竞态；清零 8 语言内部系统词泄漏（`训练卡库` / `确认入库` / `后续和回看` / `UI proxy` / `事件账本`）。
+  - `0b0e13f`：基于真实模型实测揪出并根治 3 个 P1 真问题——为 RethinkFun 深度讲稿（4096 / 推理型模型 8192）和推理型模型工具回合（4096）放宽输出 token 预算；修正 `prompts.py` 与 `tools.py` 中 `coach_finalize` 过期误导提示，确保深度讲稿、代码诊断与真相汇报直接输出完整纯文本；扩展 `note_request.py` 自然中文匹配并在 `App.tsx` / `router_support.py` 中对单输入框真相查询与讲稿落盘自动开启 `useAgentLoop`；要求 `inspect_learning_truth` 回复将内部字段名转译为自然中文。
+- **四层反自欺验收结果（截至干净代码头 `0b0e13f`）**：
+  1. **工程门禁全绿**：`ruff check` 0 错误、`verify:server-pyright` 0 错误、`pytest server/tests` 全量 4190 passed / 28 subtests passed（注：并发期间 `test_workspace_classifier.py` 1 处 tmp-path 偶发抖动已独立复跑 59/59 0.12s 通过）、`npm run check && npm run build`、`npm run test:extension` 全绿、`verify:version`（1.4.4）、`verify:credentials`（5020 文件 0 泄露）、`verify:copy-vocabulary`（66 文件 0 违规）、`verify:ui-geometry`（360/360 含 `textareas <= 1` 唯一输入框断言）、`verify:local-latency`（5 动作 ≤ 1000ms）、Playwright 12 核心 spec（203/203 passed）。
+  2. **真实视觉像素审查**：逐张核查 340px/420px × 深色/浅色 × 中/英 真实渲染截图（对话展开/收起练习、资料页、学习抽屉、设置页连接详情含网络代理开关），修正了审查中发现的资料行标题居中与列对齐缺陷，确认同屏绝无双输入框、无冗余页脚堆叠、零溢出裁切。
+  3. **安装态实机验证**：基于干净 `0b0e13f` 重编独立 `darwin-arm64` PyInstaller 侧车二进制（237 文件 `sha256: 88057b06...`）并通过 `verify:sidecar-runtime`，重新打包干净源码态 VSIX（`sourceDirty: false`），通过 `verify-vsix-install`（`metadataJunkCount=0`）与 `test:vsix-e2e`（36/36 installed-host steps PASS）。
+  4. **真模型 4 场景实测（`MiniMax-M2.7`，本机存在系统代理环境变量且启用 `ignoreSystemProxy: true` 直连通过，仓库与报告不含任何密钥与私有地址）**：
+     - Case 1（短问答）：首字 `3521ms`（本轮中转高于 2s 目标，如实记录），`0` 垫词 / `0` 术语，3 句直指缺口 + 反问。
+     - Case 2（RethinkFun 深度讲透 Attention `1/√d_k` + 落盘笔记）：**14/14 项门槛全达标**，`0` 垫词 / `0` 术语，成功调用 `save_lecture_note` 将规范 `.md` 落盘至 `Trainer Library/.trainer-resources/markdown/resource-e5431af414.md`。
+     - Case 3（`payments.py` 真实代码引导）：真实读完 7 行代码且**零修改用户代码仓**（`paymentsCodeUntouched=true`），给出 3 方案对比、2 个静默边界 bug、3 行接口契约与 3 条可复现本地 pytest 标准。
+     - Case 4（唯一输入框 `inspect_learning_truth` + 推理型复习）：准确报出 3 个阶段与 0 条验证证据（不编造），基于刚存讲稿出 4 问闭卷推导复习题；单次复述工具字段词 `handoff` 已在 `0b0e13f` 补齐自然语言转译指令。
+     - 存储真相：`all_under_library_root=true`、`outside_library_root=[]`、代码仓仅保留原始 `payments.py`。
+- **诚实 BLOCKED 边界**：`T-0028`（`teaching_acceptance` 人工最终教学签收）与 `remote_ssh_e2e`（真实 Remote-SSH L2 窗口）继续保持 `BLOCKED`，待本人按 [docs/TRIAL-1.5.0-RC.md](../docs/TRIAL-1.5.0-RC.md) 完成 15 分钟安装态试用后签核。

@@ -7,7 +7,7 @@
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "local packaged VSIX host E2E passed 36/36 steps at bcb7cf6 (evidence/vsix-e2e-bcb7cf6.json); macOS standalone trainer-sidecar binary rebuilt @2e26c44; 1.5.0-rc clean-HEAD verify-vsix-install + test:vsix-e2e executed immediately after clean source commit (see extension/trainer-extension-1.4.4-darwin-arm64.vsix.build.json). Visual window capture is win32-only and skipped on macOS."
+      "evidence": "at clean HEAD 0b0e13f: macOS darwin-arm64 standalone trainer-sidecar rebuilt (237 files, sha256 88057b06...) + verify:sidecar-runtime PASS + clean VSIX packaged (sourceDirty=false, extension/trainer-extension-1.4.4-darwin-arm64.vsix.build.json) + verify-vsix-install PASS (metadataJunkCount=0) + test:vsix-e2e PASS 36/36 installed-host steps (55.4s). Visual window capture is win32-only and skipped on macOS."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
@@ -19,11 +19,11 @@
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
-      "evidence": "Owner T-0028 sign-off is human-only. Use docs/TRIAL-1.5.0-RC.md (15-min local VSIX trial checklist) for owner sign-off. Machine gates + direct live MiniMax-M2.7 and MiniMax-M3.1-Flash multi-turn probes passed with zero fallback and zero repo pollution, but do not convert human sign-off to PASS."
+      "evidence": "Owner T-0028 sign-off is human-only. Use docs/TRIAL-1.5.0-RC.md (15-min local VSIX trial checklist) for owner sign-off. Machine gates + direct live MiniMax-M2.7 4-case RethinkFun audit (14/14 lecture criteria, save_lecture_note into <LibraryRoot>, read-only payments.py guidance, inspect_learning_truth + reasoning review, zero fallback, zero repo pollution) passed, but do not convert human sign-off to PASS."
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "at d2d6460: LearningDrawer unified single 4-segment capability bar + formal learning copy across 8 locales (5911cbf); Resources toolbar search input + silent context restore + Markdown+images default (0dd62f1); 288 geometry assertions, 59 copy-vocab files clean, Playwright visual screenshots inspected"
+      "evidence": "at 0b0e13f: Single-Composer Sovereignty (inline practice collapsible card with zero second textarea and zero inline card-library CRUD chrome), LearningDrawer read-only memo + unified 4-segment capability bar + composer footer hint, Resources filter/composer separation + Markdown Preview default + row quick-ask, Settings direct-connect network proxy toggle; 360/360 geometry assertions, 66 copy-vocab files 0 violations, real PNG screenshots audited at 340/420px dark/light zh-CN/en-US"
     },
     "core_journey_structure": {
       "status": "PASS_STRUCTURAL",
@@ -79,7 +79,7 @@
     },
     "local_e2e_full": {
       "status": "PASS",
-      "evidence": "d2d6460: 171/171 Playwright passed across 9 core specs (trainer, trainer-governance, trainer-settings-lifecycle, trainer-resources-visible-facts, trainer-bound-card-facts, trainer-inline-learning-cards, trainer-template-navigation, trainer-session-recovery, trainer-conversation-simplicity) with Coach reply auto-scroll kept in viewport above inline footer"
+      "evidence": "at 7acebbe/0b0e13f: 203/203 Playwright passed across 12 core specs (trainer, trainer-inline-learning-cards incl. single-composer sovereignty & collapse/expand, trainer-session-recovery, trainer-template-navigation, trainer-settings-lifecycle incl. ignoreSystemProxy toggle, trainer-locales, trainer-rtl-i18n, trainer-governance, trainer-error-surface, trainer-resources-visible-facts, trainer-bound-card-facts, trainer-conversation-simplicity)"
     },
     "real_vscode_training": {
       "status": "PASS",
@@ -99,19 +99,19 @@
     },
     "copy_vocabulary_gate": {
       "status": "PASS",
-      "evidence": "aba4c2de: npm run verify:copy-vocabulary PASS (scanned 59 files, 0 banned-term violations)"
+      "evidence": "at 0b0e13f: npm run verify:copy-vocabulary PASS (scanned 66 files incl. components/training & settingsText.ts, 0 banned-term violations)"
     },
     "calm_ui_geometry": {
       "status": "PASS",
-      "evidence": "d2d6460: npm run verify:ui-geometry PASS (288 geometry assertions passed across 340/420/460 dark/light zh-CN/en-US incl. unified capability bar and Resources search shell)"
+      "evidence": "at 0b0e13f: npm run verify:ui-geometry PASS (360 geometry assertions passed across 340/420/460 dark/light zh-CN/en-US incl. single-composer sovereignty textareas<=1, unified capability bar, and Resources alignment)"
     },
     "local_latency_2dest": {
       "status": "PASS",
-      "evidence": "d2d6460: npm run verify:local-latency PASS (5 actions within 1000ms: coach->learning-drawer, learning-drawer->resources, resources->settings, settings->teaching, settings->coach)"
+      "evidence": "at 0b0e13f: npm run verify:local-latency PASS (5 actions within 1000ms: coach->learning-drawer, learning-drawer->resources, resources->settings, settings->teaching, settings->coach)"
     },
     "stage2_coaching_latency_and_productivity": {
       "status": "PASS",
-      "evidence": "Waves 3-4 + 2e26c44: server/tests/test_turn_stream_latency_budget.py PASS standalone (0.94s) & in full pytest -n 4; npm run verify:server-pyright 0 errors"
+      "evidence": "Waves 3-4 + 0b0e13f: server/tests/test_turn_stream_latency_budget.py PASS; deep RethinkFun lecture & reasoning-model agentic output token headroom verified; npm run verify:server-pyright 0 errors"
     },
     "stage3_proactive_budget": {
       "status": "PASS",
@@ -119,11 +119,11 @@
     },
     "idempotency_story_deterministic": {
       "status": "PASS",
-      "evidence": "2e26c44: server/tests/test_idempotency_story_acceptance.py + Journey F + M3.1 stream close + PDF Markdown-only sandbox sync PASS; full server pytest -n 4 4185 passed (28 subtests passed); ruff 0 errors; npm run verify:server-pyright 0 errors"
+      "evidence": "at 0b0e13f: server/tests/test_idempotency_story_acceptance.py + test_stage1_rethinkfun_truth_and_proxy.py (5/5) + full server pytest 4190 passed (28 subtests passed; 1 xdist tmp-path race in test_workspace_classifier.py re-verified 59/59 in 0.12s); ruff 0 errors; npm run verify:server-pyright 0 errors"
     },
     "live_model_idempotency_story": {
       "status": "PARTIAL",
-      "evidence": "Hardened direct live probe (output/idempotency-story-m2.7.json & m3.1-flash.json, no API keys stored): MiniMax-M2.7 turn0 TTFT 1183ms (<=2000ms target, total 1283ms), turn1 36619ms (2 attempts), turn2 17335ms; MiniMax-M3.1-Flash turn0 TTFT 3419ms (above 2000ms budget, total 3655ms), turn1 17380ms, turn2 16638ms. All 6 turns completed=true, providerFallback=false, all_under_library_root=true, zero code-repo pollution."
+      "evidence": "Hardened live probes (no API keys or private URLs stored): prior MiniMax-M2.7 idempotency story turn0 TTFT 1183ms (<=2000ms); 2026-11-21 MiniMax-M2.7 4-case RethinkFun audit with ignoreSystemProxy=true under ambient proxy vars: Case1 short Q&A TTFT 3521ms (above 2000ms relay target, 0 clichés/0 jargon), Case2 deep RethinkFun Attention lecture 14/14 criteria + save_lecture_note persisted under Trainer Library/.trainer-resources/markdown/, Case3 payments.py read-only code guidance (paymentsCodeUntouched=true), Case4 inspect_learning_truth + closed-book 4-part reasoning review (1 echoed tool field word 'handoff' caught and fixed via tools.py translation instruction @0b0e13f). All turns completed=true, providerFallback=false, all_under_library_root=true, outside_library_root=[]."
     }
   }
 }
