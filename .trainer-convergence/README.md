@@ -2,7 +2,7 @@
 
 Persistent working state for the autonomous convergence loop.
 
-- `product-contract.md` — locked product positioning (do not relitigate).
+- `product-contract.md` — locked product positioning, v2 (2026-11-20). Changes only through its decision log (§11).
 - `architecture-contract.md` — standing architecture constraints.
 - `design-contract.md` — locked design system and UX rules.
 - `issue-registry.json` — the single source of truth for open defects.

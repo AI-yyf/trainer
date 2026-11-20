@@ -5,6 +5,8 @@
 项目路径：本仓库根目录（`trainer/`）
 状态：P1 Release Candidate
 
+> 产品真相以 `.trainer-convergence/product-contract.md`（v2，2026-11-20 锁定）为准；本文描述规格与实现细节，与契约冲突时以契约为准并在同一提交中修正本文。
+
 ## 1. 产品定位
 
 Trainer = **通用技术教练（编程起点） / General Technology Coach, coding-first**

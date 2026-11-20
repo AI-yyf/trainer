@@ -1,117 +1,104 @@
-# Product Contract (locked)
+# Trainer 产品契约 v2（locked）
 
-Trainer is a long-term technical learning coach:
+> 状态：2026-11-20 锁定，替代 v1（三目的地 / 三条独立会话历史），是**唯一的产品真相**。v1 全文见 git 历史 `e700e6f:.trainer-convergence/product-contract.md`。
+> `SPEC.md`、`AGENTS.md` 和任何计划文档如果与本文冲突，以本文为准，并在同一个提交里修正冲突的那一方。
 
-- understands the technology the learner is studying, the project, files and errors;
-- explains, guides practice, verifies real results, records trustworthy evidence;
-- drives review and long-term skill growth;
-- connects browser material, project files, conversation and learning plans.
+## 1. Trainer 是什么
 
-## Two core engines
+Trainer 是一个**记得你、守在你项目里、只认你亲手做到的事**的技术教练（从编程起步）。
 
-Trainer is not a workflow tool, a generic chat client, or a quiz bank. It has two
-core engines that share one memory, one long-term goal, one material library and
-one evidence record:
+- 它的目标不是替你写代码，而是让你最终能自己写。
+- 它不是代码 agent，不是学习管理后台，也不是通用聊天客户端。
 
-- **Teaching Engine** — diagnoses current understanding, chooses an explanation
-  strategy for this learner and this knowledge type, asks questions that expose
-  real understanding, gives hints in steps instead of complete answers, designs
-  inline checks and exercises, reads errors and gaps, adjusts difficulty from
-  evidence, and schedules recall and transfer.
-- **Preparation Engine** — defines the research questions for an important
-  learning target, gathers and compares sources, judges recency and reliability,
-  extracts concepts and prerequisites, maps differences between sources, names
-  the remaining gaps, designs the teaching order, prepares explanations,
-  analogies, misconceptions and acceptance criteria, and proposes plan updates.
+## 2. 北极星
 
-The working order is **research → prepare → teach → verify**. Trainer must not
-generate large teaching content without preparation behind it, and must state
-honestly which part of a claim is sourced, which is its own inference, and which
-is still unverified.
+> **这周你比上周多了哪些能独立做到的事，而且有证据。**
 
-ReThink Fund is one teaching strategy among many. Trainer selects by knowledge
-type, learner state and stated preference among: ReThink Fund, first principles,
-concept-first, example-first, Socratic questioning, stepwise hints, guided
-practice, independent challenge and transfer. When the learner explicitly asks
-for a direct explanation, explain directly. When the learner has an urgent
-blocker, help them get unblocked before prescribing practice.
+由此推出三条规则：
 
-## Long-term plan and goal governance
+1. 一段学习对话应当至少留下一样东西：**一次尝试**、**一条证据**或**一个约好的复习**。三样都没有，就是没有产出的对话（直接问答模式除外）。
+2. 教练说得越少越好，你动手的时间越多越好。
+3. 任何界面上的进度表达，都必须能追溯到一条证据。
 
-- Goals are micro-goals inside the long-term learning plan, not an isolated
-  small-task mode. A micro-goal carries its knowledge point, prerequisites,
-  expected mastery, key questions, teaching method, acceptance criteria, linked
-  materials, evidence and next step.
-- Every conversation considers the long-term plan, but no conversation silently
-  changes it. Trainer proposes a plan change only on a real gap, prerequisite
-  change, direction change or acceptance result, and shows the change and its
-  reason for explicit learner confirmation.
-- Mastery is never inferred from the learner's self-claim. Only the existing
-  verification and evidence paths can attest capability.
+## 3. 用户可见的概念只有四个
 
-## Learning scope
+| 概念 | 用户的问题 | 内部承载（不出现在 UI 文案里） |
+|---|---|---|
+| **目标** | 我在学什么、下一步是什么 | 长期计划、阶段、微目标、修订号、变更提议 |
+| **练一下** | 现在动手 | 即时练习、候选卡、正式卡、FSRS、复习队列 |
+| **会了吗** | 我真的会了吗 | 证据账本、四维投影、档位、失效、信任级别 |
+| **资料** | 依据在哪 | 规范 Markdown、Research Brief、版本、引用 |
 
-Learning answers three questions and nothing else: progress, quick practice,
-long-term plan. Growth evidence is a detail inside progress; it is not a
-separate product destination. Practice happens in the Learning conversation
-stream with the same message components as Coach; there is no separate complex
-training console. The long-term plan distinguishes must-master core knowledge,
-extension knowledge and optional research directions, and makes prerequisites,
-milestones and stage acceptance criteria visible.
+- 任何新 UI 文案只能使用这四个词及其自然语言变体。内部术语（候选、账本、投影、修订、到期队列……）不得出现在学习者可见的文案中。
+- **同一个事实只说一次**：复习统一叫"今天要复习 N 个"，不再并列"待回顾"和"到期练习"。
 
-## Training card governance
+## 4. 形态
 
-Two different objects must never be conflated:
+- **两个一级目的地**：对话、资料。历史和设置是工具入口。
+- **只有一条会话**：所有学习活动都发生在这条对话里，不按"学习 / 资料"拆分历史。资料页有自己的阅读上下文，发出的消息仍然进入同一条会话。
+- **学习是对话的记忆，不是去处**：
+  - 对话顶部一行：目标 · 当前一步 · 今天要复习的数量；
+  - 练习以卡片出现在对话流里，作答、验证、反思都在卡片内完成；
+  - 进度以**一句人话**出现在对话流里（例如"你第二次独立做到了：识别重复写入"），可以下钻到证据；
+  - 学习抽屉只用来备查，不放调整入口；目标、练习、进度应当在对话中按时出现，而不是靠打开抽屉。
+- **每张卡最多一个主动作**；每条回复的常驻动作不超过 3 个，其余收进"更多"。
+- 旧路由 `plan / training / progress` 保留为兼容别名，统一落到对话 + 对应位置。
 
-- **Instant practice** — the learner asks for a question and gets one inline in
-  the conversation. It does not create a permanent training card, does not enter
-  the card library, does not change the long-term plan, and is evaluated in the
-  same conversation. The learner may explicitly ask to keep it.
-- **Formal training card** — a designed, reviewed asset. Candidates can come
-  from goal teaching, plan preparation or resource research. A candidate must be
-  reviewed and accepted by the learner before it enters the formal library. The
-  lifecycle is candidate → learner review → formal library → select/schedule →
-  practice → acceptance and evidence → mastered / retrain / archive.
+## 5. 教学
 
-A learner request for practice is not authorization to create a formal card.
-The learner decides which cards are worth keeping; the system may propose
-candidates but never promote them on its own.
+- **先动手，后讲解**：默认先给一个小动作或反问，等学习者尝试后，纠正一个误解，再约好下一次复查。
+- **学习者说了算**：明确要求"直接告诉我"时就直接讲，讲完不强拉进练习，最多轻提一句"要不要变成一个小练习"。卡住时先帮你脱困，再谈练习。
+- **用你的项目当教材**：练习和例子优先来自学习者真实的代码、报错和环境；验证跑在真实环境里（包括远程）。
+- **先备课再教**：对重要目标遵循 研究 → 备课 → 教学 → 验证；明确区分"有来源的结论 / 模型推断 / 未验证"。
+- **节奏就是教学法**：
+  - 首个可见内容 ≤ 2 秒（一句反问、一个动作，或"我在看你的 X 文件"）；
+  - 短回合完整回复 ≤ 6 秒；
+  - 深度讲解可以随后流式补充，但不得阻塞第一步。
 
-## Resources scope
+## 6. 证据（不可退让）
 
-Resources is Trainer's research and preparation center, not only a library. The
-resource tree, reader, versions and hashes stay. The resource composer performs
-search, reading, comparison, extraction, synthesis, research-gap discovery,
-organization, lesson preparation and plan-advice requests without a mode menu.
-Completed research and preparation is stored as a traceable **Research Brief**
-library asset: research goal, key questions, sources and citations, findings,
-source disagreements, concepts and prerequisites, knowledge structure, teaching
-order, explanation strategy, examples and analogies, misconceptions, check
-questions, acceptance criteria, open questions and follow-up research. Every key
-conclusion points at its resource, version and location; sourced claims, model
-inference and unverified assumptions stay distinguishable.
+- 自称"会了"不等于验证过；一次通过不等于长期掌握；AI 帮你做出来不等于你独立会做。
+- 客户端提交的证据一律是 `self_reported`；只有宿主验证路径（`/training/verification/attest`）能证明可执行能力。
+- 文件 hash 变化时，旧证据失效；删除来源时，引用会被标记。
+- 结果未知（中断、超时、断线）时**不写证据**。
+- 能力展示**禁止百分比和分数**，档位必须与服务端投影的状态**一一对应**，不得丢档。
 
-## Skills and entry points
+## 7. 主动性
 
-Skills are organized into two domains — Teaching and Preparation — and are
-selected and combined by Trainer automatically. The learner is not required to
-open a skill or workflow menu. Typed `/` shortcuts remain for experienced users
-as an accelerator, not as the primary interaction. User-visible workflow feature
-entries are removed; internal execution, confirmation and reliability mechanisms
-remain.
+- 教练可以主动出现，但要有预算，宁少勿多：
+  - 碰到与薄弱项相关的报错时，轻提一句，邀请学习者先自己定位；
+  - 复习安排在工作间隙，不打断正在写代码的人。
+- 任何计划变更只能是**提议**，必须展示原因并得到学习者确认。
 
-Hard boundaries:
-- Not an autonomous coding agent. It never ghost-writes business code by default.
-- No Coach/Pair/Agent triple execution modes.
-- No silent modification of the user's project; writes follow explicit workspace authority.
-- Three permanent destinations: Coach, Learning, Resources. Training is a Learning context; Progress belongs to Learning; Settings/History are utilities.
-- Local Brain + Remote Hands: identity/memory/plans/evidence stay local; remote work goes through the WorkspaceGateway/Companion with local-only credentials.
+## 8. 硬边界
 
-## Shared composer
+- Coach 只讲解、分析、引导、验证，**从不编写或修改学习者的项目代码**；不向 Coach 注册写工具。
+- 不做 Coach / Pair / Agent 三种执行模式，不做多 agent 和自主编码。
+- Local Brain + Remote Hands：身份、记忆、计划、证据留在本地；远程只做读、搜索、hash、诊断、验证；凭据永远只在本地。
+- destructive 操作（只针对 Trainer 自有资产）需要明确授权，并留有回收站、checkpoint 和 ledger 记录。
 
-- The Coach, Learning and Resources work contexts use the same composer. Settings and History are utilities.
-- The input routes explicit practice, recall, verification and library actions. It shows a confirmation before changing a plan or moving or deleting library entries.
-- Drafts and source references retain workspace and session scope. Training answers additionally retain card scope. Coach, Learning and Resources use separate conversation histories within the workspace session.
-- Browser capture stages a page or selected text for the visible work context and requires its receipt before draining the queue. A separate learner submission starts model work.
-- Queued captures keep the workspace they were created for. New captures follow explicit host focus, and a stopped workspace resumes its queue when it returns.
-- Learning reads activity and review timing from persisted records. Only the existing verification and evidence paths can attest capability.
+## 9. 不做
+
+- 不新增一级目的地或独立的学习、训练、成长页面。
+- 不做仪表盘、课程表，不让卡片库管理界面成为主角。
+- 不做假完成态、假百分比、假分数。
+- 浏览器端只做**捕获**（popup 快速捕获 + 右键菜单）。侧栏对话客户端已冻结：保留现有代码与测试，不再扩展，也不作为产品入口宣传。
+- 不新增只证明形状、不证明行为的源码文本守卫测试。
+
+## 10. 总验收：一条故事
+
+> 周一学习者说"我想真正搞懂幂等"。教练读了项目，指出 `retry()` 的重复写入，先让学习者说出自己的理解，再让他自己改。改完后，教练在真实环境里验证通过，记下一条**独立完成**的证据。
+> 周四，学习者在另一个模块遇到类似问题，教练只提醒了一句，学习者自己修好了，记下**迁移**。
+> 两周后复查，学习者仍能讲清为什么。
+> 全程学习者没有打开抽屉，也没有看到任何看不懂的词。
+
+**通过条件**：用**真实模型**、在安装态 VSIX 中、同一份数据里，把这条故事从头跑到尾（时间用受控时钟推进），并完成一次**人工教学质量签核**。在此之前，任何"完成"声明都只是切片证明。
+
+## 11. 决策记录
+
+| 日期 | 决策 |
+|---|---|
+| 2026-11-20 | 废弃 v1 契约中"三目的地、三条独立会话历史"的条款，统一为两目的地 + 单一会话 |
+| 2026-11-20 | 浏览器侧栏对话客户端冻结（不删、不扩展），浏览器产品范围回到捕获 |
+| 2026-11-20 | `codex/trainer-convergence-verification`：只读梳理后挑选仍适用的修复单独移植，然后打 tag 归档，不整体合并 |
+| 2026-11-20 | 进度展示：一句人话为主，热力格作为下钻；热力格档位与服务端投影状态一一对应 |
