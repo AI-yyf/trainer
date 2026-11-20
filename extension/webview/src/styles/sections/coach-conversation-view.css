@@ -203,6 +203,74 @@
   }
 }
 
+.coach-conversation-view .message-bubble__more-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.coach-conversation-view .message-bubble__more-menu {
+  position: absolute;
+  z-index: 30;
+  inset-inline-start: 0;
+  top: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 156px;
+  max-width: min(220px, 78vw);
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--bg-0);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--bg-0) 44%, transparent);
+}
+
+.coach-conversation-view .message-bubble__more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-1);
+  font: inherit;
+  font-size: var(--trainer-font-2xs);
+  line-height: 1.35;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+
+.coach-conversation-view .message-bubble__more-item svg {
+  flex: none;
+}
+
+.coach-conversation-view .message-bubble__more-item:hover:not(:disabled),
+.coach-conversation-view .message-bubble__more-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--fg-0);
+}
+
+.coach-conversation-view .message-bubble__more-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.coach-conversation-view .message-bubble__more-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-conversation-view .message-bubble__more-item {
+    transition: none;
+  }
+}
+
 .coach-conversation-view .template-overflow > summary {
   color: color-mix(in srgb, var(--fg-muted) 55%, transparent);
   transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);

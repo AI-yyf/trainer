@@ -272,17 +272,26 @@ test('the quick-action icons feed a CSS label instead of a title tooltip', () =>
     'utf8',
   );
 
-  for (const action of ['copy', 'share', 'save-resource', 'save-research-brief', 'training-card', 'flash-card', 'set-goal', 'retry']) {
-    assert.ok(
-      source.includes(`data-action-label={messageActionLabels`),
-      `expected the ${action} action to carry a label attribute`,
-    );
+  for (const attr of [
+    'data-action-label={messageActionLabels.copy}',
+    'data-action-label={messageActionLabels["training-card"]}',
+    'data-action-label={moreLabel}',
+  ]) {
+    assert.ok(source.includes(attr), `expected persistent icon action ${attr}`);
   }
   assert.equal(
     countOccurrences(source, 'data-action-label={'),
-    9,
-    'eight shortcuts plus the next-action reveal',
+    3,
+    'three persistent icon actions (copy, training-card, more)',
   );
+  assert.match(source, /role="menu"/, 'expected accessible overflow action menu');
+  for (const action of ['flash-card', 'set-goal', 'save-resource', 'save-research-brief', 'share', 'retry', 'next-action']) {
+    assert.match(
+      source,
+      new RegExp(`role="menuitem"[\\s\\S]{0,160}data-message-quick-action="${action}"`),
+      `expected ${action} inside the role="menu" overflow menu`,
+    );
+  }
   assert.doesNotMatch(source, /title=\{messageActionLabels/, 'the native tooltip stays removed');
 });
 

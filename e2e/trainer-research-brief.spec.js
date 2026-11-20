@@ -44,9 +44,11 @@ test("saving a reply as a prep brief reaches the draft endpoint and confirms", a
 
   await page.setViewportSize({ width: 420, height: 761 });
   await page.goto("/?view=coach&scenario=ready&lang=zh-CN&connection=connected");
-  const saveBrief = page
-    .locator(".message-bubble__icon-action[data-message-quick-action='save-research-brief']")
-    .last();
+  const lastTools = page.locator(".message-bubble__quick-tools").last();
+  await lastTools.locator("[data-message-quick-action='more']").click();
+  const saveBrief = lastTools.locator(
+    ".message-bubble__more-menu [data-message-quick-action='save-research-brief']",
+  );
   await expect(saveBrief).toBeVisible();
   await saveBrief.click();
 
@@ -165,9 +167,11 @@ test("a failed brief save surfaces the honest error", async ({ page }) => {
     }));
   await page.setViewportSize({ width: 420, height: 761 });
   await page.goto("/?view=coach&scenario=ready&lang=zh-CN&connection=connected");
-  const saveBrief = page
-    .locator(".message-bubble__icon-action[data-message-quick-action='save-research-brief']")
-    .last();
+  const lastTools = page.locator(".message-bubble__quick-tools").last();
+  await lastTools.locator("[data-message-quick-action='more']").click();
+  const saveBrief = lastTools.locator(
+    ".message-bubble__more-menu [data-message-quick-action='save-research-brief']",
+  );
   await saveBrief.click();
 
   // Raw failure text is sanitized by design; the recoverable-operation copy is

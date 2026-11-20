@@ -1,5 +1,5 @@
 import { CoachReply } from "../../templates/CoachReply";
-import { memo, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { resolveCopy } from "../../lib/i18n/copy";
 import { viewLabels } from "../../lib/viewLabels";
 
@@ -66,6 +66,13 @@ const GLYPH_TARGET = (
     <circle cx="12" cy="12" r="3" />
   </>
 );
+const GLYPH_MORE = (
+  <>
+    <circle cx="5" cy="12" r="1.5" />
+    <circle cx="12" cy="12" r="1.5" />
+    <circle cx="19" cy="12" r="1.5" />
+  </>
+);
 
 import {
   deriveTrainerToolActivity,
@@ -80,7 +87,13 @@ import {
 } from "../../lib/nextStepConfirmation";
 import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
 import { artifactBlockCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
-import { coachMessageBubbleCopy, COACH_MESSAGE_ACTION_LABELS, OPEN_RESEARCH_PREPARATION_TEXT, RESEARCH_PREPARATION_TEXT } from "../../lib/i18n/segments/coachMessageBubbleCopy";
+import {
+  coachMessageBubbleCopy,
+  COACH_MESSAGE_ACTION_LABELS,
+  MORE_ACTIONS_TEXT,
+  OPEN_RESEARCH_PREPARATION_TEXT,
+  RESEARCH_PREPARATION_TEXT,
+} from "../../lib/i18n/segments/coachMessageBubbleCopy";
 import { CoachMessageParts } from "./CoachMessageParts";
 import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
 import { currentTrainerStage } from "../../lib/trainerStage";
@@ -357,6 +370,30 @@ function CoachMessageBubbleImpl({
   // 弹出式：最新回复的主操作默认隐藏，由图标排末尾的下一步按钮展开——
   // 展开后动作条出现在消息底部，正好位于输入框上方。
   const [nextActionRevealed, setNextActionRevealed] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!moreOpen) {
+      return undefined;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setMoreOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [moreOpen]);
+  const moreLabel = MORE_ACTIONS_TEXT[language] ?? MORE_ACTIONS_TEXT["en-US"];
   const primaryNextAction = primaryArtifact && onArtifactOpen && !streaming && isLatestAssistant ? (
     <CoachArtifactBlock
       artifact={primaryArtifact}
@@ -581,15 +618,8 @@ function CoachMessageBubbleImpl({
       ) : null}
         nextAction={isLatestAssistant ? null : primaryNextAction}
         tools={showAssistantActions ? (
-          // Every delivered assistant message carries its shortcuts as small
-          // icon buttons pinned to the message's bottom-left: learning-value
-          // actions first (training card / save to library), then the
-          // utilities (copy / share), then regenerate on the latest reply
-          // only. No overflow menu — nothing hides behind "···".
-          // Each icon feeds `data-action-label` for its CSS hover/focus label
-          // (`.message-bubble__icon-action::after`); the native title tooltip
-          // stays removed on purpose (37ca124) and the label text comes from
-          // the same eight-language COACH_MESSAGE_ACTION_LABELS map.
+          // Keep the persistent reply bar calm: 3 visible actions (copy,
+          // practice, more) and tuck secondary actions into the accessible menu.
           <div className="message-bubble__tools">
             <div className="message-bubble__quick-tools" role="group" aria-label={coachMessageBubbleCopy(language, "这条回复的快捷操作")}>
               <button
@@ -606,52 +636,6 @@ function CoachMessageBubbleImpl({
               <button
                 type="button"
                 className="message-bubble__icon-action"
-                data-message-quick-action="share"
-                data-action-label={messageActionLabels.share}
-                aria-label={messageActionLabels.share}
-                disabled={Boolean(pendingAssistantAction)}
-                onClick={() => onMessageAction?.("share", message)}
-              >
-                <ActionGlyph glyphs={GLYPH_SHARE} />
-              </button>
-              <button
-                type="button"
-                className="message-bubble__icon-action"
-                data-message-quick-action="save-resource"
-                data-action-label={messageActionLabels["save-resource"]}
-                aria-label={messageActionLabels["save-resource"]}
-                disabled={Boolean(pendingAssistantAction)}
-                onClick={() => onMessageAction?.("save-resource", message)}
-              >
-                <ActionGlyph glyphs={GLYPH_LIBRARY} />
-              </button>
-              {message.researchPreparation?.status !== "saved" ? <button
-                type="button"
-                className="message-bubble__icon-action"
-                data-message-quick-action="save-research-brief"
-                data-action-label={messageActionLabels["save-research-brief"]}
-                aria-label={messageActionLabels["save-research-brief"]}
-                disabled={Boolean(pendingAssistantAction)}
-                onClick={() => onMessageAction?.("save-research-brief", message)}
-              >
-                <ActionGlyph glyphs={GLYPH_BRIEF} />
-              </button> : null}
-              {isLatestAssistant ? (
-                <button
-                  type="button"
-                  className="message-bubble__icon-action"
-                  data-message-quick-action="set-goal"
-                  data-action-label={messageActionLabels["set-goal"]}
-                  aria-label={messageActionLabels["set-goal"]}
-                  disabled={Boolean(pendingAssistantAction)}
-                  onClick={() => onMessageAction?.("set-goal", message)}
-                >
-                  <ActionGlyph glyphs={GLYPH_TARGET} />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="message-bubble__icon-action"
                 data-message-quick-action="training-card"
                 data-action-label={messageActionLabels["training-card"]}
                 aria-label={messageActionLabels["training-card"]}
@@ -660,43 +644,110 @@ function CoachMessageBubbleImpl({
               >
                 <ActionGlyph glyphs={GLYPH_CARD} />
               </button>
-              <button
-                type="button"
-                className="message-bubble__icon-action"
-                data-message-quick-action="flash-card"
-                data-action-label={messageActionLabels["flash-card"]}
-                aria-label={messageActionLabels["flash-card"]}
-                disabled={Boolean(pendingAssistantAction)}
-                onClick={() => onMessageAction?.("flash-card", message)}
-              >
-                <ActionGlyph glyphs={GLYPH_FLASH} />
-              </button>
-              {isLatestAssistant ? (
+              <div className="message-bubble__more-wrap" ref={moreMenuRef}>
                 <button
                   type="button"
                   className="message-bubble__icon-action"
-                  data-message-quick-action="retry"
-                  data-action-label={messageActionLabels.retry}
-                  aria-label={messageActionLabels.retry}
+                  data-message-quick-action="more"
+                  data-action-label={moreLabel}
+                  aria-label={moreLabel}
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
                   disabled={Boolean(pendingAssistantAction)}
-                  onClick={() => onMessageAction?.("retry", message)}
+                  onClick={() => setMoreOpen((open) => !open)}
                 >
-                  <ActionGlyph glyphs={GLYPH_RETRY} />
+                  <ActionGlyph glyphs={GLYPH_MORE} />
                 </button>
-              ) : null}
-              {isLatestAssistant && primaryNextAction ? (
-                <button
-                  type="button"
-                  className="message-bubble__icon-action"
-                  data-message-quick-action="next-action"
-                  data-action-label={artifactBlockCopy(language, "下一步")}
-                  aria-label={artifactBlockCopy(language, "下一步")}
-                  aria-pressed={nextActionRevealed}
-                  onClick={() => setNextActionRevealed((value) => !value)}
-                >
-                  <ActionGlyph glyphs={GLYPH_NEXT} />
-                </button>
-              ) : null}
+                {moreOpen ? (
+                  <div className="message-bubble__more-menu" role="menu" aria-label={moreLabel}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="message-bubble__more-item"
+                      data-message-quick-action="flash-card"
+                      disabled={Boolean(pendingAssistantAction)}
+                      onClick={() => { setMoreOpen(false); onMessageAction?.("flash-card", message); }}
+                    >
+                      <ActionGlyph glyphs={GLYPH_FLASH} />
+                      <span>{messageActionLabels["flash-card"]}</span>
+                    </button>
+                    {isLatestAssistant ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="message-bubble__more-item"
+                        data-message-quick-action="set-goal"
+                        disabled={Boolean(pendingAssistantAction)}
+                        onClick={() => { setMoreOpen(false); onMessageAction?.("set-goal", message); }}
+                      >
+                        <ActionGlyph glyphs={GLYPH_TARGET} />
+                        <span>{messageActionLabels["set-goal"]}</span>
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="message-bubble__more-item"
+                      data-message-quick-action="save-resource"
+                      disabled={Boolean(pendingAssistantAction)}
+                      onClick={() => { setMoreOpen(false); onMessageAction?.("save-resource", message); }}
+                    >
+                      <ActionGlyph glyphs={GLYPH_LIBRARY} />
+                      <span>{messageActionLabels["save-resource"]}</span>
+                    </button>
+                    {message.researchPreparation?.status !== "saved" ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="message-bubble__more-item"
+                        data-message-quick-action="save-research-brief"
+                        disabled={Boolean(pendingAssistantAction)}
+                        onClick={() => { setMoreOpen(false); onMessageAction?.("save-research-brief", message); }}
+                      >
+                        <ActionGlyph glyphs={GLYPH_BRIEF} />
+                        <span>{messageActionLabels["save-research-brief"]}</span>
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="message-bubble__more-item"
+                      data-message-quick-action="share"
+                      disabled={Boolean(pendingAssistantAction)}
+                      onClick={() => { setMoreOpen(false); onMessageAction?.("share", message); }}
+                    >
+                      <ActionGlyph glyphs={GLYPH_SHARE} />
+                      <span>{messageActionLabels.share}</span>
+                    </button>
+                    {isLatestAssistant ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="message-bubble__more-item"
+                        data-message-quick-action="retry"
+                        disabled={Boolean(pendingAssistantAction)}
+                        onClick={() => { setMoreOpen(false); onMessageAction?.("retry", message); }}
+                      >
+                        <ActionGlyph glyphs={GLYPH_RETRY} />
+                        <span>{messageActionLabels.retry}</span>
+                      </button>
+                    ) : null}
+                    {isLatestAssistant && primaryNextAction ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="message-bubble__more-item"
+                        data-message-quick-action="next-action"
+                        aria-pressed={nextActionRevealed}
+                        onClick={() => { setMoreOpen(false); setNextActionRevealed((value) => !value); }}
+                      >
+                        <ActionGlyph glyphs={GLYPH_NEXT} />
+                        <span>{artifactBlockCopy(language, "下一步")}</span>
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
             {isLatestAssistant && nextActionRevealed && primaryNextAction ? primaryNextAction : null}
           </div>

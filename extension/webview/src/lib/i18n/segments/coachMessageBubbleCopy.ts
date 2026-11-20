@@ -93,6 +93,17 @@ export const OPEN_RESEARCH_PREPARATION_TEXT = {
   "pt-BR": "Abrir relatório salvo",
 } satisfies Record<ComposerLanguage, string>;
 
+export const MORE_ACTIONS_TEXT: Record<ComposerLanguage, string> = {
+  "zh-CN": "更多操作",
+  "en-US": "More actions",
+  "es-ES": "Más acciones",
+  "fr-FR": "Plus d’actions",
+  "de-DE": "Weitere Aktionen",
+  "ja-JP": "その他の操作",
+  "ko-KR": "추가 작업",
+  "pt-BR": "Mais ações",
+};
+
 /**
  * The five quick-action icon labels stay a single source of truth: the bubble
  * uses them for `aria-label` and for the `data-action-label` attribute that the
