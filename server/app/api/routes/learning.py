@@ -226,6 +226,14 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         # the artifact must be one of those targets (canonical comparison);
         # otherwise an unrelated passing test could mark this practice verified.
         attest_card = runtime.memory_service.get_card(resolved_workspace_id, card_id)
+        if attest_card is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "training_card_not_found",
+                    "message": f"Training card '{card_id}' was not found in workspace '{resolved_workspace_id}'.",
+                },
+            )
         if verification_artifact is not None:
             artifact_path = str(verification_artifact.get("artifact_path") or verification_artifact.get("artifact_uri") or "")
             card_targets = list(getattr(attest_card, "files_to_touch", []) or [])
@@ -248,19 +256,37 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                         },
                     )
 
-        updated = runtime.memory_service.record_training_practice_evaluation_result(
-            workspace_id=resolved_workspace_id,
-            card_id=card_id,
-            card_title=str(payload.get("card_title") or payload.get("cardTitle") or ""),
-            passed=passed,
-            summary=str(payload.get("summary") or tests_output or "Host test runner attestation."),
-            next_step=str(payload.get("next_step") or payload.get("nextStep") or "Record a reflection, then return the card."),
-            focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
-            evidence_source=evidence_source,
-            verified_by_evaluator=passed,
-            idempotency_key=idempotency_key,
-            verification_artifact=verification_artifact,
-        )
+        try:
+            updated = runtime.memory_service.record_training_practice_evaluation_result(
+                workspace_id=resolved_workspace_id,
+                card_id=card_id,
+                card_title=str(payload.get("card_title") or payload.get("cardTitle") or ""),
+                passed=passed,
+                summary=str(payload.get("summary") or tests_output or "Host test runner attestation."),
+                next_step=str(payload.get("next_step") or payload.get("nextStep") or "Record a reflection, then return the card."),
+                focus_area=str(payload.get("focus_area") or payload.get("focusArea") or ""),
+                evidence_source=evidence_source,
+                verified_by_evaluator=passed,
+                idempotency_key=idempotency_key,
+                verification_artifact=verification_artifact,
+            )
+        except ValueError as exc:
+            detail_text = str(exc)
+            if "not found" in detail_text.lower():
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "code": "training_card_not_found",
+                        "message": detail_text,
+                    },
+                ) from exc
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "invalid_attestation_request",
+                    "message": detail_text,
+                },
+            ) from exc
 
         # T-0015: remote verification writes the SAME unified evidence as the
         # local evaluator — attempt binding, artifact hash, trust level — then

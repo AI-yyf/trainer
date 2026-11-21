@@ -571,7 +571,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
   },
 };
 
-function hostUiLanguage(): ComposerLanguage | undefined {
+export function hostUiLanguage(): ComposerLanguage | undefined {
   const language = vscode.env?.language?.trim().toLowerCase();
   if (!language) {
     return undefined;

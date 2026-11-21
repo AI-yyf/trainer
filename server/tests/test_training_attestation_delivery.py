@@ -67,3 +67,30 @@ def test_invalid_attestation_source_never_reaches_the_replay_ledger(tmp_path):
             })
         assert response.status_code == 422
         record.assert_not_called()
+
+
+def test_missing_training_card_returns_clean_404_instead_of_500(tmp_path):
+    app = _app(tmp_path)
+    workspace_id = "missing-card-attestation"
+    with TestClient(app) as client:
+        start = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": workspace_id},
+        )
+        assert start.status_code == 200, start.text
+        response = client.post(
+            "/training/verification/attest",
+            json={
+                "session_id": start.json()["session_id"],
+                "workspace_id": workspace_id,
+                "card_id": "does-not-exist-card",
+                "passed": True,
+                "evidence_source": "test_runner",
+                "tests_output": "1 passed",
+                "idempotency_key": "remote-verify:run-missing:does-not-exist-card",
+            },
+        )
+        assert response.status_code == 404, response.text
+        detail = response.json()["detail"]
+        assert isinstance(detail, dict)
+        assert detail["code"] == "training_card_not_found"

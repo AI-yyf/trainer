@@ -192,6 +192,7 @@ class ToolRegistry:
         explicit_training_card_request: bool = False,
         formal_plan_mutation: bool = False,
         explicit_learning_note_request: bool = False,
+        explicit_lecture_note_save_request: bool = False,
         explicit_resource_import: bool = False,
         explicit_resource_organize: bool = False,
         live_formal_plan_for_task_mint: bool = False,
@@ -207,6 +208,10 @@ class ToolRegistry:
             denied.add("save_formal_plan")
         if explicit_learning_note_request is not True:
             denied.add("record_learning_note")
+        if (
+            explicit_lecture_note_save_request is not True
+            and explicit_learning_note_request is not True
+        ):
             denied.add("save_lecture_note")
         if live_formal_plan_for_task_mint is not True:
             denied.add("specify_task")
@@ -5168,30 +5173,103 @@ async def _handle_inspect_plan(context: ToolContext, _: dict[str, Any]) -> dict[
     return {"ok": True, "plan": payload, "summary": summary}
 
 
-def _summarize_plan(payload: Any) -> dict[str, Any]:
+_TRUTH_OPAQUE_ID_KEYS = frozenset(
+    {
+        "id",
+        "goal_id",
+        "plan_id",
+        "stage_id",
+        "current_stage_id",
+        "card_id",
+        "attempt_id",
+        "resource_id",
+        "session_id",
+        "workspace_id",
+        "evidence_id",
+        "selected_card_id",
+        "active_card_id",
+        "anchor_id",
+    }
+)
+
+
+def _localize_truth_enum(value: Any, *, is_zh: bool) -> Any:
+    if not isinstance(value, str):
+        return value
+    mappings = {
+        "insufficient_evidence": ("暂无足够验证证据", "not enough verified evidence yet"),
+        "no_recall_evidence": ("尚未通过主动回想检验", "no recall check recorded yet"),
+        "not_verified": ("未验证", "not verified"),
+        "needs_review": ("待巩固", "needs review"),
+        "assisted": ("需辅助", "assisted"),
+        "independent": ("独立完成", "independent"),
+        "repeat_verified": ("稳定掌握", "repeat verified"),
+        "completed": ("已完成", "completed"),
+        "done": ("已完成", "completed"),
+        "active": ("进行中", "active"),
+        "paused": ("已暂停", "paused"),
+        "pending": ("待开始", "pending"),
+        "known": ("已有真实证据", "verified"),
+    }
+    pair = mappings.get(value.strip().lower())
+    if pair is not None:
+        return pair[0] if is_zh else pair[1]
+    return value
+
+
+def _sanitize_learning_truth_value(value: Any, *, is_zh: bool) -> Any:
+    if isinstance(value, dict):
+        cleaned: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text in _TRUTH_OPAQUE_ID_KEYS:
+                continue
+            cleaned[key_text] = _sanitize_learning_truth_value(item, is_zh=is_zh)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_learning_truth_value(item, is_zh=is_zh) for item in value]
+    if isinstance(value, str):
+        stripped = value.strip()
+        if re.fullmatch(
+            r"(?:goal|resource|card|stage|plan|attempt|evidence|session|ctx|ws)-[0-9a-zA-Z_-]{6,}",
+            stripped,
+        ):
+            return ""
+        return _localize_truth_enum(value, is_zh=is_zh)
+    return value
+
+
+def _summarize_plan(payload: Any, *, is_zh: bool = False) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
     stages = [stage for stage in (payload.get("stages") or []) if isinstance(stage, dict)]
     completed_stages = [
         {
-            "id": stage.get("id"),
             "title": stage.get("title"),
             "goal": stage.get("goal"),
-            "status": stage.get("status"),
+            "status": _localize_truth_enum(str(stage.get("status") or ""), is_zh=is_zh),
         }
         for stage in stages
         if str(stage.get("status") or "").strip().lower() in {"done", "completed"}
     ]
-    active = next(
+    raw_active = next(
         (stage for stage in stages if str(stage.get("status") or "").strip().lower() == "active"),
         None,
     )
+    active = (
+        {
+            "title": raw_active.get("title"),
+            "goal": raw_active.get("goal"),
+            "status": _localize_truth_enum(str(raw_active.get("status") or ""), is_zh=is_zh),
+        }
+        if isinstance(raw_active, dict)
+        else None
+    )
     upcoming_stages = [
         {
-            "id": stage.get("id"),
             "title": stage.get("title"),
             "goal": stage.get("goal"),
-            "status": stage.get("status"),
+            "status": _localize_truth_enum(str(stage.get("status") or ""), is_zh=is_zh),
         }
         for stage in stages
         if str(stage.get("status") or "").strip().lower() not in {"done", "completed", "active"}
@@ -5208,7 +5286,7 @@ def _summarize_plan(payload: Any) -> dict[str, Any]:
 
 
 def _slug_markdown_filename(title: str) -> str:
-    cleaned = re.sub(r'[\\/:*?"<>|\r\n\t]+', " ", title).strip()
+    cleaned = re.sub(r'[\\/:*?"<>|\x00-\x1f\r\n\t]+', " ", title).strip()
     cleaned = re.sub(r"\s+", "-", cleaned).strip(".-")
     if not cleaned:
         cleaned = "lecture-note"
@@ -5224,13 +5302,22 @@ async def _handle_inspect_learning_truth(
     """Read-only unified view of plan stages, capability evidence, reviews, and active goal."""
     runtime = context.runtime
     workspace_id = context.workspace_id
+    is_zh = _prefers_chinese(context.response_language)
     section = str(args.get("section") or "all").strip().lower() or "all"
     try:
         evidence_limit = max(1, min(int(args.get("evidence_limit") or 20), 50))
     except (TypeError, ValueError):
         evidence_limit = 20
 
-    result: dict[str, Any] = {"ok": True, "workspace_id": workspace_id, "section": section}
+    result: dict[str, Any] = {
+        "ok": True,
+        "section": section,
+        "presentation_rule": (
+            "只用自然中文向学习者转述下方事实；严禁输出英文字段名、下划线状态码或内部编号。"
+            if is_zh
+            else "Summarize the facts below in natural prose; never print raw JSON key names, snake_case enum tokens, or opaque IDs."
+        ),
+    }
 
     repository = getattr(runtime, "repository", None)
     memory_service = getattr(runtime, "memory_service", None)
@@ -5240,9 +5327,11 @@ async def _handle_inspect_learning_truth(
         if hasattr(repository, "get_current_goal"):
             try:
                 goal = repository.get_current_goal(workspace_id)
-                result["active_goal"] = (
-                    goal.model_dump(mode="json") if goal is not None and hasattr(goal, "model_dump") else None
-                )
+                if goal is not None and hasattr(goal, "model_dump"):
+                    raw_goal = _sanitize_learning_truth_value(goal.model_dump(mode="json"), is_zh=is_zh)
+                    result["active_goal"] = raw_goal
+                else:
+                    result["active_goal"] = None
             except Exception as exc:
                 result["active_goal_error"] = str(exc)
         if hasattr(repository, "get_latest_plan"):
@@ -5252,12 +5341,11 @@ async def _handle_inspect_learning_truth(
                     result["plan"] = None
                 else:
                     plan_payload = plan.model_dump(mode="json") if hasattr(plan, "model_dump") else plan
+                    stages_raw = plan_payload.get("stages") if isinstance(plan_payload, dict) else []
+                    sanitized_stages = _sanitize_learning_truth_value(stages_raw or [], is_zh=is_zh)
                     result["plan"] = {
-                        "summary": _summarize_plan(plan_payload),
-                        "stages": plan_payload.get("stages") if isinstance(plan_payload, dict) else [],
-                        "current_stage_id": (
-                            plan_payload.get("current_stage_id") if isinstance(plan_payload, dict) else None
-                        ),
+                        "summary": _summarize_plan(plan_payload, is_zh=is_zh),
+                        "stages": sanitized_stages,
                     }
             except Exception as exc:
                 result["plan_error"] = str(exc)
@@ -5272,7 +5360,10 @@ async def _handle_inspect_learning_truth(
                 if isinstance(state_payload, dict):
                     for key in ("projection", "capabilities", "mastery", "evidence", "summary", "counts"):
                         if key in state_payload and state_payload[key] is not None:
-                            result[f"learner_{key}"] = state_payload[key]
+                            result[f"learner_{key}"] = _sanitize_learning_truth_value(
+                                state_payload[key],
+                                is_zh=is_zh,
+                            )
             except Exception as exc:
                 result["learner_state_error"] = str(exc)
         if memory_service is not None:
@@ -5286,9 +5377,13 @@ async def _handle_inspect_learning_truth(
                     limit=evidence_limit,
                 )
                 result["evidence_records"] = [
-                    item.model_dump(mode="json") if hasattr(item, "model_dump") else item
+                    _sanitize_learning_truth_value(
+                        item.model_dump(mode="json") if hasattr(item, "model_dump") else item,
+                        is_zh=is_zh,
+                    )
                     for item in unified
                 ]
+                result["verified_evidence_count"] = len(result["evidence_records"])
             except Exception as exc:
                 result["evidence_error"] = str(exc)
 
@@ -5296,22 +5391,33 @@ async def _handle_inspect_learning_truth(
         try:
             snapshot = memory_service.snapshot(workspace_id)
             snap_data = snapshot.model_dump(mode="json") if hasattr(snapshot, "model_dump") else {}
-            due_reviews = snap_data.get("due_reviews") or []
+            due_reviews = _sanitize_learning_truth_value(
+                snap_data.get("due_reviews") or [],
+                is_zh=is_zh,
+            )
             result["due_reviews"] = due_reviews
-            result["weaknesses"] = snap_data.get("weaknesses") or []
+            result["weaknesses"] = _sanitize_learning_truth_value(
+                snap_data.get("weaknesses") or [],
+                is_zh=is_zh,
+            )
             result["current_focus"] = snap_data.get("current_focus") or ""
-            result["learning_outcomes"] = (snap_data.get("learning_outcomes") or [])[-8:]
+            result["learning_outcomes"] = _sanitize_learning_truth_value(
+                (snap_data.get("learning_outcomes") or [])[-8:],
+                is_zh=is_zh,
+            )
             get_cards = getattr(memory_service, "get_cards", None)
             if callable(get_cards):
                 raw_cards = get_cards(workspace_id)
                 cards = list(raw_cards) if isinstance(raw_cards, (list, tuple, set)) else []
                 active_cards = [
                     {
-                        "card_id": getattr(card, "card_id", ""),
                         "title": getattr(card, "title", ""),
                         "focus_area": getattr(card, "focus_area", ""),
                         "problem_statement": getattr(card, "problem_statement", ""),
-                        "status": getattr(card, "status", ""),
+                        "status": _localize_truth_enum(
+                            str(getattr(card, "status", "") or ""),
+                            is_zh=is_zh,
+                        ),
                     }
                     for card in cards
                     if getattr(card, "status", "") not in {"archived", "completed"}
@@ -5349,9 +5455,9 @@ async def _handle_save_lecture_note(
     if not markdown_content:
         return {"ok": False, "error": "missing_content", "detail": "markdown_content must be non-empty."}
 
-    folder = " ".join(str(args.get("folder") or "").split()).strip()
-    if not folder:
-        folder = "学习讲稿" if _prefers_chinese(context.response_language) else "Lecture Notes"
+    is_zh = _prefers_chinese(context.response_language)
+    default_folder = "学习讲稿" if is_zh else "Lecture Notes"
+    folder = " ".join(str(args.get("folder") or "").split()).strip() or default_folder
     tags = _tool_text_list(args.get("tags"), limit=8, item_limit=48)
     if "lecture-note" not in tags:
         tags.append("lecture-note")
@@ -5360,37 +5466,155 @@ async def _handle_save_lecture_note(
     if not markdown_content.lstrip().startswith("#"):
         markdown_content = f"# {title}\n\n{markdown_content}\n"
 
-    from ..core.models import ResourceIndexRequest, ResourceUploadRequest
+    memory_service = getattr(runtime, "memory_service", None)
+    if memory_service is not None:
+        try:
+            workspace_meta = memory_service.snapshot(context.workspace_id).workspace
+            if isinstance(workspace_meta, dict) and workspace_meta.get("workspace_trusted") is False:
+                return {
+                    "ok": False,
+                    "error": "library_not_writable",
+                    "detail": "Workspace is untrusted.",
+                }
+        except Exception:
+            pass
 
-    upload_req = ResourceUploadRequest(
-        workspace_id=context.workspace_id,
-        kind="markdown",
-        name=filename,
-        source=filename,
-        content=markdown_content,
-        content_encoding="utf-8",
-        tags=tags,
-        source_type="file",
-        content_language=context.response_language,
+    from ..core.models import ResourceIndexRequest, ResourceUploadRequest
+    from ..resources.library import LIBRARY_DIRECTORY_NAME, LibraryError, LibraryService
+    from ..workspace.authority import PermissionLevel, WorkspaceAuthority
+
+    repository = getattr(runtime, "repository", None)
+    carrier_resolver = cast(
+        Callable[[str], WorkspaceAuthority | None] | None,
+        getattr(runtime, "library_carrier_authority", None),
     )
+    library_download = None
+    saved_abs_path: Path | None = None
+    actual_folder = folder
+    library_service: LibraryService | None = None
+
+    if repository is not None and carrier_resolver is not None and callable(carrier_resolver):
+        carrier_authority: WorkspaceAuthority | None = carrier_resolver(context.workspace_id)
+        resolved_library_root = (
+            resource_service._resolved_library_root(context.workspace_id)
+            if hasattr(resource_service, "_resolved_library_root")
+            else None
+        )
+        effective_resolver: Callable[[str], WorkspaceAuthority | None] = carrier_resolver
+        if (
+            carrier_authority is not None
+            and carrier_authority.destructive_mutation_block_reason() is not None
+            and resolved_library_root is not None
+        ):
+            project_root = (
+                runtime.resolve_workspace_path(context.workspace_id)
+                if hasattr(runtime, "resolve_workspace_path")
+                else None
+            )
+            project_resolved = (
+                Path(str(project_root)).expanduser().resolve(strict=False)
+                if project_root
+                else None
+            )
+            lib_resolved = Path(resolved_library_root).expanduser().resolve(strict=False)
+            # Only create an explicit local carrier for dedicated <LibraryRoot>
+            # in direct unit tests that omitted /workspace/adopt trust handshake.
+            if lib_resolved.is_dir() and lib_resolved != project_resolved:
+                dedicated_carrier = WorkspaceAuthority(
+                    root_path=str(lib_resolved),
+                    initial_permission=PermissionLevel.INSPECT,
+                )
+                dedicated_carrier.set_workspace_context(workspace_trusted=True)
+
+                def _resolve_dedicated_carrier(
+                    _ws: str,
+                    _auth: WorkspaceAuthority = dedicated_carrier,
+                ) -> WorkspaceAuthority | None:
+                    return _auth
+
+                effective_resolver = _resolve_dedicated_carrier
+        library_service = LibraryService(
+            repository,
+            workspace_authority_resolver=effective_resolver,
+        )
+        try:
+            library_download, saved_abs_path = library_service.save_markdown_note(
+                context.workspace_id,
+                filename=filename,
+                markdown_content=markdown_content,
+                folder=folder,
+            )
+        except LibraryError:
+            # Retry with the safe default folder if a model supplied an invalid folder name.
+            if folder != default_folder:
+                try:
+                    library_download, saved_abs_path = library_service.save_markdown_note(
+                        context.workspace_id,
+                        filename=filename,
+                        markdown_content=markdown_content,
+                        folder=default_folder,
+                    )
+                    actual_folder = default_folder
+                except LibraryError as exc:
+                    return {"ok": False, "error": exc.code, "detail": exc.message(context.response_language)}
+            else:
+                raise
+        if library_download is not None:
+            parts = library_download.relative_path.split("/")
+            if len(parts) >= 3 and parts[0] == LIBRARY_DIRECTORY_NAME:
+                actual_folder = "/".join(parts[1:-1]) or default_folder
+
+    if saved_abs_path is not None and library_download is not None:
+        upload_req = ResourceUploadRequest(
+            workspace_id=context.workspace_id,
+            kind="markdown",
+            name=saved_abs_path.name,
+            source=str(saved_abs_path),
+            tags=tags,
+            source_type="file",
+            content_language=context.response_language,
+        )
+    else:
+        upload_req = ResourceUploadRequest(
+            workspace_id=context.workspace_id,
+            kind="markdown",
+            name=filename,
+            source=filename,
+            content=markdown_content,
+            content_encoding="utf-8",
+            tags=tags,
+            source_type="file",
+            content_language=context.response_language,
+        )
     try:
         uploaded = resource_service.upload(context.workspace_id, upload_req)
         indexed = resource_service.index(
             context.workspace_id,
             ResourceIndexRequest(workspace_id=context.workspace_id, resource_id=uploaded.id),
         )
+        if library_service is not None and library_download is not None:
+            library_service.remember_download(context.workspace_id, indexed, library_download)
     except Exception as exc:
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
 
+    saved_path = (
+        library_download.relative_path
+        if library_download is not None
+        else f"{LIBRARY_DIRECTORY_NAME}/{actual_folder}/{indexed.name}"
+    )
     return {
         "ok": True,
-        "resource_id": indexed.id,
         "title": title,
         "name": indexed.name,
-        "folder": folder,
-        "canonical_markdown_path": getattr(indexed, "canonical_markdown_path", None),
+        "folder": actual_folder,
+        "saved_path": saved_path,
         "status": getattr(indexed, "status", "indexed"),
         "stored_under_library_root": True,
+        "exact_path_instruction": (
+            f"讲稿已真实写入 `{saved_path}`。提及保存位置时必须原样引用 `{saved_path}`，不得猜测或改写路径。"
+            if is_zh
+            else f"Saved to `{saved_path}`. Cite `{saved_path}` verbatim if mentioning the saved path; never invent or alter the filename."
+        ),
     }
 
 
@@ -6876,9 +7100,11 @@ def build_default_tool_registry(
         ToolDefinition(
             name="write_sandbox_file",
             description=(
-                "Create or overwrite a text file inside Trainer's managed resource sandbox. "
-                "Use this to edit library notes, extracted artifacts, and working copies. "
-                "Never write the learner's project or business code. Parent folders are created."
+                "Create or overwrite an existing sandbox copy, extracted artifact, or working file inside "
+                "Trainer's managed resource sandbox (never the learner's project code). "
+                "Do NOT use this to save a learner-requested lecture or study note — call "
+                "`save_lecture_note` in one step instead so it lands cleanly under "
+                "`<LibraryRoot>/Trainer Library/`. Parent folders are created."
             ),
             parameters={
                 "type": "object",
@@ -6901,8 +7127,10 @@ def build_default_tool_registry(
         ToolDefinition(
             name="index_sandbox_file",
             description=(
-                "Register or reindex a sandbox file in the Resources library so search can find it. "
-                "Use after writing or editing a sandbox note. Does not touch the learner's project."
+                "Register or reindex an existing sandbox working file or extracted artifact in the "
+                "Resources library so search can find it (does not touch the learner's project). "
+                "Do NOT use write_sandbox_file + index_sandbox_file for a learner-requested lecture or "
+                "study note; call `save_lecture_note` in one step instead."
             ),
             parameters={
                 "type": "object",
@@ -7168,7 +7396,7 @@ def build_default_tool_registry(
                 "required": ["title", "markdown_content"],
             },
             handler=_handle_save_lecture_note,
-            coach_only=True,
+            coach_only=False,
         )
     )
 

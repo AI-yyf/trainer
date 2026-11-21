@@ -29,6 +29,21 @@ const BANNED_TERMS = [
   { term: "skill projection", regex: /\bskill projection\b/gi },
   { term: "plan revision", regex: /\bplan revision\b/gi },
   { term: "candidate library", regex: /\bcandidate library\b/gi },
+  { term: "chunk anchor", regex: /¶chunk:/g },
+];
+
+const COPY_ONLY_BANNED_TERMS = [
+  { term: "insufficient_evidence", regex: /\binsufficient_evidence\b/g },
+  { term: "no_recall_evidence", regex: /\bno_recall_evidence\b/g },
+];
+
+const COPY_TABLE_PATHS = [
+  "extension/webview/src/lib/i18n",
+  "extension/webview/src/components/settings/settingsText.ts",
+  "extension/webview/src/templates/templateCopy.ts",
+  "extension/src/commands/hostCommandCopy.ts",
+  "extension/src/commands/providerHostCopy.ts",
+  "browser-extension/sidepanel/sidepanel.js",
 ];
 
 const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs"]);
@@ -111,7 +126,8 @@ function stripCommentsPreserveLines(source) {
   return out;
 }
 
-const files = SCAN_TARGETS.flatMap(collectFiles);
+const files = Array.from(new Set([...SCAN_TARGETS, ...COPY_TABLE_PATHS].flatMap(collectFiles)));
+const copyFiles = new Set(COPY_TABLE_PATHS.flatMap(collectFiles));
 const violations = [];
 
 for (const file of files) {
@@ -119,8 +135,9 @@ for (const file of files) {
   const raw = fs.readFileSync(file, "utf8");
   const clean = stripCommentsPreserveLines(raw);
   const lines = clean.split("\n");
+  const activeTerms = copyFiles.has(file) ? [...BANNED_TERMS, ...COPY_ONLY_BANNED_TERMS] : BANNED_TERMS;
   lines.forEach((line, index) => {
-    for (const { term, regex } of BANNED_TERMS) {
+    for (const { term, regex } of activeTerms) {
       regex.lastIndex = 0;
       if (regex.test(line)) {
         violations.push(`${rel}:${index + 1}: banned learner-visible term "${term}" -> ${line.trim()}`);

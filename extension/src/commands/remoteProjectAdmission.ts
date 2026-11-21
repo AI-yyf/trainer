@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { CommandContext } from '../core/commandContext';
 import { normalizeRemoteWorkspaceIdentity, type TrainerManagedProjectIdentity } from '../core/trainerWorkspaceService';
 import { resolveCurrentTrainerProjectPath } from '../core/trainerWorkspaceAdmission';
+import { hostCommandCopy, resolveHostCommandLanguage } from './hostCommandCopy';
 import { resolveWorkspaceIdentity } from './workspaceContext';
 
 /** The UI host observes remote identity; the sidecar only provisions its local brain lane. */
@@ -11,6 +12,7 @@ export async function provisionRemoteProject(
   root: { rootId?: string; canonicalRootPath: string },
   postAdmission: <T>(path: string, body: unknown) => Promise<T>,
 ): Promise<TrainerManagedProjectIdentity & { agentSessionId: string }> {
+  const lang = resolveHostCommandLanguage(context);
   const current = () => resolveCurrentTrainerProjectPath(context.getHostState().workspace);
   const expected = normalizeRemoteWorkspaceIdentity(projectUri);
   const scopeIsCurrent = () => normalizeRemoteWorkspaceIdentity(current() ?? '') === expected &&
@@ -24,23 +26,23 @@ export async function provisionRemoteProject(
     )?.uri ?? folders[0]?.uri;
   if (!observedRoot || observedRoot.scheme !== 'vscode-remote' ||
       normalizeRemoteWorkspaceIdentity(observedRoot.toString()) !== expected || !scopeIsCurrent()) {
-    throw new Error('Remote adoption must use the current workspace authority and root.');
+    throw new Error(hostCommandCopy(lang, 'remoteAdoptMustUseCurrentAuthority'));
   }
   const caps = await context.workspaceGateway.capabilities();
   if (!caps.companionAvailable || caps.protocolVersion !== 2) {
-    throw new Error(
-      'Remote Workspace Companion (protocol v2) is not active on the remote host yet. Install or reload Remote Workspace Support and try again.',
-    );
+    throw new Error(hostCommandCopy(lang, 'remoteAdoptCompanionInactive'));
   }
   const [stat, environment] = await Promise.all([
     context.workspaceGateway.stat(observedRoot),
     context.workspaceGateway.environment(),
   ]);
   if ((stat.type & vscode.FileType.Directory) === 0 || !scopeIsCurrent()) {
-    throw new Error('Remote project changed or its Companion directory could not be verified.');
+    throw new Error(hostCommandCopy(lang, 'remoteAdoptDirUnverified'));
   }
   const companionRoot = vscode.Uri.parse(environment.canonical_workspace_uri ?? '', true);
-  if (companionRoot.scheme !== 'file') throw new Error('The Companion did not provide the canonical remote directory.');
+  if (companionRoot.scheme !== 'file') {
+    throw new Error(hostCommandCopy(lang, 'remoteAdoptMissingCanonicalDir'));
+  }
   const canonicalUri = normalizeRemoteWorkspaceIdentity(observedRoot.with({ path: companionRoot.path }).toString());
   const response = await postAdmission<{
     project_identity?: TrainerManagedProjectIdentity;
@@ -57,7 +59,7 @@ export async function provisionRemoteProject(
   if (!scopeIsCurrent() || !response.project_identity ||
       normalizeRemoteWorkspaceIdentity(response.project_identity.canonicalProjectPath) !== canonicalUri ||
       !response.project_provisioning?.agent_session_id) {
-    throw new Error('Remote adoption returned a stale or mismatched project identity.');
+    throw new Error(hostCommandCopy(lang, 'remoteAdoptIdentityMismatch'));
   }
   return { ...response.project_identity, agentSessionId: response.project_provisioning.agent_session_id };
 }

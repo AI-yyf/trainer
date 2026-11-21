@@ -1,18 +1,19 @@
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
+import { hostCommandCopy, resolveHostCommandLanguage } from './hostCommandCopy';
 
 export async function installRemoteCompanionCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   const workspace = context.getHostState().workspace;
   if (!workspace.isRemoteWorkspace && !workspace.remoteName) {
-    return { ok: false, message: 'Open a Remote-SSH, WSL, Tunnel, or Dev Container workspace first.' };
+    return { ok: false, message: hostCommandCopy(lang, 'remoteOpenWorkspaceFirst') };
   }
   if (!vscode.workspace.isTrusted) {
-    return { ok: false, message: 'Trust the current workspace before installing remote support.' };
+    return { ok: false, message: hostCommandCopy(lang, 'remoteTrustBeforeInstall') };
   }
 
   const companionUri = vscode.Uri.joinPath(
@@ -27,11 +28,11 @@ export async function installRemoteCompanionCommand(
     context.outputChannel.appendLine(
       `[remote] companion installation failed: ${error instanceof Error ? error.message : String(error)}`,
     );
-    return { ok: false, message: 'VS Code could not install the Remote Workspace Companion.' };
+    return { ok: false, message: hostCommandCopy(lang, 'remoteCompanionInstallFailed') };
   }
 
   return {
     ok: true,
-    message: 'Remote Workspace Companion installation requested. Reload the remote window when VS Code asks.',
+    message: hostCommandCopy(lang, 'remoteCompanionInstallRequested'),
   };
 }

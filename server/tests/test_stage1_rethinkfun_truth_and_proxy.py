@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.models import (
@@ -158,7 +159,63 @@ def test_inspect_learning_truth_and_save_lecture_note_zero_code_repo_pollution(t
         assert saved["ok"] is True, saved
         assert saved["stored_under_library_root"] is True
         assert saved["name"].endswith(".md")
+        assert saved["folder"] == "学习讲稿"
+        assert saved["saved_path"] == "Trainer Library/学习讲稿/幂等性状态流讲稿.md"
+        assert "resource_id" not in saved
+        assert (library_root / "Trainer Library" / "学习讲稿" / "幂等性状态流讲稿.md").is_file()
         assert sorted(p.name for p in code_repo.iterdir()) == ["payments.py"]
+
+        # Verify GET /library/groups sees the saved lecture note in "学习讲稿".
+        groups_resp = client.get("/library/groups", params={"workspace_id": ws_id})
+        assert groups_resp.status_code == 200, groups_resp.text
+        groups_payload = groups_resp.json()
+        assert groups_payload["total_resource_count"] >= 1
+        assert any(
+            g["path"] == "学习讲稿" and g["resource_count"] >= 1
+            for g in groups_payload["groups"]
+        )
+
+        # Verify inspect_learning_truth hides raw IDs and internal telemetry enum codes.
+        import json as _json
+
+        truth_dumped = _json.dumps(truth, ensure_ascii=False)
+        assert "goal-1" not in truth_dumped
+        assert "plan-1" not in truth_dumped
+        assert "stage-1" not in truth_dumped
+        assert "insufficient_evidence" not in truth_dumped
+        assert "no_recall_evidence" not in truth_dumped
+
+        # Verify prose sanitizer strips leaked internal chunk anchors, IDs, and fixes guessed note paths.
+        from app.llm.coaching_replies import (
+            _strip_internal_coach_meta,
+            enforce_truthful_saved_note_path,
+        )
+
+        dirty_prose = (
+            "你的目标（goal-ca92fa8628a4）当前 evidence_records: []，处于 insufficient_evidence，"
+            "复习状态为 no_recall_evidence。讲稿（resource-db2655504e，¶chunk:1@31）已保存在 "
+            "`Trainer Library/wrong-guessed-name.md`。\n\n"
+            "```python\n# code blocks must stay untouched\nx = 'insufficient_evidence ¶chunk:0@1'\n```"
+        )
+        cleaned_prose = _strip_internal_coach_meta(dirty_prose)
+        cleaned_prose = enforce_truthful_saved_note_path(
+            cleaned_prose,
+            [
+                {
+                    "type": "tool_result",
+                    "name": "save_lecture_note",
+                    "result": {"ok": True, "saved_path": saved["saved_path"]},
+                }
+            ],
+        )
+        assert "goal-ca92fa8628a4" not in cleaned_prose
+        assert "resource-db2655504e" not in cleaned_prose
+        assert "insufficient_evidence" not in cleaned_prose.split("```")[0]
+        assert "no_recall_evidence" not in cleaned_prose.split("```")[0]
+        assert "¶chunk:" not in cleaned_prose.split("```")[0]
+        assert saved["saved_path"] in cleaned_prose
+        assert "Trainer Library/wrong-guessed-name.md" not in cleaned_prose
+        assert "insufficient_evidence ¶chunk:0@1" in cleaned_prose.split("```python")[1]
 
 
 def test_ignore_system_proxy_bypasses_trust_env_and_surfaces_proxy_hint(monkeypatch) -> None:
@@ -305,3 +362,318 @@ def test_single_composer_truth_and_note_triggers_cover_all_eight_languages() -> 
         assert message_requests_lecture_note_save(rejected) is False, rejected
 
     assert _message_requests_single_composer_truth_or_note("with 退出时会释放锁吗？") is False
+
+
+def test_plan_generate_honors_goal_parameter_and_chinese_concepts(tmp_path: Path) -> None:
+    with TestClient(create_app(_settings(tmp_path / "data"))) as client:
+        runtime = client.app.state.runtime
+        cfg = ProviderConfig.model_validate(
+            {
+                "name": "test-openai",
+                "baseUrl": "https://api.example.com/v1",
+                "apiKeyRef": "trainer.test",
+                "model": "gpt-4.1-mini",
+            }
+        )
+        runtime.provider_service = ProviderService(cfg, api_key="sk-test")
+        from tests.provider_fixtures import seed_verified_capabilities
+
+        seed_verified_capabilities(runtime, cfg, "sk-test")
+        start = client.post(
+            "/session/start",
+            json={"workspace_id": "ws-plan-goal", "workspace_name": "Plan Goal"},
+        )
+        assert start.status_code == 200, start.text
+        session_id = start.json()["session_id"]
+        resp = client.post(
+            "/plan/generate",
+            json={
+                "session_id": session_id,
+                "goal": "掌握支付幂等键持久化与并发防重入",
+                "response_language": "zh-CN",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        plan = resp.json()["plan"]
+        text_dump = str(plan)
+        assert "支付幂等键持久化" in text_dump or "并发防重入" in text_dump
+        assert "problem framing" not in text_dump.lower()
+
+
+def test_streamable_prefix_does_not_stall_on_fenced_code_blocks() -> None:
+    from app.llm.coaching_replies import _streamable_visible_prefix
+
+    chunks = [
+        "<think>内部推演",
+        "步骤</think>\n先看旧做法为什么卡住。\n",
+        "```python\ndef check():\n",
+        "    return 1\n```\n",
+        "接着检验边界。",
+    ]
+    buf = ""
+    emitted = ""
+    deltas: list[str] = []
+    for part in chunks:
+        buf += part
+        prefix = _streamable_visible_prefix(buf)
+        if prefix and prefix.startswith(emitted):
+            delta = prefix[len(emitted) :]
+            if delta:
+                emitted = prefix
+                deltas.append(delta)
+    assert len(deltas) >= 3
+    assert "```python" in emitted
+    assert "def check():" in emitted
+    assert "内部推演" not in emitted
+
+
+def test_turn_stream_emits_reasoning_status_tool_intent_and_split_timings(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import json as _json
+
+    cfg = ProviderConfig.model_validate(
+        {
+            "name": "test-openai",
+            "baseUrl": "https://api.example.com/v1",
+            "apiKeyRef": "trainer.test",
+            "model": "MiniMax-M2.7",
+            "capabilities": {"tools": True, "streaming": True},
+        }
+    )
+
+    class _StreamBinding:
+        protocol = "openai_chat_completions"
+
+        @staticmethod
+        def attachments_will_be_sent() -> bool:
+            return False
+
+        async def call_stream(self, _messages, _tools):
+            yield {"type": "provider_activity", "phase": "model_reasoning"}
+            yield {"type": "provider_activity", "phase": "tool_drafting", "name": "inspect_learning_truth"}
+            yield {"type": "delta", "delta": "状态流说明：\n", "safe_to_stream": True}
+            yield {"type": "delta", "delta": "```python\nx = 1\n```\n", "safe_to_stream": True}
+            yield {"type": "delta", "delta": "最后检查变量角色。", "safe_to_stream": True}
+            yield {"type": "final", "content": "状态流说明：\n```python\nx = 1\n```\n最后检查变量角色。", "tool_calls": [], "stop_reason": "stop"}
+
+        async def call(self, _messages, _tools):
+            return {"content": "状态流说明", "tool_calls": [], "stop_reason": "stop"}
+
+    monkeypatch.setattr(
+        ProviderService,
+        "build_agent_provider",
+        lambda self, **kwargs: (_StreamBinding(), _StreamBinding()),
+    )
+
+    with TestClient(create_app(_settings(tmp_path / "data"))) as client:
+        runtime = client.app.state.runtime
+        runtime.provider_service = ProviderService(cfg, api_key="sk-test")
+        from tests.provider_fixtures import seed_verified_capabilities
+
+        seed_verified_capabilities(runtime, cfg, "sk-test")
+        start = client.post(
+            "/session/start",
+            json={"workspace_id": "ws-stream-timings", "workspace_name": "Timings"},
+        )
+        assert start.status_code == 200
+        session_id = start.json()["session_id"]
+
+        resp = client.post(
+            "/turn/stream",
+            json={
+                "session_id": session_id,
+                "workspace_id": "ws-stream-timings",
+                "intent": "coach",
+                "message": "用状态流解释一个变量并给代码",
+                "response_language": "zh-CN",
+                "use_agent_loop": True,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.text
+        statuses = []
+        chunks = []
+        complete = None
+        for block in body.split("\n\n"):
+            if not block.strip():
+                continue
+            ev = "message"
+            data_str = ""
+            for line in block.splitlines():
+                if line.startswith("event:"):
+                    ev = line.split(":", 1)[1].strip()
+                elif line.startswith("data:"):
+                    data_str += line.split(":", 1)[1].strip()
+            if not data_str:
+                continue
+            parsed = _json.loads(data_str)
+            if ev == "status":
+                statuses.append(parsed)
+            elif "chunk" in parsed:
+                chunks.append(parsed["chunk"])
+            elif ev == "complete":
+                complete = parsed
+        assert any(s.get("phase") == "model_reasoning" for s in statuses), statuses
+        assert any(s.get("phase") == "tool_intent" and s.get("name") == "inspect_learning_truth" for s in statuses), statuses
+        assert len(chunks) >= 2, chunks
+        assert complete is not None
+        timings = complete["response"].get("timings")
+        assert isinstance(timings, dict)
+        assert timings["local_prep_ms"] is not None
+        assert timings["provider_first_event_ms"] is not None
+        assert timings["visible_ttft_ms"] is not None
+        assert timings["total_ms"] >= timings["visible_ttft_ms"]
+
+
+@pytest.mark.asyncio
+async def test_leaked_token_stripper_preserves_code_calls_and_emit_activity_is_opt_in() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.llm.agent_binding import ProviderAgentBinding
+    from app.llm.coaching_replies import _strip_leaked_internal_prose_tokens
+
+    sample = "`pop()` 和 `self._items.pop()` 不该掉括号；但 (resource-deadbeef, ¶chunk:12) 和 insufficient_evidence 要清洗。"
+    cleaned = _strip_leaked_internal_prose_tokens(sample)
+    assert "`pop()`" in cleaned
+    assert "`self._items.pop()`" in cleaned
+    assert "resource-deadbeef" not in cleaned
+    assert "¶chunk:12" not in cleaned
+    assert "insufficient_evidence" not in cleaned
+
+    async def _stream_once():
+        yield SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(
+                        content="<think>step",
+                        tool_calls=[],
+                    ),
+                    finish_reason=None,
+                )
+            ]
+        )
+        yield SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    delta=SimpleNamespace(
+                        content="</think>回答。",
+                        tool_calls=[],
+                    ),
+                    finish_reason="stop",
+                )
+            ]
+        )
+
+    service = SimpleNamespace(
+        _api_key="sk-test",
+        _config=SimpleNamespace(
+            name="openai-compat",
+            base_url="https://api.example/v1",
+            model="MiniMax-M2.7",
+            protocol="openai_chat_completions_compatible",
+            request_defaults={},
+            capabilities=SimpleNamespace(vision=False, chat=True),
+        ),
+        _get_client=MagicMock(
+            return_value=SimpleNamespace(
+                chat=SimpleNamespace(
+                    completions=SimpleNamespace(create=AsyncMock(side_effect=[_stream_once(), _stream_once()]))
+                )
+            )
+        ),
+        _apply_request_defaults=lambda payload: payload,
+        _resolve_model=lambda: "MiniMax-M2.7",
+        _model_candidates=lambda model: [model],
+        _is_model_not_supported_error=lambda exc: False,
+    )
+    quiet = ProviderAgentBinding(provider_service=service, emit_activity=False).build_agent_provider()
+    quiet_types = [e["type"] async for e in quiet.call_stream([{"role": "user", "content": "hi"}], None)]
+    assert "provider_activity" not in quiet_types
+
+    loud = ProviderAgentBinding(provider_service=service, emit_activity=True).build_agent_provider()
+    loud_types = [e["type"] async for e in loud.call_stream([{"role": "user", "content": "hi"}], None)]
+    assert "provider_activity" in loud_types
+
+
+def test_save_lecture_note_schema_exposed_for_lecture_save_request_without_learning_note_flag() -> None:
+    from types import SimpleNamespace
+    from typing import Any, cast
+
+    from app.llm.agent_loop import CoachAgentLoop
+    from app.llm.agent_tool_context import _build_agent_tool_context_extra
+    from app.llm.coaching_replies import enforce_truthful_saved_note_path
+
+    registry = build_default_tool_registry()
+    save_msg = "请讲明白注意力缩放，并且把这份成品讲稿保存成我资料库里的 Markdown 笔记。"
+    for answer_mode in ("guided", "direct"):
+        extra = _build_agent_tool_context_extra(
+            coach_context=None,
+            attachment_delivery={},
+            answer_mode=answer_mode,
+            current_file=None,
+            learner_message=save_msg,
+        )
+        assert extra["explicit_lecture_note_save_request"] is True
+        assert extra["explicit_learning_note_request"] is False
+        assert "save_lecture_note" not in extra["denied_tool_names"]
+        if answer_mode == "direct":
+            assert extra["allow_coach_only_tools"] is False
+
+        loop = CoachAgentLoop(
+            provider=cast(Any, SimpleNamespace(protocol="openai_chat_completions_compatible")),
+            registry=registry,
+            context=ToolContext(
+                workspace_id="ws-lecture-schema",
+                session_id="sess-lecture-schema",
+                runtime=SimpleNamespace(),
+                extra=extra,
+            ),
+        )
+        tool_names = [
+            item["function"]["name"]
+            for item in loop._tools_schema()
+            if isinstance(item, dict) and isinstance(item.get("function"), dict)
+        ]
+        assert "save_lecture_note" in tool_names
+
+    for answer_mode in ("guided", "direct"):
+        plain_extra = _build_agent_tool_context_extra(
+            coach_context=None,
+            attachment_delivery={},
+            answer_mode=answer_mode,
+            current_file=None,
+            learner_message="请讲明白注意力缩放。",
+        )
+        assert "save_lecture_note" in plain_extra["denied_tool_names"]
+        plain_loop = CoachAgentLoop(
+            provider=cast(Any, SimpleNamespace(protocol="openai_chat_completions_compatible")),
+            registry=registry,
+            context=ToolContext(
+                workspace_id="ws-lecture-schema",
+                session_id="sess-lecture-schema",
+                runtime=SimpleNamespace(),
+                extra=plain_extra,
+            ),
+        )
+        plain_tool_names = [
+            item["function"]["name"]
+            for item in plain_loop._tools_schema()
+            if isinstance(item, dict) and isinstance(item.get("function"), dict)
+        ]
+        assert "save_lecture_note" not in plain_tool_names
+
+    rewritten = enforce_truthful_saved_note_path(
+        "已写入 `Trainer Library/Scaled Dot-Product Attention 讲稿.md`。",
+        [
+            {
+                "type": "tool_result",
+                "name": "save_lecture_note",
+                "result": {"ok": True, "saved_path": "Trainer Library/学习讲稿/scaled-dot-product-attention.md"},
+            }
+        ],
+    )
+    assert "Trainer Library/学习讲稿/scaled-dot-product-attention.md" in rewritten
+    assert "Trainer Library/Scaled Dot-Product Attention 讲稿.md" not in rewritten

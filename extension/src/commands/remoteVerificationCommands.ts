@@ -7,7 +7,7 @@ import { assertRemoteVerificationFileScope, captureRemoteVerificationArtifact, f
   type CapturedRemoteArtifact } from '../testing/remoteVerificationArtifact';
 import { deriveCompanionInstallState } from '../../../shared/src/companionInstallState';
 import type { ComposerLanguage } from '../../../shared/src/types';
-import { resolveProviderHostLanguage } from './providerHostCopy';
+import { hostCommandCopy, resolveHostCommandLanguage } from './hostCommandCopy';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import {
@@ -106,32 +106,32 @@ export async function remoteVerifyCommand(
 ): Promise<CommandExecutionResult> {
   const workspace = context.getHostState().workspace;
   const record = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+  const lang = resolveHostCommandLanguage(context, record.responseLanguage);
   const requestedCard = typeof record.cardId === 'string' && record.cardId.trim() ? record.cardId.trim() : undefined;
   const scope = captureVerificationScope(context, requestedCard);
   if (!workspace.isRemoteWorkspace && !workspace.remoteName) {
     return {
       ok: false,
-      message: 'Remote verification is only available in a Remote-SSH, WSL, Tunnel, or Dev Container window.',
+      message: hostCommandCopy(lang, 'remoteVerifyWindowRequired'),
     };
   }
   if (!(await context.trustGuard.ensureTrusted('run remote verification'))) {
-    return { ok: false, message: 'Workspace trust is required to run remote verification.' };
+    return { ok: false, message: hostCommandCopy(lang, 'remoteVerifyTrustRequired') };
   }
   const spec = parseSpec(record);
   if (!spec) {
-    return { ok: false, message: 'A verification executable is required.' };
+    return { ok: false, message: hostCommandCopy(lang, 'remoteVerifyExecutableRequired') };
   }
 
   const capabilities = await context.workspaceGateway.capabilities();
   if (!capabilities.companionAvailable || !capabilities.verify) {
     return {
       ok: false,
-      message:
-        'Remote Workspace Companion is not available in this window. Run "Trainer: Install Remote Workspace Support", reload the remote window, then verify again.',
+      message: hostCommandCopy(lang, 'remoteVerifyCompanionUnavailableRunInstall'),
     };
   }
 
-  if (!verificationScopeIsCurrent(context, scope)) return { ok: false, message: 'Workspace, session or card changed before remote verification started.' };
+  if (!verificationScopeIsCurrent(context, scope)) return { ok: false, message: hostCommandCopy(lang, 'remoteVerifyScopeChangedBeforeStart') };
   const described = describeSpec(spec);
   let stdout = '';
   let stderr = '';
@@ -147,7 +147,7 @@ export async function remoteVerifyCommand(
       typeof record.artifactUri === 'string' ? record.artifactUri : vscode.window?.activeTextEditor?.document.uri); }
     catch { context.outputChannel.appendLine('[remote] verification artifact could not be bound; evidence will not be recorded.'); }
   }
-  if (!verificationScopeIsCurrent(context, scope)) return { ok: false, message: 'Workspace, session or card changed before remote verification started.' };
+  if (!verificationScopeIsCurrent(context, scope)) return { ok: false, message: hostCommandCopy(lang, 'remoteVerifyScopeChangedBeforeStart') };
   try {
     const verification = await context.workspaceGateway.runVerification(spec, {
       onStart: (session) => {
@@ -165,14 +165,14 @@ export async function remoteVerifyCommand(
     if (verification.state !== 'completed') {
       const reason =
         verification.state === 'timed_out'
-          ? 'the run timed out'
+          ? hostCommandCopy(lang, 'remoteVerifyReasonTimedOut')
           : verification.state === 'cancelled'
-            ? 'the run was cancelled'
-            : 'the companion connection was lost';
-      context.outputChannel.appendLine(`[remote] verification interrupted: ${reason}`);
+            ? hostCommandCopy(lang, 'remoteVerifyReasonCancelled')
+            : hostCommandCopy(lang, 'remoteVerifyReasonConnectionLost');
+      context.outputChannel.appendLine(`[remote] verification interrupted: ${verification.state}`);
       return {
         ok: false,
-        message: `Remote verification was interrupted (${reason}), so no evidence was recorded.`,
+        message: hostCommandCopy(lang, 'remoteVerifyInterruptedReason', { reason }),
         data: { spec, state: verification.state, stdout, stderr },
       };
     }
@@ -187,13 +187,13 @@ export async function remoteVerifyCommand(
     context.outputChannel.appendLine(`[remote] verification did not complete: ${detail}`);
     return {
       ok: false,
-      message: `Remote verification did not complete, so no evidence was recorded: ${detail}`,
+      message: hostCommandCopy(lang, 'remoteVerifyFailedDetail', { detail }),
     };
   }
   if (exitCode === null) {
     return {
       ok: false,
-      message: 'Remote verification was interrupted before producing an exit code; no evidence was recorded.',
+      message: hostCommandCopy(lang, 'remoteVerifyNoExitCode'),
     };
   }
 
@@ -212,14 +212,15 @@ export async function remoteVerifyCommand(
     });
     attestation = await dispatchTestRunAttestation(attestationRuntimeWithUndeliveredNotice(context, scope), body);
   }
+  const statusWord = hostCommandCopy(lang, passed ? 'statusWordPassed' : 'statusWordFailed');
   return {
     ok: passed,
     message: attestation === 'delivered'
-      ? `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); the result was attested to the trainer.`
+      ? hostCommandCopy(lang, 'remoteVerifyOutcomeDelivered', { status: statusWord, code: exitCode })
       : attestation === 'undelivered' ? ATTESTATION_UNDELIVERED_MARKER
-      : attestation === 'stale_scope' ? 'Remote verification completed in an earlier workspace, session or card; no evidence was recorded.'
-      : attestation === 'artifact_unavailable' ? 'Remote verification completed, but the selected artifact identity or stable hash could not be confirmed; no evidence was recorded.'
-      : `Remote verification ${passed ? 'passed' : 'failed'} (exit ${exitCode}); no live practice card, so nothing was attested.`,
+      : attestation === 'stale_scope' ? hostCommandCopy(lang, 'remoteVerifyOutcomeStale')
+      : attestation === 'artifact_unavailable' ? hostCommandCopy(lang, 'remoteVerifyOutcomeArtifactUnavailable')
+      : hostCommandCopy(lang, 'remoteVerifyOutcomeNoCard', { status: statusWord, code: exitCode }),
     data: { spec, exit_code: exitCode, passed, stdout, stderr, attestation },
   };
 }
@@ -324,12 +325,11 @@ function remoteVerificationSummary(
   return table[kind].split('{exit}').join(String(exitCode ?? '?'));
 }
 
-/** Workspace response language for host-posted summaries (provider copy rule). */
-function remoteVerificationLanguage(context: CommandContext): ComposerLanguage | undefined {
-  return resolveProviderHostLanguage(
-    undefined,
-    context.getHostState().bootstrap.memory?.workspace?.responseLanguage,
-  );
+/** Workspace response language for host-posted summaries. */
+function remoteVerificationLanguage(context: CommandContext, payload?: unknown): ComposerLanguage {
+  const explicit =
+    payload && typeof payload === 'object' ? (payload as Record<string, unknown>).responseLanguage : undefined;
+  return resolveHostCommandLanguage(context, explicit);
 }
 
 function buildActiveFileVerificationSpec(
@@ -356,6 +356,7 @@ export interface RemoteActiveFileVerificationPayload {
 export async function remoteVerifyActiveFileCommand(context: CommandContext, payload?: unknown): Promise<CommandExecutionResult> {
   const workspace = context.getHostState().workspace;
   const scope = captureVerificationScope(context);
+  const language = remoteVerificationLanguage(context, payload);
   if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'expectedCardId')) {
     const expectedCardId = (payload as Record<string, unknown>).expectedCardId;
     if (typeof expectedCardId !== 'string' || !expectedCardId.trim() || expectedCardId.trim() !== scope.cardId) {
@@ -364,35 +365,34 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext, pay
   }
   const editor = vscode.window.activeTextEditor;
   if (!workspace.isRemoteWorkspace && !workspace.remoteName) return { ok: false,
-    message: 'Remote verification is only available in a Remote-SSH, WSL, Tunnel, or Dev Container window.' };
+    message: hostCommandCopy(language, 'remoteVerifyWindowRequired') };
   if (!(await context.trustGuard.ensureTrusted('run remote verification'))) return { ok: false,
-    message: 'Workspace trust is required to run remote verification.' };
+    message: hostCommandCopy(language, 'remoteVerifyTrustRequired') };
   if (activeRemoteVerification) return { ok: false,
-    message: 'A remote verification is already running. Stop it before starting another.' };
-  if (!editor) return { ok: false, message: 'Open the practice file before verifying it.' };
+    message: hostCommandCopy(language, 'remoteVerifyAlreadyRunning') };
+  if (!editor) return { ok: false, message: hostCommandCopy(language, 'remoteVerifyOpenFileFirst') };
   const spec = buildActiveFileVerificationSpec({ fsPath: editor.document.uri.fsPath });
-  if (!spec) return { ok: false, message: 'Remote file verification currently supports Python practice files (pytest).' };
+  if (!spec) return { ok: false, message: hostCommandCopy(language, 'remoteVerifyPythonOnly') };
   const verificationFileName = path.basename(editor.document.uri.fsPath);
 
   // Reserve before any further await; onStart can arrive much later than the user's second click.
   const run: ActiveRemoteVerification = { signal: { aborted: false } };
   activeRemoteVerification = run;
-  const language = remoteVerificationLanguage(context);
   let capabilities;
   try { capabilities = await context.workspaceGateway.capabilities(); }
   catch (error) {
     if (activeRemoteVerification === run) activeRemoteVerification = undefined;
     context.outputChannel.appendLine(`[remote] capabilities unavailable: ${error instanceof Error ? error.name : 'Request failed'}`);
-    return { ok: false, message: 'Remote Workspace Companion is unavailable. Reconnect before verifying.' };
+    return { ok: false, message: hostCommandCopy(language, 'remoteVerifyCompanionReconnect') };
   }
   if (!capabilities.companionAvailable || !capabilities.verify || !verificationScopeIsCurrent(context, scope)) {
     if (activeRemoteVerification === run) activeRemoteVerification = undefined;
-    return { ok: false, message: 'Remote Workspace Companion is not available in this workspace. Reconnect before verifying.' };
+    return { ok: false, message: hostCommandCopy(language, 'remoteVerifyCompanionNotInWorkspace') };
   }
   try { await assertRemoteVerificationFileScope(context, editor.document.uri); }
   catch {
     if (activeRemoteVerification === run) activeRemoteVerification = undefined;
-    return { ok: false, message: 'The practice file could not be confirmed inside the current remote project; no verification was started.' };
+    return { ok: false, message: hostCommandCopy(language, 'remoteVerifyFileOutsideProject') };
   }
   let captured: CapturedRemoteArtifact | undefined;
   try {
@@ -404,7 +404,7 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext, pay
   }
   if (!verificationScopeIsCurrent(context, scope) || run.signal.aborted) {
     if (activeRemoteVerification === run) activeRemoteVerification = undefined;
-    return { ok: false, message: 'Remote verification scope changed or was cancelled before starting.' };
+    return { ok: false, message: hostCommandCopy(language, 'remoteVerifyCancelledBeforeStart') };
   }
   const post = (message: unknown) => {
     if (verificationScopeIsCurrent(context, scope)) void context.workbench.postMessage(message);
@@ -453,12 +453,12 @@ export async function remoteVerifyActiveFileCommand(context: CommandContext, pay
       ...(scope.cardId ? { cardId: scope.cardId } : {}),
       state: 'connection_lost', exitCode: null, summary: remoteVerificationSummary('interrupted', language) } });
   }).finally(() => { if (activeRemoteVerification === run) activeRemoteVerification = undefined; });
-  return { ok: true, message: `Remote verification starting on ${workspace.remoteName ?? 'remote'}.` };
+  return { ok: true, message: hostCommandCopy(language, 'remoteVerifyStarting', { remote: workspace.remoteName ?? 'remote' }) };
 }
 
-export async function remoteVerifyCancelCommand(_context: CommandContext): Promise<CommandExecutionResult> {
+export async function remoteVerifyCancelCommand(context: CommandContext): Promise<CommandExecutionResult> {
   if (activeRemoteVerification) activeRemoteVerification.signal.aborted = true;
-  return { ok: true, message: 'Stop requested for the running remote verification.' };
+  return { ok: true, message: hostCommandCopy(resolveHostCommandLanguage(context), 'remoteVerifyStopRequested') };
 }
 
 
@@ -499,7 +499,7 @@ export async function remoteCompanionStateCommand(
   });
   return {
     ok: true,
-    message: `Remote support state: ${state}.`,
+    message: hostCommandCopy(resolveHostCommandLanguage(context), 'remoteCompanionStateReport', { state }),
     data: { state, remoteName },
   };
 }

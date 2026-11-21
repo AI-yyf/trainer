@@ -586,6 +586,14 @@ export type TrainerStreamingState = {
   streamError?: string;
   agentActivity: TrainerToolActivity[];
   agentStep?: number;
+  liveStageKind?:
+    | "think"
+    | "reason"
+    | "retrieve"
+    | "download"
+    | "organize"
+    | "cards"
+    | "finalize";
   completionSummary?: string;
   completionNextStep?: string;
   completionStopReason?: string;
@@ -844,6 +852,7 @@ export function createEmptyTrainerStreamingState(): TrainerStreamingState {
     streamMessageId: undefined,
     agentActivity: [],
     agentStep: undefined,
+    liveStageKind: undefined,
     completionSummary: undefined,
     completionNextStep: undefined,
     completionStopReason: undefined,
@@ -899,6 +908,16 @@ export function normalizeTrainerStreamingState(value: unknown): TrainerStreaming
     streamError: asString(record.streamError) ?? asString(record.stream_error),
     agentActivity,
     agentStep: asNumber(record.agentStep) ?? asNumber(record.agent_step),
+    liveStageKind:
+      record.liveStageKind === "think" ||
+      record.liveStageKind === "reason" ||
+      record.liveStageKind === "retrieve" ||
+      record.liveStageKind === "download" ||
+      record.liveStageKind === "organize" ||
+      record.liveStageKind === "cards" ||
+      record.liveStageKind === "finalize"
+        ? record.liveStageKind
+        : undefined,
     completionSummary:
       asString(record.completionSummary) ?? asString(record.completion_summary),
     completionNextStep:

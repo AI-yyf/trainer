@@ -724,3 +724,27 @@
   - 真模型 4 场景复验（`MiniMax-M2.7`，失效系统代理 `127.0.0.1:1` + `ignoreSystemProxy: true` 直连通过，密钥/地址零落盘）：全部 4 用例 `completed=true`、`providerFallback=false`、`clicheHits=[]`、**`jargonHits=[]`**（Case 4 `handoff` 泄漏清零）；Case 1 TTFT `3640ms`（同期直连上游基线首可见字 `1698ms`，差值为推理模型在教学提示下的思考耗时）；Case 2 完整状态流推导并写入 `<LibraryRoot>/Trainer Library/.trainer-resources/markdown/*.md`；Case 3 `payments.py` 零写入；Case 4 如实汇报 0 条验证证据并出 5 问推理型复习题。
   - 全量门禁全绿：`ruff check` 0 错误、`verify:server-pyright` 0 错误、`pytest server/tests -n 4` **4191 passed / 0 failed / 28 subtests passed**、`npm run verify:i18n` PASS（213 `appUiCopy` + 212 `settingsText`，0 缺失、0 跨语种泄漏）、`verify:copy-vocabulary` PASS（66 文件 0 违规）、`verify:credentials` PASS（5032 文件 0 泄露）、`verify:version` PASS（1.4.4）、`npm run check` PASS、`npm run test:extension` 全绿、`verify:ui-geometry` PASS（360 断言）、`verify:local-latency` PASS（71–295ms）、12 份核心 Playwright E2E（111/111 passed）。
 - **唯一剩余人工项（诚实 `BLOCKED`）**：`T-0028`（`teaching_acceptance`）属于所有者人工最终教学签收，继续诚实保持 `BLOCKED`，待本人按 [docs/TRIAL-1.5.0-RC.md](../docs/TRIAL-1.5.0-RC.md) 试用后签核。
+
+## 2026-11-22 — 二次证据深审修复（P1/P2/P3 全量闭环）、宿主 8 语言清零、34s Remote-SSH 真模型对话与拆分遥测
+- **复审根治与工程修复（含 `extension/bundled/server/` 同步）**：
+  - **P1 目标防误建（`server/app/goal/service.py`）**：收紧 `detect_goal_candidate` 句式锚定与核查/提问句排除规则，新增显式目标指令检测 `detect_explicit_goal_command`，阻断查询类问题污染「当前目标」（`test_goal_session.py` 覆盖）。
+  - **P1 验证证明守卫（`server/app/api/routes/learning.py`）**：`POST /training/verification/attest` 对缺失/过期 `card_id` 明确返回 `404`（`code: "training_card_not_found"`），消除未捕获异常 `500`。
+  - **P2 讲稿落盘直通与路径诚实（`server/app/resources/library.py`、`tools.py`、`agent_loop.py`、`agent_tool_context.py`、`coach_support.py`、`prompts.py`、`coaching_replies.py`）**：
+    - `save_lecture_note` 改为 `coach_only=False`（仍严格受显式讲稿/学习笔记请求守卫限制），并在 `ToolRegistry.as_protocol_schemas` / `CoachAgentLoop._tools_schema` / `coach_support` 中对齐 `explicit_lecture_note_save_request`，使深度讲透（`direct` 模式）不再被过滤掉 `save_lecture_note`；
+    - 讲稿同步写入 `<LibraryRoot>/Trainer Library/<folder>/<slug>.md` 并调用 `remember_download` 入组，更新 `_SAVED_NOTE_PATH_PATTERN` 与 `enforce_truthful_saved_note_path` 以精确替换含空格路径。
+  - **P2 内部词清洗与流式透明化（`coaching_replies.py`、`agent_binding.py`、`provider_service.py`、`routes/core.py`、`extension/`）**：
+    - 新增 `_strip_leaked_internal_prose_tokens` 清除 `¶chunk:` / 实体 ID / 状态枚举词并保留代码括号（如 `` `pop()` ``）；
+    - 为 `AgentLoop` 启用 opt-in 阶段态事件（`model_reasoning` / `tool_intent`）与端到端耗时拆分 `timings`（`local_prep_ms` / `provider_first_event_ms` / `visible_ttft_ms` / `total_ms`），修复代码块围栏流式卡顿；
+    - `planner/service.py` 与 `routes/plan.py` 补齐中文目标概念分词并优先采纳 `payload["goal"]`。
+  - **P2 宿主 8 语言清零（`extension/src/commands/hostCommandCopy.ts` 等 5 份宿主命令文件 + `verify-i18n-completeness.mjs`）**：为 `remoteProjectAdmission.ts`、`remoteCompanionCommands.ts`、`remoteVerificationCommands.ts`、`workspaceAdmissionCommands.ts`、`resourceCommands.ts` 全量接入 8 语言并纳入 `verify:i18n` 字面量零残留硬门禁（`272 hostCommandCopy` 调用点）。
+- **真模型 4 场景实测（`MiniMax-M2.7`，环境代理存在且直连绕过）**：
+  - Case 1（短问答）：客户端 `ttftMs=2615ms` / `totalTurnMs=3116ms`；服务端 `local_prep_ms=55ms` / `provider_first_event_ms=2526.2ms` / `visible_ttft_ms=2581.2ms` / `total_ms=3078.4ms`（`>2000ms` 记为 `PARTIAL`）。
+  - Case 2（深度 RethinkFun 讲稿 + 落盘）：真实调用 `["search_resources", "list_resources", "save_lecture_note"]`，写入 `Trainer Library/学习讲稿/Scaled-Dot-Product-Attention：为什么要除以-sqrt(d_k).md`，`savedResourcesCount=1`，`libraryGroups=[{"name":"学习讲稿","resource_count":1}]`，`notePathCitedTruthfully=true`、`citedBogusLibraryPaths=[]`。
+  - Case 3（`payments.py` 引导）：`paymentsCodeUntouched=true`；Case 4（核查与推理复习）：`planStageTitles=["基础","练习","整合"]`、`attestMissingCardStatus=404`、`attestStatus=200`（`save`+`start` 后）、`goalNonPollutionCheck.unchangedByAuditQuery=true`。
+  - 全部 4 用例 `providerFallback=false`、`clicheHits=[]`、`internalLeakHits=[]`、`all_under_library_root=true`；如实记录 Case 4 正文含 1 处括号英文 `handoff`（`jargonHits=["handoff"]`）。
+- **真实 Linux `34s` Remote-SSH L2 + 真模型流式对话实测（`20/20` 步全通过）**：
+  - 全量验证远端 Companion v2、宿主 `trainer.workspace.adoptProject` / `trainer.remote.verify` / `trainer.memory.refresh`、本机 `<LibraryRoot>/.trainer/runtime/trainer.sqlite3`、零远端代码仓写入（`4 -> 4` 文件），并在 Step 11 实跑 `trainer.provider.save` → `trainer.provider.test` → `trainer.session.sendStreamMessage`（`MiniMax-M2.7`, `10712ms`），回复精确引用远端 `payments.py` 的 `record_charge` / `self._seen` 与 `test_payments.py`。
+- **全量验证门禁**：
+  - `ruff check`：0 错误；`verify:server-pyright`：0 错误；`pytest server/tests -n 2 -q`：**4205 passed, 28 subtests passed, 0 failed**（注：此前 `-n 4` 高并发出现 2 项时间/争抢抖动，单独复跑 `22 passed in 1.37s` 并在 `-n 2` 全量通过）。
+  - `verify:i18n`（213/212/272）、`verify:copy-vocabulary`（68 文件 0 违规）、`npm run check`、`npm run test:extension`、`verify:ui-geometry`（360 断言）、`verify:local-latency`（39–272ms）、核心 Playwright 4 spec（93/93 passed）、`verify:credentials`（5079 文件 0 泄露）、`verify:version`（1.4.4）全部通过。
+- **诚实 `BLOCKED` 边界**：`T-0028`（`teaching_acceptance`）继续保持 `BLOCKED`，等待人工最终教学签收。

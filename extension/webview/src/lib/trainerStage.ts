@@ -6,6 +6,7 @@ export type TrainerStageKind =
   | "organize"
   | "cards"
   | "finalize"
+  | "reason"
   | "think";
 
 export type TrainerStage = {
@@ -22,6 +23,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "正在整理资料",
     cards: "正在生成训练卡",
     finalize: "正在整理回答",
+    reason: "正在推演思路",
     think: "正在思考",
   },
   "en-US": {
@@ -30,6 +32,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organizing the library",
     cards: "Creating a training card",
     finalize: "Shaping the answer",
+    reason: "Reasoning",
     think: "Thinking",
   },
   "es-ES": {
@@ -38,6 +41,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organizando la biblioteca",
     cards: "Creando una tarjeta",
     finalize: "Preparando la respuesta",
+    reason: "Razonando",
     think: "Pensando",
   },
   "fr-FR": {
@@ -46,6 +50,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organisation de la bibliothèque",
     cards: "Création d'une carte",
     finalize: "Préparation de la réponse",
+    reason: "Raisonnement",
     think: "Réflexion",
   },
   "de-DE": {
@@ -54,6 +59,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Bibliothek wird organisiert",
     cards: "Trainingskarte wird erstellt",
     finalize: "Antwort wird formuliert",
+    reason: "Überlegt",
     think: "Denkt nach",
   },
   "ja-JP": {
@@ -62,6 +68,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "ライブラリを整理中",
     cards: "トレーニングカードを作成中",
     finalize: "回答を整えています",
+    reason: "推論中",
     think: "考えています",
   },
   "ko-KR": {
@@ -70,6 +77,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "라이브러리 정리 중",
     cards: "트레이닝 카드 생성 중",
     finalize: "답변 정리 중",
+    reason: "추론 중",
     think: "생각 중",
   },
   "pt-BR": {
@@ -78,6 +86,7 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
     organize: "Organizando a biblioteca",
     cards: "Criando um cartão",
     finalize: "Preparando a resposta",
+    reason: "Raciocinando",
     think: "Pensando",
   },
 };
@@ -133,10 +142,11 @@ type ActivityLike = {
 export function currentTrainerStage(
   activities: readonly ActivityLike[] | undefined,
   language: ComposerLanguage,
+  fallbackKind?: TrainerStageKind,
 ): TrainerStage {
   const list = activities ?? [];
   const running = [...list].reverse().find((activity) => activity.status === "running");
   const latest = running ?? [...list].reverse().find((activity) => activity.status === "succeeded");
-  const kind = latest ? trainerStageKindForTool(latest.name) : "think";
+  const kind = latest ? trainerStageKindForTool(latest.name) : (fallbackKind ?? "think");
   return { kind, label: trainerStageLabel(kind, language) };
 }

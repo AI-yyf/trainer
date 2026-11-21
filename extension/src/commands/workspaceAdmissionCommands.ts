@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import fs from 'node:fs';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
 import { SidecarHttpError, type SidecarErrorPathState } from '../core/httpClient';
+import { hostCommandCopy, resolveHostCommandLanguage } from './hostCommandCopy';
 import { provisionRemoteProject } from './remoteProjectAdmission';
 
 import type { CommandContext } from '../core/commandContext';
@@ -487,14 +488,15 @@ export function runtimeDataRootUnder(rootPath: string): string {
   return path.join(rootPath, TRAINER_WORKSPACE_RUNTIME_DATA_DIRECTORY);
 }
 
-async function readSelectedTrainerRoot(context: CommandContext): Promise<SelectedTrainerRoot> {
+async function readSelectedTrainerRoot(context: CommandContext, responseLanguage?: ComposerLanguage): Promise<SelectedTrainerRoot> {
   const manifest = await context.trainerWorkspace.readWorkspaceManifest();
   if (!manifest) {
+    const lang = resolveHostCommandLanguage(context, responseLanguage);
     const configuredRoot = context.trainerWorkspace.getRoot();
     throw new Error(
       configuredRoot
-        ? `Project could not be added (root_path_unavailable). The selected Trainer workspace root is unavailable: ${configuredRoot}. Choose the Trainer workspace root again, then click Add to Trainer to retry.`
-        : 'Project could not be added (root_missing). No Trainer workspace root is selected. Choose the Trainer workspace root, then click Add to Trainer to retry.',
+        ? hostCommandCopy(lang, 'rootUnavailablePathError', { path: configuredRoot })
+        : hostCommandCopy(lang, 'rootUnavailableMissingError'),
     );
   }
   return selectedRootFromManifest(manifest);
@@ -523,21 +525,21 @@ function unresolvableProjectPathResult(
   };
 }
 
-function serverRootPath(response: ProjectDecisionResponse): string | undefined {
+function serverRootPath(response: ProjectDecisionResponse, lang: ComposerLanguage): string | undefined {
   const identityPath = response.project_identity?.canonicalRootPath;
   const provisioningPath =
     response.project_provisioning?.root_path ?? response.project_provisioning?.rootPath;
   if (identityPath && provisioningPath && !pathsEqual(identityPath, provisioningPath)) {
-    throw new Error('Trainer backend returned conflicting workspace-root paths.');
+    throw new Error(hostCommandCopy(lang, 'backendConflictingRootPaths'));
   }
   return identityPath ?? provisioningPath;
 }
 
-function serverRootId(response: ProjectDecisionResponse): string | undefined {
+function serverRootId(response: ProjectDecisionResponse, lang: ComposerLanguage): string | undefined {
   const identityId = response.project_identity?.rootId;
   const provisioningId = response.project_provisioning?.root_id ?? response.project_provisioning?.rootId;
   if (identityId && provisioningId && identityId !== provisioningId) {
-    throw new Error('Trainer backend returned conflicting workspace-root IDs.');
+    throw new Error(hostCommandCopy(lang, 'backendConflictingRootIds'));
   }
   return identityId ?? provisioningId;
 }
@@ -545,25 +547,27 @@ function serverRootId(response: ProjectDecisionResponse): string | undefined {
 function assertProvisioningMatchesSelectedRoot(
   response: ProjectDecisionResponse,
   selectedRoot: SelectedTrainerRoot,
+  lang: ComposerLanguage,
 ): void {
-  const returnedRootPath = serverRootPath(response);
-  const returnedRootId = serverRootId(response);
+  const returnedRootPath = serverRootPath(response, lang);
+  const returnedRootId = serverRootId(response, lang);
   if (!returnedRootPath || !pathsEqual(returnedRootPath, selectedRoot.canonicalRootPath)) {
-    throw new Error('Trainer backend did not keep this project under the selected Trainer workspace.');
+    throw new Error(hostCommandCopy(lang, 'backendWrongRootPath'));
   }
   if (!returnedRootId) {
-    throw new Error('Trainer backend did not return the stable identity for the selected workspace.');
+    throw new Error(hostCommandCopy(lang, 'backendMissingRootIdentity'));
   }
   if (selectedRoot.rootId && selectedRoot.rootId !== returnedRootId) {
-    throw new Error('Trainer workspace changed while this project was being added.');
+    throw new Error(hostCommandCopy(lang, 'workspaceChangedDuringAdd'));
   }
 }
 
 export async function chooseTrainerWorkspaceRootCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('set up the Trainer workspace root'))) {
-    return { ok: false, message: 'Workspace trust is required to set up the Trainer workspace root.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSetRoot') };
   }
 
   const language = resolveWorkspaceAdmissionResponseLanguage(context);
@@ -579,8 +583,8 @@ export async function chooseTrainerWorkspaceRootCommand(
     canSelectFolders: true,
     canSelectMany: false,
     defaultUri,
-    openLabel: 'Use as Trainer Workspace',
-    title: 'Choose Trainer Workspace Root',
+    openLabel: hostCommandCopy(lang, 'pickRootOpenLabel'),
+    title: hostCommandCopy(lang, 'pickRootTitle'),
   });
   const pickedUri = picks?.[0];
   if (pickedUri && pickedUri.scheme && pickedUri.scheme !== 'file') {
@@ -595,8 +599,7 @@ export async function chooseTrainerWorkspaceRootCommand(
     // windows, restricted mode). Offer a typed-path fallback so first-time
     // setup never dead-ends: a missing folder is created for the learner.
     const typed = await vscode.window.showInputBox({
-      prompt:
-        'Folder dialog cancelled — type the full path of the folder to use as the Trainer Workspace (it will be created if missing)',
+      prompt: hostCommandCopy(lang, 'pickRootPromptFallback'),
       placeHolder: '/Users/<you>/trainer-learning',
       ignoreFocusOut: true,
     });
@@ -607,15 +610,16 @@ export async function chooseTrainerWorkspaceRootCommand(
       } catch (error) {
         return {
           ok: false,
-          message: `Could not create the Trainer workspace folder at ${rootPath}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          message: hostCommandCopy(lang, 'pickRootCreateFailed', {
+            path: rootPath,
+            error: error instanceof Error ? error.message : String(error),
+          }),
         };
       }
     }
   }
   if (!rootPath) {
-    return { ok: false, message: 'Trainer Workspace Root selection cancelled.' };
+    return { ok: false, message: hostCommandCopy(lang, 'pickRootCancelled') };
   }
 
   let manifest: TrainerWorkspaceManifest;
@@ -662,16 +666,16 @@ export async function chooseTrainerWorkspaceRootCommand(
   } catch (error) {
     return {
       ok: false,
-      message: `Choosing the Trainer workspace root failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: hostCommandCopy(lang, 'pickRootFailed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
     };
   }
   await patchTrainerWorkspaceAdmission(context);
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
   return {
     ok: true,
-    message: `Trainer Workspace is ready at ${manifest.rootPath}.`,
+    message: hostCommandCopy(lang, 'pickRootReady', { path: manifest.rootPath }),
     data: manifest,
   };
 }
@@ -679,17 +683,18 @@ export async function chooseTrainerWorkspaceRootCommand(
 export async function migrateTrainerWorkspaceRootCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('migrate the Trainer workspace root'))) {
-    return { ok: false, message: 'Workspace trust is required to migrate the Trainer workspace root.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredMigrateRoot') };
   }
 
   const targetRoot = await pickTrainerWorkspaceDirectory({
     currentRoot: context.trainerWorkspace.getRoot(),
-    openLabel: 'Migrate Trainer Workspace Here',
-    title: 'Choose an Empty Folder for the Migrated Trainer Workspace',
+    openLabel: hostCommandCopy(lang, 'migrateRootOpenLabel'),
+    title: hostCommandCopy(lang, 'migrateRootTitle'),
   });
   if (!targetRoot) {
-    return { ok: false, message: 'Trainer Workspace migration cancelled.' };
+    return { ok: false, message: hostCommandCopy(lang, 'migrateRootCancelled') };
   }
 
   const { result: migration, restartedSidecar } = await runWithQuiescentManagedData(
@@ -702,7 +707,7 @@ export async function migrateTrainerWorkspaceRootCommand(
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
   return {
     ok: true,
-    message: `Trainer Workspace was copied to ${migration.targetRoot}. The previous root was left unchanged.`,
+    message: hostCommandCopy(lang, 'migrateRootDone', { target: migration.targetRoot }),
     data: migration,
   };
 }
@@ -710,17 +715,18 @@ export async function migrateTrainerWorkspaceRootCommand(
 export async function backupTrainerWorkspaceCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('back up the Trainer workspace root'))) {
-    return { ok: false, message: 'Workspace trust is required to back up the Trainer workspace root.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredBackupRoot') };
   }
 
   const backupRoot = await pickTrainerWorkspaceDirectory({
     currentRoot: context.trainerWorkspace.getRoot(),
-    openLabel: 'Save Trainer Workspace Backup Here',
-    title: 'Choose an Empty Folder for the Trainer Workspace Backup',
+    openLabel: hostCommandCopy(lang, 'backupRootOpenLabel'),
+    title: hostCommandCopy(lang, 'backupRootTitle'),
   });
   if (!backupRoot) {
-    return { ok: false, message: 'Trainer Workspace backup cancelled.' };
+    return { ok: false, message: hostCommandCopy(lang, 'backupRootCancelled') };
   }
 
   const { result: backup, restartedSidecar } = await runWithQuiescentManagedData(
@@ -730,11 +736,7 @@ export async function backupTrainerWorkspaceCommand(
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar, false);
   return {
     ok: true,
-    message: (
-      `Trainer Workspace backup was created at ${backup.backupRoot}. ` +
-      'The archive keeps learning records and plans; API keys stay in VS Code secrets and are never included. ' +
-      'On another device, open Trainer, choose Restore Trainer Workspace Backup, and pick this folder.'
-    ),
+    message: hostCommandCopy(lang, 'backupRootCreated', { target: backup.backupRoot }),
     data: backup,
   };
 }
@@ -742,25 +744,26 @@ export async function backupTrainerWorkspaceCommand(
 export async function restoreTrainerWorkspaceBackupCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('restore a Trainer workspace backup'))) {
-    return { ok: false, message: 'Workspace trust is required to restore a Trainer workspace backup.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredRestoreRoot') };
   }
 
   const backupRoot = await pickTrainerWorkspaceDirectory({
-    openLabel: 'Use This Trainer Workspace Backup',
-    title: 'Choose a Trainer Workspace Backup',
+    openLabel: hostCommandCopy(lang, 'restorePickBackupOpenLabel'),
+    title: hostCommandCopy(lang, 'restorePickBackupTitle'),
   });
   if (!backupRoot) {
-    return { ok: false, message: 'Trainer Workspace restore cancelled.' };
+    return { ok: false, message: hostCommandCopy(lang, 'restoreCancelled') };
   }
 
   const targetRoot = await pickTrainerWorkspaceDirectory({
     currentRoot: context.trainerWorkspace.getRoot(),
-    openLabel: 'Restore Trainer Workspace Here',
-    title: 'Choose an Empty Folder for the Restored Trainer Workspace',
+    openLabel: hostCommandCopy(lang, 'restoreTargetOpenLabel'),
+    title: hostCommandCopy(lang, 'restoreTargetTitle'),
   });
   if (!targetRoot) {
-    return { ok: false, message: 'Trainer Workspace restore cancelled.' };
+    return { ok: false, message: hostCommandCopy(lang, 'restoreCancelled') };
   }
 
   const { result: restoration, restartedSidecar } = await runWithQuiescentManagedData(
@@ -772,7 +775,7 @@ export async function restoreTrainerWorkspaceBackupCommand(
   await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
   return {
     ok: true,
-    message: `Trainer Workspace was restored to ${restoration.targetRoot}.`,
+    message: hostCommandCopy(lang, 'restoreDone', { target: restoration.targetRoot }),
     data: restoration,
   };
 }
@@ -795,6 +798,7 @@ async function runWithQuiescentManagedData<T>(
   }
   let operationFailure: unknown;
 
+  const lang = resolveHostCommandLanguage(context);
   if (wasReady) {
     await context.setSessionId(undefined);
     await context.sidecarManager.stop();
@@ -805,7 +809,7 @@ async function runWithQuiescentManagedData<T>(
     if (resolveNextManagedDataRoot) {
       const nextManagedDataRoot = resolveNextManagedDataRoot(result);
       if (!nextManagedDataRoot) {
-        throw new Error('Workspace transfer did not include the runtime data required to resume Trainer.');
+        throw new Error(hostCommandCopy(lang, 'rootTransferMissingRuntimeData'));
       }
       const nextManifest = await context.trainerWorkspace.readWorkspaceManifest();
       await context.sidecarManager.setManagedDataRootScope?.({
@@ -853,7 +857,7 @@ async function runWithQuiescentManagedData<T>(
       try {
         const status = await context.sidecarManager.restart();
         if (!operationFailure && status.lifecycle !== 'ready') {
-          throw new Error(status.detail ?? 'Trainer backend did not restart after workspace data transfer.');
+          throw new Error(status.detail ?? hostCommandCopy(lang, 'backendRestartFailedAfterTransfer'));
         }
       } catch (error) {
         if (!operationFailure) {
@@ -916,8 +920,9 @@ function uriToProjectPath(uri: vscode.Uri | undefined): string | undefined {
 export async function chooseWorkspaceProjectCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('choose the Trainer project folder'))) {
-    return { ok: false, message: 'Workspace trust is required to choose the Trainer project folder.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredChooseProject') };
   }
   const language = resolveWorkspaceAdmissionResponseLanguage(context);
   const copy = admissionHostCopy(language);
@@ -991,8 +996,9 @@ export async function deleteWorkspaceProjectCommand(
   context: CommandContext,
   payload?: WorkspaceAdmissionCommandPayload,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context, payload?.responseLanguage);
   if (!(await context.trustGuard.ensureTrusted('delete the Trainer project'))) {
-    return { ok: false, message: 'Workspace trust is required to delete a Trainer project.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredDeleteProject') };
   }
 
   const projectPath =
@@ -1001,7 +1007,7 @@ export async function deleteWorkspaceProjectCommand(
   if (!projectPath) {
     return {
       ok: false,
-      message: 'Open the project you want to delete from Trainer.',
+      message: hostCommandCopy(lang, 'deleteProjectOpenTarget'),
     };
   }
 
@@ -1009,17 +1015,18 @@ export async function deleteWorkspaceProjectCommand(
   if (!existing || existing.adoptionMode !== 'managed') {
     return {
       ok: false,
-      message: 'This folder is not a managed Trainer project.',
+      message: hostCommandCopy(lang, 'deleteProjectNotManaged'),
     };
   }
 
+  const deleteButton = hostCommandCopy(lang, 'deleteProjectConfirmButton');
   const confirmed = await vscode.window.showWarningMessage(
-    'Delete this project from Trainer? Stored records stay on the project lane. Live plan, task, and cards will not stay open here.',
+    hostCommandCopy(lang, 'deleteProjectConfirmPrompt'),
     { modal: true },
-    'Delete project',
+    deleteButton,
   );
-  if (confirmed !== 'Delete project') {
-    return { ok: false, cancelled: true, message: 'Trainer project delete cancelled.' };
+  if (confirmed !== deleteButton) {
+    return { ok: false, cancelled: true, message: hostCommandCopy(lang, 'deleteProjectCancelled') };
   }
 
   const deleted = await context.trainerWorkspace.deleteManagedProject(projectPath);
@@ -1058,7 +1065,7 @@ export async function deleteWorkspaceProjectCommand(
   }
   return {
     ok: true,
-    message: 'The Trainer project was deleted. Stored records remain on the project lane.',
+    message: hostCommandCopy(lang, 'deleteProjectDone'),
     data: deleted,
   };
 }
@@ -1080,11 +1087,12 @@ export async function continueWorkspaceAdmissionCommand(
 export async function abandonWorkspaceAdmissionCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   const projectPath = resolveCurrentTrainerProjectPath(context.getHostState().workspace);
-  if (!projectPath) return { ok: false, message: 'Open the pending project before abandoning reconciliation.' };
+  if (!projectPath) return { ok: false, message: hostCommandCopy(lang, 'abandonReconcileNeedProject') };
   await context.trainerWorkspace.abandonManagedProvisioning(projectPath);
   await patchTrainerWorkspaceAdmission(context);
-  return { ok: true, message: 'Pending workspace reconciliation was cleared; the project was not changed.' };
+  return { ok: true, message: hostCommandCopy(lang, 'abandonReconcileDone') };
 }
 
 function incomingWorkspaceIdAfterAdmission(
@@ -1414,8 +1422,9 @@ async function runSetCurrentWorkspaceProjectAdmission(
   responseLanguage?: ComposerLanguage,
   selectedProjectPath?: string,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context, responseLanguage);
   if (!(await context.trustGuard.ensureTrusted('set the current Trainer project admission mode'))) {
-    return { ok: false, message: 'Workspace trust is required to update the Trainer project admission.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredAdmission') };
   }
 
   const projectPath = selectedProjectPath?.trim() || resolveCurrentTrainerProjectPath(context.getHostState().workspace);
@@ -1445,7 +1454,7 @@ async function runSetCurrentWorkspaceProjectAdmission(
         await patchTrainerWorkspaceAdmission(context);
         return {
           ok: true,
-          message: 'The current project will stay browse-only and will not receive long-lived project memory.',
+          message: hostCommandCopy(lang, 'browseOnlyNotice'),
           data: project,
         };
       }
@@ -1457,7 +1466,6 @@ async function runSetCurrentWorkspaceProjectAdmission(
         await context.trainerWorkspace.recordManagedProvisioningPending(projectPath, fallback).catch(() => undefined);
         return { ok: false, message: fallback };
       }
-      const language = resolveWorkspaceAdmissionResponseLanguage(context, { responseLanguage });
       const message = workspaceAdmissionFailureMessage(failure, language);
       context.outputChannel.appendLine(
         safeWorkspaceAdmissionLog(failure, error instanceof SidecarHttpError ? error.statusCode : undefined),
@@ -1467,7 +1475,7 @@ async function runSetCurrentWorkspaceProjectAdmission(
     }
   } else {
     try {
-      await assertProjectCanUseNonManagedAdmission(context, projectPath);
+      await assertProjectCanUseNonManagedAdmission(context, projectPath, responseLanguage);
     } catch (error) {
       return {
         ok: false,
@@ -1590,7 +1598,8 @@ async function provisionManagedProject(
   projectPath: string,
   responseLanguage?: ComposerLanguage,
 ): Promise<{ kind: 'managed'; identity: TrainerManagedProjectIdentity } | { kind: 'browse' }> {
-  let selectedRoot = await readSelectedTrainerRoot(context);
+  const lang = resolveHostCommandLanguage(context, responseLanguage);
+  let selectedRoot = await readSelectedTrainerRoot(context, responseLanguage);
   if (!projectPath.includes('://') && pathsEqual(selectedRoot.canonicalRootPath, projectPath)) {
     const copy = admissionHostCopy(resolveWorkspaceAdmissionResponseLanguage(context, { responseLanguage }));
     throw new Error(copy.projectSameAsRoot);
@@ -1598,7 +1607,7 @@ async function provisionManagedProject(
 
   let status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    throw new Error(status.detail ?? 'Trainer backend is unavailable.');
+    throw new Error(status.detail ?? hostCommandCopy(lang, 'backendUnavailable'));
   }
 
   const workspaceName = basenameFs(projectPath) || 'Trainer';
@@ -1615,11 +1624,11 @@ async function provisionManagedProject(
   const registeredRootId = classification.root_identity?.rootId;
   const registeredRootPath = classification.root_identity?.rootPath;
   if (!registeredRootId || !registeredRootPath) {
-    throw new Error('Trainer backend did not register the selected workspace root before adding the project.');
+    throw new Error(hostCommandCopy(lang, 'backendDidNotRegisterRoot'));
   }
   const rootScopeChanged = selectedRoot.rootId !== registeredRootId;
   await context.trainerWorkspace.setRootIdentity(registeredRootId, registeredRootPath);
-  selectedRoot = await readSelectedTrainerRoot(context);
+  selectedRoot = await readSelectedTrainerRoot(context, responseLanguage);
   if (rootScopeChanged) {
     // Root registration may have happened during the initial unscoped launch.
     // Switch storage before creating the project/session, then obtain a fresh
@@ -1627,7 +1636,7 @@ async function provisionManagedProject(
     await patchTrainerWorkspaceAdmission(context);
     status = await context.sidecarManager.ensureRunning();
     if (status.lifecycle !== 'ready' || !status.port) {
-      throw new Error(status.detail ?? 'Trainer backend is unavailable.');
+      throw new Error(status.detail ?? hostCommandCopy(lang, 'backendUnavailable'));
     }
     classification = await classifyProjectForAdmission(context, status.port, {
       workspace_id: projectPath, folder_path: projectPath,
@@ -1639,7 +1648,7 @@ async function provisionManagedProject(
     if (classification.root_identity?.rootId !== selectedRoot.rootId ||
         !classification.root_identity?.rootPath ||
         !pathsEqual(classification.root_identity.rootPath, selectedRoot.canonicalRootPath)) {
-      throw new Error('Trainer workspace changed while this project was being added.');
+      throw new Error(hostCommandCopy(lang, 'workspaceChangedDuringAdd'));
     }
   }
   if (projectPath.startsWith('vscode-remote://')) {
@@ -1668,7 +1677,7 @@ async function provisionManagedProject(
   );
   const discoveryId = classification.project_discovery?.discovery_id;
   if (!discoveryId) {
-    throw new Error('Trainer backend did not return a project discovery record.');
+    throw new Error(hostCommandCopy(lang, 'backendNoDiscoveryRecord'));
   }
   const decisionKind = discoveryDecisionFromClassification(
     classification,
@@ -1699,6 +1708,7 @@ async function provisionManagedProject(
     selectedRoot,
     projectPath,
     decision,
+    lang,
   );
   const agentSessionId = completed.project_provisioning!.agent_session_id!;
   await context.setSessionId(agentSessionId);
@@ -1742,19 +1752,25 @@ function projectAdoptionPollingPath(jobId: string, rootPath: string, workspaceId
   return `/workspace/adoption-job?${params.toString()}`;
 }
 
-function managedAdoptionFailureMessage(status: string | undefined, reason: string | undefined): string {
+function managedAdoptionFailureMessage(
+  lang: ComposerLanguage,
+  status: string | undefined,
+  reason: string | undefined,
+): string {
   const normalizedStatus = status?.trim().toLowerCase();
   if (normalizedStatus === 'interrupted') {
     return reason
-      ? `Trainer adoption indexing was interrupted: ${reason}`
-      : 'Trainer adoption indexing was interrupted.';
+      ? hostCommandCopy(lang, 'adoptionInterruptedReason', { reason })
+      : hostCommandCopy(lang, 'adoptionInterrupted');
   }
   if (normalizedStatus === 'retry_required') {
-    return reason ? `Trainer adoption indexing needs retry: ${reason}` : 'Trainer adoption indexing needs retry.';
+    return reason
+      ? hostCommandCopy(lang, 'adoptionRetryRequiredReason', { reason })
+      : hostCommandCopy(lang, 'adoptionRetryRequired');
   }
   return reason
-    ? `Trainer adoption indexing timed out before completion: ${reason}`
-    : 'Trainer adoption indexing timed out before completion.';
+    ? hostCommandCopy(lang, 'adoptionTimedOutReason', { reason })
+    : hostCommandCopy(lang, 'adoptionTimedOut');
 }
 
 async function waitForManagedProjectAdoption(
@@ -1763,6 +1779,7 @@ async function waitForManagedProjectAdoption(
   selectedRoot: SelectedTrainerRoot,
   projectPath: string,
   initialDecision: ProjectDecisionResponse,
+  lang: ComposerLanguage,
 ): Promise<ProjectDecisionResponse> {
   const completedStatus = initialDecision.project_adoption_job?.status?.trim().toLowerCase();
   if (
@@ -1771,14 +1788,14 @@ async function waitForManagedProjectAdoption(
     initialDecision.project_provisioning?.agent_session_id &&
     initialDecision.project_identity
   ) {
-    const currentSelectedRoot = await readSelectedTrainerRoot(context);
+    const currentSelectedRoot = await readSelectedTrainerRoot(context, lang);
     if (
       !pathsEqual(currentSelectedRoot.canonicalRootPath, selectedRoot.canonicalRootPath) ||
       currentSelectedRoot.rootId !== selectedRoot.rootId
     ) {
-      throw new Error('Trainer workspace changed while this project was being added.');
+      throw new Error(hostCommandCopy(lang, 'workspaceChangedDuringAdd'));
     }
-    assertProvisioningMatchesSelectedRoot(initialDecision, currentSelectedRoot);
+    assertProvisioningMatchesSelectedRoot(initialDecision, currentSelectedRoot, lang);
     return initialDecision;
   }
 
@@ -1789,17 +1806,17 @@ async function waitForManagedProjectAdoption(
       initialDecision.project_provisioning?.agent_session_id &&
       initialDecision.project_identity
     ) {
-      const currentSelectedRoot = await readSelectedTrainerRoot(context);
+      const currentSelectedRoot = await readSelectedTrainerRoot(context, lang);
       if (
         !pathsEqual(currentSelectedRoot.canonicalRootPath, selectedRoot.canonicalRootPath) ||
         currentSelectedRoot.rootId !== selectedRoot.rootId
       ) {
-        throw new Error('Trainer workspace changed while this project was being added.');
+        throw new Error(hostCommandCopy(lang, 'workspaceChangedDuringAdd'));
       }
-      assertProvisioningMatchesSelectedRoot(initialDecision, currentSelectedRoot);
+      assertProvisioningMatchesSelectedRoot(initialDecision, currentSelectedRoot, lang);
       return initialDecision;
     }
-    throw new Error('Trainer backend did not start a project adoption job.');
+    throw new Error(hostCommandCopy(lang, 'adoptionNoJobStarted'));
   }
 
   const timeoutMs = 15_000;
@@ -1808,12 +1825,12 @@ async function waitForManagedProjectAdoption(
   let lastStatus = initialDecision.project_adoption_job;
 
   while (Date.now() <= deadlineMs) {
-    const currentSelectedRoot = await readSelectedTrainerRoot(context);
+    const currentSelectedRoot = await readSelectedTrainerRoot(context, lang);
     if (
       !pathsEqual(currentSelectedRoot.canonicalRootPath, selectedRoot.canonicalRootPath) ||
       currentSelectedRoot.rootId !== selectedRoot.rootId
     ) {
-      throw new Error('Trainer workspace changed while this project was being added.');
+      throw new Error(hostCommandCopy(lang, 'workspaceChangedDuringAdd'));
     }
 
     const response = await getUserInitiatedProjectAdmission<ProjectDecisionResponse>(
@@ -1826,20 +1843,20 @@ async function waitForManagedProjectAdoption(
     if (status === 'completed') {
       const agentSessionId = response.project_provisioning?.agent_session_id;
       if (!agentSessionId || !response.project_identity || response.project_discovery?.status !== 'adopted') {
-        throw new Error('Trainer backend completed adoption without returning the required project state.');
+        throw new Error(hostCommandCopy(lang, 'adoptionIncompleteState'));
       }
-      const finalSelectedRoot = await readSelectedTrainerRoot(context);
+      const finalSelectedRoot = await readSelectedTrainerRoot(context, lang);
       if (
         !pathsEqual(finalSelectedRoot.canonicalRootPath, selectedRoot.canonicalRootPath) ||
         finalSelectedRoot.rootId !== selectedRoot.rootId
       ) {
-        throw new Error('Trainer workspace changed while this project was being added.');
+        throw new Error(hostCommandCopy(lang, 'workspaceChangedDuringAdd'));
       }
-      assertProvisioningMatchesSelectedRoot(response, finalSelectedRoot);
+      assertProvisioningMatchesSelectedRoot(response, finalSelectedRoot, lang);
       return response;
     }
     if (status === 'interrupted' || status === 'retry_required') {
-      throw new Error(managedAdoptionFailureMessage(status, response.project_adoption_job?.retry_reason));
+      throw new Error(managedAdoptionFailureMessage(lang, status, response.project_adoption_job?.retry_reason));
     }
 
     const remainingMs = deadlineMs - Date.now();
@@ -1849,18 +1866,18 @@ async function waitForManagedProjectAdoption(
     await new Promise<void>((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, remainingMs)));
   }
 
-  throw new Error(managedAdoptionFailureMessage(lastStatus?.status, lastStatus?.retry_reason));
+  throw new Error(managedAdoptionFailureMessage(lang, lastStatus?.status, lastStatus?.retry_reason));
 }
 
 async function assertProjectCanUseNonManagedAdmission(
   context: CommandContext,
   projectPath: string,
+  responseLanguage?: ComposerLanguage,
 ): Promise<void> {
+  const lang = resolveHostCommandLanguage(context, responseLanguage);
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    throw new Error(
-      'Trainer could not verify whether this project is already managed. Browse or ignore was not applied.',
-    );
+    throw new Error(hostCommandCopy(lang, 'nonManagedVerifyFailed'));
   }
 
   let response: ProjectProvisioningResponse;
@@ -1873,19 +1890,13 @@ async function assertProjectCanUseNonManagedAdmission(
     if (isSidecarNotFound(error)) {
       return;
     }
-    throw new Error(
-      'Trainer could not verify whether this project is already managed. Browse or ignore was not applied.',
-    );
+    throw new Error(hostCommandCopy(lang, 'nonManagedVerifyFailed'));
   }
 
   if (!response?.project_provisioning?.agent_session_id) {
-    throw new Error(
-      'Trainer received an incomplete project-management response. Browse or ignore was not applied.',
-    );
+    throw new Error(hostCommandCopy(lang, 'nonManagedIncompleteVerify'));
   }
-  throw new Error(
-    'This project is already managed by Trainer. Use an explicit retire or revoke project flow before changing it to browse or ignore.',
-  );
+  throw new Error(hostCommandCopy(lang, 'alreadyManagedMustRetireFirst'));
 }
 
 function isSidecarNotFound(error: unknown): boolean {
@@ -1917,15 +1928,14 @@ async function pickTrainerWorkspaceDirectory(input: {
 export async function trustWorkspaceWindowCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resolveHostCommandLanguage(context);
   // 受限模式下扩展写操作全部被 VS Code 拦截;这里给用户一个明确的一键入口,
   // 打开原生的工作区信任管理,信任后 Trainer 的所有功能立即可用。
   await vscode.commands.executeCommand('workbench.trust.manage');
   const trusted = vscode.workspace.isTrusted;
   return {
     ok: true,
-    message: trusted
-      ? '工作区已信任。Trainer 全部功能可用。'
-      : '已打开信任管理。请在其中选择“信任”,然后重试。',
+    message: hostCommandCopy(lang, trusted ? 'trustWorkspaceReady' : 'trustWorkspaceManageOpened'),
     data: { trusted },
   };
 }

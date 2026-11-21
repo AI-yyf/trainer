@@ -26,6 +26,7 @@ import {
 } from "../../../../shared/src/operationReliabilityGovernance";
 import { composerDockDraftScope } from "../lib/composerDock";
 import { createNeutralBootstrapData } from "../lib/neutralBootstrap";
+import { trainerStageKindForTool } from "../lib/trainerStage";
 import {
   resolveOperationMessageSurface,
   type OperationMessageSurface,
@@ -1617,6 +1618,21 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           streaming: {
             ...state.streaming,
             agentStep: message.payload.index,
+          },
+        };
+      }
+
+      if (message.type === "stream/stage") {
+        if (!isCurrentStreamEvent(state.streaming, message.payload.messageId)) {
+          return {};
+        }
+        const liveStageKind = message.payload.toolName
+          ? trainerStageKindForTool(message.payload.toolName)
+          : (message.payload.kind ?? state.streaming.liveStageKind);
+        return {
+          streaming: {
+            ...state.streaming,
+            liveStageKind,
           },
         };
       }

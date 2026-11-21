@@ -2104,6 +2104,14 @@ type HostMessageBody =
   | { type: 'stream/tool_result'; payload: StreamAgentToolResultPayload }
   | { type: 'stream/step'; payload: StreamAgentStepPayload }
   | {
+      type: 'stream/stage';
+      payload: {
+        messageId: string;
+        kind?: 'think' | 'reason' | 'retrieve' | 'download' | 'organize' | 'cards' | 'finalize';
+        toolName?: string;
+      };
+    }
+  | {
       type: 'resourceOrganization/pending';
       payload: { pending: boolean; operationCount?: number };
     };

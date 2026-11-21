@@ -49,6 +49,7 @@ function createStreamingState(overrides = {}) {
     streamMessageId: undefined,
     agentActivity: [],
     agentStep: undefined,
+    liveStageKind: undefined,
     completionSummary: undefined,
     completionNextStep: undefined,
     completionStopReason: undefined,

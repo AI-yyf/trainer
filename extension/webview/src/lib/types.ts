@@ -2364,6 +2364,14 @@ type HostMessageBody =
   | { type: "stream/tool_result"; payload: StreamAgentToolResultEvent }
   | { type: "stream/step"; payload: StreamAgentStepEvent }
   | {
+      type: "stream/stage";
+      payload: {
+        messageId?: string;
+        kind?: "think" | "reason" | "retrieve" | "download" | "organize" | "cards" | "finalize";
+        toolName?: string;
+      };
+    }
+  | {
       type: "resourceOrganization/pending";
       payload: { pending: boolean; operationCount?: number };
     }

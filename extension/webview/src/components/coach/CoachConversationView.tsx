@@ -95,8 +95,10 @@ function CoachConversationViewImpl({
   const storeStreamMessageId = useWorkbenchState((state) => state.streaming.streamMessageId);
   const storeAgentActivity = useWorkbenchState((state) => state.streaming.agentActivity);
   const storeAgentStep = useWorkbenchState((state) => state.streaming.agentStep);
+  const storeLiveStageKind = useWorkbenchState((state) => state.streaming.liveStageKind);
   const resolvedAgentActivity = liveContentFromStore ? storeAgentActivity : agentActivity;
   const resolvedAgentStep = liveContentFromStore ? storeAgentStep : agentStep;
+  const resolvedLiveStageKind = liveContentFromStore ? storeLiveStageKind : undefined;
   const resolvedStreamingBody = streamingMessage
     ? liveContentFromStore
       ? streamingMessage.body?.trim()
@@ -157,7 +159,11 @@ function CoachConversationViewImpl({
   const streamingStripVisible = Boolean(
     streamingMessage && resolvedAgentActivity && resolvedAgentActivity.length > 0,
   );
-  const activeTrainerStage = currentTrainerStage(resolvedAgentActivity ?? [], language);
+  const activeTrainerStage = currentTrainerStage(
+    resolvedAgentActivity ?? [],
+    language,
+    resolvedLiveStageKind,
+  );
 
   return (
     <Conversation className={classes} label={title}>

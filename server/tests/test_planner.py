@@ -173,6 +173,19 @@ class PlannerTests(unittest.TestCase):
         self.assertIn("error handling", concepts)
         self.assertNotEqual(concepts[0], "learn")
 
+    def test_extract_concepts_supports_chinese_goals_without_english_placeholders(self) -> None:
+        planner = TrainingPlannerService()
+        concepts = planner._extract_concepts("掌握支付幂等键持久化与并发防重入的学习计划")
+        self.assertIn("支付幂等键持久化", concepts)
+        self.assertIn("并发防重入", concepts)
+        self.assertNotIn("problem framing", concepts)
+        self.assertNotIn("scaffold", concepts)
+
+        scaffold_filtered = planner._extract_concepts("scaffold new first 学习机制")
+        self.assertNotIn("scaffold", scaffold_filtered)
+        self.assertNotIn("new", scaffold_filtered)
+        self.assertNotIn("first", scaffold_filtered)
+
     def test_memory_snapshot_anchor_feeds_progression_focus(self) -> None:
         planner = PlannerService(TrainingPlannerService())
         profile = UserProfile(

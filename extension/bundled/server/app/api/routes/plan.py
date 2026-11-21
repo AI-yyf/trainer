@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -510,17 +511,24 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
                 if workspace_memory.get("response_language")
                 else requested_response_language
             )
+            explicit_goal = str(
+                payload.get("goal") or payload.get("learning_goal") or payload.get("learningGoal") or ""
+            ).strip()
             objectives = [
                 str(item).strip()
                 for item in payload.get("objectives", [])
                 if str(item).strip()
             ]
+            if not objectives and explicit_goal:
+                objectives = [explicit_goal]
             if not objectives:
                 first_look_goal = first_look_goal_hint(state.workspace_id)
                 if first_look_goal:
                     objectives = [first_look_goal]
                 elif profile.long_term_goal.strip():
                     objectives = [profile.long_term_goal.strip()]
+            elif explicit_goal and profile.long_term_goal in {"", "Trainer"}:
+                profile = profile.model_copy(update={"long_term_goal": explicit_goal})
             request = PlanGenerateRequest(
                 profile=profile,
                 goals=objectives,
@@ -609,14 +617,24 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         request = PlanGenerateRequest.model_validate(payload)
         workspace_id = current_workspace_id(workspace_id=request.workspace_id)
         reject_frozen_plan_generation(workspace_id, payload)
+        explicit_goal = str(
+            payload.get("goal") or payload.get("learning_goal") or payload.get("learningGoal") or ""
+        ).strip()
         goals = [str(item).strip() for item in request.goals if str(item).strip()]
+        if not goals and explicit_goal:
+            goals = [explicit_goal]
         if not goals:
             first_look_goal = first_look_goal_hint(workspace_id)
             if first_look_goal:
                 goals = [first_look_goal]
             elif request.profile.long_term_goal.strip():
                 goals = [request.profile.long_term_goal.strip()]
-        request = request.model_copy(update={"goals": goals})
+        request_updates: dict[str, Any] = {"goals": goals}
+        if explicit_goal and not request.profile.long_term_goal.strip():
+            request_updates["profile"] = request.profile.model_copy(
+                update={"long_term_goal": explicit_goal}
+            )
+        request = request.model_copy(update=request_updates)
         try:
             plan = runtime.planner_service.generate_plan(request)
             plan = runtime.planner_service.localize_plan(plan, requested_response_language)

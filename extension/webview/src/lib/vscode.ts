@@ -325,6 +325,17 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       stop_reason: z.union([z.string(), z.null()]).optional(),
     }),
   }),
+  z.object({
+    type: z.literal("stream/stage"),
+    payload: z.object({
+      messageId: z.string().nullish().transform((value) => value ?? undefined),
+      kind: z
+        .enum(["think", "reason", "retrieve", "download", "organize", "cards", "finalize"])
+        .nullish()
+        .transform((value) => value ?? undefined),
+      toolName: z.string().nullish().transform((value) => value ?? undefined),
+    }),
+  }),
   // Library folder answers (list/create/rename/delete), correlated by the
   // request's operationId. Without this entry the schema silently dropped the
   // host's answers and every folder operation timed out as "unconfirmed".

@@ -837,6 +837,7 @@ class CoachAgentLoop:
             explicit_training_card_request=extra.get("explicit_training_card_request") is True,
             formal_plan_mutation=extra.get("formal_plan_mutation") is True,
             explicit_learning_note_request=extra.get("explicit_learning_note_request") is True,
+            explicit_lecture_note_save_request=extra.get("explicit_lecture_note_save_request") is True,
             explicit_resource_import=extra.get("explicit_resource_import") is True,
             explicit_resource_organize=extra.get("explicit_resource_organize") is True,
             live_formal_plan_for_task_mint=extra.get("live_formal_plan_for_task_mint") is True,

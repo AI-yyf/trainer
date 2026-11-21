@@ -66,12 +66,23 @@ STOPWORDS = {
     "learn",
     "make",
     "more",
+    "new",
+    "plan",
+    "please",
     "plugin",
     "push",
     "project",
+    "scaffold",
     "ship",
     "side",
     "stabilize",
+    "stage",
+    "stages",
+    "current",
+    "first",
+    "goal",
+    "master",
+    "understand",
     "that",
     "the",
     "this",
@@ -80,6 +91,13 @@ STOPWORDS = {
     "with",
     "work",
 }
+
+_ZH_GOAL_CLEAN_PREFIX = re.compile(
+    r"^(?:请)?(?:帮我)?(?:制定|规划|设计|安排|学习|掌握|理解|搞懂|深入理解|系统学习|学会|实现)\s*"
+)
+_ZH_GOAL_CLEAN_SUFFIX = re.compile(r"(?:的)?(?:学习|成长|能力)?(?:路线|计划|路径|方案)$")
+_ZH_CONCEPT_SPLIT = re.compile(r"[、，,；;。/｜|\n]+|(?:\s*(?:以及|并且|还有)\s*|\s+[与和及并跟]\s+|与|和)")
+_ZH_FALLBACK_CONCEPTS = ["问题边界与约束", "核心机制实现", "真实环境验证"]
 
 PHRASE_HINTS = [
     "error handling",
@@ -385,6 +403,19 @@ class TrainingPlannerService:
             if phrase in lowered:
                 concepts.append(phrase)
 
+        if re.search(r"[\u4e00-\u9fff]", goal):
+            cleaned_zh = re.sub(r"\s+", " ", str(goal or "")).strip(" 。.!！?？:：;；")
+            previous = None
+            while cleaned_zh and cleaned_zh != previous:
+                previous = cleaned_zh
+                cleaned_zh = _ZH_GOAL_CLEAN_PREFIX.sub("", cleaned_zh)
+                cleaned_zh = _ZH_GOAL_CLEAN_SUFFIX.sub("", cleaned_zh).strip()
+            for segment in _ZH_CONCEPT_SPLIT.split(cleaned_zh):
+                part = _ZH_GOAL_CLEAN_PREFIX.sub("", segment.strip()).strip(" 。.!！?？:：;；")
+                part = _ZH_GOAL_CLEAN_SUFFIX.sub("", part).strip()
+                if len(part) >= 2 and re.search(r"[\u4e00-\u9fff]", part):
+                    concepts.append(part[:28].strip())
+
         tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9_-]+", lowered)
         filtered_tokens = [token for token in tokens if len(token) > 2 and token not in STOPWORDS]
         counter = Counter(filtered_tokens)
@@ -396,7 +427,11 @@ class TrainingPlannerService:
             if normalized and normalized not in deduped:
                 deduped.append(normalized)
 
-        return deduped[:6] or ["problem framing", "implementation", "verification"]
+        if deduped:
+            return deduped[:6]
+        if re.search(r"[\u4e00-\u9fff]", goal):
+            return list(_ZH_FALLBACK_CONCEPTS)
+        return ["problem framing", "implementation", "verification"]
 
     def _pick_due_review(
         self,

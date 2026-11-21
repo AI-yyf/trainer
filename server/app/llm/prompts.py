@@ -573,10 +573,11 @@ def _agent_loop_core_instructions() -> str:
         "evidence, or test counts.\n"
         "- `save_lecture_note` - persist a structured RethinkFun Markdown lecture note strictly "
         "under `<LibraryRoot>/Trainer Library/` (never into the user's code repository) and index "
-        "it immediately. Call it only when the learner explicitly asks to save a lecture or study "
-        "note into their Resources library. After calling it, still deliver the complete, readable "
-        "RethinkFun lecture directly in plain text with NO further tool calls (do not replace it "
-        "with `coach_finalize`).\n"
+        "it immediately in one step. When the learner explicitly asks to save a lecture or study "
+        "note into their Resources library, ALWAYS use `save_lecture_note` in one step (never use "
+        "`write_sandbox_file` + `index_sandbox_file` for lecture notes). After calling it, still "
+        "deliver the complete, readable RethinkFun lecture directly in plain text with NO further "
+        "tool calls (do not replace it with `coach_finalize`).\n"
         "- `coach_finalize` - optional, and ONLY use it last when a short 2-3 sentence structured "
         "close (`summary`, `decision`, `teaching_note`) is enough (for example after `save_formal_plan`). "
         "Do NOT call `coach_finalize` after `read_file`, `save_lecture_note`, or `inspect_learning_truth`, "
@@ -630,9 +631,11 @@ def _agent_loop_library_instructions() -> str:
         "including sandbox artifacts bound to a resource id. Trainer commits operations inside "
         "its own managed storage; never use it on the learner's project.\n"
         "- `list_sandbox`, `read_sandbox_file`, `write_sandbox_file`, `index_sandbox_file` - "
-        "work inside Trainer's managed resource sandbox only. List and read before editing. "
-        "Write library notes, extracted artifacts, and working copies, then index so search "
-        "can find them. Never write the learner's project or business code.\n"
+        "work inside Trainer's managed resource sandbox only. List and read before editing existing "
+        "sandbox copies and extracted artifacts, then index so search can find them. Do NOT use "
+        "`write_sandbox_file` + `index_sandbox_file` to save a learner-requested lecture or study "
+        "note (use `save_lecture_note` in one step instead). Never write the learner's project or "
+        "business code.\n"
         "- `read_workspace_file` / `list_workspace_files` read the learner's project. On a "
         "remote repository the host attaches a snapshot; use those tools to analyze code.\n"
         "- `import_workspace_file` copies one project file into the local library sandbox "
@@ -649,10 +652,11 @@ def _agent_loop_library_instructions() -> str:
         "- If a retrieved resource gives an explicit sequence, preserve its step count, labels, and boundaries. Do not silently add or rename steps; if you extend it, say that you are extending it.\n"
         "- When the prepared library grounding already includes an exact sequence, restate every step in order in the visible reply before you narrow to the learner's next action.\n"
         "- Behave like a live coach with a working library habit: quietly check the learner's own materials before teaching from generic memory when the library already carries the topic.\n"
-        "- The visible transcript already renders each read excerpt with its resource id, "
-        "version, paragraph anchor and citation id. Do not paste a long passage again; quote a "
-        "short exact phrase only when the wording itself is the lesson, and point the learner to "
-        "the rendered excerpt for the rest.\n"
+        "- Refer to read materials naturally by their title or heading; the visible transcript "
+        "already renders each read excerpt cleanly for the learner, so NEVER output internal "
+        "resource IDs (`resource-...`), paragraph anchors (`¶chunk:...`), or raw JSON field names "
+        "in learner-facing prose. Quote a short exact phrase only when the wording itself is the "
+        "lesson.\n"
         "- Keep 2-5 strong fragments, then synthesize. Do not dump search hits back at the learner."
     )
 
@@ -1439,7 +1443,10 @@ def _growth_loop_honesty_block(coach_context: dict[str, Any] | None) -> str:
     if coach_context.get("formal_plan_mutation") is True:
         return ""
     # Chat-side "create a card" stays hint-only; mint is POST /training/generate-card.
-    if not pressure_blocks and coach_context.get("explicit_learning_note_request") is True:
+    if not pressure_blocks and (
+        coach_context.get("explicit_learning_note_request") is True
+        or coach_context.get("explicit_lecture_note_save_request") is True
+    ):
         return ""
     if coach_context.get("explicit_resource_import") is True:
         return ""

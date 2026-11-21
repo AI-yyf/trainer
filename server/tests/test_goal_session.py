@@ -59,6 +59,12 @@ def _current(client: TestClient, workspace_id: str = "w-goal") -> dict | None:
         ("今天的目标是什么？", None),
         ("随便聊聊", None),
         ("/review", None),
+        ("帮我检查一下我掌握的程度如何", None),
+        ("帮我看看为什么这个测试没过，我搞懂了一半", None),
+        ("帮我解释一下 GIL，我想掌握一下它为什么存在", None),
+        ("请核查并如实告诉我目前当前目标、计划各阶段、掌握进度的具体验证证据记录", None),
+        ("帮我分析一下我哪里还没搞懂？", None),
+        ("我想掌握 AsyncIO 事件循环", "AsyncIO 事件循环"),
     ],
 )
 def test_detection_only_matches_explicit_capability_intent(
@@ -66,6 +72,31 @@ def test_detection_only_matches_explicit_capability_intent(
     expected: str | None,
 ) -> None:
     assert detect_goal_candidate(message) == expected
+
+
+def test_explicit_goal_command_can_update_existing_active_goal(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path / "data"))
+    with TestClient(app) as client:
+        client.get("/snapshot", params={"workspace_id": "w-explicit-override"})
+        service = app.state.runtime.goals()
+        first = service.observe_turn(
+            workspace_id="w-explicit-override",
+            message="我想真正学会实现 PPO",
+            intent="coach",
+            active_view="coach",
+        )
+        assert first is not None and first.title == "实现 PPO"
+
+        updated = service.observe_turn(
+            workspace_id="w-explicit-override",
+            message="帮我设定一个长期目标：独立推导并实现 Transformer 注意力",
+            intent="coach",
+            active_view="coach",
+        )
+        assert updated is not None
+        assert updated.source == "user_explicit"
+        assert updated.title == "独立推导并实现 Transformer 注意力"
+        assert updated.goal_id != first.goal_id
 
 
 def test_auto_detection_never_replaces_an_existing_goal(tmp_path: Path) -> None:

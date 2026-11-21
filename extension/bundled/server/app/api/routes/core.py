@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -63,6 +64,7 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
+from ...llm.coaching_replies import enforce_truthful_saved_note_path
 from ...llm.provider.service_support import has_successful_agent_tool_result
 from ...llm.provider_service import (
     ProviderService,
@@ -117,6 +119,31 @@ from ..training_card_identity import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _build_stream_timings(
+    *,
+    stream_started_at: float,
+    model_requested_at: float | None,
+    provider_first_event_at: float | None,
+    visible_first_at: float | None,
+    finished_at: float,
+) -> dict[str, float | None]:
+    model_mark = model_requested_at if model_requested_at is not None else stream_started_at
+    return {
+        "local_prep_ms": round(max(0.0, (model_mark - stream_started_at) * 1000.0), 1),
+        "provider_first_event_ms": (
+            round(max(0.0, (provider_first_event_at - model_mark) * 1000.0), 1)
+            if provider_first_event_at is not None
+            else None
+        ),
+        "visible_ttft_ms": (
+            round(max(0.0, (visible_first_at - stream_started_at) * 1000.0), 1)
+            if visible_first_at is not None
+            else None
+        ),
+        "total_ms": round(max(0.0, (finished_at - stream_started_at) * 1000.0), 1),
+    }
 
 
 @dataclass(slots=True)
@@ -2028,6 +2055,10 @@ def build_core_router(
         # complexity bailout is silenced here and the StreamingResponse call
         # site pins the async-iterator type explicitly.
         async def generate():  # pyright: ignore[reportGeneralTypeIssues]
+            stream_started_at = time.perf_counter()
+            model_requested_at: float | None = None
+            provider_first_event_at: float | None = None
+            visible_first_at: float | None = None
             token_count = 0
             streamed_reply_content = ""
             pending_streamed_reply_content = ""
@@ -2170,6 +2201,7 @@ def build_core_router(
                 provider_failure_detected = False
                 final_agent_meta: dict[str, object] = {}
                 if guided_training_local_reply is None:
+                    model_requested_at = time.perf_counter()
                     yield core.stream_status_event("requesting_model", stream_id)
                 if guided_training_local_reply is not None:
                     full_content, updated_coach_turn, guided_meta = core.apply_guided_training_visible_fallback(
@@ -2205,7 +2237,24 @@ def build_core_router(
                                     yield _abort_frame
                                 return
                             event_type = str(event.get("type") or "")
-                            if event_type == "text":
+                            if provider_first_event_at is None and event_type in {
+                                "provider_activity",
+                                "text",
+                                "tool_call",
+                                "final",
+                            }:
+                                provider_first_event_at = time.perf_counter()
+                            if event_type == "provider_activity":
+                                activity_phase = str(event.get("phase") or "")
+                                if activity_phase == "model_reasoning":
+                                    yield core.stream_status_event("model_reasoning", stream_id)
+                                elif activity_phase == "tool_drafting" and event.get("name"):
+                                    yield core.stream_status_event(
+                                        "tool_intent",
+                                        stream_id,
+                                        detail={"name": str(event.get("name"))},
+                                    )
+                            elif event_type == "text":
                                 delta = str(event.get("delta") or "")
                                 if delta:
                                     full_content += delta
@@ -2220,9 +2269,13 @@ def build_core_router(
                                             full_content,
                                         )
                                         if visible_delta:
+                                            if visible_first_at is None:
+                                                visible_first_at = time.perf_counter()
                                             streamed_reply_content += visible_delta
                                             yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                             elif event_type == "tool_call":
+                                if visible_first_at is None:
+                                    visible_first_at = time.perf_counter()
                                 agent_tool_events.append(dict(event))
                                 yield core.stream_frame("tool_call", event, stream_id)
                             elif event_type == "tool_result":
@@ -2268,6 +2321,7 @@ def build_core_router(
                             coach_context=dict(coach_turn["coach_context"]),
                             grounded_completion=has_successful_agent_tool_result(agent_tool_events),
                         )
+                        full_content = enforce_truthful_saved_note_path(full_content, agent_tool_events)
                     if not agent_resume_thread and (agent_summary or agent_next_step):
                         agent_resume_thread = core.build_resume_thread_text(
                             str(agent_summary or "").strip(),
@@ -2341,12 +2395,16 @@ def build_core_router(
                                 return
                             full_content += chunk
                             token_count += 1
+                            if provider_first_event_at is None and chunk:
+                                provider_first_event_at = time.perf_counter()
                             visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
                                 pending_streamed_reply_content,
                                 chunk,
                                 full_content,
                             )
                             if visible_chunk and not core.requires_formal_plan_commit(request):
+                                if visible_first_at is None:
+                                    visible_first_at = time.perf_counter()
                                 streamed_reply_content += visible_chunk
                                 yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
                     except Exception:
@@ -2634,8 +2692,19 @@ def build_core_router(
                 )
                 visible_delta = core.completion_stream_delta(streamed_reply_content, visible_content)
                 if visible_delta:
+                    if visible_first_at is None:
+                        visible_first_at = time.perf_counter()
                     token_count += 1
                     yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                timings_payload = _build_stream_timings(
+                    stream_started_at=stream_started_at,
+                    model_requested_at=model_requested_at,
+                    provider_first_event_at=provider_first_event_at,
+                    visible_first_at=visible_first_at,
+                    finished_at=time.perf_counter(),
+                )
+                final_agent_meta["timings"] = timings_payload
+                response_data["timings"] = timings_payload
                 if final_agent_meta:
                     response_data["agent"] = final_agent_meta
                 if await stream_cancelled():
@@ -2963,6 +3032,10 @@ def build_core_router(
         # complexity bailout is silenced here and the StreamingResponse call
         # site pins the async-iterator type explicitly.
         async def generate():  # pyright: ignore[reportGeneralTypeIssues]
+            stream_started_at = time.perf_counter()
+            model_requested_at: float | None = None
+            provider_first_event_at: float | None = None
+            visible_first_at: float | None = None
             nonlocal coaching_service, profile, request, state, use_agent_stream, workspace_id
             token_count = 0
             streamed_reply_content = ""
@@ -3109,6 +3182,7 @@ def build_core_router(
                     final_agent_meta: dict[str, object] = dict(prepared_agent_meta)
                     provider_failure_detected = False
 
+                    model_requested_at = time.perf_counter()
                     yield core.stream_status_event("requesting_model", stream_id)
                     if use_agent_stream:
                         agent_context = dict(coach_context)
@@ -3142,7 +3216,24 @@ def build_core_router(
                             if not isinstance(event, dict):
                                 continue
                             event_type = str(event.get("type") or "")
-                            if event_type == "text":
+                            if provider_first_event_at is None and event_type in {
+                                "provider_activity",
+                                "text",
+                                "tool_call",
+                                "final",
+                            }:
+                                provider_first_event_at = time.perf_counter()
+                            if event_type == "provider_activity":
+                                activity_phase = str(event.get("phase") or "")
+                                if activity_phase == "model_reasoning":
+                                    yield core.stream_status_event("model_reasoning", stream_id)
+                                elif activity_phase == "tool_drafting" and event.get("name"):
+                                    yield core.stream_status_event(
+                                        "tool_intent",
+                                        stream_id,
+                                        detail={"name": str(event.get("name"))},
+                                    )
+                            elif event_type == "text":
                                 delta = str(event.get("delta") or "")
                                 if delta:
                                     full_content += delta
@@ -3157,9 +3248,13 @@ def build_core_router(
                                             full_content,
                                         )
                                         if visible_delta:
+                                            if visible_first_at is None:
+                                                visible_first_at = time.perf_counter()
                                             streamed_reply_content += visible_delta
                                             yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                             elif event_type == "tool_call":
+                                if visible_first_at is None:
+                                    visible_first_at = time.perf_counter()
                                 agent_tool_events.append(dict(event))
                                 yield core.stream_frame("tool_call", event, stream_id)
                             elif event_type == "tool_result":
@@ -3205,6 +3300,7 @@ def build_core_router(
                                 coach_context=coach_context,
                                 grounded_completion=has_successful_agent_tool_result(agent_tool_events),
                             )
+                            full_content = enforce_truthful_saved_note_path(full_content, agent_tool_events)
                         if not agent_resume_thread and (agent_summary or agent_next_step):
                             agent_resume_thread = core.build_resume_thread_text(
                                 str(agent_summary or "").strip(),
@@ -3235,12 +3331,16 @@ def build_core_router(
                                 continue
                             full_content += delta
                             token_count += 1
+                            if provider_first_event_at is None:
+                                provider_first_event_at = time.perf_counter()
                             visible_delta, pending_streamed_reply_content = core.safe_stream_delta(
                                 pending_streamed_reply_content,
                                 delta,
                                 full_content,
                             )
                             if visible_delta and not core.requires_formal_plan_commit(request):
+                                if visible_first_at is None:
+                                    visible_first_at = time.perf_counter()
                                 streamed_reply_content += visible_delta
                                 yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                         stream_finalization = coaching_service.consume_stream_finalization()
@@ -3394,8 +3494,19 @@ def build_core_router(
                     )
                     visible_delta = core.completion_stream_delta(streamed_reply_content, visible_content)
                     if visible_delta:
+                        if visible_first_at is None:
+                            visible_first_at = time.perf_counter()
                         token_count += 1
                         yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                    timings_payload = _build_stream_timings(
+                        stream_started_at=stream_started_at,
+                        model_requested_at=model_requested_at,
+                        provider_first_event_at=provider_first_event_at,
+                        visible_first_at=visible_first_at,
+                        finished_at=time.perf_counter(),
+                    )
+                    final_agent_meta["timings"] = timings_payload
+                    response_data["timings"] = timings_payload
                     if final_agent_meta:
                         response_data["agent"] = final_agent_meta
                     if await stream_cancelled():
@@ -3538,6 +3649,7 @@ def build_core_router(
                 provider_failure_detected = False
                 final_agent_meta: dict[str, object] = {}
                 if guided_training_local_reply is None:
+                    model_requested_at = time.perf_counter()
                     yield core.stream_status_event("requesting_model", stream_id)
                 if guided_training_local_reply is not None:
                     full_content, updated_coach_turn, guided_meta = core.apply_guided_training_visible_fallback(
@@ -3575,7 +3687,24 @@ def build_core_router(
                                     yield _abort_frame
                                 return
                             event_type = str(event.get("type") or "")
-                            if event_type == "text":
+                            if provider_first_event_at is None and event_type in {
+                                "provider_activity",
+                                "text",
+                                "tool_call",
+                                "final",
+                            }:
+                                provider_first_event_at = time.perf_counter()
+                            if event_type == "provider_activity":
+                                activity_phase = str(event.get("phase") or "")
+                                if activity_phase == "model_reasoning":
+                                    yield core.stream_status_event("model_reasoning", stream_id)
+                                elif activity_phase == "tool_drafting" and event.get("name"):
+                                    yield core.stream_status_event(
+                                        "tool_intent",
+                                        stream_id,
+                                        detail={"name": str(event.get("name"))},
+                                    )
+                            elif event_type == "text":
                                 delta = str(event.get("delta") or "")
                                 if delta:
                                     full_content += delta
@@ -3590,9 +3719,13 @@ def build_core_router(
                                             full_content,
                                         )
                                         if visible_delta:
+                                            if visible_first_at is None:
+                                                visible_first_at = time.perf_counter()
                                             streamed_reply_content += visible_delta
                                             yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
                             elif event_type == "tool_call":
+                                if visible_first_at is None:
+                                    visible_first_at = time.perf_counter()
                                 agent_tool_events.append(dict(event))
                                 yield core.stream_frame("tool_call", event, stream_id)
                             elif event_type == "tool_result":
@@ -3638,6 +3771,7 @@ def build_core_router(
                             coach_context=dict(coach_turn["coach_context"]),
                             grounded_completion=has_successful_agent_tool_result(agent_tool_events),
                         )
+                        full_content = enforce_truthful_saved_note_path(full_content, agent_tool_events)
                     if not full_content:
                         local_sequence_fallback = core.build_local_sequence_visible_fallback(
                             coach_context=dict(coach_turn["coach_context"]),
@@ -3705,12 +3839,16 @@ def build_core_router(
                                 return
                             full_content += chunk
                             token_count += 1
+                            if provider_first_event_at is None and chunk:
+                                provider_first_event_at = time.perf_counter()
                             visible_chunk, pending_streamed_reply_content = core.safe_stream_delta(
                                 pending_streamed_reply_content,
                                 chunk,
                                 full_content,
                             )
                             if visible_chunk and not core.requires_formal_plan_commit(request):
+                                if visible_first_at is None:
+                                    visible_first_at = time.perf_counter()
                                 streamed_reply_content += visible_chunk
                                 yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
                     except Exception:
@@ -4040,8 +4178,19 @@ def build_core_router(
                 )
                 visible_delta = core.completion_stream_delta(streamed_reply_content, visible_content)
                 if visible_delta:
+                    if visible_first_at is None:
+                        visible_first_at = time.perf_counter()
                     token_count += 1
                     yield f"data: {json.dumps({'chunk': visible_delta})}\n\n"
+                timings_payload = _build_stream_timings(
+                    stream_started_at=stream_started_at,
+                    model_requested_at=model_requested_at,
+                    provider_first_event_at=provider_first_event_at,
+                    visible_first_at=visible_first_at,
+                    finished_at=time.perf_counter(),
+                )
+                final_agent_meta["timings"] = timings_payload
+                response_data["timings"] = timings_payload
                 if final_agent_meta:
                     response_data["agent"] = final_agent_meta
                 if await stream_cancelled():

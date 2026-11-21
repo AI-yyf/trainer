@@ -18,12 +18,38 @@ if TYPE_CHECKING:
     from ..core.event_ledger import EventLedgerService
 from ..db.repository import TrainerRepository
 
-_ZH_INTENT_PREFIX = re.compile(
-    r"(?:我(?:真的|真心|一直|很|想|打算)?(?:要|想|希望|打算)|帮我|请帮我|我想要)"
+_ZH_GOAL_INTENT = re.compile(
+    r"^(?:请)?(?:我(?:真的|真心|一直|很|想|打算)?(?:要|想|希望|打算)|(?:请)?帮我|我想要)\s*"
+    r"(?:真正|认真|好好|彻底)?(?:学会|学懂|掌握|搞懂|弄懂|系统(?:地)?学习|系统学|从零(?:开始)?学习|从头(?:开始)?学)\s*"
+    r"(?P<title>.+)$"
 )
-_ZH_LEARNING_VERB = re.compile(
-    r"(?:真正|认真)?(?:学会|学懂|掌握|搞懂|弄懂|系统(?:地)?学习|系统学|从零(?:开始)?学习|从头(?:开始)?学)"
+_ZH_SYSTEMATIC_GOAL = re.compile(
+    r"^(?:请)?(?:系统(?:地)?学习|系统学|从零(?:开始)?学习|从头(?:开始)?学)\s*(?P<title>.+)$"
 )
+_NON_GOAL_AUDIT_PREFIX = re.compile(
+    r"^(?:请)?(?:(?:帮我|给我|先帮我|再)?\s*)?(?:检查|核查|查看|看看|查一下|核对|统计|汇总|审计|解释|分析|说明|介绍|告诉我)"
+)
+_INVALID_GOAL_TITLE_PREFIX = re.compile(
+    r"^(?:的|了|着|过|一点|一半)(?:$|[\s，,。]|[\u4e00-\u9fff])|^一下(?:$|.*(?:为什么|如何|多少|怎么|是不是|是否))",
+    re.IGNORECASE,
+)
+_INVALID_GOAL_TITLE_SUFFIX = re.compile(
+    r"(?:的程度(?:如何)?|了一半|证据记录|验证记录|掌握程度|掌握进度)$"
+)
+_INVALID_GOAL_TITLE_EXACT = frozenset(
+    {
+        "程度",
+        "进度",
+        "情况",
+        "状态",
+        "证据",
+        "验证证据",
+        "具体验证证据记录",
+        "什么",
+        "为什么",
+    }
+)
+_QUESTION_TAIL = re.compile(r"(?:吗|呢)$")
 _ZH_PLAN_REQUEST = re.compile(
     r"^(?:请)?帮我(?:制定|规划|设计|安排)(?:一个|一份|一套)?"
     r"(?P<body>.+?)(?:的)?(?:学习|成长|能力)?(?:路线|计划|路径|方案)$"
@@ -78,40 +104,71 @@ def _clean_candidate_title(value: str) -> str:
     return normalize_goal_title(title)
 
 
+def _is_valid_goal_candidate_title(title: str, original_message: str) -> bool:
+    if len(title) < 2:
+        return False
+    if "?" in title or "？" in title:
+        return False
+    if title in _INVALID_GOAL_TITLE_EXACT:
+        return False
+    if _INVALID_GOAL_TITLE_PREFIX.search(title):
+        return False
+    if _INVALID_GOAL_TITLE_SUFFIX.search(title):
+        return False
+    if re.search(r"(?:为什么存在|什么意思|是什么)$", title):
+        return False
+    stripped = str(original_message or "").strip()
+    if stripped.endswith(("?", "？")):
+        return False
+    if _QUESTION_TAIL.search(normalize_goal_title(stripped)):
+        return False
+    return True
+
+
+def detect_explicit_goal_command(message: str) -> str | None:
+    """Return a goal title when the message explicitly commands setting a goal."""
+    raw = normalize_goal_title(message)
+    if len(raw) < 4 or raw.startswith("/"):
+        return None
+    explicit_goal = _ZH_EXPLICIT_GOAL.match(raw) or _EN_EXPLICIT_GOAL.match(raw)
+    if not explicit_goal:
+        return None
+    title = _clean_candidate_title(explicit_goal.group("title"))
+    return title if _is_valid_goal_candidate_title(title, message) else None
+
+
 def detect_goal_candidate(message: str) -> str | None:
     """Return a goal title only for an explicit capability-learning statement.
 
-    Ordinary questions, explanations and chat never match. The caller still
-    decides whether to persist the candidate.
+    Ordinary questions, explanations, audits and chat never match. The caller
+    still decides whether to persist the candidate.
     """
+    original = str(message or "").strip()
     raw = normalize_goal_title(message)
     if len(raw) < 4 or raw.startswith("/"):
+        return None
+    if original.endswith(("?", "？")) or _QUESTION_TAIL.search(raw):
+        return None
+
+    explicit_title = detect_explicit_goal_command(message)
+    if explicit_title:
+        return explicit_title
+
+    if _NON_GOAL_AUDIT_PREFIX.match(raw):
         return None
 
     plan_match = _ZH_PLAN_REQUEST.match(raw)
     if plan_match:
         title = _clean_candidate_title(plan_match.group("body"))
-        if len(title) >= 2:
+        if _is_valid_goal_candidate_title(title, original):
             return title
 
-    explicit_goal = _ZH_EXPLICIT_GOAL.match(raw) or _EN_EXPLICIT_GOAL.match(raw)
-    if explicit_goal:
-        title = _clean_candidate_title(explicit_goal.group("title"))
-        if len(title) >= 2:
-            return title
-
-    verb_match = _ZH_LEARNING_VERB.search(raw)
-    if verb_match and _ZH_INTENT_PREFIX.search(raw[: verb_match.start()]):
-        title = _clean_candidate_title(raw[verb_match.end() :])
-        if len(title) >= 2:
-            return title
-
-    for pattern in (_EN_INTENT, _EN_SYSTEMATIC):
+    for pattern in (_ZH_GOAL_INTENT, _ZH_SYSTEMATIC_GOAL, _EN_INTENT, _EN_SYSTEMATIC):
         match = pattern.match(raw)
         if not match:
             continue
         title = _clean_candidate_title(match.group("title"))
-        if len(title) >= 2:
+        if _is_valid_goal_candidate_title(title, original):
             return title
     return None
 
@@ -298,6 +355,20 @@ class GoalService:
                     plan=plan,
                 )
             return current
+        explicit_title = detect_explicit_goal_command(message)
+        if (
+            explicit_title
+            and str(intent or "coach").strip().lower() == "coach"
+            and str(active_view or "coach").strip().lower() in {"coach", ""}
+        ):
+            return self.start(
+                workspace_id=workspace_id,
+                title=explicit_title,
+                session_id=session_id,
+                concept=explicit_title,
+                source="user_explicit",
+                plan=plan,
+            )
         if current is not None:
             return current
         if str(intent or "coach").strip().lower() != "coach":

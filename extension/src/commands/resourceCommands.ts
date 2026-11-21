@@ -27,6 +27,8 @@ import { mergeMemorySummarySnapshot, mergeResourceRecords, resetWorkbenchAfterRu
 import { rehydrateWorkbenchRuntime, trainerSessionBlockReason } from '../core/runtimeRehydration';
 import { getRuntimeWorkspaceId, isRemoteWorkspaceSnapshot, withWorkspaceQuery } from './workspaceContext';
 import { basenameFs, looksLikeWindowsAbsolutePath, normalizeFsPath } from '../core/workspaceRoots';
+import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
+import { hostCommandCopy, resolveHostCommandLanguage } from './hostCommandCopy';
 import { runtimeDataRootUnder } from './workspaceAdmissionCommands';
 
 const MAX_RESOURCE_UPLOADS = 100;
@@ -199,19 +201,13 @@ function resourceMutationAdmissionBlock(context: CommandContext): CommandExecuti
   if (status === 'browse') {
     return {
       ok: false,
-      message:
-        language === 'zh-CN'
-          ? '这个项目目前只能浏览。你可以搜索和打开已有资料，但不能添加、索引或修改资料。'
-          : 'This project is browse-only. You can search and open existing resources, but cannot add, index, or change them.',
+      message: hostCommandCopy(language, 'resourceBrowseOnly'),
     };
   }
   if (status === 'ignored') {
     return {
       ok: false,
-      message:
-        language === 'zh-CN'
-          ? '这个项目已被忽略。Trainer 不会在这里添加或修改资料；需要时请先在教练页把它加入 Trainer。'
-          : 'This project is ignored. Trainer will not add or change resources here. Add it to Trainer from Coach when you are ready.',
+      message: hostCommandCopy(language, 'resourceProjectIgnored'),
     };
   }
 
@@ -219,29 +215,27 @@ function resourceMutationAdmissionBlock(context: CommandContext): CommandExecuti
     ok: false,
     message:
       trainerSessionBlockReason(context) ??
-      'Choose how Trainer should work with this project before changing its resources.',
+      hostCommandCopy(language, 'resourceChooseAdmissionFallback'),
   };
 }
 
-function resourceResponseLanguage(context: CommandContext): string | undefined {
-  return context.getHostState().bootstrap.memory?.workspace?.responseLanguage;
+function resourceResponseLanguage(context: CommandContext, explicit?: unknown): ComposerLanguage {
+  return resolveHostCommandLanguage(context, explicit);
 }
 
 function preservedTrashListMessage(context: CommandContext): string {
-  return resourceResponseLanguage(context) === 'zh-CN'
-    ? '当前回收站内容保持不变。'
-    : 'The current Trash list is still shown.';
+  return hostCommandCopy(resourceResponseLanguage(context), 'trashCurrentListPreserved');
 }
 
-async function typedResourcePathFallback(kind: 'file' | 'folder'): Promise<string[] | undefined> {
+async function typedResourcePathFallback(
+  kind: 'file' | 'folder',
+  language: ComposerLanguage,
+): Promise<string[] | undefined> {
   // Mirrors the workspace-admission typed-path fallback: when the native
   // dialog never appears, ask for a full path instead of failing silently.
   const typed = await vscode.window.showInputBox({
-    title: kind === 'file' ? 'Trainer resource file' : 'Trainer resource folder',
-    prompt:
-      kind === 'file'
-        ? 'The file dialog did not open — type the full path of the file to import.'
-        : 'The folder dialog did not open — type the full path of the folder to import.',
+    title: hostCommandCopy(language, kind === 'file' ? 'resourcePickerTitleFile' : 'resourcePickerTitleFolder'),
+    prompt: hostCommandCopy(language, kind === 'file' ? 'resourcePickerPromptFile' : 'resourcePickerPromptFolder'),
     placeHolder: kind === 'file' ? '/Users/<you>/notes/lecture.pdf' : '/Users/<you>/notes',
     ignoreFocusOut: true,
   });
@@ -259,9 +253,10 @@ export async function uploadResourceCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('upload training resources'))) {
-    return { ok: false, message: 'Workspace trust is required to upload resources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredUploadResources') };
   }
 
   const requestedMode =
@@ -273,7 +268,7 @@ export async function uploadResourceCommand(
     requestedMode === 'files' || requestedMode === 'folder' || requestedMode === 'url'
       ? requestedMode
       : undefined;
-  const inlineUploadResult = parseInlineResourceUploads(payload);
+  const inlineUploadResult = parseInlineResourceUploads(payload, lang);
   if (inlineUploadResult.error) {
     return { ok: false, message: inlineUploadResult.error };
   }
@@ -283,34 +278,39 @@ export async function uploadResourceCommand(
     | { label: string; value: ResourceSourceMode }
     | undefined = inlineUploads.length > 0
     ? {
-        label: 'Inline resources',
+        label: hostCommandCopy(lang, 'resourceLabelInline'),
         value: resolveInlineUploadMode(inlineUploads, directMode),
       }
     : directMode
     ? {
-        label: directMode === 'files' ? 'Local files' : directMode === 'folder' ? 'Folder' : 'URL',
+        label:
+          directMode === 'files'
+            ? hostCommandCopy(lang, 'resourceLabelLocalFiles')
+            : directMode === 'folder'
+              ? hostCommandCopy(lang, 'resourceLabelFolder')
+              : hostCommandCopy(lang, 'resourceLabelUrl'),
         value: directMode,
       }
     : await vscode.window.showQuickPick(
     [
       {
-        label: 'Local files',
-        description: 'Select up to 100 files from this machine',
+        label: hostCommandCopy(lang, 'resourceLabelLocalFiles'),
+        description: hostCommandCopy(lang, 'resourceDescLocalFiles'),
         value: 'files' as const,
       },
       {
-        label: 'Folder',
-        description: 'Recursively import files from one folder (up to 100 files)',
+        label: hostCommandCopy(lang, 'resourceLabelFolder'),
+        description: hostCommandCopy(lang, 'resourceDescFolder'),
         value: 'folder' as const,
       },
       {
-        label: 'URL',
-        description: 'Attach a remote page or document link',
+        label: hostCommandCopy(lang, 'resourceLabelUrl'),
+        description: hostCommandCopy(lang, 'resourceDescUrl'),
         value: 'url' as const,
       },
     ],
     {
-      title: 'Add Trainer resource',
+      title: hostCommandCopy(lang, 'resourceAddMethodTitle'),
       ignoreFocusOut: true,
     },
   );
@@ -321,7 +321,7 @@ export async function uploadResourceCommand(
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const uploads: unknown[] = [];
@@ -343,7 +343,7 @@ export async function uploadResourceCommand(
   // surface through the final per-resource result.
   let importStageHandle: { dispose?: () => void } | undefined;
   let lastImportStageAt = 0;
-  const showImportStage = async (zh: string, en: string) => {
+  const showImportStage = async (text: string) => {
     // Keep each real stage visible long enough to be read; the work itself is
     // already done (or about to start), this only paces the disclosure.
     const elapsed = Date.now() - lastImportStageAt;
@@ -355,12 +355,9 @@ export async function uploadResourceCommand(
     if (typeof vscode.window.setStatusBarMessage !== "function") {
       return;
     }
-    importStageHandle = vscode.window.setStatusBarMessage(
-      resourceResponseLanguage(context) === 'zh-CN' ? zh : en,
-      180_000,
-    );
+    importStageHandle = vscode.window.setStatusBarMessage(text, 180_000);
   };
-  await showImportStage('正在识别资料类型…', 'Identifying resource types…');
+  await showImportStage(hostCommandCopy(lang, 'importStageIdentifying'));
 
   const recordUploaded = async (upload: unknown) => {
     uploads.push(upload);
@@ -386,7 +383,7 @@ export async function uploadResourceCommand(
       canSelectFiles: true,
       canSelectFolders: false,
       canSelectMany: true,
-      openLabel: 'Upload to Trainer',
+      openLabel: hostCommandCopy(lang, 'uploadToTrainerLabel'),
       filters: {
         Resources: RESOURCE_FILTER_EXTENSIONS,
         All: ['*'],
@@ -398,7 +395,7 @@ export async function uploadResourceCommand(
     // typed-path fallback so importing never dead-ends silently.
     const allFiles = picks?.length
       ? picks.map((uri) => uri.fsPath)
-      : await typedResourcePathFallback('file');
+      : await typedResourcePathFallback('file', lang);
     if (!allFiles?.length) {
       return { ok: false, cancelled: true };
     }
@@ -409,8 +406,8 @@ export async function uploadResourceCommand(
         ok: false,
         message:
           skippedUnsupported > 0
-            ? `Skipped ${skippedUnsupported} unsupported file(s). No supported resources were selected.`
-            : 'No resources selected.',
+            ? hostCommandCopy(lang, 'skippedUnsupportedFiles', { count: skippedUnsupported })
+            : hostCommandCopy(lang, 'noResourcesSelected'),
       };
     }
     truncated = supportedFiles.length > MAX_RESOURCE_UPLOADS;
@@ -430,10 +427,10 @@ export async function uploadResourceCommand(
       canSelectFiles: false,
       canSelectFolders: true,
       canSelectMany: false,
-      openLabel: 'Import folder into Trainer',
+      openLabel: hostCommandCopy(lang, 'importFolderToTrainerLabel'),
     });
 
-    const folderPath = picks?.[0]?.fsPath ?? (await typedResourcePathFallback('folder'))?.[0];
+    const folderPath = picks?.[0]?.fsPath ?? (await typedResourcePathFallback('folder', lang))?.[0];
     if (!folderPath) {
       return { ok: false, cancelled: true };
     }
@@ -450,8 +447,8 @@ export async function uploadResourceCommand(
         ok: false,
         message:
           skippedUnsupported > 0
-            ? `Skipped ${skippedUnsupported} unsupported file(s). No supported files were found in that folder.`
-            : 'No supported files were found in that folder.',
+            ? hostCommandCopy(lang, 'folderSkippedUnsupportedFiles', { count: skippedUnsupported })
+            : hostCommandCopy(lang, 'folderNoSupportedFiles'),
       };
     }
 
@@ -466,10 +463,10 @@ export async function uploadResourceCommand(
     failedUploads += uploadResult.failedCount;
   } else {
     const source = await vscode.window.showInputBox({
-      title: 'Trainer resource URL',
-      prompt: 'Paste the URL to attach to this workspace.',
+      title: hostCommandCopy(lang, 'resourceUrlTitle'),
+      prompt: hostCommandCopy(lang, 'resourceUrlPrompt'),
       ignoreFocusOut: true,
-      validateInput: (value) => validateResourceUrl(value),
+      validateInput: (value) => validateResourceUrl(value, lang),
     });
     if (!source) {
       return { ok: false, cancelled: true };
@@ -507,7 +504,7 @@ export async function uploadResourceCommand(
         truncated,
         skippedUnsupported,
         sourceMode: sourceMode.value,
-        language: resourceResponseLanguage(context),
+        language: lang,
       }),
       data: [],
     };
@@ -523,7 +520,7 @@ export async function uploadResourceCommand(
       workspace_id: workspaceId,
       resource_ids: uploadedResourceIds,
     };
-    await showImportStage('正在解析文档结构…', 'Parsing document structure…');
+    await showImportStage(hostCommandCopy(lang, 'importStageParsingStructure'));
     try {
       await context.sidecarClient.postJson<unknown>(
         sidecarPort,
@@ -534,7 +531,7 @@ export async function uploadResourceCommand(
     } catch {
       // Older sidecars without the staged endpoints still index normally.
     }
-    await showImportStage('正在生成 Markdown…', 'Generating canonical Markdown…');
+    await showImportStage(hostCommandCopy(lang, 'importStageGeneratingMarkdown'));
     let materializedItems: Record<string, unknown>[] = [];
     try {
       const materialized = await context.sidecarClient.postJson<unknown>(
@@ -561,12 +558,11 @@ export async function uploadResourceCommand(
     );
     if (imageCount > 0 || tableCount > 0) {
       await showImportStage(
-        `已生成 Markdown；已抽取 ${imageCount} 张图片、${tableCount} 个表格`,
-        `Markdown ready; extracted ${imageCount} image(s) and ${tableCount} table(s)`,
+        hostCommandCopy(lang, 'importStageExtractedSummary', { images: imageCount, tables: tableCount }),
       );
     }
   }
-  await showImportStage('正在建立索引…', 'Building the search index…');
+  await showImportStage(hostCommandCopy(lang, 'importStageBuildingIndex'));
   // Parsing Word/PowerPoint/PDF sources into Markdown and indexing them can
   // take tens of seconds; keep one honest visible stage instead of a silent
   // wait. The final command message still reports the real per-resource result.
@@ -584,10 +580,7 @@ export async function uploadResourceCommand(
       ? await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title:
-              resourceResponseLanguage(context) === 'zh-CN'
-                ? 'Trainer：正在解析并生成 Markdown、建立索引…'
-                : 'Trainer: parsing documents into Markdown and indexing…',
+            title: hostCommandCopy(lang, 'importStageProgressTitle'),
             cancellable: false,
           },
           runIndex,
@@ -595,7 +588,7 @@ export async function uploadResourceCommand(
       : await runIndex();
   const indexed = indexResult.indexed;
   let summaryRefreshed = true;
-  await showImportStage('正在刷新资料库…', 'Refreshing the library…');
+  await showImportStage(hostCommandCopy(lang, 'importStageRefreshingLibrary'));
   try {
     const summary = await context.sidecarClient.getJson<unknown>(
       status.port,
@@ -625,7 +618,7 @@ export async function uploadResourceCommand(
       truncated,
       skippedUnsupported,
       sourceMode: sourceMode.value,
-      language: resourceResponseLanguage(context),
+      language: lang,
     }),
     data: indexed.length > 0 ? indexed : uploads,
   };
@@ -665,65 +658,47 @@ type LibraryCopyKey =
  * failure sanitizer can trust and pass through the specific reason instead of
  * replacing it with the generic "try again" notice.
  */
-function libraryCopy(key: LibraryCopyKey, language?: string, detail?: string): string {
-  const isChinese = language === 'zh-CN';
-  const failure = (zh: string, en: string): string =>
-    `[[trainer-resource-failure]] ${isChinese ? zh : en}`;
+function libraryCopy(key: LibraryCopyKey, language?: ComposerLanguage, detail?: string): string {
+  const lang = language ?? 'en-US';
+  const formatDetail = detail ? (lang === 'zh-CN' ? `（${detail}）` : ` (${detail})`) : '';
+  const failure = (msg: string): string => `[[trainer-resource-failure]] ${msg}`;
   switch (key) {
     case 'captureStartedBody':
-      return isChinese ? '正在抓取并整理这份资料…' : 'Capturing and processing this resource…';
+      return hostCommandCopy(lang, 'libCaptureStarted');
     case 'captureInvalidUrl':
-      return failure('这个链接看起来不完整。检查后重新粘贴一次。', 'That URL does not look complete. Check it and paste it again.');
+      return failure(hostCommandCopy(lang, 'libCaptureInvalidUrl'));
     case 'captureFetchFailed':
-      return failure(
-        `这份网页暂时抓取失败${detail ? `（${detail}）` : ''}。网络恢复后重试，或先把网页存成文件再导入。`,
-        `This page could not be captured right now${detail ? ` (${detail})` : ''}. Retry once the network is back, or save the page as a file and import it.`,
-      );
+      return failure(hostCommandCopy(lang, 'libCaptureFetchFailed', { detail: formatDetail }));
     case 'captureNotConfirmed':
-      return failure(
-        '没能确认这次采集是否完成。请稍后查看资料库；如仍未出现，请重试一次。',
-        'It is not confirmed whether this capture finished. Check the library shortly; if it never appears, try once more.',
-      );
+      return failure(hostCommandCopy(lang, 'libCaptureNotConfirmed'));
     case 'organizeBlocked':
-      return failure(
-        '这份资料暂时不能移动或改名。它可能正在被索引或只读。',
-        'This resource cannot be moved or renamed right now. It may be indexing or read-only.',
-      );
+      return failure(hostCommandCopy(lang, 'libOrganizeBlocked'));
     case 'organizeNotFound':
-      return failure('这份资料已不在资料库里。刷新资料库后再试。', 'This resource is no longer in the library. Refresh Resources and try again.');
+      return failure(hostCommandCopy(lang, 'libOrganizeNotFound'));
     case 'organizeInvalid':
-      return failure('这次的整理请求不完整，没有生效。', 'This organize request was incomplete and was not applied.');
+      return failure(hostCommandCopy(lang, 'libOrganizeInvalid'));
     case 'exportNotFound':
-      return failure('这份资料已不在资料库里。刷新资料库后再试。', 'This resource is no longer in the library. Refresh Resources and try again.');
+      return failure(hostCommandCopy(lang, 'libOrganizeNotFound'));
     case 'exportNoSnapshot':
-      return failure('这份资料还没有可导出的本地副本。先把原文导入资料库，再导出。', 'This resource has no local snapshot to export yet. Import the original first, then export.');
+      return failure(hostCommandCopy(lang, 'libExportNoSnapshot'));
     case 'exportSaveCancelled':
-      return failure('已取消导出，资料保持不变。', 'Export cancelled. The resource is unchanged.');
+      return failure(hostCommandCopy(lang, 'libExportCancelled'));
     case 'exportSaveFailed':
-      return failure(`导出没有成功${detail ? `（${detail}）` : ''}。换一个保存位置再试一次。`, `The export did not finish${detail ? ` (${detail})` : ''}. Pick a different save location and try again.`);
+      return failure(hostCommandCopy(lang, 'libExportFailed', { detail: formatDetail }));
     case 'exportSucceeded':
-      return isChinese ? `已导出：${detail ?? ''}` : `Exported: ${detail ?? ''}`;
+      return hostCommandCopy(lang, 'libExportSucceeded', { name: detail ?? '' });
     case 'serviceUnavailable':
-      return failure('资料服务暂时不可用。稍后再试。', 'The resource service is unavailable right now. Try again shortly.');
+      return failure(hostCommandCopy(lang, 'libServiceUnavailable'));
     case 'migrationFailed':
-      return failure(
-        `资料库迁移没有完成${detail ? `（${detail}）` : ''}。资料保持原样，可以稍后再试。`,
-        `The library migration did not finish${detail ? ` (${detail})` : ''}. The library is unchanged; try again later.`,
-      );
+      return failure(hostCommandCopy(lang, 'libMigrationFailed', { detail: formatDetail }));
     case 'migrationConfirmationRequired':
-      return failure(
-        '这次迁移需要先预览、再确认一次。',
-        'This migration needs a preview and one explicit confirmation.',
-      );
+      return failure(hostCommandCopy(lang, 'libMigrationConfirmationRequired'));
     case 'openMissingSource':
-      return failure('这份资料没有可打开的原文。', 'This resource has no source to open.');
+      return failure(hostCommandCopy(lang, 'libOpenMissingSource'));
     case 'openMissingFile':
-      return failure(
-        '这份资料的原文不在当前工作区或资料库里，暂时不能打开。请重新导入原文后再打开。',
-        "This resource's source file is not in the current workspace or library, so it cannot be opened. Import the original again before opening it.",
-      );
+      return failure(hostCommandCopy(lang, 'libOpenMissingFile'));
     case 'openCaptureRequired':
-      return failure('请先把网页导入资料库，再在 VS Code 中打开。', 'Import the webpage into the library before opening it in VS Code.');
+      return failure(hostCommandCopy(lang, 'libOpenCaptureRequired'));
   }
 }
 
@@ -742,9 +717,10 @@ export async function captureResourceCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('capture a resource from a URL'))) {
-    return { ok: false, message: 'Workspace trust is required to capture resources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredCapture') };
   }
 
   const request = isResourceCapturePayloadRecord(payload);
@@ -752,15 +728,15 @@ export async function captureResourceCommand(
   const sessionId = context.getSessionId();
   const url = asString(request.url)?.trim() ?? '';
   if (!url || !/^https?:\/\//i.test(url)) {
-    return { ok: false, message: libraryCopy('captureInvalidUrl', resourceResponseLanguage(context)) };
+    return { ok: false, message: libraryCopy('captureInvalidUrl', lang) };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: libraryCopy('captureFetchFailed', resourceResponseLanguage(context), status.detail ?? 'sidecar unavailable') };
+    return { ok: false, message: libraryCopy('captureFetchFailed', lang, status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable')) };
   }
   if ((request.workspace_id && request.workspace_id !== workspaceId) || workspaceId !== getRuntimeWorkspaceId(context)) {
-    return { ok: false, message: 'The project changed. Submit the capture again.' };
+    return { ok: false, message: hostCommandCopy(lang, 'projectChangedResubmitCapture') };
   }
 
   const title = asString(request.title)?.trim();
@@ -817,9 +793,7 @@ export async function captureResourceCommand(
     return {
       ok: true,
       message: deduped
-        ? resourceResponseLanguage(context) === 'zh-CN'
-          ? `资料库已有这份内容：${capturedTitle}`
-          : `The library already has this content: ${capturedTitle}`
+        ? hostCommandCopy(lang, 'captureAlreadyInLibrary', { title: capturedTitle })
         : capturedTitle,
       data: captured,
     };
@@ -827,7 +801,7 @@ export async function captureResourceCommand(
     const detail = errorSidecarDetail(error);
     return {
       ok: false,
-      message: libraryCopy('captureFetchFailed', resourceResponseLanguage(context), detail),
+      message: libraryCopy('captureFetchFailed', lang, detail),
     };
   }
 }
@@ -849,18 +823,19 @@ export async function checkResourceVersionsCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   const request = isResourceCapturePayloadRecord(payload);
   const workspaceId = getRuntimeWorkspaceId(context);
   const sessionId = context.getSessionId();
   if (request.workspace_id !== workspaceId) {
-    return { ok: false, message: 'The project changed. Check its sources again.' };
+    return { ok: false, message: hostCommandCopy(lang, 'projectChangedCheckSourcesAgain') };
   }
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
   if (workspaceId !== getRuntimeWorkspaceId(context) || sessionId !== context.getSessionId()) {
-    return { ok: false, message: 'The project changed. Check its sources again.' };
+    return { ok: false, message: hostCommandCopy(lang, 'projectChangedCheckSourcesAgain') };
   }
   const results = await context.sidecarClient.postJson<ResourceVersionCheckResult[]>(
     status.port, '/resources/check-versions',
@@ -876,16 +851,17 @@ export async function linkResourceToLearningCommand(
 ): Promise<CommandExecutionResult> {
   const admissionBlock = resourceMutationAdmissionBlock(context);
   if (admissionBlock) return admissionBlock;
+  const lang = resourceResponseLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('link library sources to learning'))) {
-    return { ok: false, message: 'Workspace trust is required to link library sources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredLinkSources') };
   }
   const request = isResourceCapturePayloadRecord(payload);
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
   if (request.workspace_id && request.workspace_id !== getRuntimeWorkspaceId(context)) {
-    return { ok: false, message: 'The project changed. Confirm the learning link again.' };
+    return { ok: false, message: hostCommandCopy(lang, 'projectChangedConfirmLink') };
   }
   try {
     const linked = await context.sidecarClient.postJson(
@@ -900,7 +876,7 @@ export async function linkResourceToLearningCommand(
     }
     return { ok: true, data: linked };
   } catch (error) {
-    return { ok: false, message: errorSidecarDetail(error) ?? 'The resource link could not be saved.' };
+    return { ok: false, message: errorSidecarDetail(error) ?? hostCommandCopy(lang, 'resourceLinkSaveFailed') };
   }
 }
 
@@ -914,13 +890,14 @@ export async function saveResearchBriefCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   const request = isResourceCapturePayloadRecord(payload);
   const researchGoal = asString(request.researchGoal ?? request.research_goal)?.trim() ?? '';
   const reply = asString(request.reply)?.trim() ?? '';
   if (!researchGoal || !reply) {
     return {
       ok: false,
-      message: 'A research goal and the analysis reply are required to prepare a brief.',
+      message: hostCommandCopy(lang, 'briefMissingGoalOrReply'),
     };
   }
   const workspaceId = getRuntimeWorkspaceId(context);
@@ -930,7 +907,7 @@ export async function saveResearchBriefCommand(
     context.getSessionId() === sessionId && context.getHostState().bootstrap.runtimeDataGeneration === generation;
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
   const resourceIds = Array.isArray(request.resourceIds)
     ? request.resourceIds
@@ -941,7 +918,7 @@ export async function saveResearchBriefCommand(
   try {
     const provider = context.providerStore.getConfig();
     const apiKey = await context.providerStore.getApiKey();
-    if (!currentScope()) return { ok: false, message: 'The workspace changed before preparing the brief.' };
+    if (!currentScope()) return { ok: false, message: hostCommandCopy(lang, 'workspaceChangedBeforeBrief') };
     const result = await context.sidecarClient.postJson(
       status.port,
       '/resource/research-brief/draft',
@@ -949,7 +926,7 @@ export async function saveResearchBriefCommand(
         researchGoal: researchGoal.slice(0, 300),
         reply: reply.slice(0, 12000),
         resourceIds,
-        responseLanguage: resourceResponseLanguage(context),
+        responseLanguage: lang,
         contextId: workspaceId,
         provider,
         api_key: apiKey,
@@ -959,7 +936,7 @@ export async function saveResearchBriefCommand(
     );
     const payload = asRecord(result);
     const brief = mapResearchBriefAsset(payload?.asset);
-    if (payload?.saved !== true || !brief) return { ok: false, message: 'The saved research brief was not returned.' };
+    if (payload?.saved !== true || !brief) return { ok: false, message: hostCommandCopy(lang, 'briefNotReturned') };
     if (currentScope()) {
       const memory = context.getHostState().bootstrap.memory;
       await context.patchWorkbenchData({ memory: { ...memory, researchBriefs: upsertResearchBrief(memory.researchBriefs, brief) } });
@@ -968,7 +945,7 @@ export async function saveResearchBriefCommand(
   } catch (error) {
     return {
       ok: false,
-      message: errorSidecarDetail(error) ?? 'The research brief could not be prepared.',
+      message: errorSidecarDetail(error) ?? hostCommandCopy(lang, 'briefPrepareFailed'),
     };
   }
 }
@@ -1002,14 +979,14 @@ export async function organizeResourceCommand(
     return admissionBlock;
   }
 
+  const language = resourceResponseLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('organize the resource library'))) {
-    return { ok: false, message: 'Workspace trust is required to organize resources.' };
+    return { ok: false, message: hostCommandCopy(language, 'trustRequiredOrganize') };
   }
 
   const request = isResourceCapturePayloadRecord(payload);
   const resourceId = asString(request.resource_id ?? request.resourceId)?.trim();
   const action = asString(request.action)?.trim();
-  const language = resourceResponseLanguage(context);
   if (!resourceId || !action || !['rename', 'set_tags', 'set_group'].includes(action)) {
     return { ok: false, message: libraryCopy('organizeInvalid', language) };
   }
@@ -1054,13 +1031,13 @@ export async function exportResourceCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
+  const language = resourceResponseLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('export a resource'))) {
-    return { ok: false, message: 'Workspace trust is required to export resources.' };
+    return { ok: false, message: hostCommandCopy(language, 'trustRequiredExport') };
   }
 
   const request = isResourceCapturePayloadRecord(payload);
   const resourceId = asString(request.resource_id ?? request.resourceId)?.trim();
-  const language = resourceResponseLanguage(context);
   const resource = resourceId
     ? context.getHostState().bootstrap.resources.find((item) => item.id === resourceId)
     : undefined;
@@ -1113,7 +1090,7 @@ export async function exportResourceCommand(
     : undefined;
   const target = await vscode.window.showSaveDialog({
     defaultUri,
-    saveLabel: language === 'zh-CN' ? '导出到本地' : 'Export',
+    saveLabel: hostCommandCopy(language, 'exportSaveLabel'),
   });
   if (!target) {
     // Report the cancellation as a normal outcome (not `cancelled`): a
@@ -1223,14 +1200,15 @@ export async function indexResourcesCommand(  context: CommandContext,
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('index training resources'))) {
-    return { ok: false, message: 'Workspace trust is required to index resources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredIndex') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const resources = context.getHostState().bootstrap.resources;
@@ -1303,15 +1281,14 @@ export async function openResourceCommand(
   const language = resourceResponseLanguage(context);
 
   if (typeof resourceId !== 'string') {
-    return { ok: false, message: 'No resource selected.' };
+    return { ok: false, message: hostCommandCopy(language, 'noSingleResourceSelected') };
   }
 
   const resource = context.getHostState().bootstrap.resources.find((item) => item.id === resourceId);
   if (!resource) {
-    return { ok: false, message: 'The selected resource could not be found.' };
+    return { ok: false, message: hostCommandCopy(language, 'selectedResourceMissing') };
   }
-  const unavailablePin = () => ({ ok: false, message: language === 'zh-CN'
-    ? '找不到该引文对应的资料版本和位置。' : 'The cited version or location could not be opened.' });
+  const unavailablePin = () => ({ ok: false, message: hostCommandCopy(language, 'unavailablePinLocation') });
   if (researchCitation && (!requestedLine || !resource.versionId || !resource.contentHash ||
     resource.versionId !== researchCitation.versionId || resource.contentHash !== researchCitation.contentHash)) {
     return unavailablePin();
@@ -1364,10 +1341,7 @@ export async function openResourceCommand(
       await vscode.commands.executeCommand('markdown.showPreview', targetUri);
       return {
         ok: true,
-        message:
-          language === 'zh-CN'
-            ? `已打开预览：${resource.title}`
-            : `Opened preview for ${resource.title}.`,
+        message: hostCommandCopy(language, 'openedPreview', { title: resource.title }),
       };
     } catch {
       // Fall back to opening the source document if Markdown preview is unavailable.
@@ -1380,7 +1354,7 @@ export async function openResourceCommand(
   });
   return {
     ok: true,
-    message: language === 'zh-CN' ? `已打开：${resource.title}` : `Opened ${resource.title}.`,
+    message: hostCommandCopy(language, 'openedResource', { title: resource.title }),
   };
 }
 
@@ -1563,19 +1537,20 @@ async function executeDeleteResourceCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('delete training resources'))) {
-    return { ok: false, message: 'Workspace trust is required to delete resources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredDeleteResources') };
   }
 
   const deletionRequest = extractResourceDeletionRequest(payload);
   if (deletionRequest.resourceIds.length === 0) {
-    return { ok: false, message: 'No resources selected.' };
+    return { ok: false, message: hostCommandCopy(lang, 'noResourcesSelected') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const deletionSnapshot = context.getHostState().bootstrap;
@@ -1658,8 +1633,7 @@ async function executeDeleteResourceCommand(
     } catch {
       return {
         ok: false,
-        message:
-          'Resources were deleted, but the workbench could not refresh. Reopen Resources to verify the current state.',
+        message: hostCommandCopy(lang, 'resourcesDeletedRefreshFailed'),
         data: buildResourceDeletionBatchResult(
           deletionRequest.resourceIds,
           deletedResourceIds,
@@ -1735,27 +1709,25 @@ export function refreshResourceTrashCommand(
 async function executeRefreshResourceTrashCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   const admissionBlock = resourceMutationAdmissionBlock(context);
   if (admissionBlock) {
     return {
       ...admissionBlock,
-      message: `${admissionBlock.message ?? 'Trainer cannot refresh the Trash for this project yet.'} ${preservedTrashListMessage(context)}`,
+      message: `${admissionBlock.message ?? hostCommandCopy(lang, 'trashRefreshBlockDefault')} ${preservedTrashListMessage(context)}`,
     };
   }
 
   if (!(await context.trustGuard.ensureTrusted('refresh the resource Trash'))) {
     return {
       ok: false,
-      message:
-        resourceResponseLanguage(context) === 'zh-CN'
-          ? '请先信任当前工作区，再刷新回收站。当前回收站内容保持不变。'
-          : 'Trust this workspace before refreshing the Trash. The current Trash list is still shown.',
+      message: hostCommandCopy(lang, 'trustRequiredRefreshTrash'),
     };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   try {
@@ -1765,14 +1737,14 @@ async function executeRefreshResourceTrashCommand(
       ok: true,
       message:
         deletedResources.length > 0
-          ? `Trash refreshed. ${formatResourceCount(deletedResources.length)} can be restored.`
-          : 'Trash refreshed. No deleted resources are available.',
+          ? hostCommandCopy(lang, 'trashRefreshedCount', { count: deletedResources.length })
+          : hostCommandCopy(lang, 'trashRefreshedEmpty'),
       data: deletedResources,
     };
   } catch {
     return {
       ok: false,
-      message: 'Could not refresh the resource Trash. The last known recovery state is still shown.',
+      message: hostCommandCopy(lang, 'trashRefreshFailed'),
     };
   }
 }
@@ -1785,19 +1757,20 @@ async function executeRestoreResourceCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('restore training resources'))) {
-    return { ok: false, message: 'Workspace trust is required to restore resources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredRestoreResources') };
   }
 
   const restorationRequest = extractResourceDeletionRequest(payload);
   if (restorationRequest.resourceIds.length === 0) {
-    return { ok: false, message: 'No deleted resources selected.' };
+    return { ok: false, message: hostCommandCopy(lang, 'noDeletedResourcesSelected') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const restoredResourceIds: string[] = [];
@@ -1881,8 +1854,7 @@ async function executeRestoreResourceCommand(
     } catch {
       return {
         ok: false,
-        message:
-          'Resources were restored, but the workbench could not refresh. Reopen Resources to verify the current state.',
+        message: hostCommandCopy(lang, 'resourcesRestoredRefreshFailed'),
         data: buildResourceRestorationBatchResult(
           restorationRequest.resourceIds,
           restoredResourceIds,
@@ -1920,9 +1892,10 @@ export async function restoreSandboxPathCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('restore sandbox resources'))) {
-    return { ok: false, message: 'Workspace trust is required to restore sandbox resources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSandboxRestore') };
   }
 
   const sandboxPath =
@@ -1930,12 +1903,12 @@ export async function restoreSandboxPathCommand(
       ? (payload as { path?: unknown }).path
       : undefined;
   if (typeof sandboxPath !== 'string' || !sandboxPath.trim()) {
-    return { ok: false, message: 'No sandbox path was provided.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxNoPathProvided') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const workspace = context.getHostState().workspace;
@@ -1959,7 +1932,7 @@ export async function restoreSandboxPathCommand(
 
   return {
     ok: true,
-    message: 'Sandbox path restored from trash.',
+    message: hostCommandCopy(lang, 'sandboxRestoredFromTrash'),
     data: sandboxState,
   };
 }
@@ -1971,9 +1944,10 @@ export async function chooseManagedDataFolderCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('change the Trainer managed data folder'))) {
-    return { ok: false, message: 'Workspace trust is required to change the managed data folder.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredChangeDataFolder') };
   }
 
   const workspaceFolder = context.getHostState().workspace.workspaceFolder;
@@ -1983,22 +1957,21 @@ export async function chooseManagedDataFolderCommand(
     canSelectFolders: true,
     canSelectMany: false,
     defaultUri: vscode.Uri.file(currentFolder.effectivePath),
-    openLabel: 'Use this folder',
-    title: 'Choose Trainer managed data folder',
+    openLabel: hostCommandCopy(lang, 'useThisFolderOpenLabel'),
+    title: hostCommandCopy(lang, 'chooseDataFolderTitle'),
   });
   let targetFolder = picks?.[0]?.fsPath;
   if (!targetFolder) {
     // 原生目录对话框被取消/不可用时,允许直接输入路径(不存在则创建),
     // 首次设置永远不会在这里卡死。
     const typed = await vscode.window.showInputBox({
-      prompt:
-        'Folder dialog cancelled — type the full path for the Trainer managed data folder (created if missing)',
+      prompt: hostCommandCopy(lang, 'chooseDataFolderPromptFallback'),
       placeHolder: currentFolder.effectivePath,
       ignoreFocusOut: true,
     });
     targetFolder = typed?.trim();
     if (!targetFolder) {
-      return { ok: false, message: 'Managed data folder selection cancelled.' };
+      return { ok: false, message: hostCommandCopy(lang, 'dataFolderCancelled') };
     }
   }
 
@@ -2017,7 +1990,10 @@ export async function chooseManagedDataFolderCommand(
     } catch (fallbackError) {
       return {
         ok: false,
-        message: `无法使用所选文件夹(${error instanceof Error ? error.message : String(error)}),已尝试在其下创建 Trainer 子目录也失败:${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`,
+        message: hostCommandCopy(lang, 'dataFolderPickFailed', {
+          error: error instanceof Error ? error.message : String(error),
+          fallbackError: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+        }),
       };
     }
   }
@@ -2031,9 +2007,10 @@ export async function resetManagedDataFolderCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('reset the Trainer managed data folder'))) {
-    return { ok: false, message: 'Workspace trust is required to reset the managed data folder.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredResetDataFolder') };
   }
 
   const workspaceFolder = context.getHostState().workspace.workspaceFolder;
@@ -2051,9 +2028,10 @@ export async function moveManagedDataUnderRootCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('move Trainer data under the workspace root'))) {
-    return { ok: false, message: 'Workspace trust is required to move Trainer data under the workspace root.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredAdoptDataFolder') };
   }
 
   // Unified-root model (P0): the recommended data home is the workspace
@@ -2067,7 +2045,7 @@ export async function moveManagedDataUnderRootCommand(
   if (!rootPath) {
     return {
       ok: false,
-      message: 'Choose a Trainer workspace root first — data moves under it.',
+      message: hostCommandCopy(lang, 'chooseWorkspaceRootBeforeMove'),
     };
   }
 
@@ -2078,7 +2056,7 @@ export async function moveManagedDataUnderRootCommand(
     normalizeFsPath(left).toLowerCase() === normalizeFsPath(right).toLowerCase() ||
     left === right;
   if (samePath(current.effectivePath, targetFolder)) {
-    return { ok: true, message: 'Trainer data already lives under the workspace root.' };
+    return { ok: true, message: hostCommandCopy(lang, 'dataAlreadyUnderWorkspaceRoot') };
   }
 
   const change = await context.sidecarManager.configureManagedDataFolder(targetFolder, workspaceFolder, {
@@ -2094,9 +2072,10 @@ export async function chooseSandboxRootCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('change the workspace sandbox root'))) {
-    return { ok: false, message: 'Workspace trust is required to change the sandbox root.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredChangeSandboxRoot') };
   }
 
   const current = context.getHostState().bootstrap;
@@ -2110,12 +2089,12 @@ export async function chooseSandboxRootCommand(
     canSelectFolders: true,
     canSelectMany: false,
     defaultUri: defaultPath ? vscode.Uri.file(defaultPath) : undefined,
-    openLabel: 'Use as sandbox root',
-    title: 'Choose workspace sandbox root',
+    openLabel: hostCommandCopy(lang, 'useAsSandboxRootLabel'),
+    title: hostCommandCopy(lang, 'chooseSandboxRootTitle'),
   });
   const targetFolder = picks?.[0]?.fsPath;
   if (!targetFolder) {
-    return { ok: false, message: 'Sandbox root selection cancelled.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxRootCancelled') };
   }
 
   return applySandboxRootChange(context, { rootPath: targetFolder });
@@ -2128,9 +2107,10 @@ export async function resetSandboxRootCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('reset the workspace sandbox root'))) {
-    return { ok: false, message: 'Workspace trust is required to reset the sandbox root.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredResetSandboxRoot') };
   }
 
   return applySandboxRootChange(context, { clear: true });
@@ -2140,22 +2120,23 @@ export async function searchResourcesCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   const request = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
   const query = typeof request.query === 'string' ? request.query.trim() : '';
   const requestId = normalizeResourceSearchRequestId(request);
   const requestOwner = Symbol('resource-search');
   resourceSearchRequestOwners.set(context, requestOwner);
   if (!query) {
-    return { ok: false, message: 'Enter a resource search query.' };
+    return { ok: false, message: hostCommandCopy(lang, 'searchQueryRequired') };
   }
 
   if (!(await context.trustGuard.ensureTrusted('search training resources'))) {
-    return { ok: false, message: 'Workspace trust is required to search resources.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSearch') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const body: Record<string, unknown> = {
@@ -2184,7 +2165,7 @@ export async function searchResourcesCommand(
 
   return {
     ok: true,
-    message: buildResourceSearchMessage(normalized),
+    message: buildResourceSearchMessage(normalized, lang),
     data: normalized,
   };
 }
@@ -2219,9 +2200,10 @@ export async function createSandboxDirectoryCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('create sandbox directories'))) {
-    return { ok: false, message: 'Workspace trust is required to create sandbox directories.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSandboxMkdir') };
   }
 
   const requestedPath =
@@ -2230,12 +2212,12 @@ export async function createSandboxDirectoryCommand(
       : undefined;
   const directoryPath = typeof requestedPath === 'string' ? requestedPath.trim() : '';
   if (!directoryPath) {
-    return { ok: false, message: 'Provide a sandbox directory path.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxMissingDirPath') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const current = context.getHostState().bootstrap;
@@ -2273,7 +2255,7 @@ export async function createSandboxDirectoryCommand(
 
   return {
     ok: true,
-    message: `Created sandbox folder ${directoryPath}.`,
+    message: hostCommandCopy(lang, 'sandboxCreatedFolder', { path: directoryPath }),
     data: sandboxState,
   };
 }
@@ -2286,21 +2268,22 @@ export async function createSandboxFileCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('create sandbox files'))) {
-    return { ok: false, message: 'Workspace trust is required to create sandbox files.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSandboxWrite') };
   }
 
   const request = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
   const requestedPath = typeof request.path === 'string' ? request.path.trim() : '';
   const content = typeof request.content === 'string' ? request.content : '';
   if (!requestedPath) {
-    return { ok: false, message: 'Provide a sandbox file path.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxMissingFilePath') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const current = context.getHostState().bootstrap;
@@ -2326,7 +2309,7 @@ export async function createSandboxFileCommand(
 
   return {
     ok: true,
-    message: `Created sandbox file ${requestedPath}.`,
+    message: hostCommandCopy(lang, 'sandboxCreatedFile', { path: requestedPath }),
     data: sandboxState,
   };
 }
@@ -2339,9 +2322,10 @@ export async function renameSandboxPathCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('rename sandbox paths'))) {
-    return { ok: false, message: 'Workspace trust is required to rename sandbox paths.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSandboxRename') };
   }
 
   const request = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
@@ -2353,15 +2337,15 @@ export async function renameSandboxPathCommand(
         ? request.nextPath.trim()
         : '';
   if (!sandboxPath) {
-    return { ok: false, message: 'No sandbox path was provided.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxNoPathProvided') };
   }
   if (!nextPath) {
-    return { ok: false, message: 'Provide the next sandbox path.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxMissingNextPath') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const current = context.getHostState().bootstrap;
@@ -2386,7 +2370,7 @@ export async function renameSandboxPathCommand(
 
   return {
     ok: true,
-    message: `Sandbox path renamed to ${nextPath}.`,
+    message: hostCommandCopy(lang, 'sandboxRenamedPath', { path: nextPath }),
     data: sandboxState,
   };
 }
@@ -2399,9 +2383,10 @@ export async function deleteSandboxPathCommand(
   if (admissionBlock) {
     return admissionBlock;
   }
+  const lang = resourceResponseLanguage(context);
 
   if (!(await context.trustGuard.ensureTrusted('delete sandbox paths'))) {
-    return { ok: false, message: 'Workspace trust is required to delete sandbox paths.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSandboxDelete') };
   }
 
   const sandboxPath =
@@ -2409,12 +2394,12 @@ export async function deleteSandboxPathCommand(
       ? (payload as { path?: unknown }).path
       : undefined;
   if (typeof sandboxPath !== 'string' || !sandboxPath.trim()) {
-    return { ok: false, message: 'No sandbox path was provided.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxNoPathProvided') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
 
   const current = context.getHostState().bootstrap;
@@ -2453,7 +2438,7 @@ export async function deleteSandboxPathCommand(
 
   return {
     ok: true,
-    message: 'Sandbox path moved to Trash.',
+    message: hostCommandCopy(lang, 'sandboxMovedOneToTrash'),
     data: sandboxState,
   };
 }
@@ -2462,6 +2447,7 @@ export async function deleteSandboxPathsCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   const request = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
   const candidatePaths = Array.isArray(request.paths) ? request.paths : [];
   const paths = candidatePaths
@@ -2469,7 +2455,7 @@ export async function deleteSandboxPathsCommand(
     .filter((value, index, items) => value.length > 0 && items.indexOf(value) === index);
 
   if (paths.length === 0) {
-    return { ok: false, message: 'No sandbox paths were provided.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxNoPathsProvided') };
   }
 
   let lastResult: CommandExecutionResult | undefined;
@@ -2478,7 +2464,7 @@ export async function deleteSandboxPathsCommand(
     if (!result.ok) {
       return {
         ok: false,
-        message: result.message || `Failed while deleting ${sandboxPath}.`,
+        message: result.message || hostCommandCopy(lang, 'sandboxDeletePathFailed', { path: sandboxPath }),
         data: result.data,
       };
     }
@@ -2489,8 +2475,8 @@ export async function deleteSandboxPathsCommand(
     ok: true,
     message:
       paths.length === 1
-        ? 'Sandbox path moved to Trash.'
-        : `${paths.length} sandbox paths moved to Trash.`,
+        ? hostCommandCopy(lang, 'sandboxMovedOneToTrash')
+        : hostCommandCopy(lang, 'sandboxMovedManyToTrash', { count: paths.length }),
     data: lastResult?.data,
   };
 }
@@ -2498,13 +2484,14 @@ export async function deleteSandboxPathsCommand(
 export async function refreshSandboxCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('refresh resource sandbox capability'))) {
-    return { ok: false, message: 'Workspace trust is required to refresh sandbox capability.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSandboxRefresh') };
   }
 
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
   const port = status.port;
 
@@ -2538,7 +2525,7 @@ export async function refreshSandboxCommand(
 
   return {
     ok: true,
-    message: 'Sandbox capability refreshed.',
+    message: hostCommandCopy(lang, 'sandboxCapabilityRefreshed'),
     data: sandboxState,
   };
 }
@@ -2547,8 +2534,9 @@ export async function revealSandboxPathCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   if (!(await context.trustGuard.ensureTrusted('open sandbox paths in the system file manager'))) {
-    return { ok: false, message: 'Workspace trust is required to open sandbox paths.' };
+    return { ok: false, message: hostCommandCopy(lang, 'trustRequiredSandboxOpen') };
   }
 
   const request = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
@@ -2563,39 +2551,40 @@ export async function revealSandboxPathCommand(
   const targetPath = requestedPath || fallbackRoot;
 
   if (!targetPath) {
-    return { ok: false, message: 'No sandbox path is available to open.' };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxNoPathAvailableToOpen') };
   }
 
   try {
     await fs.access(targetPath);
   } catch {
-    return { ok: false, message: `Sandbox path is unavailable: ${targetPath}.` };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxPathUnavailable', { path: targetPath }) };
   }
 
   const targetUri = vscode.Uri.file(targetPath);
+  const targetLabel = basenameFs(targetPath) || targetPath;
   try {
     await vscode.commands.executeCommand('revealFileInOS', targetUri);
   } catch {
-    return { ok: false, message: `Could not reveal ${basenameFs(targetPath) || targetPath} in the file manager.` };
+    return { ok: false, message: hostCommandCopy(lang, 'sandboxRevealFailed', { target: targetLabel }) };
   }
 
   return {
     ok: true,
-    message: `Revealed ${basenameFs(targetPath) || targetPath} in the file manager.`,
+    message: hostCommandCopy(lang, 'sandboxRevealDone', { target: targetLabel }),
   };
 }
 
-function validateResourceUrl(value: string): string | undefined {
+function validateResourceUrl(value: string, lang: ComposerLanguage = 'en-US'): string | undefined {
   if (!value.trim()) {
-    return 'Enter a URL.';
+    return hostCommandCopy(lang, 'resourceUrlValidateEmpty');
   }
   try {
     const url = new URL(value.trim());
     if (!['http:', 'https:'].includes(url.protocol)) {
-      return 'Use an http or https URL.';
+      return hostCommandCopy(lang, 'resourceUrlValidateHttp');
     }
   } catch {
-    return 'Enter a valid URL.';
+    return hostCommandCopy(lang, 'resourceUrlValidateInvalid');
   }
   return undefined;
 }
@@ -2843,7 +2832,7 @@ function buildResourceImportMessage(input: {
   truncated: boolean;
   skippedUnsupported: number;
   sourceMode: 'files' | 'folder' | 'url';
-  language?: string;
+  language?: ComposerLanguage;
 }): string {
   const {
     uploadsCount,
@@ -2856,90 +2845,88 @@ function buildResourceImportMessage(input: {
     sourceMode,
     language,
   } = input;
-  const isChinese = language === 'zh-CN';
+  const lang = language ?? 'en-US';
   if (uploadsCount === 0) {
-    const failedSummary = isChinese
-      ? failedUploads > 0
-        ? `有 ${failedUploads} 个文件没能添加。请稍后再试。`
-        : '没有添加任何资料。'
-      : failedUploads > 0
-        ? `${formatFileCount(failedUploads)} could not be added. Try again.`
-        : 'No resources were added.';
+    const failedSummary =
+      failedUploads > 0
+        ? hostCommandCopy(lang, 'importFailedFilesRetry', {
+            count: failedUploads,
+            files: formatFileCount(failedUploads),
+          })
+        : hostCommandCopy(lang, 'importNoneAdded');
     const skippedSummary =
       skippedUnsupported > 0
-        ? isChinese
-          ? ` 已跳过 ${skippedUnsupported} 个 Trainer 暂不支持的文件。`
-          : ` Skipped ${formatFileCount(skippedUnsupported)} that Trainer cannot use.`
+        ? ` ${hostCommandCopy(lang, 'importSkippedHint', {
+            count: skippedUnsupported,
+            files: formatFileCount(skippedUnsupported),
+          })}`
         : '';
     return `${failedSummary}${skippedSummary}`.trim();
   }
-  const importedSummary = isChinese
-    ? truncated
-      ? sourceMode === 'folder'
-        ? `已导入文件夹中的前 ${uploadsCount} 个可用文件`
-        : `已导入前 ${uploadsCount} 个可用文件`
-      : `已导入 ${uploadsCount} 项资料`
-    : truncated
-      ? sourceMode === 'folder'
-        ? `Imported the first ${uploadsCount} supported file(s) from that folder`
-        : `Imported the first ${uploadsCount} supported file(s)`
-      : `Imported ${uploadsCount} resource(s)`;
-  const indexedSummary = indexedCount > 0
-    ? isChinese
-      ? `，已完成 ${indexedCount} 项索引`
-      : ` and indexed ${indexedCount}`
-    : '';
+  const importedSummary = truncated
+    ? sourceMode === 'folder'
+      ? hostCommandCopy(lang, 'importSummaryTruncatedFolder', { count: uploadsCount })
+      : hostCommandCopy(lang, 'importSummaryTruncated', { count: uploadsCount })
+    : hostCommandCopy(lang, 'importSummaryDone', { count: uploadsCount });
+  const indexedSummary =
+    indexedCount > 0
+      ? hostCommandCopy(lang, 'importSummaryIndexed', { count: indexedCount })
+      : lang === 'zh-CN'
+        ? '。'
+        : '.';
   const skippedSummary =
     skippedUnsupported > 0
-      ? isChinese
-        ? ` 已跳过 ${skippedUnsupported} 个不支持的文件。`
-        : ` Skipped ${skippedUnsupported} unsupported file(s).`
+      ? ` ${hostCommandCopy(lang, 'importSummarySkipped', { count: skippedUnsupported })}`
       : '';
   const failedUploadSummary =
     failedUploads > 0
-      ? isChinese
-        ? ` 另有 ${failedUploads} 个文件没能添加。你可以先使用已导入的资料，稍后再试。`
-        : ` ${formatFileCount(failedUploads)} could not be added. You can use the imported resource${uploadsCount === 1 ? '' : 's'} now and try the other file${failedUploads === 1 ? '' : 's'} again.`
+      ? ` ${hostCommandCopy(lang, 'importPartialFailedUploads', {
+          count: failedUploads,
+          files: formatFileCount(failedUploads),
+          importedWord: uploadsCount === 1 ? 'resource' : 'resources',
+          otherWord: failedUploads === 1 ? 'file' : 'files',
+        })}`
       : '';
   const failedIndexSummary =
     failedIndexes > 0
-      ? isChinese
-        ? ` 另有 ${failedIndexes} 项资料还没完成索引。可在“资料”页刷新后重试。`
-        : ` ${formatResourceCount(failedIndexes)} still need${failedIndexes === 1 ? 's' : ''} indexing. Refresh Resources to try again.`
+      ? ` ${hostCommandCopy(lang, 'importPartialFailedIndex', {
+          count: failedIndexes,
+          resources: formatResourceCount(failedIndexes),
+          verb: failedIndexes === 1 ? 'needs' : 'need',
+        })}`
       : '';
   const summaryRefreshNotice = summaryRefreshed
     ? ''
-    : isChinese
-      ? ' 资料列表暂时没能刷新。重新打开“资料”页查看最新结果。'
-      : ' The library summary could not be refreshed. Reopen Resources to check the latest state.';
-  return `${importedSummary}${indexedSummary}${isChinese ? '。' : '.'}${skippedSummary}${failedUploadSummary}${failedIndexSummary}${summaryRefreshNotice}`.trim();
+    : ` ${hostCommandCopy(lang, 'importSummaryNotRefreshed')}`;
+  return `${importedSummary}${indexedSummary}${skippedSummary}${failedUploadSummary}${failedIndexSummary}${summaryRefreshNotice}`.trim();
 }
 
 function buildResourceIndexMessage(input: {
   indexedCount: number;
   failedCount: number;
   summaryRefreshed: boolean;
-  language?: string;
+  language?: ComposerLanguage;
 }): string {
   const { indexedCount, failedCount, summaryRefreshed, language } = input;
-  const isChinese = language === 'zh-CN';
+  const lang = language ?? 'en-US';
   if (indexedCount === 0 && failedCount === 0) {
-    return isChinese ? '所有资料都已经是最新状态。' : 'All resources are already up to date.';
+    return hostCommandCopy(lang, 'indexAllUpToDate');
   }
 
-  const indexedSummary = isChinese
-    ? `已完成 ${indexedCount} 项资料的索引。`
-    : `Indexed ${formatResourceCount(indexedCount)}.`;
-  const failedSummary = failedCount > 0
-    ? isChinese
-      ? ` 另有 ${failedCount} 项暂时没有完成。已完成的资料可以继续使用；刷新资料会重试其余项目。`
-      : ` ${formatResourceCount(failedCount)} did not finish. The indexed resources are still available; refresh Resources to retry the rest.`
-    : '';
+  const indexedSummary = hostCommandCopy(lang, 'indexDoneCount', {
+    count: indexedCount,
+    resources: formatResourceCount(indexedCount),
+  });
+  const failedSummary =
+    failedCount > 0
+      ? ` ${hostCommandCopy(lang, 'indexFailedTail', {
+          count: failedCount,
+          resources: formatResourceCount(failedCount),
+        })}`
+      : '';
   const summaryRefreshNotice = summaryRefreshed
     ? ''
-    : isChinese
-      ? ' 资料库摘要暂时没有刷新；重新打开“资料”页即可确认最新状态。'
-      : ' The library summary did not refresh. Reopen Resources to confirm the latest state.';
+    : ` ${hostCommandCopy(lang, 'indexSummaryNotRefreshed')}`;
   return `${indexedSummary}${failedSummary}${summaryRefreshNotice}`.trim();
 }
 
@@ -3006,7 +2993,10 @@ function detectResourceKind(filePath: string): ResourceUploadKind {
   return 'text';
 }
 
-function parseInlineResourceUploads(payload: unknown): {
+function parseInlineResourceUploads(
+  payload: unknown,
+  lang: ComposerLanguage = 'en-US',
+): {
   uploads: InlineResourceUpload[];
   error?: string;
 } {
@@ -3016,12 +3006,12 @@ function parseInlineResourceUploads(payload: unknown): {
 
   const rawUploads = (payload as { uploads?: unknown }).uploads;
   if (!Array.isArray(rawUploads) || rawUploads.length === 0) {
-    return { uploads: [], error: 'No inline resources were provided.' };
+    return { uploads: [], error: hostCommandCopy(lang, 'inlineResourcesEmpty') };
   }
 
   const uploads: InlineResourceUpload[] = [];
   for (let index = 0; index < rawUploads.length; index += 1) {
-    const parsed = parseInlineResourceUpload(rawUploads[index], index);
+    const parsed = parseInlineResourceUpload(rawUploads[index], index, lang);
     if (typeof parsed === 'string') {
       return { uploads: [], error: parsed };
     }
@@ -3034,9 +3024,10 @@ function parseInlineResourceUploads(payload: unknown): {
 function parseInlineResourceUpload(
   value: unknown,
   index: number,
+  lang: ComposerLanguage = 'en-US',
 ): InlineResourceUpload | string {
   if (!value || typeof value !== 'object') {
-    return `Inline resource ${index + 1} must be an object.`;
+    return hostCommandCopy(lang, 'inlineResourceNotObject', { index: index + 1 });
   }
 
   const record = value as {
@@ -3051,11 +3042,11 @@ function parseInlineResourceUpload(
   };
   const name = typeof record.name === 'string' ? record.name.trim() : '';
   if (!name) {
-    return `Inline resource ${index + 1} is missing a name.`;
+    return hostCommandCopy(lang, 'inlineResourceMissingName', { index: index + 1 });
   }
   const source = typeof record.source === 'string' ? record.source.trim() : '';
   if (!source) {
-    return `Inline resource ${index + 1} is missing a source.`;
+    return hostCommandCopy(lang, 'inlineResourceMissingSource', { index: index + 1 });
   }
 
   const sourceType =
@@ -3071,9 +3062,12 @@ function parseInlineResourceUpload(
       : inferredKind;
 
   if (kind === 'url') {
-    const validationError = validateResourceUrl(source);
+    const validationError = validateResourceUrl(source, lang);
     if (validationError) {
-      return `Inline resource ${index + 1} has an invalid URL source: ${validationError}`;
+      return hostCommandCopy(lang, 'inlineResourceInvalidUrl', {
+        index: index + 1,
+        error: validationError,
+      });
     }
   }
 
@@ -3608,9 +3602,9 @@ function buildResourceDeletionResultMessage(
   responses: unknown[],
   result: ResourceDeletionBatchResult,
   trashSnapshotConfirmed: boolean,
-  language?: string,
+  language?: ComposerLanguage,
 ): string {
-  const isChinese = language === 'zh-CN';
+  const lang = language ?? 'en-US';
   if (
     !request.isBatch &&
     result.deletedResourceIds.length === 1 &&
@@ -3618,46 +3612,40 @@ function buildResourceDeletionResultMessage(
     result.summaryRefreshed &&
     trashSnapshotConfirmed
   ) {
-    return buildDeleteResourceMessage(responses[0]);
+    return buildDeleteResourceMessage(responses[0], lang);
   }
 
   const parts: string[] = [];
   if (result.deletedResourceIds.length > 0) {
     parts.push(
-      isChinese
-        ? `已移入回收站 ${result.deletedResourceIds.length} 份资料。`
-        : `Deleted ${formatResourceCount(result.deletedResourceIds.length)}.`,
+      hostCommandCopy(lang, 'deleteDeletedCount', {
+        count: result.deletedResourceIds.length,
+        resources: formatResourceCount(result.deletedResourceIds.length),
+      }),
     );
   } else {
-    parts.push(isChinese ? '没有资料被删除。' : 'No resources were deleted.');
+    parts.push(hostCommandCopy(lang, 'deleteNoneDeleted'));
   }
   if (result.failures.length > 0) {
     parts.push(
-      isChinese
-        ? `有 ${result.failures.length} 份资料暂时没能删除。`
-        : `${formatResourceCount(result.failures.length)} could not be deleted.`,
+      hostCommandCopy(lang, 'deleteFailedCount', {
+        count: result.failures.length,
+        resources: formatResourceCount(result.failures.length),
+      }),
     );
   }
   if (!result.summaryRefreshed && result.deletedResourceIds.length > 0) {
-    parts.push(
-      isChinese
-        ? '工作区摘要暂时没能刷新。'
-        : 'The workspace summary could not be refreshed.',
-    );
+    parts.push(hostCommandCopy(lang, 'deleteSummaryRefreshFailed'));
   }
   if (!trashSnapshotConfirmed && result.deletedResourceIds.length > 0) {
-    parts.push(
-      isChinese
-        ? '回收站状态暂时没能确认。重新打开「资料」页确认当前状态。'
-        : 'The Trash state could not be confirmed. Reopen Resources to verify the current state.',
-    );
+    parts.push(hostCommandCopy(lang, 'deleteTrashUnconfirmed'));
   }
   const allGood =
     result.deletedResourceIds.length > 0 &&
     result.failures.length === 0 &&
     result.summaryRefreshed &&
     trashSnapshotConfirmed;
-  const text = parts.join(isChinese ? '' : ' ');
+  const text = parts.join(lang === 'zh-CN' ? '' : ' ');
   // A not-fully-successful deletion reaches the webview's error sanitizer;
   // the marker marks this copy as curated + localized so it is shown verbatim.
   return allGood || (!request.isBatch && result.deletedResourceIds.length === 1 && result.failures.length === 0)
@@ -3683,46 +3671,40 @@ function buildResourceRestorationBatchResult(
 function buildResourceRestorationResultMessage(
   result: ResourceRestorationBatchResult,
   trashSnapshotConfirmed: boolean,
-  language?: string,
+  language?: ComposerLanguage,
 ): string {
-  const isChinese = language === 'zh-CN';
+  const lang = language ?? 'en-US';
   const parts: string[] = [];
   if (result.restoredResourceIds.length > 0) {
     parts.push(
-      isChinese
-        ? `已恢复 ${result.restoredResourceIds.length} 份资料。继续使用前先刷新索引：阅读器里的「刷新索引」按钮就是这一步。`
-        : `Restored ${formatResourceCount(result.restoredResourceIds.length)}. Re-index before reuse. Use "Refresh index" in the reader.`,
+      hostCommandCopy(lang, 'restoreRestoredCount', {
+        count: result.restoredResourceIds.length,
+        resources: formatResourceCount(result.restoredResourceIds.length),
+      }),
     );
   } else {
-    parts.push(isChinese ? '没有资料被恢复。' : 'No resources were restored.');
+    parts.push(hostCommandCopy(lang, 'restoreNoneRestored'));
   }
   if (result.failures.length > 0) {
     parts.push(
-      isChinese
-        ? `有 ${result.failures.length} 份资料暂时没能恢复。`
-        : `${formatResourceCount(result.failures.length)} could not be restored.`,
+      hostCommandCopy(lang, 'restoreFailedCount', {
+        count: result.failures.length,
+        resources: formatResourceCount(result.failures.length),
+      }),
     );
   }
   if (!result.summaryRefreshed && result.restoredResourceIds.length > 0) {
-    parts.push(
-      isChinese
-        ? '工作区摘要暂时没能刷新。'
-        : 'The workspace summary could not be refreshed.',
-    );
+    parts.push(hostCommandCopy(lang, 'deleteSummaryRefreshFailed'));
   }
   if (!trashSnapshotConfirmed && result.restoredResourceIds.length > 0) {
-    parts.push(
-      isChinese
-        ? '回收站状态暂时没能确认。重新打开「资料」页确认当前状态。'
-        : 'The Trash state could not be confirmed. Reopen Resources to verify the current state.',
-    );
+    parts.push(hostCommandCopy(lang, 'deleteTrashUnconfirmed'));
   }
   const allGood =
     result.restoredResourceIds.length > 0 &&
     result.failures.length === 0 &&
     result.summaryRefreshed &&
     trashSnapshotConfirmed;
-  const text = parts.join(isChinese ? '' : ' ');
+  const text = parts.join(lang === 'zh-CN' ? '' : ' ');
   // Same trust marker as deletions: a partial restore reaches the error
   // sanitizer, and only marked copy is shown verbatim.
   return allGood ? text : `[[trainer-resource-failure]] ${text}`;
@@ -3732,21 +3714,26 @@ function formatResourceCount(count: number): string {
   return `${count} resource${count === 1 ? '' : 's'}`;
 }
 
-function buildDeleteResourceMessage(value: unknown): string {
+function buildDeleteResourceMessage(value: unknown, lang: ComposerLanguage = 'en-US'): string {
   const record = asRecord(value) ?? {};
-  const detail = asString(record.detail) ?? 'Resource deleted.';
+  const detail = asString(record.detail) ?? hostCommandCopy(lang, 'deleteDefaultDetail');
   const checkpointId = asString(record.checkpoint_id) ?? asString(record.checkpointId);
   const ledgerEntryId = asString(record.ledger_entry_id) ?? asString(record.ledgerEntryId);
   const patchSteps = Array.isArray(record.patch) ? record.patch.length : 0;
   const parts = [detail];
   if (checkpointId) {
-    parts.push(`Checkpoint ${checkpointId}.`);
+    parts.push(hostCommandCopy(lang, 'deleteCheckpointPart', { id: checkpointId }));
   }
   if (ledgerEntryId) {
-    parts.push(`Ledger ${ledgerEntryId}.`);
+    parts.push(hostCommandCopy(lang, 'deleteLedgerPart', { id: ledgerEntryId }));
   }
   if (patchSteps > 0) {
-    parts.push(`${patchSteps} patch step${patchSteps === 1 ? '' : 's'}.`);
+    parts.push(
+      hostCommandCopy(lang, 'deletePatchStepCount', {
+        count: patchSteps,
+        steps: `${patchSteps} patch step${patchSteps === 1 ? '' : 's'}`,
+      }),
+    );
   }
   return parts.join(' ');
 }
@@ -3755,13 +3742,14 @@ async function applyManagedDataFolderChange(
   context: CommandContext,
   change: ManagedDataFolderChangeResult,
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   if (!change.changed) {
     return {
       ok: true,
-      message:
-        change.next.source === 'custom'
-          ? 'Trainer is already using this managed data folder.'
-          : 'Trainer is already using the recommended managed data folder.',
+      message: hostCommandCopy(
+        lang,
+        change.next.source === 'custom' ? 'dataFolderAlreadyCustom' : 'dataFolderAlreadyRecommended',
+      ),
       data: change.next,
     };
   }
@@ -3780,7 +3768,7 @@ async function applyManagedDataFolderChange(
 
   return {
     ok: status.lifecycle === 'ready',
-    message: buildManagedDataFolderChangeMessage(change, status),
+    message: buildManagedDataFolderChangeMessage(change, status, lang),
     data: {
       sidecar: status,
       migration: change.migration,
@@ -3796,9 +3784,10 @@ async function applySandboxRootChange(
     clear?: boolean;
   },
 ): Promise<CommandExecutionResult> {
+  const lang = resourceResponseLanguage(context);
   const status = await context.sidecarManager.ensureRunning();
   if (status.lifecycle !== 'ready' || !status.port) {
-    return { ok: false, message: status.detail ?? 'Sidecar is unavailable.' };
+    return { ok: false, message: status.detail ?? hostCommandCopy(lang, 'sidecarUnavailable') };
   }
   const port = status.port;
   const current = context.getHostState().bootstrap;
@@ -3844,8 +3833,10 @@ async function applySandboxRootChange(
   return {
     ok: true,
     message: options.clear
-      ? 'Sandbox root reset to the default Trainer workspace.'
-      : `Sandbox root fixed at ${basenameFs(nextRoot ?? '') || nextRoot || 'the selected folder'}.`,
+      ? hostCommandCopy(lang, 'sandboxRootResetDone')
+      : hostCommandCopy(lang, 'sandboxRootFixedAt', {
+          target: basenameFs(nextRoot ?? '') || nextRoot || hostCommandCopy(lang, 'selectedFolderLabel'),
+        }),
     data: sandboxState,
   };
 }
@@ -3853,42 +3844,44 @@ async function applySandboxRootChange(
 function buildManagedDataFolderChangeMessage(
   change: ManagedDataFolderChangeResult,
   status: { lifecycle: string; detail?: string },
+  lang: ComposerLanguage = 'en-US',
 ): string {
-  const changeSummary =
-    change.next.source === 'custom'
-      ? 'Managed data folder updated.'
-      : 'Trainer returned to the recommended managed data folder.';
+  const changeSummary = hostCommandCopy(
+    lang,
+    change.next.source === 'custom' ? 'managedFolderUpdatedSummary' : 'managedFolderResetSummary',
+  );
   const migrationSummary =
     change.migration === 'copied'
-      ? ' Existing sidecar data was copied because the target folder was empty.'
+      ? ` ${hostCommandCopy(lang, 'managedMigrationCopied')}`
       : change.migration === 'skipped_nonempty_target'
-        ? ' The target folder already had content, so Trainer left it untouched and did not copy old data.'
+        ? ` ${hostCommandCopy(lang, 'managedMigrationSkippedNonEmpty')}`
         : change.migration === 'skipped_nested_target'
-          ? ' Trainer skipped auto-copy because the new folder overlaps the previous one.'
+          ? ` ${hostCommandCopy(lang, 'managedMigrationSkippedNested')}`
           : change.migration === 'source_missing'
-            ? ' No previous sidecar data folder was available to copy.'
+            ? ` ${hostCommandCopy(lang, 'managedMigrationSourceMissing')}`
             : '';
-  const previousFolderNote = ' The previous folder was left untouched.';
+  const previousFolderNote = ` ${hostCommandCopy(lang, 'managedFolderPrevUnchanged')}`;
   if (status.lifecycle !== 'ready') {
-    return `${changeSummary}${migrationSummary}${previousFolderNote} Sidecar restart needs attention: ${
-      status.detail ?? 'Trainer backend is unavailable.'
-    }`;
+    const attention = hostCommandCopy(lang, 'managedFolderSidecarAttention', {
+      detail: status.detail ?? hostCommandCopy(lang, 'backendUnavailable'),
+    });
+    return `${changeSummary}${migrationSummary}${previousFolderNote} ${attention}`;
   }
-  return `${changeSummary}${migrationSummary}${previousFolderNote} Trainer restarted the backend on the new folder.`;
+  return `${changeSummary}${migrationSummary}${previousFolderNote} ${hostCommandCopy(lang, 'managedFolderRestartReady')}`;
 }
 
 function buildResourceSearchMessage(
   search: BootstrapData['resourceSearch'],
+  lang: ComposerLanguage = 'en-US',
 ): string {
   if (!search) {
-    return 'Found 0 ranked resources.';
+    return hostCommandCopy(lang, 'resourceSearchZeroSummary');
   }
   const topHitSummary = search.hits[0]
-    ? formatSearchHitTeachingSummary(search.hits[0], 'en')
+    ? formatSearchHitTeachingSummary(search.hits[0], lang === 'zh-CN' ? 'zh' : 'en')
     : undefined;
-  return topHitSummary
-    ? `Found ${search.total} ranked resources. ${topHitSummary}`
-    : `Found ${search.total} ranked resources.`;
+  const summary = hostCommandCopy(lang, 'resourceSearchManySummary', { total: search.total });
+  return topHitSummary ? `${summary} ${topHitSummary}` : summary;
 }
 
 function clearDeletedResourcePreviews(
@@ -4033,31 +4026,21 @@ export async function confirmResourceOrganizationCommand(
     markResourceOrganizationConfirmInFlight,
     sendStreamMessageCommand,
   } = await import('./sessionCommands');
-  if (!armResourceOrganizationConfirm(context)) {
-    return {
-      ok: false,
-      message: 'No resource organization proposal is waiting for confirmation.',
-    };
-  }
   const record =
     payload && typeof payload === 'object' && !Array.isArray(payload)
       ? (payload as Record<string, unknown>)
       : {};
-  const responseLanguage =
-    record.responseLanguage === 'zh-CN' ||
-    record.responseLanguage === 'en-US' ||
-    record.responseLanguage === 'es-ES' ||
-    record.responseLanguage === 'fr-FR' ||
-    record.responseLanguage === 'de-DE' ||
-    record.responseLanguage === 'ja-JP' ||
-    record.responseLanguage === 'ko-KR' ||
-    record.responseLanguage === 'pt-BR'
-      ? record.responseLanguage
-      : undefined;
-  const confirmText =
-    responseLanguage === 'zh-CN'
-      ? '请按刚才的整理方案提交变更。'
-      : 'Commit the proposed resource organization.';
+  const responseLanguage = isComposerLanguage(record.responseLanguage)
+    ? record.responseLanguage
+    : undefined;
+  const lang = resourceResponseLanguage(context, responseLanguage);
+  if (!armResourceOrganizationConfirm(context)) {
+    return {
+      ok: false,
+      message: hostCommandCopy(lang, 'resourceOrganizeProposalMissing'),
+    };
+  }
+  const confirmText = hostCommandCopy(lang, 'confirmOrganizePrompt');
   markResourceOrganizationConfirmInFlight(context, true);
   try {
     return await sendStreamMessageCommand(context, {

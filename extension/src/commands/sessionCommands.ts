@@ -2330,6 +2330,7 @@ export async function sendStreamMessageCommand(
         // authoritative resource list once when a mutating resource tool ran.
         const resourceMutationTools = new Set([
           'import_resource_url',
+          'save_lecture_note',
           'delete_resource',
           'restore_resource',
           'refresh_resource_index',
@@ -2482,6 +2483,19 @@ export async function sendStreamMessageCommand(
       if (event.event === 'status') {
         const parsed = parseSseJson(event);
         const phase = typeof parsed?.phase === 'string' ? parsed.phase : undefined;
+        if (phase === 'model_reasoning' || phase === 'tool_intent') {
+          if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
+            return { ok: true, message: 'Stream invalidated.' };
+          }
+          await context.workbench.postMessage({
+            type: 'stream/stage',
+            payload: {
+              messageId,
+              kind: phase === 'model_reasoning' ? 'reason' : undefined,
+              toolName: typeof parsed?.name === 'string' ? parsed.name : undefined,
+            },
+          });
+        }
         const reliabilityPhase = mapStreamStatusToReliabilityPhase(phase);
         if (reliabilityPhase) {
           if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
@@ -4407,18 +4421,40 @@ function streamStatusMessage(
   if (localized) {
     return localized[responseLanguage] ?? localized['en-US'];
   }
-  const preparing = responseLanguage === 'zh-CN'
-    ? {
-        preparing_context: '\u6b63\u5728\u51c6\u5907\u5f53\u524d\u5de5\u4f5c\u533a\u548c\u5b66\u4e60\u4e0a\u4e0b\u6587\u3002',
-        requesting_model: '\u6b63\u5728\u5411\u5df2\u914d\u7f6e\u7684\u6a21\u578b\u8bf7\u6c42\u56de\u590d\u3002',
-      }
-    : {
-        preparing_context: 'Preparing the current workspace and learning context.',
-        requesting_model: 'Requesting a reply from the configured model.',
-      };
-  return phase === 'preparing_context' || phase === 'requesting_model'
-    ? preparing[phase]
-    : undefined;
+  const stageByLang: Record<string, Record<ComposerLanguage, string>> = {
+    preparing_context: {
+      'zh-CN': '正在准备当前工作区和学习上下文。',
+      'en-US': 'Preparing the current workspace and learning context.',
+      'es-ES': 'Preparando el espacio de trabajo actual y el contexto de aprendizaje.',
+      'fr-FR': 'Préparation de l’espace de travail et du contexte d’apprentissage.',
+      'de-DE': 'Aktueller Arbeitsbereich und Lernkontext werden vorbereitet.',
+      'ja-JP': '現在のワークスペースと学習コンテキストを準備しています。',
+      'ko-KR': '현재 작업 영역과 학습 컨텍스트를 준비하는 중입니다.',
+      'pt-BR': 'Preparando o espaço de trabalho atual e o contexto de aprendizagem.',
+    },
+    requesting_model: {
+      'zh-CN': '正在向已配置的模型请求回复。',
+      'en-US': 'Requesting a reply from the configured model.',
+      'es-ES': 'Solicitando una respuesta al modelo configurado.',
+      'fr-FR': 'Demande de réponse au modèle configuré en cours.',
+      'de-DE': 'Eine Antwort vom konfigurierten Modell wird angefordert.',
+      'ja-JP': '設定されたモデルに返信をリクエストしています。',
+      'ko-KR': '설정된 모델에 답변을 요청하는 중입니다.',
+      'pt-BR': 'Solicitando uma resposta ao modelo configurado.',
+    },
+    model_reasoning: {
+      'zh-CN': '模型正在推演思路。',
+      'en-US': 'The model is reasoning through the next step.',
+      'es-ES': 'El modelo está razonando el siguiente paso.',
+      'fr-FR': 'Le modèle est en train de raisonner.',
+      'de-DE': 'Das Modell durchdenkt den nächsten Schritt.',
+      'ja-JP': 'モデルが推論を進めています。',
+      'ko-KR': '모델이 추론을 진행하는 중입니다.',
+      'pt-BR': 'O modelo está raciocinando sobre o próximo passo.',
+    },
+  };
+  const stageLocalized = stageByLang[phase];
+  return stageLocalized ? (stageLocalized[responseLanguage] ?? stageLocalized['en-US']) : undefined;
 }
 
 async function postStreamReliabilityStatus(

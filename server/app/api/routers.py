@@ -5580,6 +5580,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     _STREAM_STATUS_PHASES = {
         "preparing_context",
         "requesting_model",
+        "model_reasoning",
+        "tool_intent",
         "intent",
         "pending",
         "executing",
@@ -5706,6 +5708,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 "session_id",
                 "suggested_actions",
                 "reliability",
+                "timings",
             )
             attached = {
                 key: value for key, value in attached.items() if key in slim_keep
@@ -5873,12 +5876,21 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 )
             unregister_stream_cancellation(stream_id)
 
-    def stream_status_event(phase: str, stream_id: str | None = None) -> str:
+    def stream_status_event(
+        phase: str,
+        stream_id: str | None = None,
+        *,
+        detail: dict[str, object] | None = None,
+    ) -> str:
         if phase not in _STREAM_STATUS_PHASES:
             raise ValueError(f"Unsupported stream status phase: {phase}")
         payload: dict[str, object] = {"phase": phase}
         if stream_id:
             payload["stream_id"] = stream_id
+        if isinstance(detail, dict):
+            for key, value in detail.items():
+                if key not in {"phase", "stream_id"} and value is not None:
+                    payload[key] = value
         return f"event: status\ndata: {json.dumps(payload)}\n\n"
 
     def stream_event_payload(value: object, stream_id: str) -> object:

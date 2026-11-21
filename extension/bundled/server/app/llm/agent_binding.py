@@ -965,7 +965,9 @@ class ProviderAgentBinding:
         anthropic_base_url: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 1024,
+        emit_activity: bool = False,
     ) -> None:
+        self._emit_activity = bool(emit_activity)
         self._provider_service = provider_service
         config = getattr(provider_service, "_config", None)
         config_base_url = getattr(config, "base_url", None) if config is not None else None
@@ -1193,6 +1195,8 @@ class ProviderAgentBinding:
         text_buffer = ""
         reasoning_filter = ReasoningBlockFilter()
         emitted_visible = False
+        emitted_reasoning = False
+        emitted_tool_drafts: set[int] = set()
 
         def _normalize_stream_chunk(text: str) -> str:
             nonlocal emitted_visible
@@ -1208,9 +1212,18 @@ class ProviderAgentBinding:
         async with stream as response_stream:
             async for event in response_stream:
                 event_type = str(getattr(event, "type", "") or "")
+                if "reasoning" in event_type and not emitted_reasoning:
+                    emitted_reasoning = True
+                    if self._emit_activity:
+                        yield {"type": "provider_activity", "phase": "model_reasoning"}
                 if event_type in {"response.output_item.added", "response.output_item.done"}:
                     item = getattr(event, "item", None)
-                    if item is None or str(getattr(item, "type", "") or "") != "function_call":
+                    item_type = str(getattr(item, "type", "") or "") if item is not None else ""
+                    if item_type == "reasoning" and not emitted_reasoning:
+                        emitted_reasoning = True
+                        if self._emit_activity:
+                            yield {"type": "provider_activity", "phase": "model_reasoning"}
+                    if item is None or item_type != "function_call":
                         continue
                     index = int(getattr(event, "output_index", 0) or 0)
                     slot = tool_call_state.setdefault(index, {"id": "", "name": "", "arguments": ""})
@@ -1220,6 +1233,14 @@ class ProviderAgentBinding:
                     name = getattr(item, "name", None)
                     if name:
                         slot["name"] = str(name)
+                        if index not in emitted_tool_drafts:
+                            emitted_tool_drafts.add(index)
+                            if self._emit_activity:
+                                yield {
+                                    "type": "provider_activity",
+                                    "phase": "tool_drafting",
+                                    "name": slot["name"],
+                                }
                     arguments = getattr(item, "arguments", None)
                     if isinstance(arguments, str):
                         slot["arguments"] = arguments
@@ -1336,6 +1357,8 @@ class ProviderAgentBinding:
                 text_buffer = ""
                 reasoning_filter = ReasoningBlockFilter()
                 emitted_visible = False
+                emitted_reasoning = False
+                emitted_tool_drafts: set[tuple[int, int]] = set()
 
                 def _normalize_stream_chunk(text: str) -> str:
                     nonlocal emitted_visible
@@ -1369,6 +1392,10 @@ class ProviderAgentBinding:
                         for part_index, part in enumerate(parts or []):
                             if not isinstance(part, dict):
                                 continue
+                            if part.get("thought") is True and not emitted_reasoning:
+                                emitted_reasoning = True
+                                if self._emit_activity:
+                                    yield {"type": "provider_activity", "phase": "model_reasoning"}
                             piece = part.get("text")
                             if isinstance(piece, str) and piece:
                                 visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
@@ -1381,12 +1408,21 @@ class ProviderAgentBinding:
                             name = str(function_call.get("name") or "")
                             if not name:
                                 continue
+                            slot_key = (candidate_index, part_index)
                             slot = tool_call_state.setdefault(
-                                (candidate_index, part_index),
+                                slot_key,
                                 {"id": "", "name": "", "arguments": None},
                             )
                             slot["name"] = name
                             slot["id"] = slot["id"] or name
+                            if slot_key not in emitted_tool_drafts:
+                                emitted_tool_drafts.add(slot_key)
+                                if self._emit_activity:
+                                    yield {
+                                        "type": "provider_activity",
+                                        "phase": "tool_drafting",
+                                        "name": name,
+                                    }
                             args = function_call.get("args")
                             if args is None:
                                 args = function_call.get("arguments")
@@ -1681,6 +1717,8 @@ class ProviderAgentBinding:
         text_buffer = ""
         reasoning_filter = ReasoningBlockFilter()
         emitted_visible = False
+        emitted_reasoning = False
+        emitted_tool_drafts: set[int] = set()
 
         def _normalize_stream_chunk(text: str) -> str:
             nonlocal emitted_visible
@@ -1711,12 +1749,24 @@ class ProviderAgentBinding:
             delta = getattr(choice, "delta", None)
             if delta is None:
                 continue
+            has_reasoning_delta = any(
+                bool(getattr(delta, field_name, None))
+                for field_name in ("reasoning_content", "reasoning", "thinking")
+            )
+            if has_reasoning_delta and not emitted_reasoning:
+                emitted_reasoning = True
+                if self._emit_activity:
+                    yield {"type": "provider_activity", "phase": "model_reasoning"}
             piece = getattr(delta, "content", None)
             if isinstance(piece, str) and piece:
                 visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
                 if visible_piece:
                     text_buffer += visible_piece
                     yield {"type": "delta", "delta": visible_piece}
+                elif not emitted_reasoning and ("<think" in piece.lower() or not emitted_visible):
+                    emitted_reasoning = True
+                    if self._emit_activity:
+                        yield {"type": "provider_activity", "phase": "model_reasoning"}
             for delta_call in getattr(delta, "tool_calls", []) or []:
                 index = int(getattr(delta_call, "index", 0) or 0)
                 slot = tool_call_state.setdefault(index, {"id": "", "name": "", "arguments": ""})
@@ -1727,6 +1777,14 @@ class ProviderAgentBinding:
                     continue
                 if getattr(fn, "name", None):
                     slot["name"] = str(fn.name)
+                    if index not in emitted_tool_drafts:
+                        emitted_tool_drafts.add(index)
+                        if self._emit_activity:
+                            yield {
+                                "type": "provider_activity",
+                                "phase": "tool_drafting",
+                                "name": slot["name"],
+                            }
                 if getattr(fn, "arguments", None):
                     slot["arguments"] += str(fn.arguments)
 
@@ -1942,6 +2000,7 @@ class ProviderAgentBinding:
                 text_buffer = ""
                 reasoning_filter = ReasoningBlockFilter()
                 emitted_visible = False
+                emitted_reasoning = False
 
                 def _normalize_stream_chunk(text: str) -> str:
                     nonlocal emitted_visible
@@ -1977,12 +2036,24 @@ class ProviderAgentBinding:
                     event_type = str(event.get("type") or "")
                     if event_type == "content_block_start":
                         block = event.get("content_block") or {}
-                        if str(block.get("type") or "") == "tool_use":
+                        block_type = str(block.get("type") or "")
+                        if block_type == "thinking" and not emitted_reasoning:
+                            emitted_reasoning = True
+                            if self._emit_activity:
+                                yield {"type": "provider_activity", "phase": "model_reasoning"}
+                        if block_type == "tool_use":
+                            block_name = str(block.get("name") or "")
                             tool_block_states[int(event.get("index") or 0)] = {
                                 "id": str(block.get("id") or ""),
-                                "name": str(block.get("name") or ""),
+                                "name": block_name,
                                 "arguments": "",
                             }
+                            if block_name and self._emit_activity:
+                                yield {
+                                    "type": "provider_activity",
+                                    "phase": "tool_drafting",
+                                    "name": block_name,
+                                }
                     elif event_type == "content_block_delta":
                         delta = event.get("delta") or {}
                         delta_kind = str(delta.get("type") or "")
@@ -2559,6 +2630,7 @@ def build_agent_provider_for(
     attachments: list[dict[str, Any]] | None = None,
     temperature: float = 0.7,
     max_tokens: int = 1024,
+    emit_activity: bool = False,
 ) -> tuple[AgentProvider, ProviderAgentBinding]:
     binding = ProviderAgentBinding(
         provider_service=provider_service,
@@ -2566,6 +2638,7 @@ def build_agent_provider_for(
         attachments=attachments,
         temperature=temperature,
         max_tokens=max_tokens,
+        emit_activity=emit_activity,
     )
     return binding.build_agent_provider(), binding
 

@@ -119,6 +119,154 @@ _VISIBLE_COACH_PARAGRAPH_SPLIT_PATTERN = re.compile(r"\n\s*\n")
 
 
 _VISIBLE_COACH_SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+")
+_LEAKED_ANCHOR_PATTERN = re.compile(
+    r"[（(\[]?\s*¶(?:chunk|page|slide|h|p|spine)[^\s)）\]，。；,.;:]*\s*[)）\]]?",
+)
+_LEAKED_INTERNAL_ID_PAREN_PATTERN = re.compile(
+    r"\s*[（(\[]\s*(?:goal|resource|card|stage|plan|attempt|evidence|session|ctx|ws)-[0-9a-f]{6,}\s*[)）\]]",
+    re.IGNORECASE,
+)
+_LEAKED_INTERNAL_ID_BARE_PATTERN = re.compile(
+    r"`?\b(?:goal|resource|card|stage|plan|attempt|evidence|session|ctx)-[0-9a-f]{8,}\b`?",
+    re.IGNORECASE,
+)
+_SAVED_NOTE_PATH_PATTERN = re.compile(
+    r"Trainer Library/[^)`\"'，。；：\n]{1,160}?\.md",
+)
+
+
+def _strip_leaked_internal_prose_tokens(text: str) -> str:
+    """Remove raw internal anchors, opaque entity IDs, and schema enums from visible prose."""
+    cleaned = _LEAKED_ANCHOR_PATTERN.sub("", text)
+    cleaned = _LEAKED_INTERNAL_ID_PAREN_PATTERN.sub("", cleaned)
+    cleaned = _LEAKED_INTERNAL_ID_BARE_PATTERN.sub("", cleaned)
+    use_zh = _contains_cjk(cleaned)
+    cleaned = re.sub(
+        r"`?evidence_records`?\s*[:：]\s*\[\s*\]",
+        "暂无已验证证据记录" if use_zh else "no verified evidence records yet",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"`?\binsufficient_evidence\b`?",
+        "暂无足够验证证据" if use_zh else "not enough verified evidence yet",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"`?\bno_recall_evidence\b`?",
+        "尚未进行回想检验" if use_zh else "no recall check recorded yet",
+        cleaned,
+    )
+    cleaned = re.sub(r"(?<![A-Za-z0-9_.\]`])(?:\(\s*\)|（\s*）|\[\s*\])", "", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return re.sub(r"\s+([,.;:!?，。；：！？])", r"\1", cleaned).strip()
+
+
+def enforce_truthful_saved_note_path(
+    reply: str,
+    tool_events: list[dict[str, Any]] | None,
+) -> str:
+    """Replace any guessed `Trainer Library/*.md` path with the real `save_lecture_note` path."""
+    if not reply or not tool_events:
+        return reply
+    saved_path = ""
+    for event in tool_events:
+        if str(event.get("type") or "") != "tool_result":
+            continue
+        if str(event.get("name") or "") != "save_lecture_note":
+            continue
+        raw_result = event.get("result")
+        payload = raw_result if isinstance(raw_result, dict) else None
+        if payload and payload.get("ok") is True:
+            candidate = str(payload.get("saved_path") or "").strip()
+            if candidate:
+                saved_path = candidate
+    if not saved_path:
+        return reply
+    return _SAVED_NOTE_PATH_PATTERN.sub(saved_path, reply)
+
+
+_STREAM_UNSAFE_LINE_TAIL_PREFIXES = (
+    "<",
+    "¶",
+    "current focus",
+    "current coaching focus",
+    "review rhythm",
+    "preferred teaching asset",
+    "reusable teaching asset",
+    "resume the live thread",
+    "build on the verified result",
+    "keep the blocker",
+    "coach confidence",
+    "当前聚焦",
+    "复习节奏",
+    "已读取",
+    "我已读取",
+    "教学顺序",
+    "教学重点",
+    "当前阻塞",
+)
+
+
+def _streamable_visible_prefix(buffered_text: str) -> str:
+    """Compute incrementally streamable visible text without breaking code fences.
+
+    Unlike ``_strip_internal_coach_meta`` (which normalizes paragraph spacing
+    around fenced code blocks at finalization), this preserves newline layout so
+    multi-chunk fenced code blocks keep advancing strictly as prefixes.
+    """
+    normalized = _visible_model_text(buffered_text)
+    if not normalized:
+        return ""
+    lines = normalized.splitlines(keepends=True)
+    if not normalized.endswith(("\n", "\r")) and lines:
+        tail = lines[-1].strip()
+        tail_lower = tail.casefold()
+        if any(
+            tail_lower.startswith(prefix) or prefix.startswith(tail_lower)
+            for prefix in _STREAM_UNSAFE_LINE_TAIL_PREFIXES
+            if tail_lower
+        ):
+            lines = lines[:-1]
+    out: list[str] = []
+    fence = ""
+    for raw_line in lines:
+        match = re.match(r"^[ \t]*(`{3,}|~{3,})", raw_line)
+        if fence:
+            out.append(raw_line)
+            if (
+                match
+                and match.group(1)[0] == fence[0]
+                and len(match.group(1)) >= len(fence)
+                and not raw_line[match.end() :].strip()
+            ):
+                fence = ""
+            continue
+        if match:
+            fence = match.group(1)
+            out.append(raw_line)
+            continue
+        stripped = raw_line.strip()
+        if not stripped:
+            out.append(raw_line)
+            continue
+        without_prefix = _strip_leading_coach_meta_prefix(stripped)
+        if without_prefix != _normalize_coach_meta_candidate(stripped):
+            line_ending = raw_line[len(raw_line.rstrip("\r\n")) :]
+            if without_prefix:
+                cleaned_line = _strip_leaked_internal_prose_tokens(without_prefix)
+                if cleaned_line:
+                    out.append(f"{cleaned_line}{line_ending}")
+            continue
+        if _looks_like_internal_coach_meta(stripped):
+            continue
+        sanitized = _strip_leaked_internal_prose_tokens(raw_line.rstrip("\r\n"))
+        line_ending = raw_line[len(raw_line.rstrip("\r\n")) :]
+        if sanitized:
+            out.append(f"{sanitized}{line_ending}")
+        elif not line_ending:
+            continue
+    return "".join(out).lstrip()
 
 
 def _normalize_coach_meta_candidate(text: str) -> str:
@@ -223,7 +371,9 @@ def _strip_internal_coach_prose(normalized_text: str) -> str:
             joined = " ".join(kept_fragments)
             joined = re.sub(r"\s+([,.;:!?])", r"\1", joined).strip()
             if joined:
-                kept_lines.append(joined)
+                sanitized_line = _strip_leaked_internal_prose_tokens(joined)
+                if sanitized_line:
+                    kept_lines.append(sanitized_line)
         if kept_lines:
             kept_paragraphs.append("\n".join(kept_lines))
 

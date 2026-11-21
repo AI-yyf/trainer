@@ -51,7 +51,10 @@ from ..llm.turn_grounding import (
     sanitize_memory_anchor,
 )
 from ..memory.conversation_feedback import explanation_feedback
-from ..memory.note_request import message_requests_explicit_learning_note
+from ..memory.note_request import (
+    message_requests_explicit_learning_note,
+    message_requests_lecture_note_save,
+)
 from ..memory.proactive_budget import match_diagnostic_to_weakness
 from ..memory.review_intervention import derive_review_budget
 from ..memory.workspace_recovery import (
@@ -4693,6 +4696,7 @@ def build_coach_context(deps: CoachSupportDeps,
         "first_turn_priority": first_turn_priority,
         "explicit_training_card_request": message_requests_explicit_training_card(message),
         "explicit_learning_note_request": message_requests_explicit_learning_note(message),
+        "explicit_lecture_note_save_request": message_requests_lecture_note_save(message),
         "history_mode": (
             "fresh_lane" if fresh_lane else "resume"
         ),

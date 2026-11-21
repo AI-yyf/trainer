@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 import os
 import posixpath
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -385,6 +386,69 @@ class LibraryService:
                 status_code=500,
                 params={"path": LIBRARY_DIRECTORY_NAME},
             ) from exc
+
+    @staticmethod
+    def _safe_note_filename(filename: str) -> str:
+        raw = str(filename or "").strip()
+        base = Path(raw).name if raw else ""
+        cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f\r\n\t]+', " ", base).strip()
+        stem = cleaned[:-3] if cleaned.lower().endswith(".md") else cleaned
+        stem = re.sub(r"\s+", "-", stem).strip(".-")
+        if not stem:
+            stem = "lecture-note"
+        if len(stem) > 72:
+            stem = stem[:72].rstrip(".-")
+        return f"{stem}.md"
+
+    def save_markdown_note(
+        self,
+        workspace_id: str,
+        *,
+        filename: str,
+        markdown_content: str,
+        folder: str | None = None,
+    ) -> tuple[LibraryDownload, Path]:
+        """Persist a learner-requested Markdown note inside ``<LibraryRoot>/Trainer Library/``."""
+
+        raw_folder = str(folder or "").strip()
+        group_path = normalize_group_path(raw_folder) if raw_folder else ""
+        target_dir_rel = (
+            f"{LIBRARY_DIRECTORY_NAME}/{group_path}" if group_path else LIBRARY_DIRECTORY_NAME
+        )
+        directory, _ = self.resolve_target_dir(
+            workspace_id,
+            target_dir_rel,
+            create=True,
+        )
+        library_root = self.library_root(workspace_id, create=True)
+        safe_name = self._safe_note_filename(filename)
+        target_path = directory / safe_name
+        existed = target_path.exists()
+        self._authorize(
+            workspace_id,
+            library_root,
+            OperationType.GENERATE if not existed else OperationType.WRITE,
+            target_path,
+            details={"kind": "markdown", "target": str(target_path)},
+        )
+        try:
+            target_path.write_bytes(str(markdown_content or "").encode("utf-8"))
+        except OSError as exc:
+            raise LibraryError(
+                "group_mutation_failed",
+                status_code=500,
+                params={"path": safe_name},
+            ) from exc
+        workspace_root = self.workspace_root(workspace_id)
+        relative_path = self._relative_to_workspace(target_path, workspace_root)
+        return (
+            LibraryDownload(
+                relative_path=relative_path,
+                kind="markdown",
+                created=not existed,
+            ),
+            target_path,
+        )
 
     # -------------------------------------------------------------- downloads
 

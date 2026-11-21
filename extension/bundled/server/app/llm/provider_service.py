@@ -72,6 +72,7 @@ from .coaching_replies import (
     _reply_has_guided_lane_signal,
     _sanitize_agentic_continuity_text,
     _stream_holdback_chars,
+    _streamable_visible_prefix,
     _strip_fresh_lane_cross_lane_carryover,
     _strip_internal_coach_meta,
 )
@@ -4922,6 +4923,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             attachments=attachments,
             temperature=temperature,
             max_tokens=effective_max_tokens,
+            emit_activity=True,
         )
         binding._max_tokens = effective_max_tokens  # noqa: SLF001 - request budget is set per call below
         original_call = provider_obj.call
@@ -5923,11 +5925,11 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                         # Native tool-capable streams can expose visible model
                         # text before the tool decision arrives. Keep the
                         # guardrails that strip internal metadata and reject
-                        # mixed-script corruption, but do not wait for the
-                        # complete tool loop before forwarding a valid prefix.
-                        visible = _strip_internal_coach_meta(buffered_text)
+                        # mixed-script corruption, while preserving single-newline
+                        # fenced code blocks so long lectures stream incrementally.
+                        visible = _streamable_visible_prefix(buffered_text)
                         if (
-                            visible == _visible_model_text(buffered_text).strip()
+                            visible
                             and _strip_short_cyrillic_noise(visible, message=message) == visible
                             and not _mixed_script_reply_corruption_detail(
                                 visible,
