@@ -698,3 +698,29 @@
      - Case 4（唯一输入框 `inspect_learning_truth` + 推理型复习）：准确报出 3 个阶段与 0 条验证证据（不编造），基于刚存讲稿出 4 问闭卷推导复习题；单次复述工具字段词 `handoff` 已在 `0b0e13f` 补齐自然语言转译指令。
      - 存储真相：`all_under_library_root=true`、`outside_library_root=[]`、代码仓仅保留原始 `payments.py`。
 - **诚实 BLOCKED 边界**：`T-0028`（`teaching_acceptance` 人工最终教学签收）与 `remote_ssh_e2e`（真实 Remote-SSH L2 窗口）继续保持 `BLOCKED`，待本人按 [docs/TRIAL-1.5.0-RC.md](../docs/TRIAL-1.5.0-RC.md) 完成 15 分钟安装态试用后签核。
+
+## 2026-11-21 — 全窗口工作区接入、唯一本机 `<LibraryRoot>` 加固、8 语言补全与真实 Remote-SSH L2 实测通过
+- **核心修复提交**：
+  - `eec0e98`（工作区接入 + Remote Companion URI 修复 + 单 `<LibraryRoot>` 守卫）：
+    - 修复真实 Remote-SSH 下 UI 宿主传入 `vscode-remote://<remoteName>+...` URI 与远端工作区扩展 `file://` 根目录 scheme 不匹配导致全部操作被 `WorkspaceScopeError` 拒绝的致命缺陷（`remote-extension/src/extension.ts` 新增 `normalizeIncomingUriForFolder` 并支持多根 `environment(uri)` 严格校验）；
+    - 空窗口、多根无活动编辑器窗口下 `WorkspaceAdmissionPanel` 主动作收敛为「选择项目文件夹」，`chooseWorkspaceProjectCommand` 多根时弹出已打开文件夹 QuickPick + 「浏览其他文件夹…」，保留 `vscode-remote://` URI 并通过 `WorkspaceTrustGuard.setPreferredWorkspaceProject` 持久化本窗口选中态；
+    - 冷启动首次在输入框发送时自动关联项目并在进入 `managed` 后**自动发送排队首条消息**（失败/取消时清空队列并保留草稿）；
+    - 严守唯一本机 `<LibraryRoot>`：`chooseTrainerWorkspaceRootCommand` 拒绝非 `file://` 远端目录作为根目录，打开 `<LibraryRoot>` 本身作为项目时明确报错，彻底移除静默把 `<LibraryRoot>` 上移到父目录的 `relocateWorkspaceRootForProject`；`root-missing` 下选择项目无缝先引导选根目录再绑定项目；补齐 8 语言宿主接入文案；新增 `extension/tests/remoteExtensionResolveUri.test.js`、`e2e/trainer-workspace-admission.spec.js` 及 5 项宿主行为测试。
+  - `67a9418`（8 语言完整性 + 硬门禁 + 8 语言单输入框工具触发）：
+    - 补齐 `appUiCopy.ts` 全部 8 处缺失键并修正 2 处 `ja-JP` 混入韩文字符的缺陷；补齐 `settingsText.ts` 全部 91 处缺失 8 语言词条（`de-DE`/`fr-FR`/`es-ES`/`pt-BR`/`ja-JP`/`ko-KR` 零英文回退）；`formatReviewDueLabel` 改用当前 locale；
+    - 扩展单输入框真相查询（`inspect_learning_truth`）与讲稿落盘（`save_lecture_note`）自动触发至全部 8 语言（`App.tsx`、`router_support.py`、`note_request.py`，同步至 `extension/bundled/server/`，新增 8 语言 pytest）；
+    - 新增硬回归门禁 `scripts/verify-i18n-completeness.mjs`（`npm run verify:i18n`），并实际渲染及像素审查 340px 下 `de-DE`/`fr-FR`/`es-ES`/`pt-BR`/`ja-JP`/`ko-KR` 的设置页与学习抽屉截图（0 溢出、0 英文/中文泄漏）。
+  - `f6dfb98`（安全卫生）：清除追踪文件 `docs/maturity/2026-10-28-deep-audit.md` 与 `scripts/live-long-horizon-provider-probe.py` 中遗留的私有中转地址，后者改为强制要求环境变量 `TRAINER_LIVE_PROBE_BASE_URL`。
+  - `c31e5f6`（单 `<LibraryRoot>` `trainer.sqlite3` 迁移修复）：真实 Remote-SSH 实测中发现 `migrateGlobalStorageToLibraryRootIfNeeded` 与 `workspaceAdmissionCommands.ts` 仅检查 `trainer.db`、漏掉了实际生成的 `trainer.sqlite3`；现已同时兼容 `trainer.sqlite3` 与 `trainer.db` 并补齐行为单测。
+- **真实 Remote-SSH Layer-2 实测通过（`remote_ssh_e2e: PASS`）**：
+  - 使用最新独立打包的本机 macOS UI 宿主 `trainer-extension@1.4.4`（`extensionKind=1`）+ 远端 Linux x86_64 宿主 `trainer-workspace-companion@1.0.0`（protocol v2），通过真实 VS Code `1.145.2`（`c4453f8e`）`ms-vscode-remote.remote-ssh` 连接实机 Linux 服务器，**19/19 步全绿通过**：
+    - `remote_window_attached`（`ssh-remote`）、`local_trainer_activated`、`companion_capabilities_v2`（9/9 能力全开）；
+    - 使用 UI 宿主 `vscode-remote://` URI 完整通过 `stat`、`read_file`、`list_directory`、`find_files`、`search_text`、`hash_artifact`（SHA-256 字节一致）、`diagnostics`、`environment`（`os=linux, arch=x64`）；
+    - 安全边界实测：读取 `/etc/passwd` 被 Companion fail-closed 拦截（`outside the active workspace`）；
+    - 远端真实执行：`python3 -B -m unittest` 通过（`exit_code=0`）与故意失败脚本（`exit_code=1`）均诚实回报；
+    - 宿主接入与存储核验：`trainer.workspace.adoptProject` 将远端项目绑定至本机唯一 `<LibraryRoot>`，`trainer.remote.companionState=ready`，`trainer.remote.verify` 通过，`trainer.memory.refresh` 正常，本机 `<LibraryRoot>/.trainer/workspace.json` 与 `<LibraryRoot>/.trainer/runtime/trainer.sqlite3` 均落盘；
+    - **远端代码仓零污染**：实测前后远端项目目录文件数严格 `4 -> 4`（`addedOnRemote=[]`, `removedOnRemote=[]`），远端零 `.trainer/` 或任何 Trainer 数据文件。
+- **真模型复验与全量工程门禁（截至 `c31e5f6`）**：
+  - 真模型 4 场景复验（`MiniMax-M2.7`，失效系统代理 `127.0.0.1:1` + `ignoreSystemProxy: true` 直连通过，密钥/地址零落盘）：全部 4 用例 `completed=true`、`providerFallback=false`、`clicheHits=[]`、**`jargonHits=[]`**（Case 4 `handoff` 泄漏清零）；Case 1 TTFT `3640ms`（同期直连上游基线首可见字 `1698ms`，差值为推理模型在教学提示下的思考耗时）；Case 2 完整状态流推导并写入 `<LibraryRoot>/Trainer Library/.trainer-resources/markdown/*.md`；Case 3 `payments.py` 零写入；Case 4 如实汇报 0 条验证证据并出 5 问推理型复习题。
+  - 全量门禁全绿：`ruff check` 0 错误、`verify:server-pyright` 0 错误、`pytest server/tests -n 4` **4191 passed / 0 failed / 28 subtests passed**、`npm run verify:i18n` PASS（213 `appUiCopy` + 212 `settingsText`，0 缺失、0 跨语种泄漏）、`verify:copy-vocabulary` PASS（66 文件 0 违规）、`verify:credentials` PASS（5032 文件 0 泄露）、`verify:version` PASS（1.4.4）、`npm run check` PASS、`npm run test:extension` 全绿、`verify:ui-geometry` PASS（360 断言）、`verify:local-latency` PASS（71–295ms）、12 份核心 Playwright E2E（111/111 passed）。
+- **唯一剩余人工项（诚实 `BLOCKED`）**：`T-0028`（`teaching_acceptance`）属于所有者人工最终教学签收，继续诚实保持 `BLOCKED`，待本人按 [docs/TRIAL-1.5.0-RC.md](../docs/TRIAL-1.5.0-RC.md) 试用后签核。

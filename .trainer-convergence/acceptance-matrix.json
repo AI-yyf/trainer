@@ -7,15 +7,15 @@
     },
     "native_install_e2e": {
       "status": "PASS",
-      "evidence": "at clean HEAD 0b0e13f: macOS darwin-arm64 standalone trainer-sidecar rebuilt (237 files, sha256 88057b06...) + verify:sidecar-runtime PASS + clean VSIX packaged (sourceDirty=false, extension/trainer-extension-1.4.4-darwin-arm64.vsix.build.json) + verify-vsix-install PASS (metadataJunkCount=0) + test:vsix-e2e PASS 36/36 installed-host steps (55.4s). Visual window capture is win32-only and skipped on macOS."
+      "evidence": "at clean HEAD c31e5f6: macOS darwin-arm64 standalone trainer-sidecar rebuilt + verify:sidecar-runtime PASS + trainer-workspace-companion.vsix packaged + clean VSIX packaged (sourceDirty=false, extension/trainer-extension-1.4.4-darwin-arm64.vsix.build.json) + verify-vsix-install PASS + test:vsix-e2e PASS 36/36 installed-host steps. Visual window capture is win32-only and skipped on macOS."
     },
     "browser_e2e": {
       "status": "PASS_LOCAL",
       "evidence": "25/25 real Chrome + sidecar checks at 5881e56 (browser lane unchanged at d72e98b); focus e2e PASS; evidence/browser-e2e-5881e56.log + focus-e2e-5881e56.log. Windows/Linux browser installs not included."
     },
     "remote_ssh_e2e": {
-      "status": "BLOCKED",
-      "evidence": "Layer1 transport only; real Remote-SSH window not available"
+      "status": "PASS",
+      "evidence": "2026-11-21 at c31e5f6: real VS Code 1.145.2 (c4453f8e) Remote-SSH Layer-2 E2E against live Linux x86_64 SSH server with local macOS UI host (local.trainer-extension@1.4.4, extensionKind=1) + remote workspace host (local.trainer-workspace-companion@1.0.0, protocol v2). 19/19 steps passed: remote_window_attached (ssh-remote), companion_capabilities_v2 (9/9 capabilities true), stat/read_file/list_directory/find_files/search_text/hash_artifact(exact sha256)/diagnostics/environment via UI-host vscode-remote:// URIs, fail-closed /etc/passwd escape blocked, companion verify pass (python3 -B -m unittest exit 0) & fail (exit 1), trainer.workspace.adoptProject into single local <LibraryRoot>, trainer.remote.companionState ready, trainer.remote.verify passed, trainer.memory.refresh ok, local <LibraryRoot>/.trainer/workspace.json & .trainer/runtime/trainer.sqlite3 verified, and zeroPollutionOnRemote passed (beforeCount=4, afterCount=4, addedOnRemote=[], removedOnRemote=[])."
     },
     "teaching_acceptance": {
       "status": "BLOCKED",
@@ -23,7 +23,7 @@
     },
     "design_acceptance": {
       "status": "PASS",
-      "evidence": "at 0b0e13f: Single-Composer Sovereignty (inline practice collapsible card with zero second textarea and zero inline card-library CRUD chrome), LearningDrawer read-only memo + unified 4-segment capability bar + composer footer hint, Resources filter/composer separation + Markdown Preview default + row quick-ask, Settings direct-connect network proxy toggle; 360/360 geometry assertions, 66 copy-vocab files 0 violations, real PNG screenshots audited at 340/420px dark/light zh-CN/en-US"
+      "evidence": "at c31e5f6: Single-Composer Sovereignty + 8-language completeness (verify:i18n PASS: 213 appUiCopy call sites, 212 settingsText call sites, 0 missing locales, 0 cross-script leaks; 340px screenshots visually verified across de-DE/fr-FR/es-ES/pt-BR/ja-JP/ko-KR with 0 overflow and 0 EN/ZH chrome leaks); 360/360 geometry assertions, 66 copy-vocab files 0 violations"
     },
     "core_journey_structure": {
       "status": "PASS_STRUCTURAL",
@@ -79,7 +79,7 @@
     },
     "local_e2e_full": {
       "status": "PASS",
-      "evidence": "at 7acebbe/0b0e13f: 203/203 Playwright passed across 12 core specs (trainer, trainer-inline-learning-cards incl. single-composer sovereignty & collapse/expand, trainer-session-recovery, trainer-template-navigation, trainer-settings-lifecycle incl. ignoreSystemProxy toggle, trainer-locales, trainer-rtl-i18n, trainer-governance, trainer-error-surface, trainer-resources-visible-facts, trainer-bound-card-facts, trainer-conversation-simplicity)"
+      "evidence": "at c31e5f6: 111/111 Playwright passed across 12 core specs (incl. new trainer-workspace-admission.spec.js covering empty-window/multi-root chooseProject, cold-start auto-adopt + auto-send on managed, error draft preservation, and browse/ignored 1-click rejoin; plus locales/rtl/settings-lifecycle/resources-lifecycle/conversation-simplicity/template-navigation/backend-recovery/governance/error-surface/learning-actions/session-recovery)"
     },
     "real_vscode_training": {
       "status": "PASS",
@@ -95,23 +95,23 @@
     },
     "unified_library_root_storage": {
       "status": "PASS",
-      "evidence": "434f3903: GET /workspace/storage-truth + test_unified_library_root_storage.py + unifiedLibraryRootStorage.test.js PASS; zero pollution in user code repository"
+      "evidence": "434f3903 + eec0e98 + c31e5f6: strict single local <LibraryRoot> invariant enforced (rejects non-local remote URIs as LibraryRoot, rejects adopting LibraryRoot itself without parent relocation, auto-migrates legacy globalStorage trainer.sqlite3/trainer.db into <LibraryRoot>/.trainer/runtime/, zero writes in both local and Remote-SSH project folders verified live)"
     },
     "copy_vocabulary_gate": {
       "status": "PASS",
-      "evidence": "at 0b0e13f: npm run verify:copy-vocabulary PASS (scanned 66 files incl. components/training & settingsText.ts, 0 banned-term violations)"
+      "evidence": "at c31e5f6: npm run verify:copy-vocabulary PASS (66 files, 0 banned-term violations) + npm run verify:i18n PASS (213 appUiCopy + 212 settingsText sites, 0 missing locales, 0 cross-script leaks)"
     },
     "calm_ui_geometry": {
       "status": "PASS",
-      "evidence": "at 0b0e13f: npm run verify:ui-geometry PASS (360 geometry assertions passed across 340/420/460 dark/light zh-CN/en-US incl. single-composer sovereignty textareas<=1, unified capability bar, and Resources alignment)"
+      "evidence": "at c31e5f6: npm run verify:ui-geometry PASS (360 geometry assertions passed across 340/420/460 dark/light zh-CN/en-US)"
     },
     "local_latency_2dest": {
       "status": "PASS",
-      "evidence": "at 0b0e13f: npm run verify:local-latency PASS (5 actions within 1000ms: coach->learning-drawer, learning-drawer->resources, resources->settings, settings->teaching, settings->coach)"
+      "evidence": "at c31e5f6: npm run verify:local-latency PASS (5 actions 71ms-295ms, all within 1000ms)"
     },
     "stage2_coaching_latency_and_productivity": {
       "status": "PASS",
-      "evidence": "Waves 3-4 + 0b0e13f: server/tests/test_turn_stream_latency_budget.py PASS; deep RethinkFun lecture & reasoning-model agentic output token headroom verified; npm run verify:server-pyright 0 errors"
+      "evidence": "Waves 3-4 + 0b0e13f + c31e5f6: server/tests/test_turn_stream_latency_budget.py PASS; deep RethinkFun lecture & reasoning-model agentic output token headroom verified; npm run verify:server-pyright 0 errors"
     },
     "stage3_proactive_budget": {
       "status": "PASS",
@@ -119,11 +119,11 @@
     },
     "idempotency_story_deterministic": {
       "status": "PASS",
-      "evidence": "at 0b0e13f: server/tests/test_idempotency_story_acceptance.py + test_stage1_rethinkfun_truth_and_proxy.py (5/5) + full server pytest 4190 passed (28 subtests passed; 1 xdist tmp-path race in test_workspace_classifier.py re-verified 59/59 in 0.12s); ruff 0 errors; npm run verify:server-pyright 0 errors"
+      "evidence": "at c31e5f6: server/tests/test_stage1_rethinkfun_truth_and_proxy.py (6/6 incl. 8-language single-composer triggers) + full server pytest 4191 passed, 0 failed, 28 subtests passed; ruff 0 errors; npm run verify:server-pyright 0 errors"
     },
     "live_model_idempotency_story": {
       "status": "PARTIAL",
-      "evidence": "Hardened live probes (no API keys or private URLs stored): prior MiniMax-M2.7 idempotency story turn0 TTFT 1183ms (<=2000ms); 2026-11-21 MiniMax-M2.7 4-case RethinkFun audit with ignoreSystemProxy=true under ambient proxy vars: Case1 short Q&A TTFT 3521ms (above 2000ms relay target, 0 clichés/0 jargon), Case2 deep RethinkFun Attention lecture 14/14 criteria + save_lecture_note persisted under Trainer Library/.trainer-resources/markdown/, Case3 payments.py read-only code guidance (paymentsCodeUntouched=true), Case4 inspect_learning_truth + closed-book 4-part reasoning review (1 echoed tool field word 'handoff' caught and fixed via tools.py translation instruction @0b0e13f). All turns completed=true, providerFallback=false, all_under_library_root=true, outside_library_root=[]."
+      "evidence": "Hardened live probes (zero keys/private URLs stored): 2026-11-21 post-fix MiniMax-M2.7 4-case RethinkFun re-verification with ignoreSystemProxy=true under dead ambient proxy (127.0.0.1:1): Case1 short Q&A TTFT 3640ms (direct upstream M2.7 baseline first visible token 1698ms after <think>, delta is model thinking time on coaching prompt), Case2 deep RethinkFun Attention lecture + save_lecture_note persisted under Trainer Library/.trainer-resources/markdown/, Case3 payments.py read-only code guidance (paymentsCodeUntouched=true), Case4 inspect_learning_truth + closed-book 5-part reasoning review. All 4 cases completed=true, providerFallback=false, clicheHits=[], jargonHits=[] (Case4 handoff leak cleared), all_under_library_root=true, outside_library_root=[]. Remains PARTIAL only because M2.7 thinking TTFT exceeds 2000ms target on Case1."
     }
   }
 }
