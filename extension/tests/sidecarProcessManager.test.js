@@ -794,3 +794,33 @@ test('SidecarProcessManager can switch datasets without copying and resume the e
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('SidecarProcessManager migrates legacy globalStorage trainer.sqlite3 into LibraryRoot/.trainer/runtime', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-sqlite3-migrate-'));
+  try {
+    const workspaceRoot = path.join(tempRoot, 'workspace');
+    const libraryRoot = path.join(tempRoot, 'SingleLibraryRoot');
+    fs.mkdirSync(libraryRoot, { recursive: true });
+    const manager = createManagerFixture({
+      workspaceFolder: workspaceRoot,
+      extensionPath: path.join(workspaceRoot, 'extension'),
+    });
+    const legacyDir = manager.getManagedDataFolderSnapshot(workspaceRoot).effectivePath;
+    writeFile(path.join(legacyDir, 'trainer.sqlite3'), 'sqlite3-payload');
+
+    await manager.setManagedDataRootScope({
+      rootId: 'root-single-1',
+      rootPath: libraryRoot,
+      legacyWorkspaceFolder: workspaceRoot,
+    });
+
+    const nextSnapshot = manager.getManagedDataFolderSnapshot(workspaceRoot);
+    assert.equal(nextSnapshot.effectivePath, path.join(libraryRoot, '.trainer', 'runtime'));
+    assert.equal(
+      fs.readFileSync(path.join(libraryRoot, '.trainer', 'runtime', 'trainer.sqlite3'), 'utf8'),
+      'sqlite3-payload',
+    );
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});

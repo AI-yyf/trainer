@@ -787,7 +787,7 @@ export class SidecarProcessManager implements vscode.Disposable {
       return;
     }
     const targetRuntimeDir = path.join(this.managedDataRootPath, '.trainer', 'runtime');
-    if (fs.existsSync(path.join(targetRuntimeDir, 'trainer.db'))) {
+    if (hasTrainerDatabaseFile(targetRuntimeDir)) {
       return;
     }
     const globalStoragePath = this.extensionContext?.globalStorageUri?.fsPath;
@@ -806,7 +806,7 @@ export class SidecarProcessManager implements vscode.Disposable {
         !pathsEqual(candidate, targetRuntimeDir) &&
         !isNestedPath(candidate, targetRuntimeDir) &&
         !isNestedPath(targetRuntimeDir, candidate) &&
-        fs.existsSync(path.join(candidate, 'trainer.db')),
+        hasTrainerDatabaseFile(candidate),
     );
     if (!source) {
       return;
@@ -1030,6 +1030,13 @@ export class SidecarProcessManager implements vscode.Disposable {
     this.status = status;
     this.statusEmitter.fire(this.getStatus());
   }
+}
+
+function hasTrainerDatabaseFile(directory: string): boolean {
+  return (
+    fs.existsSync(path.join(directory, 'trainer.sqlite3')) ||
+    fs.existsSync(path.join(directory, 'trainer.db'))
+  );
 }
 
 function isUsableLocalDataDirectory(candidate?: string): boolean {

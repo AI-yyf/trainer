@@ -640,11 +640,13 @@ export async function chooseTrainerWorkspaceRootCommand(
         normalizedPrev.startsWith(`${normalizedGlobalSidecar}${path.sep}`) ||
         normalizedPrev.startsWith(`${normalizedGlobalSidecar}/`)),
   );
+  const hasTrainerDb = (dir: string): boolean =>
+    fs.existsSync(path.join(dir, 'trainer.sqlite3')) || fs.existsSync(path.join(dir, 'trainer.db'));
   const shouldMigrateFromGlobalStorage = Boolean(
     previousDataFolder &&
       prevInsideGlobalStorage &&
-      fs.existsSync(path.join(previousDataFolder, 'trainer.db')) &&
-      !fs.existsSync(path.join(targetDefaultRuntime, 'trainer.db')),
+      hasTrainerDb(previousDataFolder) &&
+      !hasTrainerDb(targetDefaultRuntime),
   );
   try {
     const selection = await runWithQuiescentManagedData(
