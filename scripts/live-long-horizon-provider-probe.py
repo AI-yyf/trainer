@@ -214,7 +214,10 @@ def main() -> int:
         print(json.dumps({"ok": False, "error": "TRAINER_LIVE_PROBE_API_KEY is required"}))
         return 2
 
-    base_url = os.environ.get("TRAINER_LIVE_PROBE_BASE_URL", "http://minimax.redfast.top/v1").strip()
+    base_url = os.environ.get("TRAINER_LIVE_PROBE_BASE_URL", "").strip()
+    if not base_url:
+        print(json.dumps({"ok": False, "error": "TRAINER_LIVE_PROBE_BASE_URL is required"}))
+        return 2
     model = os.environ.get("TRAINER_LIVE_PROBE_MODEL", "MiniMax-M2.7-highspeed").strip()
     workspace_id = "workspace-live-long-horizon-probe"
     provider = provider_payload(base_url, model)

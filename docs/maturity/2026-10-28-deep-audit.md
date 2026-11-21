@@ -2,7 +2,7 @@
 
 **日期：** 2026-10-28
 **范围：** extension 命令层 / webview 三目的地 UI / sidecar 路由与教练链路 / 测试基线 / 真实 API 通道实测
-**测试通道：** `http://minimax.redfast.top`（newapi 中转，MiniMax 系列模型）
+**测试通道：** `[REDACTED_ENDPOINT]`（newapi 中转，MiniMax 系列模型）
 
 ---
 
