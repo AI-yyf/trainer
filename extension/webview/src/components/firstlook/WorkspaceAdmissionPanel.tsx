@@ -96,6 +96,11 @@ function resolveActions(props: WorkspaceAdmissionPanelProps): {
     case "root-missing":
       return { primary: selectRoot, secondary: selectProject ? [selectProject] : [] };
     case "project-found": {
+      const hasResolvedProject = Boolean(props.projectPath?.trim());
+      if (!hasResolvedProject) {
+        const primary = selectProject ?? browse;
+        return { primary, secondary: withoutPrimary(primary, [selectProject, browse, ignore]) };
+      }
       const primary = add ?? selectProject ?? browse;
       return { primary, secondary: withoutPrimary(primary, [selectProject, add, browse, ignore]) };
     }

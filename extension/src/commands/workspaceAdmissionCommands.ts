@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import fs from 'node:fs';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
@@ -174,19 +175,243 @@ function workspaceAdmissionFailure(error: unknown): WorkspaceAdmissionFailure | 
   return undefined;
 }
 
+type AdmissionHostCopy = {
+  addFailedPrefix: string;
+  nextRootMissing: string;
+  nextRootIdMismatch: string;
+  nextRootPathUnavailable: string;
+  nextBackendUnavailable: string;
+  noFolderOpen: string;
+  unresolvedFolder: (resolvedPath: string) => string;
+  reopenAndRetry: string;
+  rootMustBeLocal: string;
+  projectSameAsRoot: string;
+  pickWorkspaceFolderTitle: string;
+  pickWorkspaceFolderPlaceholder: string;
+  browseAnotherFolder: string;
+  browseAnotherFolderDetail: string;
+  chooseProjectTitle: string;
+  chooseProjectOpenLabel: string;
+  projectSelectionCancelled: string;
+  rootSelectionCancelled: string;
+  rootReady: (rootPath: string) => string;
+  projectAdded: string;
+  projectBrowseOnly: string;
+  projectIgnored: string;
+};
+
+const ADMISSION_HOST_COPY: Record<ComposerLanguage, AdmissionHostCopy> = {
+  'zh-CN': {
+    addFailedPrefix: '无法添加项目',
+    nextRootMissing: '请先选择唯一的 Trainer 学习文件夹（根目录）。',
+    nextRootIdMismatch: '请重新选择与该路径匹配的 Trainer 学习文件夹后重试。',
+    nextRootPathUnavailable: '请确认学习文件夹仍可访问，再重新选择并重试。',
+    nextBackendUnavailable: '请确认工作区受信任且本地服务可用，然后重试。',
+    noFolderOpen: '当前窗口没有打开任何项目文件夹。',
+    unresolvedFolder: (p) => `未能解析当前项目目录（已检测到的工作区目录：${p}）。`,
+    reopenAndRetry: '请选择或重新打开项目文件夹后点击“加入 Trainer”重试。',
+    rootMustBeLocal: 'Trainer 学习文件夹（根目录）必须位于本机，不能选择远程路径；远程代码目录将自动关联到此本机根目录且保持零写入。',
+    projectSameAsRoot: '当前打开的目录本身就是 Trainer 唯一的学习文件夹（根目录），不能同时作为子项目加入。请选择其他代码或学习项目文件夹。',
+    pickWorkspaceFolderTitle: '选择要加入 Trainer 的工作区文件夹',
+    pickWorkspaceFolderPlaceholder: '选择一个已打开的文件夹（所有数据仍保存在本机唯一的 Trainer 根目录）',
+    browseAnotherFolder: '浏览其他文件夹…',
+    browseAnotherFolderDetail: '从文件系统选择其他项目目录关联到当前 Trainer 根目录',
+    chooseProjectTitle: '选择要加入 Trainer 的项目文件夹',
+    chooseProjectOpenLabel: '加入此项目文件夹',
+    projectSelectionCancelled: '已取消选择项目文件夹。',
+    rootSelectionCancelled: '已取消选择 Trainer 学习文件夹。',
+    rootReady: (p) => `Trainer 唯一学习文件夹已就绪：${p}。`,
+    projectAdded: '当前项目已关联到本机唯一的 Trainer 根目录，项目目录本身零写入。',
+    projectBrowseOnly: '当前项目将保持仅浏览模式，不会写入长期项目记忆。',
+    projectIgnored: '已忽略当前项目；需要时可随时重新加入 Trainer。',
+  },
+  'en-US': {
+    addFailedPrefix: 'Project could not be added',
+    nextRootMissing: 'Choose the single Trainer learning folder (root) first.',
+    nextRootIdMismatch: 'Re-select the Trainer learning folder that matches this path, then retry.',
+    nextRootPathUnavailable: 'Verify that the learning folder is accessible, re-select it, and retry.',
+    nextBackendUnavailable: 'Verify workspace trust and local backend availability, then retry.',
+    noFolderOpen: 'Trainer could not resolve the current project folder (no workspace folder is open).',
+    unresolvedFolder: (p) => `Trainer could not resolve the current project folder (resolved workspace folder: ${p}).`,
+    reopenAndRetry: 'Reopen or choose a project folder, then click Add to Trainer again to retry.',
+    rootMustBeLocal: 'The single Trainer learning folder (root) must be a local folder on this computer, not a remote URI.',
+    projectSameAsRoot: 'This folder is already your single Trainer learning folder (root) and cannot be added as a project inside itself. Choose a separate project folder instead.',
+    pickWorkspaceFolderTitle: 'Choose a workspace folder to add to Trainer',
+    pickWorkspaceFolderPlaceholder: 'Pick an open folder (all Trainer data stays inside your single local root)',
+    browseAnotherFolder: 'Browse another folder…',
+    browseAnotherFolderDetail: 'Pick any other project folder to link into your single Trainer root',
+    chooseProjectTitle: 'Choose Trainer Project Folder',
+    chooseProjectOpenLabel: 'Use as Trainer Project',
+    projectSelectionCancelled: 'Trainer project folder selection cancelled.',
+    rootSelectionCancelled: 'Trainer Workspace Root selection cancelled.',
+    rootReady: (p) => `Trainer Workspace is ready at ${p}.`,
+    projectAdded: 'The current project was added to Trainer with an isolated project lane.',
+    projectBrowseOnly: 'The current project will stay browse-only and will not receive long-lived project memory.',
+    projectIgnored: 'The current project will be ignored by Trainer.',
+  },
+  'es-ES': {
+    addFailedPrefix: 'No se pudo agregar el proyecto',
+    nextRootMissing: 'Elige primero la carpeta única de aprendizaje de Trainer.',
+    nextRootIdMismatch: 'Vuelve a elegir la carpeta de Trainer que coincide con esta ruta e inténtalo de nuevo.',
+    nextRootPathUnavailable: 'Verifica que la carpeta de aprendizaje siga accesible, vuelve a elegirla e inténtalo de nuevo.',
+    nextBackendUnavailable: 'Verifica la confianza del espacio de trabajo y el servicio local, luego reintenta.',
+    noFolderOpen: 'No hay ninguna carpeta de proyecto abierta en esta ventana.',
+    unresolvedFolder: (p) => `No se pudo resolver la carpeta actual del proyecto (carpeta detectada: ${p}).`,
+    reopenAndRetry: 'Abre o elige una carpeta de proyecto y vuelve a pulsar Agregar a Trainer.',
+    rootMustBeLocal: 'La carpeta raíz de Trainer debe estar en este equipo local, no en una ruta remota.',
+    projectSameAsRoot: 'Esta carpeta ya es tu carpeta raíz única de Trainer. Elige una carpeta de proyecto distinta.',
+    pickWorkspaceFolderTitle: 'Elige una carpeta del espacio de trabajo para agregar a Trainer',
+    pickWorkspaceFolderPlaceholder: 'Todos los datos de Trainer se guardan únicamente en tu carpeta raíz local',
+    browseAnotherFolder: 'Explorar otra carpeta…',
+    browseAnotherFolderDetail: 'Elegir otra carpeta de proyecto para vincularla a tu raíz única de Trainer',
+    chooseProjectTitle: 'Elegir carpeta de proyecto de Trainer',
+    chooseProjectOpenLabel: 'Usar como proyecto de Trainer',
+    projectSelectionCancelled: 'Se canceló la selección de la carpeta del proyecto.',
+    rootSelectionCancelled: 'Se canceló la selección de la carpeta raíz de Trainer.',
+    rootReady: (p) => `La carpeta raíz de Trainer está lista en ${p}.`,
+    projectAdded: 'El proyecto se vinculó a la carpeta raíz única de Trainer sin escribir archivos en el proyecto.',
+    projectBrowseOnly: 'El proyecto permanecerá en modo solo exploración sin memoria a largo plazo.',
+    projectIgnored: 'Trainer ignorará este proyecto por ahora.',
+  },
+  'fr-FR': {
+    addFailedPrefix: 'Impossible d’ajouter le projet',
+    nextRootMissing: 'Choisissez d’abord l’unique dossier d’apprentissage Trainer.',
+    nextRootIdMismatch: 'Sélectionnez à nouveau le dossier Trainer correspondant à ce chemin puis réessayez.',
+    nextRootPathUnavailable: 'Vérifiez que le dossier racine est accessible, sélectionnez-le à nouveau puis réessayez.',
+    nextBackendUnavailable: 'Vérifiez la confiance de l’espace de travail et la disponibilité du service local, puis réessayez.',
+    noFolderOpen: 'Aucun dossier de projet n’est ouvert dans cette fenêtre.',
+    unresolvedFolder: (p) => `Impossible de résoudre le dossier de projet actuel (dossier détecté : ${p}).`,
+    reopenAndRetry: 'Ouvrez ou choisissez un dossier de projet puis cliquez à nouveau sur Ajouter à Trainer.',
+    rootMustBeLocal: 'Le dossier racine unique de Trainer doit être un dossier local sur cet ordinateur, pas un chemin distant.',
+    projectSameAsRoot: 'Ce dossier est déjà votre dossier racine unique de Trainer. Choisissez un autre dossier de projet.',
+    pickWorkspaceFolderTitle: 'Choisir un dossier de l’espace de travail à ajouter à Trainer',
+    pickWorkspaceFolderPlaceholder: 'Toutes les données Trainer restent dans votre unique dossier racine local',
+    browseAnotherFolder: 'Parcourir un autre dossier…',
+    browseAnotherFolderDetail: 'Sélectionner un autre dossier de projet à lier à votre racine Trainer',
+    chooseProjectTitle: 'Choisir le dossier de projet Trainer',
+    chooseProjectOpenLabel: 'Utiliser comme projet Trainer',
+    projectSelectionCancelled: 'Sélection du dossier de projet annulée.',
+    rootSelectionCancelled: 'Sélection du dossier racine Trainer annulée.',
+    rootReady: (p) => `Le dossier racine Trainer est prêt : ${p}.`,
+    projectAdded: 'Le projet a été lié à votre dossier racine unique Trainer sans rien écrire dans le projet.',
+    projectBrowseOnly: 'Ce projet restera en consultation seule sans mémoire persistante.',
+    projectIgnored: 'Ce projet sera ignoré par Trainer.',
+  },
+  'de-DE': {
+    addFailedPrefix: 'Projekt konnte nicht hinzugefügt werden',
+    nextRootMissing: 'Wählen Sie zuerst den einzigen Trainer-Lernordner (Stammordner).',
+    nextRootIdMismatch: 'Wählen Sie den zu diesem Pfad passenden Trainer-Stammordner erneut aus und versuchen Sie es wieder.',
+    nextRootPathUnavailable: 'Prüfen Sie, ob der Stammordner erreichbar ist, wählen Sie ihn erneut aus und versuchen Sie es wieder.',
+    nextBackendUnavailable: 'Prüfen Sie die Arbeitsbereichs-Vertrauenswürdigkeit und den lokalen Dienst und versuchen Sie es erneut.',
+    noFolderOpen: 'In diesem Fenster ist kein Projektordner geöffnet.',
+    unresolvedFolder: (p) => `Der aktuelle Projektordner konnte nicht ermittelt werden (erkannter Ordner: ${p}).`,
+    reopenAndRetry: 'Öffnen oder wählen Sie einen Projektordner und klicken Sie erneut auf Zu Trainer hinzufügen.',
+    rootMustBeLocal: 'Der einzige Trainer-Stammordner muss ein lokaler Ordner auf diesem Computer sein, kein Remote-Pfad.',
+    projectSameAsRoot: 'Dieser Ordner ist bereits Ihr einziger Trainer-Stammordner. Bitte wählen Sie einen separaten Projektordner.',
+    pickWorkspaceFolderTitle: 'Arbeitsbereichsordner für Trainer auswählen',
+    pickWorkspaceFolderPlaceholder: 'Alle Trainer-Daten bleiben ausschließlich in Ihrem lokalen Stammordner',
+    browseAnotherFolder: 'Anderen Ordner durchsuchen…',
+    browseAnotherFolderDetail: 'Einen anderen Projektordner mit dem lokalen Trainer-Stammordner verknüpfen',
+    chooseProjectTitle: 'Trainer-Projektordner auswählen',
+    chooseProjectOpenLabel: 'Als Trainer-Projekt verwenden',
+    projectSelectionCancelled: 'Auswahl des Projektordners abgebrochen.',
+    rootSelectionCancelled: 'Auswahl des Trainer-Stammordners abgebrochen.',
+    rootReady: (p) => `Trainer-Stammordner ist bereit unter ${p}.`,
+    projectAdded: 'Das Projekt wurde mit dem einzigen lokalen Trainer-Stammordner verknüpft (keine Schreibvorgänge im Projekt).',
+    projectBrowseOnly: 'Dieses Projekt bleibt im Nur-Ansicht-Modus ohne dauerhafte Projekterinnerung.',
+    projectIgnored: 'Dieses Projekt wird von Trainer ignoriert.',
+  },
+  'ja-JP': {
+    addFailedPrefix: 'プロジェクトを追加できませんでした',
+    nextRootMissing: 'まず唯一の Trainer 学習フォルダ（ルート）を選択してください。',
+    nextRootIdMismatch: 'このパスに一致する Trainer 学習フォルダを選び直してから再試行してください。',
+    nextRootPathUnavailable: '学習フォルダにアクセスできるか確認し、選び直して再試行してください。',
+    nextBackendUnavailable: 'ワークスペースの信頼状態とローカルサービスを確認してから再試行してください。',
+    noFolderOpen: 'このウィンドウではプロジェクトフォルダが開かれていません。',
+    unresolvedFolder: (p) => `現在のプロジェクトフォルダを特定できませんでした（検出パス: ${p}）。`,
+    reopenAndRetry: 'プロジェクトフォルダを開くか選択してから、もう一度「Trainer に追加」をクリックしてください。',
+    rootMustBeLocal: 'Trainer の学習フォルダ（ルート）はこのローカル端末上のフォルダである必要があります。リモートパスは指定できません。',
+    projectSameAsRoot: 'このフォルダ自体が Trainer の唯一の学習フォルダ（ルート）です。別のプロジェクトフォルダを選択してください。',
+    pickWorkspaceFolderTitle: 'Trainer に追加するワークスペースフォルダを選択',
+    pickWorkspaceFolderPlaceholder: 'すべての Trainer データは唯一のローカルルート内に保存されます',
+    browseAnotherFolder: '別のフォルダを参照…',
+    browseAnotherFolderDetail: '他のプロジェクトフォルダをローカルの Trainer ルートに紐付けます',
+    chooseProjectTitle: 'Trainer プロジェクトフォルダを選択',
+    chooseProjectOpenLabel: 'Trainer プロジェクトとして使用',
+    projectSelectionCancelled: 'プロジェクトフォルダの選択がキャンセルされました。',
+    rootSelectionCancelled: 'Trainer 学習フォルダの選択がキャンセルされました。',
+    rootReady: (p) => `Trainer 学習フォルダの準備が完了しました: ${p}`,
+    projectAdded: '現在のプロジェクトを唯一のローカル Trainer ルートに紐付けました（プロジェクト側への書き込みなし）。',
+    projectBrowseOnly: '現在のプロジェクトは閲覧のみとなり、長期記憶は保存されません。',
+    projectIgnored: '現在のプロジェクトは Trainer で無視されます。',
+  },
+  'ko-KR': {
+    addFailedPrefix: '프로젝트를 추가할 수 없습니다',
+    nextRootMissing: '먼저 유일한 Trainer 학습 폴더(루트)를 선택하세요.',
+    nextRootIdMismatch: '이 경로와 일치하는 Trainer 학습 폴더를 다시 선택한 뒤 재시도하세요.',
+    nextRootPathUnavailable: '학습 폴더에 접근 가능한지 확인하고 다시 선택한 뒤 재시도하세요.',
+    nextBackendUnavailable: '작업 영역 신뢰 상태와 로컬 서비스를 확인한 뒤 재시도하세요.',
+    noFolderOpen: '이 창에 열려 있는 프로젝트 폴더가 없습니다.',
+    unresolvedFolder: (p) => `현재 프로젝트 폴더를 확인할 수 없습니다(감지된 경로: ${p}).`,
+    reopenAndRetry: '프로젝트 폴더를 열거나 선택한 뒤 Trainer에 추가를 다시 클릭하세요.',
+    rootMustBeLocal: 'Trainer 학습 폴더(루트)는 원격 경로가 아닌 이 로컬 컴퓨터의 폴더여야 합니다.',
+    projectSameAsRoot: '이 폴더는 이미 유일한 Trainer 학습 폴더(루트)입니다. 별도의 프로젝트 폴더를 선택하세요.',
+    pickWorkspaceFolderTitle: 'Trainer에 추가할 작업 영역 폴더 선택',
+    pickWorkspaceFolderPlaceholder: '모든 Trainer 데이터는 유일한 로컬 루트 폴더에만 저장됩니다',
+    browseAnotherFolder: '다른 폴더 찾아보기…',
+    browseAnotherFolderDetail: '다른 프로젝트 폴더를 로컬 Trainer 루트에 연결합니다',
+    chooseProjectTitle: 'Trainer 프로젝트 폴더 선택',
+    chooseProjectOpenLabel: 'Trainer 프로젝트로 사용',
+    projectSelectionCancelled: '프로젝트 폴더 선택이 취소되었습니다.',
+    rootSelectionCancelled: 'Trainer 학습 폴더 선택이 취소되었습니다.',
+    rootReady: (p) => `Trainer 학습 폴더가 준비되었습니다: ${p}`,
+    projectAdded: '현재 프로젝트가 유일한 로컬 Trainer 루트에 연결되었습니다(프로젝트 폴더에 쓰기 없음).',
+    projectBrowseOnly: '현재 프로젝트는 둘러보기 전용으로 유지되며 장기 기억이 저장되지 않습니다.',
+    projectIgnored: '현재 프로젝트는 Trainer에서 무시됩니다.',
+  },
+  'pt-BR': {
+    addFailedPrefix: 'Não foi possível adicionar o projeto',
+    nextRootMissing: 'Escolha primeiro a pasta única de aprendizado do Trainer (raiz).',
+    nextRootIdMismatch: 'Selecione novamente a pasta raiz do Trainer correspondente a este caminho e tente de novo.',
+    nextRootPathUnavailable: 'Verifique se a pasta raiz continua acessível, selecione-a novamente e tente de novo.',
+    nextBackendUnavailable: 'Verifique a confiança do espaço de trabalho e o serviço local e tente novamente.',
+    noFolderOpen: 'Nenhuma pasta de projeto está aberta nesta janela.',
+    unresolvedFolder: (p) => `Não foi possível resolver a pasta atual do projeto (pasta detectada: ${p}).`,
+    reopenAndRetry: 'Abra ou escolha uma pasta de projeto e clique novamente em Adicionar ao Trainer.',
+    rootMustBeLocal: 'A pasta raiz única do Trainer deve ser uma pasta local neste computador, não um caminho remoto.',
+    projectSameAsRoot: 'Esta pasta já é sua pasta raiz única do Trainer. Escolha uma pasta de projeto separada.',
+    pickWorkspaceFolderTitle: 'Escolha uma pasta do espaço de trabalho para adicionar ao Trainer',
+    pickWorkspaceFolderPlaceholder: 'Todos os dados do Trainer ficam exclusivamente na sua pasta raiz local',
+    browseAnotherFolder: 'Procurar outra pasta…',
+    browseAnotherFolderDetail: 'Selecionar outra pasta de projeto para vincular à raiz única do Trainer',
+    chooseProjectTitle: 'Escolher pasta do projeto Trainer',
+    chooseProjectOpenLabel: 'Usar como projeto Trainer',
+    projectSelectionCancelled: 'Seleção da pasta do projeto cancelada.',
+    rootSelectionCancelled: 'Seleção da pasta raiz do Trainer cancelada.',
+    rootReady: (p) => `Pasta raiz do Trainer pronta em ${p}.`,
+    projectAdded: 'O projeto atual foi vinculado à pasta raiz única do Trainer sem gravar arquivos no projeto.',
+    projectBrowseOnly: 'O projeto atual permanecerá apenas para visualização, sem memória de longo prazo.',
+    projectIgnored: 'Este projeto será ignorado pelo Trainer.',
+  },
+};
+
+function admissionHostCopy(language: ComposerLanguage | undefined): AdmissionHostCopy {
+  return ADMISSION_HOST_COPY[language ?? 'en-US'] ?? ADMISSION_HOST_COPY['en-US'];
+}
+
 function workspaceAdmissionFailureMessage(
   failure: WorkspaceAdmissionFailure,
   language: ComposerLanguage | undefined,
 ): string {
-  const chinese = language === 'zh-CN';
+  const copy = admissionHostCopy(language);
   const next = failure.errorCode === 'root_missing'
-    ? (chinese ? '请先选择 Trainer 工作区根目录。' : 'Choose the Trainer workspace root first.')
+    ? copy.nextRootMissing
     : failure.errorCode === 'root_id_mismatch'
-      ? (chinese ? '请重新选择与该路径匹配的 Trainer 工作区根目录后重试。' : 'Re-select the Trainer workspace root that matches this path, then retry.')
+      ? copy.nextRootIdMismatch
       : failure.errorCode === 'root_path_unavailable'
-        ? (chinese ? '请确认根目录仍可访问，再重新选择并重试。' : 'Verify that the root is accessible, re-select it, and retry.')
-        : (chinese ? '请确认工作区受信任且 sidecar 可用，然后重试。' : 'Verify workspace trust and sidecar availability, then retry.');
-  return `${chinese ? '无法添加项目' : 'Project could not be added'} (${failure.errorCode}). ${next}`;
+        ? copy.nextRootPathUnavailable
+        : copy.nextBackendUnavailable;
+  return `${copy.addFailedPrefix} (${failure.errorCode}). ${next}`;
 }
 
 function safeWorkspaceAdmissionLog(failure: WorkspaceAdmissionFailure, statusCode?: number): string {
@@ -275,8 +500,12 @@ async function readSelectedTrainerRoot(context: CommandContext): Promise<Selecte
   return selectedRootFromManifest(manifest);
 }
 
-function unresolvableProjectPathResult(context: CommandContext): CommandExecutionResult {
-  const language = resolveWorkspaceAdmissionResponseLanguage(context);
+function unresolvableProjectPathResult(
+  context: CommandContext,
+  responseLanguage?: ComposerLanguage,
+): CommandExecutionResult {
+  const language = resolveWorkspaceAdmissionResponseLanguage(context, { responseLanguage });
+  const copy = admissionHostCopy(language);
   const failure: WorkspaceAdmissionFailure = {
     errorCode: 'root_missing',
     category: 'workspace_root',
@@ -285,11 +514,11 @@ function unresolvableProjectPathResult(context: CommandContext): CommandExecutio
   const workspace = context.getHostState().workspace;
   const resolvedPath = workspace.activeWorkspaceRoot ?? workspace.workspaceFolder;
   const resolutionDetail = resolvedPath
-    ? `Trainer could not resolve the current project folder (resolved workspace folder: ${resolvedPath}).`
-    : 'Trainer could not resolve the current project folder (no workspace folder is open).';
+    ? copy.unresolvedFolder(resolvedPath)
+    : copy.noFolderOpen;
   return {
     ok: false,
-    message: `${workspaceAdmissionFailureMessage(failure, language)} ${resolutionDetail} Reopen the project folder, then click Add to Trainer again to retry.`,
+    message: `${workspaceAdmissionFailureMessage(failure, language)} ${resolutionDetail} ${copy.reopenAndRetry}`,
     data: failure,
   };
 }
@@ -337,16 +566,30 @@ export async function chooseTrainerWorkspaceRootCommand(
     return { ok: false, message: 'Workspace trust is required to set up the Trainer workspace root.' };
   }
 
+  const language = resolveWorkspaceAdmissionResponseLanguage(context);
+  const copy = admissionHostCopy(language);
   const currentRoot = context.trainerWorkspace.getRoot();
+  const defaultLocalPath = currentRoot || os.homedir();
+  const defaultUri =
+    defaultLocalPath && typeof vscode.Uri?.file === 'function'
+      ? vscode.Uri.file(defaultLocalPath)
+      : undefined;
   const picks = await vscode.window.showOpenDialog({
     canSelectFiles: false,
     canSelectFolders: true,
     canSelectMany: false,
-    defaultUri: currentRoot ? vscode.Uri.file(currentRoot) : undefined,
+    defaultUri,
     openLabel: 'Use as Trainer Workspace',
     title: 'Choose Trainer Workspace Root',
   });
-  let rootPath = picks?.[0]?.fsPath;
+  const pickedUri = picks?.[0];
+  if (pickedUri && pickedUri.scheme && pickedUri.scheme !== 'file') {
+    return {
+      ok: false,
+      message: copy.rootMustBeLocal,
+    };
+  }
+  let rootPath = pickedUri?.fsPath;
   if (!rootPath) {
     // The native folder dialog can be unusable in some window setups (remote
     // windows, restricted mode). Offer a typed-path fallback so first-time
@@ -658,24 +901,76 @@ export async function adoptWorkspaceProjectCommand(
   );
 }
 
+function uriToProjectPath(uri: vscode.Uri | undefined): string | undefined {
+  if (!uri) {
+    return undefined;
+  }
+  if (uri.scheme && uri.scheme !== 'file') {
+    return uri.toString();
+  }
+  return uri.fsPath;
+}
+
 export async function chooseWorkspaceProjectCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
   if (!(await context.trustGuard.ensureTrusted('choose the Trainer project folder'))) {
     return { ok: false, message: 'Workspace trust is required to choose the Trainer project folder.' };
   }
-  const picks = await vscode.window.showOpenDialog({
-    canSelectFiles: false,
-    canSelectFolders: true,
-    canSelectMany: false,
-    openLabel: 'Use as Trainer Project',
-    title: 'Choose Trainer Project Folder',
-  });
-  const projectPath = picks?.[0]?.fsPath;
-  if (!projectPath) {
-    return { ok: false, cancelled: true, message: 'Trainer project folder selection cancelled.' };
+  const language = resolveWorkspaceAdmissionResponseLanguage(context);
+  const copy = admissionHostCopy(language);
+
+  let projectPath: string | undefined;
+  const openFolders = vscode.workspace?.workspaceFolders ?? [];
+  if (openFolders.length > 1 && typeof vscode.window?.showQuickPick === 'function') {
+    const BROWSE_SENTINEL = '__trainer_browse_another_folder__';
+    const items = [
+      ...openFolders
+        .map((folder) => {
+          const folderPath = uriToProjectPath(folder.uri);
+          return folderPath
+            ? {
+                label: folder.name || basenameFs(folderPath) || folderPath,
+                description: folderPath,
+                projectPath: folderPath,
+              }
+            : undefined;
+        })
+        .filter((item): item is { label: string; description: string; projectPath: string } => Boolean(item)),
+      {
+        label: copy.browseAnotherFolder,
+        description: '',
+        detail: copy.browseAnotherFolderDetail,
+        projectPath: BROWSE_SENTINEL,
+      },
+    ];
+    const selected = await vscode.window.showQuickPick(items, {
+      title: copy.pickWorkspaceFolderTitle,
+      placeHolder: copy.pickWorkspaceFolderPlaceholder,
+      ignoreFocusOut: true,
+    });
+    if (!selected) {
+      return { ok: false, cancelled: true, message: copy.projectSelectionCancelled };
+    }
+    if (selected.projectPath !== BROWSE_SENTINEL) {
+      projectPath = selected.projectPath;
+    }
   }
-  return setCurrentWorkspaceProjectAdmission(context, 'managed', undefined, projectPath);
+
+  if (!projectPath) {
+    const picks = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: copy.chooseProjectOpenLabel,
+      title: copy.chooseProjectTitle,
+    });
+    projectPath = uriToProjectPath(picks?.[0]);
+  }
+  if (!projectPath) {
+    return { ok: false, cancelled: true, message: copy.projectSelectionCancelled };
+  }
+  return setCurrentWorkspaceProjectAdmission(context, 'managed', language, projectPath);
 }
 
 export async function browseWorkspaceProjectCommand(
@@ -726,6 +1021,9 @@ export async function deleteWorkspaceProjectCommand(
   }
 
   const deleted = await context.trainerWorkspace.deleteManagedProject(projectPath);
+  if (context.trustGuard.getPreferredWorkspaceProject?.() === projectPath) {
+    context.trustGuard.setPreferredWorkspaceProject?.(undefined);
+  }
   const liveDeleted = deletedProjectIsLiveOnWorkbench(context.getHostState().bootstrap, deleted);
   const excludedWorkspaceIds = await excludeDeletedProjectFromTransferPromotion(context, deleted);
   const demotedBeforeAdmission = applyExcludedWorkspacesToBootstrap(
@@ -928,11 +1226,15 @@ async function patchWorkbenchAfterDeletedLiveProject(context: CommandContext): P
   await context.setSessionId(undefined);
 }
 
-export async function patchTrainerWorkspaceAdmission(context: CommandContext): Promise<void> {
+export async function patchTrainerWorkspaceAdmission(
+  context: CommandContext,
+  preferredProjectPath?: string,
+): Promise<void> {
   const current = context.getHostState().bootstrap;
   const trainerWorkspace = await resolveTrainerWorkspaceAdmission(
     context.trainerWorkspace,
     context.getHostState().workspace,
+    preferredProjectPath,
   );
   const trainerProjects = await resolveTrainerProjectsList(
     context.trainerWorkspace,
@@ -1116,7 +1418,20 @@ async function runSetCurrentWorkspaceProjectAdmission(
 
   const projectPath = selectedProjectPath?.trim() || resolveCurrentTrainerProjectPath(context.getHostState().workspace);
   if (!projectPath) {
-    return unresolvableProjectPathResult(context);
+    return unresolvableProjectPathResult(context, responseLanguage);
+  }
+
+  const language = resolveWorkspaceAdmissionResponseLanguage(context, { responseLanguage });
+  const copy = admissionHostCopy(language);
+
+  if (adoptionMode === 'managed') {
+    const existingManifest = await context.trainerWorkspace.readWorkspaceManifest();
+    if (!existingManifest && typeof vscode.window?.showOpenDialog === 'function') {
+      const rootSetup = await chooseTrainerWorkspaceRootCommand(context);
+      if (!rootSetup.ok) {
+        return rootSetup;
+      }
+    }
   }
 
   let managedIdentity: TrainerManagedProjectIdentity | undefined;
@@ -1166,9 +1481,15 @@ async function runSetCurrentWorkspaceProjectAdmission(
     projectPath.includes('://') ? managedIdentity?.canonicalProjectPath : undefined,
   );
   if (adoptionMode === 'managed') {
+    if (selectedProjectPath?.trim()) {
+      context.trustGuard.setPreferredWorkspaceProject?.(projectPath);
+    }
     await includeAdoptedProjectInTransferPromotion(context, managedIdentity, projectPath);
   }
-  await patchTrainerWorkspaceAdmission(context);
+  await patchTrainerWorkspaceAdmission(
+    context,
+    adoptionMode === 'managed' && selectedProjectPath?.trim() ? projectPath : undefined,
+  );
   if (adoptionMode === 'managed') {
     await rehydrateWorkbenchRuntime(context, {
       ensureSidecar: true,
@@ -1184,15 +1505,15 @@ async function runSetCurrentWorkspaceProjectAdmission(
   const persistedAdoptionMode =
     (project as { adoptionMode?: TrainerProjectAdoptionMode } | undefined)?.adoptionMode ??
     adoptionMode;
-  const description =
+  const resultMessage =
     persistedAdoptionMode === 'managed'
-      ? 'was added to Trainer with an isolated project lane.'
+      ? copy.projectAdded
       : persistedAdoptionMode === 'browse'
-        ? 'will stay browse-only and will not receive long-lived project memory.'
-        : 'will be ignored by Trainer.';
+        ? copy.projectBrowseOnly
+        : copy.projectIgnored;
   return {
     ok: true,
-    message: `The current project ${description}`,
+    message: resultMessage,
     data: project,
   };
 }
@@ -1218,45 +1539,6 @@ function discoveryDecisionFromClassification(
     return 'browse';
   }
   return 'adopt';
-}
-
-async function relocateWorkspaceRootForProject(
-  context: CommandContext,
-  projectPath: string,
-  selectedRoot: SelectedTrainerRoot,
-): Promise<SelectedTrainerRoot> {
-  const normalizedProject = normalizeFsPath(projectPath);
-  const windowsStyleProject = looksLikeWindowsAbsolutePath(normalizedProject);
-  const parentRoot = windowsStyleProject
-    ? path.win32.normalize(path.win32.dirname(normalizedProject))
-    : path.resolve(path.dirname(normalizedProject));
-  const filesystemRoot = windowsStyleProject
-    ? path.win32.parse(normalizedProject).root
-    : path.parse(normalizedProject).root;
-  if (
-    !parentRoot ||
-    pathsEqual(parentRoot, normalizedProject) ||
-    pathsEqual(parentRoot, filesystemRoot)
-  ) {
-    throw new Error(
-      'The current project is also the Trainer workspace root, and no separate parent folder is available for the workspace. Choose a different Trainer workspace root, then add the project again.',
-    );
-  }
-
-  context.outputChannel.appendLine(
-    `[workspace-admission] The project folder is the workspace root; relocating the Trainer workspace root to its parent: ${parentRoot}`,
-  );
-  const { result: manifest, restartedSidecar } = await runWithQuiescentManagedData(
-    context,
-    async () => context.trainerWorkspace.selectRoot(parentRoot),
-    (selectedManifest) => runtimeDataRootUnder(selectedManifest.rootPath),
-  );
-  await patchTrainerWorkspaceAdmission(context);
-  await rehydrateAfterWorkspaceDataTransfer(context, restartedSidecar);
-  void vscode.window.showInformationMessage(
-    `The Trainer workspace root was moved to ${parentRoot} so the project can be added as a project lane.`,
-  );
-  return selectedRootFromManifest(manifest);
 }
 
 async function classifyProjectForAdmission(
@@ -1307,8 +1589,9 @@ async function provisionManagedProject(
   responseLanguage?: ComposerLanguage,
 ): Promise<{ kind: 'managed'; identity: TrainerManagedProjectIdentity } | { kind: 'browse' }> {
   let selectedRoot = await readSelectedTrainerRoot(context);
-  if (pathsEqual(selectedRoot.canonicalRootPath, projectPath)) {
-    selectedRoot = await relocateWorkspaceRootForProject(context, projectPath, selectedRoot);
+  if (!projectPath.includes('://') && pathsEqual(selectedRoot.canonicalRootPath, projectPath)) {
+    const copy = admissionHostCopy(resolveWorkspaceAdmissionResponseLanguage(context, { responseLanguage }));
+    throw new Error(copy.projectSameAsRoot);
   }
 
   let status = await context.sidecarManager.ensureRunning();

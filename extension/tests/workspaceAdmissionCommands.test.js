@@ -1775,3 +1775,144 @@ test('admission mutations serialize and report the persisted mode', () => {
   assert.match(source, /runSetCurrentWorkspaceProjectAdmission/);
   assert.match(source, /persistedAdoptionMode/);
 });
+
+test('multi-root QuickPick chooses an open folder, records preferred project, and binds strictly under the single LibraryRoot', async () => {
+  const folderA = 'C:\\trainer-workspace-tests\\repo-a';
+  const folderB = 'C:\\trainer-workspace-tests\\repo-b';
+  let quickPickItems = [];
+  const vscodeMock = {
+    Uri: { file: (value) => ({ scheme: 'file', fsPath: value, toString: () => `file://${value}` }) },
+    window: {
+      async showQuickPick(items) {
+        quickPickItems = items;
+        return items[1]; // Pick folderB
+      },
+      async showOpenDialog() {
+        throw new Error('showOpenDialog should not be called when QuickPick chose an open folder');
+      },
+    },
+    workspace: {
+      workspaceFolders: [
+        { name: 'repo-a', uri: { scheme: 'file', fsPath: folderA, toString: () => `file://${folderA}` } },
+        { name: 'repo-b', uri: { scheme: 'file', fsPath: folderB, toString: () => `file://${folderB}` } },
+      ],
+      async findFiles() {
+        return [];
+      },
+    },
+  };
+  const { chooseWorkspaceProjectCommand } = loadWithVscodeMock(commandsModulePath, vscodeMock);
+  const context = createContext();
+  let preferredProject;
+  context.trustGuard.setPreferredWorkspaceProject = (value) => {
+    preferredProject = value;
+  };
+  await context.trainerWorkspace.selectRoot('C:\\trainer-workspace-tests\\trainer-root');
+
+  const result = await chooseWorkspaceProjectCommand(context);
+
+  assert.equal(result.ok, true, result.message);
+  assert.equal(quickPickItems.length, 3); // repo-a, repo-b, Browse another folder...
+  assert.equal(preferredProject, folderB);
+  const classifyCall = context.__runtimeCalls.find(
+    (call) => call.kind === 'post' && call.requestPath === '/workspace/classify',
+  );
+  assert.equal(classifyCall.body.folder_path, folderB);
+  assert.equal(classifyCall.body.root_path, 'C:\\trainer-workspace-tests\\trainer-root');
+  const admissionPatch = [...context.__patches]
+    .reverse()
+    .find((patch) => patch?.memory?.workspace?.trainerWorkspace);
+  assert.equal(admissionPatch.memory.workspace.trainerWorkspace.status, 'managed');
+  assert.equal(admissionPatch.memory.workspace.trainerWorkspace.projectPath, folderB);
+});
+
+test('chooseTrainerWorkspaceRoot rejects non-local remote URIs so LibraryRoot stays strictly local', async () => {
+  const vscodeMock = {
+    Uri: { file: (value) => ({ scheme: 'file', fsPath: value, toString: () => `file://${value}` }) },
+    window: {
+      async showOpenDialog() {
+        return [{ scheme: 'vscode-remote', authority: 'ssh-remote+141s', fsPath: '/remote/brain', toString: () => 'vscode-remote://ssh-remote+141s/remote/brain' }];
+      },
+    },
+    workspace: { workspaceFolders: [] },
+  };
+  const { chooseTrainerWorkspaceRootCommand } = loadWithVscodeMock(commandsModulePath, vscodeMock);
+  const context = createContext();
+  context.getHostState().bootstrap.memory.workspace = {
+    ...(context.getHostState().bootstrap.memory.workspace ?? {}),
+    responseLanguage: 'zh-CN',
+  };
+
+  const result = await chooseTrainerWorkspaceRootCommand(context);
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /本机/);
+  assert.equal(context.trainerWorkspace.getRoot(), undefined);
+});
+
+test('adopting LibraryRoot itself fails cleanly without relocating LibraryRoot to a parent directory', async () => {
+  const rootPath = 'C:\\trainer-workspace-tests\\single-library-root';
+  const vscodeMock = createVscodeMock(rootPath);
+  const { adoptWorkspaceProjectCommand, chooseTrainerWorkspaceRootCommand } = loadWithVscodeMock(
+    commandsModulePath,
+    vscodeMock,
+  );
+  const context = createContext();
+  await chooseTrainerWorkspaceRootCommand(context);
+  const rootSelectionsBefore = context.__calls.filter((call) => call.kind === 'root').length;
+
+  const result = await adoptWorkspaceProjectCommand(context, {
+    projectPath: rootPath,
+    responseLanguage: 'zh-CN',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /学习文件夹/);
+  assert.equal(context.trainerWorkspace.getRoot(), rootPath);
+  assert.equal(
+    context.__calls.filter((call) => call.kind === 'root').length,
+    rootSelectionsBefore,
+  );
+});
+
+test('chooseWorkspaceProject seamlessly sets up LibraryRoot first when root-missing', async () => {
+  const pickedProject = 'C:\\trainer-workspace-tests\\fresh-project';
+  const pickedRoot = 'C:\\trainer-workspace-tests\\root';
+  const vscodeMock = createVscodeMock(pickedProject, pickedRoot);
+  const { chooseWorkspaceProjectCommand } = loadWithVscodeMock(commandsModulePath, vscodeMock);
+  const context = createContext();
+  assert.equal(context.trainerWorkspace.getRoot(), undefined);
+
+  const result = await chooseWorkspaceProjectCommand(context);
+
+  assert.equal(result.ok, true, result.message);
+  assert.equal(context.trainerWorkspace.getRoot(), pickedRoot);
+  const classifyCall = [...context.__runtimeCalls].reverse().find(
+    (call) => call.kind === 'post' && call.requestPath === '/workspace/classify',
+  );
+  assert.equal(classifyCall.body.folder_path, pickedProject);
+  assert.equal(classifyCall.body.root_path, pickedRoot);
+});
+
+test('unresolvable project folder errors localize cleanly without hardcoded English tails', async () => {
+  const vscodeMock = createVscodeMock();
+  vscodeMock.workspace.workspaceFolders = [
+    { uri: { fsPath: 'C:\\trainer-workspace-tests\\a' } },
+    { uri: { fsPath: 'C:\\trainer-workspace-tests\\b' } },
+  ];
+  const { adoptWorkspaceProjectCommand } = loadWithVscodeMock(commandsModulePath, vscodeMock);
+  const context = createContext();
+  context.getHostState().workspace = { trusted: true };
+
+  for (const [lang, expectedPattern] of [
+    ['zh-CN', /没有打开任何项目文件夹/],
+    ['de-DE', /kein Projektordner/i],
+    ['ja-JP', /プロジェクトフォルダが開かれていません|ワークスペースフォルダが開かれていません/],
+  ]) {
+    const result = await adoptWorkspaceProjectCommand(context, { responseLanguage: lang });
+    assert.equal(result.ok, false);
+    assert.equal(result.data?.errorCode, 'root_missing');
+    assert.match(result.message, expectedPattern);
+    assert.doesNotMatch(result.message, /Reopen a single project folder/);
+  }
+});

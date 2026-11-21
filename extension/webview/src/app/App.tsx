@@ -751,6 +751,14 @@ export function App() {
     useWorkbenchState.getState().writeComposerResourceRefs(composerSessionKey, ids, "replace");
   };
   const hostMessageSequenceRef = useRef(0);
+  const pendingPostAdmissionSendRef = useRef<{
+    text: string;
+    attachments: MessageAttachment[];
+    draftScope: typeof composerDraftScope;
+    goalMode: boolean;
+    goalText?: string;
+    activeView: ActiveWorkbenchView;
+  } | null>(null);
   const coachRuntimeContextSignatureRef = useRef<string | undefined>(undefined);
   const composerModelSearchRef = useRef<HTMLInputElement | null>(null);
   const viewContentRef = useRef<HTMLElement | null>(null);
@@ -1607,6 +1615,9 @@ export function App() {
       }
       let hostOperationSurface: OperationMessageSurface | undefined;
       if (message.type === "operation/status") {
+        if (message.payload.tone === "error") {
+          pendingPostAdmissionSendRef.current = null;
+        }
         // §三: the training-card controller settles a failed remote-verification
         // request; a failure that belongs to another card aborts the message.
         if (handleRemoteVerificationCommandFailure(message) === "abort") {
@@ -6083,6 +6094,56 @@ export function App() {
     );
   };
 
+  const sendTurnRef = useRef(sendTurn);
+  sendTurnRef.current = sendTurn;
+
+  useEffect(() => {
+    const admissionStatus = trainerWorkspaceAdmission?.status;
+    if (admissionStatus === "browse" || admissionStatus === "ignored") {
+      pendingPostAdmissionSendRef.current = null;
+      return;
+    }
+    if (admissionStatus !== "managed" || workspaceSessionBlocked || streaming.isStreaming) {
+      return;
+    }
+    const pending = pendingPostAdmissionSendRef.current;
+    if (!pending) {
+      return;
+    }
+    pendingPostAdmissionSendRef.current = null;
+    if (!providerCanCoachNow || providerBlockReason || capabilitySendBlocked) {
+      return;
+    }
+    const { layout: currentLayout } = useWorkbenchState.getState();
+    const currentDraft =
+      currentLayout.composerDraftScope === pending.draftScope
+        ? currentLayout.composerDraft
+        : currentLayout.composerDrafts?.[pending.draftScope];
+    if ((currentDraft ?? "").trim() === pending.text) {
+      setComposerDraft("", pending.draftScope);
+      setComposerAttachments([]);
+    }
+    sendTurnRef.current({
+      text: pending.text,
+      intent: "coach",
+      intentSource: "explicit",
+      stream: true,
+      activeView: pending.activeView,
+      attachments: pending.attachments.length ? pending.attachments : undefined,
+      goalMode: pending.goalMode,
+      goalText: pending.goalText,
+    });
+  }, [
+    trainerWorkspaceAdmission?.status,
+    workspaceSessionBlocked,
+    streaming.isStreaming,
+    providerCanCoachNow,
+    providerBlockReason,
+    capabilitySendBlocked,
+    setComposerDraft,
+    setComposerAttachments,
+  ]);
+
   sendRecoveredPlanResumeRef.current = (action) => {
     const resume = buildRecoveredPlanResumeTurn(action, {
       recovered: planRuntimeStatus?.recovered === true,
@@ -7208,21 +7269,37 @@ export function App() {
 
     if (canChatBeforeProjectAdmission && normalizedDraft) {
       // Zero-friction cold start: gently bind this project inside <LibraryRoot>
-      // (zero writes inside the code repo) while preserving the learner's draft.
+      // (zero writes inside the code repo) while preserving the learner's draft,
+      // and auto-send the queued first message as soon as admission finishes.
+      const hasResolvedProjectPath = Boolean(trainerWorkspaceAdmission?.projectPath?.trim());
+      pendingPostAdmissionSendRef.current = {
+        text: normalizedDraft,
+        attachments: submissionAttachments,
+        draftScope: composerDraftScope,
+        goalMode: Boolean(goalMode || goalDraftPending),
+        goalText: goalMode || goalDraftPending ? goalText : undefined,
+        activeView: activeView === "resources" ? "resources" : "coach",
+      };
       if (!isBrowserPreview) {
         postMessage({
           type: "command/execute",
-          payload: {
-            commandId: trainerCommands.adoptWorkspaceProject,
-            payload: { adoptionMode: "managed" },
-          },
+          payload: hasResolvedProjectPath
+            ? {
+                commandId: trainerCommands.adoptWorkspaceProject,
+                payload: { adoptionMode: "managed", responseLanguage: layout.composerLanguage },
+              }
+            : {
+                commandId: trainerCommands.chooseWorkspaceProject,
+              },
         });
       }
       setOperationMessage({
         tone: "info",
         message: appUiCopy(
           layout.composerLanguage,
-          "正在将当前项目关联到学习文件夹，完成后即可继续对话。",
+          hasResolvedProjectPath
+            ? "正在将当前项目关联到学习文件夹，完成后将自动发送。"
+            : "请先选择要关联的项目文件夹，完成后将自动发送。",
         ),
       });
       return;

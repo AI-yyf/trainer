@@ -15,17 +15,28 @@ export async function provisionRemoteProject(
   const expected = normalizeRemoteWorkspaceIdentity(projectUri);
   const scopeIsCurrent = () => normalizeRemoteWorkspaceIdentity(current() ?? '') === expected &&
     context.trainerWorkspace.getRoot() === root.canonicalRootPath && context.getHostState().workspace.trusted;
-  const observedRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  const observedRoot =
+    folders.find(
+      (folder) =>
+        folder.uri.scheme === 'vscode-remote' &&
+        normalizeRemoteWorkspaceIdentity(folder.uri.toString()) === expected,
+    )?.uri ?? folders[0]?.uri;
   if (!observedRoot || observedRoot.scheme !== 'vscode-remote' ||
       normalizeRemoteWorkspaceIdentity(observedRoot.toString()) !== expected || !scopeIsCurrent()) {
     throw new Error('Remote adoption must use the current workspace authority and root.');
   }
-  const [caps, stat, environment] = await Promise.all([
-    context.workspaceGateway.capabilities(), context.workspaceGateway.stat(observedRoot),
+  const caps = await context.workspaceGateway.capabilities();
+  if (!caps.companionAvailable || caps.protocolVersion !== 2) {
+    throw new Error(
+      'Remote Workspace Companion (protocol v2) is not active on the remote host yet. Install or reload Remote Workspace Support and try again.',
+    );
+  }
+  const [stat, environment] = await Promise.all([
+    context.workspaceGateway.stat(observedRoot),
     context.workspaceGateway.environment(),
   ]);
-  if (!caps.companionAvailable || caps.protocolVersion !== 2 || (stat.type & vscode.FileType.Directory) === 0 ||
-      !scopeIsCurrent()) {
+  if ((stat.type & vscode.FileType.Directory) === 0 || !scopeIsCurrent()) {
     throw new Error('Remote project changed or its Companion directory could not be verified.');
   }
   const companionRoot = vscode.Uri.parse(environment.canonical_workspace_uri ?? '', true);

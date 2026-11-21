@@ -150,7 +150,7 @@ async function handleRequest(value: unknown): Promise<RemoteCompanionResponse> {
       case 'diagnostics':
         return { ok: true, diagnostics: await diagnostics(value.uri) };
       case 'environment':
-        return { ok: true, environment: await environment() };
+        return { ok: true, environment: await environment(value.uri) };
       case 'verify_start':
         return {
           ok: true,
@@ -181,28 +181,68 @@ async function handleRequest(value: unknown): Promise<RemoteCompanionResponse> {
 
 class WorkspaceScopeError extends Error {}
 
+function normalizeIncomingUriForFolder(
+  uri: vscode.Uri,
+  folder: vscode.WorkspaceFolder,
+): vscode.Uri | undefined {
+  if (uri.scheme === folder.uri.scheme && uri.authority === folder.uri.authority) {
+    return uri;
+  }
+  // In VS Code Remote-SSH / WSL / Dev Containers, the local UI host holds
+  // `vscode-remote://<remoteName>+<host>/...` URIs while the workspace
+  // extension host running on the remote machine sees `file:///...` folders.
+  // Accept UI-host remote URIs ONLY when they match this remote host's active
+  // remoteName prefix, then normalize to `file://` so lexical + fs.realpath
+  // containment below still fail closed on any path escape.
+  const activeRemoteName = String(vscode.env.remoteName ?? '').trim().toLowerCase();
+  if (
+    folder.uri.scheme === 'file' &&
+    uri.scheme === 'vscode-remote' &&
+    activeRemoteName &&
+    uri.authority.toLowerCase().startsWith(`${activeRemoteName}+`)
+  ) {
+    return vscode.Uri.file(uri.path);
+  }
+  return undefined;
+}
+
 async function resolveUri(value: unknown): Promise<vscode.Uri> {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error('A workspace URI is required.');
   }
-  const uri = vscode.Uri.parse(value, true);
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (!folder) {
+  const parsed = vscode.Uri.parse(value, true);
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) {
     throw new Error('No workspace folder is open.');
   }
-  if (uri.scheme !== folder.uri.scheme || uri.authority !== folder.uri.authority) {
+  let matchedCandidate: { folder: vscode.WorkspaceFolder; target: vscode.Uri } | undefined;
+  let hadCompatibleAuthority = false;
+  for (const folder of folders) {
+    const candidate = normalizeIncomingUriForFolder(parsed, folder);
+    if (!candidate) {
+      continue;
+    }
+    hadCompatibleAuthority = true;
+    const relative = path.posix.relative(folder.uri.path, candidate.path);
+    if (relative.startsWith('../') || relative === '..' || path.posix.isAbsolute(relative)) {
+      continue;
+    }
+    matchedCandidate = { folder, target: candidate };
+    break;
+  }
+  if (!hadCompatibleAuthority) {
     throw new WorkspaceScopeError('Remote request URI belongs to a different workspace authority.');
   }
-  const relative = path.posix.relative(folder.uri.path, uri.path);
-  if (relative.startsWith('../') || relative === '..' || path.posix.isAbsolute(relative)) {
+  if (!matchedCandidate) {
     throw new WorkspaceScopeError('Remote request URI is outside the active workspace.');
   }
-  if (uri.scheme === 'file') {
+  const { folder, target } = matchedCandidate;
+  if (target.scheme === 'file') {
     // The workspace root itself may be a legitimate alias (for example
     // /tmp on macOS). Compare both real paths rather than rejecting aliases
     // or trusting a lexically contained symlink that points outside.
     const [rootPath, filePath] = await Promise.all([
-      fs.realpath(folder.uri.fsPath), fs.realpath(uri.fsPath),
+      fs.realpath(folder.uri.fsPath), fs.realpath(target.fsPath),
     ]);
     const canonicalRelative = path.relative(rootPath, filePath);
     if (canonicalRelative === '..' || canonicalRelative.startsWith(`..${path.sep}`) ||
@@ -210,7 +250,7 @@ async function resolveUri(value: unknown): Promise<vscode.Uri> {
       throw new WorkspaceScopeError('Remote request URI is outside the canonical active workspace.');
     }
   }
-  return uri;
+  return target;
 }
 
 async function statUri(value: unknown): Promise<RemoteFileStat> {
@@ -303,8 +343,23 @@ async function diagnostics(value: unknown): Promise<RemoteDiagnostic[]> {
   return scoped;
 }
 
-async function environment(): Promise<RemoteEnvironment> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
+async function environment(value?: unknown): Promise<RemoteEnvironment> {
+  let folder = vscode.workspace.workspaceFolders?.[0];
+  if (typeof value === 'string' && value.trim()) {
+    const resolved = await resolveUri(value);
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const matched = folders.find((candidate) => {
+      const normalized = normalizeIncomingUriForFolder(resolved, candidate);
+      if (!normalized) {
+        return false;
+      }
+      const relative = path.posix.relative(candidate.uri.path, normalized.path);
+      return !relative.startsWith('../') && relative !== '..' && !path.posix.isAbsolute(relative);
+    });
+    if (matched) {
+      folder = matched;
+    }
+  }
   return {
     remote_name: vscode.env.remoteName || undefined,
     workspace_uri: folder?.uri.toString(),

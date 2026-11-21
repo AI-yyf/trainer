@@ -90,6 +90,28 @@ export class WorkspaceTrustGuard {
    * user meant to attach, so keep a reference and fall back to it.
    */
   private lastActiveEditor: vscode.TextEditor | undefined;
+  /**
+   * Explicitly chosen Trainer project for this window (empty window, multi-root
+   * QuickPick, or folder browse) when VS Code itself has no single sovereign
+   * folder. Stored in memory for the window lifetime so admission, rehydration,
+   * and auto-send stay bound to the folder the learner picked.
+   */
+  private preferredWorkspaceProject: string | undefined;
+
+  setPreferredWorkspaceProject(projectPathOrUri: string | undefined): void {
+    const cleaned = projectPathOrUri?.trim() || undefined;
+    this.preferredWorkspaceProject = cleaned;
+    if (cleaned && this.lastActiveEditor) {
+      const editorFolder = resolveWorkspaceFolderPathForFile(this.lastActiveEditor.document.uri.fsPath);
+      if (editorFolder && editorFolder !== cleaned) {
+        this.lastActiveEditor = undefined;
+      }
+    }
+  }
+
+  getPreferredWorkspaceProject(): string | undefined {
+    return this.preferredWorkspaceProject;
+  }
 
   async ensureTrusted(_reason: string): Promise<boolean> {
     if (vscode.workspace.isTrusted) {
@@ -142,7 +164,14 @@ export class WorkspaceTrustGuard {
 
   rememberActiveEditor(editor: vscode.TextEditor | undefined = vscode.window.activeTextEditor): void {
     if (editor) {
+      const changedEditor = this.lastActiveEditor && this.lastActiveEditor !== editor;
       this.lastActiveEditor = editor;
+      if (changedEditor && this.preferredWorkspaceProject) {
+        const nextFolder = resolveWorkspaceFolderPathForFile(editor.document.uri.fsPath);
+        if (nextFolder) {
+          this.preferredWorkspaceProject = undefined;
+        }
+      }
     }
     const path = editor?.document.uri.fsPath;
     if (!path) {
@@ -205,15 +234,56 @@ export class WorkspaceTrustGuard {
       selection && !selection.isEmpty
         ? `${selection.start.line + 1}:${selection.start.character + 1}-${selection.end.line + 1}:${selection.end.character + 1}`
         : undefined;
+    const editorWorkspaceRoot = resolveWorkspaceFolderPathForFile(activeFile);
+    const preferred = this.preferredWorkspaceProject;
+    const preferredIsRemoteUri = Boolean(preferred && preferred.includes('://'));
+    const matchedPreferredFolder = preferred
+      ? workspaceFolders.find((candidate) => {
+          const uriStr = typeof candidate.uri.toString === 'function' ? candidate.uri.toString() : undefined;
+          return uriStr === preferred || candidate.uri.fsPath === preferred;
+        })
+      : undefined;
+    const matchedEditorFolder = editorWorkspaceRoot
+      ? workspaceFolders.find((candidate) => candidate.uri.fsPath === editorWorkspaceRoot)
+      : undefined;
+    const recentWorkspaceRoot = resolveWorkspaceFolderPathForKnownFiles(this.recentFiles);
+    const matchedRecentFolder = recentWorkspaceRoot
+      ? workspaceFolders.find((candidate) => candidate.uri.fsPath === recentWorkspaceRoot)
+      : undefined;
     const activeWorkspaceRoot =
-      resolveWorkspaceFolderPathForFile(activeFile) ??
-      resolveWorkspaceFolderPathForKnownFiles(this.recentFiles);
+      editorWorkspaceRoot ??
+      (preferred && !preferredIsRemoteUri ? preferred : undefined) ??
+      recentWorkspaceRoot;
     const remoteName = vscode.env?.remoteName?.trim() || undefined;
-    const folder = workspaceFolders.length === 1 ? workspaceFolders[0] : undefined;
-    const folderUri = folder?.uri;
+    const folder =
+      matchedEditorFolder ??
+      matchedPreferredFolder ??
+      (workspaceFolders.length === 1 ? workspaceFolders[0] : matchedRecentFolder);
+    let folderUri: { scheme?: string; authority?: string; path?: string; fsPath?: string; toString?: () => string } | undefined =
+      folder?.uri;
+    if (!folderUri && preferredIsRemoteUri && preferred) {
+      if (typeof vscode.Uri?.parse === 'function') {
+        folderUri = vscode.Uri.parse(preferred);
+      } else {
+        try {
+          const parsed = new URL(preferred);
+          folderUri = {
+            scheme: parsed.protocol.replace(/:$/, ''),
+            authority: parsed.host,
+            path: decodeURIComponent(parsed.pathname),
+            fsPath: decodeURIComponent(parsed.pathname),
+            toString: () => preferred,
+          };
+        } catch {
+          folderUri = undefined;
+        }
+      }
+    }
     const workspaceUri = folderUri && typeof folderUri.toString === 'function'
       ? folderUri.toString()
-      : undefined;
+      : preferredIsRemoteUri
+        ? preferred
+        : undefined;
     const scheme = folderUri?.scheme?.trim() || undefined;
     const authority = folderUri?.authority?.trim() || undefined;
     const remoteType = detectRemoteWorkspaceTypeFromContext({

@@ -38,10 +38,13 @@ function toReconciliationView(
 export async function resolveTrainerWorkspaceAdmission(
   trainerWorkspace: TrainerWorkspaceService,
   workspace: WorkspaceSnapshot,
+  preferredProjectPath?: string,
 ): Promise<TrainerWorkspaceAdmissionView | undefined> {
-  const projectPath = resolveCurrentTrainerProjectPath(workspace);
+  const projectPath = preferredProjectPath?.trim() || resolveCurrentTrainerProjectPath(workspace);
+  const remote =
+    Boolean(projectPath && projectPath.includes('://')) || isRemoteWorkspaceSnapshot(workspace);
   const snapshot = await trainerWorkspace.toSnapshot(projectPath, {
-    remote: isRemoteWorkspaceSnapshot(workspace),
+    remote,
   });
 
   if (!snapshot.workspaceReady) {
