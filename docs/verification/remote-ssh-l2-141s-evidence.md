@@ -30,7 +30,7 @@ cross-platform 的 linux 构建基座改为 ubuntu-22.04（glibc 2.35），旧 r
 
 | 项 | 结果 | 证据 |
 | --- | --- | --- |
-| SSH 可达 | ✅ | `ssh 141s`（14.103.175.141, yunfei.yan）BatchMode 免密连通，`CONN_OK` |
+| SSH 可达 | ✅ | `ssh 141s`（`[REDACTED_IP]`, `[REDACTED_USER]`）BatchMode 免密连通，`CONN_OK` |
 | 远端 python3 | ✅ | Python 3.10.12 |
 | 远端 git | ✅ | git 2.34.1 |
 | VS Code Server | ✅ | Stable `110a328ea54b…` 已存在（用户此前连接过），`code-server` CLI 可用 |
