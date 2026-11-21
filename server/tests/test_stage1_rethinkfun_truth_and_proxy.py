@@ -262,8 +262,46 @@ def test_rethinkfun_deep_lecture_grants_generous_output_token_budget() -> None:
     assert mm_svc._coaching_requested_output_tokens(lecture_prompt) == 8192
     assert mm_svc._coaching_requested_output_tokens("帮我核查掌握进度的具体证据", agent_loop_enabled=True) == 4096
 
-    from app.api.router_support import _message_requests_single_composer_truth_or_note
 
-    assert _message_requests_single_composer_truth_or_note("帮我核查完整学习计划阶段和掌握进度的具体验证证据") is True
-    assert _message_requests_single_composer_truth_or_note("请把讲稿保存成我资料库里的 Markdown 笔记") is True
+def test_single_composer_truth_and_note_triggers_cover_all_eight_languages() -> None:
+    from app.api.router_support import _message_requests_single_composer_truth_or_note
+    from app.memory.note_request import message_requests_lecture_note_save
+
+    truth_queries = [
+        "给我看我的完整学习路线和掌握进度依据",
+        "Show me all stages and mastery evidence",
+        "Muéstrame las etapas completadas y la evidencia de dominio",
+        "Montre-moi les étapes terminées et la preuve de maîtrise",
+        "Zeige mir abgeschlossene Phasen und den Beherrschungsnachweis",
+        "完了した段階と習得の根拠を教えてください",
+        "완료한 단계와 숙달 근거를 보여줘",
+        "Mostre as etapas concluídas e a evidência de domínio",
+    ]
+    for query in truth_queries:
+        assert _message_requests_single_composer_truth_or_note(query) is True, query
+
+    note_requests = [
+        "把刚才的讲稿存进资料库",
+        "Save this explanation as a lecture note to my library",
+        "Guardar esta explicación como nota en recursos",
+        "Enregistrer cette fiche dans les ressources",
+        "Bitte als Notiz in Ressourcen speichern",
+        "この解説をノートとして資料に保存して",
+        "이 설명을 노트로 자료실에 저장해 줘",
+        "Salvar esta explicação como nota em recursos",
+    ]
+    for req in note_requests:
+        assert message_requests_lecture_note_save(req) is True, req
+        assert _message_requests_single_composer_truth_or_note(req) is True, req
+
+    for rejected in (
+        "不要存进资料库",
+        "Do not save this note to resources",
+        "No guardes esta nota",
+        "Bitte nicht speichern als Notiz",
+        "ノートは保存しないで",
+        "노트로 저장하지 마",
+    ):
+        assert message_requests_lecture_note_save(rejected) is False, rejected
+
     assert _message_requests_single_composer_truth_or_note("with 退出时会释放锁吗？") is False

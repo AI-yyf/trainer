@@ -76,15 +76,24 @@ def message_requests_lecture_note_save(message: str | None) -> bool:
         return False
     rejected_patterns = (
         r"\b(?:do not|don't|dont|not now|no)\b.{0,48}\b(?:save|store|write)\b.{0,32}\b(?:note|lecture|library|resources?)\b",
+        r"\b(?:no\s+guardes|ne\s+sauvegarde\s+pas|nicht\s+speichern|não\s+salve)\b",
+        r"(?:保存しない|저장하지\s*마)",
         r"(?:\u4e0d\u8981|\u4e0d\u9700\u8981|\u5148\u4e0d\u8981|\u6682\u65f6\u4e0d\u8981).{0,36}(?:\u5b58\u8fdb|\u5b58\u5165|\u4fdd\u5b58|\u6c89\u6dc0|\u7b14\u8bb0|\u8bb2\u7a3f|\u8d44\u6599\u5e93)",
     )
     if any(re.search(pattern, lowered) for pattern in rejected_patterns):
         return False
-    english_patterns = (
+    multilingual_patterns = (
         r"\b(?:save|store|export|turn)\s+(?:this|that|it|the\s+lecture|the\s+explanation|above)\b.{0,48}\b(?:library|resources?|markdown|\.md|lecture\s+note)\b",
-        r"\b(?:save|create|write)\s+(?:a|an|this)?\s*lecture\s+note\b",
+        r"\b(?:save|create|write)\s+(?:a|an|this)?\s*(?:lecture|study)\s+note\b",
+        r"\b(?:guardar|guarda|almacenar)\b.{0,36}\b(?:nota|apunte|recursos|biblioteca|markdown|\.md)\b",
+        r"\b(?:enregistrer|enregistre|sauvegarder|sauvegarde)\b.{0,36}\b(?:note|fiche|ressources|bibliothèque|markdown|\.md)\b",
+        r"\b(?:speichern|speichere|ablegen)\b.{0,36}\b(?:notiz|mitschrift|ressourcen|bibliothek|markdown|\.md)\b",
+        r"\b(?:notiz|mitschrift|markdown)\b.{0,24}\b(?:speichern|ablegen)\b",
+        r"(?:ノート|講義メモ|資料|マークダウン|markdown|\.md).{0,16}(?:保存|残し|まとめ)",
+        r"(?:노트|강의\s*메모|자료실|마크다운|markdown|\.md).{0,16}(?:저장|정리)",
+        r"\b(?:salvar|salve|guardar)\b.{0,36}\b(?:nota|anotação|recursos|biblioteca|markdown|\.md)\b",
     )
-    if any(re.search(pattern, lowered) for pattern in english_patterns):
+    if any(re.search(pattern, lowered) for pattern in multilingual_patterns):
         return True
     chinese_patterns = (
         r"(?:保存|存成|存为|存进|存入|存到|整理成|沉淀为|沉淀到|写成).{0,16}(?:资料库|笔记|讲稿|markdown|\.md)",

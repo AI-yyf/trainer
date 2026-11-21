@@ -43,6 +43,7 @@
     "verify:coach-gui": "node ./scripts/verify-coach-gui.mjs",
     "verify:ui-geometry": "node ./scripts/verify-ui-geometry.mjs",
     "verify:copy-vocabulary": "node ./scripts/verify-copy-vocabulary.mjs",
+    "verify:i18n": "node ./scripts/verify-i18n-completeness.mjs",
     "verify:local-latency": "npm run build:preview --prefix extension/webview && node ./scripts/verify-local-latency.mjs",
     "verify:i18n-zoom": "node ./scripts/verify-i18n-zoom-gui.mjs"
   },

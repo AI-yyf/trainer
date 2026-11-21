@@ -436,7 +436,14 @@ def _resolve_agent_loop_enabled(
 
 _SINGLE_COMPOSER_TRUTH_QUERY_RE = re.compile(
     r"完整(?:学习)?(?:计划|路线)|哪些阶段|完成了哪些|掌握(?:度|进度).{0,8}(?:证据|依据)"
-    r"|具体(?:验证)?证据|复习依据|(?:all|completed)\s+stages|learning\s+roadmap|mastery\s+evidence",
+    r"|具体(?:验证)?证据|复习依据"
+    r"|(?:all|completed)\s+stages|learning\s+roadmap|mastery\s+evidence|review\s+(?:reason|basis)"
+    r"|etapas?\s+(?:completadas?|del\s+plan)|ruta\s+de\s+aprendizaje|evidencia\s+de\s+dominio"
+    r"|étapes?\s+(?:terminées?|complètes?|du\s+plan)|feuille\s+de\s+route|preuve\s+de\s+maîtrise"
+    r"|abgeschlossene\s+phasen|alle\s+phasen|lernplan|beherrschungsnachweis|verifikationsnachweis"
+    r"|全ステージ|完了した(?:段階|ステージ)|学習(?:ロードマップ|計画全体)|習得の(?:根拠|証拠)"
+    r"|전체\s*(?:단계|학습\s*계획)|완료한\s*단계|숙달\s*(?:근거|증거)"
+    r"|etapas?\s+(?:concluídas|do\s+plano)|trilha\s+de\s+aprendizado|evidência\s+de\s+domínio",
     re.IGNORECASE,
 )
 

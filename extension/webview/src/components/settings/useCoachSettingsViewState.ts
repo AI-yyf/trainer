@@ -572,7 +572,7 @@ export function formatReviewDueLabel(value: string | undefined, language: Compos
         hour: "2-digit",
         minute: "2-digit",
       })
-    : date.toLocaleString("en-US", {
+    : date.toLocaleString(language, {
         month: "short",
         day: "numeric",
         hour: "2-digit",

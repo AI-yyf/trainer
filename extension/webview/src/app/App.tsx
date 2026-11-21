@@ -6028,7 +6028,7 @@ export function App() {
             (laneNeedsVerifiedTools ||
               data.resources.length > 0 ||
               messageReferencesWorkspaceFile(text) ||
-              /完整(学习)?(计划|路线)|哪些阶段|完成了哪些|掌握(度|进度).{0,8}(证据|依据)|具体(验证)?证据|复习依据|(保存|存成|存进|整理成).{0,10}(资料库|笔记|markdown|\.?md)|(all|completed)\s+stages|learning\s+roadmap|mastery\s+evidence|save.{0,16}(lecture|study)?\s*note/i.test(text))
+              /完整(学习)?(计划|路线)|哪些阶段|完成了哪些|掌握(度|进度).{0,8}(证据|依据)|具体(验证)?证据|复习依据|(保存|存成|存进|整理成).{0,10}(资料库|笔记|讲稿|markdown|\.?md)|(all|completed)\s+stages|learning\s+roadmap|mastery\s+evidence|save.{0,20}(lecture|study)?\s*note|etapas?\s+(completadas?|del\s+plan)|evidencia\s+de\s+dominio|guardar.{0,20}(nota|apunte|recursos)|étapes?\s+(terminées?|complètes?)|preuve\s+de\s+maîtrise|enregistrer.{0,20}(note|fiche|ressources)|abgeschlossene\s+phasen|lernplan|beherrschungsnachweis|als\s+(notiz|markdown)\s+speichern|全ステージ|完了した段階|習得の根拠|ノート.{0,8}保存|전체\s*단계|완료한\s*단계|숙달\s*근거|노트.{0,8}저장|etapas?\s+concluídas|evidência\s+de\s+domínio|salvar.{0,20}(nota|anotação|recursos)/i.test(text))
           ? true
           : undefined,
       requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
