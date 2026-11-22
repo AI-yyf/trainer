@@ -2,7 +2,7 @@
 
 **Generated:** 2026-06-19
 **Updated:** 2026-09-18 — refreshed structure, sizes, and test-stack notes
-**Branch:** codex/trainer-unified-learning (active)
+**Branch:** main (active)
 
 > **Product truth:** `.trainer-convergence/product-contract.md` (v2.1, locked 2026-11-21) and strategy [`docs/STRATEGY.md`](docs/STRATEGY.md). If this file, `SPEC.md` or any plan disagrees with the contract, the contract wins — fix the other side in the same commit. Roadmap: two destinations + one conversation + single-composer sovereignty; RethinkFun state-flow pedagogy kernel; learning is the conversation's read-only memory; four formal learner-visible concepts (目标 / 练习 / 掌握进度 / 资料); all data, resources, and memory live under one unified `<LibraryRoot>`.
 

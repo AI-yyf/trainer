@@ -1,6 +1,6 @@
 # Trainer 产品与工程战略（Strategy）
 
-> 生效日期：2026-11-21 · 分支：`codex/trainer-unified-learning`
+> 生效日期：2026-11-21 · 分支：`main`
 > 配套产品契约：[.trainer-convergence/product-contract.md](file:///Users/Apple/Desktop/trainer/.trainer-convergence/product-contract.md)（v2.1，locked）
 
 ---
@@ -87,7 +87,7 @@
 
 ## 6. 分支纪律与总验收
 
-- **单一主线**：仅在 `codex/trainer-unified-learning` 推进；对历史分支 `codex/trainer-convergence-verification` 做只读梳理后挑选移植可靠修复，随后打 tag 归档，不做整枝合并。
+- **单一主线**：仅在唯一主干分支 `main` 推进（原 `codex/trainer-unified-learning` 已快进合入 `main` 并清理其余分支；历史分支 `codex/trainer-convergence-verification` 已完成只读梳理与修复移植，并以 tag `archive/trainer-convergence-verification-2026-11-20` 归档）。
 - **打包解耦**：`server/app` 与 `extension/bundled/server/app` 保持同步并通过 parity 测试（后续评估打包脚本在构建时同步，减少提交噪声）。
 - **测试原则**：停止新增只锁源码文本形态的守卫测试，优先编写行为测试与真实布局/语义门禁。
 - **总验收标准**：在安装态 VSIX 中、用真实模型、在同一份 `<LibraryRoot>` 数据上，从头到尾跑通契约第 10 节的「幂等性」跨周学习与受控时钟复查故事，并完成一次人工教学质量签核（T-0028）。
