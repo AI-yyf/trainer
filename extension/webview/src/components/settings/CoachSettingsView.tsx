@@ -1479,9 +1479,26 @@ function stringArrayKey(value: string[] | undefined): string {
   );
 }
 
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalJsonValue);
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+    const sorted: Record<string, unknown> = {};
+    for (const [key, item] of entries) {
+      sorted[key] = canonicalJsonValue(item);
+    }
+    return sorted;
+  }
+  return value;
+}
+
 function requestDefaultsKey(value: unknown): string {
   try {
-    return JSON.stringify(asRecord(value) ?? {});
+    return JSON.stringify(canonicalJsonValue(asRecord(value) ?? {}));
   } catch {
     return "{}";
   }
@@ -2012,11 +2029,10 @@ export function CoachSettingsView({
             hasBaseUrl && typeof patch.baseUrl === "string" ? patch.baseUrl : current.baseUrl;
           const normalizedCurrentBaseUrl = current.baseUrl.trim().replace(/\/+$/, "");
           const normalizedNextBaseUrl = nextBaseUrl.trim().replace(/\/+$/, "");
-          const transportChanged =
-            (hasProtocol && normalizeProviderProtocol(current.protocol) !== nextProtocol) ||
-            (hasBaseUrl && normalizedCurrentBaseUrl !== normalizedNextBaseUrl);
+          const protocolChanged =
+            hasProtocol && normalizeProviderProtocol(current.protocol) !== nextProtocol;
 
-          if (transportChanged) {
+          if (protocolChanged) {
             return {
               ...current,
               ...patch,
@@ -2025,6 +2041,14 @@ export function CoachSettingsView({
               contextWindowTokens: undefined,
               maxOutputTokens: undefined,
               modelTokenLimits: undefined,
+              catalogModels: [],
+            };
+          }
+
+          if (hasBaseUrl && normalizedCurrentBaseUrl !== normalizedNextBaseUrl) {
+            return {
+              ...current,
+              ...patch,
               catalogModels: [],
             };
           }
@@ -2750,8 +2774,9 @@ function CoachSettingsViewSheet({
     ].filter(Boolean) as string[],
     copy.off,
   );
+  const expectedDraftName = provider.configured ? provider.name : "";
   const providerHasDraftChanges =
-    providerDraft.name !== provider.name ||
+    providerDraft.name !== expectedDraftName ||
     draftProtocol !== savedProtocol ||
     providerDraft.baseUrl !== provider.baseUrl ||
     providerDraft.model !== provider.model ||
@@ -2772,7 +2797,7 @@ function CoachSettingsViewSheet({
       (provider.embeddingModel ?? "") ||
     (providerDraft.catalogSource ?? provider.catalogSource ?? "provider_live") !==
       (provider.catalogSource ?? "provider_live") ||
-    (providerDraft.cacheTtlSeconds ?? provider.cacheTtlSeconds) !== provider.cacheTtlSeconds ||
+    providerDraft.cacheTtlSeconds !== provider.cacheTtlSeconds ||
     requestDefaultsKey(providerDraft.requestDefaults ?? provider.requestDefaults) !==
       requestDefaultsKey(provider.requestDefaults) ||
     // thinkingConfig is durable intent: on wires that cannot emit thinking
@@ -2956,14 +2981,25 @@ function CoachSettingsViewSheet({
               : {}),
           }
         : { mode: "disabled" as const };
+      const syncedRequestDefaults = updateProviderThinking(
+        {
+          ...draftThinkingContext,
+          model: modelName,
+        },
+        draftRequestDefaults,
+        nextThinking,
+      );
       onProviderDraftChange({
         model: modelName,
         capabilities: nextCapabilities,
         thinkingConfig: nextThinking,
+        requestDefaults: syncedRequestDefaults,
       });
     },
     [
       draftProtocol,
+      draftRequestDefaults,
+      draftThinkingContext,
       normalizedDraftBaseUrl,
       onProviderDraftChange,
       provider.capabilities,
@@ -3044,11 +3080,9 @@ function CoachSettingsViewSheet({
       ),
   );
   const typedModelPolicy = evaluateProviderModelPolicy(modelSearchQuery, draftModelPolicy);
-  const hasMatchingModelOptions = matchingModelOptions.length > 0;
   const canUseTypedModel =
     Boolean(normalizedModelSearchQuery) &&
-    typedModelPolicy.allowed &&
-    (!hasMatchingModelOptions || Boolean(exactMatchingModel));
+    typedModelPolicy.allowed;
   const showTypedModelAction =
     canUseTypedModel && (!exactMatchingModel || !exactMatchingModelIsVisible);
   const hiddenMatchingModelCount = Math.max(
@@ -3088,10 +3122,13 @@ function CoachSettingsViewSheet({
     formatRequestDefaultsDraft(draftRequestDefaults),
   );
   const [requestDefaultsError, setRequestDefaultsError] = useState<string>();
+  const requestDefaultsFocusedRef = useRef(false);
   useEffect(() => {
-    setRequestDefaultsText(formatRequestDefaultsDraft(draftRequestDefaults));
-    setRequestDefaultsError(undefined);
-  }, [draftRequestDefaultsSignature]);
+    if (!requestDefaultsFocusedRef.current) {
+      setRequestDefaultsText(formatRequestDefaultsDraft(draftRequestDefaults));
+      setRequestDefaultsError(undefined);
+    }
+  }, [draftRequestDefaults, draftRequestDefaultsSignature]);
   const normalizedManualModelDraft = manualModelDraft.trim();
   const manualModelPolicy = evaluateProviderModelPolicy(
     normalizedManualModelDraft,
@@ -3107,8 +3144,21 @@ function CoachSettingsViewSheet({
     draftCatalogModels.length === 0 &&
     liveCatalogModels.length === 0;
   const providerDraftEditorBlocked = Boolean(requestDefaultsError);
-  const requestDefaultsTextHasDrift =
-    requestDefaultsText.trim() !== formatRequestDefaultsDraft(draftRequestDefaults).trim();
+  const requestDefaultsTextHasDrift = useMemo(() => {
+    if (requestDefaultsError) {
+      return true;
+    }
+    const trimmed = requestDefaultsText.trim();
+    const expectedKey = requestDefaultsKey(draftRequestDefaults);
+    if (!trimmed) {
+      return expectedKey !== "{}";
+    }
+    try {
+      return requestDefaultsKey(JSON.parse(trimmed)) !== expectedKey;
+    } catch {
+      return true;
+    }
+  }, [draftRequestDefaults, requestDefaultsError, requestDefaultsText]);
   const providerDraftReadyForTest =
     providerDraftReadyForTestBase &&
     !currentDraftModelBlockedByPolicy &&
@@ -3535,10 +3585,24 @@ function CoachSettingsViewSheet({
   );
   const draftCredentialMode = providerDraft.credentialMode ?? provider.credentialMode ?? "ui_proxy";
   const draftCatalogSource = providerDraft.catalogSource ?? provider.catalogSource ?? "provider_live";
-  const draftCacheTtlSeconds = providerDraft.cacheTtlSeconds ?? provider.cacheTtlSeconds;
-  const draftEmbeddingModel = providerDraft.embeddingModel ?? provider.embeddingModel ?? "";
-  const draftAllowedModelsText = formatDraftStringList(providerDraft.allowedModels ?? provider.allowedModels);
-  const draftDeniedModelsText = formatDraftStringList(providerDraft.deniedModels ?? provider.deniedModels);
+  const draftCacheTtlSeconds = providerDraft.cacheTtlSeconds;
+  const draftEmbeddingModel = providerDraft.embeddingModel ?? "";
+  const draftAllowedModelsSource = formatDraftStringList(providerDraft.allowedModels);
+  const draftDeniedModelsSource = formatDraftStringList(providerDraft.deniedModels);
+  const [allowedModelsText, setAllowedModelsText] = useState(() => draftAllowedModelsSource);
+  const allowedModelsFocusedRef = useRef(false);
+  useEffect(() => {
+    if (!allowedModelsFocusedRef.current) {
+      setAllowedModelsText(draftAllowedModelsSource);
+    }
+  }, [draftAllowedModelsSource]);
+  const [deniedModelsText, setDeniedModelsText] = useState(() => draftDeniedModelsSource);
+  const deniedModelsFocusedRef = useRef(false);
+  useEffect(() => {
+    if (!deniedModelsFocusedRef.current) {
+      setDeniedModelsText(draftDeniedModelsSource);
+    }
+  }, [draftDeniedModelsSource]);
   const updateThinkingConfig = (config: ProviderThinkingConfig) => {
     const next = updateProviderThinking(
       draftThinkingContext,
@@ -3813,20 +3877,24 @@ function CoachSettingsViewSheet({
     onRefreshProviderModels,
     providerDraftReadyForModelDiscovery,
   ]);
-  // A fetched catalog with no current choice opens the picker for an explicit
-  // selection. We never silently pick an arbitrary model on the learner's
-  // behalf; the list is one click away and the default stays unset.
+  // Auto-open the model picker once per fetched catalog when no model is chosen yet,
+  // without re-opening on manual collapse.
+  const autoOpenedCatalogKeyRef = useRef<string>();
+  const modelCatalogAutoOpenKey =
+    !currentDraftModel && modelListStatus === "ready" && availableModels.length > 0
+      ? `${provider.profileId ?? ""}:${availableModels.join("\0")}`
+      : "";
   useEffect(() => {
-    if (
-      currentDraftModel ||
-      modelListStatus !== "ready" ||
-      availableModels.length === 0 ||
-      modelPickerOpen
-    ) {
+    if (!modelCatalogAutoOpenKey) {
+      autoOpenedCatalogKeyRef.current = undefined;
       return;
     }
+    if (autoOpenedCatalogKeyRef.current === modelCatalogAutoOpenKey) {
+      return;
+    }
+    autoOpenedCatalogKeyRef.current = modelCatalogAutoOpenKey;
     setModelPickerOpen(true);
-  }, [availableModels.length, currentDraftModel, modelListStatus, modelPickerOpen]);
+  }, [modelCatalogAutoOpenKey]);
   const canSaveProviderConnection = Boolean(
     onSaveProvider &&
     !providerSaveBusy &&
@@ -5315,12 +5383,20 @@ function CoachSettingsViewSheet({
                   <span>{localizedCatalogAllowedModelsLabel}</span>
                   <textarea
                     rows={2}
-                    value={draftAllowedModelsText}
-                    onChange={(event) =>
+                    value={allowedModelsText}
+                    onFocus={() => {
+                      allowedModelsFocusedRef.current = true;
+                    }}
+                    onChange={(event) => {
+                      setAllowedModelsText(event.target.value);
                       onProviderDraftChange({
                         allowedModels: parseDraftStringList(event.target.value),
-                      })
-                    }
+                      });
+                    }}
+                    onBlur={() => {
+                      allowedModelsFocusedRef.current = false;
+                      setAllowedModelsText(draftAllowedModelsSource);
+                    }}
                   />
                   <p className="settings-sheet__note settings-sheet__note--compact">
                     {localizedAllowedModelsInputDetail}
@@ -5331,12 +5407,20 @@ function CoachSettingsViewSheet({
                   <span>{localizedCatalogDeniedModelsLabel}</span>
                   <textarea
                     rows={2}
-                    value={draftDeniedModelsText}
-                    onChange={(event) =>
+                    value={deniedModelsText}
+                    onFocus={() => {
+                      deniedModelsFocusedRef.current = true;
+                    }}
+                    onChange={(event) => {
+                      setDeniedModelsText(event.target.value);
                       onProviderDraftChange({
                         deniedModels: parseDraftStringList(event.target.value),
-                      })
-                    }
+                      });
+                    }}
+                    onBlur={() => {
+                      deniedModelsFocusedRef.current = false;
+                      setDeniedModelsText(draftDeniedModelsSource);
+                    }}
                   />
                   <p className="settings-sheet__note settings-sheet__note--compact">
                     {localizedDeniedModelsInputDetail}
@@ -5349,7 +5433,16 @@ function CoachSettingsViewSheet({
                     rows={6}
                     spellCheck={false}
                     value={requestDefaultsText}
+                    onFocus={() => {
+                      requestDefaultsFocusedRef.current = true;
+                    }}
                     onChange={(event) => handleRequestDefaultsTextChange(event.target.value)}
+                    onBlur={() => {
+                      requestDefaultsFocusedRef.current = false;
+                      if (!requestDefaultsError) {
+                        setRequestDefaultsText(formatRequestDefaultsDraft(draftRequestDefaults));
+                      }
+                    }}
                   />
                   <p className="settings-sheet__note settings-sheet__note--compact">
                     {localizedRequestDefaultsInputDetail}
@@ -5550,32 +5643,30 @@ function CoachSettingsViewSheet({
       >
         {settingsText(language, "取消", "Cancel")}
       </button>
-      {!modelDiscoveryGuidanceActive ? (
-        <ActionButton
-          fullWidth={false}
-          icon={
-            providerSaveBusy ? (
-              <span aria-hidden="true" className="trainer-spinner trainer-spinner--sm" />
-            ) : (
-              <DoneIcon size={14} />
-            )
-          }
-          label={settingsText(language, "保存", "Save")}
-          ariaLabel={saveProviderConnectionLabel}
-          // r1-g2-4: 保存并使用 is this screen's single solid primary; retest
-          // and model-list refresh stay quiet secondary actions below it.
-          tone="accent"
-          detail={
-            canSaveProviderConnection
-              ? settingsPhrase(language, "saveToApply")
-              : currentDraftModelPolicyMessage ??
-                settingsPhrase(language, "saveConnectionDetail")
-          }
-          disabled={!canSaveProviderConnection}
-          onClick={onSaveProvider}
-          title={saveProviderConnectionTitle}
-        />
-      ) : null}
+      <ActionButton
+        fullWidth={false}
+        icon={
+          providerSaveBusy ? (
+            <span aria-hidden="true" className="trainer-spinner trainer-spinner--sm" />
+          ) : (
+            <DoneIcon size={14} />
+          )
+        }
+        label={settingsText(language, "保存", "Save")}
+        ariaLabel={saveProviderConnectionLabel}
+        // r1-g2-4: 保存并使用 is this screen's single solid primary; retest
+        // and model-list refresh stay quiet secondary actions below it.
+        tone="accent"
+        detail={
+          canSaveProviderConnection
+            ? settingsPhrase(language, "saveToApply")
+            : currentDraftModelPolicyMessage ??
+              settingsPhrase(language, "saveConnectionDetail")
+        }
+        disabled={!canSaveProviderConnection}
+        onClick={onSaveProvider}
+        title={saveProviderConnectionTitle}
+      />
     </div>
   ) : null;
   const providerDetailRequirementNote = providerHasDraftChanges
@@ -6186,7 +6277,7 @@ function CoachSettingsViewSheet({
                     </div>
                   </div>
                 ) : null}
-                {providerSaved && !providerHasDraftChanges && onRefreshProviderModels ? (
+                {(providerSaved || providerDraftReadyForModelDiscovery) && onRefreshProviderModels ? (
                   <button
                     type="button"
                     className="settings-model-refresh"
@@ -6271,17 +6362,22 @@ function CoachSettingsViewSheet({
                     <select
                       value={draftThinkingConfig?.reasoningEffort ?? "auto"}
                       onChange={(event) =>
-                        updateThinkingConfig({
-                          ...(draftThinkingConfig ?? { mode: "enabled" }),
-                          mode:
-                            (draftThinkingConfig?.mode ?? "enabled") === "disabled"
-                              ? "enabled"
-                              : draftThinkingConfig?.mode ?? "enabled",
-                          reasoningEffort:
-                            event.target.value === "auto"
-                              ? undefined
-                              : (event.target.value as "low" | "medium" | "high"),
-                        })
+                        updateThinkingConfig(
+                          event.target.value === "auto"
+                            ? {
+                                ...(draftThinkingConfig ?? { mode: "auto" }),
+                                mode: "auto",
+                                reasoningEffort: undefined,
+                              }
+                            : {
+                                ...(draftThinkingConfig ?? { mode: "enabled" }),
+                                mode:
+                                  (draftThinkingConfig?.mode ?? "enabled") === "disabled"
+                                    ? "enabled"
+                                    : draftThinkingConfig?.mode ?? "enabled",
+                                reasoningEffort: event.target.value as "low" | "medium" | "high",
+                              },
+                        )
                       }
                     >
                       <option value="auto">

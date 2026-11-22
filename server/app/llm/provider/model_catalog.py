@@ -17,6 +17,7 @@ from ..provider_gateway import (
     gateway_fingerprint_diagnostics,
     inspect_provider_gateway_headers,
 )
+from .capability import _allows_keyless_local_provider
 from .redaction import redact_provider_error
 from .service_support import extract_model_token_limit as _extract_model_token_limit
 
@@ -60,7 +61,13 @@ class ModelCatalogMixin:
         if not cached:
             return None
         cached_at, response = cached
-        if monotonic() - cached_at > self._MODEL_CACHE_TTL_SECONDS:
+        configured_ttl = getattr(provider, "cache_ttl_seconds", None)
+        ttl_seconds: float = (
+            max(0.0, float(configured_ttl))
+            if isinstance(configured_ttl, (int, float)) and not isinstance(configured_ttl, bool)
+            else self._MODEL_CACHE_TTL_SECONDS
+        )
+        if ttl_seconds <= 0 or monotonic() - cached_at > ttl_seconds:
             self._models_cache.pop(cache_key, None)
             return None
         return response.model_copy(update={"cache_hit": True})
@@ -619,29 +626,33 @@ class ModelCatalogMixin:
         *,
         skip_cache: bool = False,
     ) -> ProviderModelsResponse:
-        if not api_key:
-            return ProviderModelsResponse(
-                ok=False,
-                detail="Provider config is saved, but no API key is available. Trainer cannot fetch models until you add one.",
-                error_category="missing_api_key",
-                retryable=False,
-                diagnostics=["No API key supplied for model listing."],
-            )
+        effective_api_key = (api_key or "").strip()
+        if not effective_api_key:
+            if _allows_keyless_local_provider(provider):
+                effective_api_key = "local-no-key"
+            else:
+                return ProviderModelsResponse(
+                    ok=False,
+                    detail="Provider config is saved, but no API key is available. Trainer cannot fetch models until you add one.",
+                    error_category="missing_api_key",
+                    retryable=False,
+                    diagnostics=["No API key supplied for model listing."],
+                )
 
         if not skip_cache:
-            cached = self._get_cached_models(provider, api_key)
+            cached = self._get_cached_models(provider, effective_api_key)
             if cached is not None:
                 return cached
 
         try:
             protocol = self._configured_protocol(provider)
             if protocol == "anthropic_messages":
-                result = self._anthropic_list_models(provider, api_key)
+                result = self._anthropic_list_models(provider, effective_api_key)
             elif protocol == "gemini_generate_content":
-                result = self._gemini_list_models(provider, api_key)
+                result = self._gemini_list_models(provider, effective_api_key)
             else:
-                result = self._openai_list_models(provider, api_key)
-            self._store_cached_models(provider, api_key, result)
+                result = self._openai_list_models(provider, effective_api_key)
+            self._store_cached_models(provider, effective_api_key, result)
             return result
         except Exception as exc:  # pragma: no cover - network dependent
             category, retryable, status_code, _, _ = self._classify_error(exc)

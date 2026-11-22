@@ -429,7 +429,7 @@ export function describeProviderThinking(
       kind: 'minimax_thinking',
       config,
       advanced: true,
-      disabled: config.mode !== 'enabled',
+      disabled: false,
     };
   }
   if (!protocol || !normalized.config || normalized.reason === 'unknown_model' || normalized.reason === 'unsupported_protocol') return undefined;
@@ -467,7 +467,7 @@ export function synthesizeProviderThinkingDescriptor(
       kind: 'minimax_thinking',
       config,
       advanced: true,
-      disabled: config.mode !== 'enabled',
+      disabled: false,
     };
   }
   if (!protocol || !thinkingProtocolSupportsWire(protocol)) return undefined;

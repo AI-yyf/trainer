@@ -19,6 +19,7 @@ from .principle_explainer import PrincipleExplainerService, PrincipleNote
 from .project_adaptation_coach import ProjectAdaptationCoachService, ProjectAdaptationGuide
 from .project_idea_miner import ProjectIdea, ProjectIdeaMinerService
 from .project_source_scout import ProjectSourceScoutService, ProjectSourceSuggestion
+from .smalltalk import is_casual_greeting_or_smalltalk, is_exploratory_or_research_query
 from .turn_decision import TurnFacts, decide_turn
 
 TeachingMode = Literal[
@@ -465,7 +466,10 @@ class PedagogyService:
                 or memory_snapshot.top_weakness
             )
         )
-        needs_rescue = frustration_level >= 0.65 or request.answer_mode == "direct"
+        casual_greeting = is_casual_greeting_or_smalltalk(request.message)
+        needs_rescue = False if casual_greeting else (
+            frustration_level >= 0.65 or request.answer_mode == "direct"
+        )
 
         if needs_rescue:
             hint_depth = "direct"
@@ -1265,7 +1269,16 @@ class PedagogyService:
             )
         elif decision.mode == "onboarding":
             artifacts.selected_teaching_assets = list(selected_assets)
-        if artifacts.implementation_guide is None and decision.mode == "direct_rescue":
+        if (
+            artifacts.implementation_guide is None
+            and decision.mode == "direct_rescue"
+            and not is_casual_greeting_or_smalltalk(request.message)
+            and not (
+                is_exploratory_or_research_query(request.message)
+                and learner_state.frustration_level < 0.65
+                and request.current_file is None
+            )
+        ):
             artifacts.implementation_guide = self._implementation_coach.build_guide(
                 request=request,
                 learner_state=learner_state,

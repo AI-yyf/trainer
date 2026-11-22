@@ -380,7 +380,10 @@ class ImplementationCoachService:
             return label
         subject = self._message_subject(message)
         if subject:
-            return subject
+            from .smalltalk import is_casual_greeting_or_smalltalk
+
+            if not is_casual_greeting_or_smalltalk(subject) and not is_casual_greeting_or_smalltalk(message):
+                return subject
         if profile is not None and profile.long_term_goal:
             return profile.long_term_goal.strip()
         return label or "the current idea"

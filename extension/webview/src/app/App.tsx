@@ -2048,6 +2048,14 @@ export function App() {
     };
     return messages[layout.composerLanguage];
   }, [layout.composerLanguage]);
+  const chatToolsEvidence = scopedProviderLastTest?.capabilityEvidence?.find(
+    (entry) => entry.name.trim().toLowerCase() === "tools",
+  );
+  const providerToolsExplicitlyUnsupported =
+    data.providerConfig.capabilities?.tools === false ||
+    scopedProviderLastTest?.toolsReady === false ||
+    chatToolsEvidence?.state === "unsupported" ||
+    chatToolsEvidence?.state === "disabled";
   const agentToolsCapabilityMessage = useMemo(() => {
     const messages: Record<ComposerLanguage, string> = {
       "zh-CN": "当前视图需要已经通过工具调用验证的 Provider。请在设置中选择并测试支持 tools 的连接。",
@@ -6024,11 +6032,11 @@ export function App() {
       attachments: attachments?.length ? attachments : undefined,
       useAgentLoop: resolvedResourceComposerIntent?.mode === "analyze" ? false : requiresVerifiedAgentTools
         ? true
-        : providerSupportsFormalPlanTools &&
+        : (providerSupportsFormalPlanTools || !providerToolsExplicitlyUnsupported) &&
             (laneNeedsVerifiedTools ||
               data.resources.length > 0 ||
               messageReferencesWorkspaceFile(text) ||
-              /完整(学习)?(计划|路线)|哪些阶段|完成了哪些|掌握(度|进度).{0,8}(证据|依据)|具体(验证)?证据|复习依据|(保存|存成|存进|整理成).{0,10}(资料库|笔记|讲稿|markdown|\.?md)|(all|completed)\s+stages|learning\s+roadmap|mastery\s+evidence|save.{0,20}(lecture|study)?\s*note|etapas?\s+(completadas?|del\s+plan)|evidencia\s+de\s+dominio|guardar.{0,20}(nota|apunte|recursos)|étapes?\s+(terminées?|complètes?)|preuve\s+de\s+maîtrise|enregistrer.{0,20}(note|fiche|ressources)|abgeschlossene\s+phasen|lernplan|beherrschungsnachweis|als\s+(notiz|markdown)\s+speichern|全ステージ|完了した段階|習得の根拠|ノート.{0,8}保存|전체\s*단계|완료한\s*단계|숙달\s*근거|노트.{0,8}저장|etapas?\s+concluídas|evidência\s+de\s+domínio|salvar.{0,20}(nota|anotação|recursos)/i.test(text))
+              !/^(?:你好|您好|你好[呀啊吗哦]?|嗨|哈[喽罗]|早安?|早上好|在吗|谢谢|好的?|嗯+|hi|hello|hey|thanks|thank you|ok|okay|ping|test)[!！.。,，~～\s]*$/i.test(text.trim()))
           ? true
           : undefined,
       requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -6935,17 +6943,21 @@ export function App() {
   );
 
   const exportLibraryResource = useCallback(
-    async (resourceId: string): Promise<ResourceMutationOutcome> => {
+    async (
+      resourceId: string,
+      format: "markdown" | "pdf" = "markdown",
+    ): Promise<ResourceMutationOutcome> => {
       const resource = data.resources.find((item) => item.id === resourceId);
       const name = resource?.title?.trim() || resourceId;
       if (isBrowserPreview && !browserPreviewFixture) {
         try {
           const browserPreview = await loadBrowserPreviewModule();
           const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
+          const formatParam = format === "pdf" ? "&format=pdf" : "";
           const response = await fetch(
             `${baseUrl}/resource/export?session_id=${encodeURIComponent(
               previewSessionId ?? "",
-            )}&resource_id=${encodeURIComponent(resourceId)}`,
+            )}&resource_id=${encodeURIComponent(resourceId)}${formatParam}`,
           );
           if (!response.ok) {
             const detail = await response
@@ -6955,7 +6967,9 @@ export function App() {
             return { ok: false, message: detail || sanitizeErrorSurfaceText(`HTTP ${response.status}`, layout.composerLanguage) };
           }
           const blob = await response.blob();
-          const downloadName = exportDownloadName(response.headers) ?? name;
+          const fallbackName =
+            format === "pdf" ? `${name.replace(/\.md$/i, "")}.pdf` : name;
+          const downloadName = exportDownloadName(response.headers) ?? fallbackName;
           triggerLocalDownload(blob, downloadName);
           return { ok: true, message: downloadName, resourceId };
         } catch (error) {
@@ -6977,6 +6991,7 @@ export function App() {
           commandId: "trainer.resource.export",
           payload: {
             resource_id: resourceId,
+            format,
             workspace_id: data.memory.workspace?.workspaceId || undefined,
             __trainerResourceOperationId: exportWait.requestId,
           },
@@ -7052,7 +7067,9 @@ export function App() {
           payload.responseLanguage === savedWorkspaceSettings.responseLanguage &&
           payload.answerMode === savedWorkspaceSettings.answerMode &&
           payload.resourceSearchMode === savedWorkspaceSettings.resourceSearchMode &&
-          (savedTeachingStyle === undefined || payload.teachingStyle === savedTeachingStyle) &&
+          (savedTeachingStyle === undefined
+            ? payload.teachingStyle === DEFAULT_TEACHING_STYLE
+            : payload.teachingStyle === savedTeachingStyle) &&
           payload.followCurrentFile === savedWorkspaceSettings.followCurrentFile &&
           payload.contextDetail === savedWorkspaceSettings.contextDetail &&
           payload.includeCurrentFile === savedWorkspaceSettings.includeCurrentFile &&
@@ -7223,11 +7240,55 @@ export function App() {
   }>();
   const resourceVersionCheckRequest = useRef<AbortController>();
   useEffect(() => () => resourceVersionCheckRequest.current?.abort(), [composerSessionKey]);
+  const [queuedFollowUps, setQueuedFollowUps] = useState<
+    Array<{ id: string; text: string; attachments: MessageAttachment[] }>
+  >([]);
+  const handleSubmitRef = useRef<
+    ((confirmedActionKey?: string, overrideSubmission?: { text: string; attachments?: MessageAttachment[] }) => Promise<void>) | null
+  >(null);
+  const queueCurrentComposerDraft = useCallback(() => {
+    if (composerUsesTrainingFlow) {
+      return;
+    }
+    const textToQueue = draft.trim();
+    const attachmentsToQueue = composerAttachments;
+    if (!textToQueue && attachmentsToQueue.length === 0) {
+      return;
+    }
+    setQueuedFollowUps((current) => [
+      ...current,
+      {
+        id: `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: textToQueue,
+        attachments: attachmentsToQueue,
+      },
+    ]);
+    setComposerDraft("", composerDraftScope);
+    setComposerAttachments([]);
+  }, [composerAttachments, composerDraftScope, composerUsesTrainingFlow, draft, setComposerDraft]);
   const linkingSourceInFlight = useRef(false);
-  const handleSubmit = async (confirmedActionKey?: string) => {
-    if (streaming.isStreaming || trainingPersistencePending) return;
-    const normalizedDraft = (composerUsesTrainingFlow ? activityDraft : draft).trim();
-    const submissionAttachments = composerUsesTrainingFlow ? activityAttachments : composerAttachments;
+  const handleSubmit = async (
+    confirmedActionKey?: string,
+    overrideSubmission?: { text: string; attachments?: MessageAttachment[] },
+  ) => {
+    if (!overrideSubmission && (streaming.isStreaming || isOperationReliabilityInFlight(streaming.reliabilityPhase))) {
+      if (!trainingPersistencePending && !composerUsesTrainingFlow) {
+        queueCurrentComposerDraft();
+      }
+      return;
+    }
+    if (trainingPersistencePending) return;
+    const rawText = overrideSubmission
+      ? overrideSubmission.text
+      : composerUsesTrainingFlow
+        ? activityDraft
+        : draft;
+    const normalizedDraft = rawText.trim();
+    const submissionAttachments = overrideSubmission
+      ? (overrideSubmission.attachments ?? [])
+      : composerUsesTrainingFlow
+        ? activityAttachments
+        : composerAttachments;
     const browserPrefill = browserComposerSource?.prefill;
     const instruction = browserPrefill ? normalizedDraft.replace(browserPrefill, "").trim() : normalizedDraft;
     const startsGoal = activeView === "coach" && goalDraftPending && Boolean(instruction) &&
@@ -7237,6 +7298,9 @@ export function App() {
     const practiceAfterLink = unified.kind === "resource-link" && unified.practiceAfterLink === true;
     if (confirmedActionKey && (composerActionPreview?.scope !== attachmentScope || composerActionPreview.text !== normalizedDraft)) return;
     const clearSubmission = () => {
+      if (overrideSubmission) {
+        return;
+      }
       const { layout: current } = useWorkbenchState.getState();
       if (composerUsesTrainingFlow) {
         if ((current.activityDrafts?.[activityDraftKey] ?? "") === activityDraft) setActivityDraft("");
@@ -7427,7 +7491,7 @@ export function App() {
         const isPlanUpdate = submittedSkill.commandId === trainerCommands.updatePlan;
         setActiveView(targetView);
         if (isLivePlanTaskMint || isGenerateCard || isPlanUpdate) {
-          pendingLivePlanTaskMintRef.current = { commandId: submittedSkill.commandId, scope: composerDraftScope, draft };
+          pendingLivePlanTaskMintRef.current = { commandId: submittedSkill.commandId, scope: composerDraftScope, draft: rawText };
           setOperationMessage({
             tone: "info",
             message: isGenerateCard
@@ -8333,6 +8397,35 @@ export function App() {
     layout.composerLanguage,
     previewSessionId,
     setOperationMessage,
+  ]);
+
+  handleSubmitRef.current = handleSubmit;
+
+  useEffect(() => {
+    setQueuedFollowUps([]);
+  }, [composerSessionKey]);
+
+  useEffect(() => {
+    const busy =
+      streaming.isStreaming ||
+      isOperationReliabilityInFlight(streaming.reliabilityPhase) ||
+      trainingPersistencePending;
+    if (busy || queuedFollowUps.length === 0) {
+      return;
+    }
+    const [nextItem, ...rest] = queuedFollowUps;
+    setQueuedFollowUps(rest);
+    if (nextItem) {
+      void handleSubmitRef.current?.(undefined, {
+        text: nextItem.text,
+        attachments: nextItem.attachments,
+      });
+    }
+  }, [
+    queuedFollowUps,
+    streaming.isStreaming,
+    streaming.reliabilityPhase,
+    trainingPersistencePending,
   ]);
 
   // Phase-D training attempt lifecycle: entering a formal card starts/resumes
@@ -10456,6 +10549,17 @@ export function App() {
               folderInputRef: uploadFolderInputRef,
             })
           }
+          onImportWorkspace={
+            isBrowserPreview
+              ? undefined
+              : () =>
+                  triggerResourceUpload({
+                    browserPreview: false,
+                    payloadMode: "workspace",
+                    filesInputRef: uploadFilesInputRef,
+                    folderInputRef: uploadFolderInputRef,
+                  })
+          }
           onImportUrl={() =>
             isBrowserPreview ? void handleBrowserUrlImport() : triggerResourceUpload({
               browserPreview: false,
@@ -11643,6 +11747,61 @@ export function App() {
                 }
               }}
               onSubmit={() => { void handleSubmit(); }}
+              onQueueSubmit={composerUsesTrainingFlow ? undefined : queueCurrentComposerDraft}
+              queueBanner={
+                queuedFollowUps.length > 0 ? (
+                  <div className="composer__queue-banner" role="region" aria-label={layout.composerLanguage === "zh-CN" ? "待发送消息队列" : "Queued messages"}>
+                    <div className="composer__queue-banner__header">
+                      <span>
+                        {layout.composerLanguage === "zh-CN"
+                          ? `已排队（${queuedFollowUps.length} 条 · 回复完成后自动发送）`
+                          : `Queued (${queuedFollowUps.length} · sends when current reply finishes)`}
+                      </span>
+                    </div>
+                    {queuedFollowUps.map((item, idx) => (
+                      <div key={item.id} className="composer__queue-banner__row">
+                        <span className="composer__queue-banner__text" title={item.text}>
+                          {item.text || (layout.composerLanguage === "zh-CN" ? "[图片消息]" : "[Image message]")}
+                        </span>
+                        <span className="composer__queue-banner__actions">
+                          {idx === 0 ? (
+                            <button
+                              type="button"
+                              className="button button--ghost button--compact"
+                              onClick={() => handleCancelStream()}
+                            >
+                              {layout.composerLanguage === "zh-CN" ? "立即切换" : "Send now"}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="button button--ghost button--compact"
+                            onClick={() => {
+                              setQueuedFollowUps((current) => current.filter((entry) => entry.id !== item.id));
+                              if (!composerUsesTrainingFlow && item.text) {
+                                setComposerDraft(draft.trim() ? `${draft.trim()}\n${item.text}` : item.text, composerDraftScope);
+                                requestCoachComposerFocus();
+                              }
+                            }}
+                          >
+                            {layout.composerLanguage === "zh-CN" ? "编辑" : "Edit"}
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--ghost button--compact"
+                            aria-label={layout.composerLanguage === "zh-CN" ? "取消排队" : "Remove queued message"}
+                            onClick={() =>
+                              setQueuedFollowUps((current) => current.filter((entry) => entry.id !== item.id))
+                            }
+                          >
+                            ×
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : undefined
+              }
               onCancel={handleCancelStream}
               mentionItems={composerMentionItems}
               onMentionSelect={handleComposerMentionSelect}

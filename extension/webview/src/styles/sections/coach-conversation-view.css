@@ -219,11 +219,18 @@
   gap: 2px;
   min-width: 156px;
   max-width: min(220px, 78vw);
+  max-height: min(260px, 46vh);
+  overflow-y: auto;
   padding: 4px;
   border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   border-radius: var(--radius-md);
   background: var(--bg-0);
   box-shadow: 0 8px 20px color-mix(in srgb, var(--bg-0) 44%, transparent);
+}
+
+.coach-conversation-view .message-bubble__more-menu[data-menu-placement="above"] {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .coach-conversation-view .message-bubble__more-item {

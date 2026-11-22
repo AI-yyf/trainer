@@ -103,7 +103,9 @@ export function summarizeSafeCoachToolResult(
     ? record.hits
     : Array.isArray(record.items)
       ? record.items
-      : undefined;
+      : Array.isArray(record.results)
+        ? record.results
+        : undefined;
   if (items) {
     return text.found(items.length);
   }

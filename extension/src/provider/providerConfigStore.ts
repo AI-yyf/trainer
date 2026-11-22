@@ -158,6 +158,25 @@ export function providerConnectionMatches(
   );
 }
 
+function sameProviderVendorHost(
+  existing: Pick<ProviderConfig, 'baseUrl'> | undefined,
+  candidate: Pick<ProviderConfig, 'baseUrl'> | undefined,
+): boolean {
+  if (!existing?.baseUrl?.trim() || !candidate?.baseUrl?.trim()) {
+    return false;
+  }
+  try {
+    const existingHost = new URL(existing.baseUrl.trim()).hostname.toLowerCase();
+    const candidateHost = new URL(candidate.baseUrl.trim()).hostname.toLowerCase();
+    return Boolean(existingHost && candidateHost && existingHost === candidateHost);
+  } catch {
+    return (
+      existing.baseUrl.trim().replace(/\/+$/, '').toLowerCase() ===
+      candidate.baseUrl.trim().replace(/\/+$/, '').toLowerCase()
+    );
+  }
+}
+
 /**
  * Keep the reference for the same saved connection, while assigning every new
  * connection an opaque UUID-backed reference. Legacy references remain valid.
@@ -172,7 +191,11 @@ export function resolveProviderApiKeyRef(
   }
 
   const candidateProfileId = candidate.profileId?.trim();
-  if (candidateProfileId && candidateProfileId === existing?.profileId?.trim()) {
+  if (
+    candidateProfileId &&
+    candidateProfileId === existing?.profileId?.trim() &&
+    sameProviderVendorHost(existing, candidate)
+  ) {
     return existingRef;
   }
 
@@ -247,7 +270,7 @@ export class ProviderConfigStore implements vscode.Disposable {
 
   getConfig(): ProviderConfig | undefined {
     const stored = this.getStoredConfig();
-    const profileConfig = this.getWorkspaceProfileConfig() ?? this.getActiveRegistryProfileConfig();
+    const profileConfig = this.getActiveRegistryProfileConfig() ?? this.getWorkspaceProfileConfig();
     return this.getWorkspaceOverrideConfig(profileConfig ?? stored) ?? profileConfig ?? stored;
   }
 
@@ -265,7 +288,7 @@ export class ProviderConfigStore implements vscode.Disposable {
   }
 
   getActiveProfileConfig(): ProviderConfig | undefined {
-    const profileConfig = this.getWorkspaceProfileConfig() ?? this.getActiveRegistryProfileConfig();
+    const profileConfig = this.getActiveRegistryProfileConfig() ?? this.getWorkspaceProfileConfig();
     if (!profileConfig) {
       return this.getConfig();
     }
@@ -344,13 +367,15 @@ export class ProviderConfigStore implements vscode.Disposable {
       previousTargetProfile,
     );
 
-    // Editing an existing connection (for example fixing a Base URL typo)
-    // assigns a fresh opaque key ref. When the caller did not supply a
-    // replacement key, carry the stored secret over to the new ref so a small
-    // edit never silently deletes the user's API key.
+    // Editing an existing connection (for example fixing a Base URL typo on the
+    // same host) assigns a fresh opaque key ref. Never carry an old secret across
+    // different vendor hosts when switching endpoints without a new API key.
     let carriedApiKey: string | undefined;
     if (apiKey === undefined && !inheritedApiKey?.trim()) {
-      for (const apiKeyRef of this.collectPreviousApiKeyRefs(configsToClean, configWithSafeApiKeyRef)) {
+      const sameVendorConfigs = configsToClean.filter((previous) =>
+        sameProviderVendorHost(previous, nextConfig),
+      );
+      for (const apiKeyRef of this.collectPreviousApiKeyRefs(sameVendorConfigs, configWithSafeApiKeyRef)) {
         if (this.isApiKeyRefUsedByAnotherProfile(apiKeyRef, targetProfileId)) {
           continue;
         }
@@ -764,7 +789,13 @@ export class ProviderConfigStore implements vscode.Disposable {
     if (!switched) {
       return false;
     }
-    this.emitter.fire(this.getConfig());
+    const nextConfig = this.getProfileConfigById(profileId);
+    if (nextConfig) {
+      await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, nextConfig);
+      this.mirrorConfigToFile(nextConfig);
+      await this.syncWorkspaceProviderOverride(nextConfig);
+    }
+    this.emitter.fire(this.getConfig() ?? nextConfig);
     return true;
   }
 
@@ -785,19 +816,18 @@ export class ProviderConfigStore implements vscode.Disposable {
       catalogModels?: string[];
       modelAliases: Record<string, string>;
     }>,  ): Promise<ProviderConfig | undefined> {
-    const profile = await this.profileRegistry.createFromTemplate(templateIndex, undefined, overrides);
+    const profile = await this.profileRegistry.createFromTemplate(templateIndex, undefined, {
+      ...overrides,
+      apiKeyRef: overrides?.apiKeyRef?.trim() || createProviderApiKeyRef(),
+    });
     if (!profile) {
       return undefined;
     }
 
-    const updatedProfile = await this.profileRegistry.updateProfile(profile.id, {
-      apiKeyRef: createProviderApiKeyRef(),
-    });
-    const nextProfile = updatedProfile ?? profile;
     if (apiKey?.trim()) {
-      await this.extensionContext.secrets.store(this.secretKey(nextProfile.apiKeyRef), apiKey.trim());
+      await this.extensionContext.secrets.store(this.secretKey(profile.apiKeyRef), apiKey.trim());
     }
-    return this.profileToProviderConfig(nextProfile);
+    return this.profileToProviderConfig(profile);
   }
 
   async createProfileFromConfig(
@@ -979,6 +1009,12 @@ export class ProviderConfigStore implements vscode.Disposable {
     const workspaceDocument = this.readWorkspaceConfig();
     const providerRecord = this.asRecord(workspaceDocument?.provider);
     if (!providerRecord) {
+      return undefined;
+    }
+    const workspaceProfileId =
+      this.readString(providerRecord, 'profileId') ?? this.readString(providerRecord, 'profile_id');
+    const baseProfileId = baseConfig?.profileId?.trim();
+    if (workspaceProfileId && baseProfileId && workspaceProfileId !== baseProfileId) {
       return undefined;
     }
 
@@ -1299,9 +1335,9 @@ export class ProviderConfigStore implements vscode.Disposable {
   ): string | undefined {
     const candidates = [
       this.readProfileId(config),
-      this.getWorkspaceProfileConfig()?.profileId,
-      this.readProfileId(fallback),
       this.profileRegistry.getActiveProfileId(),
+      this.readProfileId(fallback),
+      this.getWorkspaceProfileConfig()?.profileId,
     ];
 
     for (const candidate of candidates) {
@@ -1326,19 +1362,27 @@ export class ProviderConfigStore implements vscode.Disposable {
   ): ProviderConfig {
     const protocol = normalizeProviderProtocol(config.protocol ?? fallback?.protocol);
     const model = config.model.trim();
-    const normalizedModelTokenLimits =
-      normalizeProviderModelTokenLimits(config.modelTokenLimits) ??
-      normalizeProviderModelTokenLimits(fallback?.modelTokenLimits);
+    const hasOwnField = (field: keyof ProviderConfig): boolean =>
+      Object.prototype.hasOwnProperty.call(config, field);
+    const explicitModelTokenLimits = hasOwnField('modelTokenLimits');
+    const explicitContextWindow = hasOwnField('contextWindowTokens');
+    const explicitMaxOutput = hasOwnField('maxOutputTokens');
+    const normalizedModelTokenLimits = explicitModelTokenLimits
+      ? normalizeProviderModelTokenLimits(config.modelTokenLimits)
+      : (normalizeProviderModelTokenLimits(config.modelTokenLimits) ??
+        normalizeProviderModelTokenLimits(fallback?.modelTokenLimits));
     const configuredModelTokenLimit = readProviderModelTokenLimit(normalizedModelTokenLimits, model);
     const fallbackMatchesModel = fallback?.model?.trim() === model;
-    const effectiveContextWindowTokens =
-      config.contextWindowTokens ??
-      configuredModelTokenLimit?.contextWindowTokens ??
-      (fallbackMatchesModel ? fallback?.contextWindowTokens : undefined);
-    const effectiveMaxOutputTokens =
-      config.maxOutputTokens ??
-      configuredModelTokenLimit?.maxOutputTokens ??
-      (fallbackMatchesModel ? fallback?.maxOutputTokens : undefined);
+    const effectiveContextWindowTokens = explicitContextWindow
+      ? config.contextWindowTokens
+      : (config.contextWindowTokens ??
+        configuredModelTokenLimit?.contextWindowTokens ??
+        (fallbackMatchesModel ? fallback?.contextWindowTokens : undefined));
+    const effectiveMaxOutputTokens = explicitMaxOutput
+      ? config.maxOutputTokens
+      : (config.maxOutputTokens ??
+        configuredModelTokenLimit?.maxOutputTokens ??
+        (fallbackMatchesModel ? fallback?.maxOutputTokens : undefined));
     const nextModelTokenLimits = withProviderModelTokenLimit(normalizedModelTokenLimits, model, {
       contextWindowTokens: effectiveContextWindowTokens,
       maxOutputTokens: effectiveMaxOutputTokens,
@@ -1367,6 +1411,7 @@ export class ProviderConfigStore implements vscode.Disposable {
     // Fallback defaults merge forward, but thinking fields must not: they are
     // derived exclusively from thinkingConfig (or the fresh requestDefaults
     // intent). Merging stale wire fields would resurrect a cleared choice.
+    const hasExplicitRequestDefaults = hasOwnField('requestDefaults');
     const fallbackRequestDefaults = this.readRequestDefaults(fallback?.requestDefaults) ?? {};
     removeThinkingFields(fallbackRequestDefaults);
     const normalizedRequestDefaults = normalizeProviderRequestDefaults(
@@ -1377,10 +1422,12 @@ export class ProviderConfigStore implements vscode.Disposable {
         protocol,
         ...thinkingEvidence,
       },
-      mergeProviderRequestDefaults(
-        fallbackRequestDefaults,
-        this.readRequestDefaults(config.requestDefaults) ?? {},
-      ),
+      hasExplicitRequestDefaults
+        ? (this.readRequestDefaults(config.requestDefaults) ?? {})
+        : mergeProviderRequestDefaults(
+            fallbackRequestDefaults,
+            this.readRequestDefaults(config.requestDefaults) ?? {},
+          ),
     );
     return {
       ...fallback,
@@ -1458,6 +1505,8 @@ export class ProviderConfigStore implements vscode.Disposable {
       return;
     }
 
+    const hasExplicitField = (field: keyof ProviderConfig): boolean =>
+      Object.prototype.hasOwnProperty.call(config, field);
     const nextConfig = this.materializeProviderConfig(config, this.profileToProviderConfig(currentProfile));
     await this.profileRegistry.updateProfile(profileId, {
       label: nextConfig.profileLabel?.trim() || nextConfig.label?.trim() || nextConfig.name,
@@ -1473,14 +1522,23 @@ export class ProviderConfigStore implements vscode.Disposable {
       baseUrl: nextConfig.baseUrl,
       apiKeyRef: nextConfig.apiKeyRef,
       model: nextConfig.model,
-      contextWindowTokens: nextConfig.contextWindowTokens ?? currentProfile.contextWindowTokens,
-      maxOutputTokens: nextConfig.maxOutputTokens ?? currentProfile.maxOutputTokens,
-      modelTokenLimits:
-        normalizeProviderModelTokenLimits(nextConfig.modelTokenLimits) ??
-        currentProfile.modelTokenLimits,
-      embeddingModel: nextConfig.embeddingModel ?? currentProfile.embeddingModel,
+      contextWindowTokens: hasExplicitField('contextWindowTokens')
+        ? nextConfig.contextWindowTokens
+        : currentProfile.contextWindowTokens,
+      maxOutputTokens: hasExplicitField('maxOutputTokens')
+        ? nextConfig.maxOutputTokens
+        : currentProfile.maxOutputTokens,
+      modelTokenLimits: hasExplicitField('modelTokenLimits')
+        ? normalizeProviderModelTokenLimits(nextConfig.modelTokenLimits)
+        : (normalizeProviderModelTokenLimits(nextConfig.modelTokenLimits) ??
+          currentProfile.modelTokenLimits),
+      embeddingModel: hasExplicitField('embeddingModel')
+        ? nextConfig.embeddingModel
+        : currentProfile.embeddingModel,
       catalogSource: nextConfig.catalogSource ?? currentProfile.catalogSource,
-      cacheTtlSeconds: nextConfig.cacheTtlSeconds ?? currentProfile.cacheTtlSeconds,
+      cacheTtlSeconds: hasExplicitField('cacheTtlSeconds')
+        ? nextConfig.cacheTtlSeconds
+        : currentProfile.cacheTtlSeconds,
       modelAliases: nextConfig.modelAliases ?? currentProfile.modelAliases,
       availableModels: nextConfig.availableModels ?? currentProfile.availableModels,
       catalogModels: this.mergeCatalogModels(
@@ -1502,10 +1560,12 @@ export class ProviderConfigStore implements vscode.Disposable {
             capabilities: nextConfig.capabilities,
             modelCapabilities: nextConfig.modelCapabilities?.[nextConfig.model],
           },
-          mergeProviderRequestDefaults(
-            profileDefaults,
-            nextConfig.requestDefaults ?? {},
-          ),
+          hasExplicitField('requestDefaults')
+            ? (nextConfig.requestDefaults ?? {})
+            : mergeProviderRequestDefaults(
+                profileDefaults,
+                nextConfig.requestDefaults ?? {},
+              ),
         );
       })(),
       thinkingConfig: normalizeProviderThinkingConfig(

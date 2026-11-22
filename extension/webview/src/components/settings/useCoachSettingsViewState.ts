@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   leftoverResourceSandboxStateIsNotLive,
   leftoverSettingsLearnerProjectOnboardingIsNotLive,
@@ -240,13 +240,20 @@ export function useCoachSettingsViewState({
     );
   const runtimeCurrentStep =
     planRuntimeStatus?.currentStep ?? planRuntimeStatus?.currentMainThread?.currentStep;
+  const [coachSettingsEditedInUi, setCoachSettingsEditedInUi] = useState(false);
+  const hasSavedCoachDefaults = Boolean(
+    memoryWorkspace?.coachDefaults && !recoveredRuntime,
+  );
   const leftoverSettingsProfileRhythmNotLive =
+    !coachSettingsEditedInUi &&
+    !hasSavedCoachDefaults &&
     !sessionHistoryRestored &&
     leftoverSettingsProfileRhythmIsNotLive({
       recovered: recoveredRuntime,
       runtimeCurrentStep,
     });
   const leftoverSettingsLearnerProjectOnboardingNotLive =
+    !coachSettingsEditedInUi &&
     !sessionHistoryRestored &&
     leftoverSettingsLearnerProjectOnboardingIsNotLive({
       recovered: recoveredRuntime,
@@ -256,6 +263,7 @@ export function useCoachSettingsViewState({
   // Settings save on change: apply now, let App decide when to persist. The
   // App-side wrappers previously did exactly this (apply + queue) inline.
   const mutateCoachSettings = () => {
+    setCoachSettingsEditedInUi(true);
     onCoachSettingsMutated?.();
   };
 

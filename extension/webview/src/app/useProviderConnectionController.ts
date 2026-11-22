@@ -213,6 +213,9 @@ export function useProviderConnectionController({
   const [providerDraft, setDraftState] = useState<ProviderDraft>(() => providerDraftFromFacts(facts));
   const providerDraftIsDirtyRef = useRef(false);
   const providerDraftSourceKeyRef = useRef<string>();
+  const prevFactsSwitchSignatureRef = useRef<string>(
+    `${facts.profileId ?? ""}\0${facts.model ?? ""}`,
+  );
 
   // The facts projection is the single source the draft resets to.
   const providerDraftSource = useMemo(() => providerDraftFromFacts(facts), [facts]);
@@ -220,17 +223,22 @@ export function useProviderConnectionController({
     () => JSON.stringify(providerDraftSource),
     [providerDraftSource],
   );
+  const factsSwitchSignature = `${facts.profileId ?? ""}\0${facts.model ?? ""}`;
 
   // Host facts changed (or the session scope changed): align the draft unless
   // the learner has unsaved edits that this very action is about to persist or
-  // discard.
+  // discard. Always follow explicit external profile/model switches (e.g. Composer).
   useEffect(() => {
-    if (providerDraftSourceKeyRef.current === providerDraftSourceKey) {
+    const externalSelectionChanged =
+      prevFactsSwitchSignatureRef.current !== factsSwitchSignature;
+    prevFactsSwitchSignatureRef.current = factsSwitchSignature;
+    if (providerDraftSourceKeyRef.current === providerDraftSourceKey && !externalSelectionChanged) {
       return;
     }
     providerDraftSourceKeyRef.current = providerDraftSourceKey;
 
     const shouldKeepUnsavedProviderDraft =
+      !externalSelectionChanged &&
       providerDraftIsDirtyRef.current &&
       (settingsActionScopeRef.current !== settingsScopeKey ||
         (settingsActionKind !== "save-provider" && settingsActionKind !== "clear-provider"));
@@ -241,6 +249,7 @@ export function useProviderConnectionController({
     setDraftState(providerDraftSource);
     providerDraftIsDirtyRef.current = false;
   }, [
+    factsSwitchSignature,
     providerDraftSource,
     providerDraftSourceKey,
     settingsActionKind,

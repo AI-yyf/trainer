@@ -226,6 +226,8 @@ export type ResourceTextKey =
   | "organizeFailed"
   | "organizeUnconfirmed"
   | "exportAction"
+  | "exportPdfAction"
+  | "importWorkspace"
   | "exportBusy"
   | "exportSucceeded"
   | "exportFailed"
@@ -391,6 +393,8 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
     en: "Trainer could not confirm this change. Refresh the library and try again.",
   },
   exportAction: { zh: "\u5bfc\u51fa\u5230\u672c\u5730", en: "Export to this machine" },
+  exportPdfAction: { zh: "\u5bfc\u51fa PDF", en: "Export PDF" },
+  importWorkspace: { zh: "\u4ece\u5f53\u524d\u9879\u76ee\u9009\u62e9\u5bfc\u5165", en: "Select from project" },
   exportBusy: { zh: "\u6b63\u5728\u5bfc\u51fa\u2026", en: "Exporting..." },
   exportSucceeded: { zh: "\u5df2\u5bfc\u51fa\uff1a{v}", en: "Exported: {v}" },
   exportFailed: { zh: "\u5bfc\u51fa\u5931\u8d25\uff1a{v}", en: "Export failed: {v}" },
@@ -561,6 +565,8 @@ export const resourceTextLocaleOverrides: Record<
     organizeFailed: "No se pudo organizar este recurso: {v}",
     organizeUnconfirmed: "Trainer no pudo confirmar este cambio. Actualiza la biblioteca e intentalo de nuevo.",
     exportAction: "Exportar a este equipo",
+    exportPdfAction: "Exportar PDF",
+    importWorkspace: "Seleccionar del proyecto",
     exportBusy: "Exportando...",
     exportSucceeded: "Exportado: {v}",
     exportFailed: "Fallo la exportacion: {v}",
@@ -699,6 +705,8 @@ export const resourceTextLocaleOverrides: Record<
     organizeFailed: "Impossible d'organiser cette ressource : {v}",
     organizeUnconfirmed: "Trainer n'a pas pu confirmer cette modification. Actualisez la bibliotheque et reessayez.",
     exportAction: "Exporter vers cet ordinateur",
+    exportPdfAction: "Exporter en PDF",
+    importWorkspace: "Choisir depuis le projet",
     exportBusy: "Export en cours...",
     exportSucceeded: "Exporte : {v}",
     exportFailed: "Echec de l'export : {v}",
@@ -837,6 +845,8 @@ export const resourceTextLocaleOverrides: Record<
     organizeFailed: "Material konnte nicht organisiert werden: {v}",
     organizeUnconfirmed: "Trainer konnte diese Anderung nicht bestatigen. Aktualisiere die Bibliothek und versuche es erneut.",
     exportAction: "Auf diesen Rechner exportieren",
+    exportPdfAction: "Als PDF exportieren",
+    importWorkspace: "Aus Projekt wahlen",
     exportBusy: "Export lauft...",
     exportSucceeded: "Exportiert: {v}",
     exportFailed: "Export fehlgeschlagen: {v}",
@@ -975,6 +985,8 @@ export const resourceTextLocaleOverrides: Record<
     organizeFailed: "整理できませんでした：{v}",
     organizeUnconfirmed: "この変更を確認できませんでした。資料庫を更新してもう一度お試しください。",
     exportAction: "ローカルに書き出す",
+    exportPdfAction: "PDF を書き出す",
+    importWorkspace: "プロジェクトから選択",
     exportBusy: "書き出し中…",
     exportSucceeded: "書き出しました：{v}",
     exportFailed: "書き出しに失敗しました：{v}",
@@ -1113,6 +1125,8 @@ export const resourceTextLocaleOverrides: Record<
     organizeFailed: "정리하지 못했습니다: {v}",
     organizeUnconfirmed: "이 변경을 확인하지 못했습니다. 자료실을 새로 고친 뒤 다시 시도하세요.",
     exportAction: "로컬로 내보내기",
+    exportPdfAction: "PDF 내보내기",
+    importWorkspace: "프로젝트에서 선택",
     exportBusy: "내보내는 중…",
     exportSucceeded: "내보냈습니다: {v}",
     exportFailed: "내보내기 실패: {v}",
@@ -1251,6 +1265,8 @@ export const resourceTextLocaleOverrides: Record<
     organizeFailed: "Nao foi possivel organizar este recurso: {v}",
     organizeUnconfirmed: "Trainer nao conseguiu confirmar esta alteracao. Atualize a biblioteca e tente de novo.",
     exportAction: "Exportar para este computador",
+    exportPdfAction: "Exportar PDF",
+    importWorkspace: "Selecionar do projeto",
     exportBusy: "Exportando...",
     exportSucceeded: "Exportado: {v}",
     exportFailed: "Falha na exportacao: {v}",

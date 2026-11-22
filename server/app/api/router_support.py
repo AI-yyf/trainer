@@ -322,6 +322,37 @@ def _attach_requested_workspace_files(
     return payload
 
 
+def register_request_workspace_path(
+    runtime: object,
+    workspace_id: str | None,
+    payload: dict | None = None,
+    request: object | None = None,
+) -> str | None:
+    """Register the workspace directory from a chat/turn payload if present."""
+    candidates: list[object] = []
+    if request is not None:
+        candidates.append(getattr(request, "workspace_path", None))
+    if isinstance(payload, dict):
+        candidates.extend(
+            [
+                payload.get("workspace_path"),
+                payload.get("workspacePath"),
+            ]
+        )
+        ws_ctx = payload.get("workspace_context") or payload.get("workspaceContext")
+        if isinstance(ws_ctx, dict):
+            candidates.extend([ws_ctx.get("root_path"), ws_ctx.get("rootPath"), ws_ctx.get("workspace_path")])
+        ws_snap = payload.get("workspace_file_snapshot") or payload.get("workspaceFileSnapshot")
+        if isinstance(ws_snap, dict):
+            candidates.extend([ws_snap.get("root_path"), ws_snap.get("rootPath")])
+    resolved = next((str(item).strip() for item in candidates if isinstance(item, str) and item.strip()), None)
+    if resolved and workspace_id:
+        register = getattr(runtime, "register_workspace_path", None)
+        if callable(register):
+            register(workspace_id, resolved)
+    return resolved
+
+
 def _stamp_library_sandbox_work(
     coach_context: dict[str, object] | None,
     request: TurnRequest | SessionMessageRequest,
@@ -427,10 +458,63 @@ def _resolve_agent_loop_enabled(
         # accepted any keyed provider, then failed later inside tool binding.
         return bool(request.use_agent_loop) and provider_supports_tools
     message_text = str(getattr(request, "message", "") or "")
-    if provider_supports_tools and _message_requests_single_composer_truth_or_note(message_text):
+    if provider_supports_tools and (
+        _message_requests_single_composer_truth_or_note(message_text)
+        or _message_benefits_from_autonomous_tools(message_text)
+    ):
         return True
     # Plan discussion and Training feedback stay on the model stream unless the
     # host asked for tools. Resources/library work is handled above.
+    return False
+
+
+def _message_benefits_from_autonomous_tools(message: str) -> bool:
+    """Enable read-only workspace/web tools for exploratory, codebase, and research turns."""
+    from ..pedagogy.smalltalk import (
+        is_casual_greeting_or_smalltalk,
+        is_exploratory_or_research_query,
+    )
+
+    cleaned = " ".join(str(message or "").split()).strip()
+    if not cleaned or is_casual_greeting_or_smalltalk(cleaned):
+        return False
+    if is_exploratory_or_research_query(cleaned):
+        return True
+    lowered = cleaned.lower()
+    autonomous_markers = (
+        "这个项目",
+        "当前项目",
+        "这个文件夹",
+        "当前文件夹",
+        "工作区",
+        "目录",
+        "代码库",
+        "仓库",
+        "源码",
+        "文件结构",
+        "项目结构",
+        "架构",
+        "readme",
+        "this project",
+        "this folder",
+        "this repo",
+        "this repository",
+        "workspace",
+        "directory",
+        "codebase",
+        "file tree",
+        "备课",
+        "讲稿",
+        "备课简报",
+        "资料库",
+        "导出",
+        "lesson prep",
+        "lesson plan",
+    )
+    if any(marker in lowered for marker in autonomous_markers):
+        return True
+    if any(ext in lowered for ext in (".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".md", ".json")):
+        return True
     return False
 
 

@@ -55,10 +55,9 @@ test('Settings keeps model selection compact, searchable, and recoverable with a
     source,
     /const typedModelPolicy = evaluateProviderModelPolicy\(modelSearchQuery, draftModelPolicy\);/,
   );
-  assert.match(source, /const hasMatchingModelOptions = matchingModelOptions\.length > 0;/);
   assert.match(
     source,
-    /const canUseTypedModel =\s*Boolean\(normalizedModelSearchQuery\) &&\s*typedModelPolicy\.allowed &&\s*\(!hasMatchingModelOptions \|\| Boolean\(exactMatchingModel\)\);/,
+    /const canUseTypedModel =\s*Boolean\(normalizedModelSearchQuery\) &&\s*typedModelPolicy\.allowed;/,
   );
   assert.match(
     source,
@@ -100,7 +99,7 @@ test('Settings commits an exact search with Enter and a list choice with its nat
   );
   assert.match(
     source,
-    /const canUseTypedModel =\s*Boolean\(normalizedModelSearchQuery\) &&\s*typedModelPolicy\.allowed &&\s*\(!hasMatchingModelOptions \|\| Boolean\(exactMatchingModel\)\);/,
+    /const canUseTypedModel =\s*Boolean\(normalizedModelSearchQuery\) &&\s*typedModelPolicy\.allowed;/,
   );
   assert.match(
     source,
@@ -266,15 +265,11 @@ test('Settings keeps the long model list searchable and defers inner save or tes
   assert.match(source, /ariaLabel=\{saveProviderConnectionLabel\}/);
   assert.match(source, /const modelDiscoveryGuidanceActive = canFindDraftModels \|\| hasDiscoveredDraftModels;/);
   assert.match(source, /const showProviderDetailActions =\s*!modelDiscoveryGuidanceActive \|\| showSecondaryModelDiscoveryAction;/);
-  assert.match(source, /\{!modelDiscoveryGuidanceActive \? \(\s*<ActionButton/);
+  assert.match(source, /label=\{settingsText\(language, "保存", "Save"\)\}/);
   assert.match(source, /className="settings-api-key-test"/);
 });
 
-test('Settings clears stale model state when the provider transport changes', () => {
-  // §props-debt redirect: the draft-patch reducer moved from App's settings
-  // JSX into the settings shell (verbatim, writing App's controller draft
-  // through the provider-connection context). The regexes below are preserved
-  // verbatim against the reducer's new home.
+test('Settings clears stale model state when the provider protocol changes without wiping draft edits on URL typos', () => {
   const shellSourcePath = path.resolve(
     __dirname,
     '..',
@@ -296,19 +291,19 @@ test('Settings clears stale model state when the provider transport changes', ()
   );
   assert.match(
     source,
-    /\(hasProtocol && normalizeProviderProtocol\(current\.protocol\) !== nextProtocol\) \|\|[\s\S]*?\(hasBaseUrl && normalizedCurrentBaseUrl !== normalizedNextBaseUrl\)/,
+    /const protocolChanged =\s*hasProtocol && normalizeProviderProtocol\(current\.protocol\) !== nextProtocol;/,
   );
 
-  const transportReset = source.match(
-    /if \(transportChanged\) \{\s*return \{([\s\S]*?)\n\s*\};\s*\}/,
+  const protocolReset = source.match(
+    /if \(protocolChanged\) \{\s*return \{([\s\S]*?)\n\s*\};\s*\}/,
   );
-  assert.ok(transportReset, 'transport changes should reset the draft model state');
-  assert.match(transportReset[1], /model: "",/);
-  assert.match(transportReset[1], /contextWindowTokens: undefined,/);
-  assert.match(transportReset[1], /maxOutputTokens: undefined,/);
-  assert.match(transportReset[1], /modelTokenLimits: undefined,/);
-  assert.match(transportReset[1], /catalogModels: \[\],/);
-  assert.doesNotMatch(transportReset[1], /resolveProviderModelTokenState|apiKey:/);
+  assert.ok(protocolReset, 'protocol changes should reset the draft model state');
+  assert.match(protocolReset[1], /model: "",/);
+  assert.match(protocolReset[1], /contextWindowTokens: undefined,/);
+  assert.match(protocolReset[1], /maxOutputTokens: undefined,/);
+  assert.match(protocolReset[1], /modelTokenLimits: undefined,/);
+  assert.match(protocolReset[1], /catalogModels: \[\],/);
+  assert.doesNotMatch(protocolReset[1], /resolveProviderModelTokenState|apiKey:/);
 });
 
 test('smart paste auto-discovers and preselects a real model', () => {

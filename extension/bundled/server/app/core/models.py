@@ -3100,18 +3100,24 @@ class GoalControlRequest(BaseModel):
 
 
 class CoachSettingsRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    response_language: ResponseLanguage | None = None
-    answer_mode: CoachRequestAnswerMode | None = None
-    teaching_style: str | None = None
-    coach_defaults: CoachDefaults | None = None
-    follow_current_file: bool | None = None
-    context_detail: Literal["focused", "balanced", "full"] | None = None
-    include_current_file: bool | None = None
-    include_selection: bool | None = None
-    include_diagnostics: bool | None = None
-    include_related_files: bool | None = None
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    session_id: str | None = Field(default=None, alias="sessionId")
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    response_language: ResponseLanguage | None = Field(default=None, alias="responseLanguage")
+    answer_mode: CoachRequestAnswerMode | None = Field(default=None, alias="answerMode")
+    teaching_style: str | None = Field(default=None, alias="teachingStyle")
+    coach_defaults: CoachDefaults | None = Field(default=None, alias="coachDefaults")
+    follow_current_file: bool | None = Field(default=None, alias="followCurrentFile")
+    context_detail: Literal["focused", "balanced", "full"] | None = Field(
+        default=None,
+        alias="contextDetail",
+    )
+    include_current_file: bool | None = Field(default=None, alias="includeCurrentFile")
+    include_selection: bool | None = Field(default=None, alias="includeSelection")
+    include_diagnostics: bool | None = Field(default=None, alias="includeDiagnostics")
+    include_related_files: bool | None = Field(default=None, alias="includeRelatedFiles")
+    resource_search_mode: str | None = Field(default=None, alias="resourceSearchMode")
 
 
 class GlobalMemoryUpdateRequest(BaseModel):

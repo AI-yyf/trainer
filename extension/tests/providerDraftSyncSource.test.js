@@ -38,7 +38,7 @@ function providerHydrationEffect(source) {
   const dependencies = effect.arguments[1];
   assert.ok(dependencies && ts.isArrayLiteralExpression(dependencies), 'hydration has explicit dependencies');
   assert.deepEqual(dependencies.elements.map((node) => node.getText(sourceFile)), [
-    'providerDraftSource', 'providerDraftSourceKey', 'settingsActionKind', 'settingsScopeKey', 'settingsActionScopeRef',
+    'factsSwitchSignature', 'providerDraftSource', 'providerDraftSourceKey', 'settingsActionKind', 'settingsScopeKey', 'settingsActionScopeRef',
   ]);
   return ts.transpileModule(`(${effect.arguments[0].getText(sourceFile)})();`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 },
@@ -63,7 +63,7 @@ test('provider draft sync only follows stable provider transport fields', () => 
   assert.match(source, /fromFacts: \(facts\) => facts\.protocol \?\? "openai_chat_completions_compatible"/);
   assert.match(
     source,
-    /useEffect\(\(\) => \{[\s\S]*?providerDraftSourceKeyRef\.current === providerDraftSourceKey[\s\S]*?setDraftState\(providerDraftSource\);[\s\S]*?providerDraftIsDirtyRef\.current = false;[\s\S]*?\}, \[[\s\S]*?providerDraftSource,[\s\S]*?providerDraftSourceKey,[\s\S]*?settingsActionKind,[\s\S]*?settingsScopeKey,[\s\S]*?settingsActionScopeRef,[\s\S]*?\]\);/,
+    /useEffect\(\(\) => \{[\s\S]*?providerDraftSourceKeyRef\.current === providerDraftSourceKey[\s\S]*?setDraftState\(providerDraftSource\);[\s\S]*?providerDraftIsDirtyRef\.current = false;[\s\S]*?\}, \[[\s\S]*?factsSwitchSignature,[\s\S]*?providerDraftSource,[\s\S]*?providerDraftSourceKey,[\s\S]*?settingsActionKind,[\s\S]*?settingsScopeKey,[\s\S]*?settingsActionScopeRef,[\s\S]*?\]\);/,
   );
   assert.match(
     source,
@@ -94,6 +94,8 @@ test('provider hydration preserves dirty drafts across discovery and scope chang
         const draft = { baseUrl: 'https://unsaved.example/v1', model: 'unsaved-model', apiKey: 'draft-key' };
         const calls = [];
         const context = {
+          prevFactsSwitchSignatureRef: { current: 'p1\0saved-model' },
+          factsSwitchSignature: 'p1\0saved-model',
           providerDraftSourceKeyRef: { current: 'previous' }, providerDraftSourceKey: 'incoming',
           providerDraftIsDirtyRef: { current: dirty }, settingsActionScopeRef: { current: sameScope ? 'current' : 'old' },
           settingsScopeKey: 'current', settingsActionKind: kind,

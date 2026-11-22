@@ -1626,12 +1626,28 @@ class TrainerRuntime:
         if provider_config is None and api_key is None:
             return self.overlay_last_test_on_service(self.provider_service)
 
-        key = _provider_service_cache_key(provider_config, api_key)
+        resolved_config = (
+            provider_config
+            if provider_config is not None
+            else getattr(self.provider_service, "_config", None)
+        )
+        resolved_api_key = api_key
+        if resolved_api_key is None and provider_config is not None:
+            current_config = getattr(self.provider_service, "_config", None)
+            if current_config is not None and (
+                self._normalize_transport_marker(getattr(current_config, "base_url", ""))
+                == self._normalize_transport_marker(getattr(provider_config, "base_url", ""))
+                and str(getattr(current_config, "api_key_ref", "") or "")
+                == str(getattr(provider_config, "api_key_ref", "") or "")
+            ):
+                resolved_api_key = getattr(self.provider_service, "_api_key", None)
+
+        key = _provider_service_cache_key(resolved_config, resolved_api_key)
         cached = self.provider_service_cache.get(key)
         if cached is not None:
             return self.overlay_last_test_on_service(cached)
 
-        created = ProviderService(config=provider_config, api_key=api_key)
+        created = ProviderService(config=resolved_config, api_key=resolved_api_key)
         self.provider_service_cache[key] = created
         if len(self.provider_service_cache) > 16:
             oldest_key = next(iter(self.provider_service_cache))
@@ -1704,7 +1720,12 @@ class TrainerRuntime:
                     continue
                 if model and model not in cache_key:
                     continue
-                self.provider_capability_cache[cache_key] = {"connection": "unverified"}
+                invalidated = {"connection": "unverified"}
+                self.provider_capability_cache[cache_key] = invalidated
+                try:
+                    self.repository.save_provider_capability(cache_key, invalidated)
+                except Exception:
+                    logger.warning("[provider] sibling capability invalidation failed", exc_info=True)
         self.provider_capability_cache[key] = states
         # Pi-agent 式持久化:能力真值落盘,重启即加载,不再要求用户重测。
         try:
@@ -1804,7 +1825,13 @@ class TrainerRuntime:
         config_model = self._normalize_transport_marker(getattr(provider_config, "model", ""))
         if not test_base or not test_model or not config_base or not config_model:
             return False
-        return test_base == config_base and test_model == config_model
+        if test_base != config_base or test_model != config_model:
+            return False
+        test_protocol = self._normalize_transport_marker(last_test.get("protocol"))
+        config_protocol = self._normalize_transport_marker(getattr(provider_config, "protocol", ""))
+        if test_protocol and config_protocol and test_protocol != config_protocol:
+            return False
+        return True
 
     def _should_apply_rehydrated_record(
         self,

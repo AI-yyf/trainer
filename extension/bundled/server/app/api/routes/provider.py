@@ -11,12 +11,13 @@ from ...core.models import (
     ProviderModelsResponse,
     ProviderTestResponse,
 )
+from ...llm.provider.capability import _allows_keyless_local_provider
 from ...llm.provider.quota_copy import provider_quota_reply
 from ...llm.provider_gateway import NEWAPI_CONNECTION_TYPE
 from ...llm.provider_protocols import provider_protocol_family
 from ...llm.skill_draft import generate_skill_draft
 from .._helpers import contains_cjk_text, localized_text, prefers_chinese
-from ..runtime import TrainerRuntime
+from ..runtime import TrainerRuntime, _provider_capability_transport_markers
 from ._deps import RouterDeps
 
 
@@ -40,7 +41,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         provider = provider_config_from_payload(payload)
         api_key = provider_api_key_from_payload(payload)
         service = runtime.provider_service_for(provider, api_key)
-        if not service.has_api_key:
+        if not service.has_usable_credential(provider, api_key):
             raise HTTPException(status_code=409, detail="Save a provider connection first.")
         language = str(payload.get("response_language") or "en-US")
         try:
@@ -144,7 +145,9 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             "thinking_probe_status": "unverified",
             "base_url": (provider.base_url if provider is not None else None) or None,
             "model": (provider.model if provider is not None else None) or None,
-            "available_models": [],
+            "available_models": list(getattr(provider, "available_models", None) or [])
+            if provider is not None
+            else [],
             "resolved_model": None,
             "warnings": [],
             **provider_declared_window_payload(provider),
@@ -187,6 +190,9 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         streaming = next((item for item in serialized if item["name"] == "streaming"), None)
         vision = next((item for item in serialized if item["name"] == "vision"), None)
         thinking = next((item for item in serialized if item["name"] == "thinking"), None)
+        existing_models = list(getattr(provider, "available_models", None) or [])
+        result_models = list(getattr(result, "available_models", None) or [])
+        merged_models = list(dict.fromkeys([*result_models, *existing_models]))
         return {
             "capability_evidence": serialized,
             "tools_ready": tools_ready,
@@ -205,8 +211,8 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             ),
             "base_url": provider.base_url or None,
             "model": provider.model or None,
-            "available_models": [],
-            "resolved_model": None,
+            "available_models": merged_models,
+            "resolved_model": getattr(result, "resolved_model", None),
             "warnings": [],
             **provider_declared_window_payload(provider),
         }
@@ -748,14 +754,21 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                     api_key,
                     unknown_protocol_response,
                 )
-                transport_url = (unknown_provider.base_url or "").strip().rstrip("/")
-                transport_model = (unknown_provider.model or "").strip()
+                transport_url, transport_model, key_fp = _provider_capability_transport_markers(
+                    unknown_provider,
+                    api_key,
+                )
                 if transport_url and transport_model:
                     for cache_key in list(runtime.provider_capability_cache):
+                        if key_fp and key_fp not in cache_key:
+                            continue
                         if transport_url in cache_key and transport_model in cache_key:
-                            runtime.provider_capability_cache[cache_key] = {
-                                "connection": "unverified",
-                            }
+                            invalidated = {"connection": "unverified"}
+                            runtime.provider_capability_cache[cache_key] = invalidated
+                            try:
+                                runtime.repository.save_provider_capability(cache_key, invalidated)
+                            except Exception:
+                                pass
             return unknown_protocol_response
         if provider_protocol is None:
             provider_protocol = "openai_chat_completions_compatible"
@@ -767,6 +780,11 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             or provider_payload.get("apiKeyRef", "trainer.default"),
             model=(provider_payload.get("model", "") or "").strip(),
             protocol=provider_protocol,
+            ignoreSystemProxy=bool(
+                provider_payload.get("ignoreSystemProxy")
+                if "ignoreSystemProxy" in provider_payload
+                else provider_payload.get("ignore_system_proxy", False)
+            ),
             embeddingModel=provider_payload.get("embedding_model") or provider_payload.get("embeddingModel"),
             requestDefaults=provider_payload.get("request_defaults")
             or provider_payload.get("requestDefaults")
@@ -775,6 +793,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         )
         configured = bool(provider.name and provider.base_url and provider.model)
         api_key_supplied = bool(api_key)
+        keyless_local_allowed = _allows_keyless_local_provider(provider)
         diagnostics = [
             f"provider: {provider.name}",
             f"base URL: {provider.base_url or '(missing)'}",
@@ -852,7 +871,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         runtime.remember_provider_capability_test(provider, api_key, result)
         result_status = result.error_category or "failed"
 
-        if not api_key_supplied:
+        if not api_key_supplied and not keyless_local_allowed:
             detail = localized_text(
                 (
                     "Provider settings are saved, but no API key is stored. "
@@ -895,7 +914,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             success_response = {
                 "ok": True,
                 "configured": True,
-                "api_key_supplied": True,
+                "api_key_supplied": bool(api_key_supplied),
                 "reachable": True,
                 "success": True,
                 "status": "connected",
@@ -936,7 +955,7 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
         failed_response = {
             "ok": False,
             "configured": True,
-            "api_key_supplied": True,
+            "api_key_supplied": bool(api_key_supplied),
             "reachable": result.provider_reachable,
             "success": False,
             "status": result_status,

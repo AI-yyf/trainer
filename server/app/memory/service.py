@@ -7355,6 +7355,7 @@ class MemoryService(
         include_selection: bool | None = None,
         include_diagnostics: bool | None = None,
         include_related_files: bool | None = None,
+        resource_search_mode: str | None = None,
     ) -> None:
         resolved_workspace_id = self._resolve_workspace_for_write(workspace_id)
         structured = self._structured_for(resolved_workspace_id)
@@ -7427,6 +7428,14 @@ class MemoryService(
             workspace_patch["include_diagnostics"] = include_diagnostics
         if include_related_files is not None:
             workspace_patch["include_related_files"] = include_related_files
+        normalized_resource_search_mode = (resource_search_mode or "").strip()
+        if normalized_resource_search_mode:
+            workspace_patch["resource_search_mode"] = normalized_resource_search_mode
+            structured.remember_preference(
+                "resource_search_mode",
+                normalized_resource_search_mode,
+                source="coach-settings",
+            )
 
         structured.update_workspace(**workspace_patch)
         self._persist_structured(resolved_workspace_id)

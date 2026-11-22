@@ -1969,17 +1969,25 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
         resource_id: str,
         session_id: str | None = None,
         workspace_id: str | None = None,
+        format: str = "markdown",
     ) -> FileResponse:
-        """Download one resource's owned snapshot to the local machine."""
+        """Download one resource's owned Markdown or PDF export to the local machine."""
 
         resolved_workspace_id = current_workspace_id(
             session_id=session_id,
             workspace_id=workspace_id,
         )
+        normalized_format = str(format or "markdown").strip().lower()
+        if normalized_format not in {"markdown", "md", "pdf"}:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported export format: {format}",
+            )
         try:
             export = runtime.resource_service.export_resource(
                 resolved_workspace_id,
                 resource_id.strip(),
+                export_format=normalized_format,
             )
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Resource not found.") from exc

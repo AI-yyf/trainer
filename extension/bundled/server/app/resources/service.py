@@ -1393,16 +1393,54 @@ class ResourceService:
         root = str(resource.collection_root or "").strip()
         return root or None
 
-    def export_resource(self, workspace_id: str, resource_id: str) -> dict[str, Any]:
+    def export_resource(
+        self,
+        workspace_id: str,
+        resource_id: str,
+        *,
+        export_format: str = "markdown",
+    ) -> dict[str, Any]:
         """Resolve the bytes that "download/export" hands to the user.
 
-        The library is Markdown-only: the export is the canonical Markdown
-        document. A record that predates the Markdown-only library is converted
-        once and then exported as Markdown; a record with no readable source is
-        refused honestly instead of exporting a binary original.
+        Supports canonical Markdown (``.md``) and paginated PDF (``.pdf``)
+        rendered from the resource's canonical Markdown document. A record with
+        no readable source is refused honestly instead of exporting a binary
+        original.
         """
 
+        normalized_format = str(export_format or "markdown").strip().lower()
+        if normalized_format in {"md", "markdown"}:
+            normalized_format = "markdown"
+        elif normalized_format != "pdf":
+            raise ValueError(f"Unsupported export format: {export_format!r}")
+
         resource = self._require_workspace_resource(workspace_id, resource_id)
+        resolved = self._resolve_markdown_export_target(workspace_id, resource)
+        if normalized_format == "markdown":
+            return resolved
+
+        from .pdf_export import render_markdown_pdf_bytes
+
+        md_path = Path(str(resolved["path"]))
+        markdown_text = md_path.read_text(encoding="utf-8", errors="replace")
+        pdf_bytes = render_markdown_pdf_bytes(resource.name or md_path.stem, markdown_text)
+        cache_dir = md_path.parent / ".export-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        digest = sha256(pdf_bytes).hexdigest()[:12]
+        pdf_path = cache_dir / f"{resource.id}-{digest}.pdf"
+        if not pdf_path.is_file():
+            pdf_path.write_bytes(pdf_bytes)
+        md_name = str(resolved["filename"])
+        stem = md_name[:-3] if md_name.lower().endswith(".md") else md_name
+        return {
+            "path": str(pdf_path),
+            "filename": f"{stem}.pdf",
+            "media_type": "application/pdf",
+        }
+
+    def _resolve_markdown_export_target(
+        self, workspace_id: str, resource: ApiResourceRecord
+    ) -> dict[str, Any]:
         resolved = self._canonical_export_target(workspace_id, resource)
         if resolved is not None:
             return resolved
@@ -1414,7 +1452,7 @@ class ResourceService:
             self.materialize_canonical(workspace_id, [resource.id])
         except Exception:  # noqa: BLE001 - conversion failure is reported below
             pass
-        refreshed = self._require_workspace_resource(workspace_id, resource_id)
+        refreshed = self._require_workspace_resource(workspace_id, resource.id)
         resolved = self._canonical_export_target(workspace_id, refreshed)
         if resolved is not None:
             return resolved

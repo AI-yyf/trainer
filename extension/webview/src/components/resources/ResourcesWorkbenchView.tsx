@@ -122,6 +122,7 @@ export interface ResourcesWorkbenchViewProps {
   onClearSearch?: () => void;
   onImportFiles?: () => void;
   onImportFolder?: () => void;
+  onImportWorkspace?: () => void;
   onImportUrl?: () => void;
   /**
    * In-library "add by URL": paste a link and file it through the capture
@@ -136,8 +137,11 @@ export interface ResourcesWorkbenchViewProps {
     resourceId: string,
     request: ResourceOrganizeInput,
   ) => Promise<ResourceMutationOutcome>;
-  /** Byte-for-byte export of the resource's owned snapshot to this machine. */
-  onExportResource?: (resourceId: string) => Promise<ResourceMutationOutcome>;
+  /** Export the resource's owned document as Markdown or PDF. */
+  onExportResource?: (
+    resourceId: string,
+    format?: "markdown" | "pdf",
+  ) => Promise<ResourceMutationOutcome>;
   /**
    * Markdown-only library migration. The view owns the two-step flow: a dry-run
    * preview first, then one explicit confirmation on the same surface.
@@ -1194,6 +1198,7 @@ export function ResourcesWorkbenchView({
   onClearSearch,
   onImportFiles,
   onImportFolder,
+  onImportWorkspace,
   onImportUrl: onImportUrlAction,
   onCaptureResource,
   captureFocusOptions,
@@ -2155,6 +2160,7 @@ export function ResourcesWorkbenchView({
     if (!canWriteResources || !onCreateLibraryFolder) {
       return;
     }
+    setLibraryFoldersOpen(true);
     setFolderPromptState(undefined);
     setFolderPrompt({
       mode: parentPath ? "subfolder" : "create",
@@ -2361,6 +2367,54 @@ export function ResourcesWorkbenchView({
           <span className="resources-knowledge__folder-name">{entry.name}</span>
           <span className="resources-knowledge__folder-count">{entry.resourceCount}</span>
         </button>
+        <span className="resources-knowledge__folder-row-actions">
+          {canWriteResources && onRenameLibraryFolder ? (
+            <button
+              className="resources-knowledge__folder-row-action"
+              type="button"
+              title={`${localize(language, "folderRenameAction")}: ${entry.name}`}
+              onClick={() => {
+                setSelectedFolderPath(entry.path);
+                setLibraryFoldersOpen(true);
+                setFolderPromptState(undefined);
+                setFolderPrompt({
+                  mode: "rename",
+                  parentPath: libraryFolderParentPath(entry.path),
+                  path: entry.path,
+                  value: libraryFolderName(entry.path) || entry.name,
+                });
+              }}
+            >
+              {localize(language, "folderRenameAction")}
+            </button>
+          ) : null}
+          {canWriteResources && onCreateLibraryFolder ? (
+            <button
+              className="resources-knowledge__folder-row-action"
+              type="button"
+              title={localize(language, "folderSubfolderAction")}
+              onClick={() => {
+                setSelectedFolderPath(entry.path);
+                openFolderCreatePrompt(entry.path);
+              }}
+            >
+              +
+            </button>
+          ) : null}
+          {canWriteResources && onDeleteLibraryFolder ? (
+            <button
+              className="resources-knowledge__folder-row-action resources-knowledge__folder-row-action--danger"
+              type="button"
+              title={localize(language, "folderDeleteAction")}
+              onClick={() => {
+                setSelectedFolderPath(entry.path);
+                requestFolderDelete(entry.path);
+              }}
+            >
+              <TrashIcon size={12} aria-hidden="true" />
+            </button>
+          ) : null}
+        </span>
       </li>
     );
   };
@@ -2484,13 +2538,17 @@ export function ResourcesWorkbenchView({
     setMigrationState(undefined);
   };
 
-  const exportSelectedResource = (resourceId: string, title?: string) => {
+  const exportSelectedResource = (
+    resourceId: string,
+    title?: string,
+    format: "markdown" | "pdf" = "markdown",
+  ) => {
     if (!onExportResource || exportState?.phase === "busy") {
       return;
     }
     setExportState({ phase: "busy", message: localize(language, "exportBusy") });
     void Promise.resolve()
-      .then(() => onExportResource(resourceId))
+      .then(() => onExportResource(resourceId, format))
       .then((outcome) => {
         setExportState({
           phase: outcome.ok ? "ok" : "failed",
@@ -2873,6 +2931,21 @@ export function ResourcesWorkbenchView({
           aria-label={localize(language, "addResource")}
           onKeyDown={handleImportMenuKeyDown}
         >
+          {onImportWorkspace ? (
+            <button
+              className="menu-list__item"
+              type="button"
+              role="menuitem"
+              onClick={() => runImportAction(onImportWorkspace)}
+            >
+              <span className="menu-list__icon" aria-hidden="true">
+                <FolderIcon size={14} />
+              </span>
+              <span className="menu-list__body">
+                <strong>{localize(language, "importWorkspace")}</strong>
+              </span>
+            </button>
+          ) : null}
           <button
             className="menu-list__item"
             type="button"
@@ -3299,7 +3372,7 @@ export function ResourcesWorkbenchView({
                 )}
               </ul>
             )}
-            {selectedFolderEntry ? (
+            {selectedFolderEntry && !folderPrompt ? (
               <div
                 className="resources-knowledge__folder-actions"
                 role="group"
@@ -3318,7 +3391,7 @@ export function ResourcesWorkbenchView({
                         mode: "rename",
                         parentPath: libraryFolderParentPath(selectedFolderEntry.path),
                         path: selectedFolderEntry.path,
-                        value: libraryFolderName(selectedFolderEntry.path),
+                        value: libraryFolderName(selectedFolderEntry.path) || selectedFolderEntry.name,
                       });
                     }}
                   >
@@ -3344,6 +3417,88 @@ export function ResourcesWorkbenchView({
                     <span>{localize(language, "folderDeleteAction")}</span>
                   </button>
                 ) : null}
+              </div>
+            ) : null}
+            {folderPrompt ? (
+              <div
+                className="resources-knowledge__folder-prompt"
+                role="dialog"
+                aria-modal="false"
+                aria-labelledby="resources-folder-prompt-title"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setFolderPrompt(undefined);
+                    setFolderPromptState(undefined);
+                  }
+                }}
+              >
+                <form
+                  className="resources-knowledge__folder-prompt-body"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    submitFolderPrompt();
+                  }}
+                >
+                  <label className="resources-knowledge__folder-prompt-field">
+                    <span id="resources-folder-prompt-title">
+                      {folderPrompt.mode === "rename"
+                        ? `${localize(language, "folderPromptRenameTitle")}: ${libraryFolderName(folderPrompt.path ?? "") || folderPrompt.path}`
+                        : folderPrompt.mode === "subfolder"
+                          ? localizeValue(language, "folderPromptSubfolderTitle", folderPrompt.parentPath)
+                          : localize(language, "folderPromptCreateTitle")}
+                    </span>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={folderPrompt.value}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onChange={(event) =>
+                        setFolderPrompt((current) =>
+                          current ? { ...current, value: event.target.value } : current,
+                        )
+                      }
+                      placeholder={localize(language, "folderNamePlaceholder")}
+                      aria-label={localize(language, "folderNamePlaceholder")}
+                      disabled={folderPromptState?.phase === "busy"}
+                    />
+                  </label>
+                  {folderPromptState?.message ? (
+                    <p
+                      className="resources-knowledge__folders-status"
+                      role="status"
+                      aria-live="polite"
+                      data-folder-prompt-phase={folderPromptState.phase}
+                    >
+                      {folderPromptState.message}
+                    </p>
+                  ) : null}
+                  <div className="resources-knowledge__folder-prompt-actions">
+                    <button
+                      className="button button--compact"
+                      type="button"
+                      onClick={() => {
+                        setFolderPrompt(undefined);
+                        setFolderPromptState(undefined);
+                      }}
+                      disabled={folderPromptState?.phase === "busy"}
+                    >
+                      <span>{t("cancel")}</span>
+                    </button>
+                    <button
+                      className="button button--primary button--compact"
+                      type="submit"
+                      disabled={folderPromptState?.phase === "busy" || !folderPrompt.value.trim()}
+                      aria-busy={folderPromptState?.phase === "busy"}
+                    >
+                      <span>
+                        {folderPrompt.mode === "rename"
+                          ? localize(language, "folderRenameConfirm")
+                          : localize(language, "folderCreateConfirm")}
+                      </span>
+                    </button>
+                  </div>
+                </form>
               </div>
             ) : null}
             {folderMutationState?.message ? (
@@ -3428,7 +3583,7 @@ export function ResourcesWorkbenchView({
       {/* Folder name prompt and folder deletion confirmation live at the root
           for the same reason as the resource delete confirmation: the Library
           container can be hidden behind the reader. */}
-      {folderPrompt ? (
+      {showLibraryFolders ? null : folderPrompt ? (
         <div
           className="resources-knowledge__folder-prompt"
           role="dialog"
@@ -3461,6 +3616,7 @@ export function ResourcesWorkbenchView({
                 type="text"
                 autoFocus
                 value={folderPrompt.value}
+                onFocus={(event) => event.currentTarget.select()}
                 onChange={(event) =>
                   setFolderPrompt((current) =>
                     current ? { ...current, value: event.target.value } : current,
@@ -3735,17 +3891,30 @@ export function ResourcesWorkbenchView({
               </button>
             ) : null}
             {onExportResource && canWriteResources ? (
-              <button
-                className="button button--ghost button--compact resources-knowledge__export-action"
-                type="button"
-                onClick={() => exportSelectedResource(selectedResource.id)}
-                disabled={exportState?.phase === "busy"}
-                aria-busy={exportState?.phase === "busy"}
-                aria-label={`${localize(language, "exportAction")}: ${selectedResource.title}`}
-                title={localize(language, "exportAction")}
-              >
-                <span>{localize(language, "exportAction")}</span>
-              </button>
+              <>
+                <button
+                  className="button button--ghost button--compact resources-knowledge__export-action"
+                  type="button"
+                  onClick={() => exportSelectedResource(selectedResource.id, selectedResource.title, "markdown")}
+                  disabled={exportState?.phase === "busy"}
+                  aria-busy={exportState?.phase === "busy"}
+                  aria-label={`${localize(language, "exportAction")}: ${selectedResource.title}`}
+                  title={localize(language, "exportAction")}
+                >
+                  <span>{localize(language, "exportAction")}</span>
+                </button>
+                <button
+                  className="button button--ghost button--compact resources-knowledge__export-pdf-action"
+                  type="button"
+                  onClick={() => exportSelectedResource(selectedResource.id, selectedResource.title, "pdf")}
+                  disabled={exportState?.phase === "busy"}
+                  aria-busy={exportState?.phase === "busy"}
+                  aria-label={`${localize(language, "exportPdfAction")}: ${selectedResource.title}`}
+                  title={localize(language, "exportPdfAction")}
+                >
+                  <span>{localize(language, "exportPdfAction")}</span>
+                </button>
+              </>
             ) : null}
             {onDeleteResources ? (
               <button
@@ -4008,17 +4177,30 @@ export function ResourcesWorkbenchView({
               </button>
             ) : null}
             {onExportResource && canWriteResources ? (
-              <button
-                className="menu-list__item"
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  closeResourceRowMenu();
-                  exportSelectedResource(resource.id, resource.title);
-                }}
-              >
-                <span className="menu-list__body"><strong>{localize(language, "exportAction")}</strong></span>
-              </button>
+              <>
+                <button
+                  className="menu-list__item"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeResourceRowMenu();
+                    exportSelectedResource(resource.id, resource.title, "markdown");
+                  }}
+                >
+                  <span className="menu-list__body"><strong>{localize(language, "exportAction")}</strong></span>
+                </button>
+                <button
+                  className="menu-list__item"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeResourceRowMenu();
+                    exportSelectedResource(resource.id, resource.title, "pdf");
+                  }}
+                >
+                  <span className="menu-list__body"><strong>{localize(language, "exportPdfAction")}</strong></span>
+                </button>
+              </>
             ) : null}
             {onDeleteResources && canWriteResources ? (
               <button

@@ -55,6 +55,21 @@ class WebSearchClient:
             except Exception:
                 continue
 
+        if not self._site_constraint_domains(query):
+            for fallback_searcher in (
+                self._search_wikipedia,
+                self._search_arxiv,
+                self._search_github,
+            ):
+                try:
+                    results = fallback_searcher(query.strip(), limit=limit)
+                    if results:
+                        return results
+                except ControlledFetchError as exc:
+                    failures.append(exc)
+                except Exception:
+                    continue
+
         if failures:
             raise failures[-1]
 
@@ -408,6 +423,206 @@ class WebSearchClient:
             return parsed.netloc.replace("www.", "")
         except Exception:
             return url
+
+    def _fetch_public_with_optional_proxy(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+    ) -> Any:
+        """Fetch a public URL via ``fetch_url`` and only use ambient HTTP(S) proxy on transport failure."""
+        from ..network_fetch import ControlledFetchResponse, _is_non_public_address
+
+        try:
+            return fetch_url(
+                url,
+                network_enabled=True,
+                timeout_seconds=self.timeout,
+                max_response_bytes=self.max_response_bytes,
+                headers=headers,
+            )
+        except ControlledFetchError as exc:
+            import os
+
+            proxy_url = (
+                os.getenv("HTTPS_PROXY")
+                or os.getenv("https_proxy")
+                or os.getenv("HTTP_PROXY")
+                or os.getenv("http_proxy")
+                or ""
+            ).strip()
+            if (
+                not proxy_url
+                or exc.code not in {
+                    "network_unreachable",
+                    "request_timeout",
+                    "dns_resolution_failed",
+                    "connection_failed",
+                    "tls_error",
+                }
+            ):
+                raise
+            import ipaddress
+
+            import httpx
+
+            parsed = urllib.parse.urlsplit(url)
+            host = (parsed.hostname or "").strip().lower()
+            if parsed.scheme not in {"http", "https"} or not host or host in {"localhost", "127.0.0.1", "::1"}:
+                raise
+            try:
+                addr = ipaddress.ip_address(host)
+            except ValueError:
+                addr = None
+            if addr is not None and _is_non_public_address(addr):
+                raise
+            with httpx.Client(
+                proxy=proxy_url,
+                timeout=self.timeout,
+                follow_redirects=False,
+            ) as client:
+                response = client.get(url, headers=headers)
+            raw = response.content[: self.max_response_bytes]
+            return ControlledFetchResponse(
+                body=raw,
+                final_url=str(response.url),
+                status=int(response.status_code),
+                headers={k.lower(): v for k, v in response.headers.items()},
+                fetched_at="",
+            )
+
+    def _search_wikipedia(self, query: str, limit: int) -> list[dict[str, Any]]:
+        """Structured Wikipedia search fallback for public encyclopedia/concept lookups."""
+        import json
+
+        cleaned = " ".join(query.split()).strip()
+        if not cleaned:
+            return []
+        has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in cleaned)
+        host = "zh.wikipedia.org" if has_cjk else "en.wikipedia.org"
+        encoded = urllib.parse.quote_plus(cleaned)
+        url = (
+            f"https://{host}/w/api.php?action=query&list=search&format=json"
+            f"&utf8=1&srlimit={max(1, min(limit, 8))}&srsearch={encoded}"
+        )
+        response = self._fetch_public_with_optional_proxy(
+            url,
+            headers={"User-Agent": self._user_agent, "Accept": "application/json"},
+        )
+        if response.status >= 400:
+            return []
+        payload = json.loads(response.body.decode("utf-8", errors="ignore") or "{}")
+        hits = ((payload.get("query") or {}).get("search") or []) if isinstance(payload, dict) else []
+        results: list[dict[str, Any]] = []
+        for entry in hits:
+            if not isinstance(entry, dict):
+                continue
+            title = str(entry.get("title") or "").strip()
+            if not title:
+                continue
+            page_url = f"https://{host}/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+            snippet = unescape(re.sub(r"<[^>]+>", " ", str(entry.get("snippet") or ""))).strip()
+            results.append(
+                {
+                    "title": title,
+                    "url": page_url,
+                    "source": host,
+                    "snippet": snippet,
+                    "rank": len(results) + 1,
+                }
+            )
+            if len(results) >= limit:
+                break
+        return results
+
+    def _search_arxiv(self, query: str, limit: int) -> list[dict[str, Any]]:
+        """Public arXiv Atom API search fallback for research papers & technical advances."""
+        import xml.etree.ElementTree as ET
+
+        cleaned = " ".join(query.split()).strip()
+        if not cleaned:
+            return []
+        encoded = urllib.parse.quote_plus(cleaned)
+        url = (
+            f"https://export.arxiv.org/api/query?search_query=all:{encoded}"
+            f"&start=0&max_results={max(1, min(limit, 8))}&sortBy=submittedDate&sortOrder=descending"
+        )
+        response = self._fetch_public_with_optional_proxy(
+            url,
+            headers={"User-Agent": self._user_agent, "Accept": "application/atom+xml,application/xml"},
+        )
+        if response.status >= 400:
+            return []
+        xml_text = response.body.decode("utf-8", errors="ignore")
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return []
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        results: list[dict[str, Any]] = []
+        for entry in root.findall("atom:entry", ns):
+            title = " ".join((entry.findtext("atom:title", default="", namespaces=ns) or "").split()).strip()
+            entry_id = str(entry.findtext("atom:id", default="", namespaces=ns) or "").strip()
+            summary = " ".join((entry.findtext("atom:summary", default="", namespaces=ns) or "").split()).strip()
+            published = str(entry.findtext("atom:published", default="", namespaces=ns) or "").strip()[:10]
+            if not title or not entry_id:
+                continue
+            results.append(
+                {
+                    "title": f"{title} ({published})" if published else title,
+                    "url": entry_id,
+                    "source": "arxiv.org",
+                    "snippet": summary[:360],
+                    "rank": len(results) + 1,
+                }
+            )
+            if len(results) >= limit:
+                break
+        return results
+
+    def _search_github(self, query: str, limit: int) -> list[dict[str, Any]]:
+        """Public GitHub repository search fallback for codebases & open-source tools."""
+        import json
+
+        cleaned = " ".join(query.split()).strip()
+        if not cleaned:
+            return []
+        encoded = urllib.parse.quote_plus(cleaned)
+        url = f"https://api.github.com/search/repositories?q={encoded}&sort=stars&order=desc&per_page={max(1, min(limit, 6))}"
+        response = self._fetch_public_with_optional_proxy(
+            url,
+            headers={
+                "User-Agent": self._user_agent,
+                "Accept": "application/vnd.github+json",
+            },
+        )
+        if response.status >= 400:
+            return []
+        payload = json.loads(response.body.decode("utf-8", errors="ignore") or "{}")
+        items = payload.get("items") if isinstance(payload, dict) else None
+        if not isinstance(items, list):
+            return []
+        results: list[dict[str, Any]] = []
+        for repo in items:
+            if not isinstance(repo, dict):
+                continue
+            full_name = str(repo.get("full_name") or "").strip()
+            html_url = str(repo.get("html_url") or "").strip()
+            desc = str(repo.get("description") or "").strip()
+            if not full_name or not html_url:
+                continue
+            results.append(
+                {
+                    "title": full_name,
+                    "url": html_url,
+                    "source": "github.com",
+                    "snippet": desc[:320],
+                    "rank": len(results) + 1,
+                }
+            )
+            if len(results) >= limit:
+                break
+        return results
 
 
 class SearchResultEnricher:

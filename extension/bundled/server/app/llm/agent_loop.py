@@ -629,6 +629,7 @@ class CoachAgentLoop:
                         "summary": summary,
                         "next_step": next_step,
                         "stop_reason": "provider_error",
+                        "error": redact_provider_error(exc),
                     }
                     return
 

@@ -1,4 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <rect x="1" y="1" width="22" height="22" rx="6" fill="#111111"/>
-  <path d="M7.5 8.2h9M12 8.2v8" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="porcelain" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F8FAFC" />
+    </linearGradient>
+    <linearGradient id="indigo-ink" x1="32" y1="34" x2="72" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#191642" />
+      <stop offset="100%" stop-color="#312E81" />
+    </linearGradient>
+    <linearGradient id="indigo-silk" x1="62" y1="34" x2="96" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4338CA" />
+      <stop offset="100%" stop-color="#6366F1" />
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#porcelain)" stroke="#E5E9F2" stroke-width="1.5" />
+  <path d="M34.5 34.5 H59.2 L68.8 48 C70.1 49.8 70.8 51.6 70.8 53.8 V91.5 C70.8 93.7 69 95.5 66.8 95.5 H60.8 C58.6 95.5 56.8 93.7 56.8 91.5 V57 C56.8 51.2 52.8 47.8 47 47.8 H34.5 C32.6 47.8 31 46.2 31 44.3 V38 C31 36.1 32.6 34.5 34.5 34.5 Z" fill="url(#indigo-ink)" />
+  <path d="M63.8 34.5 H93.5 C95.4 34.5 97 36.1 97 38 V44.3 C97 46.2 95.4 47.8 93.5 47.8 H73.3 L63.8 34.5 Z" fill="url(#indigo-silk)" />
 </svg>

@@ -28,10 +28,11 @@ import inspect
 import ipaddress
 import json
 import logging
+import os
 import re
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, cast
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -4923,38 +4924,305 @@ async def _handle_read_workspace_file(context: ToolContext, args: dict[str, Any]
 # --- list_workspace_files -----------------------------------------------
 
 
+_WORKSPACE_IGNORED_DIRS: frozenset[str] = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        "node_modules",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".next",
+        ".nuxt",
+        ".turbo",
+        "dist",
+        "build",
+        "target",
+        ".idea",
+    }
+)
+
+
+def _is_ignored_workspace_relpath(rel_path: str) -> bool:
+    parts = [part for part in rel_path.replace("\\", "/").split("/") if part and part != "."]
+    return any(part in _WORKSPACE_IGNORED_DIRS for part in parts)
+
+
+def _workspace_matches_pattern(rel_posix: str, pattern_raw: str) -> bool:
+    normalized = rel_posix.strip("/")
+    if not normalized:
+        return False
+    pattern = pattern_raw.strip() or "**/*"
+    if pattern in {"**/*", "*", "**"}:
+        return True
+    if "/" not in pattern and "**" not in pattern:
+        return fnmatch.fnmatch(PurePosixPath(normalized).name, pattern)
+    return PurePosixPath(normalized).match(pattern) or fnmatch.fnmatch(normalized, pattern)
+
+
+def _network_fetch_enabled(context: ToolContext) -> bool:
+    runtime = getattr(context, "runtime", None)
+    if runtime is None:
+        return False
+    research_flag = getattr(runtime, "research_network_fetch_enabled", None)
+    if research_flag is not None:
+        return bool(research_flag)
+    resource_service = getattr(runtime, "resource_service", None)
+    if resource_service is not None:
+        return bool(getattr(resource_service, "enable_network_fetch", False))
+    return False
+
+
+async def _handle_web_search(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Search the public web (web results, Wikipedia, arXiv papers, GitHub repos)."""
+    query = " ".join(str(args.get("query") or "").split()).strip()
+    if not query:
+        return {"ok": False, "error": "missing_query", "detail": "web_search requires a non-empty query."}
+    if not _network_fetch_enabled(context):
+        return {
+            "ok": False,
+            "error": "network_disabled",
+            "detail": (
+                "Live web search is disabled by Trainer settings (`trainer.research.networkEnabled`)."
+            ),
+        }
+    try:
+        limit = max(1, min(int(args.get("limit", 5)), 8))
+    except Exception:
+        limit = 5
+    fetch_excerpts = args.get("fetch_excerpts", True) is not False
+
+    from ..network_fetch import ControlledFetchError
+    from ..research.web_search import WebSearchClient
+
+    client = WebSearchClient(network_enabled=True, timeout=12)
+    try:
+        hits = client.search(query, limit=limit)
+    except ControlledFetchError as exc:
+        return {
+            "ok": False,
+            "error": exc.code,
+            "detail": exc.detail,
+            "query": query,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": exc.__class__.__name__,
+            "detail": str(exc),
+            "query": query,
+        }
+
+    # If query explicitly asks for academic/research updates, include arXiv papers alongside web hits
+    # when web results lacked arxiv/academic depth.
+    lowered_q = query.lower()
+    academic_intent = any(
+        token in lowered_q
+        for token in ("paper", "arxiv", "research", "论文", "研究", "进展", "模型", "world model", "survey")
+    )
+    if academic_intent and len(hits) < limit and not any(
+        "arxiv.org" in str(item.get("url") or "") for item in hits
+    ):
+        try:
+            extra_arxiv = client._search_arxiv(query, limit=max(2, limit - len(hits)))
+            seen_urls = {str(item.get("url") or "") for item in hits}
+            for item in extra_arxiv:
+                if item.get("url") not in seen_urls:
+                    seen_urls.add(str(item.get("url") or ""))
+                    hits.append({**item, "rank": len(hits) + 1})
+                    if len(hits) >= limit:
+                        break
+        except Exception:
+            pass
+
+    enriched: list[dict[str, Any]] = []
+    for idx, hit in enumerate(hits[:limit]):
+        entry = dict(hit)
+        url = str(entry.get("url") or "").strip()
+        if fetch_excerpts and idx < 3 and url and not str(entry.get("snippet") or "").strip():
+            try:
+                page = client.fetch_page(url, max_length=1200)
+                entry["snippet"] = page.get("content", "")
+                entry["fetched_at"] = page.get("fetched_at", "")
+                if page.get("final_url"):
+                    entry["url"] = page["final_url"]
+            except Exception:
+                pass
+        enriched.append(entry)
+
+    is_zh = bool(context.response_language and context.response_language.lower().startswith("zh"))
+    return {
+        "ok": True,
+        "query": query,
+        "results": enriched,
+        "items": enriched,
+        "note": (
+            f"检索到 {len(enriched)} 条公开网页/论文来源"
+            if is_zh
+            else f"Found {len(enriched)} public web sources"
+        ),
+    }
+
+
+async def _handle_fetch_web_page(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Read one public web page as bounded clean text without modifying the library."""
+    url, validation_error = _validate_public_http_url(args.get("url"))
+    if validation_error:
+        return {
+            "ok": False,
+            "error": "invalid_url" if args.get("url") else "missing_url",
+            "detail": validation_error,
+        }
+    assert url is not None
+    if not _network_fetch_enabled(context):
+        return {
+            "ok": False,
+            "error": "network_disabled",
+            "detail": (
+                "Live web page reading is disabled by Trainer settings (`trainer.research.networkEnabled`)."
+            ),
+        }
+    try:
+        max_chars = max(500, min(int(args.get("max_chars", 6000)), 12000))
+    except Exception:
+        max_chars = 6000
+
+    from ..network_fetch import ControlledFetchError
+    from ..research.web_search import WebSearchClient
+
+    client = WebSearchClient(network_enabled=True, timeout=15)
+    try:
+        page = client.fetch_page(url, max_length=max_chars)
+    except ControlledFetchError as exc:
+        try:
+            response = client._fetch_public_with_optional_proxy(
+                url,
+                headers={
+                    "User-Agent": client._user_agent,
+                    "Accept": "text/html,application/xhtml+xml,text/plain,application/json",
+                },
+            )
+            raw_text = response.body.decode("utf-8", errors="ignore")
+            content_type = response.headers.get("content-type", "text/html")
+            extracted = (
+                client._extract_text_from_html(raw_text, max_chars)
+                if "html" in content_type.lower() or "<html" in raw_text.lower()
+                else raw_text.strip()[:max_chars]
+            )
+            page = {
+                "final_url": response.final_url,
+                "fetched_at": response.fetched_at,
+                "content_type": content_type,
+                "content": extracted,
+            }
+        except Exception:
+            return {"ok": False, "error": exc.code, "detail": exc.detail, "url": url}
+    except Exception as exc:
+        return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc), "url": url}
+
+    content = str(page.get("content") or "").strip()
+    lines = len(content.splitlines()) if content else 0
+    return {
+        "ok": True,
+        "url": url,
+        "final_url": page.get("final_url") or url,
+        "fetched_at": page.get("fetched_at") or "",
+        "content_type": page.get("content_type") or "",
+        "content": content,
+        "line_count": lines,
+        "note": client._extract_domain(str(page.get("final_url") or url)),
+    }
+
+
 async def _handle_list_workspace_files(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     pattern_raw = str(args.get("pattern") or "**/*").strip() or "**/*"
+    directory_raw = str(args.get("directory") or "").strip().replace("\\", "/").strip("/")
+    if directory_raw in {".", ""}:
+        directory_raw = ""
+    raw_max_depth = args.get("max_depth")
+    max_depth: int | None = None
+    if raw_max_depth is not None:
+        try:
+            max_depth = max(1, min(int(raw_max_depth), 12))
+        except Exception:
+            max_depth = None
     try:
-        limit = max(1, min(int(args.get("limit", 30)), 200))
+        limit = max(1, min(int(args.get("limit", 120)), 400))
     except Exception:
-        limit = 30
+        limit = 120
     root = _resolve_workspace_root(context)
-    if pattern_raw.startswith("/"):
+    if pattern_raw.startswith("/") or directory_raw.startswith("/"):
         return {
             "ok": False,
             "error": "absolute_pattern_rejected",
-            "detail": "Pattern must be relative to the workspace root.",
+            "detail": "Pattern and directory must be relative to the workspace root.",
         }
     if root is not None:
+        search_root = _safe_path_under(root, directory_raw) if directory_raw else root
+        if search_root is None or not search_root.is_dir():
+            return {
+                "ok": False,
+                "error": "directory_not_found",
+                "detail": f"Directory {directory_raw or '.'!r} does not exist in the workspace.",
+            }
+        # If pattern includes a leading directory prefix like "src/**/*" and directory wasn't set,
+        # keep walking pruned tree cleanly.
+        collected: list[dict[str, Any]] = []
+        total_seen = 0
         try:
-            matches = list(root.glob(pattern_raw))
+            root_parts_count = len(search_root.resolve().parts)
+            for current_dir, dirnames, filenames in os.walk(search_root, followlinks=False):
+                current_path = Path(current_dir)
+                rel_dir_parts = current_path.resolve().parts[root_parts_count:]
+                current_depth = len(rel_dir_parts)
+                # Prune ignored heavy/system directories before descending
+                dirnames[:] = sorted(
+                    d for d in dirnames if d not in _WORKSPACE_IGNORED_DIRS
+                )
+                if max_depth is not None and current_depth >= max_depth:
+                    dirnames[:] = []
+                for dirname in dirnames:
+                    full_dir = current_path / dirname
+                    rel_posix = str(full_dir.relative_to(root)).replace("\\", "/")
+                    if _workspace_matches_pattern(rel_posix, pattern_raw):
+                        total_seen += 1
+                        if len(collected) < limit:
+                            collected.append({"path": rel_posix, "is_dir": True, "size": 0})
+                for filename in sorted(filenames):
+                    full_file = current_path / filename
+                    rel_posix = str(full_file.relative_to(root)).replace("\\", "/")
+                    if _is_ignored_workspace_relpath(rel_posix):
+                        continue
+                    if not _workspace_matches_pattern(rel_posix, pattern_raw):
+                        continue
+                    try:
+                        stat = full_file.stat()
+                    except Exception:
+                        continue
+                    total_seen += 1
+                    if len(collected) < limit:
+                        collected.append(
+                            {
+                                "path": rel_posix,
+                                "is_dir": False,
+                                "size": stat.st_size,
+                            }
+                        )
         except Exception as exc:
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
-        items: list[dict[str, Any]] = []
-        for path in matches[:limit]:
-            try:
-                stat = path.stat()
-            except Exception:
-                continue
-            items.append(
-                {
-                    "path": str(path.relative_to(root)),
-                    "is_dir": path.is_dir(),
-                    "size": stat.st_size,
-                }
-            )
-        return {"ok": True, "pattern": pattern_raw, "items": items, "total_seen": len(matches), "source": "workspace_disk"}
+        return {
+            "ok": True,
+            "pattern": pattern_raw,
+            "directory": directory_raw or ".",
+            "items": collected,
+            "total_seen": total_seen,
+            "truncated": total_seen > len(collected),
+            "source": "workspace_disk",
+        }
     snapshot_items = _snapshot_file_list(context)
     if not snapshot_items:
         return {
@@ -4962,26 +5230,33 @@ async def _handle_list_workspace_files(context: ToolContext, args: dict[str, Any
             "error": "no_workspace",
             "detail": "No workspace path is currently available; the learner has not opened a folder.",
         }
-    filtered = [
-        item
-        for item in snapshot_items
-        if _snapshot_path_matches(str(item.get("path") or ""), pattern_raw)
-    ]
+    filtered = []
+    for item in snapshot_items:
+        rel_path = str(item.get("path") or "").replace("\\", "/")
+        if _is_ignored_workspace_relpath(rel_path):
+            continue
+        if directory_raw and not (rel_path == directory_raw or rel_path.startswith(directory_raw + "/")):
+            continue
+        if _snapshot_path_matches(rel_path, pattern_raw):
+            filtered.append(item)
     return {
         "ok": True,
         "pattern": pattern_raw,
+        "directory": directory_raw or ".",
         "items": filtered[:limit],
         "total_seen": len(filtered),
+        "truncated": len(filtered) > limit,
         "source": "workspace_snapshot",
     }
 
 
-async def _handle_import_workspace_file(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
-    """Copy a learner-project file into the local Trainer library/sandbox."""
-
-    path_raw = str(args.get("path") or "").strip()
-    if not path_raw:
-        return {"ok": False, "error": "missing_path", "detail": "import_workspace_file requires a path."}
+async def _import_single_workspace_item(
+    context: ToolContext,
+    path_raw: str,
+    *,
+    folder: str = "",
+    extra_tags: list[str] | None = None,
+) -> dict[str, Any]:
     relative = _normalize_workspace_relpath(path_raw)
     text: str | None = None
     source = "workspace_snapshot"
@@ -4993,7 +5268,7 @@ async def _handle_import_workspace_file(context: ToolContext, args: dict[str, An
             source = "workspace_disk"
             relative = str(target.relative_to(root)).replace("\\", "/") if root is not None else relative
         except Exception as exc:
-            return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+            return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc), "path": relative}
     if text is None:
         record = _snapshot_file_record(context, path_raw)
         if record is None:
@@ -5014,22 +5289,39 @@ async def _handle_import_workspace_file(context: ToolContext, args: dict[str, An
             return {
                 "ok": False,
                 "error": "not_found",
+                "path": relative,
                 "detail": f"Path {path_raw!r} is not available in the host workspace snapshot.",
             }
         text = str(record.get("content") or "")
         relative = str(record.get("path") or relative)
     if not text.strip():
-        return {"ok": False, "error": "empty_file", "detail": f"Path {relative!r} has no importable text."}
-    dest = f"sources/workspace/{relative.lstrip('/')}"
+        return {"ok": False, "error": "empty_file", "path": relative, "detail": f"Path {relative!r} has no importable text."}
+    safe_folder = "/".join(
+        part.strip()
+        for part in folder.replace("\\", "/").split("/")
+        if part.strip() and part.strip() not in {".", ".."}
+    )
+    dest = (
+        f"sources/workspace/{safe_folder}/{Path(relative).name}"
+        if safe_folder
+        else f"sources/workspace/{relative.lstrip('/')}"
+    )
     written = await _handle_write_sandbox_file(context, {"path": dest, "content": text, "create": True})
     if written.get("ok") is not True:
         return written
+    base_tags = ["workspace", "remote"] if _workspace_file_snapshot(context).get("is_remote") else ["workspace"]
+    if safe_folder:
+        base_tags.append(safe_folder)
+    for tag in (extra_tags or []):
+        clean_tag = str(tag).strip()
+        if clean_tag and clean_tag not in base_tags:
+            base_tags.append(clean_tag)
     indexed = await _handle_index_sandbox_file(
         context,
         {
             "path": dest,
             "name": Path(relative).name,
-            "tags": ["workspace", "remote"] if _workspace_file_snapshot(context).get("is_remote") else ["workspace"],
+            "tags": base_tags[:20],
         },
     )
     return {
@@ -5040,6 +5332,84 @@ async def _handle_import_workspace_file(context: ToolContext, args: dict[str, An
         "sandbox_path": dest,
         "bytes": len(text.encode("utf-8", errors="replace")),
         "library": indexed if indexed.get("ok") is True else None,
+        "note": relative,
+    }
+
+
+async def _handle_import_workspace_file(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Selectively copy one or more learner-project files/folders into the local Trainer library."""
+    folder = str(args.get("folder") or args.get("folder_path") or "").strip()
+    raw_tags = args.get("tags")
+    extra_tags = (
+        [str(tag).strip() for tag in raw_tags if str(tag).strip()][:12]
+        if isinstance(raw_tags, list)
+        else []
+    )
+    raw_paths = args.get("paths")
+    directory_raw = str(args.get("directory") or "").strip().replace("\\", "/").strip("/")
+    path_raw = str(args.get("path") or "").strip()
+
+    if isinstance(raw_paths, list) and raw_paths:
+        target_paths = [str(p).strip() for p in raw_paths if str(p).strip()][:30]
+    elif directory_raw:
+        listed = await _handle_list_workspace_files(
+            context,
+            {"directory": directory_raw, "pattern": "**/*", "limit": 60},
+        )
+        if not listed.get("ok"):
+            return listed
+        target_paths = [
+            str(item.get("path") or "")
+            for item in (listed.get("items") or [])
+            if isinstance(item, dict) and not item.get("is_dir") and item.get("path")
+        ][:30]
+        if not target_paths:
+            return {
+                "ok": False,
+                "error": "empty_directory",
+                "detail": f"No importable text files were found under {directory_raw!r}.",
+            }
+    elif path_raw:
+        return await _import_single_workspace_item(
+            context,
+            path_raw,
+            folder=folder,
+            extra_tags=extra_tags,
+        )
+    else:
+        return {
+            "ok": False,
+            "error": "missing_path",
+            "detail": "import_workspace_file requires a path, paths array, or directory.",
+        }
+
+    imported_items: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for candidate in target_paths:
+        outcome = await _import_single_workspace_item(
+            context,
+            candidate,
+            folder=folder,
+            extra_tags=extra_tags,
+        )
+        if outcome.get("ok") is True:
+            imported_items.append(outcome)
+        else:
+            skipped.append({"path": candidate, "error": outcome.get("error"), "detail": outcome.get("detail")})
+    if not imported_items:
+        return {
+            "ok": False,
+            "error": skipped[0].get("error") if skipped else "import_failed",
+            "detail": skipped[0].get("detail") if skipped else "No files were imported.",
+            "skipped": skipped,
+        }
+    return {
+        "ok": True,
+        "imported": True,
+        "imported_count": len(imported_items),
+        "imported_items": imported_items,
+        "skipped": skipped,
+        "note": f"{len(imported_items)} files",
     }
 
 
@@ -6885,6 +7255,64 @@ def build_default_tool_registry(
                 "required": ["verdict", "evidence_standard", "facet_assessments"],
             },
             handler=_handle_assess_research_evidence,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="web_search",
+            description=(
+                "Search the public internet for current technical documentation, latest "
+                "research progress, arXiv papers, Wikipedia background, and GitHub repositories. "
+                "Use whenever the learner asks about recent developments, unfamiliar frameworks, "
+                "or public references, then read key URLs with fetch_web_page before answering."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": _string("Search query keywords (supports site:domain filters)."),
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum search results to return (1-8).",
+                        "minimum": 1,
+                        "maximum": 8,
+                        "default": 5,
+                    },
+                    "fetch_excerpts": {
+                        "type": "boolean",
+                        "description": "Fetch brief readable excerpts from the top results.",
+                        "default": True,
+                    },
+                },
+                "required": ["query"],
+            },
+            handler=_handle_web_search,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="fetch_web_page",
+            description=(
+                "Fetch and extract readable clean text/Markdown from one public HTTP(S) URL "
+                "(read-only; does not add the page to the resource library). Use to inspect "
+                "documentation pages, arXiv abstracts, or articles returned by web_search."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "url": _string("Public HTTP(S) URL to read."),
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "Maximum characters to extract (500-12000).",
+                        "minimum": 500,
+                        "maximum": 12000,
+                        "default": 6000,
+                    },
+                },
+                "required": ["url"],
+            },
+            handler=_handle_fetch_web_page,
         )
     )
 

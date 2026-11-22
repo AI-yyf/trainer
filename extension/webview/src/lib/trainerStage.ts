@@ -97,6 +97,8 @@ const TOOL_STAGES: Record<string, TrainerStageKind> = {
   read_resource_excerpt: "retrieve",
   list_workspace_files: "retrieve",
   read_workspace_file: "retrieve",
+  web_search: "retrieve",
+  fetch_web_page: "retrieve",
   inspect_current_file: "retrieve",
   recall_memory: "retrieve",
   inspect_plan: "retrieve",

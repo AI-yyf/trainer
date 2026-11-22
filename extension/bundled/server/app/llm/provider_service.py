@@ -122,6 +122,7 @@ from .provider.assessment import (
     _unusable_visible_reply_category,
 )
 from .provider.capability import (
+    _allows_keyless_local_provider,
     _flatten_minimax_thinking_for_raw_http,
     _is_loopback_provider_url,
     _is_minimax_like_provider,
@@ -234,6 +235,41 @@ from .vision_challenge import build_vision_challenge
 from .vision_payload import openai_responses_input_image_parts
 
 logger = logging.getLogger("trainer.provider")
+
+
+def _looks_like_tools_unsupported_error(detail: object) -> bool:
+    """Return True when a provider error indicates function/tool schemas were rejected."""
+    raw = str(detail or "").strip().lower()
+    if not raw:
+        return False
+    has_tool_term = any(
+        term in raw
+        for term in (
+            "tool",
+            "tools",
+            "tool_choice",
+            "function",
+            "functions",
+            "function_calling",
+        )
+    )
+    if not has_tool_term:
+        return False
+    return any(
+        marker in raw
+        for marker in (
+            "not support",
+            "unsupported",
+            "not enabled",
+            "unavailable",
+            "unknown parameter",
+            "unrecognized",
+            "not allowed",
+            "cannot use",
+            "does not support",
+            "不支持",
+        )
+    )
 
 DEFAULT_OPENAI_CLIENT_TIMEOUT_SECONDS = 45.0
 DEFAULT_OPENAI_CLIENT_MAX_RETRIES = 0
@@ -536,6 +572,26 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
     @property
     def has_api_key(self) -> bool:
         return bool(self._api_key)
+
+    def has_usable_credential(
+        self,
+        provider: ProviderConfig | None = None,
+        api_key: str | None = None,
+    ) -> bool:
+        effective_key = self._api_key if api_key is None else api_key
+        if bool((effective_key or "").strip()):
+            return True
+        target = provider or self._config
+        return _allows_keyless_local_provider(target)
+
+    @staticmethod
+    def _effective_wire_api_key(provider: ProviderConfig | None, api_key: str | None) -> str:
+        stripped = (api_key or "").strip() if isinstance(api_key, str) else ""
+        if stripped:
+            return stripped
+        if _allows_keyless_local_provider(provider):
+            return "local-no-key"
+        return ""
 
     def clear_last_reply_state(self) -> None:
         self.clear_last_reply_failure()
@@ -853,7 +909,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             async_openai_cls = self._get_async_openai_class()
             base_url = self._normalized_openai_compatible_base_url()
             client_kwargs: dict[str, Any] = {
-                "api_key": self._api_key,
+                "api_key": self._effective_wire_api_key(self._config, self._api_key),
                 "base_url": base_url,
                 # Generation client: no designed read ceiling (see
                 # GENERATION_CLIENT_TIMEOUT). Probe/control callers that share
@@ -894,7 +950,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
     def _create_sync_client(self, provider: ProviderConfig, api_key: str) -> Any:
         openai_cls = self._get_sync_openai_class()
         client_kwargs: dict[str, Any] = {
-            "api_key": api_key,
+            "api_key": self._effective_wire_api_key(provider, api_key),
             "base_url": self._normalized_openai_compatible_base_url(provider),
             # The sync client only serves bounded capability probes.
             "timeout": self._probe_client_timeout_seconds(provider),
@@ -1507,9 +1563,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             payload: dict[str, Any] = {
                 "model": provider.model,
                 "input": prompt,
-                "temperature": 0,
                 "max_output_tokens": max_tokens,
             }
+            if not _model_looks_reasoning_first(provider):
+                payload["temperature"] = 0
             if system:
                 payload["instructions"] = system
             response = client.responses.create(**payload)
@@ -1589,7 +1646,11 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     continue
                 content = candidate.get("content") or {}
                 for part in content.get("parts") or []:
-                    if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    if (
+                        isinstance(part, dict)
+                        and part.get("thought") is not True
+                        and isinstance(part.get("text"), str)
+                    ):
                         text_parts.append(part["text"])
             return self._native_probe_preview("".join(text_parts))
 
@@ -1819,6 +1880,11 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             merged["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         elif isinstance(thinking_budget, str) and thinking_budget.strip().lower() == "disabled":
             merged.pop("thinking", None)
+        merged_thinking = merged.get("thinking")
+        if isinstance(merged_thinking, dict) and merged_thinking.get("type") == "enabled":
+            if merged.get("temperature") not in (None, 1):
+                merged.pop("temperature", None)
+            merged.pop("top_k", None)
         return _flatten_minimax_thinking_for_raw_http(merged, provider)
 
     # --- thinking re-negotiation ------------------------------------------------
@@ -1913,8 +1979,11 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             return payload
         merged = dict(payload)
         extra_body = defaults.get("extra_body")
+        gemini_allowed_root = {"safetySettings", "cachedContent", "labels", "toolConfig", "thinkingConfig"}
         if isinstance(extra_body, dict):
-            merged.update(extra_body)
+            for key, value in extra_body.items():
+                if key in gemini_allowed_root:
+                    merged[key] = value
         generation_config = dict(merged.get("generationConfig") or {})
         if isinstance(defaults.get("generationConfig"), dict):
             generation_config.update(defaults["generationConfig"])
@@ -1951,18 +2020,33 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                         self._native_probe_prompts(response_language),
                         start=1,
                     ):
-                        response = client.responses.create(
-                            model=candidate,
-                            input=prompt,
-                            temperature=0,
-                            max_output_tokens=probe_output_budget,
+                        attempt_budget = (
+                            probe_output_budget if attempt == 1 else max(probe_output_budget * 2, 128)
                         )
+                        request_kwargs: dict[str, Any] = {
+                            "model": candidate,
+                            "input": prompt,
+                            "max_output_tokens": attempt_budget,
+                        }
+                        if not _model_looks_reasoning_first(provider):
+                            request_kwargs["temperature"] = 0
+                        try:
+                            response = client.responses.create(**request_kwargs)
+                        except Exception as temp_exc:  # noqa: BLE001
+                            if (
+                                "temperature" in request_kwargs
+                                and "temperature" in str(temp_exc).lower()
+                            ):
+                                request_kwargs.pop("temperature", None)
+                                response = client.responses.create(**request_kwargs)
+                            else:
+                                raise
                         hidden_reasoning_observed = _has_hidden_reasoning(response)
                         reasoning_budget_exhausted = (
                             reasoning_budget_exhausted
                             or _reasoning_budget_exhausted(
                                 response,
-                                max_tokens=probe_output_budget,
+                                max_tokens=attempt_budget,
                             )
                         )
                         preview = self._native_probe_preview(getattr(response, "output_text", ""))
@@ -2507,8 +2591,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     model=provider.model,
                     input=prompt,
                     reasoning={"effort": "low"},
-                    temperature=0,
-                    max_output_tokens=16,
+                    max_output_tokens=128,
                 )
             elif protocol in {"openai_chat_completions", "openai_chat_completions_compatible"}:
                 client = self._create_sync_client(provider, api_key)
@@ -2516,7 +2599,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     "model": provider.model,
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": 0,
-                    "max_tokens": 256 if _is_minimax_like_provider(provider) else 16,
+                    "max_tokens": 256 if _is_minimax_like_provider(provider) else 128,
                 }
                 if _is_minimax_like_provider(provider):
                     payload["extra_body"] = {"thinking": {"type": "enabled"}}
@@ -2527,6 +2610,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     extra_body = dict(payload.get("extra_body") or {})
                     extra_body["thinking"] = {"type": "enabled"}
                     payload["extra_body"] = extra_body
+                if "reasoning_effort" in payload:
+                    payload.pop("temperature", None)
                 response = client.chat.completions.create(**payload)
             elif protocol == "anthropic_messages":
                 payload = self._apply_anthropic_native_probe_defaults({
@@ -2547,7 +2632,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             elif protocol == "gemini_generate_content":
                 payload = self._apply_gemini_native_probe_defaults({
                     "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0, "maxOutputTokens": 16, "thinkingConfig": {"thinkingBudget": 128}},
+                    "generationConfig": {"temperature": 0, "maxOutputTokens": 256, "thinkingConfig": {"thinkingBudget": 64}},
                 }, provider)
                 with self._direct_http_client(provider, timeout=60.0) as client:
                     response = client.post(self._gemini_endpoint(provider), json=payload, headers={"x-goog-api-key": api_key, "content-type": "application/json"})
@@ -2631,7 +2716,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             return False, "Streaming probe completed without visible incremental content."
 
         async def consume() -> bool:
-            stream = self.chat_completion_stream(
+            target_service = (
+                self
+                if self._config is provider and self._api_key == api_key
+                else ProviderService(config=provider, api_key=api_key)
+            )
+            stream = target_service.chat_completion_stream(
                 [{"role": "user", "content": "Reply with one short visible word: OK."}],
                 model=provider.model,
                 temperature=0,
@@ -3010,7 +3100,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         probe_message: str | None = None,
         response_language: str | None = None,
     ) -> ProviderTestResponse:
-        if not api_key:
+        effective_key = self._effective_wire_api_key(provider, api_key)
+        if not effective_key:
             return ProviderTestResponse(
                 ok=False,
                 detail="Provider config is saved, but no API key is available. Trainer cannot work until you add one.",
@@ -3021,14 +3112,14 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             )
         native_result = self._test_native_protocol(
             provider,
-            api_key,
+            effective_key,
             probe_message,
             response_language,
         )
         if native_result is not None:
             return native_result
         try:
-            client = self._create_sync_client(provider, api_key)
+            client = self._create_sync_client(provider, effective_key)
             try:
                 chosen_model = None
                 response = None
@@ -3389,7 +3480,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         history: list[dict[str, str]] | None = None,
     ) -> str:
         self.clear_last_reply_state()
-        if not self.has_api_key:
+        if not self.has_usable_credential():
             if not profile:
                 return self._missing_api_key_reply(response_language)
             return self._missing_api_key_reply_with_scaffold(
@@ -4487,7 +4578,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         temperature: float = 0.7,
         max_tokens: int | None = None,
     ) -> str:
-        if not self.has_api_key:
+        if not self.has_usable_credential():
             raise RuntimeError(
                 "API key not configured. Please set up your provider API key in settings."
             )
@@ -4689,7 +4780,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         cancel_event: asyncio.Event | None = None,
     ):
         self.clear_last_reply_state()
-        if not self.has_api_key:
+        if not self.has_usable_credential():
             raise RuntimeError(
                 "API key not configured. Please set up your provider API key in settings."
             )
@@ -5129,7 +5220,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if bool(attachment_delivery.get("attachments_delivered_to_model"))
             else None
         )
-        if not self.has_api_key:
+        if not self.has_usable_credential():
             return {
                 "content": self._missing_api_key_reply(response_language),
                 "steps": [],
@@ -5434,25 +5525,58 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     final_text = timeout_reply
                 fell_back = True
         if str(result.stop_reason or "").strip() == "provider_error":
-            provider_error_recovery = _build_provider_error_recovery_override(
-                message,
-                current_file=current_file,
-                coach_context=coach_context,
-                response_language=response_language,
-                error_detail=getattr(result, "error", None),
-            )
-            result.summary = _optional_text(provider_error_recovery.get("summary")) or result.summary
-            result.next_step = _optional_text(provider_error_recovery.get("next_step")) or result.next_step
-            result.teaching_note = _optional_text(provider_error_recovery.get("teaching_note")) or result.teaching_note
-            result.resume_thread = _optional_text(provider_error_recovery.get("resume_thread")) or _agentic_resume_thread_text(
-                result.summary,
-                result.next_step,
-                response_language=response_language,
-            )
-            provider_error_reply = str(provider_error_recovery.get("reply") or "").strip()
-            if provider_error_reply:
-                final_text = provider_error_reply
-            fell_back = True
+            if not tool_events and _looks_like_tools_unsupported_error(getattr(result, "error", None)):
+                self.clear_last_reply_state()
+                try:
+                    plain_reply = await self._llm_reply(
+                        profile,
+                        message,
+                        current_file,
+                        response_language,
+                        answer_mode,
+                        coach_context=coach_context,
+                        history=history,
+                    )
+                except Exception:
+                    plain_reply = ""
+                plain_failure = self.consume_last_reply_failure()
+                plain_override = self.consume_last_reply_override()
+                plain_stop_reason = (
+                    str(plain_override.get("stop_reason") or "").strip()
+                    if isinstance(plain_override, dict)
+                    else ""
+                )
+                if (
+                    plain_reply.strip()
+                    and plain_failure is None
+                    and plain_stop_reason not in {"empty_response", "provider_error"}
+                ):
+                    final_text = plain_reply
+                    result.stop_reason = "completed"
+                    result.summary = None
+                    result.next_step = None
+                    result.resume_thread = None
+                    fell_back = True
+            if str(result.stop_reason or "").strip() == "provider_error":
+                provider_error_recovery = _build_provider_error_recovery_override(
+                    message,
+                    current_file=current_file,
+                    coach_context=coach_context,
+                    response_language=response_language,
+                    error_detail=getattr(result, "error", None),
+                )
+                result.summary = _optional_text(provider_error_recovery.get("summary")) or result.summary
+                result.next_step = _optional_text(provider_error_recovery.get("next_step")) or result.next_step
+                result.teaching_note = _optional_text(provider_error_recovery.get("teaching_note")) or result.teaching_note
+                result.resume_thread = _optional_text(provider_error_recovery.get("resume_thread")) or _agentic_resume_thread_text(
+                    result.summary,
+                    result.next_step,
+                    response_language=response_language,
+                )
+                provider_error_reply = str(provider_error_recovery.get("reply") or "").strip()
+                if provider_error_reply:
+                    final_text = provider_error_reply
+                fell_back = True
         if not final_text.strip() and result.stop_reason == "coach_finalize":
             self.clear_last_reply_state()
             try:
@@ -5710,7 +5834,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if bool(attachment_delivery.get("attachments_delivered_to_model"))
             else None
         )
-        if not self.has_api_key:
+        if not self.has_usable_credential():
             yield {
                 "type": "final",
                 "content": self._missing_api_key_reply(response_language),
@@ -5903,6 +6027,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     return ""
                 return available[len(streamed_visible_text) :]
 
+            pending_tool_error: dict[str, Any] | None = None
             async for event in loop.run_stream(messages):
                 if self._agent_provider_context_budget_exhausted(provider_obj):
                     yield {
@@ -5975,6 +6100,54 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                         except Exception:
                             logger.warning("skill_usage_record_failed", exc_info=True)
                     if event.get("stop_reason") == "provider_error":
+                        if (
+                            not tool_events
+                            and not streamed_visible_text
+                            and (
+                                pending_tool_error is not None
+                                or _looks_like_tools_unsupported_error(
+                                    event.get("error") or event.get("detail")
+                                )
+                            )
+                        ):
+                            self.clear_last_reply_state()
+                            plain_chunks: list[str] = []
+                            try:
+                                async for chunk in self.coaching_reply_stream(
+                                    profile,
+                                    message,
+                                    current_file,
+                                    response_language=response_language,
+                                    answer_mode=answer_mode,
+                                    coach_context=coach_context,
+                                    history=history,
+                                ):
+                                    if chunk:
+                                        plain_chunks.append(chunk)
+                                        streamed_visible_text += chunk
+                                        yield {
+                                            "type": "text",
+                                            "delta": chunk,
+                                            "safe_to_stream": True,
+                                        }
+                            except Exception:
+                                plain_chunks = []
+                            plain_failure = self.consume_last_reply_failure()
+                            plain_text = "".join(plain_chunks).strip()
+                            if plain_text and plain_failure is None:
+                                yield {
+                                    "type": "final",
+                                    "content": plain_text,
+                                    "summary": None,
+                                    "next_step": None,
+                                    "stop_reason": "completed",
+                                    "fell_back": True,
+                                    **attachment_delivery,
+                                }
+                                return
+                        if pending_tool_error is not None:
+                            yield pending_tool_error
+                            pending_tool_error = None
                         transport_failure = self._agent_provider_failure_result(
                             provider_obj,
                             response_language=response_language,
@@ -6047,6 +6220,13 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                             "terminal": False,
                             "degraded": True,
                         }
+                    if (
+                        not tool_events
+                        and not streamed_visible_text
+                        and _looks_like_tools_unsupported_error(event.get("detail"))
+                    ):
+                        pending_tool_error = dict(event)
+                        continue
                 yield event
         except ContextBudgetExhaustedError:
             yield {
@@ -6507,7 +6687,7 @@ async def _provider_service_coaching_reply_stream(
     cancel_event = cancel_event or _stream_cancel_event(
         coach_context.get("stream_cancel_event") if isinstance(coach_context, dict) else None
     )
-    if not self.has_api_key:
+    if not self.has_usable_credential():
         if not profile:
             yield self._missing_api_key_reply(response_language)
             return

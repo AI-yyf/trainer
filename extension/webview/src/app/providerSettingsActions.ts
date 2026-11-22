@@ -290,10 +290,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
         includeRelatedFiles: true,
         coachDefaults: defaultCoachDefaults,
       });
-      store.setOperationMessage({
-        tone: "success",
-        message: appUiCopy(defaultLanguage, "已恢复教练默认设置。"),
-      });
     },
   };
 }

@@ -10,16 +10,16 @@ export type WorkspaceFileSnapshot = {
   contents: Record<string, { content: string; language_id?: string }>;
 };
 
-const LIST_LIMIT_LOCAL = 80;
-const LIST_LIMIT_REMOTE = 200;
+const LIST_LIMIT_LOCAL = 300;
+const LIST_LIMIT_REMOTE = 400;
 const CONTENT_FILE_LIMIT_LOCAL = 10;
 const CONTENT_FILE_LIMIT_REMOTE = 48;
 const CONTENT_CHAR_LIMIT_LOCAL = 80_000;
 const CONTENT_CHAR_LIMIT_REMOTE = 400_000;
 const PER_FILE_CHAR_LIMIT = 24_000;
-const EXCLUDE_GLOB = '{**/node_modules/**,**/.git/**,**/dist/**,**/.venv/**,**/__pycache__/**}';
-const INCLUDE_GLOB =
-  '**/*.{py,ts,tsx,js,jsx,mjs,cjs,go,rs,java,kt,swift,c,cc,cpp,h,hpp,md,json,toml,yml,yaml,txt}';
+const EXCLUDE_GLOB =
+  '{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/.venv/**,**/venv/**,**/__pycache__/**,**/.next/**,**/.turbo/**,**/target/**,**/.pytest_cache/**,**/.mypy_cache/**,**/.ruff_cache/**}';
+const INCLUDE_GLOB = '**/*';
 const PRIORITY_BASENAMES = new Set([
   'readme.md',
   'readme',

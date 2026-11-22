@@ -192,6 +192,11 @@ def provider_config_from_payload(payload: dict) -> ProviderConfig | None:
         mode=provider_mode_from_payload(provider_payload),
         connectionType=connection_type,
         credentialMode=provider_credential_mode_from_payload(provider_payload),
+        ignoreSystemProxy=bool(
+            provider_payload.get("ignoreSystemProxy")
+            if "ignoreSystemProxy" in provider_payload
+            else provider_payload.get("ignore_system_proxy", False)
+        ),
         availableModels=list(provider_payload.get("available_models") or provider_payload.get("availableModels") or []),
         allowedModels=list(provider_payload.get("allowed_models") or provider_payload.get("allowedModels") or []),
         deniedModels=list(provider_payload.get("denied_models") or provider_payload.get("deniedModels") or []),

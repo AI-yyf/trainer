@@ -50,7 +50,7 @@ from urllib.parse import quote
 import httpx
 
 from .agent_loop import AgentProvider, CoachAgentLoop
-from .provider.capability import _is_loopback_provider_url
+from .provider.capability import _allows_keyless_local_provider, _is_loopback_provider_url
 from .provider.errors import ContextBudgetExhaustedError
 from .provider.streaming import (
     STREAM_IDLE_TIMEOUT_SECONDS,
@@ -626,19 +626,16 @@ def _format_gemini_payload(
                 system_parts.append(text)
             continue
         if role == "tool":
-            contents.append(
-                {
-                    "role": "function",
-                    "parts": [
-                        {
-                            "functionResponse": {
-                                "name": str(msg.get("name") or msg.get("tool_call_id") or ""),
-                                "response": {"content": str(msg.get("content") or "")},
-                            }
-                        }
-                    ],
+            fn_part = {
+                "functionResponse": {
+                    "name": str(msg.get("name") or msg.get("tool_call_id") or ""),
+                    "response": {"content": str(msg.get("content") or "")},
                 }
-            )
+            }
+            if contents and contents[-1].get("role") == "function" and isinstance(contents[-1].get("parts"), list):
+                contents[-1]["parts"].append(fn_part)
+            else:
+                contents.append({"role": "function", "parts": [fn_part]})
             continue
         if role == "assistant":
             parts: list[dict[str, Any]] = []
@@ -711,6 +708,8 @@ def _parse_gemini_response(payload: dict[str, Any]) -> dict[str, Any]:
         for part in parts or []:
             if not isinstance(part, dict):
                 continue
+            if part.get("thought") is True:
+                continue
             if isinstance(part.get("text"), str):
                 text_parts.append(part["text"])
                 continue
@@ -782,18 +781,22 @@ def _split_anthropic_messages(
         if role == "tool":
             tool_use_id = str(msg.get("tool_call_id") or msg.get("name") or "")
             content_text = str(msg.get("content") or "")
-            converted.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": content_text,
-                        }
-                    ],
-                }
-            )
+            tool_result_block = {
+                "type": "tool_result",
+                "tool_use_id": tool_use_id,
+                "content": content_text,
+            }
+            if (
+                converted
+                and converted[-1].get("role") == "user"
+                and isinstance(converted[-1].get("content"), list)
+                and converted[-1]["content"]
+                and isinstance(converted[-1]["content"][0], dict)
+                and converted[-1]["content"][0].get("type") == "tool_result"
+            ):
+                converted[-1]["content"].append(tool_result_block)
+            else:
+                converted.append({"role": "user", "content": [tool_result_block]})
             continue
         if role == "assistant":
             blocks: list[dict[str, Any]] = []
@@ -1392,10 +1395,12 @@ class ProviderAgentBinding:
                         for part_index, part in enumerate(parts or []):
                             if not isinstance(part, dict):
                                 continue
-                            if part.get("thought") is True and not emitted_reasoning:
-                                emitted_reasoning = True
-                                if self._emit_activity:
-                                    yield {"type": "provider_activity", "phase": "model_reasoning"}
+                            if part.get("thought") is True:
+                                if not emitted_reasoning:
+                                    emitted_reasoning = True
+                                    if self._emit_activity:
+                                        yield {"type": "provider_activity", "phase": "model_reasoning"}
+                                continue
                             piece = part.get("text")
                             if isinstance(piece, str) and piece:
                                 visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
@@ -2484,6 +2489,13 @@ class ProviderAgentBinding:
             existing_reasoning = merged.get("reasoning")
             existing = dict(existing_reasoning) if isinstance(existing_reasoning, dict) else {}
             merged["reasoning"] = {**existing, "effort": reasoning_effort.strip()}
+        explicit_temperature = self._usable_default(self._first_default(defaults, "temperature"))
+        if (
+            explicit_temperature is None
+            and isinstance(merged.get("reasoning"), dict)
+            and merged["reasoning"]
+        ):
+            merged.pop("temperature", None)
         return merged
 
     def _apply_anthropic_request_defaults(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -2519,6 +2531,14 @@ class ProviderAgentBinding:
             merged.pop("thinking", None)
         merged_thinking = merged.get("thinking")
         if isinstance(merged_thinking, dict) and merged_thinking.get("type") == "enabled":
+            # Anthropic Messages rejects temperature != 1 and top_k when extended thinking is enabled.
+            temp = merged.get("temperature")
+            if temp is not None and temp != 1:
+                merged.pop("temperature", None)
+            merged.pop("top_k", None)
+            top_p = merged.get("top_p")
+            if isinstance(top_p, (int, float)) and top_p < 0.95:
+                merged.pop("top_p", None)
             budget_tokens = merged_thinking.get("budget_tokens")
             merged_max_tokens = merged.get("max_tokens")
             if (
@@ -2539,9 +2559,13 @@ class ProviderAgentBinding:
         if not defaults:
             return payload
         merged = dict(payload)
+        gemini_allowed_root = {"safetySettings", "cachedContent", "labels", "toolConfig", "thinkingConfig"}
         if isinstance(defaults.get("extra_body"), dict):
-            merged = self._merge_record(merged, defaults["extra_body"])
-        merged = self._flatten_raw_http_thinking(merged)
+            gemini_extra = {
+                k: v for k, v in defaults["extra_body"].items() if k in gemini_allowed_root
+            }
+            if gemini_extra:
+                merged = self._merge_record(merged, gemini_extra)
         generation_config = dict(merged.get("generationConfig") or {})
         if isinstance(defaults.get("generationConfig"), dict):
             generation_config = self._merge_record(generation_config, defaults["generationConfig"])
@@ -2557,13 +2581,16 @@ class ProviderAgentBinding:
             if value is not None:
                 generation_config[output_key] = value
         merged["generationConfig"] = generation_config
-        return self._flatten_raw_http_thinking(merged)
+        return merged
 
     def _gemini_credentials(self) -> tuple[str, str]:
         api_key = getattr(self._provider_service, "_api_key", None)
-        if not isinstance(api_key, str) or not api_key.strip():
-            raise RuntimeError("Gemini GenerateContent provider requires an API key.")
         config = getattr(self._provider_service, "_config", None)
+        if not isinstance(api_key, str) or not api_key.strip():
+            if _allows_keyless_local_provider(config):
+                api_key = "local-no-key"
+            else:
+                raise RuntimeError("Gemini GenerateContent provider requires an API key.")
         model = getattr(config, "model", None) or "gemini-2.0-flash"
         return api_key.strip(), str(model).strip()
 

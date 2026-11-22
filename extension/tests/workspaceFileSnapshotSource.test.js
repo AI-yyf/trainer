@@ -20,7 +20,8 @@ test('managed admission does not hardcode adopt for remote browse-only discovery
 
 test('remote workspace snapshots list and attach more files than local ones', () => {
   const source = fs.readFileSync(sourcePath, 'utf8');
-  assert.match(source, /LIST_LIMIT_REMOTE = 200/);
+  assert.match(source, /LIST_LIMIT_LOCAL = 300/);
+  assert.match(source, /LIST_LIMIT_REMOTE = 400/);
   assert.match(source, /CONTENT_FILE_LIMIT_REMOTE = 48/);
   assert.match(source, /vscode\.env\?\.remoteName/);
   assert.match(source, /PRIORITY_BASENAMES/);

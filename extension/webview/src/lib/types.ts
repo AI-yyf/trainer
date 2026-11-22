@@ -2201,7 +2201,7 @@ type WebviewActionBody =
   | {
       type: "resource/upload";
       payload?: {
-        mode?: "files" | "folder" | "url";
+        mode?: "files" | "folder" | "workspace" | "url";
         __trainerResourceOperationId?: string;
       };
     }

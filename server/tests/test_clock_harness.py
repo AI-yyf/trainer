@@ -64,3 +64,17 @@ def test_learning_step_survives_persistence_and_graduates(monkeypatch: pytest.Mo
     second = restored.process_review("persisted-step", TrainingRating.GOOD)
     assert second.new_interval >= 1
     assert restored.get_card_state("persisted-step").state == "review"
+
+
+def test_memory_utc_now_resets_monotonic_latch_when_test_clock_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.memory.models import utc_now as memory_utc_now
+
+    monkeypatch.setenv("TRAINER_TEST_NOW", "2099-01-01T00:00:00Z")
+    future = memory_utc_now()
+    assert future.year == 2099
+
+    monkeypatch.delenv("TRAINER_TEST_NOW", raising=False)
+    real = memory_utc_now()
+    assert real.year < 2099

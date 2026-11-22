@@ -1893,7 +1893,8 @@ export class ProviderProfileRegistry implements vscode.Disposable {
 
   private generateProfileId(label: string): string {
     const timestamp = Date.now().toString(36);
-    const hash = crypto.createHash('md5').update(`${label}-${timestamp}`).digest('hex').slice(0, 8);
+    const nonce = crypto.randomBytes(4).toString('hex');
+    const hash = crypto.createHash('md5').update(`${label}-${timestamp}-${nonce}`).digest('hex').slice(0, 8);
     return `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${hash}`;
   }
 

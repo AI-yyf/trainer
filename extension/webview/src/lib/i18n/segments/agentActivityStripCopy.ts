@@ -231,4 +231,29 @@ export const TOOL_LABELS: Record<string, Record<ComposerLanguage, string>> = {
     "fr-FR": "Finaliser", "de-DE": "Abschließen",
     "ja-JP": "まとめ", "ko-KR": "마무리", "pt-BR": "Finalizar",
   },
+  web_search: {
+    "zh-CN": "联网检索", "en-US": "Web search", "es-ES": "Búsqueda web",
+    "fr-FR": "Recherche web", "de-DE": "Websuche",
+    "ja-JP": "Web検索", "ko-KR": "웹 검색", "pt-BR": "Busca na web",
+  },
+  fetch_web_page: {
+    "zh-CN": "读取网页", "en-US": "Read webpage", "es-ES": "Leer página",
+    "fr-FR": "Lire la page", "de-DE": "Webseite lesen",
+    "ja-JP": "Webページを読む", "ko-KR": "웹페이지 읽기", "pt-BR": "Ler página",
+  },
+  import_workspace_file: {
+    "zh-CN": "转入资料库", "en-US": "Import to library", "es-ES": "Importar a biblioteca",
+    "fr-FR": "Importer vers la bibliothèque", "de-DE": "In Bibliothek importieren",
+    "ja-JP": "ライブラリに取込", "ko-KR": "라이브러리로 가져오기", "pt-BR": "Importar para biblioteca",
+  },
+  read_resource_excerpt: {
+    "zh-CN": "精读资料", "en-US": "Read resource", "es-ES": "Leer recurso",
+    "fr-FR": "Lire la ressource", "de-DE": "Ressource lesen",
+    "ja-JP": "資料を読む", "ko-KR": "자료 읽기", "pt-BR": "Ler recurso",
+  },
+  search_learning_materials: {
+    "zh-CN": "搜寻学习资料", "en-US": "Find materials", "es-ES": "Buscar materiales",
+    "fr-FR": "Chercher des ressources", "de-DE": "Lernmaterial suchen",
+    "ja-JP": "学習資料を検索", "ko-KR": "학습 자료 검색", "pt-BR": "Buscar materiais",
+  },
 };

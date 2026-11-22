@@ -758,11 +758,11 @@ export class WorkbenchSidebarController
           );
         }
         // Speed-test latency rows are data, not an operation status message:
-        // the settings panel renders them directly from this dedicated ack.
-        if (command.commandId === COMMAND_IDS.providerSpeedTest && result.data) {
+        // always close the pending UI state even when the command errors.
+        if (command.commandId === COMMAND_IDS.providerSpeedTest) {
           await this.postMessage({
             type: 'provider/speedTest',
-            payload: result.data as { results: unknown[] },
+            payload: (result.data as { results: unknown[] } | undefined) ?? { results: [] },
           });
         }
         // The session list is data for the coach history panel, not a status

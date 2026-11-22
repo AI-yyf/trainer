@@ -4,7 +4,7 @@
 
 Trainer 扩展可打包为 `.vsix`，并在扩展内部携带独立冻结的 sidecar 二进制以及 Remote-SSH Companion（`extension/bundled/remote/trainer-workspace-companion.vsix`）。
 
-- 每个 `.vsix` 都绑定一个系统和架构；请安装文件名与当前 VS Code Extension Host 匹配的版本，例如 `trainer-extension-1.4.5-darwin-arm64.vsix`、`trainer-extension-1.4.5-win32-x64.vsix` 或 `trainer-extension-1.4.5-linux-x64.vsix`
+- 每个 `.vsix` 都绑定一个系统和架构；请安装文件名与当前 VS Code Extension Host 匹配的版本，例如 `trainer-extension-1.5.0-darwin-arm64.vsix`、`trainer-extension-1.5.0-win32-x64.vsix` 或 `trainer-extension-1.5.0-linux-x64.vsix`
 - 安装扩展后，无需通过 VS Code `Run Extension` 调试模式启动
 - 安装版只会启动包内已验证的 sidecar 二进制
 - 如果二进制缺失或与当前系统不匹配，Trainer 会提示重新安装对应 VSIX；不会尝试使用电脑上的 Python 或源码
@@ -25,11 +25,11 @@ npm run package:vsix --prefix extension
 
 产物会出现在 `extension/` 下，名称带有版本号和目标平台：
 
-`trainer-extension-1.4.5-<platform>-<arch>.vsix`
+`trainer-extension-1.5.0-<platform>-<arch>.vsix`
 
 ## 安装到 VS Code
 
-1. 打开 VS Code（或命令行运行 `code --install-extension extension/trainer-extension-1.4.5-<platform>-<arch>.vsix --force`）
+1. 打开 VS Code（或命令行运行 `code --install-extension extension/trainer-extension-1.5.0-<platform>-<arch>.vsix --force`）
 2. 执行命令 `Extensions: Install from VSIX...`
 3. 选择生成的 `.vsix`
 4. 安装后重载窗口
@@ -43,7 +43,7 @@ npm run package:vsix --prefix extension
 
 ## 发布前检查
 
-- 运行 `npm run verify:delivery`（含 `verify`、`test:experience-matrix`、`package:vsix`）并确认 `extension/trainer-extension-1.4.5-<platform>-<arch>.vsix.build.json` 中 `sourceDirty: false`
+- 运行 `npm run verify:delivery`（含 `verify`、`test:experience-matrix`、`package:vsix`）并确认 `extension/trainer-extension-1.5.0-<platform>-<arch>.vsix.build.json` 中 `sourceDirty: false`
 - 运行 `npm run test:server` 与 `npm run verify:ui-geometry`，以当次实际结果为准，不要依赖历史数值
 - 确认产物文件名中的 `<platform>-<arch>` 与安装目标一致
 

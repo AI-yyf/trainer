@@ -278,6 +278,26 @@
 .settings-endpoint-speed__row:nth-child(7) { animation-delay: 240ms; }
 .settings-endpoint-speed__row:nth-child(8) { animation-delay: 280ms; }
 
+/* Added workspace projects row + current badge spacing */
+.settings-added-projects__name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-added-projects__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--fg-0);
+  font-size: var(--trainer-font-3xs, 11px);
+  line-height: 1.4;
+}
+
 /* Motion kill-switch: one blanket override so future animations stay
    accessibility-safe without remembering a per-feature reduced-motion block. */
 @media (prefers-reduced-motion: reduce) {

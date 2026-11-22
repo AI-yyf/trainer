@@ -485,6 +485,15 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
         api_key_override = provider_api_key_from_payload(payload)
         if override_config is not None or api_key_override is not None:
             coaching_service = runtime.provider_service_for(override_config, api_key_override)
+        if coaching_service is not None:
+            from types import SimpleNamespace
+
+            runtime.adopt_request_provider_evidence(
+                SimpleNamespace(
+                    last_test_result=payload.get("last_test_result") or payload.get("lastTestResult")
+                ),
+                coaching_service,
+            )
         ensure_coach_provider_ready(
             coaching_service,
             response_language=requested_response_language,

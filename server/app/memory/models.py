@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -8,13 +9,19 @@ from ..core.clock import utc_now as _system_utc_now
 from ..core.models import TeachingKnowledgeAsset
 
 _last_utc_now: datetime | None = None
+_last_test_now_env: str | None = None
 
 
 def utc_now() -> datetime:
     # Records written within the same clock tick share a timestamp and would
     # fall back to insertion order when sorted by updated_at. Keep the clock
-    # strictly monotonic so the last write always orders first.
-    global _last_utc_now
+    # strictly monotonic so the last write always orders first, while resetting
+    # the latch whenever a test clock override is applied or cleared.
+    global _last_utc_now, _last_test_now_env
+    test_now_env = (os.getenv("TRAINER_TEST_NOW") or "").strip()
+    if test_now_env != _last_test_now_env:
+        _last_test_now_env = test_now_env
+        _last_utc_now = None
     now = _system_utc_now()
     if _last_utc_now is not None and now <= _last_utc_now:
         now = _last_utc_now + timedelta(microseconds=1)

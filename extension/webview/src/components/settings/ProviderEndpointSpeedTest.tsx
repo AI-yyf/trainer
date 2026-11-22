@@ -72,12 +72,14 @@ export function ProviderEndpointSpeedTest({
     );
   }, [results]);
 
+  const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, "");
+
   const addExtra = () => {
     const normalized = extraUrlDraft.trim().replace(/\/+$/, "");
     if (
       !normalized ||
       extraUrls.includes(normalized) ||
-      normalized === baseUrl.trim() ||
+      normalized === normalizedBaseUrl ||
       endpoints.length >= MAX_ENDPOINTS
     ) {
       setExtraUrlDraft("");
@@ -109,7 +111,7 @@ export function ProviderEndpointSpeedTest({
       <div className="settings-endpoint-speed__rows">
         {results.map((item) => {
           const tier = endpointLatencyTier(item.latencyMs);
-          const selected = item.url === baseUrl;
+          const selected = item.url.trim().replace(/\/+$/, "") === normalizedBaseUrl;
           return (
             <button
               key={item.url}
@@ -156,7 +158,7 @@ export function ProviderEndpointSpeedTest({
         >
           {pending ? copy(language, "running") : copy(language, "run")}
         </button>
-        {fastest && fastest.url !== baseUrl ? (
+        {fastest && fastest.url.trim().replace(/\/+$/, "") !== normalizedBaseUrl ? (
           <button type="button" className="toolbar-button" onClick={() => onAdopt(fastest.url)}>
             {copy(language, "adoptFastest")} ({fastest.latencyMs}ms)
           </button>

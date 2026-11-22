@@ -41,6 +41,7 @@ export type ProviderConfig = {
   label?: string;
   mode?: "direct" | "gateway";
   credentialMode?: ProviderCredentialMode;
+  ignoreSystemProxy?: boolean;
   availableModels?: string[];
   catalogModels?: string[];
   allowedModels?: string[];

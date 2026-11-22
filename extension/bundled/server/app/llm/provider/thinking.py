@@ -160,6 +160,19 @@ def declared_thinking(payload: dict[str, Any] | None) -> ThinkingPolicy | None:
             return "disabled"
         if kind in {"enabled", "adaptive", "auto"}:
             return "enabled"
+    # Respect OpenAI / gateway `reasoning_effort` / `reasoning` overrides without
+    # injecting a contradictory `extra_body.thinking = {"type": "disabled"}`.
+    extra_body = payload.get("extra_body")
+    containers = (payload, extra_body) if isinstance(extra_body, dict) else (payload,)
+    for container in containers:
+        effort = container.get("reasoning_effort")
+        if effort is None:
+            effort = container.get("reasoningEffort")
+        if isinstance(effort, str) and effort.strip():
+            return "omit"
+        reasoning = container.get("reasoning")
+        if isinstance(reasoning, dict) and reasoning:
+            return "omit"
     if "thinking" in payload and payload.get("thinking") is None:
         return "omit"
     return None
@@ -173,13 +186,16 @@ def resolve_thinking_policy(
 
     Precedence, highest first:
 
-    1. A user-declared thinking config is never overridden.
-    2. A policy this model already taught us by rejecting the previous one.
-    3. The default first attempt (``disabled``), which keeps probe replies short.
+    1. An explicit opt-in (`enabled`) or `omit` (`reasoning_effort` / explicit
+       ``thinking: None``) is never overridden.
+    2. A policy this model already taught us by rejecting the previous one
+       (so mandatory-thinking models aren't re-sent an auto-injected ``disabled``).
+    3. Any remaining declared policy (such as an explicit ``disabled`` default).
+    4. The default first attempt (``disabled``), which keeps probe replies short.
     """
     explicit = declared_thinking(payload)
-    if explicit == "enabled":
-        return "enabled"
+    if explicit in {"enabled", "omit"}:
+        return explicit
     learned = learned_policy(provider)
     if learned is not None:
         return learned

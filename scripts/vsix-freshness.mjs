@@ -167,7 +167,9 @@ export function describeVsixFreshness({ repoRoot, vsixPath }) {
     return `Packaged VSIX is current (${freshness.inputCount} packaged sources checked).`;
   }
   const newest = freshness.newestInput;
-  const newestName = newest ? path.relative(repoRoot, newest.file) : "unknown";
+  const newestName = newest
+    ? path.relative(repoRoot, newest.file).split(path.sep).join("/")
+    : "unknown";
   const lines = [
     `Packaged VSIX is older than the sources it packages: ${vsixPath}`,
     `- newest packaged source: ${newestName}`,

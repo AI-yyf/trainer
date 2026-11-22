@@ -34,6 +34,31 @@ def _is_loopback_provider_url(value: object | None) -> bool:
         return False
 
 
+def _allows_keyless_local_provider(provider: Any) -> bool:
+    """Return whether a loopback provider explicitly represents a keyless local runtime."""
+    if provider is None:
+        return False
+    base_url = getattr(provider, "base_url", None)
+    if not _is_loopback_provider_url(base_url):
+        return False
+    cred_mode = str(getattr(provider, "credential_mode", "") or "").strip().lower()
+    if cred_mode in {"local_no_auth", "none", "anonymous"}:
+        return True
+    try:
+        if urlsplit(str(base_url or "").strip()).port == 11434:
+            return True
+    except ValueError:
+        pass
+    markers = " ".join(
+        str(getattr(provider, attr, "") or "").strip().lower()
+        for attr in ("name", "label", "connection_type", "api_key_ref")
+    )
+    return any(
+        token in markers
+        for token in ("ollama", "lmstudio", "lm-studio", "lm studio", "vllm", "llamacpp", "llama.cpp")
+    )
+
+
 def _should_fingerprint_gateway(provider: ProviderConfig | None) -> bool:
     if provider is None:
         return False
@@ -158,10 +183,22 @@ def _normalized_provider_request_defaults(provider: ProviderConfig | None) -> di
         else ""
     )
     user_declared_thinking = thinking_type == "enabled"
+    user_disabled_thinking = thinking_type == "disabled"
     probe_declared_thinking = bool(getattr(getattr(provider, "capabilities", None), "thinking", False))
-    # A thinking-capability probe overlays extra_body after defaults are applied.
-    if thinking_type != "enabled" or (probe_declared_thinking and not user_declared_thinking):
-        thinking_type = "enabled" if (probe_declared_thinking or user_declared_thinking) else "disabled"
+    # Honor explicit user opt-outs (`thinking: {type: "disabled"}`) as well as
+    # explicit `reasoning_effort` declarations; only inject MiniMax defaults when
+    # no thinking policy was explicitly chosen.
+    has_reasoning_effort = bool(
+        str(normalized.get("reasoning_effort") or normalized.get("reasoningEffort") or "").strip()
+    )
+    if has_reasoning_effort and not thinking_type:
+        return normalized
+    if not thinking_type or (probe_declared_thinking and not user_disabled_thinking):
+        thinking_type = (
+            "enabled"
+            if (user_declared_thinking or (probe_declared_thinking and not user_disabled_thinking))
+            else "disabled"
+        )
     normalized_extra_body["thinking"] = {"type": thinking_type}
     normalized["extra_body"] = normalized_extra_body
     return normalized

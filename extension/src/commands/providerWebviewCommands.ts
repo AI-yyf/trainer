@@ -605,11 +605,21 @@ export async function saveProviderFromWebviewCommand(
     input.baseUrl ?? existing?.baseUrl ?? 'http://localhost:1234/v1',
     resolvedProtocol,
   );
-  // P0: no silent placeholder defaults. A save without a model (fresh quick
-  // setup, whitespace-only draft) fails with an actionable message so the user
-  // picks from the known list or types the model ID — gpt-4.1-mini and friends
-  // are never assumed.
-  const model = input.model?.trim() || existing?.model?.trim() || '';
+  const previousProtocol = normalizeProviderProtocol(existing?.protocol);
+  const protocolChanged = resolvedProtocol !== previousProtocol;
+  const sameConnection =
+    Boolean(existing) &&
+    previousProtocol === resolvedProtocol &&
+    normalizeBaseUrl(existing?.baseUrl ?? '', previousProtocol) === baseUrl;
+  // P0: no silent placeholder defaults. An explicit empty model or a changed
+  // vendor connection without a chosen model fails cleanly instead of falling
+  // back to the previous provider's model ID.
+  const hasModelField = hasOwn(input, 'model');
+  const model = hasModelField
+    ? (input.model?.trim() ?? '')
+    : sameConnection
+      ? (existing?.model?.trim() ?? '')
+      : '';
 
   if (!baseUrl || !model) {
     const responseLanguage = resolveProviderResponseLanguage(context, input.responseLanguage);
@@ -621,12 +631,6 @@ export async function saveProviderFromWebviewCommand(
     };
   }
 
-  const previousProtocol = normalizeProviderProtocol(existing?.protocol);
-  const protocolChanged = resolvedProtocol !== previousProtocol;
-  const sameConnection =
-    Boolean(existing) &&
-    previousProtocol === resolvedProtocol &&
-    normalizeBaseUrl(existing?.baseUrl ?? '', previousProtocol) === baseUrl;
   const capabilities: CapabilityFlags = protocolChanged
     ? defaultCapabilitiesForProtocol(resolvedProtocol)
     : {

@@ -113,6 +113,10 @@ export interface CoachComposerProps {
   /** @-mention candidates: linked resources and workspace files. */
   mentionItems?: ComposerMentionItem[];
   onMentionSelect?: (item: ComposerMentionItem) => void;
+  /** Optional queued-follow-ups strip rendered calmly above the input while streaming. */
+  queueBanner?: ReactNode;
+  /** Optional handler to enqueue the current draft while a stream is in flight. */
+  onQueueSubmit?: () => void;
 }
 
 export function CoachComposer({
@@ -156,6 +160,8 @@ export function CoachComposer({
   submitBlockedReason,
   mentionItems = [],
   onMentionSelect,
+  queueBanner,
+  onQueueSubmit,
 }: CoachComposerProps) {
   const localizedCopy = composerLocaleCopy[language] ?? composerLocaleCopy["en-US"];
   const addCopy = composerAddCopy[language];
@@ -378,12 +384,13 @@ export function CoachComposer({
     },
     [onAttachmentsChange, stagedAttachments],
   );
-  const areActionsDisabled = disabled || busy;
+  const areActionsDisabled = disabled;
   const trimmedValue = value.trim();
   const hasSubmissionContent = trimmedValue.length > 0 || stagedAttachments.length > 0;
   const hasSubmissionPermission = allowEmptySubmit || hasSubmissionContent;
   const isSubmitDisabled = imageStaging.busy || submitDisabled || !hasSubmissionPermission;
   const canSubmit = !disabled && !busy && !isSubmitDisabled;
+  const canQueueWhileBusy = Boolean(busy && !disabled && onQueueSubmit && hasSubmissionContent && !imageStaging.busy && !submitDisabled);
   const sendState = busy ? "streaming" : submitDisabled ? "blocked" : hasSubmissionPermission ? "ready" : "idle";
   const resolvedSummary = summary?.trim() ? summary : undefined;
   const resolvedHintText = hintText?.trim() ? hintText : undefined;
@@ -894,6 +901,7 @@ export function CoachComposer({
         </div>
       ) : null}
       <div className="composer__body">
+        {queueBanner}
         <div
           className={`composer__frame ${showCharCount ? "composer__frame--with-count" : ""} ${
             isDragActive ? "composer__frame--drop-target" : ""
@@ -1215,7 +1223,7 @@ export function CoachComposer({
             </div>
           ) : null}
 
-          {value && !busy && (
+          {value && !disabled && (
             <button
               type="button"
               className="composer__clear-btn"
@@ -1230,6 +1238,17 @@ export function CoachComposer({
           {showToolbarDivider ? <span className="composer__toolbar-divider" aria-hidden="true" /> : null}
 
           <div className="composer__send-wrap">
+            {canQueueWhileBusy ? (
+              <button
+                aria-label={language === "zh-CN" ? "排队发送（完成后自动发出）" : "Queue message to send next"}
+                title={language === "zh-CN" ? "排队发送（Enter）" : "Queue message (Enter)"}
+                className="composer__queue-btn button button--ghost button--compact"
+                onClick={onQueueSubmit}
+                type="button"
+              >
+                <SendIcon size={14} />
+              </button>
+            ) : null}
             <button
               aria-label={busy ? resolvedCancelLabel : resolvedSubmitButtonLabel}
               title={busy ? resolvedCancelLabel : resolvedSubmitButtonLabel}

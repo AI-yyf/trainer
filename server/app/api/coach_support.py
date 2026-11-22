@@ -117,6 +117,7 @@ from .router_support import (
 from .router_support import (
     _resolve_agent_loop_enabled,
     _stamp_library_sandbox_work,
+    register_request_workspace_path,
 )
 from .router_support import (
     reset_provider_scheme_cache as reset_provider_scheme_cache,
@@ -6404,6 +6405,7 @@ async def execute_turn(deps: CoachSupportDeps,
 ) -> tuple[object, object, object]:
     workspace_id = deps.current_workspace_id(session_id=request.session_id, workspace_id=request.workspace_id)
     state = deps.runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+    register_request_workspace_path(deps.runtime, state.workspace_id, payload, request)
     profile = deps.resolved_profile(state.workspace_id)
     frozen_formal_plan_mutation_requested = bool(
         request.intent == "plan"

@@ -1114,9 +1114,12 @@ function buildProviderDiagnosticsPatch(
   const modelDiagnostics = hasOwn(response, 'model_diagnostics')
     ? toModelDiagnostics(response.model_diagnostics)
     : bootstrapProvider.modelDiagnostics ?? [];
+  const responseModels = hasOwn(response, 'available_models')
+    ? toStringArray(response.available_models)
+    : [];
   const availableModels = filterProviderModelOptions(
-    hasOwn(response, 'available_models')
-      ? toStringArray(response.available_models)
+    responseModels.length > 0
+      ? responseModels
       : (bootstrapProvider.availableModels?.length
           ? bootstrapProvider.availableModels
           : config.availableModels ?? config.catalogModels ?? []),
@@ -1649,9 +1652,10 @@ export async function createProviderProfileFromDraftCommand(
       'Trainer did not create or switch to a new connection.',
     );
   }
-  const fallbackApiKey = existing
-    ? await resolveProviderApiKey(context, existing as ProviderConfig & { apiKey?: string })
-    : undefined;
+  const fallbackApiKey =
+    existing && sameConnection
+      ? await resolveProviderApiKey(context, existing as ProviderConfig & { apiKey?: string })
+      : undefined;
   const copiedApiKey = toOptionalString(input.apiKey) ?? fallbackApiKey;
   const credentialMode =
     input.credentialMode ??

@@ -1906,6 +1906,10 @@ export async function sendMessageCommand(
     coach_defaults: sessionPayload?.coachDefaults,
     attachments: normalizeAttachments(sessionPayload?.attachments),
     use_agent_loop: sessionPayload?.useAgentLoop,
+    workspace_path:
+      getRuntimeWorkspaceContext(context).canonicalProjectPath ??
+      activeWorkspaceRoot(context) ??
+      undefined,
     request_id:
       sessionPayload?.requestId?.trim() ||
       `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -2172,6 +2176,10 @@ export async function sendStreamMessageCommand(
       coach_defaults: streamPayload.coachDefaults,
       attachments: normalizeAttachments(streamPayload.attachments),
       use_agent_loop: streamPayload.useAgentLoop,
+      workspace_path:
+        getRuntimeWorkspaceContext(context).canonicalProjectPath ??
+        activeWorkspaceRoot(context) ??
+        undefined,
       request_id: streamPayload.requestId?.trim() || `coach-${messageId}`,
       plan_runtime_recovery: streamPayload.planRuntimeRecovery,
       stream: true,

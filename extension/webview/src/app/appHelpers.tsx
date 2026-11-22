@@ -3626,7 +3626,7 @@ export function triggerResourceUpload({
   folderInputRef,
 }: {
   browserPreview: boolean;
-  payloadMode?: "files" | "folder" | "url";
+  payloadMode?: "files" | "folder" | "workspace" | "url";
   folder?: boolean;
   filesInputRef: { current: HTMLInputElement | null };
   folderInputRef: { current: HTMLInputElement | null };

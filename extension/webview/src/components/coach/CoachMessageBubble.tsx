@@ -282,6 +282,30 @@ function toolTrailLabel(name: string, language: ComposerLanguage): string {
   return TOOL_LABELS[name]?.[language] ?? humanizeToolName(name);
 }
 
+function toolTrailTarget(activity: { args?: Record<string, unknown> }): string {
+  const args = activity.args;
+  if (!args || typeof args !== "object") {
+    return "";
+  }
+  const candidate =
+    args.path ??
+    args.directory ??
+    args.query ??
+    args.url ??
+    args.title ??
+    args.name ??
+    args.folder ??
+    args.pattern;
+  if (typeof candidate === "string") {
+    const cleaned = candidate.replace(/\s+/g, " ").trim();
+    return cleaned.length > 56 ? `${cleaned.slice(0, 55)}…` : cleaned;
+  }
+  if (Array.isArray(args.paths) && args.paths.length > 0) {
+    return `${String(args.paths[0]).trim()} (+${args.paths.length - 1})`;
+  }
+  return "";
+}
+
 function toolTrailHint(
   activity: { status: string; result?: unknown },
   language: ComposerLanguage,
@@ -371,6 +395,7 @@ function CoachMessageBubbleImpl({
   // 展开后动作条出现在消息底部，正好位于输入框上方。
   const [nextActionRevealed, setNextActionRevealed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [morePlacement, setMorePlacement] = useState<"below" | "above">("below");
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!moreOpen) {
@@ -458,7 +483,7 @@ function CoachMessageBubbleImpl({
   const toolTrailActivities =
     message.role === "assistant" && !streaming
       ? deriveTrainerToolActivity(message.parts).filter((activity) =>
-          /(read|search|grep|find|list|fetch|diagnostic|context|inspect|open)/i.test(
+          /(read|search|grep|find|list|fetch|diagnostic|context|inspect|open|import|save|write|organize|index|recall)/i.test(
             activity.name,
           ),
         )
@@ -525,14 +550,20 @@ function CoachMessageBubbleImpl({
           <details className="coach-work-trail">
             <summary>{toolTrailSummary(toolTrailActivities, language)}</summary>
             <ul className="coach-work-trail__rows">
-              {toolTrailActivities.map((activity) => (
-                <li key={activity.id} className="coach-work-trail__row">
-                  <span>{toolTrailLabel(activity.name, language)}</span>
-                  <span className="coach-work-trail__hint">
-                    {toolTrailHint(activity, language)}
-                  </span>
-                </li>
-              ))}
+              {toolTrailActivities.map((activity) => {
+                const target = toolTrailTarget(activity);
+                return (
+                  <li key={activity.id} className="coach-work-trail__row">
+                    <span>
+                      {toolTrailLabel(activity.name, language)}
+                      {target ? ` · ${target}` : ""}
+                    </span>
+                    <span className="coach-work-trail__hint">
+                      {toolTrailHint(activity, language)}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </details>
         ) : null}
@@ -654,12 +685,23 @@ function CoachMessageBubbleImpl({
                   aria-haspopup="menu"
                   aria-expanded={moreOpen}
                   disabled={Boolean(pendingAssistantAction)}
-                  onClick={() => setMoreOpen((open) => !open)}
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const viewportHeight =
+                      typeof window !== "undefined" ? window.innerHeight : 800;
+                    setMorePlacement(rect.bottom + 240 > viewportHeight ? "above" : "below");
+                    setMoreOpen((open) => !open);
+                  }}
                 >
                   <ActionGlyph glyphs={GLYPH_MORE} />
                 </button>
                 {moreOpen ? (
-                  <div className="message-bubble__more-menu" role="menu" aria-label={moreLabel}>
+                  <div
+                    className="message-bubble__more-menu"
+                    data-menu-placement={morePlacement}
+                    role="menu"
+                    aria-label={moreLabel}
+                  >
                     <button
                       type="button"
                       role="menuitem"

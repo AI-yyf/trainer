@@ -112,5 +112,17 @@ def message_requests_lecture_note_save(message: str | None) -> bool:
         "\u6c89\u6dc0\u5230\u8d44\u6599\u5e93",
         "\u5b58\u6210\u7b14\u8bb0",
         "\u5b58\u6210\u8bb2\u7a3f",
+        "备课简报",
+        "生成备课",
+        "做一份备课",
+        "帮我备课",
+        "自主备课",
+        "生成讲稿",
+        "准备讲稿",
+        "写成讲稿",
+        "prepare a lesson",
+        "lesson plan",
+        "teaching brief",
+        "lecture note",
     )
     return any(phrase in lowered for phrase in chinese_phrases)

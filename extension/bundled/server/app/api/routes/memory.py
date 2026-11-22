@@ -43,7 +43,6 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     current_workspace_id = deps.current_workspace_id
     current_snapshot = deps.current_snapshot
     refresh_workspace_sessions = deps.refresh_workspace_sessions
-    hydrate_snapshot = deps.hydrate_snapshot
 
 
     @router.get("/memory/summary", response_model=WorkbenchSnapshot)
@@ -311,29 +310,10 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             include_selection=request.include_selection,
             include_diagnostics=request.include_diagnostics,
             include_related_files=request.include_related_files,
+            resource_search_mode=request.resource_search_mode,
         )
 
-        state = runtime.get_session(request.session_id) if request.session_id else runtime.latest_session()
-        if state and state.workspace_id == workspace_id:
-            state.snapshot.memory = runtime.memory_service.snapshot(workspace_id)
-            state.snapshot.profile = runtime.repository.get_profile(workspace_id)
-            state.snapshot.plan = runtime.repository.get_latest_plan(workspace_id)
-            workspace_memory = state.snapshot.memory.workspace if isinstance(state.snapshot.memory.workspace, dict) else {}
-            hydrate_snapshot(
-                state.snapshot,
-                response_language=(
-                    str(workspace_memory.get("response_language")).strip()
-                    if workspace_memory.get("response_language")
-                    else None
-                ),
-                answer_mode=(
-                    str(workspace_memory.get("answer_mode")).strip()
-                    if workspace_memory.get("answer_mode")
-                    else (state.snapshot.profile.answer_policy if state.snapshot.profile else None)
-                ),
-            )
-            runtime.save_session_state(state.session_id)
-
+        refresh_workspace_sessions(workspace_id)
         return current_snapshot(session_id=request.session_id, workspace_id=workspace_id)
 
     @router.post("/proactive/evaluate", response_model=None)

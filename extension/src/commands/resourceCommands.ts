@@ -32,7 +32,7 @@ import { hostCommandCopy, resolveHostCommandLanguage } from './hostCommandCopy';
 import { runtimeDataRootUnder } from './workspaceAdmissionCommands';
 
 const MAX_RESOURCE_UPLOADS = 100;
-type ResourceSourceMode = 'files' | 'folder' | 'url';
+type ResourceSourceMode = 'files' | 'folder' | 'workspace' | 'url';
 const RESOURCE_FILTER_EXTENSIONS = [
   'pdf',
   'doc',
@@ -265,7 +265,10 @@ export async function uploadResourceCommand(
       : undefined;
 
   const directMode: ResourceSourceMode | undefined =
-    requestedMode === 'files' || requestedMode === 'folder' || requestedMode === 'url'
+    requestedMode === 'files' ||
+    requestedMode === 'folder' ||
+    requestedMode === 'workspace' ||
+    requestedMode === 'url'
       ? requestedMode
       : undefined;
   const inlineUploadResult = parseInlineResourceUploads(payload, lang);
@@ -288,7 +291,9 @@ export async function uploadResourceCommand(
             ? hostCommandCopy(lang, 'resourceLabelLocalFiles')
             : directMode === 'folder'
               ? hostCommandCopy(lang, 'resourceLabelFolder')
-              : hostCommandCopy(lang, 'resourceLabelUrl'),
+              : directMode === 'workspace'
+                ? (lang === 'zh-CN' ? '从当前项目选择' : 'Select from workspace')
+                : hostCommandCopy(lang, 'resourceLabelUrl'),
         value: directMode,
       }
     : await vscode.window.showQuickPick(
@@ -458,6 +463,70 @@ export async function uploadResourceCommand(
       workspaceId,
       discoveredFiles,
       folderPath,
+      recordUploaded,
+    );
+    failedUploads += uploadResult.failedCount;
+  } else if (sourceMode.value === 'workspace') {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? context.getHostState().workspace.activeWorkspaceRoot;
+    if (!workspaceRoot) {
+      return {
+        ok: false,
+        message: lang === 'zh-CN' ? '当前尚未打开本地项目文件夹。' : 'No local workspace folder is currently open.',
+      };
+    }
+    let candidatePaths: string[] = [];
+    if (typeof vscode.workspace.findFiles === 'function') {
+      const found = await vscode.workspace.findFiles(
+        '**/*',
+        '{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/.venv/**,**/venv/**,**/__pycache__/**,**/.next/**,**/.turbo/**}',
+        400,
+      );
+      candidatePaths = found
+        .map((uri) => uri.fsPath)
+        .filter((fsPath) => fsPath && isSupportedResourceFile(fsPath));
+    }
+    if (candidatePaths.length === 0) {
+      const scanned = await collectImportableFiles(workspaceRoot, 300);
+      candidatePaths = scanned.files;
+    }
+    const items = candidatePaths
+      .map((filePath) => {
+        const rel = path.relative(workspaceRoot, filePath).split(path.sep).join('/') || path.basename(filePath);
+        const dir = path.posix.dirname(rel);
+        return {
+          label: path.posix.basename(rel),
+          description: dir === '.' ? path.basename(workspaceRoot) : `${path.basename(workspaceRoot)}/${dir}`,
+          detail: rel,
+          filePath,
+        };
+      })
+      .sort((a, b) => a.detail.localeCompare(b.detail));
+    if (items.length === 0) {
+      return {
+        ok: false,
+        message: hostCommandCopy(lang, 'folderNoSupportedFiles'),
+      };
+    }
+    const picked = await vscode.window.showQuickPick(items, {
+      canPickMany: true,
+      matchOnDescription: true,
+      matchOnDetail: true,
+      ignoreFocusOut: true,
+      title: lang === 'zh-CN' ? '选择当前项目文件复制到资料库' : 'Select workspace files to copy into Library',
+      placeHolder: lang === 'zh-CN' ? '勾选需要加入 Trainer 资料库的代码或文档（不会改动原项目）' : 'Check project files to copy into Trainer Library (read-only on project)',
+    });
+    if (!picked || picked.length === 0) {
+      return { ok: false, cancelled: true };
+    }
+    truncated = picked.length > MAX_RESOURCE_UPLOADS;
+    const selectedFiles = picked.slice(0, MAX_RESOURCE_UPLOADS).map((item) => item.filePath);
+    const uploadResult = await uploadLocalFiles(
+      context,
+      status.port,
+      workspaceId,
+      selectedFiles,
+      workspaceRoot,
       recordUploaded,
     );
     failedUploads += uploadResult.failedCount;
@@ -1038,6 +1107,8 @@ export async function exportResourceCommand(
 
   const request = isResourceCapturePayloadRecord(payload);
   const resourceId = asString(request.resource_id ?? request.resourceId)?.trim();
+  const requestedFormat =
+    asString(request.format)?.trim().toLowerCase() === 'pdf' ? 'pdf' : 'markdown';
   const resource = resourceId
     ? context.getHostState().bootstrap.resources.find((item) => item.id === resourceId)
     : undefined;
@@ -1053,6 +1124,9 @@ export async function exportResourceCommand(
   const workspaceId = getRuntimeWorkspaceId(context);
   const sessionId = context.getSessionId();
   const query = new URLSearchParams({ resource_id: resource.id });
+  if (requestedFormat === 'pdf') {
+    query.set('format', 'pdf');
+  }
   if (sessionId) {
     query.set('session_id', sessionId);
   }
@@ -1085,12 +1159,20 @@ export async function exportResourceCommand(
   }
 
   const sanitize = (value: string) => value.replace(/[\\/:*?"<>|]/g, '_').trim() || 'resource';
+  const normalizedFilename =
+    requestedFormat === 'pdf' && !sanitize(filename).toLowerCase().endsWith('.pdf')
+      ? `${sanitize(filename).replace(/\.md$/i, '')}.pdf`
+      : sanitize(filename);
   const defaultUri = vscode.workspace.workspaceFile
-    ? vscode.Uri.joinPath(vscode.Uri.file(path.dirname(vscode.workspace.workspaceFile.fsPath)), sanitize(filename))
+    ? vscode.Uri.joinPath(vscode.Uri.file(path.dirname(vscode.workspace.workspaceFile.fsPath)), normalizedFilename)
     : undefined;
   const target = await vscode.window.showSaveDialog({
     defaultUri,
     saveLabel: hostCommandCopy(language, 'exportSaveLabel'),
+    filters:
+      requestedFormat === 'pdf'
+        ? { PDF: ['pdf'] }
+        : { Markdown: ['md'] },
   });
   if (!target) {
     // Report the cancellation as a normal outcome (not `cancelled`): a
@@ -2831,7 +2913,7 @@ function buildResourceImportMessage(input: {
   summaryRefreshed: boolean;
   truncated: boolean;
   skippedUnsupported: number;
-  sourceMode: 'files' | 'folder' | 'url';
+  sourceMode: ResourceSourceMode;
   language?: ComposerLanguage;
 }): string {
   const {
@@ -2864,7 +2946,7 @@ function buildResourceImportMessage(input: {
     return `${failedSummary}${skippedSummary}`.trim();
   }
   const importedSummary = truncated
-    ? sourceMode === 'folder'
+    ? sourceMode === 'folder' || sourceMode === 'workspace'
       ? hostCommandCopy(lang, 'importSummaryTruncatedFolder', { count: uploadsCount })
       : hostCommandCopy(lang, 'importSummaryTruncated', { count: uploadsCount })
     : hostCommandCopy(lang, 'importSummaryDone', { count: uploadsCount });

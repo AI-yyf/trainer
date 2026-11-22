@@ -103,6 +103,7 @@ from ..router_support import (
     _stamp_library_sandbox_work,
     _workspace_snapshot_from_payload,
     overlay_session_response_honesty_stamps,
+    register_request_workspace_path,
 )
 from ..router_support import (
     _request_is_plan_agent_turn as _request_is_plan_agent_turn,
@@ -674,14 +675,28 @@ def build_core_router(
                 restored.snapshot.profile = runtime.repository.get_profile(workspace_id)
                 restored.snapshot.memory = runtime.memory_service.snapshot(workspace_id)
                 runtime.hydrate_plan_context(restored.snapshot, workspace_id)
-                coach_support.hydrate_snapshot(core.coach_support_deps,
-                    restored.snapshot,
-                    response_language=None,
-                    answer_mode=(
+                restored_workspace_memory = (
+                    restored.snapshot.memory.workspace
+                    if isinstance(restored.snapshot.memory.workspace, dict)
+                    else {}
+                )
+                saved_response_language = (
+                    str(restored_workspace_memory.get("response_language") or "").strip()
+                    or start_response_language
+                    or None
+                )
+                saved_answer_mode = (
+                    str(restored_workspace_memory.get("answer_mode") or "").strip()
+                    or (
                         restored.snapshot.profile.answer_policy
                         if restored.snapshot.profile
                         else None
-                    ),
+                    )
+                )
+                coach_support.hydrate_snapshot(core.coach_support_deps,
+                    restored.snapshot,
+                    response_language=saved_response_language,
+                    answer_mode=saved_answer_mode,
                     preserve_session_history=True,
                 )
                 runtime.save_session_state(restored.session_id)
@@ -847,6 +862,7 @@ def build_core_router(
             if current_task is not None:
                 current_task.add_done_callback(_owner_task_cleanup)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        register_request_workspace_path(runtime, state.workspace_id, payload, request)
         profile = core.resolved_profile(state.workspace_id)
         raw_requested_answer_mode = str(
             payload.get("answer_mode") or payload.get("answerMode") or ""
@@ -865,6 +881,8 @@ def build_core_router(
         api_key_override = core.provider_api_key_from_payload(payload)
         if override_config is not None or api_key_override is not None:
             coaching_service = runtime.provider_service_for(override_config, api_key_override)
+        if coaching_service is not None:
+            runtime.adopt_request_provider_evidence(request, coaching_service)
         core.ensure_coach_provider_ready(
             coaching_service,
             response_language=request.response_language,
@@ -1842,6 +1860,7 @@ def build_core_router(
         core.apply_host_workspace_trust_attestation(workspace_id, payload)
         observe_goal_for_request(request, workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        register_request_workspace_path(runtime, state.workspace_id, payload, request)
         profile = core.resolved_profile(state.workspace_id)
         raw_requested_answer_mode = str(
             payload.get("answer_mode") or payload.get("answerMode") or ""
@@ -1858,6 +1877,8 @@ def build_core_router(
         api_key_override = core.provider_api_key_from_payload(payload)
         if override_config is not None or api_key_override is not None:
             coaching_service = runtime.provider_service_for(override_config, api_key_override)
+        if coaching_service is not None:
+            runtime.adopt_request_provider_evidence(request, coaching_service)
         core.ensure_coach_provider_ready(
             coaching_service,
             response_language=request.response_language,
@@ -1997,6 +2018,8 @@ def build_core_router(
                     media_type="text/event-stream",
                 )
 
+        if coaching_service is not None:
+            runtime.adopt_request_provider_evidence(request, coaching_service)
         provider_live_usable = core.provider_is_live_usable(coaching_service, payload)
         if not provider_live_usable:
             turn_request = core.turn_request_from_stream_payload(payload, intent="coach")
@@ -2014,8 +2037,6 @@ def build_core_router(
                 media_type="text/event-stream",
             )
         try:
-            if coaching_service is not None:
-                runtime.adopt_request_provider_evidence(request, coaching_service)
             core.ensure_streaming_ready(coaching_service, request.response_language)
             core.ensure_agent_tools_ready(request, coaching_service)
 
@@ -2828,6 +2849,7 @@ def build_core_router(
         core.apply_host_workspace_trust_attestation(workspace_id, payload)
         observe_goal_for_request(request, workspace_id)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        register_request_workspace_path(runtime, state.workspace_id, payload, request)
         profile = core.resolved_profile(state.workspace_id)
         raw_requested_answer_mode = str(
             payload.get("answer_mode") or payload.get("answerMode") or ""
@@ -2980,6 +3002,8 @@ def build_core_router(
 
                 return StreamingResponse(waiter_generate(), media_type="text/event-stream")
 
+        if coaching_service is not None:
+            runtime.adopt_request_provider_evidence(request, coaching_service)
         provider_live_usable = core.provider_is_live_usable(coaching_service, payload)
         if not provider_live_usable:
             core.register_stream_cancellation(stream_id)
@@ -2996,8 +3020,6 @@ def build_core_router(
                 media_type="text/event-stream",
             )
         try:
-            if coaching_service is not None:
-                runtime.adopt_request_provider_evidence(request, coaching_service)
             core.ensure_streaming_ready(coaching_service, request.response_language)
             core.ensure_agent_tools_ready(request, coaching_service)
             use_agent_stream = _resolve_agent_loop_enabled(
@@ -4854,6 +4876,8 @@ def build_core_router(
         training_provider_service = runtime.overlay_last_test_on_service(
             core.build_coaching_service(stream_payload)
         )
+        if training_provider_service is not None:
+            runtime.adopt_request_provider_evidence(request, training_provider_service)
         core.ensure_coach_provider_ready(
             training_provider_service,
             response_language=getattr(request, "response_language", None),
@@ -4863,7 +4887,6 @@ def build_core_router(
             stream_payload,
             getattr(request, "response_language", None),
         )
-        runtime.adopt_request_provider_evidence(request, training_provider_service)
         core.ensure_streaming_ready(
             training_provider_service,
             getattr(request, "response_language", None),

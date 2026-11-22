@@ -5,10 +5,14 @@
 .message-render-block {
   margin: var(--space-2) 0;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .message-render-block--table {
   overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-1) 94%, var(--bg-0));
@@ -17,6 +21,8 @@
 .message-table-wrap {
   display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: auto hidden;
 }
 
@@ -45,7 +51,8 @@
   background: color-mix(in srgb, var(--bg-2) 82%, var(--bg-1));
   font-weight: 400;
   color: var(--fg-0);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .message-table-wrap td {
