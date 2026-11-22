@@ -12,7 +12,7 @@
 
 [English](README.md) · 简体中文 · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/source-v1.4.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Release](https://img.shields.io/badge/source-v1.4.5-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#安装)
 [![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#质量门禁)
@@ -76,7 +76,7 @@
 从 [Releases](https://github.com/AI-yyf/trainer/releases/latest) 下载与你系统架构匹配的 `.vsix`（`darwin-arm64` / `linux-x64` / `win32-x64`）：
 
 ```bash
-code --install-extension trainer-extension-1.4.4-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.4.5-<platform>-<arch>.vsix --force
 ```
 
 或在 VS Code 扩展面板点击 `···` → **从 VSIX 安装** → 重载窗口即可。详细安装说明与数据目录规范见 [`extension/README.install.md`](extension/README.install.md)。
@@ -345,7 +345,7 @@ Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://
 
 ## 质量门禁
 
-> 以下每一项均为当前 `main` 分支（`v1.4.4`）实测数据，不虚报未验证项：
+> 以下每一项均为当前 `main` 分支（`v1.4.5`）实测数据，不虚报未验证项：
 
 | 门禁 | 实测覆盖与结果 | 执行命令 |
 |---|---|---|
@@ -397,7 +397,7 @@ Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.4.4}
+  note   = {v1.4.5}
 }
 ```
 
@@ -407,6 +407,6 @@ Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://
 
 **// 训练你的 AI · 与 AI 共同成长**
 
-`v1.4.4` · 由咖啡、FSRS、RethinkFun 状态流教学内核、6,606 个自动化测试，以及一颗拒绝替你写代码的心共同构筑。
+`v1.4.5` · 由咖啡、FSRS、RethinkFun 状态流教学内核、6,606 个自动化测试，以及一颗拒绝替你写代码的心共同构筑。
 
 </div>
