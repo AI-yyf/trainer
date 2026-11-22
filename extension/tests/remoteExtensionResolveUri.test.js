@@ -199,7 +199,7 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
       uri: remoteUriForPath('ssh-remote+141s', repoB),
     });
     assert.equal(envRes.ok, true, JSON.stringify(envRes));
-    assert.equal(envRes.environment.canonical_workspace_uri, pathToFileURL(fs.realpathSync(repoB)).toString());
+    assert.equal(envRes.environment.canonical_workspace_uri, pathToFileURL(fs.realpathSync.native(repoB)).toString());
 
     // 5. Fails closed on foreign remoteName authority
     const wrongRemote = await request({

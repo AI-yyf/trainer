@@ -12,7 +12,7 @@
 
 English · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/source-v1.5.2-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Release](https://img.shields.io/badge/source-v1.5.3-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#installation)
 [![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#quality-gates)
@@ -78,7 +78,7 @@ It is not a chat wrapper — it is a coach with memory, a curriculum, and an exa
 Grab the `.vsix` matching your OS and architecture (`darwin-arm64` / `linux-x64` / `win32-x64`) from [Releases](https://github.com/AI-yyf/trainer/releases/latest).
 
 ```bash
-code --install-extension trainer-extension-1.5.2-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.5.3-<platform>-<arch>.vsix --force
 ```
 
 Or via VS Code: Extensions view → `···` → *Install from VSIX...* → reload window.  
@@ -351,7 +351,7 @@ All primary state-carrying HTTP routes return the canonical **`WorkbenchSnapshot
 
 ## Quality Gates
 
-> Every figure below reflects verified workspace checks on `main` (`v1.5.2`):
+> Every figure below reflects verified workspace checks on `main` (`v1.5.3`):
 
 | Gate | Scope & Verified Result | Command |
 |---|---|---|
@@ -403,7 +403,7 @@ Verified cleanly by `npm run verify:i18n` with automated locale leak and missing
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.5.2}
+  note   = {v1.5.3}
 }
 ```
 
@@ -413,6 +413,6 @@ Verified cleanly by `npm run verify:i18n` with automated locale leak and missing
 
 **// Train Your AI · Grow With Your AI**
 
-`v1.5.2` · Made with coffee, FSRS, RethinkFun state-flow pedagogy, 6,606 automated tests, and a coach that refuses to write your code for you.
+`v1.5.3` · Made with coffee, FSRS, RethinkFun state-flow pedagogy, 6,606 automated tests, and a coach that refuses to write your code for you.
 
 </div>
