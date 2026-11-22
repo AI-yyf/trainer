@@ -18,6 +18,17 @@ from app.core.models import (
 )
 from app.core.settings import AppSettings
 from app.llm.agent_binding import _format_gemini_payload
+from app.llm.agent_loop import (
+    AgentProvider,
+    CoachAgentLoop,
+    _build_completion_continuity,
+    _build_empty_response_recovery,
+    _build_no_progress_recovery,
+    _build_runtime_failure_recovery,
+    _build_step_limit_recovery,
+    _visible_coach_finalize_reply,
+    run_with_scripted_responses,
+)
 from app.llm.provider.capability import (
     _allows_keyless_local_provider,
     _flatten_minimax_thinking_for_raw_http,
@@ -27,13 +38,23 @@ from app.llm.provider.thinking import (
     resolve_thinking_policy,
 )
 from app.llm.provider_service import ProviderService
-from app.llm.tools import ToolContext, build_default_tool_registry
+from app.llm.tools import ToolContext, ToolDefinition, ToolRegistry, build_default_tool_registry
 from app.main import create_app
 from app.memory.note_request import message_requests_lecture_note_save
 from app.network_fetch import ControlledFetchResponse
 from app.pedagogy.service import PedagogyService
-from app.pedagogy.smalltalk import is_bogus_smalltalk_step
+from app.pedagogy.smalltalk import (
+    is_bogus_smalltalk_step,
+    is_casual_greeting_or_smalltalk,
+    is_exploratory_or_research_query,
+)
 from app.sandbox.service import SandboxService
+from app.training.card_generator import (
+    _WHY_NOW_MESSAGES,
+    CardGenerationProviderFailure,
+    _fallback_provenance_copy,
+    _localized_why_now,
+)
 
 
 def _offline_app(tmp_path: Path, *, enable_network_fetch: bool = False):
@@ -511,3 +532,176 @@ def test_nested_finder_group_organization_and_index(tmp_path: Path) -> None:
         indexed_body = idx.json()
         assert indexed_body["collection_path"].startswith("Auth/")
         assert str(indexed_body["collection_root"]).replace("\\", "/").endswith("/groups/API/Auth")
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_8_locale_recovery_and_prior_tool_empty_response_continuity() -> None:
+    expected_blocker_prefixes = {
+        "es-ES": "Bloqueo actual: ",
+        "fr-FR": "Blocage actuel : ",
+        "de-DE": "Aktueller Blocker: ",
+        "ja-JP": "現在のブロッカー: ",
+        "ko-KR": "현재 막힌 지점: ",
+        "pt-BR": "Bloqueio atual: ",
+    }
+    english_empty_summary, english_empty_next = _build_empty_response_recovery(
+        context=None, response_language="en-US"
+    )
+    english_no_progress, _ = _build_no_progress_recovery(
+        [{"name": "web_search"}], previous_step=None, context=None, response_language="en-US"
+    )
+    english_step_limit, _ = _build_step_limit_recovery(
+        None, context=None, response_language="en-US"
+    )
+    english_timeout, _ = _build_runtime_failure_recovery(
+        "timeout", context=None, response_language="en-US", previous_step=None
+    )
+    english_cont, _ = _build_completion_continuity(
+        "", context=None, response_language="en-US"
+    )
+
+    for locale, blocker_prefix in expected_blocker_prefixes.items():
+        rendered = _visible_coach_finalize_reply(
+            {"summary": "Summary", "blocker": "timeout"},
+            response_language=locale,
+        )
+        assert f"{blocker_prefix}timeout" in rendered
+
+        no_progress_sum, _ = _build_no_progress_recovery(
+            [{"name": "web_search"}], previous_step=None, context=None, response_language=locale
+        )
+        assert no_progress_sum != english_no_progress
+
+        step_limit_sum, _ = _build_step_limit_recovery(
+            None, context=None, response_language=locale
+        )
+        assert step_limit_sum != english_step_limit
+
+        timeout_sum, _ = _build_runtime_failure_recovery(
+            "timeout", context=None, response_language=locale, previous_step=None
+        )
+        assert timeout_sum != english_timeout
+
+        empty_sum, empty_next = _build_empty_response_recovery(
+            context=None, response_language=locale
+        )
+        assert empty_sum != english_empty_summary
+        assert empty_next != english_empty_next
+
+        cont_sum, _ = _build_completion_continuity(
+            "", context=None, response_language=locale
+        )
+        assert cont_sum != english_cont
+
+    # Multi-step run & stream: prior executed tools are surfaced when the final answer is empty
+    registry = ToolRegistry()
+
+    async def _echo(_context: ToolContext, args: dict[str, object]) -> dict[str, object]:
+        return {"ok": True, "text": args.get("text", "")}
+
+    registry.register(
+        ToolDefinition(
+            name="echo_check",
+            description="Echo check helper.",
+            parameters={"type": "object", "properties": {"text": {"type": "string"}}},
+            handler=_echo,
+        )
+    )
+    ctx_ja = ToolContext(
+        runtime=None,
+        workspace_id="ws-ja",
+        session_id="sess-ja",
+        response_language="ja-JP",
+        extra={},
+    )
+    tool_step = {
+        "content": "",
+        "tool_calls": [{"id": "c1", "name": "echo_check", "arguments": '{"text": "ok"}'}],
+    }
+    run_res = await run_with_scripted_responses(
+        registry=registry,
+        context=ctx_ja,
+        scripted_responses=[tool_step, {"content": "   ", "tool_calls": []}],
+        initial_messages=[{"role": "user", "content": "確認して"}],
+        max_steps=4,
+    )
+    assert run_res.stop_reason == "empty_response"
+    assert run_res.summary and "echo_check" in run_res.summary
+    assert "実行済みの確認" in run_res.summary
+
+    stream_responses = iter(
+        [
+            {"content": "", "tool_calls": [{"id": "c2", "name": "echo_check", "arguments": "{}"}]},
+            {"content": "", "tool_calls": []},
+        ]
+    )
+
+    async def _stream_call(_messages, _tools):
+        yield {"type": "final", **next(stream_responses)}
+
+    stream_loop = CoachAgentLoop(
+        provider=AgentProvider(
+            protocol="openai_chat_completions",
+            call=AsyncMock(return_value={"content": "", "tool_calls": []}),
+            call_stream=_stream_call,
+        ),
+        registry=registry,
+        context=ToolContext(
+            runtime=None,
+            workspace_id="ws-ko",
+            session_id="sess-ko",
+            response_language="ko-KR",
+            extra={},
+        ),
+        max_steps=4,
+    )
+    events = [event async for event in stream_loop.run_stream([{"role": "user", "content": "확인해 줘"}])]
+    final = next(event for event in events if event["type"] == "final")
+    assert final["stop_reason"] == "empty_response"
+    assert final["summary"] and "echo_check" in final["summary"]
+    assert "실행된 점검" in final["summary"]
+
+
+def test_smalltalk_and_exploratory_queries_across_all_8_locales() -> None:
+    for greeting in ("你好", "hello", "こんにちは", "안녕하세요", "hola", "bonjour", "hallo", "olá"):
+        assert is_casual_greeting_or_smalltalk(greeting) is True
+
+    for research_prompt in (
+        "你帮我找找目前的世界模型的研究进展可以吗",
+        "Could you search the latest research progress on world models?",
+        "このプロジェクトの構造と最新研究を調べてください",
+        "이 프로젝트 구조와 최신 연구 동향을 검색해 줄 수 있나요?",
+        "¿Puedes explicar la estructura de este proyecto y buscar últimos avances?",
+        "Peux-tu expliquer la structure du projet et rechercher les dernières recherches ?",
+        "Kannst du die Projektstruktur erklären und neueste Forschung suchen?",
+        "Você pode explicar a estrutura do projeto e pesquisar novidades recentes?",
+    ):
+        assert is_exploratory_or_research_query(research_prompt) is True
+
+
+def test_training_card_generator_8_locale_provenance_and_why_now() -> None:
+    non_zh_en_locales = ("es-ES", "fr-FR", "de-DE", "ja-JP", "ko-KR", "pt-BR")
+    english_failure = CardGenerationProviderFailure("invalid_json", response_language="en-US")
+    zh_failure = CardGenerationProviderFailure("invalid_json", response_language="zh-CN")
+    assert "model-authored card" in english_failure.detail
+    assert "模型生成的卡片" in zh_failure.detail
+
+    english_marker, english_detail = _fallback_provenance_copy("invalid_json", "en-US")
+    assert english_marker == "generation_source=deterministic_fallback;reason=invalid_json"
+    assert "deterministic fallback" in english_detail
+
+    for locale in non_zh_en_locales:
+        failure = CardGenerationProviderFailure("invalid_json", response_language=locale)
+        assert failure.detail != english_failure.detail
+        assert failure.detail != zh_failure.detail
+
+        localized_why = _localized_why_now(
+            "conversation_gap",
+            _WHY_NOW_MESSAGES["conversation_gap"],
+            locale,
+        )
+        assert localized_why != _WHY_NOW_MESSAGES["conversation_gap"]
+
+        marker, detail = _fallback_provenance_copy("invalid_json", locale)
+        assert marker == "generation_source=deterministic_fallback;reason=invalid_json"
+        assert detail != english_detail

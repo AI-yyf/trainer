@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import html
+import io
 import re
-import tempfile
-from pathlib import Path
 
 import pymupdf
 
@@ -247,19 +246,18 @@ def render_markdown_pdf_bytes(title: str, markdown_text: str) -> bytes:
     story = pymupdf.Story(html=html_doc)
     mediabox = pymupdf.paper_rect("a4")
     where = mediabox + (42, 42, -42, -42)
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        raw_path = Path(tmp_dir) / "rendered.pdf"
-        writer = pymupdf.DocumentWriter(str(raw_path))
-        more = True
-        while more:
-            dev = writer.begin_page(mediabox)
-            more, _ = story.place(where)
-            story.draw(dev, None)
-            writer.end_page()
-        writer.close()
-        doc = pymupdf.open(str(raw_path))
-        try:
-            doc.subset_fonts()
-            return doc.tobytes(deflate=True, garbage=3)
-        finally:
-            doc.close()
+    buf = io.BytesIO()
+    writer = pymupdf.DocumentWriter(buf)
+    more = True
+    while more:
+        dev = writer.begin_page(mediabox)
+        more, _ = story.place(where)
+        story.draw(dev, None)
+        writer.end_page()
+    writer.close()
+    doc = pymupdf.open(stream=buf.getvalue(), filetype="pdf")
+    try:
+        doc.subset_fonts()
+        return doc.tobytes(deflate=True, garbage=3)
+    finally:
+        doc.close()

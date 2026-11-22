@@ -1003,17 +1003,77 @@
 .resource-capture__footer { display: flex; align-items: center; gap: var(--space-2); }
 
 /* Finder-like unified path bar, inline folder hover actions, and drag/move styling */
+.resources-import-menu__divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: color-mix(in srgb, var(--line) 48%, transparent);
+}
+
 .resources-finder-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 6px;
   padding: 4px 6px;
   margin-bottom: var(--space-1);
   border-radius: var(--radius-sm, 8px);
   background: color-mix(in srgb, var(--bg-2) 60%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
   font-size: var(--trainer-font-2xs);
+}
+
+.resources-finder-bar__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.resources-finder-bar__add-folder {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.resources-finder-bar__add-folder:hover {
+  background: color-mix(in srgb, var(--bg-2) 85%, transparent);
+  color: var(--fg-0);
+}
+
+.resources-finder-empty-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 4px 20px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+}
+
+.resources-finder-empty-action {
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-1);
+  font: inherit;
+  cursor: pointer;
+}
+
+.resources-finder-empty-action:hover {
+  background: color-mix(in srgb, var(--bg-2) 80%, transparent);
+  color: var(--fg-0);
 }
 
 .resources-finder-bar__back,
@@ -1068,12 +1128,6 @@
 .collapse-section__header:hover .resources-finder-folder-actions,
 .collapse-section__header:focus-within .resources-finder-folder-actions {
   opacity: 1;
-}
-
-.resources-finder-empty-inline {
-  margin: 2px 0 4px 20px;
-  color: var(--fg-muted);
-  font-size: var(--trainer-font-2xs);
 }
 
 .resources-knowledge__new-folder {

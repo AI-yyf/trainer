@@ -1085,6 +1085,8 @@ interface ResourceTreeItemProps {
   onMenu: (resource: ResourceRecord, event: React.MouseEvent<HTMLElement>) => void;
   onEnterFolder?: (folderPath: string) => void;
   onFolderMenu?: (folderPath: string, label: string, event: React.MouseEvent<HTMLElement>) => void;
+  onQuickAddToFolder?: (folderPath: string) => void;
+  quickAddFilesLabel?: string;
   onResourceDragStart?: (resource: ResourceRecord, event: React.DragEvent<HTMLElement>) => void;
   onResourceDragEnd?: () => void;
   onFolderDragOver?: (folderPath: string, event: React.DragEvent<HTMLElement>) => void;
@@ -1110,6 +1112,8 @@ function ResourceTreeItem({
   onMenu,
   onEnterFolder,
   onFolderMenu,
+  onQuickAddToFolder,
+  quickAddFilesLabel,
   onResourceDragStart,
   onResourceDragEnd,
   onFolderDragOver,
@@ -1348,6 +1352,8 @@ function ResourceTreeItem({
                 onMenu={onMenu}
                 onEnterFolder={onEnterFolder}
                 onFolderMenu={onFolderMenu}
+                onQuickAddToFolder={onQuickAddToFolder}
+                quickAddFilesLabel={quickAddFilesLabel}
                 onResourceDragStart={onResourceDragStart}
                 onResourceDragEnd={onResourceDragEnd}
                 onFolderDragOver={onFolderDragOver}
@@ -1359,7 +1365,19 @@ function ResourceTreeItem({
             ))
           ) : folderPath ? (
             <p className="resources-empty resources-empty--compact resources-finder-empty-inline">
-              {localize(language, "finderEmptyFolder")}
+              <span>{localize(language, "finderEmptyFolder")}</span>
+              {onQuickAddToFolder && quickAddFilesLabel ? (
+                <button
+                  type="button"
+                  className="resources-finder-empty-action"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onQuickAddToFolder(folderPath);
+                  }}
+                >
+                  + {quickAddFilesLabel}
+                </button>
+              ) : null}
             </p>
           ) : null
         ) : null}
@@ -3278,6 +3296,51 @@ export function ResourcesWorkbenchView({
               <strong>{t("addFolder")}</strong>
             </span>
           </button>
+          <button
+            className="menu-list__item"
+            type="button"
+            role="menuitem"
+            onClick={() => runImportAction(onImportUrl)}
+            disabled={isBrowserPreview && !isLiveBrowserPreview}
+            aria-label={
+              isBrowserPreview && !isLiveBrowserPreview
+                ? localize(language, "browserPreviewMutationNotice")
+                : localize(language, "captureWebSnapshot")
+            }
+            title={
+              isBrowserPreview && !isLiveBrowserPreview
+                ? localize(language, "browserPreviewMutationNotice")
+                : localize(language, "captureWebSnapshot")
+            }
+          >
+            <span className="menu-list__icon" aria-hidden="true">
+              <LinkIcon size={14} />
+            </span>
+            <span className="menu-list__body">
+              <strong>{localize(language, "captureWebSnapshot")}</strong>
+            </span>
+          </button>
+          <button
+            className="menu-list__item"
+            type="button"
+            role="menuitem"
+            data-capture-entry="true"
+            onClick={() => {
+              closeImportMenu();
+              setCaptureDialogMessage(undefined);
+              setCaptureDialogOpen(true);
+            }}
+          >
+            <span className="menu-list__icon" aria-hidden="true">
+              <PlusIcon size={14} />
+            </span>
+            <span className="menu-list__body">
+              <strong>{localize(language, "captureToLibrary")}</strong>
+            </span>
+          </button>
+          {(canWriteResources && onCreateLibraryFolder) || onMigrateLibrary ? (
+            <div className="resources-import-menu__divider" role="separator" />
+          ) : null}
           {canWriteResources && onCreateLibraryFolder ? (
             <button
               className="menu-list__item"
@@ -3285,7 +3348,7 @@ export function ResourcesWorkbenchView({
               role="menuitem"
               onClick={() => {
                 closeImportMenu();
-                openFolderCreatePrompt();
+                openFolderCreatePrompt(activeFolderPath);
               }}
             >
               <span className="menu-list__icon" aria-hidden="true">
@@ -3316,48 +3379,6 @@ export function ResourcesWorkbenchView({
               </span>
             </button>
           ) : null}
-          <button
-            className="menu-list__item"
-            type="button"
-            role="menuitem"
-            data-capture-entry="true"
-            onClick={() => {
-              closeImportMenu();
-              setCaptureDialogMessage(undefined);
-              setCaptureDialogOpen(true);
-            }}
-          >
-            <span className="menu-list__icon" aria-hidden="true">
-              <PlusIcon size={14} />
-            </span>
-            <span className="menu-list__body">
-              <strong>{localize(language, "captureToLibrary")}</strong>
-            </span>
-          </button>
-          <button
-            className="menu-list__item"
-            type="button"
-            role="menuitem"
-            onClick={() => runImportAction(onImportUrl)}
-            disabled={isBrowserPreview && !isLiveBrowserPreview}
-            aria-label={
-              isBrowserPreview && !isLiveBrowserPreview
-                ? localize(language, "browserPreviewMutationNotice")
-                : localize(language, "captureWebSnapshot")
-            }
-            title={
-              isBrowserPreview && !isLiveBrowserPreview
-                ? localize(language, "browserPreviewMutationNotice")
-                : localize(language, "captureWebSnapshot")
-            }
-          >
-            <span className="menu-list__icon" aria-hidden="true">
-              <LinkIcon size={14} />
-            </span>
-            <span className="menu-list__body">
-              <strong>{localize(language, "captureWebSnapshot")}</strong>
-            </span>
-          </button>
         </div>
       ) : null}
 
@@ -3556,40 +3577,53 @@ export function ResourcesWorkbenchView({
       <div className="resources-library-shell">
       {!hasSearchQuery && activeFolderPath ? (
         <nav className="resources-finder-bar" aria-label={localize(language, "finderRoot")}>
-          <button
-            className="resources-finder-bar__back"
-            type="button"
-            aria-label={localize(language, "finderBack")}
-            title={localize(language, "finderBack")}
-            onClick={() => setActiveFolderPath(libraryFolderParentPath(activeFolderPath))}
-          >
-            ‹
-          </button>
-          <button
-            className={`resources-finder-crumb${dropTargetFolderPath === "" ? " is-drop-target" : ""}`}
-            type="button"
-            onClick={() => setActiveFolderPath("")}
-            onDragOver={(event) => handleFolderDragOver("", event)}
-            onDragLeave={() => handleFolderDragLeave("")}
-            onDrop={(event) => handleFolderDrop("", event)}
-          >
-            {localize(language, "finderRoot")}
-          </button>
-          {activeFolderBreadcrumbs.map((crumb, index) => (
-            <span key={crumb.path} className="resources-finder-crumb-group">
-              <span className="resources-finder-sep" aria-hidden="true">/</span>
-              <button
-                className={`resources-finder-crumb${index === activeFolderBreadcrumbs.length - 1 ? " is-current" : ""}${dropTargetFolderPath === crumb.path ? " is-drop-target" : ""}`}
-                type="button"
-                onClick={() => setActiveFolderPath(crumb.path)}
-                onDragOver={(event) => handleFolderDragOver(crumb.path, event)}
-                onDragLeave={() => handleFolderDragLeave(crumb.path)}
-                onDrop={(event) => handleFolderDrop(crumb.path, event)}
-              >
-                {crumb.name}
-              </button>
-            </span>
-          ))}
+          <div className="resources-finder-bar__crumbs">
+            <button
+              className="resources-finder-bar__back"
+              type="button"
+              aria-label={localize(language, "finderBack")}
+              title={localize(language, "finderBack")}
+              onClick={() => setActiveFolderPath(libraryFolderParentPath(activeFolderPath))}
+            >
+              ‹
+            </button>
+            <button
+              className={`resources-finder-crumb${dropTargetFolderPath === "" ? " is-drop-target" : ""}`}
+              type="button"
+              onClick={() => setActiveFolderPath("")}
+              onDragOver={(event) => handleFolderDragOver("", event)}
+              onDragLeave={() => handleFolderDragLeave("")}
+              onDrop={(event) => handleFolderDrop("", event)}
+            >
+              {localize(language, "finderRoot")}
+            </button>
+            {activeFolderBreadcrumbs.map((crumb, index) => (
+              <span key={crumb.path} className="resources-finder-crumb-group">
+                <span className="resources-finder-sep" aria-hidden="true">/</span>
+                <button
+                  className={`resources-finder-crumb${index === activeFolderBreadcrumbs.length - 1 ? " is-current" : ""}${dropTargetFolderPath === crumb.path ? " is-drop-target" : ""}`}
+                  type="button"
+                  onClick={() => setActiveFolderPath(crumb.path)}
+                  onDragOver={(event) => handleFolderDragOver(crumb.path, event)}
+                  onDragLeave={() => handleFolderDragLeave(crumb.path)}
+                  onDrop={(event) => handleFolderDrop(crumb.path, event)}
+                >
+                  {crumb.name}
+                </button>
+              </span>
+            ))}
+          </div>
+          {canWriteResources && onCreateLibraryFolder ? (
+            <button
+              className="resources-finder-bar__add-folder"
+              type="button"
+              aria-label={localize(language, "folderSubfolderAction")}
+              title={localize(language, "folderSubfolderAction")}
+              onClick={() => openFolderCreatePrompt(activeFolderPath)}
+            >
+              <PlusIcon size={12} aria-hidden="true" />
+            </button>
+          ) : null}
         </nav>
       ) : null}
       {folderPrompt ? (
@@ -3761,6 +3795,12 @@ export function ResourcesWorkbenchView({
                 onMenu={openResourceRowMenu}
                 onEnterFolder={(folderPath) => setActiveFolderPath(folderPath)}
                 onFolderMenu={openFolderRowMenu}
+                onQuickAddToFolder={
+                  canWriteResources && onImportToFolder
+                    ? (folderPath) => onImportToFolder("files", folderPath)
+                    : undefined
+                }
+                quickAddFilesLabel={t("addFiles")}
                 onResourceDragStart={(resource, event) => handleResourceDragStart(resource, event)}
                 onResourceDragEnd={handleResourceDragEnd}
                 onFolderDragOver={handleFolderDragOver}
@@ -3778,6 +3818,15 @@ export function ResourcesWorkbenchView({
                 </span>
                 <div className="resources-empty-state__copy">
                   <strong>{localize(language, "finderEmptyFolder")}</strong>
+                  {canWriteResources && onImportToFolder && activeFolderPath ? (
+                    <button
+                      type="button"
+                      className="resources-finder-empty-action"
+                      onClick={() => onImportToFolder("files", activeFolderPath)}
+                    >
+                      + {t("addFiles")}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}

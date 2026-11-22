@@ -297,3 +297,100 @@ test('settings capabilities dirty-check, Finder resources tree, and learning ste
   assert.match(learningSummarySource, /export function sanitizeBogusLearningStep/);
   assert.match(learningSummarySource, /CASUAL_GREETING_TOKENS/);
 });
+
+test('all 37 registered backend tools have 8-locale TOOL_LABELS and UX settings/resources polish stays intact', () => {
+  const toolsSource = fs.readFileSync(
+    path.join(repoRoot, 'server', 'app', 'llm', 'tools.py'),
+    'utf8',
+  );
+  const stripCopySource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'lib', 'i18n', 'segments', 'agentActivityStripCopy.ts'),
+    'utf8',
+  );
+  const settingsSource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'components', 'settings', 'CoachSettingsView.tsx'),
+    'utf8',
+  );
+  const resourcesInlineSource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'lib', 'i18n', 'segments', 'resourcesInlineText.ts'),
+    'utf8',
+  );
+
+  const registeredTools = Array.from(
+    toolsSource.matchAll(/ToolDefinition\(\s*name="([a-z0-9_]+)"/g),
+    (m) => m[1],
+  );
+  assert.ok(registeredTools.length >= 37, `Expected >= 37 tools, got ${registeredTools.length}`);
+  const locales = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
+  const toolLabelsIdx = stripCopySource.indexOf('export const TOOL_LABELS');
+  assert.ok(toolLabelsIdx >= 0);
+  const toolLabelsBlock = stripCopySource.slice(toolLabelsIdx);
+
+  for (const toolName of registeredTools) {
+    const start = toolLabelsBlock.indexOf(`  ${toolName}: {`);
+    assert.ok(start >= 0, `Missing TOOL_LABELS entry for ${toolName}`);
+    const end = toolLabelsBlock.indexOf('  },', start);
+    const slice = toolLabelsBlock.slice(start, end);
+    for (const locale of locales) {
+      assert.match(slice, new RegExp(`"${locale}":\\s*"[^"]+"`), `${toolName} missing locale ${locale}`);
+    }
+  }
+
+  assert.match(settingsSource, /const CAPABILITY_VERDICT_LABELS/);
+  assert.match(settingsSource, /settings-token-presets-panel/);
+
+  // Verify every ResourceTextKey in resourceText is translated across all 6 override locales
+  const resourceTextStart = resourcesInlineSource.indexOf('export const resourceText:');
+  const overridesStart = resourcesInlineSource.indexOf('export const resourceTextLocaleOverrides:');
+  assert.ok(resourceTextStart >= 0 && overridesStart > resourceTextStart);
+  const baseBlock = resourcesInlineSource.slice(resourceTextStart, overridesStart);
+  const overridesBlock = resourcesInlineSource.slice(overridesStart);
+  const resourceKeys = Array.from(
+    baseBlock.matchAll(/^\s{2}([A-Za-z0-9_]+):\s*\{/gm),
+    (m) => m[1],
+  );
+  assert.ok(resourceKeys.length >= 150, `Expected >= 150 resource keys, got ${resourceKeys.length}`);
+  for (const locale of ['es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
+    const locStart = overridesBlock.indexOf(`"${locale}": {`);
+    assert.ok(locStart >= 0, `Missing override block for ${locale}`);
+    const nextLocMatch = overridesBlock.slice(locStart + 10).match(/\r?\n\s{2}"(?:es-ES|fr-FR|de-DE|ja-JP|ko-KR|pt-BR)":\s*\{|\r?\n\};/);
+    const locEnd = nextLocMatch ? locStart + 10 + nextLocMatch.index : overridesBlock.length;
+    const locSlice = overridesBlock.slice(locStart, locEnd);
+    for (const key of resourceKeys) {
+      assert.match(locSlice, new RegExp(`\\b${key}:`), `resourcesInlineText ${locale} missing key ${key}`);
+    }
+  }
+});
+
+test('shared training card, review queue, and coach bridge helpers return 8-locale non-English text', () => {
+  const { buildTrainingCoachBridge } = require('../dist/shared/src/trainingCoachBridge.js');
+  const { summarizeTrainingScenarioPack } = require('../dist/shared/src/trainingCardCopy.js');
+  const { summarizeReviewQueueTruth } = require('../dist/shared/src/reviewQueueGovernance.js');
+
+  for (const locale of ['es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR']) {
+    const bridge = buildTrainingCoachBridge({
+      language: locale,
+      cardId: 'card-1',
+      taskTitle: 'Router contract',
+      cardTitle: 'Check response_model',
+      latestVerifiedResult: 'pytest passed',
+    });
+    assert.equal(bridge.mode, 'report_result');
+    assert.notEqual(bridge.ctaLabel, 'Bring result to Coach');
+    assert.notEqual(bridge.title, 'Verified result ready to return to Coach');
+
+    const packLabel = summarizeTrainingScenarioPack(locale, 'debug_loop');
+    assert.ok(packLabel);
+    assert.notEqual(packLabel, 'Minimal debug loop');
+
+    const queue = summarizeReviewQueueTruth(
+      [{ concept: 'response_model', reason: 'weakness', source: 'weakness', fsrsState: 'review', intervalDays: 3, retrievability: 0.85, dueAt: '2026-11-25T10:00:00Z' }],
+      undefined,
+      locale,
+    );
+    assert.ok(queue && queue.headline);
+    assert.ok(queue.detail);
+    assert.ok(queue.meta.length >= 2);
+    assert.doesNotMatch(queue.detail, /Estimated retrievability/);
+  }
+});

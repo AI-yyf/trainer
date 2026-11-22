@@ -4,6 +4,7 @@ import asyncio
 import contextvars
 import json
 import logging
+import os
 import posixpath
 import re
 from dataclasses import asdict, is_dataclass
@@ -9546,9 +9547,16 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         root = normalize_training_path(workspace_root)
         if not root or not is_absolute_training_path(root):
             return ""
-        if path.startswith("/") and root.startswith("/") and not (
-            path.startswith("//") or root.startswith("//")
-        ):
+        is_posix_abs = (
+            path.startswith("/")
+            and root.startswith("/")
+            and not (path.startswith("//") or root.startswith("//"))
+        )
+        is_windows_native_abs = os.name == "nt" and bool(
+            re.match(r"^[a-z]:/", path, flags=re.IGNORECASE)
+            and re.match(r"^[a-z]:/", root, flags=re.IGNORECASE)
+        )
+        if is_posix_abs or is_windows_native_abs:
             try:
                 relative = Path(path).resolve().relative_to(Path(root).resolve())
             except (OSError, RuntimeError, ValueError):

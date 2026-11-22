@@ -116,6 +116,114 @@ function normalizeValue(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+const REVIEW_QUEUE_LOCALE_TEXT: Record<
+  ComposerLanguage,
+  {
+    dateLocale: string;
+    states: { learning: string; review: string; relearning: string };
+    today: string;
+    intervalDays: (days: number) => string;
+    recallDetail: (pct: string) => string;
+    nextDue: (target: string, due: string) => string;
+    recallChip: (pct: string) => string;
+    defaultTopic: string;
+    stillQueued: (topic: string) => string;
+  }
+> = {
+  "zh-CN": {
+    dateLocale: "zh-CN",
+    states: { learning: "学习中", review: "复习中", relearning: "回补中" },
+    today: "今天回看",
+    intervalDays: (days) => `${days} 天间隔`,
+    recallDetail: (pct) => `当前可回忆率约 ${pct}。`,
+    nextDue: (target, due) => `${target} 下次建议回看时间：${due}。`,
+    recallChip: (pct) => `可回忆率 ${pct}`,
+    defaultTopic: "当前主题",
+    stillQueued: (topic) => `${topic} 仍在复习队列里。`,
+  },
+  "en-US": {
+    dateLocale: "en-US",
+    states: { learning: "Learning", review: "Review", relearning: "Relearning" },
+    today: "Review today",
+    intervalDays: (days) => `${days}d interval`,
+    recallDetail: (pct) => `Estimated recall right now is ${pct}.`,
+    nextDue: (target, due) => `Next suggested review for ${target}: ${due}.`,
+    recallChip: (pct) => `Recall ${pct}`,
+    defaultTopic: "This topic",
+    stillQueued: (topic) => `${topic} is still in the review queue.`,
+  },
+  "es-ES": {
+    dateLocale: "es-ES",
+    states: { learning: "Aprendiendo", review: "Repaso", relearning: "Reaprendizaje" },
+    today: "Repasar hoy",
+    intervalDays: (days) => `Intervalo de ${days} d`,
+    recallDetail: (pct) => `El recuerdo estimado ahora mismo es de ${pct}.`,
+    nextDue: (target, due) => `Próximo repaso sugerido para ${target}: ${due}.`,
+    recallChip: (pct) => `Recuerdo ${pct}`,
+    defaultTopic: "Este tema",
+    stillQueued: (topic) => `${topic} sigue en la cola de repaso.`,
+  },
+  "fr-FR": {
+    dateLocale: "fr-FR",
+    states: { learning: "Apprentissage", review: "Révision", relearning: "Réapprentissage" },
+    today: "À revoir aujourd'hui",
+    intervalDays: (days) => `Intervalle ${days} j`,
+    recallDetail: (pct) => `Taux de rappel estimé actuellement à ${pct}.`,
+    nextDue: (target, due) => `Prochaine révision conseillée pour ${target} : ${due}.`,
+    recallChip: (pct) => `Rappel ${pct}`,
+    defaultTopic: "Ce sujet",
+    stillQueued: (topic) => `${topic} reste dans la file de révision.`,
+  },
+  "de-DE": {
+    dateLocale: "de-DE",
+    states: { learning: "Lernen", review: "Wiederholung", relearning: "Nachlernen" },
+    today: "Heute ansehen",
+    intervalDays: (days) => `${days} Tage Intervall`,
+    recallDetail: (pct) => `Geschätzte Erinnerung liegt aktuell bei ${pct}.`,
+    nextDue: (target, due) => `Nächste empfohlene Wiederholung für ${target}: ${due}.`,
+    recallChip: (pct) => `Erinnerung ${pct}`,
+    defaultTopic: "Dieses Thema",
+    stillQueued: (topic) => `${topic} steht noch in der Wiederholungsliste.`,
+  },
+  "ja-JP": {
+    dateLocale: "ja-JP",
+    states: { learning: "学習中", review: "復習中", relearning: "再学習中" },
+    today: "今日見直す",
+    intervalDays: (days) => `${days}日ごと`,
+    recallDetail: (pct) => `現在の推定定着率は ${pct} です。`,
+    nextDue: (target, due) => `${target} の次回推奨復習時刻: ${due}。`,
+    recallChip: (pct) => `定着率 ${pct}`,
+    defaultTopic: "現在のトピック",
+    stillQueued: (topic) => `${topic} はまだ復習キューにあります。`,
+  },
+  "ko-KR": {
+    dateLocale: "ko-KR",
+    states: { learning: "학습 중", review: "복습 중", relearning: "재학습 중" },
+    today: "오늘 다시 보기",
+    intervalDays: (days) => `${days}일 간격`,
+    recallDetail: (pct) => `현재 예상 기억률은 ${pct}입니다.`,
+    nextDue: (target, due) => `${target} 다음 권장 복습 시간: ${due}.`,
+    recallChip: (pct) => `기억률 ${pct}`,
+    defaultTopic: "현재 주제",
+    stillQueued: (topic) => `${topic} 항목이 아직 복습 대기열에 있습니다.`,
+  },
+  "pt-BR": {
+    dateLocale: "pt-BR",
+    states: { learning: "Aprendendo", review: "Revisão", relearning: "Reaprendizado" },
+    today: "Revisar hoje",
+    intervalDays: (days) => `Intervalo de ${days} d`,
+    recallDetail: (pct) => `A retenção estimada agora é de ${pct}.`,
+    nextDue: (target, due) => `Próxima revisão sugerida para ${target}: ${due}.`,
+    recallChip: (pct) => `Retenção ${pct}`,
+    defaultTopic: "Este tópico",
+    stillQueued: (topic) => `${topic} ainda está na fila de revisão.`,
+  },
+};
+
+function reviewLocaleText(language: ComposerLanguage) {
+  return REVIEW_QUEUE_LOCALE_TEXT[language] ?? REVIEW_QUEUE_LOCALE_TEXT["en-US"];
+}
+
 function formatReviewDueLabel(value: string | undefined, language: ComposerLanguage): string | undefined {
   if (!value) {
     return undefined;
@@ -124,6 +232,7 @@ function formatReviewDueLabel(value: string | undefined, language: ComposerLangu
   if (Number.isNaN(date.getTime())) {
     return value;
   }
+  const copy = reviewLocaleText(language);
   return language === "zh-CN"
     ? date.toLocaleString("zh-CN", {
         month: "numeric",
@@ -131,7 +240,7 @@ function formatReviewDueLabel(value: string | undefined, language: ComposerLangu
         hour: "2-digit",
         minute: "2-digit",
       })
-    : date.toLocaleString("en-US", {
+    : date.toLocaleString(copy.dateLocale, {
         month: "short",
         day: "numeric",
         hour: "2-digit",
@@ -150,26 +259,23 @@ function stateLabel(value: string | undefined, language: ComposerLanguage): stri
     return undefined;
   }
   const normalized = value.trim().toLowerCase();
-  const labels: Record<string, { zh: string; en: string }> = {
-    learning: { zh: "学习中", en: "Learning" },
-    review: { zh: "复习中", en: "Review" },
-    relearning: { zh: "回补中", en: "Relearning" },
-  };
-  const entry = labels[normalized];
-  return entry ? (language === "zh-CN" ? entry.zh : entry.en) : value;
+  const states = reviewLocaleText(language).states;
+  if (normalized === "learning" || normalized === "review" || normalized === "relearning") {
+    return states[normalized];
+  }
+  return value;
 }
 
 function intervalLabel(days: number, language: ComposerLanguage): string {
+  const copy = reviewLocaleText(language);
   if (days <= 1) {
-    return language === "zh-CN" ? "今天回看" : "Review today";
+    return copy.today;
   }
-  return language === "zh-CN" ? `${days} 天间隔` : `${days}d interval`;
+  return copy.intervalDays(days);
 }
 
 function retrievabilityDetail(value: number, language: ComposerLanguage): string {
-  return language === "zh-CN"
-    ? `当前可回忆率约 ${percentLabel(value, language)}。`
-    : `Estimated recall right now is ${percentLabel(value, language)}.`;
+  return reviewLocaleText(language).recallDetail(percentLabel(value, language));
 }
 
 function dueDetail(
@@ -181,9 +287,7 @@ function dueDetail(
     return undefined;
   }
   const target = item.taskHint?.trim() || item.focusArea?.trim() || item.concept.trim();
-  return language === "zh-CN"
-    ? `${target} 下次建议回看时间：${dueLabel}。`
-    : `Next suggested review for ${target}: ${dueLabel}.`;
+  return reviewLocaleText(language).nextDue(target, dueLabel);
 }
 
 export function summarizeReviewQueueTruth<T extends SharedReviewQueueItemLike>(
@@ -195,12 +299,11 @@ export function summarizeReviewQueueTruth<T extends SharedReviewQueueItemLike>(
   if (!primary && !latestAction) {
     return undefined;
   }
+  const copy = reviewLocaleText(language);
 
   const meta = [
     typeof primary?.retrievability === "number"
-      ? language === "zh-CN"
-        ? `可回忆率 ${percentLabel(primary.retrievability, language)}`
-        : `Recall ${percentLabel(primary.retrievability, language)}`
+      ? copy.recallChip(percentLabel(primary.retrievability, language))
       : undefined,
     typeof primary?.intervalDays === "number" && primary.intervalDays > 0
       ? intervalLabel(primary.intervalDays, language)
@@ -216,9 +319,7 @@ export function summarizeReviewQueueTruth<T extends SharedReviewQueueItemLike>(
 
   const headline = primary
     ? dueDetail(primary, language) ??
-      (language === "zh-CN"
-        ? `${primary.concept.trim() || "当前主题"} 仍在复习队列里。`
-        : `${primary.concept.trim() || "This topic"} is still in the review queue.`)
+      copy.stillQueued(primary.concept.trim() || copy.defaultTopic)
     : undefined;
 
   return {

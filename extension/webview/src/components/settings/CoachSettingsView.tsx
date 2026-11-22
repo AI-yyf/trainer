@@ -163,6 +163,81 @@ import type {
 
 type AnswerMode = CoachAnswerMode;
 type SaveState = "saved" | "unsaved" | "empty";
+
+type CapabilityVerdictKey =
+  | "chat"
+  | "streaming"
+  | "tools"
+  | "image-input"
+  | "formal-plan"
+  | "resource-write";
+
+const CAPABILITY_VERDICT_LABELS: Record<ComposerLanguage, Record<CapabilityVerdictKey, string>> = {
+  "zh-CN": {
+    chat: "对话",
+    streaming: "流式输出",
+    tools: "工具调用",
+    "image-input": "图像理解",
+    "formal-plan": "学习计划",
+    "resource-write": "资料写入",
+  },
+  "en-US": {
+    chat: "Chat",
+    streaming: "Streaming",
+    tools: "Tools",
+    "image-input": "Image input",
+    "formal-plan": "Learning plan",
+    "resource-write": "Library write",
+  },
+  "es-ES": {
+    chat: "Chat",
+    streaming: "Streaming",
+    tools: "Herramientas",
+    "image-input": "Imagen",
+    "formal-plan": "Plan formal",
+    "resource-write": "Escritura",
+  },
+  "fr-FR": {
+    chat: "Chat",
+    streaming: "Streaming",
+    tools: "Outils",
+    "image-input": "Image",
+    "formal-plan": "Plan formel",
+    "resource-write": "Écriture",
+  },
+  "de-DE": {
+    chat: "Chat",
+    streaming: "Streaming",
+    tools: "Werkzeuge",
+    "image-input": "Bildeingabe",
+    "formal-plan": "Lernplan",
+    "resource-write": "Schreibzugriff",
+  },
+  "ja-JP": {
+    chat: "チャット",
+    streaming: "ストリーミング",
+    tools: "ツール",
+    "image-input": "画像入力",
+    "formal-plan": "学習プラン",
+    "resource-write": "資料書込",
+  },
+  "ko-KR": {
+    chat: "대화",
+    streaming: "스트리밍",
+    tools: "도구",
+    "image-input": "이미지 입력",
+    "formal-plan": "학습 계획",
+    "resource-write": "자료 쓰기",
+  },
+  "pt-BR": {
+    chat: "Chat",
+    streaming: "Streaming",
+    tools: "Ferramentas",
+    "image-input": "Imagem",
+    "formal-plan": "Plano formal",
+    "resource-write": "Escrita",
+  },
+};
 type AnswerStylePreset = "simple" | "balanced" | "deep" | "custom";
 const DEFAULT_PROVIDER_CONNECTION_NAME = "custom-openai-compatible";
 // P0: the model picker renders the full known list — search still filters, the
@@ -5555,12 +5630,13 @@ function CoachSettingsViewSheet({
             {providerSaved && !showConnectionSummary && !showConnectionForm ? (
               <button
                 type="button"
-                className="settings-provider-bar__icon-button"
+                className="settings-provider-bar__add"
                 title={settingsPhrase(language, "editConfiguration")}
                 aria-label={settingsPhrase(language, "editConfiguration")}
                 onClick={() => setConnectionView("edit")}
               >
                 <ComposeIcon size={14} />
+                <span>{settingsPhrase(language, "editConfiguration")}</span>
               </button>
             ) : null}
             {canSaveProviderProfile && !showConnectionSummary ? (
@@ -6491,56 +6567,75 @@ function CoachSettingsViewSheet({
                 <p className="settings-sheet__note settings-sheet__note--compact">
                   {settingsPhrase(language, "capabilitiesFromLiveTest")}
                 </p>
-                <div className="settings-advanced-limits">
-                  <label className="settings-field">
-                    <span>{settingsPhrase(language, "contextWindow")}</span>
-                    <input
-                      inputMode="numeric"
-                      value={draftContextWindowTokens ?? ""}
-                      placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
-                      onChange={(event) =>
-                        onProviderDraftChange({
-                          contextWindowTokens: parsePositiveIntegerInput(event.target.value),
-                        })
-                      }
-                    />
-                  </label>
-                  <div className="settings-advanced-presets">
-                    {[32768, 65536, 131072, 262144].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => onProviderDraftChange({ contextWindowTokens: value })}
-                      >
-                        {value / 1024}K
-                      </button>
-                    ))}
+                <details className="settings-sheet__minor-panel settings-token-presets-panel">
+                  <summary>
+                    <span>{settingsText(language, "上下文与输出上限", "Context & output limits")}</span>
+                    {(draftContextWindowTokens || draftMaxOutputTokens) ? (
+                      <span className="settings-section-count">
+                        {[
+                          draftContextWindowTokens
+                            ? `${Math.round(draftContextWindowTokens / 1024)}K`
+                            : settingsText(language, "自动", "Auto"),
+                          draftMaxOutputTokens
+                            ? `${Math.round(draftMaxOutputTokens / 1024)}K`
+                            : settingsText(language, "自动", "Auto"),
+                        ].join(" / ")}
+                      </span>
+                    ) : null}
+                  </summary>
+                  <div className="settings-sheet__minor-body">
+                    <div className="settings-advanced-limits">
+                      <label className="settings-field">
+                        <span>{settingsPhrase(language, "contextWindow")}</span>
+                        <input
+                          inputMode="numeric"
+                          value={draftContextWindowTokens ?? ""}
+                          placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
+                          onChange={(event) =>
+                            onProviderDraftChange({
+                              contextWindowTokens: parsePositiveIntegerInput(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <div className="settings-advanced-presets">
+                        {[32768, 65536, 131072, 262144].map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => onProviderDraftChange({ contextWindowTokens: value })}
+                          >
+                            {value / 1024}K
+                          </button>
+                        ))}
+                      </div>
+                      <label className="settings-field">
+                        <span>{settingsPhrase(language, "maxOutput")}</span>
+                        <input
+                          inputMode="numeric"
+                          value={draftMaxOutputTokens ?? ""}
+                          placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
+                          onChange={(event) =>
+                            onProviderDraftChange({
+                              maxOutputTokens: parsePositiveIntegerInput(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                      <div className="settings-advanced-presets">
+                        {[8192, 16384, 32768, 65536].map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => onProviderDraftChange({ maxOutputTokens: value })}
+                          >
+                            {value / 1024}K
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <label className="settings-field">
-                    <span>{settingsPhrase(language, "maxOutput")}</span>
-                    <input
-                      inputMode="numeric"
-                      value={draftMaxOutputTokens ?? ""}
-                      placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
-                      onChange={(event) =>
-                        onProviderDraftChange({
-                          maxOutputTokens: parsePositiveIntegerInput(event.target.value),
-                        })
-                      }
-                    />
-                  </label>
-                  <div className="settings-advanced-presets">
-                    {[8192, 16384, 32768, 65536].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => onProviderDraftChange({ maxOutputTokens: value })}
-                      >
-                        {value / 1024}K
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                </details>
                 {thinkingDescriptor?.kind === "reasoning_effort" ||
                 thinkingDescriptor?.kind === "minimax_thinking" ||
                 thinkingDescriptor?.kind === "thinking_budget" ||
@@ -6609,7 +6704,7 @@ function CoachSettingsViewSheet({
                                 ["resource-write", capabilityVerdict.resourceWrite],
                               ] as const).map(([name, enabled]) => (
                                 <span key={name} data-capability-verdict={name}>
-                                  <span>{name}</span>{" "}
+                                  <span>{CAPABILITY_VERDICT_LABELS[language][name]}</span>{" "}
                                   <StatusPill tone={enabled ? "connected" : "warn"}>
                                     {enabled
                                       ? settingsStatusPhrase(language, "ready")

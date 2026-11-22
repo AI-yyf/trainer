@@ -133,21 +133,21 @@
 .inline-practice-slot {
   width: 100%;
   max-width: var(--coach-content-max, 660px);
-  margin: 8px auto 4px;
+  margin: 10px auto 6px;
 }
 .inline-practice-slot__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 80%, transparent);
 }
 .inline-practice-slot__header--expanded {
   justify-content: flex-end;
-  padding: 0 0 4px;
+  padding: 0 2px 4px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -164,7 +164,7 @@
 .inline-practice-slot__toggle {
   flex: none;
   padding: 2px 8px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: var(--fg-muted);
@@ -174,14 +174,16 @@
 }
 .inline-practice-slot__toggle:hover {
   color: var(--fg-0);
-  background: color-mix(in srgb, var(--fg-0) 7%, transparent);
+  border-color: color-mix(in srgb, var(--line) 55%, transparent);
+  background: color-mix(in srgb, var(--fg-0) 6%, transparent);
 }
 .inline-practice-slot .training-view { padding: 0; }
 .inline-practice-slot .training-pane {
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-1) 72%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 76%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bg-0) 40%, transparent);
 }
 .inline-practice-slot .template-activity-header { gap: 3px; padding-block: 0 8px; }
 .inline-practice-slot .template-activity-header h2 { font-size: var(--trainer-font-md); line-height: 1.4; }

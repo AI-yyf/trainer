@@ -82,14 +82,49 @@ class CardGenerationStreamEvent:
 _CARD_STREAM_IDLE_TIMEOUT_SECONDS = 45.0
 
 
+def _normalize_card_locale(language: str | None) -> str:
+    raw = str(language or "").strip().lower().replace("_", "-")
+    if raw.startswith("zh"):
+        return "zh-CN"
+    if raw.startswith("es"):
+        return "es-ES"
+    if raw.startswith("fr"):
+        return "fr-FR"
+    if raw.startswith("de"):
+        return "de-DE"
+    if raw.startswith("ja"):
+        return "ja-JP"
+    if raw.startswith("ko"):
+        return "ko-KR"
+    if raw.startswith("pt"):
+        return "pt-BR"
+    return "en-US"
+
+
+def _localized_8(copy_by_locale: dict[str, str], language: str | None) -> str:
+    locale = _normalize_card_locale(language)
+    return copy_by_locale.get(locale) or copy_by_locale["en-US"]
+
+
+_PROVIDER_FAILURE_DETAIL_BY_LOCALE: dict[str, str] = {
+    "en-US": "The model-authored card was not accepted; retry generation to obtain a model card.",
+    "zh-CN": "模型生成的卡片未被接受；可以重试以获取模型卡片。",
+    "es-ES": "No se aceptó la tarjeta generada por el modelo; vuelve a intentar la generación para obtener una tarjeta del modelo.",
+    "fr-FR": "La carte générée par le modèle n'a pas été acceptée ; relance la génération pour obtenir une carte du modèle.",
+    "de-DE": "Die vom Modell erstellte Karte wurde nicht akzeptiert; starte die Generierung erneut, um eine Modellkarte zu erhalten.",
+    "ja-JP": "モデルが生成したカードが受け入れられませんでした。モデルカードを取得するには再生成してください。",
+    "ko-KR": "모델이 생성한 카드가 수락되지 않았습니다. 모델 카드를 받으려면 생성을 다시 시도하세요.",
+    "pt-BR": "O cartão gerado pelo modelo não foi aceito; tente gerar novamente para obter um cartão do modelo.",
+}
+
+
 class CardGenerationProviderFailure(RuntimeError):
     """A live provider did not produce a valid card; do not persist a template."""
 
     def __init__(self, reason: str, *, response_language: str | None = None) -> None:
         self.reason = str(reason or "invalid_card")
-        self.detail = _localized_text(
-            "The model-authored card was not accepted; retry generation to obtain a model card.",
-            "模型生成的卡片未被接受；可以重试以获取模型卡片。",
+        self.detail = _localized_8(
+            _PROVIDER_FAILURE_DETAIL_BY_LOCALE,
             response_language,
         )
         super().__init__(self.detail)
@@ -395,6 +430,59 @@ _WHY_NOW_MESSAGES_ZH: dict[str, str] = {
     "practice_feedback": "来自最近练习反馈。",
     "dependency_mastery": "前置技能还没有掌握。",
     "review_due": "这个概念到了复习时间。",
+}
+
+_WHY_NOW_MESSAGES_BY_LOCALE: dict[str, dict[str, str]] = {
+    "en-US": _WHY_NOW_MESSAGES,
+    "zh-CN": _WHY_NOW_MESSAGES_ZH,
+    "es-ES": {
+        "conversation_gap": "Se detectó una brecha de conocimiento durante la conversación.",
+        "plan_requirement": "Esta etapa del plan requiere dominar esta habilidad.",
+        "resource_knowledge": "Se encontró conocimiento extraíble en un recurso indexado.",
+        "practice_feedback": "Comentarios de una sesión de práctica reciente.",
+        "dependency_mastery": "Una habilidad previa aún no está dominada.",
+        "review_due": "Este concepto ya tiene pendiente su repaso programado.",
+    },
+    "fr-FR": {
+        "conversation_gap": "Une lacune a été détectée pendant la conversation.",
+        "plan_requirement": "Cette étape du plan exige de maîtriser cette compétence.",
+        "resource_knowledge": "Des connaissances exploitables ont été trouvées dans une ressource indexée.",
+        "practice_feedback": "Retour d'une séance de pratique récente.",
+        "dependency_mastery": "Une compétence prérequise n'est pas encore maîtrisée.",
+        "review_due": "La révision planifiée de ce concept est arrivée à échéance.",
+    },
+    "de-DE": {
+        "conversation_gap": "Im Gespräch wurde eine Wissenslücke erkannt.",
+        "plan_requirement": "Dieser Planschritt erfordert das Beherrschen dieser Fähigkeit.",
+        "resource_knowledge": "In einer indexierten Quelle wurden verwertbare Inhalte gefunden.",
+        "practice_feedback": "Rückmeldung aus einer kürzlichen Übungseinheit.",
+        "dependency_mastery": "Eine vorausgesetzte Fähigkeit ist noch nicht sicher beherrscht.",
+        "review_due": "Für dieses Konzept steht die geplante Wiederholung an.",
+    },
+    "ja-JP": {
+        "conversation_gap": "会話の中で知識の抜けが見つかりました。",
+        "plan_requirement": "プランのこの段階では、このスキルの習得が必要です。",
+        "resource_knowledge": "インデックス済み資料から抽出できる知識が見つかりました。",
+        "practice_feedback": "直近の練習セッションからのフィードバックです。",
+        "dependency_mastery": "前提となるスキルがまだ習得できていません。",
+        "review_due": "この概念の予定復習タイミングになりました。",
+    },
+    "ko-KR": {
+        "conversation_gap": "대화 중에 지식 공백이 발견되었습니다.",
+        "plan_requirement": "계획 단계에서 이 기술을 먼저 익혀야 합니다.",
+        "resource_knowledge": "색인된 자료에서 추출할 수 있는 지식을 찾았습니다.",
+        "practice_feedback": "최근 연습 세션의 피드백에서 이어졌습니다.",
+        "dependency_mastery": "선행 기술이 아직 충분히 숙달되지 않았습니다.",
+        "review_due": "이 개념의 예정된 복습 시점이 되었습니다.",
+    },
+    "pt-BR": {
+        "conversation_gap": "Uma lacuna de conhecimento foi detectada durante a conversa.",
+        "plan_requirement": "Esta etapa do plano exige dominar esta habilidade.",
+        "resource_knowledge": "Conhecimento extraível encontrado em um recurso indexado.",
+        "practice_feedback": "Feedback de uma sessão de prática recente.",
+        "dependency_mastery": "Uma habilidade pré-requisito ainda não foi dominada.",
+        "review_due": "A revisão programada deste conceito está no prazo.",
+    },
 }
 
 _RESOURCE_BLOCKING_FLAGS = {
@@ -703,16 +791,82 @@ def _localized_text(english: str, chinese: str, language: str | None) -> str:
     return chinese if _prefers_chinese(language) else english
 
 
+_FALLBACK_REASON_BY_LOCALE: dict[str, dict[str, str]] = {
+    "invalid_json": {
+        "en-US": "invalid JSON",
+        "zh-CN": "无效 JSON",
+        "es-ES": "JSON no válido",
+        "fr-FR": "JSON invalide",
+        "de-DE": "ungültiges JSON",
+        "ja-JP": "無効な JSON",
+        "ko-KR": "유효하지 않은 JSON",
+        "pt-BR": "JSON inválido",
+    },
+    "invalid_card": {
+        "en-US": "invalid card payload",
+        "zh-CN": "无效卡片内容",
+        "es-ES": "contenido de tarjeta no válido",
+        "fr-FR": "contenu de carte invalide",
+        "de-DE": "ungültige Kartendaten",
+        "ja-JP": "無効なカード内容",
+        "ko-KR": "유효하지 않은 카드 데이터",
+        "pt-BR": "conteúdo de cartão inválido",
+    },
+    "missing_required_fields": {
+        "en-US": "missing required fields",
+        "zh-CN": "缺少必需字段",
+        "es-ES": "faltan campos obligatorios",
+        "fr-FR": "champs obligatoires manquants",
+        "de-DE": "fehlende Pflichtfelder",
+        "ja-JP": "必須フィールドが不足しています",
+        "ko-KR": "필수 필드가 누락되었습니다",
+        "pt-BR": "campos obrigatórios ausentes",
+    },
+    "language_mismatch": {
+        "en-US": "language mismatch",
+        "zh-CN": "语言不匹配",
+        "es-ES": "idioma no coincidente",
+        "fr-FR": "langue incohérente",
+        "de-DE": "Sprache stimmt nicht überein",
+        "ja-JP": "言語が一致しません",
+        "ko-KR": "언어가 일치하지 않습니다",
+        "pt-BR": "idioma incompatível",
+    },
+    "provider_stalled": {
+        "en-US": "provider stalled",
+        "zh-CN": "provider 无响应",
+        "es-ES": "el proveedor no respondió",
+        "fr-FR": "le fournisseur ne répond plus",
+        "de-DE": "Anbieter reagiert nicht",
+        "ja-JP": "プロバイダーが応答しません",
+        "ko-KR": "공급자가 응답하지 않습니다",
+        "pt-BR": "provedor sem resposta",
+    },
+}
+
+_FALLBACK_PROVENANCE_TEMPLATE_BY_LOCALE: dict[str, str] = {
+    "en-US": "Generation source: deterministic fallback ({reason_label}). The model-authored card was not accepted; retry generation to obtain a model card.",
+    "zh-CN": "生成来源：确定性降级卡（{reason_label}）。模型生成的卡片未被接受；可以重试以获取模型卡片。",
+    "es-ES": "Origen de generación: respaldo determinista ({reason_label}). No se aceptó la tarjeta del modelo; vuelve a intentarlo para obtener una tarjeta generada por el modelo.",
+    "fr-FR": "Source de génération : repli déterministe ({reason_label}). La carte du modèle n'a pas été acceptée ; relance la génération pour obtenir une carte du modèle.",
+    "de-DE": "Erstellungsquelle: deterministischer Rückfall ({reason_label}). Die Modellkarte wurde nicht akzeptiert; wiederhole die Generierung für eine Modellkarte.",
+    "ja-JP": "生成元: 決定論的フォールバック（{reason_label}）。モデルが生成したカードが受け入れられませんでした。モデルカードを取得するには再生成してください。",
+    "ko-KR": "생성 출처: 결정론적 대체 카드({reason_label}). 모델이 생성한 카드가 수락되지 않았습니다. 모델 카드를 받으려면 다시 생성하세요.",
+    "pt-BR": "Origem da geração: fallback determinístico ({reason_label}). O cartão gerado pelo modelo não foi aceito; tente gerar novamente para obter um cartão do modelo.",
+}
+
+
 def _localized_why_now(source: str, why_now: str, language: str | None) -> str:
-    if not _prefers_chinese(language):
+    locale = _normalize_card_locale(language)
+    if locale == "en-US":
         return why_now
 
     english = _WHY_NOW_MESSAGES.get(source)
-    chinese = _WHY_NOW_MESSAGES_ZH.get(source)
-    if english and chinese and why_now.startswith(english):
-        return why_now.replace(english, chinese, 1)
-    if english and chinese and why_now == english:
-        return chinese
+    localized = _WHY_NOW_MESSAGES_BY_LOCALE.get(locale, {}).get(source)
+    if english and localized and why_now.startswith(english):
+        return why_now.replace(english, localized, 1)
+    if english and localized and why_now == english:
+        return localized
     return why_now
 
 
@@ -722,36 +876,19 @@ def _fallback_provenance_copy(
 ) -> tuple[str, str]:
     """Return a machine-readable source marker and learner-facing explanation."""
     normalized_reason = reason.strip() or "unknown"
-    reason_label = {
-        "invalid_json": _localized_text("invalid JSON", "无效 JSON", language),
-        "invalid_card": _localized_text("invalid card payload", "无效卡片内容", language),
-        "missing_required_fields": _localized_text(
-            "missing required fields",
-            "缺少必需字段",
-            language,
-        ),
-        "language_mismatch": _localized_text(
-            "language mismatch",
-            "语言不匹配",
-            language,
-        ),
-        "provider_stalled": _localized_text(
-            "provider stalled",
-            "provider 无响应",
-            language,
-        ),
-    }.get(
-        normalized_reason,
-        _localized_text(normalized_reason, normalized_reason, language),
+    locale = _normalize_card_locale(language)
+    reason_table = _FALLBACK_REASON_BY_LOCALE.get(normalized_reason)
+    reason_label = (
+        reason_table.get(locale) or reason_table["en-US"]
+        if reason_table is not None
+        else normalized_reason
     )
     source_marker = f"generation_source=deterministic_fallback;reason={normalized_reason}"
-    detail = _localized_text(
-        f"Generation source: deterministic fallback ({reason_label}). "
-        "The model-authored card was not accepted; retry generation to obtain a model card.",
-        f"生成来源：确定性降级卡（{reason_label}）。模型生成的卡片未被接受；可以重试以获取模型卡片。",
-        language,
+    template = _FALLBACK_PROVENANCE_TEMPLATE_BY_LOCALE.get(
+        locale,
+        _FALLBACK_PROVENANCE_TEMPLATE_BY_LOCALE["en-US"],
     )
-    return source_marker, detail
+    return source_marker, template.format(reason_label=reason_label)
 
 
 def _subject_taxonomy(context: CardGenerationContext):
@@ -1941,26 +2078,59 @@ def _guided_function_anchor(context: CardGenerationContext, path: str) -> str:
     ):
         match = re.search(pattern, source)
         if match:
-            return _localized_text(
-                f"function `{match.group(1)}` in `{path}`",
-                f"\u51fd\u6570`{match.group(1)}`\u4f4d\u4e8e`{path}`",
+            symbol = match.group(1)
+            return _localized_8(
+                {
+                    "en-US": f"function `{symbol}` in `{path}`",
+                    "zh-CN": f"\u51fd\u6570`{symbol}`\u4f4d\u4e8e`{path}`",
+                    "es-ES": f"función `{symbol}` en `{path}`",
+                    "fr-FR": f"fonction `{symbol}` dans `{path}`",
+                    "de-DE": f"Funktion `{symbol}` in `{path}`",
+                    "ja-JP": f"`{path}` 内の関数 `{symbol}`",
+                    "ko-KR": f"`{path}`의 함수 `{symbol}`",
+                    "pt-BR": f"função `{symbol}` em `{path}`",
+                },
                 context.response_language,
             )
     selection_range = _guided_fact_text(context.current_file_selection_range, limit=120)
     if context.current_file_selection:
-        range_label = _localized_text(
-            selection_range or "range not supplied",
-            selection_range or "\u672a\u63d0\u4f9b\u8303\u56f4",
+        range_label = selection_range or _localized_8(
+            {
+                "en-US": "range not supplied",
+                "zh-CN": "\u672a\u63d0\u4f9b\u8303\u56f4",
+                "es-ES": "rango no indicado",
+                "fr-FR": "plage non fournie",
+                "de-DE": "Bereich nicht angegeben",
+                "ja-JP": "範囲未指定",
+                "ko-KR": "범위가 제공되지 않음",
+                "pt-BR": "intervalo não informado",
+            },
             context.response_language,
         )
-        return _localized_text(
-            f"selected code ({range_label}) in `{path}`",
-            f"`{path}`\u4e2d\u7684\u9009\u4e2d\u4ee3\u7801\uff08{range_label}\uff09",
+        return _localized_8(
+            {
+                "en-US": f"selected code ({range_label}) in `{path}`",
+                "zh-CN": f"`{path}`\u4e2d\u7684\u9009\u4e2d\u4ee3\u7801\uff08{range_label}\uff09",
+                "es-ES": f"código seleccionado ({range_label}) en `{path}`",
+                "fr-FR": f"code sélectionné ({range_label}) dans `{path}`",
+                "de-DE": f"ausgewählter Code ({range_label}) in `{path}`",
+                "ja-JP": f"`{path}` の選択コード（{range_label}）",
+                "ko-KR": f"`{path}`의 선택된 코드({range_label})",
+                "pt-BR": f"código selecionado ({range_label}) em `{path}`",
+            },
             context.response_language,
         )
-    return _localized_text(
-        f"current code in `{path}`",
-        f"`{path}`\u4e2d\u7684\u5f53\u524d\u4ee3\u7801",
+    return _localized_8(
+        {
+            "en-US": f"current code in `{path}`",
+            "zh-CN": f"`{path}`\u4e2d\u7684\u5f53\u524d\u4ee3\u7801",
+            "es-ES": f"código actual en `{path}`",
+            "fr-FR": f"code actuel dans `{path}`",
+            "de-DE": f"aktueller Code in `{path}`",
+            "ja-JP": f"`{path}` 内の現在のコード",
+            "ko-KR": f"`{path}`의 현재 코드",
+            "pt-BR": f"código atual em `{path}`",
+        },
         context.response_language,
     )
 

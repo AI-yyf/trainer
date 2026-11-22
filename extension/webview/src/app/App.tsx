@@ -489,6 +489,83 @@ import {
 const injectedBootstrapAvailable = Boolean(getInjectedBootstrapState());
 const RESOURCE_VERSION_CHECK_TIMEOUT_MS = 125_000;
 
+const QUEUED_BANNER_COPY: Record<
+  ComposerLanguage,
+  {
+    regionLabel: string;
+    summary: (count: number) => string;
+    imagePlaceholder: string;
+    sendNow: string;
+    edit: string;
+    remove: string;
+  }
+> = {
+  "zh-CN": {
+    regionLabel: "待发送消息队列",
+    summary: (count) => `已排队（${count} 条 · 回复完成后自动发送）`,
+    imagePlaceholder: "[图片消息]",
+    sendNow: "立即切换",
+    edit: "编辑",
+    remove: "取消排队",
+  },
+  "en-US": {
+    regionLabel: "Queued messages",
+    summary: (count) => `Queued (${count} · sends when current reply finishes)`,
+    imagePlaceholder: "[Image message]",
+    sendNow: "Send now",
+    edit: "Edit",
+    remove: "Remove queued message",
+  },
+  "es-ES": {
+    regionLabel: "Mensajes en cola",
+    summary: (count) => `En cola (${count} · se envía al terminar la respuesta)`,
+    imagePlaceholder: "[Mensaje de imagen]",
+    sendNow: "Enviar ahora",
+    edit: "Editar",
+    remove: "Quitar de la cola",
+  },
+  "fr-FR": {
+    regionLabel: "Messages en file d'attente",
+    summary: (count) => `En file (${count} · envoi automatique après la réponse)`,
+    imagePlaceholder: "[Message image]",
+    sendNow: "Envoyer maintenant",
+    edit: "Modifier",
+    remove: "Retirer de la file",
+  },
+  "de-DE": {
+    regionLabel: "Nachrichten-Warteschlange",
+    summary: (count) => `In Warteschlange (${count} · sendet nach Antwortende)`,
+    imagePlaceholder: "[Bildnachricht]",
+    sendNow: "Jetzt senden",
+    edit: "Bearbeiten",
+    remove: "Aus Warteschlange entfernen",
+  },
+  "ja-JP": {
+    regionLabel: "送信待ちキュー",
+    summary: (count) => `キュー済み（${count} 件 · 返信完了後に自動送信）`,
+    imagePlaceholder: "[画像メッセージ]",
+    sendNow: "今すぐ切替",
+    edit: "編集",
+    remove: "キューから削除",
+  },
+  "ko-KR": {
+    regionLabel: "전송 대기열",
+    summary: (count) => `대기열 (${count}건 · 답변 완료 후 자동 전송)`,
+    imagePlaceholder: "[이미지 메시지]",
+    sendNow: "지금 전환",
+    edit: "편집",
+    remove: "대기열에서 제거",
+  },
+  "pt-BR": {
+    regionLabel: "Mensagens na fila",
+    summary: (count) => `Na fila (${count} · envia ao concluir a resposta)`,
+    imagePlaceholder: "[Mensagem com imagem]",
+    sendNow: "Enviar agora",
+    edit: "Editar",
+    remove: "Remover da fila",
+  },
+};
+
 /**
  * Scroll target for Coach auto-follow: keep the latest message visible even when
  * inline learning/practice footer cards sit beneath the thread.
@@ -6711,6 +6788,9 @@ export function App() {
 
   const listLibraryFolders = useCallback(async (): Promise<LibraryFolderListResult> => {
     if (isBrowserPreview && !browserPreviewFixture) {
+      if (!previewSessionId?.trim()) {
+        return { ok: false, folders: [], message: "" };
+      }
       try {
         const browserPreview = await loadBrowserPreviewModule();
         const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
@@ -10603,7 +10683,9 @@ export function App() {
             isBrowserPreview && browserPreviewFixture ? undefined : requestLibraryMigration
           }
           onListLibraryFolders={
-            isBrowserPreview && browserPreviewFixture ? undefined : listLibraryFolders
+            (isBrowserPreview && browserPreviewFixture) || activeView !== "resources"
+              ? undefined
+              : listLibraryFolders
           }
           onCreateLibraryFolder={
             isBrowserPreview && browserPreviewFixture ? undefined : createLibraryFolder
@@ -11760,19 +11842,17 @@ export function App() {
               onSubmit={() => { void handleSubmit(); }}
               onQueueSubmit={composerUsesTrainingFlow ? undefined : queueCurrentComposerDraft}
               queueBanner={
-                queuedFollowUps.length > 0 ? (
-                  <div className="composer__queue-banner" role="region" aria-label={layout.composerLanguage === "zh-CN" ? "待发送消息队列" : "Queued messages"}>
+                queuedFollowUps.length > 0 ? (() => {
+                  const queueCopy = QUEUED_BANNER_COPY[layout.composerLanguage] ?? QUEUED_BANNER_COPY["en-US"];
+                  return (
+                  <div className="composer__queue-banner" role="region" aria-label={queueCopy.regionLabel}>
                     <div className="composer__queue-banner__header">
-                      <span>
-                        {layout.composerLanguage === "zh-CN"
-                          ? `已排队（${queuedFollowUps.length} 条 · 回复完成后自动发送）`
-                          : `Queued (${queuedFollowUps.length} · sends when current reply finishes)`}
-                      </span>
+                      <span>{queueCopy.summary(queuedFollowUps.length)}</span>
                     </div>
                     {queuedFollowUps.map((item, idx) => (
                       <div key={item.id} className="composer__queue-banner__row">
                         <span className="composer__queue-banner__text" title={item.text}>
-                          {item.text || (layout.composerLanguage === "zh-CN" ? "[图片消息]" : "[Image message]")}
+                          {item.text || queueCopy.imagePlaceholder}
                         </span>
                         <span className="composer__queue-banner__actions">
                           {idx === 0 ? (
@@ -11781,7 +11861,7 @@ export function App() {
                               className="button button--ghost button--compact"
                               onClick={() => handleCancelStream()}
                             >
-                              {layout.composerLanguage === "zh-CN" ? "立即切换" : "Send now"}
+                              {queueCopy.sendNow}
                             </button>
                           ) : null}
                           <button
@@ -11795,12 +11875,12 @@ export function App() {
                               }
                             }}
                           >
-                            {layout.composerLanguage === "zh-CN" ? "编辑" : "Edit"}
+                            {queueCopy.edit}
                           </button>
                           <button
                             type="button"
                             className="button button--ghost button--compact"
-                            aria-label={layout.composerLanguage === "zh-CN" ? "取消排队" : "Remove queued message"}
+                            aria-label={queueCopy.remove}
                             onClick={() =>
                               setQueuedFollowUps((current) => current.filter((entry) => entry.id !== item.id))
                             }
@@ -11811,7 +11891,8 @@ export function App() {
                       </div>
                     ))}
                   </div>
-                ) : undefined
+                  );
+                })() : undefined
               }
               onCancel={handleCancelStream}
               mentionItems={composerMentionItems}

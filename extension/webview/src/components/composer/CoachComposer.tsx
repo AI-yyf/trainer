@@ -119,6 +119,20 @@ export interface CoachComposerProps {
   onQueueSubmit?: () => void;
 }
 
+const COMPOSER_QUEUE_BUTTON_COPY: Record<
+  ComposerLanguage,
+  { ariaLabel: string; title: string }
+> = {
+  "zh-CN": { ariaLabel: "排队发送（完成后自动发出）", title: "排队发送（Enter）" },
+  "en-US": { ariaLabel: "Queue message to send next", title: "Queue message (Enter)" },
+  "es-ES": { ariaLabel: "Poner en cola para enviar después", title: "Enviar en cola (Enter)" },
+  "fr-FR": { ariaLabel: "Mettre en file d'attente pour envoi suivant", title: "Mettre en file (Entrée)" },
+  "de-DE": { ariaLabel: "Als Nächstes in Warteschlange senden", title: "In Warteschlange (Enter)" },
+  "ja-JP": { ariaLabel: "キューに追加（返信完了後に送信）", title: "キュー送信（Enter）" },
+  "ko-KR": { ariaLabel: "대기열에 추가 (완료 후 자동 전송)", title: "대기열 전송 (Enter)" },
+  "pt-BR": { ariaLabel: "Enfileirar mensagem para enviar depois", title: "Enfileirar (Enter)" },
+};
+
 export function CoachComposer({
   value,
   onChange,
@@ -1240,8 +1254,8 @@ export function CoachComposer({
           <div className="composer__send-wrap">
             {canQueueWhileBusy ? (
               <button
-                aria-label={language === "zh-CN" ? "排队发送（完成后自动发出）" : "Queue message to send next"}
-                title={language === "zh-CN" ? "排队发送（Enter）" : "Queue message (Enter)"}
+                aria-label={(COMPOSER_QUEUE_BUTTON_COPY[language] ?? COMPOSER_QUEUE_BUTTON_COPY["en-US"]).ariaLabel}
+                title={(COMPOSER_QUEUE_BUTTON_COPY[language] ?? COMPOSER_QUEUE_BUTTON_COPY["en-US"]).title}
                 className="composer__queue-btn button button--ghost button--compact"
                 onClick={onQueueSubmit}
                 type="button"

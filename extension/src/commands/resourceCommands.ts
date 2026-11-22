@@ -245,6 +245,78 @@ async function typedResourcePathFallback(
   return trimmed ? [trimmed] : undefined;
 }
 
+const WORKSPACE_IMPORT_COPY: Record<
+  ComposerLanguage,
+  {
+    selectFromWorkspace: string;
+    noLocalWorkspaceFolder: string;
+    pickTitle: string;
+    pickPlaceholder: string;
+    detailFormat: (detail: string) => string;
+  }
+> = {
+  'zh-CN': {
+    selectFromWorkspace: '从当前项目选择',
+    noLocalWorkspaceFolder: '当前尚未打开本地项目文件夹。',
+    pickTitle: '选择当前项目文件复制到资料库',
+    pickPlaceholder: '勾选需要加入 Trainer 资料库的代码或文档（不会改动原项目）',
+    detailFormat: (detail) => `（${detail}）`,
+  },
+  'en-US': {
+    selectFromWorkspace: 'Select from workspace',
+    noLocalWorkspaceFolder: 'No local workspace folder is currently open.',
+    pickTitle: 'Select workspace files to copy into Library',
+    pickPlaceholder: 'Check project files to copy into Trainer Library (read-only on project)',
+    detailFormat: (detail) => ` (${detail})`,
+  },
+  'es-ES': {
+    selectFromWorkspace: 'Seleccionar del proyecto',
+    noLocalWorkspaceFolder: 'No hay ninguna carpeta de proyecto local abierta.',
+    pickTitle: 'Seleccionar archivos del proyecto para copiar a la biblioteca',
+    pickPlaceholder: 'Marca los archivos a copiar en la biblioteca de Trainer (solo lectura)',
+    detailFormat: (detail) => ` (${detail})`,
+  },
+  'fr-FR': {
+    selectFromWorkspace: 'Choisir depuis le projet',
+    noLocalWorkspaceFolder: 'Aucun dossier de projet local n’est actuellement ouvert.',
+    pickTitle: 'Choisir les fichiers du projet à copier dans la bibliothèque',
+    pickPlaceholder: 'Cochez les fichiers à copier dans Trainer (lecture seule sur le projet)',
+    detailFormat: (detail) => ` (${detail})`,
+  },
+  'de-DE': {
+    selectFromWorkspace: 'Aus aktuellem Projekt wählen',
+    noLocalWorkspaceFolder: 'Derzeit ist kein lokaler Projektordner geöffnet.',
+    pickTitle: 'Projektdateien zum Kopieren in die Bibliothek auswählen',
+    pickPlaceholder: 'Dateien für die Trainer-Bibliothek auswählen (Projekt bleibt schreibgeschützt)',
+    detailFormat: (detail) => ` (${detail})`,
+  },
+  'ja-JP': {
+    selectFromWorkspace: '現在のプロジェクトから選択',
+    noLocalWorkspaceFolder: '現在開いているローカルプロジェクトフォルダがありません。',
+    pickTitle: 'ライブラリにコピーするプロジェクトファイルを選択',
+    pickPlaceholder: 'Trainer ライブラリへコピーするファイルを選択（元のプロジェクトは変更されません）',
+    detailFormat: (detail) => `（${detail}）`,
+  },
+  'ko-KR': {
+    selectFromWorkspace: '현재 프로젝트에서 선택',
+    noLocalWorkspaceFolder: '현재 열려 있는 로컬 프로젝트 폴더가 없습니다.',
+    pickTitle: '자료실로 복사할 프로젝트 파일 선택',
+    pickPlaceholder: 'Trainer 자료실에 복사할 파일을 선택하세요 (원본 프로젝트는 수정되지 않음)',
+    detailFormat: (detail) => ` (${detail})`,
+  },
+  'pt-BR': {
+    selectFromWorkspace: 'Selecionar do projeto',
+    noLocalWorkspaceFolder: 'Nenhuma pasta de projeto local está aberta no momento.',
+    pickTitle: 'Selecionar arquivos do projeto para copiar à biblioteca',
+    pickPlaceholder: 'Marque os arquivos para copiar à biblioteca do Trainer (somente leitura)',
+    detailFormat: (detail) => ` (${detail})`,
+  },
+};
+
+function workspaceImportCopy(language?: ComposerLanguage) {
+  return WORKSPACE_IMPORT_COPY[language ?? 'en-US'] ?? WORKSPACE_IMPORT_COPY['en-US'];
+}
+
 function normalizeRequestedTargetFolder(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') {
     return undefined;
@@ -315,7 +387,7 @@ export async function uploadResourceCommand(
             : directMode === 'folder'
               ? hostCommandCopy(lang, 'resourceLabelFolder')
               : directMode === 'workspace'
-                ? (lang === 'zh-CN' ? '从当前项目选择' : 'Select from workspace')
+                ? workspaceImportCopy(lang).selectFromWorkspace
                 : hostCommandCopy(lang, 'resourceLabelUrl'),
         value: directMode,
       }
@@ -503,7 +575,7 @@ export async function uploadResourceCommand(
     if (!workspaceRoot) {
       return {
         ok: false,
-        message: lang === 'zh-CN' ? '当前尚未打开本地项目文件夹。' : 'No local workspace folder is currently open.',
+        message: workspaceImportCopy(lang).noLocalWorkspaceFolder,
       };
     }
     let candidatePaths: string[] = [];
@@ -544,8 +616,8 @@ export async function uploadResourceCommand(
       matchOnDescription: true,
       matchOnDetail: true,
       ignoreFocusOut: true,
-      title: lang === 'zh-CN' ? '选择当前项目文件复制到资料库' : 'Select workspace files to copy into Library',
-      placeHolder: lang === 'zh-CN' ? '勾选需要加入 Trainer 资料库的代码或文档（不会改动原项目）' : 'Check project files to copy into Trainer Library (read-only on project)',
+      title: workspaceImportCopy(lang).pickTitle,
+      placeHolder: workspaceImportCopy(lang).pickPlaceholder,
     });
     if (!picked || picked.length === 0) {
       return { ok: false, cancelled: true };
@@ -781,7 +853,7 @@ type LibraryCopyKey =
  */
 function libraryCopy(key: LibraryCopyKey, language?: ComposerLanguage, detail?: string): string {
   const lang = language ?? 'en-US';
-  const formatDetail = detail ? (lang === 'zh-CN' ? `（${detail}）` : ` (${detail})`) : '';
+  const formatDetail = detail ? workspaceImportCopy(lang).detailFormat(detail) : '';
   const failure = (msg: string): string => `[[trainer-resource-failure]] ${msg}`;
   switch (key) {
     case 'captureStartedBody':

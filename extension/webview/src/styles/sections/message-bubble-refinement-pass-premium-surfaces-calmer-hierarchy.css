@@ -193,10 +193,29 @@
 }
 
 .coach-work-trail__row > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.coach-work-trail__target {
+  display: inline-block;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 64%, transparent);
+  color: var(--fg-2);
+  font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, monospace);
+  font-size: var(--trainer-font-3xs);
+  line-height: 1.45;
 }
 
 .coach-work-trail__hint {

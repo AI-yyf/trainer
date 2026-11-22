@@ -2098,6 +2098,24 @@ export const SETTINGS_TEXT: Record<string, Partial<Record<ComposerLanguage, stri
     "ko-KR": "추천 설정 적용",
     "pt-BR": "Aplicar sugestão",
   },
+  "上下文与输出上限\u0000Context & output limits": {
+    "en-US": "Context & output limits",
+    "es-ES": "Límites de contexto y salida",
+    "fr-FR": "Limites de contexte et de sortie",
+    "de-DE": "Kontext- und Ausgabelimits",
+    "ja-JP": "コンテキストと出力上限",
+    "ko-KR": "컨텍스트 및 출력 한도",
+    "pt-BR": "Limites de contexto e saída",
+  },
+  "自动\u0000Auto": {
+    "en-US": "Auto",
+    "es-ES": "Automático",
+    "fr-FR": "Auto",
+    "de-DE": "Auto",
+    "ja-JP": "自動",
+    "ko-KR": "자동",
+    "pt-BR": "Automático",
+  },
 };
 
 /** Resolves the active-language text for a migrated zh/en pair. */

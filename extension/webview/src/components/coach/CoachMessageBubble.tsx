@@ -149,12 +149,24 @@ export interface CoachMessageBubbleProps {
   resources?: ResourceRecord[];
 }
 
-function fallbackRoleLabel(message: ConversationMessage): string {
+const ROLE_FALLBACK_COPY: Record<ComposerLanguage, { you: string; system: string }> = {
+  "zh-CN": { you: "你", system: "系统" },
+  "en-US": { you: "You", system: "System" },
+  "es-ES": { you: "Tú", system: "Sistema" },
+  "fr-FR": { you: "Vous", system: "Système" },
+  "de-DE": { you: "Du", system: "System" },
+  "ja-JP": { you: "あなた", system: "システム" },
+  "ko-KR": { you: "나", system: "시스템" },
+  "pt-BR": { you: "Você", system: "Sistema" },
+};
+
+function fallbackRoleLabel(message: ConversationMessage, language: ComposerLanguage): string {
+  const labels = ROLE_FALLBACK_COPY[language] ?? ROLE_FALLBACK_COPY["en-US"];
   if (message.role === "user") {
-    return "You";
+    return labels.you;
   }
   if (message.role === "system") {
-    return "System";
+    return labels.system;
   }
   return "Trainer";
 }
@@ -292,13 +304,25 @@ function toolTrailTarget(activity: { args?: Record<string, unknown> }): string {
     args.directory ??
     args.query ??
     args.url ??
+    args.symbol ??
+    args.module ??
+    args.topic ??
     args.title ??
     args.name ??
     args.folder ??
     args.pattern;
   if (typeof candidate === "string") {
-    const cleaned = candidate.replace(/\s+/g, " ").trim();
-    return cleaned.length > 56 ? `${cleaned.slice(0, 55)}…` : cleaned;
+    let cleaned = candidate.replace(/\s+/g, " ").trim();
+    if (/^https?:\/\//i.test(cleaned)) {
+      try {
+        const parsed = new URL(cleaned);
+        const pathPart = parsed.pathname === "/" ? "" : parsed.pathname;
+        cleaned = `${parsed.hostname}${pathPart}`.replace(/\/+$/, "");
+      } catch {
+        // Keep raw trimmed string if URL parsing fails
+      }
+    }
+    return cleaned.length > 48 ? `${cleaned.slice(0, 47)}…` : cleaned;
   }
   if (Array.isArray(args.paths) && args.paths.length > 0) {
     return `${String(args.paths[0]).trim()} (+${args.paths.length - 1})`;
@@ -344,7 +368,7 @@ function CoachMessageBubbleImpl({
   const resolvedRoleLabel =
     roleLabel ??
     (message.role === "user" ? userLabel : message.role === "system" ? systemLabel : assistantLabel) ??
-    fallbackRoleLabel(message);
+    fallbackRoleLabel(message, language);
 
   const variant = message.role === "user" ? "user" : message.role === "system" ? "system" : "assistant";
   const classes = [
@@ -482,10 +506,8 @@ function CoachMessageBubbleImpl({
   // muted line that expands to the per-step strip. Nothing disappears.
   const toolTrailActivities =
     message.role === "assistant" && !streaming
-      ? deriveTrainerToolActivity(message.parts).filter((activity) =>
-          /(read|search|grep|find|list|fetch|diagnostic|context|inspect|open|import|save|write|organize|index|recall)/i.test(
-            activity.name,
-          ),
+      ? deriveTrainerToolActivity(message.parts).filter(
+          (activity) => activity.name !== "coach_finalize",
         )
       : [];
   // Degraded turns may carry only a status part with no readable body; keep a
@@ -555,8 +577,8 @@ function CoachMessageBubbleImpl({
                 return (
                   <li key={activity.id} className="coach-work-trail__row">
                     <span>
-                      {toolTrailLabel(activity.name, language)}
-                      {target ? ` · ${target}` : ""}
+                      <span>{toolTrailLabel(activity.name, language)}</span>
+                      {target ? <code className="coach-work-trail__target">{target}</code> : null}
                     </span>
                     <span className="coach-work-trail__hint">
                       {toolTrailHint(activity, language)}

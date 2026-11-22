@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · 日本語 · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/source-v1.5.3-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Release](https://img.shields.io/badge/source-v1.6.0-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#インストール)
 [![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#品質ゲート)
@@ -76,7 +76,7 @@ LLM との会話は閉じた瞬間に蒸発し、動画は一方通行。火曜�
 お使いの OS とアーキテクチャ（`darwin-arm64` / `linux-x64` / `win32-x64`）向けの `.vsix` を [Releases](https://github.com/AI-yyf/trainer/releases/latest) からダウンロードします：
 
 ```bash
-code --install-extension trainer-extension-1.5.3-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.6.0-<platform>-<arch>.vsix --force
 ```
 
 または VS Code の拡張機能パネル → `···` → *VSIX からのインストール…* → ウィンドウを再読み込み。詳細は [`extension/README.install.md`](extension/README.install.md) を参照してください。
@@ -345,7 +345,7 @@ Trainer の状態フロー型直観指導メソッドは、AI 技術系クリエ
 
 ## 品質ゲート
 
-> 以下の数値はすべて `main` ブランチ（`v1.5.3`）で直接計測した実績です：
+> 以下の数値はすべて `main` ブランチ（`v1.6.0`）で直接計測した実績です：
 
 | ゲート | 対象と検証結果 | コマンド |
 |---|---|---|
@@ -397,7 +397,7 @@ UI、設定画面、ホスト通知、ブラウザ拡張機能、README が **8 
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.5.3}
+  note   = {v1.6.0}
 }
 ```
 
@@ -407,6 +407,6 @@ UI、設定画面、ホスト通知、ブラウザ拡張機能、README が **8 
 
 **// AIを鍛える · AIとともに成長する**
 
-`v1.5.3` · コーヒーと FSRS、RethinkFun State-Flow 教育カーネル、6,606 個の自動テスト、そしてあなたの代わりにコードを書くことを拒むコーチで作られています。
+`v1.6.0` · コーヒーと FSRS、RethinkFun State-Flow 教育カーネル、6,606 個の自動テスト、そしてあなたの代わりにコードを書くことを拒むコーチで作られています。
 
 </div>

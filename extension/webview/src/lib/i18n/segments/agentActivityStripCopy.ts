@@ -256,4 +256,59 @@ export const TOOL_LABELS: Record<string, Record<ComposerLanguage, string>> = {
     "fr-FR": "Chercher des ressources", "de-DE": "Lernmaterial suchen",
     "ja-JP": "学習資料を検索", "ko-KR": "학습 자료 검색", "pt-BR": "Buscar materiais",
   },
+  list_project_modules: {
+    "zh-CN": "浏览项目模块", "en-US": "List modules", "es-ES": "Listar módulos",
+    "fr-FR": "Lister les modules", "de-DE": "Module auflisten",
+    "ja-JP": "モジュール一覧", "ko-KR": "모듈 목록", "pt-BR": "Listar módulos",
+  },
+  read_project_symbol: {
+    "zh-CN": "读取代码符号", "en-US": "Read symbol", "es-ES": "Leer símbolo",
+    "fr-FR": "Lire le symbole", "de-DE": "Symbol lesen",
+    "ja-JP": "シンボルを読む", "ko-KR": "심볼 읽기", "pt-BR": "Ler símbolo",
+  },
+  analyze_project_impact: {
+    "zh-CN": "分析改动影响", "en-US": "Analyze impact", "es-ES": "Analizar impacto",
+    "fr-FR": "Analyser l'impact", "de-DE": "Auswirkung prüfen",
+    "ja-JP": "影響範囲を分析", "ko-KR": "영향 분석", "pt-BR": "Analisar impacto",
+  },
+  compare_with_anchor: {
+    "zh-CN": "对比参考实现", "en-US": "Compare reference", "es-ES": "Comparar referencia",
+    "fr-FR": "Comparer avec la référence", "de-DE": "Mit Referenz vergleichen",
+    "ja-JP": "参照実装と比較", "ko-KR": "참조와 비교", "pt-BR": "Comparar referência",
+  },
+  run_rubric_review: {
+    "zh-CN": "核对评分标准", "en-US": "Check rubric", "es-ES": "Revisar rúbrica",
+    "fr-FR": "Vérifier les critères", "de-DE": "Bewertungskriterien prüfen",
+    "ja-JP": "評価基準を確認", "ko-KR": "평가 기준 확인", "pt-BR": "Verificar critérios",
+  },
+  assess_research_evidence: {
+    "zh-CN": "评估研究证据", "en-US": "Assess evidence", "es-ES": "Evaluar evidencia",
+    "fr-FR": "Évaluer les preuves", "de-DE": "Belege bewerten",
+    "ja-JP": "研究根拠を評価", "ko-KR": "연구 근거 평가", "pt-BR": "Avaliar evidências",
+  },
+  list_sandbox: {
+    "zh-CN": "浏览资料目录", "en-US": "Browse library", "es-ES": "Explorar biblioteca",
+    "fr-FR": "Parcourir la bibliothèque", "de-DE": "Bibliothek durchsuchen",
+    "ja-JP": "ライブラリ参照", "ko-KR": "자료실 탐색", "pt-BR": "Explorar biblioteca",
+  },
+  read_sandbox_file: {
+    "zh-CN": "读取资料文件", "en-US": "Read library file", "es-ES": "Leer archivo",
+    "fr-FR": "Lire le fichier", "de-DE": "Bibliotheksdatei lesen",
+    "ja-JP": "資料ファイルを読む", "ko-KR": "자료 파일 읽기", "pt-BR": "Ler arquivo",
+  },
+  inspect_current_file: {
+    "zh-CN": "查看当前文件", "en-US": "Inspect active file", "es-ES": "Inspeccionar archivo",
+    "fr-FR": "Inspecter le fichier actif", "de-DE": "Aktive Datei prüfen",
+    "ja-JP": "現在のファイルを確認", "ko-KR": "현재 파일 확인", "pt-BR": "Inspecionar arquivo",
+  },
+  specify_task: {
+    "zh-CN": "明确练习目标", "en-US": "Specify task", "es-ES": "Definir tarea",
+    "fr-FR": "Préciser la tâche", "de-DE": "Aufgabe festlegen",
+    "ja-JP": "課題を明確化", "ko-KR": "과제 정의", "pt-BR": "Especificar tarefa",
+  },
+  next_task: {
+    "zh-CN": "推进下一步", "en-US": "Next task", "es-ES": "Siguiente tarea",
+    "fr-FR": "Tâche suivante", "de-DE": "Nächste Aufgabe",
+    "ja-JP": "次の課題へ", "ko-KR": "다음 과제", "pt-BR": "Próxima tarefa",
+  },
 };

@@ -3,7 +3,7 @@
   "displayName": "Trainer",
   "description": "A conversation-first universal learning coach for VS Code.",
   "icon": "media/trainer-icon.png",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "publisher": "local",
   "repository": {
     "type": "git",

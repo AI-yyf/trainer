@@ -389,6 +389,7 @@ class CoachAgentLoop:
                     summary, next_step = _build_empty_response_recovery(
                         context=self.context,
                         response_language=self.context.response_language,
+                        executed_steps=steps[:-1],
                     )
                     return AgentRunResult(
                         final_content="",
@@ -648,6 +649,7 @@ class CoachAgentLoop:
                     summary, next_step = _build_empty_response_recovery(
                         context=self.context,
                         response_language=self.context.response_language,
+                        executed_steps=streamed_steps,
                     )
                     yield {
                         "type": "final",
@@ -1160,6 +1162,37 @@ def _normalize_coach_finalize_payload(payload: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _normalize_loop_locale(response_language: str | None) -> str:
+    raw = str(response_language or "").strip().lower().replace("_", "-")
+    if raw.startswith("zh"):
+        return "zh-CN"
+    if raw.startswith("es"):
+        return "es-ES"
+    if raw.startswith("fr"):
+        return "fr-FR"
+    if raw.startswith("de"):
+        return "de-DE"
+    if raw.startswith("ja"):
+        return "ja-JP"
+    if raw.startswith("ko"):
+        return "ko-KR"
+    if raw.startswith("pt"):
+        return "pt-BR"
+    return "en-US"
+
+
+_BLOCKER_PREFIX_BY_LOCALE: dict[str, str] = {
+    "zh-CN": "\u5f53\u524d\u963b\u585e\uff1a",
+    "en-US": "Current blocker: ",
+    "es-ES": "Bloqueo actual: ",
+    "fr-FR": "Blocage actuel : ",
+    "de-DE": "Aktueller Blocker: ",
+    "ja-JP": "\u73fe\u5728\u306e\u30d6\u30ed\u30c3\u30ab\u30fc: ",
+    "ko-KR": "\ud604\uc7ac \ub9c9\ud78c \uc9c0\uc810: ",
+    "pt-BR": "Bloqueio atual: ",
+}
+
+
 def _visible_coach_finalize_reply(
     payload: dict[str, Any],
     *,
@@ -1171,8 +1204,8 @@ def _visible_coach_finalize_reply(
     through the reply's icon strip (agent_meta.next_step), keeping the reply
     text to the coach's own words.
     """
-    chinese = bool(response_language and response_language.lower().startswith("zh"))
-    blocker_label = "\u5f53\u524d\u963b\u585e\uff1a" if chinese else "Current blocker: "
+    locale = _normalize_loop_locale(response_language)
+    blocker_label = _BLOCKER_PREFIX_BY_LOCALE.get(locale, _BLOCKER_PREFIX_BY_LOCALE["en-US"])
     parts: list[str] = []
 
     for key in ("summary", "decision", "teaching_note"):
@@ -1211,6 +1244,326 @@ def _merge_coach_finalize_payload(
     return merged
 
 
+_NO_PROGRESS_COPY: dict[str, dict[str, str]] = {
+    "zh-CN": {
+        "summary_base": "模型重复了相同的工具路径{suffix}，但没有带来新的证据。",
+        "summary_suffix": "：{tool_path}",
+        "focus": " 当前应该回到：{focus_note}。",
+        "failure": " 上一次还卡在：{failure_note}。",
+        "next_plain": "换一个证据来源，或者先把问题收窄，再继续同样的工具路径。",
+        "next_tool": "先换一个证据来源，或者收窄问题，再重新评估是否要继续 `{tool_path}`。",
+        "return_to": " 也可以先回到 {next_step_note}。",
+        "fix_first": " 先修掉 `{failure_note}` 对应的问题。",
+    },
+    "en-US": {
+        "summary_base": "The model repeated the same tool path{suffix} without new evidence.",
+        "summary_suffix": ": {tool_path}",
+        "focus": " The turn should stay anchored to {focus_note}.",
+        "failure": " The last attempt was already stuck on: {failure_note}.",
+        "next_plain": "Switch evidence sources or narrow the question before trying the same tool path again.",
+        "next_tool": "Try a different evidence source, then decide whether `{tool_path}` is still the right path.",
+        "return_to": " Or return to {next_step_note}.",
+        "fix_first": " Fix the issue tied to `{failure_note}` first.",
+    },
+    "es-ES": {
+        "summary_base": "El modelo repitió la misma ruta de herramientas{suffix} sin aportar nueva evidencia.",
+        "summary_suffix": ": {tool_path}",
+        "focus": " Este turno debe seguir anclado en {focus_note}.",
+        "failure": " El intento anterior quedó bloqueado en: {failure_note}.",
+        "next_plain": "Cambia de fuente de evidencia o acota la pregunta antes de repetir la misma ruta de herramientas.",
+        "next_tool": "Prueba otra fuente de evidencia y decide si `{tool_path}` sigue siendo la ruta adecuada.",
+        "return_to": " O vuelve a {next_step_note}.",
+        "fix_first": " Resuelve primero el problema asociado a `{failure_note}`.",
+    },
+    "fr-FR": {
+        "summary_base": "Le modèle a répété le même enchaînement d'outils{suffix} sans apporter de nouvelle preuve.",
+        "summary_suffix": " : {tool_path}",
+        "focus": " Cet échange doit rester ancré sur {focus_note}.",
+        "failure": " La tentative précédente bloquait déjà sur : {failure_note}.",
+        "next_plain": "Change de source de preuve ou resserre la question avant de relancer le même parcours d'outils.",
+        "next_tool": "Essaie une autre source de preuve, puis vérifie si `{tool_path}` reste la bonne piste.",
+        "return_to": " Ou reviens à {next_step_note}.",
+        "fix_first": " Corrige d'abord le problème lié à `{failure_note}`.",
+    },
+    "de-DE": {
+        "summary_base": "Das Modell hat denselben Werkzeugpfad{suffix} ohne neue Belege wiederholt.",
+        "summary_suffix": ": {tool_path}",
+        "focus": " Die Runde sollte auf {focus_note} ausgerichtet bleiben.",
+        "failure": " Der letzte Versuch hing bereits an: {failure_note}.",
+        "next_plain": "Wechsle die Belegquelle oder grenze die Frage enger ein, bevor du denselben Werkzeugpfad wiederholst.",
+        "next_tool": "Nutze eine andere Belegquelle und prüfe dann, ob `{tool_path}` noch der richtige Weg ist.",
+        "return_to": " Oder kehre zu {next_step_note} zurück.",
+        "fix_first": " Behebe zuerst das Problem rund um `{failure_note}`.",
+    },
+    "ja-JP": {
+        "summary_base": "モデルが新しい根拠を得られないまま同じツール経路{suffix}を繰り返しました。",
+        "summary_suffix": "（{tool_path}）",
+        "focus": " 現在の焦点は {focus_note} に保ってください。",
+        "failure": " 前回の詰まり箇所: {failure_note}。",
+        "next_plain": "別の根拠ソースに切り替えるか、論点を絞ってから同じツール経路を再試行してください。",
+        "next_tool": "別の根拠ソースを試し、`{tool_path}` を続けるべきか見直してください。",
+        "return_to": " または {next_step_note} に戻ってください。",
+        "fix_first": " まず `{failure_note}` に関連する問題を修正してください。",
+    },
+    "ko-KR": {
+        "summary_base": "모델이 새로운 근거 없이 동일한 도구 경로{suffix}를 반복했습니다.",
+        "summary_suffix": "({tool_path})",
+        "focus": " 현재 초점은 {focus_note}에 맞춰 유지해야 합니다.",
+        "failure": " 이전 시도에서 막힌 지점: {failure_note}.",
+        "next_plain": "같은 도구 경로를 다시 시도하기 전에 다른 근거 출처로 전환하거나 질문을 좁혀 주세요.",
+        "next_tool": "다른 근거 출처를 시도한 뒤 `{tool_path}`가 여전히 적절한 경로인지 다시 판단하세요.",
+        "return_to": " 또는 {next_step_note} 단계로 돌아가세요.",
+        "fix_first": " 먼저 `{failure_note}`와 관련된 문제를 해결하세요.",
+    },
+    "pt-BR": {
+        "summary_base": "O modelo repetiu o mesmo caminho de ferramentas{suffix} sem novas evidências.",
+        "summary_suffix": ": {tool_path}",
+        "focus": " A conversa deve permanecer ancorada em {focus_note}.",
+        "failure": " A última tentativa já havia travado em: {failure_note}.",
+        "next_plain": "Troque a fonte de evidência ou restrinja a pergunta antes de repetir o mesmo caminho de ferramentas.",
+        "next_tool": "Tente outra fonte de evidência e decida se `{tool_path}` ainda é o melhor caminho.",
+        "return_to": " Ou volte para {next_step_note}.",
+        "fix_first": " Corrija primeiro o problema ligado a `{failure_note}`.",
+    },
+}
+
+_STEP_LIMIT_COPY: dict[str, dict[str, str]] = {
+    "zh-CN": {
+        "summary": "模型已经跑到步数上限，但还没有自然收束。",
+        "focus": " 当前仍应围绕：{focus_note}。",
+        "next_step": "下一轮先从最近一次工具路径继续；如果还是卡住，就换证据来源或缩小问题。",
+        "return_to": " 也可以先回到 {next_step_note}。",
+        "failure": " 上一轮最接近的卡点是：{failure_note}。",
+        "fix_first": " 先修掉 `{failure_note}` 对应的问题。",
+    },
+    "en-US": {
+        "summary": "The model reached the step limit without a natural stop.",
+        "focus": " The turn should still be anchored to {focus_note}.",
+        "next_step": "Continue from the latest tool path, but switch evidence sources or narrow scope if you are still stuck.",
+        "return_to": " Or return to {next_step_note}.",
+        "failure": " The closest blocker was: {failure_note}.",
+        "fix_first": " Fix the issue tied to `{failure_note}` first.",
+    },
+    "es-ES": {
+        "summary": "El modelo alcanzó el límite de pasos sin cerrar de forma natural.",
+        "focus": " El turno debe seguir anclado en {focus_note}.",
+        "next_step": "Continúa desde la última ruta de herramientas, pero cambia de fuente o acota el alcance si sigues atascado.",
+        "return_to": " O vuelve a {next_step_note}.",
+        "failure": " El bloqueo más cercano fue: {failure_note}.",
+        "fix_first": " Resuelve primero el problema asociado a `{failure_note}`.",
+    },
+    "fr-FR": {
+        "summary": "Le modèle a atteint la limite d'étapes sans conclure naturellement.",
+        "focus": " L'échange doit rester ancré sur {focus_note}.",
+        "next_step": "Reprends depuis le dernier outil utilisé, mais change de source de preuve ou réduis la portée si tu restes bloqué.",
+        "return_to": " Ou reviens à {next_step_note}.",
+        "failure": " Le blocage le plus proche était : {failure_note}.",
+        "fix_first": " Corrige d'abord le problème lié à `{failure_note}`.",
+    },
+    "de-DE": {
+        "summary": "Das Modell hat das Schrittlimit ohne natürlichen Abschluss erreicht.",
+        "focus": " Die Runde sollte auf {focus_note} verankert bleiben.",
+        "next_step": "Setze beim letzten Werkzeugpfad fort, wechsle aber die Belegquelle oder grenze den Umfang ein, wenn es weiter stockt.",
+        "return_to": " Oder kehre zu {next_step_note} zurück.",
+        "failure": " Der nächste Blocker war: {failure_note}.",
+        "fix_first": " Behebe zuerst das Problem rund um `{failure_note}`.",
+    },
+    "ja-JP": {
+        "summary": "モデルが自然な完了に至らないままステップ上限に達しました。",
+        "focus": " 論点は引き続き {focus_note} に合わせてください。",
+        "next_step": "直近のツール経路から再開し、まだ詰まる場合は根拠ソースを変えるか範囲を狭めてください。",
+        "return_to": " または {next_step_note} に戻ってください。",
+        "failure": " 直前のブロッカー: {failure_note}。",
+        "fix_first": " まず `{failure_note}` に関連する問題を修正してください。",
+    },
+    "ko-KR": {
+        "summary": "모델이 자연스럽게 마무리되지 못한 채 단계 한도에 도달했습니다.",
+        "focus": " 대화 초점은 여전히 {focus_note}에 두어야 합니다.",
+        "next_step": "최근 도구 경로에서 이어가되, 계속 막히면 근거 출처를 바꾸거나 범위를 좁혀 주세요.",
+        "return_to": " 또는 {next_step_note} 단계로 돌아가세요.",
+        "failure": " 가장 가까운 막힌 지점: {failure_note}.",
+        "fix_first": " 먼저 `{failure_note}`와 관련된 문제를 해결하세요.",
+    },
+    "pt-BR": {
+        "summary": "O modelo atingiu o limite de etapas sem encerrar naturalmente.",
+        "focus": " A conversa deve continuar ancorada em {focus_note}.",
+        "next_step": "Continue pelo último caminho de ferramentas, mas troque a fonte de evidência ou reduza o escopo se ainda estiver travado.",
+        "return_to": " Ou volte para {next_step_note}.",
+        "failure": " O bloqueio mais próximo foi: {failure_note}.",
+        "fix_first": " Corrija primeiro o problema ligado a `{failure_note}`.",
+    },
+}
+
+_RUNTIME_FAILURE_COPY: dict[str, dict[str, str]] = {
+    "zh-CN": {
+        "timeout_summary": "这一轮工具调用超时了，还没来得及自然收束。",
+        "timeout_next": "先回到最近的证据，再缩小问题或换一个更快的检查。",
+        "error_summary": "这一轮教练服务在中途断开了，但我们可以沿着同一条主线续回去。",
+        "error_next": "先检查 provider 或连接状态，再继续最小的下一步。",
+        "focus": " 当前主线还是：{focus_note}。",
+        "failure": " 上一轮最接近的卡点是：{failure_note}。",
+        "return_to": " 也可以先回到 {next_step_note}。",
+    },
+    "en-US": {
+        "timeout_summary": "This turn timed out before the provider could finish.",
+        "timeout_next": "Re-anchor on the latest evidence and retry the smallest check.",
+        "error_summary": "The provider stopped mid-turn, but the thread can still resume.",
+        "error_next": "Check the provider connection, then retry the smallest anchored step.",
+        "focus": " Stay anchored to {focus_note}.",
+        "failure": " The closest blocker was: {failure_note}.",
+        "return_to": " Or return to {next_step_note}.",
+    },
+    "es-ES": {
+        "timeout_summary": "Este turno superó el tiempo de espera antes de que el proveedor terminara.",
+        "timeout_next": "Vuelve a apoyarte en la evidencia más reciente y reintenta la comprobación más pequeña.",
+        "error_summary": "El proveedor se detuvo a mitad del turno, pero el hilo aún puede continuar.",
+        "error_next": "Revisa la conexión del proveedor y vuelve a intentar el paso anclado más pequeño.",
+        "focus": " Mantén el foco en {focus_note}.",
+        "failure": " El bloqueo más cercano fue: {failure_note}.",
+        "return_to": " O vuelve a {next_step_note}.",
+    },
+    "fr-FR": {
+        "timeout_summary": "Ce tour a expiré avant que le fournisseur puisse terminer.",
+        "timeout_next": "Appuie-toi sur la preuve la plus récente et relance la plus petite vérification.",
+        "error_summary": "Le fournisseur s'est interrompu en cours de tour, mais le fil peut reprendre.",
+        "error_next": "Vérifie la connexion du fournisseur, puis relance la plus petite étape ciblée.",
+        "focus": " Reste ancré sur {focus_note}.",
+        "failure": " Le blocage le plus proche était : {failure_note}.",
+        "return_to": " Ou reviens à {next_step_note}.",
+    },
+    "de-DE": {
+        "timeout_summary": "Diese Runde hat das Zeitlimit überschritten, bevor der Anbieter fertig war.",
+        "timeout_next": "Orientiere dich am letzten Beleg und wiederhole die kleinste Prüfung.",
+        "error_summary": "Der Anbieter wurde mitten in der Runde unterbrochen, aber der Faden lässt sich fortsetzen.",
+        "error_next": "Prüfe die Anbieterverbindung und wiederhole dann den kleinsten verankerten Schritt.",
+        "focus": " Bleibe bei {focus_note}.",
+        "failure": " Der nächste Blocker war: {failure_note}.",
+        "return_to": " Oder kehre zu {next_step_note} zurück.",
+    },
+    "ja-JP": {
+        "timeout_summary": "プロバイダーが完了する前にこのターンがタイムアウトしました。",
+        "timeout_next": "最新の根拠に戻り、最小の確認を再試行してください。",
+        "error_summary": "プロバイダーが途中で停止しましたが、同じ流れから再開できます。",
+        "error_next": "プロバイダーの接続状態を確認し、最小の次の一歩を再試行してください。",
+        "focus": " 引き続き {focus_note} に焦点を合わせてください。",
+        "failure": " 直前のブロッカー: {failure_note}。",
+        "return_to": " または {next_step_note} に戻ってください。",
+    },
+    "ko-KR": {
+        "timeout_summary": "공급자가 완료하기 전에 이 턴의 제한 시간이 초과되었습니다.",
+        "timeout_next": "가장 최근 근거를 기준으로 가장 작은 점검부터 다시 시도하세요.",
+        "error_summary": "공급자가 턴 중간에 중단되었지만, 같은 흐름에서 다시 이어갈 수 있습니다.",
+        "error_next": "공급자 연결 상태를 확인한 뒤 가장 작은 다음 단계를 다시 시도하세요.",
+        "focus": " 계속 {focus_note}에 초점을 맞추세요.",
+        "failure": " 가장 가까운 막힌 지점: {failure_note}.",
+        "return_to": " 또는 {next_step_note} 단계로 돌아가세요.",
+    },
+    "pt-BR": {
+        "timeout_summary": "Este turno atingiu o tempo limite antes de o provedor concluir.",
+        "timeout_next": "Reancore na evidência mais recente e tente novamente a menor verificação.",
+        "error_summary": "O provedor parou no meio do turno, mas a conversa ainda pode continuar.",
+        "error_next": "Verifique a conexão do provedor e tente novamente o menor passo ancorado.",
+        "focus": " Mantenha o foco em {focus_note}.",
+        "failure": " O bloqueio mais próximo foi: {failure_note}.",
+        "return_to": " Ou volte para {next_step_note}.",
+    },
+}
+
+_EMPTY_RESPONSE_COPY: dict[str, dict[str, str]] = {
+    "zh-CN": {
+        "summary": "模型返回了空内容，所以这轮不能算完成。",
+        "focus": " 当前主线仍然是：{focus_note}。",
+        "tools": " 已执行的检查：{tools}。",
+        "next_step": "重新发起这一轮，但要求模型给出可见结论；如果再次为空，就先切回最小可验证动作。",
+        "return_to": " 也可以先回到 {next_step_note}。",
+    },
+    "en-US": {
+        "summary": "The provider returned an empty visible answer, so this turn cannot be treated as complete.",
+        "focus": " The thread should stay anchored to {focus_note}.",
+        "tools": " Completed checks: {tools}.",
+        "next_step": "Retry the turn and require a visible conclusion; if it repeats, fall back to the smallest verifiable move.",
+        "return_to": " Or return to {next_step_note}.",
+    },
+    "es-ES": {
+        "summary": "El proveedor devolvió una respuesta visible vacía, por lo que este turno no puede darse por terminado.",
+        "focus": " El hilo debe seguir anclado en {focus_note}.",
+        "tools": " Comprobaciones ejecutadas: {tools}.",
+        "next_step": "Reintenta el turno pidiendo una conclusión visible; si se repite, vuelve al paso verificable más pequeño.",
+        "return_to": " O vuelve a {next_step_note}.",
+    },
+    "fr-FR": {
+        "summary": "Le fournisseur a renvoyé une réponse visible vide ; ce tour ne peut donc pas être considéré comme terminé.",
+        "focus": " Le fil doit rester ancré sur {focus_note}.",
+        "tools": " Vérifications exécutées : {tools}.",
+        "next_step": "Relance le tour en demandant une conclusion visible ; si cela se répète, reviens au plus petit geste vérifiable.",
+        "return_to": " Ou reviens à {next_step_note}.",
+    },
+    "de-DE": {
+        "summary": "Der Anbieter hat eine leere sichtbare Antwort geliefert, daher gilt diese Runde nicht als abgeschlossen.",
+        "focus": " Der Faden sollte auf {focus_note} verankert bleiben.",
+        "tools": " Ausgeführte Prüfungen: {tools}.",
+        "next_step": "Wiederhole die Runde und verlange ein sichtbares Ergebnis; falls es sich wiederholt, geh zum kleinsten prüfbaren Schritt zurück.",
+        "return_to": " Oder kehre zu {next_step_note} zurück.",
+    },
+    "ja-JP": {
+        "summary": "プロバイダーが空の応答を返したため、このターンは完了とみなせません。",
+        "focus": " スレッドの軸は引き続き {focus_note} に保ってください。",
+        "tools": " 実行済みの確認: {tools}。",
+        "next_step": "目に見える結論を返すよう指定して再試行し、繰り返す場合は検証可能な最小の一歩へ戻ってください。",
+        "return_to": " または {next_step_note} に戻ってください。",
+    },
+    "ko-KR": {
+        "summary": "공급자가 빈 응답을 반환했으므로 이번 턴을 완료로 처리할 수 없습니다.",
+        "focus": " 대화 흐름은 계속 {focus_note}에 맞추세요.",
+        "tools": " 실행된 점검: {tools}.",
+        "next_step": "보이는 결론을 반환하도록 다시 시도하고, 반복되면 검증 가능한 가장 작은 동작으로 돌아가세요.",
+        "return_to": " 또는 {next_step_note} 단계로 돌아가세요.",
+    },
+    "pt-BR": {
+        "summary": "O provedor retornou uma resposta visível vazia, portanto este turno não pode ser tratado como concluído.",
+        "focus": " A conversa deve continuar ancorada em {focus_note}.",
+        "tools": " Verificações executadas: {tools}.",
+        "next_step": "Tente novamente o turno exigindo uma conclusão visível; se repetir, volte ao menor passo verificável.",
+        "return_to": " Ou volte para {next_step_note}.",
+    },
+}
+
+_COMPLETION_CONTINUITY_DEFAULTS: dict[str, tuple[str, str]] = {
+    "zh-CN": (
+        "这一轮已经自然收口，可以继续同一条主线。",
+        "继续沿着同一条主线，验证最小的具体结果。",
+    ),
+    "en-US": (
+        "This turn completed cleanly and the thread can continue.",
+        "Continue from the same thread and verify the smallest concrete result.",
+    ),
+    "es-ES": (
+        "Este turno terminó limpiamente y el hilo puede continuar.",
+        "Continúa por el mismo hilo y verifica el resultado concreto más pequeño.",
+    ),
+    "fr-FR": (
+        "Ce tour s'est terminé proprement et le fil peut se poursuivre.",
+        "Poursuis sur le même fil et vérifie le plus petit résultat concret.",
+    ),
+    "de-DE": (
+        "Diese Runde wurde sauber abgeschlossen und der Faden kann weitergehen.",
+        "Setze am selben Faden fort und prüfe das kleinste konkrete Ergebnis.",
+    ),
+    "ja-JP": (
+        "このターンはきれいに完了しました。同じ流れで続けられます。",
+        "同じ流れを続け、最小の具体的な結果を確認してください。",
+    ),
+    "ko-KR": (
+        "이번 턴이 깔끔하게 마무리되었으며 같은 흐름을 이어갈 수 있습니다.",
+        "같은 흐름에서 계속 진행하며 가장 작은 구체적 결과를 확인하세요.",
+    ),
+    "pt-BR": (
+        "Este turno terminou de forma limpa e a conversa pode continuar.",
+        "Continue pela mesma linha e verifique o menor resultado concreto.",
+    ),
+}
+
+
 def _build_no_progress_recovery(
     tool_calls: list[dict[str, Any]],
     *,
@@ -1218,7 +1571,8 @@ def _build_no_progress_recovery(
     context: ToolContext | None,
     response_language: str | None,
 ) -> tuple[str, str]:
-    chinese = bool(response_language and response_language.lower().startswith("zh"))
+    locale = _normalize_loop_locale(response_language)
+    copy = _NO_PROGRESS_COPY.get(locale, _NO_PROGRESS_COPY["en-US"])
     tool_names = [
         str(call.get("name") or "").strip()
         for call in tool_calls
@@ -1231,39 +1585,21 @@ def _build_no_progress_recovery(
     focus_note = _recovery_focus_note(context)
     next_step_note = _recovery_next_step_note(context)
 
-    if chinese:
-        summary = (
-            f"模型重复了相同的工具路径{f'：{tool_path}' if tool_path else ''}，但没有带来新的证据。"
-        )
-        if focus_note:
-            summary = f"{summary} 当前应该回到：{focus_note}。"
-        if failure_note:
-            summary = f"{summary} 上一次还卡在：{failure_note}。"
-        next_step = (
-            "换一个证据来源，或者先把问题收窄，再继续同样的工具路径。"
-            if not tool_path
-            else f"先换一个证据来源，或者收窄问题，再重新评估是否要继续 `{tool_path}`。"
-        )
-        if next_step_note:
-            next_step = f"{next_step} 也可以先回到 {next_step_note}。"
-        if failure_note:
-            next_step = f"{next_step} 先修掉 `{failure_note}` 对应的问题。"
-        return summary, next_step
-
-    summary = f"The model repeated the same tool path{f': {tool_path}' if tool_path else ''} without new evidence."
+    suffix = copy["summary_suffix"].format(tool_path=tool_path) if tool_path else ""
+    summary = copy["summary_base"].format(suffix=suffix)
     if focus_note:
-        summary = f"{summary} The turn should stay anchored to {focus_note}."
+        summary = f"{summary}{copy['focus'].format(focus_note=focus_note)}"
     if failure_note:
-        summary = f"{summary} The last attempt was already stuck on: {failure_note}."
+        summary = f"{summary}{copy['failure'].format(failure_note=failure_note)}"
     next_step = (
-        "Switch evidence sources or narrow the question before trying the same tool path again."
+        copy["next_plain"]
         if not tool_path
-        else f"Try a different evidence source, then decide whether `{tool_path}` is still the right path."
+        else copy["next_tool"].format(tool_path=tool_path)
     )
     if next_step_note:
-        next_step = f"{next_step} Or return to {next_step_note}."
+        next_step = f"{next_step}{copy['return_to'].format(next_step_note=next_step_note)}"
     if failure_note:
-        next_step = f"{next_step} Fix the issue tied to `{failure_note}` first."
+        next_step = f"{next_step}{copy['fix_first'].format(failure_note=failure_note)}"
     return summary, next_step
 
 
@@ -1291,32 +1627,21 @@ def _build_step_limit_recovery(
     context: ToolContext | None,
     response_language: str | None,
 ) -> tuple[str, str]:
-    chinese = bool(response_language and response_language.lower().startswith("zh"))
+    locale = _normalize_loop_locale(response_language)
+    copy = _STEP_LIMIT_COPY.get(locale, _STEP_LIMIT_COPY["en-US"])
     failure_note = _previous_step_failure_note(previous_step)
     focus_note = _recovery_focus_note(context)
     next_step_note = _recovery_next_step_note(context)
 
-    if chinese:
-        summary = "模型已经跑到步数上限，但还没有自然收束。"
-        if focus_note:
-            summary = f"{summary} 当前仍应围绕：{focus_note}。"
-        next_step = "下一轮先从最近一次工具路径继续；如果还是卡住，就换证据来源或缩小问题。"
-        if next_step_note:
-            next_step = f"{next_step} 也可以先回到 {next_step_note}。"
-        if failure_note:
-            summary = f"{summary} 上一轮最接近的卡点是：{failure_note}。"
-            next_step = f"{next_step} 先修掉 `{failure_note}` 对应的问题。"
-        return summary, next_step
-
-    summary = "The model reached the step limit without a natural stop."
+    summary = copy["summary"]
     if focus_note:
-        summary = f"{summary} The turn should still be anchored to {focus_note}."
-    next_step = "Continue from the latest tool path, but switch evidence sources or narrow scope if you are still stuck."
+        summary = f"{summary}{copy['focus'].format(focus_note=focus_note)}"
+    next_step = copy["next_step"]
     if next_step_note:
-        next_step = f"{next_step} Or return to {next_step_note}."
+        next_step = f"{next_step}{copy['return_to'].format(next_step_note=next_step_note)}"
     if failure_note:
-        summary = f"{summary} The closest blocker was: {failure_note}."
-        next_step = f"{next_step} Fix the issue tied to `{failure_note}` first."
+        summary = f"{summary}{copy['failure'].format(failure_note=failure_note)}"
+        next_step = f"{next_step}{copy['fix_first'].format(failure_note=failure_note)}"
     return summary, next_step
 
 
@@ -1327,67 +1652,65 @@ def _build_runtime_failure_recovery(
     response_language: str | None,
     previous_step: AgentStep | None,
 ) -> tuple[str, str]:
-    chinese = bool(response_language and response_language.lower().startswith("zh"))
+    locale = _normalize_loop_locale(response_language)
+    copy = _RUNTIME_FAILURE_COPY.get(locale, _RUNTIME_FAILURE_COPY["en-US"])
     focus_note = _recovery_focus_note(context)
     next_step_note = _recovery_next_step_note(context)
     failure_note = _previous_step_failure_note(previous_step)
 
-    if chinese:
-        if reason == "timeout":
-            summary = "这一轮工具调用超时了，还没来得及自然收束。"
-            next_step = "先回到最近的证据，再缩小问题或换一个更快的检查。"
-        else:
-            summary = "这一轮教练服务在中途断开了，但我们可以沿着同一条主线续回去。"
-            next_step = "先检查 provider 或连接状态，再继续最小的下一步。"
-        if focus_note:
-            summary = f"{summary} 当前主线还是：{focus_note}。"
-        if failure_note:
-            summary = f"{summary} 上一轮最接近的卡点是：{failure_note}。"
-        if next_step_note:
-            next_step = f"{next_step} 也可以先回到 {next_step_note}。"
-        return summary, next_step
-
     if reason == "timeout":
-        summary = "This turn timed out before the provider could finish."
-        next_step = "Re-anchor on the latest evidence and retry the smallest check."
+        summary = copy["timeout_summary"]
+        next_step = copy["timeout_next"]
     else:
-        summary = "The provider stopped mid-turn, but the thread can still resume."
-        next_step = "Check the provider connection, then retry the smallest anchored step."
+        summary = copy["error_summary"]
+        next_step = copy["error_next"]
     if focus_note:
-        summary = f"{summary} Stay anchored to {focus_note}."
+        summary = f"{summary}{copy['focus'].format(focus_note=focus_note)}"
     if failure_note:
-        summary = f"{summary} The closest blocker was: {failure_note}."
+        summary = f"{summary}{copy['failure'].format(failure_note=failure_note)}"
     if next_step_note:
-        next_step = f"{next_step} Or return to {next_step_note}."
+        next_step = f"{next_step}{copy['return_to'].format(next_step_note=next_step_note)}"
     return summary, next_step
+
+
+def _extract_executed_tool_names(executed_steps: list[AgentStep] | None) -> list[str]:
+    tool_names: list[str] = []
+    for step in executed_steps or ():
+        for call in step.tool_calls:
+            if not isinstance(call, dict):
+                continue
+            name = str(call.get("name") or "").strip()
+            if name and name != "coach_finalize":
+                tool_names.append(name)
+        for result in step.tool_results:
+            if not isinstance(result, dict):
+                continue
+            name = str(result.get("name") or "").strip()
+            if name and name != "coach_finalize":
+                tool_names.append(name)
+    return list(dict.fromkeys(tool_names))
 
 
 def _build_empty_response_recovery(
     *,
     context: ToolContext | None,
     response_language: str | None,
+    executed_steps: list[AgentStep] | None = None,
 ) -> tuple[str, str]:
-    chinese = bool(response_language and response_language.lower().startswith("zh"))
+    locale = _normalize_loop_locale(response_language)
+    copy = _EMPTY_RESPONSE_COPY.get(locale, _EMPTY_RESPONSE_COPY["en-US"])
     focus_note = _recovery_focus_note(context)
     next_step_note = _recovery_next_step_note(context)
+    executed_tools = _extract_executed_tool_names(executed_steps)
 
-    if chinese:
-        summary = "模型返回了空内容，所以这轮不能算完成。"
-        if focus_note:
-            summary = f"{summary} 当前主线仍然是：{focus_note}。"
-        next_step = "重新发起这一轮，但要求模型给出可见结论；如果再次为空，就先切回最小可验证动作。"
-        if next_step_note:
-            next_step = f"{next_step} 也可以先回到 {next_step_note}。"
-        return summary, next_step
-
-    summary = (
-        "The provider returned an empty visible answer, so this turn cannot be treated as complete."
-    )
+    summary = copy["summary"]
     if focus_note:
-        summary = f"{summary} The thread should stay anchored to {focus_note}."
-    next_step = "Retry the turn and require a visible conclusion; if it repeats, fall back to the smallest verifiable move."
+        summary = f"{summary}{copy['focus'].format(focus_note=focus_note)}"
+    if executed_tools:
+        summary = f"{summary}{copy['tools'].format(tools=', '.join(executed_tools[:5]))}"
+    next_step = copy["next_step"]
     if next_step_note:
-        next_step = f"{next_step} Or return to {next_step_note}."
+        next_step = f"{next_step}{copy['return_to'].format(next_step_note=next_step_note)}"
     return summary, next_step
 
 
@@ -1398,7 +1721,10 @@ def _build_completion_continuity(
     response_language: str | None,
     previous_step: AgentStep | None = None,
 ) -> tuple[str, str]:
-    chinese = bool(response_language and response_language.lower().startswith("zh"))
+    locale = _normalize_loop_locale(response_language)
+    default_summary, default_next_step = _COMPLETION_CONTINUITY_DEFAULTS.get(
+        locale, _COMPLETION_CONTINUITY_DEFAULTS["en-US"]
+    )
     extra = context.extra if context is not None and isinstance(context.extra, dict) else {}
 
     def first_text(*keys: str) -> str:
@@ -1475,11 +1801,7 @@ def _build_completion_continuity(
     if not summary:
         summary = _trim_sentence(content, 140)
     if not summary:
-        summary = (
-            "This turn completed cleanly and the thread can continue."
-            if not chinese
-            else "这一轮已经自然收口，可以继续同一条主线。"
-        )
+        summary = default_summary
 
     next_step = visible_next_step(content) or first_text(
         "thread_next_step",
@@ -1497,11 +1819,7 @@ def _build_completion_continuity(
         if candidate and candidate != summary:
             next_step = candidate
     if not next_step:
-        next_step = (
-            "Continue from the same thread and verify the smallest concrete result."
-            if not chinese
-            else "继续沿着同一条主线，验证最小的具体结果。"
-        )
+        next_step = default_next_step
     return summary, next_step
 
 
@@ -1559,24 +1877,36 @@ def _looks_like_recovery_meta_text(value: str) -> bool:
     if not normalized:
         return False
 
-    english_markers = (
+    latin_markers = (
         "empty visible answer",
         "no visible answer",
         "turn cannot be treated as complete",
         "retry the turn and require a visible conclusion",
         "resume the live thread around",
         "keep the next move as",
+        "respuesta visible vacía",
+        "no puede darse por terminado",
+        "réponse visible vide",
+        "considéré comme terminé",
+        "leere sichtbare antwort",
+        "nicht als abgeschlossen",
+        "resposta visível vazia",
+        "tratado como concluído",
     )
-    if any(marker in normalized for marker in english_markers):
+    if any(marker in normalized for marker in latin_markers):
         return True
 
-    chinese_markers = (
+    cjk_markers = (
         "\u7a7a\u5185\u5bb9",
         "\u53ef\u89c1\u7ed3\u8bba",
         "\u91cd\u65b0\u53d1\u8d77\u8fd9\u4e00\u8f6e",
         "\u7ee7\u7eed\u6cbf\u7740\u540c\u4e00\u6761\u4e3b\u7ebf",
+        "\u7a7a\u306e\u5fdc\u7b54",
+        "\u76ee\u306b\u898b\u3048\u308b\u7d50\u8ad6",
+        "\ube48 \uc751\ub2f5\uc744",
+        "\ubcf4\uc774\ub294 \uacb0\ub860\uc744",
     )
-    return any(marker in value for marker in chinese_markers)
+    return any(marker in value for marker in cjk_markers)
 
 
 def _compact_text(value: object | None, limit: int = 160) -> str | None:
