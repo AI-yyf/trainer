@@ -404,7 +404,7 @@
     "verify:sidecar-runtime": "node ./scripts/verify-bundled-sidecar-runtime.mjs",
     "verify:coach-recovery": "node --test ./tests/webviewBridge.test.js && npm run verify:webview-recovery",
     "verify:webview-recovery": "npm exec --yes --package playwright@1.62.1 -- node ./scripts/verify-webview-recovery.mjs",
-    "build:remote-companion": "npm run build --prefix ../remote-extension",
+    "build:remote-companion": "node ./node_modules/typescript/bin/tsc -p ../remote-extension/tsconfig.json",
     "package:remote-companion": "npm run build:remote-companion && npm run package:vsix --prefix ../remote-extension && node ./scripts/copy-remote-companion.mjs",
     "vscode:prepublish": "node ./scripts/prepublish-vsix.mjs",
     "build": "npm run sync:server && npm run clean && tsc -p tsconfig.json",
