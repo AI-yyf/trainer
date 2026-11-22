@@ -210,6 +210,37 @@ export function parseLibraryFolderTree(payload: unknown): LibraryFolderNode[] {
 }
 
 /**
+ * Recover the nested managed group path (`API/Auth`) when a snapshot lives under
+ * Trainer's managed `groups/` root, where `collectionRoot` names the leaf dir
+ * (`.../groups/API/Auth`) and `collectionPath` starts with its leaf name (`Auth/...`).
+ */
+export function managedGroupSegmentsFromResource(resource: {
+  collectionPath?: string;
+  collectionRoot?: string;
+}): string[] | undefined {
+  const root = String(resource.collectionRoot ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  const cpath = normalizeLibraryFolderPath(resource.collectionPath);
+  if (!root || !cpath) {
+    return undefined;
+  }
+  const match = /\/groups\/([^/]+(?:\/[^/]+){0,2})$/i.exec(root);
+  if (!match) {
+    return undefined;
+  }
+  const cpathParts = cpath.split("/").filter(Boolean);
+  const groupParts = match[1].split("/").map((segment) => segment.trim()).filter(Boolean);
+  if (
+    cpathParts.length < 2 ||
+    groupParts.length === 0 ||
+    groupParts[groupParts.length - 1].toLowerCase() !== cpathParts[0].toLowerCase()
+  ) {
+    return undefined;
+  }
+  const normalizedGroup = normalizeLibraryFolderPath(groupParts.join("/"));
+  return normalizedGroup ? normalizedGroup.split("/") : undefined;
+}
+
+/**
  * Folders derived from the resources' own `collection_path` values.
  * Internal intake layout segments (`sources/inbox/<resource-id>`, hash
  * context folders) are storage facts and never become user-visible folders.
@@ -229,10 +260,9 @@ export function libraryFolderTreeFromResources(
     }
     // `collection_path` addresses the resource itself; its folder is the path
     // without the last segment (same rule as the resource tree).
-    const folderSegments = path
-      .split("/")
-      .slice(0, -1)
-      .filter((segment) => !internalLayoutSegment.test(segment));
+    const folderSegments = (
+      managedGroupSegmentsFromResource(resource) ?? path.split("/").slice(0, -1)
+    ).filter((segment) => !internalLayoutSegment.test(segment));
     if (folderSegments.length === 0) {
       continue;
     }

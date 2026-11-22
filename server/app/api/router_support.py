@@ -463,9 +463,77 @@ def _resolve_agent_loop_enabled(
         or _message_benefits_from_autonomous_tools(message_text)
     ):
         return True
+    if not provider_supports_tools and _provider_can_attempt_autonomous_tools(coaching_service):
+        from ..pedagogy.smalltalk import is_exploratory_or_research_query
+
+        if is_exploratory_or_research_query(message_text) or _message_requests_single_composer_truth_or_note(
+            message_text
+        ):
+            return True
     # Plan discussion and Training feedback stay on the model stream unless the
     # host asked for tools. Resources/library work is handled above.
     return False
+
+
+_TOOL_CAPABLE_FAMILY_HINTS = (
+    "minimax",
+    "deepseek",
+    "claude",
+    "anthropic",
+    "glm",
+    "zhipu",
+    "bigmodel",
+    "qwen",
+    "qianwen",
+    "dashscope",
+    "tongyi",
+    "gemini",
+    "google",
+    "kimi",
+    "moonshot",
+    "gpt-",
+    "chatgpt",
+    "o1",
+    "o3",
+    "o4",
+)
+
+
+def _provider_can_attempt_autonomous_tools(coaching_service: ProviderService) -> bool:
+    """Allow read-only workspace/web tools on keyed known-capable profiles before a live probe.
+
+    Legacy OpenAI-compatible profiles saved before v1.5.0 defaulted
+    ``capabilities.tools = False`` even for tool-capable models (e.g. MiniMax,
+    DeepSeek, Qwen, GLM, Kimi, GPT, Claude, Gemini). Unless a live probe
+    explicitly marked tools ``unsupported`` or ``disabled``, let general
+    autonomous Chat turns bind read-only tools (and fall back cleanly on HTTP
+    400 if an upstream relay rejects tool specs).
+    """
+    has_cred = getattr(coaching_service, "has_usable_credential", None)
+    if callable(has_cred):
+        if not has_cred():
+            return False
+    elif not getattr(coaching_service, "has_api_key", False):
+        return False
+
+    truth_map = getattr(coaching_service, "_capability_truth", None)
+    if isinstance(truth_map, dict):
+        tools_truth = str(truth_map.get("tools") or "").strip().lower()
+        if tools_truth in {"unsupported", "disabled"}:
+            return False
+
+    config = getattr(coaching_service, "_config", None)
+    if config is None:
+        return False
+    haystack = " ".join(
+        str(part or "")
+        for part in (
+            getattr(config, "model", ""),
+            getattr(config, "name", ""),
+            getattr(config, "base_url", ""),
+        )
+    ).lower()
+    return any(hint in haystack for hint in _TOOL_CAPABLE_FAMILY_HINTS)
 
 
 def _message_benefits_from_autonomous_tools(message: str) -> bool:

@@ -1457,6 +1457,9 @@ export class ProviderConfigStore implements vscode.Disposable {
               providerName: config.name.trim(),
               baseUrl: normalizedBaseUrl,
               ...thinkingEvidence,
+              ...(thinkingConfig.mode === 'enabled' && capabilities.thinking === true
+                ? { capabilityEvidence: undefined, supported: true }
+                : {}),
             },
             normalizedRequestDefaults,
             thinkingConfig,

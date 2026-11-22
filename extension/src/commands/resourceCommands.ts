@@ -245,6 +245,27 @@ async function typedResourcePathFallback(
   return trimmed ? [trimmed] : undefined;
 }
 
+function normalizeRequestedTargetFolder(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+  const record = payload as { targetFolder?: unknown; collectionPath?: unknown };
+  const raw =
+    typeof record.targetFolder === 'string'
+      ? record.targetFolder
+      : typeof record.collectionPath === 'string'
+        ? record.collectionPath
+        : '';
+  const segments = raw
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment && segment !== '.' && segment !== '..');
+  return segments.length > 0 ? segments.slice(0, 3).join('/') : undefined;
+}
+
 export async function uploadResourceCommand(
   context: CommandContext,
   payload?: unknown,
@@ -276,6 +297,8 @@ export async function uploadResourceCommand(
     return { ok: false, message: inlineUploadResult.error };
   }
   const inlineUploads = inlineUploadResult.uploads;
+  const requestedTargetFolder = normalizeRequestedTargetFolder(payload);
+  let targetGroupForUploads = requestedTargetFolder;
 
   const sourceMode:
     | { label: string; value: ResourceSourceMode }
@@ -464,7 +487,15 @@ export async function uploadResourceCommand(
       discoveredFiles,
       folderPath,
       recordUploaded,
+      Boolean(requestedTargetFolder),
     );
+    if (requestedTargetFolder) {
+      const folderName = basenameFs(folderPath).trim();
+      targetGroupForUploads = [...requestedTargetFolder.split('/'), ...(folderName ? [folderName] : [])]
+        .filter((segment) => segment && segment !== '.' && segment !== '..')
+        .slice(0, 3)
+        .join('/');
+    }
     failedUploads += uploadResult.failedCount;
   } else if (sourceMode.value === 'workspace') {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -526,7 +557,7 @@ export async function uploadResourceCommand(
       status.port,
       workspaceId,
       selectedFiles,
-      workspaceRoot,
+      requestedTargetFolder ? undefined : workspaceRoot,
       recordUploaded,
     );
     failedUploads += uploadResult.failedCount;
@@ -580,6 +611,27 @@ export async function uploadResourceCommand(
   }
 
   const sidecarPort = status.port;
+  if (targetGroupForUploads && uploads.length > 0) {
+    for (let index = 0; index < uploads.length; index += 1) {
+      const uploadedId = asString(asRecord(uploads[index])?.id);
+      if (!uploadedId) {
+        continue;
+      }
+      try {
+        const organized = await context.sidecarClient.postJson<unknown>(sidecarPort, '/resource/organize', {
+          session_id: context.getSessionId(),
+          workspace_id: workspaceId,
+          resource_id: uploadedId,
+          action: 'set_group',
+          group: targetGroupForUploads,
+        });
+        uploads[index] = organized;
+        await patchResourceRecords([organized]);
+      } catch {
+        // Keep the uploaded resource even if automatic folder placement fails.
+      }
+    }
+  }
   const uploadedResourceIds = uploads
     .map((upload) => asString(asRecord(upload)?.id))
     .filter((value): value is string => Boolean(value));
@@ -2706,13 +2758,15 @@ async function uploadLocalFiles(
   filePaths: string[],
   collectionRoot?: string,
   onUploaded?: ResourceRecordObserver,
+  skipCollectionMaterialization = false,
 ): Promise<ResourceUploadBatchResult> {
   const uploads: unknown[] = [];
   let failedCount = 0;
   for (const filePath of filePaths) {
-    const collectionPath = collectionRoot
-      ? collectionPathForFile(filePath, collectionRoot)
-      : undefined;
+    const collectionPath =
+      collectionRoot && !skipCollectionMaterialization
+        ? collectionPathForFile(filePath, collectionRoot)
+        : undefined;
     let upload: unknown;
     try {
       // These paths come from the native file/folder picker. Import their

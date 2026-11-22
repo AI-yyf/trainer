@@ -8224,10 +8224,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         # Hydration may rebuild card routing; a recovered runtime step remains
         # authoritative for the visible training next hop.
+        from ..pedagogy.smalltalk import is_bogus_smalltalk_step
+
         workspace = snapshot.memory.workspace if snapshot.memory is not None else {}
         runtime_record = workspace.get("latest_plan_runtime") if isinstance(workspace, dict) else None
         current_step = str((runtime_record or {}).get("current_step") or "").strip()
-        if current_step and isinstance(workspace, dict):
+        if current_step and not is_bogus_smalltalk_step(current_step) and isinstance(workspace, dict):
             current_hop = workspace.get("latest_training_next_hop")
             workspace["latest_training_next_hop"] = {
                 **(current_hop if isinstance(current_hop, dict) else {}),

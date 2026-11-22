@@ -2998,6 +2998,77 @@ def derive_coaching_state(deps: CoachSupportDeps,
     )
 
 
+def _scrub_bogus_smalltalk_steps(snapshot: WorkbenchSnapshot) -> None:
+    """Clear legacy pre-1.5 smalltalk rescue steps that wrapped casual greetings."""
+    from ..pedagogy.smalltalk import is_bogus_smalltalk_step
+
+    if snapshot.coaching_state is not None and is_bogus_smalltalk_step(snapshot.coaching_state.next_step):
+        snapshot.coaching_state = snapshot.coaching_state.model_copy(update={"next_step": ""})
+    if snapshot.evaluation is not None and is_bogus_smalltalk_step(snapshot.evaluation.next_step):
+        snapshot.evaluation = snapshot.evaluation.model_copy(update={"next_step": ""})
+    if snapshot.implementation_guide is not None and is_bogus_smalltalk_step(
+        snapshot.implementation_guide.current_step
+    ):
+        snapshot.implementation_guide = snapshot.implementation_guide.model_copy(
+            update={"current_step": ""}
+        )
+    if snapshot.plan is not None and is_bogus_smalltalk_step(snapshot.plan.current_step):
+        snapshot.plan = snapshot.plan.model_copy(update={"current_step": None})
+    if snapshot.current_task is not None:
+        task_updates: dict[str, object] = {}
+        if is_bogus_smalltalk_step(snapshot.current_task.title):
+            task_updates["title"] = ""
+        if is_bogus_smalltalk_step(snapshot.current_task.natural_language_goal):
+            task_updates["natural_language_goal"] = ""
+        if task_updates:
+            snapshot.current_task = snapshot.current_task.model_copy(update=task_updates)
+    if snapshot.memory is not None and snapshot.memory.active_thread is not None:
+        active_thread = snapshot.memory.active_thread
+        if is_bogus_smalltalk_step(active_thread.next_step):
+            snapshot.memory = snapshot.memory.model_copy(
+                update={"active_thread": active_thread.model_copy(update={"next_step": ""})}
+            )
+    if isinstance(snapshot.plan_runtime_status, dict):
+        cleaned_status = dict(snapshot.plan_runtime_status)
+        for key in ("current_step", "currentStep", "next_training_action", "nextTrainingAction"):
+            if key in cleaned_status and is_bogus_smalltalk_step(str(cleaned_status.get(key) or "")):
+                cleaned_status[key] = ""
+        snapshot.plan_runtime_status = cleaned_status
+    if snapshot.memory is not None and isinstance(snapshot.memory.workspace, dict):
+        workspace_copy = dict(snapshot.memory.workspace)
+        for container_key in (
+            "latest_plan_runtime",
+            "latestPlanRuntime",
+            "latest_coach_turn",
+            "latestCoachTurn",
+            "latest_training_next_hop",
+            "latestTrainingNextHop",
+            "latest_next_step_hint",
+            "latestNextStepHint",
+            "current_thread",
+            "currentThread",
+        ):
+            sub = workspace_copy.get(container_key)
+            if isinstance(sub, dict):
+                sub_copy = dict(sub)
+                changed = False
+                for field_key in (
+                    "current_step",
+                    "currentStep",
+                    "next_step",
+                    "nextStep",
+                    "title",
+                    "card_title",
+                    "cardTitle",
+                ):
+                    if field_key in sub_copy and is_bogus_smalltalk_step(str(sub_copy.get(field_key) or "")):
+                        sub_copy[field_key] = ""
+                        changed = True
+                if changed:
+                    workspace_copy[container_key] = sub_copy
+        snapshot.memory = snapshot.memory.model_copy(update={"workspace": workspace_copy})
+
+
 def hydrate_snapshot(deps: CoachSupportDeps,
     snapshot: WorkbenchSnapshot,
     *,
@@ -3813,6 +3884,8 @@ def hydrate_snapshot(deps: CoachSupportDeps,
             }
             workspace_memory.pop("latestCoachTurn", None)
             snapshot.memory.workspace = workspace_memory
+    _scrub_bogus_smalltalk_steps(snapshot)
+    workspace_memory = snapshot.memory.workspace if isinstance(snapshot.memory.workspace, dict) else {}
     orientation = build_coach_orientation_from_snapshot(
         snapshot,
         response_language=response_language,

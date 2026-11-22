@@ -269,7 +269,13 @@ export type ResourceTextKey =
   | "folderSubfolderAction"
   | "folderDeleteAction"
   | "folderDeleteConfirmation"
-  | "folderMoveToNew";
+  | "folderMoveToNew"
+  | "finderOpenFolder"
+  | "finderRoot"
+  | "finderBack"
+  | "finderEmptyFolder"
+  | "finderMoveTo"
+  | "finderActions";
 
 export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> = {
   title: { zh: "\u8d44\u6599\u5e93", en: "Unified library" },
@@ -464,6 +470,12 @@ export const resourceText: Record<ResourceTextKey, { zh: string; en: string }> =
     en: "Folder \u201c{v}\u201d moves to Trash, together with the resources inside it.",
   },
   folderMoveToNew: { zh: "\u65b0\u5efa\u6587\u4ef6\u5939\u5e76\u79fb\u5165", en: "New folder and move" },
+  finderOpenFolder: { zh: "\u6253\u5f00\u6587\u4ef6\u5939", en: "Open folder" },
+  finderRoot: { zh: "\u8d44\u6599\u5e93", en: "Library" },
+  finderBack: { zh: "\u8fd4\u56de\u4e0a\u4e00\u7ea7", en: "Up one level" },
+  finderEmptyFolder: { zh: "\u7a7a\u6587\u4ef6\u5939", en: "Empty folder" },
+  finderMoveTo: { zh: "\u79fb\u52a8\u5230\u6587\u4ef6\u5939", en: "Move to folder" },
+  finderActions: { zh: "\u6587\u4ef6\u5939\u64cd\u4f5c", en: "Folder actions" },
 };
 
 export const resourceTextLocaleOverrides: Record<
@@ -609,6 +621,12 @@ export const resourceTextLocaleOverrides: Record<
     folderDeleteAction: "Eliminar carpeta",
     folderDeleteConfirmation: "La carpeta \u201c{v}\u201d se mueve a la Papelera, junto con los recursos que contiene.",
     folderMoveToNew: "Nueva carpeta y mover",
+    finderOpenFolder: "Abrir carpeta",
+    finderRoot: "Biblioteca",
+    finderBack: "Subir un nivel",
+    finderEmptyFolder: "Carpeta vac\u00eda",
+    finderMoveTo: "Mover a carpeta",
+    finderActions: "Acciones de carpeta",
   },
   "fr-FR": {
     migrateLibrary: "Migrer vers Markdown",
@@ -749,6 +767,12 @@ export const resourceTextLocaleOverrides: Record<
     folderDeleteAction: "Supprimer le dossier",
     folderDeleteConfirmation: "Le dossier \u00ab {v} \u00bb est deplace vers la corbeille, avec les ressources qu'il contient.",
     folderMoveToNew: "Nouveau dossier et deplacer",
+    finderOpenFolder: "Ouvrir le dossier",
+    finderRoot: "Biblioth\u00e8que",
+    finderBack: "Niveau sup\u00e9rieur",
+    finderEmptyFolder: "Dossier vide",
+    finderMoveTo: "D\u00e9placer vers le dossier",
+    finderActions: "Actions du dossier",
   },
   "de-DE": {
     migrateLibrary: "Nach Markdown migrieren",
@@ -889,6 +913,12 @@ export const resourceTextLocaleOverrides: Record<
     folderDeleteAction: "Ordner loschen",
     folderDeleteConfirmation: "Ordner \u201e{v}\u201c wird in den Papierkorb verschoben, zusammen mit dem enthaltenen Material.",
     folderMoveToNew: "Neuer Ordner und verschieben",
+    finderOpenFolder: "Ordner \u00f6ffnen",
+    finderRoot: "Bibliothek",
+    finderBack: "Eine Ebene nach oben",
+    finderEmptyFolder: "Leerer Ordner",
+    finderMoveTo: "In Ordner verschieben",
+    finderActions: "Ordneraktionen",
   },
   "ja-JP": {
     migrateLibrary: "Markdown \u3078\u79fb\u884c",
@@ -1029,6 +1059,12 @@ export const resourceTextLocaleOverrides: Record<
     folderDeleteAction: "\u30d5\u30a9\u30eb\u30c0\u3092\u524a\u9664",
     folderDeleteConfirmation: "\u30d5\u30a9\u30eb\u30c0\u300c{v}\u300d\u306f\u4e2d\u306e\u8cc7\u6599\u3068\u4e00\u7dd2\u306b\u3054\u307f\u7bb1\u3078\u79fb\u52d5\u3057\u307e\u3059\u3002",
     folderMoveToNew: "\u65b0\u3057\u3044\u30d5\u30a9\u30eb\u30c0\u3092\u4f5c\u6210\u3057\u3066\u79fb\u52d5",
+    finderOpenFolder: "\u30d5\u30a9\u30eb\u30c0\u3092\u958b\u304f",
+    finderRoot: "\u30e9\u30a4\u30d6\u30e9\u30ea",
+    finderBack: "\u4e0a\u306e\u968e\u5c64\u3078",
+    finderEmptyFolder: "\u7a7a\u306e\u30d5\u30a9\u30eb\u30c0",
+    finderMoveTo: "\u30d5\u30a9\u30eb\u30c0\u3078\u79fb\u52d5",
+    finderActions: "\u30d5\u30a9\u30eb\u30c0\u64cd\u4f5c",
   },
   "ko-KR": {
     migrateLibrary: "Markdown \ub85c \uc774\uc0c1",
@@ -1169,6 +1205,12 @@ export const resourceTextLocaleOverrides: Record<
     folderDeleteAction: "폴더 삭제",
     folderDeleteConfirmation: "폴더 \u201c{v}\u201d가 안의 자료와 함께 휴지통으로 이동합니다.",
     folderMoveToNew: "새 폴더 만들고 이동",
+    finderOpenFolder: "폴더 열기",
+    finderRoot: "자료실",
+    finderBack: "상위 폴더로",
+    finderEmptyFolder: "빈 폴더",
+    finderMoveTo: "폴더로 이동",
+    finderActions: "폴더 작업",
   },
   "pt-BR": {
     migrateLibrary: "Migrar para Markdown",
@@ -1309,6 +1351,12 @@ export const resourceTextLocaleOverrides: Record<
     folderDeleteAction: "Excluir pasta",
     folderDeleteConfirmation: "A pasta \u201c{v}\u201d vai para a Lixeira, junto com os recursos dentro dela.",
     folderMoveToNew: "Nova pasta e mover",
+    finderOpenFolder: "Abrir pasta",
+    finderRoot: "Biblioteca",
+    finderBack: "Um n\u00edvel acima",
+    finderEmptyFolder: "Pasta vazia",
+    finderMoveTo: "Mover para pasta",
+    finderActions: "A\u00e7\u00f5es da pasta",
   },
 };
 

@@ -558,6 +558,20 @@ export class WorkbenchSidebarController
       // originating UI. Keep its old identity so a newer session cannot
       // mistake this rejection for one of its own operation outcomes.
       await this.postOperationPhase(identity, 'interrupted');
+      if (
+        command?.commandId.startsWith('trainer.library.folders.') &&
+        command.payload &&
+        typeof command.payload === 'object' &&
+        typeof (command.payload as Record<string, unknown>).operationId === 'string'
+      ) {
+        const operationId = String((command.payload as Record<string, unknown>).operationId).trim();
+        if (operationId) {
+          await this.deliverMessage({
+            type: 'library/folders',
+            payload: { operationId, ok: false, message: '' },
+          });
+        }
+      }
       await this.deliverMessage({ type: 'operation/status', operation: identity,
         scope: { ...identity, messageId: '' },
         payload: { tone: 'error', message: '[[trainer-operation-scope-changed]]' },

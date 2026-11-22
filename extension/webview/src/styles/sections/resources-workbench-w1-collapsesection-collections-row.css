@@ -1001,3 +1001,101 @@
 .resource-capture__target input { accent-color: var(--accent); }
 .resource-capture__message { margin: 0; color: var(--fg-1); font-size: var(--trainer-font-2xs); line-height: 1.5; }
 .resource-capture__footer { display: flex; align-items: center; gap: var(--space-2); }
+
+/* Finder-like unified path bar, inline folder hover actions, and drag/move styling */
+.resources-finder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--bg-2) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  font-size: var(--trainer-font-2xs);
+}
+
+.resources-finder-bar__back,
+.resources-finder-crumb {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.resources-finder-bar__back:hover,
+.resources-finder-crumb:hover {
+  background: color-mix(in srgb, var(--bg-2) 85%, transparent);
+  color: var(--fg-0);
+}
+
+.resources-finder-crumb.is-current {
+  color: var(--fg-0);
+}
+
+.resources-finder-crumb.is-drop-target,
+.resources-library-tree__item.is-drop-target > .collapse-section > .collapse-section__header {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.resources-finder-crumb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.resources-finder-sep {
+  color: var(--fg-muted);
+  user-select: none;
+}
+
+.resources-finder-folder-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.collapse-section__header:hover .resources-finder-folder-actions,
+.collapse-section__header:focus-within .resources-finder-folder-actions {
+  opacity: 1;
+}
+
+.resources-finder-empty-inline {
+  margin: 2px 0 4px 20px;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+}
+
+.resources-knowledge__new-folder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0 6px;
+}
+
+.resources-row-menu__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.resources-row-menu__move-list {
+  display: flex;
+  flex-direction: column;
+  margin-left: 10px;
+  padding-left: 6px;
+  border-left: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  max-height: 160px;
+  overflow-y: auto;
+}

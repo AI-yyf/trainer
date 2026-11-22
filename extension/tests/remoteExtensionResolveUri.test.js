@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { fileURLToPath, pathToFileURL } = require('node:url');
 const Module = require('node:module');
 
 const companionModulePath = path.resolve(
@@ -18,16 +19,21 @@ const companionModulePath = path.resolve(
   'extension.js',
 );
 
+function remoteUriForPath(authority, fsPath) {
+  const pathname = pathToFileURL(path.resolve(fsPath)).pathname;
+  return `vscode-remote://${authority}${pathname}`;
+}
+
 function makeUri(value) {
   if (value.startsWith('file://')) {
     const url = new URL(value);
-    const fsPath = decodeURIComponent(url.pathname);
+    const fsPath = fileURLToPath(url);
     return {
       scheme: 'file',
       authority: url.host || '',
-      path: fsPath,
+      path: decodeURIComponent(url.pathname),
       fsPath,
-      toString: () => `file://${fsPath}`,
+      toString: () => url.toString(),
     };
   }
   const url = new URL(value);
@@ -46,7 +52,7 @@ function loadCompanionWithMock({ folders, remoteName }) {
   const vscodeMock = {
     env: { remoteName },
     Uri: {
-      file: (fsPath) => makeUri(`file://${path.resolve(fsPath)}`),
+      file: (fsPath) => makeUri(pathToFileURL(path.resolve(fsPath)).toString()),
       parse: (value) => makeUri(value),
     },
     RelativePattern: class RelativePattern {
@@ -59,7 +65,7 @@ function loadCompanionWithMock({ folders, remoteName }) {
       isTrusted: true,
       workspaceFolders: folders.map((folderPath) => ({
         name: path.basename(folderPath),
-        uri: makeUri(`file://${path.resolve(folderPath)}`),
+        uri: makeUri(pathToFileURL(path.resolve(folderPath)).toString()),
       })),
       fs: {
         async stat(uri) {
@@ -149,7 +155,7 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
     const statRes = await request({
       protocol_version: 2,
       operation: 'stat',
-      uri: `vscode-remote://ssh-remote+141s${repoA}`,
+      uri: remoteUriForPath('ssh-remote+141s', repoA),
     });
     assert.equal(statRes.ok, true, JSON.stringify(statRes));
     assert.equal(statRes.stat.type, 2);
@@ -157,7 +163,7 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
     const readA = await request({
       protocol_version: 2,
       operation: 'read_file',
-      uri: `vscode-remote://ssh-remote+141s${fileA}`,
+      uri: remoteUriForPath('ssh-remote+141s', fileA),
     });
     assert.equal(readA.ok, true, JSON.stringify(readA));
     assert.match(Buffer.from(readA.content_base64, 'base64').toString('utf8'), /def charge/);
@@ -166,7 +172,7 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
     const readB = await request({
       protocol_version: 2,
       operation: 'read_file',
-      uri: `vscode-remote://ssh-remote+141s${fileB}`,
+      uri: remoteUriForPath('ssh-remote+141s', fileB),
     });
     assert.equal(readB.ok, true, JSON.stringify(readB));
     assert.match(Buffer.from(readB.content_base64, 'base64').toString('utf8'), /def run/);
@@ -175,7 +181,7 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
     const hashRes = await request({
       protocol_version: 2,
       operation: 'hash_artifact',
-      uri: `vscode-remote://ssh-remote+141s${fileA}`,
+      uri: remoteUriForPath('ssh-remote+141s', fileA),
     });
     assert.equal(hashRes.ok, true, JSON.stringify(hashRes));
     assert.match(hashRes.artifact_hash, /^[a-f0-9]{64}$/);
@@ -184,16 +190,16 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
     const envRes = await request({
       protocol_version: 2,
       operation: 'environment',
-      uri: `vscode-remote://ssh-remote+141s${repoB}`,
+      uri: remoteUriForPath('ssh-remote+141s', repoB),
     });
     assert.equal(envRes.ok, true, JSON.stringify(envRes));
-    assert.equal(envRes.environment.canonical_workspace_uri, `file://${fs.realpathSync(repoB)}`);
+    assert.equal(envRes.environment.canonical_workspace_uri, pathToFileURL(fs.realpathSync(repoB)).toString());
 
     // 5. Fails closed on foreign remoteName authority
     const wrongRemote = await request({
       protocol_version: 2,
       operation: 'read_file',
-      uri: `vscode-remote://wsl+ubuntu${fileA}`,
+      uri: remoteUriForPath('wsl+ubuntu', fileA),
     });
     assert.equal(wrongRemote.ok, false);
     assert.match(wrongRemote.error.detail, /different workspace authority/i);
@@ -202,7 +208,7 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
     const escaped = await request({
       protocol_version: 2,
       operation: 'read_file',
-      uri: `vscode-remote://ssh-remote+141s${outsideFile}`,
+      uri: remoteUriForPath('ssh-remote+141s', outsideFile),
     });
     assert.equal(escaped.ok, false);
     assert.match(escaped.error.detail, /outside the active workspace/i);

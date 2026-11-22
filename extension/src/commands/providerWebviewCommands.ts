@@ -631,13 +631,23 @@ export async function saveProviderFromWebviewCommand(
     };
   }
 
-  const capabilities: CapabilityFlags = protocolChanged
+  const baseCapabilities = protocolChanged
     ? defaultCapabilitiesForProtocol(resolvedProtocol)
     : {
         ...defaultCapabilitiesForProtocol(resolvedProtocol),
         ...(existing?.capabilities ?? {}),
-        ...(input.capabilities ?? {}),
       };
+  const hasExplicitCapabilityEdits =
+    Boolean(input.capabilities) &&
+    (!protocolChanged ||
+      !existing?.capabilities ||
+      JSON.stringify(input.capabilities) !== JSON.stringify(existing.capabilities));
+  const capabilities: CapabilityFlags = hasExplicitCapabilityEdits
+    ? {
+        ...baseCapabilities,
+        ...(input.capabilities ?? {}),
+      }
+    : baseCapabilities;
   const credentialMode =
     input.credentialMode ??
     existing?.credentialMode ??

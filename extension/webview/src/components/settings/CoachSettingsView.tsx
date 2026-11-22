@@ -1504,6 +1504,20 @@ function requestDefaultsKey(value: unknown): string {
   }
 }
 
+function providerCapabilitiesKey(value: Partial<CapabilityFlags> | undefined): string {
+  return JSON.stringify([
+    Boolean(value?.chat),
+    Boolean(value?.responses),
+    Boolean(value?.vision),
+    Boolean(value?.embeddings),
+    Boolean(value?.tools),
+    Boolean(value?.jsonSchema),
+    Boolean(value?.streaming),
+    Boolean(value?.structuredOutput),
+    Boolean(value?.thinking),
+  ]);
+}
+
 function formatRequestDefaultsDraft(value: unknown): string {
   return JSON.stringify(asRecord(value) ?? {}, null, 2);
 }
@@ -2811,6 +2825,8 @@ function CoachSettingsViewSheet({
       JSON.stringify(
         normalizeProviderThinkingConfig(provider.thinkingConfig, savedProtocol) ?? null,
       ) ||
+    providerCapabilitiesKey(providerDraft.capabilities ?? provider.capabilities) !==
+      providerCapabilitiesKey(provider.capabilities) ||
     providerDraft.apiKey.trim().length > 0;
   const normalizedDraftBaseUrl = normalizeProviderBaseUrlDraft(providerDraft.baseUrl, draftProtocol);
   const normalizedSavedBaseUrl = normalizeProviderBaseUrlDraft(provider.baseUrl, savedProtocol);
@@ -2898,6 +2914,14 @@ function CoachSettingsViewSheet({
   const draftThinkingCapabilityEvidence = draftThinkingProbeApplies
     ? lastTest?.capabilityEvidence
     : undefined;
+  const draftCapabilities = providerDraft.capabilities ?? provider.capabilities;
+  const draftThinkingConfig = normalizeProviderThinkingConfig(
+    providerDraft.thinkingConfig,
+    draftProtocol,
+  );
+  const explicitDraftThinkingEnabled =
+    draftThinkingConfig?.mode === "enabled" ||
+    (draftCapabilities.thinking === true && draftThinkingConfig?.mode !== "disabled");
   const draftThinkingModelCapabilities =
     canUseSavedModelMetadata && providerDraft.model.trim()
       ? provider.modelCapabilities?.[providerDraft.model.trim()]
@@ -2907,25 +2931,20 @@ function CoachSettingsViewSheet({
     model: providerDraft.model,
     providerName: providerDraft.name,
     baseUrl: providerDraft.baseUrl,
-    capabilityEvidence: draftThinkingCapabilityEvidence,
+    capabilityEvidence: explicitDraftThinkingEnabled
+      ? undefined
+      : draftThinkingCapabilityEvidence,
     modelCapabilities: draftThinkingModelCapabilities,
-    profileCapabilities: provider.capabilities,
+    profileCapabilities: draftCapabilities,
+    ...(explicitDraftThinkingEnabled ? { supported: true } : {}),
   };
-  // The durable draft intent is the source of truth for the displayed mode:
-  // wire markers only exist when capability evidence allowed an emit, so an
-  // explicit choice must still render (and stay editable) before that.
-  const draftThinkingConfig = normalizeProviderThinkingConfig(
-    providerDraft.thinkingConfig,
-    draftProtocol,
+  // Always expose Thinking configuration whenever the selected protocol or vendor
+  // supports wire thinking so users can explicitly toggle or override probe defaults.
+  const draftThinkingIsMiniMax = /minimax/i.test(
+    `${providerDraft.name} ${providerDraft.baseUrl} ${providerDraft.model}`,
   );
-  // Smart adaptation: a probe that explicitly observed rejection hides the
-  // control; otherwise it renders whenever the protocol can carry a thinking
-  // field. "自动" writes nothing until the learner picks a mode, and a
-  // gateway that rejects the choice is absorbed by the negotiated replay —
-  // so waiting for a probe only ever hid a working control.
-  const draftThinkingSupport = classifyProviderThinkingSupport(draftThinkingContext);
   const draftThinkingVisible =
-    thinkingProtocolSupportsWire(draftProtocol) && draftThinkingSupport !== "unsupported";
+    thinkingProtocolSupportsWire(draftProtocol) || draftThinkingIsMiniMax;
   const describedThinking = draftThinkingVisible
     ? describeProviderThinking(draftThinkingContext, draftRequestDefaults)
     : undefined;
@@ -3604,12 +3623,28 @@ function CoachSettingsViewSheet({
     }
   }, [draftDeniedModelsSource]);
   const updateThinkingConfig = (config: ProviderThinkingConfig) => {
+    const nextThinkingEnabled = config.mode !== "disabled";
+    const nextCapabilities = {
+      ...draftCapabilities,
+      thinking: nextThinkingEnabled,
+    };
     const next = updateProviderThinking(
-      draftThinkingContext,
+      {
+        ...draftThinkingContext,
+        profileCapabilities: nextCapabilities,
+        capabilityEvidence: nextThinkingEnabled
+          ? undefined
+          : draftThinkingContext.capabilityEvidence,
+        ...(nextThinkingEnabled ? { supported: true } : {}),
+      },
       draftRequestDefaults,
       config,
     );
-    onProviderDraftChange({ requestDefaults: next, thinkingConfig: config });
+    onProviderDraftChange({
+      requestDefaults: next,
+      thinkingConfig: config,
+      capabilities: nextCapabilities,
+    });
   };
   const thinkingFieldLabel = thinkingDescriptor?.kind === "reasoning_effort"
     ? labels?.thinkingEffort ?? copy.thinkingEffort
@@ -6275,6 +6310,20 @@ function CoachSettingsViewSheet({
                         <span>{settingsText(language, "基础对话", "Chat only")}</span>
                       ) : null}
                     </div>
+                    {modelAdaptation.confidence === "known" &&
+                    (Boolean(draftCapabilities.tools) !== modelAdaptation.supportsTools ||
+                      Boolean(draftCapabilities.vision) !== modelAdaptation.supportsVision ||
+                      explicitDraftThinkingEnabled !== modelAdaptation.supportsThinking) ? (
+                      <div>
+                        <button
+                          type="button"
+                          className="button button--ghost button--compact"
+                          onClick={() => applyModelAdaptation(currentDraftModel)}
+                        >
+                          {settingsText(language, "应用推荐能力", "Apply suggested")}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {(providerSaved || providerDraftReadyForModelDiscovery) && onRefreshProviderModels ? (
@@ -6324,23 +6373,45 @@ function CoachSettingsViewSheet({
                     <span>
                       {settingsText(
                         language,
-                        "实测结果优先；未实测时只作为建议。",
-                        "Observed results win; unverified items are suggestions only.",
+                        "可手动开启或关闭，也可点击上方测试验证。",
+                        "Toggle manually or run a live test to verify.",
                       )}
                     </span>
                   </div>
                   <label className="settings-advanced-toggle">
-                    <input type="checkbox" checked={!providerHasDraftChanges && capabilityVerdict.verifiedTools} disabled readOnly />
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draftCapabilities.tools)}
+                      onChange={(event) =>
+                        onProviderDraftChange({
+                          capabilities: {
+                            ...draftCapabilities,
+                            tools: event.target.checked,
+                          },
+                        })
+                      }
+                    />
                     <span>{toolsCopy.label}</span>
                   </label>
                   <label className="settings-advanced-toggle">
-                    <input type="checkbox" checked={!providerHasDraftChanges && capabilityVerdict.imageInput} disabled readOnly />
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draftCapabilities.vision)}
+                      onChange={(event) =>
+                        onProviderDraftChange({
+                          capabilities: {
+                            ...draftCapabilities,
+                            vision: event.target.checked,
+                          },
+                        })
+                      }
+                    />
                     <span>{visionCopy.label}</span>
                   </label>
                   <label className="settings-advanced-toggle">
                     <input
                       type="checkbox"
-                      checked={(draftThinkingConfig?.mode ?? "disabled") !== "disabled"}
+                      checked={explicitDraftThinkingEnabled}
                       onChange={(event) =>
                         updateThinkingConfig({
                           ...(draftThinkingConfig ?? { mode: "auto" }),
@@ -6349,6 +6420,11 @@ function CoachSettingsViewSheet({
                           thinkingDescriptor?.kind === "reasoning_effort" &&
                           !draftThinkingConfig?.reasoningEffort
                             ? { reasoningEffort: "medium" as const }
+                            : {}),
+                          ...(event.target.checked &&
+                          thinkingDescriptor?.kind === "thinking_budget" &&
+                          typeof draftThinkingConfig?.budgetTokens !== "number"
+                            ? { budgetTokens: 4096 }
                             : {}),
                         })
                       }
@@ -6387,6 +6463,29 @@ function CoachSettingsViewSheet({
                       <option value="medium">{settingsText(language, "中", "Medium")}</option>
                       <option value="high">{settingsText(language, "高", "High")}</option>
                     </select>
+                  </label>
+                ) : explicitDraftThinkingEnabled &&
+                  (thinkingDescriptor?.kind === "thinking_budget" ||
+                    thinkingDescriptor?.kind === "gemini_thinking") ? (
+                  <label className="settings-field">
+                    <span>{labels?.thinkingBudget ?? copy.thinkingBudget}</span>
+                    <input
+                      type="number"
+                      min={thinkingDescriptor.budgetMin}
+                      max={thinkingDescriptor.budgetMax}
+                      value={
+                        typeof draftThinkingConfig?.budgetTokens === "number"
+                          ? draftThinkingConfig.budgetTokens
+                          : ""
+                      }
+                      onChange={(event) =>
+                        updateThinkingConfig({
+                          ...(draftThinkingConfig ?? { mode: "enabled" }),
+                          mode: "enabled",
+                          budgetTokens: parsePositiveIntegerInput(event.target.value),
+                        })
+                      }
+                    />
                   </label>
                 ) : null}
                 <p className="settings-sheet__note settings-sheet__note--compact">
@@ -6442,7 +6541,12 @@ function CoachSettingsViewSheet({
                     ))}
                   </div>
                 </div>
-                {thinkingDescriptor?.kind === "reasoning_effort" ? null : thinkingControl}
+                {thinkingDescriptor?.kind === "reasoning_effort" ||
+                thinkingDescriptor?.kind === "minimax_thinking" ||
+                thinkingDescriptor?.kind === "thinking_budget" ||
+                thinkingDescriptor?.kind === "gemini_thinking"
+                  ? null
+                  : thinkingControl}
                 {!canNestModelLimitsInCatalog ? providerModelLimitsPanel : null}
                 {providerCatalogPanel}
                 <details className="settings-sheet__minor-panel settings-connection-diagnostics">

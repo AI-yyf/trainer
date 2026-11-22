@@ -514,6 +514,24 @@ function buildDraftTestConfig(
     hasMaxOutputTokens: hasOwn(input, 'maxOutputTokens'),
   });
 
+  const baseCapabilities = protocolChanged
+    ? defaultCapabilitiesForProtocol(protocol)
+    : {
+        ...defaultCapabilitiesForProtocol(protocol),
+        ...(existing?.capabilities ?? {}),
+      };
+  const hasExplicitCapabilityEdits =
+    Boolean(input.capabilities) &&
+    (!protocolChanged ||
+      !existing?.capabilities ||
+      JSON.stringify(input.capabilities) !== JSON.stringify(existing.capabilities));
+  const capabilities: CapabilityFlags = hasExplicitCapabilityEdits
+    ? {
+        ...baseCapabilities,
+        ...(input.capabilities ?? {}),
+      }
+    : baseCapabilities;
+
   return {
     name,
     baseUrl,
@@ -531,13 +549,7 @@ function buildDraftTestConfig(
       typeof input.ignoreSystemProxy === 'boolean'
         ? input.ignoreSystemProxy
         : Boolean(existing?.ignoreSystemProxy),
-    capabilities: protocolChanged
-      ? defaultCapabilitiesForProtocol(protocol)
-      : {
-          ...defaultCapabilitiesForProtocol(protocol),
-          ...(existing?.capabilities ?? {}),
-          ...(input.capabilities ?? {}),
-        },
+    capabilities,
     catalogModels: mergeCatalogModels(
       input.catalogModels,
       sameConnection ? existing?.catalogModels : undefined,
@@ -568,13 +580,7 @@ function buildDraftTestConfig(
         name,
         baseUrl,
         model,
-        capabilities: protocolChanged
-          ? defaultCapabilitiesForProtocol(protocol)
-          : {
-              ...defaultCapabilitiesForProtocol(protocol),
-              ...(existing?.capabilities ?? {}),
-              ...(input.capabilities ?? {}),
-            },
+        capabilities,
         modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model] : undefined,
       },
       draftRequestDefaults,

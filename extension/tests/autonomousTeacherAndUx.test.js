@@ -198,4 +198,102 @@ test('autonomous workspace path forwarding, streaming composer queue, and settin
   assert.match(appSource, /onQueueSubmit=/);
   assert.match(appSource, /providerToolsExplicitlyUnsupported/);
   assert.match(appSource, /onImportWorkspace=/);
+  assert.match(appSource, /sanitizeBogusLearningStep/);
+});
+
+test('uploadResourceCommand files uploads into requested targetFolder using set_group', async (t) => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-folder-import-'));
+  t.after(() => fs.rmSync(projectDir, { recursive: true, force: true }));
+  const docFile = path.join(projectDir, 'spec.md');
+  fs.writeFileSync(docFile, '# API Spec\n', 'utf8');
+
+  const bootstrap = createDefaultBootstrapData(
+    { trusted: true, workspaceFolder: projectDir },
+    {
+      name: 'Local Compatible',
+      baseUrl: 'http://127.0.0.1:1234/v1',
+      apiKeyRef: 'trainer.default',
+      model: 'demo-model',
+      capabilities: {},
+    },
+    { lifecycle: 'ready', host: '127.0.0.1', port: 4557, canStart: true },
+  );
+
+  const organizeCalls = [];
+  const { uploadResourceCommand } = loadWithVscodeMock(resourceCommandsModulePath, {
+    window: {
+      showOpenDialog: async () => [{ fsPath: docFile, scheme: 'file' }],
+    },
+  });
+
+  const context = {
+    trustGuard: { ensureTrusted: async () => true },
+    getHostState: () => ({
+      workspace: { activeWorkspaceRoot: projectDir, workspaceFolder: projectDir, remoteName: undefined },
+      bootstrap,
+    }),
+    getSessionId: () => 'sess-folder-import',
+    getWorkspaceId: () => 'ws-folder-import',
+    sidecarManager: { ensureRunning: async () => ({ lifecycle: 'ready', port: 4557 }) },
+    sidecarClient: {
+      postJson: async (_port, route, body) => {
+        if (route === '/resource/upload') {
+          return {
+            id: 'res-folder-1',
+            workspace_id: 'ws-folder-import',
+            kind: body.kind,
+            name: body.name,
+            title: body.name,
+            status: 'ready',
+            source: body.source,
+          };
+        }
+        if (route === '/resource/organize') {
+          organizeCalls.push(body);
+          return {
+            id: body.resource_id,
+            workspace_id: 'ws-folder-import',
+            name: 'spec.md',
+            title: 'spec.md',
+            status: 'ready',
+            collection_path: 'API/spec.md',
+          };
+        }
+        return { id: 'res-folder-1', status: 'ready' };
+      },
+      getJson: async () => ({ memory: { recent_summary: 'Imported into folder API.' } }),
+    },
+    patchWorkbenchData: async () => {},
+  };
+
+  const result = await uploadResourceCommand(context, { mode: 'files', targetFolder: 'API' });
+  assert.equal(result.ok, true);
+  assert.equal(organizeCalls.length, 1);
+  assert.equal(organizeCalls[0].action, 'set_group');
+  assert.equal(organizeCalls[0].group, 'API');
+});
+
+test('settings capabilities dirty-check, Finder resources tree, and learning step sanitizer stay intact', () => {
+  const settingsSource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'components', 'settings', 'CoachSettingsView.tsx'),
+    'utf8',
+  );
+  const resourcesSource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'components', 'resources', 'ResourcesWorkbenchView.tsx'),
+    'utf8',
+  );
+  const learningSummarySource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'lib', 'learningSummary.ts'),
+    'utf8',
+  );
+
+  assert.match(settingsSource, /function providerCapabilitiesKey/);
+  assert.match(settingsSource, /providerCapabilitiesKey\(providerDraft\.capabilities/);
+  assert.match(settingsSource, /应用推荐能力/);
+  assert.doesNotMatch(resourcesSource, /data-library-folders/);
+  assert.match(resourcesSource, /mergeLibraryFolderTrees/);
+  assert.match(resourcesSource, /mode:\s*"rename-resource"/);
+  assert.match(resourcesSource, /resources-finder-bar/);
+  assert.match(learningSummarySource, /export function sanitizeBogusLearningStep/);
+  assert.match(learningSummarySource, /CASUAL_GREETING_TOKENS/);
 });

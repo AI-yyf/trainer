@@ -32,6 +32,7 @@ from app.main import create_app
 from app.memory.note_request import message_requests_lecture_note_save
 from app.network_fetch import ControlledFetchResponse
 from app.pedagogy.service import PedagogyService
+from app.pedagogy.smalltalk import is_bogus_smalltalk_step
 from app.sandbox.service import SandboxService
 
 
@@ -402,3 +403,111 @@ def test_settings_and_protocol_regressions() -> None:
     # Parallel tool responses grouped into ONE single function content turn
     assert len(function_turns) == 1
     assert len(function_turns[0]["parts"]) == 2
+
+
+def test_legacy_untested_tool_capable_profile_enables_autonomous_web_tools() -> None:
+    legacy_minimax = ProviderService(
+        config=ProviderConfig(
+            name="MiniMax",
+            base_url="https://api.minimaxi.com/v1",
+            api_key_ref="trainer.minimax",
+            model="MiniMax-M3.1-Flash",
+            protocol="openai_chat_completions_compatible",
+            capabilities={"chat": True, "tools": False, "streaming": True},
+        ),
+        api_key="sk-minimax",
+    )
+    assert _resolve_agent_loop_enabled(TurnRequest(message="你好"), legacy_minimax) is False
+    assert _resolve_agent_loop_enabled(TurnRequest(message="你现在可以联网了吗"), legacy_minimax) is True
+    assert (
+        _resolve_agent_loop_enabled(
+            TurnRequest(message="你帮我找找目前的世界模型的研究进展可以吗"),
+            legacy_minimax,
+        )
+        is True
+    )
+
+    legacy_minimax.replace_observed_capability_states({"tools": "unsupported"})
+    assert _resolve_agent_loop_enabled(TurnRequest(message="你现在可以联网了吗"), legacy_minimax) is False
+
+
+def test_bogus_smalltalk_step_detection_preserves_technical_steps() -> None:
+    assert is_bogus_smalltalk_step("先把 你好 压成一个很小的补丁目标，再继续写。") is True
+    assert is_bogus_smalltalk_step("先把 hello 压成一个很小的补丁目标，再继续写。") is True
+    assert is_bogus_smalltalk_step("围绕「你好」先做一个小动作") is True
+    assert is_bogus_smalltalk_step("先把 Python 的 asyncio 压成一个很小的补丁目标，再继续写。") is False
+    assert is_bogus_smalltalk_step("先打开 app.py，确认 Router 注册。") is False
+
+
+def test_session_message_stream_without_use_agent_loop_does_not_409_when_unverified(tmp_path: Path) -> None:
+    with TestClient(_offline_app(tmp_path)) as client:
+        workspace_id = "ws-no-409"
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Chat Stream Test"},
+        )
+        assert started.status_code == 200
+        session_id = started.json()["session_id"]
+
+        client.app.state.runtime.provider_service = ProviderService(
+            config=ProviderConfig(
+                name="MiniMax",
+                base_url="https://api.minimaxi.com/v1",
+                api_key_ref="trainer.minimax",
+                model="MiniMax-M3.1-Flash",
+                protocol="openai_chat_completions_compatible",
+                capabilities={"chat": True, "tools": False, "streaming": True},
+            ),
+            api_key="",
+        )
+        resp = client.post(
+            "/session/message/stream",
+            json={
+                "session_id": session_id,
+                "workspace_id": workspace_id,
+                "message": "你好",
+            },
+        )
+        assert resp.status_code != 409
+
+
+def test_nested_finder_group_organization_and_index(tmp_path: Path) -> None:
+    with TestClient(_offline_app(tmp_path)) as client:
+        workspace_id = "ws-finder-nested"
+        client.post("/session/start", json={"workspace_id": workspace_id, "workspace_name": "Finder Repo"})
+        upload = client.post(
+            "/resource/upload",
+            json={
+                "workspace_id": workspace_id,
+                "kind": "markdown",
+                "name": "auth-flow.md",
+                "source": "inline://auth-flow.md",
+                "content": "# Auth Flow\nToken verification details.\n",
+                "content_encoding": "utf-8",
+            },
+        )
+        assert upload.status_code == 200, upload.text
+        resource_id = upload.json()["id"]
+
+        organized = client.post(
+            "/resource/organize",
+            json={
+                "workspace_id": workspace_id,
+                "resource_id": resource_id,
+                "action": "set_group",
+                "group": "API/Auth",
+            },
+        )
+        assert organized.status_code == 200, organized.text
+        body = organized.json()
+        assert body["collection_path"].startswith("Auth/")
+        assert str(body["collection_root"]).replace("\\", "/").endswith("/groups/API/Auth")
+
+        idx = client.post(
+            "/resource/index",
+            json={"workspace_id": workspace_id, "resource_id": resource_id, "enable_network": False},
+        )
+        assert idx.status_code == 200, idx.text
+        indexed_body = idx.json()
+        assert indexed_body["collection_path"].startswith("Auth/")
+        assert str(indexed_body["collection_root"]).replace("\\", "/").endswith("/groups/API/Auth")

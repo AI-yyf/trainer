@@ -3622,12 +3622,14 @@ export function triggerResourceUpload({
   browserPreview,
   payloadMode,
   folder,
+  targetFolder,
   filesInputRef,
   folderInputRef,
 }: {
   browserPreview: boolean;
   payloadMode?: "files" | "folder" | "workspace" | "url";
   folder?: boolean;
+  targetFolder?: string;
   filesInputRef: { current: HTMLInputElement | null };
   folderInputRef: { current: HTMLInputElement | null };
 }) {
@@ -3644,10 +3646,12 @@ export function triggerResourceUpload({
   }
 
   const operationId = `resource-upload-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const normalizedTarget = typeof targetFolder === "string" ? targetFolder.trim() : "";
   postMessage({
     type: "resource/upload",
     payload: {
       ...(payloadMode ? { mode: payloadMode } : {}),
+      ...(normalizedTarget ? { targetFolder: normalizedTarget } : {}),
       __trainerResourceOperationId: operationId,
     },
   });

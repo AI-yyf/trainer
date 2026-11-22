@@ -2080,6 +2080,24 @@ export const SETTINGS_TEXT: Record<string, Partial<Record<ComposerLanguage, stri
     "ko-KR": "스킬 추가",
     "pt-BR": "Adicionar habilidade",
   },
+  "可手动开启或关闭，也可点击上方测试验证。\u0000Toggle manually or run a live test to verify.": {
+    "en-US": "Toggle manually or run a live test to verify.",
+    "es-ES": "Activa o desactiva manualmente, o ejecuta una prueba en vivo para verificar.",
+    "fr-FR": "Activez ou désactivez manuellement, ou lancez un test en direct pour vérifier.",
+    "de-DE": "Manuell ein- oder ausschalten oder oben per Live-Test prüfen.",
+    "ja-JP": "手動で切り替えたり、上のライブテストで検証できます。",
+    "ko-KR": "수동으로 켜거나 끄고, 위 라이브 테스트로 검증할 수 있습니다.",
+    "pt-BR": "Ative ou desative manualmente ou execute um teste ao vivo para verificar.",
+  },
+  "应用推荐能力\u0000Apply suggested": {
+    "en-US": "Apply suggested",
+    "es-ES": "Aplicar sugerencia",
+    "fr-FR": "Appliquer la suggestion",
+    "de-DE": "Vorschlag übernehmen",
+    "ja-JP": "推奨設定を適用",
+    "ko-KR": "추천 설정 적용",
+    "pt-BR": "Aplicar sugestão",
+  },
 };
 
 /** Resolves the active-language text for a migrated zh/en pair. */

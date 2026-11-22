@@ -386,6 +386,108 @@ export function deriveProgressSentence(
   };
 }
 
+const CASUAL_GREETING_TOKENS = new Set([
+  "你好",
+  "您好",
+  "你好呀",
+  "你好啊",
+  "你好哦",
+  "你好吗",
+  "嗨",
+  "哈喽",
+  "哈罗",
+  "早",
+  "早安",
+  "早上好",
+  "上午好",
+  "中午好",
+  "下午好",
+  "晚上好",
+  "晚安",
+  "在吗",
+  "在不在",
+  "谢谢",
+  "多谢",
+  "感谢",
+  "谢谢你",
+  "好的",
+  "好",
+  "嗯",
+  "嗯嗯",
+  "收到",
+  "明白",
+  "了解",
+  "测试",
+  "试试",
+  "hi",
+  "hello",
+  "hey",
+  "yo",
+  "sup",
+  "hi there",
+  "hello there",
+  "hey there",
+  "hi trainer",
+  "hello trainer",
+  "hey trainer",
+  "你好 trainer",
+  "你好教练",
+  "good morning",
+  "good afternoon",
+  "good evening",
+  "thanks",
+  "thank you",
+  "thx",
+  "ok",
+  "okay",
+  "got it",
+  "ping",
+  "test",
+  "你是谁",
+  "你叫什么",
+  "你能做什么",
+  "你是干嘛的",
+  "who are you",
+  "what can you do",
+]);
+
+const BOGUS_SMALLTALK_STEP_PATTERNS: readonly RegExp[] = [
+  /^先把\s+(.+?)\s+压成一个很小的补丁目标(?:[，,]?\s*再继续写[。.]?)?$/u,
+  /^先交付一个小而可复盘的\s+(.+?)\s+版本(?:[，,。.]|$)/u,
+  /^先找到\s+(.+?)\s+的第一处切口(?:[，,。.]|$)/u,
+  /^先用一句话重述\s+(.+?)\s+该表现成什么样[。.]?$/u,
+  /^先说出\s+(.+?)\s+的第一个可见行为(?:[，,。.]|$)/u,
+  /^围绕[「"](.+?)[」"]先做一个小动作/u,
+];
+
+function isCasualGreetingTarget(raw: string): boolean {
+  const normalized = raw
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[\s`~!@#$%^&*()\-_=+[\]{};:'",.<>/?\\|，。！？、；：“”‘’（）【】《》~～·]+/g, " ")
+    .trim();
+  return normalized.length > 0 && CASUAL_GREETING_TOKENS.has(normalized);
+}
+
+/**
+ * Scrub legacy ImplementationCoach fallback steps that mistakenly wrapped a
+ * casual greeting ("先把 你好 压成一个很小的补丁目标，再继续写。") from persisted
+ * pre-1.5 sessions while preserving real technical goals.
+ */
+export function sanitizeBogusLearningStep(value?: string): string | undefined {
+  const cleaned = " ".concat(String(value ?? "").trim()).trim().replace(/\s+/g, " ");
+  if (!cleaned) {
+    return undefined;
+  }
+  for (const pattern of BOGUS_SMALLTALK_STEP_PATTERNS) {
+    const match = pattern.exec(cleaned);
+    if (match && isCasualGreetingTarget(match[1])) {
+      return undefined;
+    }
+  }
+  return cleaned;
+}
+
 /**
  * One projection for the strip, the drawer and the inline progress card.
  * Every value is derived from live runtime facts; nothing is invented when a
@@ -405,8 +507,8 @@ export function deriveLearningSummary(input: LearningSummaryInput): LearningSumm
     };
   });
   return {
-    goalTitle: input.planTitle?.trim() || undefined,
-    goalStep: input.currentStep?.trim() || undefined,
+    goalTitle: sanitizeBogusLearningStep(input.planTitle),
+    goalStep: sanitizeBogusLearningStep(input.currentStep),
     goalStatus: input.frozen ? "frozen" : undefined,
     dueCount: input.dueCount,
     dueCardTitle: input.dueCardTitle?.trim() || undefined,

@@ -214,7 +214,7 @@ import { AppShell } from "../templates/AppShell";
 import { ActivityHeader } from "../templates/ActivityHeader";
 import { resolveUnifiedComposerIntent, unifiedComposerCommands } from "../lib/unifiedComposerIntent";
 import { primaryDestinationForRoute } from "../lib/workbenchDestinations";
-import { deriveLearningSummary, isSameLearningFact } from "../lib/learningSummary";
+import { deriveLearningSummary, isSameLearningFact, sanitizeBogusLearningStep } from "../lib/learningSummary";
 import { normalizeTrainingStateTextFields } from "../lib/hostText";
 import { useHostOperationResolver } from "../lib/useHostOperationResolver";
 import { appendDockAnchor, composerDockDraftScope, docksComposer, resolveDockContextAnchor } from "../lib/composerDock";
@@ -2052,10 +2052,10 @@ export function App() {
     (entry) => entry.name.trim().toLowerCase() === "tools",
   );
   const providerToolsExplicitlyUnsupported =
-    data.providerConfig.capabilities?.tools === false ||
-    scopedProviderLastTest?.toolsReady === false ||
-    chatToolsEvidence?.state === "unsupported" ||
-    chatToolsEvidence?.state === "disabled";
+    (chatToolsEvidence?.state === "unsupported" ||
+      chatToolsEvidence?.state === "disabled" ||
+      scopedProviderLastTest?.toolsReady === false) &&
+    data.providerConfig.capabilities?.tools !== true;
   const agentToolsCapabilityMessage = useMemo(() => {
     const messages: Record<ComposerLanguage, string> = {
       "zh-CN": "当前视图需要已经通过工具调用验证的 Provider。请在设置中选择并测试支持 tools 的连接。",
@@ -3087,14 +3087,15 @@ export function App() {
     (leftoverCoachTurnChromeNotLive ? undefined : activeThreadSummary) ??
     liveCoachTurnChrome.coachingStateSummary ??
     liveCoachTaskChrome.currentFocus;
-  const resolvedCoachNextStep =
+  const resolvedCoachNextStep = sanitizeBogusLearningStep(
     planRuntimeStatus?.nextTrainingAction ??
-    runtimeCurrentThread?.nextStep ??
-    liveCoachTurnChrome.coachTurnNextStep ??
-    (leftoverCoachTurnChromeNotLive ? undefined : activeThreadNextStep) ??
-    liveCoachTurnChrome.coachingStateNextStep ??
-    liveCoachTaskChrome.nextStep ??
-    (leftoverTaskChromeNotLive ? undefined : data.task.nextActionLabel);
+      runtimeCurrentThread?.nextStep ??
+      liveCoachTurnChrome.coachTurnNextStep ??
+      (leftoverCoachTurnChromeNotLive ? undefined : activeThreadNextStep) ??
+      liveCoachTurnChrome.coachingStateNextStep ??
+      liveCoachTaskChrome.nextStep ??
+      (leftoverTaskChromeNotLive ? undefined : data.task.nextActionLabel),
+  );
   const resolvedCoachEncouragement =
     liveCoachTurnChrome.coachTurnEncouragement ??
     liveCoachTurnChrome.coachingStateEncouragement ??
@@ -3119,7 +3120,7 @@ export function App() {
   const runtimeCurrentStepRaw = planRuntimeStatus?.currentStep ?? runtimeCurrentThread?.currentStep;
   const runtimeWhyNowRaw = planRuntimeStatus?.whyNow ?? runtimeCurrentThread?.whyNow;
   const runtimeCurrentStep = isLanguageAlignedUiText(layout.composerLanguage, runtimeCurrentStepRaw)
-    ? runtimeCurrentStepRaw
+    ? sanitizeBogusLearningStep(runtimeCurrentStepRaw)
     : undefined;
   const runtimeWhyNow = isLanguageAlignedUiText(layout.composerLanguage, runtimeWhyNowRaw)
     ? runtimeWhyNowRaw
@@ -3150,7 +3151,7 @@ export function App() {
           verifyMethod: runtimeVerifyItems,
         },
         plan: {
-          currentStep: data.plan.currentStep,
+          currentStep: sanitizeBogusLearningStep(data.plan.currentStep),
           whyNow: data.plan.whyNow,
           nextAfterCurrent: data.plan.nextAfterCurrent,
           blockedReason: data.plan.blockedReason,
@@ -3380,7 +3381,7 @@ export function App() {
     runtimeWhyNow,
   ]);
   const verifyPlanAdvanceNext = planRuntimeStatus?.verifyPlanAdvance?.advanced
-    ? planRuntimeStatus.verifyPlanAdvance.next?.trim() || "" : "";
+    ? sanitizeBogusLearningStep(planRuntimeStatus.verifyPlanAdvance.next?.trim()) || "" : "";
   const planVerifyItems = useMemo(() => {
     const items = lockRecoveredPlanVerifyItems({
       recovered: recoveredRuntime,
@@ -6030,15 +6031,12 @@ export function App() {
         turnActiveView === "plan" ? planComposerMode ?? resolvedPlanComposerMode : undefined,
       planRuntimeRecovery: recoveredResume,
       attachments: attachments?.length ? attachments : undefined,
-      useAgentLoop: resolvedResourceComposerIntent?.mode === "analyze" ? false : requiresVerifiedAgentTools
-        ? true
-        : (providerSupportsFormalPlanTools || !providerToolsExplicitlyUnsupported) &&
-            (laneNeedsVerifiedTools ||
-              data.resources.length > 0 ||
-              messageReferencesWorkspaceFile(text) ||
-              !/^(?:你好|您好|你好[呀啊吗哦]?|嗨|哈[喽罗]|早安?|早上好|在吗|谢谢|好的?|嗯+|hi|hello|hey|thanks|thank you|ok|okay|ping|test)[!！.。,，~～\s]*$/i.test(text.trim()))
-          ? true
-          : undefined,
+      useAgentLoop:
+        resolvedResourceComposerIntent?.mode === "analyze" || providerToolsExplicitlyUnsupported
+          ? false
+          : requiresVerifiedAgentTools
+            ? true
+            : undefined,
       requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     };
     setLastTurnView(turnActiveView);
@@ -10556,6 +10554,19 @@ export function App() {
                   triggerResourceUpload({
                     browserPreview: false,
                     payloadMode: "workspace",
+                    filesInputRef: uploadFilesInputRef,
+                    folderInputRef: uploadFolderInputRef,
+                  })
+          }
+          onImportToFolder={
+            isBrowserPreview
+              ? undefined
+              : (mode, targetFolder) =>
+                  triggerResourceUpload({
+                    browserPreview: false,
+                    payloadMode: mode,
+                    folder: mode === "folder",
+                    targetFolder,
                     filesInputRef: uploadFilesInputRef,
                     folderInputRef: uploadFolderInputRef,
                   })
