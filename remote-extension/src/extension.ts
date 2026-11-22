@@ -181,6 +181,20 @@ async function handleRequest(value: unknown): Promise<RemoteCompanionResponse> {
 
 class WorkspaceScopeError extends Error {}
 
+function uriPathToLocalFsPath(uriPath: string): string {
+  if (process.platform === 'win32' && /^\/[A-Za-z]:(?:\/|$)/.test(uriPath)) {
+    return uriPath.slice(1);
+  }
+  return uriPath;
+}
+
+function normalizeUriPathForComparison(uriPath: string): string {
+  if (process.platform === 'win32' && /^\/[A-Za-z]:(?:\/|$)/.test(uriPath)) {
+    return `/${uriPath[1].toLowerCase()}${uriPath.slice(2)}`;
+  }
+  return uriPath;
+}
+
 function normalizeIncomingUriForFolder(
   uri: vscode.Uri,
   folder: vscode.WorkspaceFolder,
@@ -201,7 +215,7 @@ function normalizeIncomingUriForFolder(
     activeRemoteName &&
     uri.authority.toLowerCase().startsWith(`${activeRemoteName}+`)
   ) {
-    return vscode.Uri.file(uri.path);
+    return vscode.Uri.file(uriPathToLocalFsPath(uri.path));
   }
   return undefined;
 }
@@ -223,7 +237,10 @@ async function resolveUri(value: unknown): Promise<vscode.Uri> {
       continue;
     }
     hadCompatibleAuthority = true;
-    const relative = path.posix.relative(folder.uri.path, candidate.path);
+    const relative = path.posix.relative(
+      normalizeUriPathForComparison(folder.uri.path),
+      normalizeUriPathForComparison(candidate.path),
+    );
     if (relative.startsWith('../') || relative === '..' || path.posix.isAbsolute(relative)) {
       continue;
     }
@@ -353,7 +370,10 @@ async function environment(value?: unknown): Promise<RemoteEnvironment> {
       if (!normalized) {
         return false;
       }
-      const relative = path.posix.relative(candidate.uri.path, normalized.path);
+      const relative = path.posix.relative(
+        normalizeUriPathForComparison(candidate.uri.path),
+        normalizeUriPathForComparison(normalized.path),
+      );
       return !relative.startsWith('../') && relative !== '..' && !path.posix.isAbsolute(relative);
     });
     if (matched) {

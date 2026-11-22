@@ -52,7 +52,13 @@ function loadCompanionWithMock({ folders, remoteName }) {
   const vscodeMock = {
     env: { remoteName },
     Uri: {
-      file: (fsPath) => makeUri(pathToFileURL(path.resolve(fsPath)).toString()),
+      file: (fsPath) => {
+        const normalizedFsPath =
+          process.platform === 'win32' && /^\/[A-Za-z]:(?:\/|$)/.test(fsPath)
+            ? fsPath.slice(1)
+            : fsPath;
+        return makeUri(pathToFileURL(path.resolve(normalizedFsPath)).toString());
+      },
       parse: (value) => makeUri(value),
     },
     RelativePattern: class RelativePattern {
@@ -215,5 +221,153 @@ test('remote Companion resolves UI-host vscode-remote://ssh-remote+... URIs agai
   } finally {
     companion.deactivate();
     fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('remote Companion strips leading slash from Windows drive URIs and matches drive letters case-insensitively', async () => {
+  const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  const fsPromises = require('node:fs/promises');
+  const recordedFileArgs = [];
+
+  const winUriFromFsPath = (fsPath) => {
+    recordedFileArgs.push(fsPath);
+    if (/^\/[A-Za-z]:(?:\/|$)/.test(fsPath)) {
+      // Simulate Windows path.resolve('/C:/...') against D:\a\trainer -> D:\C:\...
+      const broken = `D:${fsPath}`;
+      return {
+        scheme: 'file',
+        authority: '',
+        path: `/${broken.replace(/\\/g, '/')}`,
+        fsPath: broken,
+        toString: () => `file:///${broken.replace(/\\/g, '/')}`,
+      };
+    }
+    if (/^[A-Za-z]:/.test(fsPath)) {
+      const posix = fsPath.replace(/\\/g, '/');
+      return {
+        scheme: 'file',
+        authority: '',
+        path: `/${posix}`,
+        fsPath: posix.replace(/\//g, '\\'),
+        toString: () => `file:///${posix}`,
+      };
+    }
+    return {
+      scheme: 'file',
+      authority: '',
+      path: fsPath,
+      fsPath,
+      toString: () => `file://${fsPath}`,
+    };
+  };
+
+  const folderUri = winUriFromFsPath('c:\\workspace\\repo-a');
+  recordedFileArgs.length = 0;
+
+  const vscodeMock = {
+    env: { remoteName: 'ssh-remote' },
+    Uri: {
+      file: (fsPath) => winUriFromFsPath(fsPath),
+      parse: (value) => makeUri(value),
+    },
+    RelativePattern: class RelativePattern {
+      constructor(base, pattern) {
+        this.base = base;
+        this.pattern = pattern;
+      }
+    },
+    workspace: {
+      isTrusted: true,
+      workspaceFolders: [{ name: 'repo-a', uri: folderUri }],
+      fs: {
+        async stat(uri) {
+          if (uri.path === '/c:/workspace/repo-a') {
+            return { type: 2, size: 0, mtime: 1 };
+          }
+          return { type: 1, size: 32, mtime: 1 };
+        },
+        async readFile() {
+          return new Uint8Array(Buffer.from('def charge(key):\n    return key\n', 'utf8'));
+        },
+        async readDirectory() {
+          return [];
+        },
+      },
+      async findFiles() {
+        return [];
+      },
+    },
+    languages: {
+      getDiagnostics() {
+        return [];
+      },
+    },
+    commands: {
+      registerCommand(id, handler) {
+        vscodeMock._commands.set(id, handler);
+        return { dispose() {} };
+      },
+    },
+    _commands: new Map(),
+  };
+
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  const originalLoad = Module._load;
+  delete require.cache[companionModulePath];
+  Module._load = function (request, parent, isMain) {
+    if (request === 'vscode') {
+      return vscodeMock;
+    }
+    if (request === 'node:fs/promises') {
+      return {
+        ...fsPromises,
+        realpath: async (p) =>
+          `/win32/${String(p)
+            .replace(/^([A-Za-z]):/, (_, drive) => drive.toLowerCase())
+            .replace(/\\/g, '/')}`,
+      };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  let mod;
+  try {
+    mod = require(companionModulePath);
+  } finally {
+    Module._load = originalLoad;
+  }
+
+  const subscriptions = [];
+  mod.activate({ subscriptions });
+  try {
+    const request = vscodeMock._commands.get('trainer.remote.request');
+    const readRes = await request({
+      protocol_version: 2,
+      operation: 'read_file',
+      uri: 'vscode-remote://ssh-remote+141s/C:/workspace/repo-a/payments.py',
+    });
+    assert.equal(readRes.ok, true, JSON.stringify(readRes));
+    assert.ok(recordedFileArgs.includes('C:/workspace/repo-a/payments.py'));
+    assert.ok(!recordedFileArgs.some((arg) => /^\/[A-Za-z]:/.test(arg)));
+
+    const envRes = await request({
+      protocol_version: 2,
+      operation: 'environment',
+      uri: 'vscode-remote://ssh-remote+141s/C:/workspace/repo-a/payments.py',
+    });
+    assert.equal(envRes.ok, true, JSON.stringify(envRes));
+
+    const escapedRes = await request({
+      protocol_version: 2,
+      operation: 'read_file',
+      uri: 'vscode-remote://ssh-remote+141s/D:/outside/secret.txt',
+    });
+    assert.equal(escapedRes.ok, false);
+    assert.match(escapedRes.error.detail, /outside the active workspace/i);
+  } finally {
+    mod.deactivate();
+    delete require.cache[companionModulePath];
+    if (originalPlatformDescriptor) {
+      Object.defineProperty(process, 'platform', originalPlatformDescriptor);
+    }
   }
 });

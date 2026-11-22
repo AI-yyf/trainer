@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · Français · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/source-v1.5.1-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Release](https://img.shields.io/badge/source-v1.5.2-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#installation)
 [![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#garanties-de-qualité)
@@ -76,7 +76,7 @@ Ce n'est pas un enrobage de chat : c'est un coach doté d'une mémoire durable, 
 Télécharge le `.vsix` correspondant à ton système (`darwin-arm64` / `linux-x64` / `win32-x64`) depuis [Releases](https://github.com/AI-yyf/trainer/releases/latest) :
 
 ```bash
-code --install-extension trainer-extension-1.5.1-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.5.2-<platform>-<arch>.vsix --force
 ```
 
 Ou depuis la vue Extensions de VS Code → `···` → *Installer depuis VSIX…* → recharger la fenêtre. Détails complets dans [`extension/README.install.md`](extension/README.install.md).
@@ -345,7 +345,7 @@ Toutes les routes HTTP d'état retournent l'objet canonique **`WorkbenchSnapshot
 
 ## Garanties de qualité
 
-> Chaque mesure ci-dessous correspond aux exécutions vérifiées sur `main` (`v1.5.1`) :
+> Chaque mesure ci-dessous correspond aux exécutions vérifiées sur `main` (`v1.5.2`) :
 
 | Garantie | Portée et résultat vérifié | Commande |
 |---|---|---|
@@ -397,7 +397,7 @@ Garanti automatiquement par `npm run verify:i18n` (`extension/webview/src/lib/i1
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.5.1}
+  note   = {v1.5.2}
 }
 ```
 
@@ -407,6 +407,6 @@ Garanti automatiquement par `npm run verify:i18n` (`extension/webview/src/lib/i1
 
 **// Entraîne ton IA · Grandis avec ton IA**
 
-`v1.5.1` · Fait avec du café, FSRS, la pédagogie RethinkFun State-Flow, 6 606 tests automatisés et un coach qui refuse d'écrire ton code à ta place.
+`v1.5.2` · Fait avec du café, FSRS, la pédagogie RethinkFun State-Flow, 6 606 tests automatisés et un coach qui refuse d'écrire ton code à ta place.
 
 </div>
