@@ -4,9 +4,9 @@
 
 <img src="assets/banner.png" alt="Trainer — Trainiere deine KI · Wachse mit deiner KI · Wo KI und Menschen zusammen wachsen" width="100%" />
 
-**Ein langfristiger Technologie-Coach mit Programmierung als Ausgangspunkt, der in deiner VS Code Sidebar lebt.**
+**Ein langfristiger Coding- und Lern-Coach direkt in deiner VS-Code-Sidebar.**
 
-**Er plant, drillt, verifiziert und merkt sich alles über dich — aber deinen Code schreibt er nie.**
+**Er plant, trainiert, verifiziert und erinnert sich über Sitzungen hinweg — und weigert sich, deinen Produktionscode für dich zu schreiben.**
 
 **// Output ≠ Wachstum // Verifizieren + Wiederholen = Wachstum**
 
@@ -14,15 +14,16 @@
 
 [![Release](https://img.shields.io/badge/source-v1.4.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#installation)
-[![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#qualitätsgates)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#installation)
+[![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#qualitätsgates)
 [![i18n](https://img.shields.io/badge/i18n-8%20languages-A78BFA)](#i18n--acht-sprachen)
 
 [Warum](#warum-es-trainer-gibt) ·
 [Installation](#installation) ·
-[Einrichtung](#drei-schritte-kein-vierter) ·
+[Drei Schritte](#drei-schritte-kein-vierter) ·
 [Mechaniken](#kernmechaniken) ·
-[Drei Ziele](#drei-ziele) ·
+[Zwei Ziele](#zwei-ziele--ein-gespräch) ·
+[Remote-SSH](#remote-ssh-companion) ·
 [Vergleich](#vergleich) ·
 [5-Min-Demo](#fünf-minuten-demo) ·
 [Design](#warum-es-sich-anders-anfühlt) ·
@@ -41,23 +42,21 @@
 > Entwickler bleiben nicht hängen, weil es an Tutorials mangelt.
 > Sie bleiben hängen, weil nichts die Lernschleife schließt.
 
-Ein Chat mit einem LLM verdampft in dem Moment, in dem er endet; Videos sind passiv; das Konzept, das du am Dienstag fast verstanden hattest, ist am Freitag weg.
+Ein Chat mit einem LLM verdampft in dem Moment, in dem er endet; Videos sind passiv; das Konzept, das du am Dienstag halb verstanden hattest, ist am Freitag weg.
 
 Schlimmer noch: **vibe coding** — drei Monate lang Code von der KI schreiben lassen, während du nichts davon verstehst.
 
-Lesezeichen stapeln sich, während der Output flach bleibt. Repos wachsen, während dein Kopf sich leert.
-
 **Trainer löst das direkt im Editor.**
 
-Er ist keine Chat-Shell — er ist ein Coach mit Gedächtnis, Lehrplan und Prüfungsordnung:
+Er ist kein Chat-Wrapper — er ist ein Coach mit Gedächtnis, Lehrplan und Prüfungsordnung:
 
 - Er **plant** dein Lernen in Etappen und verfolgt, wo du wirklich stehst — nicht, wo du dich nur fühlst
-- Er **trainiert** dich mit Lernkarten, Theorie-Drills und Szenario-Experimenten
-- Er **verifiziert** dein Können an deinem echten Code — über FastAPI reden zählt nichts, solange die aktuelle Datei es nicht beweist
-- Er **erinnert** sich über Sitzungen, Projekte und Wochen hinweg an dich und plant Wiederholungen auf der FSRS-Vergessenskurve
-- Er **schreibt niemals Produktionscode für dich** — du schreibst, er lehrt, **ihr wächst zusammen**
+- Er **trainiert** dich mit Lernkarten, Theorie-Drills und eingebetteten Übungen direkt an deinem echten Projekt
+- Er **verifiziert** dein Können an deinem realen Code — über FastAPI reden zählt nichts, solange deine aktuelle Datei es nicht beweist
+- Er **erinnert** sich über Sitzungen, Projekte und Wochen hinweg und plant Wiederholungen auf der **FSRS**-Vergessenskurve
+- Er **schreibt niemals Produktionscode für dich** — du schreibst, er lehrt, **ihr wachst zusammen**
 
-**Und diese Disziplin reicht über den Code hinaus.** Dieselbe „erst verifizieren"-Schleife deckt jetzt auch Literatur und Sprachenlernen ab: Close Reading mit ¶-verankerten Anmerkungen, Imitationsschreiben mit Rückanker zum Original, Theorie-Konzeptkarten — jedes Fach wird über sein eigenes Verifier-Paket und eigene Fortschrittsdimensionen gelehrt, nicht durch umetikettierte Code-Checks.
+**Und diese Disziplin geht über Code hinaus.** Dieselbe „erst verifizieren“-Schleife trägt auch Close Reading, Prinzipien-Vorlesungen und geistes- oder sprachwissenschaftliches Lernen mit eigenen Verifier-Paketen und Fähigkeitsdimensionen.
 
 <div align="center">
 
@@ -72,40 +71,44 @@ Er ist keine Chat-Shell — er ist ein Coach mit Gedächtnis, Lehrplan und Prüf
 
 ## Installation
 
-**Per VSIX (vorgebaut, drei Plattformen):**
+**Per vorgebautem VSIX (drei CI-geprüfte Desktop-Plattformen):**
 
-Hol dir die `.vsix` für deine Plattform (`darwin-arm64` / `linux-x64` / `win32-x64`) aus dem [zuletzt veröffentlichten Release](https://github.com/AI-yyf/trainer/releases/latest).
+Lade die `.vsix` passend zu Betriebssystem und Architektur (`darwin-arm64` / `linux-x64` / `win32-x64`) aus den [Releases](https://github.com/AI-yyf/trainer/releases/latest):
 
-VS Code Extensions-Panel → `···` → *Install from VSIX* → Fenster neu laden.
+```bash
+code --install-extension trainer-extension-1.4.4-<platform>-<arch>.vsix --force
+```
+
+Oder im VS-Code-Extensions-Panel → `···` → *Aus VSIX installieren…* → Fenster neu laden. Hinweise zu Paketierung und Speicherpfaden stehen in [`extension/README.install.md`](extension/README.install.md).
 
 **Aus dem Quellcode:**
 
 ```bash
 git clone https://github.com/AI-yyf/trainer.git
-cd trainer && npm install
-cd server && python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cd .. && npm run build
+cd trainer && npm ci
+cd server && uv sync --frozen --extra dev --python 3.12 && cd ..
+npm run build
 ```
 
-Öffne dieses Repo in VS Code und drücke F5 (Extension Development Host), oder installiere das gepackte VSIX.
+Öffne das Repo in VS Code und drücke `F5` (Extension Development Host) oder baue lokal ein `.vsix` mit `npm run package:vsix`.
 
-**Voraussetzungen:** VS Code ≥ 1.96 · Python ≥ 3.12 (Quellcode-Build) · macOS / Linux / Windows
+**Voraussetzungen:** VS Code `≥ 1.96` · Python `3.12` (für Quellcode-Builds; VSIX enthält den eigenständig gefrorenen Sidecar) · macOS (`arm64`) / Linux (`x64`) / Windows (`x64`).
 
 ---
 
 ## Drei Schritte, kein vierter
 
-1. Öffne die Trainer-Sidebar → Settings
-2. Füge deine Relay-Verbindungsdaten ein (der komplette JSON-Block, kopiert aus einem Relay-Dashboard, wird automatisch geparst — Endpoint und Key werden dir sauber getrennt) → füge deinen API-Key ein
-3. Klick auf **Save & Connect**
+Kaltstart **ohne Konfigurationsmauer**: Öffne Trainer und lande direkt im Chat. Zum Verbinden eines Modells genügen drei Schritte:
 
-Trainer zieht die Live-Modellliste, wählt ein Standardmodell und prüft den Streaming-Pfad in einem Durchgang.
+1. Öffne **Einstellungen → Verbindung** (Zahnrad oben rechts)
+2. Wähle das deklarierte Protokoll (`OpenAI Chat`, `OpenAI Responses`, `Anthropic Messages`, `Gemini` oder `Azure OpenAI`) und trage **Service-Stammaddress**, **API-Schlüssel** (ausschließlich im OS-Schlüsselbund über VS Code `SecretStorage`) und **Modell** ein
+3. Falls lokale Proxy-Variablen (`HTTP_PROXY` / `HTTPS_PROXY`) `502` oder Timeouts auslösen, schalte **Netzwerk-Proxy** auf **System-Proxy ignorieren (Direkt)** und klicke auf **Verbindung testen**
 
-Ein ungültiger Key meldet `invalid_key_or_permission` — kein vager Spinner.
+Trainer lädt die Modellliste, prüft Streaming, Tool-Calling und Denkfähigkeit und meldet Fehler ehrlich (`invalid_key_or_permission`, `network` oder Abweisung leerer Streams).
 
 <p align="center">
-  <img src="assets/screenshots/settings-quick-setup.png" alt="Schnelleinrichtung" width="420" />
+  <img src="assets/screenshots/de-DE/settings-connected.png" alt="Verbindungszusammenfassung in den Einstellungen" width="380" />
+  <img src="assets/screenshots/de-DE/settings-quick-setup.png" alt="Verbindungsformular mit System-Proxy-Bypass" width="380" />
 </p>
 
 ---
@@ -114,218 +117,168 @@ Ein ungültiger Key meldet `invalid_key_or_permission` — kein vager Spinner.
 
 ### ① Verifikationsgates — du schreibst den Code, der Code beweist es
 
-Eine Trainingskarte rückt nicht auf „implementiert“ vor, bis die Verifikation gegen deine tatsächliche Datei läuft; einen manuellen „als erledigt markieren“-Button gibt es absichtlich nicht.
-
-Der schnellste Weg, Lernen vorzutäuschen, ist, jedes Kästchen abzuhaken. Trainer macht da nicht mit.
+Eine Trainingskarte rückt niemals weiter, bevor die Verifikation gegen deinen echten Code gelaufen ist; einen manuellen „als erledigt markieren“-Button gibt es absichtlich nicht.
 
 <p align="center"><img src="assets/feat-verify.png" alt="Verifikationsgates" width="720" /></p>
 
-**Wie:**
-- Der Server-`EvaluatorService` **kopiert** die aktuelle Datei in ein `tempfile.TemporaryDirectory`, führt dort ruff + pyright + pytest aus und räumt das Temp-Verzeichnis wieder ab
-- Tools laufen **nie** im Projekt des Lernenden — keine `.pytest_cache`-Verschmutzung
-- Jeder Check meldet Details pro Kriterium (Matched/Missing) gegen eine explizite Liste aus `acceptance_criteria` + `expected_symbols`
-- Code: `server/app/evaluator/service.py:198-312`
+- **Isolierte lokale Sandbox** (`server/app/evaluator/service.py` — `EvaluatorService`): kopiert Zieldateien in ein temporäres Verzeichnis, führt Prüfungen ohne `.pytest_cache`-Müll im Projekt aus und bewertet jedes Kriterium in `acceptance_criteria` + `expected_symbols`
+- **VS Code Testing API Attestation** (`extension/src/testing/`): echte Test-Resultate testieren direkt an `/training/verification/attest` — unbekannte oder abgebrochene Läufe fälschen niemals ein Bestehen
+- **Remote-SSH Lese-/Prüf-Proxy**: verifiziert Dateien auf Remote-Hosts, ohne API-Keys oder deine Bibliothek vom lokalen Rechner wegzubewegen
 
-### ② Langzeitgedächtnis — FSRS-Vergessenskurven-Planung
+### ② Langzeitgedächtnis + Einheitliches `<LibraryRoot>`
 
-Gelerntes, Schwachstellen und fällige Wiederholungen leben in SQLite, mit semantischem Abruf über Qdrant.
+Alle gelernten Signale, gesammelten Materialien und gespeicherten Vorlesungsnotizen liegen in **einem einzigen `<LibraryRoot>`-Verzeichnis** deiner Wahl — deine Code-Repositories bleiben zu 100 % sauber (`git status` ohne Fremddateien).
 
-Wiederholungen folgen der FSRS-Vergessenskurve — sie erscheinen genau kurz bevor du vergessen würdest und halten sich zurück, solange du dich noch erinnerst.
+<p align="center"><img src="assets/feat-memory.png" alt="Langzeitgedächtnis und einheitliches LibraryRoot" width="720" /></p>
 
-<p align="center"><img src="assets/feat-memory.png" alt="Langzeitgedächtnis" width="720" /></p>
+```text
+<LibraryRoot>/
+├── Trainer Library/          # Durchsuchbare Ressourcen & automatisch gespeicherte Markdown-Notizen
+│   ├── Vorlesungsnotizen/    # Von `save_lecture_note` erzeugt (direkt im Finder/Explorer lesbar)
+│   └── Papers/               # Importierte PDFs, Webseiten-Snapshots & Referenzblätter
+└── .trainer/
+    └── runtime/              # SQLite (`trainer.sqlite3`), Qdrant-Vektorindex, Checkpoints & Logs
+```
 
-**Wie:**
-- Zweischichtiges Gedächtnis: strukturiert (`StructuredMemoryService`, ~480 Einträge) + semantisch (Qdrant + sentence-transformer als Offline-Fallback)
-- **`_should_delay_live_thread_reviews()`** — Wiederholungen werden aktiv unterdrückt, solange ein Idee-Umsetzungs-Flow läuft, damit dein Gedankengang nie unterbrochen wird
-- **Übertragbare Skills sind über Workspaces fail-closed**: Erfolg in einem Projekt wird nie zur globalen Meisterschaft; befördert wird nur, was in ≥2 Workspaces besteht
-- Zentraler Code: `server/app/memory/service.py:1357-1597` · `transfer_skills.py:81-113` · `review_scheduler.py:522-544`
+- **Zweischichtiges Gedächtnis**: strukturierter SQLite-Zustand + semantischer Abruf (`Qdrant` mit lokalem Fallback) auf der **`py-fsrs`**-Vergessenskurve (`server/app/memory/review_scheduler.py`)
+- **Unterdrückung im Live-Flow**: fällige Wiederholungen pausieren während aktiver Implementierungsstränge
+- **Fail-closed über Workspaces**: Erfolg in einem einzelnen Projekt wird niemals global aufgebläht (`server/app/memory/transfer_skills.py`)
 
-### ③ Die Trainingsschleife — kommt bei Fälligkeit, rückt weiter bei Verifikation
+### ③ RethinkFun State-Flow Trainingsschleife
 
-Lernkarten, Theorie-Drills und Szenario-Experimente warten in der Training-Ansicht: Wiederholungen erscheinen bei Fälligkeit, Karten rücken nach Verifikation weiter, und jede Wissenslücke im Gespräch wird mit einem Klick zur Trainingskarte.
+Das Training lebt direkt in der Konversation statt hinter verstreuten Verwaltungs-Tabellen:
 
 <p align="center"><img src="assets/feat-training.png" alt="Die Trainingsschleife" width="720" /></p>
 
-**Wie:**
-- **5-Phasen-Zustandsmaschine** `LEARN → TRY → VERIFY → REFLECT → RETURN`, jeder Übergang wird in `phase_history` protokolliert
-- **Whitelist vertrauenswürdiger Verifikationsquellen**: `automated_test` / `evaluator` / `ide_current_file` / `server_evaluator` / `test_runner` / `verification_service` — eine „manuelle Behauptung“ kann eine Karte nie weiterbringen
-- Die `onSkip`/`onRate`-Handler der Karten-UI sind **`@deprecated Unused`** — der einzige Weg nach vorn führt über `onCardStatusTransition`
-- Zentraler Code: `server/app/training/handoff.py:40-47` · `extension/webview/src/components/training/TrainingCardPanel.tsx:78-85`
+- **Drei kalibrierte Unterrichtspfade** (`server/app/pedagogy/` + `server/app/llm/`):
+  - **Schnelle Umsetzungsführung**: orientiert an konkreten Symbolen und fehlgeschlagenen Checks ohne unnötiges Dozieren
+  - **Tiefe Konzept-Vorlesungen (`save_lecture_note`)**: leitet Gleichungen und Zustandsübergänge Schritt für Schritt her, verbindet minimalen ausführbaren Code mit Theorie und speichert sauberes Markdown in `<LibraryRoot>/Trainer Library/`
+  - **Geerdete Status- & Evidenzabfrage (`inspect_learning_truth`)**: beantwortet Fortschrittsfragen direkt aus verifizierten Server-Fakten ohne interne UUIDs oder JSON-Felder zu leaken
+- **5-Phasen-Zustandsmaschine** (`LEARN → TRY → VERIFY → REFLECT → RETURN` in `server/app/training/handoff.py`)
 
 ### ④ Du schreibst, der Coach führt
 
-Der Coach liest deine Dateien, prüft Diagnostics und durchsucht den Workspace — aber Produktionscode entsteht immer in deinen Händen.
-
-`direct` antwortet sofort; `coach-first` lässt dich zuerst denken. **Die kognitive Last gehört dir, nicht ihm.**
+Der Coach liest Dateien, Diagnostics und Workspace-Struktur für dich — produktive Edits bleiben immer in deinen Händen (`server/app/workspace/authority.py` erzwingt schreibgeschützte Quell-Boundaries).
 
 <p align="center"><img src="assets/feat-youwrite.png" alt="Du schreibst, der Coach führt" width="720" /></p>
 
-**Wie:**
-- Der `PedagogyService` stellt in jedem Turn einen `ImplementationGuide` mit 12 Feldern bereit — jedes Feld ist eine Einschränkung dessen, was der Coach als Nächstes fragen darf
-- `ImplementationCoach._current_step` ist am „ersten scheiternden Pfad“ oder am „ersten bekannten Einstiegspunkt“ verankert — nie bei „erkunde die Codebasis“
-- Affect-getriebener Ton: Der `AffectService` schaltet nach zwei Fehlern in Folge in den `concise_rescue`-Modus
-- Zentraler Code: `server/app/pedagogy/implementation_coach.py:140-186` · `affect/service.py:142-152`
+- Adaptives Pacing (`AffectService` in `server/app/affect/service.py`) erkennt wiederholte Fehlschläge und wechselt automatisch in einen ruhigen, fokussierten Rettungsmodus
+
+### ⑤ Grounding & Erklärungsqualität
+
+- Deterministische Antwort-Kontinuitäts- und Recovery-Guards (`coaching_recovery.py`, `coaching_replies.py`) fangen leere Streams, fehlerhafte Tool-Antworten und Sprachdrift zuverlässig ab
+- Nicht-blockierendes 5-Dimensionen-Qualitätsmonitoring beobachtet Kontextbindung, Symbolanker und das Verbot direkter Musterlösungen
 
 ---
 
-## Drei Ziele
+## Zwei Ziele + Ein Gespräch
 
-> Chat, Lernen und Materialien bleiben sichtbar. Verlauf und Einstellungen sind oben erreichbar; Training und Fortschritt gehören zum Lernen.
+> Ruhige, feste Shell: **Chat** und **Materialien** in der Kopfzeile; **Lernen-Schublade**, **Sitzungsverlauf** und **Einstellungen** rechts oben; **ein einziges Eingabefeld (Single-Composer-Souveränität)** über alle Ansichten hinweg.
 
-| Ansicht | Rolle | Kurzfassung |
-|-----------|------|--------|
-| **Coach** | Streaming-Chat | **Einstieg**: Tool-Zugriff + `$`-Skill-Palette + Bildanhänge + Antwortmodi |
-| **Plan** | Lernplan | **Karte**: Etappen, Fortschritt, Evidenz, Plan einfrieren/auftauen |
-| **Resources** | Bibliothek | **Bücherregal**: FTS5-Suche + 3-stufige Sandbox-Vorschau + wiederherstellbarer Papierkorb |
-| **Training (innerhalb von Lernen)** | Training | **Spielplatz**: FSRS-Lernkarten + Theorie-Drills + Szenario-Experimente + Verifikationsgates |
-| **Settings (oben erreichbar)** | Einstellungen | **Konsole**: 59 Befehle + Endpoint-Speedtest + Denkintensität + Workspace-Zulassung |
+| Oberfläche | Rolle | Inhalt |
+|---|---|---|
+| **Chat** (`coach`) | Hauptarbeitsfläche | Streaming-Antworten im State-Flow, gespeicherte `.md`-Notiz-Badges, Nachrichtenaktionen, einklappbare **Inline-Übungskarten** (ohne zweites Textfeld), einzeiliger Lernstreifen, `$`-Skill-Palette |
+| **Materialien** (`resources`) | Bibliothek & Reader | Einheitlicher `<LibraryRoot>`-Ordnerbaum, lokaler Schnellfilter, gerenderte VS-Code-Markdown-Vorschau mit Bildern & KaTeX/Shiki/Mermaid, PDF/DOCX/URL-Ingest, wiederherstellbarer Papierkorb |
+| **Lernen-Schublade** (`plan` / `training` / `progress`) | Schreibgeschütztes Gedächtnis | Modales Panel über dem Chat (Entwurf bleibt erhalten) mit drei ruhigen Karten: **Aktuelles Ziel**, **Fällige Übung** und **Beherrschung** (ein **4-Segment-Kompetenzbalken**, ohne Prozente) |
+| **Einstellungen** (`settings`) | Zentrale Konsole | 5-Protokoll-Verbindung + **Direkter Proxy-Bypass**, Coach-Stil & `$`-Skills, **Workspace `<LibraryRoot>`** + Remote Companion, 8 Sprachen & Telemetrie-Opt-in |
+
+*(Alle sechs internen Kompatibilitätsrouten — `coach`, `plan`, `resources`, `training`, `progress`, `settings` — bleiben für Deep Links und Wiederherstellung gültig.)*
 
 <p align="center">
-  <img src="assets/screenshots/plan.png" alt="Plan-Ansicht" width="260" />
-  <img src="assets/screenshots/resources.png" alt="Resources-Ansicht" width="260" />
-  <img src="assets/screenshots/training.png" alt="Training-Ansicht" width="260" />
+  <img src="assets/screenshots/de-DE/chat-first-run.png" alt="Leerer Startzustand im Chat" width="255" />
+  <img src="assets/screenshots/de-DE/coach-teach.png" alt="State-Flow-Vorlesung, Notizspeicherung und Nachrichtenaktionen" width="255" />
+  <img src="assets/screenshots/de-DE/plan.png" alt="Lernen-Schublade mit 4-Segment-Kompetenzbalken" width="255" />
 </p>
-
-### Coach-Ansicht (Einstieg)
-
-Streaming-Coach-Chat mit Tool-Zugriff, `$`-Skill-Palette, Bildanhängen, Antwortmodi, Kontextnutzungs-Ring, Sitzungsverlauf und Teilen-Funktion.
-
-**Eine Coach-Antwort hebt einen nächsten Schritt hervor. Das Menü für weitere Aktionen enthält:**
-
-- **Antwort als Markdown kopieren**
-- **In die Bibliothek speichern** (durchsuchbar + in der Vorschau ansehbar)
-- **In eine überprüfbare Trainingskarte umwandeln** — pro Nachricht, nicht pro Sitzung
-
-<p align="center"><img src="assets/screenshots/message-actions.png" alt="Aktionen pro Nachricht" width="520" /></p>
+<p align="center">
+  <img src="assets/screenshots/de-DE/training.png" alt="Erweiterte Inline-Übungskarte mit einzigem Eingabefeld" width="255" />
+  <img src="assets/screenshots/de-DE/resources.png" alt="Bibliothek unter LibraryRoot" width="255" />
+  <img src="assets/screenshots/de-DE/coach-narrow.png" alt="Kompaktes 340px-Seitenleistenlayout" width="215" />
+</p>
 
 ### Eigene `$`-Skills — erstellen, teilen, installieren
 
-Tippe `$` im Chat für eine durchsuchbare Palette mit sechs Vorschlägen. Eigene Skills verwaltest du unter Einstellungen → Coach → Skills: Neben den eingebauten Skills kannst du eigene Prompts in Skills mit Trigger-Wörtern und Keywords verpacken, sie mit anderen teilen oder Skills installieren, die andere teilen — **alles über einen reinen Datenkanal, ohne Code-Ausführung**.
+Tippe `$` im einzigen Eingabefeld für sofortigen Zugriff auf integrierte und eigene Prompt-Skills. Verwaltung unter **Einstellungen → Coach → Skills** — reine JSON-Daten ohne `eval()` und mit Schutz der Standard-Trigger.
 
 <p align="center">
-  <img src="assets/screenshots/skill-deck.png" alt="Skill-Palette" width="380" />
-  <img src="assets/screenshots/skill-manager.png" alt="Skill-Manager" width="380" />
+  <img src="assets/screenshots/de-DE/skill-deck.png" alt="$-Skill-Palette im Eingabefeld" width="380" />
+  <img src="assets/screenshots/de-DE/skill-manager.png" alt="Skill-Verwaltung in den Einstellungen" width="380" />
 </p>
 
 <p align="center"><img src="assets/feat-skills.png" alt="Eigene Skills" width="720" /></p>
 
-**Wie:**
-- Eigene Skills sind reine JSON-Importe — `{ _type, version, trigger, title, prompt, keywords }`; kein `eval`, kein `Function()`, kein Code-Pfad
-- Harte Limits: Prompt ≤ 4000 Zeichen, Titel ≤ 160, Keywords ≤ 16, User-Skills ≤ 24
-- Bei Kollisionen gewinnen eingebaute Trigger — ein importierter `$explain` kann den mitgelieferten nicht überschatten
-- Zentraler Code: `shared/src/skillCatalog.ts:614-764`
+---
+
+## Remote-SSH Companion
+
+Für Remote-Linux/SSH-Workspaces trennt Trainer sauber zwischen **lokalem Gehirn und entfernten Händen**:
+
+- **UI-Extension + Python-Sidecar + API-Keys + `<LibraryRoot>`** verbleiben stets lokal auf deinem Hauptrechner
+- **`remote-extension/`** (`Trainer Workspace Companion`, gebündelt als `extension/bundled/remote/trainer-workspace-companion.vsix`) läuft auf dem Remote-Host für schreibgeschütztes Dateilesen, Symbolsuche, Diagnostics und gesteuerte Testausführung (`trainer.remote.verify`)
+- **Harte Schreibsperre auf Remote-Quellcode**: Schreiboperationen auf dem Remote-Repo werden ausnahmslos abgewiesen
+
+<p align="center">
+  <img src="assets/screenshots/de-DE/settings-workspace.png" alt="Workspace-Einstellungen mit einheitlichem LibraryRoot" width="380" />
+</p>
 
 ---
 
 ## Vergleich
 
-> Trainer ist nicht da, um jemanden zu ersetzen — er füllt eine Lücke, die niemand sonst besetzt.
-
 | Dimension | Vibe-Tools | Chat-IDEs | Flashcard-Apps | **Trainer** |
 |---|---|---|---|---|
-| Schreibt Code für dich | ✅ | ✅ | ❌ | ❌ |
-| Verifiziert deinen Code | ❌ | ❌ | ❌ | ✅ gegen die aktuelle Datei |
-| Erinnert sich über Sitzungen hinweg | ⚠️ Kontextfenster | ⚠️ Zusammenfassungen | ✅ | ✅ SQLite + Qdrant |
-| Spaced Repetition auf FSRS | ❌ | ❌ | ✅ | ✅ + Live-Flow-Unterdrückung |
-| Workspace-Berechtigungsstufen | ❌ | ⚠️ Trust-Dialog | ❌ | ✅ 6 Stufen + harte Remote-Sperre |
-| Karten-Fortschritt gegated | ❌ | ❌ | ⚠️ manuelle Checkboxen | ✅ Verifikation erzwungen |
-| Beförderung übertragbarer Skills | ❌ | ❌ | ❌ | ✅ fail-closed über Workspaces |
-| Jenseits von Code (Literatur & Sprachen) | ❌ | ❌ | ❌ | ✅ eingebaute Literatur-/Sprach-Verifier-Pakete |
-| i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ Keys × 8 |
-| Testsuite | closed source | closed source | closed source | ✅ **3.328 Fälle** (offen) |
-| Verweigert das Schreiben für dich | ❌ | ❌ | n/v | ✅ eine philosophische Grenze |
+| Schreibt Code für dich | ✅ | ✅ | ❌ | ❌ (bewusste Grenze) |
+| Verifiziert an realem Code | ❌ | ❌ | ❌ | ✅ Sandbox + VS Code Testing + Remote-SSH |
+| Langzeitgedächtnis | ⚠️ Kontextfenster | ⚠️ Kurz-Zusammenfassung | ✅ | ✅ SQLite + Qdrant unter `<LibraryRoot>` |
+| Hält dein Git-Repo sauber | ⚠️ mischt Dateien | ⚠️ | n/v | ✅ ein `<LibraryRoot>`, null Repo-Schreibzugriffe |
+| Spaced Repetition nach FSRS | ❌ | ❌ | ✅ | ✅ inkl. Live-Flow-Unterdrückung |
+| Berechtigungsstufen | ❌ | ⚠️ Trust-Dialog | ❌ | ✅ 6 Stufen + Remote-Schreibsperre |
+| Offene Testabdeckung | closed source | closed source | closed source | ✅ **6.606 Unit/Integration + 166 E2E-Specs** |
+| i18n | ⚠️ | ⚠️ | ⚠️ | ✅ **8 Sprachen** mit CI-Vollständigkeitsgate |
 
-> In einem Satz: Andere Tools bringen dich zum schnelleren Schreiben; Trainer bringt dich zum tatsächlichen Schreiben.
+> Andere Tools lassen dich Code schneller ausspucken; **Trainer sorgt dafür, dass du wirklich beherrschst, was du baust.**
 
 ---
 
 ## Fünf-Minuten-Demo
 
-> So sehen deine ersten fünf Minuten tatsächlich aus.
-
-### T+0:00 — Sidebar öffnen
-
-Klick auf das Trainer-Symbol in der Activity Bar. Die Sidebar öffnet sich, standardmäßig in der **Coach-Ansicht**.
-
-<p align="center">
-  <img src="assets/screenshots/settings-quick-setup.png" alt="Erstes Öffnen" width="420" />
-</p>
-
-### T+0:30 — Provider konfigurieren (nur beim ersten Mal)
-
-Settings → Relay-JSON + API-Key einfügen → Save & Connect.
-
-Trainer zieht die Live-Modellliste, wählt einen Default, prüft das Streaming. Ungültiger Key → du bekommst `invalid_key_or_permission`.
-
-### T+1:30 — Erstes Gespräch
-
-Wechsle zu Coach und tipp: `@current_file explain what this async/await is doing?`
-
-Trainer streamt eine Antwort. **Er schreibt deinen Code nicht um.** Er zeigt auf Zeile 17: „das ist ein Fan-out“; Zeile 23: „das ist die Barriere. Um das wirklich zu lernen, schreib eine Version, die einen Task mitten in der Ausführung abbricht — ich führe die Verifikation mit dir durch.“
-
-### T+2:30 — Trainingskarte mit einem Klick
-
-Fahr mit der Maus über die Antwort. Drei Buttons: `Copy` / `Save to library` / **`Create training card`**.
-
-Klick auf `Create training card` → Karte generiert → landet in der Training-Ansicht → FSRS plant sie für 3 Tage ab heute ein.
-
-### T+4:00 — Selbst schreiben, verifizieren lassen
-
-Du schreibst Code. Trainer **schreibt ihn nicht für dich**.
-
-Öffne Training → Karte umdrehen → Bestehenskriterien ansehen → schreiben → `Request verification` klicken → Trainer führt ruff + pyright + pytest in einer Sandbox aus → meldet Bestehen oder markiert ein fehlendes Kriterium.
-
-### T+5:00 — Am nächsten Tag
-
-Öffne morgen VS Code: Trainer stellt alles automatisch wieder her — letzte Sitzung, Plan, Karten-Fortschritt, alles da.
-
-Die Karte pulsiert auf der FSRS-Rhythmanzeige — heute fällig.
-
-**Du bist kein Vibe-Coding-Entwickler mehr.**
+1. **T+0:00 — Trainer öffnen**: Sidebar-Icon klicken und ohne Konfigurationsmauer direkt in **Chat** starten.
+2. **T+0:30 — Modell verbinden**: Unter **Einstellungen → Verbindung** Protokoll, URL, Modell und Keychain-API-Schlüssel eintragen (bei Bedarf **System-Proxy ignorieren (Direkt)** aktivieren) und **Verbindung testen** drücken.
+3. **T+1:30 — Tiefe Erklärung anfordern**: Beispiel: *„Erkläre mir mit State-Flow, warum Scaled Dot-Product Attention durch sqrt(d_k) teilt, und speichere eine Markdown-Notiz.“* — die Notiz landet sauber in `<LibraryRoot>/Trainer Library/`.
+4. **T+2:30 — Inline-Übung bearbeiten**: Klappe die eingebettete **FocusedPractice**-Karte aus und schreibe direkt in deinem Projekt — alle Rückfragen und Antworten laufen durch dasselbe Eingabefeld.
+5. **T+4:00 — Verifizieren & FSRS aktualisieren**: Klick auf **Aktuelle Datei prüfen** (oder führe Tests über VS Code Testing / Remote-SSH aus). Bestehende Checks schalten **Verständnis / Implementierung / Fehlersuche / Transfer** weiter und terminieren FSRS.
+6. **T+5:00 — Lernen-Schublade öffnen**: Ein Klick auf das Buch-Icon zeigt Aktuelles Ziel, Fällige Übungen und den 4-Segment-Balken auf einen Blick.
 
 ---
 
 ## Warum es sich anders anfühlt
 
-### Ehrliches Scheitern
+### Ehrliches Scheitern & Proxy-Bypass
+- Unbekannte Gateways werden nie blind als OpenAI-kompatibel vermutet
+- **System-Proxy ignorieren (Direkt)** umgeht störende lokale `HTTP_PROXY` / `HTTPS_PROXY`-Variablen pro Verbindungsprofil
+- Leere Streams, Auth-Fehler und abgebrochene Tool-Calls zeigen sofort klare Recovery-Hinweise statt Endlos-Spinner
 
-Ein ungültiger Key sagt `invalid_key_or_permission`; nicht erreichbar sagt `network`; eine kaputte Antwort sagt „diese Antwort war nicht klar lesbar, bitte erneut senden“ — **kaputter Output wird nie als Antwort verkleidet**.
-
-Unbekannte Gateways werden nicht stillschweigend als OpenAI-kompatibel angenommen.
-
-**Wie:** Fehlerklassifizierer (`provider_service.py:2823-2874`) + Credential-Scrubbing (`provider_protocols.py:640-681`) + Unknown-Fingerprint-Abtastung (`provider_gateway.py:39-70`).
-
-### Endpoint-Speedtest
-
-Provider-Endpoints treten parallel gegeneinander an (**erst Warm-up, um die Cold-Start-Strafe zu neutralisieren, dann wird gestoppt**).
-
-Grün unter 500 ms, gelb unter 1 s. Ein Klick übernimmt den Schnellsten.
+### Endpoint-Speedtest & Thinking-Steuerung
+- Mehrere Kandidaten-Endpoints treten parallel mit Warm-up-Bereinigung gegeneinander an
+- Thinking-Intensität richtet sich streng nach verifizierten Modellfähigkeiten
 
 <p align="center"><img src="assets/feat-speed.png" alt="Endpoint-Speedtest" width="720" /></p>
 
-**Wie:** `Promise.all` + eine verworfene Warm-up-Anfrage pro URL vor der gestoppten (`providerWebviewCommands.ts:2275-2352`).
+### Einheitliche Bibliothek unter `<LibraryRoot>`
+- Importiere PDFs (`PyMuPDF`), Webseiten (`Trafilatura`), DOCX (`mammoth` / `MarkItDown`) oder speichere Vorlesungsnotizen direkt in `<LibraryRoot>/Trainer Library/`
+- Mit lokalem Filter, gerendertem Markdown inkl. KaTeX/Shiki/Mermaid, wiederherstellbarem Papierkorb und Ein-Klick-Kontextübergabe an den Chat
 
-### Kontextnutzungs-Ring
+<p align="center"><img src="assets/feat-library.png" alt="Einheitliche Bibliothek" width="720" /></p>
 
-Ein Live-Ring zur Kontextnutzung sitzt über dem Gespräch — **du siehst die Kompression kommen, bevor sie passiert**.
+### Browser Quick Capture & Side Panel (`browser-extension/`)
+- Chromium MV3-Erweiterung **ohne Pairing-Code** mit automatischer Sidecar-Erkennung (`127.0.0.1`)
+- Webseiten, arXiv-PDFs, GitHub-Repos oder markierten Text direkt nach `<LibraryRoot>/Trainer Library/` oder als Entwurf in das Chat-Eingabefeld senden — inklusive Offline-Warteschlange und vollständigem Side-Panel-Chat in 8 Sprachen
 
-### Denkintensität
+<p align="center">
+  <img src="assets/screenshots/de-DE/browser-capture.png" alt="Trainer Capture Browser-Popup" width="320" />
+</p>
 
-Gegated anhand von Evidenz pro Modell — deklarierte Fähigkeit **oder** verifizierte Sondierung. Wird nie blind durchgereicht.
-
-### Bibliothek auf Vollgas
-
-<p align="center"><img src="assets/feat-library.png" alt="Bibliothek auf Vollgas" width="720" /></p>
-
-Uploads werden beim Eintreffen indexiert, FTS5-Volltextsuche, **3-stufige Sandbox-Vorschau** (A reich / B konvertiert / C Metadaten + nativer Editor-Fallback), Löschungen landen im wiederherstellbaren Papierkorb.
-
-**Physische 3-Zonen-Trennung**: Workspace / Sandbox / Papierkorb. Niemals vermischt.
-
-Coach-Antworten landen mit einem Klick darin — **wenn du es wiederfinden kannst, hast du es wirklich gelernt**.
-
-### Zustand mit langem Horizont
-
-Pläne frieren ein und tauen auf; Sitzungen überleben Neustarts; der Karten-Fortschritt lebt in SQLite; Wiederholungen werden auf der FSRS-Kurve fällig — **nicht auf einer To-do-Liste**.
+### MCP-Integration (`docs/mcp.md`)
+- Optionaler stdio-**MCP-Client** (`TRAINER_MCP_SERVERS`) bindet externe MCP-Server (z. B. GitHub / Gitee) über die gemeinsame 6-stufige Fail-closed-Berechtigungsleiter in den ReAct-Loop ein — Details unter [`docs/mcp.md`](docs/mcp.md)
 
 ---
 
@@ -333,244 +286,99 @@ Pläne frieren ein und tauen auf; Sitzungen überleben Neustarts; der Karten-For
 
 ### Systemtopologie
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    VS Code Window                            │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │   Trainer Sidebar                                     │  │
-│  │   (React 19 + Zustand, 8-language i18n, 24 governance)│  │
-│  │                                                       │  │
-│  │   ─── postMessage ─── CommandRegistry ── 59 commands  │  │
-│  │                                       │               │  │
-│  └───────────────────────────────────────┼───────────────┘  │
-│                                          │                   │
-│                          ┌───────────────▼──────────────┐    │
-│                          │  FastAPI sidecar (127.0.0.1)│    │
-│                          │  PyInstaller --onedir frozen│    │
-│                          │  (250 MB / 6 platform arch) │    │
-│                          │                              │    │
-│                          │  ├── ReAct agent loop        │    │
-│                          │  │   (dual-channel stream)   │    │
-│                          │  ├── Pedagogy (12-field guide)│   │
-│                          │  ├── Affect (failures→rescue)│    │
-│                          │  ├── Memory                  │    │
-│                          │  │   SQLite + Qdrant semantic│    │
-│                          │  ├── FSRS scheduler          │    │
-│                          │  ├── Authority (6 tiers)     │    │
-│                          │  ├── Provider (5 protocols)  │    │
-│                          │  ├── Training handoff (5 ph.)│    │
-│                          │  └── Resources (3 zones+FTS5)│    │
-│                          │                              │    │
-│                          │  ─── 24 shared pure fns ────│    │
-│                          │      (host + webview + test)  │    │
-│                          └──────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                             VS Code Window                              │
+│  ┌──────────────────────────────┐    ┌────────────────────────────────┐ │
+│  │  Trainer-Sidebar (Lokal)     │    │  Remote-SSH Workspace (Remote) │ │
+│  │  React 19 + Zustand (8 i18n) │    │  remote-extension (Companion)  │ │
+│  │  Chat / Materialien + Drawer │◄──►│  Nur Lesen / Suche / Diagnose  │ │
+│  └──────────────┬───────────────┘    │  & verifizierte Testausführung │ │
+│                 │                    └────────────────────────────────┘ │
+│  ┌──────────────▼───────────────┐                                       │
+│  │  Extension Host (TypeScript) │  • SecretStorage (OS-Schlüsselbund)   │
+│  │  CommandRegistry · Workspace │  • Testing API → Verification Attest  │
+│  │  Gateway · Sidecar Manager   │  • Browser-Extension MV3 Brücke       │
+│  └──────────────┬───────────────┘                                       │
+│                 │ http://127.0.0.1 + SSE Stream                         │
+│  ┌──────────────▼───────────────┐    ┌────────────────────────────────┐ │
+│  │  FastAPI Sidecar (Python)    │───►│  Einheitliches <LibraryRoot>   │ │
+│  │  • ReAct Loop + MCP Client   │    │  • Trainer Library/ (Notizen)  │ │
+│  │  • RethinkFun State-Flow     │    │  • .trainer/runtime/           │ │
+│  │  • 5 Protokolle + Proxy-Byp. │    │    trainer.sqlite3 · Qdrant ·  │ │
+│  │  • FSRS Scheduler + Memory   │    │    Checkpoints · Audit-Ledger  │ │
+│  │  • 6-Stufen Authority Guard  │    │  (Null Schreibzugriff im Repo) │ │
+│  └──────────────────────────────┘    └────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Verzeichnisstruktur
 
-| Ordner | Inhalt | Größe |
+| Ordner | Inhalt | Gemessene Größe |
 |---|---|---|
-| `extension/src/` | Host: Commands, Workspace-Trust, Secret Storage, Sidecar-Lebenszyklus | ~30k Zeilen TS |
-| `extension/webview/` | React-Workbench: 3 Ziele und 6 Routen + Zustand + 8 Sprachen | ~50k Zeilen TSX |
-| `extension/tests/` | node:test-Suite (220 Dateien / 1.679 Fälle) | 73.744 Zeilen |
-| `server/app/` | FastAPI-Gehirn: Agent / Pädagogik / Memory / FSRS / Training | ~120k Zeilen Python |
-| `server/tests/` | pytest-Suite (159 Dateien / 1.649 Fälle) | 106.422 Zeilen |
-| `shared/src/` | **Geteilte Pure Functions + 24 Governance-Module** (Host + Webview + Test) | ~3k Zeilen TS |
-| `extension/bundled/` | Sidecar, ins VSIX gebündelt (PyInstaller onedir) | ~250 MB |
+| `extension/src/` | VS Code Host: Commands, SecretStorage, WorkspaceGateway, SidecarProcessManager | `79` TS-Dateien (~`53.286` Zeilen) |
+| `extension/webview/src/` | React-Workbench: 2 Ziele, Drawer, Single-Composer, Shiki/KaTeX/Mermaid, 8 Sprachen | `233` TS/TSX + `53` CSS (~`120.507` Zeilen) |
+| `extension/tests/` | `node:test`-Suite: Host, Governance, i18n, Browser-Capture, Security | `317` Dateien · **`2.401` Tests** |
+| `server/app/` | FastAPI-Sidecar: Agent Loop, RethinkFun-Pädagogik, Memory/FSRS, Ingest, Evaluator | `232` Python-Dateien (~`173.863` Zeilen) |
+| `server/tests/` | Backend-`pytest`-Suite für API, Pädagogik, Memory, Protokolle & Authority | `295` Dateien · **`4.205` gesammelte Tests** |
+| `shared/src/` | Geteilte deterministische Governance-Module für Host, Webview & Tests | `76` Module (~`29.508` Zeilen · `523` Exporte) |
+| `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS-Dateien (`746` Zeilen) |
+| `browser-extension/` | Chromium MV3 Popup, Offline-Queues, Kontextmenüs & Side Panel | `8` Dateien (`6.977` Zeilen) |
+| `extension/bundled/` | Gefrorener PyInstaller-Sidecar & `trainer-workspace-companion.vsix` | ~`245 MB` |
 
-### Ein kanonischer Umschlag
+### Kanonischer Snapshot-Vertrag (`WorkbenchSnapshot`)
 
-> Alle Trainer-HTTP-Antworten (außer `/health`) geben denselben `WorkbenchSnapshot` zurück (31 Felder).
-
-| Kategorie | Beispielfelder | Produzent |
-|---|---|---|
-| Sitzung | `messages`, `coaching_state`, `learner_state` | `pedagogy/service.py` |
-| Plan | `plan`, `global_plan`, `project_plan_link`, `current_task` | `planner/service.py` |
-| Gedächtnis | `memory`, `selected_teaching_assets`, `next_review_due` | `memory/service.py` |
-| Unterricht | `teaching_decision`, `implementation_guide`, `project_ideas` | `pedagogy/*` |
-| Affekt | `affect_state`, `tone_decision` | `affect/service.py` |
-| Training | `evaluation`, `review_queue_summary` | `training/*` |
-| Meta | `context_id`, `sidecar_status`, `snapshot_revision`, `active_panel` | `api/runtime.py` |
-
-**Warum ein Umschlag:**
-- Das Webview rendert **vollständig aus diesem einen Objekt** — 12 Subsysteme schreiben ihre Felder, ein einziger Hydrationsschritt
-- **CRDT-light inkrementelle Synchronisierung**: Jeder Snapshot hat eine `snapshot_revision`; `GET /snapshot?since_revision=N` verschickt den vollen Blob nur, wenn N veraltet ist, sonst `{unchanged: true}`
-- Zentraler Code: `server/app/core/models.py:2304-2336` · `server/app/api/routers.py:11648-11710`
-
-### Gemeinsame Governance-Module
-
-> Das architektonische Rückgrat von Trainer sind **24 Governance-Module aus Pure Functions** — Host, Webview und Test fahren alle dieselbe deterministische Logik.
-
-| Modul | Rolle |
-|---|---|
-| `planGovernance` · `masterPlanGovernance` | Plan-Bearbeitung, projektübergreifender Masterplan |
-| `trainingHandoffGovernance` · `trainingRecoveryGovernance` · `trainingReliabilityGovernance` | Karten-Routing, Recovery, Zuverlässigkeit |
-| `reviewQueueGovernance` · `reviewArtifactGovernance` | FSRS-Queue-Ordnung, Evidenz-Review |
-| `workspaceAuthority` · `workspaceRecoveryGovernance` | 6-stufige Berechtigungen, Recovery |
-| `suggestedActionGovernance` · `conversationCandidateGovernance` | Vorgeschlagene Aktionen, Gesprächs-Schlichtung |
-| `transferEvidenceGovernance` · `transferSkillGovernance` | Projektübergreifende Evidenz, Skill-Beförderung |
-| `coachOrientationGovernance` · `resourcesOrientationGovernance` | Orientierung in Coach-/Resources-Ansicht |
-| `settingsCapabilityGovernance` · `operationReliabilityGovernance` | Settings-Fähigkeits-Gating, Betriebszuverlässigkeit |
-| `hostLastTestGovernance` · `providerModelPolicy` | Letzter Provider-Test, Modell-Policy |
-| `sandboxNetworkCapabilityNarrative` · `projectLaneGovernance` | Sandbox-Fähigkeits-Narrativ, Projekt-Spuren |
-| `previewAssets` · `materialRecommendationGovernance` | Vorschau-Asset-Stufen, Material-Empfehlungen |
-
-**Warum:** Dasselbe `resolveSuggestedActionGovernance` läuft in Host, Webview und Tests — **dreifach konsistent, keine Round-Trips**.
+Alle zustandsführenden Haupt-HTTP-Routen liefern ein einheitliches **`WorkbenchSnapshot`** (`33` Top-Level-Felder in `server/app/core/models.py`), inkrementell synchronisiert über `snapshot_revision`.
 
 ---
 
 ## Sicherheitsmodell
 
-- API-Keys liegen im **VS Code SecretStorage** (Verschlüsselung auf OS-Ebene) — nie in Config-Dateien, nie in git
-- Der Workspace folgt dem **nativen VS Code Trust** — solange nicht vertraut, wird jeder Schreibzugriff verweigert
-- **6-stufige Berechtigungsleiter**: INSPECT < ANNOTATE < REORGANIZE < GENERATE < APPLY < DESTRUCTIVE — standardmäßig read-only; Schreiben/Löschen/Ändern erfordern eskalierende Attestierung
-- **Remote-Workspaces sind unterhalb von REORGANIZE hart verriegelt** — selbst eine Nutzerfreigabe hebt das nicht auf
-- **Löschen geht in den Papierkorb**: kein `delete`-Op, nur `move to <root>/.trash/<timestamp-uuid>/`
-- Sandbox-Vorschauen erzwingen strenge **Path-Governance** — Pfade außerhalb der Grenzen bekommen ein kompromissloses 422
-- Skill-Sharing ist ein **reiner Datenimport** — begrenzte Feldlängen, Eingebaute gewinnen, **ein Code-Pfad existiert nicht**
-- **Telemetrie ist Opt-in und standardmäßig aus**: Nichts verlässt den Rechner, bis du den Schalter in den Einstellungen umlegst; der Export enthält nur grobkörnige lokale Ereigniszählungen — keine Inhalte, keine Pfade, keine Identität (Payload per Schema geprüft durch `scripts/verify-telemetry-payload.mjs`; Consent-Änderungen werden im lokalen Ereignis-Ledger auditiert)
-
-**Zentraler Code:** `server/app/workspace/authority.py:33-962` · `extension/src/provider/providerConfigStore.ts` · `shared/src/skillCatalog.ts:614-764`
+- **API-Keys ausschließlich in OS Keychain / VS Code `SecretStorage`** — nie in Workspaces, `<LibraryRoot>`, Snapshots oder Logs (`npm run verify:credentials`)
+- **VS Code Workspace Trust wird fail-closed durchgesetzt** — nicht vertraute Fenster blockieren Inspektion und Verifikation
+- **6-stufige Workspace-Authority-Leiter** (`server/app/workspace/authority.py`): Nutzer-Repositories bleiben standardmäßig read-only; Remote-Workspaces sperren Schreibzugriffe vollständig
+- **Wiederherstellbarer Papierkorb + `<LibraryRoot>`**: Löschungen verschieben sicher in den Papierkorb statt endgültig zu vernichten
+- **Reines JSON-Skill-Sharing**: strikte Schema- und Längenlimits ohne dynamische Code-Ausführung
+- **Telemetrie Opt-in (standardmäßig aus)**: überträgt ausschließlich grobe lokale Zähler — niemals Code, Pfade oder Inhalte
 
 ---
 
 ## Qualitätsgates
 
-> Trainer behandelt seinen eigenen Verifikations-Stack als Produkt.
+> Jede Kennzahl spiegelt reale Verifikationsläufe auf `main` (`v1.4.4`) wider:
 
-| Gate | Abdeckung | Anmerkungen |
+| Gate | Umfang & Verifiziertes Ergebnis | Befehl |
 |---|---|---|
-| **Server-Tests** (pytest) | **159 Dateien / 1.649 Fälle / 106.422 Zeilen** | inkl. 6 Hypothesis-Property-based-Suiten |
-| **Extension-Tests** (node:test) | **220 Dateien / 1.679 Fälle / 73.744 Zeilen** | 109 Source-Guard-Dateien + 111 Verhaltenstests |
-| **E2E** | **11 Specs / 4.335 Zeilen** | echte VS Code-Instanz gegen ein echtes Modell |
-| **Experience-Matrix** | **200 Szenarien × 2 Ebenen** | Preview-Fixture + echter Sidecar |
-| **VSIX-Host-Treiber** | **33 Schritte** | installieren → aktivieren → streamen → verifizieren → echtes Webview-Rendering prüfen |
-| **Statische Analyse** | ruff + pyright + tsc | null Warnungen |
-| **Protokoll-Matrix** | **5 Protokolle** | OpenAI Chat / Responses / Anthropic / Gemini / OpenAI-Compatible |
-| **i18n** | **8 Sprachen × 600+ Keys** | zh-CN / en-US / es-ES / fr-FR / de-DE / ja-JP / ko-KR / pt-BR |
-| **Gebündelter Sidecar** | **6 Plattform-Binaries** | win32-x64 / win32-arm64 / darwin-x64 / darwin-arm64 / linux-x64 / linux-arm64 |
+| **Server-Tests (`pytest`)** | **295 Dateien · 4.205 Tests** (inkl. Subtests) | `npm run test:server` |
+| **Extension & Shared (`node:test`)** | **317 Dateien · 2.401 Tests** (`2.400` bestanden, `1` Plattform-Skip, `0` Fehler) | `npm run test:extension` |
+| **Statische Analyse & Typen** | `ruff check` (`0` Fehler) · `pyright` (`0` Fehler) · CSS + `tsc -b` (`0` Fehler) | `npm run check && npm run verify:server-pyright` |
+| **UI-Geometrie-Gate** | Single-Composer-Souveränität, 2-Ziele-Shell, Overflow-Checks (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
+| **i18n-Vollständigkeitsgate** | **213** `appUiCopy` + **212** `settingsText` + **272** `hostCommandCopy` über **8 Sprachen** (`0` Lücken) | `npm run verify:i18n` |
+| **Vokabular & Secrets** | **68** UI-Copy-Dateien sauber · **4.027** Repo-Dateien ohne Klartext-Credentials | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **Playwright E2E & Remote-SSH** | **30** Playwright-Specs (`166` Tests) + Real-Sidecar Matrix + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **CI-Release-Ziele** | **3 Desktop-Ziele**: `win32-x64`, `darwin-arm64`, `linux-x64` | `.github/workflows/release.yml` |
 
-**Die E2E-Suite läuft in einer echten VS Code-Instanz gegen ein echtes Modell:**
-
-> Aktiviert die gepackte Extension → startet den gebündelten Sidecar → speichert den Provider → streamt einen vollen Coach-Turn → generiert und verifiziert eine Trainingskarte → prüft, was das Webview **tatsächlich gerendert** hat → macht Screenshots → öffnet über Workspaces hinweg neu und stellt den Verlauf wieder her.
-
-**Tests bezeugen ihre eigenen Grenzen:**
-Jedes E2E-Szenario trägt `evidence: { realSidecar, limitation }` — **der Test erklärt selbst, was er nicht beweist.**
+*(Hinweis: Die manuelle pädagogische Abnahme `T-0028` bleibt in [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md) als manuelles Gate geführt.)*
 
 ---
 
 ## i18n · Acht Sprachen
 
-| Sprache | Code | Primär |
-|---|---|---|
-| 简体中文 | `zh-CN` | ✅ |
-| English | `en-US` | ✅ |
-| Español | `es-ES` | ✅ |
-| Français | `fr-FR` | ✅ |
-| Deutsch | `de-DE` | ✅ |
-| 日本語 | `ja-JP` | ✅ |
-| 한국어 | `ko-KR` | ✅ |
-| Português | `pt-BR` | ✅ |
+Oberfläche, Einstellungen, Host-Meldungen, Browser-Erweiterung und READMEs erscheinen parallel in **8 Sprachen**:
 
-**Fallback-Kette:** Nutzereinstellung > VS Code `env.language` > `zh-CN` (Standard)
+`zh-CN` · `en-US` · `es-ES` · `fr-FR` · `de-DE` · `ja-JP` · `ko-KR` · `pt-BR`
 
-**6 oberflächenbezogene Overrides:** `resourceView` / `contextRail` / `trainingUi` / `orientationRail` / `composerAccessibility` / `leftoverHonesty` — Übersetzer:innen füllen nur die Oberflächen, die sie betreuen, **nicht die volle 600+-Key-Tabelle**.
-
-Zentraler Code: `extension/webview/src/lib/i18n/copy.ts` (5.283 Zeilen)
+Automatisch abgesichert über `npm run verify:i18n` (`extension/webview/src/lib/i18n/copy.ts`).
 
 ---
 
 ## Danksagungen
 
-> Trainer steht auf den Schultern von Riesen.
-
-### 🏃 Laufzeitkern
-
-| Projekt | Zweck | Warum unersetzlich |
-|---|---|---|
-| [FastAPI](https://github.com/fastapi/fastapi) | Lokales Sidecar-Framework | async + Pydantic + automatische OpenAPI-Docs |
-| [Uvicorn](https://github.com/encode/uvicorn) | ASGI-Server | HTTP/1.1 + WebSocket + hohe Nebenläufigkeit |
-| [Pydantic](https://github.com/pydantic/pydantic) | Datenvalidierung & Serialisierung | der 31-Felder-WorkbenchSnapshot läuft darauf |
-| [httpx](https://github.com/encode/httpx) | Async-HTTP-Client | gesamtes Sidecar ↔ LLM-Gateway-Protokoll-Routing |
-
-### 🤖 LLM-Protokolle
-
-| Projekt | Zweck |
-|---|---|
-| [openai-python](https://github.com/openai/openai-python) | OpenAI-/Anthropic-/Gemini-kompatibler Client (5-Protokoll-Routing) |
-
-### 🧠 Training & Gedächtnis
-
-| Projekt | Zweck |
-|---|---|
-| [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) | FSRS-Wiederholungsplanung nach Vergessenskurve · treibt `TrainingCardState` an |
-| [qdrant-client](https://github.com/qdrant/qdrant-client) | Vektorabruf für semantisches Gedächtnis (mit sentence-transformer-Fallback) |
-| [PyMuPDF](https://github.com/pymupdf/PyMuPDF) | PDF-Parsing (Tier-A-Vorschau in der Bibliothek) |
-| [trafilatura](https://github.com/adbar/trafilatura) | Web-Content-Extraktion (Ressourcen-Ingest) |
-| [markitdown](https://github.com/microsoft/markitdown) | Dokument-zu-Markdown-Konvertierung (Tier-B-Vorschau in der Bibliothek) |
-
-### ⚛️ Frontend-Kern
-
-| Projekt | Zweck |
-|---|---|
-| [React](https://github.com/facebook/react) | Sidebar-Workbench-UI |
-| [Vite](https://github.com/vitejs/vite) | Build-Tool + Dev-Server |
-| [Zustand](https://github.com/pmndrs/zustand) | Workbench-State-Management |
-| [Zod](https://github.com/colinhacks/zod) | Typvalidierung zur Laufzeit |
-
-### 🎨 Rendering
-
-| Projekt | Zweck |
-|---|---|
-| [react-markdown](https://github.com/remarkjs/react-markdown) | Markdown-Rendering |
-| [remark-gfm](https://github.com/remarkjs/remark-gfm) | GFM-Erweiterungen (Tabellen, Task-Listen) |
-| [remark-math](https://github.com/remarkjs/remark-math) · [rehype-katex](https://github.com/remarkjs/rehype-katex) · [KaTeX](https://github.com/KaTeX/KaTeX) | Math-Rendering |
-| [Shiki](https://github.com/shikijs/shiki) | Code-Highlighting (VS Code TextMate-Grammatiken) |
-| [Mermaid](https://github.com/mermaid-js/mermaid) | Diagramme & Flowcharts |
-| [@tanstack/react-table](https://github.com/TanStack/table) | Tabellen für Bibliothek / Training-Queue |
-
-### 📄 Vorschau
-
-| Projekt | Zweck |
-|---|---|
-| [mammoth](https://github.com/mwilliamson/mammoth.js) · [docx-preview](https://github.com/VolodymyrBaydalka/docx-preview) | DOCX-Rich-Rendering (Tier A) |
-| PDF.js (gebündelt) | PDF-Rich-Rendering (Tier A) |
-
-### 🧪 Testing & Qualität
-
-| Projekt | Zweck |
-|---|---|
-| [pytest](https://github.com/pytest-dev/pytest) · [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio) | Server: 159 Dateien / 1.649 Fälle |
-| [Hypothesis](https://github.com/HypothesisWorks/hypothesis) | Property-Testing (Planner / Evaluator / Scheduler) |
-| [ruff](https://github.com/astral-sh/ruff) | Python-Linting + Formatierung (E/F/I/B, py312, 100 Spalten) |
-| [pyright](https://github.com/microsoft/pyright) | Statische Python-Typprüfung |
-| [TypeScript](https://github.com/microsoft/TypeScript) | Strict Mode, null Warnungen |
-| [Playwright](https://github.com/microsoft/playwright) | E2E + Experience-Matrix mit 200 Szenarien |
-
-### 📦 Paketierung & Verteilung
-
-| Projekt | Zweck |
-|---|---|
-| [PyInstaller](https://github.com/pyinstaller/pyinstaller) | Sidecar als Single-Binary-Freeze (6 Plattformen, Manifest-sha256) |
-
-### 💡 Methodische Inspiration
-
-| Projekt | Inspiration |
-|---|---|
-| [open-spaced-repetition/fsrs4anki](https://github.com/open-spaced-repetition/fsrs4anki) | Das ursprüngliche FSRS-Paper und die Referenzimplementierung |
-| [obra/superpowers](https://github.com/obra/superpowers) | Coach-Disziplin nach „verpflichtenden Workflows statt Vorschlägen“ |
-| [HKUDS/CLI-Anything](https://github.com/HKUDS/CLI-Anything) | Der Ehrgeiz, „alle Software agent-nativ zu machen“ |
-
-### 🎨 Bildmaterial
-
-| Projekt | Zweck |
-|---|---|
-| [dora-image](https://github.com/AI-yyf/trainer/tree/main/assets) | Jedes Bild in diesem README (siehe `assets/MASCOT.md` / `BANNER_PROMPT.md` / `FEATURE_PROMPTS.md`) |
-| DeepSeek offizielles Moe-Girl | Referenz für Chibi-Proportionen / Cel-Shading-Tendenz |
-| Pieter Bruegel, *Der Turm zu Babel* | Referenz für die Links-rechts-Lager-Komposition des Ensembles |
-| Rembrandt, *Die Nachtwache* | Referenz für den 7:1-Chiaroscuro-Kontrast |
-| Studio Ghibli Charakterdesign | große Augen mit Dreipunkt-Glanzlichtern, zurückhaltende Mimik |
+- **Runtime & HTTP**: [FastAPI](https://github.com/fastapi/fastapi) · [Uvicorn](https://github.com/encode/uvicorn) · [Pydantic](https://github.com/pydantic/pydantic) · [httpx](https://github.com/encode/httpx) · [openai-python](https://github.com/openai/openai-python)
+- **Gedächtnis, FSRS & Parsing**: [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) · [qdrant-client](https://github.com/qdrant/qdrant-client) · [PyMuPDF](https://github.com/pymupdf/PyMuPDF) · [Trafilatura](https://github.com/adbar/trafilatura) · [MarkItDown](https://github.com/microsoft/markitdown)
+- **Frontend & Rendering**: [React](https://github.com/facebook/react) · [Vite](https://github.com/vitejs/vite) · [Zustand](https://github.com/pmndrs/zustand) · [Zod](https://github.com/colinhacks/zod) · [react-markdown](https://github.com/remarkjs/react-markdown) · [KaTeX](https://github.com/KaTeX/KaTeX) · [Shiki](https://github.com/shikijs/shiki) · [Mermaid](https://github.com/mermaid-js/mermaid) · [@tanstack/react-table](https://github.com/TanStack/table) · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth](https://github.com/mwilliamson/mammoth.js) · [docx-preview](https://github.com/VolodymyrBaydalka/docx-preview)
+- **Testing & Paketierung**: [pytest](https://github.com/pytest-dev/pytest) · [Hypothesis](https://github.com/HypothesisWorks/hypothesis) · [ruff](https://github.com/astral-sh/ruff) · [pyright](https://github.com/microsoft/pyright) · [TypeScript](https://github.com/microsoft/TypeScript) · [Playwright](https://github.com/microsoft/playwright) · [PyInstaller](https://github.com/pyinstaller/pyinstaller)
+- **Visuelle Assets**: Generiert mit **[GPT Image](https://github.com/AI-yyf/trainer/tree/main/assets)** (`assets/MASCOT.md` · `assets/BANNER_PROMPT.md` · `assets/FEATURE_PROMPTS.md`)
 
 ---
 
@@ -581,8 +389,6 @@ Zentraler Code: `extension/webview/src/lib/i18n/copy.ts` (5.283 Zeilen)
 ---
 
 ## Trainer zitieren
-
-Wenn Trainer deinem Workflow geholfen hat, zitiere es gern in deinem Blog / Paper / Vortrag:
 
 ```bibtex
 @software{trainer2026,
@@ -600,6 +406,6 @@ Wenn Trainer deinem Workflow geholfen hat, zitiere es gern in deinem Blog / Pape
 
 **// Trainiere deine KI · Wachse mit deiner KI**
 
-`v1.4.4` · Gemacht mit Kaffee, FSRS, 24 Pure Functions, 3.328 Tests und einem Herzen, das sich weigert, für dich Code zu schreiben.
+`v1.4.4` · Gemacht mit Kaffee, FSRS, RethinkFun State-Flow-Pädagogik, 6.606 automatisierten Tests und einem Coach, der sich weigert, für dich Code zu schreiben.
 
 </div>

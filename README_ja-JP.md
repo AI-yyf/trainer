@@ -4,9 +4,9 @@
 
 <img src="assets/banner.png" alt="Trainer — AIを鍛える · AIとともに成長する · AIと人がともに育つ場所" width="100%" />
 
-**VS Code のサイドバーに住み着く、長期のテクノロジーコーチ（プログラミングが起点）。**
+**VS Code のサイドバーに住み着く、長期のコーディング＆学習コーチ。**
 
-**計画し、鍛え、検証し、あなたのことをすべて記憶する — しかし、あなたのコードは決して書きません。**
+**計画し、鍛え、検証し、セッションをまたいで記憶します — しかし、本番コードを代わりに書くことは決してありません。**
 
 **// 出力 ≠ 成長 // 検証 + 復習 = 成長**
 
@@ -14,23 +14,24 @@
 
 [![Release](https://img.shields.io/badge/source-v1.4.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-8b949e)](#インストール)
-[![Tests](https://img.shields.io/badge/tests-3%2C328%20cases-F59E0B)](#品質ゲート)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#インストール)
+[![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#品質ゲート)
 [![i18n](https://img.shields.io/badge/i18n-8%20languages-A78BFA)](#i18n--8言語)
 
 [なぜ](#なぜ-trainer-を作ったのか) ·
 [インストール](#インストール) ·
-[セットアップ](#セットアップは3ステップで完了) ·
+[3ステップ](#セットアップは3ステップで完了) ·
 [仕組み](#コアの仕組み) ·
-[3つの入口](#3つの入口) ·
+[2つの入口](#2つの入口--1つの対話) ·
+[Remote-SSH](#remote-ssh-companion) ·
 [比較](#比較) ·
 [5分デモ](#5分デモ) ·
-[設計思想](#なぜ使い心地が違うのか) ·
+[設計](#なぜ使い心地が違うのか) ·
 [アーキテクチャ](#アーキテクチャ) ·
 [安全モデル](#安全モデル) ·
 [品質](#品質ゲート) ·
 [謝辞](#謝辞) ·
-[🎭 キャラクター](docs/CAST.md)
+[🎭 キャスト](docs/CAST.md)
 
 </div>
 
@@ -39,32 +40,30 @@
 ## なぜ Trainer を作ったのか
 
 > 開発者がつまずくのは、チュートリアルが足りないからではありません。
-> 学習ループを閉じてくれるものが、何ひとつないからです。
+> 学習ループを閉じてくれるものが何ひとつないからです。
 
-LLM との会話は終わった瞬間に蒸発し、動画は一方通行。火曜日に「ほぼ理解した」はずの概念は、金曜日には消えています。
+LLM との会話は閉じた瞬間に蒸発し、動画は一方通行。火曜日に半分だけ分かったつもりの概念は、金曜日には消えています。
 
-さらに悪いのが **バイブコーディング** — 3 ヶ月もの間 AI にコードを書かせ続け、自分はひとつも理解していない状態です。
+さらに厄介なのが **バイブコーディング** — 何ヶ月も AI にコードを書かせ続け、自分は何も理解していない状態です。
 
-ブックマークは増える一方でアウトプットは横ばい。リポジトリは育っても、頭の中は空になっていく。
+**Trainer はこの問題をエディタの中から解決します。**
 
-**Trainer はこの問題を、エディタの中から解決します。**
+これはただのチャットラッパーではなく、記憶とカリキュラムと試験方針を備えたコーチです：
 
-これはただのチャットシェルではありません — 記憶とカリキュラムと試験方針を備えたコーチです:
-
-- 学習をステージに**計画**し、あなたの「実際の」位置を追跡します — 感覚上の位置ではなく
-- フラッシュカード、理論ドリル、シナリオ実験であなたを**訓練**します
-- 実際のコードに対して習得を**検証**します — 現在のファイルが証明するまで、FastAPI について語っても何の証明にもなりません
-- セッション・プロジェクト・週をまたいであなたを**記憶**し、FSRS の忘却曲線に沿って復習をスケジューリングします
+- 学習を段階ごとに**計画**し、感覚ではなく「本当に到達している位置」を追跡します
+- 実際のプロジェクトに根ざしたカード、理論ドリル、インライン演習であなたを**鍛えます**
+- 実際のコードで習得を**検証**します — 現在のファイルが証明しない限り、FastAPI について語っても習得とは認めません
+- セッション・プロジェクト・週をまたいであなたを**記憶**し、**FSRS** の忘却曲線に沿って復習をスケジューリングします
 - 本番コードをあなたの代わりに書くことは**決してありません** — あなたが書き、Trainer が教える。**ともに成長する**のです
 
-**そして、この規律はコードの外へも広がります。** 同じ「まず検証」のループが文学と言語学習にも広がりました：¶ アンカー付きの精読批注、原文にアンカーを戻した模写、文論概念カード — 各教科はコードチェックの衣替えではなく、それぞれの検証パックと成長ディメンションで教えられます。
+**そして、この規律はコードの外へも広がります。** 同じ「まず検証」のループは、精読・原理講義・人文／語学学習も専用の検証パックと成長軸で支えます。
 
 <div align="center">
 
 | バイブコーディング · 今日の常識 | Trainer · あるべき姿 |
 |:---:|:---:|
 | `def ship(code):` <br> `    ai.write(code)` <br> `# 本当に理解しましたか？` <br> `    return forget(code)` | `def ship(code):` <br> `    you.write(code)` <br> `    ai.verify(code)` <br> `    you.recall(code)` <br> `    return grown(code)` |
-| 出力 = 忘却 | 出力 + 記憶 + 復習 = 成長 |
+| 出力 = 忘却 | 出力 + 記憶 + 想起 = 成長 |
 
 </div>
 
@@ -72,505 +71,314 @@ LLM との会話は終わった瞬間に蒸発し、動画は一方通行。火�
 
 ## インストール
 
-**VSIX から（ビルド済み、3 プラットフォーム対応）:**
+**ビルド済み VSIX から（CI 検証済み 3 プラットフォーム）：**
 
-お使いのプラットフォーム（`darwin-arm64` / `linux-x64` / `win32-x64`）向けの `.vsix` を [最新の公開リリース](https://github.com/AI-yyf/trainer/releases/latest)からダウンロードしてください。
+お使いの OS とアーキテクチャ（`darwin-arm64` / `linux-x64` / `win32-x64`）向けの `.vsix` を [Releases](https://github.com/AI-yyf/trainer/releases/latest) からダウンロードします：
 
-VS Code の拡張機能パネル → `···` → *VSIX からのインストール* → ウィンドウを再読み込み。
+```bash
+code --install-extension trainer-extension-1.4.4-<platform>-<arch>.vsix --force
+```
 
-**ソースから:**
+または VS Code の拡張機能パネル → `···` → *VSIX からのインストール…* → ウィンドウを再読み込み。詳細は [`extension/README.install.md`](extension/README.install.md) を参照してください。
+
+**ソースからビルド：**
 
 ```bash
 git clone https://github.com/AI-yyf/trainer.git
-cd trainer && npm install
-cd server && python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cd .. && npm run build
+cd trainer && npm ci
+cd server && uv sync --frozen --extra dev --python 3.12 && cd ..
+npm run build
 ```
 
-このリポジトリを VS Code で開いて F5 を押す（Extension Development Host）か、パッケージ済みの VSIX をインストールしてください。
+リポジトリを VS Code で開いて `F5`（Extension Development Host）を押すか、`npm run package:vsix` で VSIX を生成します。
 
-**必要要件:** VS Code ≥ 1.96 · Python ≥ 3.12（ソースビルド時）· macOS / Linux / Windows
+**動作要件：** VS Code `≥ 1.96` · Python `3.12`（ソースビルド時のみ；VSIX には凍結済み sidecar を同梱）· macOS (`arm64`) / Linux (`x64`) / Windows (`x64`)。
 
 ---
 
 ## セットアップは3ステップで完了
 
-1. Trainer サイドバーを開く → Settings
-2. リレーの接続情報を貼り付ける（リレーダッシュボードからコピーした JSON ブロック全体は自動でパースされ、エンドポイントとキーに分解されます）→ API キーを貼り付ける
-3. **Save & Connect** をクリック
+コールドスタートに**設定の壁はありません**。Trainer を開けばすぐ**対話**に入れます。モデルを接続するときも 3 ステップだけです：
 
-Trainer が最新のモデル一覧を取得し、デフォルトモデルを選び、ストリーミング経路を一括で検証します。
+1. 右上の歯車アイコンから **設定 → 接続** を開く
+2. 明示的プロトコル（`OpenAI Chat`、`OpenAI Responses`、`Anthropic Messages`、`Gemini`、`Azure OpenAI`）を選び、**サービスルート URL**・**API キー**（VS Code `SecretStorage` 経由で OS キーチェーンにのみ保存）・**モデル** を入力
+3. ローカルのプロキシ環境変数（`HTTP_PROXY` / `HTTPS_PROXY`）で `502` やタイムアウトが起きる場合は、**ネットワークプロキシ**を **システムプロキシを無視（直接接続）** に切り替えて **接続テスト**
 
-誤ったキーは `invalid_key_or_permission` と報告されます — 曖昧なスピナーのままにはなりません。
+Trainer がライブモデル一覧を取得し、ストリーミング・ツール呼び出し・推論能力を実測して、エラーも誤魔化さず通知します（`invalid_key_or_permission`、`network`、空ストリーム拒否）。
 
 <p align="center">
-  <img src="assets/screenshots/settings-quick-setup.png" alt="クイックセットアップ" width="420" />
+  <img src="assets/screenshots/ja-JP/settings-connected.png" alt="設定の接続サマリー" width="380" />
+  <img src="assets/screenshots/ja-JP/settings-quick-setup.png" alt="接続編集とプロキシ直接接続バイパス" width="380" />
 </p>
 
 ---
 
 ## コアの仕組み
 
-### ① 検証ゲート — あなたが書き、コードが証明する
+### ① 検証ゲート — あなたがコードを書き、コード自身が証明する
 
-トレーニングカードは、実際のファイルに対して検証が走るまで「実装済み」へ進めません。「完了にする」手動ボタンは意図的に存在しません。
-
-学習の偽装を最も速く済ませる方法は、チェックボックスを全部埋めること。Trainer はそれを拒みます。
+実際のファイルに対して検証が走るまで、トレーニングカードは絶対に前進しません。「完了としてマーク」ボタンは意図的に存在しません。
 
 <p align="center"><img src="assets/feat-verify.png" alt="検証ゲート" width="720" /></p>
 
-**仕組み:**
-- サーバー側の `EvaluatorService` が現在のファイルを `tempfile.TemporaryDirectory` へ**コピー**し、ruff + pyright + pytest を実行してから、一時ディレクトリを片付けます
-- ツールが学習者のプロジェクト内で実行されることは**決して**ありません — `.pytest_cache` による汚染もありません
-- すべてのチェックは、明示的な `acceptance_criteria` + `expected_symbols` リストに対して、基準ごとの Matched/Missing 詳細を報告します
-- コード: `server/app/evaluator/service.py:198-312`
+- **独立したローカルサンドボックス**（`server/app/evaluator/service.py` — `EvaluatorService`）：一時ディレクトリへ対象ファイルをコピーして検査を実行し、リポジトリに `.pytest_cache` を残さず `acceptance_criteria` と `expected_symbols` を項目別に採点
+- **VS Code Testing API 証明**（`extension/src/testing/`）：実際のテスト成否を `/training/verification/attest` へ報告 — 中断や不明結果を合格と偽装しません
+- **Remote-SSH 読み取り／検証プロキシ**：API キーやライブラリを外に出さずリモートホスト上で検証を実行
 
-### ② 長期記憶 — FSRS 忘却曲線スケジューリング
+### ② 長期記憶 + 単一統合 `<LibraryRoot>`
 
-習得状況も弱点も来たるべき復習も、SQLite 上に Qdrant セマンティック検索とともに保存されます。
+Trainer が覚えた学習履歴、収集資料、保存された講義ノートはすべて**1 つの `<LibraryRoot>` ディレクトリ**に統合され、あなたの開発リポジトリを 100% クリーンに保ちます（`git status` 汚染ゼロ）。
 
-復習は FSRS の忘却曲線に沿って現れます — 忘れかける直前に現れ、まだ覚えている間は静かにしています。
+<p align="center"><img src="assets/feat-memory.png" alt="長期記憶と単一ルート LibraryRoot" width="720" /></p>
 
-<p align="center"><img src="assets/feat-memory.png" alt="長期記憶" width="720" /></p>
+```text
+<LibraryRoot>/
+├── Trainer Library/          # 直接開ける資料群 & 自動保存 Markdown 講義ノート
+│   ├── 講義ノート/            # `save_lecture_note` で出力（Finder / Explorer で即閲覧可能）
+│   └── Papers/               # 取り込んだ PDF、Web 抜粋、リファレンスノート
+└── .trainer/
+    └── runtime/              # SQLite (`trainer.sqlite3`)、Qdrant ベクトル索引、チェックポイント、ログ
+```
 
-**仕組み:**
-- 2 層メモリ: 構造化（`StructuredMemoryService`、約 480 レコード）+ セマンティック（Qdrant + sentence-transformer のオフラインフォールバック）
-- **`_should_delay_live_thread_reviews()`** — アイデア実装フローの進行中は復習を積極的に抑制し、思考の流れを中断させません
-- **移植可能スキルはワークスペース横断で fail-closed**: あるプロジェクトでの成功がそのまま全体的な習得になることはなく、昇格には 2 ワークスペース以上での合格が必要です
-- 主要コード: `server/app/memory/service.py:1357-1597` · `transfer_skills.py:81-113` · `review_scheduler.py:522-544`
+- **2 層メモリ**：構造化 SQLite + セマンティック検索（`Qdrant` + ローカルフォールバック）を **`py-fsrs`** の忘却曲線でスケジューリング（`server/app/memory/review_scheduler.py`）
+- **実装集中中の割り込み抑止**：進行中の実装スレッドがある間は期限の復習通知を一時抑制
+- **ワークスペース間の厳格隔離（fail-closed）**：単一プロジェクトでの合格を全体習熟へ過大評価しません（`server/app/memory/transfer_skills.py`）
 
-### ③ トレーニングループ — 期日になったら現れ、検証されたら進む
+### ③ RethinkFun State-Flow トレーニングループ
 
-フラッシュカード、理論ドリル、シナリオ実験は Training ビューにキューイングされます: 復習は期日になると現れ、カードは検証されて初めて進み、会話中のどんな知識の穴もワンクリックでトレーニングカードに変わります。
+別画面のカード管理 CRUD に飛ばされることなく、トレーニングはそのまま対話の流れに溶け込みます：
 
 <p align="center"><img src="assets/feat-training.png" alt="トレーニングループ" width="720" /></p>
 
-**仕組み:**
-- **5 フェーズのステートマシン** `LEARN → TRY → VERIFY → REFLECT → RETURN`。すべての遷移は `phase_history` に記録されます
-- **信頼できる検証ソースのホワイトリスト**: `automated_test` / `evaluator` / `ide_current_file` / `server_evaluator` / `test_runner` / `verification_service` — 「手動での申告」がカードを進めることは決してありません
-- カード UI の `onSkip` / `onRate` ハンドラは **`@deprecated Unused`** — 進行できる唯一の経路は `onCardStatusTransition` です
-- 主要コード: `server/app/training/handoff.py:40-47` · `extension/webview/src/components/training/TrainingCardPanel.tsx:78-85`
+- **3 つの明確な指導レーン**（`server/app/pedagogy/` + `server/app/llm/`）：
+  - **高速コードガイド**：実シンボルと失敗チェックを起点に、余計な説教なしで次の一手を案内
+  - **状態フロー深掘り講義（`save_lecture_note`）**：「明らかに」等の水増し語を排し、状態変化ごとに数式と最小コードを結び付け、`<LibraryRoot>/Trainer Library/` に整理済み `.md` を自動保存
+  - **事実に基づく進捗照会（`inspect_learning_truth`）**：サーバー記録を直接参照し、内部 UUID や生 JSON を漏らさず回答（証拠 0 件なら正直に 0 と伝えます）
+- **5 フェーズ状態遷移マシン**（`LEARN → TRY → VERIFY → REFLECT → RETURN`、`server/app/training/handoff.py`）
 
-### ④ 書くのはあなた、導くのはコーチ
+### ④ あなたが書き、コーチが導く
 
-コーチはあなたのファイルを読み、診断を確認し、ワークスペースを検索します — それでも、本番コードは常にあなたの手から生まれます。
-
-`direct` は即座に答え、`coach-first` はまずあなたに考えさせます。**認知的負荷を背負うのはあなたであって、コーチではありません。**
+コーチはファイル・診断結果・ワークスペース構成を読み取りますが、本番コードを書くのは常にあなたです（`server/app/workspace/authority.py` がソース書き換えを遮断）。
 
 <p align="center"><img src="assets/feat-youwrite.png" alt="あなたが書き、コーチが導く" width="720" /></p>
 
-**仕組み:**
-- `PedagogyService` は毎ターン、12 フィールドの `ImplementationGuide` を出力します — そのどのフィールドも「コーチが次に何を問えるか」への制約です
-- `ImplementationCoach._current_step` は「最初に失敗しているパス」か「最初に既知のエントリポイント」に固定されます — 「コードベースを探索する」ことは決してありません
-- 感情駆動のトーン: `AffectService` は 2 回連続で失敗すると `concise_rescue` モードへ切り替わります
-- 主要コード: `server/app/pedagogy/implementation_coach.py:140-186` · `affect/service.py:142-152`
+- 適応ペース調整（`AffectService`、`server/app/affect/service.py`）が連続失敗を検知すると、簡潔なレスキューモードへ切り替えます
+
+### ⑤ グラウンディングと説明品質の監視
+
+- 決定論的な応答継続・リカバリガード（`coaching_recovery.py`、`coaching_replies.py`）が空ストリームや言語ずれを防止
+- 非ゲート型 5 次元スコアラーがコンテキスト結合・シンボル参照・答え丸投げ防止・因果明確性を継続観測
 
 ---
 
-## 3つの入口
+## 2つの入口 + 1つの対話
 
-> 対話・学習・資料は常に表示されます。履歴と設定は上部から開き、訓練と成長は学習の内部にあります。
+> 静かで安定したシェル：**対話** と **資料** の 2 つの主ナビゲーション、右上の **学習ドロワー／履歴／設定**、そして**常に画面下部の入力欄ただ 1 つ（Single-Composer Sovereignty）**。
 
-| ビュー | 役割 | ひとことで |
-|-----------|------|--------|
-| **Coach** | ストリーミングチャット | **入り口**: ツールアクセス + `$` スキルパレット + 画像添付 + 回答モード |
-| **Plan** | 学習プラン | **地図**: ステージ、進捗、エビデンス、プランの凍結/解除 |
-| **Resources** | ライブラリ | **本棚**: FTS5 検索 + 3 層サンドボックスプレビュー + 復元できるゴミ箱 |
-| **Training (学習内)** | トレーニング | **遊び場**: FSRS フラッシュカード + 理論ドリル + シナリオ実験 + 検証ゲート |
-| **Settings (上部から開く)** | 設定 | **コントロールパネル**: 59 個のコマンド + エンドポイント速度テスト + 思考強度 + ワークスペースの受け入れ制御 |
+| サーフェス | 役割 | 内容 |
+|---|---|---|
+| **対話** (`coach`) | メイン作業面 | State-Flow ストリーミング応答、保存済み `.md` ノートバッジ、メッセージ単位のアクション、折り畳み可能な**インライン練習カード**（第 2 テキスト欄なし）、1 行学習ストリップ、`$` スキルパレット |
+| **資料** (`resources`) | ライブラリ & リーダー | 単一 `<LibraryRoot>` フォルダツリー、高速ローカル検索、画像・KaTeX・Shiki・Mermaid 対応 VS Code Markdown プレビュー、PDF/DOCX/URL 取り込み、復元可能なゴミ箱 |
+| **学習ドロワー** (`plan` / `training` / `progress`) | 読み取り専用メモリ | 対話の上に重なるモーダルシート（入力中の下書きを保持）。**現在の目標**・**期限の練習**・**習得状況**（％表記なしの**統一 4 セグメント能力バー**）を 3 枚で提示 |
+| **設定** (`settings`) | 設定コンソール | 5 プロトコル接続 + **直接プロキシバイパス**、コーチ設定 & `$` スキル、**ワークスペース `<LibraryRoot>`** + Remote Companion、8 言語・オプトイン計測 |
+
+*（既存の 6 内部ルート `coach` / `plan` / `resources` / `training` / `progress` / `settings` はディープリンクや状態復元の互換性のため維持されています。）*
 
 <p align="center">
-  <img src="assets/screenshots/plan.png" alt="Plan ビュー" width="260" />
-  <img src="assets/screenshots/resources.png" alt="Resources ビュー" width="260" />
-  <img src="assets/screenshots/training.png" alt="Training ビュー" width="260" />
+  <img src="assets/screenshots/ja-JP/chat-first-run.png" alt="初回起動の対話空状態" width="255" />
+  <img src="assets/screenshots/ja-JP/coach-teach.png" alt="State-Flow 講義とノート保存・折り畳み練習バー" width="255" />
+  <img src="assets/screenshots/ja-JP/plan.png" alt="4セグメント能力バーを備えた学習ドロワー" width="255" />
+</p>
+<p align="center">
+  <img src="assets/screenshots/ja-JP/training.png" alt="単一入力欄を共有する展開済みインライン練習カード" width="255" />
+  <img src="assets/screenshots/ja-JP/resources.png" alt="LibraryRoot に統合された資料ライブラリ" width="255" />
+  <img src="assets/screenshots/ja-JP/coach-narrow.png" alt="340px 狭いサイドバーでのレスポンシブ表示" width="215" />
 </p>
 
-### Coach ビュー（入り口）
+### カスタム `$` スキル — 作成・共有・導入
 
-ツールアクセス、`$` スキルパレット、画像添付、回答モード、コンテキスト使用量リング、セッション履歴と共有を備えた、ストリーミング型のコーチチャット。
-
-**コーチの返信は次の一歩を強調し、その他の操作メニューに次の機能を残します:**
-
-- **返信を Markdown としてコピー**
-- **ライブラリに保存**（検索可能 + プレビュー可能）
-- **検証可能なトレーニングカードに変換** — セッション単位ではなく、メッセージ単位
-
-<p align="center"><img src="assets/screenshots/message-actions.png" alt="メッセージごとのアクション" width="520" /></p>
-
-### カスタム `$` スキル — 作る、共有する、インストールする
-
-対話で `$` を入力すると、検索可能なスキルパレットが開き、最初に六項目を表示します。カスタムスキルは設定 → コーチ → Skills で管理します: ビルトインに加えて、自分のプロンプトをトリガーワードとキーワード付きのスキルにラップして他の人と共有したり、他の人が共有したスキルをインストールしたりできます — **そのすべてが純粋なデータチャネル経由で、コード実行は一切ありません**。
+入力欄で `$` をタイプするだけでビルトインと自作スキルを呼び出せます。**設定 → コーチ → スキル** で管理でき、完全な純粋 JSON（`eval()` ゼロ・標準トリガー保護）で安全に共有できます。
 
 <p align="center">
-  <img src="assets/screenshots/skill-deck.png" alt="スキルパレット" width="380" />
-  <img src="assets/screenshots/skill-manager.png" alt="スキルマネージャー" width="380" />
+  <img src="assets/screenshots/ja-JP/skill-deck.png" alt="入力欄の $ スキルパレット" width="380" />
+  <img src="assets/screenshots/ja-JP/skill-manager.png" alt="設定画面のカスタムスキル管理" width="380" />
 </p>
 
 <p align="center"><img src="assets/feat-skills.png" alt="カスタムスキル" width="720" /></p>
 
-**仕組み:**
-- カスタムスキルは純粋な JSON インポートです — `{ _type, version, trigger, title, prompt, keywords }`。`eval` も `Function()` もコード経路もありません
-- ハード上限: プロンプト ≤ 4000 文字、タイトル ≤ 160、キーワード ≤ 16、ユーザースキル ≤ 24
-- トリガーが衝突した場合はビルトインが勝ちます — ユーザーがインポートした `$explain` が同梱のものを覆い隠すことはありません
-- 主要コード: `shared/src/skillCatalog.ts:614-764`
+---
+
+## Remote-SSH Companion
+
+リモート Linux/SSH 開発でも **「ローカルの頭脳 ＋ リモートの手足」** 構成でフル機能が動きます：
+
+- **UI 拡張・Python sidecar・API キー・`<LibraryRoot>`** は常に**手元のローカルマシン**に留まります
+- **`remote-extension/`**（`Trainer Workspace Companion`、`extension/bundled/remote/trainer-workspace-companion.vsix` 同梱）がリモート側でファイル閲覧・検索・診断読み取り・テスト検証（`trainer.remote.verify`）を代行
+- **リモート書き込みハードロック**：リモートリポジトリへの直接ソース書き換えは権限層で完全に禁止されます
+
+<p align="center">
+  <img src="assets/screenshots/ja-JP/settings-workspace.png" alt="ワークスペース設定と統一 LibraryRoot" width="380" />
+</p>
 
 ---
 
 ## 比較
 
-> Trainer は誰かを置き換えるためにあるのではありません — 誰も所有していないギャップを埋めます。
-
-| 観点 | バイブコーディング系ツール | チャット IDE | フラッシュカードアプリ | **Trainer** |
+| 観点 | Vibe ツール | チャット IDE | 暗記カードアプリ | **Trainer** |
 |---|---|---|---|---|
-| あなたの代わりにコードを書く | ✅ | ✅ | ❌ | ❌ |
-| あなたのコードを検証する | ❌ | ❌ | ❌ | ✅ 現在のファイルに対して |
-| セッションをまたいで記憶 | ⚠️ コンテキストウィンドウ | ⚠️ 要約 | ✅ | ✅ SQLite + Qdrant |
-| FSRS による間隔反復 | ❌ | ❌ | ✅ | ✅ + ライブフロー中は抑制 |
-| ワークスペース権限の段階 | ❌ | ⚠️ 信頼ダイアログ | ❌ | ✅ 6 段階 + リモートはハードロック |
-| カード進行のゲート制御 | ❌ | ❌ | ⚠️ 手動チェックボックス | ✅ 検証を強制 |
-| 移植可能スキルの昇格 | ❌ | ❌ | ❌ | ✅ ワークスペース横断で fail-closed |
-| コードの外へ（文学・言語） | ❌ | ❌ | ❌ | ✅ 文学/言語の検証パックを内蔵 |
-| i18n | ⚠️ | ⚠️ | ⚠️ | ✅ 600+ キー × 8 言語 |
-| テストスイート | クローズドソース | クローズドソース | クローズドソース | ✅ **3,328 ケース**（公開） |
-| 代筆の拒否 | ❌ | ❌ | 該当なし | ✅ 哲学的な一線 |
+| コードを代筆する | ✅ | ✅ | ❌ | ❌（意図的な境界） |
+| 実コードに対する検証 | ❌ | ❌ | ❌ | ✅ ローカルサンドボックス + Testing + Remote-SSH |
+| セッションをまたぐ記憶 | ⚠️ コンテキスト依存 | ⚠️ 要約 | ✅ | ✅ `<LibraryRoot>` 配下の SQLite + Qdrant |
+| Git リポジトリを汚さない | ⚠️ ファイル混入 | ⚠️ | n/a | ✅ 単一 `<LibraryRoot>`、リポ書き込みゼロ |
+| FSRS 間隔反復 | ❌ | ❌ | ✅ | ✅ 実装集中時の自動抑止付き |
+| 権限レベル制御 | ❌ | ⚠️ 基本 Trust | ❌ | ✅ 6 段階 + リモート書込ハードロック |
+| 公開テストスイート | クローズド | クローズド | クローズド | ✅ **6,606 単体/統合 + 166 E2E** |
+| 多言語対応 | ⚠️ | ⚠️ | ⚠️ | ✅ **8 言語**（CI 完全性ゲート保証） |
 
-> ひとことで言えば: 他のツールはあなたを速く書かせます。Trainer はあなたを本当に書かせます。
+> 他のツールは「コードを書く速度」を上げます；**Trainer は「書いたものを自分の力にする」ツールです。**
 
 ---
 
 ## 5分デモ
 
-> 最初の 5 分間が、実際にはどうなるかを見ていきましょう。
-
-### T+0:00 — サイドバーを開く
-
-アクティビティバーの Trainer アイコンをクリックします。サイドバーが開き、**Coach ビュー**がデフォルトで表示されます。
-
-<p align="center">
-  <img src="assets/screenshots/settings-quick-setup.png" alt="初回起動" width="420" />
-</p>
-
-### T+0:30 — プロバイダを設定する（初回のみ）
-
-Settings → リレーの JSON + API キーを貼り付け → Save & Connect。
-
-Trainer が最新のモデル一覧を取得し、デフォルトを選び、ストリーミングを検証します。誤ったキーなら `invalid_key_or_permission` と教えてくれます。
-
-### T+1:30 — 最初の会話
-
-Coach に切り替えて、次のように入力します: `@current_file explain what this async/await is doing?`
-
-Trainer は返信をストリーミングします。**あなたのコードを書き換えることはありません。** 17 行目を指して「これは fan-out」、23 行目は「これがバリア。本当に身につけたければ、実行中のタスクを途中でキャンセルするバージョンを書いてみましょう — 検証は私が一緒に走らせます」と。
-
-### T+2:30 — ワンクリックでトレーニングカード
-
-返信にカーソルを合わせます。3 つのボタン: `Copy` / `Save to library` / **`Create training card`**。
-
-`Create training card` をクリック → カードが生成される → Training ビューに入る → FSRS が 3 日後にスケジュールします。
-
-### T+4:00 — 自分で書いて、検証を受ける
-
-コードを書くのはあなたです。Trainer が**代わりに書くことはありません**。
-
-Training を開く → カードをめくる → 合格基準を確認する → 書く → `Request verification` をクリック → Trainer がサンドボックスで ruff + pyright + pytest を実行 → 合格を報告するか、欠けている基準を指摘します。
-
-### T+5:00 — 翌日
-
-翌日 VS Code を開くと: Trainer が自動復元します — 前回のセッションも、プランも、カードの進捗も、すべてそこにあります。
-
-あのカードが FSRS のリズム盤の上で脈打っています — 期日は今日です。
-
-**あなたはもう、バイブコーディングする開発者ではありません。**
+1. **T+0:00 — Trainer を開く**：左バーのアイコンを押せば設定の壁なしでそのまま **対話** に入れます。
+2. **T+0:30 — モデル接続**：**設定 → 接続** でプロトコル・URL・モデル・キーチェーン API キーを入力し（ローカルプロキシが 502 を返す場合は **システムプロキシを無視（直接接続）** を選択）、**接続テスト**。
+3. **T+1:30 — 原理講義とコードガイドを依頼**：たとえば *「Scaled Dot-Product Attention が sqrt(d_k) で割る理由を状態フローで説明して Markdown ノートに保存して」* — `<LibraryRoot>/Trainer Library/` へ即保存されます。
+4. **T+2:30 — インライン練習に挑戦**：チャット内の **FocusedPractice** カードを展開し、手元のソースを編集しながら画面下部の**同じ 1 つの入力欄**で回答やヒントをやり取りします。
+5. **T+4:00 — 実ファイル検証 & FSRS 記録**：**現在のファイルを検証**（または Remote-SSH 検証）を実行すると、**理解／実装／デバッグ／転移**の習熟状態が進み、次回の FSRS 復習日が組まれます。
+6. **T+5:00 — 学習ドロワーで確認**：右上の本アイコンで **現在の目標**・**期限の練習**・**4 セグメント能力バー** を一望できます。
 
 ---
 
 ## なぜ使い心地が違うのか
 
-### 正直な失敗
+### 正直な失敗表示 & プロキシ直連バイパス
+- 未知のゲートウェイを黙って OpenAI 互換と決めつけません
+- **システムプロキシを無視（直接接続）** を接続プロファイル単位で切り替え、ローカル `HTTP_PROXY` / `HTTPS_PROXY` 起因の 502／タイムアウトを回避
+- 空ストリームや認証不備はスピナーで誤魔化さず具体的な復旧アクションを提示
 
-誤ったキーなら `invalid_key_or_permission`、到達不能なら `network`、壊れた返信なら「この返信は正しく読み取れませんでした。再送してください」と表示されます — **壊れた出力を答えとして飾り立てることは決してありません**。
-
-未知のゲートウェイを、黙って OpenAI 互換と決めつけることもありません。
-
-**仕組み:** エラー分類器（`provider_service.py:2823-2874`）+ 認証情報のスクラビング（`provider_protocols.py:640-681`）+ 未知フィンガープリントのプローブ（`provider_gateway.py:39-70`）。
-
-### エンドポイント速度テスト
-
-プロバイダのエンドポイントが並行して競います（**まずウォームアップでコールドスタートのペナルティを消してから、計測**）。
-
-500 ms 未満は緑、1 秒未満は黄。ワンクリックで最速のものを採用します。
+### エンドポイント速度テスト & 推論強度制御
+- 複数候補 URL をウォームアップ除外込みで並列計測し、ワンクリックで最速ルートを採用
+- 実測済み能力に基づいて思考パラメータを安全に送信
 
 <p align="center"><img src="assets/feat-speed.png" alt="エンドポイント速度テスト" width="720" /></p>
 
-**仕組み:** `Promise.all` + 計測用リクエストの前に、各 URL へ結果を捨てるウォームアップリクエストを送信（`providerWebviewCommands.ts:2275-2352`）。
+### 統合ライブラリ `<LibraryRoot>`
+- PDF（`PyMuPDF`）、Web（`Trafilatura`）、DOCX（`mammoth` / `MarkItDown`）、および自動生成された講義ノートを一括管理
+- ローカルフィルタ、数式・図表付き Markdown プレビュー、復元可能ゴミ箱、ワンクリック対話引用に対応
 
-### コンテキスト使用量リング
+<p align="center"><img src="assets/feat-library.png" alt="統合ライブラリ" width="720" /></p>
 
-会話の上部には常にコンテキスト使用量リングが表示されます — **圧縮が起きる前に、その予兆をつかめます**。
+### ブラウザ拡張キャプチャ & Side Panel（`browser-extension/`）
+- Chromium MV3 拡張機能が**ペアリングコード不要**でローカル sidecar（`127.0.0.1`）を自動検出
+- Web ページ・arXiv PDF・GitHub リポジトリ（`docs/` 含む選択可）・選択テキストを `<LibraryRoot>/Trainer Library/` や入力欄下書きへ即投入（オフライン FIFO キュー＋8 言語 Side Panel チャット完備）
 
-### 思考強度
+<p align="center">
+  <img src="assets/screenshots/ja-JP/browser-capture.png" alt="Trainer Capture ブラウザ拡張ポップアップ" width="320" />
+</p>
 
-モデルごとのエビデンスでゲートされます — 宣言された能力**または**検証済みプローブ。盲目的に転送されることはありません。
-
-### 全力ライブラリ
-
-<p align="center"><img src="assets/feat-library.png" alt="全力ライブラリ" width="720" /></p>
-
-アップロードは到着次第インデックス化、FTS5 全文検索、**3 層サンドボックスプレビュー**（A リッチ表示 / B 変換表示 / C メタデータ + ネイティブエディタへのフォールバック）、削除は復元可能なゴミ箱へ。
-
-**3 ゾーンの物理分離**: ワークスペース / サンドボックス / ゴミ箱。決して混ざりません。
-
-コーチの返信もワンクリックで落ちてきます — **検索で取り戻せるなら、それは本当に学んだということ**。
-
-### 長期にわたる状態
-
-プランは凍結・解除でき、セッションは再起動をまたいで生き残り、カードの進捗は SQLite に宿り、復習は FSRS 曲線に従って期日を迎えます — **To-Do リストの上ではありません**。
+### MCP 外部ツール連携（`docs/mcp.md`）
+- `TRAINER_MCP_SERVERS` 環境変数で有効化する stdio 型 **MCP クライアント** が GitHub / Gitee 等のツールを ReAct ループへ統合（同一の 6 段階権限ゲート適用）— 詳細は [`docs/mcp.md`](docs/mcp.md)
 
 ---
 
 ## アーキテクチャ
 
-### システム構成
+### システム構成図
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    VS Code Window                            │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │   Trainer Sidebar                                     │  │
-│  │   (React 19 + Zustand, 8-language i18n, 24 governance)│  │
-│  │                                                       │  │
-│  │   ─── postMessage ─── CommandRegistry ── 59 commands  │  │
-│  │                                       │               │  │
-│  └───────────────────────────────────────┼───────────────┘  │
-│                                          │                   │
-│                          ┌───────────────▼──────────────┐    │
-│                          │  FastAPI sidecar (127.0.0.1)│    │
-│                          │  PyInstaller --onedir frozen│    │
-│                          │  (250 MB / 6 platform arch) │    │
-│                          │                              │    │
-│                          │  ├── ReAct agent loop        │    │
-│                          │  │   (dual-channel stream)   │    │
-│                          │  ├── Pedagogy (12-field guide)│   │
-│                          │  ├── Affect (failures→rescue)│    │
-│                          │  ├── Memory                  │    │
-│                          │  │   SQLite + Qdrant semantic│    │
-│                          │  ├── FSRS scheduler          │    │
-│                          │  ├── Authority (6 tiers)     │    │
-│                          │  ├── Provider (5 protocols)  │    │
-│                          │  ├── Training handoff (5 ph.)│    │
-│                          │  └── Resources (3 zones+FTS5)│    │
-│                          │                              │    │
-│                          │  ─── 24 shared pure fns ────│    │
-│                          │      (host + webview + test)  │    │
-│                          └──────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                             VS Code Window                              │
+│  ┌──────────────────────────────┐    ┌────────────────────────────────┐ │
+│  │  Trainer サイドバー (ローカル)│    │  Remote-SSH 環境 (リモート)     │ │
+│  │  React 19 + Zustand (8言語)  │    │  remote-extension (Companion)  │ │
+│  │  対話 / 資料 + 学習ドロワー   │◄──►│  読取専用参照 / 検索 / 診断 /  │ │
+│  └──────────────┬───────────────┘    │  検証テスト実行のみ            │ │
+│                 │                    └────────────────────────────────┘ │
+│  ┌──────────────▼───────────────┐                                       │
+│  │  Extension Host (TypeScript) │  • SecretStorage (OS キーチェーン)    │
+│  │  CommandRegistry · Workspace │  • Testing API → 実テスト検証報告     │
+│  │  Gateway · Sidecar Manager   │  • Browser Extension MV3 ブリッジ     │
+│  └──────────────┬───────────────┘                                       │
+│                 │ http://127.0.0.1 + SSE ストリーム                     │
+│  ┌──────────────▼───────────────┐    ┌────────────────────────────────┐ │
+│  │  FastAPI Sidecar (Python)    │───►│  単一統合ルート <LibraryRoot>  │ │
+│  │  • ReAct ループ + MCP        │    │  • Trainer Library/ (ノート等) │ │
+│  │  • RethinkFun 教育カーネル    │    │  • .trainer/runtime/           │ │
+│  │  • 5 プロトコル + 直連バイパス│    │    trainer.sqlite3 · Qdrant ·  │ │
+│  │  • FSRS  scheduler + 記憶     │    │    チェックポイント · 監査ログ │ │
+│  │  • 6 段階権限ガード           │    │  (ユーザーリポ書込ゼロ)        │ │
+│  └──────────────────────────────┘    └────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### ディレクトリ構成
+### ディレクトリ構成（実測値）
 
-| フォルダ | 内容 | サイズ |
+| ディレクトリ | 内容 | 実測規模 |
 |---|---|---|
-| `extension/src/` | ホスト: コマンド、ワークスペース信頼、シークレットストレージ、sidecar のライフサイクル | ~30k 行の TS |
-| `extension/webview/` | React ワークベンチ: 3 つの入口と 6 つのルート + Zustand + 8 言語 | ~50k 行の TSX |
-| `extension/tests/` | node:test スイート（220 ファイル / 1,679 ケース） | 73,744 行 |
-| `server/app/` | FastAPI の頭脳: agent / pedagogy / memory / FSRS / training | ~120k 行の Python |
-| `server/tests/` | pytest スイート（159 ファイル / 1,649 ケース） | 106,422 行 |
-| `shared/src/` | **共有純粋関数 + 24 個のガバナンスモジュール**（host + webview + test） | ~3k 行の TS |
-| `extension/bundled/` | VSIX にバンドルされた sidecar（PyInstaller onedir） | ~250 MB |
+| `extension/src/` | VS Code ホスト：コマンド、SecretStorage、WorkspaceGateway、Sidecar 管理 | `79` TS ファイル（約 `53,286` 行） |
+| `extension/webview/src/` | React ワークベンチ：2 入口、ドロワー、単一入力欄、Shiki/KaTeX/Mermaid、8 言語 | `233` TS/TSX + `53` CSS（約 `120,507` 行） |
+| `extension/tests/` | `node:test` スイート：ホスト、共有ガバナンス、i18n、ブラウザ拡張、セキュリティ | `317` ファイル · **`2,401` テスト** |
+| `server/app/` | FastAPI sidecar：ReAct、RethinkFun、FSRS/メモリ、取り込み、サンドボックス検証 | `232` Python ファイル（約 `173,863` 行） |
+| `server/tests/` | `pytest` バックエンドテスト（API、教育カーネル、メモリ、プロバイダ、権限） | `295` ファイル · **`4,205` 収集テスト** |
+| `shared/src/` | Host・Webview・テストで共有する決定論的ガバナンス純粋関数モジュール | `76` モジュール（約 `29,508` 行 · `523` エクスポート） |
+| `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS ファイル（`746` 行） |
+| `browser-extension/` | Chromium MV3 ポップアップ、オフラインキュー、コンテキストメニュー、Side Panel | `8` ファイル（`6,977` 行） |
+| `extension/bundled/` | PyInstaller 凍結 sidecar & `trainer-workspace-companion.vsix` | 約 `245 MB` |
 
-### 唯一の共通エンベロープ
+### 統一スナップショット契約（`WorkbenchSnapshot`）
 
-> Trainer の HTTP レスポンスはすべて（`/health` を除き）、**同一の** `WorkbenchSnapshot`（31 フィールド）を返します。
-
-| カテゴリ | フィールドの例 | 生成元 |
-|---|---|---|
-| セッション | `messages`, `coaching_state`, `learner_state` | `pedagogy/service.py` |
-| プラン | `plan`, `global_plan`, `project_plan_link`, `current_task` | `planner/service.py` |
-| メモリ | `memory`, `selected_teaching_assets`, `next_review_due` | `memory/service.py` |
-| ティーチング | `teaching_decision`, `implementation_guide`, `project_ideas` | `pedagogy/*` |
-| アフェクト | `affect_state`, `tone_decision` | `affect/service.py` |
-| トレーニング | `evaluation`, `review_queue_summary` | `training/*` |
-| メタ | `context_id`, `sidecar_status`, `snapshot_revision`, `active_panel` | `api/runtime.py` |
-
-**なぜ 1 つのエンベロープなのか:**
-- webview は**この 1 つのオブジェクトだけで完全に描画**されます — 12 のサブシステムがフィールドを書き込み、ハイドレートは 1 回だけ
-- **CRDT ライトな増分同期**: 各スナップショットは `snapshot_revision` を持ちます。`GET /snapshot?since_revision=N` は N が古いときだけ完全なデータを送り、そうでなければ `{unchanged: true}` を返します
-- 主要コード: `server/app/core/models.py:2304-2336` · `server/app/api/routers.py:11648-11710`
-
-### 共有ガバナンスモジュール
-
-> Trainer のアーキテクチャの背骨は **24 個の純粋関数ガバナンスモジュール**です — host、webview、test がすべて同じ決定論的ロジックを走らせます。
-
-| モジュール | 役割 |
-|---|---|
-| `planGovernance` · `masterPlanGovernance` | プラン編集、クロスプロジェクトのマスタープラン |
-| `trainingHandoffGovernance` · `trainingRecoveryGovernance` · `trainingReliabilityGovernance` | カードのルーティング、リカバリ、信頼性 |
-| `reviewQueueGovernance` · `reviewArtifactGovernance` | FSRS キューの順序付け、エビデンスレビュー |
-| `workspaceAuthority` · `workspaceRecoveryGovernance` | 6 段階の権限、リカバリ |
-| `suggestedActionGovernance` · `conversationCandidateGovernance` | 提案アクション、会話の調停 |
-| `transferEvidenceGovernance` · `transferSkillGovernance` | クロスプロジェクトのエビデンス、スキル昇格 |
-| `coachOrientationGovernance` · `resourcesOrientationGovernance` | Coach/Resources ビューのオリエンテーション |
-| `settingsCapabilityGovernance` · `operationReliabilityGovernance` | 設定のケイパビリティゲート、操作の信頼性 |
-| `hostLastTestGovernance` · `providerModelPolicy` | プロバイダの最終テスト、モデルポリシー |
-| `sandboxNetworkCapabilityNarrative` · `projectLaneGovernance` | サンドボックス機能の説明、プロジェクトレーン |
-| `previewAssets` · `materialRecommendationGovernance` | プレビューアセットの階層、教材のレコメンデーション |
-
-**なぜなら:** 同じ `resolveSuggestedActionGovernance` が host、webview、test で走ります — **3 者間で一貫し、ラウンドトリップは不要**です。
+すべての主要状態 HTTP ルートは **`WorkbenchSnapshot`**（`server/app/core/models.py` 内のトップレベル `33` フィールド）を返し、`snapshot_revision` により差分同期します。
 
 ---
 
 ## 安全モデル
 
-- API キーは **VS Code SecretStorage**（OS レベルの暗号化）に保存されます — 設定ファイルにも git にも決して入りません
-- ワークスペースは **VS Code ネイティブの信頼機構**に従います — 未信頼の間はすべての書き込みを拒否します
-- **6 段階の権限ラダー**: INSPECT < ANNOTATE < REORGANIZE < GENERATE < APPLY < DESTRUCTIVE — デフォルトは読み取り専用。書き込み/削除/変更には段階的な attestation（証明）が必要です
-- **リモートワークスペースは REORGANIZE 未満にハードロック** — ユーザーが許可しても昇格できません
-- **削除はゴミ箱行き**: `delete` 操作は存在せず、`move to <root>/.trash/<timestamp-uuid>/` だけです
-- サンドボックスプレビューは厳格な **パスガバナンス**を強制します — 範囲外のパスには容赦なく 422 を返します
-- スキル共有は **純粋なデータのインポート**です — フィールド長には上限があり、ビルトインが優先され、**コード経路は存在しません**
-- **テレメトリはオプトイン・デフォルトオフ**：設定でスイッチを入れるまで、何もマシンの外に出ません；エクスポートは粗粒度のローカルイベント計数のみ — コンテンツなし、パスなし、身元なし（ペイロードは `scripts/verify-telemetry-payload.mjs` がスキーマ検証；同意の変更はローカルイベント台帳に監査記録）
-
-**主要コード:** `server/app/workspace/authority.py:33-962` · `extension/src/provider/providerConfigStore.ts` · `shared/src/skillCatalog.ts:614-764`
+- **API キーは OS キーチェーン / VS Code `SecretStorage` のみ** — リポジトリ・`<LibraryRoot>`・ログへ平文保存しません（`npm run verify:credentials`）
+- **VS Code Workspace Trust を fail-closed で強制** — 未信頼ウィンドウではファイル検査・検証を遮断
+- **6 段階ワークスペース権限ラダー**（`server/app/workspace/authority.py`）：開発リポジトリは既定で読み取り専用、Remote-SSH 環境では書き込みを強制ロック
+- **復元可能なゴミ箱 + `<LibraryRoot>`**：削除してもゴミ箱へ移動し、開発リポジトリへ隠し設定やキャッシュを一切残しません
+- **純粋 JSON スキル共有**：スキーマ／文字数検査のみ、動的コード実行なし
+- **テレメトリは既定オフのオプトイン**：コードやパス・プロンプトは一切送信しません
 
 ---
 
 ## 品質ゲート
 
-> Trainer は自身の検証スタックを 1 つの製品として扱います。
+> 以下の数値はすべて `main` ブランチ（`v1.4.4`）で直接計測した実績です：
 
-| ゲート | カバレッジ | 備考 |
+| ゲート | 対象と検証結果 | コマンド |
 |---|---|---|
-| **サーバーテスト**（pytest） | **159 ファイル / 1,649 ケース / 106,422 行** | Hypothesis によるプロパティベーススイート 6 件を含む |
-| **拡張機能テスト**（node:test） | **220 ファイル / 1,679 ケース / 73,744 行** | ソースガード 109 ファイル + 振る舞いテスト 111 件 |
-| **E2E** | **11 spec / 4,335 行** | 実際の VS Code インスタンス × 実際のモデル |
-| **エクスペリエンスマトリクス** | **200 シナリオ × 2 レイヤ** | プレビューフィクスチャ + 実 sidecar |
-| **VSIX ホストドライバ** | **33 ステップ** | インストール → 有効化 → ストリーミング → 検証 → 実際の webview 描画をアサート |
-| **静的解析** | ruff + pyright + tsc | 警告ゼロ |
-| **プロトコルマトリクス** | **5 プロトコル** | OpenAI Chat / Responses / Anthropic / Gemini / OpenAI-Compatible |
-| **i18n** | **8 言語 × 600+ キー** | zh-CN / en-US / es-ES / fr-FR / de-DE / ja-JP / ko-KR / pt-BR |
-| **バンドル sidecar** | **6 プラットフォームバイナリ** | win32-x64 / win32-arm64 / darwin-x64 / darwin-arm64 / linux-x64 / linux-arm64 |
+| **サーバーテスト (`pytest`)** | **295 ファイル · 4,205 テスト**（＋サブテスト） | `npm run test:server` |
+| **拡張機能テスト (`node:test`)** | **317 ファイル · 2,401 テスト**（`2,400` 合格、`1` 条件スキップ、`0` 失敗） | `npm run test:extension` |
+| **静的解析 & 型検証** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
+| **UI ジオメトリ検査** | 単一入力欄主権、2 入口シェル、はみ出し検査（`340/420/460px` × 明暗 × 中英） | `npm run verify:ui-geometry` |
+| **i18n 完全性ゲート** | **213** `appUiCopy` + **212** `settingsText` + **272** `hostCommandCopy` × **8 言語**（欠損 0） | `npm run verify:i18n` |
+| **語彙・機密スキャン** | UI 文言 **68 ファイル**異常なし · リポジトリ **4,027 ファイル**平文キー 0 件 | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **Playwright E2E & Remote-SSH** | **30** Playwright spec（`166` ケース）+ 実 sidecar 行列 + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **CI リリースビルド対象** | **3 デスクトップ基盤**：`win32-x64`、`darwin-arm64`、`linux-x64` | `.github/workflows/release.yml` |
 
-**E2E スイートは、実際の VS Code インスタンスで実際のモデルに対して実行されます:**
-
-> パッケージ化された拡張機能を有効化 → バンドル sidecar を起動 → プロバイダを保存 → コーチターン全体をストリーミング → トレーニングカードを生成して検証 → webview が**実際に描画した**内容をアサート → スクリーンショット → ワークスペースをまたいで開き直して履歴を復元。
-
-**テストは自らの限界を自認します:**
-各 E2E シナリオは `evidence: { realSidecar, limitation }` を持っています — **テスト自身が、証明していないことを宣言する**のです。
+*（注：最終的な人手による教育品質受領確認 `T-0028` は [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md) にて手動ゲートとして管理しています。）*
 
 ---
 
 ## i18n · 8言語
 
-| 言語 | コード | 主要 |
-|---|---|---|
-| 简体中文 | `zh-CN` | ✅ |
-| English | `en-US` | ✅ |
-| Español | `es-ES` | ✅ |
-| Français | `fr-FR` | ✅ |
-| Deutsch | `de-DE` | ✅ |
-| 日本語 | `ja-JP` | ✅ |
-| 한국어 | `ko-KR` | ✅ |
-| Português | `pt-BR` | ✅ |
+UI、設定画面、ホスト通知、ブラウザ拡張機能、README が **8 言語** で並行提供されています：
 
-**フォールバックチェーン:** ユーザー設定 > VS Code `env.language` > `zh-CN`（デフォルト）
+`zh-CN` · `en-US` · `es-ES` · `fr-FR` · `de-DE` · `ja-JP` · `ko-KR` · `pt-BR`
 
-**6 つのサーフェス単位オーバーライド:** `resourceView` / `contextRail` / `trainingUi` / `orientationRail` / `composerAccessibility` / `leftoverHonesty` — 翻訳者は自分が担当するサーフェスだけを埋めればよく、**600+ キーの完全なテーブルを埋める必要はありません**。
-
-主要コード: `extension/webview/src/lib/i18n/copy.ts`（5,283 行）
+`npm run verify:i18n` によって欠損・他言語混入が自動検証されます（`extension/webview/src/lib/i18n/copy.ts`）。
 
 ---
 
 ## 謝辞
 
-> Trainer は巨人の肩の上に立っています。
-
-### 🏃 ランタイムコア
-
-| プロジェクト | 用途 | 代替が利かない理由 |
-|---|---|---|
-| [FastAPI](https://github.com/fastapi/fastapi) | ローカル sidecar フレームワーク | async + Pydantic + 自動 OpenAPI ドキュメント |
-| [Uvicorn](https://github.com/encode/uvicorn) | ASGI サーバ | HTTP/1.1 + WebSocket + 高同時実行 |
-| [Pydantic](https://github.com/pydantic/pydantic) | データ検証とシリアライズ | 31 フィールドの WorkbenchSnapshot はこれで動いています |
-| [httpx](https://github.com/encode/httpx) | 非同期 HTTP クライアント | sidecar ↔ LLM ゲートウェイの全プロトコルルーティング |
-
-### 🤖 LLM プロトコル
-
-| プロジェクト | 用途 |
-|---|---|
-| [openai-python](https://github.com/openai/openai-python) | OpenAI / Anthropic / Gemini 互換クライアント（5 プロトコルルーティング） |
-
-### 🧠 トレーニングとメモリ
-
-| プロジェクト | 用途 |
-|---|---|
-| [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) | FSRS 忘却曲線の復習スケジューリング · `TrainingCardState` を駆動 |
-| [qdrant-client](https://github.com/qdrant/qdrant-client) | セマンティックメモリのベクトル検索（sentence-transformer フォールバック付き） |
-| [PyMuPDF](https://github.com/pymupdf/PyMuPDF) | PDF パース（ライブラリの Tier A プレビュー） |
-| [trafilatura](https://github.com/adbar/trafilatura) | Web コンテンツ抽出（リソースの取り込み） |
-| [markitdown](https://github.com/microsoft/markitdown) | ドキュメント → Markdown 変換（ライブラリの Tier B プレビュー） |
-
-### ⚛️ フロントエンドコア
-
-| プロジェクト | 用途 |
-|---|---|
-| [React](https://github.com/facebook/react) | サイドバーのワークベンチ UI |
-| [Vite](https://github.com/vitejs/vite) | ビルドツール + 開発サーバ |
-| [Zustand](https://github.com/pmndrs/zustand) | ワークベンチの状態管理 |
-| [Zod](https://github.com/colinhacks/zod) | ランタイム型検証 |
-
-### 🎨 レンダリング
-
-| プロジェクト | 用途 |
-|---|---|
-| [react-markdown](https://github.com/remarkjs/react-markdown) | Markdown レンダリング |
-| [remark-gfm](https://github.com/remarkjs/remark-gfm) | GFM 拡張（テーブル、タスクリスト） |
-| [remark-math](https://github.com/remarkjs/remark-math) · [rehype-katex](https://github.com/remarkjs/rehype-katex) · [KaTeX](https://github.com/KaTeX/KaTeX) | 数式レンダリング |
-| [Shiki](https://github.com/shikijs/shiki) | コードハイライト（VS Code TextMate 文法） |
-| [Mermaid](https://github.com/mermaid-js/mermaid) | 図とフローチャート |
-| [@tanstack/react-table](https://github.com/TanStack/table) | ライブラリ / トレーニングキューのテーブル |
-
-### 📄 プレビュー
-
-| プロジェクト | 用途 |
-|---|---|
-| [mammoth](https://github.com/mwilliamson/mammoth.js) · [docx-preview](https://github.com/VolodymyrBaydalka/docx-preview) | DOCX のリッチレンダリング（Tier A） |
-| PDF.js（バンドル） | PDF のリッチレンダリング（Tier A） |
-
-### 🧪 テストと品質
-
-| プロジェクト | 用途 |
-|---|---|
-| [pytest](https://github.com/pytest-dev/pytest) · [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio) | サーバー 159 ファイル / 1,649 ケース |
-| [Hypothesis](https://github.com/HypothesisWorks/hypothesis) | プロパティテスト（planner / evaluator / scheduler） |
-| [ruff](https://github.com/astral-sh/ruff) | Python lint + フォーマット（E/F/I/B、py312、100 カラム） |
-| [pyright](https://github.com/microsoft/pyright) | Python 静的型検査 |
-| [TypeScript](https://github.com/microsoft/TypeScript) | strict モード、警告ゼロ |
-| [Playwright](https://github.com/microsoft/playwright) | E2E + 200 シナリオのエクスペリエンスマトリクス |
-
-### 📦 パッケージングと配布
-
-| プロジェクト | 用途 |
-|---|---|
-| [PyInstaller](https://github.com/pyinstaller/pyinstaller) | sidecar バイナリのフリーズ（6 プラットフォーム、manifest sha256） |
-
-### 💡 方法論のインスピレーション
-
-| プロジェクト | インスピレーション |
-|---|---|
-| [open-spaced-repetition/fsrs4anki](https://github.com/open-spaced-repetition/fsrs4anki) | FSRS の原論文とリファレンス実装 |
-| [obra/superpowers](https://github.com/obra/superpowers) | 「必須のワークフロー、提案にあらず」というコーチングの規律 |
-| [HKUDS/CLI-Anything](https://github.com/HKUDS/CLI-Anything) | 「すべてのソフトウェアをエージェントネイティブに」という野心 |
-
-### 🎨 ビジュアルアセット
-
-| プロジェクト | 用途 |
-|---|---|
-| [dora-image](https://github.com/AI-yyf/trainer/tree/main/assets) | この README のすべての画像（`assets/MASCOT.md` / `BANNER_PROMPT.md` / `FEATURE_PROMPTS.md` を参照） |
-| DeepSeek 公式の萌えキャラクター | ちび体型 / セルシェーディング寄りのリファレンス |
-| ピーテル・ブリューゲル『バベルの塔』 | 左右の陣営に分かれた群像構図のリファレンス |
-| レンブラント『夜警』 | 7:1 のキアロスクーロ対比のリファレンス |
-| スタジオジブリのキャラクターデザイン | 3 点ハイライト入りの大きな目、抑えた表情 |
+- **ランタイム & HTTP**：[FastAPI](https://github.com/fastapi/fastapi) · [Uvicorn](https://github.com/encode/uvicorn) · [Pydantic](https://github.com/pydantic/pydantic) · [httpx](https://github.com/encode/httpx) · [openai-python](https://github.com/openai/openai-python)
+- **メモリ・FSRS・取り込み**：[py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) · [qdrant-client](https://github.com/qdrant/qdrant-client) · [PyMuPDF](https://github.com/pymupdf/PyMuPDF) · [Trafilatura](https://github.com/adbar/trafilatura) · [MarkItDown](https://github.com/microsoft/markitdown)
+- **フロントエンド & 描画**：[React](https://github.com/facebook/react) · [Vite](https://github.com/vitejs/vite) · [Zustand](https://github.com/pmndrs/zustand) · [Zod](https://github.com/colinhacks/zod) · [react-markdown](https://github.com/remarkjs/react-markdown) · [KaTeX](https://github.com/KaTeX/KaTeX) · [Shiki](https://github.com/shikijs/shiki) · [Mermaid](https://github.com/mermaid-js/mermaid) · [@tanstack/react-table](https://github.com/TanStack/table) · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth](https://github.com/mwilliamson/mammoth.js) · [docx-preview](https://github.com/VolodymyrBaydalka/docx-preview)
+- **テスト & パッケージ**：[pytest](https://github.com/pytest-dev/pytest) · [Hypothesis](https://github.com/HypothesisWorks/hypothesis) · [ruff](https://github.com/astral-sh/ruff) · [pyright](https://github.com/microsoft/pyright) · [TypeScript](https://github.com/microsoft/TypeScript) · [Playwright](https://github.com/microsoft/playwright) · [PyInstaller](https://github.com/pyinstaller/pyinstaller)
+- **ビジュアルアセット**：**[GPT Image](https://github.com/AI-yyf/trainer/tree/main/assets)** で生成（`assets/MASCOT.md` · `assets/BANNER_PROMPT.md` · `assets/FEATURE_PROMPTS.md`）
 
 ---
 
@@ -581,8 +389,6 @@ Training を開く → カードをめくる → 合格基準を確認する →
 ---
 
 ## Trainer の引用
-
-Trainer があなたのワークフローに役立ったなら、ブログ / 論文 / 発表でぜひ引用してください:
 
 ```bibtex
 @software{trainer2026,
@@ -600,6 +406,6 @@ Trainer があなたのワークフローに役立ったなら、ブログ / 論
 
 **// AIを鍛える · AIとともに成長する**
 
-`v1.4.4` · コーヒーと、FSRS と、24 個の純粋関数と、3,328 個のテストと、あなたの代わりにコードを書くことを拒む心で作られています。
+`v1.4.4` · コーヒーと FSRS、RethinkFun State-Flow 教育カーネル、6,606 個の自動テスト、そしてあなたの代わりにコードを書くことを拒むコーチで作られています。
 
 </div>

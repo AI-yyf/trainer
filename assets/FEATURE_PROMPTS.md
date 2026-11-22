@@ -1141,31 +1141,24 @@ polyglot harmony
 
 ---
 
-## 通用生成脚本
+## 通用生成方式（GPT Image）
 
-每张图用同一脚本生成（改文件名 + prompt 文件路径）：
+每张子图均通过 OpenAI **GPT Image**（`gpt-image-1`）生成，传入对应分镜的 `[STYLE LOCK]` Prompt 即可：
 
-```bash
-python3 scripts/generate_dora_image.py \
-  --prompt "$(cat assets/prompts/<name>.md | grep -A 10000 '\[STYLE LOCK\]')" \
-  --model gpt-image-2 \
-  --workflow normal \
-  --aspect-ratio $(case <name> in \
-    banner) echo "16:9" ;; \
-    feat-*) echo "16:9" ;; \
-    diagram-*) echo "16:9" ;; \
-  esac) \
-  --target-size $(case <name> in \
-    banner) echo "3840x2160" ;; \
-    feat-*) echo "1600x900" ;; \
-    diagram-*) echo "2400x1350" ;; \
-  esac) \
-  --quality high \
-  --generation-mode standard \
-  --output-format png \
-  --output assets/<name>@4k.png
+```python
+from openai import OpenAI
+import base64
 
-cwebp -q 82 assets/<name>@4k.png -o assets/<name>.webp
+client = OpenAI()
+result = client.images.generate(
+    model="gpt-image-1",
+    prompt=FEATURE_PROMPT,  # 复制对应章节 [STYLE LOCK] 起的正文
+    size="1536x1024",
+    quality="high",
+    output_format="png",
+)
+with open("assets/feat-<name>.png", "wb") as out:
+    out.write(base64.b64decode(result.data[0].b64_json))
 ```
 
 ---

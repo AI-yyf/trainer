@@ -2,7 +2,7 @@
 
 Persistent working state for the autonomous convergence loop.
 
-- `product-contract.md` — locked product positioning, v2 (2026-11-20). Changes only through its decision log (§11).
+- `product-contract.md` — locked product positioning, v2.1 (2026-11-21). Changes only through its decision log (§11).
 - `architecture-contract.md` — standing architecture constraints.
 - `design-contract.md` — locked design system and UX rules.
 - `issue-registry.json` — the single source of truth for open defects.
@@ -10,7 +10,6 @@ Persistent working state for the autonomous convergence loop.
 - `acceptance-matrix.json` — release gates and their real evidence.
 - `run-state.json` — current loop checkpoint (safe to resume from).
 - `handoff.md` — what a fresh session must know.
-- `evidence/` — per-task test/evidence artifacts (never secrets).
 
 Rules:
 - Task IDs are stable and never reused for a different defect.

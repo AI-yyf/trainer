@@ -23,7 +23,7 @@
 
 ---
 
-## 1. 主 Prompt（可直接喂给 dora-image）
+## 1. 主 Prompt（可直接喂给 GPT Image）
 
 ```text
 [ART DIRECTION]
@@ -230,22 +230,25 @@ perspective, volumetric god-rays, cinematic depth of field
 
 ---
 
-## 2. 生成参数建议（dora-image 调用）
+## 2. 生成参数建议（GPT Image 调用）
 
-```bash
-python3 scripts/generate_dora_image.py \
-  --prompt "$(cat assets/BANNER_PROMPT.md | tail -n +30)" \
-  --model gpt-image-2 \
-  --workflow normal \
-  --aspect-ratio 16:9 \
-  --target-size 3840x2160 \
-  --quality high \
-  --generation-mode standard \
-  --output-format png \
-  --output assets/banner@4k.png
+```python
+from openai import OpenAI
+import base64
 
-# 之后用 cwebp 压成 webp：
-cwebp -q 82 assets/banner@4k.png -o assets/banner.webp
+client = OpenAI()
+with open("assets/BANNER_PROMPT.md") as f:
+    prompt = f.read().split("## 1.", 1)[1].split("```text", 1)[1].split("```", 1)[0].strip()
+
+result = client.images.generate(
+    model="gpt-image-1",
+    prompt=prompt,
+    size="1536x1024",
+    quality="high",
+    output_format="png",
+)
+with open("assets/banner.png", "wb") as out:
+    out.write(base64.b64decode(result.data[0].b64_json))
 ```
 
 ---
