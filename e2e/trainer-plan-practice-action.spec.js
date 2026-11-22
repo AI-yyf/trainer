@@ -4,8 +4,9 @@ const { closeLearningDrawer } = require("./workbench-navigation");
 async function clickPracticeAction(page) {
   const action = page.getByRole('button', { name: '下一步：设为练习', exact: true });
   if ((await action.count()) === 0) {
-    // The latest reply tucks its primary next action behind the icon toggle.
-    await page.getByRole('button', { name: '下一步', exact: true }).click();
+    // The latest reply tucks its primary next action behind the More actions menu.
+    await page.locator('[data-message-quick-action="more"]').last().click();
+    await page.locator('[data-message-quick-action="next-action"]').last().click();
   }
   await action.click();
 }

@@ -134,10 +134,20 @@ test("single-folder cold start auto-adopts and auto-sends once managed, or keeps
         window.location.origin,
       ),
   );
+  await expect(page.locator("[data-system-state=recoverable-error]")).toBeVisible();
   await expect(composer).toHaveValue("Explain idempotency keys from first principles");
 
   // Retry submit and succeed -> auto-sends immediately once managed.
   await composer.press("Enter");
+  await expect.poll(() =>
+    page.evaluate(() =>
+      window.__TRAINER_E2E_HOST_ACTIONS__.filter(
+        (action) =>
+          action.type === "command/execute" &&
+          action.payload?.commandId === "trainer.workspace.adoptProject",
+      ).length,
+    ),
+  ).toBe(2);
   await page.evaluate(
     (payload) => window.postMessage({ type: "bootstrap", payload }, window.location.origin),
     withAdmission(bootstrap, {

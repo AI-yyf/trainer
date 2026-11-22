@@ -2112,9 +2112,9 @@
   gap: 8px;
   margin-top: 2px;
   padding-block: var(--space-2);
-  background: color-mix(in srgb, var(--bg-0) 94%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 96%, var(--bg-0));
   backdrop-filter: blur(8px);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid color-mix(in srgb, var(--line) 56%, transparent);
 }
 
 .settings-model-editor__footer .action-button--accent {

@@ -46,7 +46,8 @@ test('the reading library opens one file directly and removes management panels'
   for (const width of [300, 360, 800]) {
     await page.setViewportSize({ width, height: 760 });
     await expect(page.locator('#coach-composer')).toBeVisible();
-    await expect(page.locator('.resources-knowledge input[type=search]')).toHaveCount(0);
+    await expect(page.locator('.resources-knowledge__toolbar input[type=search]')).toHaveCount(1);
+    await expect(page.locator('[data-library-folders]')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
 });
@@ -79,9 +80,22 @@ test('nested folders stay distinct, support keyboard navigation and open their f
   await expect(page.getByRole('treeitem', { name: '随手笔记.md', exact: true })).toBeVisible();
   const python = page.getByRole('group', { name: 'Python', exact: true });
   await expect(python).toBeVisible();
-  const nested = page.getByRole('group', { name: '基础 / 容器', exact: true });
+  const pythonHeader = python.locator('.collapse-section__header').first();
+  if ((await pythonHeader.getAttribute('aria-expanded')) === 'false') {
+    await pythonHeader.click();
+  }
+  const baseGroup = python.getByRole('group', { name: '基础', exact: true });
+  await expect(baseGroup).toBeVisible();
+  const baseHeader = baseGroup.locator('.collapse-section__header').first();
+  if ((await baseHeader.getAttribute('aria-expanded')) === 'false') {
+    await baseHeader.click();
+  }
+  const nested = baseGroup.getByRole('group', { name: '容器', exact: true });
   await expect(nested).toBeVisible();
   const folderButton = nested.locator('.collapse-section__header').first();
+  if ((await folderButton.getAttribute('aria-expanded')) === 'false') {
+    await folderButton.click();
+  }
   await folderButton.focus();
   await folderButton.press('ArrowLeft');
   await expect(folderButton).toHaveAttribute('aria-expanded', 'false');

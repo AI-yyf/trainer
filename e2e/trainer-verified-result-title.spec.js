@@ -2,7 +2,7 @@ const { test, expect } = require('playwright/test');
 const { planOnlyFixture } = require('./learning-fixtures');
 const { openLearningDrawer } = require('./workbench-navigation');
 
-for (const [language, title] of [['zh-CN', '确认这次验证结果'], ['en-US', 'Confirm this verification result']]) {
+for (const [language, title] of [['zh-CN', '确认本次验证结果'], ['en-US', 'Confirm this verification result']]) {
   test(`verified training return uses a clear ${language} primary title and keeps raw evidence in disclosure`, async ({ page }) => {
     await page.goto(`/vscode-preview.html?view=plan&lang=${language}&connection=connected&run=verified-result-title-${language}`);
     await expect(page.locator('#root[data-trainer-app-ready="true"]')).toBeVisible();

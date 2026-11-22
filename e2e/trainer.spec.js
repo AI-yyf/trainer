@@ -1511,7 +1511,7 @@ test.describe("Trainer two-destination shell", () => {
     await expect(page.locator("main")).toContainText("Connection diagnostics");
     await expect(page.locator("main")).toContainText("Add provider");
     await expect(page.locator("main")).toContainText("Final capabilities");
-    await expect(page.locator("main")).toContainText(/chat\s*Ready/);
+    await expect(page.locator("main")).toContainText(/chat\s*Ready/i);
     await expect(page.getByText("Connection needs test", { exact: true })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
     await expectNoConsoleErrors(errors);

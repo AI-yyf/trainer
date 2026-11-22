@@ -1177,14 +1177,18 @@
 
 .resources-knowledge__import-menu {
   align-self: flex-end;
-  min-width: 164px;
+  margin-inline-start: auto;
+  width: max-content;
+  min-width: 176px;
   max-width: min(260px, calc(100vw - 24px));
-  margin-top: -4px;
+  margin-top: 6px;
+  margin-bottom: 6px;
   padding: var(--space-1);
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: var(--radius-md);
   background: var(--bg-1);
   box-shadow: 0 8px 18px color-mix(in srgb, var(--bg-0) 42%, transparent);
+  transform-origin: top right;
 }
 
 .resources-knowledge__import-menu .menu-list__item {

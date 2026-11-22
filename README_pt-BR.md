@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · Português
 
-[![Versão](https://img.shields.io/badge/source-v1.6.0-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Versão](https://img.shields.io/badge/source-v1.6.1-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![Licença](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Plataformas](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#instalação)
 [![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#portões-de-qualidade)
@@ -76,7 +76,7 @@ Não é uma casca de chat — é um coach com memória duradoura, currículo em 
 Baixe o `.vsix` compatível com o seu sistema e arquitetura (`darwin-arm64` / `linux-x64` / `win32-x64`) em [Releases](https://github.com/AI-yyf/trainer/releases/latest):
 
 ```bash
-code --install-extension trainer-extension-1.6.0-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.6.1-<platform>-<arch>.vsix --force
 ```
 
 Ou no painel de Extensões do VS Code → `···` → *Instalar do VSIX…* → recarregue a janela. Veja mais detalhes em [`extension/README.install.md`](extension/README.install.md).
@@ -345,7 +345,7 @@ Todas as rotas HTTP principais de estado retornam o objeto único **`WorkbenchSn
 
 ## Portões de qualidade
 
-> Todos os números refletem verificações reais na branch `main` (`v1.6.0`):
+> Todos os números refletem verificações reais na branch `main` (`v1.6.1`):
 
 | Portão | Escopo e resultado verificado | Comando |
 |---|---|---|
@@ -397,7 +397,7 @@ Verificado automaticamente via `npm run verify:i18n` (`extension/webview/src/lib
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.6.0}
+  note   = {v1.6.1}
 }
 ```
 
@@ -407,6 +407,6 @@ Verificado automaticamente via `npm run verify:i18n` (`extension/webview/src/lib
 
 **// Treine sua IA · Cresça com sua IA**
 
-`v1.6.0` · Feito com café, FSRS, pedagogia RethinkFun State-Flow, 6.606 testes automatizados e um coach que se recusa a escrever código por você.
+`v1.6.1` · Feito com café, FSRS, pedagogia RethinkFun State-Flow, 6.606 testes automatizados e um coach que se recusa a escrever código por você.
 
 </div>

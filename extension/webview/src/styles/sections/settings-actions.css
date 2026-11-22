@@ -75,3 +75,23 @@
   display: none;
 }
 
+.settings-actions--compact.settings-model-editor__footer .action-button.action-button--accent:not(:disabled) {
+  border-color: var(--fg-0);
+  background: var(--fg-0);
+  color: var(--bg-0);
+}
+
+.settings-actions--compact.settings-model-editor__footer .action-button.action-button--accent:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--fg-0) 88%, var(--bg-0));
+  background: color-mix(in srgb, var(--fg-0) 88%, var(--bg-0));
+  color: var(--bg-0);
+}
+
+.settings-actions--compact.settings-model-editor__footer .action-button.action-button--accent:disabled {
+  border-color: color-mix(in srgb, var(--line) 46%, transparent);
+  background: color-mix(in srgb, var(--bg-2) 65%, transparent);
+  color: var(--fg-muted);
+  opacity: 0.78;
+  cursor: default;
+}
+
