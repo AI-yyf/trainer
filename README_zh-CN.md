@@ -146,7 +146,7 @@ Trainer 彻底告别分散存储与目录污染：一切学习资料、讲稿笔
 
 ### ③ RethinkFun 状态流教学内核 —— 快节奏引导、深推导讲稿、实事求是问答
 
-所有教学与训练自然收敛进对话流，而不是另开一套繁琐的卡片增删改查后台：
+Trainer 的状态流直观教学法直接受技术博主 **[RethinkFun](https://rethink.fun)** 启发（从直觉问题切入、逐帧消解状态缺口、不堆“显然/易得”跳步垫词，并将可运行代码逐行回指底层原理）。所有教学与训练自然收敛进对话流，而不是另开一套繁琐的卡片增删改查后台：
 
 <p align="center"><img src="assets/feat-training.png" alt="状态流训练闭环" width="720" /></p>
 
@@ -378,6 +378,7 @@ Trainer 彻底告别分散存储与目录污染：一切学习资料、讲稿笔
 - **长期记忆、FSRS 与文档解析**：[py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) · [qdrant-client](https://github.com/qdrant/qdrant-client) · [PyMuPDF](https://github.com/pymupdf/PyMuPDF) · [Trafilatura](https://github.com/adbar/trafilatura) · [MarkItDown](https://github.com/microsoft/markitdown)
 - **前端与富文本渲染**：[React](https://github.com/facebook/react) · [Vite](https://github.com/vitejs/vite) · [Zustand](https://github.com/pmndrs/zustand) · [Zod](https://github.com/colinhacks/zod) · [react-markdown](https://github.com/remarkjs/react-markdown) · [KaTeX](https://github.com/KaTeX/KaTeX) · [Shiki](https://github.com/shikijs/shiki) · [Mermaid](https://github.com/mermaid-js/mermaid) · [@tanstack/react-table](https://github.com/TanStack/table) · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth](https://github.com/mwilliamson/mammoth.js) · [docx-preview](https://github.com/VolodymyrBaydalka/docx-preview)
 - **测试、静态检查与打包**：[pytest](https://github.com/pytest-dev/pytest) · [Hypothesis](https://github.com/HypothesisWorks/hypothesis) · [ruff](https://github.com/astral-sh/ruff) · [pyright](https://github.com/microsoft/pyright) · [TypeScript](https://github.com/microsoft/TypeScript) · [Playwright](https://github.com/microsoft/playwright) · [PyInstaller](https://github.com/pyinstaller/pyinstaller)
+- **教学方法与理念启发**：状态流直观教学方式灵感源自 AI 技术博主 **[RethinkFun](https://rethink.fun)** · [open-spaced-repetition/fsrs4anki](https://github.com/open-spaced-repetition/fsrs4anki)
 - **视觉素材**：由 **[GPT Image](https://github.com/AI-yyf/trainer/tree/main/assets)** 生成（规范见 `assets/MASCOT.md` · `assets/BANNER_PROMPT.md` · `assets/FEATURE_PROMPTS.md`）
 
 ---

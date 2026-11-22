@@ -146,7 +146,7 @@ Alle gelernten Signale, gesammelten Materialien und gespeicherten Vorlesungsnoti
 
 ### ③ RethinkFun State-Flow Trainingsschleife
 
-Das Training lebt direkt in der Konversation statt hinter verstreuten Verwaltungs-Tabellen:
+Die zustandsbasierte, intuitionsgeleitete Lehrmethode von Trainer ist direkt vom Tech-Blogger und KI-Pädagogen **[RethinkFun](https://rethink.fun)** inspiriert (Problemkontext zuerst, lückenlose Herleitung ohne „offensichtlich“-Füllwörter und direkte Rückbindung zwischen Code und Theorie). Das Training lebt unmittelbar in der Konversation statt hinter verstreuten Verwaltungs-Tabellen:
 
 <p align="center"><img src="assets/feat-training.png" alt="Die Trainingsschleife" width="720" /></p>
 
@@ -378,6 +378,7 @@ Automatisch abgesichert über `npm run verify:i18n` (`extension/webview/src/lib/
 - **Gedächtnis, FSRS & Parsing**: [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) · [qdrant-client](https://github.com/qdrant/qdrant-client) · [PyMuPDF](https://github.com/pymupdf/PyMuPDF) · [Trafilatura](https://github.com/adbar/trafilatura) · [MarkItDown](https://github.com/microsoft/markitdown)
 - **Frontend & Rendering**: [React](https://github.com/facebook/react) · [Vite](https://github.com/vitejs/vite) · [Zustand](https://github.com/pmndrs/zustand) · [Zod](https://github.com/colinhacks/zod) · [react-markdown](https://github.com/remarkjs/react-markdown) · [KaTeX](https://github.com/KaTeX/KaTeX) · [Shiki](https://github.com/shikijs/shiki) · [Mermaid](https://github.com/mermaid-js/mermaid) · [@tanstack/react-table](https://github.com/TanStack/table) · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth](https://github.com/mwilliamson/mammoth.js) · [docx-preview](https://github.com/VolodymyrBaydalka/docx-preview)
 - **Testing & Paketierung**: [pytest](https://github.com/pytest-dev/pytest) · [Hypothesis](https://github.com/HypothesisWorks/hypothesis) · [ruff](https://github.com/astral-sh/ruff) · [pyright](https://github.com/microsoft/pyright) · [TypeScript](https://github.com/microsoft/TypeScript) · [Playwright](https://github.com/microsoft/playwright) · [PyInstaller](https://github.com/pyinstaller/pyinstaller)
+- **Pädagogische Inspiration**: Lehrmethodik inspiriert vom Tech-Creator **[RethinkFun](https://rethink.fun)** (State-Flow-Intuition vor bloßen Formeln) · [fsrs4anki](https://github.com/open-spaced-repetition/fsrs4anki)
 - **Visuelle Assets**: Generiert mit **[GPT Image](https://github.com/AI-yyf/trainer/tree/main/assets)** (`assets/MASCOT.md` · `assets/BANNER_PROMPT.md` · `assets/FEATURE_PROMPTS.md`)
 
 ---

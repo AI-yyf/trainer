@@ -146,7 +146,7 @@ Trainer가 기억하는 학습 상태, 수집한 자료, 저장된 강의 노트
 
 ### ③ RethinkFun State-Flow 훈련 루프
 
-별도의 카드 CRUD 관리 화면으로 쫓아내지 않고 대화 안에서 모든 훈련이 자연스럽게 이어집니다:
+Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이터 **[RethinkFun](https://rethink.fun)** 의 교육 방식에서 직접 영감을 받았습니다(기존 해법이 막히는 지점부터 출발해 "자명하다" 같은 비약 없이 단계별로 유도하고, 최소 실행 코드를 원리에 곧바로 연결). 별도의 카드 CRUD 관리 화면으로 쫓아내지 않고 대화 안에서 모든 훈련이 자연스럽게 이어집니다:
 
 <p align="center"><img src="assets/feat-training.png" alt="훈련 루프" width="720" /></p>
 
@@ -378,6 +378,7 @@ Trainer가 기억하는 학습 상태, 수집한 자료, 저장된 강의 노트
 - **기억, FSRS & 수집**: [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) · [qdrant-client](https://github.com/qdrant/qdrant-client) · [PyMuPDF](https://github.com/pymupdf/PyMuPDF) · [Trafilatura](https://github.com/adbar/trafilatura) · [MarkItDown](https://github.com/microsoft/markitdown)
 - **프론트엔드 & 렌더링**: [React](https://github.com/facebook/react) · [Vite](https://github.com/vitejs/vite) · [Zustand](https://github.com/pmndrs/zustand) · [Zod](https://github.com/colinhacks/zod) · [react-markdown](https://github.com/remarkjs/react-markdown) · [KaTeX](https://github.com/KaTeX/KaTeX) · [Shiki](https://github.com/shikijs/shiki) · [Mermaid](https://github.com/mermaid-js/mermaid) · [@tanstack/react-table](https://github.com/TanStack/table) · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth](https://github.com/mwilliamson/mammoth.js) · [docx-preview](https://github.com/VolodymyrBaydalka/docx-preview)
 - **테스트 & 패키징**: [pytest](https://github.com/pytest-dev/pytest) · [Hypothesis](https://github.com/HypothesisWorks/hypothesis) · [ruff](https://github.com/astral-sh/ruff) · [pyright](https://github.com/microsoft/pyright) · [TypeScript](https://github.com/microsoft/TypeScript) · [Playwright](https://github.com/microsoft/playwright) · [PyInstaller](https://github.com/pyinstaller/pyinstaller)
+- **교육 방식 영감**: 상태 흐름 직관 강의 스타일은 AI 기술 크리에이터 **[RethinkFun](https://rethink.fun)** 의 교수법에서 영감을 받았습니다 · [fsrs4anki](https://github.com/open-spaced-repetition/fsrs4anki)
 - **비주얼 에셋**: **[GPT Image](https://github.com/AI-yyf/trainer/tree/main/assets)** 로 생성 (`assets/MASCOT.md` · `assets/BANNER_PROMPT.md` · `assets/FEATURE_PROMPTS.md`)
 
 ---
