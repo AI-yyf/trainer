@@ -162,18 +162,21 @@ test('Resources opens the original source from one click or Space and has no Rea
   assert.ok(treeItemStart >= 0, 'expected the resource tree item renderer');
   assert.ok(treeItemEnd > treeItemStart, 'expected the resource tree item renderer to end');
   const treeItemSource = viewSource.slice(treeItemStart, treeItemEnd);
+  const resourceRowEnd = treeItemSource.indexOf('const isExpanded = expandedIds.has(node.id);');
+  assert.ok(resourceRowEnd > 0, 'expected file row slice before folder branch');
+  const resourceRowSource = treeItemSource.slice(0, resourceRowEnd);
 
-  assert.match(treeItemSource, /onClick=\{\(\) => onOpen\(node\.resource!\)\}/);
-  assert.doesNotMatch(treeItemSource, /onClick=\{\(\) => onSelect\(node\.resource!\)\}/);
-  // A raw row double-click can never fire: the first click opens the editor.
-  assert.doesNotMatch(treeItemSource, /onDoubleClick/);
-  assert.match(treeItemSource, /event\.key === "Enter"[\s\S]*?onOpen\(node\.resource!\);/);
-  assert.match(treeItemSource, /event\.key === " "[\s\S]*?onOpen\(node\.resource!\);/);
-  assert.match(treeItemSource, /aria-keyshortcuts="Enter Space"/);
-  assert.match(treeItemSource, /onContextMenu=\{\(event\) =>/);
+  assert.match(resourceRowSource, /onClick=\{\(\) => \{\s*if \(!isEditingThisResource\) \{\s*onOpen\(node\.resource!\);\s*\}\s*\}\}/);
+  assert.doesNotMatch(resourceRowSource, /onClick=\{\(\) => onSelect\(node\.resource!\)\}/);
+  // A raw file row double-click can never fire: the first click opens the editor.
+  assert.doesNotMatch(resourceRowSource, /onDoubleClick/);
+  assert.match(resourceRowSource, /event\.key === "Enter"[\s\S]*?onOpen\(node\.resource!\);/);
+  assert.match(resourceRowSource, /event\.key === " "[\s\S]*?onOpen\(node\.resource!\);/);
+  assert.match(resourceRowSource, /aria-keyshortcuts="Enter Space F2"/);
+  assert.match(resourceRowSource, /onContextMenu=\{\(event\) =>/);
   // Reading-first tree: no per-row checkboxes, no batch-selection handlers.
-  assert.doesNotMatch(treeItemSource, /type="checkbox"/);
-  assert.doesNotMatch(treeItemSource, /onToggleSelection/);
+  assert.doesNotMatch(resourceRowSource, /type="checkbox"/);
+  assert.doesNotMatch(resourceRowSource, /onToggleSelection/);
   assert.match(viewSource, /className="menu-list is-compact resources-row-menu"/);
   assert.match(viewSource, /openResourceInVsCode\(resource\)/);
 });

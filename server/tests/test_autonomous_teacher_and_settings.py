@@ -32,8 +32,10 @@ from app.llm.agent_loop import (
 from app.llm.provider.capability import (
     _allows_keyless_local_provider,
     _flatten_minimax_thinking_for_raw_http,
+    _normalized_provider_request_defaults,
 )
 from app.llm.provider.thinking import (
+    apply_thinking_policy,
     declared_thinking,
     resolve_thinking_policy,
 )
@@ -705,3 +707,197 @@ def test_training_card_generator_8_locale_provenance_and_why_now() -> None:
         marker, detail = _fallback_provenance_copy("invalid_json", locale)
         assert marker == "generation_source=deterministic_fallback;reason=invalid_json"
         assert detail != english_detail
+
+
+def test_unified_library_folder_rename_and_delete_for_set_group_and_nested_resources(tmp_path: Path) -> None:
+    with TestClient(_offline_app(tmp_path)) as client:
+        runtime = client.app.state.runtime
+        project_dir = tmp_path / "project"
+        project_dir.mkdir(exist_ok=True)
+        trainer_root = tmp_path / "trainer-root"
+        trainer_root.mkdir(exist_ok=True)
+        provisioning = runtime.provision_project_adoption(
+            workspace_id="ws-unified-folder-ops",
+            root_path=str(trainer_root),
+            project_path=str(project_dir),
+            project_name="Unified Folder Repo",
+        )
+        workspace_id = provisioning.context_id
+        runtime.memory_service.update_workspace_state(workspace_id, workspace_trusted=True)
+        runtime.workspace_authority(workspace_id)
+
+        # 1. Top-level group via upload + set_group
+        upload_top = client.post(
+            "/resource/upload",
+            json={
+                "workspace_id": workspace_id,
+                "kind": "markdown",
+                "name": "world-model-notes.md",
+                "source": "inline://world-model-notes.md",
+                "content": "# World Models\nLatent dynamics summary.\n",
+                "content_encoding": "utf-8",
+            },
+        )
+        assert upload_top.status_code == 200, upload_top.text
+        top_id = upload_top.json()["id"]
+
+        org_top = client.post(
+            "/resource/organize",
+            json={
+                "workspace_id": workspace_id,
+                "resource_id": top_id,
+                "action": "set_group",
+                "group": "WorldModels",
+            },
+        )
+        assert org_top.status_code == 200, org_top.text
+
+        listed_before = client.get(f"/library/groups?workspace_id={workspace_id}")
+        assert listed_before.status_code == 200, listed_before.text
+        groups_before = {item["path"]: item for item in listed_before.json()["groups"]}
+        assert "WorldModels" in groups_before
+        assert groups_before["WorldModels"]["resource_count"] >= 1
+
+        renamed_top = client.post(
+            "/library/groups/rename",
+            json={
+                "workspace_id": workspace_id,
+                "path": "WorldModels",
+                "new_path": "InfraDocs",
+            },
+        )
+        assert renamed_top.status_code == 200, renamed_top.text
+        assert renamed_top.json()["moved_resource_count"] == 1
+
+        summary_after = client.get(f"/memory/summary?workspace_id={workspace_id}")
+        assert summary_after.status_code == 200, summary_after.text
+        res_map = {item["id"]: item for item in summary_after.json()["memory"]["resources"]}
+        res_body = res_map[top_id]
+        assert res_body["collection_path"].startswith("InfraDocs/")
+        assert Path(res_body["source"]).is_file()
+
+        listed_after = client.get(f"/library/groups?workspace_id={workspace_id}")
+        assert listed_after.status_code == 200, listed_after.text
+        paths_after = {item["path"] for item in listed_after.json()["groups"]}
+        assert "InfraDocs" in paths_after
+        assert "WorldModels" not in paths_after
+
+        # 2. Nested child group via set_group ("InfraDocs/Auth") + parent rename ("InfraDocs" -> "CoreDocs")
+        upload_nested = client.post(
+            "/resource/upload",
+            json={
+                "workspace_id": workspace_id,
+                "kind": "markdown",
+                "name": "token-guard.md",
+                "source": "inline://token-guard.md",
+                "content": "# Token Guard\nAuth sequence.\n",
+                "content_encoding": "utf-8",
+            },
+        )
+        assert upload_nested.status_code == 200, upload_nested.text
+        nested_id = upload_nested.json()["id"]
+
+        org_nested = client.post(
+            "/resource/organize",
+            json={
+                "workspace_id": workspace_id,
+                "resource_id": nested_id,
+                "action": "set_group",
+                "group": "InfraDocs/Auth",
+            },
+        )
+        assert org_nested.status_code == 200, org_nested.text
+
+        renamed_parent = client.post(
+            "/library/groups/rename",
+            json={
+                "workspace_id": workspace_id,
+                "path": "InfraDocs",
+                "new_path": "CoreDocs",
+            },
+        )
+        assert renamed_parent.status_code == 200, renamed_parent.text
+        assert renamed_parent.json()["moved_resource_count"] == 2
+
+        summary_nested = client.get(f"/memory/summary?workspace_id={workspace_id}")
+        assert summary_nested.status_code == 200, summary_nested.text
+        nested_map = {item["id"]: item for item in summary_nested.json()["memory"]["resources"]}
+        nested_body = nested_map[nested_id]
+        assert str(nested_body["collection_root"]).replace("\\", "/").endswith("/groups/CoreDocs/Auth")
+        assert nested_body["collection_path"].startswith("Auth/")
+        assert Path(nested_body["source"]).is_file()
+
+        # 3. Deleting "CoreDocs" safely moves inline-grouped files into Trainer Library/.trash/
+        deleted = client.request(
+            "DELETE",
+            "/library/groups",
+            json={"workspace_id": workspace_id, "path": "CoreDocs"},
+        )
+        assert deleted.status_code == 200, deleted.text
+        trash_body = deleted.json()
+        assert trash_body["recoverable"] is True
+        trash_rel = trash_body["trash_path"]
+        assert ".trash" in trash_rel
+        trash_dir = trainer_root / trash_rel
+        assert trash_dir.exists()
+        assert list(trash_dir.rglob("*world-model-notes*.md"))
+        assert list(trash_dir.rglob("*token-guard*.md"))
+        summary_trashed = client.get(f"/memory/summary?workspace_id={workspace_id}")
+        assert summary_trashed.status_code == 200, summary_trashed.text
+        trashed_map = {item["id"]: item for item in summary_trashed.json()["memory"]["resources"]}
+        assert Path(trashed_map[top_id]["source"]).is_file()
+        assert Path(trashed_map[nested_id]["source"]).is_file()
+
+
+def test_minimax_and_compatible_custom_thinking_budget_preserved_and_stripped() -> None:
+    enabled_provider = ProviderConfig(
+        name="MiniMax",
+        base_url="https://api.minimaxi.com/v1",
+        api_key_ref="trainer.minimax",
+        model="MiniMax-M3.1-Flash",
+        protocol="openai_chat_completions_compatible",
+        capabilities={"chat": True, "tools": True, "thinking": True, "streaming": True},
+        request_defaults={
+            "reasoning_effort": "medium",
+            "extra_body": {"thinking": {"type": "enabled", "budget_tokens": 8192}},
+        },
+    )
+    normalized = _normalized_provider_request_defaults(enabled_provider)
+    assert normalized["reasoning_effort"] == "medium"
+    assert normalized["extra_body"]["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+
+    raw_payload = _flatten_minimax_thinking_for_raw_http(
+        {
+            "model": "MiniMax-M3.1-Flash",
+            "reasoning_effort": "medium",
+            "extra_body": {"thinking": {"type": "enabled", "budget_tokens": 8192}},
+        },
+        enabled_provider,
+    )
+    assert raw_payload["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+    assert "extra_body" not in raw_payload
+
+    disabled_provider = ProviderConfig(
+        name="MiniMax",
+        base_url="https://api.minimaxi.com/v1",
+        api_key_ref="trainer.minimax",
+        model="MiniMax-M3.1-Flash",
+        protocol="openai_chat_completions_compatible",
+        capabilities={"chat": True, "tools": True, "thinking": False, "streaming": True},
+        request_defaults={
+            "extra_body": {"thinking": {"type": "disabled", "budget_tokens": 8192}},
+        },
+    )
+    disabled_norm = _normalized_provider_request_defaults(disabled_provider)
+    assert disabled_norm["extra_body"]["thinking"] == {"type": "disabled"}
+
+    applied_disabled = apply_thinking_policy(
+        {
+            "reasoning_effort": "high",
+            "extra_body": {"thinking": {"type": "enabled", "budget_tokens": 8192}},
+        },
+        "disabled",
+    )
+    assert applied_disabled["extra_body"]["thinking"] == {"type": "disabled"}
+    assert "reasoning_effort" not in applied_disabled
+

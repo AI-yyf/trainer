@@ -48,8 +48,10 @@ import {
 } from "./libraryPaths";
 import {
   ArrowRightIcon,
+  CheckMarkIcon,
   ChevronDownIcon,
   ComposeIcon,
+  EditRenameIcon,
   FileIcon,
   FolderIcon,
   LinkIcon,
@@ -58,6 +60,7 @@ import {
   RefreshIcon,
   TrashIcon,
   UploadIcon,
+  XMarkIcon,
 } from "../icons";
 import {
   resourceFolderIconUrl,
@@ -1069,6 +1072,22 @@ function resourceRowMeta(resource: ResourceRecord): string | undefined {
   return meta ? meta.slice(0, 96) : undefined;
 }
 
+function resourceCurrentFolderPath(resource: ResourceRecord): string {
+  const managed = managedGroupSegmentsFromResource(resource);
+  if (managed && managed.length > 0) {
+    return managed.join("/");
+  }
+  const cpath = normalizeLibraryFolderPath(resource.collectionPath ?? "");
+  if (!cpath) {
+    return "";
+  }
+  const segments = collectionPathSegments(resource.collectionPath, resource.collectionRoot);
+  if (segments.length <= 1) {
+    return "";
+  }
+  return segments.slice(0, -1).join("/");
+}
+
 interface ResourceTreeItemProps {
   node: ResourceTreeNode;
   depth: number;
@@ -1079,11 +1098,21 @@ interface ResourceTreeItemProps {
   activeTreeItemId: string | null;
   dropTargetFolderPath: string | null;
   canDragResources?: boolean;
+  editingFolderPath?: string;
+  editingResourceId?: string;
+  inlineRenameValue?: string;
+  inlineRenameBusy?: boolean;
+  onInlineRenameChange?: (value: string) => void;
+  onInlineRenameSubmit?: () => void;
+  onInlineRenameCancel?: () => void;
+  cancelLabel?: string;
   onToggle: (id: string) => void;
   onOpen: (resource: ResourceRecord) => void;
   onAsk?: (resource: ResourceRecord) => void;
   onMenu: (resource: ResourceRecord, event: React.MouseEvent<HTMLElement>) => void;
+  onRenameResource?: (resource: ResourceRecord) => void;
   onEnterFolder?: (folderPath: string) => void;
+  onRenameFolder?: (folderPath: string) => void;
   onFolderMenu?: (folderPath: string, label: string, event: React.MouseEvent<HTMLElement>) => void;
   onQuickAddToFolder?: (folderPath: string) => void;
   quickAddFilesLabel?: string;
@@ -1096,6 +1125,20 @@ interface ResourceTreeItemProps {
   onMoveTreeFocus: (id: string) => void;
 }
 
+function selectRenameInputText(input: HTMLInputElement, isFile: boolean): void {
+  const value = input.value;
+  if (!isFile) {
+    input.select();
+    return;
+  }
+  const dotIndex = value.lastIndexOf(".");
+  if (dotIndex > 0) {
+    input.setSelectionRange(0, dotIndex);
+  } else {
+    input.select();
+  }
+}
+
 function ResourceTreeItem({
   node,
   depth,
@@ -1106,11 +1149,21 @@ function ResourceTreeItem({
   activeTreeItemId,
   dropTargetFolderPath,
   canDragResources = false,
+  editingFolderPath,
+  editingResourceId,
+  inlineRenameValue = "",
+  inlineRenameBusy = false,
+  onInlineRenameChange,
+  onInlineRenameSubmit,
+  onInlineRenameCancel,
+  cancelLabel = "Cancel",
   onToggle,
   onOpen,
   onAsk,
   onMenu,
+  onRenameResource,
   onEnterFolder,
+  onRenameFolder,
   onFolderMenu,
   onQuickAddToFolder,
   quickAddFilesLabel,
@@ -1125,11 +1178,12 @@ function ResourceTreeItem({
   if (node.kind === "resource" && node.resource) {
     const isSelected = selectedResourceId === node.resource.id;
     const displayTitle = formatLibraryResourceTitle(node.resource);
+    const isEditingThisResource = editingResourceId === node.resource.id;
     return (
       <div
         className={`resources-library-tree__node resources-library-tree__node--resource resources-row ${
           isSelected ? "is-selected" : ""
-        }`}
+        }${isEditingThisResource ? " is-renaming" : ""}`}
         role="treeitem"
         aria-level={depth + 1}
         aria-label={displayTitle}
@@ -1137,18 +1191,42 @@ function ResourceTreeItem({
         data-resource-tree-item-id={node.id}
         tabIndex={activeTreeItemId === node.id ? 0 : -1}
         title={[displayTitle, resourceRowMeta(node.resource)].filter(Boolean).join(" — ")}
-        draggable={canDragResources}
-        onDragStart={(event) => onResourceDragStart?.(node.resource!, event)}
+        draggable={canDragResources && !isEditingThisResource}
+        onDragStart={(event) => {
+          if (isEditingThisResource) {
+            event.preventDefault();
+            return;
+          }
+          onResourceDragStart?.(node.resource!, event);
+        }}
         onDragEnd={() => onResourceDragEnd?.()}
         onFocus={() => onActiveTreeItemChange(node.id)}
-        onMouseDown={(event) => event.currentTarget.focus()}
-        onClick={() => onOpen(node.resource!)}
+        onMouseDown={(event) => {
+          if ((event.target as HTMLElement | null)?.closest(".resources-inline-rename")) {
+            return;
+          }
+          event.currentTarget.focus();
+        }}
+        onClick={() => {
+          if (!isEditingThisResource) {
+            onOpen(node.resource!);
+          }
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
           event.stopPropagation();
           onMenu(node.resource!, event);
         }}
         onKeyDown={(event) => {
+          if (isEditingThisResource) {
+            return;
+          }
+          if (event.key === "F2" && onRenameResource) {
+            event.preventDefault();
+            event.stopPropagation();
+            onRenameResource(node.resource!);
+            return;
+          }
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onOpen(node.resource!);
@@ -1162,7 +1240,7 @@ function ResourceTreeItem({
             onMoveTreeFocus(parentId);
           }
         }}
-        aria-keyshortcuts="Enter Space"
+        aria-keyshortcuts="Enter Space F2"
       >
         <span
           className="resources-library-tree__kind"
@@ -1172,37 +1250,107 @@ function ResourceTreeItem({
           <ResourceKindIcon resource={node.resource} />
         </span>
         <span className="resources-library-tree__copy">
-          <strong>{displayTitle}</strong>
-        </span>
-        <span className="resources-library-tree__actions">
-          {onAsk ? (
-            <button
-              className="resources-library-tree__preview"
-              type="button"
-              data-resource-quick-ask="true"
-              aria-label={`${templateCopy[language].askCoach}: ${displayTitle}`}
-              title={templateCopy[language].askCoach}
-              onClick={(event) => {
+          {isEditingThisResource ? (
+            <form
+              className="resources-inline-rename"
+              data-inline-rename="resource"
+              onClick={(event) => event.stopPropagation()}
+              onSubmit={(event) => {
+                event.preventDefault();
                 event.stopPropagation();
-                onAsk(node.resource!);
+                onInlineRenameSubmit?.();
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onInlineRenameCancel?.();
+                }
               }}
             >
-              <ComposeIcon size={14} aria-hidden="true" />
-            </button>
-          ) : null}
-          <button
-            className="resources-library-tree__open resources-library-tree__menu"
-            type="button"
-            aria-label={`${localize(language, "fileActionsTitle")}: ${displayTitle}`}
-            title={localize(language, "fileActionsTitle")}
-            onClick={(event) => {
-              event.stopPropagation();
-              onMenu(node.resource!, event);
-            }}
-          >
-            <span aria-hidden="true">⋯</span>
-          </button>
+              <input
+                type="text"
+                className="resources-inline-rename__input"
+                autoFocus
+                value={inlineRenameValue}
+                aria-label={localize(language, "organizeRenameLabel")}
+                disabled={inlineRenameBusy}
+                onFocus={(event) => selectRenameInputText(event.currentTarget, true)}
+                onChange={(event) => onInlineRenameChange?.(event.target.value)}
+              />
+              <button
+                type="submit"
+                className="resources-inline-rename__btn resources-inline-rename__btn--confirm"
+                aria-label={localize(language, "organizeRenameAction")}
+                title={localize(language, "organizeRenameAction")}
+                disabled={inlineRenameBusy || !inlineRenameValue.trim()}
+              >
+                <CheckMarkIcon size={12} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="resources-inline-rename__btn"
+                aria-label={cancelLabel}
+                title={cancelLabel}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onInlineRenameCancel?.();
+                }}
+                disabled={inlineRenameBusy}
+              >
+                <XMarkIcon size={12} aria-hidden="true" />
+              </button>
+            </form>
+          ) : (
+            <strong>{displayTitle}</strong>
+          )}
         </span>
+        {!isEditingThisResource ? (
+          <span className="resources-library-tree__actions">
+            {onRenameResource ? (
+              <button
+                className="resources-library-tree__preview"
+                type="button"
+                data-resource-rename="true"
+                aria-label={`${localize(language, "folderRenameAction")}: ${displayTitle}`}
+                title={localize(language, "folderRenameAction")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRenameResource(node.resource!);
+                }}
+              >
+                <EditRenameIcon size={14} aria-hidden="true" />
+              </button>
+            ) : null}
+            {onAsk ? (
+              <button
+                className="resources-library-tree__preview"
+                type="button"
+                data-resource-quick-ask="true"
+                aria-label={`${templateCopy[language].askCoach}: ${displayTitle}`}
+                title={templateCopy[language].askCoach}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAsk(node.resource!);
+                }}
+              >
+                <ComposeIcon size={14} aria-hidden="true" />
+              </button>
+            ) : null}
+            <button
+              className="resources-library-tree__open resources-library-tree__menu"
+              type="button"
+              aria-label={`${localize(language, "fileActionsTitle")}: ${displayTitle}`}
+              title={localize(language, "fileActionsTitle")}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMenu(node.resource!, event);
+              }}
+            >
+              <span aria-hidden="true">⋯</span>
+            </button>
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -1211,6 +1359,7 @@ function ResourceTreeItem({
   const descendantResourceIds = resourceIdsInTreeNode(node);
   const firstChildId = node.children[0]?.id;
   const folderPath = node.folderPath;
+  const isEditingThisFolder = Boolean(folderPath && editingFolderPath === folderPath);
   const isDropTarget = Boolean(folderPath && dropTargetFolderPath === folderPath);
   const isLogicalCollection = node.collectionKind === "logical";
   const collectionDescription = isLogicalCollection
@@ -1218,7 +1367,7 @@ function ResourceTreeItem({
     : node.label;
   return (
     <div
-      className={`resources-library-tree__item${isDropTarget ? " is-drop-target" : ""}`}
+      className={`resources-library-tree__item${isDropTarget ? " is-drop-target" : ""}${isEditingThisFolder ? " is-renaming" : ""}`}
       role="group"
       aria-label={node.label}
       aria-description={`${descendantResourceIds.length}${isLogicalCollection ? ` · ${localize(language, "logicalCollection")}` : ""}`}
@@ -1254,6 +1403,18 @@ function ResourceTreeItem({
           : undefined
       }
       onKeyDown={(event) => {
+        if (isEditingThisFolder) {
+          return;
+        }
+        if (event.key === "F2" && folderPath && onRenameFolder) {
+          const target = event.target as HTMLElement | null;
+          if (!target?.closest(".resources-library-tree__node--resource")) {
+            event.preventDefault();
+            event.stopPropagation();
+            onRenameFolder(folderPath);
+            return;
+          }
+        }
         if (event.key === "ArrowRight") {
           event.preventDefault();
           event.stopPropagation();
@@ -1278,26 +1439,111 @@ function ResourceTreeItem({
         level={depth === 0 ? 1 : depth === 1 ? 2 : 3}
         persistenceKey={resourceCollectionPersistenceKey(node.id)}
         title={
-          <span
-            className="resources-library-tree__collection-label"
-            title={collectionDescription}
-          >
-            {/* Folder glyphs are an alpha mask so they inherit the theme's
-                icon colour instead of shipping a fixed hue. */}
+          isEditingThisFolder ? (
+            <form
+              className="resources-inline-rename"
+              data-inline-rename="folder"
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onSubmit={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onInlineRenameSubmit?.();
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onInlineRenameCancel?.();
+                }
+              }}
+            >
+              <span
+                className="resources-library-tree__folder-icon"
+                style={{
+                  "--folder-icon-url": `url("${isExpanded ? resourceFolderOpenIconUrl : resourceFolderIconUrl}")`,
+                } as React.CSSProperties}
+                aria-hidden="true"
+              />
+              <input
+                type="text"
+                className="resources-inline-rename__input"
+                autoFocus
+                value={inlineRenameValue}
+                aria-label={localize(language, "folderNamePlaceholder")}
+                disabled={inlineRenameBusy}
+                onFocus={(event) => selectRenameInputText(event.currentTarget, false)}
+                onChange={(event) => onInlineRenameChange?.(event.target.value)}
+              />
+              <button
+                type="submit"
+                className="resources-inline-rename__btn resources-inline-rename__btn--confirm"
+                aria-label={localize(language, "folderRenameConfirm")}
+                title={localize(language, "folderRenameConfirm")}
+                disabled={inlineRenameBusy || !inlineRenameValue.trim()}
+              >
+                <CheckMarkIcon size={12} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="resources-inline-rename__btn"
+                aria-label={cancelLabel}
+                title={cancelLabel}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onInlineRenameCancel?.();
+                }}
+                disabled={inlineRenameBusy}
+              >
+                <XMarkIcon size={12} aria-hidden="true" />
+              </button>
+            </form>
+          ) : (
             <span
-              className="resources-library-tree__folder-icon"
-              style={{
-                "--folder-icon-url": `url("${isExpanded ? resourceFolderOpenIconUrl : resourceFolderIconUrl}")`,
-              } as React.CSSProperties}
-              aria-hidden="true"
-            />
-            <span>{node.label}</span>
-          </span>
+              className="resources-library-tree__collection-label"
+              title={collectionDescription}
+              onDoubleClick={
+                folderPath && onRenameFolder
+                  ? (event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onRenameFolder(folderPath);
+                    }
+                  : undefined
+              }
+            >
+              {/* Folder glyphs are an alpha mask so they inherit the theme's
+                  icon colour instead of shipping a fixed hue. */}
+              <span
+                className="resources-library-tree__folder-icon"
+                style={{
+                  "--folder-icon-url": `url("${isExpanded ? resourceFolderOpenIconUrl : resourceFolderIconUrl}")`,
+                } as React.CSSProperties}
+                aria-hidden="true"
+              />
+              <span>{node.label}</span>
+            </span>
+          )
         }
         subtitle={undefined}
         actions={
-          folderPath ? (
+          folderPath && !isEditingThisFolder ? (
             <span className="resources-finder-folder-actions">
+              {onRenameFolder ? (
+                <button
+                  className="resources-library-tree__preview"
+                  type="button"
+                  data-folder-rename="true"
+                  aria-label={`${localize(language, "folderRenameAction")}: ${node.label}`}
+                  title={localize(language, "folderRenameAction")}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRenameFolder(folderPath);
+                  }}
+                >
+                  <EditRenameIcon size={12} aria-hidden="true" />
+                </button>
+              ) : null}
               {onEnterFolder ? (
                 <button
                   className="resources-library-tree__preview"
@@ -1330,7 +1576,11 @@ function ResourceTreeItem({
           ) : undefined
         }
         open={isExpanded}
-        onToggle={() => onToggle(node.id)}
+        onToggle={() => {
+          if (!isEditingThisFolder) {
+            onToggle(node.id);
+          }
+        }}
       >
         {isExpanded ? (
           firstChildId ? (
@@ -1346,11 +1596,21 @@ function ResourceTreeItem({
                 activeTreeItemId={activeTreeItemId}
                 dropTargetFolderPath={dropTargetFolderPath}
                 canDragResources={canDragResources}
+                editingFolderPath={editingFolderPath}
+                editingResourceId={editingResourceId}
+                inlineRenameValue={inlineRenameValue}
+                inlineRenameBusy={inlineRenameBusy}
+                onInlineRenameChange={onInlineRenameChange}
+                onInlineRenameSubmit={onInlineRenameSubmit}
+                onInlineRenameCancel={onInlineRenameCancel}
+                cancelLabel={cancelLabel}
                 onToggle={onToggle}
                 onOpen={onOpen}
                 onAsk={onAsk}
                 onMenu={onMenu}
+                onRenameResource={onRenameResource}
                 onEnterFolder={onEnterFolder}
+                onRenameFolder={onRenameFolder}
                 onFolderMenu={onFolderMenu}
                 onQuickAddToFolder={onQuickAddToFolder}
                 quickAddFilesLabel={quickAddFilesLabel}
@@ -2618,6 +2878,25 @@ export function ResourcesWorkbenchView({
                 : path,
             ),
           );
+          const sourcePrefix = `collection:directory:${(prompt.path ?? "")
+            .split("/")
+            .map((segment) => encodeURIComponent(segment))
+            .join("/")}`;
+          const targetPrefix = `collection:directory:${targetPath
+            .split("/")
+            .map((segment) => encodeURIComponent(segment))
+            .join("/")}`;
+          setExpandedCollectionIds((current) => {
+            const next = new Set<string>();
+            for (const id of current) {
+              if (id === sourcePrefix || id.startsWith(`${sourcePrefix}/`)) {
+                next.add(`${targetPrefix}${id.slice(sourcePrefix.length)}`);
+              } else {
+                next.add(id);
+              }
+            }
+            return next;
+          });
         } else {
           setSelectedFolderPath(targetPath);
           if (normalizedParent) {
@@ -3597,36 +3876,147 @@ export function ResourcesWorkbenchView({
             >
               {localize(language, "finderRoot")}
             </button>
-            {activeFolderBreadcrumbs.map((crumb, index) => (
-              <span key={crumb.path} className="resources-finder-crumb-group">
-                <span className="resources-finder-sep" aria-hidden="true">/</span>
-                <button
-                  className={`resources-finder-crumb${index === activeFolderBreadcrumbs.length - 1 ? " is-current" : ""}${dropTargetFolderPath === crumb.path ? " is-drop-target" : ""}`}
-                  type="button"
-                  onClick={() => setActiveFolderPath(crumb.path)}
-                  onDragOver={(event) => handleFolderDragOver(crumb.path, event)}
-                  onDragLeave={() => handleFolderDragLeave(crumb.path)}
-                  onDrop={(event) => handleFolderDrop(crumb.path, event)}
-                >
-                  {crumb.name}
-                </button>
-              </span>
-            ))}
+            {activeFolderBreadcrumbs.map((crumb, index) => {
+              const isCurrent = index === activeFolderBreadcrumbs.length - 1;
+              const isRenamingCurrent =
+                isCurrent &&
+                folderPrompt?.mode === "rename" &&
+                folderPrompt.path === crumb.path;
+              return (
+                <span key={crumb.path} className="resources-finder-crumb-group">
+                  <span className="resources-finder-sep" aria-hidden="true">/</span>
+                  {isRenamingCurrent ? (
+                    <form
+                      className="resources-inline-rename"
+                      data-inline-rename="breadcrumb"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        submitFolderPrompt();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setFolderPrompt(undefined);
+                          setFolderPromptState(undefined);
+                        }
+                      }}
+                    >
+                      <input
+                        type="text"
+                        className="resources-inline-rename__input"
+                        autoFocus
+                        value={folderPrompt.value}
+                        aria-label={localize(language, "folderNamePlaceholder")}
+                        disabled={folderPromptState?.phase === "busy"}
+                        onFocus={(event) => selectRenameInputText(event.currentTarget, false)}
+                        onChange={(event) =>
+                          setFolderPrompt((current) =>
+                            current ? { ...current, value: event.target.value } : current,
+                          )
+                        }
+                      />
+                      <button
+                        type="submit"
+                        className="resources-inline-rename__btn resources-inline-rename__btn--confirm"
+                        aria-label={localize(language, "folderRenameConfirm")}
+                        disabled={folderPromptState?.phase === "busy" || !folderPrompt.value.trim()}
+                      >
+                        <CheckMarkIcon size={12} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="resources-inline-rename__btn"
+                        aria-label={t("cancel")}
+                        onClick={() => {
+                          setFolderPrompt(undefined);
+                          setFolderPromptState(undefined);
+                        }}
+                        disabled={folderPromptState?.phase === "busy"}
+                      >
+                        <XMarkIcon size={12} aria-hidden="true" />
+                      </button>
+                    </form>
+                  ) : (
+                    <button
+                      className={`resources-finder-crumb${isCurrent ? " is-current" : ""}${dropTargetFolderPath === crumb.path ? " is-drop-target" : ""}`}
+                      type="button"
+                      onClick={() => setActiveFolderPath(crumb.path)}
+                      onDoubleClick={
+                        isCurrent && canWriteResources && onRenameLibraryFolder
+                          ? () => openFolderRenamePrompt(crumb.path)
+                          : undefined
+                      }
+                      onDragOver={(event) => handleFolderDragOver(crumb.path, event)}
+                      onDragLeave={() => handleFolderDragLeave(crumb.path)}
+                      onDrop={(event) => handleFolderDrop(crumb.path, event)}
+                    >
+                      {crumb.name}
+                    </button>
+                  )}
+                </span>
+              );
+            })}
           </div>
-          {canWriteResources && onCreateLibraryFolder ? (
-            <button
-              className="resources-finder-bar__add-folder"
-              type="button"
-              aria-label={localize(language, "folderSubfolderAction")}
-              title={localize(language, "folderSubfolderAction")}
-              onClick={() => openFolderCreatePrompt(activeFolderPath)}
-            >
-              <PlusIcon size={12} aria-hidden="true" />
-            </button>
-          ) : null}
+          <div className="resources-finder-bar__actions">
+            {canWriteResources && onRenameLibraryFolder ? (
+              <button
+                className="resources-finder-bar__action"
+                type="button"
+                data-finder-rename-current="true"
+                aria-label={`${localize(language, "folderRenameAction")}: ${activeFolderPath}`}
+                title={localize(language, "folderRenameAction")}
+                onClick={() => openFolderRenamePrompt(activeFolderPath)}
+              >
+                <EditRenameIcon size={12} aria-hidden="true" />
+              </button>
+            ) : null}
+            {canWriteResources && onCreateLibraryFolder ? (
+              <button
+                className="resources-finder-bar__add-folder"
+                type="button"
+                aria-label={localize(language, "folderSubfolderAction")}
+                title={localize(language, "folderSubfolderAction")}
+                onClick={() => openFolderCreatePrompt(activeFolderPath)}
+              >
+                <PlusIcon size={12} aria-hidden="true" />
+              </button>
+            ) : null}
+            {canWriteResources && onImportToFolder ? (
+              <button
+                className="resources-finder-bar__action"
+                type="button"
+                data-finder-add-files-current="true"
+                aria-label={t("addFiles")}
+                title={t("addFiles")}
+                onClick={() => onImportToFolder("files", activeFolderPath)}
+              >
+                <UploadIcon size={12} aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
         </nav>
       ) : null}
-      {folderPrompt ? (
+      {!folderPrompt ||
+      (folderPrompt.mode !== "create" &&
+        folderPrompt.mode !== "subfolder" &&
+        (folderPrompt.mode !== "rename" ||
+          folderPrompt.path === activeFolderPath ||
+          Boolean(findTreeNodeByFolderPath(displayedResourceTree, folderPrompt.path ?? ""))) &&
+        (folderPrompt.mode !== "rename-resource" ||
+          visibleResourceIds.has(folderPrompt.resourceId ?? "")))
+        ? folderPrompt && folderPromptState?.message
+          ? (
+            <p
+              className="resources-knowledge__folders-status"
+              role="status"
+              aria-live="polite"
+              data-folder-prompt-phase={folderPromptState.phase}
+            >
+              {folderPromptState.message}
+            </p>
+          )
+          : null
+        : (
         <div
           className="resources-knowledge__folder-prompt"
           role="dialog"
@@ -3719,7 +4109,7 @@ export function ResourcesWorkbenchView({
             </div>
           </form>
         </div>
-      ) : null}
+        )}
       {folderMutationState?.message ? (
         <p
           className="resources-knowledge__folders-status"
@@ -3789,11 +4179,30 @@ export function ResourcesWorkbenchView({
                 activeTreeItemId={resolvedActiveTreeItemId}
                 dropTargetFolderPath={dropTargetFolderPath}
                 canDragResources={canWriteResources && Boolean(onOrganizeResource)}
+                editingFolderPath={folderPrompt?.mode === "rename" ? folderPrompt.path : undefined}
+                editingResourceId={folderPrompt?.mode === "rename-resource" ? folderPrompt.resourceId : undefined}
+                inlineRenameValue={folderPrompt?.value ?? ""}
+                inlineRenameBusy={folderPromptState?.phase === "busy"}
+                onInlineRenameChange={(value) =>
+                  setFolderPrompt((current) => (current ? { ...current, value } : current))
+                }
+                onInlineRenameSubmit={submitFolderPrompt}
+                onInlineRenameCancel={() => {
+                  setFolderPrompt(undefined);
+                  setFolderPromptState(undefined);
+                }}
+                cancelLabel={t("cancel")}
                 onToggle={toggleCollection}
                 onOpen={openResourceInVsCode}
                 onAsk={onAskCoach ? (resource) => onAskCoach([resource.id]) : undefined}
                 onMenu={openResourceRowMenu}
+                onRenameResource={
+                  canWriteResources && onOrganizeResource ? openResourceRenamePrompt : undefined
+                }
                 onEnterFolder={(folderPath) => setActiveFolderPath(folderPath)}
+                onRenameFolder={
+                  canWriteResources && onRenameLibraryFolder ? openFolderRenamePrompt : undefined
+                }
                 onFolderMenu={openFolderRowMenu}
                 onQuickAddToFolder={
                   canWriteResources && onImportToFolder
@@ -4440,11 +4849,15 @@ export function ResourcesWorkbenchView({
                 </button>
                 {rowMoveMenuOpen ? (
                   <div className="resources-row-menu__move-list" role="group" aria-label={localize(language, "finderMoveTo")}>
+                    {(() => {
+                      const currentFolder = resourceCurrentFolderPath(resource);
+                      return (
+                        <>
                     <button
                       className="menu-list__item"
                       type="button"
                       role="menuitem"
-                      disabled={!resource.collectionPath}
+                      disabled={!currentFolder && !resource.collectionPath}
                       onClick={() => {
                         closeResourceRowMenu();
                         runOrganizeAction({ action: "set_group", group: "" }, resource.id);
@@ -4458,7 +4871,7 @@ export function ResourcesWorkbenchView({
                         className="menu-list__item"
                         type="button"
                         role="menuitem"
-                        disabled={normalizeLibraryFolderPath(resource.collectionPath ?? "") === entry.path}
+                        disabled={currentFolder === entry.path}
                         onClick={() => {
                           closeResourceRowMenu();
                           runOrganizeAction({ action: "set_group", group: entry.path }, resource.id);
@@ -4467,6 +4880,9 @@ export function ResourcesWorkbenchView({
                         <span className="menu-list__body">{entry.path}</span>
                       </button>
                     ))}
+                        </>
+                      );
+                    })()}
                     {onCreateLibraryFolder ? (
                       <button
                         className="menu-list__item"

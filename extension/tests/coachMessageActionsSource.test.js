@@ -121,7 +121,7 @@ test('training-card action sends the reply through the real card generator', () 
   const source = readAppModuleSource();
   const handlerStart = source.indexOf('const handleCoachMessageAction');
   assert.ok(handlerStart > -1, 'expected handleCoachMessageAction');
-  const handler = source.slice(handlerStart, handlerStart + 8000);
+  const handler = source.slice(handlerStart, handlerStart + 9500);
 
   assert.match(handler, /requestTrainingPersistence\(trainerCommands\.trainingGenerateCard/);
   assert.match(handler, /source: "conversation_gap"/);

@@ -418,6 +418,8 @@ export interface WorkbenchStore {
   requestStageMaterialGeneration: (planId: string, stageId: string) => void;
   applyStageMaterials: (stageId: string, materials: StageMaterialItem[]) => void;
   setStageMaterialGenerating: (stageId: string, busy: boolean) => void;
+  /** Enter the live working indicator at t=0 before host `stream/start` lands. */
+  beginOptimisticStream: () => void;
   startStream: (messageId: string) => void;
   appendChunk: (chunk: string) => void;
   endStream: () => void;
@@ -1344,9 +1346,19 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         const previous = state.operations[identity.requestId];
         if (previous && (!["pending", "running"].includes(previous.phase) || previous.phase === "running" && phase === "pending")) return {};
         const entries = Object.entries(state.operations).slice(-127);
+        const clearPendingOptimisticStream =
+          state.streaming.isStreaming &&
+          !state.streaming.streamMessageId &&
+          (identity.commandId === trainerCommands.sendStreamMessage ||
+            identity.commandId === trainerCommands.sendMessage) &&
+          (phase === "failed" ||
+            phase === "cancelled" ||
+            phase === "interrupted" ||
+            (identity.commandId === trainerCommands.sendMessage && phase === "succeeded"));
         return { operations: { ...Object.fromEntries(entries), [identity.requestId]: { identity, phase } },
           latestOperationRequests: phase === "pending" ? { ...Object.fromEntries(Object.entries(state.latestOperationRequests).slice(-127)),
             [webviewOperationTargetKey(identity)]: identity.requestId } : state.latestOperationRequests,
+          ...(clearPendingOptimisticStream ? { streaming: freshStreamingState() } : {}),
         };
       }
       if (message.type === "state/syncStatus") {
@@ -1420,7 +1432,15 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
               },
             })
           : nextData;
-        const nextStreaming = normalizeTrainerStreamingState(resolvedData.streamingState);
+        const incomingStreaming = normalizeTrainerStreamingState(resolvedData.streamingState);
+        const preserveOptimisticStream = Boolean(
+          !runtimeDataChanged &&
+          state.streaming.isStreaming &&
+          !state.streaming.streamMessageId &&
+          !incomingStreaming.isStreaming &&
+          resolvedData.conversation.length <= state.data.conversation.length,
+        );
+        const nextStreaming = preserveOptimisticStream ? state.streaming : incomingStreaming;
         return {
           data: resolvedData,
           layout: nextLayout,
@@ -1472,10 +1492,26 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           nextData.memory.workspace?.responseLanguage,
         );
         // Stream events can finish between host snapshots. An unrelated patch
-        // must not restore the older in-flight state from the last snapshot.
-        const nextStreaming = message.payload.streamingState !== undefined
-          ? normalizeTrainerStreamingState(message.payload.streamingState)
-          : workspaceChanged ? createEmptyTrainerStreamingState() : state.streaming;
+        // must not restore the older in-flight state from the last snapshot,
+        // and a background idle snapshot must not wipe an optimistic pending
+        // turn before the host emits stream/start.
+        const incomingStreaming =
+          message.payload.streamingState !== undefined
+            ? normalizeTrainerStreamingState(message.payload.streamingState)
+            : undefined;
+        const preserveOptimisticStream = Boolean(
+          !workspaceChanged &&
+          state.streaming.isStreaming &&
+          !state.streaming.streamMessageId &&
+          incomingStreaming &&
+          !incomingStreaming.isStreaming &&
+          nextData.conversation.length <= state.data.conversation.length,
+        );
+        const nextStreaming = workspaceChanged
+          ? createEmptyTrainerStreamingState()
+          : preserveOptimisticStream
+            ? state.streaming
+            : incomingStreaming ?? state.streaming;
         const patchedStageMaterials = message.payload.stageMaterials;
         const stageScopeChanged = workspaceChanged || nextData.plan.id !== state.data.plan.id;
         return {
@@ -1788,19 +1824,26 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
       if (message.type === "operation/status") {
         const reliabilityPhase = mapStreamStatusToReliabilityPhase(message.payload.phase);
         const streamScopedStatus = message.payload.surface === "stream";
+        const clearPendingOptimisticStream = Boolean(
+          message.payload.tone === "error" &&
+          state.streaming.isStreaming &&
+          !state.streaming.streamMessageId,
+        );
         return {
-          streaming: reliabilityPhase
-            ? {
-                ...state.streaming,
-                reliabilityPhase,
-                reliabilityOutcome:
-                  reliabilityPhase === "failed"
-                    ? "failure"
-                    : reliabilityPhase === "cancelled"
-                      ? "cancelled"
-                      : state.streaming.reliabilityOutcome,
-              }
-            : state.streaming,
+          streaming: clearPendingOptimisticStream
+            ? freshStreamingState()
+            : reliabilityPhase
+              ? {
+                  ...state.streaming,
+                  reliabilityPhase,
+                  reliabilityOutcome:
+                    reliabilityPhase === "failed"
+                      ? "failure"
+                      : reliabilityPhase === "cancelled"
+                        ? "cancelled"
+                        : state.streaming.reliabilityOutcome,
+                }
+              : state.streaming,
           ...operationBannerState(
             streamScopedStatus && message.payload.tone !== "error"
               ? undefined
@@ -2036,6 +2079,22 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         ? { ...state.stageMaterialGenerating, [stageId]: true }
         : clearStageMaterialGenerating(state.stageMaterialGenerating, new Set([stageId])),
     })),
+  beginOptimisticStream: () =>
+    set((state) => {
+      if (state.streaming.isStreaming) {
+        return {};
+      }
+      return {
+        streaming: {
+          ...freshStreamingState(),
+          isStreaming: true,
+          streamMessageId: undefined,
+          reliabilityPhase: "pending",
+          liveStageKind: "think",
+        },
+        ...operationBannerState(undefined),
+      };
+    }),
   startStream: (messageId) =>
     set({
       streaming: {

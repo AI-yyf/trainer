@@ -199,7 +199,12 @@ def _normalized_provider_request_defaults(provider: ProviderConfig | None) -> di
             if (user_declared_thinking or (probe_declared_thinking and not user_disabled_thinking))
             else "disabled"
         )
-    normalized_extra_body["thinking"] = {"type": thinking_type}
+    existing_thinking = dict(thinking) if isinstance(thinking, dict) else {}
+    if thinking_type == "disabled":
+        existing_thinking.pop("budget_tokens", None)
+        existing_thinking.pop("budgetTokens", None)
+    existing_thinking["type"] = thinking_type
+    normalized_extra_body["thinking"] = existing_thinking
     normalized["extra_body"] = normalized_extra_body
     return normalized
 

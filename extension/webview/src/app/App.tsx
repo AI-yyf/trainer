@@ -182,7 +182,7 @@ import { templateCopy } from "../templates/templateCopy";
 import { buildComposerProviderMenuItems, composerModelPolicyHint, compactComposerModelLabel, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
 import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
-import { getSurfaceScrollElement, useSurfaceScroll } from "./useSurfaceScroll";
+import { getSurfaceScrollElement, resolveCoachBottomScrollTop, useSurfaceScroll } from "./useSurfaceScroll";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { useComposerModelQuery } from "./useComposerModelQuery";
@@ -566,25 +566,6 @@ const QUEUED_BANNER_COPY: Record<
   },
 };
 
-/**
- * Scroll target for Coach auto-follow: keep the latest message visible even when
- * inline learning/practice footer cards sit beneath the thread.
- */
-function resolveCoachBottomScrollTop(container: HTMLElement): number {
-  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-  if (!container.querySelector(".coach-conversation-view__footer")) {
-    return maxScrollTop;
-  }
-  const items = container.querySelectorAll<HTMLElement>(".coach-conversation-view__item");
-  const lastItem = items.length > 0 ? items[items.length - 1] : undefined;
-  if (!lastItem) {
-    return maxScrollTop;
-  }
-  const itemBottom =
-    container.scrollTop + (lastItem.getBoundingClientRect().bottom - container.getBoundingClientRect().top);
-  return Math.max(0, Math.min(maxScrollTop, itemBottom - container.clientHeight + 16));
-}
-
 export function App() {
   useEffect(() => {
     performance.mark("trainer:app-mounted");
@@ -851,6 +832,7 @@ export function App() {
   const coachWasStreamingRef = useRef(false);
   const coachViewIdentityRef = useRef<string | null>(null);
   const coachConversationLengthRef = useRef(0);
+  const coachOptimisticLengthRef = useRef(0);
   const pinCoachScrollToBottom = useCallback(() => {
     coachAutoScrollPinnedRef.current = true;
   }, []);
@@ -1237,6 +1219,7 @@ export function App() {
           return;
         }
         appendOptimisticTurn(prompt);
+        useWorkbenchState.getState().beginOptimisticStream();
         postMessage({
           type: "session/sendStreamMessage",
           payload: {
@@ -2837,8 +2820,16 @@ export function App() {
     const isPinnedToBottom = () =>
       resolveCoachBottomScrollTop(container) - container.scrollTop < 120;
 
+    let lastScrollTop = container.scrollTop;
     const handleScroll = () => {
-      coachAutoScrollPinnedRef.current = isPinnedToBottom();
+      const currentScrollTop = container.scrollTop;
+      const scrolledUp = currentScrollTop < lastScrollTop - 4;
+      lastScrollTop = currentScrollTop;
+      if (isPinnedToBottom()) {
+        coachAutoScrollPinnedRef.current = true;
+      } else if (scrolledUp) {
+        coachAutoScrollPinnedRef.current = false;
+      }
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
 
@@ -2846,35 +2837,47 @@ export function App() {
     // were reading older messages. Once streaming is running, the pin follows
     // their scroll position again so browsing history stays respected.
     const streamingStarted = streaming.isStreaming && !coachWasStreamingRef.current;
+    const streamingEnded = !streaming.isStreaming && coachWasStreamingRef.current;
     coachWasStreamingRef.current = streaming.isStreaming;
     // The learner's own turn must always be visible, even when the streaming
     // edge was already consumed (a restored stream, or a mount that happened
     // mid-turn). Otherwise the reply lands below the fold and the thread looks
     // stuck.
-    const conversationGrew = data.conversation.length > coachConversationLengthRef.current;
+    const serverConversationGrew = data.conversation.length > coachConversationLengthRef.current;
+    const optimisticGrew = optimisticTurns.length > coachOptimisticLengthRef.current;
     coachConversationLengthRef.current = data.conversation.length;
-    const learnerTurn = conversationGrew && data.conversation[data.conversation.length - 1]?.role === "user";
+    coachOptimisticLengthRef.current = optimisticTurns.length;
+    const conversationGrew = serverConversationGrew || optimisticGrew;
+    const learnerTurn =
+      optimisticGrew ||
+      (serverConversationGrew &&
+        data.conversation[data.conversation.length - 1]?.role === "user");
     const previouslyPinned = coachAutoScrollPinnedRef.current;
     coachAutoScrollPinnedRef.current =
       (streamingStarted && !viewChanged) ||
       learnerTurn ||
-      (conversationGrew && !viewChanged && previouslyPinned) ||
+      ((conversationGrew || streamingEnded) && !viewChanged && previouslyPinned) ||
       isPinnedToBottom();
     const scrollToBottom = () => {
       container.scrollTop = resolveCoachBottomScrollTop(container);
+      lastScrollTop = container.scrollTop;
     };
+    if (coachAutoScrollPinnedRef.current && (streamingStarted || learnerTurn || conversationGrew || streamingEnded)) {
+      scrollToBottom();
+    }
     const handle = window.requestAnimationFrame(() => {
       if (coachAutoScrollPinnedRef.current) {
         scrollToBottom();
       }
     });
-    const settle = streamingStarted
-      ? window.setTimeout(() => {
-          if (coachAutoScrollPinnedRef.current) {
-            scrollToBottom();
-          }
-        }, 90)
-      : undefined;
+    const settle =
+      streamingStarted || conversationGrew || streamingEnded
+        ? window.setTimeout(() => {
+            if (coachAutoScrollPinnedRef.current) {
+              scrollToBottom();
+            }
+          }, 90)
+        : undefined;
 
     return () => {
       window.cancelAnimationFrame(handle);
@@ -2883,13 +2886,20 @@ export function App() {
       }
       container.removeEventListener("scroll", handleScroll);
     };
-  }, [activeView, data.conversation.length, streaming.isStreaming]);
+  }, [activeView, data.conversation.length, optimisticTurns.length, streaming.isStreaming]);
 
-  // Per-chunk content is not part of App's subscription; the stick-to-bottom
-  // pin follows the store directly so every chunk re-sticks without a render.
+  // Per-chunk content and agent stages are not part of App's subscription;
+  // the stick-to-bottom pin follows the store directly so every live stage
+  // transition, tool call, and chunk re-sticks without an App re-render.
   useEffect(() => {
-    return useWorkbenchState.subscribe((state, previous) => {
-      if (state.streaming.streamedContent === previous.streaming.streamedContent) {
+    let rafHandle: number | undefined;
+    const unsubscribe = useWorkbenchState.subscribe((state, previous) => {
+      const streamProgressed =
+        state.streaming.streamedContent !== previous.streaming.streamedContent ||
+        state.streaming.agentActivity.length !== previous.streaming.agentActivity.length ||
+        state.streaming.liveStageKind !== previous.streaming.liveStageKind ||
+        (state.streaming.isStreaming && !previous.streaming.isStreaming);
+      if (!streamProgressed) {
         return;
       }
       if (activeViewRef.current !== "coach" || !coachAutoScrollPinnedRef.current) {
@@ -2901,7 +2911,22 @@ export function App() {
         return;
       }
       container.scrollTop = resolveCoachBottomScrollTop(container);
+      if (rafHandle !== undefined) {
+        window.cancelAnimationFrame(rafHandle);
+      }
+      rafHandle = window.requestAnimationFrame(() => {
+        rafHandle = undefined;
+        if (activeViewRef.current === "coach" && coachAutoScrollPinnedRef.current) {
+          container.scrollTop = resolveCoachBottomScrollTop(container);
+        }
+      });
     });
+    return () => {
+      if (rafHandle !== undefined) {
+        window.cancelAnimationFrame(rafHandle);
+      }
+      unsubscribe();
+    };
   }, []);
 
   const hasFormalPlan = data.hasFormalPlan;
@@ -6123,6 +6148,7 @@ export function App() {
     // Every reply belongs to the one conversation: the surface only decides
     // where the learner reads it.
     appendOptimisticTurn(text, "coach");
+    useWorkbenchState.getState().beginOptimisticStream();
 
     if (isBrowserPreview) {
       if (stream) {
@@ -6138,6 +6164,7 @@ export function App() {
           onCancelled: (message) => applyHostMessage(message),
           }),
         ).catch(() => {
+          useWorkbenchState.getState().resetStream();
           setOperationMessage({
             tone: "error",
             message: recoverableFailureMessage("send", layout.composerLanguage),
@@ -6151,8 +6178,10 @@ export function App() {
         .then(({ sessionId, message }) => {
           setPreviewSessionId(sessionId);
           applyHostMessage(message);
+          useWorkbenchState.getState().endStream();
         })
         .catch(() => {
+          useWorkbenchState.getState().resetStream();
           setOperationMessage({
             tone: "error",
             message: recoverableFailureMessage("send", layout.composerLanguage),
@@ -8161,11 +8190,10 @@ export function App() {
     const planComposerSubmission = !resourceAnalysis &&
       (formalPlanGeneration || contextualPlanMode !== undefined);
     const submittedPlanMode = formalPlanGeneration ? "generate" : contextualPlanMode ?? "explain";
-    // Learning is part of the conversation now; resource analysis no longer
-    // targets a separate learning surface.
-    const analyzeInLearning = false;
-    const turnView = planComposerSubmission ? "plan"
-      : unified.kind === "resource-turn" && !unified.preparation && !analyzeInLearning ? "resources" : activeView;
+    // Learning and resource replies live in the single Chat conversation. Keep
+    // resource turns anchored in Chat instead of hijacking to the Resources
+    // library or dropping the live streaming indicator.
+    const turnView = planComposerSubmission ? "plan" : "coach";
     const resourceIds = activeComposerResourceIds;
     if (formalPlanGeneration) {
       const key = JSON.stringify([attachmentScope, composerSessionKey, data.plan?.id, data.plan?.revision,
@@ -8227,7 +8255,7 @@ export function App() {
         ? { mode: unified.mode, resourceIds }
         : unified.kind === "practice" && resourceIds.length > 0
           ? { mode: "analyze", resourceIds }
-          : turnView === "resources" ? { mode: "locate", resourceIds } : undefined,
+          : activeView === "resources" ? { mode: "locate", resourceIds } : undefined,
       resourceIds,
       includeDiagnostics: intent === "review" ? true : undefined,
       contextDetail: intent === "review" ? "full" : undefined,
@@ -9817,7 +9845,7 @@ export function App() {
       language={layout.composerLanguage}
       emptyState={embedded || workspaceSessionBlocked ? null : coachSuperEntryContent(false)}
       streamingMessage={
-        streaming.isStreaming && (!lastTurnView || primaryDestinationForRoute(lastTurnView) === "coach")
+        streaming.isStreaming
           ? {
               // R3: the in-flight body comes from the view's own store
               // subscription; App never selects per-chunk content.

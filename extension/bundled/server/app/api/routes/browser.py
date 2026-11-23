@@ -321,6 +321,7 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             library = LibraryService(
                 runtime.repository,
                 workspace_authority_resolver=runtime.library_carrier_authority,
+                inline_resource_root_resolver=runtime.resource_service._inline_resource_root,
             )
             groups = library.list_groups(workspace_id)
             managed_root = str(groups.managed_root or managed_root)

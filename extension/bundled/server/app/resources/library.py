@@ -191,10 +191,66 @@ class LibraryService:
         repository: Any,
         *,
         workspace_authority_resolver: Callable[[str], WorkspaceAuthority | None],
+        inline_resource_root_resolver: Callable[[str], Path] | None = None,
     ) -> None:
         self._repository = repository
         self._workspace_authority_resolver = workspace_authority_resolver
+        self._inline_resource_root_resolver = inline_resource_root_resolver
         self._carrier_authorities: dict[tuple[str, str], WorkspaceAuthority] = {}
+
+    def _inline_groups_root(self, workspace_id: str) -> Path | None:
+        """Managed inline resource ``groups/`` root when ResourceService is wired."""
+
+        if self._inline_resource_root_resolver is None:
+            return None
+        try:
+            inline_root = Path(self._inline_resource_root_resolver(workspace_id)).expanduser()
+        except Exception:
+            return None
+        return (inline_root / "groups").resolve(strict=False)
+
+    @staticmethod
+    def _prune_empty_parents(directory: Path, stop_at: Path) -> None:
+        current = directory
+        resolved_stop = stop_at.resolve(strict=False)
+        while current.resolve(strict=False) != resolved_stop:
+            try:
+                if current.exists() and current.is_dir() and not any(current.iterdir()):
+                    current.rmdir()
+                else:
+                    break
+            except OSError:
+                break
+            if current.parent == current:
+                break
+            current = current.parent
+
+    @staticmethod
+    def _merge_move_tree(src: Path, dst: Path) -> None:
+        """Move files from ``src`` into ``dst`` without overwriting existing files."""
+
+        if not src.exists():
+            return
+        if not dst.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            src.rename(dst)
+            return
+        if src.is_dir() and dst.is_dir():
+            for child in list(src.iterdir()):
+                target_child = dst / child.name
+                if target_child.exists():
+                    if child.is_dir() and target_child.is_dir():
+                        LibraryService._merge_move_tree(child, target_child)
+                        continue
+                    stem = target_child.stem
+                    suffix = target_child.suffix
+                    target_child = dst / f"{stem}-{uuid4().hex[:6]}{suffix}"
+                child.rename(target_child)
+            try:
+                if not any(src.iterdir()):
+                    src.rmdir()
+            except OSError:
+                pass
 
     # ------------------------------------------------------------- authorities
 
@@ -604,15 +660,29 @@ class LibraryService:
     # ----------------------------------------------------------------- groups
 
     def list_groups(self, workspace_id: str) -> LibraryGroupsSnapshot:
-        """Real folders under the management root with per-group resource counts."""
+        """Real & managed-group folders with per-group resource counts."""
 
         self._authority(workspace_id)
         library_root = self.library_root(workspace_id, create=False)
-        membership = self._resource_membership(workspace_id)
+        inline_groups_root = self._inline_groups_root(workspace_id)
+        membership = self._resource_membership(workspace_id, inline_groups_root=inline_groups_root)
         managed_root = LIBRARY_DIRECTORY_NAME
         trash_root = f"{managed_root}/{LIBRARY_TRASH_DIRECTORY_NAME}"
         total = len(membership.get("", set()))
-        if not library_root.is_dir():
+
+        discovered_paths: set[str] = set()
+        if library_root.is_dir():
+            discovered_paths.update(self._scan_disk_group_paths(library_root, "", depth=0))
+        if inline_groups_root is not None and inline_groups_root.is_dir():
+            discovered_paths.update(self._scan_disk_group_paths(inline_groups_root, "", depth=0))
+        for group_path in membership:
+            if group_path:
+                segments = group_path.split("/")
+                for depth in range(1, min(len(segments), MAX_LIBRARY_PATH_DEPTH) + 1):
+                    discovered_paths.add("/".join(segments[:depth]))
+
+        exists = library_root.is_dir() or bool(discovered_paths)
+        if not exists:
             return LibraryGroupsSnapshot(
                 managed_root=managed_root,
                 exists=False,
@@ -620,7 +690,7 @@ class LibraryService:
                 total_resource_count=total,
                 groups=[],
             )
-        groups = self._scan_groups(library_root, "", membership, depth=0)
+        groups = self._build_group_tree(discovered_paths, membership)
         return LibraryGroupsSnapshot(
             managed_root=managed_root,
             exists=True,
@@ -629,17 +699,16 @@ class LibraryService:
             groups=groups,
         )
 
-    def _scan_groups(
+    def _scan_disk_group_paths(
         self,
-        library_root: Path,
+        root_dir: Path,
         relative: str,
-        membership: dict[str, set[str]],
         *,
         depth: int,
-    ) -> list[dict[str, object]]:
+    ) -> list[str]:
         if depth >= MAX_LIBRARY_PATH_DEPTH:
             return []
-        base = library_root if not relative else library_root.joinpath(*relative.split("/"))
+        base = root_dir if not relative else root_dir.joinpath(*relative.split("/"))
         try:
             entries = sorted(
                 (entry for entry in os.scandir(base) if entry.is_dir(follow_symlinks=False)),
@@ -647,47 +716,101 @@ class LibraryService:
             )
         except OSError:
             return []
-        nodes: list[dict[str, object]] = []
+        paths: list[str] = []
         for entry in entries:
             name = entry.name
             if name.startswith(".") or name.casefold() in _RESERVED_LIBRARY_SEGMENTS:
                 continue
             group_path = f"{relative}/{name}" if relative else name
-            nodes.append(
-                {
-                    "path": group_path,
-                    "name": name,
-                    "workspace_path": f"{LIBRARY_DIRECTORY_NAME}/{group_path}",
-                    "resource_count": len(membership.get(group_path, set())),
-                    "children": self._scan_groups(
-                        library_root,
-                        group_path,
-                        membership,
-                        depth=depth + 1,
-                    ),
-                }
-            )
-        return nodes
+            paths.append(group_path)
+            paths.extend(self._scan_disk_group_paths(root_dir, group_path, depth=depth + 1))
+        return paths
 
-    def _resource_membership(self, workspace_id: str) -> dict[str, set[str]]:
-        """group path -> ids of library resources downloaded into it (incl. nested)."""
+    @staticmethod
+    def _build_group_tree(
+        discovered_paths: set[str],
+        membership: dict[str, set[str]],
+    ) -> list[dict[str, object]]:
+        children_by_parent: dict[str, list[str]] = {}
+        for group_path in discovered_paths:
+            parent = group_path.rsplit("/", 1)[0] if "/" in group_path else ""
+            children_by_parent.setdefault(parent, []).append(group_path)
 
+        def build_level(parent: str) -> list[dict[str, object]]:
+            items = sorted(children_by_parent.get(parent, []), key=str.casefold)
+            nodes: list[dict[str, object]] = []
+            for group_path in items:
+                name = group_path.rsplit("/", 1)[-1]
+                nodes.append(
+                    {
+                        "path": group_path,
+                        "name": name,
+                        "workspace_path": f"{LIBRARY_DIRECTORY_NAME}/{group_path}",
+                        "resource_count": len(membership.get(group_path, set())),
+                        "children": build_level(group_path),
+                    }
+                )
+            return nodes
+
+        return build_level("")
+
+    def _resource_managed_group_path(
+        self,
+        resource: ResourceRecord,
+        *,
+        inline_groups_root: Path | None,
+    ) -> str | None:
+        raw_root = str(getattr(resource, "collection_root", None) or "").strip()
+        raw_cpath = str(getattr(resource, "collection_path", None) or "").strip().replace("\\", "/").strip("/")
+        if raw_root and inline_groups_root is not None:
+            resolved_root = Path(raw_root).expanduser().resolve(strict=False)
+            try:
+                rel = resolved_root.relative_to(inline_groups_root)
+                rel_posix = rel.as_posix().strip("/")
+                if rel_posix and not rel_posix.startswith("."):
+                    return rel_posix
+            except ValueError:
+                pass
+        if raw_cpath and raw_root:
+            folder = posixpath.dirname(raw_cpath).strip("/")
+            if folder and not folder.startswith(".") and not folder.startswith(f"{LIBRARY_TRASH_DIRECTORY_NAME}"):
+                return folder
+        return None
+
+    def _resource_membership(
+        self,
+        workspace_id: str,
+        *,
+        inline_groups_root: Path | None = None,
+    ) -> dict[str, set[str]]:
+        """group path -> ids of library resources in it (incl. nested)."""
+
+        if inline_groups_root is None:
+            inline_groups_root = self._inline_groups_root(workspace_id)
         membership: dict[str, set[str]] = {}
         prefix = f"{LIBRARY_DIRECTORY_NAME}/"
         for resource in self._repository.list_resources(workspace_id):
+            group_candidates: set[str] = set()
             for relative in getattr(resource, "library_paths", []) or []:
                 text = str(relative or "").strip().replace("\\", "/").strip("/")
                 if not text.startswith(prefix):
                     continue
                 inner = text[len(prefix) :]
                 if inner.startswith(f"{LIBRARY_TRASH_DIRECTORY_NAME}/"):
-                    # Trashed folders are not library groups.
                     continue
                 folder = posixpath.dirname(inner)
-                target = f"{LIBRARY_DIRECTORY_NAME}/{folder}" if folder else LIBRARY_DIRECTORY_NAME
-                segments = target.split("/")
-                for depth in range(1, len(segments) + 1):
-                    membership.setdefault("/".join(segments[1:depth]), set()).add(resource.id)
+                if folder:
+                    group_candidates.add(folder)
+            managed = self._resource_managed_group_path(resource, inline_groups_root=inline_groups_root)
+            if managed:
+                group_candidates.add(managed)
+            if not group_candidates:
+                continue
+            membership.setdefault("", set()).add(resource.id)
+            for folder in group_candidates:
+                segments = folder.split("/")
+                for depth in range(1, min(len(segments), MAX_LIBRARY_PATH_DEPTH) + 1):
+                    membership.setdefault("/".join(segments[:depth]), set()).add(resource.id)
         return membership
 
     def create_group(self, workspace_id: str, path: str) -> dict[str, object]:
@@ -743,11 +866,28 @@ class LibraryService:
         authority = self._authority(workspace_id)
         self._require_writable_workspace(authority)
         library_root = self.library_root(workspace_id, create=True)
+        inline_groups_root = self._inline_groups_root(workspace_id)
         source = library_root.joinpath(*source_group.split("/"))
         target = library_root.joinpath(*target_group.split("/"))
+        inline_source = (
+            inline_groups_root.joinpath(*source_group.split("/"))
+            if inline_groups_root is not None
+            else None
+        )
+        inline_target = (
+            inline_groups_root.joinpath(*target_group.split("/"))
+            if inline_groups_root is not None
+            else None
+        )
         self._validate_group_target(authority, source, source_group)
         self._validate_group_target(authority, target, target_group)
-        if not source.is_dir():
+        moved_resources = self._resources_under(
+            workspace_id,
+            source_group,
+            inline_groups_root=inline_groups_root,
+        )
+        inline_exists = bool(inline_source is not None and inline_source.is_dir())
+        if not source.is_dir() and not inline_exists and not moved_resources:
             raise LibraryError(
                 "group_not_found",
                 status_code=404,
@@ -763,23 +903,36 @@ class LibraryService:
             }
         if target_group.startswith(f"{source_group}/"):
             raise LibraryError("group_rename_into_itself", status_code=422)
-        if target.exists():
+        target_resources = self._resources_under(
+            workspace_id,
+            target_group,
+            inline_groups_root=inline_groups_root,
+        )
+        if target.exists() or (inline_target is not None and inline_target.exists()) or target_resources:
             raise LibraryError(
                 "group_already_exists",
                 status_code=409,
                 params={"path": target_group},
             )
-        moved_resources = self._resources_under(workspace_id, source_group)
-        target.parent.mkdir(parents=True, exist_ok=True)
+        authorize_path = source if source.is_dir() else library_root
         self._authorize(
             workspace_id,
             library_root,
             OperationType.RENAME,
-            source,
+            authorize_path,
             details={"from": source_group, "to": target_group},
         )
         try:
-            source.rename(target)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_dir():
+                source.rename(target)
+            else:
+                target.mkdir(parents=True, exist_ok=True)
+            if inline_source is not None and inline_target is not None and inline_source.is_dir():
+                inline_target.parent.mkdir(parents=True, exist_ok=True)
+                inline_source.rename(inline_target)
+                if inline_groups_root is not None:
+                    self._prune_empty_parents(inline_source.parent, inline_groups_root)
         except OSError as exc:
             raise LibraryError(
                 "group_mutation_failed",
@@ -792,6 +945,7 @@ class LibraryService:
             target_group,
             moved_resources,
             library_root=library_root,
+            inline_groups_root=inline_groups_root,
         )
         return {
             "workspace_id": workspace_id,
@@ -808,20 +962,32 @@ class LibraryService:
         authority = self._authority(workspace_id)
         self._require_writable_workspace(authority)
         library_root = self.library_root(workspace_id, create=True)
+        inline_groups_root = self._inline_groups_root(workspace_id)
         target = library_root.joinpath(*group_path.split("/"))
+        inline_target = (
+            inline_groups_root.joinpath(*group_path.split("/"))
+            if inline_groups_root is not None
+            else None
+        )
         self._validate_group_target(authority, target, group_path)
-        if not target.is_dir():
+        moved_resources = self._resources_under(
+            workspace_id,
+            group_path,
+            inline_groups_root=inline_groups_root,
+        )
+        inline_exists = bool(inline_target is not None and inline_target.is_dir())
+        if not target.is_dir() and not inline_exists and not moved_resources:
             raise LibraryError(
                 "group_not_found",
                 status_code=404,
                 params={"path": group_path},
             )
-        moved_resources = self._resources_under(workspace_id, group_path)
+        authorize_path = target if target.is_dir() else library_root
         self._authorize(
             workspace_id,
             library_root,
             OperationType.DELETE,
-            target,
+            authorize_path,
             details={"group": group_path},
         )
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
@@ -833,7 +999,14 @@ class LibraryService:
         trashed = trash_dir.joinpath(*group_path.split("/"))
         try:
             trashed.parent.mkdir(parents=True, exist_ok=True)
-            target.rename(trashed)
+            if target.is_dir():
+                target.rename(trashed)
+            else:
+                trashed.mkdir(parents=True, exist_ok=True)
+            if inline_target is not None and inline_target.is_dir():
+                self._merge_move_tree(inline_target, trashed)
+                if inline_groups_root is not None:
+                    self._prune_empty_parents(inline_target.parent, inline_groups_root)
         except OSError as exc:
             raise LibraryError(
                 "group_mutation_failed",
@@ -847,6 +1020,8 @@ class LibraryService:
             trashed_group,
             moved_resources,
             library_root=library_root,
+            inline_groups_root=inline_groups_root,
+            trashed=True,
         )
         return {
             "workspace_id": workspace_id,
@@ -883,15 +1058,37 @@ class LibraryService:
             return False
         return True
 
-    def _resources_under(self, workspace_id: str, group_path: str) -> list[ResourceRecord]:
+    def _resources_under(
+        self,
+        workspace_id: str,
+        group_path: str,
+        *,
+        inline_groups_root: Path | None = None,
+    ) -> list[ResourceRecord]:
+        if inline_groups_root is None:
+            inline_groups_root = self._inline_groups_root(workspace_id)
         prefix = f"{LIBRARY_DIRECTORY_NAME}/{group_path}/"
         affected: list[ResourceRecord] = []
+        seen_ids: set[str] = set()
         for resource in self._repository.list_resources(workspace_id):
+            matched = False
             for relative in getattr(resource, "library_paths", []) or []:
                 text = str(relative or "").strip().replace("\\", "/").strip("/")
                 if text.startswith(prefix):
-                    affected.append(resource)
+                    matched = True
                     break
+            if not matched:
+                managed = self._resource_managed_group_path(
+                    resource,
+                    inline_groups_root=inline_groups_root,
+                )
+                if managed == group_path or (
+                    managed is not None and managed.startswith(f"{group_path}/")
+                ):
+                    matched = True
+            if matched and resource.id not in seen_ids:
+                seen_ids.add(resource.id)
+                affected.append(resource)
         return affected
 
     def _rewrite_moved_resource_paths(
@@ -902,13 +1099,31 @@ class LibraryService:
         resources: list[ResourceRecord],
         *,
         library_root: Path,
+        inline_groups_root: Path | None = None,
+        trashed: bool = False,
     ) -> None:
-        """Keep the recorded download locations truthful after a folder move."""
+        """Keep recorded download & managed-group locations truthful after a folder move."""
 
         if not resources:
             return
         from_prefix = f"{LIBRARY_DIRECTORY_NAME}/{from_group}/"
         to_prefix = f"{LIBRARY_DIRECTORY_NAME}/{to_group}/"
+        from_library_dir = library_root.joinpath(*from_group.split("/")).resolve(strict=False)
+        to_library_dir = library_root.joinpath(*to_group.split("/")).resolve(strict=False)
+        from_inline_dir = (
+            inline_groups_root.joinpath(*from_group.split("/")).resolve(strict=False)
+            if inline_groups_root is not None
+            else None
+        )
+        to_inline_dir = (
+            to_library_dir
+            if trashed
+            else (
+                inline_groups_root.joinpath(*to_group.split("/")).resolve(strict=False)
+                if inline_groups_root is not None
+                else None
+            )
+        )
         for resource in resources:
             rewritten: list[str] = []
             changed = False
@@ -929,17 +1144,55 @@ class LibraryService:
                 raw = str(value or "").strip()
                 if not raw or "://" in raw:
                     continue
-                candidate = Path(raw).expanduser()
-                if not self._is_within(candidate, library_root):
-                    continue
-                try:
-                    relative = candidate.resolve(strict=False).relative_to(
-                        (library_root.joinpath(*from_group.split("/"))).resolve(strict=False)
-                    )
-                except ValueError:
-                    continue
-                moved = library_root.joinpath(*to_group.split("/"), *relative.parts)
-                update[field_name] = str(moved)
+                candidate = Path(raw).expanduser().resolve(strict=False)
+                if self._is_within(candidate, from_library_dir):
+                    relative = candidate.relative_to(from_library_dir)
+                    update[field_name] = str(to_library_dir.joinpath(*relative.parts))
+                elif (
+                    from_inline_dir is not None
+                    and to_inline_dir is not None
+                    and self._is_within(candidate, from_inline_dir)
+                ):
+                    relative = candidate.relative_to(from_inline_dir)
+                    update[field_name] = str(to_inline_dir.joinpath(*relative.parts))
+
+            raw_collection_root = str(getattr(resource, "collection_root", None) or "").strip()
+            raw_collection_path = str(getattr(resource, "collection_path", None) or "").strip().replace("\\", "/").strip("/")
+            if trashed:
+                if raw_collection_root or raw_collection_path:
+                    update["collection_root"] = None
+                    update["collection_path"] = None
+                    if not update.get("library_paths") and not getattr(resource, "library_paths", None):
+                        # Record the recycle bin location when an inline-grouped resource had no library_paths yet.
+                        moved_source = str(update.get("source") or getattr(resource, "source", "") or "")
+                        rel_name = Path(moved_source).name if moved_source else Path(raw_collection_path).name
+                        if rel_name:
+                            update["library_paths"] = [f"{to_prefix}{rel_name}"]
+            else:
+                inline_root_rewritten = False
+                if raw_collection_root and from_inline_dir is not None and to_inline_dir is not None:
+                    resolved_croot = Path(raw_collection_root).expanduser().resolve(strict=False)
+                    if self._is_within(resolved_croot, from_inline_dir):
+                        rel_root = resolved_croot.relative_to(from_inline_dir)
+                        new_croot = to_inline_dir.joinpath(*rel_root.parts)
+                        update["collection_root"] = str(new_croot)
+                        inline_root_rewritten = True
+                        # When the renamed folder itself is the leaf dir (rel_root == .),
+                        # collection_path begins with the leaf name (`OldLeaf/file.md`),
+                        # so rewrite that leaf prefix cleanly to `NewLeaf/file.md`.
+                        old_leaf = from_group.rsplit("/", 1)[-1]
+                        new_leaf = to_group.rsplit("/", 1)[-1]
+                        if (
+                            rel_root == Path(".")
+                            and raw_collection_path.startswith(f"{old_leaf}/")
+                            and old_leaf != new_leaf
+                        ):
+                            update["collection_path"] = f"{new_leaf}/{raw_collection_path[len(old_leaf) + 1:]}"
+                if not inline_root_rewritten and raw_collection_path:
+                    if raw_collection_path == from_group:
+                        update["collection_path"] = to_group
+                    elif raw_collection_path.startswith(f"{from_group}/"):
+                        update["collection_path"] = f"{to_group}/{raw_collection_path[len(from_group) + 1:]}"
             if update:
                 self._repository.save_resource(
                     workspace_id,

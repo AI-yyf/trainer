@@ -394,3 +394,145 @@ test('shared training card, review queue, and coach bridge helpers return 8-loca
     assert.doesNotMatch(queue.detail, /Estimated retrievability/);
   }
 });
+
+test('library folder rename/delete commands sync workbench resources and v1.6.3 UX guards hold', async () => {
+  const libraryFolderCommandsPath = path.resolve(
+    __dirname,
+    '..',
+    'dist',
+    'extension',
+    'src',
+    'commands',
+    'libraryFolderCommands.js',
+  );
+  const {
+    libraryFoldersRenameCommand,
+    libraryFoldersDeleteCommand,
+  } = loadWithVscodeMock(libraryFolderCommandsPath, {});
+
+  const patches = [];
+  const getPaths = [];
+  const bootstrap = createDefaultBootstrapData(
+    { trusted: true, workspaceFolder: '/ws/project' },
+    {
+      name: 'MiniMax',
+      baseUrl: 'https://api.minimaxi.com/v1',
+      apiKeyRef: 'trainer.minimax',
+      model: 'MiniMax-M3.1-Flash',
+      capabilities: { chat: true, tools: true, thinking: true },
+    },
+    { lifecycle: 'ready', host: '127.0.0.1', port: 4588, canStart: true },
+  );
+
+  const mockContext = {
+    trustGuard: { ensureTrusted: async () => true },
+    sidecarManager: { ensureRunning: async () => ({ lifecycle: 'ready', port: 4588 }) },
+    sidecarClient: {
+      postJson: async () => ({ ok: true, moved_resource_count: 1 }),
+      deleteJson: async () => ({ ok: true, recoverable: true }),
+      getJson: async (_port, reqPath) => {
+        getPaths.push(reqPath);
+        if (reqPath.startsWith('/library/groups')) {
+          return {
+            managed_root: 'Trainer Library',
+            exists: true,
+            total_resource_count: 1,
+            groups: [{ path: 'InfraDocs', name: 'InfraDocs', resource_count: 1 }],
+          };
+        }
+        return {
+          memory: {
+            recent_summary: 'Folder synchronized.',
+            resources: [
+              {
+                id: 'res-sync-1',
+                name: 'world-model.md',
+                title: 'world-model.md',
+                kind: 'markdown',
+                status: 'ready',
+                collection_path: 'InfraDocs/world-model.md',
+              },
+            ],
+          },
+        };
+      },
+    },
+    workbench: { postMessage: async () => {} },
+    getSessionId: () => 'sess-folder-sync',
+    getWorkspaceId: () => 'ws-folder-sync',
+    getHostState: () => ({
+      bootstrap,
+      workspace: { workspaceFolder: '/ws/project', activeWorkspaceRoot: '/ws/project' },
+    }),
+    patchWorkbenchData: async (nextData) => {
+      patches.push(nextData);
+    },
+  };
+
+  const renameResult = await libraryFoldersRenameCommand(mockContext, {
+    operationId: 'op-rename-sync',
+    path: 'WorldModels',
+    new_path: 'InfraDocs',
+  });
+  assert.equal(renameResult.ok, true);
+  assert.ok(getPaths.some((p) => p.startsWith('/library/groups')));
+  assert.ok(getPaths.some((p) => p.startsWith('/memory/summary')));
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0].resources[0].collectionPath, 'InfraDocs/world-model.md');
+
+  const deleteResult = await libraryFoldersDeleteCommand(mockContext, {
+    operationId: 'op-delete-sync',
+    path: 'InfraDocs',
+  });
+  assert.equal(deleteResult.ok, true);
+  assert.equal(patches.length, 2);
+
+  const workbenchStateSource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'app', 'useWorkbenchState.ts'),
+    'utf8',
+  );
+  const settingsViewSource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'components', 'settings', 'CoachSettingsView.tsx'),
+    'utf8',
+  );
+  const folderRowCss = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'extension',
+      'webview',
+      'src',
+      'styles',
+      'sections',
+      'resources-workbench-w1-collapsesection-collections-row.css',
+    ),
+    'utf8',
+  );
+
+  assert.match(workbenchStateSource, /beginOptimisticStream:/);
+  assert.match(settingsViewSource, /settings-thinking-intensity/);
+  const coachBubbleSource = fs.readFileSync(
+    path.join(repoRoot, 'extension', 'webview', 'src', 'components', 'coach', 'CoachMessageBubble.tsx'),
+    'utf8',
+  );
+  const quietSurfaceCss = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'extension',
+      'webview',
+      'src',
+      'styles',
+      'sections',
+      'surface-materials-document-column-hairline-chrome-crafted-disclosure.css',
+    ),
+    'utf8',
+  );
+  assert.match(coachBubbleSource, /message-bubble__assistant-rail--with-activity/);
+  assert.match(
+    quietSurfaceCss,
+    /\.coach-conversation-view--quiet-surface \.message-bubble__assistant-rail:not\(\.message-bubble__assistant-rail--with-activity\)/,
+  );
+  assert.match(
+    folderRowCss,
+    /\.collapse-section__header-row:hover \.resources-finder-folder-actions/,
+  );
+});

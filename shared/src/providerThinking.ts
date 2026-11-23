@@ -47,8 +47,11 @@ export function normalizeProviderThinkingConfig(
   const normalizedProtocol = normalizeProviderProtocol(protocol);
   if (normalizedProtocol === 'anthropic_messages' || normalizedProtocol === 'gemini_generate_content') {
     delete normalized.reasoningEffort;
-  } else if (normalizedProtocol === 'openai_responses' || providerProtocolFamily(normalizedProtocol) === 'openai') {
+  } else if (normalizedProtocol === 'openai_responses') {
     delete normalized.budgetTokens;
+  } else if (normalizedProtocol === 'openai_chat_completions' || normalizedProtocol === 'openai_chat_completions_compatible') {
+    // OpenAI-compatible gateways (MiniMax, DeepSeek, Qwen, OpenRouter, New API)
+    // accept both effort presets and explicit custom thinking token budgets.
   } else {
     delete normalized.budgetTokens;
     delete normalized.reasoningEffort;
@@ -286,7 +289,11 @@ export function removeThinkingFields(target: Record<string, unknown>): void {
   if (extra) {
     const next = { ...extra };
     delete next.thinking;
-    target.extra_body = next;
+    if (Object.keys(next).length === 0) {
+      delete target.extra_body;
+    } else {
+      target.extra_body = next;
+    }
   }
   // thinkingConfig lives under generationConfig on the Gemini wire path; strip
   // only that key so unrelated generation defaults (tokens, temperature) stay.
@@ -308,8 +315,17 @@ export function removeThinkingFields(target: Record<string, unknown>): void {
 
 function emitMiniMaxThinking(target: Record<string, unknown>, config: ProviderThinkingConfig): void {
   const extra = record(target.extra_body) ?? {};
-  extra.thinking = { type: config.mode === 'enabled' ? 'enabled' : 'disabled' };
+  const thinking: Record<string, unknown> = {
+    type: config.mode === 'enabled' ? 'enabled' : 'disabled',
+  };
+  if (config.mode === 'enabled' && typeof config.budgetTokens === 'number') {
+    thinking.budget_tokens = config.budgetTokens;
+  }
+  extra.thinking = thinking;
   target.extra_body = extra;
+  if (config.mode === 'enabled' && config.reasoningEffort) {
+    target.reasoning_effort = config.reasoningEffort;
+  }
 }
 
 // Anthropic rejects thinking.type=enabled without budget_tokens, so an explicit
@@ -354,7 +370,21 @@ function emitThinking(target: Record<string, unknown>, protocol: ProviderProtoco
     };
     target.generationConfig = generation;
   } else if (protocol === 'openai_chat_completions' || protocol === 'openai_chat_completions_compatible') {
-    target.reasoning_effort = config.reasoningEffort ?? 'medium';
+    if (typeof budget === 'number') {
+      const extra = record(target.extra_body) ?? {};
+      const existingThinking = record(extra.thinking) ?? {};
+      extra.thinking = {
+        ...existingThinking,
+        type: 'enabled',
+        budget_tokens: budget,
+      };
+      target.extra_body = extra;
+      if (config.reasoningEffort) {
+        target.reasoning_effort = config.reasoningEffort;
+      }
+    } else {
+      target.reasoning_effort = config.reasoningEffort ?? 'medium';
+    }
   } else {
     return false;
   }
@@ -400,7 +430,18 @@ export function normalizeProviderThinking(
   // An explicit "off" restores its marker so the choice survives normalization.
   if (parsed.config.mode !== 'enabled') {
     if (parsed.config.mode === 'disabled') {
-      applyDisabledThinkingMarker(target, protocol);
+      const sourceExtraThinking = record(record(source.extra_body)?.thinking);
+      if (
+        (protocol === 'openai_chat_completions' || protocol === 'openai_chat_completions_compatible')
+        && sourceExtraThinking?.type === 'disabled'
+        && !record(source.thinking)
+      ) {
+        const extra = record(target.extra_body) ?? {};
+        extra.thinking = { type: 'disabled' };
+        target.extra_body = extra;
+      } else {
+        applyDisabledThinkingMarker(target, protocol);
+      }
     }
     return { config: parsed.config, requestDefaults: target, migrated: parsed.migrated, emitted: false, reason: 'disabled' };
   }
@@ -428,6 +469,9 @@ export function describeProviderThinking(
       protocol: protocol ?? 'openai_chat_completions_compatible',
       kind: 'minimax_thinking',
       config,
+      effortOptions: ['low', 'medium', 'high'],
+      budgetMin: 1,
+      budgetMax: 200000,
       advanced: true,
       disabled: false,
     };
@@ -443,7 +487,7 @@ export function describeProviderThinking(
     return { protocol, kind: 'gemini_thinking', config: normalized.config, budgetMin: 1, budgetMax: 32768, advanced: true };
   }
   if (protocol === 'openai_chat_completions' || protocol === 'openai_chat_completions_compatible') {
-    return { protocol, kind: 'reasoning_effort', config: normalized.config, effortOptions: ['low', 'medium', 'high'], advanced: true };
+    return { protocol, kind: 'reasoning_effort', config: normalized.config, effortOptions: ['low', 'medium', 'high'], budgetMin: 1, budgetMax: 200000, advanced: true };
   }
   return undefined;
 }
@@ -466,6 +510,9 @@ export function synthesizeProviderThinkingDescriptor(
       protocol: protocol ?? 'openai_chat_completions_compatible',
       kind: 'minimax_thinking',
       config,
+      effortOptions: ['low', 'medium', 'high'],
+      budgetMin: 1,
+      budgetMax: 200000,
       advanced: true,
       disabled: false,
     };
@@ -477,7 +524,10 @@ export function synthesizeProviderThinkingDescriptor(
   if (protocol === 'gemini_generate_content') {
     return { protocol, kind: 'gemini_thinking', config, budgetMin: 1, budgetMax: 32768, advanced: true };
   }
-  return { protocol, kind: 'reasoning_effort', config, effortOptions: ['low', 'medium', 'high'], advanced: true };
+  if (protocol === 'openai_responses') {
+    return { protocol, kind: 'reasoning_effort', config, effortOptions: ['low', 'medium', 'high'], advanced: true };
+  }
+  return { protocol, kind: 'reasoning_effort', config, effortOptions: ['low', 'medium', 'high'], budgetMin: 1, budgetMax: 200000, advanced: true };
 }
 
 export function updateProviderThinking(

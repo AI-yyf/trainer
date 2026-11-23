@@ -26,6 +26,18 @@ export function ComposeIcon(props: CoachIconProps) {
   );
 }
 
+/** Finder-style I-beam + label bar glyph for inline rename actions. */
+export function EditRenameIcon(props: CoachIconProps) {
+  return (
+    <CoachIconBase {...props}>
+      <rect x="2.2" y="4.2" width="11.6" height="7.6" rx="1.6" />
+      <path d="M9.5 2.6h3" />
+      <path d="M9.5 13.4h3" />
+      <path d="M11 2.6v10.8" />
+    </CoachIconBase>
+  );
+}
+
 export function SendIcon(props: CoachIconProps) {
   return (
     <CoachIconBase {...props}>

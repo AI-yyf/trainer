@@ -61,7 +61,12 @@ export function CoachWorkingIndicator({
     const timer = window.setInterval(() => {
       setElapsedMs(performance.now() - startedAt);
     }, 1000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      if (key === "default") {
+        WORKING_STARTED_AT.delete("default");
+      }
+    };
   }, [key, startedAt]);
 
   const label = stage?.label ?? COACH_WORKING_LABELS[language] ?? COACH_WORKING_LABELS["en-US"];

@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · Deutsch · [日本語](README_ja-JP.md) · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/source-v1.6.2-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Release](https://img.shields.io/badge/source-v1.6.3-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#installation)
 [![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#qualitätsgates)
@@ -76,7 +76,7 @@ Er ist kein Chat-Wrapper — er ist ein Coach mit Gedächtnis, Lehrplan und Prü
 Lade die `.vsix` passend zu Betriebssystem und Architektur (`darwin-arm64` / `linux-x64` / `win32-x64`) aus den [Releases](https://github.com/AI-yyf/trainer/releases/latest):
 
 ```bash
-code --install-extension trainer-extension-1.6.2-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.6.3-<platform>-<arch>.vsix --force
 ```
 
 Oder im VS-Code-Extensions-Panel → `···` → *Aus VSIX installieren…* → Fenster neu laden. Hinweise zu Paketierung und Speicherpfaden stehen in [`extension/README.install.md`](extension/README.install.md).
@@ -232,7 +232,7 @@ Für Remote-Linux/SSH-Workspaces trennt Trainer sauber zwischen **lokalem Gehirn
 | Hält dein Git-Repo sauber | ⚠️ mischt Dateien | ⚠️ | n/v | ✅ ein `<LibraryRoot>`, null Repo-Schreibzugriffe |
 | Spaced Repetition nach FSRS | ❌ | ❌ | ✅ | ✅ inkl. Live-Flow-Unterdrückung |
 | Berechtigungsstufen | ❌ | ⚠️ Trust-Dialog | ❌ | ✅ 6 Stufen + Remote-Schreibsperre |
-| Offene Testabdeckung | closed source | closed source | closed source | ✅ **6.606 Unit/Integration + 166 E2E-Specs** |
+| Offene Testabdeckung | closed source | closed source | closed source | ✅ **6.636 Unit/Integration + 471 E2E-Specs** |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ **8 Sprachen** mit CI-Vollständigkeitsgate |
 
 > Andere Tools lassen dich Code schneller ausspucken; **Trainer sorgt dafür, dass du wirklich beherrschst, was du baust.**
@@ -318,9 +318,9 @@ Für Remote-Linux/SSH-Workspaces trennt Trainer sauber zwischen **lokalem Gehirn
 |---|---|---|
 | `extension/src/` | VS Code Host: Commands, SecretStorage, WorkspaceGateway, SidecarProcessManager | `79` TS-Dateien (~`53.286` Zeilen) |
 | `extension/webview/src/` | React-Workbench: 2 Ziele, Drawer, Single-Composer, Shiki/KaTeX/Mermaid, 8 Sprachen | `233` TS/TSX + `53` CSS (~`120.507` Zeilen) |
-| `extension/tests/` | `node:test`-Suite: Host, Governance, i18n, Browser-Capture, Security | `317` Dateien · **`2.401` Tests** |
+| `extension/tests/` | `node:test`-Suite: Host, Governance, i18n, Browser-Capture, Security | `318` Dateien · **`2.412` Tests** |
 | `server/app/` | FastAPI-Sidecar: Agent Loop, RethinkFun-Pädagogik, Memory/FSRS, Ingest, Evaluator | `232` Python-Dateien (~`173.863` Zeilen) |
-| `server/tests/` | Backend-`pytest`-Suite für API, Pädagogik, Memory, Protokolle & Authority | `295` Dateien · **`4.205` gesammelte Tests** |
+| `server/tests/` | Backend-`pytest`-Suite für API, Pädagogik, Memory, Protokolle & Authority | `296` Dateien · **`4.224` gesammelte Tests** |
 | `shared/src/` | Geteilte deterministische Governance-Module für Host, Webview & Tests | `76` Module (~`29.508` Zeilen · `523` Exporte) |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS-Dateien (`746` Zeilen) |
 | `browser-extension/` | Chromium MV3 Popup, Offline-Queues, Kontextmenüs & Side Panel | `8` Dateien (`6.977` Zeilen) |
@@ -345,17 +345,17 @@ Alle zustandsführenden Haupt-HTTP-Routen liefern ein einheitliches **`Workbench
 
 ## Qualitätsgates
 
-> Jede Kennzahl spiegelt reale Verifikationsläufe auf `main` (`v1.6.2`) wider:
+> Jede Kennzahl spiegelt reale Verifikationsläufe auf `main` (`v1.6.3`) wider:
 
 | Gate | Umfang & Verifiziertes Ergebnis | Befehl |
 |---|---|---|
-| **Server-Tests (`pytest`)** | **295 Dateien · 4.205 Tests** (inkl. Subtests) | `npm run test:server` |
-| **Extension & Shared (`node:test`)** | **317 Dateien · 2.401 Tests** (`2.400` bestanden, `1` Plattform-Skip, `0` Fehler) | `npm run test:extension` |
+| **Server-Tests (`pytest`)** | **296 Dateien · 4.224 Tests** (inkl. Subtests) | `npm run test:server` |
+| **Extension & Shared (`node:test`)** | **318 Dateien · 2.412 Tests** (`2.411` bestanden, `1` Plattform-Skip, `0` Fehler) | `npm run test:extension` |
 | **Statische Analyse & Typen** | `ruff check` (`0` Fehler) · `pyright` (`0` Fehler) · CSS + `tsc -b` (`0` Fehler) | `npm run check && npm run verify:server-pyright` |
 | **UI-Geometrie-Gate** | Single-Composer-Souveränität, 2-Ziele-Shell, Overflow-Checks (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
 | **i18n-Vollständigkeitsgate** | **213** `appUiCopy` + **212** `settingsText` + **272** `hostCommandCopy` über **8 Sprachen** (`0` Lücken) | `npm run verify:i18n` |
 | **Vokabular & Secrets** | **68** UI-Copy-Dateien sauber · **4.027** Repo-Dateien ohne Klartext-Credentials | `npm run verify:copy-vocabulary && npm run verify:credentials` |
-| **Playwright E2E & Remote-SSH** | **30** Playwright-Specs (`166` Tests) + Real-Sidecar Matrix + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **Playwright E2E & Remote-SSH** | **30** Playwright-Specs (`471` Tests) + Real-Sidecar Matrix + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **CI-Release-Ziele** | **3 Desktop-Ziele**: `win32-x64`, `darwin-arm64`, `linux-x64` | `.github/workflows/release.yml` |
 
 *(Hinweis: Die manuelle pädagogische Abnahme `T-0028` bleibt in [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md) als manuelles Gate geführt.)*
@@ -397,7 +397,7 @@ Automatisch abgesichert über `npm run verify:i18n` (`extension/webview/src/lib/
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.6.2}
+  note   = {v1.6.3}
 }
 ```
 
@@ -407,6 +407,6 @@ Automatisch abgesichert über `npm run verify:i18n` (`extension/webview/src/lib/
 
 **// Trainiere deine KI · Wachse mit deiner KI**
 
-`v1.6.2` · Gemacht mit Kaffee, FSRS, RethinkFun State-Flow-Pädagogik, 6.606 automatisierten Tests und einem Coach, der sich weigert, für dich Code zu schreiben.
+`v1.6.3` · Gemacht mit Kaffee, FSRS, RethinkFun State-Flow-Pädagogik, 6.636 automatisierten Tests und einem Coach, der sich weigert, für dich Code zu schreiben.
 
 </div>

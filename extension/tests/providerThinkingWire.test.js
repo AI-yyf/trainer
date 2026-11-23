@@ -3,11 +3,15 @@ const assert = require('node:assert/strict');
 const {
   classifyProviderThinkingSupport,
   describeProviderThinking,
+  normalizeProviderThinkingConfig,
   providerThinkingMayEmit,
   providerThinkingProbeObserved,
   updateProviderThinking,
   thinkingProtocolSupportsWire,
 } = require('../dist/shared/src/providerThinking.js');
+const {
+  normalizeProviderRequestDefaults,
+} = require('../dist/shared/src/providerRequestDefaults.js');
 
 const CAPABLE = { supported: true };
 
@@ -259,4 +263,75 @@ test('probe-unsupported model refuses the choice even after a probed verdict', (
     { mode: 'enabled', reasoningEffort: 'high' },
   );
   assert.equal(defaults.reasoning_effort, undefined);
+});
+
+test('MiniMax and OpenAI-compatible gateways preserve custom budgetTokens and reasoningEffort across normalization', () => {
+  const minimaxCtx = {
+    protocol: 'openai_chat_completions_compatible',
+    providerName: 'MiniMax',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    model: 'MiniMax-M3.1-Flash',
+    ...CAPABLE,
+  };
+
+  // Explicit custom budget + preset effort round-trip cleanly without stripping budget_tokens
+  const withBudget = updateProviderThinking(
+    minimaxCtx,
+    { temperature: 0.3 },
+    { mode: 'enabled', reasoningEffort: 'medium', budgetTokens: 8192 },
+  );
+  assert.equal(withBudget.reasoning_effort, 'medium');
+  assert.deepEqual(withBudget.extra_body, { thinking: { type: 'enabled', budget_tokens: 8192 } });
+
+  const normalizedMiniMax = normalizeProviderRequestDefaults(
+    {
+      name: 'MiniMax',
+      baseUrl: 'https://api.minimaxi.com/v1',
+      model: 'MiniMax-M3.1-Flash',
+      protocol: 'openai_chat_completions_compatible',
+      thinkingSupported: true,
+    },
+    withBudget,
+  );
+  assert.deepEqual(normalizedMiniMax.extra_body, { thinking: { type: 'enabled', budget_tokens: 8192 } });
+  assert.equal(normalizedMiniMax.reasoning_effort, 'medium');
+
+  const descriptorMiniMax = describeProviderThinking(minimaxCtx, normalizedMiniMax);
+  assert.equal(descriptorMiniMax.kind, 'minimax_thinking');
+  assert.equal(descriptorMiniMax.config.mode, 'enabled');
+  assert.equal(descriptorMiniMax.config.reasoningEffort, 'medium');
+  assert.equal(descriptorMiniMax.config.budgetTokens, 8192);
+  assert.deepEqual(descriptorMiniMax.effortOptions, ['low', 'medium', 'high']);
+
+  // Enabled without custom budget/effort preserves canonical MiniMax `{ type: 'enabled' }`
+  const defaultEnabledMiniMax = updateProviderThinking(minimaxCtx, {}, { mode: 'enabled' });
+  assert.deepEqual(defaultEnabledMiniMax.extra_body, { thinking: { type: 'enabled' } });
+
+  // Generic OpenAI-compatible gateway retains both reasoningEffort and budgetTokens
+  const normalizedConfig = normalizeProviderThinkingConfig(
+    { mode: 'enabled', reasoningEffort: 'high', budgetTokens: 16384 },
+    'openai_chat_completions_compatible',
+  );
+  assert.deepEqual(normalizedConfig, {
+    mode: 'enabled',
+    reasoningEffort: 'high',
+    budgetTokens: 16384,
+  });
+
+  const compatOut = updateProviderThinking(
+    { protocol: 'openai_chat_completions_compatible', model: 'gateway-reasoner', ...CAPABLE },
+    {},
+    normalizedConfig,
+  );
+  assert.equal(compatOut.reasoning_effort, 'high');
+  assert.deepEqual(compatOut.extra_body, { thinking: { type: 'enabled', budget_tokens: 16384 } });
+
+  // Disabling cleans up empty extra_body
+  const disabledCompat = updateProviderThinking(
+    { protocol: 'openai_chat_completions_compatible', model: 'gateway-reasoner', ...CAPABLE },
+    compatOut,
+    { mode: 'disabled' },
+  );
+  assert.equal(disabledCompat.reasoning_effort, undefined);
+  assert.equal(disabledCompat.extra_body, undefined);
 });

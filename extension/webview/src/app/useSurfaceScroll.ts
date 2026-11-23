@@ -16,6 +16,25 @@ export function getSurfaceScrollElement(root: HTMLElement, view: ActiveWorkbench
   return root.querySelector<HTMLElement>(`[data-surface="${view}"] ${READING_SURFACES[view]}`);
 }
 
+/**
+ * Scroll target for Coach auto-follow: keep the latest message visible even when
+ * inline learning/practice footer cards sit beneath the thread.
+ */
+export function resolveCoachBottomScrollTop(container: HTMLElement): number {
+  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+  if (!container.querySelector(".coach-conversation-view__footer")) {
+    return maxScrollTop;
+  }
+  const items = container.querySelectorAll<HTMLElement>(".coach-conversation-view__item");
+  const lastItem = items.length > 0 ? items[items.length - 1] : undefined;
+  if (!lastItem) {
+    return maxScrollTop;
+  }
+  const itemBottom =
+    container.scrollTop + (lastItem.getBoundingClientRect().bottom - container.getBoundingClientRect().top);
+  return Math.max(0, Math.min(maxScrollTop, itemBottom - container.clientHeight + 16));
+}
+
 /** Preserve reading positions by real workspace/session identity, including reload. */
 export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeView: ActiveWorkbenchView, scope: string) {
   const positions = useRef(new Map(Object.entries(useWorkbenchState.getState().layout.surfaceScrollPositions ?? {})));
@@ -28,9 +47,6 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
     let restoring = true;
     let timeout: number | undefined;
     let previousOverflowAnchor = "";
-    const restore = () => {
-      if (pane && restoring) pane.scrollTop = saved ?? (activeView === "coach" ? pane.scrollHeight : 0);
-    };
     const remember = () => { if (pane && !restoring) positions.current.set(key, pane.scrollTop); };
     const persist = () => {
       if (pane) useWorkbenchState.getState().rememberSurfaceScroll(key, positions.current.get(key) ?? pane.scrollTop);
@@ -41,6 +57,14 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
       resize.disconnect();
       if (pane) pane.style.overflowAnchor = previousOverflowAnchor;
       remember();
+    };
+    const restore = () => {
+      if (!pane || !restoring) return;
+      if (activeView === "coach" && useWorkbenchState.getState().streaming.isStreaming) {
+        finishRestore();
+        return;
+      }
+      pane.scrollTop = saved ?? (activeView === "coach" ? resolveCoachBottomScrollTop(pane) : 0);
     };
     const resize = new ResizeObserver(restore);
     const connect = () => {
@@ -67,9 +91,15 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
     mutations.observe(root, { childList: true, subtree: true });
     connect();
     const frame = window.requestAnimationFrame(restore);
+    const unsubscribeStore = useWorkbenchState.subscribe((state, previous) => {
+      if (activeView === "coach" && state.streaming.isStreaming && !previous.streaming.isStreaming) {
+        finishRestore();
+      }
+    });
     const onPageHide = () => { remember(); persist(); };
     window.addEventListener("pagehide", onPageHide);
     return () => {
+      unsubscribeStore();
       window.cancelAnimationFrame(frame);
       window.clearTimeout(timeout);
       mutations.disconnect();

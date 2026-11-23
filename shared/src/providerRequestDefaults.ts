@@ -88,10 +88,17 @@ export function normalizeProviderRequestDefaults(
 
   const merged = mergeProviderRequestDefaults(MINIMAX_PROVIDER_REQUEST_DEFAULTS, thinking.requestDefaults);
   const extraBody = asRecord(merged.extra_body);
-  const thinkingType = asRecord(extraBody?.thinking)?.type;
+  const existingThinking = asRecord(extraBody?.thinking);
+  const thinkingType = existingThinking?.type;
   merged.extra_body = {
     ...(extraBody ? cloneRequestDefaults(extraBody) : {}),
-    thinking: { type: thinkingType === "enabled" ? "enabled" : "disabled" },
+    thinking:
+      thinkingType === "enabled"
+        ? {
+            ...existingThinking,
+            type: "enabled",
+          }
+        : { type: "disabled" },
   };
   return merged;
 }

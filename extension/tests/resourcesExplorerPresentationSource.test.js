@@ -41,7 +41,7 @@ test('resource row click opens VS Code and does not switch the sidebar to the Re
   assert.doesNotMatch(handler, /resource\.location\?\.line_start/);
   assert.doesNotMatch(handler, /setSelectedResourceId/);
   assert.doesNotMatch(handler, /setResourceDetail/);
-  assert.match(view, /onClick=\{\(\) => onOpen\(node\.resource!\)\}/);
+  assert.match(view, /onClick=\{\(\) => \{\s*if \(!isEditingThisResource\) \{\s*onOpen\(node\.resource!\);\s*\}\s*\}\}/);
   assert.match(view, /event\.key === " "[\s\S]*?onOpen\(node\.resource!\);/);
 });
 

@@ -230,6 +230,11 @@ def apply_thinking_policy(
     elif has_top_level:
         existing = out.get("thinking")
         thinking = dict(existing) if isinstance(existing, dict) else {}
+        if policy == "disabled":
+            thinking.pop("budget_tokens", None)
+            thinking.pop("budgetTokens", None)
+            out.pop("reasoning_effort", None)
+            out.pop("reasoningEffort", None)
         thinking["type"] = policy
         out["thinking"] = thinking
     else:
@@ -237,6 +242,11 @@ def apply_thinking_policy(
             extra_body = {}
         existing = extra_body.get("thinking")
         thinking = dict(existing) if isinstance(existing, dict) else {}
+        if policy == "disabled":
+            thinking.pop("budget_tokens", None)
+            thinking.pop("budgetTokens", None)
+            out.pop("reasoning_effort", None)
+            out.pop("reasoningEffort", None)
         thinking["type"] = policy
         extra_body["thinking"] = thinking
 

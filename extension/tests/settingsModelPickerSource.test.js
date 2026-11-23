@@ -265,7 +265,10 @@ test('Settings keeps the long model list searchable and defers inner save or tes
   assert.match(source, /ariaLabel=\{saveProviderConnectionLabel\}/);
   assert.match(source, /const modelDiscoveryGuidanceActive = canFindDraftModels \|\| hasDiscoveredDraftModels;/);
   assert.match(source, /const showProviderDetailActions =\s*!modelDiscoveryGuidanceActive \|\| showSecondaryModelDiscoveryAction;/);
-  assert.match(source, /label=\{settingsText\(language, "保存", "Save"\)\}/);
+  assert.match(
+    source,
+    /label=\{\s*!canSaveProviderConnection && providerSaved && !providerHasDraftChanges\s*\?\s*settingsText\(language, "已保存", "Saved"\)\s*:\s*settingsText\(language, "保存", "Save"\)\s*\}/,
+  );
   assert.match(source, /className="settings-api-key-test"/);
 });
 

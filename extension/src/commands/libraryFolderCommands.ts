@@ -1,6 +1,7 @@
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
-import { getRuntimeWorkspaceId } from './workspaceContext';
+import { mergeMemorySummarySnapshot } from '../core/workbenchData';
+import { getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
 
 /**
  * Internal bridge commands for the Library's real-folder space.
@@ -111,7 +112,34 @@ async function mutateLibraryFolder(
     } else {
       await context.sidecarClient.deleteJson<unknown>(status.port, '/library/groups', body);
     }
-    await answerLibraryFolders(context, operationId, true, '');
+    let updatedFolders: unknown;
+    try {
+      const query = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+      updatedFolders = await context.sidecarClient.getJson<unknown>(
+        status.port,
+        `/library/groups${query}`,
+      );
+    } catch {
+      updatedFolders = undefined;
+    }
+    if (
+      (operation === 'rename' || operation === 'delete') &&
+      typeof context.patchWorkbenchData === 'function' &&
+      typeof context.getHostState === 'function'
+    ) {
+      try {
+        const summary = await context.sidecarClient.getJson<unknown>(
+          status.port,
+          withWorkspaceQuery('/memory/summary', context),
+        );
+        await context.patchWorkbenchData(
+          mergeMemorySummarySnapshot(context.getHostState().bootstrap, summary, workspaceId),
+        );
+      } catch {
+        // Folder mutation already succeeded on disk; leave best-effort snapshot sync silent.
+      }
+    }
+    await answerLibraryFolders(context, operationId, true, '', updatedFolders);
     return { ok: true };
   } catch (error) {
     const message = failureMessage(error);

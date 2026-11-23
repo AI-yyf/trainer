@@ -121,8 +121,10 @@ details[open] > :not(summary) {
   }
 }
 
-/* Crafted first surface: one input object, no leftover chrome. */
-.coach-conversation-view--quiet-surface .message-bubble__assistant-rail {
+/* Crafted first surface: hide static speaker label/time chrome, never live stage activity strips. */
+.coach-conversation-view--quiet-surface .message-bubble__assistant-rail:not(.message-bubble__assistant-rail--with-activity),
+.coach-conversation-view--quiet-surface .message-bubble__assistant-label,
+.coach-conversation-view--quiet-surface .message-bubble__assistant-time {
   display: none;
 }
 

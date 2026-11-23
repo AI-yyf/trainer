@@ -2306,6 +2306,7 @@ function CoachSettingsViewSheet({
 
   const modelSearchInputRef = useRef<HTMLInputElement | null>(null);
   const modelSelectRef = useRef<HTMLSelectElement | null>(null);
+  const thinkingBudgetInputRef = useRef<HTMLInputElement | null>(null);
   const connectionAnchorRef = useRef<HTMLDivElement | null>(null);
   const teachingPrefsAnchorRef = useRef<HTMLDivElement | null>(null);
   const workspaceAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -3242,6 +3243,9 @@ function CoachSettingsViewSheet({
     if (requestDefaultsError) {
       return true;
     }
+    if (!requestDefaultsFocusedRef.current) {
+      return false;
+    }
     const trimmed = requestDefaultsText.trim();
     const expectedKey = requestDefaultsKey(draftRequestDefaults);
     if (!trimmed) {
@@ -3497,31 +3501,31 @@ function CoachSettingsViewSheet({
   const localizedCatalogPanelDetail =
     settingsText(language, "Trainer \u4F1A\u6309\u8FD9\u4E9B\u5DF2\u4FDD\u5B58\u7684 model \u7EC6\u8282\u6765\u505A\u81EA\u52A8\u5207\u6362\u3001profile \u5207\u6362\u548C live refresh\u3002", "Trainer uses these saved model details when it switches models, swaps profiles, and refreshes live catalogs.");
   const localizedCatalogAliasesLabel =
-    settingsText(language, "Model aliases", "Model aliases");
+    settingsText(language, "模型别名", "Model aliases");
   const localizedCatalogTaskBindingsLabel =
-    settingsText(language, "Task bindings", "Task bindings");
+    settingsText(language, "任务绑定", "Task bindings");
   const localizedCatalogAllowedModelsLabel =
-    settingsText(language, "Allowed models", "Allowed models");
+    settingsText(language, "允许的模型", "Allowed models");
   const localizedCatalogDeniedModelsLabel =
-    settingsText(language, "Blocked models", "Blocked models");
+    settingsText(language, "禁用的模型", "Blocked models");
   const localizedCatalogEmbeddingModelLabel =
-    settingsText(language, "Embedding model", "Embedding model");
+    settingsText(language, "向量模型", "Embedding model");
   const localizedCatalogRequestDefaultsLabel =
-    settingsText(language, "Request defaults", "Request defaults");
+    settingsText(language, "请求默认参数", "Request defaults");
   const localizedCatalogSourceLabel =
-    settingsText(language, "Catalog source", "Catalog source");
+    settingsText(language, "目录来源", "Catalog source");
   const localizedCatalogCacheTtlLabel =
-    settingsText(language, "Cache TTL", "Cache TTL");
+    settingsText(language, "缓存有效期", "Cache TTL");
   const localizedAdvancedRoutingLabel =
     settingsText(language, "\u8DEF\u7531\u89C4\u5219", "Routing rules");
   const localizedAdvancedRoutingDetail =
     settingsText(language, "这里放会影响 provider profile 行为的高级字段。默认收起，不抢首屏。", "These fields shape provider profile behavior. They stay collapsed by default so Settings keeps its first screen calm.");
   const localizedCredentialModeLabel =
-    settingsText(language, "Credential mode", "Credential mode");
+    settingsText(language, "凭据模式", "Credential mode");
   const localizedCredentialModeUiProxy =
     settingsText(language, "本地宿主转发", "Local host relay");
   const localizedCredentialModeWorkspaceSecret =
-    settingsText(language, "Workspace secret", "Workspace secret");
+    settingsText(language, "工作区密钥", "Workspace secret");
   const localizedAllowedModelsInputDetail =
     settingsText(language, "用逗号或换行分隔。留空表示不限制。", "Separate models with commas or new lines. Leave blank to allow any model.");
   const localizedDeniedModelsInputDetail =
@@ -3583,11 +3587,19 @@ function CoachSettingsViewSheet({
     provider.catalogModels && provider.catalogModels.length > 0
       ? compactSummaryValue(provider.catalogModels.slice(0, 4), String(provider.catalogModels.length))
       : undefined;
+  const localizedCatalogSourceValue =
+    provider.catalogSource === "manual"
+      ? modelCardCopy.manual
+      : provider.catalogSource === "cached"
+        ? modelCardCopy.cached
+        : provider.catalogSource === "provider_live"
+          ? modelCardCopy.liveFetch
+          : provider.catalogSource;
   const providerCatalogRows = [
-    provider.catalogSource
+    localizedCatalogSourceValue
       ? {
           label: localizedCatalogSourceLabel,
-          value: provider.catalogSource,
+          value: localizedCatalogSourceValue,
         }
       : null,
     cacheTtlSummary
@@ -3665,13 +3677,13 @@ function CoachSettingsViewSheet({
   const providerCatalogSummary = compactSummaryValue(
     [
       provider.catalogModels && provider.catalogModels.length > 0
-        ? `${provider.catalogModels.length} saved models`
+        ? `${provider.catalogModels.length} ${localizedCatalogSavedModelsLabel[language]}`
         : undefined,
       providerCapabilityGroups.aliases.length > 0
-        ? `${providerCapabilityGroups.aliases.length} ${localizedCatalogAliasesLabel.toLowerCase()}`
+        ? `${providerCapabilityGroups.aliases.length} ${localizedCatalogAliasesLabel}`
         : undefined,
       providerCapabilityGroups.taskBindings.length > 0
-        ? `${providerCapabilityGroups.taskBindings.length} ${localizedCatalogTaskBindingsLabel.toLowerCase()}`
+        ? `${providerCapabilityGroups.taskBindings.length} ${localizedCatalogTaskBindingsLabel}`
         : undefined,
       cacheTtlSummary ? `${localizedCatalogCacheTtlLabel} ${cacheTtlSummary}` : undefined,
     ].filter(Boolean) as string[],
@@ -5763,7 +5775,11 @@ function CoachSettingsViewSheet({
             <DoneIcon size={14} />
           )
         }
-        label={settingsText(language, "保存", "Save")}
+        label={
+          !canSaveProviderConnection && providerSaved && !providerHasDraftChanges
+            ? settingsText(language, "已保存", "Saved")
+            : settingsText(language, "保存", "Save")
+        }
         ariaLabel={saveProviderConnectionLabel}
         // r1-g2-4: 保存并使用 is this screen's single solid primary; retest
         // and model-list refresh stay quiet secondary actions below it.
@@ -6338,70 +6354,6 @@ function CoachSettingsViewSheet({
                   </div>
                 </div>
                 )}
-                {currentDraftModel ? (
-                  <div
-                    className={`settings-model-adaptation settings-model-adaptation--${modelAdaptation.confidence}`}
-                    data-model-adaptation={modelAdaptation.confidence}
-                  >
-                    <div className="settings-model-adaptation__header">
-                      <strong>{settingsText(language, "模型适配", "Model fit")}</strong>
-                      <span>
-                        {modelAdaptation.confidence === "unknown"
-                          ? settingsText(
-                              language,
-                              "未识别模型 · 请测试确认",
-                              "Unknown model · test to confirm",
-                            )
-                          : settingsText(
-                              language,
-                              "按模型族推断 · 测试后以实测为准",
-                              "Inferred from the model family · a real test remains authoritative",
-                            )}
-                      </span>
-                    </div>
-                    <div className="settings-model-adaptation__chips">
-                      {modelAdaptation.supportsTools ? (
-                        <span>{toolsCopy.label}</span>
-                      ) : null}
-                      {modelAdaptation.supportsVision ? (
-                        <span>{visionCopy.label}</span>
-                      ) : null}
-                      {modelAdaptation.supportsThinking ? (
-                        <span>
-                          {settingsText(language, "思考", "Thinking")}
-                          {modelAdaptation.suggestedEffort
-                            ? ` · ${
-                                modelAdaptation.suggestedEffort === "low"
-                                  ? settingsText(language, "低", "Low")
-                                  : modelAdaptation.suggestedEffort === "high"
-                                    ? settingsText(language, "高", "High")
-                                    : settingsText(language, "中", "Medium")
-                              }`
-                            : ""}
-                        </span>
-                      ) : null}
-                      {!modelAdaptation.supportsTools &&
-                      !modelAdaptation.supportsVision &&
-                      !modelAdaptation.supportsThinking ? (
-                        <span>{settingsText(language, "基础对话", "Chat only")}</span>
-                      ) : null}
-                    </div>
-                    {modelAdaptation.confidence === "known" &&
-                    (Boolean(draftCapabilities.tools) !== modelAdaptation.supportsTools ||
-                      Boolean(draftCapabilities.vision) !== modelAdaptation.supportsVision ||
-                      explicitDraftThinkingEnabled !== modelAdaptation.supportsThinking) ? (
-                      <div>
-                        <button
-                          type="button"
-                          className="button button--ghost button--compact"
-                          onClick={() => applyModelAdaptation(currentDraftModel)}
-                        >
-                          {settingsText(language, "应用推荐能力", "Apply suggested")}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
                 {(providerSaved || providerDraftReadyForModelDiscovery) && onRefreshProviderModels ? (
                   <button
                     type="button"
@@ -6467,11 +6419,6 @@ function CoachSettingsViewSheet({
                           ...(draftThinkingConfig ?? { mode: "auto" }),
                           mode: event.target.checked ? "enabled" : "disabled",
                           ...(event.target.checked &&
-                          thinkingDescriptor?.kind === "reasoning_effort" &&
-                          !draftThinkingConfig?.reasoningEffort
-                            ? { reasoningEffort: "medium" as const }
-                            : {}),
-                          ...(event.target.checked &&
                           thinkingDescriptor?.kind === "thinking_budget" &&
                           typeof draftThinkingConfig?.budgetTokens !== "number"
                             ? { budgetTokens: 4096 }
@@ -6482,65 +6429,260 @@ function CoachSettingsViewSheet({
                     <span>{settingsText(language, "思考模式", "Thinking")}</span>
                   </label>
                 </div>
-                {thinkingDescriptor?.kind === "reasoning_effort" && !thinkingDescriptor.disabled ? (
-                  <label className="settings-field">
-                    <span>{settingsText(language, "默认思考强度", "Default thinking effort")}</span>
-                    <select
-                      value={draftThinkingConfig?.reasoningEffort ?? "auto"}
-                      onChange={(event) =>
-                        updateThinkingConfig(
-                          event.target.value === "auto"
-                            ? {
-                                ...(draftThinkingConfig ?? { mode: "auto" }),
-                                mode: "auto",
-                                reasoningEffort: undefined,
-                              }
-                            : {
-                                ...(draftThinkingConfig ?? { mode: "enabled" }),
-                                mode:
-                                  (draftThinkingConfig?.mode ?? "enabled") === "disabled"
-                                    ? "enabled"
-                                    : draftThinkingConfig?.mode ?? "enabled",
-                                reasoningEffort: event.target.value as "low" | "medium" | "high",
-                              },
-                        )
-                      }
-                    >
-                      <option value="auto">
-                        {settingsText(language, "自动（使用请求层默认值）", "Auto (request default)")}
-                      </option>
-                      <option value="low">{settingsText(language, "低", "Low")}</option>
-                      <option value="medium">{settingsText(language, "中", "Medium")}</option>
-                      <option value="high">{settingsText(language, "高", "High")}</option>
-                    </select>
-                  </label>
-                ) : explicitDraftThinkingEnabled &&
-                  (thinkingDescriptor?.kind === "thinking_budget" ||
-                    thinkingDescriptor?.kind === "gemini_thinking") ? (
-                  <label className="settings-field">
-                    <span>{labels?.thinkingBudget ?? copy.thinkingBudget}</span>
-                    <input
-                      type="number"
-                      min={thinkingDescriptor.budgetMin}
-                      max={thinkingDescriptor.budgetMax}
-                      value={
-                        typeof draftThinkingConfig?.budgetTokens === "number"
-                          ? draftThinkingConfig.budgetTokens
-                          : ""
-                      }
-                      onChange={(event) =>
+                {currentDraftModel &&
+                (modelAdaptation.confidence === "unknown" ||
+                  (modelAdaptation.supportsTools && !draftCapabilities.tools) ||
+                  (modelAdaptation.supportsVision && !draftCapabilities.vision) ||
+                  (modelAdaptation.supportsThinking && !explicitDraftThinkingEnabled)) ? (
+                  <div
+                    className={`settings-model-adaptation settings-model-adaptation--${modelAdaptation.confidence}`}
+                    data-model-adaptation={modelAdaptation.confidence}
+                  >
+                    <div className="settings-model-adaptation__header">
+                      <strong>{settingsText(language, "模型适配", "Model fit")}</strong>
+                      <span>
+                        {modelAdaptation.confidence === "unknown"
+                          ? settingsText(
+                              language,
+                              "未识别模型 · 请测试确认",
+                              "Unknown model · test to confirm",
+                            )
+                          : settingsText(
+                              language,
+                              "按模型族推断 · 测试后以实测为准",
+                              "Inferred from the model family · a real test remains authoritative",
+                            )}
+                      </span>
+                    </div>
+                    <div className="settings-model-adaptation__footer">
+                      <div className="settings-model-adaptation__chips">
+                        {modelAdaptation.supportsTools ? <span>{toolsCopy.label}</span> : null}
+                        {modelAdaptation.supportsVision ? <span>{visionCopy.label}</span> : null}
+                        {modelAdaptation.supportsThinking ? (
+                          <span>
+                            {settingsText(language, "思考", "Thinking")}
+                            {modelAdaptation.suggestedEffort
+                              ? ` · ${
+                                  modelAdaptation.suggestedEffort === "low"
+                                    ? settingsText(language, "低", "Low")
+                                    : modelAdaptation.suggestedEffort === "high"
+                                      ? settingsText(language, "高", "High")
+                                      : settingsText(language, "中", "Medium")
+                                }`
+                              : ""}
+                          </span>
+                        ) : null}
+                        {!modelAdaptation.supportsTools &&
+                        !modelAdaptation.supportsVision &&
+                        !modelAdaptation.supportsThinking ? (
+                          <span>{settingsText(language, "基础对话", "Chat only")}</span>
+                        ) : null}
+                      </div>
+                      {modelAdaptation.confidence === "known" ? (
+                        <button
+                          type="button"
+                          className="button button--ghost button--compact"
+                          onClick={() => applyModelAdaptation(currentDraftModel)}
+                        >
+                          {settingsText(language, "应用推荐能力", "Apply suggested")}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {thinkingDescriptor &&
+                !thinkingDescriptor.disabled &&
+                (explicitDraftThinkingEnabled || thinkingDescriptor.kind === "reasoning_effort") ? (() => {
+                  const isBudgetProtocol =
+                    thinkingDescriptor.kind === "thinking_budget" ||
+                    thinkingDescriptor.kind === "gemini_thinking";
+                  const supportsCustomBudget = typeof thinkingDescriptor.budgetMax === "number";
+                  const currentBudget =
+                    typeof draftThinkingConfig?.budgetTokens === "number"
+                      ? draftThinkingConfig.budgetTokens
+                      : undefined;
+                  const activePreset = isBudgetProtocol
+                    ? currentBudget === 2048
+                      ? "low"
+                      : currentBudget === 8192
+                        ? "medium"
+                        : currentBudget === 16384
+                          ? "high"
+                          : (thinkingDescriptor.kind === "thinking_budget" ? currentBudget === 4096 : currentBudget === undefined)
+                            ? "auto"
+                            : "custom"
+                    : currentBudget !== undefined
+                      ? "custom"
+                      : draftThinkingConfig?.reasoningEffort ?? "auto";
+                  const quickTokenPresets = [2048, 4096, 8192, 16384, 32768].filter(
+                    (value) => value <= (thinkingDescriptor.budgetMax ?? 200000),
+                  );
+                  const selectThinkingPreset = (
+                    preset: "auto" | "low" | "medium" | "high" | "custom",
+                  ) => {
+                    if (isBudgetProtocol) {
+                      if (preset === "custom") {
                         updateThinkingConfig({
                           ...(draftThinkingConfig ?? { mode: "enabled" }),
                           mode: "enabled",
-                          budgetTokens: parsePositiveIntegerInput(event.target.value),
-                        })
+                          budgetTokens: currentBudget ?? 12288,
+                        });
+                        window.requestAnimationFrame(() => thinkingBudgetInputRef.current?.focus());
+                        return;
                       }
-                    />
-                  </label>
-                ) : null}
-                <p className="settings-sheet__note settings-sheet__note--compact">
-                  {settingsPhrase(language, "capabilitiesFromLiveTest")}
-                </p>
+                      const presetBudget =
+                        preset === "low"
+                          ? 2048
+                          : preset === "medium"
+                            ? 8192
+                            : preset === "high"
+                              ? 16384
+                              : thinkingDescriptor.kind === "thinking_budget"
+                                ? 4096
+                                : undefined;
+                      updateThinkingConfig({
+                        ...(draftThinkingConfig ?? { mode: "enabled" }),
+                        mode: "enabled",
+                        budgetTokens: presetBudget,
+                      });
+                      return;
+                    }
+                    if (preset === "custom") {
+                      updateThinkingConfig({
+                        ...(draftThinkingConfig ?? { mode: "enabled" }),
+                        mode: "enabled",
+                        reasoningEffort: undefined,
+                        budgetTokens: currentBudget ?? 8192,
+                      });
+                      window.requestAnimationFrame(() => thinkingBudgetInputRef.current?.focus());
+                      return;
+                    }
+                    if (preset === "auto") {
+                      updateThinkingConfig({
+                        ...(draftThinkingConfig ?? { mode: "auto" }),
+                        mode:
+                          thinkingDescriptor.kind === "reasoning_effort" &&
+                          draftProtocol === "openai_responses"
+                            ? "auto"
+                            : explicitDraftThinkingEnabled
+                              ? "enabled"
+                              : "auto",
+                        reasoningEffort: undefined,
+                        budgetTokens: undefined,
+                      });
+                      return;
+                    }
+                    updateThinkingConfig({
+                      ...(draftThinkingConfig ?? { mode: "enabled" }),
+                      mode: "enabled",
+                      reasoningEffort: preset,
+                      budgetTokens: undefined,
+                    });
+                  };
+                  return (
+                    <div className="settings-thinking-intensity" data-thinking-intensity="true">
+                      <div className="settings-thinking-intensity__row">
+                        <span className="settings-thinking-intensity__label">
+                          {settingsText(language, "思考强度", "Thinking intensity")}
+                        </span>
+                        <div
+                          className="settings-thinking-intensity__pills"
+                          role="group"
+                          aria-label={settingsText(language, "思考强度", "Thinking intensity")}
+                        >
+                          {(
+                            [
+                              ["auto", settingsText(language, "自动", "Auto")],
+                              ["low", settingsText(language, "低", "Low")],
+                              ["medium", settingsText(language, "中", "Medium")],
+                              ["high", settingsText(language, "高", "High")],
+                              ...(supportsCustomBudget
+                                ? ([["custom", settingsText(language, "自定义", "Custom")]] as const)
+                                : []),
+                            ] as const
+                          ).map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className="settings-thinking-intensity__pill"
+                              data-thinking-preset={value}
+                              aria-pressed={activePreset === value}
+                              onClick={() => selectThinkingPreset(value)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {explicitDraftThinkingEnabled && supportsCustomBudget ? (
+                        <div className="settings-thinking-intensity__budget">
+                          <label className="settings-thinking-intensity__budget-field">
+                            <span>{settingsText(language, "自定义预算 (Tokens)", "Custom budget (Tokens)")}</span>
+                            <div className="settings-thinking-intensity__input-wrap">
+                              <input
+                                ref={thinkingBudgetInputRef}
+                                type="number"
+                                min={thinkingDescriptor.budgetMin ?? 1}
+                                max={thinkingDescriptor.budgetMax}
+                                step={256}
+                                value={currentBudget ?? ""}
+                                placeholder={settingsText(
+                                  language,
+                                  "例如 8192（留空跟随模型默认）",
+                                  "e.g. 8192 (blank = model default)",
+                                )}
+                                onChange={(event) =>
+                                  updateThinkingConfig({
+                                    ...(draftThinkingConfig ?? { mode: "enabled" }),
+                                    mode: "enabled",
+                                    budgetTokens: parsePositiveIntegerInput(event.target.value),
+                                  })
+                                }
+                              />
+                              {currentBudget !== undefined ? (
+                                <button
+                                  type="button"
+                                  className="settings-thinking-intensity__clear"
+                                  aria-label={settingsText(language, "清除自定义预算", "Clear custom budget")}
+                                  title={settingsText(language, "清除自定义预算", "Clear custom budget")}
+                                  onClick={() =>
+                                    updateThinkingConfig({
+                                      ...(draftThinkingConfig ?? { mode: "enabled" }),
+                                      mode: "enabled",
+                                      budgetTokens: undefined,
+                                    })
+                                  }
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                            </div>
+                          </label>
+                          <div className="settings-thinking-intensity__chips">
+                            {quickTokenPresets.map((tokens) => (
+                              <button
+                                key={tokens}
+                                type="button"
+                                className="settings-thinking-intensity__chip"
+                                aria-pressed={currentBudget === tokens}
+                                onClick={() =>
+                                  updateThinkingConfig({
+                                    ...(draftThinkingConfig ?? { mode: "enabled" }),
+                                    mode: "enabled",
+                                    reasoningEffort: undefined,
+                                    budgetTokens: tokens,
+                                  })
+                                }
+                              >
+                                {tokens / 1024}K
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })() : null}
                 <label className="settings-field">
                   <span>{settingsSupportPhrase(language, "protocol")}</span>
                   <select
@@ -6692,6 +6834,7 @@ function CoachSettingsViewSheet({
                       />
                       <SummaryCard
                         label={settingsPhrase(language, "finalCapabilities")}
+                        detail={settingsPhrase(language, "capabilitiesFromLiveTest")}
                         value={
                           capabilityChipsAllowed ? (
                             <span className="settings-sheet__summary-inline">

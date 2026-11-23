@@ -554,7 +554,9 @@ function CoachMessageBubbleImpl({
         body={(
       <div className="message-bubble__body">
         {showAssistantRail ? (
-          <div className="message-bubble__assistant-rail">
+          <div
+            className={`message-bubble__assistant-rail${headNote ? " message-bubble__assistant-rail--with-activity" : ""}`}
+          >
             <span className="message-bubble__assistant-label">{resolvedRoleLabel}</span>
             {headNote}
             {!streaming && timestamp ? (

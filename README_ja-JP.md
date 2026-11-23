@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · 日本語 · [한국어](README_ko-KR.md) · [Português](README_pt-BR.md)
 
-[![Release](https://img.shields.io/badge/source-v1.6.2-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![Release](https://img.shields.io/badge/source-v1.6.3-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#インストール)
 [![Tests](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#品質ゲート)
@@ -76,7 +76,7 @@ LLM との会話は閉じた瞬間に蒸発し、動画は一方通行。火曜�
 お使いの OS とアーキテクチャ（`darwin-arm64` / `linux-x64` / `win32-x64`）向けの `.vsix` を [Releases](https://github.com/AI-yyf/trainer/releases/latest) からダウンロードします：
 
 ```bash
-code --install-extension trainer-extension-1.6.2-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.6.3-<platform>-<arch>.vsix --force
 ```
 
 または VS Code の拡張機能パネル → `···` → *VSIX からのインストール…* → ウィンドウを再読み込み。詳細は [`extension/README.install.md`](extension/README.install.md) を参照してください。
@@ -232,7 +232,7 @@ Trainer の状態フロー型直観指導メソッドは、AI 技術系クリエ
 | Git リポジトリを汚さない | ⚠️ ファイル混入 | ⚠️ | n/a | ✅ 単一 `<LibraryRoot>`、リポ書き込みゼロ |
 | FSRS 間隔反復 | ❌ | ❌ | ✅ | ✅ 実装集中時の自動抑止付き |
 | 権限レベル制御 | ❌ | ⚠️ 基本 Trust | ❌ | ✅ 6 段階 + リモート書込ハードロック |
-| 公開テストスイート | クローズド | クローズド | クローズド | ✅ **6,606 単体/統合 + 166 E2E** |
+| 公開テストスイート | クローズド | クローズド | クローズド | ✅ **6,636 単体/統合 + 471 E2E** |
 | 多言語対応 | ⚠️ | ⚠️ | ⚠️ | ✅ **8 言語**（CI 完全性ゲート保証） |
 
 > 他のツールは「コードを書く速度」を上げます；**Trainer は「書いたものを自分の力にする」ツールです。**
@@ -318,9 +318,9 @@ Trainer の状態フロー型直観指導メソッドは、AI 技術系クリエ
 |---|---|---|
 | `extension/src/` | VS Code ホスト：コマンド、SecretStorage、WorkspaceGateway、Sidecar 管理 | `79` TS ファイル（約 `53,286` 行） |
 | `extension/webview/src/` | React ワークベンチ：2 入口、ドロワー、単一入力欄、Shiki/KaTeX/Mermaid、8 言語 | `233` TS/TSX + `53` CSS（約 `120,507` 行） |
-| `extension/tests/` | `node:test` スイート：ホスト、共有ガバナンス、i18n、ブラウザ拡張、セキュリティ | `317` ファイル · **`2,401` テスト** |
+| `extension/tests/` | `node:test` スイート：ホスト、共有ガバナンス、i18n、ブラウザ拡張、セキュリティ | `318` ファイル · **`2,412` テスト** |
 | `server/app/` | FastAPI sidecar：ReAct、RethinkFun、FSRS/メモリ、取り込み、サンドボックス検証 | `232` Python ファイル（約 `173,863` 行） |
-| `server/tests/` | `pytest` バックエンドテスト（API、教育カーネル、メモリ、プロバイダ、権限） | `295` ファイル · **`4,205` 収集テスト** |
+| `server/tests/` | `pytest` バックエンドテスト（API、教育カーネル、メモリ、プロバイダ、権限） | `296` ファイル · **`4,224` 収集テスト** |
 | `shared/src/` | Host・Webview・テストで共有する決定論的ガバナンス純粋関数モジュール | `76` モジュール（約 `29,508` 行 · `523` エクスポート） |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS ファイル（`746` 行） |
 | `browser-extension/` | Chromium MV3 ポップアップ、オフラインキュー、コンテキストメニュー、Side Panel | `8` ファイル（`6,977` 行） |
@@ -345,17 +345,17 @@ Trainer の状態フロー型直観指導メソッドは、AI 技術系クリエ
 
 ## 品質ゲート
 
-> 以下の数値はすべて `main` ブランチ（`v1.6.2`）で直接計測した実績です：
+> 以下の数値はすべて `main` ブランチ（`v1.6.3`）で直接計測した実績です：
 
 | ゲート | 対象と検証結果 | コマンド |
 |---|---|---|
-| **サーバーテスト (`pytest`)** | **295 ファイル · 4,205 テスト**（＋サブテスト） | `npm run test:server` |
-| **拡張機能テスト (`node:test`)** | **317 ファイル · 2,401 テスト**（`2,400` 合格、`1` 条件スキップ、`0` 失敗） | `npm run test:extension` |
+| **サーバーテスト (`pytest`)** | **296 ファイル · 4,224 テスト**（＋サブテスト） | `npm run test:server` |
+| **拡張機能テスト (`node:test`)** | **318 ファイル · 2,412 テスト**（`2,411` 合格、`1` 条件スキップ、`0` 失敗） | `npm run test:extension` |
 | **静的解析 & 型検証** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **UI ジオメトリ検査** | 単一入力欄主権、2 入口シェル、はみ出し検査（`340/420/460px` × 明暗 × 中英） | `npm run verify:ui-geometry` |
 | **i18n 完全性ゲート** | **213** `appUiCopy` + **212** `settingsText` + **272** `hostCommandCopy` × **8 言語**（欠損 0） | `npm run verify:i18n` |
 | **語彙・機密スキャン** | UI 文言 **68 ファイル**異常なし · リポジトリ **4,027 ファイル**平文キー 0 件 | `npm run verify:copy-vocabulary && npm run verify:credentials` |
-| **Playwright E2E & Remote-SSH** | **30** Playwright spec（`166` ケース）+ 実 sidecar 行列 + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **Playwright E2E & Remote-SSH** | **30** Playwright spec（`471` ケース）+ 実 sidecar 行列 + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **CI リリースビルド対象** | **3 デスクトップ基盤**：`win32-x64`、`darwin-arm64`、`linux-x64` | `.github/workflows/release.yml` |
 
 *（注：最終的な人手による教育品質受領確認 `T-0028` は [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md) にて手動ゲートとして管理しています。）*
@@ -397,7 +397,7 @@ UI、設定画面、ホスト通知、ブラウザ拡張機能、README が **8 
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.6.2}
+  note   = {v1.6.3}
 }
 ```
 
@@ -407,6 +407,6 @@ UI、設定画面、ホスト通知、ブラウザ拡張機能、README が **8 
 
 **// AIを鍛える · AIとともに成長する**
 
-`v1.6.2` · コーヒーと FSRS、RethinkFun State-Flow 教育カーネル、6,606 個の自動テスト、そしてあなたの代わりにコードを書くことを拒むコーチで作られています。
+`v1.6.3` · コーヒーと FSRS、RethinkFun State-Flow 教育カーネル、6,636 個の自動テスト、そしてあなたの代わりにコードを書くことを拒むコーチで作られています。
 
 </div>
