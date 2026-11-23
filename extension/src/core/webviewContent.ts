@@ -35,7 +35,7 @@ export async function buildWorkbenchHtml(
       `<head>
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource} data:; script-src ${webview.cspSource} 'nonce-${nonce}'; worker-src blob:; form-action 'none'; connect-src https: http://127.0.0.1:* http://localhost:*;"
+      content="default-src 'none'; img-src ${webview.cspSource} https: http://127.0.0.1:* http://localhost:* data: blob:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource} data:; script-src ${webview.cspSource} 'nonce-${nonce}'; worker-src blob:; form-action 'none'; connect-src https: http://127.0.0.1:* http://localhost:*;"
     />`,
     );
     html = html.replace(

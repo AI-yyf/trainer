@@ -1528,6 +1528,12 @@ export interface ConversationMessage {
     label: string;
     value: string;
   }>;
+  imagePreviews?: Array<{
+    id: string;
+    name?: string;
+    mimeType: string;
+    dataUrl: string;
+  }>;
   artifacts?: Array<{
     kind:
       | "task"

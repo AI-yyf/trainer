@@ -102,7 +102,7 @@ import {
   resolveCoachToolResultCopy,
   summarizeSafeCoachToolResult,
 } from "./coachToolResultCopy";
-import { MessageRichContent } from "./MessageRichContent";
+import { MessageImageGallery, MessageRichContent } from "./MessageRichContent";
 
 export type CoachMessageAction =
   | "copy"
@@ -395,6 +395,7 @@ function CoachMessageBubbleImpl({
   const messageHasArtifacts = artifactCount > 0;
   const visibleBody = message.body;
   const hasBody = visibleBody.trim().length > 0;
+  const hasImagePreviews = (message.imagePreviews?.length ?? 0) > 0;
 
   const primaryArtifact = message.artifacts?.find((artifact) => Boolean(artifact.recommendedAction));
   const visibleParts =
@@ -596,13 +597,16 @@ function CoachMessageBubbleImpl({
             {sanitizeErrorSurfaceText(fallbackStatusSummary, language)}
           </p>
         ) : null}
-        {emptyReplyFallback ? (
+        {emptyReplyFallback && !hasImagePreviews ? (
           <p className="message-bubble__agent-status-summary" data-empty-reply-fallback="true">
             {coachMessageBubbleCopy(
               language,
               "这一轮没有返回可显示的回复。可以重试或换一种问法。",
             )}
           </p>
+        ) : null}
+        {hasImagePreviews ? (
+          <MessageImageGallery previews={message.imagePreviews} language={language} />
         ) : null}
         {hasBody ? (
           <MessageRichContent

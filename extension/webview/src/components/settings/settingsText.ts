@@ -2260,6 +2260,33 @@ export const SETTINGS_TEXT: Record<string, Partial<Record<ComposerLanguage, stri
     "ko-KR": "작업 영역 시크릿",
     "pt-BR": "Segredo do workspace",
   },
+  "智能\u0000Smart": {
+    "en-US": "Smart",
+    "es-ES": "Inteligente",
+    "fr-FR": "Intelligent",
+    "de-DE": "Intelligent",
+    "ja-JP": "スマート",
+    "ko-KR": "스마트",
+    "pt-BR": "Inteligente",
+  },
+  "智能默认\u0000Smart default": {
+    "en-US": "Smart default",
+    "es-ES": "Valor inteligente",
+    "fr-FR": "Défaut intelligent",
+    "de-DE": "Smarter Standard",
+    "ja-JP": "スマート既定値",
+    "ko-KR": "스마트 기본값",
+    "pt-BR": "Padrão inteligente",
+  },
+  "例如 {n}（安全上限 {max}，留空自动）\u0000e.g. {n} (cap {max}, blank = auto)": {
+    "en-US": "e.g. {n} (cap {max}, blank = auto)",
+    "es-ES": "p. ej. {n} (máx. {max}, vacío = auto)",
+    "fr-FR": "ex. {n} (plafond {max}, vide = auto)",
+    "de-DE": "z. B. {n} (Limit {max}, leer = auto)",
+    "ja-JP": "例: {n}（上限 {max}・空欄で自動）",
+    "ko-KR": "예: {n} (상한 {max}, 비우면 자동)",
+    "pt-BR": "ex. {n} (teto {max}, vazio = auto)",
+  },
 };
 
 /** Resolves the active-language text for a migrated zh/en pair. */

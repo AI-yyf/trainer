@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.models import ProviderConfig, ProviderModelTokenLimit
 from ..coaching_recovery import _localized_text
-from ..prompts import _truncate_coaching_history_content
+from ..harness import DEFAULT_CONTEXT_WINDOW_TOKENS
+from ..prompts import _truncate_coaching_history_content, resolve_smart_history_budget
 from .errors import ContextBudgetExhaustedError
 from .service_support import (
     extract_model_token_limit as _extract_model_token_limit,
@@ -24,6 +25,39 @@ from .service_support import (
 DEFAULT_COACHING_MAX_OUTPUT_TOKENS = 1024
 MIN_CONTEXT_OUTPUT_TOKENS = 128
 CONTEXT_BUDGET_SAFETY_TOKENS = 256
+
+
+def configured_thinking_budget_tokens(defaults: dict[str, Any] | None) -> int | None:
+    """Extract an active thinking budget from normalized provider request defaults."""
+    if not isinstance(defaults, dict):
+        return None
+    for container in (
+        defaults.get("thinking"),
+        (defaults.get("extra_body") or {}).get("thinking")
+        if isinstance(defaults.get("extra_body"), dict)
+        else None,
+    ):
+        if isinstance(container, dict):
+            mode = str(container.get("type") or container.get("mode") or "").strip().lower()
+            if mode == "disabled":
+                return None
+            budget = _positive_int(container.get("budget_tokens") or container.get("budgetTokens"))
+            if budget is not None:
+                return budget
+    direct = _positive_int(defaults.get("thinking_budget") or defaults.get("thinkingBudget"))
+    if direct is not None:
+        return direct
+    for gen_key in ("generationConfig", "generation_config"):
+        gen = defaults.get(gen_key)
+        if isinstance(gen, dict):
+            tc = gen.get("thinkingConfig") or gen.get("thinking_config")
+            if isinstance(tc, dict):
+                if tc.get("includeThoughts") is False or tc.get("include_thoughts") is False:
+                    return None
+                tc_budget = _positive_int(tc.get("thinkingBudget") or tc.get("thinking_budget"))
+                if tc_budget is not None:
+                    return tc_budget
+    return None
 
 
 class ContextBudgetMixin:
@@ -154,9 +188,8 @@ class ContextBudgetMixin:
             config,
             model,
         )
-        default_max_output_tokens = self._request_default_max_output_tokens(
-            self._raw_provider_request_defaults(config)
-        )
+        raw_defaults = self._raw_provider_request_defaults(config)
+        default_max_output_tokens = self._request_default_max_output_tokens(raw_defaults)
         requested = _positive_int(requested_max_tokens)
         if prefer_configured_output:
             desired = (
@@ -172,9 +205,25 @@ class ContextBudgetMixin:
                 or configured_max_output_tokens
                 or DEFAULT_COACHING_MAX_OUTPUT_TOKENS
             )
+        thinking_budget = configured_thinking_budget_tokens(raw_defaults)
+        if thinking_budget is not None and desired <= thinking_budget:
+            visible_headroom = max(2_048, min(8_192, thinking_budget // 4))
+            desired = thinking_budget + visible_headroom
         if configured_max_output_tokens is not None:
             desired = min(desired, configured_max_output_tokens)
         return max(1, desired)
+
+    def _smart_coaching_history_budget(
+        self,
+        *,
+        model: str | None = None,
+        provider: ProviderConfig | None = None,
+    ) -> tuple[int, int]:
+        """Scale coaching history turns & token budget with effective context window."""
+        context_window_tokens, _ = self._configured_token_limits(provider, model)
+        return resolve_smart_history_budget(
+            context_window_tokens or DEFAULT_CONTEXT_WINDOW_TOKENS
+        )
 
     @staticmethod
     def _context_budget_safety_margin(

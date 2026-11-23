@@ -6839,6 +6839,491 @@ async def _handle_coach_finalize(context: ToolContext, args: dict[str, Any]) -> 
     }
 
 
+async def _handle_search_academic_papers(
+    context: ToolContext,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    """Search arXiv academic papers (and optionally GitHub repos) for a topic."""
+    query = " ".join(str(args.get("query") or "").split()).strip()
+    if not query:
+        return {
+            "ok": False,
+            "error": "missing_query",
+            "detail": "search_academic_papers requires a non-empty query.",
+        }
+    if not _network_fetch_enabled(context):
+        return {
+            "ok": False,
+            "error": "network_disabled",
+            "detail": (
+                "Live web search is disabled by Trainer settings (`trainer.research.networkEnabled`)."
+            ),
+        }
+    try:
+        limit = max(1, min(int(args.get("limit", 5)), 8))
+    except Exception:
+        limit = 5
+    include_github = args.get("include_github", False) is True
+
+    from ..research.web_search import WebSearchClient
+
+    client = WebSearchClient(network_enabled=True, timeout=12)
+    try:
+        results = client._search_arxiv(query, limit=limit)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": exc.__class__.__name__,
+            "detail": str(exc),
+            "query": query,
+        }
+    if include_github and len(results) < limit:
+        try:
+            extra = client._search_github(query, limit=max(1, min(3, limit - len(results))))
+            for item in extra:
+                results.append({**item, "rank": len(results) + 1})
+        except Exception:
+            pass
+    return {
+        "ok": True,
+        "query": query,
+        "results": results[:limit],
+        "items": results[:limit],
+        "count": len(results[:limit]),
+    }
+
+
+def _resolve_tool_library_service(
+    context: ToolContext,
+    *,
+    require_writable: bool = False,
+) -> tuple[Any | None, dict[str, Any] | None]:
+    """Build a LibraryService scoped strictly to `<LibraryRoot>` / inline managed library."""
+    runtime = context.runtime
+    if runtime is None:
+        return None, {"ok": False, "error": "runtime_unavailable", "detail": "Trainer runtime is unavailable."}
+    repository = getattr(runtime, "repository", None)
+    resource_service = getattr(runtime, "resource_service", None)
+    if repository is None or resource_service is None:
+        return None, {"ok": False, "error": "library_unavailable", "detail": "Resource library service is unavailable."}
+
+    from ..resources.library import LibraryService
+    from ..workspace.authority import PermissionLevel, WorkspaceAuthority
+
+    carrier_resolver = cast(
+        Callable[[str], WorkspaceAuthority | None] | None,
+        getattr(runtime, "library_carrier_authority", None),
+    )
+    effective_resolver: Callable[[str], WorkspaceAuthority | None] | None = carrier_resolver
+    carrier = carrier_resolver(context.workspace_id) if callable(carrier_resolver) else None
+    resolved_lib_raw = (
+        resource_service._resolved_library_root(context.workspace_id)
+        if hasattr(resource_service, "_resolved_library_root")
+        else None
+    )
+    if (
+        (carrier is None or not carrier.has_active_workspace_root or carrier.destructive_mutation_block_reason() is not None)
+        and resolved_lib_raw
+    ):
+        project_raw = (
+            runtime.resolve_workspace_path(context.workspace_id)
+            if hasattr(runtime, "resolve_workspace_path")
+            else None
+        )
+        project_resolved = Path(str(project_raw)).expanduser().resolve(strict=False) if project_raw else None
+        lib_resolved = Path(str(resolved_lib_raw)).expanduser().resolve(strict=False)
+        if lib_resolved.is_dir() and lib_resolved != project_resolved:
+            dedicated = WorkspaceAuthority(
+                root_path=str(lib_resolved),
+                initial_permission=PermissionLevel.INSPECT,
+            )
+            dedicated.set_workspace_context(workspace_trusted=True)
+
+            def _resolve_dedicated(_ws: str, _auth: WorkspaceAuthority = dedicated) -> WorkspaceAuthority | None:
+                return _auth
+
+            effective_resolver = _resolve_dedicated
+
+    if not callable(effective_resolver):
+        if require_writable:
+            return None, {
+                "ok": False,
+                "error": "library_root_unavailable",
+                "detail": "Bind or create a Trainer Library folder before organizing folders.",
+            }
+        return None, None
+
+    library_service = LibraryService(
+        repository,
+        workspace_authority_resolver=effective_resolver,
+        inline_resource_root_resolver=getattr(resource_service, "_inline_resource_root", None),
+    )
+    return library_service, None
+
+
+async def _handle_list_library_folders(
+    context: ToolContext,
+    _args: dict[str, Any],
+) -> dict[str, Any]:
+    """List Trainer Library folders and resource group counts."""
+    runtime = context.runtime
+    repository = getattr(runtime, "repository", None)
+    list_resources_fn = getattr(repository, "list_resources", None)
+    if not callable(list_resources_fn):
+        return {"ok": False, "error": "library_unavailable", "detail": "Resource repository is unavailable."}
+
+    from ..resources.library import LIBRARY_DIRECTORY_NAME, LibraryError
+
+    resources = list(cast("Iterable[Any]", list_resources_fn(context.workspace_id)) or [])
+    uncategorized_count = sum(
+        1 for item in resources if not str(getattr(item, "collection_path", "") or "").strip()
+    )
+    library_service, _err = _resolve_tool_library_service(context, require_writable=False)
+    if library_service is not None:
+        try:
+            snap = library_service.list_groups(context.workspace_id)
+            groups_payload = [
+                {
+                    "path": node.get("path") if isinstance(node, dict) else node.path,
+                    "name": node.get("name") if isinstance(node, dict) else node.name,
+                    "workspace_path": (
+                        node.get("workspace_path")
+                        if isinstance(node, dict) and node.get("workspace_path")
+                        else f"{LIBRARY_DIRECTORY_NAME}/{node.get('path') if isinstance(node, dict) else node.path}"
+                    ),
+                    "resource_count": (
+                        node.get("resource_count", 0)
+                        if isinstance(node, dict)
+                        else node.resource_count
+                    ),
+                }
+                for node in _flatten_library_group_nodes(snap.groups)
+            ]
+            return {
+                "ok": True,
+                "managed_root": snap.managed_root,
+                "exists": snap.exists,
+                "total_resource_count": snap.total_resource_count,
+                "uncategorized_count": uncategorized_count,
+                "groups": groups_payload,
+            }
+        except LibraryError:
+            pass
+
+    group_counts: dict[str, int] = {}
+    for item in resources:
+        group = str(getattr(item, "collection_path", "") or "").strip().strip("/")
+        if group:
+            group_counts[group] = group_counts.get(group, 0) + 1
+    return {
+        "ok": True,
+        "managed_root": LIBRARY_DIRECTORY_NAME,
+        "exists": bool(group_counts),
+        "total_resource_count": len(resources),
+        "uncategorized_count": uncategorized_count,
+        "groups": [
+            {
+                "path": path,
+                "name": path.rsplit("/", 1)[-1],
+                "workspace_path": f"{LIBRARY_DIRECTORY_NAME}/{path}",
+                "resource_count": count,
+            }
+            for path, count in sorted(group_counts.items())
+        ],
+    }
+
+
+def _flatten_library_group_nodes(nodes: Iterable[Any]) -> list[Any]:
+    flat: list[Any] = []
+    for node in nodes or ():
+        flat.append(node)
+        children = (
+            node.get("children")
+            if isinstance(node, dict)
+            else getattr(node, "children", None)
+        )
+        if children:
+            flat.extend(_flatten_library_group_nodes(children))
+    return flat
+
+
+async def _handle_curate_library_resources(
+    context: ToolContext,
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    """Create/rename library folders or regroup/rename/tag resources inside Trainer Library."""
+    action = str(args.get("action") or "").strip().lower()
+    folder_path = str(args.get("folder_path") or "").strip()
+    new_folder_path = str(args.get("new_folder_path") or "").strip()
+    resource_id = str(args.get("resource_id") or "").strip()
+    title = str(args.get("title") or "").strip()
+    raw_tags = args.get("tags")
+
+    runtime = context.runtime
+    resource_service = getattr(runtime, "resource_service", None)
+    if resource_service is None:
+        return {"ok": False, "error": "library_unavailable", "detail": "Resource service is unavailable."}
+
+    from ..core.models import ResourceOrganizeRequest
+    from ..resources.library import LibraryError
+
+    if action in {"create_folder", "rename_folder"}:
+        library_service, err = _resolve_tool_library_service(context, require_writable=True)
+        if err is not None:
+            return err
+        assert library_service is not None
+        try:
+            if action == "create_folder":
+                if not folder_path:
+                    return {"ok": False, "error": "missing_folder_path", "detail": "create_folder requires folder_path."}
+                result = library_service.create_group(context.workspace_id, folder_path)
+                return {"ok": True, "action": action, **result}
+            if not folder_path or not new_folder_path:
+                return {
+                    "ok": False,
+                    "error": "missing_folder_path",
+                    "detail": "rename_folder requires folder_path and new_folder_path.",
+                }
+            result = library_service.rename_group(context.workspace_id, folder_path, new_folder_path)
+            return {"ok": True, "action": action, **result}
+        except LibraryError as exc:
+            return {
+                "ok": False,
+                "error": exc.code,
+                "detail": exc.message(context.response_language),
+            }
+
+    if action not in {"move_to_folder", "rename_resource", "tag_resource"}:
+        return {
+            "ok": False,
+            "error": "unsupported_action",
+            "detail": (
+                "action must be one of create_folder, rename_folder, "
+                "move_to_folder, rename_resource, tag_resource."
+            ),
+        }
+    if not resource_id:
+        return {"ok": False, "error": "missing_resource_id", "detail": f"{action} requires resource_id."}
+
+    try:
+        if action == "move_to_folder":
+            req = ResourceOrganizeRequest(
+                workspace_id=context.workspace_id,
+                resource_id=resource_id,
+                action="set_group",
+                group=folder_path,
+            )
+        elif action == "rename_resource":
+            if not title:
+                return {"ok": False, "error": "missing_title", "detail": "rename_resource requires title."}
+            req = ResourceOrganizeRequest(
+                workspace_id=context.workspace_id,
+                resource_id=resource_id,
+                action="rename",
+                title=title,
+            )
+        else:
+            tags = [str(item).strip() for item in (raw_tags or []) if str(item).strip()] if isinstance(raw_tags, list) else []
+            req = ResourceOrganizeRequest(
+                workspace_id=context.workspace_id,
+                resource_id=resource_id,
+                action="set_tags",
+                tags=tags,
+            )
+        updated = resource_service.organize_resource(context.workspace_id, req)
+    except (KeyError, ValueError, PermissionError, LibraryError) as exc:
+        detail = exc.message(context.response_language) if isinstance(exc, LibraryError) else str(exc)
+        return {"ok": False, "error": exc.__class__.__name__, "detail": detail}
+
+    return {
+        "ok": True,
+        "action": action,
+        "resource": {
+            "id": updated.id,
+            "name": updated.name,
+            "collection_path": getattr(updated, "collection_path", None),
+            "tags": list(getattr(updated, "tags", []) or []),
+        },
+    }
+
+
+def _collect_custom_skills_from_context(context: ToolContext) -> list[dict[str, Any]]:
+    raw = context.extra.get("custom_skills") if isinstance(context.extra, dict) else None
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        skill_id = str(item.get("id") or item.get("trigger") or "").strip()
+        trigger = str(item.get("trigger") or "").strip()
+        title = str(item.get("title") or skill_id or trigger).strip()
+        detail = str(item.get("detail") or "").strip()
+        prompt = str(item.get("prompt") or "").strip()
+        if not (skill_id or trigger):
+            continue
+        out.append(
+            {
+                "skill_id": skill_id or trigger.lstrip("$"),
+                "kind": "custom",
+                "name": title,
+                "description": detail,
+                "triggers": [trigger] if trigger else [],
+                "prompt": prompt,
+                "active": True,
+                "reviewed": True,
+                "source": "custom",
+            }
+        )
+    return out
+
+
+async def _handle_list_skills(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """List active and available built-in, workspace, and custom skills."""
+    from ..skills.runtime import runtime_skill_registry
+
+    kind_filter = str(args.get("kind") or "").strip().lower() or None
+    skills_out: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    registry = runtime_skill_registry(context.runtime)
+    if registry is not None:
+        valid_kinds = {"tutor", "knowledge", "action"}
+        reg_kind = kind_filter if kind_filter in valid_kinds else None
+        if kind_filter != "custom":
+            for rec in registry.list_skills(kind=reg_kind, workspace_id=context.workspace_id):
+                if rec.quarantined:
+                    continue
+                seen_ids.add(rec.skill_id)
+                front = rec.metadata.get("front_matter") if isinstance(rec.metadata, dict) else {}
+                raw_triggers = front.get("triggers") if isinstance(front, dict) else ""
+                triggers = [t.strip() for t in str(raw_triggers or "").split(",") if t.strip()]
+                skills_out.append(
+                    {
+                        "skill_id": rec.skill_id,
+                        "kind": rec.kind,
+                        "name": rec.name,
+                        "description": rec.description,
+                        "triggers": triggers,
+                        "active": rec.active,
+                        "reviewed": rec.reviewed,
+                        "source": str((rec.metadata or {}).get("origin") or "skill"),
+                    }
+                )
+
+    if kind_filter in (None, "custom"):
+        for item in _collect_custom_skills_from_context(context):
+            sid = str(item["skill_id"])
+            if sid in seen_ids:
+                continue
+            seen_ids.add(sid)
+            skills_out.append(
+                {
+                    "skill_id": sid,
+                    "kind": "custom",
+                    "name": item["name"],
+                    "description": item["description"],
+                    "triggers": item["triggers"],
+                    "active": True,
+                    "reviewed": True,
+                    "source": "custom",
+                }
+            )
+
+    return {"ok": True, "skills": skills_out, "count": len(skills_out)}
+
+
+async def _handle_invoke_skill(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Load and invoke one skill by id, $trigger, or title, returning its instructions."""
+    from ..skills.runtime import runtime_skill_registry
+
+    query = str(args.get("skill_id") or "").strip()
+    task_note = str(args.get("task_note") or "").strip()
+    if not query:
+        return {"ok": False, "error": "missing_skill_id", "detail": "invoke_skill requires skill_id."}
+    needle = query.casefold()
+    needle_stripped = needle.lstrip("$")
+
+    registry = runtime_skill_registry(context.runtime)
+    if registry is not None:
+        matched = None
+        for rec in registry.list_skills(workspace_id=context.workspace_id):
+            front = rec.metadata.get("front_matter") if isinstance(rec.metadata, dict) else {}
+            raw_triggers = front.get("triggers") if isinstance(front, dict) else ""
+            triggers = [t.strip().casefold() for t in str(raw_triggers or "").split(",") if t.strip()]
+            if (
+                rec.skill_id.casefold() == needle
+                or rec.skill_id.casefold() == needle_stripped
+                or rec.name.casefold() == needle
+                or needle in triggers
+                or needle_stripped in [t.lstrip("$") for t in triggers]
+            ):
+                matched = rec
+                break
+        if matched is not None:
+            if matched.quarantined:
+                return {
+                    "ok": False,
+                    "error": "skill_quarantined",
+                    "detail": f"Skill {matched.skill_id!r} failed security review and cannot run.",
+                }
+            body = registry._load_body(matched)
+            try:
+                registry.record_usage(
+                    matched.skill_id,
+                    applied=True,
+                    workspace_id=context.workspace_id,
+                    session_id=context.session_id or "",
+                )
+            except Exception:
+                pass
+            return {
+                "ok": True,
+                "skill_id": matched.skill_id,
+                "name": matched.name,
+                "kind": matched.kind,
+                "instructions": body or matched.description,
+                "task_note": task_note or None,
+            }
+
+    for item in _collect_custom_skills_from_context(context):
+        triggers = [str(t).strip().casefold() for t in item.get("triggers") or []]
+        if (
+            str(item["skill_id"]).casefold() == needle
+            or str(item["skill_id"]).casefold() == needle_stripped
+            or str(item["name"]).casefold() == needle
+            or needle in triggers
+        ):
+            return {
+                "ok": True,
+                "skill_id": item["skill_id"],
+                "name": item["name"],
+                "kind": "custom",
+                "instructions": item.get("prompt") or item.get("description") or item["name"],
+                "task_note": task_note or None,
+            }
+
+    return {
+        "ok": False,
+        "error": "skill_not_found",
+        "detail": f"No skill matched {query!r}. Call list_skills to inspect available skills.",
+    }
+
+
+async def _handle_generate_image(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Generate a visual diagram, illustration, or photorealistic image for the reply."""
+    from .image_generation import generate_pedagogical_image
+
+    return await generate_pedagogical_image(
+        context,
+        prompt=str(args.get("prompt") or ""),
+        title=str(args.get("title") or ""),
+        style=str(args.get("style") or "diagram"),
+        aspect_ratio=str(args.get("aspect_ratio") or "16:9"),
+        save_to_library=args.get("save_to_library", True) is not False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Default registry
 # ---------------------------------------------------------------------------
@@ -7960,6 +8445,153 @@ def build_default_tool_registry(
                 "required": ["path"],
             },
             handler=_handle_run_diagnostics,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="search_academic_papers",
+            description=(
+                "Search arXiv academic papers (and optionally public GitHub repositories) "
+                "for recent research advances, paper abstracts, and codebases."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": _string("Topic, method, or paper keywords to search."),
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results to return (1-8).",
+                        "minimum": 1,
+                        "maximum": 8,
+                        "default": 5,
+                    },
+                    "include_github": {
+                        "type": "boolean",
+                        "description": "Also search open-source GitHub repositories if results remain.",
+                        "default": False,
+                    },
+                },
+                "required": ["query"],
+            },
+            handler=_handle_search_academic_papers,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="list_library_folders",
+            description=(
+                "List folders in the learner's Trainer Library along with resource counts "
+                "and uncategorized item counts. Use before curating or organizing materials."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {},
+            },
+            handler=_handle_list_library_folders,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="curate_library_resources",
+            description=(
+                "Create or rename folders inside Trainer Library, or move/rename/tag an existing "
+                "library resource. Operates strictly inside Trainer's managed library, never "
+                "in the user's code repository."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum(
+                        "Curation action to perform.",
+                        [
+                            "create_folder",
+                            "rename_folder",
+                            "move_to_folder",
+                            "rename_resource",
+                            "tag_resource",
+                        ],
+                    ),
+                    "folder_path": _string("Folder path inside Trainer Library (use '' with move_to_folder to ungroup)."),
+                    "new_folder_path": _string("New folder path when action is rename_folder."),
+                    "resource_id": _string("Resource identifier when action is move_to_folder, rename_resource, or tag_resource."),
+                    "title": _string("New display title when action is rename_resource."),
+                    "tags": _string_array("Tags list when action is tag_resource."),
+                },
+                "required": ["action"],
+            },
+            handler=_handle_curate_library_resources,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="list_skills",
+            description=(
+                "List available built-in, workspace, and custom Trainer skills (including "
+                "triggers and descriptions) so the best skill can be invoked for the learner's task."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "kind": _string("Optional filter: tutor, knowledge, action, or custom."),
+                },
+            },
+            handler=_handle_list_skills,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="invoke_skill",
+            description=(
+                "Activate and read the full step-by-step instructions for a named skill "
+                "(built-in, workspace, or custom $trigger) and apply it during this turn."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "skill_id": _string("Skill identifier, $trigger, or title."),
+                    "task_note": _string("Optional note describing the learner goal for this invocation."),
+                },
+                "required": ["skill_id"],
+            },
+            handler=_handle_invoke_skill,
+        )
+    )
+
+    registry.register(
+        ToolDefinition(
+            name="generate_image",
+            description=(
+                "Generate an educational diagram, flow chart, concept illustration, or "
+                "visual figure for the learner and save a copy to Trainer Library when bound. "
+                "Keep the returned markdown link (`![title](trainer-image://img_...)`) in your reply."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "prompt": _string("Detailed visual specification of the diagram, nodes, arrows, or illustration."),
+                    "title": _string("Short figure caption / alt title."),
+                    "style": _enum(
+                        "Visual style.",
+                        ["diagram", "illustration", "chart", "photorealistic"],
+                    ),
+                    "aspect_ratio": _enum(
+                        "Aspect ratio.",
+                        ["16:9", "4:3", "1:1", "3:4"],
+                    ),
+                    "save_to_library": {
+                        "type": "boolean",
+                        "description": "Save a copy in Trainer Library/Generated Images when bound (default true).",
+                        "default": True,
+                    },
+                },
+                "required": ["prompt"],
+            },
+            handler=_handle_generate_image,
         )
     )
 

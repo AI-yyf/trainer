@@ -62,7 +62,105 @@ BUILTIN_TUTOR_SKILLS: list[dict[str, Any]] = [
         "body": RETHINKFUN_LECTURE_BODY,
         "evidence_markers": ["缺口", "失败", "旧方案", "为什么", "状态"],
         "origin_note": "internalized from user-provided rethinkfun-lecture skill",
-    }
+    },
+    {
+        "skill_id": "visual-image-generator",
+        "kind": "action",
+        "name": "教学配图生成",
+        "description": (
+            "为复杂架构、状态流、矩阵维度、注意力机制与概率直觉生成清晰教学配图（矢量架构图、示意图或概念插画），并内嵌到回复中。"
+            "Use for 画图/配图/示意图/架构图/流程图/visualize/diagram/generate image requests."
+        ),
+        "triggers": [
+            "画图",
+            "配图",
+            "画张图",
+            "生成图片",
+            "生图",
+            "示意图",
+            "架构图",
+            "流程图",
+            "状态图",
+            "可视化图",
+            "diagram",
+            "flowchart",
+            "generate image",
+            "draw",
+            "visualize",
+            "illustration",
+        ],
+        "body": (
+            "你现在拥有原生生图工具 `generate_image`，不要只用纯文字描述或粗糙 ASCII 画图来敷衍。\n"
+            "1. 先提炼 3-6 个核心实体、状态流方向、张量形状或因果关系，写清结构化英文/中文视觉描述作为 prompt。\n"
+            "2. 对机制图、架构图、流程图、梯度流与几何直觉优先选 `style=\"diagram\"` 或 `\"illustration\"`；明确要照片级真实材质时选 `style=\"photorealistic\"`。\n"
+            "3. 拿到工具返回的 `markdown`（形如 `![标题](trainer-image://img_...)`）后，原样保留到正式回答的合适位置，再用紧凑文字对照图中节点讲解。\n"
+            "4. 禁止伪造本地文件路径或不存在的外链图片地址。"
+        ),
+        "evidence_markers": ["trainer-image://", "generate_image"],
+        "origin_note": "builtin visual generation skill",
+    },
+    {
+        "skill_id": "deep-web-research",
+        "kind": "knowledge",
+        "name": "联网查证与论文检索",
+        "description": (
+            "围绕最新版本、官方文档、论文与开源仓库联网检索、抓取原文、交叉核对并给出可引用出处。"
+            "Use for 联网搜索/查最新/找论文/arxiv/官方文档/search/latest/docs requests."
+        ),
+        "triggers": [
+            "联网",
+            "搜一下",
+            "网上查",
+            "找论文",
+            "搜论文",
+            "查论文",
+            "arxiv",
+            "官方文档",
+            "最新版本",
+            "release notes",
+            "search web",
+            "latest docs",
+            "find paper",
+        ],
+        "body": (
+            "当问题涉及最新框架变化、论文公式细节、官方 API 或跨源对比时：\n"
+            "1. 需要论文/前沿研究时先调 `search_academic_papers`，一般网页与文档先调 `web_search`（不要只凭记忆猜版本号）。\n"
+            "2. 对命中的核心 URL 调 `fetch_web_page` 读取一手细节，确需长期沉淀进资料库时可用 `import_resource_url` 入库。\n"
+            "3. 回答必须区分「一手来源已核实」与「推理/待验证」，附上实际打开过的标题与链接。"
+        ),
+        "evidence_markers": ["web_search", "search_academic_papers", "fetch_web_page"],
+        "origin_note": "builtin web and paper verification skill",
+    },
+    {
+        "skill_id": "library-curator",
+        "kind": "action",
+        "name": "资料库整理与归档",
+        "description": (
+            "围绕用户本地与在线学习资料执行目录梳理、建文件夹、重命名分组、归类移动与去重整理，并严格保持提案确认护栏。"
+            "Use for 整理资料/新建文件夹/资料归档/资料分类/organize resources/curate library requests."
+        ),
+        "triggers": [
+            "整理资料",
+            "整理一下资料",
+            "资料归档",
+            "资料分类",
+            "新建文件夹",
+            "建个文件夹",
+            "重命名文件夹",
+            "资料整理",
+            "organize resources",
+            "organize library",
+            "curate library",
+        ],
+        "body": (
+            "整理资料库前必须先看清现状，禁止盲改用户编码仓库：\n"
+            "1. 先调用 `list_library_folders` 与 `list_resources` 掌握现有文件夹与资源归属。\n"
+            "2. 若只是创建/重命名空文件夹或把少量指定资料放入指定目录，调用 `curate_library_resources`（保持所有操作严格在 Trainer `<LibraryRoot>` 内）。\n"
+            "3. 若要批量重构整套资料目录与多份文档归属，调用 `organize_resources` 生成结构化整理提案，让学习者先预览再确认。"
+        ),
+        "evidence_markers": ["list_library_folders", "curate_library_resources", "organize_resources"],
+        "origin_note": "builtin library curation skill",
+    },
 ]
 
 

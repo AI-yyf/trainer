@@ -256,3 +256,78 @@ def apply_thinking_policy(
         else:
             out.pop("extra_body", None)
     return out
+
+
+def clamp_wire_thinking_budget(
+    payload: dict[str, Any],
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """Ensure enabled wire ``budget_tokens`` / ``thinkingBudget`` stays strictly below output max.
+
+    Providers return HTTP 400 when ``thinking.budget_tokens >= max_tokens`` (or
+    when Gemini ``thinkingBudget >= maxOutputTokens``). Keeping thinking safely
+    below the output cap guarantees headroom for the visible answer.
+    """
+    out = dict(payload)
+    effective_cap = max_tokens
+    if not isinstance(effective_cap, int) or isinstance(effective_cap, bool) or effective_cap <= 0:
+        for key in ("max_tokens", "max_completion_tokens", "max_output_tokens", "maxTokens", "maxOutputTokens"):
+            raw = out.get(key)
+            if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0:
+                effective_cap = raw
+                break
+        if effective_cap is None and isinstance(out.get("generationConfig"), dict):
+            gen_max = out["generationConfig"].get("maxOutputTokens")
+            if isinstance(gen_max, int) and not isinstance(gen_max, bool) and gen_max > 0:
+                effective_cap = gen_max
+    if not isinstance(effective_cap, int) or isinstance(effective_cap, bool) or effective_cap <= 0:
+        return out
+
+    reserve = min(2_048, max(128, effective_cap // 5))
+    safe_thinking_cap = effective_cap - reserve
+
+    def _clamp_thinking_record(thinking_obj: dict[str, Any]) -> dict[str, Any]:
+        updated = dict(thinking_obj)
+        mode = str(updated.get("type") or updated.get("mode") or "").strip().lower()
+        if mode == "disabled":
+            return updated
+        budget = updated.get("budget_tokens", updated.get("budgetTokens"))
+        if isinstance(budget, int) and not isinstance(budget, bool) and budget >= effective_cap:
+            if safe_thinking_cap >= 64:
+                if "budget_tokens" in updated:
+                    updated["budget_tokens"] = safe_thinking_cap
+                if "budgetTokens" in updated:
+                    updated["budgetTokens"] = safe_thinking_cap
+            else:
+                updated.pop("budget_tokens", None)
+                updated.pop("budgetTokens", None)
+        return updated
+
+    top_thinking = out.get("thinking")
+    if isinstance(top_thinking, dict):
+        out["thinking"] = _clamp_thinking_record(top_thinking)
+
+    extra_body = out.get("extra_body")
+    if isinstance(extra_body, dict) and isinstance(extra_body.get("thinking"), dict):
+        next_extra = dict(extra_body)
+        next_extra["thinking"] = _clamp_thinking_record(extra_body["thinking"])
+        out["extra_body"] = next_extra
+
+    gen_cfg = out.get("generationConfig")
+    if isinstance(gen_cfg, dict) and isinstance(gen_cfg.get("thinkingConfig"), dict):
+        next_gen = dict(gen_cfg)
+        next_tc = dict(gen_cfg["thinkingConfig"])
+        raw_tc_budget = next_tc.get("thinkingBudget", next_tc.get("thinking_budget"))
+        if isinstance(raw_tc_budget, int) and not isinstance(raw_tc_budget, bool) and raw_tc_budget >= effective_cap:
+            if safe_thinking_cap >= 64:
+                if "thinkingBudget" in next_tc:
+                    next_tc["thinkingBudget"] = safe_thinking_cap
+                if "thinking_budget" in next_tc:
+                    next_tc["thinking_budget"] = safe_thinking_cap
+            else:
+                next_tc.pop("thinkingBudget", None)
+                next_tc.pop("thinking_budget", None)
+        next_gen["thinkingConfig"] = next_tc
+        out["generationConfig"] = next_gen
+
+    return out

@@ -566,16 +566,25 @@ def _agent_loop_core_instructions() -> str:
         "about the project, folder layout, entry points, or architecture, ALWAYS call "
         "`list_workspace_files` and `read_workspace_file` yourself first (NEVER ask the learner to "
         "run `ls` or `find` in a terminal). They are read-only.\n"
-        "- `web_search`, `fetch_web_page` - search the public web (articles, arXiv papers, official "
-        "documentation, GitHub repos) and read page excerpts in real time. Whenever the learner asks "
-        "about latest research, papers, libraries, versions, external facts, or whether you can access "
-        "the internet / search online (for example whether live internet search works right now), confirm clearly that real-time "
-        "web search is available and ALWAYS call `web_search` (and `fetch_web_page` for key sources) "
-        "when a query needs live information, grounding your answer in cited URLs/titles/dates "
+        "- `web_search`, `fetch_web_page`, `search_academic_papers` - search the public web "
+        "(articles, official documentation, GitHub repos, arXiv / OpenAlex academic papers) and read "
+        "page excerpts in real time. Whenever the learner asks about latest research, papers, libraries, "
+        "versions, external facts, or whether live internet search works right now, confirm clearly that "
+        "real-time web search is available and ALWAYS call `web_search` / `search_academic_papers` "
+        "(and `fetch_web_page` for key sources), grounding your answer in cited URLs/titles/dates "
         "(NEVER claim the conversation cannot access live internet unless the tool explicitly returns `network_disabled`).\n"
-        "- `import_workspace_file` - selectively copy useful files or directories from the learner's "
-        "workspace into `<LibraryRoot>/Trainer Library/` / the resource library and index them "
-        "without ever modifying the learner's source code.\n"
+        "- `list_library_folders`, `curate_library_resources`, `list_resources`, `import_workspace_file` - "
+        "inspect folders/resources in `<LibraryRoot>` and organize them (create/rename/delete folders, "
+        "move or rename resources, apply tags) or selectively copy useful project files into `<LibraryRoot>/Trainer Library/` "
+        "without ever modifying the learner's source code repository.\n"
+        "- `list_skills`, `invoke_skill` - inspect available Tutor / Knowledge / Action / custom `$` skills "
+        "(such as `rethinkfun-lecture`, `visual-image-generator`, `deep-web-research`, `library-curator`, "
+        "and user-defined `$` skills) and load a skill's structured instructions when helpful.\n"
+        "- `generate_image` - generate a clear pedagogical diagram, concept illustration, or architecture "
+        "visual (using the provider's image API or clean rendered visual diagrams saved under `<LibraryRoot>`). "
+        "Whenever the learner asks to draw/illustrate/generate an image or diagram, call `generate_image` "
+        "and embed the exact `![title](trainer-image://...)` Markdown string it returns directly inside "
+        "your visible reply (do NOT call `coach_finalize` after `generate_image`).\n"
         "- `inspect_learning_truth` - read-only authoritative view of the learner's full plan "
         "(completed, active, and upcoming stages), active goal, 4-dimension capability states, "
         "concrete verified evidence records, and FSRS due review rationale. Because the UI stays "
@@ -1585,6 +1594,19 @@ def _build_active_thread_block(context: dict[str, Any]) -> str:
 
 DEFAULT_COACHING_HISTORY_TOKEN_BUDGET = 1800
 _HISTORY_TRUNCATION_MARKER = "\n[earlier message shortened]\n"
+
+
+def resolve_smart_history_budget(context_window_tokens: int | None) -> tuple[int, int]:
+    """Return ``(history_limit, history_token_budget)`` scaled to context window."""
+    if context_window_tokens is None or context_window_tokens >= 500_000:
+        return 40, 64_000
+    if context_window_tokens >= 131_072:
+        return 24, 24_000
+    if context_window_tokens >= 32_768:
+        return 16, 8_192
+    if context_window_tokens > 8_192:
+        return 12, 3_600
+    return 8, max(600, context_window_tokens // 4)
 
 
 def _coaching_history_token_units(value: str) -> int:

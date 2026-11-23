@@ -1,5 +1,6 @@
 import type { ProviderProtocol } from './models';
 import { normalizeProviderProtocol, providerProtocolFamily } from './providerProtocols';
+import { resolveEffectiveTokenBudgetProfile } from './smartTokenBudget';
 
 export type ProviderThinkingMode = 'disabled' | 'enabled' | 'auto';
 export type ProviderThinkingBudget = number | 'auto';
@@ -86,6 +87,9 @@ export interface ProviderThinkingNormalizationContext {
   /** Compatibility shape for callers carrying a capability object. */
   modelCapabilities?: { thinking?: boolean };
   profileCapabilities?: { thinking?: boolean };
+  /** Effective context/output bounds for smart thinking budget capping. */
+  contextWindowTokens?: number;
+  maxOutputTokens?: number;
 }
 
 /**
@@ -456,6 +460,27 @@ export function thinkingProtocolSupportsWire(protocol: ProviderProtocol | string
     || providerProtocolFamily(normalized) === 'openai';
 }
 
+function resolvedSmartThinkingCap(
+  context: ProviderThinkingNormalizationContext,
+  protocolCap: number,
+): number {
+  if (
+    typeof context.contextWindowTokens !== 'number' &&
+    typeof context.maxOutputTokens !== 'number'
+  ) {
+    return protocolCap;
+  }
+  return resolveEffectiveTokenBudgetProfile({
+    protocol: context.protocol,
+    model: context.model,
+    providerName: context.providerName,
+    baseUrl: context.baseUrl,
+    configuredContextWindowTokens: context.contextWindowTokens,
+    configuredMaxOutputTokens: context.maxOutputTokens,
+    protocolBudgetMax: protocolCap,
+  }).thinkingBudget.max;
+}
+
 export function describeProviderThinking(
   context: ProviderThinkingNormalizationContext,
   requestDefaults: unknown,
@@ -471,7 +496,7 @@ export function describeProviderThinking(
       config,
       effortOptions: ['low', 'medium', 'high'],
       budgetMin: 1,
-      budgetMax: 200000,
+      budgetMax: resolvedSmartThinkingCap(context, 262_144),
       advanced: true,
       disabled: false,
     };
@@ -481,13 +506,13 @@ export function describeProviderThinking(
     return { protocol, kind: 'reasoning_effort', config: normalized.config, effortOptions: ['low', 'medium', 'high'], advanced: true };
   }
   if (protocol === 'anthropic_messages') {
-    return { protocol, kind: 'thinking_budget', config: normalized.config, budgetMin: 1, budgetMax: 200000, advanced: true };
+    return { protocol, kind: 'thinking_budget', config: normalized.config, budgetMin: 1, budgetMax: resolvedSmartThinkingCap(context, 262_144), advanced: true };
   }
   if (protocol === 'gemini_generate_content') {
-    return { protocol, kind: 'gemini_thinking', config: normalized.config, budgetMin: 1, budgetMax: 32768, advanced: true };
+    return { protocol, kind: 'gemini_thinking', config: normalized.config, budgetMin: 1, budgetMax: resolvedSmartThinkingCap(context, 65_536), advanced: true };
   }
   if (protocol === 'openai_chat_completions' || protocol === 'openai_chat_completions_compatible') {
-    return { protocol, kind: 'reasoning_effort', config: normalized.config, effortOptions: ['low', 'medium', 'high'], budgetMin: 1, budgetMax: 200000, advanced: true };
+    return { protocol, kind: 'reasoning_effort', config: normalized.config, effortOptions: ['low', 'medium', 'high'], budgetMin: 1, budgetMax: resolvedSmartThinkingCap(context, 262_144), advanced: true };
   }
   return undefined;
 }
@@ -512,22 +537,22 @@ export function synthesizeProviderThinkingDescriptor(
       config,
       effortOptions: ['low', 'medium', 'high'],
       budgetMin: 1,
-      budgetMax: 200000,
+      budgetMax: resolvedSmartThinkingCap(context, 262_144),
       advanced: true,
       disabled: false,
     };
   }
   if (!protocol || !thinkingProtocolSupportsWire(protocol)) return undefined;
   if (protocol === 'anthropic_messages') {
-    return { protocol, kind: 'thinking_budget', config, budgetMin: 1, budgetMax: 200000, advanced: true };
+    return { protocol, kind: 'thinking_budget', config, budgetMin: 1, budgetMax: resolvedSmartThinkingCap(context, 262_144), advanced: true };
   }
   if (protocol === 'gemini_generate_content') {
-    return { protocol, kind: 'gemini_thinking', config, budgetMin: 1, budgetMax: 32768, advanced: true };
+    return { protocol, kind: 'gemini_thinking', config, budgetMin: 1, budgetMax: resolvedSmartThinkingCap(context, 65_536), advanced: true };
   }
   if (protocol === 'openai_responses') {
     return { protocol, kind: 'reasoning_effort', config, effortOptions: ['low', 'medium', 'high'], advanced: true };
   }
-  return { protocol, kind: 'reasoning_effort', config, effortOptions: ['low', 'medium', 'high'], budgetMin: 1, budgetMax: 200000, advanced: true };
+  return { protocol, kind: 'reasoning_effort', config, effortOptions: ['low', 'medium', 'high'], budgetMin: 1, budgetMax: resolvedSmartThinkingCap(context, 262_144), advanced: true };
 }
 
 export function updateProviderThinking(

@@ -6,7 +6,10 @@ import type {
 } from "../../../../../shared/src/providerThinking";
 import type { ComposerProviderMenuItem } from "../../lib/composerModelHelpers";
 import { composerModelPolicyHint } from "../../lib/composerModelHelpers";
-import { formatTokenCount } from "../../lib/formatUtils";
+import {
+  formatCompactTokenLimit,
+  resolveEffectiveTokenBudgetProfile,
+} from "../../../../../shared/src/smartTokenBudget";
 import { ComposerIconButton } from "./ComposerIconButton";
 import { CheckMarkIcon, RefreshIcon } from "../icons";
 
@@ -247,7 +250,8 @@ export function ComposerModelMenu({
           ) : null}
           {thinkingDescriptor.config.mode === "enabled" &&
           (thinkingDescriptor.kind === "thinking_budget" ||
-            thinkingDescriptor.kind === "gemini_thinking") ? (
+            thinkingDescriptor.kind === "gemini_thinking" ||
+            typeof thinkingDescriptor.config.budgetTokens === "number") ? (
             <p className="composer-menu-panel__hint">
               {localize(
                 composerLanguage,
@@ -257,7 +261,8 @@ export function ComposerModelMenu({
               ).replace(
                 "{n}",
                 typeof thinkingDescriptor.config.budgetTokens === "number"
-                  ? String(thinkingDescriptor.config.budgetTokens)
+                  ? formatCompactTokenLimit(thinkingDescriptor.config.budgetTokens) ||
+                      String(thinkingDescriptor.config.budgetTokens)
                   : "",
               )}
             </p>
@@ -281,13 +286,21 @@ export function ComposerModelMenu({
                       profile.policyReason,
                     );
                     const modelDisabled = profile.isActive || profile.isSelectable === false;
-                    const modelContextTokens =
+                    const explicitModelContextTokens =
                       providerConfig.modelTokenLimits?.[profile.model]
                         ?.contextWindowTokens ?? providerConfig.contextWindowTokens;
+                    const modelContextTokens =
+                      explicitModelContextTokens ??
+                      resolveEffectiveTokenBudgetProfile({
+                        model: profile.model,
+                        protocol: providerConfig.protocol,
+                        baseUrl: providerConfig.baseUrl,
+                        providerName: providerConfig.name,
+                      }).effectiveContextWindowTokens;
                     const modelContextHint = modelContextTokens
                       ? localize(composerLanguage, "上下文 {n}").replace(
                           "{n}",
-                          formatTokenCount(modelContextTokens),
+                          formatCompactTokenLimit(modelContextTokens) || String(modelContextTokens),
                         )
                       : undefined;
                     return (

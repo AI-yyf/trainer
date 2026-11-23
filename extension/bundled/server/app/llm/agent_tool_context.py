@@ -147,11 +147,31 @@ def _build_agent_tool_context_extra(
     }
     if provider_config is not None:
         window = getattr(provider_config, "context_window_tokens", None)
+        model_name = str(getattr(provider_config, "model", "") or "").strip()
+        limits = getattr(provider_config, "model_token_limits", None)
+        if model_name and isinstance(limits, dict):
+            entry = limits.get(model_name)
+            if isinstance(entry, dict):
+                window = entry.get("contextWindowTokens") or entry.get("context_window_tokens") or window
+            elif entry is not None:
+                window = getattr(entry, "context_window_tokens", None) or window
         try:
-            if window is not None:
+            if window is not None and int(window) > 0:
                 extra["context_window_tokens"] = int(window)
+            else:
+                from .harness import DEFAULT_CONTEXT_WINDOW_TOKENS
+
+                extra["context_window_tokens"] = DEFAULT_CONTEXT_WINDOW_TOKENS
         except (TypeError, ValueError):
-            pass
+            from .harness import DEFAULT_CONTEXT_WINDOW_TOKENS
+
+            extra["context_window_tokens"] = DEFAULT_CONTEXT_WINDOW_TOKENS
+    if isinstance(coach_context, dict):
+        coach_defaults = coach_context.get("coach_defaults")
+        if isinstance(coach_defaults, dict):
+            raw_custom_skills = coach_defaults.get("custom_skills") or coach_defaults.get("customSkills")
+            if isinstance(raw_custom_skills, list):
+                extra["custom_skills"] = list(raw_custom_skills)
     resolved_learner_message = learner_message
     if not isinstance(coach_context, dict):
         if isinstance(current_file, dict):

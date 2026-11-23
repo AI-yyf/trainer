@@ -17,6 +17,7 @@ const OPTIMISTIC_TURN_TTL_MS = 120_000;
 export interface OptimisticTurn {
   id: string;
   body: string;
+  imagePreviews?: ConversationMessage["imagePreviews"];
   baseLength: number;
   sourceView: ActiveWorkbenchView;
   createdAt: number;
@@ -40,9 +41,14 @@ export function useCoachConversationController({
   // value in a ref so the callback stays stable across renders.
   const conversationLengthRef = useRef(conversation.length);
   conversationLengthRef.current = conversation.length;
-  const appendOptimisticTurn = useCallback((body: string, sourceView: ActiveWorkbenchView = "coach") => {
+  const appendOptimisticTurn = useCallback((
+    body: string,
+    sourceView: ActiveWorkbenchView = "coach",
+    imagePreviews?: ConversationMessage["imagePreviews"],
+  ) => {
     const trimmed = body.trim();
-    if (!trimmed) {
+    const previews = imagePreviews?.length ? imagePreviews : undefined;
+    if (!trimmed && !previews) {
       return;
     }
     setOptimisticTurns((current) => [
@@ -51,6 +57,7 @@ export function useCoachConversationController({
         id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         body: trimmed,
         sourceView,
+        ...(previews ? { imagePreviews: previews } : {}),
         baseLength: conversationLengthRef.current,
         createdAt: Date.now(),
       },

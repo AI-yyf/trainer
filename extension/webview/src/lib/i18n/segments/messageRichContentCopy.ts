@@ -61,6 +61,42 @@ export const MESSAGE_RICH_CONTENT_TEXT: Record<string, Record<string, string>> =
     "ko-KR": "열",
     "pt-BR": "coluna",
   },
+  "配图": {
+    "en-US": "Figure",
+    "es-ES": "Figura",
+    "fr-FR": "Figure",
+    "de-DE": "Abbildung",
+    "ja-JP": "図解",
+    "ko-KR": "그림",
+    "pt-BR": "Figura",
+  },
+  "点击放大查看": {
+    "en-US": "Click to zoom",
+    "es-ES": "Haz clic para ampliar",
+    "fr-FR": "Cliquer pour agrandir",
+    "de-DE": "Zum Vergrößern klicken",
+    "ja-JP": "クリックして拡大",
+    "ko-KR": "클릭하여 확대",
+    "pt-BR": "Clique para ampliar",
+  },
+  "关闭预览": {
+    "en-US": "Close preview",
+    "es-ES": "Cerrar vista previa",
+    "fr-FR": "Fermer l'aperçu",
+    "de-DE": "Vorschau schließen",
+    "ja-JP": "プレビューを閉じる",
+    "ko-KR": "미리 보기 닫기",
+    "pt-BR": "Fechar visualização",
+  },
+  "图片加载失败": {
+    "en-US": "Image could not be displayed.",
+    "es-ES": "No se pudo mostrar la imagen.",
+    "fr-FR": "Impossible d'afficher l'image.",
+    "de-DE": "Bild konnte nicht angezeigt werden.",
+    "ja-JP": "画像を表示できませんでした。",
+    "ko-KR": "이미지를 표시할 수 없습니다.",
+    "pt-BR": "Não foi possível exibir a imagem.",
+  },
 };
 
 export function messageRichContentCopy(language: ComposerLanguage, key: string): string {

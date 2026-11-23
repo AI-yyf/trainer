@@ -6737,6 +6737,35 @@ function mergeDefinedResourceFields(
   } as ResourceRecordView;
 }
 
+function mapConversationImagePreviews(
+  value: unknown,
+): BootstrapData['conversation'][number]['imagePreviews'] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  const previews: NonNullable<BootstrapData['conversation'][number]['imagePreviews']> = [];
+  for (const item of value) {
+    const record = asRecord(item);
+    const id = asString(record?.id);
+    const mimeType = asString(record?.mime_type ?? record?.mimeType);
+    const dataUrl = asString(record?.data_url ?? record?.dataUrl);
+    if (!id || !mimeType || !dataUrl) {
+      continue;
+    }
+    if (!/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[a-zA-Z0-9+/=]+$/.test(dataUrl)) {
+      continue;
+    }
+    const name = asString(record?.name);
+    previews.push({
+      id,
+      mimeType,
+      dataUrl,
+      ...(name ? { name } : {}),
+    });
+  }
+  return previews.length > 0 ? previews : undefined;
+}
+
 function mapConversation(
   value: unknown,
   fallback: BootstrapData['conversation'],
@@ -6751,6 +6780,7 @@ function mapConversation(
     const record = asRecord(item);
     const role = asString(record?.role) === 'user' ? 'user' : 'assistant';
     const metadata = asRecord(record?.metadata);
+    const imagePreviews = mapConversationImagePreviews(metadata?.image_previews);
     return {
       id: asString(record?.id) ?? `message-${index + 1}`,
       role,
@@ -6761,6 +6791,7 @@ function mapConversation(
       sourceResourceIds: asStringArray(metadata?.resource_ids),
       researchPreparation: mapResearchPreparation(metadata?.research_preparation),
       parts: mapConversationParts(metadata),
+      ...(imagePreviews ? { imagePreviews } : {}),
       // Context provenance (intent / mode / strategy / selection / file) stays
       // in the raw metadata for diagnostics, but the thread no longer prints
       // it under every user turn: Copilot-style chat keeps the user bubble to

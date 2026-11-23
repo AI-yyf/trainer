@@ -5427,6 +5427,27 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             # stays the internal management context.
             metadata["source_note"] = metadata["context_note"]
         apply_attachment_delivery_metadata(metadata, attachment_delivery)
+        image_previews: list[dict[str, str]] = []
+        allowed_preview_mimes = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
+        for attachment in (getattr(request, "attachments", None) or [])[:4]:
+            if str(getattr(attachment, "kind", "") or "").strip().lower() != "image":
+                continue
+            mime_type = str(getattr(attachment, "mime_type", "") or "").strip().lower()
+            raw_b64 = str(getattr(attachment, "data_base64", "") or "").strip()
+            if mime_type not in allowed_preview_mimes or not raw_b64 or len(raw_b64) > 2_800_000:
+                continue
+            item_id = str(getattr(attachment, "id", "") or "").strip() or f"img-{len(image_previews) + 1}"
+            item_name = str(getattr(attachment, "name", "") or "").strip()
+            preview_item: dict[str, str] = {
+                "id": item_id,
+                "mime_type": mime_type,
+                "data_url": f"data:{mime_type};base64,{raw_b64}",
+            }
+            if item_name:
+                preview_item["name"] = item_name
+            image_previews.append(preview_item)
+        if image_previews:
+            metadata["image_previews"] = image_previews
         if stream_id:
             metadata["stream_id"] = stream_id
         if stream_state:

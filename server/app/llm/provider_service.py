@@ -217,6 +217,7 @@ from .provider.text import (
 )
 from .provider.thinking import (
     apply_thinking_policy,
+    clamp_wire_thinking_budget,
     declared_thinking,
     learned_policy,
     remember_policy,
@@ -1172,7 +1173,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         # every chat request passes through. Without this the policy learned
         # from a gateway rejection is never re-applied, so every later turn
         # re-pays the same HTTP 400 round trip before succeeding.
-        return apply_thinking_policy(merged, resolve_thinking_policy(merged, self._thinking_scope(provider)))
+        applied = apply_thinking_policy(merged, resolve_thinking_policy(merged, self._thinking_scope(provider)))
+        return clamp_wire_thinking_budget(applied)
 
 
     @staticmethod
@@ -3513,6 +3515,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         coach_context: dict[str, Any] | None = None,
         history: list[dict[str, str]] | None = None,
     ) -> str:
+        history_limit, history_token_budget = self._smart_coaching_history_budget()
         messages = build_coaching_messages(
             profile,
             message,
@@ -3521,6 +3524,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             answer_mode=answer_mode,
             coach_context=coach_context,
             history=history,
+            history_limit=history_limit,
+            history_token_budget=history_token_budget,
         )
         model = self._resolve_model()
         try:
@@ -4787,6 +4792,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         if not profile:
             yield self._onboarding_reply(response_language)
             return
+        history_limit, history_token_budget = self._smart_coaching_history_budget()
         messages = build_coaching_messages(
             profile,
             message,
@@ -4795,6 +4801,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             answer_mode=answer_mode,
             coach_context=coach_context,
             history=history,
+            history_limit=history_limit,
+            history_token_budget=history_token_budget,
         )
         model = self._resolve_model()
         try:
@@ -5246,6 +5254,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         from .mcp_client import build_coach_mcp_tools
         from .tools import ToolContext, build_default_tool_registry
 
+        history_limit, history_token_budget = self._smart_coaching_history_budget()
         messages = build_coaching_messages(
             profile,
             message,
@@ -5255,6 +5264,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             coach_context=coach_context,
             agent_loop_enabled=True,
             history=history,
+            history_limit=history_limit,
+            history_token_budget=history_token_budget,
         )
         try:
             messages, max_tokens = self._prepare_context_budget(
@@ -5716,6 +5727,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 result.summary = summary
             if not str(result.next_step or "").strip():
                 result.next_step = next_step
+        generated_image_ids = list(context.extra.get("generated_image_ids") or [])
         context = extract_coaching_context(message, current_file, coach_context)
         scenario = str(context.get("scenario") or "").strip()
         history_mode = str(context.get("history_mode") or "").strip().lower()
@@ -5777,6 +5789,14 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 )
             else:
                 result.resume_thread = sanitized_resume_thread
+        if generated_image_ids or "trainer-image://" in final_text:
+            from .image_generation import resolve_generated_images_in_text
+
+            final_text = resolve_generated_images_in_text(
+                final_text,
+                runtime_obj,
+                generated_image_ids,
+            )
         return {
             "content": final_text,
             "steps": [self._step_to_dict(step) for step in result.steps],
@@ -5858,6 +5878,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         from .mcp_client import build_coach_mcp_tools
         from .tools import ToolContext, build_default_tool_registry
 
+        history_limit, history_token_budget = self._smart_coaching_history_budget()
         messages = build_coaching_messages(
             profile,
             message,
@@ -5867,6 +5888,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             coach_context=coach_context,
             agent_loop_enabled=True,
             history=history,
+            history_limit=history_limit,
+            history_token_budget=history_token_budget,
         )
         try:
             messages, max_tokens = self._prepare_context_budget(
@@ -6010,6 +6033,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 ):
                     return ""
                 visible = _strip_internal_coach_meta(buffered_text)
+                if "trainer-image://" in visible:
+                    cut_idx = visible.find("trainer-image://")
+                    bang_idx = visible.rfind("![", 0, cut_idx)
+                    visible = visible[: bang_idx if bang_idx >= 0 else cut_idx].rstrip()
                 if (
                     not visible
                     or visible != _visible_model_text(buffered_text).strip()
@@ -6193,6 +6220,19 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                         coach_context=coach_context,
                         tool_events=tool_events,
                     )
+                    generated_image_ids = list(context.extra.get("generated_image_ids") or [])
+                    resolved_content = str(event.get("content") or "")
+                    if generated_image_ids or "trainer-image://" in resolved_content:
+                        from .image_generation import resolve_generated_images_in_text
+
+                        event = {
+                            **event,
+                            "content": resolve_generated_images_in_text(
+                                resolved_content,
+                                runtime_obj,
+                                generated_image_ids,
+                            ),
+                        }
                 elif event_type == "error":
                     # AgentLoop emits a recovery final after provider errors.
                     # Mark this frame explicitly so SSE consumers do not
@@ -6704,6 +6744,8 @@ async def _provider_service_coaching_reply_stream(
         yield self._onboarding_reply(response_language)
         return
 
+    model = self._resolve_model()
+    history_limit, history_token_budget = self._smart_coaching_history_budget(model=model)
     messages = build_coaching_messages(
         profile,
         message,
@@ -6712,8 +6754,9 @@ async def _provider_service_coaching_reply_stream(
         answer_mode=answer_mode,
         coach_context=coach_context,
         history=history,
+        history_limit=history_limit,
+        history_token_budget=history_token_budget,
     )
-    model = self._resolve_model()
     resource_intent = coach_context.get("resource_composer_intent") if coach_context else None
     analysis_requested = (
         _coaching_active_view_name(coach_context) == "resources"

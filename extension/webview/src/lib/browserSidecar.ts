@@ -2240,6 +2240,21 @@ function fixturePreviewConversation(
   const idPrefix = `browser-preview-${Date.now()}`;
   const language = request.responseLanguage ?? resolvePreviewLanguage();
   const timestamp = fixturePreviewTimestamp(language);
+  const fixtureImagePreviews = (request.attachments ?? [])
+    .filter(
+      (item) =>
+        item.kind === "image" &&
+        typeof item.dataBase64 === "string" &&
+        item.dataBase64.trim().length > 0 &&
+        /^image\/(?:png|jpeg|jpg|webp|gif)$/i.test(item.mimeType),
+    )
+    .slice(0, 4)
+    .map((item) => ({
+      id: item.id,
+      ...(item.name ? { name: item.name } : {}),
+      mimeType: item.mimeType,
+      dataUrl: `data:${item.mimeType};base64,${item.dataBase64}`,
+    }));
   const nextConversation = [
     ...conversation,
     {
@@ -2247,6 +2262,7 @@ function fixturePreviewConversation(
       role: "user" as const,
       author: resolveCopy(language).you,
       body: request.text.trim(),
+      ...(fixtureImagePreviews.length > 0 ? { imagePreviews: fixtureImagePreviews } : {}),
       sourceView: request.activeView,
       timestamp,
     },
@@ -6515,6 +6531,35 @@ function normalizePreviewTier(value: string | undefined): ResourceRecord["previe
   return value === "rich" || value === "converted" || value === "metadata" ? value : undefined;
 }
 
+function mapPreviewMessageImagePreviews(
+  value: unknown,
+): ConversationMessage["imagePreviews"] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  const previews: NonNullable<ConversationMessage["imagePreviews"]> = [];
+  for (const item of value) {
+    const record = asRecord(item);
+    const id = asString(record?.id);
+    const mimeType = asString(record?.mime_type ?? record?.mimeType);
+    const dataUrl = asString(record?.data_url ?? record?.dataUrl);
+    if (!id || !mimeType || !dataUrl) {
+      continue;
+    }
+    if (!/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[a-zA-Z0-9+/=]+$/.test(dataUrl)) {
+      continue;
+    }
+    const name = asString(record?.name);
+    previews.push({
+      id,
+      mimeType,
+      dataUrl,
+      ...(name ? { name } : {}),
+    });
+  }
+  return previews.length > 0 ? previews : undefined;
+}
+
 function mapConversationMessage(value: unknown, index: number): ConversationMessage {
   const message = asRecord(value);
   const metadata = asRecord(message?.metadata);
@@ -6538,6 +6583,7 @@ function mapConversationMessage(value: unknown, index: number): ConversationMess
     sourceResourceIds: asStringArray(metadata?.resource_ids),
     researchPreparation: mapResearchPreparation(metadata?.research_preparation),
     parts: mapMessageParts(metadata),
+    imagePreviews: mapPreviewMessageImagePreviews(metadata?.image_previews),
     artifacts: mapArtifacts(metadata?.artifacts),
     contextNote: asString(metadata?.context_note) ?? undefined,
     sourceNote: asString(metadata?.source_note) ?? undefined,

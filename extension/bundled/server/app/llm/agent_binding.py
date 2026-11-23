@@ -58,6 +58,7 @@ from .provider.streaming import (
     extract_non_sse_json_stream_payload,
 )
 from .provider.text import ReasoningBlockFilter
+from .provider.thinking import clamp_wire_thinking_budget
 from .provider_protocols import (
     _finish_reason_is_truncated,
     assess_provider_error,
@@ -2548,10 +2549,20 @@ class ProviderAgentBinding:
                 and not isinstance(merged_max_tokens, bool)
                 and merged_max_tokens <= budget_tokens
             ):
-                # Anthropic requires max_tokens > budget_tokens; a saved cap at
-                # or below the thinking budget would 400 every request, so lift
-                # the cap rather than drop the user's explicit choice.
-                merged["max_tokens"] = budget_tokens + 1024
+                config = getattr(self._provider_service, "_config", None)
+                configured_cap = None
+                if config is not None:
+                    limits_fn = getattr(self._provider_service, "_configured_token_limits", None)
+                    if callable(limits_fn):
+                        limits_result = limits_fn(config)
+                        if isinstance(limits_result, tuple) and len(limits_result) >= 2:
+                            configured_cap = limits_result[1]
+                if isinstance(configured_cap, int) and configured_cap > 0:
+                    merged = clamp_wire_thinking_budget(merged, configured_cap)
+                else:
+                    # Anthropic requires max_tokens > budget_tokens; without a smaller
+                    # explicit output cap, lift max_tokens to keep visible headroom.
+                    merged["max_tokens"] = budget_tokens + 1024
         return self._flatten_raw_http_thinking(merged)
 
     def _apply_gemini_request_defaults(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -2581,7 +2592,7 @@ class ProviderAgentBinding:
             if value is not None:
                 generation_config[output_key] = value
         merged["generationConfig"] = generation_config
-        return merged
+        return clamp_wire_thinking_budget(merged)
 
     def _gemini_credentials(self) -> tuple[str, str]:
         api_key = getattr(self._provider_service, "_api_key", None)

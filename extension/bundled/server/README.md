@@ -18,7 +18,7 @@ Local FastAPI Python 3.12 sidecar powering Trainer's coaching loop, pedagogy ker
 cd server
 uv sync --frozen --extra dev --python 3.12
 
-# Run backend test suite (296 test files, 4,224 passed pytest tests)
+# Run backend test suite (297 test files, 4,229 passed pytest tests)
 .venv/bin/pytest tests
 
 # Static lint and type gates (must both exit 0)

@@ -48,6 +48,13 @@ import {
   withProviderModelTokenLimit,
 } from "../../../../../shared/src/providerModelTokenLimits";
 import {
+  SMART_CONTEXT_WINDOW_PRESETS,
+  SMART_MAX_OUTPUT_PRESETS,
+  formatCompactTokenLimit,
+  inferModelDefaultTokenLimits,
+  resolveEffectiveTokenBudgetProfile,
+} from "../../../../../shared/src/smartTokenBudget";
+import {
   evaluateProviderModelPolicy,
   filterProviderModelOptions,
 } from "../../../../../shared/src/providerModelPolicy";
@@ -3002,11 +3009,50 @@ function CoachSettingsViewSheet({
     canUseSavedModelMetadata && providerDraft.model.trim()
       ? provider.modelCapabilities?.[providerDraft.model.trim()]
       : undefined;
+  const draftActiveModelName = providerDraft.model.trim();
+  const inferredDraftLimits = useMemo(
+    () =>
+      inferModelDefaultTokenLimits({
+        model: draftActiveModelName,
+        protocol: draftProtocol,
+        baseUrl: normalizedDraftBaseUrl,
+        providerName: providerDraft.name,
+      }),
+    [draftActiveModelName, draftProtocol, normalizedDraftBaseUrl, providerDraft.name],
+  );
+  const smartTokenProfile = useMemo(
+    () =>
+      resolveEffectiveTokenBudgetProfile({
+        model: draftActiveModelName,
+        protocol: draftProtocol,
+        baseUrl: normalizedDraftBaseUrl,
+        providerName: providerDraft.name,
+        configuredContextWindowTokens:
+          (draftActiveModelName
+            ? providerDraft.modelTokenLimits?.[draftActiveModelName]?.contextWindowTokens
+            : undefined) ?? providerDraft.contextWindowTokens,
+        configuredMaxOutputTokens:
+          (draftActiveModelName
+            ? providerDraft.modelTokenLimits?.[draftActiveModelName]?.maxOutputTokens
+            : undefined) ?? providerDraft.maxOutputTokens,
+      }),
+    [
+      draftActiveModelName,
+      draftProtocol,
+      normalizedDraftBaseUrl,
+      providerDraft.contextWindowTokens,
+      providerDraft.maxOutputTokens,
+      providerDraft.modelTokenLimits,
+      providerDraft.name,
+    ],
+  );
   const draftThinkingContext = {
     protocol: draftProtocol,
     model: providerDraft.model,
     providerName: providerDraft.name,
     baseUrl: providerDraft.baseUrl,
+    contextWindowTokens: smartTokenProfile.effectiveContextWindowTokens,
+    maxOutputTokens: smartTokenProfile.effectiveMaxOutputTokens,
     capabilityEvidence: explicitDraftThinkingEnabled
       ? undefined
       : draftThinkingCapabilityEvidence,
@@ -6497,16 +6543,21 @@ function CoachSettingsViewSheet({
                     thinkingDescriptor.kind === "thinking_budget" ||
                     thinkingDescriptor.kind === "gemini_thinking";
                   const supportsCustomBudget = typeof thinkingDescriptor.budgetMax === "number";
+                  const plan = smartTokenProfile.thinkingBudget;
+                  const effectiveBudgetMax = Math.min(
+                    thinkingDescriptor.budgetMax ?? plan.max,
+                    plan.max,
+                  );
                   const currentBudget =
                     typeof draftThinkingConfig?.budgetTokens === "number"
                       ? draftThinkingConfig.budgetTokens
                       : undefined;
                   const activePreset = isBudgetProtocol
-                    ? currentBudget === 2048
+                    ? currentBudget === plan.low
                       ? "low"
-                      : currentBudget === 8192
+                      : currentBudget === plan.medium
                         ? "medium"
-                        : currentBudget === 16384
+                        : currentBudget === plan.high
                           ? "high"
                           : (thinkingDescriptor.kind === "thinking_budget" ? currentBudget === 4096 : currentBudget === undefined)
                             ? "auto"
@@ -6514,8 +6565,8 @@ function CoachSettingsViewSheet({
                     : currentBudget !== undefined
                       ? "custom"
                       : draftThinkingConfig?.reasoningEffort ?? "auto";
-                  const quickTokenPresets = [2048, 4096, 8192, 16384, 32768].filter(
-                    (value) => value <= (thinkingDescriptor.budgetMax ?? 200000),
+                  const quickTokenPresets = plan.presets.filter(
+                    (value) => value <= effectiveBudgetMax,
                   );
                   const selectThinkingPreset = (
                     preset: "auto" | "low" | "medium" | "high" | "custom",
@@ -6525,18 +6576,18 @@ function CoachSettingsViewSheet({
                         updateThinkingConfig({
                           ...(draftThinkingConfig ?? { mode: "enabled" }),
                           mode: "enabled",
-                          budgetTokens: currentBudget ?? 12288,
+                          budgetTokens: currentBudget ?? plan.recommendedCustom,
                         });
                         window.requestAnimationFrame(() => thinkingBudgetInputRef.current?.focus());
                         return;
                       }
                       const presetBudget =
                         preset === "low"
-                          ? 2048
+                          ? plan.low
                           : preset === "medium"
-                            ? 8192
+                            ? plan.medium
                             : preset === "high"
-                              ? 16384
+                              ? plan.high
                               : thinkingDescriptor.kind === "thinking_budget"
                                 ? 4096
                                 : undefined;
@@ -6552,7 +6603,7 @@ function CoachSettingsViewSheet({
                         ...(draftThinkingConfig ?? { mode: "enabled" }),
                         mode: "enabled",
                         reasoningEffort: undefined,
-                        budgetTokens: currentBudget ?? 8192,
+                        budgetTokens: currentBudget ?? plan.recommendedCustom,
                       });
                       window.requestAnimationFrame(() => thinkingBudgetInputRef.current?.focus());
                       return;
@@ -6623,14 +6674,16 @@ function CoachSettingsViewSheet({
                                 ref={thinkingBudgetInputRef}
                                 type="number"
                                 min={thinkingDescriptor.budgetMin ?? 1}
-                                max={thinkingDescriptor.budgetMax}
+                                max={effectiveBudgetMax}
                                 step={256}
                                 value={currentBudget ?? ""}
                                 placeholder={settingsText(
                                   language,
-                                  "例如 8192（留空跟随模型默认）",
-                                  "e.g. 8192 (blank = model default)",
-                                )}
+                                  "例如 {n}（安全上限 {max}，留空自动）",
+                                  "e.g. {n} (cap {max}, blank = auto)",
+                                )
+                                  .replace("{n}", String(plan.recommendedCustom))
+                                  .replace("{max}", formatCompactTokenLimit(effectiveBudgetMax))}
                                 onChange={(event) =>
                                   updateThinkingConfig({
                                     ...(draftThinkingConfig ?? { mode: "enabled" }),
@@ -6674,7 +6727,7 @@ function CoachSettingsViewSheet({
                                   })
                                 }
                               >
-                                {tokens / 1024}K
+                                {formatCompactTokenLimit(tokens) || String(tokens)}
                               </button>
                             ))}
                           </div>
@@ -6712,18 +6765,18 @@ function CoachSettingsViewSheet({
                 <details className="settings-sheet__minor-panel settings-token-presets-panel">
                   <summary>
                     <span>{settingsText(language, "上下文与输出上限", "Context & output limits")}</span>
-                    {(draftContextWindowTokens || draftMaxOutputTokens) ? (
-                      <span className="settings-section-count">
-                        {[
-                          draftContextWindowTokens
-                            ? `${Math.round(draftContextWindowTokens / 1024)}K`
-                            : settingsText(language, "自动", "Auto"),
-                          draftMaxOutputTokens
-                            ? `${Math.round(draftMaxOutputTokens / 1024)}K`
-                            : settingsText(language, "自动", "Auto"),
-                        ].join(" / ")}
-                      </span>
-                    ) : null}
+                    <span className="settings-section-count">
+                      {[
+                        draftContextWindowTokens
+                          ? formatCompactTokenLimit(draftContextWindowTokens) ||
+                            formatTokenValue(draftContextWindowTokens)
+                          : `${settingsText(language, "智能", "Smart")} ${formatCompactTokenLimit(smartTokenProfile.effectiveContextWindowTokens)}`,
+                        draftMaxOutputTokens
+                          ? formatCompactTokenLimit(draftMaxOutputTokens) ||
+                            formatTokenValue(draftMaxOutputTokens)
+                          : formatCompactTokenLimit(smartTokenProfile.effectiveMaxOutputTokens),
+                      ].join(" / ")}
+                    </span>
                   </summary>
                   <div className="settings-sheet__minor-body">
                     <div className="settings-advanced-limits">
@@ -6732,7 +6785,7 @@ function CoachSettingsViewSheet({
                         <input
                           inputMode="numeric"
                           value={draftContextWindowTokens ?? ""}
-                          placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
+                          placeholder={`${settingsText(language, "智能默认", "Smart default")} (${formatCompactTokenLimit(inferredDraftLimits.contextWindowTokens)})`}
                           onChange={(event) =>
                             onProviderDraftChange({
                               contextWindowTokens: parsePositiveIntegerInput(event.target.value),
@@ -6741,22 +6794,29 @@ function CoachSettingsViewSheet({
                         />
                       </label>
                       <div className="settings-advanced-presets">
-                        {[32768, 65536, 131072, 262144].map((value) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => onProviderDraftChange({ contextWindowTokens: value })}
-                          >
-                            {value / 1024}K
-                          </button>
-                        ))}
+                        {([undefined, ...SMART_CONTEXT_WINDOW_PRESETS] as const).map((value) => {
+                          const active = (draftContextWindowTokens ?? undefined) === value;
+                          return (
+                            <button
+                              key={value ?? "auto"}
+                              type="button"
+                              className={active ? "is-active" : undefined}
+                              aria-pressed={active}
+                              onClick={() => onProviderDraftChange({ contextWindowTokens: value })}
+                            >
+                              {value
+                                ? formatCompactTokenLimit(value)
+                                : settingsText(language, "自动", "Auto")}
+                            </button>
+                          );
+                        })}
                       </div>
                       <label className="settings-field">
                         <span>{settingsPhrase(language, "maxOutput")}</span>
                         <input
                           inputMode="numeric"
                           value={draftMaxOutputTokens ?? ""}
-                          placeholder={settingsText(language, "使用提供商默认值", "Provider default")}
+                          placeholder={`${settingsText(language, "智能默认", "Smart default")} (${formatCompactTokenLimit(inferredDraftLimits.maxOutputTokens)})`}
                           onChange={(event) =>
                             onProviderDraftChange({
                               maxOutputTokens: parsePositiveIntegerInput(event.target.value),
@@ -6765,15 +6825,22 @@ function CoachSettingsViewSheet({
                         />
                       </label>
                       <div className="settings-advanced-presets">
-                        {[8192, 16384, 32768, 65536].map((value) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => onProviderDraftChange({ maxOutputTokens: value })}
-                          >
-                            {value / 1024}K
-                          </button>
-                        ))}
+                        {([undefined, ...SMART_MAX_OUTPUT_PRESETS] as const).map((value) => {
+                          const active = (draftMaxOutputTokens ?? undefined) === value;
+                          return (
+                            <button
+                              key={value ?? "auto"}
+                              type="button"
+                              className={active ? "is-active" : undefined}
+                              aria-pressed={active}
+                              onClick={() => onProviderDraftChange({ maxOutputTokens: value })}
+                            >
+                              {value
+                                ? formatCompactTokenLimit(value)
+                                : settingsText(language, "自动", "Auto")}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

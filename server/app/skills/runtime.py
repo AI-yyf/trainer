@@ -147,6 +147,10 @@ def select_active_skills(
                 matched_terms.append(term)
         if matched_terms:
             score = 100 + len(matched_terms)
+        elif isinstance(record.metadata, dict) and record.metadata.get("origin") == "builtin":
+            # Built-in skills define curated explicit triggers; avoid injecting
+            # unrelated turns on generic description words like "resources".
+            continue
         else:
             matched_terms = [token for token in _description_tokens(record) if token in message_tokens]
             if not matched_terms:

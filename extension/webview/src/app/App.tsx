@@ -99,6 +99,7 @@ import {
   deriveCoachOrientation,
 } from "../../../../shared/src/coachOrientationGovernance";
 import { isOperationReliabilityInFlight } from "../../../../shared/src/operationReliabilityGovernance";
+import { resolveEffectiveTokenBudgetProfile } from "../../../../shared/src/smartTokenBudget";
 import {
   buildRecoveredPlanResumeTurn,
   derivePlanOrientation,
@@ -2415,9 +2416,19 @@ export function App() {
   const composerContextUsage = useMemo(() => {
     const provider = data.providerConfig;
     const model = provider.resolvedModel ?? provider.model;
-    const limit =
+    const explicitLimit =
       (model ? provider.modelTokenLimits?.[model]?.contextWindowTokens : undefined) ??
       provider.contextWindowTokens;
+    const limit =
+      explicitLimit ??
+      (provider.configured || Boolean(model?.trim())
+        ? resolveEffectiveTokenBudgetProfile({
+            model,
+            protocol: provider.protocol,
+            baseUrl: provider.baseUrl,
+            providerName: provider.name,
+          }).effectiveContextWindowTokens
+        : undefined);
     const cjkPattern = /[\u1100-\u11ff\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/;
     const tally = (text: string): { cjk: number; other: number } => {
       let cjk = 0;
@@ -3086,6 +3097,7 @@ export function App() {
         role: "user" as const,
         author: t.you,
         body: entry.body,
+        ...(entry.imagePreviews?.length ? { imagePreviews: entry.imagePreviews } : {}),
         timestamp: "",
       }));
     return pendingMessages.length > 0 ? [...list, ...pendingMessages] : list;
@@ -6147,7 +6159,25 @@ export function App() {
     // copy lands at the same list position when the snapshot merges.
     // Every reply belongs to the one conversation: the surface only decides
     // where the learner reads it.
-    appendOptimisticTurn(text, "coach");
+    appendOptimisticTurn(
+      text,
+      "coach",
+      (attachments ?? [])
+        .filter(
+          (item) =>
+            item.kind === "image" &&
+            typeof item.dataBase64 === "string" &&
+            item.dataBase64.trim().length > 0 &&
+            /^image\/(?:png|jpeg|jpg|webp|gif)$/i.test(item.mimeType),
+        )
+        .slice(0, 4)
+        .map((item) => ({
+          id: item.id,
+          ...(item.name ? { name: item.name } : {}),
+          mimeType: item.mimeType,
+          dataUrl: `data:${item.mimeType};base64,${item.dataBase64}`,
+        })),
+    );
     useWorkbenchState.getState().beginOptimisticStream();
 
     if (isBrowserPreview) {

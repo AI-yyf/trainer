@@ -28,6 +28,7 @@ export * from "./workspaceRecoveryGovernance";
 export * from "./hostLastTestGovernance";
 export * from "./settingsCapabilityGovernance";
 export * from "./providerModelAdaptation";
+export * from "./smartTokenBudget";
 export * from "./errorSurfaceSanitizer";
 export * from "./tokens";
 export * from "./types";

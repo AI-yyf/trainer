@@ -311,4 +311,34 @@ export const TOOL_LABELS: Record<string, Record<ComposerLanguage, string>> = {
     "fr-FR": "Tâche suivante", "de-DE": "Nächste Aufgabe",
     "ja-JP": "次の課題へ", "ko-KR": "다음 과제", "pt-BR": "Próxima tarefa",
   },
+  search_academic_papers: {
+    "zh-CN": "检索论文与开源项目", "en-US": "Search papers", "es-ES": "Buscar artículos",
+    "fr-FR": "Chercher des articles", "de-DE": "Paper suchen",
+    "ja-JP": "論文を検索", "ko-KR": "논문 검색", "pt-BR": "Buscar artigos",
+  },
+  list_library_folders: {
+    "zh-CN": "查看资料文件夹", "en-US": "List folders", "es-ES": "Listar carpetas",
+    "fr-FR": "Lister les dossiers", "de-DE": "Ordner auflisten",
+    "ja-JP": "フォルダ一覧", "ko-KR": "폴더 목록", "pt-BR": "Listar pastas",
+  },
+  curate_library_resources: {
+    "zh-CN": "整理资料目录", "en-US": "Curate library", "es-ES": "Organizar biblioteca",
+    "fr-FR": "Classer les ressources", "de-DE": "Bibliothek ordnen",
+    "ja-JP": "資料を整理", "ko-KR": "자료실 정리", "pt-BR": "Organizar biblioteca",
+  },
+  list_skills: {
+    "zh-CN": "查看可用技能", "en-US": "List skills", "es-ES": "Listar habilidades",
+    "fr-FR": "Lister les compétences", "de-DE": "Skills auflisten",
+    "ja-JP": "スキル一覧", "ko-KR": "스킬 목록", "pt-BR": "Listar habilidades",
+  },
+  invoke_skill: {
+    "zh-CN": "调用技能", "en-US": "Run skill", "es-ES": "Ejecutar habilidad",
+    "fr-FR": "Exécuter la compétence", "de-DE": "Skill ausführen",
+    "ja-JP": "スキルを実行", "ko-KR": "스킬 실행", "pt-BR": "Executar habilidade",
+  },
+  generate_image: {
+    "zh-CN": "生成教学配图", "en-US": "Generate figure", "es-ES": "Generar figura",
+    "fr-FR": "Générer une figure", "de-DE": "Abbildung erstellen",
+    "ja-JP": "図解を生成", "ko-KR": "도해 생성", "pt-BR": "Gerar figura",
+  },
 };

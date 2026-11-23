@@ -26,9 +26,9 @@ from typing import Any
 
 logger = logging.getLogger("trainer.llm.harness")
 
-# Pi coding-agent defaults: compact when contextTokens > window - reserve,
-# keep the most recent ~20k tokens verbatim.
-DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
+# Modern 1M-context defaults: compact when contextTokens > window - reserve,
+# scaling reserve and keep_recent thresholds proportionally with window size.
+DEFAULT_CONTEXT_WINDOW_TOKENS = 1_000_000
 RESERVE_TOKENS = 16_384
 KEEP_RECENT_TOKENS = 20_000
 OVERFLOW_KEEP_RECENT_TOKENS = 8_000
@@ -130,6 +130,7 @@ TOOL_OUTPUT_LIMITS: dict[str, int] = {
     "list_sandbox": 30_000,
     "list_workspace_files": 30_000,
     "web_search": 24_000,
+    "search_academic_papers": 28_000,
     "fetch_web_page": 30_000,
     "run_diagnostics": 30_000,
     "recall_memory": 20_000,
@@ -138,6 +139,11 @@ TOOL_OUTPUT_LIMITS: dict[str, int] = {
     "write_sandbox_file": 12_000,
     "index_sandbox_file": 12_000,
     "organize_resources": 20_000,
+    "list_library_folders": 20_000,
+    "curate_library_resources": 20_000,
+    "list_skills": 16_000,
+    "invoke_skill": 24_000,
+    "generate_image": 8_000,
     "import_resource_url": 16_000,
     "save_formal_plan": 16_000,
     "inspect_learning_truth": 24_000,
@@ -157,7 +163,11 @@ READ_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
         "list_workspace_files",
         "read_workspace_file",
         "web_search",
+        "search_academic_papers",
         "fetch_web_page",
+        "list_library_folders",
+        "list_skills",
+        "invoke_skill",
         "inspect_current_file",
         "inspect_plan",
         "inspect_learning_truth",
@@ -297,21 +307,29 @@ def resolved_context_window(extra: dict[str, Any] | None) -> int:
 
 def resolved_reserve_tokens(extra: dict[str, Any] | None) -> int:
     raw = extra.get("reserve_tokens") if isinstance(extra, dict) else None
-    try:
-        value = int(raw) if raw is not None else RESERVE_TOKENS
-    except (TypeError, ValueError):
-        value = RESERVE_TOKENS
-    return max(512, value)
+    if raw is not None:
+        try:
+            return max(512, int(raw))
+        except (TypeError, ValueError):
+            pass
+    window = resolved_context_window(extra)
+    if window <= 131_072:
+        return max(512, RESERVE_TOKENS)
+    return max(512, min(128_000, max(RESERVE_TOKENS, window // 10)))
 
 
 def resolved_keep_recent_tokens(extra: dict[str, Any] | None) -> int:
-    """§二十: keep_recent_tokens is per-model overridable via extra."""
+    """§二十: keep_recent_tokens scales with context window and stays overridable via extra."""
     raw = extra.get("keep_recent_tokens") if isinstance(extra, dict) else None
-    try:
-        value = int(raw) if raw is not None else KEEP_RECENT_TOKENS
-    except (TypeError, ValueError):
-        value = KEEP_RECENT_TOKENS
-    return max(1_024, value)
+    if raw is not None:
+        try:
+            return max(1_024, int(raw))
+        except (TypeError, ValueError):
+            pass
+    window = resolved_context_window(extra)
+    if window <= 131_072:
+        return max(1_024, KEEP_RECENT_TOKENS)
+    return max(1_024, min(160_000, max(KEEP_RECENT_TOKENS, window // 8)))
 
 
 def resolve_compaction_profile(

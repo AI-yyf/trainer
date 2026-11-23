@@ -579,6 +579,8 @@ class SkillRegistry:
         if record.source_path and Path(record.source_path).is_file():
             _front, body = parse_skill_md(Path(record.source_path))
             return body
+        if record.body and str(record.body).strip():
+            return str(record.body)
         return record.description
 
     def _require(self, skill_id: str) -> SkillRecord:

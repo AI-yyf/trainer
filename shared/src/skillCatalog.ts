@@ -282,6 +282,71 @@ export const trainerSkillCatalog: TrainerSkillCatalogItem[] = [
     },
   },
   {
+    id: "generate-visual",
+    trigger: "$image",
+    section: "Coach",
+    title: {
+      "zh-CN": "生成教学配图",
+      "en-US": "Generate visual diagram",
+    },
+    detail: {
+      "zh-CN": "调用生图工具/Skill，生成结构图、状态流图或概念插图并直接在对话中显示。",
+      "en-US": "Invoke the visual generator tool/skill to create and display an inline diagram or illustration.",
+    },
+    keywords: [
+      "image",
+      "diagram",
+      "visual",
+      "illustration",
+      "architecture",
+      "draw",
+      "生图",
+      "画图",
+      "配图",
+      "示意图",
+      "架构图",
+    ],
+    commandId: trainerCommands.sendStreamMessage,
+    prompt: {
+      "zh-CN":
+        "先调用 `invoke_skill`（`visual-image-generator`）或直接调用 `generate_image` 生成一张结构清晰、中文标签准确的教学配图（或示意图），把工具返回的 Markdown 图片链接直接嵌入回复中显示给学习者，再结合图片逐步讲解状态流转与关键约束。",
+      "en-US":
+        "Invoke the `visual-image-generator` skill or call `generate_image` directly to create a clear pedagogical diagram or illustration, embed the returned Markdown image directly in your reply so it renders inline, and walk through the diagram step by step.",
+    },
+  },
+  {
+    id: "organize-library",
+    trigger: "$organize",
+    section: "Resources",
+    title: {
+      "zh-CN": "整理资料库",
+      "en-US": "Organize library",
+    },
+    detail: {
+      "zh-CN": "盘点资料库目录、新建/重命名文件夹、归类散落资料并补齐标签。",
+      "en-US": "Inspect folders and resources, create or rename folders, group loose items, and tag them cleanly.",
+    },
+    keywords: [
+      "organize",
+      "curate",
+      "folder",
+      "library",
+      "group",
+      "tag",
+      "整理资料",
+      "归类",
+      "文件夹",
+      "资料库",
+    ],
+    commandId: trainerCommands.sendStreamMessage,
+    prompt: {
+      "zh-CN":
+        "先调用 `list_library_folders` 与 `list_resources` 盘点当前资料库结构与未归类资料，再调用 `curate_library_resources`（可先建文件夹、移动到对应文件夹、重命名并补充标签；只操作 `<LibraryRoot>`，绝不动用户源码目录），最后清晰汇报整理结果。",
+      "en-US":
+        "Call `list_library_folders` and `list_resources` to inspect folders and ungrouped resources, then use `curate_library_resources` to create folders, move or rename items, and apply tags inside `<LibraryRoot>` without touching the user workspace. Summarize the changes clearly.",
+    },
+  },
+  {
     id: "settings-audit",
     trigger: "$settings",
     section: "Provider",

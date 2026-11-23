@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · 한국어 · [Português](README_pt-BR.md)
 
-[![릴리스](https://img.shields.io/badge/source-v1.6.3-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![릴리스](https://img.shields.io/badge/source-v1.6.4-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![라이선스](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![플랫폼](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#설치)
 [![테스트](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#품질-게이트)
@@ -76,7 +76,7 @@ LLM 대화는 창을 닫는 순간 증발하고, 영상 강의는 일방향이�
 사용 중인 OS와 아키텍처(`darwin-arm64` / `linux-x64` / `win32-x64`)에 맞는 `.vsix`를 [Releases](https://github.com/AI-yyf/trainer/releases/latest)에서 다운로드하세요:
 
 ```bash
-code --install-extension trainer-extension-1.6.3-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.6.4-<platform>-<arch>.vsix --force
 ```
 
 또는 VS Code 확장 패널 → `···` → *VSIX에서 설치…* → 창 다시 로드를 실행합니다. 자세한 내용은 [`extension/README.install.md`](extension/README.install.md)를 참고하세요.
@@ -232,7 +232,7 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 | Git 저장소를 깨끗이 유지 | ⚠️ 파일 혼재 | ⚠️ | 해당 없음 | ✅ 단일 `<LibraryRoot>`, 소스 저장소 쓰기 0 |
 | FSRS 간격 반복 | ❌ | ❌ | ✅ | ✅ 코딩 흐름 방해 방지 포함 |
 | 작업 영역 권한 계층 | ❌ | ⚠️ 기본 신뢰 창 | ❌ | ✅ 6단계 계층 + 원격 쓰기 차단 |
-| 공개 테스트 스위트 | 비공개 | 비공개 | 비공개 | ✅ **6,636 단위/통합 + 471 E2E** |
+| 공개 테스트 스위트 | 비공개 | 비공개 | 비공개 | ✅ **6,644 단위/통합 + 471 E2E** |
 | 다국어 완성도 | ⚠️ | ⚠️ | ⚠️ | ✅ **8개 언어** CI 완결성 게이트 |
 
 > 다른 도구는 코드를 더 빨리 뽑아내는 데 집중합니다; **Trainer는 당신이 만든 것을 진짜 자기 실력으로 만들게 합니다.**
@@ -318,9 +318,9 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 |---|---|---|
 | `extension/src/` | VS Code 호스트: 명령 등록, SecretStorage, WorkspaceGateway, Sidecar 관리 | `79` TS 파일 (약 `53,286` 줄) |
 | `extension/webview/src/` | React 워크벤치: 2진입점, 서랍, 단일 입력창, Shiki/KaTeX/Mermaid, 8언어 | `233` TS/TSX + `53` CSS (약 `120,507` 줄) |
-| `extension/tests/` | `node:test` 스위트: 호스트, 공유 거버넌스, i18n, 브라우저 수집, 보안 | `318` 파일 · **`2,412` 테스트** |
+| `extension/tests/` | `node:test` 스위트: 호스트, 공유 거버넌스, i18n, 브라우저 수집, 보안 | `319` 파일 · **`2,415` 테스트** |
 | `server/app/` | FastAPI sidecar: ReAct, RethinkFun, FSRS/메모리, 수집, 샌드박스 검증 | `232` Python 파일 (약 `173,863` 줄) |
-| `server/tests/` | `pytest` 백엔드 스위트(API, 교육, 메모리, 프로토콜, 권한) | `296` 파일 · **`4,224` 수집 테스트** |
+| `server/tests/` | `pytest` 백엔드 스위트(API, 교육, 메모리, 프로토콜, 권한) | `297` 파일 · **`4,229` 수집 테스트** |
 | `shared/src/` | Host·Webview·테스트가 공유하는 결정론적 거버넌스 순수 함수 모듈 | `76` 모듈 (약 `29,508` 줄 · `523` 익스포트) |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS 파일 (`746` 줄) |
 | `browser-extension/` | Chromium MV3 팝업, 오프라인 큐, 컨텍스트 메뉴, Side Panel | `8` 파일 (`6,977` 줄) |
@@ -345,16 +345,16 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 
 ## 품질 게이트
 
-> 아래 모든 수치는 `main` 브랜치(`v1.6.3`)에서 직접 검증된 실측 결과입니다:
+> 아래 모든 수치는 `main` 브랜치(`v1.6.4`)에서 직접 검증된 실측 결과입니다:
 
 | 게이트 | 범위 및 검증 결과 | 명령어 |
 |---|---|---|
-| **서버 테스트 (`pytest`)** | **296 파일 · 4,224 테스트** (및 서브테스트) | `npm run test:server` |
-| **확장 테스트 (`node:test`)** | **318 파일 · 2,412 테스트** (`2,411` 통과, `1` 플랫폼 조건 스킵, `0` 실패) | `npm run test:extension` |
+| **서버 테스트 (`pytest`)** | **297 파일 · 4,229 테스트** (및 서브테스트) | `npm run test:server` |
+| **확장 테스트 (`node:test`)** | **319 파일 · 2,415 테스트** (`2,414` 통과, `1` 플랫폼 조건 스킵, `0` 실패) | `npm run test:extension` |
 | **정적 분석 & 타입** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **UI 지오메트리 게이트** | 단일 입력창 주권, 2진입점 셸, 오버플로우 검증 (`340/420/460px`, 다크/라이트, 중/영) | `npm run verify:ui-geometry` |
-| **i18n 완결성 게이트** | **213** `appUiCopy` + **212** `settingsText` + **272** `hostCommandCopy` × **8언어** (누락 0) | `npm run verify:i18n` |
-| **용어 & 시크릿 게이트** | UI 파일 **68개** 내부 용어 누출 0 · 저장소 **4,027개** 평문 시크릿 0 | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **i18n 완결성 게이트** | **212** `appUiCopy` + **220** `settingsText` + **272** `hostCommandCopy` × **8언어** (누락 0) | `npm run verify:i18n` |
+| **용어 & 시크릿 게이트** | UI 파일 **68개** 내부 용어 누출 0 · 저장소 **4,187개** 평문 시크릿 0 | `npm run verify:copy-vocabulary && npm run verify:credentials` |
 | **Playwright E2E & Remote-SSH** | **30** Playwright spec (`471` 케이스) + 실제 sidecar 매트릭스 + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **CI 릴리스 빌드 대상** | **3개 데스크톱 타겟**: `win32-x64`, `darwin-arm64`, `linux-x64` | `.github/workflows/release.yml` |
 
@@ -397,7 +397,7 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.6.3}
+  note   = {v1.6.4}
 }
 ```
 
@@ -407,6 +407,6 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 
 **// AI를 훈련하고 · AI와 함께 성장하세요**
 
-`v1.6.3` · 커피와 FSRS, RethinkFun State-Flow 교육 커널, 6,636개의 자동화 테스트, 그리고 대신 코드를 쓰기를 거부하는 코치가 만들었습니다.
+`v1.6.4` · 커피와 FSRS, RethinkFun State-Flow 교육 커널, 6,644개의 자동화 테스트, 그리고 대신 코드를 쓰기를 거부하는 코치가 만들었습니다.
 
 </div>

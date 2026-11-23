@@ -2273,6 +2273,13 @@
   color: var(--fg-0);
 }
 
+.settings-advanced-presets button.is-active,
+.settings-advanced-presets button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--bg-2));
+  color: var(--fg-0);
+}
+
 .settings-advanced-presets button:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
@@ -2307,6 +2314,12 @@
   justify-content: space-between;
   gap: var(--space-2);
   list-style: none;
+}
+
+.settings-token-presets-panel > summary > .settings-section-count {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .settings-token-presets-panel > summary::-webkit-details-marker {

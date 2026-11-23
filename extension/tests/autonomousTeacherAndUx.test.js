@@ -298,7 +298,7 @@ test('settings capabilities dirty-check, Finder resources tree, and learning ste
   assert.match(learningSummarySource, /CASUAL_GREETING_TOKENS/);
 });
 
-test('all 37 registered backend tools have 8-locale TOOL_LABELS and UX settings/resources polish stays intact', () => {
+test('all 43 registered backend tools have 8-locale TOOL_LABELS and UX settings/resources polish stays intact', () => {
   const toolsSource = fs.readFileSync(
     path.join(repoRoot, 'server', 'app', 'llm', 'tools.py'),
     'utf8',
@@ -320,7 +320,7 @@ test('all 37 registered backend tools have 8-locale TOOL_LABELS and UX settings/
     toolsSource.matchAll(/ToolDefinition\(\s*name="([a-z0-9_]+)"/g),
     (m) => m[1],
   );
-  assert.ok(registeredTools.length >= 37, `Expected >= 37 tools, got ${registeredTools.length}`);
+  assert.ok(registeredTools.length >= 43, `Expected >= 43 tools, got ${registeredTools.length}`);
   const locales = ['zh-CN', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'ja-JP', 'ko-KR', 'pt-BR'];
   const toolLabelsIdx = stripCopySource.indexOf('export const TOOL_LABELS');
   assert.ok(toolLabelsIdx >= 0);

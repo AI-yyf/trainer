@@ -145,6 +145,215 @@ function InlineCode({ children }: { children: React.ReactNode }) {
   return <code className="message-markdown__inline-code">{children}</code>;
 }
 
+const SAFE_IMAGE_DATA_URL_RE =
+  /^data:image\/(?:png|jpeg|jpg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+
+/**
+ * Sanitize markdown href/src URLs so generated SVG/PNG data URIs and localhost
+ * image routes render safely while scriptable/HTML data URLs stay blocked.
+ */
+export function markdownUrlTransform(url: string, key?: string): string {
+  const raw = String(url ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+  const lower = raw.toLowerCase();
+  if (
+    lower.startsWith("javascript:") ||
+    lower.startsWith("vbscript:") ||
+    lower.startsWith("trainer-image://")
+  ) {
+    return "";
+  }
+  if (lower.startsWith("data:")) {
+    if (key && key !== "src") {
+      return "";
+    }
+    return SAFE_IMAGE_DATA_URL_RE.test(raw) ? raw : "";
+  }
+  if (
+    lower.startsWith("https://") ||
+    lower.startsWith("http://127.0.0.1") ||
+    lower.startsWith("http://localhost") ||
+    lower.startsWith("vscode-resource:") ||
+    lower.startsWith("vscode-webview-resource:") ||
+    lower.startsWith("blob:")
+  ) {
+    return raw;
+  }
+  if (key !== "src") {
+    if (
+      lower.startsWith("http://") ||
+      lower.startsWith("mailto:") ||
+      raw.startsWith("#") ||
+      raw.startsWith("/")
+    ) {
+      return raw;
+    }
+  }
+  return "";
+}
+
+function ImageLightbox({
+  src,
+  alt,
+  language,
+  onClose,
+}: {
+  src: string;
+  alt?: string;
+  language: ComposerLanguage;
+  onClose: () => void;
+}) {
+  const closeLabel = messageRichContentCopy(language, "关闭预览");
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="message-image-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt || messageRichContentCopy(language, "配图")}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="message-image-lightbox__dialog">
+        <button
+          type="button"
+          className="message-image-lightbox__close"
+          onClick={onClose}
+        >
+          {closeLabel}
+        </button>
+        <img className="message-image-lightbox__img" src={src} alt={alt || ""} />
+        {alt ? <p className="message-image-lightbox__caption">{alt}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function RichMarkdownImage({
+  src,
+  alt,
+  language,
+}: {
+  src?: string;
+  alt?: string;
+  language: ComposerLanguage;
+}) {
+  const [failed, setFailed] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+  const cleanSrc = markdownUrlTransform(src ?? "", "src");
+  const cleanAlt = String(alt ?? "").trim();
+
+  if (!cleanSrc || failed) {
+    return (
+      <figure className="message-rich-image" data-rich-image="error">
+        <p className="message-rich-image__error">
+          {messageRichContentCopy(language, "图片加载失败")}
+          {cleanAlt ? ` (${cleanAlt})` : ""}
+        </p>
+      </figure>
+    );
+  }
+
+  const zoomHint = messageRichContentCopy(language, "点击放大查看");
+  const figureLabel = cleanAlt || messageRichContentCopy(language, "配图");
+
+  return (
+    <>
+      <figure className="message-rich-image" data-rich-image="true">
+        <button
+          type="button"
+          className="message-rich-image__trigger"
+          aria-label={`${figureLabel} · ${zoomHint}`}
+          onClick={() => setZoomed(true)}
+        >
+          <img
+            className="message-rich-image__img"
+            src={cleanSrc}
+            alt={cleanAlt}
+            loading="lazy"
+            onError={() => setFailed(true)}
+          />
+        </button>
+        {cleanAlt ? (
+          <figcaption className="message-rich-image__caption">{cleanAlt}</figcaption>
+        ) : null}
+      </figure>
+      {zoomed ? (
+        <ImageLightbox
+          src={cleanSrc}
+          alt={cleanAlt}
+          language={language}
+          onClose={() => setZoomed(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+export function MessageImageGallery({
+  previews,
+  language,
+}: {
+  previews?: Array<{ id: string; name?: string; mimeType: string; dataUrl: string }>;
+  language: ComposerLanguage;
+}) {
+  const [active, setActive] = useState<{ src: string; alt?: string } | null>(null);
+  const safePreviews = (previews ?? []).filter((item) =>
+    markdownUrlTransform(item.dataUrl, "src"),
+  );
+  if (safePreviews.length === 0) {
+    return null;
+  }
+  const zoomHint = messageRichContentCopy(language, "点击放大查看");
+  return (
+    <>
+      <div className="message-attachment-gallery" data-image-attachment-gallery="true">
+        {safePreviews.map((item) => {
+          const label = item.name?.trim() || messageRichContentCopy(language, "配图");
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className="message-attachment-gallery__thumb"
+              aria-label={`${label} · ${zoomHint}`}
+              onClick={() => setActive({ src: item.dataUrl, alt: label })}
+            >
+              <img
+                className="message-attachment-gallery__img"
+                src={item.dataUrl}
+                alt={label}
+                loading="lazy"
+              />
+            </button>
+          );
+        })}
+      </div>
+      {active ? (
+        <ImageLightbox
+          src={active.src}
+          alt={active.alt}
+          language={language}
+          onClose={() => setActive(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function RichMarkdownRenderer({
   body,
   language,
@@ -186,6 +395,7 @@ function RichMarkdownRenderer({
 
   return (
     <ReactMarkdown
+      urlTransform={markdownUrlTransform}
       rehypePlugins={[
         [
           plugins.rehypeKatex,
@@ -199,6 +409,9 @@ function RichMarkdownRenderer({
       ]}
       remarkPlugins={[[plugins.remarkGfm, { singleTilde: false }], remarkChatBreaks, plugins.remarkMath]}
       components={{
+        img({ src, alt }) {
+          return <RichMarkdownImage src={src} alt={alt} language={language} />;
+        },
         // 处理代码元素 - 区分行内代码和代码块
         code({ node, className, children, ...props }) {
           const value = String(children ?? "").replace(/\n$/, "");

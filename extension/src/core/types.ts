@@ -1554,6 +1554,12 @@ export interface ConversationMessageView {
   researchPreparation?: ResearchPreparation;
   parts?: TrainerMessagePart[];
   attachments?: ConversationAttachmentView[];
+  imagePreviews?: Array<{
+    id: string;
+    name?: string;
+    mimeType: string;
+    dataUrl: string;
+  }>;
   artifacts?: ConversationArtifactView[];
   contextNote?: string;
   support?: {

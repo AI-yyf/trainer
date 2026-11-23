@@ -12,7 +12,7 @@ from typing import Any, cast
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential
@@ -2144,5 +2144,23 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
                 exc_info=True,
             )
         return restoration
+
+    @router.get("/generated-images/{image_id}")
+    def get_generated_image(image_id: str) -> Response:
+        """Serve a generated pedagogical SVG or PNG image by safe `img_*` id."""
+        from ...llm.image_generation import load_generated_image
+
+        clean_id = str(image_id or "").strip()
+        if not re.fullmatch(r"img_[a-z0-9_]{4,40}", clean_id):
+            raise HTTPException(status_code=422, detail="Invalid generated image identifier.")
+        loaded = load_generated_image(runtime, clean_id)
+        if loaded is None:
+            raise HTTPException(status_code=404, detail="Generated image not found.")
+        raw_bytes, mime_type, _title = loaded
+        return Response(
+            content=raw_bytes,
+            media_type=mime_type,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
 
     return router, prepare_research_turn

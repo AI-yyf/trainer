@@ -356,6 +356,7 @@ class TrainerRuntime:
     steer_queues: dict[str, list[str]] = field(default_factory=dict)
     sandbox_operation_log: dict[str, dict[str, Any]] = field(default_factory=dict)
     requested_workspace_files: dict[str, list[str]] = field(default_factory=dict)
+    generated_images: dict[str, dict[str, Any]] = field(default_factory=dict)
     _steer_guard: Lock = field(default_factory=Lock, repr=False, compare=False)
 
     def enqueue_steer_message(self, session_id: str, text: str) -> bool:
