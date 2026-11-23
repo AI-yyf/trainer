@@ -20,7 +20,10 @@ export function UtilityOverlay({ label, closeLabel, onClose, overlay = "history"
     if (!element) return;
     const controls = () => Array.from(element.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex='0']"))
       .filter((control) => control.getClientRects().length > 0);
-    (element.querySelector<HTMLInputElement>("input") ?? controls()[0] ?? element).focus();
+    const initialTarget =
+      element.querySelector<HTMLInputElement>("input") ??
+      (overlay === "learning" ? element : controls()[0] ?? element);
+    initialTarget.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); close.current(); return; }
       if (event.key !== "Tab") return;
@@ -28,7 +31,7 @@ export function UtilityOverlay({ label, closeLabel, onClose, overlay = "history"
       const first = items[0];
       const last = items[items.length - 1];
       if (!first || !last) { event.preventDefault(); element.focus(); return; }
-      if (event.shiftKey && (document.activeElement === first || !element.contains(document.activeElement))) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === element || !element.contains(document.activeElement))) {
         event.preventDefault(); last.focus();
       } else if (!event.shiftKey && (document.activeElement === last || !element.contains(document.activeElement))) {
         event.preventDefault(); first.focus();

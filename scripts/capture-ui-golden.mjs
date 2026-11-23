@@ -262,7 +262,7 @@ const WEBVIEW_SHOTS = [
     urlParams: { view: "resources", scenario: "resource-preview-loaded" },
     async interact(page) {
       for (let round = 0; round < 6; round++) {
-        const collapsed = page.locator('[data-template="Library"] button[aria-expanded="false"]');
+        const collapsed = page.locator('[data-template="Library"] button.collapse-section__header[aria-expanded="false"]');
         const count = await collapsed.count();
         if (count === 0) break;
         await collapsed.first().click();
@@ -306,7 +306,7 @@ const WEBVIEW_SHOTS = [
       if (count > 0) {
         await summaryButtons.nth(count - 1).click();
       } else {
-        await page.locator(".settings-provider-bar__icon-button").first().click();
+        await page.locator(".settings-provider-bar__add, .settings-provider-bar__icon-button").first().click();
       }
       await page.locator("form.settings-model-editor").waitFor({ state: "visible" });
       await page.evaluate(() => {

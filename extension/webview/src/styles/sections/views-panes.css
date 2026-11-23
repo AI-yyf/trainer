@@ -1175,40 +1175,59 @@
   border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
 }
 
+.resources-pane .template-library > div:last-child {
+  position: relative;
+}
+
 .resources-knowledge__import-menu {
-  align-self: flex-end;
-  margin-inline-start: auto;
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 0;
+  z-index: 30;
   width: max-content;
-  min-width: 176px;
+  min-width: 184px;
   max-width: min(260px, calc(100vw - 24px));
-  margin-top: 6px;
-  margin-bottom: 6px;
-  padding: var(--space-1);
+  margin: 0;
+  padding: 5px;
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: var(--radius-md);
-  background: var(--bg-1);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--bg-0) 42%, transparent);
+  background: color-mix(in srgb, var(--bg-1) 96%, var(--bg-0));
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--bg-0) 44%, transparent),
+    0 2px 6px color-mix(in srgb, var(--bg-0) 18%, transparent);
   transform-origin: top right;
 }
 
-.resources-knowledge__import-menu .menu-list__item {
+.resources-knowledge__import-menu .menu-list__item,
+.resources-row-menu .menu-list__item {
   min-height: 28px;
-  padding: 5px 7px;
+  padding: 5px 8px;
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+.resources-knowledge__import-menu .menu-list__item:hover,
+.resources-knowledge__import-menu .menu-list__item:focus-visible,
+.resources-row-menu .menu-list__item:hover,
+.resources-row-menu .menu-list__item:focus-visible {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--fg-0) 7%, transparent);
+  color: var(--fg-0);
 }
 
 .resources-row-menu {
-  min-width: 180px;
+  min-width: 184px;
   max-width: min(260px, calc(100vw - 16px));
-  padding: var(--space-1);
+  padding: 5px;
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: var(--radius-md);
-  background: var(--bg-1);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--bg-0) 42%, transparent);
-}
-
-.resources-row-menu .menu-list__item {
-  min-height: 28px;
-  padding: 5px 7px;
+  background: color-mix(in srgb, var(--bg-1) 96%, var(--bg-0));
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--bg-0) 44%, transparent),
+    0 2px 6px color-mix(in srgb, var(--bg-0) 18%, transparent);
 }
 
 .resources-knowledge__toolbar {
@@ -2845,13 +2864,22 @@
    to sit inside the text line and read as a run-on path sentence. */
 .training-card-files {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 2px;
 }
 
 .training-card-files__item {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--line) 44%, transparent);
+  background: color-mix(in srgb, var(--bg-0) 72%, transparent);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-3xs);
   overflow-wrap: anywhere;
 }
 

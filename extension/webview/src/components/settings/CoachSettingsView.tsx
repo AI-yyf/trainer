@@ -6417,32 +6417,6 @@ function CoachSettingsViewSheet({
               </div>
 
               <div className="settings-advanced-card coach-settings-view__provider-detail">
-                <label className="settings-field">
-                  <span>{settingsSupportPhrase(language, "protocol")}</span>
-                  <select
-                    value={draftProtocol}
-                    onChange={(event) => {
-                      const protocol = normalizeProviderProtocol(event.target.value);
-                      if (protocol) {
-                        onProviderDraftChange({ protocol });
-                      }
-                    }}
-                  >
-                    {protocolItems.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <ProviderEndpointSpeedTest
-                  language={language}
-                  baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
-                  results={providerSpeedTestResults}
-                  pending={providerSpeedTestPending}
-                  onRun={(urls) => onSpeedTestEndpoints?.(urls)}
-                  onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
-                />
                 <div className="settings-advanced-card__capabilities">
                   <div className="settings-advanced-card__section-heading">
                     <strong>{settingsText(language, "模型能力", "Model capabilities")}</strong>
@@ -6567,6 +6541,32 @@ function CoachSettingsViewSheet({
                 <p className="settings-sheet__note settings-sheet__note--compact">
                   {settingsPhrase(language, "capabilitiesFromLiveTest")}
                 </p>
+                <label className="settings-field">
+                  <span>{settingsSupportPhrase(language, "protocol")}</span>
+                  <select
+                    value={draftProtocol}
+                    onChange={(event) => {
+                      const protocol = normalizeProviderProtocol(event.target.value);
+                      if (protocol) {
+                        onProviderDraftChange({ protocol });
+                      }
+                    }}
+                  >
+                    {protocolItems.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <ProviderEndpointSpeedTest
+                  language={language}
+                  baseUrl={normalizedDraftBaseUrl || providerDraft.baseUrl}
+                  results={providerSpeedTestResults}
+                  pending={providerSpeedTestPending}
+                  onRun={(urls) => onSpeedTestEndpoints?.(urls)}
+                  onAdopt={(url) => onProviderDraftChange({ baseUrl: url })}
+                />
                 <details className="settings-sheet__minor-panel settings-token-presets-panel">
                   <summary>
                     <span>{settingsText(language, "上下文与输出上限", "Context & output limits")}</span>

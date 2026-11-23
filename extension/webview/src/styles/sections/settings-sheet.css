@@ -711,6 +711,9 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
 }
 
 .settings-provider-bar__content {
@@ -748,7 +751,8 @@
 .settings-provider-bar .settings-provider-profile--bar {
   /* Shrink inside the wrapped list: a 0 0 auto chip overflowed its 189px box
      and collided with the action buttons. */
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  max-width: 100%;
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--line) 34%, transparent);
   border-radius: var(--radius-sm);
@@ -2104,17 +2108,21 @@
 
 .settings-model-editor__footer {
   position: sticky;
-  bottom: 0;
+  bottom: -1px;
   z-index: 6;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 2px;
-  padding-block: var(--space-2);
-  background: color-mix(in srgb, var(--bg-1) 96%, var(--bg-0));
-  backdrop-filter: blur(8px);
-  border-top: 1px solid color-mix(in srgb, var(--line) 56%, transparent);
+  margin-top: 4px;
+  margin-inline: -14px;
+  margin-bottom: -14px;
+  padding: 10px 14px 12px;
+  background: color-mix(in srgb, var(--bg-1) 94%, var(--bg-0));
+  backdrop-filter: blur(10px);
+  border-top: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-bottom-left-radius: calc(var(--radius-md) - 1px);
+  border-bottom-right-radius: calc(var(--radius-md) - 1px);
 }
 
 .settings-model-editor__footer .action-button--accent {
@@ -2181,7 +2189,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 14px;
+  gap: 6px 8px;
+}
+
+.settings-advanced-card__capabilities > .settings-advanced-card__section-heading {
+  flex: 1 1 100%;
 }
 
 .settings-advanced-toggle {
@@ -2189,16 +2201,37 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-size: var(--trainer-font-2xs);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.settings-advanced-toggle:hover {
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
   color: var(--fg-0);
-  font-size: var(--trainer-font-3xs);
-  cursor: default;
+}
+
+.settings-advanced-toggle:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-0));
+  color: var(--fg-0);
 }
 
 .settings-advanced-toggle input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   margin: 0;
   accent-color: var(--fg-0);
+  cursor: pointer;
 }
 
 .settings-advanced-limits {

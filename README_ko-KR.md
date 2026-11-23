@@ -12,7 +12,7 @@
 
 [English](README.md) · [简体中文](README_zh-CN.md) · [Español](README_es-ES.md) · [Français](README_fr-FR.md) · [Deutsch](README_de-DE.md) · [日本語](README_ja-JP.md) · 한국어 · [Português](README_pt-BR.md)
 
-[![릴리스](https://img.shields.io/badge/source-v1.6.1-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
+[![릴리스](https://img.shields.io/badge/source-v1.6.2-1f6feb)](https://github.com/AI-yyf/trainer/blob/main/extension/package.json)
 [![라이선스](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
 [![플랫폼](https://img.shields.io/badge/platforms-macOS%20arm64%20%C2%B7%20Linux%20x64%20%C2%B7%20Windows%20x64-8b949e)](#설치)
 [![테스트](https://img.shields.io/badge/tests-6%2C606%20cases-F59E0B)](#품질-게이트)
@@ -76,7 +76,7 @@ LLM 대화는 창을 닫는 순간 증발하고, 영상 강의는 일방향이�
 사용 중인 OS와 아키텍처(`darwin-arm64` / `linux-x64` / `win32-x64`)에 맞는 `.vsix`를 [Releases](https://github.com/AI-yyf/trainer/releases/latest)에서 다운로드하세요:
 
 ```bash
-code --install-extension trainer-extension-1.6.1-<platform>-<arch>.vsix --force
+code --install-extension trainer-extension-1.6.2-<platform>-<arch>.vsix --force
 ```
 
 또는 VS Code 확장 패널 → `···` → *VSIX에서 설치…* → 창 다시 로드를 실행합니다. 자세한 내용은 [`extension/README.install.md`](extension/README.install.md)를 참고하세요.
@@ -345,7 +345,7 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 
 ## 품질 게이트
 
-> 아래 모든 수치는 `main` 브랜치(`v1.6.1`)에서 직접 검증된 실측 결과입니다:
+> 아래 모든 수치는 `main` 브랜치(`v1.6.2`)에서 직접 검증된 실측 결과입니다:
 
 | 게이트 | 범위 및 검증 결과 | 명령어 |
 |---|---|---|
@@ -397,7 +397,7 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
   author = {AI-yyf and contributors},
   year   = {2026},
   url    = {https://github.com/AI-yyf/trainer},
-  note   = {v1.6.1}
+  note   = {v1.6.2}
 }
 ```
 
@@ -407,6 +407,6 @@ Trainer 의 상태 흐름 기반 직관적 교수법은 AI 기술 크리에이�
 
 **// AI를 훈련하고 · AI와 함께 성장하세요**
 
-`v1.6.1` · 커피와 FSRS, RethinkFun State-Flow 교육 커널, 6,606개의 자동화 테스트, 그리고 대신 코드를 쓰기를 거부하는 코치가 만들었습니다.
+`v1.6.2` · 커피와 FSRS, RethinkFun State-Flow 교육 커널, 6,606개의 자동화 테스트, 그리고 대신 코드를 쓰기를 거부하는 코치가 만들었습니다.
 
 </div>
