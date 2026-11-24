@@ -29,12 +29,9 @@
   padding-bottom: 2px;
 }
 
-.message-mermaid__canvas svg {
-  display: block;
-  width: max-content;
-  height: auto;
-  min-width: 100%;
-}
+/* The diagram SVG lives in a closed shadow root of its own (see
+   MermaidDiagramView), so page rules cannot reach it and its <style> cannot
+   reach the page. Its sizing lives in MERMAID_SHADOW_CSS beside the renderer. */
 
 .message-mermaid__loading {
   font-size: var(--trainer-font-2xs);

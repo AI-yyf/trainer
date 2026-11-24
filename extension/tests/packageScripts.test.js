@@ -181,6 +181,13 @@ function createSidecarFixture(tempRoot) {
     path.join(serverDir, 'app', 'llm', 'provider_service.py'),
     'class ProviderService:\n    pass\n',
   );
+  // The subject profiles are package data: a package without them is refused.
+  for (const subject of ['code', 'literature', 'french-writing', 'german-grammar', 'japanese-learning']) {
+    writeFile(
+      path.join(serverDir, 'app', 'training', 'profiles', `${subject}.profile.json`),
+      '{}',
+    );
+  }
   writeFile(path.join(serverDir, 'app', '._ghost.py'), 'ghost');
   writeFile(path.join(serverDir, 'app', '.DS_Store'), 'junk');
   writeFile(path.join(serverDir, 'app', '__pycache__', 'routers.cpython-312.pyc'), 'pyc');
@@ -228,12 +235,51 @@ test('webview builds keep the browserSidecar test contract separate from product
   assert.doesNotMatch(webviewPackageJson.scripts.build, /browserSidecar-test/);
   assert.doesNotMatch(webviewPackageJson.scripts['build:preview'], /browserSidecar-test/);
 
+  // The ignore rules name the files by the path they really have. The rules
+  // used to sit one directory too high (`webview/<file>` for a file in
+  // `webview/dist/`), matched nothing, and both files shipped in every VSIX.
   const ignoreEntries = fs.readFileSync(webviewVscodeIgnorePath, 'utf8');
-  assert.match(ignoreEntries, /^webview\/browserSidecar-test\.js$/m);
+  assert.match(ignoreEntries, /^webview\/dist\/vscode-preview\.html$/m);
+  assert.match(ignoreEntries, /^webview\/dist\/assets\/preview-\*\.js$/m);
+  assert.match(ignoreEntries, /^webview\/dist\/assets\/browserPreviewHarness-\*\.js$/m);
+  assert.match(ignoreEntries, /^output\/\*\*$/m);
+  assert.doesNotMatch(ignoreEntries, /^webview\/vscode-preview\.html$/m);
+  assert.doesNotMatch(ignoreEntries, /^webview\/browserSidecar-test\.js$/m);
+  // Despite its name, that file is the lazy chunk of a production module.
+  assert.doesNotMatch(ignoreEntries, /^webview\/dist\/browserSidecar-test\.js$/m);
 
   const buildSource = fs.readFileSync(buildWebviewPackageScriptPath, 'utf8');
   assert.match(buildSource, /removeTestOnlyEntries\(stagingDir\)/);
   assert.match(buildSource, /browserSidecar-test\.js/);
+});
+
+test('the ignore rules actually match the files the webview build produces', async () => {
+  // Rule text proves nothing on its own: evaluate the rules the way the
+  // packager does against the real output names of a preview build.
+  // The same package vsce evaluates .vscodeignore with.
+  const ignore = require('ignore')();
+  ignore.add(fs.readFileSync(webviewVscodeIgnorePath, 'utf8'));
+  const shipped = (entry) => !ignore.ignores(entry);
+
+  for (const devOnly of [
+    'webview/dist/vscode-preview.html',
+    'webview/dist/assets/preview-DUHLsaQI.js',
+    'webview/dist/assets/browserPreviewHarness-DUHLsaQI.js',
+    'output/maturity/ci-installed/linux-keyring-cleanup.json',
+  ]) {
+    assert.equal(shipped(devOnly), false, `${devOnly} must not ship`);
+  }
+  for (const needed of [
+    'webview/dist/index.html',
+    'webview/dist/assets/App-23M3w7vL.js',
+    'webview/dist/assets/vendor-react-6LbFpDuR.js',
+    'webview/dist/browserSidecar-test.js',
+    'webview/dist/assets/main-CUQUWcdJ.js',
+    'dist/extension/src/extension.js',
+    'bundled/server/app/training/profiles/japanese-learning.profile.json',
+  ]) {
+    assert.equal(shipped(needed), true, `${needed} must ship`);
+  }
 });
 
 test('package scripts keep VSIX preparation and output routing explicit', () => {
@@ -763,9 +809,11 @@ test('VSIX target inspection requires the declared native runtime and rejects fo
       'extension/bundled/remote/trainer-workspace-companion.vsix',
       'extension/bundled/bin/win32-x64/trainer-sidecar.exe',
       'extension/bundled/bin/win32-x64/trainer-sidecar-manifest.json',
+      ...SHIPPED_PROFILE_ENTRIES,
     ],
   });
   assert.deepEqual(valid.errors, []);
+  assert.deepEqual(valid.developmentOnlyEntries, []);
 
   const invalid = inspectVsixTargetContents({
     targetPlatform,
@@ -778,6 +826,85 @@ test('VSIX target inspection requires the declared native runtime and rejects fo
   assert.ok(invalid.errors.some((message) => message.includes('declares target linux-x64')));
   assert.ok(invalid.errors.some((message) => message.includes('win32-x64 runtime entry')));
   assert.deepEqual(invalid.foreignRuntimeEntries, ['extension/bundled/bin/linux-x64/trainer-sidecar']);
+});
+
+const REQUIRED_ARCHIVE_ENTRIES = [
+  'extension.vsixmanifest',
+  'extension/package.json',
+  'extension/dist/extension/src/extension.js',
+  'extension/webview/dist/index.html',
+  'extension/bundled/remote/trainer-workspace-companion.vsix',
+  'extension/bundled/bin/win32-x64/trainer-sidecar.exe',
+  'extension/bundled/bin/win32-x64/trainer-sidecar-manifest.json',
+];
+const SHIPPED_PROFILE_ENTRIES = ['code', 'literature', 'french-writing', 'german-grammar', 'japanese-learning'].map(
+  (name) => `extension/bundled/server/app/training/profiles/${name}.profile.json`,
+);
+
+test('a VSIX without the subject profiles is refused', async () => {
+  // They are package data the sidecar reads at runtime: a package without
+  // them taught every language subject as if it were code.
+  const { inspectVsixTargetContents, verifyVsixTargetArtifact } = await loadPackageScriptModules();
+  const report = inspectVsixTargetContents({
+    targetPlatform: 'win32-x64',
+    manifestXml: '<Identity Id="trainer-extension" TargetPlatform="win32-x64"/>',
+    entryNames: REQUIRED_ARCHIVE_ENTRIES,
+  });
+  assert.equal(report.errors.length, SHIPPED_PROFILE_ENTRIES.length);
+  for (const message of report.errors) {
+    assert.match(message, /^VSIX is missing required win32-x64 runtime entry: extension\/bundled\/server\/app\/training\/profiles\/\w[\w-]*\.profile\.json\.$/);
+  }
+  // The release gate reads the same verdict off the archive itself.
+  const archive = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-vsix-noprofiles-')),
+    'trainer-extension.vsix',
+  );
+  fs.writeFileSync(archive, zip({
+    'extension.vsixmanifest': '<Identity Id="trainer-extension" TargetPlatform="win32-x64"/>',
+    ...Object.fromEntries(REQUIRED_ARCHIVE_ENTRIES.filter((entry) => entry !== 'extension.vsixmanifest').map((entry) => [entry, 'x'])),
+  }));
+  const artifact = verifyVsixTargetArtifact({ vsixPath: archive, targetPlatform: 'win32-x64' });
+  assert.ok(artifact.errors.some((message) => /training\/profiles\/japanese-learning\.profile\.json/.test(message)));
+});
+
+test('a VSIX that carries development-only entries is refused', async () => {
+  const { inspectVsixTargetContents, findDevelopmentOnlyVsixEntries, assertVsixTargetArtifact } = await loadPackageScriptModules();
+  const developmentOnly = [
+    'extension/webview/dist/vscode-preview.html',
+    'extension/webview/dist/assets/preview-DUHLsaQI.js',
+    'extension/webview/dist/assets/browserPreviewHarness-DUHLsaQI.js',
+    'extension/output/maturity/ci-installed/linux-keyring-cleanup.json',
+  ];
+  const entryNames = [...REQUIRED_ARCHIVE_ENTRIES, ...SHIPPED_PROFILE_ENTRIES, ...developmentOnly];
+  const report = inspectVsixTargetContents({
+    targetPlatform: 'win32-x64',
+    manifestXml: '<Identity Id="trainer-extension" TargetPlatform="win32-x64"/>',
+    entryNames,
+  });
+  assert.deepEqual(report.developmentOnlyEntries, [...developmentOnly].sort());
+  assert.equal(report.errors.length, developmentOnly.length);
+  for (const message of report.errors) {
+    assert.match(message, /^VSIX ships a development-only entry: extension\/(webview\/dist|output)\//);
+  }
+
+  // The production lazy chunk that merely carries "test" in its name stays allowed.
+  assert.deepEqual(
+    findDevelopmentOnlyVsixEntries([
+      'extension/webview/dist/browserSidecar-test.js',
+      'extension/webview/dist/assets/main-CUQUWcdJ.js',
+    ]),
+    [],
+  );
+
+  const archive = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-vsix-devonly-')),
+    'trainer-extension.vsix',
+  );
+  fs.writeFileSync(archive, zip(Object.fromEntries(entryNames.map((entry) => [entry, 'x']))));
+  assert.throws(
+    () => assertVsixTargetArtifact({ vsixPath: archive, targetPlatform: 'win32-x64' }),
+    /development-only entry: extension\/webview\/dist\/assets\/browserPreviewHarness-DUHLsaQI\.js/,
+  );
 });
 
 test('package verification refuses a target label that cannot match the native binary', async () => {

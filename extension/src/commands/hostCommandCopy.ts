@@ -510,6 +510,16 @@ export const HOST_COMMAND_COPY = {
     "ko-KR": "원격 검증을 실행하려면 작업 영역을 신뢰해야 합니다.",
     "pt-BR": "É necessário confiar no espaço de trabalho para executar a verificação remota.",
   },
+  "trainingProviderTrustRequired": {
+    "zh-CN": "需要信任当前工作区，才能用已保存的模型服务生成训练卡。",
+    "en-US": "Workspace trust is required to generate training cards with your saved model provider.",
+    "es-ES": "Se requiere confiar en el espacio de trabajo para generar tarjetas de entrenamiento con tu proveedor de modelos.",
+    "fr-FR": "La confiance de l’espace de travail est requise pour générer des cartes d’entraînement avec votre fournisseur de modèles.",
+    "de-DE": "Für das Erstellen von Trainingskarten mit Ihrem gespeicherten Modellanbieter muss dem Arbeitsbereich vertraut werden.",
+    "ja-JP": "保存したモデルプロバイダーでトレーニングカードを生成するには、ワークスペースを信頼する必要があります。",
+    "ko-KR": "저장한 모델 제공업체로 학습 카드를 만들려면 작업 영역을 신뢰해야 합니다.",
+    "pt-BR": "É necessário confiar no espaço de trabalho para gerar cartões de treinamento com o seu provedor de modelos salvo.",
+  },
   "remoteVerifyExecutableRequired": {
     "zh-CN": "需要指定用于远端验证的可执行命令。",
     "en-US": "A verification executable is required.",

@@ -370,6 +370,10 @@ async function main() {
       baseUrl: providerBaseUrl,
       model: providerModel,
       apiKey: providerApiKey,
+      // VS Code's extension host may not forward NO_PROXY to the sidecar; the
+      // product setting is the honest way to keep a local system proxy out of
+      // the real-provider path.
+      payload: { ignoreSystemProxy: true },
     }),
   });
 

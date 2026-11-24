@@ -262,6 +262,8 @@ const state = {
   page: null,
   history: [],
   connected: false,
+  /** Trainer is running but is waiting for the one-time pairing code (see the popup). */
+  needsPairing: false,
   busy: false,
   /** The live card the practice panel is answering. */
   practiceCardId: '',
@@ -972,13 +974,18 @@ async function connect() {
   renderAll();
   let auth = await T.loadAuth();
   if (!auth.credential || !auth.baseUrl) {
-    await new Promise((resolve) => chrome.runtime.sendMessage({ type: 'trainer:auto-pair' }, () => resolve()));
+    const auto = await new Promise((resolve) =>
+      chrome.runtime.sendMessage({ type: 'trainer:auto-pair' }, (value) => resolve(value || {})));
     auth = await T.loadAuth();
+    // Trainer answered, but pairs this extension only after the learner enters
+    // the pairing code once — say so instead of "Trainer is not running".
+    state.needsPairing = auto.needsPairing === true;
   }
   if (!auth.credential || !auth.baseUrl) {
     showConnectionState();
     return;
   }
+  state.needsPairing = false;
   state.auth = auth;
   const snapshotState = await new Promise((resolve) => {
     chrome.runtime.sendMessage({ type: 'trainer:state' }, (value) => resolve(value || {}));
@@ -1020,8 +1027,15 @@ async function bootstrap(sessionId) {
 function showConnectionState() {
   state.connected = false;
   elements.connectionState.hidden = false;
-  elements.connectionTitle.textContent = t('notRunning');
-  elements.connectionDetail.textContent = t('notRunningDetail');
+  if (state.needsPairing) {
+    // Same words as the popup's pairing form: the code is entered there.
+    const copy = T.activeCopy();
+    elements.connectionTitle.textContent = copy.connectHeading;
+    elements.connectionDetail.textContent = copy.pairCodeHint;
+  } else {
+    elements.connectionTitle.textContent = t('notRunning');
+    elements.connectionDetail.textContent = t('notRunningDetail');
+  }
   elements.connectionDot.dataset.state = 'offline';
   elements.composer.hidden = true;
   elements.practiceCard.hidden = true;

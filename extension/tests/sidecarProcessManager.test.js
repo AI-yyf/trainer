@@ -505,6 +505,137 @@ test('SidecarProcessManager keeps an unresponsive live child instead of starting
   }
 });
 
+/** A live child whose port never answers, with stop/start recorded in order. */
+function createWedgedChildFixture(tempRoot, { answersOnProbe = () => false } = {}) {
+  const manager = createManagerFixture({
+    workspaceFolder: path.join(tempRoot, 'workspace'),
+    extensionPath: path.join(tempRoot, 'extension'),
+  });
+  manager.status = {
+    lifecycle: 'ready',
+    host: '127.0.0.1',
+    port: 34891,
+    pid: 101,
+    canStart: true,
+  };
+  manager.process = { exitCode: null, pid: 101 };
+  let probes = 0;
+  manager.client = {
+    async probeHealth() {
+      probes += 1;
+      return answersOnProbe(probes);
+    },
+  };
+  const events = [];
+  manager.stop = async () => {
+    events.push('stop');
+    manager.process = undefined;
+    manager.status = { ...manager.status, lifecycle: 'stopped' };
+  };
+  manager.start = async () => {
+    events.push('start');
+    manager.process = { exitCode: null, pid: 102 };
+    manager.status = {
+      lifecycle: 'ready',
+      host: '127.0.0.1',
+      port: 34892,
+      pid: 102,
+      canStart: true,
+    };
+    return manager.status;
+  };
+  // Every command re-probes once the cached status is older than the TTL.
+  const probe = () => {
+    manager.status = {
+      ...manager.status,
+      lastHealthcheckAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    return manager.ensureRunning();
+  };
+  return { manager, events, probe };
+}
+
+test('SidecarProcessManager restarts a live child that keeps missing health probes', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-sidecar-wedged-'));
+  try {
+    const { manager, events, probe } = createWedgedChildFixture(tempRoot);
+
+    // A busy sidecar may miss a few probes: it is neither stopped nor replaced.
+    for (let miss = 1; miss <= 3; miss += 1) {
+      const status = await probe();
+      assert.equal(status.lifecycle, 'ready', `miss ${miss} should stay routable`);
+      assert.equal(status.port, 34891);
+    }
+    assert.deepEqual(events, []);
+
+    // The next miss means the child is wedged: it stops first, and only once
+    // it has exited does the replacement start (one writer per data folder).
+    const restarted = await probe();
+    assert.deepEqual(events, ['stop', 'start']);
+    assert.equal(restarted.lifecycle, 'ready');
+    assert.equal(restarted.port, 34892);
+    assert.equal(manager.status.pid, 102);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('SidecarProcessManager resets the missed-probe streak once the child answers', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-sidecar-streak-'));
+  try {
+    // Three misses, one answer, then misses again: the restart counts from the
+    // last answered probe, not from the first miss ever seen.
+    const { events, probe } = createWedgedChildFixture(tempRoot, {
+      answersOnProbe: (probeNumber) => probeNumber === 4,
+    });
+
+    for (let round = 0; round < 3; round += 1) {
+      await probe();
+    }
+    assert.deepEqual(events, []);
+    assert.equal((await probe()).lifecycle, 'ready');
+    for (let round = 0; round < 3; round += 1) {
+      const status = await probe();
+      assert.equal(status.lifecycle, 'ready');
+    }
+    assert.deepEqual(events, [], 'three misses after an answered probe are still tolerated');
+
+    await probe();
+    assert.deepEqual(events, ['stop', 'start']);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('SidecarProcessManager never replaces a wedged child it could not stop', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-sidecar-wedged-stuck-'));
+  try {
+    const { manager, probe } = createWedgedChildFixture(tempRoot);
+    let startCalls = 0;
+    const wedged = manager.process;
+    manager.stop = async () => {
+      throw new Error('Sidecar did not stop before the workspace data operation timed out.');
+    };
+    manager.start = async () => {
+      startCalls += 1;
+      return manager.status;
+    };
+
+    for (let round = 0; round < 3; round += 1) {
+      await probe();
+    }
+    await assert.rejects(
+      () => probe(),
+      /did not stop/,
+      'a child that is still alive must not get a second writer next to it',
+    );
+    assert.equal(startCalls, 0);
+    assert.equal(manager.process, wedged);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('SidecarProcessManager serializes concurrent health failures without replacing the live child', async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trainer-sidecar-health-concurrent-'));
   try {

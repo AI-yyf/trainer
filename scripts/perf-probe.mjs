@@ -211,9 +211,10 @@ async function navLatency(page, target) {
   return Date.now() - started;
 }
 
-// Training/progress have no primary-nav button (three-destination IA); visit
-// them the way the product does from Learning, via host view restore.
-async function visitViaHost(page, view) {
+// The learning routes (plan/training/progress) are aliases: each lands on Chat
+// with the learning drawer open on its section. Visiting one is a restore plus
+// a drawer open, and the drawer is what gets measured.
+async function visitLearningViaHost(page, view) {
   const started = Date.now();
   await page.evaluate((target) => {
     window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__({
@@ -222,14 +223,26 @@ async function visitViaHost(page, view) {
     });
   }, view);
   await page.waitForFunction(
-    (target) => {
-      const surface = document.querySelector(`div[data-surface="${target}"]`);
-      return Boolean(surface) && !surface.hidden;
+    () => {
+      const drawer = document.querySelector('[data-template="LearningDrawer"]');
+      return Boolean(drawer) && drawer.getClientRects().length > 0;
     },
-    view,
+    undefined,
     { timeout: 10_000 },
   );
-  return Date.now() - started;
+  const elapsed = Date.now() - started;
+  // The drawer floats over the conversation; close it so the next navigation
+  // starts from the same place this one did.
+  await page.locator(".learning-drawer-panel .app-shell-overlay__close").click();
+  await page.waitForFunction(
+    () => {
+      const drawer = document.querySelector('[data-template="LearningDrawer"]');
+      return !drawer || drawer.getClientRects().length === 0;
+    },
+    undefined,
+    { timeout: 10_000 },
+  );
+  return elapsed;
 }
 
 async function runStreamBurst(page, { navDuringStreamAt }) {
@@ -318,21 +331,21 @@ function percentile(samples, ratio) {
 
     // ---- 1. Long-session navigation latency (cold first visits vs warm) ----
     const cold = {};
-    const warmSamples = { resources: [], training: [], settings: [] };
+    const warmSamples = { resources: [], learningDrawer: [], settings: [] };
     {
       const page = await openProbePage(browser, baseUrl);
       for (const target of ["resources", "settings"]) {
         cold[target] = await navLatency(page, target);
         await navLatency(page, "coach");
       }
-      cold.training = await visitViaHost(page, "training");
+      cold.learningDrawer = await visitLearningViaHost(page, "training");
       await navLatency(page, "coach");
       for (let round = 0; round < NAV_SAMPLE_ROUNDS; round++) {
         for (const target of ["resources", "settings"]) {
           warmSamples[target].push(await navLatency(page, target));
           await navLatency(page, "coach");
         }
-        warmSamples.training.push(await visitViaHost(page, "training"));
+        warmSamples.learningDrawer.push(await visitLearningViaHost(page, "training"));
         await navLatency(page, "coach");
       }
       await page.close();
@@ -348,7 +361,7 @@ function percentile(samples, ratio) {
       await navLatency(pageAll, target);
       await navLatency(pageAll, "coach");
     }
-    await visitViaHost(pageAll, "training");
+    await visitLearningViaHost(pageAll, "training");
     await navLatency(pageAll, "coach");
     const allVisited = await runStreamBurst(pageAll, { navDuringStreamAt: 150 });
     await pageAll.close();

@@ -341,10 +341,11 @@ test('the capture commands are declared in the manifest and registered by the co
   const { COMMAND_IDS } = require(constantsModulePath);
   const manifest = JSON.parse(fs.readFileSync(extensionPackageJsonPath, 'utf8'));
   const declared = manifest.contributes.commands.map((entry) => entry.command);
-  // Zero-code onboarding: the pairing-code command is no longer surfaced in
-  // the palette, but the handler stays registered for internal compatibility.
+  // A browser extension pairs by itself, but only after the learner entered a
+  // pairing code once — so the code has to be reachable from the palette.
   const declaredCommands = [
     COMMAND_IDS.browserCaptureInstall,
+    COMMAND_IDS.browserCapturePairingCode,
     COMMAND_IDS.browserCaptureRevokePairing,
   ];
   const registeredCommands = [
@@ -355,6 +356,7 @@ test('the capture commands are declared in the manifest and registered by the co
 
   assert.deepEqual(declaredCommands, [
     'trainer.browserCapture.install',
+    'trainer.browserCapture.pairingCode',
     'trainer.browserCapture.revokePairing',
   ]);
   for (const commandId of declaredCommands) {
@@ -362,8 +364,8 @@ test('the capture commands are declared in the manifest and registered by the co
   }
   assert.equal(
     declared.includes(COMMAND_IDS.browserCapturePairingCode),
-    false,
-    'the pairing-code command must not appear in the command palette',
+    true,
+    'the pairing-code command is how a learner authorises a new browser extension',
   );
 
   const registeredCommandIds = [];

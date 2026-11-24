@@ -144,6 +144,15 @@ input[type="text"]::placeholder { color: var(--muted); }
 input[type="text"]:focus, select:focus { outline: 2px solid var(--fg); outline-offset: -2px; }
 input[aria-invalid="true"] { outline-color: var(--danger); }
 
+/* The one-time pairing code reads as six digits, not as a word. */
+.pair-code {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.38em;
+  text-indent: 0.38em;
+  text-align: center;
+}
+
 
 /* --------------------------------------------------------------- buttons */
 

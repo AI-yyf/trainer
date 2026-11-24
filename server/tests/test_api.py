@@ -996,6 +996,9 @@ def test_session_and_plan_flow(tmp_path: Path) -> None:
                 "plan_id": plan_id,
                 "frozen": True,
                 "weekly_cadence": "8 hours per week",
+                "expected_revision": client.app.state.runtime.repository.get_plan_revision(
+                    "workspace-1", plan_id
+                ),
             },
         )
         assert update_response.status_code == 200
@@ -9718,6 +9721,9 @@ def test_plan_update_returns_coach_turn_and_suggested_actions(tmp_path: Path) ->
                 "instructions": "Tighten the current stage around implementation before expansion.",
                 "weekly_cadence": "6 hours per week",
                 "frozen": True,
+                "expected_revision": client.app.state.runtime.repository.get_plan_revision(
+                    "workspace-plan-update", plan_id
+                ),
             },
         )
 
@@ -11504,6 +11510,32 @@ def test_attest_rejects_workspace_session_mismatch(tmp_path: Path) -> None:
         )
         assert response.status_code == 409, response.text
         assert response.json()["detail"]["code"] == "workspace_session_mismatch"
+
+
+def test_attest_requires_a_real_boolean_verdict(tmp_path: Path) -> None:
+    """`"false"` is a string, not a verdict: evidence honesty starts at the type."""
+    with build_client(tmp_path) as client:
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": "workspace-attest-bool", "workspace_name": "Attest Bool"},
+        )
+        assert started.status_code == 200, started.text
+        session_id = started.json()["session_id"]
+
+        for value in ("false", "true", 1, 0, None, [True]):
+            response = client.post(
+                "/training/verification/attest",
+                json={
+                    "session_id": session_id,
+                    "workspace_id": "workspace-attest-bool",
+                    "card_id": "card-1",
+                    "evidence_source": "test_runner",
+                    "passed": value,
+                    "tests_output": "1 passed",
+                },
+            )
+            assert response.status_code == 422, (value, response.text)
+            assert response.json()["detail"]["code"] == "passed_must_be_boolean"
 
 
 def test_attest_refuses_unresolvable_workspace_binding(tmp_path: Path) -> None:

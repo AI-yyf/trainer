@@ -359,3 +359,87 @@ def test_explicit_verify_phase_records_fsrs_again_on_failure(tmp_path: Path) -> 
             if isinstance(item, dict)
         }
         assert "auth expiry" in concepts
+
+
+def test_recall_attaches_to_focus_area_mastery_when_the_skill_has_no_record(tmp_path: Path) -> None:
+    """A card's evidence is labelled with its target skill and its focus area.
+
+    Mastery recorded under the focus area used to be skipped, so the recall
+    round never landed as an FSRS mastery row (a real-model journey stayed on
+    the heuristic schedule).
+    """
+    workspace_id = "ws-recall-focus-area"
+    card_id = "card-recall-focus-area"
+    app = create_app(_settings(tmp_path))
+    with TestClient(app) as client:
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Recall focus"},
+        )
+        assert started.status_code == 200
+
+        runtime = app.state.runtime
+        card = TrainingCardCandidateSnapshot(
+            card_id=card_id,
+            card_type="flash",
+            title="Recall the clip objective",
+            status="active",
+            focus_area="PPO clip objective",
+            target_skill="explain the clip objective",
+        )
+        runtime.memory_service.upsert_card(workspace_id, card)
+        structured = runtime.memory_service._structured_for(workspace_id)
+        structured.update_mastery("PPO clip objective", delta=0.2)
+
+        result = runtime.memory_service.schedule_training_card_recall(
+            workspace_id,
+            training_card_id=card_id,
+            passed=False,
+            rating="again",
+        )
+
+        assert result is not None
+        assert result["mastery_concept"] == "PPO clip objective"
+        attached = structured._mastery["PPO clip objective"]
+        assert attached.review_source == "fsrs"
+        assert attached.fsrs_reps >= 1
+        # Never mint: the skill still has no record of its own.
+        assert "explain the clip objective" not in structured._mastery
+
+
+def test_recall_never_mints_a_mastery_record_when_neither_concept_exists(tmp_path: Path) -> None:
+    workspace_id = "ws-recall-no-mastery"
+    card_id = "card-recall-no-mastery"
+    app = create_app(_settings(tmp_path))
+    with TestClient(app) as client:
+        started = client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Recall no mastery"},
+        )
+        assert started.status_code == 200
+
+        runtime = app.state.runtime
+        runtime.memory_service.upsert_card(
+            workspace_id,
+            TrainingCardCandidateSnapshot(
+                card_id=card_id,
+                card_type="flash",
+                title="Unrecorded skill",
+                status="active",
+                focus_area="Unrecorded area",
+                target_skill="unrecorded skill",
+            ),
+        )
+        structured = runtime.memory_service._structured_for(workspace_id)
+
+        result = runtime.memory_service.schedule_training_card_recall(
+            workspace_id,
+            training_card_id=card_id,
+            passed=False,
+            rating="again",
+        )
+
+        assert result is not None
+        assert result["mastery_concept"] is None
+        assert result["mastery_review_at"] is None
+        assert structured._mastery == {}

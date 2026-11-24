@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 import type { CommandContext } from '../core/commandContext';
 import { SIDECAR_DEFAULTS } from '../core/constants';
-import { SidecarHttpError, SidecarRequestAbortedError, type SSEMessage } from '../core/httpClient';
+import { SidecarRequestAbortedError, type SSEMessage } from '../core/httpClient';
 import { recordSendFirstTokenMs } from '../core/runtimeMetrics';
 import { trainerSessionBlockReason } from '../core/runtimeRehydration';
 import {
@@ -825,12 +825,42 @@ function userFacingErrorText(error: unknown, language?: string): string {
   return sanitizeErrorSurfaceText(normalizeErrorText(error), language);
 }
 
-/** Stable marker webview maps to local 8-lang live-plan gate copy (never raw sidecar prose). */
-function livePlanTaskGateCommandFailure(error: unknown): CommandExecutionResult | undefined {
-  if (!(error instanceof SidecarHttpError) || error.statusCode !== 409) {
+interface SidecarFailureShape {
+  statusCode: number;
+  metadata: Record<string, unknown>;
+  message: string;
+}
+
+/**
+ * Read a sidecar HTTP failure structurally rather than with instanceof: the
+ * extension ships one httpClient copy, but tests and bundled host variants can
+ * load a second copy, and the status/detail are what the caller acts on.
+ */
+function sidecarFailureShape(error: unknown): SidecarFailureShape | undefined {
+  if (!error || typeof error !== 'object') {
     return undefined;
   }
-  const detail = `${error.metadata.detail ?? ''} ${error.message}`.toLowerCase();
+  const candidate = error as { statusCode?: unknown; metadata?: unknown; message?: unknown };
+  if (typeof candidate.statusCode !== 'number') {
+    return undefined;
+  }
+  return {
+    statusCode: candidate.statusCode,
+    metadata:
+      candidate.metadata && typeof candidate.metadata === 'object'
+        ? (candidate.metadata as Record<string, unknown>)
+        : {},
+    message: typeof candidate.message === 'string' ? candidate.message : '',
+  };
+}
+
+/** Stable marker webview maps to local 8-lang live-plan gate copy (never raw sidecar prose). */
+function livePlanTaskGateCommandFailure(error: unknown): CommandExecutionResult | undefined {
+  const failure = sidecarFailureShape(error);
+  if (!failure || failure.statusCode !== 409) {
+    return undefined;
+  }
+  const detail = `${failure.metadata.detail ?? ''} ${failure.message}`.toLowerCase();
   // Only live-plan leftover/no-live gates — not frozen-plan or other 409 conflicts.
   if (!/leftover-not-live|no live learning plan/.test(detail)) {
     return undefined;
@@ -2900,7 +2930,7 @@ export async function updatePlanCommand(
       restorePlanHistoryVersion,
     };
     restorePayload.formal_plan_mutation = true;
-    if (revision !== undefined && revision > 0) {
+    if (typeof revision === 'number' && Number.isInteger(revision) && revision >= 0) {
       restorePayload.expected_revision = revision;
     }
     const restoreResult = await runPlanCommand(
@@ -2936,7 +2966,7 @@ export async function updatePlanCommand(
     // a missing expected_revision must fail loudly, never silently overwrite.
     formal_plan_mutation: true,
   };
-  if (revision !== undefined && revision > 0) {
+  if (typeof revision === 'number' && Number.isInteger(revision) && revision >= 0) {
     planPayload.expected_revision = revision;
   }
   const result = await runPlanCommand(
@@ -3500,18 +3530,19 @@ export async function restartSessionCommand(
 
 /** §十九: plan_revision_conflict 409 → honest 8-language conflict message. */
 function planRevisionConflictResult(error: unknown): CommandExecutionResult | undefined {
-  if (!(error instanceof SidecarHttpError) || error.statusCode !== 409) {
+  const failure = sidecarFailureShape(error);
+  if (!failure || failure.statusCode !== 409) {
     return undefined;
   }
-  const detail = `${error.metadata?.detail ?? ''} ${error.message ?? ''}`;
+  const detail = `${failure.metadata.detail ?? ''} ${failure.message}`;
   if (!detail.includes('plan_revision_conflict') && !detail.includes('expected_revision')) {
     return undefined;
   }
   let currentRevision: number | undefined;
   try {
-    const parsed = typeof error.metadata?.detail === 'string'
-      ? JSON.parse(error.metadata.detail)
-      : error.metadata?.detail;
+    const parsed = typeof failure.metadata.detail === 'string'
+      ? JSON.parse(failure.metadata.detail)
+      : failure.metadata.detail;
     if (parsed && typeof parsed === 'object' && 'current_revision' in parsed) {
       currentRevision = Number((parsed as Record<string, unknown>).current_revision) || undefined;
     }
@@ -3562,6 +3593,12 @@ async function runPlanCommand(
     const gateFailure = livePlanTaskGateCommandFailure(error);
     if (gateFailure) {
       return gateFailure;
+    }
+    // A losing window must see the localized conflict marker, not a bare
+    // HTTP 409: the webview turns it into "re-read and re-apply" copy.
+    const revisionConflict = planRevisionConflictResult(error);
+    if (revisionConflict) {
+      return revisionConflict;
     }
     return { ok: false, message: userFacingErrorText(error) };
   }

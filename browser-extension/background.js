@@ -562,9 +562,10 @@ async function runCapture(target, options) {
 
   if (response.unauthorized) {
     // The sidecar may have been reset or re-paired while this browser kept the
-    // old credential. Drop it so the next flush auto-pairs again, and keep the
-    // capture instead of losing it to a stale token.
-    await TrainerCapture.clearAuth();
+    // old credential. Drop it (keep the base URL so discovery retries that
+    // same Trainer window first) and keep the capture instead of losing it to
+    // a stale token.
+    await TrainerCapture.clearStaleCredential();
     resetAutoPairCache();
   }
 
@@ -755,9 +756,10 @@ async function flushQueueLocked(options) {
         continue;
       }
       await TrainerCapture.saveNotice(response.message || copy.errUnauthorized);
-      // A stale credential must not wedge the queue: clear it so the next
-      // flush auto-pairs again, and keep the item for that retry.
-      await TrainerCapture.clearAuth();
+      // A stale credential must not wedge the queue: drop it (keep the base
+      // URL so the next flush pairs with the same Trainer window again) and
+      // keep the item for that retry.
+      await TrainerCapture.clearStaleCredential();
       resetAutoPairCache();
       await recordConnection('offline');
       queue = TrainerCapture.markQueueAttempt(queue, item.clientCaptureId, response.message);
@@ -904,6 +906,26 @@ async function flushQueueLocked(options) {
 let autoPairPromise = null;
 let lastAutoPairAt = 0;
 let lastAutoPairResult = null;
+// The sidecar that last answered "pair this extension first", if any.
+let lastPairingNeededUrl = '';
+/** The sidecar that asked for the code survives worker restarts in storage. */
+async function loadPairingNeededUrl() {
+  if (lastPairingNeededUrl) {
+    return lastPairingNeededUrl;
+  }
+  const stored = await chrome.storage.local.get({
+    [TrainerCapture.STORAGE_KEYS.pairingNeededUrl]: ''
+  });
+  lastPairingNeededUrl = String(stored[TrainerCapture.STORAGE_KEYS.pairingNeededUrl] || '');
+  return lastPairingNeededUrl;
+}
+
+async function rememberPairingNeededUrl(baseUrl) {
+  lastPairingNeededUrl = String(baseUrl || '');
+  await chrome.storage.local.set({
+    [TrainerCapture.STORAGE_KEYS.pairingNeededUrl]: lastPairingNeededUrl
+  });
+}
 
 function resetAutoPairCache() {
   lastAutoPairAt = 0;
@@ -912,9 +934,11 @@ function resetAutoPairCache() {
 
 /**
  * Zero-code connection: discover the loopback sidecar and let it mint a
- * workspace-bound credential. The popup never asks for a pair code, port or
- * token. A failed probe is cached for a few seconds so opening the popup does
- * not rescan the whole managed port range twice.
+ * workspace-bound credential. The popup asks for a pair code only when the
+ * sidecar answers that it has not authorised this extension yet — once per
+ * browser, after which the extension reconnects on its own; it never asks for
+ * a port or token. A failed probe is cached for a few seconds so opening the
+ * popup does not rescan the whole managed port range twice.
  */
 async function ensureAutoPair(options) {
   const force = Boolean(options && options.force);
@@ -923,7 +947,17 @@ async function ensureAutoPair(options) {
   }
   const now = Date.now();
   if (!force && lastAutoPairResult && now - lastAutoPairAt < 5000) {
-    return lastAutoPairResult;
+    // A cached success is only valid while its credential is still stored: a
+    // revoke or a stale-token clear can land between two popup polls.
+    const cachedAuth = lastAutoPairResult.ok ? lastAutoPairResult.auth : null;
+    if (!cachedAuth) {
+      return lastAutoPairResult;
+    }
+    const cachedStored = await TrainerCapture.loadAuth();
+    if (cachedStored.credential && cachedStored.baseUrl === cachedAuth.baseUrl) {
+      return lastAutoPairResult;
+    }
+    resetAutoPairCache();
   }
   autoPairPromise = (async () => {
     const existing = await TrainerCapture.loadAuth();
@@ -931,7 +965,19 @@ async function ensureAutoPair(options) {
       [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
     });
     if (!force && disabled[TrainerCapture.STORAGE_KEYS.autoPairDisabled]) {
-      return { ok: false, disabled: true };
+      // Zero-code pairing is off (an explicit revoke set this), but the learner
+      // may still pair with a code. Probe without minting so the popup can
+      // offer the code form instead of a dead "offline" card.
+      const discovered = await TrainerCapture.discoverSidecar({
+        storedBaseUrl: existing.baseUrl
+      });
+      const needsPairing = Boolean(existing.baseUrl || discovered.found);
+      return {
+        ok: false,
+        disabled: true,
+        needsPairing,
+        pairingBaseUrl: existing.baseUrl || discovered.baseUrl || ''
+      };
     }
     // The fast path keeps popup polls and periodic flushes cheap. A forced
     // call (user capture / selection) re-checks the focused window so a
@@ -939,7 +985,9 @@ async function ensureAutoPair(options) {
     if (existing.credential && existing.baseUrl && !force) {
       return { ok: true, auth: existing };
     }
-    const discovered = await TrainerCapture.discoverSidecar({});
+    const discovered = await TrainerCapture.discoverSidecar({
+      storedBaseUrl: existing.baseUrl || lastPairingNeededUrl
+    });
     const discoveredUrls = discovered.baseUrls || [];
     let ranked = [];
     // Several VS Code windows can be open at once. Prefer the sidecar whose
@@ -976,8 +1024,18 @@ async function ensureAutoPair(options) {
         return { ok: true, auth: existing };
       }
     } else if (ranked.length) {
-      candidateUrls = ranked.map((candidate) => candidate.baseUrl);
+      // A remembered base URL that the candidate probe refused (it answers
+      // 403 until this extension is paired) is still the window this browser
+      // last used: try it before the ranked strangers.
+      const rankedUrls = ranked.map((candidate) => candidate.baseUrl);
+      candidateUrls = [
+        ...(existing.baseUrl && !rankedUrls.includes(existing.baseUrl)
+          ? [existing.baseUrl]
+          : []),
+        ...rankedUrls,
+      ];
     }
+    let pairingNeededUrl = '';
     for (const baseUrl of candidateUrls) {
       const paired = await TrainerCapture.autoPairSidecar(baseUrl);
       if (paired.ok) {
@@ -993,16 +1051,32 @@ async function ensureAutoPair(options) {
           [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
         });
         await recordConnection('ok');
+        pairingNeededUrl = '';
         return {
           ok: true,
           auth: { ...saved, workspaceName: paired.workspaceName }
         };
+      }
+      if (paired.needsPairing) {
+        // Trainer is running and is waiting for the learner to authorise this
+        // extension with a pairing code once; remember where, so the code the
+        // learner pastes is redeemed against the window that asked for it.
+        pairingNeededUrl = pairingNeededUrl || baseUrl;
       }
     }
     if (existing.credential && existing.baseUrl) {
       return { ok: true, auth: existing };
     }
     await recordConnection('offline');
+    if (pairingNeededUrl) {
+      await rememberPairingNeededUrl(pairingNeededUrl);
+      return {
+        ok: false,
+        needsPairing: true,
+        pairingBaseUrl: pairingNeededUrl,
+        message: dict().pairCodeHint
+      };
+    }
     return { ok: false, message: dict().autoPairFailed };
   })()
     .then((result) => {
@@ -1016,10 +1090,68 @@ async function ensureAutoPair(options) {
   return autoPairPromise;
 }
 
+/**
+ * One-time authorisation: the learner pastes the pairing code Trainer shows,
+ * this extension redeems it, and the sidecar remembers this extension's origin
+ * so every later connection is zero-code.
+ */
+async function pairWithCode(rawCode) {
+  if (!TrainerCapture.isValidPairCode(rawCode)) {
+    return { ok: false, reason: 'invalid_code', message: dict().pairInvalidCode };
+  }
+  const auth = await TrainerCapture.loadAuth();
+  // A service worker is torn down whenever it goes idle, so the sidecar that
+  // asked for the code is read back from storage. Without it the code went to
+  // whichever loopback listener answered the probe first — on a shared machine
+  // that can be an impostor that redeems the real code at the real sidecar.
+  const askedForTheCode = await loadPairingNeededUrl();
+  const discovered = await TrainerCapture.discoverSidecar({
+    storedBaseUrl: askedForTheCode || auth.baseUrl
+  });
+  // The sidecar that asked for the code comes first: a code is registered
+  // with one Trainer window, and another window answers "unknown code".
+  const candidateUrls = [
+    ...new Set([
+      askedForTheCode,
+      auth.baseUrl,
+      ...(Array.isArray(discovered.baseUrls) ? discovered.baseUrls : []),
+      discovered.baseUrl
+    ].filter(Boolean))
+  ];
+  for (const baseUrl of candidateUrls) {
+    const paired = await TrainerCapture.pairSidecar(baseUrl, rawCode);
+    if (paired.ok) {
+      const saved = await TrainerCapture.saveAuth(
+        paired.baseUrl,
+        paired.credential,
+        paired.workspaceId,
+        Date.now()
+      );
+      if (paired.workspaceName) {
+        await TrainerCapture.saveWorkspaceName(paired.workspaceName);
+      }
+      await TrainerCapture.saveStatusCache(null);
+      await chrome.storage.local.set({
+        [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
+      });
+      await recordConnection('ok');
+      await rememberPairingNeededUrl('');
+      resetAutoPairCache();
+      return { ok: true, auth: saved, workspaceName: paired.workspaceName || '' };
+    }
+    if (paired.reason === 'rejected' && paired.status !== 404) {
+      // Expired, locked out or malformed: no other window will take it either.
+      return { ok: false, reason: 'rejected', message: paired.message };
+    }
+  }
+  return { ok: false, reason: 'rejected', message: dict().pairCodeRejected };
+}
+
 async function buildState() {
   let auth = await TrainerCapture.loadAuth();
+  let auto = null;
   if (!auth.credential || !auth.baseUrl) {
-    const auto = await ensureAutoPair();
+    auto = await ensureAutoPair();
     if (auto.ok) {
       auth = auto.auth;
     }
@@ -1043,8 +1175,12 @@ async function buildState() {
     disabledState[TrainerCapture.STORAGE_KEYS.autoPairDisabled]
   );
   const paired = Boolean(auth.credential && auth.baseUrl);
+  // Trainer is running but has not authorised this extension yet: the popup
+  // offers the one-time pairing code instead of a bare "not running".
+  const needsPairing = Boolean(auto && auto.needsPairing && !paired);
   return {
     paired,
+    needsPairing,
     autoPairDisabled,
     // 'connected' is only asserted from an actual sidecar answer.
     connected: paired && connection === 'ok',
@@ -1362,7 +1498,17 @@ const MESSAGE_HANDLERS = {
     lastAutoPairAt = 0;
     lastAutoPairResult = null;
     const result = await ensureAutoPair({ force: true });
-    return { ok: result.ok, message: result.message || '', state: await buildState() };
+    return { ok: result.ok, needsPairing: result.needsPairing === true, message: result.message || '', state: await buildState() };
+  },
+  // The learner pasted the one-time pairing code Trainer shows in VS Code.
+  'trainer:pair-with-code': async (message) => {
+    const result = await pairWithCode(message && message.code);
+    return {
+      ok: result.ok,
+      reason: result.reason || '',
+      message: result.message || '',
+      state: await buildState()
+    };
   },
   'trainer:refresh': async () => ({ ok: true, state: await refreshState() }),
   'trainer:send-tab-context': async (message) => {

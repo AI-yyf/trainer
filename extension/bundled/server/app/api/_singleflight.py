@@ -11,6 +11,30 @@ import asyncio
 from threading import Lock
 from typing import Literal
 
+# The replay window exists for a prompt client resend (transport timeout, lost
+# response) and for restoring the last response after a reload. It used to be
+# unbounded: every completed turn kept a full WorkbenchSnapshot — including the
+# whole conversation — for the life of the sidecar, so memory grew with the
+# square of a long session. Keys beyond the bound execute again on a resend,
+# exactly as they already do after a sidecar restart.
+COMPLETED_REQUEST_REPLAY_LIMIT = 64
+
+
+def remember_completed_request(
+    completed: dict[tuple[str, str, str], dict[str, object]],
+    request_key: tuple[str, str, str],
+    payload: dict[str, object],
+    *,
+    guard: Lock,
+    limit: int = COMPLETED_REQUEST_REPLAY_LIMIT,
+) -> None:
+    """Store one completed response for replay, newest last, bounded."""
+    with guard:
+        completed.pop(request_key, None)
+        completed[request_key] = payload
+        while len(completed) > max(1, limit):
+            completed.pop(next(iter(completed)), None)
+
 
 def claim_session_request_singleflight(
     request_key: tuple[str, str, str],
@@ -44,7 +68,10 @@ def publish_session_request_singleflight(
 ) -> dict[str, object]:
     """Store completed payload and release any same-request_id waiters."""
     with guard:
+        completed.pop(request_key, None)
         completed[request_key] = payload
+        while len(completed) > COMPLETED_REQUEST_REPLAY_LIMIT:
+            completed.pop(next(iter(completed)), None)
         future = inflight.pop(request_key, None)
     if future is not None and not future.done():
         future.set_result(payload)

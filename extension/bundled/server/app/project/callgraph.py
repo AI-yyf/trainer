@@ -25,6 +25,8 @@ from typing import Any
 
 from app.project.symbols import SOURCE_SUFFIXES, RepoIndex, SymbolLocation
 
+from ..core.process_env import child_process_environment
+
 MAX_CALL_EDGES = 4000
 MAX_AFFECTED_CALLERS = 60
 MAX_DIFF_FILES = 500
@@ -254,6 +256,7 @@ def _git(args: list[str], cwd: Path) -> str:
             text=True,
             timeout=30,
             check=False,
+            env=child_process_environment(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return ""

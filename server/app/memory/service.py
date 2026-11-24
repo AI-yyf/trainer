@@ -1475,6 +1475,12 @@ class MemoryService(
         self._event_ledger = event_ledger
         self._asset_library = AssetLibraryService(repository)
         self._structured_by_workspace: dict[str, StructuredMemoryService] = {}
+        # The revision this process loaded, and the payload it loaded it from.
+        # They let a write tell "the stored record changed under me" from
+        # "nothing else touched it", so two sidecars on one LibraryRoot do not
+        # erase each other's keys.
+        self._structured_revisions: dict[str, int] = {}
+        self._structured_baselines: dict[str, dict[str, Any]] = {}
         self._default_structured = structured
         self._review_scheduler = ReviewScheduler()
         self._resource_dedupe_hook: Callable[[list[ResourceRecord]], list[ResourceRecord]] | None = None
@@ -1911,9 +1917,19 @@ class MemoryService(
         if self._default_structured is not None and not self._structured_by_workspace:
             structured = self._default_structured
             self._default_structured = None
+            self._structured_baselines[workspace_id] = structured.export_state()
         else:
-            payload = self.repository.load_structured_memory(workspace_id)
+            entry = self.repository.load_structured_memory_entry(workspace_id)
+            payload, revision = entry if entry is not None else (None, 0)
             structured = StructuredMemoryService.from_state(payload)
+            self._structured_revisions[workspace_id] = revision
+            # The baseline is the raw row, not the normalized export: fields
+            # ``from_state`` repairs while loading (for example a stripped
+            # verification artifact restored from trusted persistence) must
+            # count as this process's changes and survive the next merge.
+            self._structured_baselines[workspace_id] = (
+                payload if payload is not None else structured.export_state()
+            )
         self._structured_by_workspace[workspace_id] = structured
         return structured
 
@@ -1921,7 +1937,30 @@ class MemoryService(
         self._persist_generation += 1
         workspace_id = self._canonical_workspace_id(workspace_id)
         structured = self._structured_for(workspace_id)
-        self.repository.save_structured_memory(workspace_id, structured.export_state())
+        state = structured.export_state()
+        expected_revision = self._structured_revisions.get(workspace_id)
+        revision, stored = self.repository.save_structured_memory(
+            workspace_id,
+            state,
+            expected_revision=expected_revision,
+            base_payload=self._structured_baselines.get(workspace_id),
+        )
+        if expected_revision is not None and revision != expected_revision + 1:
+            # Another sidecar wrote this workspace since our last write; only
+            # the parts of our state that changed were applied over its copy.
+            logger.warning(
+                "Structured memory for %s advanced from revision %s to %s while "
+                "another sidecar was writing; merged our changes into it.",
+                workspace_id,
+                expected_revision,
+                revision,
+            )
+        self._structured_revisions[workspace_id] = revision
+        # The baseline is what *this* process last exported, not what was
+        # stored: the cache still lacks the other sidecar's additions, so the
+        # next write must keep merging instead of reading those additions as
+        # deletions. See TrainerRepository._merge_structured_state.
+        self._structured_baselines[workspace_id] = state
 
     def list_memory_share_grants(self, target_workspace_id: str) -> list[MemoryShareGrant]:
         return self.repository.list_memory_share_grants(target_workspace_id)
@@ -4154,17 +4193,33 @@ class MemoryService(
             ),
         )
         scheduled_mastery = None
+        scheduled_concept = ""
         if result.next_due is not None:
-            scheduled_mastery = structured.schedule_mastery_review(
+            # A card's evidence is labelled with its target skill AND its focus
+            # area, and mastery may have been recorded under either. Attach the
+            # schedule to the first of them that already has a record — never
+            # mint one. Trying only the target skill left every card whose
+            # mastery lived under its focus area on the heuristic schedule,
+            # so its recall round never landed as an FSRS row.
+            for candidate in (
                 concept,
-                next_review_at=result.next_due,
-                due_date=result.next_due,
-                fsrs_state=updated_state.state,
-                stability=result.new_stability,
-                difficulty=result.new_difficulty,
-                reps=result.reps,
-                lapses=result.lapses,
-            )
+                str(getattr(card, "focus_area", "") or "").strip(),
+            ):
+                if not candidate:
+                    continue
+                scheduled_mastery = structured.schedule_mastery_review(
+                    candidate,
+                    next_review_at=result.next_due,
+                    due_date=result.next_due,
+                    fsrs_state=updated_state.state,
+                    stability=result.new_stability,
+                    difficulty=result.new_difficulty,
+                    reps=result.reps,
+                    lapses=result.lapses,
+                )
+                if scheduled_mastery is not None:
+                    scheduled_concept = candidate
+                    break
         self._persist_structured(workspace_id)
         if result.next_due is not None and self._event_ledger is not None:
             due_at = result.next_due.isoformat()
@@ -4194,6 +4249,7 @@ class MemoryService(
                 if scheduled_mastery and scheduled_mastery.next_review_at
                 else None
             ),
+            "mastery_concept": scheduled_concept or None,
         }
 
     def schedule_training_card_recall(

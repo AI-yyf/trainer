@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from ...core.models import TeachingKnowledgeAsset
 from ...evidence.contract import pinned_card_resource
 from ...pedagogy.stage_material_state import stage_material_payload, stage_material_state
+from ...training.reliability import busy_marker
 from ...workspace.remote_identity import validate_remote_verification_artifact
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
@@ -204,7 +205,15 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                 detail=f"evidence_source must be one of: {', '.join(sorted(_HOST_TRUSTED_VERIFICATION_SOURCES))}.",
             )
         tests_output = str(payload.get("tests_output") or payload.get("testsOutput") or "").strip()
-        passed = bool(payload.get("passed"))
+        # Evidence honesty: only a JSON boolean certifies a verdict. A truthy
+        # string such as "false" must never be read as a pass.
+        raw_passed = payload.get("passed")
+        if not isinstance(raw_passed, bool):
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "passed_must_be_boolean", "message": "passed must be a JSON boolean."},
+            )
+        passed = raw_passed
         # A stable per-run key lets an authorized resend replay through the
         # training-reliability ledger instead of double-recording.
         idempotency_key = str(payload.get("idempotency_key") or payload.get("idempotencyKey") or "").strip()
@@ -287,6 +296,23 @@ def build_learning_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                     "message": detail_text,
                 },
             ) from exc
+
+        # Another training save held this workspace's slot for the whole
+        # bounded wait, so the attestation body never ran. Answer busy: a 200
+        # here would tell the host the evidence was delivered when it was not.
+        busy = busy_marker(updated)
+        if busy is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "training_reliability_busy",
+                    "message": (
+                        "Another training save is still running in this workspace. "
+                        "The attestation was not recorded; retry once it finishes."
+                    ),
+                    **busy,
+                },
+            )
 
         # T-0015: remote verification writes the SAME unified evidence as the
         # local evaluator — attempt binding, artifact hash, trust level — then

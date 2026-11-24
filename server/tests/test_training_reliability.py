@@ -11,6 +11,7 @@ from app.core.models import TrainingCardCandidateSnapshot
 from app.db.repository import TrainerRepository
 from app.memory.service import MemoryService
 from app.training.reliability import (
+    TRAINING_RELIABILITY_BUSY_KEY,
     begin_record,
     can_transition,
     expire_if_needed,
@@ -62,9 +63,18 @@ def test_reliability_replay_and_in_flight_coalesce() -> None:
     in_flight = mark_executing(
         begin_record(request_id="req-3", command_id="trainer.training.reflect", card_id="card-3")
     )
+    # A resend of the same request coalesces with the in-flight owner.
     assert should_coalesce(
         in_flight,
-        request_id="req-duplicate",
+        request_id="req-3",
+        command_id="trainer.training.reflect",
+        card_id="card-3",
+    )
+    # A different request for the same card is different work: it must not be
+    # swallowed as a duplicate (the caller would report a success that never ran).
+    assert not should_coalesce(
+        in_flight,
+        request_id="req-different-work",
         command_id="trainer.training.reflect",
         card_id="card-3",
     )
@@ -368,6 +378,45 @@ def test_memory_service_timeout_race_keeps_work_as_succeeded(tmp_path) -> None:
     assert record["timeout_after"] is True
 
 
+def test_control_expiry_racing_completed_work_keeps_the_success_slot(tmp_path) -> None:
+    """An expire control route landing while work() runs must not strand the
+    slot on failed after the save actually persisted: the finished work owns
+    the outcome (timeout_after=True) and the dedupe ledger keeps a retry from
+    re-running the body."""
+    service = MemoryService(TrainerRepository(tmp_path / "reliability-control-race.db"))
+    workspace_id = "workspace-reliability-control-race"
+    calls: list[str] = []
+
+    def racing_work() -> dict[str, object]:
+        time.sleep(1.1)  # outlives timeout_ms so /reliability/control can expire it
+        service.expire_training_reliability(workspace_id)
+        calls.append("ran")
+        return {"ok": True}
+
+    finished = service.run_training_reliability(
+        workspace_id,
+        request_id="req-control-timeout-race",
+        command_id="trainer.training.practiceReturn",
+        card_id="control-timeout-card",
+        timeout_ms=1_000,
+        work=racing_work,
+    )
+    record = finished["latest_training_reliability"]
+    assert record["phase"] == "acked"
+    assert record["outcome"] == "success"
+    assert record["timeout_after"] is True
+
+    replay = service.run_training_reliability(
+        workspace_id,
+        request_id="req-control-timeout-race",
+        command_id="trainer.training.practiceReturn",
+        card_id="control-timeout-card",
+        work=lambda: calls.append("rerun") or {"ok": True},
+    )
+    assert replay["latest_training_reliability"]["phase"] == "acked"
+    assert calls == ["ran"]
+
+
 def test_same_key_concurrent_requests_run_work_once(tmp_path) -> None:
     """T-0032: two same-key requests racing on the threadpool must not both
     execute work() — the second waits for the first's outcome and replays."""
@@ -428,6 +477,7 @@ def test_lock_timeout_returns_honest_busy_view_without_hanging(tmp_path, monkeyp
         return {"ok": True}
 
     results: list[dict] = []
+    busy_results: list[dict] = []
 
     def first() -> None:
         results.append(
@@ -450,7 +500,7 @@ def test_lock_timeout_returns_honest_busy_view_without_hanging(tmp_path, monkeyp
         type(service), "_RELIABILITY_LOCK_WAIT_SECONDS", 0.2, raising=False
     )
     second_thread = threading.Thread(
-        target=lambda: results.append(
+        target=lambda: busy_results.append(
             service.run_training_reliability(
                 workspace_id,
                 request_id="req-lock-timeout",
@@ -466,6 +516,57 @@ def test_lock_timeout_returns_honest_busy_view_without_hanging(tmp_path, monkeyp
     release.set()
     first_thread.join(timeout=10)
 
-    busy = results[1]
+    busy = busy_results[0]
     assert busy.get("ran") is None, "the busy view must not execute work()"
     assert "latest_training_reliability" in busy, "busy view is the current workspace"
+    marker = busy.get(TRAINING_RELIABILITY_BUSY_KEY)
+    assert isinstance(marker, dict), "a different request must be marked busy, not reported as success"
+    assert marker["busy"] is True
+    assert marker["phase"] == "executing"
+    # The busy answer names the lane and phase, never another caller's request id.
+    assert "request_id" not in marker
+    assert results[0]["latest_training_reliability"]["phase"] == "acked"
+
+
+def test_lock_timeout_for_the_same_request_coalesces_without_a_busy_marker(tmp_path, monkeypatch) -> None:
+    """A duplicate of the running save is coalesced, not rejected as busy."""
+    import threading
+
+    service = MemoryService(TrainerRepository(tmp_path / "reliability-lock-coalesce.db"))
+    workspace_id = "workspace-reliability-lock-coalesce"
+    release = threading.Event()
+    started = threading.Event()
+
+    def hung_work() -> dict[str, object]:
+        started.set()
+        release.wait(timeout=10)
+        return {"ok": True}
+
+    results: list[dict] = []
+
+    def run(request_id: str) -> None:
+        results.append(
+            service.run_training_reliability(
+                workspace_id,
+                request_id=request_id,
+                command_id="trainer.training.practiceReturn",
+                card_id="coalesce-card",
+                work=hung_work,
+            )
+        )
+
+    first_thread = threading.Thread(target=run, args=("req-coalesce",))
+    first_thread.start()
+    assert started.wait(timeout=5)
+    monkeypatch.setattr(type(service), "_RELIABILITY_LOCK_WAIT_SECONDS", 0.2, raising=False)
+    second = service.run_training_reliability(
+        workspace_id,
+        request_id="req-coalesce",
+        command_id="trainer.training.practiceReturn",
+        card_id="coalesce-card",
+        work=lambda: {"ok": True, "ran": True},
+    )
+    assert TRAINING_RELIABILITY_BUSY_KEY not in second
+    assert second.get("ran") is None
+    release.set()
+    first_thread.join(timeout=10)

@@ -1,3 +1,5 @@
+import type { ProviderThinkingConfig } from "./providerThinking";
+
 export type ProviderProtocol =
   | "openai_responses"
   | "openai_chat_completions"
@@ -51,6 +53,8 @@ export type ProviderConfig = {
   modelTokenLimits?: Record<string, ProviderModelTokenLimit>;
   taskBindings?: Record<string, unknown>;
   requestDefaults?: Record<string, unknown>;
+  thinkingConfig?: ProviderThinkingConfig;
+  modelThinkingConfig?: Record<string, ProviderThinkingConfig>;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
   embeddingModel?: string;

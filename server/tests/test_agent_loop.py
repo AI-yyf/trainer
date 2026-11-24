@@ -2785,6 +2785,81 @@ async def test_verify_practice_current_file_persists_training_evidence_before_re
     assert snapshot.training_event_ledger[-1]["selected_card_id"] == "practice-persist-1"
 
 
+async def test_verify_practice_current_file_does_not_claim_persistence_when_busy(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """The agent tool is the one persistence lane without an HTTP status.
+
+    When another training save holds the workspace's reliability slot, the
+    wrapper returns the unmutated busy view. Reporting it as persisted told the
+    coach a save landed that never ran.
+    """
+    from app.core.models import ActiveCardSelectionResult, TrainingCardCandidateSnapshot
+    from app.db.repository import TrainerRepository
+    from app.memory.service import MemoryService
+
+    registry = build_default_tool_registry()
+    memory_service = MemoryService(TrainerRepository(tmp_path / "trainer-memory-busy.db"))
+    card = TrainingCardCandidateSnapshot(
+        card_id="practice-busy-1",
+        card_type="practice",
+        title="Busy verification",
+        status="active",
+        focus_area="current-file evidence",
+        target_skill="practice verification",
+    )
+    memory_service.upsert_card("workspace-test", card)
+    memory_service.persist_active_card_selection(
+        "workspace-test",
+        ActiveCardSelectionResult(
+            selected_card=card,
+            selected_card_id=card.card_id,
+            why_this_card="The current file needs verified practice evidence.",
+            next_after_completion="Route the next card.",
+            fallback_action="Bring the blocker back to Coach.",
+            candidate_count=1,
+            eligible_count=1,
+        ),
+    )
+    monkeypatch.setattr(
+        type(memory_service), "_RELIABILITY_LOCK_WAIT_SECONDS", 0.05, raising=False
+    )
+    context = ToolContext(
+        runtime=SimpleNamespace(memory_service=memory_service),
+        workspace_id="workspace-test",
+        session_id="session-test",
+        extra={
+            "current_file": {
+                "path": "src/search.ts",
+                "language_id": "typescript",
+                "content": "export function debounceSearch() { return true; }\n",
+                "diagnostics": [],
+            }
+        },
+    )
+
+    # Hold the slot the way another in-flight save would.
+    lock = memory_service._reliability_lock_for("workspace-test")
+    lock.acquire()
+    try:
+        result = await registry.invoke(
+            context,
+            "verify_practice_current_file",
+            {
+                "acceptance_criteria": ["Implement debounceSearch"],
+                "expected_symbols": ["debounceSearch"],
+            },
+        )
+    finally:
+        lock.release()
+
+    assert result["passed"] is True  # the verification itself is unaffected
+    assert result["persisted_training_evidence"] is False
+    assert result["training_evidence_error"] == "training_reliability_busy"
+    assert "was not recorded" in result["training_evidence_detail"]
+
+
 async def test_coach_only_tool_refuses_without_context_opt_in() -> None:
     registry = build_default_tool_registry()
     result = await registry.invoke(

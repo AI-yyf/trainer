@@ -17,8 +17,10 @@ test('nextTask, specifyTask, and updatePlan return live-plan gate markers on 409
   const source = fs.readFileSync(sessionCommandsSourcePath, 'utf8');
   assert.match(source, /function livePlanTaskGateCommandFailure\(/);
   assert.match(source, /\[\[trainer-live-plan-task-gate:\$\{kind\}\]\]/);
-  assert.match(source, /SidecarHttpError/);
-  assert.match(source, /error\.statusCode !== 409/);
+  // Status/detail are read structurally (sidecarFailureShape) so a second
+  // httpClient module instance cannot silently drop the 409 mapping.
+  assert.match(source, /function sidecarFailureShape\(/);
+  assert.match(source, /failure\.statusCode !== 409/);
   assert.match(source, /leftover-not-live\|no live learning plan/);
 
   const specifyStart = source.indexOf('export async function specifyTaskCommand(');

@@ -5,21 +5,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.models import (
-    ChatMessage,
     GlobalPlan,
     GlobalPlanProjectLink,
     LearningPlan,
     MemoryShareGrant,
-    PlanPhase,
-    PlanUpdateRequest,
     ResourceRecord,
     SubPlan,
     TeachingKnowledgeAsset,
-    UserProfile,
-    WorkspaceContext,
 )
-from app.db.database import Database
-from app.db.repositories import PlanRepository, SessionRepository
 from app.db.repository import TrainerRepository
 
 
@@ -28,71 +21,6 @@ def test_session_message_request_contract_accepts_request_id() -> None:
 
     request = SessionMessageRequest.model_validate({"message": "hello", "requestId": "req-1"})
     assert request.request_id == "req-1"
-
-
-def test_session_repository_persists_messages(tmp_path: Path) -> None:
-    database = Database(tmp_path / "repo.db")
-    database.initialize()
-    sessions = SessionRepository(database)
-
-    session = sessions.create_session(
-        user_profile=UserProfile(long_term_goals=["Learn FastAPI"]),
-        workspace_context=WorkspaceContext(name="trainer"),
-        stage="intake",
-        summary="Initial summary",
-    )
-    sessions.add_message(session.session_id, ChatMessage(role="user", content="Hello"))
-    sessions.add_message(session.session_id, ChatMessage(role="assistant", content="Hi"))
-
-    restored = sessions.get_session(session.session_id)
-    messages = sessions.list_messages(session.session_id)
-
-    assert restored is not None
-    assert restored.summary == "Initial summary"
-    assert [message.role for message in messages] == ["user", "assistant"]
-
-
-def test_plan_repository_updates_existing_plan(tmp_path: Path) -> None:
-    database = Database(tmp_path / "repo.db")
-    database.initialize()
-    sessions = SessionRepository(database)
-    plans = PlanRepository(database)
-
-    session = sessions.create_session(
-        user_profile=UserProfile(long_term_goals=["Learn FastAPI"]),
-        workspace_context=WorkspaceContext(name="trainer"),
-        stage="intake",
-        summary="Initial summary",
-    )
-
-    plan = LearningPlan(
-        plan_id="plan-1",
-        session_id=session.session_id,
-        title="Starter",
-        objective="Learn the workflow",
-        phases=[
-            PlanPhase(
-                title="Phase 1",
-                objective="Start",
-                exercises=["Exercise 1"],
-                completion_signal="Done",
-            )
-        ],
-        weekly_cadence="4 hours per week",
-    )
-    plans.create_plan(plan)
-
-    updated = plans.update_plan(
-        PlanUpdateRequest(
-            plan_id="plan-1",
-            title="Updated Starter",
-            frozen=True,
-        )
-    )
-
-    assert updated is not None
-    assert updated.title == "Updated Starter"
-    assert updated.frozen is True
 
 
 def test_trainer_repository_round_trips_resource_curation_metadata(tmp_path: Path) -> None:

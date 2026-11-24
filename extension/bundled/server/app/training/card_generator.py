@@ -34,6 +34,7 @@ from ..core.models import (
     TrainingCardTrustState,
     TrainingCardType,
 )
+from ..llm.provider.errors import provider_error_quota_exhausted
 from ..pedagogy.evidence_controls import (
     CodeReveal,
     Difficulty,
@@ -81,6 +82,12 @@ class CardGenerationStreamEvent:
 
 _CARD_STREAM_IDLE_TIMEOUT_SECONDS = 45.0
 
+# The generation client deliberately has no read ceiling (long reasoning is
+# legitimate). A synchronous card request still needs a bound: without one a
+# stalled upstream hangs the request and the learner's UI forever. On timeout
+# the failure is classified as provider_unavailable (503), not as bad content.
+_CARD_GENERATION_ATTEMPT_TIMEOUT_SECONDS = 300.0
+
 
 def _normalize_card_locale(language: str | None) -> str:
     raw = str(language or "").strip().lower().replace("_", "-")
@@ -118,15 +125,85 @@ _PROVIDER_FAILURE_DETAIL_BY_LOCALE: dict[str, str] = {
 }
 
 
+# A transport failure is not a model-content rejection. Saying "the card was
+# not accepted" for an upstream 502 sends the learner into an endless retry
+# against an outage, so those two states get their own honest copy and status.
+_PROVIDER_UNAVAILABLE_DETAIL_BY_LOCALE: dict[str, str] = {
+    "en-US": "The model provider is temporarily unavailable; retry card generation in a moment.",
+    "zh-CN": "模型提供方暂时不可用；请稍等片刻后重试生成卡片。",
+    "es-ES": "El proveedor del modelo no está disponible temporalmente; vuelve a generar la tarjeta en unos instantes.",
+    "fr-FR": "Le fournisseur du modèle est temporairement indisponible ; relance la génération dans un instant.",
+    "de-DE": "Der Modellanbieter ist vorübergehend nicht erreichbar; starte die Kartengenerierung gleich erneut.",
+    "ja-JP": "モデル提供元が一時的に利用できません。しばらくしてからカード生成を再試行してください。",
+    "ko-KR": "모델 제공자가 일시적으로 사용할 수 없습니다. 잠시 후 카드 생성을 다시 시도하세요.",
+    "pt-BR": "O provedor do modelo está temporariamente indisponível; tente gerar o cartão novamente em instantes.",
+}
+
+_PROVIDER_QUOTA_DETAIL_BY_LOCALE: dict[str, str] = {
+    "en-US": "The model provider account quota is exhausted; top up the account before generating a card.",
+    "zh-CN": "模型提供方的账户额度已用尽；补充额度后再生成卡片。",
+    "es-ES": "La cuota de la cuenta del proveedor del modelo está agotada; recarga la cuenta antes de generar una tarjeta.",
+    "fr-FR": "Le quota du compte du fournisseur est épuisé ; recharge le compte avant de générer une carte.",
+    "de-DE": "Das Kontingent des Modellanbieter-Kontos ist aufgebraucht; lade das Konto auf, bevor du eine Karte erzeugst.",
+    "ja-JP": "モデル提供元アカウントの利用枠が上限に達しました。残高を追加してからカードを生成してください。",
+    "ko-KR": "모델 제공자 계정의 사용 한도가 소진되었습니다. 충전 후 카드를 생성하세요.",
+    "pt-BR": "A cota da conta do provedor do modelo esgotou; recarregue a conta antes de gerar um cartão.",
+}
+
+
+def _provider_failure_reason(error: BaseException) -> str:
+    """Classify transport failures in a provider exception chain.
+
+    ``ProviderService.chat_completion`` wraps every transport error in a plain
+    ``RuntimeError`` and keeps the original as ``__cause__``, so the status
+    code and retryable marker live one or more links down the chain.
+    """
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        category = str(getattr(current, "provider_error_category", "") or "").strip().lower()
+        status = getattr(current, "status_code", None)
+        if not isinstance(status, int):
+            response = getattr(current, "response", None)
+            status = getattr(response, "status_code", None)
+        if category == "quota_exhausted" or status == 402:
+            return "provider_quota_exhausted"
+        if (
+            status == 429
+            and isinstance(current, Exception)
+            and provider_error_quota_exhausted(current)
+        ):
+            # A rate limit and an exhausted account both arrive as 429; only
+            # the latter is pointless to retry.
+            return "provider_quota_exhausted"
+        if isinstance(status, int) and (status >= 500 or status in {408, 429}):
+            return "provider_unavailable"
+        if getattr(current, "provider_retryable", None) is True:
+            return "provider_unavailable"
+        if isinstance(current, TimeoutError) or type(current).__name__ in {
+            "APIConnectionError", "APITimeoutError", "ConnectError", "ConnectTimeout",
+            "ReadTimeout", "RemoteProtocolError",
+        }:
+            return "provider_unavailable"
+        current = current.__cause__ or current.__context__
+    return ""
+
+
 class CardGenerationProviderFailure(RuntimeError):
     """A live provider did not produce a valid card; do not persist a template."""
 
     def __init__(self, reason: str, *, response_language: str | None = None) -> None:
         self.reason = str(reason or "invalid_card")
-        self.detail = _localized_8(
-            _PROVIDER_FAILURE_DETAIL_BY_LOCALE,
-            response_language,
-        )
+        copy = _PROVIDER_FAILURE_DETAIL_BY_LOCALE
+        if self.reason == "provider_unavailable":
+            copy = _PROVIDER_UNAVAILABLE_DETAIL_BY_LOCALE
+        elif self.reason == "provider_quota_exhausted":
+            copy = _PROVIDER_QUOTA_DETAIL_BY_LOCALE
+        self.detail = _localized_8(copy, response_language)
+        # Only a real outage is worth retrying as-is; quota and malformed
+        # model output need a different learner action.
+        self.retryable = self.reason == "provider_unavailable"
         super().__init__(self.detail)
 
 
@@ -4143,12 +4220,19 @@ class CardGenerationService:
                 temperature=temperature,
                 max_tokens=_generation_max_tokens(provider),
             )
+
+            async def _bounded_request() -> str:
+                return await asyncio.wait_for(
+                    request,
+                    timeout=_CARD_GENERATION_ATTEMPT_TIMEOUT_SECONDS,
+                )
+
             if loop and loop.is_running():
                 # We're already in an async context — use nest_asyncio or
                 # run in a thread. For simplicity, use thread.
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    return pool.submit(asyncio.run, request).result()
-            return asyncio.run(request)
+                    return pool.submit(asyncio.run, _bounded_request()).result()
+            return asyncio.run(_bounded_request())
 
         try:
             messages = self._llm_messages(context, source, card_type)
@@ -4161,14 +4245,24 @@ class CardGenerationService:
             for attempt, temperature in enumerate((0.7, 0.9), start=1):
                 try:
                     raw = _invoke_provider(temperature)
-                except Exception:
-                    logger.debug(
-                        "LLM card generation failed for source=%s (attempt %d)",
-                        source,
-                        attempt,
-                        exc_info=True,
-                    )
-                    failure_reason = "exception"
+                except Exception as exc:
+                    failure_reason = _provider_failure_reason(exc) or "exception"
+                    if failure_reason != "exception":
+                        # An outage is operationally different from malformed
+                        # model output; keep it visible without upstream text.
+                        logger.warning(
+                            "LLM card generation provider failure for source=%s (attempt %d): %s",
+                            source,
+                            attempt,
+                            failure_reason,
+                        )
+                    else:
+                        logger.debug(
+                            "LLM card generation failed for source=%s (attempt %d)",
+                            source,
+                            attempt,
+                            exc_info=True,
+                        )
                     continue
 
                 data = _parse_llm_json(raw)

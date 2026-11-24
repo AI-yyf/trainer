@@ -52,6 +52,10 @@ export interface ProviderProfileConfig {
   taskBindings: Record<string, ProviderTaskBinding>;
   requestDefaults: ProviderRequestDefaults;
   thinkingConfig?: import('../../../shared/src/providerThinking').ProviderThinkingConfig;
+  modelThinkingConfig?: Record<
+    string,
+    import('../../../shared/src/providerThinking').ProviderThinkingConfig
+  >;
   capabilities: CapabilityFlags;
   modelCapabilities: Record<string, CapabilityFlags>;
   modelTokenLimits?: Record<string, { contextWindowTokens?: number; maxOutputTokens?: number }>;
@@ -1766,6 +1770,7 @@ export class ProviderProfileRegistry implements vscode.Disposable {
       taskBindings: (legacyConfig.taskBindings as Record<string, ProviderTaskBinding>) ?? {},
       requestDefaults: legacyConfig.requestDefaults ?? {},
       thinkingConfig: legacyConfig.thinkingConfig,
+      modelThinkingConfig: legacyConfig.modelThinkingConfig,
       capabilities: legacyConfig.capabilities,
     };
 

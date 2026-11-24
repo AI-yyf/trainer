@@ -3,7 +3,8 @@
 Two windows load the same plan at the same revision. The first save wins;
 the second must get 409 plan_revision_conflict carrying the current head
 revision — nothing silently overwritten. A window that omits
-expected_revision keeps the legacy permissive save.
+expected_revision is refused with 428 unless it explicitly labels a
+legacy/migration save.
 """
 
 from pathlib import Path
@@ -168,21 +169,69 @@ def test_conflicted_window_reapplies_on_current_revision(tmp_path: Path) -> None
         assert reapplied.json()["plan_revision"] == head + 1
 
 
-def test_update_without_expected_revision_keeps_legacy_save(tmp_path: Path) -> None:
+def test_update_without_expected_revision_is_refused_once_versioned(tmp_path: Path) -> None:
     workspace_id = "workspace-plan-conflict-legacy"
     with build_client(tmp_path) as client:
         plan_id, _ = generate_plan(client, workspace_id)
         runtime = client.app.state.runtime
 
+        refused = client.post(
+            "/plan/update",
+            json={
+                "plan_id": plan_id,
+                "workspace_id": workspace_id,
+                "title": "Blind overwrite",
+            },
+        )
+        assert refused.status_code == 428, refused.text
+        detail = refused.json()["detail"]
+        assert detail["code"] == "plan_revision_required"
+        assert detail["plan_id"] == plan_id
+        assert detail["current_revision"] >= 1
+        stored = runtime.repository.get_plan_by_id(plan_id)[1]
+        assert stored.title != "Blind overwrite"
+
+        # A caller that explicitly labels the compatibility path may still
+        # save, and the revision advances so other windows notice the change.
         legacy = client.post(
             "/plan/update",
             json={
                 "plan_id": plan_id,
                 "workspace_id": workspace_id,
                 "title": "Legacy save",
+                "legacy": True,
             },
         )
         assert legacy.status_code == 200, legacy.text
         assert legacy.json()["plan"]["title"] == "Legacy save"
-        # The revision counter still advances on legacy saves.
         assert runtime.repository.get_plan_revision(workspace_id, plan_id) >= 2
+
+
+def test_concurrent_saves_on_one_base_admit_exactly_one(tmp_path: Path) -> None:
+    """The revision check and the write are one SQLite transaction, so racing
+    writers that all read the same base cannot both land."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.core.models import LearningPlan
+    from app.db.repository import TrainerRepository
+
+    repository = TrainerRepository(tmp_path / "plan-race.db")
+    workspace_id = "workspace-plan-race"
+    repository.save_plan(
+        workspace_id,
+        LearningPlan(id="plan-race", title="Base", stages=[]),
+    )
+    base_revision = repository.get_plan_revision(workspace_id, "plan-race")
+    assert base_revision == 1
+
+    def attempt(index: int):
+        candidate = LearningPlan(id="plan-race", title=f"Writer {index}", stages=[])
+        return repository.save_plan_with_revision(
+            workspace_id, candidate, expected_revision=base_revision
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        outcomes = list(pool.map(attempt, range(8)))
+
+    assert sum(1 for outcome in outcomes if outcome is not None) == 1
+    assert repository.get_plan_revision(workspace_id, "plan-race") == base_revision + 1

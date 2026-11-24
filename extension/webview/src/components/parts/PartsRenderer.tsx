@@ -54,7 +54,9 @@ import { AlertRenderer } from "./AlertRenderer";
 import { PlanUpdateRenderer } from "./PlanUpdateRenderer";
 import { TestResultRenderer } from "./TestResultRenderer";
 import { MathRenderer } from "./MathRenderer";
-import { MermaidRenderer } from "./MermaidRenderer";
+import { MermaidRenderer, type MermaidRendererLabels } from "./MermaidRenderer";
+import { markdownUrlTransform, RichMarkdownImage } from "../coach/MessageRichContent";
+import type { ComposerLanguage } from "../../lib/types";
 
 // Lazy-load react-markdown to reduce initial bundle size
 import ReactMarkdown from "react-markdown";
@@ -69,6 +71,9 @@ type PartsCopy = {
   reasoning: string;
   file: string;
   card: string;
+  mermaidRenderFailed: string;
+  mermaidRenderDetail: string;
+  mermaidViewSource: string;
 };
 
 const partsCopy: Record<PartsLanguage, PartsCopy> = {
@@ -80,6 +85,9 @@ const partsCopy: Record<PartsLanguage, PartsCopy> = {
     reasoning: "Reasoning",
     file: "File",
     card: "Card",
+    mermaidRenderFailed: "Diagram rendering failed",
+    mermaidRenderDetail: "Rendering detail",
+    mermaidViewSource: "View source",
   },
   zh: {
     expand: "展开详情",
@@ -89,6 +97,9 @@ const partsCopy: Record<PartsLanguage, PartsCopy> = {
     reasoning: "推理摘要",
     file: "文件",
     card: "卡片",
+    mermaidRenderFailed: "图表渲染失败",
+    mermaidRenderDetail: "渲染详情",
+    mermaidViewSource: "查看源码",
   },
 };
 
@@ -139,6 +150,7 @@ function buildRenderContext(props: SinglePartRendererProps): RenderContext {
 export const SinglePartRenderer: React.FC<SinglePartRendererProps> = (props) => {
   const { part, collapsed, onCollapseChange } = props;
   const copy = resolvePartsCopy(props.language);
+  const composerLanguage: ComposerLanguage = props.language === "zh" ? "zh-CN" : "en-US";
   const context = useMemo(() => buildRenderContext(props), [props]);
 
   // Determine if this part should be collapsible
@@ -153,7 +165,7 @@ export const SinglePartRenderer: React.FC<SinglePartRendererProps> = (props) => 
   const renderContent = () => {
     switch (part.type) {
       case "markdown":
-        return <MarkdownPartRenderer part={part as MarkdownPart} />;
+        return <MarkdownPartRenderer part={part as MarkdownPart} language={composerLanguage} />;
       case "code":
         return <CodePartRenderer part={part as CodePart} />;
       case "diff":
@@ -161,7 +173,16 @@ export const SinglePartRenderer: React.FC<SinglePartRendererProps> = (props) => 
       case "math":
         return <MathPartRenderer part={part as MathPart} />;
       case "mermaid":
-        return <MermaidPartRenderer part={part as MermaidPart} />;
+        return (
+          <MermaidPartRenderer
+            part={part as MermaidPart}
+            labels={{
+              failed: copy.mermaidRenderFailed,
+              detail: copy.mermaidRenderDetail,
+              viewSource: copy.mermaidViewSource,
+            }}
+          />
+        );
       case "table":
         return <TablePartRenderer part={part as TablePart} />;
       case "citation":
@@ -243,10 +264,31 @@ function getPartSummary(part: TrainerMessagePart, copy: PartsCopy): string {
 // Individual Part Renderers
 // =============================================================================
 
-const MarkdownPartRenderer: React.FC<{ part: MarkdownPart }> = ({ part }) => {
+const MarkdownPartRenderer: React.FC<{ part: MarkdownPart; language: ComposerLanguage }> = ({
+  part,
+  language,
+}) => {
   return (
     <div className="trainer-markdown-content">
-      <ReactMarkdown rehypePlugins={[rehypeKatex]} remarkPlugins={[remarkGfm, remarkMath]}>
+      {/* The same two guards the coach thread uses: addresses go through the
+          markdown URL transform, and a remote image waits for a click. */}
+      <ReactMarkdown
+        rehypePlugins={[rehypeKatex]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        urlTransform={markdownUrlTransform}
+        components={{
+          img({ src, alt }) {
+            return <RichMarkdownImage src={src} alt={alt} language={language} />;
+          },
+          a({ node: _node, children, href, ...props }) {
+            return (
+              <a {...props} href={href} target="_blank" rel="noopener noreferrer">
+                {children}
+              </a>
+            );
+          },
+        }}
+      >
         {part.content}
       </ReactMarkdown>
     </div>
@@ -265,8 +307,11 @@ const MathPartRenderer: React.FC<{ part: MathPart }> = ({ part }) => {
   return <MathRenderer tex={part.tex} display={part.display ?? false} />;
 };
 
-const MermaidPartRenderer: React.FC<{ part: MermaidPart }> = ({ part }) => {
-  return <MermaidRenderer source={part.source} />;
+const MermaidPartRenderer: React.FC<{
+  part: MermaidPart;
+  labels: MermaidRendererLabels;
+}> = ({ part, labels }) => {
+  return <MermaidRenderer source={part.source} labels={labels} />;
 };
 
 const TablePartRenderer: React.FC<{ part: TablePart }> = ({ part }) => {

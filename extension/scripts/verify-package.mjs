@@ -377,6 +377,66 @@ export function verifyWebviewDist({
 }
 
 const REMOTE_COMPANION_RELATIVE_PATH = path.join("bundled", "remote", "trainer-workspace-companion.vsix");
+
+/** The subjects a Trainer package must be able to teach out of the box. */
+export const SHIPPED_SUBJECT_PROFILES = [
+  "code",
+  "literature",
+  "french-writing",
+  "german-grammar",
+  "japanese-learning",
+];
+const SUBJECT_PROFILES_RELATIVE_DIR = path.join("app", "training", "profiles");
+
+function isNonEmptyFile(filePath) {
+  try {
+    return fs.statSync(filePath).isFile() && fs.statSync(filePath).size > 0;
+  } catch {
+    return false;
+  }
+}
+
+function missingProfilesIn(directory) {
+  return SHIPPED_SUBJECT_PROFILES.filter(
+    (name) => !isNonEmptyFile(path.join(directory, `${name}.profile.json`)),
+  );
+}
+
+/**
+ * The subject profiles are package data, and every layout that can start a
+ * sidecar must carry them: the bundled `server/app` tree and the frozen
+ * binary. They used to sit at the repository root, so a packaged Trainer
+ * shipped none and every language-learning subject fell back to the code
+ * profile without a word.
+ */
+export function verifySubjectProfilesShipped({ targetServerDir, bundledBinaryPath } = {}) {
+  const errors = [];
+  const sourceDir = path.join(targetServerDir, SUBJECT_PROFILES_RELATIVE_DIR);
+  for (const name of missingProfilesIn(sourceDir)) {
+    errors.push(
+      `Bundled sidecar source lacks the "${name}" subject profile (${normalizeSidecarRelativePath(
+        path.join(SUBJECT_PROFILES_RELATIVE_DIR, `${name}.profile.json`),
+      )}).`,
+    );
+  }
+
+  if (bundledBinaryPath && fs.existsSync(bundledBinaryPath)) {
+    const binaryDir = path.dirname(bundledBinaryPath);
+    // PyInstaller's onedir layout keeps data in `_internal` beside the
+    // executable (older specs use the executable's own directory). A build
+    // that carries package data at all carries it there, so the profiles are
+    // required as soon as that directory exists.
+    const frozenDir = [path.join(binaryDir, "_internal"), binaryDir].find((directory) =>
+      fs.existsSync(path.join(directory, "app")),
+    );
+    if (frozenDir) {
+      for (const name of missingProfilesIn(path.join(frozenDir, SUBJECT_PROFILES_RELATIVE_DIR))) {
+        errors.push(`The frozen sidecar lacks the "${name}" subject profile.`);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
 const REMOTE_COMPANION_PACKAGE_RELATIVE_PATH = path.join("..", "remote-extension", "package.json");
 
 /**
@@ -508,6 +568,10 @@ export function verifyPackage({
     targetPlatform: packageTarget,
   });
   const binaryTargetCoverage = verifyBundledBinaryTargets({ extensionDir, repoRoot });
+  const subjectProfiles = verifySubjectProfilesShipped({
+    targetServerDir,
+    bundledBinaryPath: bundledBinaryPath ?? bundledBinaryCandidates[0],
+  });
   const metadataJunk = [
     ...collectBundledMetadataJunk(targetServerDir).map((relativePath) => ({
       scope: "bundled/server",
@@ -523,6 +587,7 @@ export function verifyPackage({
     missingRequiredPaths.length === 0 &&
     webviewDist.ok &&
     remoteCompanion.ok &&
+    subjectProfiles.ok &&
     (browserCapture.ok || !browserCapture.staged) &&
     metadataJunk.length === 0 &&
     sidecarParity.missingBundledFiles.length === 0 &&
@@ -537,6 +602,7 @@ export function verifyPackage({
     missingRequiredPaths,
     webviewDist,
     remoteCompanion,
+    subjectProfiles,
     browserCapture,
     metadataJunk,
     sidecarParity,
@@ -577,6 +643,9 @@ export function formatPackageVerificationErrors(report) {
     lines.push(`- Invalid webview asset reference in ${item.entry}: ${item.reference}`);
   }
   for (const message of report.remoteCompanion?.errors ?? []) {
+    lines.push(`- ${message}`);
+  }
+  for (const message of report.subjectProfiles?.errors ?? []) {
     lines.push(`- ${message}`);
   }
   for (const message of report.browserCapture?.errors ?? []) {

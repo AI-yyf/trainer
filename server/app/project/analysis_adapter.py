@@ -24,6 +24,8 @@ from typing import Any, Protocol
 
 from app.project.symbols import SOURCE_SUFFIXES, RepoIndex
 
+from ..core.process_env import child_process_environment
+
 MAX_EDGES_PER_PROVIDER = 4000
 
 
@@ -220,12 +222,17 @@ class _LspSession:
 
         self._timeout_s = timeout_s
         self._next_id = 0
+        # The language server runs inside the learner's repository. It must not
+        # inherit the sidecar token, and `-m` would put that repository first
+        # on `sys.path` — a checked-in `pylsp.py` would run with the server's
+        # privileges. PYTHONSAFEPATH keeps the working directory off the path.
         self._proc = subprocess.Popen(  # noqa: S603
             [sys.executable, "-m", "pylsp"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             cwd=str(root),
+            env=child_process_environment(overrides={"PYTHONSAFEPATH": "1"}),
         )
         self._root = root
         self._initialize()

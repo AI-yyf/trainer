@@ -5,6 +5,7 @@ performance.mark("trainer:webview-script-start");
 import "katex/dist/katex.min.css";
 
 import { sanitizeVisibleText } from "./lib/visibleText";
+import { installRemoteImageActivation } from "./lib/remoteImages";
 import { getInjectedBootstrapState, postMessage, reportWebviewError } from "./lib/vscode";
 import type { ComposerLanguage } from "./lib/types";
 // PR-7: styles.css is split by section into styles/sections/*.css
@@ -364,6 +365,8 @@ async function bootstrap(): Promise<void> {
 
   applyWorkbenchTheme(preferredTheme());
   installWorkbenchHostThemeBridge();
+  // Remote images in sanitized HTML previews load on click, never on their own.
+  installRemoteImageActivation();
 
   root.render(
     <React.StrictMode>

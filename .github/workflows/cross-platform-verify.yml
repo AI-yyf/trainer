@@ -170,6 +170,9 @@ jobs:
       - name: Install Playwright test runner (root dev dependency)
         run: npm install --no-save --ignore-scripts --prefix . "@playwright/test@1.62.1" "playwright@1.62.1"
 
+      - name: UI geometry gate (destinations, drawer, single composer, overflow)
+        run: npm run verify:ui-geometry
+
       - name: Run the 200-scenario preview experience matrix
         run: npm run test:experience-matrix
 

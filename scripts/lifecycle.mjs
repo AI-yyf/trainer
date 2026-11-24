@@ -267,6 +267,15 @@ function buildWorkspace(root) {
     cwd: root,
     label: "Extension build",
   });
+  // The Remote Workspace Companion is compiled by the root `npm run build`
+  // but was not by this lifecycle. The extension test suite loads the
+  // compiled Companion, so a workflow that builds with `npm run dev` and
+  // then runs the tests failed at that test on every platform — and, because
+  // the step failed, every verification after it was skipped.
+  runNpm(["run", "build:remote-companion", "--prefix", "extension"], {
+    cwd: root,
+    label: "Remote companion build",
+  });
 }
 
 function portAvailable(host, port) {
@@ -414,6 +423,7 @@ export async function smoke({ root = repoRoot, options = {} } = {}) {
     ["Server entrypoint", "server/app/main.py"],
     ["Webview build", "extension/webview/dist/index.html"],
     ["Extension build", "extension/dist/extension/src/extension.js"],
+    ["Remote companion build", "remote-extension/dist/remote-extension/src/extension.js"],
   ]) {
     addReport(report, area, fs.existsSync(path.join(root, relativePath)) ? "ok" : "pending", relativePath);
   }

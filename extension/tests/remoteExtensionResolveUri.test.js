@@ -18,6 +18,55 @@ const companionModulePath = path.resolve(
   'src',
   'extension.js',
 );
+const companionProjectDir = path.resolve(__dirname, '..', '..', 'remote-extension');
+const typescript = require(path.resolve(__dirname, '..', 'node_modules', 'typescript'));
+
+/**
+ * This suite loads the *compiled* Remote Workspace Companion, so it compiles
+ * it itself when the output is missing or older than its sources.
+ *
+ * It used to rely on something else having built it first. The workflows that
+ * ran the extension tests without a prior root build failed here on every
+ * platform — and, because the step failed, every verification after it was
+ * skipped. A test must not depend on the order in which other things ran.
+ */
+function ensureCompanionCompiled() {
+  const configPath = path.join(companionProjectDir, 'tsconfig.json');
+  const config = typescript.readConfigFile(configPath, typescript.sys.readFile);
+  if (config.error) {
+    throw new Error(typescript.flattenDiagnosticMessageText(config.error.messageText, '\n'));
+  }
+  const parsed = typescript.parseJsonConfigFileContent(config.config, typescript.sys, companionProjectDir);
+  const program = typescript.createProgram(parsed.fileNames, parsed.options);
+  if (fs.existsSync(companionModulePath)) {
+    const compiledAt = fs.statSync(companionModulePath).mtimeMs;
+    const changed = program
+      .getSourceFiles()
+      .filter((source) => !source.isDeclarationFile)
+      .filter((source) => fs.statSync(source.fileName).mtimeMs > compiledAt);
+    if (changed.length === 0) {
+      return;
+    }
+  }
+  const emit = program.emit();
+  const errors = [...parsed.errors, ...typescript.getPreEmitDiagnostics(program), ...emit.diagnostics].filter(
+    (diagnostic) => diagnostic.category === typescript.DiagnosticCategory.Error,
+  );
+  if (errors.length > 0) {
+    const detail = errors
+      .slice(0, 10)
+      .map((diagnostic) => {
+        const position = diagnostic.file?.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
+        return position
+          ? `${diagnostic.file.fileName}:${position.line + 1} ${typescript.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`
+          : typescript.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+      })
+      .join('\n');
+    throw new Error(`The Remote Workspace Companion does not compile:\n${detail}`);
+  }
+}
+
+test.before(() => ensureCompanionCompiled());
 
 function remoteUriForPath(authority, fsPath) {
   const pathname = pathToFileURL(path.resolve(fsPath)).pathname;

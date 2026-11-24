@@ -604,6 +604,31 @@ def test_generate_card_rejects_last_test_for_a_different_model(
         assert client.app.state.runtime.provider_service.supports_executable_tools() is False
 
 
+def test_generate_card_stream_rejects_last_test_for_a_different_model(
+    tmp_path: Path,
+) -> None:
+    workspace_id = "workspace-rehydrate-mismatch-stream"
+    with build_client(tmp_path, configure_provider=False) as client:
+        provider = _install_untested_compatible_provider(client)
+        mismatched = _host_last_test_payload(provider)
+        mismatched["model"] = "other-model"
+        response = client.post(
+            "/training/generate-card/stream",
+            json={
+                "workspace_id": workspace_id,
+                "source": "conversation_gap",
+                "card_type": "practice",
+                "focus_area": "tuple unpacking",
+                "response_language": "en-US",
+                "provider": KIMI_COMPATIBLE_PROVIDER,
+                "api_key": "sk-test",
+                "lastTestResult": mismatched,
+            },
+        )
+        assert response.status_code == 400, response.text
+        assert "not ready" in response.text.lower() or "还不能用" in response.text
+
+
 def test_empty_new_api_profile_is_not_live_usable_and_writes_no_card(
     tmp_path: Path,
 ) -> None:

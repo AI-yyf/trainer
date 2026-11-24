@@ -6,6 +6,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -1076,6 +1077,64 @@ class CardStatusTransitionAPITests(unittest.TestCase):
         assert data["why_this_card"] != ""
         assert data["candidate_count"] == 1
         assert data["eligible_count"] == 1
+
+    def test_api_practice_return_reports_busy_instead_of_untouched_success(self) -> None:
+        workspace_id = "ws-training-busy-slot"
+        card = _make_card(card_id="busy-practice-return", status="active", title="Busy slot")
+        self._seed_card_via_service(workspace_id, card)
+        service = self.runtime.memory_service
+        lock = service._reliability_lock_for(service._resolve_workspace_for_write(workspace_id))
+        lock.acquire()
+        try:
+            with patch.object(type(service), "_RELIABILITY_LOCK_WAIT_SECONDS", 0.1, create=True):
+                response = self.client.post(
+                    "/training/practice-return",
+                    json={
+                        "workspace_id": workspace_id,
+                        "card_id": card.card_id,
+                        "passed": True,
+                        "summary": "This must not be recorded while another save holds the slot.",
+                        "next_step": "Retry after the other save finishes.",
+                        "focus_area": "busy slot",
+                        "evidence_source": "learner_return",
+                    },
+                )
+        finally:
+            lock.release()
+
+        assert response.status_code == 409, response.text
+        detail = response.json()["detail"]
+        assert detail["code"] == "training_reliability_busy"
+        assert detail["busy"] is True
+        assert self.runtime.memory_service.get_card(workspace_id, card.card_id).status == "active"
+        assert self.runtime.memory_service.latest_training_reliability(workspace_id) is None
+
+    def test_api_card_status_reports_busy_instead_of_a_replay_card(self) -> None:
+        workspace_id = "ws-card-status-busy-slot"
+        card = _make_card(card_id="busy-card-status", status="active", title="Busy slot")
+        self._seed_card_via_service(workspace_id, card)
+        service = self.runtime.memory_service
+        lock = service._reliability_lock_for(service._resolve_workspace_for_write(workspace_id))
+        lock.acquire()
+        try:
+            with patch.object(type(service), "_RELIABILITY_LOCK_WAIT_SECONDS", 0.1, create=True):
+                response = self.client.post(
+                    "/training/card-status",
+                    json={
+                        "workspace_id": workspace_id,
+                        "card_id": card.card_id,
+                        "new_status": "archived",
+                        "reason": "must not be applied while busy",
+                    },
+                )
+        finally:
+            lock.release()
+
+        assert response.status_code == 409, response.text
+        detail = response.json()["detail"]
+        assert detail["code"] == "training_reliability_busy"
+        stored = self.runtime.memory_service.get_card(workspace_id, card.card_id)
+        assert stored is not None and stored.status == "active"
 
     def test_api_practice_return_updates_workspace_truth(self) -> None:
         workspace_id = "ws-training-return"

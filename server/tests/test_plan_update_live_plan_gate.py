@@ -74,6 +74,9 @@ def test_plan_update_with_live_plan_freezes_without_changing_plan_id(tmp_path: P
                 "plan_id": plan_id,
                 "workspace_id": workspace_id,
                 "frozen": True,
+                "expected_revision": app.state.runtime.repository.get_plan_revision(
+                    workspace_id, plan_id
+                ),
             },
         )
         assert frozen.status_code == 200, frozen.text
@@ -143,6 +146,9 @@ def test_plan_update_leftover_not_live_does_not_resurrect(tmp_path: Path) -> Non
                 "plan_id": leftover.id,
                 "workspace_id": workspace_id,
                 "frozen": True,
+                "expected_revision": runtime.repository.get_plan_revision(
+                    workspace_id, leftover.id
+                ),
             },
         )
         assert response.status_code == 409, response.text
@@ -203,6 +209,9 @@ def test_plan_update_empty_recovered_plan_id_stays_fail_closed(tmp_path: Path) -
                 "plan_id": leftover.id,
                 "workspace_id": workspace_id,
                 "instructions": "Rewrite leftover as if it were live.",
+                "expected_revision": runtime.repository.get_plan_revision(
+                    workspace_id, leftover.id
+                ),
             },
         )
         assert response.status_code == 409, response.text

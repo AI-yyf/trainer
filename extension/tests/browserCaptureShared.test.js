@@ -161,6 +161,118 @@ test('normalizePairCode accepts human-typed six-digit codes', () => {
   assert.equal(TrainerCapture.isValidPairCode('9876'), false);
 });
 
+/** Answer the extension's fetch calls from a script instead of a sidecar. */
+async function withScriptedFetch(responses, run) {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const call = { url: String(url), method: String(init.method || 'GET'), body: init.body ? JSON.parse(init.body) : null };
+    calls.push(call);
+    const scripted = responses.shift() || { status: 500, body: {} };
+    return new Response(JSON.stringify(scripted.body), {
+      status: scripted.status,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  };
+  try {
+    return await run(calls);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+test('autoPairSidecar reports a sidecar that is waiting for a one-time pairing code', async () => {
+  await withScriptedFetch(
+    [
+      {
+        status: 403,
+        body: {
+          detail: {
+            code: 'extension_not_paired',
+            message: 'Pair this browser once with a pairing code from Trainer.'
+          }
+        }
+      }
+    ],
+    async (calls) => {
+      const refused = await TrainerCapture.autoPairSidecar('http://127.0.0.1:34891');
+      assert.equal(refused.ok, false);
+      assert.equal(refused.status, 403);
+      assert.equal(refused.code, 'extension_not_paired');
+      // The popup offers the pairing form on exactly this flag.
+      assert.equal(refused.needsPairing, true);
+      assert.deepEqual(calls, [
+        { url: 'http://127.0.0.1:34891/browser/auto-pair', method: 'POST', body: {} }
+      ]);
+    }
+  );
+});
+
+test('autoPairSidecar does not mistake another refusal for a pairing request', async () => {
+  await withScriptedFetch(
+    [
+      { status: 403, body: { detail: { code: 'loopback_only', message: 'Local only.' } } },
+      { status: 403, body: { detail: { code: 'extension_origin_required', message: 'Extension only.' } } }
+    ],
+    async () => {
+      const loopback = await TrainerCapture.autoPairSidecar('http://127.0.0.1:34891');
+      assert.equal(loopback.ok, false);
+      assert.equal(loopback.needsPairing, false);
+      const origin = await TrainerCapture.autoPairSidecar('http://127.0.0.1:34891');
+      assert.equal(origin.ok, false);
+      assert.equal(origin.needsPairing, false);
+    }
+  );
+});
+
+test('autoPairSidecar connects an extension the sidecar already trusts', async () => {
+  await withScriptedFetch(
+    [
+      {
+        status: 200,
+        body: { credential: 'trcb_paired', workspace_id: 'ws-1', workspace_name: 'Focus A' }
+      }
+    ],
+    async () => {
+      const paired = await TrainerCapture.autoPairSidecar('http://127.0.0.1:34891');
+      assert.equal(paired.ok, true);
+      assert.equal(paired.credential, 'trcb_paired');
+      assert.equal(paired.workspaceName, 'Focus A');
+      assert.equal(paired.needsPairing, undefined);
+    }
+  );
+});
+
+test('pairSidecar redeems a code and returns the workspace it belongs to', async () => {
+  await withScriptedFetch(
+    [
+      {
+        status: 200,
+        body: { credential: 'trcb_once', workspace_id: 'ws-2', workspace_name: 'Focus B' }
+      }
+    ],
+    async (calls) => {
+      const paired = await TrainerCapture.pairSidecar('http://127.0.0.1:34891', '12 34 56');
+      assert.equal(paired.ok, true);
+      assert.equal(paired.credential, 'trcb_once');
+      assert.equal(paired.workspaceId, 'ws-2');
+      assert.equal(paired.workspaceName, 'Focus B');
+      assert.deepEqual(calls, [
+        { url: 'http://127.0.0.1:34891/browser/pair', method: 'POST', body: { code: '123456' } }
+      ]);
+    }
+  );
+});
+
+test('pairSidecar rejects a code that is not six digits without calling the sidecar', async () => {
+  await withScriptedFetch([], async (calls) => {
+    const rejected = await TrainerCapture.pairSidecar('http://127.0.0.1:34891', '12345');
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.reason, 'invalid_code');
+    assert.equal(calls.length, 0);
+  });
+});
+
 test('buildProbeCandidates probes the default port then the managed range', () => {
   const candidates = TrainerCapture.buildProbeCandidates({});
   assert.equal(candidates[0], 'http://127.0.0.1:8765');
@@ -1303,7 +1415,7 @@ test('popup actually hides inactive panels and refreshes the library count after
   assert.match(captureBody, /refreshStateFromHost\(\)/);
 });
 
-test('the popup has no pairing UI and lets the worker connect by itself', () => {
+test('the popup connects by itself and pairs with a code only when Trainer asks for one', () => {
   const html = fs.readFileSync(POPUP_HTML_PATH, 'utf8');
   for (const id of [
     'capture-panel',
@@ -1316,20 +1428,21 @@ test('the popup has no pairing UI and lets the worker connect by itself', () => 
   ]) {
     assert.ok(html.includes(`id="${id}"`), `popup.html must define #${id}`);
   }
-  // Zero-code onboarding removes the pairing design entirely: no panel, code
-  // field, submit button, detect button or connection-status row.
+  // The one-time pairing form is the only pairing UI: no detect button and no
+  // connection-status row.
+  for (const id of ['pair-panel', 'pair-code', 'pair-submit', 'pair-feedback']) {
+    assert.ok(html.includes(`id="${id}"`), `popup.html must define #${id}`);
+  }
   for (const id of [
-    'pair-panel',
-    'pair-code',
-    'pair-submit',
     'detect-again',
     'detect-line',
     'connect-line',
-    'retry-connect',
-    'pair-feedback'
+    'retry-connect'
   ]) {
     assert.ok(!html.includes(`id="${id}"`), `popup.html must NOT define #${id}`);
   }
+  // It is hidden by default: a browser Trainer already authorised never sees it.
+  assert.match(html, /<section id="pair-panel" class="panel" hidden>/);
 
   const js = fs.readFileSync(POPUP_JS_PATH, 'utf8');
   // The destination is resolved by the sidecar (the library folder that
@@ -1338,7 +1451,11 @@ test('the popup has no pairing UI and lets the worker connect by itself', () => 
   assert.doesNotMatch(js, /getElementById\('target-dir'\)/);
   assert.match(js, /trainer:capture-tab',[\s\S]{0,80}download: true/);
   assert.match(js, /function renderState\(/);
-  assert.doesNotMatch(js, /pair-code|pairSidecar|trainer:auto-pair/);
+  assert.doesNotMatch(js, /trainer:auto-pair/);
+  // The form appears only on the worker's "pair this extension first" answer.
+  assert.match(js, /const needsPairing = Boolean\(state && state\.needsPairing\);/);
+  assert.match(js, /elements\.pairPanel\.hidden = true;/);
+  assert.match(js, /send\(\{ type: 'trainer:pair-with-code', code \}\)/);
 
   // Auto-connect lives in the worker, not in the card.
   const background = fs.readFileSync(BACKGROUND_JS_PATH, 'utf8');
@@ -1540,4 +1657,102 @@ test('T-0041: every background queue writer runs inside the queue lock', () => {
     backgroundSource.indexOf('await TrainerCapture.clearHistory();')
   );
   assert.match(revokeSection, /withQueueLock/, 'revokePairing queue drop must lock');
+});
+
+test('a stale credential keeps the paired base URL so reconnect hits the same window', async () => {
+  const store = {
+    'trainerCapture.baseUrl': 'http://127.0.0.1:34892',
+    'trainerCapture.credential': 'trcb_stale_token',
+    'trainerCapture.connection': 'ok',
+    'trainerCapture.statusCache': { libraryCount: 3 },
+    'trainerCapture.workspaceId': 'browser-capture-e2e',
+  };
+  global.chrome = {
+    storage: {
+      local: {
+        async get(defaults) {
+          const result = {};
+          for (const [key, fallback] of Object.entries(defaults || {})) {
+            result[key] = Object.prototype.hasOwnProperty.call(store, key) ? store[key] : fallback;
+          }
+          return result;
+        },
+        async remove(keys) {
+          for (const key of keys) delete store[key];
+        },
+        async set(values) {
+          Object.assign(store, values);
+        },
+      },
+    },
+  };
+  try {
+    await TrainerCapture.clearStaleCredential();
+  } finally {
+    delete global.chrome;
+  }
+  assert.equal(store['trainerCapture.baseUrl'], 'http://127.0.0.1:34892');
+  assert.equal(store['trainerCapture.workspaceId'], 'browser-capture-e2e');
+  assert.equal(store['trainerCapture.credential'], undefined);
+  assert.equal(store['trainerCapture.connection'], undefined);
+  assert.equal(store['trainerCapture.statusCache'], undefined);
+});
+
+test('stale-credential recovery keeps the base URL and does not silently pair a sibling window', () => {
+  const backgroundSource = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'browser-extension', 'background.js'),
+    'utf8'
+  );
+  const sharedSource = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'browser-extension', 'shared.js'),
+    'utf8'
+  );
+  assert.match(sharedSource, /async function clearStaleCredential/);
+  const unauthorizedBranches = backgroundSource.match(
+    /if \(response\.unauthorized\) \{[\s\S]*?\n  \}/g
+  ) || [];
+  assert.ok(unauthorizedBranches.length >= 2, 'expected the capture and flush unauthorized paths');
+  for (const branch of unauthorizedBranches) {
+    if (branch.includes('findPairedBaseUrl')) continue;
+    assert.match(
+      branch,
+      /TrainerCapture\.clearStaleCredential\(\)/,
+      'unauthorized handling must keep the base URL for the retry'
+    );
+    assert.doesNotMatch(branch, /TrainerCapture\.clearAuth\(\)/);
+  }
+  // A remembered, still-unpaired base URL is tried before ranked strangers.
+  assert.match(
+    backgroundSource,
+    /existing\.baseUrl && !rankedUrls\.includes\(existing\.baseUrl\)/
+  );
+});
+
+test('the sidecar that asked for a pairing code is remembered across worker restarts', () => {
+  // An MV3 service worker is torn down whenever it goes idle, and the learner
+  // types the code later. Without a stored address the code went to whichever
+  // loopback listener answered the probe first.
+  assert.equal(
+    TrainerCapture.STORAGE_KEYS.pairingNeededUrl,
+    'trainerCapture.pairingNeededUrl',
+  );
+  const background = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'browser-extension', 'background.js'),
+    'utf8',
+  );
+  const pairWithCode = background.slice(
+    background.indexOf('async function pairWithCode('),
+    background.indexOf('async function buildState('),
+  );
+  assert.match(pairWithCode, /const askedForTheCode = await loadPairingNeededUrl\(\);/);
+  assert.ok(
+    pairWithCode.indexOf('loadPairingNeededUrl()') < pairWithCode.indexOf('discoverSidecar('),
+    'the remembered sidecar is loaded before any port is probed',
+  );
+  assert.match(pairWithCode, /await rememberPairingNeededUrl\(''\);/);
+  const autoPair = background.slice(
+    background.indexOf('async function ensureAutoPair('),
+    background.indexOf('async function pairWithCode('),
+  );
+  assert.match(autoPair, /await rememberPairingNeededUrl\(pairingNeededUrl\);/);
 });

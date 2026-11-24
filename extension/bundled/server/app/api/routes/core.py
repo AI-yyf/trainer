@@ -85,7 +85,7 @@ from ...training.card_generator import (
     CardGenerationProviderFailure,
 )
 from ...training.recall_evidence import record_recall_evidence
-from ...training.reliability import should_replay
+from ...training.reliability import busy_marker, should_replay
 from .. import coach_support
 from .._helpers import (
     localized_text,
@@ -94,6 +94,7 @@ from .._singleflight import (
     claim_session_request_singleflight,
     fail_session_request_singleflight,
     publish_session_request_singleflight,
+    remember_completed_request,
 )
 from ..coach_support import CoachTurnPayload
 from ..router_support import (
@@ -113,7 +114,7 @@ from ..router_support import (
 )
 from ..routes._deps import RouterDeps
 from ..routes.resources import PrepareResearchTurn
-from ..runtime import SessionState, TrainerRuntime
+from ..runtime import SessionState, TrainerRuntime, _provider_test_record_matches
 from ..training_card_identity import (
     prepare_training_file_evaluation,
     training_card_is_live_for_verify,
@@ -369,6 +370,23 @@ def _record_coach_turn_event(
         )
     except Exception:  # noqa: BLE001 - the ledger must never break a finished turn
         pass
+
+
+def _card_generation_failure_response(
+    exc: CardGenerationProviderFailure,
+) -> HTTPException:
+    """Map a failed card generation to the status its cause deserves.
+
+    A provider outage (5xx/timeout) is a 503 with Retry-After, not a 400
+    "card rejected": the learner must not read an outage as bad model output.
+    An exhausted account is a 402 billing state, and anything the model
+    actually authored but that failed validation stays a 400.
+    """
+    if exc.reason == "provider_unavailable":
+        return HTTPException(status_code=503, detail=str(exc), headers={"Retry-After": "5"})
+    if exc.reason == "provider_quota_exhausted":
+        return HTTPException(status_code=402, detail=str(exc))
+    return HTTPException(status_code=400, detail=str(exc))
 
 
 def build_core_router(
@@ -796,8 +814,12 @@ def build_core_router(
                 recovered_leftover=recovered_leftover,
             )
             if stamped is not cached_response:
-                with core.completed_session_requests_guard:
-                    core.completed_session_requests[request_key] = stamped
+                remember_completed_request(
+                    core.completed_session_requests,
+                    request_key,
+                    stamped,
+                    guard=core.completed_session_requests_guard,
+                )
             return stamped
 
         def _finish_session_response(payload: dict[str, object]) -> dict[str, object]:
@@ -1709,8 +1731,12 @@ def build_core_router(
                 recovered_leftover=recovered_leftover,
             )
             if stamped is not cached_response:
-                with core.completed_session_requests_guard:
-                    core.completed_session_requests[request_key] = stamped
+                remember_completed_request(
+                    core.completed_session_requests,
+                    request_key,
+                    stamped,
+                    guard=core.completed_session_requests_guard,
+                )
             return stamped
 
         def _finish_turn_response(payload_map: dict[str, object]) -> dict[str, object]:
@@ -1930,8 +1956,12 @@ def build_core_router(
                 recovered_leftover=recovered_leftover,
             )
             if stamped is not cached_response:
-                with core.completed_session_requests_guard:
-                    core.completed_session_requests[request_key] = stamped
+                remember_completed_request(
+                    core.completed_session_requests,
+                    request_key,
+                    stamped,
+                    guard=core.completed_session_requests_guard,
+                )
             return stamped
 
         def _publish_stream_session_response(payload: dict[str, object]) -> dict[str, object]:
@@ -2921,8 +2951,12 @@ def build_core_router(
                 recovered_leftover=recovered_leftover,
             )
             if stamped is not cached_response:
-                with core.completed_session_requests_guard:
-                    core.completed_session_requests[request_key] = stamped
+                remember_completed_request(
+                    core.completed_session_requests,
+                    request_key,
+                    stamped,
+                    guard=core.completed_session_requests_guard,
+                )
             return stamped
 
         def _publish_stream_turn_response(payload_map: dict[str, object]) -> dict[str, object]:
@@ -4750,7 +4784,7 @@ def build_core_router(
             return dict(structured._workspace)
 
         try:
-            runtime.memory_service.run_training_reliability(
+            reliability_workspace = runtime.memory_service.run_training_reliability(
                 request.workspace_id,
                 request_id=request.request_id,
                 command_id="trainer.training.cardStatusTransition",
@@ -4764,6 +4798,21 @@ def build_core_router(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         core.refresh_workspace_sessions(request.workspace_id)
+        # A busy view means work() never ran; the empty `captured` list is not
+        # a replay and must not be reported as a completed transition.
+        busy = busy_marker(reliability_workspace)
+        if busy is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "training_reliability_busy",
+                    "message": (
+                        "Another training save is still running in this workspace. "
+                        "The card was not changed; retry once it finishes."
+                    ),
+                    **busy,
+                },
+            )
         # Same request_id replay/coalesce skips work(); return current card (one mutation).
         if not captured:
             card = runtime.memory_service.get_card(request.workspace_id, request.card_id)
@@ -4844,6 +4893,21 @@ def build_core_router(
         if request.last_test_result:
             generate_payload["lastTestResult"] = request.last_test_result
         coaching_service = core.build_coaching_service(generate_payload)
+        last_test = request.last_test_result
+        if isinstance(last_test, dict) and last_test.get("ok") is True:
+            config = getattr(coaching_service, "_config", None)
+            # A passed test is evidence for the exact transport it tested. If
+            # the learner switched model/base URL afterwards, the host record
+            # must not be adopted as this connection's capability proof.
+            if config is not None and not _provider_test_record_matches(last_test, config):
+                raise HTTPException(
+                    status_code=400,
+                    detail=localized_text(
+                        "This connection is not ready. Test it in Settings, then resend this turn.",
+                        "当前连接还不能用。请先在设置里测试，再重发这一轮。",
+                        getattr(request, "response_language", None),
+                    ),
+                )
         core.ensure_coach_provider_ready(
             coaching_service,
             response_language=getattr(request, "response_language", None),
@@ -4859,7 +4923,7 @@ def build_core_router(
                 provider_service_override=coaching_service,
             )
         except CardGenerationProviderFailure as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise _card_generation_failure_response(exc) from exc
 
     @router.post("/training/generate-card/stream")
     async def training_generate_card_stream(
@@ -4878,6 +4942,18 @@ def build_core_router(
         )
         if training_provider_service is not None:
             runtime.adopt_request_provider_evidence(request, training_provider_service)
+            last_test = request.last_test_result
+            if isinstance(last_test, dict) and last_test.get("ok") is True:
+                config = getattr(training_provider_service, "_config", None)
+                if config is not None and not _provider_test_record_matches(last_test, config):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=localized_text(
+                            "This connection is not ready. Test it in Settings, then resend this turn.",
+                            "当前连接还不能用。请先在设置里测试，再重发这一轮。",
+                            getattr(request, "response_language", None),
+                        ),
+                    )
         core.ensure_coach_provider_ready(
             training_provider_service,
             response_language=getattr(request, "response_language", None),
@@ -5305,6 +5381,19 @@ def build_core_router(
             timeout_ms=request.timeout_ms,
             cancel=request.cancel,
         )
+        busy = busy_marker(updated)
+        if busy is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "training_reliability_busy",
+                    "message": (
+                        "Another training save is still running in this workspace. "
+                        "The practice result was not recorded; retry once it finishes."
+                    ),
+                    **busy,
+                },
+            )
         core.refresh_workspace_sessions(request.workspace_id)
         return {"ok": True, "workspace": updated}
 

@@ -228,6 +228,11 @@ export const SIDECAR_DEFAULTS = {
   // When the sidecar reported ready recently, skip re-probing before each
   // command and trust the cached status.
   healthCheckTtlMs: 10_000,
+  // A live sidecar that misses one probe may only be busy, so it stays
+  // routable. One that keeps missing them is wedged, and routing to it turns
+  // every command into a request timeout: after this many consecutive misses
+  // (each a TTL apart) the child is stopped and replaced.
+  maxMissedHealthProbes: 4,
   // First launch after an install/update validates the bundled native
   // libraries; macOS exceeded 60s during the native regression, and Windows
   // hosted runners exceed 20s while the ~245 MB bundled tree is first opened

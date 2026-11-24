@@ -64,6 +64,9 @@ export class SidecarProcessManager implements vscode.Disposable {
   private process?: ChildProcessWithoutNullStreams;
   private ensurePromise?: Promise<SidecarStatus>;
   private startPromise?: Promise<SidecarStatus>;
+  // Consecutive health probes the live child has missed. Any answered probe
+  // or a new child resets the streak.
+  private missedHealthProbes = 0;
   private didNotifyPortFallback = false;
   // Output-channel content is buffered in the window renderer, so streaming
   // sidecar output into it unbounded has crashed VS Code windows (observed as
@@ -281,6 +284,7 @@ export class SidecarProcessManager implements vscode.Disposable {
     if (this.status.port) {
       const healthy = await this.client.probeHealth(this.status.port);
       if (healthy) {
+        this.missedHealthProbes = 0;
         this.updateStatus({
           ...this.status,
           lifecycle: 'ready',
@@ -290,17 +294,28 @@ export class SidecarProcessManager implements vscode.Disposable {
       }
 
       if (this.process?.exitCode === null) {
-        this.updateStatus({
-          ...this.status,
-          // A slow provider turn can occupy the sidecar long enough for a health
-          // probe to miss. Keep the live process routable so follow-up commands
-          // are not rejected before it has a chance to finish the active request.
-          lifecycle: 'ready',
-          lastHealthcheckAt: new Date().toISOString(),
-          detail:
-            'Sidecar is still running and may be processing a request. Its health check did not answer yet; it will be checked again before a restart.',
-        });
-        return this.getStatus();
+        if (this.shouldTolerateMissedHealthProbe()) {
+          this.updateStatus({
+            ...this.status,
+            // A slow provider turn can occupy the sidecar long enough for a health
+            // probe to miss. Keep the live process routable so follow-up commands
+            // are not rejected before it has a chance to finish the active request.
+            lifecycle: 'ready',
+            lastHealthcheckAt: new Date().toISOString(),
+            detail:
+              'Sidecar is still running and may be processing a request. Its health check did not answer yet; it will be checked again before a restart.',
+          });
+          return this.getStatus();
+        }
+
+        // The child is alive but wedged: it missed enough probes that routing
+        // to it only turns commands into timeouts. Exactly one process may
+        // write the data directory, so the replacement waits for this one to
+        // exit — stop() refuses (and this call fails) if it does not.
+        this.logSidecarLine(
+          `[sidecar] no health answer after ${this.missedHealthProbes} checks; restarting the unresponsive process`,
+        );
+        await this.stop();
       }
     }
 
@@ -314,6 +329,12 @@ export class SidecarProcessManager implements vscode.Disposable {
     } finally {
       this.startPromise = undefined;
     }
+  }
+
+  /** Count one missed probe; true while the live child should still be kept. */
+  private shouldTolerateMissedHealthProbe(): boolean {
+    this.missedHealthProbes += 1;
+    return this.missedHealthProbes < SIDECAR_DEFAULTS.maxMissedHealthProbes;
   }
 
   async stop(): Promise<void> {
@@ -532,6 +553,7 @@ export class SidecarProcessManager implements vscode.Disposable {
 
     const commandLine = `${candidate.command} ${candidate.args.join(' ')}`;
     this.process = child;
+    this.missedHealthProbes = 0;
     this.updateStatus({
       lifecycle: 'starting',
       host: SIDECAR_DEFAULTS.host,

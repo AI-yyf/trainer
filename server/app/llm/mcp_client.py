@@ -41,6 +41,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from ..core.process_env import child_process_environment
+
 if TYPE_CHECKING:
     from .tools import ToolContext, ToolDefinition
 
@@ -298,7 +300,8 @@ class McpStdioClient:
         """Spawn the server process and wire its pipes."""
         if self._process is not None:
             return
-        env = {**os.environ, **self.config.env}
+        # The MCP server is a third-party process: it never sees the sidecar's token.
+        env = child_process_environment(overrides=self.config.env)
         try:
             self._process = await asyncio.create_subprocess_exec(
                 self.config.command,

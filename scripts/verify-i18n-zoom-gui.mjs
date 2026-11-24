@@ -34,14 +34,14 @@ const electronBinary = requireVSCodeElectronBinary();
 ensureFreshVsixOrExit({ vsixPath, reason: "the i18n zoom GUI gate verifies the delivered artifact" });
 
 const LANGUAGES = [
-  { code: "zh-CN", resources: "资料", coach: "对话", plan: "学习" },
-  { code: "en-US", resources: "Resources", coach: "Chat", plan: "Learning" },
-  { code: "es-ES", resources: "Recursos", coach: "Chat", plan: "Plan" },
-  { code: "fr-FR", resources: "Ressources", coach: "Chat", plan: "Plan" },
-  { code: "de-DE", resources: "Materialien", coach: "Chat", plan: "Plan" },
-  { code: "ja-JP", resources: "資料", coach: "対話", plan: "計画" },
-  { code: "ko-KR", resources: "자료", coach: "대화", plan: "계획" },
-  { code: "pt-BR", resources: "Recursos", coach: "Chat", plan: "Plano" },
+  { code: "zh-CN", resources: "资料", coach: "对话" },
+  { code: "en-US", resources: "Resources", coach: "Chat" },
+  { code: "es-ES", resources: "Recursos", coach: "Chat" },
+  { code: "fr-FR", resources: "Ressources", coach: "Chat" },
+  { code: "de-DE", resources: "Materialien", coach: "Chat" },
+  { code: "ja-JP", resources: "資料", coach: "対話" },
+  { code: "ko-KR", resources: "자료", coach: "대화" },
+  { code: "pt-BR", resources: "Recursos", coach: "Chat" },
 ];
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -363,7 +363,7 @@ try {
     await page.waitForTimeout(1500);
 
     const overflow = {};
-    for (const view of ["coach", "plan", "resources"]) {
+    for (const view of ["coach", "resources"]) {
       const clicked = await clickLabel(frame, language[view]);
       await page.waitForTimeout(600);
       overflow[view] = { clicked, ...(await measureOverflow(frame)) };
@@ -378,35 +378,59 @@ try {
     const bodyText = (await frame.locator("body").innerText()).replace(/\s+/g, " ").trim();
     const navMetrics = await frame.evaluate(() =>
       Array.from(document.querySelectorAll(".app-shell-nav__item")).map((element) => {
+        // The label is a display:block span with overflow:hidden. Measuring the
+        // whole button counts the caret position AFTER the block as a second
+        // "line", and the button never reports overflow because the span does
+        // the clipping. Measure the text node for the line count and the span
+        // for truncation.
+        const label = element.querySelector("span");
+        const textNode = label && label.firstChild;
         const range = document.createRange();
-        range.selectNodeContents(element);
+        range.selectNodeContents(textNode && textNode.nodeType === Node.TEXT_NODE ? textNode : element);
         const tops = new Set(
-          Array.from(range.getClientRects()).map((rect) => Math.round(rect.top)),
+          Array.from(range.getClientRects())
+            .filter((rect) => rect.width > 0 || rect.height > 0)
+            .map((rect) => Math.round(rect.top)),
         );
         return {
           text: (element.textContent || "").trim(),
           lines: tops.size,
           height: element.getBoundingClientRect().height,
+          labelClientWidth: label ? label.clientWidth : null,
+          labelScrollWidth: label ? label.scrollWidth : null,
+          // True when no character is hidden by the ellipsis.
+          labelFits: label ? label.scrollWidth <= label.clientWidth + 1 : false,
+          fits:
+            element.scrollWidth <= element.clientWidth + 1 &&
+            element.scrollHeight <= element.clientHeight + 1,
         };
       }),
     );
+    // The shell ships two destinations (Chat / Resources); learning is a
+    // drawer, not a third nav item. At 200% zoom every locale label must stay
+    // on one line AND stay complete: wrapping was never observed here — the
+    // old two-line reading was the caret-after-block artefact described above.
     const navSingleLine =
-      navMetrics.length === 3 && navMetrics.every((entry) => entry.lines === 1);
+      navMetrics.length === 2 && navMetrics.every((entry) => entry.lines === 1);
+    const navFits =
+      navMetrics.length === 2 &&
+      navMetrics.every((entry) => entry.fits && entry.labelFits);
     record("language", {
       ok:
         ready.ok === true &&
         overflow.resources.clicked === true &&
         overflow.coach.clicked === true &&
-        overflow.plan.clicked === true &&
         Object.values(overflow).every((entry) => entry.scrollWidth <= entry.clientWidth + 1) &&
         versionCheckFits &&
         navSingleLine &&
+        navFits &&
         bodyText.includes(language.resources),
       language: language.code,
-      labels: { resources: language.resources, coach: language.coach, plan: language.plan },
+      labels: { resources: language.resources, coach: language.coach },
       overflow,
       navMetrics,
       navSingleLine,
+      navFits,
       versionCheckFits,
       text: bodyText.slice(0, 300),
       screenshot: await screenshot(page, `zoom200-${language.code}`),

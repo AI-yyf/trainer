@@ -1,8 +1,9 @@
 import type { ComposerLanguage, ProviderConfigView } from "../../lib/types";
 import type { Copy } from "../../lib/i18n/copyTypes";
-import type {
-  ProviderThinkingConfig,
-  ProviderThinkingDescriptor,
+import {
+  normalizeProviderModelThinkingConfig,
+  type ProviderThinkingConfig,
+  type ProviderThinkingDescriptor,
 } from "../../../../../shared/src/providerThinking";
 import type { ComposerProviderMenuItem } from "../../lib/composerModelHelpers";
 import { composerModelPolicyHint } from "../../lib/composerModelHelpers";
@@ -11,7 +12,13 @@ import {
   resolveEffectiveTokenBudgetProfile,
 } from "../../../../../shared/src/smartTokenBudget";
 import { ComposerIconButton } from "./ComposerIconButton";
-import { CheckMarkIcon, RefreshIcon } from "../icons";
+import {
+  CheckMarkIcon,
+  EyeIcon,
+  RefreshIcon,
+  SearchIcon,
+  TerminalIcon,
+} from "../icons";
 
 export interface ComposerModelMenuProps {
   copy: Copy;
@@ -38,14 +45,80 @@ export interface ComposerModelMenuProps {
   onThinkingChange: (config: ProviderThinkingConfig) => void;
   onRefreshModels: () => void;
   onSwitchModel: (model: string) => void;
-  onSwitchProfile: (profileId: string) => void;
+  onSwitchProviderModel: (profileId: string, model: string) => void;
   initialOptionLimit: number;
 }
 
+const VISION_LABEL: Record<ComposerLanguage, string> = {
+  "zh-CN": "视觉",
+  "en-US": "Vision",
+  "es-ES": "Visión",
+  "fr-FR": "Vision",
+  "de-DE": "Vision",
+  "ja-JP": "視覚",
+  "ko-KR": "비전",
+  "pt-BR": "Visão",
+};
+
+const THINKING_LABEL: Record<ComposerLanguage, string> = {
+  "zh-CN": "思考",
+  "en-US": "Thinking",
+  "es-ES": "Razonamiento",
+  "fr-FR": "Réflexion",
+  "de-DE": "Denken",
+  "ja-JP": "思考",
+  "ko-KR": "사고",
+  "pt-BR": "Raciocínio",
+};
+
+const EFFORT_LABEL: Record<"low" | "medium" | "high", Record<ComposerLanguage, string>> = {
+  low: {
+    "zh-CN": "低",
+    "en-US": "Low",
+    "es-ES": "Bajo",
+    "fr-FR": "Faible",
+    "de-DE": "Niedrig",
+    "ja-JP": "低",
+    "ko-KR": "낮음",
+    "pt-BR": "Baixo",
+  },
+  medium: {
+    "zh-CN": "中",
+    "en-US": "Medium",
+    "es-ES": "Medio",
+    "fr-FR": "Moyen",
+    "de-DE": "Mittel",
+    "ja-JP": "中",
+    "ko-KR": "중간",
+    "pt-BR": "Médio",
+  },
+  high: {
+    "zh-CN": "最高",
+    "en-US": "Max",
+    "es-ES": "Máximo",
+    "fr-FR": "Max",
+    "de-DE": "Maximal",
+    "ja-JP": "最高",
+    "ko-KR": "최고",
+    "pt-BR": "Máximo",
+  },
+};
+
+type OtherProviderGroup = {
+  id: string;
+  label: string;
+  models: string[];
+  visionModels: Set<string>;
+  thinkingByModel: Record<string, ProviderThinkingConfig>;
+};
+
 /**
- * Composer 的“切换模型”菜单面板 (P2 模块化第二块，自 App.tsx 迁出)。
- * 纯展示切片：模型搜索/思考强度/模型与已保存连接分组，无内部状态，
- * 行为与迁出前一致。
+ * Composer 的“切换模型”菜单面板。
+ *
+ * One calm list: provider identity, search, flat model rows and a single
+ * thinking-intensity control. The active row carries a check; a verified
+ * vision capability gets a small eye badge. Thinking sits at the bottom and
+ * reads as a slider, not a second navigation surface.
  */
 export function ComposerModelMenu({
   copy,
@@ -64,19 +137,12 @@ export function ComposerModelMenu({
   onThinkingChange,
   onRefreshModels,
   onSwitchModel,
-  onSwitchProfile,
+  onSwitchProviderModel,
   initialOptionLimit,
 }: ComposerModelMenuProps) {
   const providerApplied = providerConfig.configured;
-  const visibleSelections = filteredMenuItems;
-  const visibleModels = visibleSelections.filter(
+  const visibleModels = filteredMenuItems.filter(
     (profile) => profile.selectionKind === "model",
-  );
-  const visibleProfiles = visibleSelections.filter(
-    (profile) => profile.selectionKind === "profile" && !profile.isActive,
-  );
-  const savedProfiles = menuItems.filter(
-    (profile) => profile.selectionKind === "profile" && !profile.isActive,
   );
   const hasModelQuery = modelQuery.trim().length > 0;
   const activeModelItem = menuItems.find(
@@ -91,22 +157,105 @@ export function ComposerModelMenu({
   const defaultVisibleModels = menuItems
     .filter((profile) => profile.selectionKind === "model" && !profile.isActive)
     .slice(0, initialOptionLimit);
+  const activeModelPinned =
+    activeModelItem && activeModelItem.id !== retainedBlockedActiveModel?.id
+      ? [activeModelItem]
+      : [];
   const displayedModels = hasModelQuery
     ? [
         ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
-        ...visibleModels.filter((item) => item.id !== retainedBlockedActiveModel?.id),
+        ...activeModelPinned,
+        ...visibleModels.filter(
+          (item) =>
+            item.id !== retainedBlockedActiveModel?.id && item.id !== activeModelItem?.id,
+        ),
       ]
     : [
         ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
-        ...defaultVisibleModels,
+        ...activeModelPinned,
+        ...defaultVisibleModels.filter((item) => item.id !== activeModelItem?.id),
       ];
   const nonActiveModelCount = menuItems.filter(
     (item) => item.selectionKind === "model" && !item.isActive,
   ).length;
+  // Multiple providers: every saved profile becomes its own model group.
+  // Selecting a row from another group sends the profile half of the
+  // {profileId, modelId} identity with the model, so the host switches both
+  // atomically instead of switching the provider and then racing the model.
+  const activeProfileId = providerConfig.profileId?.trim() ?? "";
+  const providerRecords = Array.isArray(providerConfig.providerProfiles)
+    ? providerConfig.providerProfiles
+    : [];
+  const otherProviderGroups = providerRecords.flatMap((record) => {
+    if (!record || typeof record !== "object" || Array.isArray(record)) {
+      return [];
+    }
+    const raw = record as Record<string, unknown>;
+    const id = typeof raw.id === "string" ? raw.id.trim() : "";
+    if (!id || id === activeProfileId) {
+      return [];
+    }
+    const label =
+      (typeof raw.label === "string" && raw.label.trim()) ||
+      (typeof raw.name === "string" && raw.name.trim()) ||
+      id;
+    const defaultModel = typeof raw.model === "string" ? raw.model.trim() : "";
+    const availableModels = Array.isArray(raw.availableModels)
+      ? raw.availableModels.filter((value): value is string => typeof value === "string")
+      : [];
+    const models = Array.from(
+      new Set([defaultModel, ...availableModels].map((value) => value.trim()).filter(Boolean)),
+    );
+    if (models.length === 0) {
+      return [];
+    }
+    const rawCapabilities =
+      raw.capabilities && typeof raw.capabilities === "object" && !Array.isArray(raw.capabilities)
+        ? (raw.capabilities as Record<string, unknown>)
+        : {};
+    const rawModelCapabilities =
+      raw.modelCapabilities && typeof raw.modelCapabilities === "object"
+        ? (raw.modelCapabilities as Record<string, unknown>)
+        : {};
+    const visionModels = new Set(
+      models.filter((model) => {
+        const modelCapability = rawModelCapabilities[model];
+        if (
+          modelCapability &&
+          typeof modelCapability === "object" &&
+          !Array.isArray(modelCapability) &&
+          (modelCapability as Record<string, unknown>).vision === true
+        ) {
+          return true;
+        }
+        return rawCapabilities.vision === true;
+      }),
+    );
+    const thinkingByModel =
+      normalizeProviderModelThinkingConfig(
+        raw.modelThinkingConfig,
+        typeof raw.protocol === "string" ? raw.protocol : undefined,
+      ) ?? {};
+    return [{ id, label, models, visionModels, thinkingByModel }];
+  });
+  const queryKey = modelQuery.trim().toLowerCase();
+  const visibleOtherGroups = otherProviderGroups
+    .map((group) => ({
+      ...group,
+      models: hasModelQuery
+        ? group.models.filter((model) => model.toLowerCase().includes(queryKey))
+        : group.models.slice(0, initialOptionLimit),
+    }))
+    .filter((group) => group.models.length > 0);
   const hasOnlyCurrentModel =
-    Boolean(activeModelItem) && nonActiveModelCount === 0 && savedProfiles.length === 0;
+    Boolean(activeModelItem) &&
+    nonActiveModelCount === 0 &&
+    otherProviderGroups.length === 0;
   const showModelSection =
-    hasModelQuery || defaultVisibleModels.length > 0 || hasOnlyCurrentModel;
+    hasModelQuery ||
+    defaultVisibleModels.length > 0 ||
+    Boolean(activeModelItem) ||
+    otherProviderGroups.length > 0;
   const searchLabel = localize(composerLanguage, "搜索模型或已保存连接");
   const emptyStateLabel = hasModelQuery
     ? localize(composerLanguage, "没有匹配的模型或已保存连接。")
@@ -116,12 +265,12 @@ export function ComposerModelMenu({
         ? localize(composerLanguage, "可从下方展开已保存连接。")
         : localize(composerLanguage, "还没有可切换的模型。请到“设置”保存连接。");
 
-  const visibleSelectionCount = displayedModels.length + (hasModelQuery ? visibleProfiles.length : 0);
-  const showSearch = nonActiveModelCount > initialOptionLimit;
+  const visibleSelectionCount =
+    displayedModels.length +
+    visibleOtherGroups.reduce((count, group) => count + group.models.length, 0);
   const modelSectionLabel = hasModelQuery
     ? localize(composerLanguage, "匹配的模型")
     : localize(composerLanguage, "可切换模型");
-  const profileSectionLabel = localize(composerLanguage, "已保存连接");
   const refreshModelsDisabled =
     !providerApplied ||
     !providerConfig.apiKeyConfigured ||
@@ -134,145 +283,127 @@ export function ComposerModelMenu({
       : providerConfig.modelListStatus === "loading"
         ? localize(composerLanguage, "正在更新模型列表")
         : localize(composerLanguage, "更新模型列表");
+  const providerLabel =
+    providerConfig.profileLabel?.trim() ||
+    providerConfig.name?.trim() ||
+    copy.chatModel;
+  const visionLabel = VISION_LABEL[composerLanguage];
+  const modelHasVision = (model: string): boolean => {
+    const modelCapability = providerConfig.modelCapabilities?.[model]?.vision;
+    if (typeof modelCapability === "boolean") {
+      return modelCapability;
+    }
+    return providerConfig.capabilities.vision === true;
+  };
+  const savedThinkingLabelFor = (
+    thinking: ProviderThinkingConfig | undefined,
+  ): string | undefined => {
+    if (!thinking) return undefined;
+    if (thinking.mode === "disabled") {
+      return localize(composerLanguage, "关闭");
+    }
+    if (thinking.mode === "enabled" && thinking.reasoningEffort) {
+      return EFFORT_LABEL[thinking.reasoningEffort][composerLanguage];
+    }
+    return undefined;
+  };
+
+  const effortOptions: readonly ("low" | "medium" | "high")[] | undefined =
+    thinkingDescriptor?.kind === "reasoning_effort"
+      ? thinkingDescriptor.effortOptions ?? ["low", "medium", "high"]
+      : undefined;
+  const modeStops = ["disabled", "auto", "enabled"] as const;
+  const thinkingStops = effortOptions ?? (thinkingDescriptor ? modeStops : undefined);
+  const thinkingIndex = (() => {
+    if (!thinkingDescriptor || !thinkingStops) return 0;
+    if (effortOptions) {
+      const effort = thinkingDescriptor.config.reasoningEffort ?? "medium";
+      return Math.max(0, effortOptions.indexOf(effort));
+    }
+    return Math.max(0, modeStops.indexOf(thinkingDescriptor.config.mode));
+  })();
+  const thinkingValueLabel = (() => {
+    if (!thinkingDescriptor || !thinkingStops) return "";
+    if (effortOptions) {
+      if (thinkingDescriptor.config.mode === "disabled") {
+        return localize(composerLanguage, "关闭");
+      }
+      if (thinkingDescriptor.config.mode === "auto") {
+        return localize(composerLanguage, "自动");
+      }
+      const effort = thinkingDescriptor.config.reasoningEffort ?? "medium";
+      return EFFORT_LABEL[effort][composerLanguage];
+    }
+    return thinkingIndex === 0
+      ? localize(composerLanguage, "关闭")
+      : thinkingIndex === 1
+        ? localize(composerLanguage, "自动")
+        : localize(composerLanguage, "开启");
+  })();
+  const onThinkingIndexChange = (index: number) => {
+    if (!thinkingDescriptor || !thinkingStops) return;
+    if (effortOptions) {
+      const effort = effortOptions[index] ?? "medium";
+      onThinkingChange({
+        ...thinkingDescriptor.config,
+        mode: "enabled",
+        reasoningEffort: effort,
+      });
+      return;
+    }
+    const mode = modeStops[index] ?? "auto";
+    onThinkingChange({
+      ...thinkingDescriptor.config,
+      mode,
+      ...(mode === "enabled" &&
+      thinkingDescriptor.kind === "reasoning_effort" &&
+      !thinkingDescriptor.config.reasoningEffort
+        ? { reasoningEffort: "medium" as const }
+        : {}),
+    });
+  };
 
   return (
-    <section className="composer-menu-panel composer-menu-panel--provider">
-      <div className="composer-menu-panel__header">
-        <span className="eyebrow">{copy.chatModel}</span>
-        <div className="composer-menu-panel__header-actions">
-          <ComposerIconButton
-            icon={<RefreshIcon size={14} />}
-            label={refreshModelsLabel}
-            ariaLabel={refreshModelsLabel}
-            title={refreshModelsTitle}
-            active={providerConfig.modelListStatus === "loading"}
-            disabled={refreshModelsDisabled}
-            onClick={onRefreshModels}
-          />
-        </div>
-      </div>
+    <section className="composer-menu-panel composer-menu-panel--provider composer-model-menu">
+      <header className="composer-model-menu__provider">
+        <span className="composer-model-menu__provider-icon" aria-hidden="true">
+          <TerminalIcon size={14} />
+        </span>
+        <span className="composer-model-menu__provider-name" title={providerLabel}>
+          {providerLabel}
+        </span>
+        <span
+          className="composer-model-menu__provider-pill"
+          title={providerConfig.protocol || "API"}
+        >
+          API
+        </span>
+        <ComposerIconButton
+          icon={<RefreshIcon size={14} />}
+          label={refreshModelsLabel}
+          ariaLabel={refreshModelsLabel}
+          title={refreshModelsTitle}
+          active={providerConfig.modelListStatus === "loading"}
+          disabled={refreshModelsDisabled}
+          onClick={onRefreshModels}
+        />
+      </header>
 
-      {showSearch || hasModelQuery ? (
-        <label className="resources-search resources-search--hero composer-menu-panel__search">
-          <span className="sr-only">{searchLabel}</span>
-          <input
-            ref={modelSearchRef}
-            type="search"
-            value={modelQuery}
-            onChange={(event) => onModelQueryChange(event.target.value)}
-            placeholder={searchLabel}
-          />
-        </label>
-      ) : null}
+      <label className="composer-model-menu__search">
+        <SearchIcon size={14} />
+        <span className="sr-only">{searchLabel}</span>
+        <input
+          ref={modelSearchRef}
+          type="search"
+          value={modelQuery}
+          onChange={(event) => onModelQueryChange(event.target.value)}
+          placeholder={searchLabel}
+        />
+      </label>
 
-      {thinkingDescriptor ? (
-        <div className="composer-menu-panel__section composer-thinking">
-          <div className="composer-thinking__header">
-            <span className="eyebrow">{localize(composerLanguage, "思考强度")}</span>
-            {thinkingDescriptor.disabled ? (
-              <span className="composer-thinking__state">
-                {localize(composerLanguage, "已关闭")}
-              </span>
-            ) : null}
-          </div>
-          <div
-            className="composer-thinking__modes"
-            role="group"
-            aria-label={localizeAlt(composerLanguage, "思考强度")}
-          >
-            {(
-              [
-                { value: "auto", label: localize(composerLanguage, "自动") },
-                { value: "disabled", label: localize(composerLanguage, "关闭") },
-                { value: "enabled", label: localize(composerLanguage, "开启") },
-              ] as const
-            ).map((option) => {
-              const active = thinkingDescriptor.config.mode === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`composer-thinking__mode ${active ? "is-active" : ""}`}
-                  aria-pressed={active}
-                  onClick={() =>
-                    onThinkingChange({
-                      ...thinkingDescriptor.config,
-                      mode: option.value,
-                      // "On" must carry a concrete effort or nothing is
-                      // emitted and the toggle falls back to "auto".
-                      ...(option.value === "enabled" &&
-                      thinkingDescriptor.kind === "reasoning_effort" &&
-                      !thinkingDescriptor.config.reasoningEffort
-                        ? { reasoningEffort: "medium" as const }
-                        : {}),
-                    })
-                  }
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-          {thinkingDescriptor.config.mode === "enabled" &&
-          thinkingDescriptor.kind === "reasoning_effort" &&
-          thinkingDescriptor.effortOptions ? (
-            <div
-              className="composer-thinking__modes composer-thinking__modes--effort"
-              role="group"
-              aria-label={localize(composerLanguage, "推理力度")}
-            >
-              {thinkingDescriptor.effortOptions.map((option) => {
-                const active =
-                  (thinkingDescriptor.config.reasoningEffort ?? "medium") === option;
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    className={`composer-thinking__mode ${active ? "is-active" : ""}`}
-                    aria-pressed={active}
-                    onClick={() =>
-                      onThinkingChange({
-                        ...thinkingDescriptor.config,
-                        mode: "enabled",
-                        reasoningEffort: option,
-                      })
-                    }
-                  >
-                    {option === "low"
-                      ? localize(composerLanguage, "低")
-                      : option === "high"
-                        ? localize(composerLanguage, "高")
-                        : localize(composerLanguage, "中")}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-          {thinkingDescriptor.config.mode === "enabled" &&
-          (thinkingDescriptor.kind === "thinking_budget" ||
-            thinkingDescriptor.kind === "gemini_thinking" ||
-            typeof thinkingDescriptor.config.budgetTokens === "number") ? (
-            <p className="composer-menu-panel__hint">
-              {localize(
-                composerLanguage,
-                typeof thinkingDescriptor.config.budgetTokens === "number"
-                  ? "思考预算 {n}，可在“设置”里调整。"
-                  : "思考预算 自动，可在“设置”里调整。",
-              ).replace(
-                "{n}",
-                typeof thinkingDescriptor.config.budgetTokens === "number"
-                  ? formatCompactTokenLimit(thinkingDescriptor.config.budgetTokens) ||
-                      String(thinkingDescriptor.config.budgetTokens)
-                  : "",
-              )}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {showModelSection ? (
-        <div className="composer-menu-panel__section">
-          {visibleSelectionCount > 0 ? (
+      <div className="composer-model-menu__scroll">
+        {showModelSection ? (
+          visibleSelectionCount > 0 ? (
             <div className="composer-provider-groups">
               {displayedModels.length > 0 ? (
                 <div
@@ -303,6 +434,10 @@ export function ComposerModelMenu({
                           formatCompactTokenLimit(modelContextTokens) || String(modelContextTokens),
                         )
                       : undefined;
+                    const vision = modelHasVision(profile.model);
+                    const savedThinkingLabel = savedThinkingLabelFor(
+                      providerConfig.modelThinkingConfig?.[profile.model],
+                    );
                     return (
                       <button
                         key={profile.id}
@@ -311,101 +446,141 @@ export function ComposerModelMenu({
                         disabled={modelDisabled}
                         aria-current={profile.isActive ? "true" : undefined}
                         title={
-                          [policyHint, modelContextHint].filter(Boolean).join(" · ") ||
+                          [modelContextHint, policyHint].filter(Boolean).join(" · ") ||
                           profile.model
                         }
                         onClick={() => onSwitchModel(profile.model)}
                       >
-                        <div className="composer-provider-list__row">
-                          <span className="composer-provider-list__stack">
-                            <span className="composer-provider-list__model">{profile.model}</span>
-                            {modelContextHint || policyHint ? (
-                              <span className="composer-provider-list__label">
-                                {[modelContextHint, policyHint].filter(Boolean).join(" · ")}
-                              </span>
-                            ) : null}
-                          </span>
+                        <span className="composer-model-menu__row">
+                          <span className="composer-provider-list__model">{profile.model}</span>
+                          {vision ? (
+                            <span className="composer-model-menu__vision">
+                              <EyeIcon size={12} />
+                              {visionLabel}
+                            </span>
+                          ) : null}
+                          {savedThinkingLabel ? (
+                            <span
+                              className="composer-model-menu__thinking-badge"
+                              title={localizeAlt(composerLanguage, "思考强度")}
+                            >
+                              {THINKING_LABEL[composerLanguage]} {savedThinkingLabel}
+                            </span>
+                          ) : null}
                           {profile.isActive ? (
                             <span className="composer-provider-list__state">
-                              <CheckMarkIcon size={12} />
+                              <CheckMarkIcon size={14} />
                               <span className="sr-only">{providerCopy.modelPicker.currentModel}</span>
                             </span>
                           ) : null}
-                        </div>
+                        </span>
                       </button>
                     );
                   })}
                 </div>
               ) : null}
 
-              {hasModelQuery && visibleProfiles.length > 0 ? (
-                <section className="composer-provider-group">
-                  <div className="composer-provider-group__header">
-                    <span className="eyebrow">{profileSectionLabel}</span>
+              {visibleOtherGroups.map((group) => (
+                <section
+                  key={group.id}
+                  className="composer-model-menu__provider-group"
+                  aria-label={group.label}
+                >
+                  <div className="composer-model-menu__group-header">
+                    <span className="composer-model-menu__group-icon" aria-hidden="true">
+                      <TerminalIcon size={12} />
+                    </span>
+                    <span className="composer-model-menu__group-name">{group.label}</span>
+                    <span className="composer-model-menu__provider-pill">API</span>
                   </div>
                   <div
                     className="composer-provider-list"
                     role="list"
-                    aria-label={localize(composerLanguage, "已保存连接")}
+                    aria-label={group.label}
                   >
-                    {visibleProfiles.map((profile) => (
-                      <button
-                        key={profile.id}
-                        className="composer-provider-list__item"
-                        type="button"
-                        title={profile.model}
-                        onClick={() => onSwitchProfile(profile.id)}
-                      >
-                        <div className="composer-provider-list__row">
-                          <span className="composer-provider-list__stack">
-                            <span className="composer-provider-list__model">{profile.label}</span>
-                            <span className="composer-provider-list__label">{profile.model}</span>
+                    {group.models.map((model) => {
+                      const groupThinkingLabel = savedThinkingLabelFor(
+                        group.thinkingByModel[model],
+                      );
+                      return (
+                        <button
+                          key={`${group.id}:${model}`}
+                          className="composer-provider-list__item"
+                          type="button"
+                          title={model}
+                          onClick={() => onSwitchProviderModel(group.id, model)}
+                        >
+                          <span className="composer-model-menu__row">
+                            <span className="composer-provider-list__model">{model}</span>
+                            {group.visionModels.has(model) ? (
+                              <span className="composer-model-menu__vision">
+                                <EyeIcon size={12} />
+                                {visionLabel}
+                              </span>
+                            ) : null}
+                            {groupThinkingLabel ? (
+                              <span
+                                className="composer-model-menu__thinking-badge"
+                                title={localizeAlt(composerLanguage, "思考强度")}
+                              >
+                                {THINKING_LABEL[composerLanguage]} {groupThinkingLabel}
+                              </span>
+                            ) : null}
                           </span>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
-              ) : null}
+              ))}
             </div>
           ) : (
             <p className="composer-menu-panel__hint">{emptyStateLabel}</p>
-          )}
-        </div>
-      ) : null}
+          )
+        ) : null}
+      </div>
 
-      {!hasModelQuery && savedProfiles.length > 0 ? (
-        <details className="composer-provider-group">
-          <summary className="composer-provider-group__header">
-            <span className="eyebrow">{profileSectionLabel}</span>
-          </summary>
-          <div
-            className="composer-provider-list"
-            role="list"
-            aria-label={localize(composerLanguage, "已保存连接")}
-          >
-            {savedProfiles.map((profile) => (
-              <button
-                key={profile.id}
-                className="composer-provider-list__item"
-                type="button"
-                title={profile.model}
-                onClick={() => onSwitchProfile(profile.id)}
-              >
-                <div className="composer-provider-list__row">
-                  <span className="composer-provider-list__stack">
-                    <span className="composer-provider-list__model">{profile.label}</span>
-                    <span className="composer-provider-list__label">{profile.model}</span>
-                  </span>
-                </div>
-              </button>
-            ))}
+      {thinkingDescriptor && thinkingStops ? (
+        <footer className="composer-model-menu__thinking">
+          <div className="composer-model-menu__thinking-header">
+            <span>{localize(composerLanguage, "思考强度")}</span>
+            <span className="composer-model-menu__thinking-value">
+              {thinkingDescriptor.disabled ? localize(composerLanguage, "关闭") : thinkingValueLabel}
+            </span>
           </div>
-        </details>
-      ) : null}
-
-      {!hasModelQuery && !showSearch && !providerApplied && savedProfiles.length === 0 ? (
-        <p className="composer-menu-panel__hint">{emptyStateLabel}</p>
+          <input
+            className="composer-model-menu__thinking-range"
+            type="range"
+            min={0}
+            max={Math.max(0, thinkingStops.length - 1)}
+            step={1}
+            value={thinkingIndex}
+            disabled={thinkingDescriptor.disabled === true}
+            aria-label={localizeAlt(composerLanguage, "思考强度")}
+            aria-valuetext={
+              thinkingDescriptor.disabled ? localize(composerLanguage, "关闭") : thinkingValueLabel
+            }
+            onChange={(event) => onThinkingIndexChange(Number(event.target.value))}
+          />
+          {thinkingDescriptor.kind === "thinking_budget" ||
+          thinkingDescriptor.kind === "gemini_thinking" ||
+          typeof thinkingDescriptor.config.budgetTokens === "number" ? (
+            <p className="composer-menu-panel__hint">
+              {localize(
+                composerLanguage,
+                typeof thinkingDescriptor.config.budgetTokens === "number"
+                  ? "思考预算 {n}，可在“设置”里调整。"
+                  : "思考预算 自动，可在“设置”里调整。",
+              ).replace(
+                "{n}",
+                typeof thinkingDescriptor.config.budgetTokens === "number"
+                  ? formatCompactTokenLimit(thinkingDescriptor.config.budgetTokens) ||
+                      String(thinkingDescriptor.config.budgetTokens)
+                  : "",
+              )}
+            </p>
+          ) : null}
+        </footer>
       ) : null}
     </section>
   );

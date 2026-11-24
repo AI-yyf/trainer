@@ -2,14 +2,14 @@
 
 Principles enforced here:
 - P1: Profile is data, not code. Adding a new subject = adding one ``*.profile.json``
-  file in ``profiles/`` that passes ``validate_subject_profile``.
+  file in ``app/training/profiles/`` that passes ``validate_subject_profile``.
 - P2: 3D orthogonality (UI language × content language × learner language).
 - P3: Locale-aware deterministic hooks (zh/en/ja/de/fr/ko/es/pt).
 - P4: Governance semantics are globally uniform — the 5-state projection ladder,
   dual-context transfer rule, trusted verification source whitelist, and
   evidence invalidation rules cannot be modified by any profile.
 - P5: Zero-code third/fourth subject gate (e.g. Japanese learning, German grammar,
-  French writing live purely as JSON files in ``profiles/``).
+  French writing live purely as JSON files in ``app/training/profiles/``).
 """
 
 from __future__ import annotations
@@ -57,12 +57,36 @@ class SubjectProfile:
     inspect_only: bool = False
 
 
-def _repo_profiles_dir() -> Path:
-    # Check repo root `profiles/` first, then `server/app/training/profiles/` fallback.
-    repo_root_profiles = Path(__file__).resolve().parents[3] / "profiles"
-    if repo_root_profiles.is_dir():
-        return repo_root_profiles
-    return Path(__file__).resolve().parent / "profiles"
+BUILTIN_PROFILES_DIRNAME = "profiles"
+
+
+def builtin_profiles_dir() -> Path:
+    """Where the shipped ``*.profile.json`` files live.
+
+    They are package data, next to this module, so they travel with the
+    sidecar in every layout: a source checkout, the bundled ``server/app``
+    tree of a VSIX, and the frozen binary (its build collects the data files
+    of ``app.training``). A profiles folder at the repository root is read
+    only as a legacy fallback, for a checkout that still keeps them there:
+    when the files lived only there, a packaged Trainer shipped none.
+    """
+    packaged = Path(__file__).resolve().parent / BUILTIN_PROFILES_DIRNAME
+    if packaged.is_dir():
+        return packaged
+    return Path(__file__).resolve().parents[3] / BUILTIN_PROFILES_DIRNAME
+
+
+# The built-in registry is read on every subject lookup; it only changes when
+# one of the shipped files does, so it is keyed by their (name, mtime, size).
+_BUILTIN_REGISTRY: tuple[tuple[object, ...], dict[str, "SubjectProfile"]] | None = None
+
+
+def _profiles_signature(target_dir: Path) -> tuple[object, ...]:
+    return tuple(
+        (path.name, path.stat().st_mtime_ns, path.stat().st_size)
+        for path in sorted(target_dir.glob("*.profile.json"))
+        if not path.name.startswith("._")
+    )
 
 
 def validate_subject_profile(
@@ -216,10 +240,16 @@ def validate_subject_profile(
 
 def load_subject_profiles(directory: Path | None = None) -> dict[str, SubjectProfile]:
     """Load all ``*.profile.json`` files from ``profiles/`` into a registry dict."""
-    target_dir = directory or _repo_profiles_dir()
+    global _BUILTIN_REGISTRY
+    target_dir = Path(directory) if directory is not None else builtin_profiles_dir()
     registry: dict[str, SubjectProfile] = {}
     if not target_dir.is_dir():
         return registry
+    if directory is None:
+        signature = _profiles_signature(target_dir)
+        cached = _BUILTIN_REGISTRY
+        if cached is not None and cached[0] == signature:
+            return dict(cached[1])
     for path in sorted(target_dir.glob("*.profile.json")):
         if path.name.startswith("._"):
             continue
@@ -228,6 +258,8 @@ def load_subject_profiles(directory: Path | None = None) -> dict[str, SubjectPro
         registry[profile.id] = profile
         if profile.family not in registry:
             registry[profile.family] = profile
+    if directory is None:
+        _BUILTIN_REGISTRY = (_profiles_signature(target_dir), dict(registry))
     return registry
 
 

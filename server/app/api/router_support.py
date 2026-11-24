@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 import re
 import socket
 import ssl
@@ -328,7 +329,14 @@ def register_request_workspace_path(
     payload: dict | None = None,
     request: object | None = None,
 ) -> str | None:
-    """Register the workspace directory from a chat/turn payload if present."""
+    """Register the workspace directory from a chat/turn payload if present.
+
+    A chat/turn payload may introduce a root the sidecar does not know yet, or
+    repeat the one it already has. It can never *move* an existing root: roots
+    change only through host-authenticated routes (``/session/start``, workspace
+    adoption and provisioning). Otherwise any caller that reaches a chat route
+    could point the coach's file tools at another directory.
+    """
     candidates: list[object] = []
     if request is not None:
         candidates.append(getattr(request, "workspace_path", None))
@@ -346,11 +354,49 @@ def register_request_workspace_path(
         if isinstance(ws_snap, dict):
             candidates.extend([ws_snap.get("root_path"), ws_snap.get("rootPath")])
     resolved = next((str(item).strip() for item in candidates if isinstance(item, str) and item.strip()), None)
-    if resolved and workspace_id:
+    if resolved and workspace_id and not _root_already_registered(runtime, workspace_id, resolved):
         register = getattr(runtime, "register_workspace_path", None)
         if callable(register):
             register(workspace_id, resolved)
     return resolved
+
+
+def _same_directory(left: str, right: str) -> bool:
+    def key(value: str) -> str:
+        absolute = os.path.abspath(os.path.expanduser(value))
+        try:
+            return os.path.normcase(os.path.realpath(absolute))
+        except OSError:
+            return os.path.normcase(absolute)
+
+    return key(left) == key(right)
+
+
+def _root_already_registered(runtime: object, workspace_id: str, candidate: str) -> bool:
+    """True when a chat/turn payload names a root the sidecar already has.
+
+    Only an *explicitly registered* root counts. The provisioning fallback that
+    ``resolve_workspace_path`` offers is not a registration, so the first chat
+    payload for a provisioned project still lands as before. Once a root is
+    registered a chat payload never rewrites it — not even with another spelling
+    of the same directory — so the registered root only ever changes through
+    the host-authenticated routes.
+    """
+    registered = getattr(runtime, "workspace_paths", None)
+    if not isinstance(registered, dict):
+        return False
+    resolve_context_id = getattr(getattr(runtime, "repository", None), "resolve_context_id", None)
+    resolved_workspace_id = workspace_id
+    if callable(resolve_context_id):
+        resolved_workspace_id = resolve_context_id(workspace_id) or workspace_id
+    current_text = str(registered.get(resolved_workspace_id) or "").strip()
+    if not current_text:
+        return False
+    if not _same_directory(current_text, candidate):
+        logger.warning(
+            "Ignored a chat payload that tried to move an already registered workspace root."
+        )
+    return True
 
 
 def _stamp_library_sandbox_work(

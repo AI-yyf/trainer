@@ -124,6 +124,15 @@ body,
 }
 
 @container trainer (max-width: 220px) {
+  .app-shell-nav {
+    /* Content-sized columns. The Resources label is longer than Chat in
+       every locale, so equal halves ellipsised "Ressources" / "Materialien"
+       at 200% zoom (54px for a 60px label). Each destination now takes what
+       its own label needs; a label still clips gracefully if it cannot fit. */
+    grid-template-columns: repeat(2, minmax(0, auto));
+    justify-content: space-between;
+  }
+
   .app-shell-nav__item {
     font-size: 11px;
     padding-inline: 2px;

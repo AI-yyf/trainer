@@ -46,6 +46,7 @@ import {
 } from "../lib/vscode";
 import { normalizeLearningSection, normalizeSidebarView } from "../lib/types";
 import { appUiCopy } from "../lib/i18n/appUiCopy";
+import { setRemoteImageLanguageResolver } from "../lib/remoteImages";
 import type {
   ActiveWorkbenchView,
   BootstrapData,
@@ -2125,3 +2126,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
     })),
   resetStream: () => set({ streaming: freshStreamingState() }),
 }));
+
+// Sanitized HTML previews are plain markup, outside React: they read the UI
+// language for their remote-image placeholders from here.
+setRemoteImageLanguageResolver(() => useWorkbenchState.getState().layout.composerLanguage);

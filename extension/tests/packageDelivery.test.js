@@ -33,6 +33,11 @@ function fixture() {
   }
   write(path.join(directory, 'server/run_sidecar.py'), 'print("fixture")');
   write(path.join(directory, 'server/app/__init__.py'), '');
+  // The subject profiles are package data: a package that lacks them is
+  // refused by the verifier, so a shippable fixture carries them.
+  for (const subject of ['code', 'literature', 'french-writing', 'german-grammar', 'japanese-learning']) {
+    write(path.join(directory, `server/app/training/profiles/${subject}.profile.json`), '{}');
+  }
   write(path.join(directory, 'server/pyproject.toml'), '[project]\nname="trainer-sidecar"');
   write(path.join(directory, 'server/README.md'), '# Sidecar');
   const companion = { name: 'trainer-workspace-companion', version: '1.0.0',
@@ -72,6 +77,12 @@ function targetArchive(target, version = '1.3.4') {
   const manifest = { platform: target, sourceSnapshot: { sha256: 'source-hash' },
     buildEnvironment: { python: '3.12.14', dependencies: { pyinstaller: '6.22.2' } } };
   const entry = target.startsWith('win32-') ? 'trainer-sidecar.exe' : 'trainer-sidecar';
+  // The subject profiles are package data every archive must carry.
+  const profiles = Object.fromEntries(
+    ['code', 'literature', 'french-writing', 'german-grammar', 'japanese-learning'].map(
+      (subject) => [`extension/bundled/server/app/training/profiles/${subject}.profile.json`, '{}'],
+    ),
+  );
   return zip({
     'extension.vsixmanifest': `<Identity Version="${version}" TargetPlatform="${target}"/>`,
     'extension/package.json': JSON.stringify({ version }),
@@ -80,6 +91,7 @@ function targetArchive(target, version = '1.3.4') {
     'extension/bundled/remote/trainer-workspace-companion.vsix': 'companion archive',
     [`extension/bundled/bin/${target}/${entry}`]: 'executable',
     [`extension/bundled/bin/${target}/trainer-sidecar-manifest.json`]: JSON.stringify(manifest),
+    ...profiles,
   });
 }
 

@@ -209,7 +209,8 @@ async function createFixture() {
   const practicePath = path.join(tempDir, "practice.py");
   // Current-file evaluation runs pytest against the submitted file in an
   // isolated sandbox, so keep the verifier in that file to exercise the
-  // required dynamic-check pass path.
+  // required dynamic-check pass path. The card-specific body is written per
+  // probe once the generated card's acceptance contract is known.
   await fs.writeFile(
     practicePath,
     "def ok() -> bool:\n    return True\n\n\ndef test_ok() -> None:\n    assert ok() is True\n",
@@ -220,6 +221,54 @@ async function createFixture() {
     practicePath,
     practiceContent: await fs.readFile(practicePath, "utf8"),
   };
+}
+
+/**
+ * Build a submission that satisfies the generated card, whatever symbols,
+ * docstring and entry-point criteria it asks for. A real provider mints
+ * card-specific acceptance criteria; a fixed `def ok` fixture then fails the
+ * honest evaluator and the smoke reports a false product regression.
+ *
+ * The submission is a real one: documented definitions and a pytest case. It
+ * must not contain forged tokens — runner words are satisfied by the run
+ * itself and docstrings by an actual docstring, which is what the evaluator
+ * checks.
+ */
+function buildPracticeForCard(card) {
+  const expectedSymbols = Array.isArray(card?.expected_symbols) ? card.expected_symbols : [];
+  const criteria = Array.isArray(card?.acceptance_criteria) ? card.acceptance_criteria : [];
+  // A docstring criterion may name a definition that is not also listed in
+  // expected_symbols: give every named identifier a documented stub.
+  const criteriaNames = criteria.flatMap((item) =>
+    Array.from(String(item || "").matchAll(/`([^`]+)`/g), (match) =>
+      String(match[1] || "").trim(),
+    ),
+  );
+  const symbols = [
+    ...new Set(
+      [...expectedSymbols, ...criteriaNames]
+        .map((item) => String(item || "").trim())
+        .filter((item) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(item) && item !== "main"),
+    ),
+  ];
+  const lines = ["# python verification entry point (pytest)", ""];
+  for (const symbol of symbols) {
+    lines.push(
+      `def ${symbol}(*args, **kwargs):`,
+      '    """Documented stub for a symbol the card expects."""',
+      "    return True",
+      "",
+    );
+  }
+  lines.push(
+    "def main() -> None:",
+    '    """Entry point required by the card contract."""',
+    "    print('ok')",
+    "",
+    "def test_submission_passes() -> None:",
+    "    assert main is not None",
+  );
+  return { content: `${lines.join("\n")}\n`, symbols };
 }
 
 function assertPracticeRouting(payload, step, diagnostics) {
@@ -362,18 +411,20 @@ async function runProbe({ name, diagnosticsInput, expectPassed, fixture, diagnos
   }
   await assertPracticeRouting({ active_routing: routing.json }, `${name}_start_card`, diagnostics);
 
+  const practice = buildPracticeForCard(card);
+  await fs.writeFile(fixture.practicePath, practice.content, "utf8");
   const evaluation = await postJson("/evaluate/current-file", {
     session_id: sessionId,
     workspace_id: workspaceId,
     task_spec_id: `training-return-smoke-${name}`,
     file_path: fixture.practicePath,
     language_id: "python",
-    content: fixture.practiceContent,
+    content: practice.content,
     diagnostics: diagnosticsInput,
     evaluation_source: "training",
     training_card_id: trainingCardId,
     training_card_title: trainingCardTitle,
-    expected_symbols: ["ok"],
+    expected_symbols: practice.symbols,
   });
   if (!evaluation.response.ok || !evaluation.json) {
     return failure({
@@ -599,6 +650,31 @@ async function main() {
       category: "missing_provider_api_key",
       detail: "Set TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_API_KEY before running the training return smoke.",
       diagnostics: [],
+    });
+  }
+
+  // A tools turn is refused until the provider's tool capability has been
+  // verified (POST /provider/test — the Settings "Test" button). Do exactly
+  // what the host does instead of relying on capability state an earlier run
+  // left in the database: on a fresh data directory that hidden order
+  // dependency failed the very first turn with 409.
+  const providerTest = await postJson("/provider/test", {
+    provider: providerPayload(),
+    apiKey: providerApiKey,
+    responseLanguage: "en-US",
+  });
+  if (
+    !providerTest.response.ok ||
+    providerTest.json?.ok !== true ||
+    providerTest.json?.tools_ready !== true
+  ) {
+    return failure({
+      step: "provider_test",
+      category: "provider_not_ready",
+      detail:
+        "Provider verification did not prove a tools-capable connection, so the training turn cannot start.",
+      diagnostics: [],
+      status: providerTest.response.status,
     });
   }
 

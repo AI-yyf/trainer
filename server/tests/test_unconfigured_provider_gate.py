@@ -113,6 +113,7 @@ def test_plan_update_content_without_live_provider_does_not_invent_a_revision(
                 "plan_id": plan.id,
                 "workspace_id": workspace_id,
                 "frozen": True,
+                "expected_revision": runtime.repository.get_plan_revision(workspace_id, plan.id),
             },
         )
         assert frozen.status_code == 200, frozen.text
@@ -122,6 +123,7 @@ def test_plan_update_content_without_live_provider_does_not_invent_a_revision(
                 "plan_id": plan.id,
                 "workspace_id": workspace_id,
                 "frozen": False,
+                "expected_revision": runtime.repository.get_plan_revision(workspace_id, plan.id),
             },
         )
         assert resumed.status_code == 200, resumed.text
@@ -133,6 +135,7 @@ def test_plan_update_content_without_live_provider_does_not_invent_a_revision(
                 "title": "Invented disconnected revision",
                 "instructions": "Rewrite the formal plan without a live provider.",
                 "response_language": "zh-CN",
+                "expected_revision": runtime.repository.get_plan_revision(workspace_id, plan.id),
             },
         )
 

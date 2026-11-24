@@ -105,3 +105,70 @@ def test_supplement_or_optimize_keeps_implementation() -> None:
             problem_statement=statement,
         )
         assert card.learning_subtype == "implementation", title
+
+
+def test_file_target_wrapped_in_prose_keeps_only_the_file() -> None:
+    """A real-model card put a whole sentence in ``files_to_touch``.
+
+    The entry was shown to the learner as the target file, and host
+    verification refused every real artifact because its name never matched
+    that "target".
+    """
+    for raw, expected in (
+        ("ppo_clip_exercise.py（建议新建，具体路径由学习者选择）", "ppo_clip_exercise.py"),
+        ("foo.py (create it)", "foo.py"),
+        ("新建 foo.py", "foo.py"),
+        ("src/app.py 的入口", "src/app.py"),
+        ("My Project/app.py", "My Project/app.py"),
+        ("C:\\work\\demo\\app.py", "C:/work/demo/app.py"),
+        ("Dockerfile", "Dockerfile"),
+        ("src/queue_lock.py:12", "src/queue_lock.py:12"),
+    ):
+        card = TrainingCardCandidateSnapshot(card_type="practice", files_to_touch=[raw])
+        assert card.files_to_touch == [expected], raw
+
+
+def test_prose_without_a_file_is_not_a_file_target() -> None:
+    for raw in (
+        "具体路径由学习者选择",
+        "main entry point",
+        "一个新建的文件",
+        "Edit the module you prefer",
+        "新建一个练习文件，验证裁剪行为。",
+    ):
+        card = TrainingCardCandidateSnapshot(
+            card_type="practice",
+            title="Implement the boundary",
+            learning_family="code",
+            learning_subtype="implementation",
+            files_to_touch=[raw],
+        )
+        assert card.files_to_touch == [], raw
+        assert card.learning_subtype == "reading", raw
+
+
+def test_symbols_the_card_presents_as_alternatives_are_not_both_required() -> None:
+    """A real-model card hinted "`torch.minimum`（或 `torch.min`）" and then
+    listed both as expected symbols; a correct torch.minimum implementation
+    failed on torch.min."""
+    card = TrainingCardCandidateSnapshot(
+        card_type="practice",
+        acceptance_criteria=[
+            "定义 `ppo_clip_loss`，用 `torch.minimum` 逐元素取两个代理目标的较小值。",
+        ],
+        api_hints=["`torch.minimum`（或双 tensor 形式的 `torch.min`）：逐元素取较小值。"],
+        expected_symbols=["ppo_clip_loss", "torch.minimum", "torch.min"],
+    )
+
+    assert card.expected_symbols == ["ppo_clip_loss", "torch.minimum"]
+
+
+def test_symbols_never_presented_as_alternatives_stay_required() -> None:
+    card = TrainingCardCandidateSnapshot(
+        card_type="practice",
+        acceptance_criteria=["用 `torch.min` 求最小值，再用 `torch.maximum` 取上界。"],
+        api_hints=["`torch.clamp` 把 `ratio` 限制在 `[1 - epsilon, 1 + epsilon]`。"],
+        expected_symbols=["torch.min", "torch.maximum", "torch.clamp"],
+    )
+
+    assert card.expected_symbols == ["torch.min", "torch.maximum", "torch.clamp"]

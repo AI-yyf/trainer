@@ -47,24 +47,54 @@ const htmlSanitizerPath = path.resolve(
 function installParse5Document() {
   const previous = globalThis.document;
 
+  function wrapText(value, ownerDocument, parent) {
+    const raw = { nodeName: '#text', value: String(value ?? ''), parentNode: null, attrs: [], childNodes: [] };
+    return {
+      nodeType: 3,
+      nodeName: '#text',
+      ownerDocument,
+      parentNode: parent,
+      get textContent() {
+        return raw.value;
+      },
+      set textContent(value) {
+        raw.value = String(value ?? '');
+      },
+      _raw: raw,
+    };
+  }
+
+  /** Members the DOM gives every element; the wrapped objects below are built per node. */
+  function withTextAndAppend(element) {
+    Object.defineProperty(element, 'append', {
+      value(...nodes) {
+        for (const node of nodes) {
+          element.appendChild(node);
+        }
+      },
+    });
+    Object.defineProperty(element, 'textContent', {
+      get() {
+        return element.childNodes.map((child) => child.textContent).join('');
+      },
+      set(value) {
+        for (const child of element.childNodes) {
+          child.parentNode = null;
+        }
+        element.childNodes = [];
+        if (String(value ?? '') !== '') {
+          element.childNodes.push(wrapText(value, element.ownerDocument, element));
+        }
+      },
+    });
+    return element;
+  }
+
   function wrapNodes(parse5Nodes, ownerDocument, parent) {
     const out = [];
     for (const raw of parse5Nodes) {
       if (raw.nodeName === '#text') {
-        const text = {
-          nodeType: 3,
-          nodeName: '#text',
-          ownerDocument,
-          parentNode: parent,
-          get textContent() {
-            return raw.value;
-          },
-          set textContent(value) {
-            raw.value = String(value ?? '');
-          },
-          _raw: raw,
-        };
-        out.push(text);
+        out.push(wrapText(raw.value, ownerDocument, parent));
         continue;
       }
       if (raw.nodeName === '#comment') {
@@ -160,7 +190,7 @@ function installParse5Document() {
     };
 
     element.childNodes = wrapNodes(raw.childNodes || [], ownerDocument, element);
-    return element;
+    return withTextAndAppend(element);
   }
 
   function serializeNode(node) {
@@ -198,8 +228,14 @@ function installParse5Document() {
       };
     },
     createElement(tagName) {
+      // A plain element the sanitizer builds itself (the remote-image
+      // placeholder): it serializes like any parsed node.
       if (String(tagName).toLowerCase() !== 'template') {
-        throw new Error(`unexpected createElement(${tagName})`);
+        return wrapElement(
+          { nodeName: String(tagName), attrs: [], childNodes: [] },
+          documentShim,
+          null,
+        );
       }
       let contentRoot = {
         nodeName: '#document-fragment',
@@ -277,6 +313,43 @@ test('sanitizePreviewHtml strips script onerror javascript fixture', () => {
   }
 });
 
+test('sanitizePreviewHtml strips external svg paint-server references', () => {
+  const restore = installParse5Document();
+  try {
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+    const { sanitizePreviewHtml } = require(htmlSanitizerPath);
+    // SVG presentation attributes are fetched without a click. A URL that is
+    // not a same-document fragment must not survive sanitisation.
+    const out = sanitizePreviewHtml(
+      '<svg><rect fill="url(https://attacker.example/p.svg#g)" ' +
+        'stroke="url(//evil.example/x#a)" ' +
+        'mask="url(http://127.0.0.1:9/m#m)" ' +
+        'href="https://evil.example/use.svg#u" /></svg>',
+    );
+    assert.doesNotMatch(out, /url\s*\(\s*(?:https?:|\/\/)/i);
+    assert.doesNotMatch(out, /href\s*=\s*["']https?:/i);
+
+    // A same-document fragment reference is the legitimate diagram form.
+    const local = sanitizePreviewHtml('<svg><rect fill="url(#grad)" /></svg>');
+    assert.match(local, /url\(#grad\)/);
+    const geometry = sanitizePreviewHtml(
+      '<svg><g transform="translate(10 20) rotate(45)"><rect /></g></svg>',
+    );
+    assert.match(geometry, /translate\(10 20\) rotate\(45\)/);
+
+    // CSS escapes and comments can hide a function name from a plain `url(`
+    // scan; they fail closed.
+    const escaped = sanitizePreviewHtml(
+      '<svg><rect fill="u\\72l(https://attacker.example/x#g)" ' +
+        'filter="url/**/(https://attacker.example/f#g)" /></svg>',
+    );
+    assert.doesNotMatch(escaped, /url|attacker\.example/i);
+  } finally {
+    restore();
+    delete require.cache[require.resolve(htmlSanitizerPath)];
+  }
+});
+
 test('coach DiffRenderer escapes or sanitizes before dangerouslySetInnerHTML', () => {
   const source = fs.readFileSync(
     path.resolve(
@@ -304,7 +377,6 @@ test('model HTML renderers sanitize; trusted Shiki/Mermaid keep library styles',
   for (const parts of [
     ['parts', 'CodeRenderer.tsx'],
     ['parts', 'MathRenderer.tsx'],
-    ['parts', 'MermaidRenderer.tsx'],
   ]) {
     const source = fs.readFileSync(
       path.resolve(__dirname, '..', 'webview', 'src', 'components', ...parts),
@@ -314,20 +386,36 @@ test('model HTML renderers sanitize; trusted Shiki/Mermaid keep library styles',
     assert.doesNotMatch(source, /securityLevel:\s*["']loose["']/, parts.join('/'));
   }
 
-  // Shiki escapes code itself; Mermaid runs strict. Their inline styles are
-  // the syntax/diagram theme, so the model-HTML sanitizer must not strip them.
-  const mermaid = fs.readFileSync(
-    path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'MermaidBlock.tsx'),
-    'utf8',
-  );
+  // Shiki escapes code itself, so the model-HTML sanitizer must not strip
+  // its inline token colours.
   const shiki = fs.readFileSync(
     path.resolve(__dirname, '..', 'webview', 'src', 'components', 'coach', 'parts', 'ShikiCodeBlock.tsx'),
     'utf8',
   );
-  assert.doesNotMatch(mermaid, /sanitizePreviewHtml/);
-  assert.match(mermaid, /securityLevel:\s*["']strict["']/);
   assert.doesNotMatch(shiki, /sanitizePreviewHtml/);
   assert.match(shiki, /import\(["']shiki["']\)/);
+
+  // Mermaid has one owner. lib/mermaidDiagram.ts runs it strict, rebuilds the
+  // SVG from an allowlist (the model-HTML sanitizer would flatten the theme,
+  // so it is not the tool here) and the result is mounted in a closed shadow
+  // root. No component injects raw library output or configures Mermaid itself.
+  const webview = (...parts) =>
+    fs.readFileSync(path.resolve(__dirname, '..', 'webview', 'src', ...parts), 'utf8');
+  const renderer = webview('lib', 'mermaidDiagram.ts');
+  assert.match(renderer, /securityLevel:\s*["']strict["']/);
+  assert.doesNotMatch(renderer, /securityLevel:\s*["']loose["']/);
+  assert.match(renderer, /scrubMermaidSvg\(result\.svg, ownerDocument\)/);
+  for (const component of [
+    webview('components', 'coach', 'MermaidBlock.tsx'),
+    webview('components', 'parts', 'MermaidRenderer.tsx'),
+  ]) {
+    assert.match(component, /renderMermaidDiagram\(/);
+    assert.doesNotMatch(component, /sanitizePreviewHtml/);
+    assert.doesNotMatch(component, /dangerouslySetInnerHTML|\.innerHTML\s*=|mermaid\.initialize/);
+  }
+  const view = webview('components', 'common', 'MermaidDiagramView.tsx');
+  assert.match(view, /attachShadow\(\{ mode: "closed" \}\)/);
+  assert.match(view, /root\.replaceChildren\(sheet, holder\)/);
 });
 
 test('docx-unrelated XSS-shaped fixture: assigned innerHTML must be sanitized output', () => {

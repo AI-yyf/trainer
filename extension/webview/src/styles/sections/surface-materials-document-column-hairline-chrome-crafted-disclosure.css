@@ -380,6 +380,59 @@ details[open] > :not(summary) {
   font-size: var(--trainer-font-2xs);
 }
 
+/* A remote image waits for a click (lib/remoteImages.ts): the placeholder
+   says where the image would come from and loads nothing until asked. It
+   appears in coach replies and in sanitized HTML previews alike. */
+.trainer-remote-image {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed color-mix(in srgb, var(--line) 88%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-1) 80%, var(--bg-0));
+  color: var(--fg-1);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.trainer-remote-image:hover {
+  border-color: var(--accent);
+}
+
+.trainer-remote-image__icon {
+  flex: none;
+  color: var(--fg-muted);
+  font-size: var(--type-ui);
+}
+
+.trainer-remote-image__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trainer-remote-image__host,
+.trainer-remote-image__alt {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--trainer-font-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trainer-remote-image--loaded {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+}
+
 .message-attachment-gallery {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 180px));

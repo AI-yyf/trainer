@@ -56,6 +56,21 @@ WORKSPACE_SNAPSHOT_REVISION_KEY = "training_snapshot_revision"
 # which keys already ran and with which outcome.
 TRAINING_RELIABILITY_DEDUPE_KEY = "training_reliability_dedupe"
 TRAINING_RELIABILITY_DEDUPE_LIMIT = 32
+# Lock-timeout marker: another request held this workspace's reliability slot
+# for the whole bounded wait, so work() never ran. It is returned on the
+# workspace view (never persisted) so routes can answer "busy" instead of
+# reporting an unperformed mutation as success.
+TRAINING_RELIABILITY_BUSY_KEY = "training_reliability_busy"
+
+
+def busy_marker(workspace: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The busy marker on a returned workspace view, or ``None``."""
+    if not isinstance(workspace, dict):
+        return None
+    marker = workspace.get(TRAINING_RELIABILITY_BUSY_KEY)
+    if isinstance(marker, dict) and marker.get("busy") is True:
+        return dict(marker)
+    return None
 
 
 def utc_now() -> datetime:
@@ -141,11 +156,11 @@ def should_coalesce(
 ) -> bool:
     if not record or not is_in_flight(str(record.get("phase") or "")) or is_expired(record, now):
         return False
-    if same_identity(record, request_id, request_id):
-        return True
-    record_command = str(record.get("command_id") or record.get("commandId") or "")
-    record_card = str(record.get("card_id") or record.get("cardId") or "")
-    return record_command == command_id and record_card == card_id
+    # Only a true duplicate coalesces. Matching on command + card alone used to
+    # swallow a DIFFERENT practice result or attestation for the same card while
+    # another save was in flight, and the caller then reported success for work
+    # that never ran.
+    return same_identity(record, request_id, request_id)
 
 
 def begin_record(

@@ -3,6 +3,7 @@ import type { Element } from "hast";
 
 import type { ComposerLanguage } from "../../lib/types";
 import { messageRichContentCopy } from "../../lib/i18n/segments/messageRichContentCopy";
+import { classifyImageUrl, describeRemoteImageHost, remoteImageLabels } from "../../lib/remoteImages";
 import { MermaidBlock } from "./MermaidBlock";
 import { RichCodeBlock } from "./RichCodeBlock";
 import { resolveCodeBlockCopy } from "./codeBlockCopy";
@@ -173,8 +174,7 @@ export function markdownUrlTransform(url: string, key?: string): string {
   }
   if (
     lower.startsWith("https://") ||
-    lower.startsWith("http://127.0.0.1") ||
-    lower.startsWith("http://localhost") ||
+    lower.startsWith("http://") ||
     lower.startsWith("vscode-resource:") ||
     lower.startsWith("vscode-webview-resource:") ||
     lower.startsWith("blob:")
@@ -183,7 +183,6 @@ export function markdownUrlTransform(url: string, key?: string): string {
   }
   if (key !== "src") {
     if (
-      lower.startsWith("http://") ||
       lower.startsWith("mailto:") ||
       raw.startsWith("#") ||
       raw.startsWith("/")
@@ -243,7 +242,7 @@ function ImageLightbox({
   );
 }
 
-function RichMarkdownImage({
+export function RichMarkdownImage({
   src,
   alt,
   language,
@@ -254,16 +253,45 @@ function RichMarkdownImage({
 }) {
   const [failed, setFailed] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  // A remote image loads only after the learner asks for it (see
+  // lib/remoteImages.ts); this resets with the address, never persists.
+  const [loadRemote, setLoadRemote] = useState(false);
   const cleanSrc = markdownUrlTransform(src ?? "", "src");
   const cleanAlt = String(alt ?? "").trim();
+  const sourceKind = classifyImageUrl(cleanSrc);
 
-  if (!cleanSrc || failed) {
+  if (!cleanSrc || sourceKind === null || failed) {
     return (
       <figure className="message-rich-image" data-rich-image="error">
         <p className="message-rich-image__error">
           {messageRichContentCopy(language, "图片加载失败")}
           {cleanAlt ? ` (${cleanAlt})` : ""}
         </p>
+      </figure>
+    );
+  }
+
+  if (sourceKind === "remote" && !loadRemote) {
+    const labels = remoteImageLabels();
+    const host = describeRemoteImageHost(cleanSrc);
+    return (
+      <figure className="message-rich-image" data-rich-image="remote">
+        <button
+          type="button"
+          className="trainer-remote-image"
+          title={labels.hint}
+          aria-label={`${labels.load} · ${host}`}
+          onClick={() => setLoadRemote(true)}
+        >
+          <span className="trainer-remote-image__icon" aria-hidden="true">
+            ▣
+          </span>
+          <span className="trainer-remote-image__text">
+            <span className="trainer-remote-image__label">{labels.load}</span>
+            {host ? <span className="trainer-remote-image__host">{host}</span> : null}
+            {cleanAlt ? <span className="trainer-remote-image__alt">{cleanAlt}</span> : null}
+          </span>
+        </button>
       </figure>
     );
   }
@@ -312,8 +340,10 @@ export function MessageImageGallery({
   language: ComposerLanguage;
 }) {
   const [active, setActive] = useState<{ src: string; alt?: string } | null>(null);
-  const safePreviews = (previews ?? []).filter((item) =>
-    markdownUrlTransform(item.dataUrl, "src"),
+  // Attachments are the learner's own files: only a local image address
+  // belongs here, and nothing in the gallery ever fetches from another site.
+  const safePreviews = (previews ?? []).filter(
+    (item) => classifyImageUrl(markdownUrlTransform(item.dataUrl, "src")) === "local",
   );
   if (safePreviews.length === 0) {
     return null;

@@ -232,7 +232,7 @@ En proyectos sobre Linux/SSH remotos, Trainer divide **cerebro local y manos rem
 | Mantiene tu repo git intacto | ⚠️ mezcla archivos | ⚠️ | n/a | ✅ un único `<LibraryRoot>`, cero escrituras en tu repo |
 | Repaso espaciado FSRS | ❌ | ❌ | ✅ | ✅ con supresión en flujo vivo |
 | Niveles de permiso | ❌ | ⚠️ Trust básico | ❌ | ✅ escalera de 6 niveles + bloqueo remoto |
-| Suite de tests abierta | cerrada | cerrada | cerrada | ✅ **6.644 unit/integración + 471 E2E** |
+| Suite de tests abierta | cerrada | cerrada | cerrada | ✅ **6.719 unit/integración + 480 E2E** |
 | Internacionalización | ⚠️ | ⚠️ | ⚠️ | ✅ **8 idiomas** con gate automático en CI |
 
 > Otras herramientas aceleran la escritura de código; **Trainer garantiza que realmente domines lo que construyes.**
@@ -318,13 +318,13 @@ En proyectos sobre Linux/SSH remotos, Trainer divide **cerebro local y manos rem
 |---|---|---|
 | `extension/src/` | Host VS Code: comandos, SecretStorage, WorkspaceGateway, SidecarProcessManager | `79` archivos TS (~`53.286` líneas) |
 | `extension/webview/src/` | Workbench React: 2 destinos, cajón, compositor único, Shiki/KaTeX/Mermaid, 8 idiomas | `233` TS/TSX + `53` CSS (~`120.507` líneas) |
-| `extension/tests/` | Suite `node:test`: host, gobernanza compartida, i18n, captura web, seguridad | `319` archivos · **`2.415` tests** |
-| `server/app/` | Sidecar FastAPI: agente ReAct, pedagogía RethinkFun, FSRS, ingesta, evaluador | `232` archivos Python (~`173.863` líneas) |
-| `server/tests/` | Suite backend `pytest` de rutas API, pedagogía, memoria y protocolos | `297` archivos · **`4.229` tests recogidos** |
-| `shared/src/` | Módulos TypeScript puros deterministas compartidos entre Host, Webview y Tests | `76` módulos (~`29.508` líneas · `523` exports) |
+| `extension/tests/` | Suite `node:test`: host, gobernanza compartida, i18n, captura web, seguridad | `324` archivos · **`2.459` tests** |
+| `server/app/` | Sidecar FastAPI: agente ReAct, pedagogía RethinkFun, FSRS, ingesta, evaluador | `234` archivos Python (~`178.520` líneas) |
+| `server/tests/` | Suite backend `pytest` de rutas API, pedagogía, memoria y protocolos | `300` archivos · **`4.260` tests recogidos** |
+| `shared/src/` | Módulos TypeScript puros deterministas compartidos entre Host, Webview y Tests | `77` módulos (~`30.414` líneas · `523` exports) |
 | `remote-extension/src/` | Companion Remote-SSH (`extensionKind: ["workspace"]`) | `2` archivos TS (`746` líneas) |
-| `browser-extension/` | Extensión Chromium MV3: popup, colas offline, menús contextuales y Side Panel | `8` archivos (`6.977` líneas) |
-| `extension/bundled/` | Binario PyInstaller congelado + `trainer-workspace-companion.vsix` | ~`245 MB` |
+| `browser-extension/` | Extensión Chromium MV3: popup, colas offline, menús contextuales y Side Panel | `9` archivos (`7.245` líneas) |
+| `extension/bundled/` | Binario PyInstaller congelado + `trainer-workspace-companion.vsix` | ~`270 MB` |
 
 ### Contrato canónico (`WorkbenchSnapshot`)
 
@@ -349,13 +349,13 @@ Todas las rutas HTTP de estado devuelven el contrato único **`WorkbenchSnapshot
 
 | Compuerta | Alcance y resultado verificado | Comando |
 |---|---|---|
-| **Tests del servidor (`pytest`)** | **297 archivos · 4.229 tests** (más subtests) | `npm run test:server` |
-| **Tests de extensión (`node:test`)** | **319 archivos · 2.415 tests** (`2.414` aprobados, `1` omitido por plataforma, `0` fallos) | `npm run test:extension` |
+| **Tests del servidor (`pytest`)** | **300 archivos · 4.260 tests** (más subtests) | `npm run test:server` |
+| **Tests de extensión (`node:test`)** | **324 archivos · 2.459 tests** (`2.458` aprobados, `1` omitido por plataforma, `0` fallos) | `npm run test:extension` |
 | **Análisis estático y tipos** | `ruff check` (`0`) · `pyright` (`0`) · CSS + `tsc -b` (`0`) | `npm run check && npm run verify:server-pyright` |
 | **Geometría UI** | Soberanía del compositor único, 2 destinos, sin desbordamiento (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
-| **Completitud i18n** | **212** `appUiCopy` + **220** `settingsText` + **272** `hostCommandCopy` en **8 idiomas** (`0` faltantes) | `npm run verify:i18n` |
-| **Vocabulario y secretos** | **68** archivos UI limpios · **4.187** archivos del repo sin credenciales en texto plano | `npm run verify:copy-vocabulary && npm run verify:credentials` |
-| **Playwright E2E & Remote-SSH** | **30** specs Playwright (`471` tests) + matriz con sidecar real + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **Completitud i18n** | **212** `appUiCopy` + **220** `settingsText` + **273** `hostCommandCopy` en **8 idiomas** (`0` faltantes) | `npm run verify:i18n` |
+| **Vocabulario y secretos** | **68** archivos UI limpios · **4.257** archivos del repo sin credenciales en texto plano | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **Playwright E2E & Remote-SSH** | **33** specs Playwright (`480` tests) + matriz con sidecar real + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **Targets CI de lanzamiento** | **3 plataformas de escritorio**: `win32-x64`, `darwin-arm64`, `linux-x64` | `.github/workflows/release.yml` |
 
 *(Nota: la validación pedagógica humana `T-0028` sigue registrada como compuerta manual en [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md).)*
@@ -407,6 +407,6 @@ Verificado automáticamente por `npm run verify:i18n` (`extension/webview/src/li
 
 **// Entrena a tu IA · Crece con tu IA**
 
-`v1.6.4` · Hecho con café, FSRS, pedagogía RethinkFun State-Flow, 6.644 tests automatizados y un coach que se niega a escribir tu código por ti.
+`v1.6.4` · Hecho con café, FSRS, pedagogía RethinkFun State-Flow, 6.719 tests automatizados y un coach que se niega a escribir tu código por ti.
 
 </div>

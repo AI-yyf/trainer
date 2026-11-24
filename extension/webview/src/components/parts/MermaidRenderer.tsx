@@ -1,79 +1,84 @@
 /**
  * Mermaid Renderer
  *
- * Diagram rendering using Mermaid.js.
- * Reference: docs/open-source-fit-and-provider-strategy.md §10
+ * A diagram carried as a typed message part. Rendering (strict mode,
+ * allowlist scrubbing, shadow isolation) has one owner in
+ * `lib/mermaidDiagram.ts`; this component only lays it out.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 
-import { sanitizePreviewHtml } from "../../lib/htmlSanitizer";
+import { MermaidDiagramView } from "../common/MermaidDiagramView";
+import { renderMermaidDiagram, resolveMermaidTheme } from "../../lib/mermaidDiagram";
+
+export interface MermaidRendererLabels {
+  failed: string;
+  detail: string;
+  viewSource: string;
+}
 
 export interface MermaidRendererProps {
   source: string;
+  labels?: MermaidRendererLabels;
 }
+
+const DEFAULT_LABELS: MermaidRendererLabels = {
+  failed: "Diagram rendering failed",
+  detail: "Rendering detail",
+  viewSource: "View source",
+};
+
+type RenderState = { svg: string; error: string };
 
 export const MermaidRenderer: React.FC<MermaidRendererProps> = ({
   source,
+  labels,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const diagramId = useRef(`mermaid-${Math.random().toString(36).substr(2, 9)}`);
+  const copy = labels ?? DEFAULT_LABELS;
+  const [state, setState] = useState<RenderState>({ svg: "", error: "" });
+  const elementId = useId().replace(/:/g, "-");
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    let cancelled = false;
 
-    const renderDiagram = async () => {
-      try {
-        // Dynamic import Mermaid to reduce initial bundle size
-        const mermaid = await import("mermaid");
-
-        // Initialize Mermaid with default config
-        mermaid.default.initialize({
-          startOnLoad: false,
-          theme: "default",
-          securityLevel: "strict",
-        });
-
-        // Clear previous content
-        if (containerRef.current) {
-          containerRef.current.innerHTML = "";
+    void renderMermaidDiagram(source, { elementId, theme: resolveMermaidTheme() }).then(
+      (svg) => {
+        if (!cancelled) {
+          setState({ svg, error: "" });
         }
-
-        // Render the diagram
-        const { svg } = await mermaid.default.render(diagramId.current, source);
-        if (containerRef.current) {
-          containerRef.current.innerHTML = sanitizePreviewHtml(svg);
+      },
+      (error: unknown) => {
+        if (!cancelled) {
+          setState({
+            svg: "",
+            // Shown as text by React; it never becomes markup.
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
-        setError(null);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to render diagram";
-        setError(errorMessage);
-        console.warn("Mermaid rendering error:", err);
-      }
-    };
-
-    renderDiagram();
-  }, [source]);
-
-  if (error) {
-    return (
-      <div className="trainer-mermaid mermaid-error">
-        <div className="mermaid-error-header">
-          <span className="error-icon">!</span>
-          <span className="error-label">Diagram rendering failed</span>
-        </div>
-        <pre className="mermaid-source">{source}</pre>
-        <div className="mermaid-error-detail">{error}</div>
-      </div>
+      },
     );
-  }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [source, elementId]);
 
   return (
     <div className="trainer-mermaid">
-      <div ref={containerRef} className="mermaid-diagram" />
+      {state.error ? (
+        <div className="mermaid-error" role="alert">
+          <div className="mermaid-error-header">
+            <span className="error-icon" aria-hidden="true">!</span>
+            <span className="error-label">{copy.failed}</span>
+          </div>
+          <pre className="mermaid-source">{source}</pre>
+          <div className="mermaid-error-detail">{copy.detail}: {state.error}</div>
+        </div>
+      ) : (
+        <MermaidDiagramView svg={state.svg} className="mermaid-diagram" />
+      )}
       <details className="mermaid-source-details">
-        <summary>View source</summary>
+        <summary>{copy.viewSource}</summary>
         <pre className="mermaid-source">{source}</pre>
       </details>
     </div>

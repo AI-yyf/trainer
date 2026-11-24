@@ -10,6 +10,7 @@ from ...core.models import (
     TrainingHandoffReturnRequest,
     TrainingReliabilityControlRequest,
 )
+from ...training.reliability import busy_marker
 from ..runtime import TrainerRuntime
 from ..training_card_identity import require_live_selected_card_for_status
 
@@ -19,6 +20,23 @@ def build_training_handoff_router(
     refresh_workspace_sessions: Callable[[str], None] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["training"])
+
+    def reject_busy(workspace: dict) -> dict:
+        """Another request held the workspace's training slot: nothing ran here."""
+        marker = busy_marker(workspace)
+        if marker is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "training_reliability_busy",
+                    "message": (
+                        "Another training save is still running in this workspace. "
+                        "Nothing was recorded by this request; retry once it finishes."
+                    ),
+                    **marker,
+                },
+            )
+        return workspace
 
     def refresh(workspace_id: str) -> None:
         if refresh_workspace_sessions is not None:
@@ -55,6 +73,7 @@ def build_training_handoff_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        reject_busy(workspace)
         refresh(request.workspace_id)
         return TrainingHandoffActionResponse(workspace=workspace)
 
@@ -80,6 +99,7 @@ def build_training_handoff_router(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        reject_busy(workspace)
         handoff = workspace.get("latest_training_handoff")
         if (
             not request.cancel

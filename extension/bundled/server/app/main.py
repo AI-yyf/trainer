@@ -199,6 +199,9 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     # there. The pending-drafts read/ack routes are host-facing too (the host is
     # their only consumer), so they stay inside this boundary as well.
     instance_token = os.getenv("TRAINER_SIDECAR_TOKEN", "").strip()
+    # Routes that may take the token as an alternative to a browser origin
+    # compare against the value this app was created with, not a later env.
+    app.state.instance_token = instance_token
     browser_lane_paths = frozenset(
         {
             "/browser/status",

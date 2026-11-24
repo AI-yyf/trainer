@@ -3,11 +3,15 @@
 /**
  * Trainer Capture — popup.
  *
- * Zero pairing UI: the background discovers the local sidecar and connects
- * itself, so the card is capture-only — the capture row (page / PDF / GitHub
- * repo), the optional project-folder download, and the library binding.
- * Captures taken while Trainer is unreachable queue automatically (the badge
- * carries the count); no connection status and no import history are shown.
+ * The background discovers the local sidecar and connects itself, so the card
+ * is capture-only — the capture row (page / PDF / GitHub repo), the optional
+ * project-folder download, and the library binding. Captures taken while
+ * Trainer is unreachable queue automatically (the badge carries the count); no
+ * connection status and no import history are shown.
+ *
+ * The one exception is a browser Trainer has not authorised yet: the sidecar
+ * pairs an extension only after the learner enters a pairing code once, so the
+ * card shows a small pairing form for that case and nothing else changes.
  *
  * Copy follows the browser locale (zh-CN, en-US, es-ES, fr-FR, de-DE, ja-JP,
  * ko-KR, pt-BR — with English as the fallback). Motion is explanatory only and
@@ -25,6 +29,11 @@ const elements = {
   downloadTarget: document.getElementById('download-target'),
   captureDownload: document.getElementById('capture-download'),
   downloadFeedback: document.getElementById('download-feedback'),
+  pairPanel: document.getElementById('pair-panel'),
+  pairForm: document.getElementById('pair-form'),
+  pairCode: document.getElementById('pair-code'),
+  pairSubmit: document.getElementById('pair-submit'),
+  pairFeedback: document.getElementById('pair-feedback'),
   revoke: document.getElementById('revoke'),
   openTrainer: document.getElementById('open-trainer'),
   notice: document.getElementById('notice'),
@@ -160,6 +169,19 @@ function renderState(state) {
   revealCapturePanel();
   elements.revoke.hidden = !paired;
 
+  // Trainer is running but has not authorised this browser extension yet.
+  // Entering the pairing code once is the only thing the learner has to do;
+  // captures taken meanwhile still queue and deliver once paired.
+  const needsPairing = Boolean(state && state.needsPairing);
+  if (needsPairing) {
+    if (elements.pairPanel.hidden) {
+      elements.pairPanel.hidden = false;
+      revealPanel(elements.pairPanel);
+    }
+  } else {
+    elements.pairPanel.hidden = true;
+  }
+
   // The sidecar owns the destination: the library folder that belongs to this
   // project. The popup only shows it.
   elements.downloadTarget.textContent = String((state && state.downloadTarget) || '');
@@ -266,6 +288,31 @@ async function disconnectAndRepair() {
   await renderTabLine();
 }
 
+/**
+ * Redeem the one-time pairing code. Trainer shows it in VS Code
+ * ("Trainer: Show Browser Pairing Code"); after this the sidecar remembers the
+ * extension and connects it without asking again.
+ */
+async function pairWithCode(event) {
+  event.preventDefault();
+  const code = TrainerCapture.normalizePairCode(elements.pairCode.value);
+  elements.pairSubmit.disabled = true;
+  elements.pairCode.setAttribute('aria-invalid', 'false');
+  const result = await send({ type: 'trainer:pair-with-code', code });
+  const failed = !result || result.ok !== true;
+  if (failed) {
+    elements.pairCode.setAttribute('aria-invalid', 'true');
+    setFeedback(elements.pairFeedback, (result && result.message) || t('pairCodeRejected'), 'error');
+  } else {
+    elements.pairCode.value = '';
+    setFeedback(elements.pairFeedback, t('pairSuccess'), '');
+  }
+  elements.pairSubmit.disabled = false;
+  if (!failed) {
+    renderState((result && result.state) || (await send({ type: 'trainer:state' })));
+  }
+}
+
 // ------------------------------------------------------------------ wiring --
 
 async function init() {
@@ -302,6 +349,18 @@ elements.captureDownload.addEventListener('click', () => {
 
 elements.revoke.addEventListener('click', () => {
   void disconnectAndRepair();
+});
+
+elements.pairForm.addEventListener('submit', (event) => {
+  void pairWithCode(event);
+});
+
+// Six digits only, however the code was typed or pasted.
+elements.pairCode.addEventListener('input', () => {
+  const digits = elements.pairCode.value.replace(/[^0-9]/g, '').slice(0, 6);
+  if (elements.pairCode.value !== digits) {
+    elements.pairCode.value = digits;
+  }
 });
 
 if (elements.close) {

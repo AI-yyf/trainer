@@ -3,9 +3,14 @@
  * Real browser-capture acceptance (Chrome + MV3 extension + real sidecar).
  *
  * Exercises the shipped extension source, not a stub:
- *   discover sidecar → auto-pair in the popup (no pairing code)
+ *   discover sidecar → pair once with a host-issued one-time code
  *   → capture a public page through the background worker → verify the
  *   library through the paired `/browser/status` → revoke → old credential 401.
+ *
+ * The first pairing always needs the code (only an origin that already
+ * redeemed one may pair without one). The script registers the code on the
+ * host boundary with the per-instance token it started the sidecar with, then
+ * types it into the popup exactly like a learner would.
  *
  * The capture target is https://example.com/ (a stable public documentation
  * page). The sidecar must be started with TRAINER_ENABLE_NETWORK_FETCH=1; the
@@ -56,6 +61,15 @@ function assert(condition, message) {
 }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Host-side calls prove the per-instance token; browser-lane calls (health is
+// not one) would otherwise get 401 once the sidecar is started with a token.
+let hostToken = "";
+function hostFetch(url, init = {}) {
+  const headers = { ...(init.headers || {}) };
+  if (hostToken) headers["x-trainer-token"] = hostToken;
+  return fetch(url, { ...init, headers });
+}
+
 /** Chrome derives an unpacked extension's ID from its real absolute path. */
 function unpackedExtensionId(directory) {
   const real = fs.realpathSync(directory);
@@ -104,7 +118,7 @@ async function waitForHealth(baseUrl, deadlineMs = 30000) {
   const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${baseUrl}/health`);
+      const response = await hostFetch(`${baseUrl}/health`);
       if (response.ok) return await response.json();
     } catch {
       // keep polling
@@ -115,7 +129,7 @@ async function waitForHealth(baseUrl, deadlineMs = 30000) {
 }
 
 async function startSession(baseUrl, projectDir) {
-  const response = await fetch(`${baseUrl}/session/start`, {
+  const response = await hostFetch(`${baseUrl}/session/start`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -155,6 +169,9 @@ async function main() {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "trainer-browser-e2e-data-"));
   const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), "trainer-browser-e2e-profile-"));
   const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "trainer-browser-e2e-project-"));
+  // The host holds this token; the browser extension never does.
+  const instanceToken = crypto.randomBytes(24).toString("base64url");
+  hostToken = instanceToken;
   const port = await choosePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   let sidecar = null;
@@ -170,6 +187,8 @@ async function main() {
         env: offlineEnv({
           TRAINER_DATA_DIR: dataDir,
           TRAINER_ENABLE_NETWORK_FETCH: "1",
+          // Host boundary for /browser/pair-code: only the host holds this.
+          TRAINER_SIDECAR_TOKEN: instanceToken,
         }),
         stdio: ["ignore", "pipe", "pipe"],
       },
@@ -208,7 +227,7 @@ async function main() {
     // Isolate this run from any other Trainer window on the machine: the
     // extension ranks auto-pair by host focus, so make this sidecar the most
     // recently focused one before the popup starts discovering.
-    const focusResponse = await fetch(`${baseUrl}/browser/host-focus`, {
+    const focusResponse = await hostFetch(`${baseUrl}/browser/host-focus`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ workspace_id: session.contextId }),
@@ -242,20 +261,85 @@ async function main() {
     }
     ok("extension-worker", extensionId);
 
-    // Zero-code onboarding: the popup discovers the sidecar and pairs itself.
-    const autoDeadline = Date.now() + 30000;
-    while (Date.now() < autoDeadline) {
-      const stored = await popup.evaluate(
+    // First pairing needs the one-time host code. The popup's zero-code probe
+    // is refused for an origin this sidecar has not trusted yet, so it shows
+    // the code form; register a code on the host boundary and type it in.
+    const pairCode = String(crypto.randomInt(100000, 1000000));
+    const registeredCode = await hostFetch(`${baseUrl}/browser/pair-code`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        code: pairCode,
+        workspace_id: session.contextId,
+        workspace_name: WORKSPACE_NAME,
+        expires_in: 300,
+      }),
+    });
+    assert(
+      registeredCode.ok,
+      `Pair-code registration failed: HTTP ${registeredCode.status}`,
+    );
+    ok("pair-code-registered");
+
+    // Another Trainer window may already be running on this machine, so the
+    // popup's first load can auto-pair it. Let that probe settle first (it
+    // writes storage), then pin this run to the isolated sidecar and disable
+    // zero-code pairing: the code form is then the only path, exactly like a
+    // first-time learner.
+    const settleDeadline = Date.now() + 5000;
+    while (Date.now() < settleDeadline) {
+      const settled = await popup.evaluate(
         () =>
           new Promise((resolve) => {
             chrome.storage.local.get(["trainerCapture.credential"], resolve);
           }),
       );
-      if (stored["trainerCapture.credential"]) break;
+      if (settled["trainerCapture.credential"]) break;
+      await sleep(200);
+    }
+    await popup.evaluate(
+      (isolatedBaseUrl) =>
+        new Promise((resolve) => {
+          chrome.storage.local.remove(
+            ["trainerCapture.credential", "trainerCapture.workspaceId"],
+            () => {
+              chrome.storage.local.set(
+                {
+                  "trainerCapture.baseUrl": isolatedBaseUrl,
+                  "trainerCapture.autoPairDisabled": true,
+                },
+                resolve,
+              );
+            },
+          );
+        }),
+      baseUrl,
+    );
+    await popup.reload();
+
+    await popup.locator("#pair-panel").waitFor({ state: "visible", timeout: 30000 });
+    await popup.fill("#pair-code", pairCode);
+    await popup.locator("#pair-submit").click();
+    const pairDeadline = Date.now() + 15000;
+    let pairedState = {};
+    while (Date.now() < pairDeadline) {
+      pairedState = await popup.evaluate(
+        () =>
+          new Promise((resolve) => {
+            chrome.storage.local.get(["trainerCapture.credential"], resolve);
+          }),
+      );
+      if (pairedState["trainerCapture.credential"]) break;
       await sleep(250);
     }
+    assert(
+      pairedState["trainerCapture.credential"],
+      "The popup did not pair with the one-time code.",
+    );
     await popup.locator("#capture-panel").waitFor({ state: "visible", timeout: 30000 });
-    ok("auto-paired");
+    ok("paired-with-code");
 
     // Compact-card contract: the popup stays a narrow, icon-led menu with one
     // primary capture row, no horizontal overflow and no unlabeled controls.
@@ -354,7 +438,7 @@ async function main() {
     ok("library-status", `count=${status.body.library_count}`);
 
     const refreshHostFocus = () =>
-      fetch(`${baseUrl}/browser/host-focus`, {
+      hostFetch(`${baseUrl}/browser/host-focus`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ workspace_id: session.contextId }),

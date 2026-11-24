@@ -804,6 +804,9 @@ def test_plan_update_localizes_coach_turn_and_suggested_actions_for_zh_cn(
                 "plan_id": seeded_plan.id,
                 "workspace_id": workspace_id,
                 "instructions": "Rework the formal plan around async error handling.",
+                "expected_revision": runtime.repository.get_plan_revision(
+                    workspace_id, seeded_plan.id
+                ),
             },
         )
 
@@ -892,6 +895,9 @@ def test_frozen_plan_rejects_direct_content_updates_until_explicit_resume(tmp_pa
                 "title": "Replacement plan title",
                 "instructions": "Rewrite the formal plan.",
                 "frozen": True,
+                "expected_revision": runtime.repository.get_plan_revision(
+                    workspace_id, frozen_plan.id
+                ),
             },
         )
 
@@ -907,6 +913,9 @@ def test_frozen_plan_rejects_direct_content_updates_until_explicit_resume(tmp_pa
                 "plan_id": frozen_plan.id,
                 "workspace_id": workspace_id,
                 "frozen": False,
+                "expected_revision": runtime.repository.get_plan_revision(
+                    workspace_id, frozen_plan.id
+                ),
             },
         )
 
@@ -948,6 +957,9 @@ def test_frozen_plan_update_notice_uses_requested_language(tmp_path: Path) -> No
                     "workspace_id": workspace_id,
                     "title": "Replacement plan title",
                     "response_language": response_language,
+                    "expected_revision": runtime.repository.get_plan_revision(
+                        workspace_id, frozen_plan.id
+                    ),
                 },
             )
 

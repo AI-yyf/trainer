@@ -611,6 +611,12 @@ function openAiChatPayload(prompt, systemPrompt) {
   };
 }
 
+function requiresThinkingField(bodyText) {
+  return /requires adaptive thinking|thinking[^.\n]{0,80}(?:not allowed|not supported|is invalid)/i.test(
+    String(bodyText || ""),
+  );
+}
+
 function openAiResponsesPayload(prompt, systemPrompt) {
   return {
     model,
@@ -741,16 +747,36 @@ async function readProtocolText(step, prompt, systemPrompt, diagnostics, modelId
   }
 
   const openAiBaseUrl = normalizedOpenAiCompatibleBaseUrl();
-  const response = await readResponse(
+  let chatPayload = openAiChatPayload(prompt, systemPrompt);
+  let response = await readResponse(
     step,
     `${openAiBaseUrl}/chat/completions`,
     {
       method: "POST",
       headers: openAiHeaders(),
-      body: JSON.stringify(openAiChatPayload(prompt, systemPrompt)),
+      body: JSON.stringify(chatPayload),
     },
     model,
   );
+  // Reasoning-first gateways (MiniMax adaptive-thinking channels) reject the
+  // disabled field outright. Mirror the sidecar's one-shot re-negotiation
+  // instead of reporting a healthy provider as request_failed.
+  if (response.failure && requiresThinkingField(response.text)) {
+    diagnostics.push(
+      "Gateway requires adaptive thinking; retried the chat probe once with thinking enabled.",
+    );
+    chatPayload = { ...chatPayload, thinking: { type: "enabled" } };
+    response = await readResponse(
+      step,
+      `${openAiBaseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers: openAiHeaders(),
+        body: JSON.stringify(chatPayload),
+      },
+      model,
+    );
+  }
   if (response.failure) {
     throw Object.assign(new Error(response.failure.detail), {
       report: buildFailureReport({

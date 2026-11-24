@@ -14,6 +14,7 @@ function startMockTrainer({
   corruptPassReturn = false,
   passNextHopStatus = 'continued_in_chat',
   evaluationFailureBody = '',
+  providerToolsReady = true,
 } = {}) {
   const sessions = new Map();
   const cards = new Map();
@@ -22,9 +23,28 @@ function startMockTrainer({
   const evaluateBodies = [];
   const reflectBodies = [];
   const returnBodies = [];
+  const providerTestBodies = [];
+  const routeOrder = [];
   let sessionCounter = 0;
 
   const server = http.createServer((request, response) => {
+    if (request.url === '/provider/test' && request.method === 'POST') {
+      let body = '';
+      request.setEncoding('utf8');
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', () => {
+        providerTestBodies.push(JSON.parse(body));
+        routeOrder.push('provider/test');
+        response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        response.end(JSON.stringify({
+          ok: providerToolsReady,
+          tools_ready: providerToolsReady,
+          streaming_ready: true,
+        }));
+      });
+      return;
+    }
+
     if (request.url === '/session/start' && request.method === 'POST') {
       let body = '';
       request.setEncoding('utf8');
@@ -35,6 +55,7 @@ function startMockTrainer({
         sessionCounter += 1;
         const payload = JSON.parse(body);
         const sessionId = `session-${sessionCounter}`;
+        routeOrder.push('session/start');
         sessions.set(sessionId, {
           workspaceId: payload.workspace_id,
           workspace: null,
@@ -54,6 +75,7 @@ function startMockTrainer({
       request.on('end', () => {
         const payload = JSON.parse(body);
         turnBodies.push(payload);
+        routeOrder.push('turn');
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         response.end(
           JSON.stringify({
@@ -86,6 +108,13 @@ function startMockTrainer({
           card_type: 'practice',
           scenario_pack: 'remote_workspace',
           title: 'Practice: Verify the remote workspace boundary',
+          // Real providers mint card-specific acceptance criteria; the smoke
+          // synthesizes a submission from them instead of a fixed fixture.
+          acceptance_criteria: [
+            'Define a `main` entry point and run the submission via `python`',
+            'Run the submission once via `pytest` or `python` and keep the output',
+          ],
+          expected_symbols: ['ok'],
         };
         cards.set(payload.workspace_id, { card, state: 'pending' });
         response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -275,6 +304,8 @@ function startMockTrainer({
         evaluateBodies,
         reflectBodies,
         returnBodies,
+        providerTestBodies,
+        routeOrder,
         close: () =>
           new Promise((closeResolve, closeReject) => {
             server.close((error) => {
@@ -354,6 +385,14 @@ test('training return smoke script passes when verified practice returns to Coac
     assert.equal(report.checks.passReturn, 'passed');
     assert.equal(report.checks.failBlock, 'passed');
     assert.equal(trainer.turnBodies.length, 2);
+    // The provider is verified before the first tools turn, as the host does.
+    assert.equal(trainer.providerTestBodies.length, 1);
+    assert.equal(trainer.providerTestBodies[0].provider.baseUrl, 'http://provider.example/v1');
+    assert.equal(trainer.providerTestBodies[0].apiKey, 'sk-test');
+    assert.ok(
+      trainer.routeOrder.indexOf('provider/test') < trainer.routeOrder.indexOf('turn'),
+      'provider verification must precede the first turn',
+    );
     assert.equal(trainer.trainingCardBodies.length, 2);
     assert.equal(trainer.evaluateBodies.length, 2);
     assert.equal(trainer.reflectBodies.length, 1);
@@ -364,7 +403,9 @@ test('training return smoke script passes when verified practice returns to Coac
     assert.equal(trainer.trainingCardBodies[0].card_type, 'practice');
     assert.equal(trainer.trainingCardBodies[0].focus_area, 'VS Code remote workspace');
     assert.equal(trainer.evaluateBodies[0].expected_symbols[0], 'ok');
-    assert.match(trainer.evaluateBodies[0].content, /def test_ok\(\)/);
+    assert.match(trainer.evaluateBodies[0].content, /def ok\(/);
+    assert.match(trainer.evaluateBodies[0].content, /def main\(\)/);
+    assert.match(trainer.evaluateBodies[0].content, /def test_submission_passes\(\)/);
     assert.equal(Array.isArray(trainer.evaluateBodies[1].diagnostics), true);
     assert.match(trainer.evaluateBodies[1].diagnostics[0], /\[error\]/);
   } finally {
@@ -467,4 +508,24 @@ test('smoke.ps1 exposes an opt-in training return smoke gate with sidecar and pr
   assert.match(source, /TRAINER_TRAINING_RETURN_SMOKE_PROVIDER_PROTOCOL/);
   assert.match(source, /TRAINER_TRAINING_RETURN_SMOKE_RESPONSE_LANGUAGE/);
   assert.match(source, /Live training return smoke via scripts\/training-return-smoke\.mjs/);
+});
+
+test('training return smoke stops before the turn when the provider is not verified for tools', async () => {
+  const trainer = await startMockTrainer({ providerToolsReady: false });
+
+  try {
+    const result = await runSmokeScript({
+      TRAINER_TRAINING_RETURN_SMOKE_SIDECAR_URL: trainer.sidecarUrl,
+    });
+
+    assert.equal(result.code, 1);
+    const report = JSON.parse(result.stderr);
+    assert.equal(report.ok, false);
+    assert.equal(report.step, 'provider_test');
+    assert.equal(report.category, 'provider_not_ready');
+    assert.equal(trainer.providerTestBodies.length, 1);
+    assert.equal(trainer.turnBodies.length, 0);
+  } finally {
+    await trainer.close();
+  }
 });

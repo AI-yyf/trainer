@@ -1818,6 +1818,23 @@ test.describe("Trainer two-destination shell", () => {
     await expectNoConsoleErrors(errors);
   });
 
+  test("new chat from Resources returns to the Chat destination", async ({ page }) => {
+    const errors = attachConsoleErrorCollector(page);
+
+    await openPreview(page, "resources", { lang: "zh-CN", connection: "connected" });
+    await expect(page.locator('[data-surface="resources"]')).toBeVisible();
+
+    await page.getByRole("button", { name: "会话历史", exact: true }).click();
+    const panel = page.locator(".app-shell-overlay__panel");
+    await panel.getByText("新对话", { exact: true }).click();
+
+    // The new conversation is only visible in Chat; the destination must
+    // follow even though the drawer was opened from Resources.
+    await expect(page.locator('[data-surface="coach"]')).toBeVisible();
+    await expect(page.locator('[data-surface="resources"]')).toBeHidden();
+    await expectNoConsoleErrors(errors);
+  });
+
   test("hint ladder reveals one hint at a time on the practice surface", async ({ page }) => {
     const errors = attachConsoleErrorCollector(page);
 

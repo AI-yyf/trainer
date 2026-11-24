@@ -8445,40 +8445,6 @@ export function App() {
     [isBrowserPreview, layout.composerLanguage, setOperationMessage],
   );
 
-  const switchComposerProviderProfile = useCallback((profileId: string) => {
-    setOpenMenu(undefined);
-    setComposerModelQuery("");
-
-    if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
-        .then((browserPreview) =>
-          browserPreview.switchBrowserPreviewProviderProfile(profileId, previewSessionId),
-        )
-        .then(({ sessionId, messages }) => {
-          setPreviewSessionId(sessionId);
-          applyPreviewHostMessages(messages, true);
-        })
-        .catch(() => {
-          setOperationMessage({
-            tone: "error",
-            message: recoverableFailureMessage("provider", layout.composerLanguage),
-          });
-        });
-      return;
-    }
-
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId: trainerCommands.switchProviderProfile,
-        payload: {
-          profileId,
-          reason: "composer_switch",
-        },
-      },
-    });
-  }, [applyPreviewHostMessages, isBrowserPreview, layout.composerLanguage, previewSessionId, setOperationMessage]);
-
   const switchComposerProviderModel = useCallback((model: string) => {
     const modelPolicy = evaluateProviderModelPolicy(model, {
       allowedModels: data.providerConfig.allowedModels,
@@ -8534,6 +8500,70 @@ export function App() {
     previewSessionId,
     setOperationMessage,
   ]);
+
+  const switchComposerProviderModelForProfile = useCallback(
+    (profileId: string, model: string) => {
+      const normalizedProfileId = profileId.trim();
+      if (
+        !normalizedProfileId ||
+        normalizedProfileId === data.providerConfig.profileId?.trim()
+      ) {
+        switchComposerProviderModel(model);
+        return;
+      }
+
+      setOpenMenu(undefined);
+      setComposerModelQuery("");
+
+      if (isBrowserPreview) {
+        void loadBrowserPreviewModule()
+          .then(async (browserPreview) => {
+            const switched = await browserPreview.switchBrowserPreviewProviderProfile(
+              normalizedProfileId,
+              previewSessionId,
+            );
+            // The preview module reads the persisted provider record, so the
+            // profile switch has to land before the model half is selected;
+            // otherwise the model is applied to the old provider.
+            applyPreviewHostMessages(switched.messages, true);
+            setPreviewSessionId(switched.sessionId);
+            return browserPreview.switchBrowserPreviewProviderModel(model, switched.sessionId);
+          })
+          .then(({ sessionId, messages }) => {
+            setPreviewSessionId(sessionId);
+            applyPreviewHostMessages(messages, true);
+          })
+          .catch(() => {
+            setOperationMessage({
+              tone: "error",
+              message: recoverableFailureMessage("provider", layout.composerLanguage),
+            });
+          });
+        return;
+      }
+
+      postMessage({
+        type: "command/execute",
+        payload: {
+          commandId: trainerCommands.switchProviderModel,
+          payload: {
+            profileId: normalizedProfileId,
+            model,
+            reason: "composer_model_switch",
+          },
+        },
+      });
+    },
+    [
+      applyPreviewHostMessages,
+      data.providerConfig.profileId,
+      isBrowserPreview,
+      layout.composerLanguage,
+      previewSessionId,
+      setOperationMessage,
+      switchComposerProviderModel,
+    ],
+  );
 
   handleSubmitRef.current = handleSubmit;
 
@@ -9226,7 +9256,7 @@ export function App() {
           onThinkingChange={setComposerThinking}
           onRefreshModels={refreshComposerProviderModels}
           onSwitchModel={switchComposerProviderModel}
-          onSwitchProfile={switchComposerProviderProfile}
+          onSwitchProviderModel={switchComposerProviderModelForProfile}
           initialOptionLimit={COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT}
         />
       );
@@ -11780,6 +11810,10 @@ export function App() {
               onRefresh={requestCoachSessions}
               onNewChat={() => {
                 clearGoal();
+                // A new conversation belongs to the Chat destination even when
+                // the drawer was opened from Resources; the host snapshot may
+                // still carry the previous active view.
+                setActiveView("coach");
                 startNewCoachChat();
               }}
               onClose={() => setOpenMenu(undefined)}

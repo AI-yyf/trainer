@@ -127,6 +127,7 @@ export interface ProviderConfigView {
   capabilities: CapabilityFlags;
   requestDefaults?: Record<string, unknown>;
   thinkingConfig?: ProviderThinkingConfig;
+  modelThinkingConfig?: Record<string, ProviderThinkingConfig>;
   protocol?: ProviderProtocol;
   protocolFamily?: string;
   connectionType?: string;
@@ -191,6 +192,7 @@ export interface ProviderConfig {
   taskBindings?: Record<string, unknown>;
   requestDefaults?: Record<string, unknown>;
   thinkingConfig?: ProviderThinkingConfig;
+  modelThinkingConfig?: Record<string, ProviderThinkingConfig>;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
   embeddingModel?: string;

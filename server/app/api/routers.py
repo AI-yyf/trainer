@@ -145,6 +145,7 @@ from ..training.card_generator import (
 from ..training.card_request import message_requests_explicit_training_card
 from ..training.plan_binding import validated_mint_binding
 from ..training.project_checks import project_python_checks
+from ..training.reliability import busy_marker
 from ..workspace.classifier import (
     classify_heuristic,
     is_code_like_current_file,
@@ -12823,7 +12824,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             or "practice verification"
         )
         failed_checks, _, missing_requirements = report_learning_payload(report)
-        runtime.memory_service.record_training_practice_evaluation_result(
+        evaluation_workspace = runtime.memory_service.record_training_practice_evaluation_result(
             workspace_id=workspace_id,
             card_id=training_card_id,
             card_title=live_request_title,
@@ -12836,6 +12837,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             evidence_source=evidence_source,
             verified_by_evaluator=bool(report.passed) and report_has_executed_pass(report),
         )
+        if busy_marker(evaluation_workspace) is not None:
+            # Another training save held the workspace slot, so this evaluation
+            # never reached the card. Do not record execution evidence for a
+            # result the card did not accept.
+            return
         if isinstance(request, EvaluateCurrentFileRequest):
             record_executed_training_evidence(
                 runtime,

@@ -238,7 +238,7 @@ Trainer brings its full coaching and verification loop to remote Linux/SSH works
 | Keeps your git repo untouched | ⚠️ mixes artifacts | ⚠️ | n/a | ✅ single `<LibraryRoot>`, zero repo writes |
 | Spaced repetition on FSRS | ❌ | ❌ | ✅ | ✅ with live-flow review suppression |
 | Workspace permission model | ❌ | ⚠️ basic trust | ❌ | ✅ 6-tier ladder + hard Remote-SSH write lock |
-| Open automated test suite | closed | closed | closed | ✅ **6,644 unit/integration + 471 E2E specs** |
+| Open automated test suite | closed | closed | closed | ✅ **6,719 unit/integration + 480 E2E specs** |
 | Localization | ⚠️ | ⚠️ | ⚠️ | ✅ **8 languages** verified by CI completeness gate |
 
 > Other tools help you produce code faster; **Trainer makes sure you actually own what you build.**
@@ -324,13 +324,13 @@ Trainer brings its full coaching and verification loop to remote Linux/SSH works
 |---|---|---|
 | `extension/src/` | VS Code Extension Host: commands, SecretStorage providers, WorkspaceGateway, SidecarProcessManager | `79` TS files (~`53,286` lines) |
 | `extension/webview/src/` | React workbench: Two Destinations, Learning Drawer, Single Composer, Shiki/KaTeX/Mermaid, 8 locales | `233` TS/TSX + `53` CSS files (~`120,507` lines) |
-| `extension/tests/` | Node test suite (`node:test`): host, webview governance, i18n, browser-capture, security | `319` files · **`2,415` tests** |
-| `server/app/` | FastAPI sidecar: agent loop, RethinkFun pedagogy, memory/FSRS, ingest, evaluator, authority | `232` Python files (~`173,863` lines) |
-| `server/tests/` | Backend `pytest` suite covering API routes, pedagogy, memory, provider transport, authority | `297` files · **`4,229` collected tests** |
-| `shared/src/` | Shared deterministic TypeScript governance & protocol modules reused across Host, Webview & Tests | `76` files (~`29,508` lines · `523` exports) |
+| `extension/tests/` | Node test suite (`node:test`): host, webview governance, i18n, browser-capture, security | `324` files · **`2,470` tests** |
+| `server/app/` | FastAPI sidecar: agent loop, RethinkFun pedagogy, memory/FSRS, ingest, evaluator, authority | `234` Python files (~`178,520` lines) |
+| `server/tests/` | Backend `pytest` suite covering API routes, pedagogy, memory, provider transport, authority | `301` files · **`4,300` collected tests** |
+| `shared/src/` | Shared deterministic TypeScript governance & protocol modules reused across Host, Webview & Tests | `77` files (~`30,414` lines · `523` exports) |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) for remote file & verification ops | `2` TS files (`746` lines) |
-| `browser-extension/` | Chrome/Edge MV3 Capture popup, offline queues, context menus, and Side Panel client | `8` files (`6,977` lines) |
-| `extension/bundled/` | Frozen PyInstaller sidecar runtime & bundled `trainer-workspace-companion.vsix` | ~`245 MB` |
+| `browser-extension/` | Chrome/Edge MV3 Capture popup, offline queues, context menus, and Side Panel client | `9` files (`7,245` lines) |
+| `extension/bundled/` | Frozen PyInstaller sidecar runtime & bundled `trainer-workspace-companion.vsix` | ~`270 MB` |
 
 ### Canonical Snapshot Contract (`WorkbenchSnapshot`)
 
@@ -355,13 +355,13 @@ All primary state-carrying HTTP routes return the canonical **`WorkbenchSnapshot
 
 | Gate | Scope & Verified Result | Command |
 |---|---|---|
-| **Server Tests (`pytest`)** | **297 files · 4,229 tests** (plus subtests) | `npm run test:server` |
-| **Extension & Shared (`node:test`)** | **319 files · 2,415 tests** (`2,414` passed, `1` conditional skip, `0` failed) | `npm run test:extension` |
+| **Server Tests (`pytest`)** | **301 files · 4,300 tests** (plus subtests) | `npm run test:server` |
+| **Extension & Shared (`node:test`)** | **324 files · 2,470 tests** (`2,469` passed, `1` conditional skip, `0` failed) | `npm run test:extension` |
 | **Static Analysis & Types** | `ruff check` (`0` errors) · `pyright` (`0` errors) · CSS + `tsc -b` (`0` errors) | `npm run check && npm run verify:server-pyright` |
 | **UI Geometry Matrix** | Single composer sovereignty, 2-destination shell, overflow checks (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
-| **i18n Completeness Gate** | **212** `appUiCopy` + **220** `settingsText` + **272** `hostCommandCopy` across **8 languages** (`0` missing / `0` leaks) | `npm run verify:i18n` |
-| **Copy Vocabulary & Secrets** | **68** UI copy files clean (`0` internal jargon violations) · **4,187** repo files clean (`0` plaintext credentials) | `npm run verify:copy-vocabulary && npm run verify:credentials` |
-| **Playwright E2E & Remote-SSH** | **30** Playwright spec files (`471` test cases) + Real-Sidecar Experience Matrix + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **i18n Completeness Gate** | **212** `appUiCopy` + **220** `settingsText` + **273** `hostCommandCopy` across **8 languages** (`0` missing / `0` leaks) | `npm run verify:i18n` |
+| **Copy Vocabulary & Secrets** | **68** UI copy files clean (`0` internal jargon violations) · **4,331** repo files clean (`0` plaintext credentials) | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **Playwright E2E & Remote-SSH** | **33** Playwright spec files (`480` test cases) + Real-Sidecar Experience Matrix + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **CI Release Targets** | **3 native targets**: `win32-x64`, `darwin-arm64`, `linux-x64` (Windows/Linux ARM64 not yet CI-verified) | `.github/workflows/release.yml` |
 
 *(Note: Manual human pedagogy sign-off `T-0028` remains tracked in [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md) and `.trainer-convergence/acceptance-matrix.json` as human-gated.)*
@@ -413,6 +413,6 @@ Verified cleanly by `npm run verify:i18n` with automated locale leak and missing
 
 **// Train Your AI · Grow With Your AI**
 
-`v1.6.4` · Made with coffee, FSRS, RethinkFun state-flow pedagogy, 6,644 automated tests, and a coach that refuses to write your code for you.
+`v1.6.4` · Made with coffee, FSRS, RethinkFun state-flow pedagogy, 6,719 automated tests, and a coach that refuses to write your code for you.
 
 </div>

@@ -232,7 +232,7 @@ Für Remote-Linux/SSH-Workspaces trennt Trainer sauber zwischen **lokalem Gehirn
 | Hält dein Git-Repo sauber | ⚠️ mischt Dateien | ⚠️ | n/v | ✅ ein `<LibraryRoot>`, null Repo-Schreibzugriffe |
 | Spaced Repetition nach FSRS | ❌ | ❌ | ✅ | ✅ inkl. Live-Flow-Unterdrückung |
 | Berechtigungsstufen | ❌ | ⚠️ Trust-Dialog | ❌ | ✅ 6 Stufen + Remote-Schreibsperre |
-| Offene Testabdeckung | closed source | closed source | closed source | ✅ **6.644 Unit/Integration + 471 E2E-Specs** |
+| Offene Testabdeckung | closed source | closed source | closed source | ✅ **6.719 Unit/Integration + 480 E2E-Specs** |
 | i18n | ⚠️ | ⚠️ | ⚠️ | ✅ **8 Sprachen** mit CI-Vollständigkeitsgate |
 
 > Andere Tools lassen dich Code schneller ausspucken; **Trainer sorgt dafür, dass du wirklich beherrschst, was du baust.**
@@ -318,13 +318,13 @@ Für Remote-Linux/SSH-Workspaces trennt Trainer sauber zwischen **lokalem Gehirn
 |---|---|---|
 | `extension/src/` | VS Code Host: Commands, SecretStorage, WorkspaceGateway, SidecarProcessManager | `79` TS-Dateien (~`53.286` Zeilen) |
 | `extension/webview/src/` | React-Workbench: 2 Ziele, Drawer, Single-Composer, Shiki/KaTeX/Mermaid, 8 Sprachen | `233` TS/TSX + `53` CSS (~`120.507` Zeilen) |
-| `extension/tests/` | `node:test`-Suite: Host, Governance, i18n, Browser-Capture, Security | `319` Dateien · **`2.415` Tests** |
-| `server/app/` | FastAPI-Sidecar: Agent Loop, RethinkFun-Pädagogik, Memory/FSRS, Ingest, Evaluator | `232` Python-Dateien (~`173.863` Zeilen) |
-| `server/tests/` | Backend-`pytest`-Suite für API, Pädagogik, Memory, Protokolle & Authority | `297` Dateien · **`4.229` gesammelte Tests** |
-| `shared/src/` | Geteilte deterministische Governance-Module für Host, Webview & Tests | `76` Module (~`29.508` Zeilen · `523` Exporte) |
+| `extension/tests/` | `node:test`-Suite: Host, Governance, i18n, Browser-Capture, Security | `324` Dateien · **`2.459` Tests** |
+| `server/app/` | FastAPI-Sidecar: Agent Loop, RethinkFun-Pädagogik, Memory/FSRS, Ingest, Evaluator | `234` Python-Dateien (~`178.520` Zeilen) |
+| `server/tests/` | Backend-`pytest`-Suite für API, Pädagogik, Memory, Protokolle & Authority | `300` Dateien · **`4.260` gesammelte Tests** |
+| `shared/src/` | Geteilte deterministische Governance-Module für Host, Webview & Tests | `77` Module (~`30.414` Zeilen · `523` Exporte) |
 | `remote-extension/src/` | Remote-SSH Companion (`extensionKind: ["workspace"]`) | `2` TS-Dateien (`746` Zeilen) |
-| `browser-extension/` | Chromium MV3 Popup, Offline-Queues, Kontextmenüs & Side Panel | `8` Dateien (`6.977` Zeilen) |
-| `extension/bundled/` | Gefrorener PyInstaller-Sidecar & `trainer-workspace-companion.vsix` | ~`245 MB` |
+| `browser-extension/` | Chromium MV3 Popup, Offline-Queues, Kontextmenüs & Side Panel | `9` Dateien (`7.245` Zeilen) |
+| `extension/bundled/` | Gefrorener PyInstaller-Sidecar & `trainer-workspace-companion.vsix` | ~`270 MB` |
 
 ### Kanonischer Snapshot-Vertrag (`WorkbenchSnapshot`)
 
@@ -349,13 +349,13 @@ Alle zustandsführenden Haupt-HTTP-Routen liefern ein einheitliches **`Workbench
 
 | Gate | Umfang & Verifiziertes Ergebnis | Befehl |
 |---|---|---|
-| **Server-Tests (`pytest`)** | **297 Dateien · 4.229 Tests** (inkl. Subtests) | `npm run test:server` |
-| **Extension & Shared (`node:test`)** | **319 Dateien · 2.415 Tests** (`2.414` bestanden, `1` Plattform-Skip, `0` Fehler) | `npm run test:extension` |
+| **Server-Tests (`pytest`)** | **300 Dateien · 4.260 Tests** (inkl. Subtests) | `npm run test:server` |
+| **Extension & Shared (`node:test`)** | **324 Dateien · 2.459 Tests** (`2.458` bestanden, `1` Plattform-Skip, `0` Fehler) | `npm run test:extension` |
 | **Statische Analyse & Typen** | `ruff check` (`0` Fehler) · `pyright` (`0` Fehler) · CSS + `tsc -b` (`0` Fehler) | `npm run check && npm run verify:server-pyright` |
 | **UI-Geometrie-Gate** | Single-Composer-Souveränität, 2-Ziele-Shell, Overflow-Checks (`340/420/460px`, dark/light, zh/en) | `npm run verify:ui-geometry` |
-| **i18n-Vollständigkeitsgate** | **212** `appUiCopy` + **220** `settingsText` + **272** `hostCommandCopy` über **8 Sprachen** (`0` Lücken) | `npm run verify:i18n` |
-| **Vokabular & Secrets** | **68** UI-Copy-Dateien sauber · **4.187** Repo-Dateien ohne Klartext-Credentials | `npm run verify:copy-vocabulary && npm run verify:credentials` |
-| **Playwright E2E & Remote-SSH** | **30** Playwright-Specs (`471` Tests) + Real-Sidecar Matrix + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
+| **i18n-Vollständigkeitsgate** | **212** `appUiCopy` + **220** `settingsText` + **273** `hostCommandCopy` über **8 Sprachen** (`0` Lücken) | `npm run verify:i18n` |
+| **Vokabular & Secrets** | **68** UI-Copy-Dateien sauber · **4.257** Repo-Dateien ohne Klartext-Credentials | `npm run verify:copy-vocabulary && npm run verify:credentials` |
+| **Playwright E2E & Remote-SSH** | **33** Playwright-Specs (`480` Tests) + Real-Sidecar Matrix + Ubuntu Remote-SSH L2 (`20/20`) | `npm run test:experience-matrix` · `npm run test:remote-ssh-e2e` |
 | **CI-Release-Ziele** | **3 Desktop-Ziele**: `win32-x64`, `darwin-arm64`, `linux-x64` | `.github/workflows/release.yml` |
 
 *(Hinweis: Die manuelle pädagogische Abnahme `T-0028` bleibt in [`docs/TRIAL-1.5.0-RC.md`](docs/TRIAL-1.5.0-RC.md) als manuelles Gate geführt.)*
@@ -407,6 +407,6 @@ Automatisch abgesichert über `npm run verify:i18n` (`extension/webview/src/lib/
 
 **// Trainiere deine KI · Wachse mit deiner KI**
 
-`v1.6.4` · Gemacht mit Kaffee, FSRS, RethinkFun State-Flow-Pädagogik, 6.644 automatisierten Tests und einem Coach, der sich weigert, für dich Code zu schreiben.
+`v1.6.4` · Gemacht mit Kaffee, FSRS, RethinkFun State-Flow-Pädagogik, 6.719 automatisierten Tests und einem Coach, der sich weigert, für dich Code zu schreiben.
 
 </div>

@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from app.core.process_env import child_process_environment
 from app.project.incremental import (
     detect_changed_files,
 )
@@ -20,7 +21,10 @@ from app.project.symbols import build_repo_index
 
 def _git(args: list[str], cwd: Path) -> str:
     r = subprocess.run(
-        ["git", "-C", str(cwd), *args], capture_output=True, text=True
+        ["git", "-C", str(cwd), *args],
+        capture_output=True,
+        text=True,
+        env=child_process_environment(),
     )
     return r.stdout.strip()
 

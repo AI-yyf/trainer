@@ -37,6 +37,126 @@ DEFAULT_LOCAL_OWNER_NAME = "Local Trainer"
 WINDOWS_WORKSPACE_ALIAS_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
 
 
+# Stable identity fields on the records kept in structured memory. Lists of
+# records are merged per item by one of these, so two sidecars appending to the
+# same list keep both entries instead of the later writer flattening the list.
+_STRUCTURED_ITEM_ID_KEYS = (
+    "card_id",
+    "asset_id",
+    "task_id",
+    "session_id",
+    "event_id",
+    "id",
+    "concept",
+    "key",
+)
+
+
+def _structured_item_identity(item: Any) -> tuple[str, str] | None:
+    if not isinstance(item, dict):
+        return None
+    for key in _STRUCTURED_ITEM_ID_KEYS:
+        value = item.get(key)
+        if isinstance(value, str) and value:
+            return (key, value)
+    return None
+
+
+def _identities(items: list[Any]) -> dict[tuple[str, str], Any] | None:
+    """Map list items by identity; ``None`` when the list has no stable ids."""
+    mapped: dict[tuple[str, str], Any] = {}
+    for item in items:
+        identity = _structured_item_identity(item)
+        if identity is None or identity in mapped:
+            return None
+        mapped[identity] = item
+    return mapped
+
+
+def _merge_unidentified_lists(base: list[Any], ours: list[Any], stored: list[Any]) -> list[Any]:
+    """Three-way merge for value lists: keep stored entries, apply our delta.
+
+    Entries this process removed are dropped from the stored list; entries it
+    added are appended if absent. Entries another writer added are kept.
+    """
+    removed = [item for item in base if item not in ours]
+    added = [item for item in ours if item not in base]
+    merged = [item for item in stored if item not in removed]
+    for item in added:
+        if item not in merged:
+            merged.append(item)
+    return merged
+
+
+def _merge_values(base: Any, ours: Any, stored: Any) -> Any:
+    """Three-way merge of one JSON value: our changes win, theirs survive."""
+    if isinstance(base, dict) and isinstance(ours, dict) and isinstance(stored, dict):
+        merged = dict(stored)
+        for key, value in ours.items():
+            if key not in base or key not in stored:
+                # New for this process, or missing from what was stored: the
+                # exported state always carries every key, so a missing key is
+                # a stripped record, not a deletion this process should honour.
+                merged[key] = value
+            elif base.get(key) != value:
+                merged[key] = _merge_values(base.get(key), value, stored.get(key))
+        return merged
+
+    if isinstance(base, list) and isinstance(ours, list) and isinstance(stored, list):
+        base_ids = _identities(base)
+        ours_ids = _identities(ours)
+        stored_ids = _identities(stored)
+        if base_ids is None or ours_ids is None or stored_ids is None:
+            return _merge_unidentified_lists(base, ours, stored)
+
+        removed = set(base_ids) - set(ours_ids)
+        merged = []
+        for item in stored:
+            identity = _structured_item_identity(item)
+            if identity in removed:
+                continue
+            if identity in ours_ids and identity in base_ids:
+                base_item = base_ids[identity]
+                if item == base_item:
+                    merged.append(ours_ids[identity])
+                elif ours_ids[identity] == base_item:
+                    merged.append(item)
+                else:
+                    # Both sides changed the same record: merge its fields.
+                    merged.append(_merge_values(base_item, ours_ids[identity], item))
+            else:
+                # Another writer added it, or we both know it.
+                merged.append(item if identity not in ours_ids else ours_ids[identity])
+        for item in ours:
+            identity = _structured_item_identity(item)
+            # Only entries this process added are appended. An entry the base
+            # already had and the stored list no longer carries was deleted by
+            # the other writer, and that deletion stands.
+            if identity not in base_ids and identity not in stored_ids:
+                merged.append(item)
+        return merged
+
+    return ours
+
+
+def _merge_structured_state(
+    base: dict[str, Any],
+    ours: dict[str, Any],
+    stored: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep another process's work while taking ours for what we changed.
+
+    ``base`` is the state this process last exported, ``ours`` what it is
+    writing now and ``stored`` what is in the database. Only the parts of
+    ``ours`` that differ from ``base`` are applied, recursively into dicts and
+    per record in id-bearing lists, so two sidecars editing one workspace do
+    not erase each other. Dict keys are never removed: the exported state
+    always carries every key (empty or null when unused), so an absent key
+    here means "not known to this process", not "deleted".
+    """
+    return _merge_values(base, ours, stored)
+
+
 class TrainerRepository:
     def save_provider_capability(self, cache_key: str, states: dict[str, str]) -> None:
         """Upsert observed provider capability truth (survives sidecar restarts)."""
@@ -189,7 +309,8 @@ class TrainerRepository:
                 ON agent_turn_checkpoints(workspace_id, session_id, created_at DESC);
                 CREATE TABLE IF NOT EXISTS structured_memory (
                     workspace_id TEXT PRIMARY KEY,
-                    payload TEXT NOT NULL
+                    payload TEXT NOT NULL,
+                    revision INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS project_provisionings (
                     workspace_id TEXT PRIMARY KEY,
@@ -323,6 +444,13 @@ class TrainerRepository:
             )
             self._migrate_library_asset_schema(connection)
             self._migrate_legacy_workspace_identity(connection)
+            # Existing databases predate the structured-memory revision.
+            self._ensure_column(
+                connection,
+                "structured_memory",
+                "revision",
+                "INTEGER NOT NULL DEFAULT 0",
+            )
 
     @staticmethod
     def _ensure_column(
@@ -2466,24 +2594,69 @@ class TrainerRepository:
             rows = connection.execute(query, params).fetchall()
         return [json.loads(row["payload"]) for row in rows]
 
-    def save_structured_memory(self, workspace_id: str, payload: dict[str, Any]) -> None:
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO structured_memory (workspace_id, payload)
-                VALUES (?, ?)
-                ON CONFLICT(workspace_id) DO UPDATE SET payload = excluded.payload
-                """,
-                (workspace_id, json.dumps(payload)),
-            )
+    def save_structured_memory(
+        self,
+        workspace_id: str,
+        payload: dict[str, Any],
+        *,
+        expected_revision: int | None = None,
+        base_payload: dict[str, Any] | None = None,
+    ) -> tuple[int, dict[str, Any]]:
+        """Persist one workspace's structured memory; returns ``(revision, stored)``.
 
-    def load_structured_memory(self, workspace_id: str) -> dict[str, Any] | None:
+        Several VS Code windows share one LibraryRoot, and each window runs its
+        own sidecar — so two processes can write the same workspace. The record
+        is one JSON object and each process caches its own copy, so a plain
+        whole-object overwrite silences whatever the other process wrote. When
+        the caller can say what its copy was based on (``base_payload``), only
+        the parts of ``payload`` that differ from it are applied, recursively,
+        onto the stored object; every other part keeps the stored value. The
+        read and the write happen in one immediate transaction, so two sidecars
+        cannot interleave between them. The revision advances on every write.
+        """
         with self._connect() as connection:
+            # The SELECT and the upsert must see and update one consistent row;
+            # BEGIN IMMEDIATE takes the write lock before the read so a second
+            # process waits here instead of writing between read and update.
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
-                "SELECT payload FROM structured_memory WHERE workspace_id = ?",
+                "SELECT payload, revision FROM structured_memory WHERE workspace_id = ?",
                 (workspace_id,),
             ).fetchone()
-        return json.loads(row["payload"]) if row else None
+            stored = json.loads(row["payload"]) if row else None
+            current_revision = int(row["revision"]) if row else 0
+            revision = current_revision + 1
+            merged = payload
+            if stored is not None and base_payload is not None:
+                merged = _merge_structured_state(base_payload, payload, stored)
+            connection.execute(
+                """
+                INSERT INTO structured_memory (workspace_id, payload, revision)
+                VALUES (?, ?, ?)
+                ON CONFLICT(workspace_id) DO UPDATE SET
+                    payload = excluded.payload,
+                    revision = excluded.revision
+                """,
+                (workspace_id, json.dumps(merged), revision),
+            )
+        return revision, merged
+
+    def load_structured_memory_entry(
+        self, workspace_id: str
+    ) -> tuple[dict[str, Any], int] | None:
+        """The stored structured memory and its revision, or ``None``."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload, revision FROM structured_memory WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return json.loads(row["payload"]), int(row["revision"])
+
+    def load_structured_memory(self, workspace_id: str) -> dict[str, Any] | None:
+        entry = self.load_structured_memory_entry(workspace_id)
+        return entry[0] if entry else None
 
     def list_structured_memory(self) -> list[tuple[str, dict[str, Any]]]:
         with self._connect() as connection:

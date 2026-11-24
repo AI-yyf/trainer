@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -277,11 +278,8 @@ declare global {
   }
 }
 
-function createNonce(): string {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let output = '';
-  for (let index = 0; index < 32; index += 1) {
-    output += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return output;
+export function createNonce(): string {
+  // The nonce is what keeps injected markup from running script, so it comes
+  // from the CSPRNG: Math.random() is predictable from a few observed values.
+  return randomBytes(24).toString('base64url');
 }

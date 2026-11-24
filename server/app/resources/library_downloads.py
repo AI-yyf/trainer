@@ -36,6 +36,8 @@ from pathlib import Path
 
 from app.network_fetch import ControlledFetchError, ControlledFetchResponse, fetch_url
 
+from ..core.process_env import child_process_environment
+
 GITHUB_REPOSITORY_API = "https://api.github.com/repos/{owner}/{repo}"
 GITHUB_ARCHIVE_URL = "https://codeload.github.com/{owner}/{repo}/zip/refs/heads/{ref}"
 GITHUB_ARCHIVE_HEAD_URL = "https://codeload.github.com/{owner}/{repo}/zip/HEAD"
@@ -209,7 +211,8 @@ def _clone_repository(clone_url: str, destination: Path) -> bool:
     if not git:
         return False
     environment = {
-        **os.environ,
+        # A copy of this process's environment without the sidecar's own token.
+        **child_process_environment(),
         # Never let git block on an interactive credential prompt.
         "GIT_TERMINAL_PROMPT": "0",
         "GCM_INTERACTIVE": "never",

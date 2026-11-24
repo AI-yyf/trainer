@@ -1563,6 +1563,9 @@ def test_leftover_formal_freeze_update_does_not_clobber_advanced_runtime(tmp_pat
                 "plan_id": "plan-formal-old",
                 "workspace_id": workspace_id,
                 "frozen": True,
+                "expected_revision": runtime.memory_service.repository.get_plan_revision(
+                    workspace_id, "plan-formal-old"
+                ),
             },
         )
         assert frozen.status_code == 409, frozen.text
@@ -1587,6 +1590,9 @@ def test_leftover_formal_freeze_update_does_not_clobber_advanced_runtime(tmp_pat
                 "plan_id": "plan-formal-old",
                 "workspace_id": workspace_id,
                 "instructions": "Rework the formal plan around async error handling.",
+                "expected_revision": runtime.memory_service.repository.get_plan_revision(
+                    workspace_id, "plan-formal-old"
+                ),
             },
         )
         assert updated.status_code == 409, updated.text

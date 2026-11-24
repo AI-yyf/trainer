@@ -80,12 +80,21 @@ function createContext(overrides = {}) {
   return {
     providerStore: {
       getConfig() {
-        return undefined;
+        return overrides.providerConfig;
       },
       async getApiKey() {
-        return undefined;
+        return overrides.apiKey;
       },
     },
+    // A trusted workspace unless a test says otherwise: attaching the live
+    // provider is gated on the learner's trust decision.
+    trustGuard:
+      overrides.trustGuard ??
+      {
+        async ensureTrusted() {
+          return true;
+        },
+      },
     sidecarManager: {
       getStatus() {
         return {
@@ -298,6 +307,69 @@ test('trainingGenerateCardCommand sends workspace_id to sidecar', async () => {
   assert.equal(String(context.__postCalls[1][1]).startsWith('/memory/summary?'), true);
   assert.equal(context.__patched.length, 1);
   assert.equal(context.__synced.length, 1);
+});
+
+test('trainingGenerateCardCommand never sends the model key for an untrusted workspace', async () => {
+  // The endpoint can come from the workspace while the key is the learner's
+  // own secret: without the learner's trust nothing is read and nothing is sent.
+  const { trainingGenerateCardCommand } = loadWithVscodeMock(trainingCommandsModulePath, {
+    commands: { async executeCommand() { return undefined; } },
+  });
+  const trustReasons = [];
+  const context = createContext({
+    workspaceFolder: 'F:\\trainer-training',
+    apiKey: 'sk-learner-secret',
+    providerConfig: { name: 'relay', base_url: 'http://attacker.example/v1', model: 'm' },
+    trustGuard: {
+      async ensureTrusted(reason) {
+        trustReasons.push(reason);
+        return false;
+      },
+    },
+  });
+
+  const result = await trainingGenerateCardCommand(context, {
+    source: 'conversation',
+    cardType: 'practice',
+    focusArea: 'state machine',
+    targetSkill: 'status transition',
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(String(result.message), /Workspace trust is required|需要信任当前工作区/);
+  assert.equal(trustReasons.length, 1);
+  const sent = JSON.stringify(context.__postCalls);
+  assert.equal(sent.includes('sk-learner-secret'), false);
+  assert.equal(sent.includes('attacker.example'), false);
+  assert.equal(
+    context.__postCalls.some(([, requestPath]) => String(requestPath).startsWith('/training/generate-card')),
+    false,
+  );
+});
+
+test('trainingGenerateCardCommand attaches the live provider once the workspace is trusted', async () => {
+  const { trainingGenerateCardCommand } = loadWithVscodeMock(trainingCommandsModulePath, {
+    commands: { async executeCommand() { return undefined; } },
+  });
+  const context = createContext({
+    workspaceFolder: 'F:\\trainer-training',
+    apiKey: 'sk-learner-secret',
+    providerConfig: { name: 'relay', base_url: 'http://127.0.0.1:9/v1', model: 'm' },
+  });
+
+  const result = await trainingGenerateCardCommand(context, {
+    source: 'conversation',
+    cardType: 'practice',
+    focusArea: 'state machine',
+    targetSkill: 'status transition',
+  });
+
+  assert.equal(result.ok, true);
+  const generateCall = context.__postCalls.find(([, requestPath]) =>
+    String(requestPath).startsWith('/training/generate-card'));
+  assert.ok(generateCall, 'the card generation request reaches the sidecar');
+  assert.equal(generateCall[2].api_key, 'sk-learner-secret');
+  assert.equal(generateCall[2].provider.base_url, 'http://127.0.0.1:9/v1');
 });
 
 test('practice generation forwards the formal plan binding through the host', async () => {

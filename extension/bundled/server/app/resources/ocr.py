@@ -11,6 +11,8 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 
+from ..core.process_env import child_process_environment
+
 
 @dataclass(slots=True)
 class OcrResult:
@@ -50,6 +52,7 @@ def ocr_image_bytes(
             capture_output=True,
             timeout=max(1.0, timeout),
             check=False,
+            env=child_process_environment(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return OcrResult(

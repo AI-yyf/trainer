@@ -44,6 +44,14 @@ try {
 } catch {}
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "trainer-full-journey-"));
+// The learner's submission is written to a throwaway workspace, never to the
+// repository root: a failed journey used to leave the card's target file
+// behind as an untracked file in the repo.
+const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), "trainer-full-journey-workspace-"));
+const removeWorkspace = () => fs.rmSync(workspaceDir, { recursive: true, force: true });
+// step() calls process.exit(1) on a failed assertion, which skips the normal
+// cleanup paths; the exit hook still runs synchronously.
+process.on("exit", removeWorkspace);
 const DB = path.join(dataDir, "trainer.sqlite3");
 let sidecar = null;
 let providerTestResult = null;
@@ -124,7 +132,7 @@ async function authorSubmission(cardData, cardTarget) {
       },
       {
         role: "user",
-        content: `目标文件：${cardTarget}\n\n卡片契约：\n${contract}\n\n请输出完整文件内容。\n\n另外：请在实现函数的注释中逐字包含与等价 torch 实现对应的这三行（符号名按卡片契约调整）：\n# ratio = torch.exp(new_logp - old_logp)\n# clipped_ratio = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps)\n# policy_loss = -torch.minimum(ratio * advantages, clipped_ratio * advantages).mean()\n实现本体用纯 Python 数值计算同一数学。`,
+        content: `目标文件：${cardTarget}\n\n卡片契约：\n${contract}\n\n请输出完整文件内容。\n\n另外：请在实现函数的注释中逐字包含与等价 torch 实现对应的这三行（符号名按卡片契约调整）：\n# ratio = torch.exp(new_logp - old_logp)\n# clipped_ratio = torch.clamp(ratio, 1.0 - clip_eps, 1.0 + clip_eps)\n# policy_loss = -torch.minimum(ratio * advantages, clipped_ratio * advantages).mean()\n实现本体以卡片验收条件为准：卡片点名的库函数（例如 torch.clamp / torch.minimum）必须在真实代码路径里使用；只有卡片没有点名任何库时才用纯 Python 数值计算同一数学。torch 不可用时的纯 Python 回退分支照常保留。`,
       },
     ],
   };
@@ -181,7 +189,23 @@ function localCheck(targetAbsPath) {
   const ruffFix = run(["-m", "ruff", "check", targetAbsPath, "--fix", "--unsafe-fixes"]);
   const script = run([targetAbsPath]);
   const pytest = run(["-m", "pytest", targetAbsPath, "-q"]);
-  const pyright = run(["-m", "pyright", targetAbsPath]);
+  // The evaluator grades a copy of the file in an empty temporary directory,
+  // where no repository pyright config applies. Run the precheck the same
+  // way: under the repository's own looser config it reported 0 errors for a
+  // file the evaluator then failed on real type errors.
+  const pyrightDir = fs.mkdtempSync(path.join(os.tmpdir(), "trainer-journey-pyright-"));
+  const pyrightCopy = path.join(pyrightDir, path.basename(targetAbsPath));
+  fs.copyFileSync(targetAbsPath, pyrightCopy);
+  let pyright;
+  try {
+    pyright = spawnSync(journeyPython, ["-m", "pyright", pyrightCopy], {
+      encoding: "utf8",
+      cwd: pyrightDir,
+      timeout: 120_000,
+    });
+  } finally {
+    fs.rmSync(pyrightDir, { recursive: true, force: true });
+  }
   return {
     ruff_fix_ok: ruffFix.status === 0,
     script_ok: script.status === 0,
@@ -291,13 +315,26 @@ function post(p, body) {
   });
 }
 
+function redactedSidecarLog() {
+  // The provider key travels only through the environment; redact it anyway
+  // before a sidecar tail lands in a failure artifact.
+  const raw = sidecarLog;
+  return (providerKey ? raw.split(providerKey).join("[redacted]") : raw).slice(-4000);
+}
+
 function step(name, data, { fail = false } = {}) {
   fs.writeFileSync(path.join(outDir, `${name}.json`), JSON.stringify(data, null, 2) + "\n");
   console.log(`[step] ${fail ? "FAIL" : "ok"} ${name}`, JSON.stringify(data).slice(0, 260));
   if (fail) {
     fs.writeFileSync(
       path.join(outDir, "FAILED.json"),
-      JSON.stringify({ failed_at: name, db_path: DB, data_dir: dataDir, ...data }, null, 2) + "\n",
+      JSON.stringify({
+        failed_at: name,
+        db_path: DB,
+        data_dir: dataDir,
+        ...data,
+        sidecar_log: redactedSidecarLog(),
+      }, null, 2) + "\n",
     );
     stopSidecar();
     process.exit(1);
@@ -385,16 +422,41 @@ try {
     workspace_name: "Full Journey",
   });
   const sessionId = start.json.session_id;
-  const providerTest = await post("/provider/test", {
+  const providerTestBody = {
     provider: { name: "journey", baseUrl: providerBase, apiKeyRef: "journey", model, protocol: "openai_chat_completions_compatible" },
     apiKey: providerKey,
     responseLanguage: "zh-CN",
-  });
+  };
+  // The relay has shown short 5xx bursts; a failed probe is retried briefly
+  // and every attempt stays in the record instead of aborting on one blip.
+  let providerTest = await post("/provider/test", providerTestBody);
+  const providerTestAttempts = [{
+    attempt: 1,
+    status: providerTest.status,
+    ok: providerTest.json?.ok === true,
+    detail: providerTest.json?.detail ?? null,
+  }];
+  for (let attempt = 2; attempt <= 3 && providerTest.json?.ok !== true; attempt += 1) {
+    await sleep(15_000);
+    providerTest = await post("/provider/test", providerTestBody);
+    providerTestAttempts.push({
+      attempt,
+      status: providerTest.status,
+      ok: providerTest.json?.ok === true,
+      detail: providerTest.json?.detail ?? null,
+    });
+  }
   step("01-session-start", {
     status: start.status, session_id: sessionId,
+    provider_test_status: providerTest.status,
     provider_test_ok: providerTest.json?.ok === true,
     streaming_ready: providerTest.json?.streaming_ready === true,
     tools_ready: providerTest.json?.tools_ready === true,
+    stream_probe_status: providerTest.json?.stream_probe_status,
+    tool_probe_status: providerTest.json?.tool_probe_status,
+    provider_test_attempts: providerTestAttempts,
+    // Safe provider-test detail: the sidecar never echoes credentials here.
+    provider_test_detail: providerTest.json?.detail ?? (providerTest.status === 200 ? null : errorDetail(providerTest.text)),
   }, { fail: start.status !== 200 || providerTest.json?.ok !== true });
   providerTestResult = providerTest.json;
 
@@ -458,17 +520,30 @@ try {
     provider: { name: "journey", baseUrl: providerBase, apiKeyRef: "journey", model, protocol: "openai_chat_completions_compatible" },
     api_key: providerKey,
   };
-  // One honest retry: four long real-model turns precede this call and the
-  // relay has shown transient failure under that burst. Both attempts are
-  // recorded; a retry that fails again still fails the step.
-  let card = await post("/training/generate-card", cardRequestBody);
-  let cardRetryOf = null;
-  if (card.status !== 200) {
-    const failedAttempt = { status: card.status, error_detail: errorDetail(card.text) };
-    await sleep(15_000);
+  // One honest retry for model-content failures. A provider outage (503 with
+  // Retry-After) is different: wait out the upstream burst instead of burning
+  // the retry on the same 5xx. Every attempt stays recorded.
+  let card = null;
+  let cardAttempts = [];
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     card = await post("/training/generate-card", cardRequestBody);
-    cardRetryOf = failedAttempt;
+    cardAttempts.push({
+      attempt,
+      status: card.status,
+      ...(card.status === 200 ? {} : { error_detail: errorDetail(card.text) }),
+    });
+    if (card.status === 200) break;
+    if (attempt === 3) break;
+    if (card.status === 503) {
+      // Provider outage: wait out the upstream burst.
+      await sleep(attempt === 1 ? 20_000 : 40_000);
+      continue;
+    }
+    // Model-content failure: exactly one honest retry, as before.
+    if (attempt > 1) break;
+    await sleep(15_000);
   }
+  const cardRetryOf = cardAttempts.length > 1 ? cardAttempts[0] : null;
   const cardData = card.json?.card ?? card.json?.data?.card ?? null;
   const cardId = cardData?.card_id ?? "";
   const degraded = cardData?.degraded === true || card.json?.degraded === true;
@@ -490,6 +565,7 @@ try {
     persisted: cardRows.length > 0,
     opened_after_review: cardOpened,
     retry_of: cardRetryOf,
+    attempts: cardAttempts,
     ...(card.status !== 200 && !degraded ? { error_detail: errorDetail(card.text) } : {}),
     // Red line: a degraded card must never pass as model-authored. Record the
     // full raw response (model output only — the key never appears here) and
@@ -611,6 +687,9 @@ if torch is not None:  # pragma: no cover
         if (!lit || lit.length > 80) continue;
         if (/[\u4e00-\u9fff]/.test(lit)) continue;
         if (/\.(py|pyi|js|jsx|ts|tsx|json|md|txt|rs|go|java|cpp|c|cs)\b/i.test(lit)) continue;
+        // Process words are verified for real now (a docstring on the named
+        // definition, a runner that actually executed): never forge them.
+        if (/^(docstrings?|py\.test|pytest|python3?|unittest)$/i.test(lit)) continue;
         if (!/^[\w.+\-*/[\]() ,:=<>%]+$/.test(lit)) continue;
         if (out.includes(lit)) continue;
         literals.add(lit);
@@ -627,11 +706,21 @@ if torch is not None:  # pragma: no cover
     }
     return out;
   }
-  const targetPath = path.join(repoRoot, cardTarget);
+  // `files_to_touch` comes from a model-authored card: resolve it inside the
+  // throwaway workspace and refuse anything that escapes it.
+  const targetPath = path.resolve(workspaceDir, cardTarget);
+  if (!targetPath.startsWith(workspaceDir + path.sep)) {
+    throw new Error(`Card target escapes the journey workspace: ${cardTarget}`);
+  }
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const evidencePath = path.join(outDir, "learner-submission", path.basename(targetPath));
   const writeSubmission = (raw) => {
     const decorated = decorateSubmission(raw);
     fs.writeFileSync(targetPath, decorated);
+    // Keep the exact graded text with the evidence: the throwaway workspace is
+    // removed on exit, and a failed verification is undiagnosable without it.
+    fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
+    fs.writeFileSync(evidencePath, decorated);
     return decorated;
   };
   let submission = writeSubmission(await authorSubmission(cardData, cardTarget));
@@ -733,7 +822,17 @@ if torch is not None:  # pragma: no cover
   // missing-signal summary and resubmits once. The evaluator grades the new
   // submission independently — nothing is forged.
   if (evaluation.status === 200 && !passed) {
-    const missingSignals = String(report.summary ?? "");
+    // Hand the model what the evaluator actually said: the bare summary
+    // ("评估未通过项：pyright") names a lane, not a single error to fix.
+    const failingChecks = [
+      ...(Array.isArray(report.static_checks) ? report.static_checks : []),
+      ...(Array.isArray(report.dynamic_checks) ? report.dynamic_checks : []),
+      ...(Array.isArray(report.semantic_checks) ? report.semantic_checks : []),
+    ].filter((check) => check && check.status === "failed");
+    const missingSignals = [
+      String(report.summary ?? ""),
+      ...failingChecks.map((check) => `${check.id}: ${String(check.detail ?? "").trim()}`),
+    ].join("\n").slice(0, 4000);
     const revised = await reviseSubmission(cardData, cardTarget, submission, missingSignals);
     if (revised) {
       submission = writeSubmission(revised);
@@ -818,12 +917,34 @@ if torch is not None:  # pragma: no cover
     session_id: sessionId,
     workspace_name: "Full Journey",
   });
-  const goalCurrent = dbRows("SELECT title, status FROM goal_sessions LIMIT 1");
+  // goal_sessions stores the title inside its payload (there is no title
+  // column); assert the active goal really survived the restart instead of
+  // recording a query error as "goal: null".
+  const goalRows = dbRows("SELECT status, payload FROM goal_sessions LIMIT 1");
+  let restoredGoal = null;
+  if (goalRows[0]) {
+    try {
+      const payload = JSON.parse(Buffer.from(goalRows[0].payload).toString("utf8"));
+      restoredGoal = {
+        goal_id: payload.goal_id ?? null,
+        title: payload.title ?? payload.concept ?? "",
+        status: payload.status ?? goalRows[0].status ?? "",
+      };
+    } catch {
+      restoredGoal = null;
+    }
+  }
   step("09-restart-restore", {
     status: restored.status,
     same_session: restored.json?.session_id === sessionId,
-    goal: goalCurrent[0] ?? null,
-  }, { fail: restored.status !== 200 || restored.json?.session_id !== sessionId });
+    goal: restoredGoal,
+  }, {
+    fail:
+      restored.status !== 200
+      || restored.json?.session_id !== sessionId
+      || restoredGoal === null
+      || restoredGoal.status !== "active",
+  });
 
   // Step 10 — advance the clock past next_review_at → due review surfaces.
   stopSidecar();
@@ -937,6 +1058,7 @@ if torch is not None:  # pragma: no cover
   }, { fail: nextStepTurn.status !== 200 || nextStepTurn.visible.length < 40 });
 
   stopSidecar();
+  removeWorkspace();
   if (partialReasons.length > 0) {
     console.log(`FULL_JOURNEY_PARTIAL ${outDir}`);
   } else {
@@ -944,6 +1066,7 @@ if torch is not None:  # pragma: no cover
   }
 } catch (error) {
   stopSidecar();
+  removeWorkspace();
   step("FAILED", { error: error instanceof Error ? error.stack : String(error), sidecar_log: sidecarLog.slice(-3000) }, { fail: true });
   console.error(`FULL_JOURNEY_FAILED ${outDir}`);
   process.exit(1);

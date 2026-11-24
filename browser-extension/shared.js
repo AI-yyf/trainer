@@ -60,6 +60,10 @@
 
   const STORAGE_KEYS = {
     baseUrl: 'trainerCapture.baseUrl',
+    // The sidecar that last asked for a pairing code. A service worker is
+    // torn down whenever it goes idle, so this must live in storage: the
+    // learner types the code minutes later, into a fresh worker.
+    pairingNeededUrl: 'trainerCapture.pairingNeededUrl',
     credential: 'trainerCapture.credential',
     history: 'trainerCapture.history',
     queue: 'trainerCapture.queue',
@@ -161,7 +165,7 @@
       connectHeading: '连接 Trainer',
       pairCodeLabel: '配对码',
       pairCodePlaceholder: '6 位配对码',
-      pairCodeHint: '在 VS Code 执行「Trainer: 复制配对码」，把 6 位码粘贴到这里。',
+      pairCodeHint: '在 VS Code 打开命令面板，执行「Trainer: Show Browser Pairing Code」，把显示的 6 位码粘贴到这里。只需这一次，之后会自动连接。',
       pairAction: '配对',
       pairInvalidCode: '配对码应为 6 位数字。',
       pairCodeRejected: '配对码不正确或已过期。',
@@ -364,7 +368,7 @@
       connectHeading: 'Connect to Trainer',
       pairCodeLabel: 'Pairing code',
       pairCodePlaceholder: '6-digit code',
-      pairCodeHint: 'Run "Trainer: Copy pairing code" in VS Code, then paste the 6-digit code here.',
+      pairCodeHint: 'Open the Command Palette in VS Code and run "Trainer: Show Browser Pairing Code", then paste the 6-digit code here. You only do this once; afterwards Trainer connects on its own.',
       pairAction: 'Pair',
       pairInvalidCode: 'The pairing code must be 6 digits.',
       pairCodeRejected: 'That pairing code is wrong or has expired.',
@@ -2399,7 +2403,13 @@
       return { ok: false, reason: 'empty_credential', message: dict.pairCodeRejected };
     }
     const workspaceId = String((result.body && result.body.workspace_id) || '').trim();
-    return { ok: true, credential, baseUrl: base, workspaceId };
+    return {
+      ok: true,
+      credential,
+      baseUrl: base,
+      workspaceId,
+      workspaceName: String((result.body && result.body.workspace_name) || '').trim()
+    };
   }
 
   async function fetchAutoPairCandidate(baseUrl) {
@@ -2451,6 +2461,12 @@
       .map((entry) => entry.candidate);
   }
 
+  /**
+   * Zero-code pairing. The sidecar answers 403 `extension_not_paired` for an
+   * extension it has not seen: that is not an error to swallow — the caller
+   * offers the pairing-code form so the learner can authorise this extension
+   * once, after which this call succeeds on its own.
+   */
   async function autoPairSidecar(baseUrl) {
     const dict = activeCopy();
     const base = normalizeBaseUrl(baseUrl);
@@ -2465,6 +2481,8 @@
       timeoutMs: PAIR_TIMEOUT_MS
     });
     if (!result.ok) {
+      const detail = result.body && typeof result.body === 'object' ? result.body.detail : null;
+      const code = detail && typeof detail === 'object' ? String(detail.code || '') : '';
       const message = result.transportError
         ? dict.pairTransport
         : describeHttpError(result.status, result.body, dict);
@@ -2472,6 +2490,9 @@
         ok: false,
         reason: result.transportError ? 'transport' : 'http',
         status: result.status,
+        code,
+        // Trainer is running and refused this extension until it is paired.
+        needsPairing: result.status === 403 && code === 'extension_not_paired',
         message
       };
     }
@@ -2630,6 +2651,21 @@
       STORAGE_KEYS.baseUrl,
       STORAGE_KEYS.credential,
       STORAGE_KEYS.workspaceFocusAt,
+      STORAGE_KEYS.connection,
+      STORAGE_KEYS.statusCache,
+      STORAGE_KEYS.notice
+    ]);
+  }
+
+  /**
+   * Drop a stale credential but remember which sidecar issued it. The next
+   * auto-pair probes that sidecar first, so a machine running several Trainer
+   * windows reconnects to the same workspace instead of whichever sidecar
+   * happens to answer first.
+   */
+  async function clearStaleCredential() {
+    await chrome.storage.local.remove([
+      STORAGE_KEYS.credential,
       STORAGE_KEYS.connection,
       STORAGE_KEYS.statusCache,
       STORAGE_KEYS.notice
@@ -2954,6 +2990,7 @@
     loadAuth,
     saveAuth,
     clearAuth,
+    clearStaleCredential,
     loadHistory,
     clearHistory,
     recordHistory,

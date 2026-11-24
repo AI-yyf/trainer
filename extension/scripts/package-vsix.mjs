@@ -9,7 +9,7 @@ import {
   assertBrowserCaptureVsixArtifact,
   collectBrowserCaptureVsixEntries,
 } from "./bundle-browser-capture.mjs";
-import { assertPackageVerified } from "./verify-package.mjs";
+import { assertPackageVerified, SHIPPED_SUBJECT_PROFILES } from "./verify-package.mjs";
 import { readZipEntries, readZipEntry } from "./vsix-archive.mjs";
 import { resolveNpmExecPath } from "./vsix-build-helpers.mjs";
 export { resolveNpmExecPath, sanitizePackagedSymlinks } from "./vsix-build-helpers.mjs";
@@ -76,11 +76,47 @@ export function extractVsixTargetPlatform(manifestXml) {
   return identityMatch?.[1];
 }
 
+/**
+ * Development-only surfaces that must never reach a VSIX.
+ *
+ * The packaged webview `dist` is also the developer preview build, so the
+ * archive is the one place these can be told apart. Each entry below is
+ * either not referenced by the shipped bundle at all (the standalone browser
+ * preview page) or referenced only from a branch that cannot run inside
+ * VS Code (the live-preview harness, which needs a page without
+ * `acquireVsCodeApi`). `webview/dist/browserSidecar-test.js` is deliberately
+ * not listed: despite its name it is the lazy chunk of a production module
+ * (`lib/browserSidecar`) that the workbench loads.
+ */
+export const DEVELOPMENT_ONLY_VSIX_ENTRY_PATTERNS = [
+  /^extension\/webview\/dist\/vscode-preview\.html$/,
+  /^extension\/webview\/dist\/assets\/preview-[^/]+\.js$/,
+  /^extension\/webview\/dist\/assets\/browserPreviewHarness-[^/]+\.js$/,
+  // Local evidence and scratch output (CI keyring notes, probe reports).
+  /^extension\/output\//,
+];
+
+export function findDevelopmentOnlyVsixEntries(entryNames) {
+  const developmentOnlyEntries = [];
+  for (const entryName of entryNames) {
+    const pattern = DEVELOPMENT_ONLY_VSIX_ENTRY_PATTERNS.find((candidate) => candidate.test(entryName));
+    if (pattern) {
+      developmentOnlyEntries.push(entryName);
+    }
+  }
+  return developmentOnlyEntries.sort((left, right) => left.localeCompare(right));
+}
+
 export function inspectVsixTargetContents({ targetPlatform, manifestXml, entryNames }) {
   const expectedExecutable = targetPlatform.startsWith("win32-")
     ? "trainer-sidecar.exe"
     : "trainer-sidecar";
   const runtimeRoot = `extension/bundled/bin/${targetPlatform}`;
+  // The subject profiles are package data the sidecar reads at runtime.
+  const expectedProfiles = SHIPPED_SUBJECT_PROFILES.map(
+    (name) =>
+      `extension/bundled/server/app/training/profiles/${name}.profile.json`,
+  );
   const expectedEntries = [
     "extension.vsixmanifest",
     "extension/package.json",
@@ -89,6 +125,7 @@ export function inspectVsixTargetContents({ targetPlatform, manifestXml, entryNa
     "extension/bundled/remote/trainer-workspace-companion.vsix",
     `${runtimeRoot}/${expectedExecutable}`,
     `${runtimeRoot}/trainer-sidecar-manifest.json`,
+    ...expectedProfiles,
   ];
   const entries = new Set(entryNames);
   const errors = [];
@@ -103,6 +140,11 @@ export function inspectVsixTargetContents({ targetPlatform, manifestXml, entryNa
     if (!entries.has(expectedEntry)) {
       errors.push(`VSIX is missing required ${targetPlatform} runtime entry: ${expectedEntry}.`);
     }
+  }
+
+  const developmentOnlyEntries = findDevelopmentOnlyVsixEntries(entryNames);
+  for (const entryName of developmentOnlyEntries) {
+    errors.push(`VSIX ships a development-only entry: ${entryName}.`);
   }
 
   const foreignRuntimeEntries = [...entries]
@@ -122,6 +164,7 @@ export function inspectVsixTargetContents({ targetPlatform, manifestXml, entryNa
     targetPlatform,
     declaredTarget,
     expectedEntries,
+    developmentOnlyEntries,
     foreignRuntimeEntries,
     errors,
   };
@@ -134,6 +177,7 @@ export function verifyVsixTargetArtifact({ vsixPath, targetPlatform = resolveNat
       vsixPath,
       declaredTarget: undefined,
       expectedEntries: [],
+      developmentOnlyEntries: [],
       foreignRuntimeEntries: [],
       errors: [`VSIX target artifact is missing: ${vsixPath}.`],
     };
@@ -149,6 +193,7 @@ export function verifyVsixTargetArtifact({ vsixPath, targetPlatform = resolveNat
         vsixPath,
         declaredTarget: undefined,
         expectedEntries: [],
+        developmentOnlyEntries: [],
         foreignRuntimeEntries: [],
         errors: ["VSIX is missing extension.vsixmanifest."],
       };
@@ -168,6 +213,7 @@ export function verifyVsixTargetArtifact({ vsixPath, targetPlatform = resolveNat
       vsixPath,
       declaredTarget: undefined,
       expectedEntries: [],
+      developmentOnlyEntries: [],
       foreignRuntimeEntries: [],
       errors: [`Could not inspect VSIX target metadata: ${message}`],
     };

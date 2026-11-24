@@ -12,6 +12,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api._singleflight import (
+    COMPLETED_REQUEST_REPLAY_LIMIT,
+    remember_completed_request,
+)
 from app.api.routers import (
     claim_session_request_singleflight,
     fail_session_request_singleflight,
@@ -2904,3 +2908,54 @@ async def test_agent_loop_cancel_before_commit_publishes_failure_complete_blocks
     assert proof_reply in str(reply.get("content") or "")
     assert call_count == 1
     assert stream_done is True
+
+
+def test_completed_replay_cache_is_bounded_and_keeps_the_newest() -> None:
+    """A long session must not keep every full snapshot for the sidecar's life."""
+    completed: dict[tuple[str, str, str], dict[str, object]] = {}
+    inflight: dict[tuple[str, str, str], asyncio.Future] = {}
+    guard = Lock()
+    total = COMPLETED_REQUEST_REPLAY_LIMIT + 10
+    for index in range(total):
+        publish_session_request_singleflight(
+            ("ws", "session", f"request-{index}"),
+            {"index": index},
+            completed=completed,
+            inflight=inflight,
+            guard=guard,
+        )
+
+    assert len(completed) == COMPLETED_REQUEST_REPLAY_LIMIT
+    assert ("ws", "session", "request-0") not in completed
+    newest = ("ws", "session", f"request-{total - 1}")
+    assert completed[newest] == {"index": total - 1}
+
+
+def test_restamping_a_cached_response_refreshes_its_place_in_the_window() -> None:
+    completed: dict[tuple[str, str, str], dict[str, object]] = {}
+    inflight: dict[tuple[str, str, str], asyncio.Future] = {}
+    guard = Lock()
+    for index in range(COMPLETED_REQUEST_REPLAY_LIMIT):
+        publish_session_request_singleflight(
+            ("ws", "session", f"request-{index}"),
+            {"index": index},
+            completed=completed,
+            inflight=inflight,
+            guard=guard,
+        )
+    oldest = ("ws", "session", "request-0")
+
+    # A later honest re-stamp of an old response must not make it the first
+    # key evicted by the next completion.
+    remember_completed_request(completed, oldest, {"index": "restamped"}, guard=guard)
+    publish_session_request_singleflight(
+        ("ws", "session", "request-new"),
+        {"index": "new"},
+        completed=completed,
+        inflight=inflight,
+        guard=guard,
+    )
+
+    assert len(completed) == COMPLETED_REQUEST_REPLAY_LIMIT
+    assert completed[oldest] == {"index": "restamped"}
+    assert ("ws", "session", "request-1") not in completed

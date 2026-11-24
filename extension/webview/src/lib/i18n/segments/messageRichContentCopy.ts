@@ -97,6 +97,24 @@ export const MESSAGE_RICH_CONTENT_TEXT: Record<string, Record<string, string>> =
     "ko-KR": "이미지를 표시할 수 없습니다.",
     "pt-BR": "Não foi possível exibir a imagem.",
   },
+  "加载远程图片": {
+    "en-US": "Load remote image",
+    "es-ES": "Cargar imagen remota",
+    "fr-FR": "Charger l’image distante",
+    "de-DE": "Externes Bild laden",
+    "ja-JP": "外部画像を読み込む",
+    "ko-KR": "원격 이미지 불러오기",
+    "pt-BR": "Carregar imagem remota",
+  },
+  "远程图片在你点击之前不会加载，以免对方站点得知你正在阅读。": {
+    "en-US": "Remote images stay unloaded until you click, so the site does not learn that you are reading this.",
+    "es-ES": "Las imágenes remotas no se cargan hasta que haces clic, para que el sitio no sepa que estás leyendo esto.",
+    "fr-FR": "Les images distantes restent déchargées tant que vous ne cliquez pas, pour que le site ne sache pas que vous lisez ceci.",
+    "de-DE": "Externe Bilder werden erst nach einem Klick geladen, damit die Seite nicht erfährt, dass du dies liest.",
+    "ja-JP": "外部画像はクリックするまで読み込まれません。サイトに閲覧を知られないためです。",
+    "ko-KR": "원격 이미지는 클릭하기 전에는 불러오지 않아, 사이트가 이 글을 읽고 있다는 사실을 알지 못합니다.",
+    "pt-BR": "Imagens remotas só são carregadas quando você clica, para o site não descobrir que você está lendo isto.",
+  },
 };
 
 export function messageRichContentCopy(language: ComposerLanguage, key: string): string {

@@ -41,6 +41,8 @@
     "test:full-journey": "node ./scripts/run-full-journey.mjs && node ./scripts/run-full-journey-visual.mjs",
     "verify:canonical-gui": "node ./scripts/verify-canonical-gui.mjs",
     "verify:coach-gui": "node ./scripts/verify-coach-gui.mjs",
+    "verify:resource-grounding-gui": "node ./scripts/verify-resource-grounding-gui.mjs",
+    "verify:frozen-sidecar": "node ./scripts/verify-frozen-sidecar-fixes.mjs",
     "verify:ui-geometry": "node ./scripts/verify-ui-geometry.mjs",
     "verify:copy-vocabulary": "node ./scripts/verify-copy-vocabulary.mjs",
     "verify:i18n": "node ./scripts/verify-i18n-completeness.mjs",

@@ -37,7 +37,11 @@ def test_unrelated_file_cannot_verify_live_card_and_saved_contract_wins(tmp_path
         assert accepted.status_code == 200, accepted.text
         request = runtime.evaluator_service.evaluate_current_file.call_args.args[0]
         assert request.acceptance_criteria == card.acceptance_criteria
-        assert request.expected_symbols == card.expected_symbols
+        # The card's own contract wins over the client's ("anything" never
+        # appears); the verified target is appended as an established fact.
+        assert request.expected_symbols[: len(card.expected_symbols)] == card.expected_symbols
+        assert "anything" not in request.expected_symbols
+        assert "sample.py" in request.expected_symbols
         assert request.learner_deliverables == card.learner_deliverables
 
 
@@ -442,3 +446,60 @@ def test_legacy_self_reported_try_handoff_can_reflect(tmp_path: Path) -> None:
         assert final_workspace["latest_learning_outcome"] == "self_reported"
         assert not str(final_workspace.get("latest_learning_verified_result") or "").strip()
         assert not str(final.get("success_signal") or "").strip()
+
+
+def test_verified_target_reaches_the_evaluator_for_a_completion_criterion(tmp_path: Path) -> None:
+    """A real-model card said "use `ppo_clip_loss.py` to complete ..." and then
+    left the file out of expected_symbols. The stored contract replaces the
+    request's symbols, so the evaluator never saw the verified file as a
+    declared target and the card could not pass against its own target.
+    """
+    with build_client(tmp_path) as client:
+        workspace = "ws-completion-target"
+        session = client.post(
+            "/session/start",
+            json={"workspace_id": workspace, "workspace_name": "Completion target"},
+        ).json()["session_id"]
+        runtime = client.app.state.runtime
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-completion-target",
+            card_type="practice",
+            status="active",
+            title="Complete the step in the target file",
+            files_to_touch=["queue_lock.py"],
+            acceptance_criteria=[
+                "使用 `queue_lock.py` 完成交付物中的关键一步",
+                "实现 `snapshot` 并返回副本。",
+            ],
+            expected_symbols=["snapshot"],
+            learner_deliverables=["在 `queue_lock.py` 中实现 `snapshot`。"],
+        )
+        runtime.memory_service.upsert_card(workspace, card)
+        runtime.memory_service.update_workspace_state(
+            workspace,
+            selected_card_id=card.card_id,
+            canonical_project_path=str(tmp_path),
+        )
+
+        response = client.post(
+            "/evaluate/current-file",
+            json={
+                "workspace_id": workspace,
+                "session_id": session,
+                "evaluation_source": "training",
+                "training_card_id": card.card_id,
+                "file_path": "queue_lock.py",
+                "language_id": "python",
+                "content": "def snapshot():\n    return 1\n",
+                "diagnostics": [],
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        training = next(
+            check
+            for check in response.json()["semantic_checks"]
+            if check["id"] == "training-acceptance"
+        )
+        assert training["status"] == "passed", training["detail"]
+        assert "current file target" in training["detail"]

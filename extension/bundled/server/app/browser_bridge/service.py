@@ -11,6 +11,21 @@ long-lived Bearer credential issued here:
 - the credential is persisted (only its SHA-256 hash) in the sidecar data
   directory, so it survives restarts until it is revoked.
 
+Zero-code auto-pairing is a convenience *on top of* that consent, never a
+second way in: it mints a credential only for a browser-extension origin that
+already redeemed a pairing code on this sidecar (the learner typed the code
+once), or for a caller that proves the per-instance token. The Origin header is
+set by the browser and cannot be forged by a web page or by another extension.
+
+The boundary of that claim is the browser, not the host. The auto-pair route is
+exempt from the instance token (the browser extension cannot read that token),
+and a NATIVE process on the same machine can send any header it likes, including
+a trusted extension origin. So zero-code pairing defends against web pages and
+other extensions, not against a local process that already knows the paired
+extension id; such a process can reach the browser lane of this loopback sidecar.
+The instance token remains the boundary for everything outside the browser lane,
+and revoking the pairing retires the origin for that process as well.
+
 The pending coach-draft queue is strictly workspace-scoped: every queued draft
 carries the workspace its selection was captured for (the credential's
 workspace), and the host can only read/acknowledge drafts of the workspace it
@@ -26,9 +41,13 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
+import tempfile
 import threading
 import time
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
@@ -48,6 +67,20 @@ PAIR_CODE_MAX_TTL_SECONDS = 3600
 CREDENTIAL_PREFIX = "trcb_"
 _STATE_FILE_NAME = "browser_bridge.json"
 _STATE_VERSION = 1
+# A browser sets the Origin of its own extension pages and refuses to let a
+# page or an extension script choose another one, so an extension origin is
+# the one claim about a browser caller the sidecar can trust. Chrome IDs are
+# 32 letters a-p; Firefox uses a UUID.
+_EXTENSION_ORIGIN_RE = re.compile(r"^(chrome-extension://[a-p]{32}|moz-extension://[0-9a-fA-F-]{36})$")
+_MAX_TRUSTED_EXTENSION_ORIGINS = 8
+# Tombstones are bounded, but far above anything a learner could outlive: a
+# hash is only ever re-created by a brand-new random token.
+_MAX_REVOKED_CREDENTIAL_HASHES = 512
+_MAX_REVOKED_EXTENSION_ORIGINS = 64
+# A trusted extension re-pairs automatically whenever the sidecar restarts
+# under a new instance. Old credentials stay valid, so cap the pile instead of
+# growing it forever.
+_MAX_AUTO_CREDENTIALS_PER_WORKSPACE = 10
 _MAX_REMEMBERED_CAPTURES = 200
 _MAX_PENDING_DRAFTS = 50
 _MAX_ACKED_DRAFT_IDS = 200
@@ -139,6 +172,12 @@ def _hashed(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def normalize_extension_origin(value: object) -> str:
+    """Return the canonical browser-extension origin, or ``""`` if it is not one."""
+    text = str(value or "").strip().rstrip("/").lower()
+    return text if text and _EXTENSION_ORIGIN_RE.match(text) else ""
+
+
 def _draft_dedupe_key(workspace_id: str, client_id: str) -> str:
     return f"{workspace_id}{_DRAFT_DEDUPE_SEPARATOR}{client_id}"
 
@@ -164,6 +203,7 @@ class BrowserBridgeService:
     ) -> None:
         self._data_root = Path(data_root)
         self._state_path = self._data_root / _STATE_FILE_NAME
+        self._state_lock_path = self._data_root / f"{_STATE_FILE_NAME}.lock"
         self._clock = clock
         self._lock = threading.RLock()
         self._pair_codes: dict[str, PairCodeRegistration] = {}
@@ -171,12 +211,22 @@ class BrowserBridgeService:
         self._pair_lockout_active = False
         self._latest_pair_code_id = ""
         self._credentials: dict[str, dict[str, object]] = {}
+        self._trusted_extension_origins: list[str] = []
+        # Revocation tombstones. They only grow (bounded): a credential or an
+        # origin retired in one sidecar process must stay retired in every
+        # other process sharing this LibraryRoot, and no later write from a
+        # process that still holds it in memory may bring it back.
+        self._revoked_token_hashes: list[str] = []
+        self._revoked_extension_origins: list[str] = []
+        self._synced_stamp: tuple[int, int, int] | None = None
         self._captures: dict[str, dict[str, object]] = {}
         self._pending_drafts: list[_PendingDraft] = []
         self._acked_draft_client_ids: list[str] = []
         self._host_focus_workspace_id = ""
         self._host_focus_at = ""
         self._load_state()
+        with self._lock:
+            self._sync_security_state_locked(force=True)
 
     # ------------------------------------------------------------ persistence
 
@@ -220,6 +270,13 @@ class BrowserBridgeService:
                 for key, value in captures.items()
                 if isinstance(value, dict)
             }
+        raw_origins = payload.get("trusted_extension_origins")
+        if isinstance(raw_origins, list):
+            self._trusted_extension_origins = [
+                origin
+                for origin in (normalize_extension_origin(item) for item in raw_origins)
+                if origin
+            ][:_MAX_TRUSTED_EXTENSION_ORIGINS]
         # Accepted-but-undelivered drafts survive restarts (T-0009): they were
         # acknowledged to the browser as stored, so losing them on a sidecar
         # restart would break that promise.
@@ -255,20 +312,190 @@ class BrowserBridgeService:
                 str(item) for item in raw_acked if str(item).strip()
             ]
 
-    def _write_state_locked(self) -> None:
-        payload = {
-            "version": _STATE_VERSION,
-            "credentials": list(self._credentials.values()),
-            "captures": self._captures,
-            "pending_drafts": [asdict(draft) for draft in self._pending_drafts],
-            "acked_draft_client_ids": list(self._acked_draft_client_ids),
+    @contextmanager
+    def _state_file_lock(self) -> Iterator[None]:
+        """Serialize the read-merge-replace cycle across sidecar processes.
+
+        ``threading.RLock`` only guards one process. Two windows over one
+        LibraryRoot used to be able to interleave sync and replace: the later
+        writer re-serialized its stale in-memory copy and erased a revocation
+        the other had just written. The OS lock makes sync + write atomic, so a
+        tombstone can only be appended, never lost.
+        """
+        self._data_root.mkdir(parents=True, exist_ok=True)
+        with open(self._state_lock_path, "a+b") as handle:
+            if os.name == "nt":  # pragma: no cover - exercised on Windows CI
+                import msvcrt
+
+                handle.seek(0, os.SEEK_END)
+                if handle.tell() == 0:
+                    handle.write(b"\0")
+                    handle.flush()
+                handle.seek(0)
+                # LK_LOCK retries only ten times before raising; keep waiting
+                # instead of losing a revocation write under contention.
+                while True:
+                    try:
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                        break
+                    except OSError:
+                        time.sleep(0.05)
+                try:
+                    yield
+                finally:
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    def _state_file_stamp(self) -> tuple[int, int, int] | None:
+        try:
+            stat = self._state_path.stat()
+        except OSError:
+            return None
+        # os.replace swaps the inode; including it detects a same-size,
+        # same-tick replacement that mtime/size alone would miss.
+        return (stat.st_mtime_ns, stat.st_size, stat.st_ino)
+
+    def _sync_security_state_locked(self, *, force: bool = False) -> None:
+        """Fold the other sidecars' pairing state into this one.
+
+        Several windows share one LibraryRoot, and each window runs its own
+        sidecar over the same state file. A revocation in one process used to
+        be invisible to the others: they kept accepting the credential, and
+        their next write put it back in the file — so a lost browser was never
+        really retired. Pairing state is therefore merged on every read and
+        write: credentials and trusted origins are the union of what is on
+        disk and what this process holds, minus the tombstones.
+        """
+        stamp = self._state_file_stamp()
+        if not force and stamp is not None and stamp == self._synced_stamp:
+            return
+        self._synced_stamp = stamp
+        disk_credentials: dict[str, dict[str, object]] = {}
+        disk_origins: list[str] = []
+        payload = None
+        try:
+            raw = self._state_path.read_text(encoding="utf-8")
+            payload = json.loads(raw)
+        except (OSError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict) and payload.get("version") == _STATE_VERSION:
+            entries = payload.get("credentials")
+            if isinstance(entries, list):
+                for entry in entries:
+                    if not isinstance(entry, dict):
+                        continue
+                    token_hash = str(entry.get("token_hash") or "").strip()
+                    workspace_id = str(entry.get("workspace_id") or "").strip()
+                    if not token_hash or not workspace_id:
+                        continue
+                    disk_credentials[token_hash] = {
+                        "token_hash": token_hash,
+                        "token_suffix": str(entry.get("token_suffix") or ""),
+                        "workspace_id": workspace_id,
+                        "workspace_name": str(entry.get("workspace_name") or ""),
+                        "created_at": str(entry.get("created_at") or ""),
+                        "last_used_at": entry.get("last_used_at") or None,
+                        "pair_code_id": str(entry.get("pair_code_id") or ""),
+                    }
+            origins = payload.get("trusted_extension_origins")
+            if isinstance(origins, list):
+                disk_origins = [
+                    origin
+                    for origin in (normalize_extension_origin(item) for item in origins)
+                    if origin
+                ]
+            revoked_hashes = payload.get("revoked_token_hashes")
+            if isinstance(revoked_hashes, list):
+                self._remember_revoked_token_hashes_locked(
+                    str(item) for item in revoked_hashes
+                )
+            revoked_origins = payload.get("revoked_extension_origins")
+            if isinstance(revoked_origins, list):
+                self._remember_revoked_extension_origins_locked(
+                    normalize_extension_origin(item) for item in revoked_origins
+                )
+        revoked_hashes = set(self._revoked_token_hashes)
+        merged = dict(disk_credentials)
+        merged.update(self._credentials)
+        self._credentials = {
+            token_hash: entry for token_hash, entry in merged.items() if token_hash not in revoked_hashes
         }
-        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
+        revoked_origins = set(self._revoked_extension_origins)
+        origins = list(dict.fromkeys([*disk_origins, *self._trusted_extension_origins]))
+        self._trusted_extension_origins = [
+            origin for origin in origins if origin not in revoked_origins
+        ][-_MAX_TRUSTED_EXTENSION_ORIGINS:]
+
+    def _remember_revoked_token_hashes_locked(self, hashes: Iterable[str]) -> None:
+        for token_hash in hashes:
+            token_hash = token_hash.strip()
+            if token_hash and token_hash not in self._revoked_token_hashes:
+                self._revoked_token_hashes.append(token_hash)
+        self._revoked_token_hashes = self._revoked_token_hashes[-_MAX_REVOKED_CREDENTIAL_HASHES:]
+
+    def _remember_revoked_extension_origins_locked(self, origins: Iterable[str]) -> None:
+        for origin in origins:
+            if origin and origin not in self._revoked_extension_origins:
+                self._revoked_extension_origins.append(origin)
+        self._revoked_extension_origins = self._revoked_extension_origins[
+            -_MAX_REVOKED_EXTENSION_ORIGINS:
+        ]
+
+    def _write_state_locked(self) -> None:
         try:
             self._data_root.mkdir(parents=True, exist_ok=True)
-            temp_path = self._state_path.with_suffix(".json.tmp")
-            temp_path.write_text(serialized, encoding="utf-8")
-            os.replace(temp_path, self._state_path)
+            with self._state_file_lock():
+                # Re-read under the inter-process lock: a revocation another
+                # sidecar wrote since our last sync must be in this payload.
+                self._sync_security_state_locked(force=True)
+                payload = {
+                    "version": _STATE_VERSION,
+                    "credentials": list(self._credentials.values()),
+                    "captures": self._captures,
+                    "pending_drafts": [asdict(draft) for draft in self._pending_drafts],
+                    "acked_draft_client_ids": list(self._acked_draft_client_ids),
+                    "trusted_extension_origins": list(self._trusted_extension_origins),
+                    "revoked_token_hashes": list(self._revoked_token_hashes),
+                    "revoked_extension_origins": list(self._revoked_extension_origins),
+                }
+                serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
+                # A unique temporary file: two processes must never write into
+                # the same .tmp and replace each other's half-written JSON.
+                fd, temp_name = tempfile.mkstemp(
+                    prefix=f"{self._state_path.name}.",
+                    suffix=".tmp",
+                    dir=str(self._data_root),
+                )
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                        handle.write(serialized)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    # Windows refuses the replace while another process has
+                    # the destination open for reading; readers do not take
+                    # the writer lock, so retry the atomic swap briefly.
+                    for attempt in range(5):
+                        try:
+                            os.replace(temp_name, self._state_path)
+                            break
+                        except PermissionError:
+                            if attempt == 4:
+                                raise
+                            time.sleep(0.02)
+                finally:
+                    if os.path.exists(temp_name):
+                        os.unlink(temp_name)
+                # Held under the lock, so no peer can replace the file between
+                # our replace and this stat.
+                self._synced_stamp = self._state_file_stamp()
         except OSError as exc:  # pragma: no cover - unwritable data dir
             logger.warning("Browser bridge state could not be persisted: %s", exc)
 
@@ -331,11 +558,15 @@ class BrowserBridgeService:
         for code in expired:
             self._pair_codes.pop(code, None)
 
-    def exchange_pair_code(self, code: str) -> tuple[BrowserCredential, str]:
+    def exchange_pair_code(self, code: str, *, origin: str = "") -> tuple[BrowserCredential, str]:
         """Consume a pairing code and return ``(credential, raw_token)``.
 
         The raw token is returned exactly once — only its SHA-256 hash is kept.
+        When the caller is a browser extension, its origin becomes trusted for
+        zero-code auto-pairing: typing the code once is the learner's consent
+        for *that* extension to reconnect on its own afterwards.
         """
+        trusted_origin = normalize_extension_origin(origin)
 
         normalized_code = str(code or "").strip()
         if not normalized_code:
@@ -394,8 +625,53 @@ class BrowserBridgeService:
                 **asdict(credential),
                 "last_used_at": None,
             }
+            if trusted_origin:
+                self._trust_extension_origin_locked(trusted_origin)
             self._write_state_locked()
         return credential, token
+
+    # ------------------------------------------------ trusted extension origins
+
+    def _trust_extension_origin_locked(self, origin: str) -> None:
+        # Trust is only recorded by the host or by a code exchange: the learner
+        # just consented again, so an earlier revocation of this origin ends.
+        self._revoked_extension_origins = [
+            item for item in self._revoked_extension_origins if item != origin
+        ]
+        if origin in self._trusted_extension_origins:
+            self._trusted_extension_origins.remove(origin)
+        self._trusted_extension_origins.append(origin)
+        while len(self._trusted_extension_origins) > _MAX_TRUSTED_EXTENSION_ORIGINS:
+            self._trusted_extension_origins.pop(0)
+
+    def trust_extension_origin(self, origin: str) -> bool:
+        """Trust a browser-extension origin for zero-code pairing.
+
+        Only host-authenticated callers and the pairing-code exchange record
+        trust; the auto-pair routes only ever *read* the list.
+        """
+        normalized = normalize_extension_origin(origin)
+        if not normalized:
+            return False
+        with self._lock:
+            if normalized in self._trusted_extension_origins:
+                return True
+            self._trust_extension_origin_locked(normalized)
+            self._write_state_locked()
+        return True
+
+    def is_trusted_extension_origin(self, origin: str) -> bool:
+        normalized = normalize_extension_origin(origin)
+        if not normalized:
+            return False
+        with self._lock:
+            self._sync_security_state_locked()
+            return normalized in self._trusted_extension_origins
+
+    def trusted_extension_origins(self) -> list[str]:
+        with self._lock:
+            self._sync_security_state_locked()
+            return list(self._trusted_extension_origins)
 
     # --------------------------------------------------------- host focus
 
@@ -433,13 +709,18 @@ class BrowserBridgeService:
         *,
         workspace_id: str,
         workspace_name: str,
+        extension_origin: str = "",
     ) -> tuple[BrowserCredential, str]:
         """Issue a long-lived workspace-bound credential without a pair code.
 
         The browser extension discovers the loopback sidecar and calls the
-        auto-pair route. The route is the only gate (loopback + extension
-        Origin); this method owns the credential shape so it stays identical
-        to a code-paired credential.
+        auto-pair route. The route is the gate (loopback + an extension origin
+        this sidecar already trusts, or the per-instance token); this method
+        re-checks an origin-based authorization under the state lock so a
+        revocation that lands between the route check and mint cannot leave a
+        fresh valid credential behind. Auto-issued credentials for one
+        workspace are capped: a restart under a new sidecar instance mints
+        another, and the oldest unused one is retired past the cap.
         """
         normalized_workspace = str(workspace_id or "").strip()
         if not normalized_workspace:
@@ -448,6 +729,7 @@ class BrowserBridgeService:
                 "Automatic pairing needs a workspace.",
                 status_code=422,
             )
+        normalized_origin = normalize_extension_origin(extension_origin)
         token = f"{CREDENTIAL_PREFIX}{secrets.token_urlsafe(32)}"
         credential = BrowserCredential(
             token_hash=_hashed(token),
@@ -458,12 +740,33 @@ class BrowserBridgeService:
             pair_code_id=AUTO_PAIR_ID,
         )
         with self._lock:
+            if normalized_origin and not self.is_trusted_extension_origin(normalized_origin):
+                raise BrowserPairingError(
+                    "extension_not_paired",
+                    "Pair this browser once with a pairing code from Trainer; it reconnects on its own afterwards.",
+                    status_code=403,
+                )
             self._credentials[credential.token_hash] = {
                 **asdict(credential),
                 "last_used_at": None,
             }
+            self._prune_auto_credentials_locked(normalized_workspace)
             self._write_state_locked()
         return credential, token
+
+    def _prune_auto_credentials_locked(self, workspace_id: str) -> None:
+        auto_entries = [
+            (str(entry.get("created_at") or ""), token_hash)
+            for token_hash, entry in self._credentials.items()
+            if str(entry.get("pair_code_id") or "") == AUTO_PAIR_ID
+            and str(entry.get("workspace_id") or "") == workspace_id
+        ]
+        excess = len(auto_entries) - _MAX_AUTO_CREDENTIALS_PER_WORKSPACE
+        for _, token_hash in sorted(auto_entries)[: max(excess, 0)]:
+            if self._credentials.pop(token_hash, None) is not None:
+                # Another sidecar may still hold this credential in memory;
+                # the tombstone prevents its next write from resurrecting it.
+                self._remember_revoked_token_hashes_locked([token_hash])
 
     # ------------------------------------------------------------ credentials
 
@@ -473,6 +776,9 @@ class BrowserBridgeService:
             return None
         token_hash = _hashed(normalized)
         with self._lock:
+            # A revocation in another sidecar process must be honoured here
+            # before this token is accepted again.
+            self._sync_security_state_locked()
             entry = self._credentials.get(token_hash)
             if entry is None:
                 return None
@@ -510,8 +816,10 @@ class BrowserBridgeService:
             return False
         token_hash = _hashed(normalized)
         with self._lock:
+            self._sync_security_state_locked()
             removed = self._credentials.pop(token_hash, None) is not None
             if removed:
+                self._remember_revoked_token_hashes_locked([token_hash])
                 self._write_state_locked()
             return removed
 
@@ -519,28 +827,29 @@ class BrowserBridgeService:
         """Host-side revocation (``DELETE /browser/pair`` without a Bearer token).
 
         The host revokes "the pairing", not one browser credential: it drops the
-        pending code and every credential issued from the most recent host
-        registration, so a lost browser credential can always be retired from
-        the workbench.
+        pending code and *every* browser credential — code-paired or
+        auto-issued — and forgets the trusted extension origins, so a lost or
+        unwanted browser can always be retired from the workbench and cannot
+        pair itself again without the learner typing a new code.
         """
-
         with self._lock:
+            self._sync_security_state_locked()
             had_pending_code = self._pair_codes != {}
             self._pair_codes = {}
-            pair_code_id = self._latest_pair_code_id
-            removed = [
-                token_hash
-                for token_hash, entry in self._credentials.items()
-                if not pair_code_id or str(entry.get("pair_code_id") or "") == pair_code_id
-            ]
-            for token_hash in removed:
-                self._credentials.pop(token_hash, None)
+            removed = list(self._credentials)
+            self._credentials.clear()
             self._latest_pair_code_id = ""
-            if removed or had_pending_code:
+            had_trusted_origins = self._trusted_extension_origins != []
+            # Retire them for every sidecar over this LibraryRoot, and make
+            # sure no process that still holds them in memory writes them back.
+            self._remember_revoked_token_hashes_locked(removed)
+            self._remember_revoked_extension_origins_locked(self._trusted_extension_origins)
+            self._trusted_extension_origins = []
+            if removed or had_pending_code or had_trusted_origins:
                 self._write_state_locked()
             return {
                 "revoked": True,
-                "had_registration": had_pending_code or bool(removed),
+                "had_registration": had_pending_code or bool(removed) or had_trusted_origins,
                 "credentials_revoked": len(removed),
             }
 

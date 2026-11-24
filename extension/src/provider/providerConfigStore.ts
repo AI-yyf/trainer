@@ -21,7 +21,7 @@ import { normalizeProviderRequestDefaults } from '../core/providerDefaults';
 import { mergeProviderRequestDefaults } from '../../../shared/src/providerRequestDefaults';
 import { defaultCapabilitiesForProtocol, normalizeProviderProtocol, OPENAI_COMPATIBLE_PROTOCOL } from '../../../shared/src/providerProtocols';
 import { normalizeProviderConnectionType } from '../../../shared/src/providerGateway';
-import { normalizeProviderThinkingConfig, removeThinkingFields, updateProviderThinking } from '../../../shared/src/providerThinking';
+import { normalizeProviderModelThinkingConfig, normalizeProviderThinkingConfig, removeThinkingFields, updateProviderThinking } from '../../../shared/src/providerThinking';
 import {
   clearHostLastTest,
   selectHostLastTest,
@@ -1005,7 +1005,19 @@ export class ProviderConfigStore implements vscode.Disposable {
     );
   }
 
+  /**
+   * `.vscode/trainer.json` travels with the repository, so it is workspace
+   * content: in Restricted Mode it must not steer where the learner's key is
+   * sent. Only a workspace the learner trusts may override the saved provider.
+   */
+  private workspaceOverridesAllowed(): boolean {
+    return vscode.workspace.isTrusted !== false;
+  }
+
   private getWorkspaceOverrideConfig(baseConfig: ProviderConfig | undefined): ProviderConfig | undefined {
+    if (!this.workspaceOverridesAllowed()) {
+      return undefined;
+    }
     const workspaceDocument = this.readWorkspaceConfig();
     const providerRecord = this.asRecord(workspaceDocument?.provider);
     if (!providerRecord) {
@@ -1091,6 +1103,11 @@ export class ProviderConfigStore implements vscode.Disposable {
         protocol,
       ),
       modelCapabilities,
+      modelThinkingConfig:
+        normalizeProviderModelThinkingConfig(
+          providerRecord.modelThinkingConfig ?? providerRecord.model_thinking_config,
+          protocol,
+        ) ?? fallback?.modelThinkingConfig,
       catalogModels,
       modelTokenLimits:
         normalizeProviderModelTokenLimits(providerRecord.modelTokenLimits) ??
@@ -1141,6 +1158,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         this.readRequestDefaults(normalized.requestDefaults) ?? {},
       ),
       thinkingConfig: normalized.thinkingConfig,
+      modelThinkingConfig: normalized.modelThinkingConfig,
       modelCapabilities: normalized.modelCapabilities,
       modelTokenLimits: normalized.modelTokenLimits,
       availableModels: normalized.availableModels,
@@ -1183,6 +1201,9 @@ export class ProviderConfigStore implements vscode.Disposable {
   }
 
   private getWorkspaceProfileConfig(): ProviderConfig | undefined {
+    if (!this.workspaceOverridesAllowed()) {
+      return undefined;
+    }
     const workspaceDocument = this.readWorkspaceConfig();
     const providerRecord = this.asRecord(workspaceDocument?.provider);
     const workspaceProfileId =
@@ -1220,6 +1241,14 @@ export class ProviderConfigStore implements vscode.Disposable {
       switchHistory: this.profileRegistry.getSwitchHistory(),
       lastModified: new Date().toISOString(),
     };
+    const profileThinkingConfig = normalizeProviderThinkingConfig(
+      profile.thinkingConfig ?? profile.requestDefaults,
+      profile.protocol,
+    );
+    const profileModelThinkingConfig = normalizeProviderModelThinkingConfig(
+      profile.modelThinkingConfig,
+      profile.protocol,
+    );
 
     return {
       name: profile.label,
@@ -1257,7 +1286,8 @@ export class ProviderConfigStore implements vscode.Disposable {
         },
         profile.requestDefaults,
       ),
-      thinkingConfig: normalizeProviderThinkingConfig(profile.thinkingConfig ?? profile.requestDefaults, profile.protocol),
+      thinkingConfig: profileModelThinkingConfig?.[profile.model] ?? profileThinkingConfig,
+      modelThinkingConfig: profileModelThinkingConfig,
       capabilities: { ...profile.capabilities },
       profileId: profile.id,
       profileLabel: profile.label,
@@ -1312,6 +1342,7 @@ export class ProviderConfigStore implements vscode.Disposable {
       modelTokenLimits: normalizeProviderModelTokenLimits(normalized.modelTokenLimits),
       taskBindings: this.normalizeTaskBindings(normalized.taskBindings) ?? {},
       thinkingConfig: normalizeProviderThinkingConfig(normalized.thinkingConfig ?? normalized.requestDefaults, protocol),
+      modelThinkingConfig: normalized.modelThinkingConfig,
       requestDefaults: normalizeProviderRequestDefaults(
         {
           name: normalized.name,
@@ -1394,14 +1425,37 @@ export class ProviderConfigStore implements vscode.Disposable {
       ...config.capabilities,
     };
     const modelCapabilities = config.modelCapabilities ?? fallback?.modelCapabilities ?? {};
-    // thinkingConfig is the durable intent store. requestDefaults' thinking
-    // fields are re-materialized from it on every load/save — otherwise a
-    // normalize pass (which correctly strips them when capability evidence is
-    // absent) could never restore them, and the wire never sees the choice.
-    const thinkingConfig = normalizeProviderThinkingConfig(
-      config.thinkingConfig ?? config.requestDefaults ?? fallback?.thinkingConfig ?? fallback?.requestDefaults,
+    // Per-model intent is the durable store; the flat thinkingConfig mirrors
+    // the current model so requests and older readers keep working. Switching
+    // models restores that model's own intensity instead of carrying the
+    // previous model's choice forward. A fresh requestDefaults save without any
+    // thinking fields clears the current model instead of resurrecting a stale
+    // map entry (the explicit-clear contract).
+    const configuredModelThinkingConfig = normalizeProviderModelThinkingConfig(
+      config.modelThinkingConfig ?? fallback?.modelThinkingConfig,
       protocol,
-    );
+    ) ?? {};
+    const hasExplicitThinking = hasOwnField('thinkingConfig');
+    const hasExplicitModelThinking = hasOwnField('modelThinkingConfig');
+    const hasFreshRequestDefaults = hasOwnField('requestDefaults');
+    const explicitThinkingConfig = normalizeProviderThinkingConfig(config.thinkingConfig, protocol);
+    const thinkingConfig = hasExplicitModelThinking
+      ? configuredModelThinkingConfig[model] ?? explicitThinkingConfig
+      : hasExplicitThinking
+        ? explicitThinkingConfig
+        : hasFreshRequestDefaults
+          ? normalizeProviderThinkingConfig(config.requestDefaults, protocol)
+          : configuredModelThinkingConfig[model] ??
+            normalizeProviderThinkingConfig(
+              config.requestDefaults ?? fallback?.thinkingConfig ?? fallback?.requestDefaults,
+              protocol,
+            );
+    const modelThinkingConfig = { ...configuredModelThinkingConfig };
+    if (thinkingConfig) {
+      modelThinkingConfig[model] = thinkingConfig;
+    } else {
+      delete modelThinkingConfig[model];
+    }
     const thinkingEvidence = this.thinkingEvidenceContext(
       { ...config, profileId: fallback?.profileId ?? config.profileId },
       model,
@@ -1411,7 +1465,6 @@ export class ProviderConfigStore implements vscode.Disposable {
     // Fallback defaults merge forward, but thinking fields must not: they are
     // derived exclusively from thinkingConfig (or the fresh requestDefaults
     // intent). Merging stale wire fields would resurrect a cleared choice.
-    const hasExplicitRequestDefaults = hasOwnField('requestDefaults');
     const fallbackRequestDefaults = this.readRequestDefaults(fallback?.requestDefaults) ?? {};
     removeThinkingFields(fallbackRequestDefaults);
     const normalizedRequestDefaults = normalizeProviderRequestDefaults(
@@ -1422,7 +1475,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         protocol,
         ...thinkingEvidence,
       },
-      hasExplicitRequestDefaults
+      hasFreshRequestDefaults
         ? (this.readRequestDefaults(config.requestDefaults) ?? {})
         : mergeProviderRequestDefaults(
             fallbackRequestDefaults,
@@ -1466,6 +1519,7 @@ export class ProviderConfigStore implements vscode.Disposable {
           )
         : normalizedRequestDefaults,
       thinkingConfig,
+      modelThinkingConfig,
       modelCapabilities,
     };
   }
@@ -1575,6 +1629,9 @@ export class ProviderConfigStore implements vscode.Disposable {
         nextConfig.thinkingConfig ?? nextConfig.requestDefaults ?? currentProfile.thinkingConfig ?? currentProfile.requestDefaults,
         nextConfig.protocol,
       ),
+      modelThinkingConfig:
+        normalizeProviderModelThinkingConfig(nextConfig.modelThinkingConfig, nextConfig.protocol) ??
+        currentProfile.modelThinkingConfig,
       capabilities: nextConfig.capabilities,
       modelCapabilities: nextConfig.modelCapabilities ?? currentProfile.modelCapabilities,
     });
@@ -1666,6 +1723,10 @@ export class ProviderConfigStore implements vscode.Disposable {
       taskBindings: this.normalizeTaskBindings(record.taskBindings ?? record.task_bindings) ?? {},
       thinkingConfig: normalizeProviderThinkingConfig(
         record.thinkingConfig ?? record.thinking_config ?? record.requestDefaults ?? record.request_defaults,
+        protocol,
+      ),
+      modelThinkingConfig: normalizeProviderModelThinkingConfig(
+        record.modelThinkingConfig ?? record.model_thinking_config,
         protocol,
       ),
       requestDefaults: normalizeProviderRequestDefaults(

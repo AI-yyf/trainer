@@ -532,6 +532,9 @@ test.describe("Trainer Settings provider lifecycle", () => {
     );
     await providerTestButton(page).click();
     await testRequest;
+    // The request event can resolve before the route handler has pushed its
+    // body under load; poll the captured payload instead of racing the push.
+    await expect.poll(() => providerTestPayloads.length).toBe(1);
 
     expect(providerTestPayloads).toHaveLength(1);
     expect(providerTestPayloads[0].provider.ignoreSystemProxy).toBe(true);

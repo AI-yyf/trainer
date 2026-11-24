@@ -45,7 +45,9 @@ where = ["."]
 include = ["app*"]
 
 [tool.setuptools.package-data]
-"app.training" = ["guided_training_scenario_packs.json"]
+# Package data: the subject profiles must ship with the sidecar in every
+# layout (source checkout, bundled server/app, frozen binary).
+"app.training" = ["guided_training_scenario_packs.json", "profiles/*.profile.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

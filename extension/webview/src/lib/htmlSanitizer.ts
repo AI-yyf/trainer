@@ -1,3 +1,5 @@
+import { REMOTE_IMAGE_ATTRIBUTE, classifyImageUrl, createRemoteImagePlaceholder } from "./remoteImages";
+
 const SAFE_TAGS = new Set([
   "a",
   "article",
@@ -125,6 +127,80 @@ const URL_ATTRS = new Set(["href", "src", "xlink:href"]);
 
 const SAFE_URL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:", ""]);
 
+// SVG presentation attributes can carry a CSS paint-server reference:
+// fill="url(https://attacker.example/p.svg#g)" is fetched by the browser as
+// soon as the element renders, without a click. Only same-document fragment
+// references are allowed on SVG elements.
+const LOCAL_SVG_FRAGMENT_PATTERN = /^#[A-Za-z_][\w:.-]*$/;
+
+// Attributes whose values are parsed as CSS and can fetch a paint server or
+// geometry transform. Other SVG attributes (ids, labels, path data) may
+// legitimately contain parentheses, so they are only checked when a plain
+// url() appears.
+const SVG_CSS_REFERENCE_ATTRS = new Set([
+  "clip-path",
+  "color-profile",
+  "cursor",
+  "fill",
+  "filter",
+  "gradienttransform",
+  "marker-end",
+  "marker-mid",
+  "marker-start",
+  "mask",
+  "patterntransform",
+  "stroke",
+  "transform",
+]);
+
+// Only geometry functions are legitimate in presentation attributes. CSS
+// escapes (`u\72l(...)`) and comments can hide a function name from a naive
+// `url(` scan, so any backslash or unconsumed parenthesis fails closed.
+const SAFE_SVG_FUNCTIONS = new Set([
+  "matrix",
+  "rotate",
+  "scale",
+  "scalex",
+  "scaley",
+  "skewx",
+  "skewy",
+  "translate",
+  "translatex",
+  "translatey",
+]);
+const SVG_FUNCTION_PATTERN = /([A-Za-z][\w-]*)\s*\(([^()]*)\)/g;
+
+function isLocalFragmentUrl(value: string): boolean {
+  return LOCAL_SVG_FRAGMENT_PATTERN.test(value.trim());
+}
+
+function isLocalSvgReference(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.includes("\\")) {
+    return false;
+  }
+  if (!trimmed.includes("(")) {
+    return true;
+  }
+  const matches = Array.from(trimmed.matchAll(SVG_FUNCTION_PATTERN));
+  if (matches.length === 0) {
+    return false;
+  }
+  for (const match of matches) {
+    const name = match[1].toLowerCase();
+    if (name === "url") {
+      const reference = match[2].trim().replace(/^['"]|['"]$/g, "");
+      if (!isLocalFragmentUrl(reference)) {
+        return false;
+      }
+    } else if (!SAFE_SVG_FUNCTIONS.has(name)) {
+      return false;
+    }
+  }
+  const remainder = trimmed.replace(SVG_FUNCTION_PATTERN, "");
+  return !remainder.includes("(") && !remainder.includes(")");
+}
+
 function isSafeUrl(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -161,6 +237,7 @@ function sanitizeElement(node: Element): void {
     return;
   }
 
+  const isSvgTag = SVG_TAGS.has(tagName);
   for (const attribute of Array.from(node.attributes)) {
     const name = attribute.name.toLowerCase();
     const value = attribute.value;
@@ -171,9 +248,30 @@ function sanitizeElement(node: Element): void {
       GLOBAL_ATTRS.has(name) ||
       ATTRS_BY_TAG[tagName]?.has(name) ||
       name.startsWith("data-") ||
-      (SVG_TAGS.has(tagName) && !isEventHandler && !isStyle && !isUrlAttr);
-    const isSafeHref = isUrlAttr && isSafeUrl(value);
-    if (isEventHandler || isStyle || (!allowed && !isSafeHref) || (isUrlAttr && !isSafeHref)) {
+      (isSvgTag && !isEventHandler && !isStyle && !isUrlAttr);
+    const isSafeHref =
+      isUrlAttr && isSafeUrl(value) && (!isSvgTag || isLocalFragmentUrl(value));
+    const isSvgExternalReference =
+      isSvgTag &&
+      !isEventHandler &&
+      !isUrlAttr &&
+      (SVG_CSS_REFERENCE_ATTRS.has(name)
+        ? !isLocalSvgReference(value)
+        : /url\s*\(/i.test(value) && !isLocalSvgReference(value));
+    // The delegated click handler trusts these to recognise a placeholder the
+    // sanitizer itself built. Untrusted markup must not be able to forge one:
+    // a forged element turns any click into a remote load that looks like
+    // the learner's consent.
+    const isInternalImageTrigger =
+      name === REMOTE_IMAGE_ATTRIBUTE || name.startsWith("data-remote-");
+    if (
+      isInternalImageTrigger ||
+      isEventHandler ||
+      isStyle ||
+      isSvgExternalReference ||
+      (!allowed && !isSafeHref) ||
+      (isUrlAttr && !isSafeHref)
+    ) {
       node.removeAttribute(attribute.name);
       continue;
     }
@@ -184,6 +282,23 @@ function sanitizeElement(node: Element): void {
     if (target === "_blank") {
       node.setAttribute("rel", "noopener noreferrer");
     }
+  }
+
+  if (tagName === "img") {
+    // Safe to show is not the same as safe to fetch: an image on another
+    // site reports the learner's reading to that site. It becomes a
+    // placeholder that loads only when the learner clicks it.
+    const source = node.getAttribute("src") ?? "";
+    if (classifyImageUrl(source) === "remote") {
+      node.replaceWith(
+        createRemoteImagePlaceholder(node.ownerDocument, source, {
+          alt: node.getAttribute("alt") ?? undefined,
+          width: node.getAttribute("width") ?? undefined,
+          height: node.getAttribute("height") ?? undefined,
+        }),
+      );
+    }
+    return;
   }
 
   for (const child of Array.from(node.children)) {

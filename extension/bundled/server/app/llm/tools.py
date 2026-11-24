@@ -23,6 +23,7 @@ and commit explicit plan/library writes — never the learner's project code.
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import inspect
 import ipaddress
@@ -4721,6 +4722,22 @@ def _persist_practice_verification_result(
             "training_evidence_error": exc.__class__.__name__,
             "training_evidence_detail": str(exc),
         }
+    from ..training.reliability import busy_marker
+
+    busy = busy_marker(workspace_update)
+    if busy is not None:
+        # Another training save held this workspace's slot for the whole
+        # bounded wait: the result was NOT recorded. Reporting persistence
+        # here would tell the coach a save landed that never ran.
+        return {
+            "persisted_training_evidence": False,
+            "training_evidence_error": "training_reliability_busy",
+            "training_evidence_detail": (
+                "Another training save is still running in this workspace, so this "
+                "verification result was not recorded. Verify again once it finishes."
+            ),
+            "training_reliability_busy": busy,
+        }
     return {
         "persisted_training_evidence": True,
         "training_card_id": card_id,
@@ -5001,7 +5018,9 @@ async def _handle_web_search(context: ToolContext, args: dict[str, Any]) -> dict
 
     client = WebSearchClient(network_enabled=True, timeout=12)
     try:
-        hits = client.search(query, limit=limit)
+        # Network I/O must not block the event loop: one slow search would
+        # freeze every other request in this sidecar, including cancellations.
+        hits = await asyncio.to_thread(client.search, query, limit=limit)
     except ControlledFetchError as exc:
         return {
             "ok": False,
@@ -5028,7 +5047,9 @@ async def _handle_web_search(context: ToolContext, args: dict[str, Any]) -> dict
         "arxiv.org" in str(item.get("url") or "") for item in hits
     ):
         try:
-            extra_arxiv = client._search_arxiv(query, limit=max(2, limit - len(hits)))
+            extra_arxiv = await asyncio.to_thread(
+                client._search_arxiv, query, limit=max(2, limit - len(hits))
+            )
             seen_urls = {str(item.get("url") or "") for item in hits}
             for item in extra_arxiv:
                 if item.get("url") not in seen_urls:
@@ -5045,7 +5066,7 @@ async def _handle_web_search(context: ToolContext, args: dict[str, Any]) -> dict
         url = str(entry.get("url") or "").strip()
         if fetch_excerpts and idx < 3 and url and not str(entry.get("snippet") or "").strip():
             try:
-                page = client.fetch_page(url, max_length=1200)
+                page = await asyncio.to_thread(client.fetch_page, url, max_length=1200)
                 entry["snippet"] = page.get("content", "")
                 entry["fetched_at"] = page.get("fetched_at", "")
                 if page.get("final_url"):
@@ -5096,10 +5117,11 @@ async def _handle_fetch_web_page(context: ToolContext, args: dict[str, Any]) -> 
 
     client = WebSearchClient(network_enabled=True, timeout=15)
     try:
-        page = client.fetch_page(url, max_length=max_chars)
+        page = await asyncio.to_thread(client.fetch_page, url, max_length=max_chars)
     except ControlledFetchError as exc:
         try:
-            response = client._fetch_public_with_optional_proxy(
+            response = await asyncio.to_thread(
+                client._fetch_public_with_optional_proxy,
                 url,
                 headers={
                     "User-Agent": client._user_agent,
@@ -5138,6 +5160,62 @@ async def _handle_fetch_web_page(context: ToolContext, args: dict[str, Any]) -> 
     }
 
 
+def _walk_workspace_files(
+    root: Path,
+    search_root: Path,
+    pattern: str,
+    *,
+    max_depth: int | None,
+    limit: int,
+) -> tuple[list[dict[str, Any]], int]:
+    """Collect matching workspace paths on disk.
+
+    Kept synchronous so the handler can run it with ``asyncio.to_thread``: a
+    large tree walk on the event loop would stall every in-flight request.
+    """
+    collected: list[dict[str, Any]] = []
+    total_seen = 0
+    root_parts_count = len(search_root.resolve().parts)
+    for current_dir, dirnames, filenames in os.walk(search_root, followlinks=False):
+        current_path = Path(current_dir)
+        rel_dir_parts = current_path.resolve().parts[root_parts_count:]
+        current_depth = len(rel_dir_parts)
+        # Prune ignored heavy/system directories before descending
+        dirnames[:] = sorted(
+            d for d in dirnames if d not in _WORKSPACE_IGNORED_DIRS
+        )
+        if max_depth is not None and current_depth >= max_depth:
+            dirnames[:] = []
+        for dirname in dirnames:
+            full_dir = current_path / dirname
+            rel_posix = str(full_dir.relative_to(root)).replace("\\", "/")
+            if _workspace_matches_pattern(rel_posix, pattern):
+                total_seen += 1
+                if len(collected) < limit:
+                    collected.append({"path": rel_posix, "is_dir": True, "size": 0})
+        for filename in sorted(filenames):
+            full_file = current_path / filename
+            rel_posix = str(full_file.relative_to(root)).replace("\\", "/")
+            if _is_ignored_workspace_relpath(rel_posix):
+                continue
+            if not _workspace_matches_pattern(rel_posix, pattern):
+                continue
+            try:
+                stat = full_file.stat()
+            except Exception:
+                continue
+            total_seen += 1
+            if len(collected) < limit:
+                collected.append(
+                    {
+                        "path": rel_posix,
+                        "is_dir": False,
+                        "size": stat.st_size,
+                    }
+                )
+    return collected, total_seen
+
+
 async def _handle_list_workspace_files(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     pattern_raw = str(args.get("pattern") or "**/*").strip() or "**/*"
     directory_raw = str(args.get("directory") or "").strip().replace("\\", "/").strip("/")
@@ -5171,47 +5249,15 @@ async def _handle_list_workspace_files(context: ToolContext, args: dict[str, Any
             }
         # If pattern includes a leading directory prefix like "src/**/*" and directory wasn't set,
         # keep walking pruned tree cleanly.
-        collected: list[dict[str, Any]] = []
-        total_seen = 0
         try:
-            root_parts_count = len(search_root.resolve().parts)
-            for current_dir, dirnames, filenames in os.walk(search_root, followlinks=False):
-                current_path = Path(current_dir)
-                rel_dir_parts = current_path.resolve().parts[root_parts_count:]
-                current_depth = len(rel_dir_parts)
-                # Prune ignored heavy/system directories before descending
-                dirnames[:] = sorted(
-                    d for d in dirnames if d not in _WORKSPACE_IGNORED_DIRS
-                )
-                if max_depth is not None and current_depth >= max_depth:
-                    dirnames[:] = []
-                for dirname in dirnames:
-                    full_dir = current_path / dirname
-                    rel_posix = str(full_dir.relative_to(root)).replace("\\", "/")
-                    if _workspace_matches_pattern(rel_posix, pattern_raw):
-                        total_seen += 1
-                        if len(collected) < limit:
-                            collected.append({"path": rel_posix, "is_dir": True, "size": 0})
-                for filename in sorted(filenames):
-                    full_file = current_path / filename
-                    rel_posix = str(full_file.relative_to(root)).replace("\\", "/")
-                    if _is_ignored_workspace_relpath(rel_posix):
-                        continue
-                    if not _workspace_matches_pattern(rel_posix, pattern_raw):
-                        continue
-                    try:
-                        stat = full_file.stat()
-                    except Exception:
-                        continue
-                    total_seen += 1
-                    if len(collected) < limit:
-                        collected.append(
-                            {
-                                "path": rel_posix,
-                                "is_dir": False,
-                                "size": stat.st_size,
-                            }
-                        )
+            collected, total_seen = await asyncio.to_thread(
+                _walk_workspace_files,
+                root,
+                search_root,
+                pattern_raw,
+                max_depth=max_depth,
+                limit=limit,
+            )
         except Exception as exc:
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         return {
@@ -6869,7 +6915,7 @@ async def _handle_search_academic_papers(
 
     client = WebSearchClient(network_enabled=True, timeout=12)
     try:
-        results = client._search_arxiv(query, limit=limit)
+        results = await asyncio.to_thread(client._search_arxiv, query, limit=limit)
     except Exception as exc:
         return {
             "ok": False,
@@ -6879,7 +6925,9 @@ async def _handle_search_academic_papers(
         }
     if include_github and len(results) < limit:
         try:
-            extra = client._search_github(query, limit=max(1, min(3, limit - len(results))))
+            extra = await asyncio.to_thread(
+                client._search_github, query, limit=max(1, min(3, limit - len(results)))
+            )
             for item in extra:
                 results.append({**item, "rank": len(results) + 1})
         except Exception:

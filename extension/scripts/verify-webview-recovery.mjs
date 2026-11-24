@@ -40,7 +40,7 @@ try {
     cases.push(await verifyManualNoticePreserved(page, previewUrl));
     cases.push(await verifyStreamStartClearsRecoveredNotice(page, previewUrl));
     cases.push(await verifyRestoreTrainingView(page, previewUrl));
-    cases.push(await verifyRestoreResourcesSandboxPreview(page, previewUrl));
+    cases.push(await verifyLegacySandboxRestoreLandsOnLibrary(page, previewUrl));
     cases.push(await verifyPlanFirstViewport(page, previewUrl));
 
     console.log(
@@ -565,11 +565,50 @@ async function verifyRestoreTrainingView(page, previewUrl) {
       },
     },
   });
+  // Training is a lane inside the one conversation: restoring it lands on Chat
+  // with the learning drawer open, and the practice card keeps its exact
+  // identity. A route of its own no longer exists to assert against.
   await page.waitForSelector(".training-pane", { timeout: waitTimeoutMs });
-  await page.locator('[data-surface="training"] [data-training-card-details="true"] > summary').click();
+  await page.waitForSelector(".learning-drawer", { timeout: waitTimeoutMs });
+  const drawerOpened = await page.evaluate(() => {
+    const node = document.querySelector(".learning-drawer");
+    const rect = node?.getBoundingClientRect();
+    return Boolean(rect && rect.width > 0 && rect.height > 0);
+  });
+  // The drawer floats over the conversation, practice card included: the
+  // learner closes it before working inside the card, so the gate does too.
+  await page.locator(".learning-drawer-panel .app-shell-overlay__close").click();
+  await page.waitForFunction(
+    () => {
+      const node = document.querySelector(".learning-drawer");
+      return !node || node.getClientRects().length === 0;
+    },
+    undefined,
+    { timeout: waitTimeoutMs },
+  );
+  await page.locator('.training-pane [data-training-card-details="true"] > summary').click();
   const surface = await readTrainingRestoreSurface(page);
-  assertEqual(surface.activeRoute, "training", "Restoring training must activate its internal route.");
-  assertEqual(surface.cardId, "card-provider-truth", "Restoring a next hop must retain its exact card identity.");
+  const drawer = await page.evaluate(() => ({
+    chatActive: Boolean(
+      document.querySelector('.template-surface[data-surface="coach"]:not([hidden])'),
+    ),
+    cards: Array.from(document.querySelectorAll(".learning-drawer__card")).map((card) =>
+      card.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    ),
+  }));
+  drawer.opened = drawerOpened;
+  assertEqual(
+    surface.activeRoute,
+    "coach",
+    "Restoring training must land on the conversation, where the practice lane lives.",
+  );
+  assertEqual(drawer.chatActive, true, "Restoring training must keep the Chat destination active.");
+  assertEqual(drawer.opened, true, "Restoring training must open the learning drawer on the due practice.");
+  assertEqual(
+    surface.cardId,
+    "card-provider-truth",
+    "Restoring a next hop must retain its exact card identity.",
+  );
   assertEqual(
     surface.heading,
     "Return to provider truth",
@@ -593,11 +632,15 @@ async function verifyRestoreTrainingView(page, previewUrl) {
   return {
     id: "restore-training-view",
     surface,
+    drawer,
   };
 }
 
-async function verifyRestoreResourcesSandboxPreview(page, previewUrl) {
+async function verifyLegacySandboxRestoreLandsOnLibrary(page, previewUrl) {
   await resetPreviewPage(page, previewUrl);
+  // The sandbox spotlight was removed with the Markdown-only library. A host
+  // that still asks for that surface must land on the library, without
+  // resurrecting removed chrome and without an error.
   await injectPreviewHostMessage(page, {
     type: "ui/restoreView",
     payload: {
@@ -610,34 +653,47 @@ async function verifyRestoreResourcesSandboxPreview(page, previewUrl) {
     },
   });
   await page.waitForSelector(".resources-pane", { timeout: waitTimeoutMs });
-  const surface = await readResourcesRestoreSurface(page);
+  const surface = await page.evaluate(() => {
+    const pane = document.querySelector(".resources-pane");
+    const rect = pane?.getBoundingClientRect();
+    return {
+      activeRoute:
+        document.querySelector(".template-surface:not([hidden])")?.getAttribute("data-surface") ??
+        null,
+      heading:
+        document
+          .querySelector(".resources-pane h1, .resources-pane h2")
+          ?.textContent?.replace(/\s+/g, " ")
+          .trim() ?? null,
+      libraryVisible: Boolean(rect && rect.width > 0 && rect.height > 0),
+      removedSpotlight: Boolean(
+        document.querySelector(
+          "[data-resource-spotlight], .resources-spotlight, [data-resource-sandbox]",
+        ),
+      ),
+      errorText:
+        document.querySelector(".resources-pane [role='alert']")?.textContent?.trim() ?? null,
+    };
+  });
+  assertEqual(surface.activeRoute, "resources", "A resources restore must land on Resources.");
   assertEqual(
     surface.heading,
     "Unified library",
     "Restoring a resources view should land on the resources library heading.",
   );
+  assertEqual(surface.libraryVisible, true, "The library must be visible after the restore.");
   assertEqual(
-    surface.cardTitle,
-    "Sandbox context restored",
-    "Restoring a sandbox preview should surface the restored sandbox title.",
+    surface.removedSpotlight,
+    false,
+    "A legacy sandbox restore must not render the removed spotlight chrome.",
   );
   assertEqual(
-    surface.cardDetail,
-    "/preview/resources/web-search",
-    "Restoring a sandbox preview should surface the preview path as the first visible detail.",
-  );
-  assertIncludes(
-    surface.cardMeta,
-    "research sandbox",
-    "Restoring a sandbox preview should keep the focus area visible in the spotlight meta.",
-  );
-  assertIncludes(
-    surface.cardMeta,
-    "/workspace/server/app/research/web_search.py",
-    "Restoring a sandbox preview should keep the sandbox path visible in the spotlight meta.",
+    surface.errorText,
+    null,
+    "A legacy sandbox restore must not surface an error to the learner.",
   );
   return {
-    id: "restore-resources-sandbox-preview",
+    id: "restore-resources-legacy-sandbox",
     surface,
   };
 }
@@ -746,9 +802,12 @@ async function readStreamingSurface(page) {
   return await page.evaluate(() => {
     const normalize = (value) => value?.replace(/\s+/g, " ").trim() ?? null;
     const streamingBubble = document.querySelector('[data-message-id="streaming"]');
-    const activityStrip = document.querySelector(
-      ".coach-conversation-view__item:last-child .agent-activity-strip",
-    );
+    // The list ends with a footer element (the coach stream footer), so "the
+    // last item" is the last element carrying the item class — not
+    // `:last-child`, which the footer now occupies.
+    const items = document.querySelectorAll(".coach-conversation-view__item");
+    const lastItem = items[items.length - 1] ?? null;
+    const activityStrip = lastItem?.querySelector(".agent-activity-strip") ?? null;
     return {
       hasStreamingBubble: Boolean(streamingBubble),
       messageText: normalize(streamingBubble?.textContent),
@@ -771,22 +830,6 @@ async function readTrainingRestoreSurface(page) {
       cardTitle: normalize(currentCard?.querySelector("h2")?.textContent),
       cardDetail: normalize(phase?.querySelector('.message-markdown')?.textContent),
       cardMeta: focus?.getBoundingClientRect().height ? normalize(focus.textContent) : null,
-    };
-  });
-}
-
-async function readResourcesRestoreSurface(page) {
-  return await page.evaluate(() => {
-    const normalize = (value) => value?.replace(/\s+/g, " ").trim() ?? null;
-    const pane = document.querySelector(".resources-pane");
-    const spotlight = pane?.querySelector(".resources-inline-context");
-    return {
-      heading: normalize(pane?.querySelector(".workbench-pane__heading h2")?.textContent),
-      cardTitle: normalize(spotlight?.querySelector(".resources-inline-context__title")?.textContent),
-      cardDetail: normalize(
-        spotlight?.querySelector("p:not(.resources-inline-context__title):not(.resources-inline-context__meta)")?.textContent,
-      ),
-      cardMeta: normalize(spotlight?.querySelector(".resources-inline-context__meta")?.textContent),
     };
   });
 }
@@ -826,10 +869,17 @@ async function readPlanFirstViewport(page) {
           })(),
       ),
       compactPrimaryActionDisabled: compactPrimaryAction?.hasAttribute('disabled') ?? null,
-      primaryActionCount: Array.from(document.querySelectorAll('[data-surface="plan"] [data-primary-action="true"]')).filter((element) => {
+      // The plan is an alias into Chat, and its goal card is a drawer card at
+      // the shell level — outside every `data-surface` element.
+      primaryActionCount: Array.from(document.querySelectorAll('.learning-drawer [data-primary-action="true"]')).filter((element) => {
         const rect = element.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
       }).length,
+      drawerOpen: (() => {
+        const drawer = document.querySelector('.learning-drawer');
+        const rect = drawer?.getBoundingClientRect();
+        return Boolean(rect && rect.width > 0 && rect.height > 0);
+      })(),
       compactVerificationIsClipped: Boolean(
         compactVerification && compactVerification.scrollHeight > compactVerification.clientHeight + 1,
       ),

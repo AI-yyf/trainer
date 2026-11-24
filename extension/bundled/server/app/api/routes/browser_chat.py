@@ -6,14 +6,21 @@ the per-instance sidecar token or provider credentials. This router is a
 narrow, bearer-authenticated proxy:
 
 - every request is scoped to the credential's workspace;
-- provider overrides/API keys from the browser are stripped;
-- the proxy calls the existing `/session/*` routes in-process, so the coaching
+- every proxied body is rebuilt from a per-route *allowlist*: the browser can
+  send a message or answer a practice, and nothing else it sends reaches
+  ``/session/*`` — no provider overrides or API keys, no ``intent``, no
+  current-file content, no workspace path or file snapshot. A paired browser
+  therefore cannot choose what the coach reads, where the workspace root
+  points, or whether the evaluator runs;
+- the proxy calls the existing ``/session/*`` routes in-process, so the coaching
   pipeline is shared rather than duplicated.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from typing import Any
 
 import httpx
@@ -24,6 +31,8 @@ from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 from .browser import _require_browser_credential
 
+# Kept as documentation of the invariant the allowlist enforces: these never
+# travel on the browser lane, whatever a caller puts in the body.
 _BROWSER_FORBIDDEN_FIELDS = frozenset(
     {
         "provider",
@@ -31,8 +40,67 @@ _BROWSER_FORBIDDEN_FIELDS = frozenset(
         "providerConfig",
         "api_key",
         "apiKey",
+        "intent",
+        "current_file",
+        "currentFile",
+        "workspace_path",
+        "workspacePath",
+        "workspace_context",
+        "workspaceContext",
+        "workspace_file_snapshot",
+        "workspaceFileSnapshot",
     }
 )
+
+_MAX_BODY_BYTES = 256 * 1024
+_MAX_MESSAGE_CHARS = 32_000
+_MAX_ID_CHARS = 200
+_MAX_NESTING_DEPTH = 4
+_MAX_LIST_ITEMS = 50
+_MAX_STRING_CHARS = 8_000
+_LANGUAGE_TAG_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
+_PAGE_CONTEXT_LIMITS = {"url": 2048, "title": 160, "selection": 1200}
+
+# Exactly what the side panel sends on each lane route. Anything else in the
+# request body is dropped before it can reach the shared coaching routes.
+_MESSAGE_FIELDS = ("session_id", "message", "response_language", "stream_id", "request_id")
+_CANCEL_FIELDS = ("session_id", "stream_id", "request_id")
+_TRAINING_FIELDS: dict[str, tuple[str, ...]] = {
+    "/training/attempt/start": ("card_id", "session_id"),
+    "/training/attempt/update": ("attempt_id", "card_id", "answer_draft"),
+    "/training/attempt/evidence": (
+        "attempt_id",
+        "artifact_hash",
+        "result",
+        "runner_version",
+        "execution_location",
+        "limitations",
+    ),
+    "/training/flashcard/answer": (
+        "card_id",
+        "learner_answer",
+        "selected_option_index",
+        "selectedOptionIndex",
+        "selected_option_indices",
+        "selectedOptionIndices",
+        "fill_blank_answers",
+        "fillBlankAnswers",
+        "sort_order",
+        "sortOrder",
+    ),
+    "/training/practice-return": (
+        "card_id",
+        "passed",
+        "summary",
+        "next_step",
+        "focus_area",
+        "evidence_source",
+    ),
+}
+
+
+class _InvalidPayload(ValueError):
+    """A browser-lane body that is too large or too deeply nested."""
 
 
 def _sidecar_token(request: Request) -> str:
@@ -43,16 +111,129 @@ def _transport(request: Request) -> httpx.ASGITransport:
     return httpx.ASGITransport(app=request.app)
 
 
-def _scoped_payload(workspace_id: str, body: Any) -> dict[str, Any]:
-    payload = dict(body) if isinstance(body, dict) else {}
-    payload["workspace_id"] = workspace_id
+async def _read_json_object(request: Request) -> dict[str, Any]:
+    raw = await request.body()
+    if len(raw) > _MAX_BODY_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "code": "browser_payload_too_large",
+                "message": "The browser request body is too large.",
+            },
+        )
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _bounded_copy(value: Any, *, depth: int = 0) -> Any:
+    """Deep-copy one JSON value within size limits, so a paired browser cannot
+    push an unbounded structure into the shared coaching routes."""
+    if depth > _MAX_NESTING_DEPTH:
+        raise _InvalidPayload("nesting")
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return value if value == value and value not in (float("inf"), float("-inf")) else None
+    if isinstance(value, str):
+        if len(value) > _MAX_STRING_CHARS:
+            raise _InvalidPayload("string")
+        return value
+    if isinstance(value, list):
+        if len(value) > _MAX_LIST_ITEMS:
+            raise _InvalidPayload("list")
+        return [_bounded_copy(item, depth=depth + 1) for item in value]
+    if isinstance(value, dict):
+        if len(value) > _MAX_LIST_ITEMS:
+            raise _InvalidPayload("object")
+        return {str(key)[:64]: _bounded_copy(item, depth=depth + 1) for key, item in value.items()}
+    return None
+
+
+def _browser_payload(workspace_id: str, body: Any, allowed: tuple[str, ...]) -> dict[str, Any]:
+    """Rebuild a lane payload from the allowlist only.
+
+    The credential names the workspace; every other field must be one the route
+    declares. Fields outside the list — provider settings, ``intent``,
+    ``current_file``, workspace paths and snapshots — are dropped here, before
+    the request is proxied in-process with the sidecar's own token.
+    """
+    payload: dict[str, Any] = {"workspace_id": workspace_id}
+    if not isinstance(body, dict):
+        return payload
+    try:
+        for key in allowed:
+            if key in body and key not in _BROWSER_FORBIDDEN_FIELDS:
+                payload[key] = _bounded_copy(body[key])
+    except _InvalidPayload as exc:
+        raise HTTPException(
+            status_code=413,
+            detail={
+                "code": "browser_payload_too_large",
+                "message": f"The browser request body is too large ({exc}).",
+            },
+        ) from exc
     for key in _BROWSER_FORBIDDEN_FIELDS:
         payload.pop(key, None)
     return payload
 
 
-def _page_context_text(body: dict[str, Any]) -> str:
-    context = body.get("page_context") or body.get("pageContext")
+def _clean_page_context(value: Any) -> dict[str, str] | None:
+    """The page context is three bounded strings; anything else is dropped."""
+    if not isinstance(value, dict):
+        return None
+    context = {
+        key: str(value.get(key) or "").strip()[:limit]
+        for key, limit in _PAGE_CONTEXT_LIMITS.items()
+        if str(value.get(key) or "").strip()
+    }
+    return context or None
+
+
+def _normalize_message_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Type-check the conversation fields a browser may set.
+
+    ``message`` must be text; identifiers are short strings; the language tag
+    has to look like one. The browser never chooses the conversation scope:
+    ``active_view`` is always the coach thread.
+    """
+    message = payload.get("message")
+    if not isinstance(message, str) or not message.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "message_required", "message": "A message is required."},
+        )
+    if len(message) > _MAX_MESSAGE_CHARS:
+        raise HTTPException(
+            status_code=413,
+            detail={"code": "browser_payload_too_large", "message": "The message is too long."},
+        )
+    payload["message"] = message
+    for key in ("session_id", "stream_id", "request_id"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            payload[key] = value.strip()[:_MAX_ID_CHARS]
+        else:
+            payload.pop(key, None)
+    language = payload.get("response_language")
+    if not (isinstance(language, str) and _LANGUAGE_TAG_RE.match(language)):
+        payload.pop("response_language", None)
+    context = _clean_page_context(payload.get("page_context") or payload.get("pageContext"))
+    payload.pop("pageContext", None)
+    if context is None:
+        payload.pop("page_context", None)
+    else:
+        payload["page_context"] = context
+    payload["active_view"] = "coach"
+    return payload
+
+
+def _page_context_text(payload: dict[str, Any]) -> str:
+    context = payload.get("page_context")
     if not isinstance(context, dict):
         return ""
     url = str(context.get("url") or "").strip()
@@ -111,12 +292,14 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
     async def browser_chat_bootstrap(
         request: Request,
         session_id: str = "",
-        workspace_name: str = "",
     ) -> JSONResponse:
         credential = _require_browser_credential(runtime, request)
+        # The credential names the workspace, label included. A paired browser
+        # used to be able to relabel the host's session through a query
+        # parameter (uncapped text, persisted by /session/start).
         payload: dict[str, Any] = {
             "workspace_id": credential.workspace_id,
-            "workspace_name": workspace_name or credential.workspace_name or credential.workspace_id,
+            "workspace_name": credential.workspace_name or credential.workspace_id,
         }
         if session_id:
             payload["session_id"] = session_id
@@ -159,11 +342,13 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
     @router.post("/message")
     async def browser_chat_message(request: Request) -> JSONResponse:
         credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
+        body = await _read_json_object(request)
+        payload = _normalize_message_payload(
+            _browser_payload(credential.workspace_id, body, _MESSAGE_FIELDS + ("page_context",))
+        )
         context = _page_context_text(payload)
         if context:
-            payload["message"] = f"{str(payload.get('message') or '').strip()}\n\n{context}".strip()
+            payload["message"] = f"{payload['message'].strip()}\n\n{context}".strip()
         return await proxy_json(
             request,
             method="POST",
@@ -175,12 +360,14 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
     @router.post("/message/stream")
     async def browser_chat_message_stream(request: Request) -> Any:
         credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
+        body = await _read_json_object(request)
+        payload = _normalize_message_payload(
+            _browser_payload(credential.workspace_id, body, _MESSAGE_FIELDS + ("page_context",))
+        )
         payload["stream"] = True
         context = _page_context_text(payload)
         if context:
-            payload["message"] = f"{str(payload.get('message') or '').strip()}\n\n{context}".strip()
+            payload["message"] = f"{payload['message'].strip()}\n\n{context}".strip()
 
         headers: dict[str, str] = {"accept": "text/event-stream"}
         token = _sidecar_token(request)
@@ -227,86 +414,36 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
     # Training lane: a practice answer typed in the browser is a real
     # attempt, recorded with the same honesty rules as the workbench.
     # The credential already names the workspace, so the browser never
-    # chooses where the evidence lands.
+    # chooses where the evidence lands — and it cannot hand the server a
+    # file path, a verification interpreter or an execution scenario: only
+    # the answer and its self-report travel.
     # ------------------------------------------------------------------
 
-    @router.post("/training/attempt/start")
-    async def browser_training_attempt_start(request: Request) -> JSONResponse:
-        credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
-        return await proxy_json(
-            request,
-            method="POST",
-            path="/training/attempt/start",
-            workspace_id=credential.workspace_id,
-            payload=payload,
-        )
+    def training_route(lane_path: str):
+        allowed = _TRAINING_FIELDS[lane_path]
 
-    @router.post("/training/attempt/update")
-    async def browser_training_attempt_update(request: Request) -> JSONResponse:
-        credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
-        return await proxy_json(
-            request,
-            method="POST",
-            path="/training/attempt/update",
-            workspace_id=credential.workspace_id,
-            payload=payload,
-        )
+        async def handler(request: Request) -> JSONResponse:
+            credential = _require_browser_credential(runtime, request)
+            body = await _read_json_object(request)
+            payload = _browser_payload(credential.workspace_id, body, allowed)
+            return await proxy_json(
+                request,
+                method="POST",
+                path=lane_path,
+                workspace_id=credential.workspace_id,
+                payload=payload,
+            )
 
-    @router.post("/training/attempt/evidence")
-    async def browser_training_attempt_evidence(request: Request) -> JSONResponse:
-        credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
-        return await proxy_json(
-            request,
-            method="POST",
-            path="/training/attempt/evidence",
-            workspace_id=credential.workspace_id,
-            payload=payload,
-        )
+        return handler
 
-    @router.post("/training/flashcard/answer")
-    async def browser_training_flashcard_answer(request: Request) -> JSONResponse:
-        credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
-        return await proxy_json(
-            request,
-            method="POST",
-            path="/training/flashcard/answer",
-            workspace_id=credential.workspace_id,
-            payload=payload,
-        )
-
-    @router.post("/training/practice-return")
-    async def browser_training_practice_return(request: Request) -> JSONResponse:
-        """A practice answered in the browser panel is a real practice return.
-
-        The panel owns the learner's answer, so the completion travels the same
-        server route the workbench uses: the server decides the evidence
-        trust level (a learner return is never host-verified) and owns the
-        workspace the result lands in.
-        """
-        credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
-        return await proxy_json(
-            request,
-            method="POST",
-            path="/training/practice-return",
-            workspace_id=credential.workspace_id,
-            payload=payload,
-        )
+    for lane_path in _TRAINING_FIELDS:
+        router.add_api_route(lane_path, training_route(lane_path), methods=["POST"])
 
     @router.post("/cancel")
     async def browser_chat_cancel(request: Request) -> JSONResponse:
         credential = _require_browser_credential(runtime, request)
-        body = await request.json()
-        payload = _scoped_payload(credential.workspace_id, body)
+        body = await _read_json_object(request)
+        payload = _browser_payload(credential.workspace_id, body, _CANCEL_FIELDS)
         return await proxy_json(
             request,
             method="POST",

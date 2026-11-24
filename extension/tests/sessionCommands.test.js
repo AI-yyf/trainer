@@ -5745,3 +5745,130 @@ test('a session activation while a coach send is in flight discards the late res
   );
   assert.equal(patchedSession, false, 'the late response must not patch the new session');
 });
+
+test('updatePlanCommand sends the observed plan revision even at a zero head', async () => {
+  const vscodeMock = {
+    commands: {
+      async executeCommand() {
+        return undefined;
+      },
+    },
+    Uri: {
+      file(filePath) {
+        return { fsPath: filePath };
+      },
+    },
+  };
+  const { updatePlanCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
+  const context = createContext();
+  context.__hostState.bootstrap.plan.revision = 0;
+  context.__hostState.bootstrap.providerConfig = {
+    configured: true,
+    name: 'Local Compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'demo-model',
+    apiKeyConfigured: true,
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: true,
+      tools: false,
+      jsonSchema: false,
+      streaming: true,
+    },
+    availableModels: [],
+    modelListStatus: 'ready',
+  };
+  context.sidecarClient = {
+    async getJson() {
+      throw new Error('Unexpected GET');
+    },
+    async postJson(port, requestPath, body) {
+      context.__postCalls.push([port, requestPath, body]);
+      if (requestPath === '/plan/update') {
+        return {
+          plan: { id: 'plan-1', title: 'Plan', frozen: true, stages: [] },
+          plan_revision: 1,
+          plan_runtime_status: {},
+        };
+      }
+      throw new Error(`Unexpected POST ${requestPath}`);
+    },
+  };
+
+  const result = await updatePlanCommand(context, { instructions: 'Freeze the plan.' });
+
+  assert.equal(result.ok, true, result.message);
+  const body = context.__postCalls[0][2];
+  assert.equal(body.formal_plan_mutation, true);
+  assert.equal(body.expected_revision, 0);
+});
+
+test('updatePlanCommand turns a 409 plan revision conflict into the localized marker', async () => {
+  const httpClientPath = path.resolve(
+    __dirname,
+    '..',
+    'dist',
+    'extension',
+    'src',
+    'core',
+    'httpClient.js',
+  );
+  const { SidecarHttpError } = require(httpClientPath);
+  const vscodeMock = {
+    commands: {
+      async executeCommand() {
+        return undefined;
+      },
+    },
+    Uri: {
+      file(filePath) {
+        return { fsPath: filePath };
+      },
+    },
+  };
+  const { updatePlanCommand } = loadWithVscodeMock(sessionCommandsModulePath, vscodeMock);
+  const context = createContext();
+  context.__hostState.bootstrap.plan.revision = 2;
+  context.__hostState.bootstrap.providerConfig = {
+    configured: true,
+    name: 'Local Compatible',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'demo-model',
+    apiKeyConfigured: true,
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: true,
+      tools: false,
+      jsonSchema: false,
+      streaming: true,
+    },
+    availableModels: [],
+    modelListStatus: 'ready',
+  };
+  context.sidecarClient = {
+    async getJson() {
+      throw new Error('Unexpected GET');
+    },
+    async postJson() {
+      throw new SidecarHttpError(409, 'Sidecar request failed (409).', {
+        detail: JSON.stringify({
+          code: 'plan_revision_conflict',
+          plan_id: 'plan-1',
+          expected_revision: 2,
+          current_revision: 5,
+        }),
+      });
+    },
+  };
+
+  const result = await updatePlanCommand(context, { instructions: 'Rename the plan.' });
+
+  assert.equal(result.ok, false);
+  assert.match(String(result.message), /\[\[trainer-plan-revision-conflict:5\]\]/);
+  assert.equal(result.data.plan_revision_conflict, true);
+  assert.equal(result.data.current_revision, 5);
+});

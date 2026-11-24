@@ -22,6 +22,7 @@ import {
 } from "./workspaceContext";
 import { withWorkspaceQuery } from "./workspaceContext";
 import { stripHostLastTestSecrets } from "../../../shared/src/hostLastTestGovernance";
+import { hostCommandCopy, resolveHostCommandLanguage } from "./hostCommandCopy";
 
 type ActiveTrainingCardStream = {
   messageId: string;
@@ -127,10 +128,28 @@ type TrainingCurrentFilePayload = {
   related_files?: Array<{ path: string; reason: string; excerpt?: string; line_span?: string }>;
 };
 
+/**
+ * Attach the learner's live provider — its config and the SecretStorage key —
+ * to a training request.
+ *
+ * Returns a localized refusal instead of attaching when the workspace is not
+ * trusted. The endpoint can come from the workspace (`.vscode/trainer.json`)
+ * while the key is the learner's own secret, so an untrusted folder must never
+ * decide where that key is sent. Callers surface the refusal; nothing is sent.
+ */
 async function attachLiveProviderToTrainingRequest(
   context: CommandContext,
   requestBody: Record<string, unknown>,
-): Promise<void> {
+): Promise<string | undefined> {
+  const trusted = await context.trustGuard.ensureTrusted(
+    "generate training content with the saved model provider",
+  );
+  if (!trusted) {
+    return hostCommandCopy(
+      resolveHostCommandLanguage(context),
+      "trainingProviderTrustRequired",
+    );
+  }
   const providerConfig = context.providerStore.getConfig();
   const apiKey = await context.providerStore.getApiKey();
   if (providerConfig) {
@@ -146,6 +165,7 @@ async function attachLiveProviderToTrainingRequest(
       ...(lastTest as unknown as Record<string, unknown>),
     });
   }
+  return undefined;
 }
 
 type TrainingGenerateCardWaiterInput = {
@@ -232,12 +252,17 @@ async function settleTrainingGenerateCardWaiter(
   if (input.responseLanguage) {
     requestBody.response_language = input.responseLanguage;
   }
-  await attachLiveProviderToTrainingRequest(
+  const providerRefusal = await attachLiveProviderToTrainingRequest(
     context,
     requestBody as unknown as Record<string, unknown>,
   );
 
   try {
+    if (providerRefusal) {
+      // The owner's stream message has to close with the reason the learner
+      // can act on, exactly like any other failed generation.
+      throw new Error(providerRefusal);
+    }
     let response: TrainingCardGenerationResponse | undefined;
     let tokenCount = 0;
     const supportsStreaming = typeof context.sidecarClient.fetchSSE === "function";
@@ -1063,10 +1088,13 @@ export async function trainingGenerateCardCommand(
     if (responseLanguage) {
       requestBody.response_language = responseLanguage;
     }
-    await attachLiveProviderToTrainingRequest(
+    const providerRefusal = await attachLiveProviderToTrainingRequest(
       context,
       requestBody as unknown as Record<string, unknown>,
     );
+    if (providerRefusal) {
+      return { ok: false, message: providerRefusal };
+    }
 
     type TrainingCardGenerationResponse = {
       card?: Record<string, unknown>;
@@ -1663,10 +1691,13 @@ export async function flashcardCreateCommand(
     if (responseLanguage) {
       requestBody.response_language = responseLanguage;
     }
-    await attachLiveProviderToTrainingRequest(
+    const providerRefusal = await attachLiveProviderToTrainingRequest(
       context,
       requestBody as unknown as Record<string, unknown>,
     );
+    if (providerRefusal) {
+      return { ok: false, message: providerRefusal };
+    }
     const response = await context.sidecarClient.postJson<{
       card: Record<string, unknown>;
       score: number;

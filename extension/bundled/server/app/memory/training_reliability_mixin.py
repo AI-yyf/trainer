@@ -14,6 +14,7 @@ import threading
 from typing import TYPE_CHECKING, Any, Callable
 
 from ..training.reliability import (
+    TRAINING_RELIABILITY_BUSY_KEY,
     TRAINING_RELIABILITY_DEDUPE_KEY,
     WORKSPACE_RELIABILITY_KEY,
     WORKSPACE_SNAPSHOT_REVISION_KEY,
@@ -237,8 +238,25 @@ class TrainingReliabilityMixin:
             # Honest busy view: another run holds this workspace's slot. Read
             # the current state WITHOUT mutating (no unlocked writes — that
             # would reopen T-0032) and never execute work() concurrently.
+            # A true duplicate of the running save coalesces (its own request
+            # is already in flight); a different request gets an explicit busy
+            # marker so a route never reports the unperformed work as success.
             structured = self._structured_for(resolved)
-            return dict(structured._workspace)
+            workspace = dict(structured._workspace)
+            running = self._load_training_reliability(structured)
+            if not should_coalesce(
+                running,
+                request_id=request_id,
+                command_id=command_id,
+                card_id=card_id,
+            ):
+                workspace[TRAINING_RELIABILITY_BUSY_KEY] = {
+                    "busy": True,
+                    "command_id": str((running or {}).get("command_id") or ""),
+                    "card_id": str((running or {}).get("card_id") or ""),
+                    "phase": str((running or {}).get("phase") or ""),
+                }
+            return workspace
         try:
             structured = self._structured_for(resolved)
             existing = expire_if_needed(self._load_training_reliability(structured))
@@ -328,14 +346,13 @@ class TrainingReliabilityMixin:
                 raise
 
             structured = self._structured_for(resolved)
-            # T-0042 finish line: if a locked control route moved OUR record
-            # (expire/recover) while work() ran, never clobber the newer honest
-            # state with the stale local snapshot — the success still lands in
-            # the dedupe ledger so the body can never re-execute.
+            # T-0042 finish line: a control route may move the persisted record
+            # (expire/resolve a timeout, recover) while work() runs. The
+            # completed work is still the authoritative outcome: record it as
+            # succeeded with the race annotated. Keeping a failed/pending slot
+            # next to a success entry in the dedupe ledger strands the UI on
+            # "failed" forever even though the save persisted.
             persisted_now = self._load_training_reliability(structured)
-            # A same-request cancel racing a completed work() is owned by
-            # the mark_succeeded/cancel_after machinery (acked, evidence
-            # kept) — never treated as a foreign control transition.
             control_moved = (
                 persisted_now is not None
                 and persisted_now != record
@@ -343,6 +360,11 @@ class TrainingReliabilityMixin:
                 and str(persisted_now.get("phase") or "") != "cancelled"
             )
             control_state = persisted_now if control_moved else None
+            control_timed_out = bool(
+                control_state is not None
+                and str(control_state.get("phase") or "") == "failed"
+                and str(control_state.get("outcome") or "") == "timeout"
+            )
             next_snapshot = int(structured._workspace.get(WORKSPACE_SNAPSHOT_REVISION_KEY) or 0) + 1
             latest_handoff = structured._workspace.get("latest_training_handoff")
             persisted_phase = learning_phase
@@ -353,21 +375,24 @@ class TrainingReliabilityMixin:
                 snapshot_revision=next_snapshot,
                 learning_phase=persisted_phase,
                 cancel_after=self._cancel_raced_work(record, structured),
+                timeout_after=control_timed_out or None,
             )
+            if control_state is not None:
+                # Preserve the newer attempt revision a recover may have set;
+                # clients chain their next expected_revision on it.
+                finished["revision"] = max(
+                    int(finished.get("revision") or 1),
+                    int(control_state.get("revision") or 1),
+                )
             success_dedupe = record_dedupe_entry(
                 self._load_training_dedupe(structured),
                 dedupe_key,
                 outcome="success",
                 snapshot_revision=next_snapshot,
             )
-            if control_state is not None:
-                workspace = self._save_training_reliability(
-                    resolved, structured, control_state, dedupe=success_dedupe
-                )
-            else:
-                workspace = self._save_training_reliability(
-                    resolved, structured, finished, dedupe=success_dedupe
-                )
+            workspace = self._save_training_reliability(
+                resolved, structured, finished, dedupe=success_dedupe
+            )
             if isinstance(result, dict):
                 merged = dict(result)
                 merged[WORKSPACE_RELIABILITY_KEY] = workspace.get(WORKSPACE_RELIABILITY_KEY)

@@ -54,6 +54,7 @@ from ..core.models import (
     TrainingCardCandidateSnapshot,
     WorkspaceAuthoritySummary,
 )
+from ..core.process_env import SIDECAR_SECRET_ENV_VARS, child_process_environment
 from ..memory.workspace_recovery import (
     leftover_formal_plan_is_live_for_fill,
     live_plan_snapshot_persist_chrome,
@@ -2421,6 +2422,7 @@ class SandboxService:
                         argv,
                         shell=False,
                         cwd=str(cwd),
+                        env=child_process_environment(),
                         capture_output=True,
                         text=True,
                         timeout=timeout_seconds,
@@ -3839,6 +3841,7 @@ class SandboxService:
                         process_argv,
                         shell=False,
                         cwd=self._fs_path(root),
+                        env=child_process_environment(),
                         capture_output=True,
                         text=True,
                         timeout=max(1, int(preflight.timeout_ms or 0)) / 1000,
@@ -4010,6 +4013,10 @@ class SandboxService:
         for name in sorted({*requested_names, *SKILL_RUNTIME_BASELINE_ENV_NAMES}):
             normalized = str(name or "").strip().upper()
             if not normalized or not self._skill_runtime_env_name_is_allowed(normalized):
+                raise ValueError(f"Skill isolated executor rejected runtime env name: {name}")
+            if normalized in SIDECAR_SECRET_ENV_VARS:
+                # Even an explicit whitelist entry never hands a skill process
+                # the sidecar's own token.
                 raise ValueError(f"Skill isolated executor rejected runtime env name: {name}")
             value = os.environ.get(normalized)
             if value is not None:
@@ -5743,6 +5750,7 @@ URI::HTTPS.prepend(TrainerGuardedURIOpen)
                     text=True,
                     timeout=5,
                     shell=False,
+                    env=child_process_environment(),
                 )
                 last_probe_exit_code = completed.returncode
             except (OSError, subprocess.SubprocessError) as exc:
@@ -5994,6 +6002,7 @@ URI::HTTPS.prepend(TrainerGuardedURIOpen)
                 text=True,
                 timeout=5,
                 shell=False,
+                env=child_process_environment(),
             )
         except (OSError, subprocess.SubprocessError) as exc:
             return {

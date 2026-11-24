@@ -26,6 +26,8 @@ from typing import Any
 
 from app.project.symbols import MAX_FILES, build_repo_index
 
+from ..core.process_env import child_process_environment
+
 _GITHUB_URL = re.compile(
     r"^(?:https?://)?github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+?)(?:\.git)?"
     r"(?:/tree/(?P<branch>[^/]+))?$",
@@ -100,6 +102,7 @@ def clone_github_repo(
             text=True,
             timeout=300,
             check=False,
+            env=child_process_environment(),
         )
     except FileNotFoundError as exc:
         raise RuntimeError("git is not available on the sidecar host.") from exc
@@ -131,6 +134,7 @@ def _git_output(command: list[str]) -> str:
             text=True,
             timeout=30,
             check=False,
+            env=child_process_environment(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return ""

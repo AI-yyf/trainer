@@ -10,7 +10,7 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Any, Callable, Literal, NamedTuple, Protocol
 
 from ..core.models import (
     EvaluateCurrentFileRequest,
@@ -19,6 +19,7 @@ from ..core.models import (
     EvaluationReport,
 )
 from ..core.models import TaskSpec as ApiTaskSpec
+from ..core.process_env import child_process_environment
 from ..memory.workspace_recovery import live_training_card_title
 from ..specs.models import RequirementItem, TaskSpec
 from .check_cache import CHECK_RESULT_CACHE
@@ -77,6 +78,8 @@ class SubprocessCommandRunner:
             completed = subprocess.run(
                 argv,
                 cwd=command.cwd,
+                # Learner code and project test suites never see the sidecar's token.
+                env=child_process_environment(),
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -955,8 +958,13 @@ class EvaluatorService:
                 ),
             )
         file_references = [item for item in all_symbols if _looks_like_file_reference(item)]
-        symbols = [item for item in all_symbols if item not in file_references]
-        if not criteria and not symbols:
+        artifact_symbols = [item for item in all_symbols if _is_artifact_term(item)]
+        symbols = [
+            item
+            for item in all_symbols
+            if item not in file_references and not _is_artifact_term(item)
+        ]
+        if not criteria and not symbols and not artifact_symbols:
             # A contract existed, but only as file targets: a file verification
             # cannot pass on the target file alone.
             return EvaluationCheck(
@@ -979,11 +987,20 @@ class EvaluatorService:
         )
         implicit_protocols: set[str] = set()
         python_expressions: set[str] = set()
-        if str(language_id or "").lower() in _PYTHON_LANGUAGE_IDS:
+        is_python = str(language_id or "").lower() in _PYTHON_LANGUAGE_IDS
+        defined: set[str] = set()
+        annotated: set[str] = set()
+        # None outside Python: a docstring or annotation cannot be checked
+        # there, so it must never become a permanent miss.
+        documented: set[str] | None = None
+        if is_python:
             try:
                 syntax = ast.parse(code)
             except SyntaxError:
                 syntax = None
+            defined, parsed_documented, parsed_annotated = _python_definitions(syntax)
+            documented = parsed_documented
+            annotated = parsed_annotated
             if syntax is not None:
                 python_expressions = {
                     ast.dump(node, include_attributes=False)
@@ -996,7 +1013,7 @@ class EvaluatorService:
                 for node in ast.walk(syntax)
             ):
                 implicit_protocols.add("__setitem__")
-        criteria_results = [
+        criteria_results: list[dict[str, Any]] = [
             _criterion_result(
                 item,
                 evidence,
@@ -1014,6 +1031,32 @@ class EvaluatorService:
             )
             for item in criteria
         ]
+        # An artifact requirement is structural: a docstring or type hints are
+        # met by the real thing on the definition the criterion names (or by
+        # any definition when it names none), never by the word appearing in
+        # the file. Comments and out-of-file documentation cannot be verified
+        # from this file at all, so they defer instead of blocking forever.
+        artifact_kinds = _artifact_requirements(documented or set(), annotated)
+        for result in criteria_results:
+            criterion_text = str(result["text"])
+            requirement = _artifact_requirement(criterion_text, artifact_kinds)
+            if requirement is None:
+                continue
+            if documented is None or requirement.satisfied is None:
+                _defer_if_unsignalled(result)
+                continue
+            targets = _artifact_targets(criterion_text, defined)
+            label = f"{requirement.label} " + (", ".join(targets) if targets else "a definition")
+            satisfied = bool(requirement.satisfied(targets, defined))
+            if result["missing_signals"] == [_NO_CODE_SIGNAL]:
+                result["missing_signals"] = []
+            if satisfied:
+                result["matched_signals"] = [*result["matched_signals"], label]
+                if not result["missing_signals"]:
+                    result["status"] = "matched"
+            else:
+                result["missing_signals"] = [*result["missing_signals"], label]
+                result["status"] = "missing"
         symbol_results = [
             _expected_symbol_result(
                 item,
@@ -1024,6 +1067,43 @@ class EvaluatorService:
             )
             for item in symbols
         ]
+        # Cards also list the artifact among their expected symbols
+        # ("docstring", "comment", "type hints").
+        for item in artifact_symbols:
+            requirement = _artifact_term_kind(item, artifact_kinds)
+            if requirement is None:
+                continue
+            targets = sorted(
+                {
+                    target
+                    for criterion in criteria
+                    if requirement.mention.search(criterion)
+                    for target in _artifact_targets(criterion, defined)
+                }
+            )
+            label = f"{requirement.label} " + (", ".join(targets) if targets else "a definition")
+            if documented is None or requirement.satisfied is None:
+                artifact_result: dict[str, Any] = {
+                    "text": item,
+                    "status": "deferred",
+                    "matched_signals": [],
+                    "missing_signals": [],
+                }
+            elif requirement.satisfied(targets, defined):
+                artifact_result = {
+                    "text": item,
+                    "status": "matched",
+                    "matched_signals": [label],
+                    "missing_signals": [],
+                }
+            else:
+                artifact_result = {
+                    "text": item,
+                    "status": "missing",
+                    "matched_signals": [],
+                    "missing_signals": [label],
+                }
+            symbol_results.append(artifact_result)
         # A criterion such as "verify the result via `queue_lock.py`" names a
         # file target, not a missing code symbol. When that target is the
         # current verified file, the criterion is satisfied. Implementation
@@ -1042,7 +1122,9 @@ class EvaluatorService:
                 result["status"] = "matched"
                 result["matched_signals"] = ["current file target"]
                 result["missing_signals"] = []
-        deferred_results = [item for item in criteria_results if item["status"] == "deferred"]
+        deferred_results = [
+            item for item in [*criteria_results, *symbol_results] if item["status"] == "deferred"
+        ]
         missing_results = [
             item
             for item in [*criteria_results, *symbol_results]
@@ -1054,7 +1136,7 @@ class EvaluatorService:
         detail_lines = [
             f"Acceptance progress: {matched_signals}/{total_signals} acceptance signals matched.",
             f"Acceptance criteria supplied: {len(criteria)}.",
-            f"Expected symbols supplied: {len(symbols)}.",
+            f"Expected symbols supplied: {len(symbols) + len(artifact_symbols)}.",
             *[
                 f"Matched: {item['text']} ({', '.join(item['matched_signals'])})"
                 for item in [*criteria_results, *symbol_results]
@@ -1380,6 +1462,25 @@ def _normalize_code_symbol(value: str) -> str | None:
     return re.sub(r"\s*\.\s*", ".", normalized)
 
 
+# Model-authored cards often quote a callable signature in full:
+# "定义 `ppo_clip_loss(new_logprobs, old_logprobs, advantages, clip_eps=0.2)`".
+# The function name is the required symbol; its parameter names are part of the
+# signature illustration, not identifiers the answer must define. Scanning the
+# raw criterion also picked those parameters up as required symbols, so a
+# correct implementation that used different parameter names still failed.
+_CALLABLE_LITERAL_PATTERN = re.compile(
+    rf"^(?P<name>{_IDENTIFIER_PATTERN}(?:\s*\.\s*{_IDENTIFIER_PATTERN})*)\s*\([^()]*\)$"
+)
+
+
+def _callable_symbol_from_literal(value: str) -> str | None:
+    normalized = value.strip().strip("`").strip()
+    match = _CALLABLE_LITERAL_PATTERN.fullmatch(normalized)
+    if match is None:
+        return None
+    return _normalize_code_symbol(match.group("name"))
+
+
 def _matches_string_literal(symbol: str, code: str | None) -> bool:
     """Match an explicit returned string value without trusting comments.
 
@@ -1416,6 +1517,163 @@ def _matches_code_symbol(symbol: str, evidence: str) -> bool:
     )
 
 
+# Model-authored cards name process and artifact requirements with backticks:
+# "use the `docstring` of `ppo_clip_loss` to explain ...", "add `type hints`
+# to `clip`", "add a `comment` ...", "write a `README`", "run the submission
+# via `pytest` or `python`". None of those words is an identifier a correct
+# answer contains. Matched as code symbols they rejected every correct answer
+# — a real-model journey failed a fully documented PPO implementation because
+# the file did not contain the word "docstring".
+#
+#   * docstrings and type hints are checked structurally, against the AST;
+#   * comments and out-of-file documentation are deliberately not code
+#     evidence (a comment must never prove an identifier), so a requirement
+#     about them can only defer to the reflection step — never block forever;
+#   * runner names are satisfied by the run itself (see _criterion_result).
+_DOCSTRING_TERM_RE = re.compile(r"^`?docstrings?`?$", re.IGNORECASE)
+_DOCSTRING_MENTION_RE = re.compile(r"\bdocstrings?\b|文档字符串", re.IGNORECASE)
+_TYPE_HINT_TERM_RE = re.compile(
+    r"^`?(?:type\s+hints?|type\s+annotations?|类型注解|类型标注|类型提示)`?$", re.IGNORECASE
+)
+_TYPE_HINT_MENTION_RE = re.compile(
+    r"\btype\s+(?:hints?|annotations?)\b|类型注解|类型标注|类型提示", re.IGNORECASE
+)
+_COMMENT_TERM_RE = re.compile(
+    r"^`?(?:(?:code|inline)\s+)?comments?`?$|^`?注释`?$", re.IGNORECASE
+)
+_COMMENT_MENTION_RE = re.compile(r"\bcomments?\b|注释", re.IGNORECASE)
+_DOCUMENT_TERM_RE = re.compile(
+    r"^`?(?:readme(?:\.md)?|docs?|documentation|文档|说明文档|screenshots?|截图)`?$",
+    re.IGNORECASE,
+)
+_DOCUMENT_MENTION_RE = re.compile(
+    r"\breadme\b|\bdocs\b|\bdocumentation\b|\bscreenshots?\b|文档|截图", re.IGNORECASE
+)
+_RUNNER_TERM_RE = re.compile(r"^`?(?:py\.test|pytest|python3?|unittest)`?$", re.IGNORECASE)
+_NO_CODE_SIGNAL = "a verifiable code symbol or explicit acceptance test"
+
+
+class _ArtifactRequirement(NamedTuple):
+    """A requirement about an artifact of the code, not an identifier in it."""
+
+    term: re.Pattern[str]
+    mention: re.Pattern[str]
+    label: str
+    # (targets, defined) -> satisfied; None when the artifact cannot be
+    # verified from this file at all.
+    satisfied: Callable[[list[str], set[str]], bool] | None
+
+
+_ARTIFACT_TERM_RES: tuple[re.Pattern[str], ...] = (
+    _DOCSTRING_TERM_RE,
+    _TYPE_HINT_TERM_RE,
+    _COMMENT_TERM_RE,
+    _DOCUMENT_TERM_RE,
+)
+
+
+def _is_artifact_term(value: str) -> bool:
+    text = str(value or "").strip()
+    return any(pattern.match(text) for pattern in _ARTIFACT_TERM_RES)
+
+
+def _is_runner_term(value: str) -> bool:
+    return bool(_RUNNER_TERM_RE.match(str(value or "").strip()))
+
+
+def _python_definitions(syntax: ast.Module | None) -> tuple[set[str], set[str], set[str]]:
+    """Every function/class name, those with a docstring, those with type hints."""
+    defined: set[str] = set()
+    documented: set[str] = set()
+    annotated: set[str] = set()
+    if syntax is None:
+        return defined, documented, annotated
+    if (ast.get_docstring(syntax) or "").strip():
+        documented.add("<module>")
+    for node in ast.walk(syntax):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            defined.add(node.name)
+            if (ast.get_docstring(node) or "").strip():
+                documented.add(node.name)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            arguments = node.args
+            parameters = [
+                *arguments.posonlyargs,
+                *arguments.args,
+                *arguments.kwonlyargs,
+                arguments.vararg,
+                arguments.kwarg,
+            ]
+            if node.returns is not None or any(
+                parameter is not None and parameter.annotation is not None
+                for parameter in parameters
+            ):
+                annotated.add(node.name)
+    return defined, documented, annotated
+
+
+def _artifact_targets(criterion: str, defined: set[str]) -> list[str]:
+    """The functions/classes an artifact requirement points at ([] = any)."""
+    targets: list[str] = []
+    for literal in re.findall(r"`([^`]+)`", criterion):
+        normalized = _normalize_code_symbol(literal)
+        if normalized and normalized in defined and normalized not in targets:
+            targets.append(normalized)
+    for token in re.findall(_IDENTIFIER_PATTERN, criterion):
+        if token in defined and token not in targets:
+            targets.append(token)
+    return targets
+
+
+def _targets_satisfy(targets: list[str], satisfied_names: set[str]) -> bool:
+    return (
+        all(target in satisfied_names for target in targets) if targets else bool(satisfied_names)
+    )
+
+
+def _artifact_requirements(
+    documented: set[str], annotated: set[str]
+) -> tuple[_ArtifactRequirement, ...]:
+    return (
+        _ArtifactRequirement(
+            _DOCSTRING_TERM_RE,
+            _DOCSTRING_MENTION_RE,
+            "docstring on",
+            lambda targets, _defined: _targets_satisfy(targets, documented),
+        ),
+        _ArtifactRequirement(
+            _TYPE_HINT_TERM_RE,
+            _TYPE_HINT_MENTION_RE,
+            "type hints on",
+            lambda targets, _defined: _targets_satisfy(targets, annotated),
+        ),
+        _ArtifactRequirement(_COMMENT_TERM_RE, _COMMENT_MENTION_RE, "comments on", None),
+        _ArtifactRequirement(
+            _DOCUMENT_TERM_RE, _DOCUMENT_MENTION_RE, "documentation for", None
+        ),
+    )
+
+
+def _artifact_term_kind(
+    value: str, kinds: tuple[_ArtifactRequirement, ...]
+) -> _ArtifactRequirement | None:
+    text = str(value or "").strip()
+    return next((kind for kind in kinds if kind.term.match(text)), None)
+
+
+def _artifact_requirement(
+    criterion: str, kinds: tuple[_ArtifactRequirement, ...]
+) -> _ArtifactRequirement | None:
+    return next((kind for kind in kinds if kind.mention.search(criterion)), None)
+
+
+def _defer_if_unsignalled(result: dict[str, Any]) -> None:
+    """An unverifiable artifact never stays a permanent miss by itself."""
+    if result["status"] == "missing" and result["missing_signals"] == [_NO_CODE_SIGNAL]:
+        result["status"] = "deferred"
+        result["missing_signals"] = []
+
+
 def _criterion_code_signals(criterion: str, expected_symbols: list[str]) -> list[str]:
     signals: list[str] = []
     # File references provide location, not a required function named after
@@ -1427,6 +1685,17 @@ def _criterion_code_signals(criterion: str, expected_symbols: list[str]) -> list
     )
 
     def add(value: str) -> None:
+        if _is_artifact_term(value):
+            # An artifact word, not an identifier: checked structurally
+            # against the AST, or deferred when it cannot be checked at all.
+            return
+        callable_name = _callable_symbol_from_literal(value)
+        if callable_name is not None:
+            # A quoted signature requires its callable, not the parameter
+            # names used to illustrate the signature.
+            if callable_name not in signals:
+                signals.append(callable_name)
+            return
         normalized = _normalize_code_symbol(value) or (
             value.strip() if _python_expression_key(value) is not None else None
         )
@@ -1439,7 +1708,15 @@ def _criterion_code_signals(criterion: str, expected_symbols: list[str]) -> list
         normalized = _normalize_code_symbol(symbol)
         if normalized and _matches_code_symbol(normalized, criterion):
             add(normalized)
-    for token in re.findall(_IDENTIFIER_PATTERN, criterion):
+    # The quoted signature was already reduced to its callable above; scanning
+    # its parameter list as free identifiers made a correct implementation
+    # fail whenever it named the parameters differently.
+    raw_scan = re.sub(
+        r"`([^`]+)`",
+        lambda match: " " if _callable_symbol_from_literal(match.group(1)) else match.group(0),
+        criterion,
+    )
+    for token in re.findall(_IDENTIFIER_PATTERN, raw_scan):
         if "_" in token or (
             token[0].islower() and any(character.isupper() for character in token[1:])
         ):
@@ -1507,10 +1784,12 @@ def _criterion_result(
         expects_no_exception = re.search(
             r"\b(?:without|no|not\s+raise)\b|不抛|不触发|无|没有|不得", criterion, re.IGNORECASE,
         )
-        execution_signals = (
-            [signal for signal in signals if signal.endswith(("Error", "Exception"))]
-            if expects_no_exception else []
-        )
+        execution_signals = [
+            signal
+            for signal in signals
+            if _is_runner_term(signal)
+            or (expects_no_exception and signal.endswith(("Error", "Exception")))
+        ]
         code_signals = [signal for signal in signals if signal not in execution_signals]
         if output_numbers:
             signals.append("actual script output")
@@ -1613,6 +1892,17 @@ def _criterion_file_references(criterion: str) -> list[str]:
     return references
 
 
+_CODE_KEYWORD_START_RE = re.compile(
+    r"^(?:with|if|for|while|try|return|import|from|def|class|async|await|let|const|"
+    r"var|function|export|new|throw|elif|except|finally|switch|case)\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_code_statement(value: str) -> bool:
+    return bool(_CODE_KEYWORD_START_RE.match(value) or re.search(r"[=(){}\[\].:<>]", value))
+
+
 def _expected_symbol_result(
     symbol: str,
     evidence: str,
@@ -1641,6 +1931,22 @@ def _expected_symbol_result(
         if requires_code_evidence
         else bool(normalized and normalized.lower() in evidence.lower())
     )
+    # A card may list a phrase where a symbol belongs ("main entry point").
+    # Without code punctuation or a leading keyword it is not a code symbol
+    # and no file can ever contain it, so it defers to reflection instead of
+    # failing every answer forever.
+    if (
+        requires_code_evidence
+        and not matched
+        and _normalize_code_symbol(normalized) is None
+        and not _looks_like_code_statement(normalized)
+    ):
+        return {
+            "text": symbol,
+            "status": "deferred",
+            "matched_signals": [],
+            "missing_signals": [],
+        }
     return {
         "text": symbol,
         "status": "matched" if matched else "missing",

@@ -9,14 +9,32 @@ Covers ``POST /browser/pair-code``, ``POST /browser/pair``, ``DELETE
 from __future__ import annotations
 
 import json
+import multiprocessing
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
-from app.browser_bridge import BrowserBridgeService, build_coach_draft_text
+from app.browser_bridge import BrowserBridgeService, BrowserPairingError, build_coach_draft_text
 from app.core.models import LearningPlan, PlanStage
 from app.core.settings import AppSettings
 from app.main import create_app
+
+
+def _revoke_own_token_worker(data_root: str, index: int, results) -> None:
+    """Mint and revoke one credential inside an independent sidecar process."""
+    from app.browser_bridge.service import _hashed
+
+    bridge = BrowserBridgeService(Path(data_root))
+    code = f"9{index:05d}"
+    bridge.register_pair_code(
+        code=code,
+        workspace_id="ws-concurrent-revoke",
+        workspace_name="Concurrent revoke",
+    )
+    _credential, token = bridge.exchange_pair_code(code)
+    bridge.revoke_token(token)
+    results.put(_hashed(token))
 
 
 def build_client(tmp_path: Path, *, enable_network_fetch: bool = False) -> TestClient:
@@ -61,6 +79,40 @@ def _pair(client: TestClient, workspace_id: str, code: str = "135790") -> str:
     )
     assert registered.status_code == 200, registered.text
     paired = client.post("/browser/pair", json={"code": code})
+    assert paired.status_code == 200, paired.text
+    return str(paired.json()["credential"])
+
+
+# A Chrome extension ID is 32 letters from a-p; the browser puts it in the
+# Origin of every request the extension makes, and nothing else can.
+EXTENSION_ORIGIN = "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+OTHER_EXTENSION_ORIGIN = "chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba"
+HOST_TOKEN_HEADERS = {"x-trainer-token": "test-instance-token"}
+
+
+def _pair_from_extension(
+    client: TestClient,
+    workspace_id: str,
+    *,
+    origin: str = EXTENSION_ORIGIN,
+    code: str = "135790",
+    workspace_name: str = "Bridge WS",
+    headers: dict[str, str] | None = None,
+) -> str:
+    """Pair the way the real extension does: redeem a code from its own origin."""
+    session_id = _start_session(client, workspace_id, workspace_name, headers=headers)
+    registered = client.post(
+        "/browser/pair-code",
+        headers=headers,
+        json={
+            "code": code,
+            "expires_in": 600,
+            "session_id": session_id,
+            "workspace_id": workspace_id,
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    paired = client.post("/browser/pair", json={"code": code}, headers={"Origin": origin})
     assert paired.status_code == 200, paired.text
     return str(paired.json()["credential"])
 
@@ -803,12 +855,15 @@ def test_pair_route_exemption_is_method_scoped_under_instance_token(tmp_path, mo
 
 
 def test_auto_pair_issues_a_workspace_bound_credential(tmp_path) -> None:
+    """Zero-code pairing works for the extension that already paired with a code."""
     with build_client(tmp_path) as client:
         _start_session(client, "workspace-auto-pair", "Auto Pair WS")
-        response = client.post(
-            "/browser/auto-pair",
-            headers={"Origin": "chrome-extension://abcdefghijklmnop"},
-        )
+        refused = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
+        assert refused.status_code == 403, refused.text
+        assert refused.json()["detail"]["code"] == "extension_not_paired"
+
+        _pair_from_extension(client, "workspace-auto-pair", code="246810", workspace_name="Auto Pair WS")
+        response = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
         assert response.status_code == 200, response.text
         payload = response.json()
         assert payload["workspace_id"] == "workspace-auto-pair"
@@ -827,6 +882,7 @@ def test_auto_pair_issues_a_workspace_bound_credential(tmp_path) -> None:
 def test_auto_pair_refuses_a_non_extension_origin(tmp_path) -> None:
     with build_client(tmp_path) as client:
         _start_session(client, "workspace-auto-origin", "Auto Origin")
+        _pair_from_extension(client, "workspace-auto-origin")
         response = client.post(
             "/browser/auto-pair",
             headers={"Origin": "https://evil.example"},
@@ -835,12 +891,125 @@ def test_auto_pair_refuses_a_non_extension_origin(tmp_path) -> None:
         assert response.json()["detail"]["code"] == "extension_origin_required"
 
 
+def test_auto_pair_refuses_an_unpaired_extension_without_minting(tmp_path) -> None:
+    """Another installed extension — or anything that merely claims to be one
+    before this sidecar has paired it — gets no credential at all."""
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-unpaired", "Unpaired")
+        response = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["code"] == "extension_not_paired"
+
+        runtime = client.app.state.runtime  # type: ignore[attr-defined]
+        bridge = runtime.browser_bridge
+        assert isinstance(bridge, BrowserBridgeService)
+        assert bridge.credential_count() == 0
+
+        candidates = client.get("/browser/auto-pair/candidates", headers={"Origin": EXTENSION_ORIGIN})
+        assert candidates.status_code == 403, candidates.text
+        assert "workspace_name" not in candidates.text
+
+
+def test_auto_pair_trusts_only_the_extension_that_redeemed_the_code(tmp_path) -> None:
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-mine", "Mine")
+        _pair_from_extension(client, "workspace-auto-mine")
+
+        mine = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
+        assert mine.status_code == 200, mine.text
+
+        other = client.post("/browser/auto-pair", headers={"Origin": OTHER_EXTENSION_ORIGIN})
+        assert other.status_code == 403, other.text
+        assert other.json()["detail"]["code"] == "extension_not_paired"
+
+        # A malformed extension id is not an extension origin at all.
+        spoofed = client.post(
+            "/browser/auto-pair",
+            headers={"Origin": "chrome-extension://not-a-real-id"},
+        )
+        assert spoofed.status_code == 403, spoofed.text
+        assert spoofed.json()["detail"]["code"] == "extension_origin_required"
+
+
+def test_auto_pair_without_an_origin_needs_the_instance_token(tmp_path, monkeypatch) -> None:
+    """No Origin means the caller is not a browser; it has to prove it is the host."""
+    monkeypatch.setenv("TRAINER_SIDECAR_TOKEN", "test-instance-token")
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-native", "Native", headers=HOST_TOKEN_HEADERS)
+        _pair_from_extension(client, "workspace-auto-native", headers=HOST_TOKEN_HEADERS)
+
+        anonymous = client.post("/browser/auto-pair")
+        assert anonymous.status_code == 403, anonymous.text
+        assert anonymous.json()["detail"]["code"] == "extension_origin_required"
+
+        wrong_token = client.post("/browser/auto-pair", headers={"x-trainer-token": "not-the-token"})
+        assert wrong_token.status_code == 403, wrong_token.text
+
+        host = client.post("/browser/auto-pair", headers=HOST_TOKEN_HEADERS)
+        assert host.status_code == 200, host.text
+        assert host.json()["workspace_id"] == "workspace-auto-native"
+
+
+def test_trusted_extension_origin_survives_a_sidecar_restart(tmp_path) -> None:
+    """The learner types the code once: a restarted sidecar still auto-pairs
+    the same extension, and only that one."""
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-restart", "Restart")
+        _pair_from_extension(client, "workspace-auto-restart")
+
+    state = json.loads((tmp_path / "browser_bridge.json").read_text(encoding="utf-8"))
+    assert state["trusted_extension_origins"] == [EXTENSION_ORIGIN]
+
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-restart", "Restart")
+        again = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
+        assert again.status_code == 200, again.text
+        stranger = client.post("/browser/auto-pair", headers={"Origin": OTHER_EXTENSION_ORIGIN})
+        assert stranger.status_code == 403, stranger.text
+
+
+def test_host_revocation_retires_auto_credentials_and_the_trusted_origin(tmp_path, monkeypatch) -> None:
+    """"Revoke pairing" must work for a credential nobody typed a code for."""
+    monkeypatch.setenv("TRAINER_SIDECAR_TOKEN", "test-instance-token")
+    with build_client(tmp_path) as client:
+        _start_session(client, "workspace-auto-revoke", "Revoke", headers=HOST_TOKEN_HEADERS)
+        _pair_from_extension(client, "workspace-auto-revoke", headers=HOST_TOKEN_HEADERS)
+        auto = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
+        assert auto.status_code == 200, auto.text
+        credential = str(auto.json()["credential"])
+
+        revoked = client.delete("/browser/pair", headers=HOST_TOKEN_HEADERS)
+        assert revoked.status_code == 200, revoked.text
+        assert revoked.json()["credentials_revoked"] >= 2
+
+        after = client.get("/browser/status", headers={"Authorization": f"Bearer {credential}"})
+        assert after.status_code == 401, after.text
+
+        # The forgotten extension cannot pair itself again without a new code.
+        repeat = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
+        assert repeat.status_code == 403, repeat.text
+        assert repeat.json()["detail"]["code"] == "extension_not_paired"
+
+
+def test_auto_pair_credentials_are_capped_per_workspace(tmp_path) -> None:
+    bridge = BrowserBridgeService(tmp_path)
+    for _ in range(12):
+        bridge.issue_auto_credential(workspace_id="workspace-cap", workspace_name="Cap")
+    assert bridge.credential_count() == 10
+    # A code-paired credential is never the one that gets pruned.
+    bridge.register_pair_code(code="135790", workspace_id="workspace-cap", workspace_name="Cap")
+    bridge.exchange_pair_code("135790")
+    assert bridge.credential_count() == 11
+
+
 def test_auto_pair_requires_an_open_host_session(tmp_path) -> None:
     with build_client(tmp_path) as client:
-        response = client.post(
-            "/browser/auto-pair",
-            headers={"Origin": "chrome-extension://abcdefghijklmnop"},
-        )
+        runtime = client.app.state.runtime  # type: ignore[attr-defined]
+        bridge = runtime.browser_bridge
+        assert isinstance(bridge, BrowserBridgeService)
+        assert bridge.trust_extension_origin(EXTENSION_ORIGIN) is True
+
+        response = client.post("/browser/auto-pair", headers={"Origin": EXTENSION_ORIGIN})
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "no_workspace"
 
@@ -848,7 +1017,8 @@ def test_auto_pair_requires_an_open_host_session(tmp_path) -> None:
 def test_auto_pair_candidates_prefer_the_focused_workspace(tmp_path) -> None:
     with build_client(tmp_path) as client:
         _start_session(client, "workspace-focus-a", "Focus A")
-        headers = {"Origin": "chrome-extension://abcdefghijklmnop"}
+        _pair_from_extension(client, "workspace-focus-a")
+        headers = {"Origin": EXTENSION_ORIGIN}
 
         before = client.get("/browser/auto-pair/candidates", headers=headers)
         assert before.status_code == 200, before.text
@@ -881,3 +1051,92 @@ def test_host_focus_requires_a_workspace(tmp_path) -> None:
         response = client.post("/browser/host-focus", json={"workspace_id": ""})
         assert response.status_code == 422
         assert response.json()["detail"]["code"] == "invalid_workspace"
+
+
+def test_revocation_reaches_every_sidecar_process_and_cannot_be_undone(tmp_path: Path) -> None:
+    """Two windows run two sidecars over one LibraryRoot and one state file.
+
+    A revocation used to be process-local: the other sidecar kept accepting the
+    credential, and its next write put the credential and the trusted origin
+    back into the file, so after a restart the revoked browser worked again.
+    """
+    origin = f"chrome-extension://{'a' * 32}"
+    first = BrowserBridgeService(tmp_path)
+    first.register_pair_code(code="246810", workspace_id="ws-two-windows", workspace_name="Two windows")
+    _first_credential, token = first.exchange_pair_code("246810", origin=origin)
+
+    # A sidecar started later loads the same file and knows the pairing.
+    second = BrowserBridgeService(tmp_path)
+    assert second.credential_for_token(token, touch=False) is not None
+    assert second.is_trusted_extension_origin(origin)
+
+    first.revoke_registered_pairing()
+
+    # The other process refuses the credential from now on...
+    assert second.credential_for_token(token, touch=False) is None
+    assert not second.is_trusted_extension_origin(origin)
+
+    # ...and nothing it writes afterwards brings it back.
+    second.register_pair_code(code="112233", workspace_id="ws-two-windows", workspace_name="Two windows")
+    second_credential, second_token = second.exchange_pair_code("112233")
+    state = json.loads((tmp_path / "browser_bridge.json").read_text(encoding="utf-8"))
+    stored_hashes = {entry["token_hash"] for entry in state["credentials"]}
+    assert first.credential_for_token(token, touch=False) is None
+    assert first.credential_for_token(second_token, touch=False) is not None
+    assert second_credential.token_hash in stored_hashes
+
+    # A fresh process sees the same truth: the revoked browser stays out.
+    third = BrowserBridgeService(tmp_path)
+    assert third.credential_for_token(token, touch=False) is None
+    assert third.credential_for_token(second_token, touch=False) is not None
+    assert not third.is_trusted_extension_origin(origin)
+
+
+def test_concurrent_revocations_across_processes_all_survive(tmp_path: Path) -> None:
+    """Every writer's tombstone survives the other writers' replace cycles.
+
+    The state file is read-merge-replaced by each sidecar. Without an
+    inter-process lock, two windows can both sync, then both replace, and the
+    later payload erases the earlier tombstone (a revoked credential becomes
+    usable again). This test runs several real processes minting and revoking
+    their own credential over one LibraryRoot.
+    """
+    ctx = multiprocessing.get_context("spawn")
+    results = ctx.Queue()
+    workers = [
+        ctx.Process(target=_revoke_own_token_worker, args=(str(tmp_path), index, results))
+        for index in range(3)
+    ]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(timeout=60)
+        assert worker.exitcode == 0, f"worker failed with {worker.exitcode}"
+
+    revoked_hashes = {results.get(timeout=10) for _ in workers}
+    state = json.loads((tmp_path / "browser_bridge.json").read_text(encoding="utf-8"))
+    assert revoked_hashes <= set(state["revoked_token_hashes"])
+    assert state["credentials"] == []
+
+
+def test_auto_credential_rechecks_origin_trust_inside_the_state_lock(tmp_path: Path) -> None:
+    """A revoke between the route check and the mint must not mint a credential."""
+    bridge = BrowserBridgeService(tmp_path)
+    origin = f"chrome-extension://{'b' * 32}"
+    with pytest.raises(BrowserPairingError) as raised:
+        bridge.issue_auto_credential(
+            workspace_id="ws-auto-recheck",
+            workspace_name="Auto recheck",
+            extension_origin=origin,
+        )
+    assert raised.value.code == "extension_not_paired"
+    assert not (tmp_path / "browser_bridge.json").exists()
+
+
+def test_paired_in_one_window_is_visible_in_the_other(tmp_path: Path) -> None:
+    first = BrowserBridgeService(tmp_path)
+    second = BrowserBridgeService(tmp_path)
+    second.register_pair_code(code="135791", workspace_id="ws-shared", workspace_name="Shared")
+    _credential, token = second.exchange_pair_code("135791")
+
+    assert first.credential_for_token(token, touch=False) is not None

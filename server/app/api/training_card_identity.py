@@ -108,6 +108,7 @@ def prepare_training_file_evaluation(
             status_code=409,
             detail="This file is outside the current project; open the training card target and retry.",
         )
+    matched = False
     if targets:
         target_paths = {canonical(item) for item in targets}
         matched = bool(requested_path) and requested_path in target_paths
@@ -147,6 +148,31 @@ def prepare_training_file_evaluation(
         values = list(getattr(card, field, []) or [])
         if values:
             updates[field] = values
+    if matched:
+        # The verified file was just proven to be one of the card's declared
+        # targets (anything else raised 409 above). The evaluator credits a
+        # completion criterion ("use `foo.py` to complete ...") only when the
+        # verified file is among the expected file references, and model-authored
+        # cards often name the target in a criterion while omitting it from
+        # expected_symbols — such a card could never pass against its own
+        # target file. Hand the evaluator that already-established fact; the
+        # card's own symbols still win over anything the client sent.
+        stored_symbols: object = updates.get(
+            "expected_symbols", getattr(card, "expected_symbols", []) or []
+        )
+        base_symbols = (
+            list(stored_symbols) if isinstance(stored_symbols, list)
+            else [str(item) for item in (getattr(card, "expected_symbols", []) or [])]
+        )
+        symbols = [str(item) for item in base_symbols]
+        present = {item.strip().lower() for item in symbols}
+        for item in targets:
+            leaf = item.replace("\\", "/").rsplit("/", 1)[-1]
+            for candidate in (item, leaf):
+                if candidate and candidate.lower() not in present:
+                    symbols.append(candidate)
+                    present.add(candidate.lower())
+        updates["expected_symbols"] = symbols
     return request.model_copy(update=updates) if updates else request
 
 

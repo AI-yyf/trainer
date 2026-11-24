@@ -1,7 +1,13 @@
 import { useEffect, useId, useState } from "react";
 
+import { MermaidDiagramView } from "../common/MermaidDiagramView";
 import { TrainerSpinner } from "../common/TrainerSpinner";
 import { ShikiCodeBlock } from "./parts/ShikiCodeBlock";
+import {
+  renderMermaidDiagram,
+  resolveMermaidTheme,
+  type MermaidThemeName,
+} from "../../lib/mermaidDiagram";
 
 export interface MermaidBlockProps {
   chart: string;
@@ -10,47 +16,15 @@ export interface MermaidBlockProps {
   loadingLabel: string;
 }
 
-let mermaidReady = false;
-let mermaidTheme: "dark" | "default" | undefined;
-let mermaidModulePromise: Promise<typeof import("mermaid")> | undefined;
-
-async function loadMermaid() {
-  mermaidModulePromise ??= import("mermaid");
-  return mermaidModulePromise;
-}
-
-function resolveMermaidTheme(): "dark" | "default" {
-  const theme = document.documentElement.dataset.theme;
-  return theme === "light" ? "default" : "dark";
-}
-
-async function ensureMermaid() {
-  const nextTheme = resolveMermaidTheme();
-  const mermaid = (await loadMermaid()).default;
-  if (mermaidReady && mermaidTheme === nextTheme) {
-    return mermaid;
-  }
-
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: "strict",
-    theme: nextTheme,
-    flowchart: {
-      useMaxWidth: true,
-      htmlLabels: true,
-      nodeSpacing: 18,
-      rankSpacing: 20,
-    },
-  });
-  mermaidReady = true;
-  mermaidTheme = nextTheme;
-  return mermaid;
-}
-
+/**
+ * A Mermaid diagram in a coach reply. The chart is model output, so it is
+ * rendered, scrubbed and shadow-isolated by `lib/mermaidDiagram.ts`; a chart
+ * that cannot be rendered falls back to its source.
+ */
 export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: MermaidBlockProps) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [theme, setTheme] = useState<"dark" | "default">(() => resolveMermaidTheme());
+  const [theme, setTheme] = useState<MermaidThemeName>(() => resolveMermaidTheme());
   const elementId = useId().replace(/:/g, "-");
 
   useEffect(() => {
@@ -67,23 +41,20 @@ export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: 
   useEffect(() => {
     let cancelled = false;
 
-    async function renderChart() {
-      try {
-        const mermaid = await ensureMermaid();
-        const result = await mermaid.render(`trainer-mermaid-${elementId}`, chart);
+    void renderMermaidDiagram(chart, { elementId, theme }).then(
+      (markup) => {
         if (!cancelled) {
-          setSvg(result.svg);
+          setSvg(markup);
           setError("");
         }
-      } catch {
+      },
+      () => {
         if (!cancelled) {
           setSvg("");
           setError(errorLabel);
         }
-      }
-    }
-
-    void renderChart();
+      },
+    );
 
     return () => {
       cancelled = true;
@@ -99,19 +70,16 @@ export function MermaidBlock({ chart, summaryLabel, errorLabel, loadingLabel }: 
     );
   }
 
-  // Mermaid runs with securityLevel "strict" and escapes labels; its SVG
-  // <style>/style attributes are the diagram's theme. The model-HTML
-  // sanitizer would strip them and flatten the diagram.
   return (
     <div className="message-mermaid">
       <span className="message-mermaid__label eyebrow">{summaryLabel}</span>
-      <div className="message-mermaid__canvas">
-        {svg ? (
-          <div dangerouslySetInnerHTML={{ __html: svg }} />
-        ) : (
+      {svg ? (
+        <MermaidDiagramView svg={svg} className="message-mermaid__canvas" />
+      ) : (
+        <div className="message-mermaid__canvas">
           <TrainerSpinner size="sm" label={loadingLabel} />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

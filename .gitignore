@@ -66,6 +66,7 @@ server/.qdrant/
 
 # Packaged extension artifacts
 *.vsix
+*.vsix.build.json
 
 # AI tool local state / editor local config
 .opencode/
@@ -74,7 +75,8 @@ server/.qdrant/
 .workbuddy/
 .tmp/
 .tmp_restore/
-.vscode/
+.vscode/*
+!.vscode/launch.json
 tmp-*.png
 
 # Built platform binaries — produced per-target by CI release builds
@@ -104,6 +106,7 @@ server/.tmp_*
 docs/plans/
 ds*.jpg
 extension/test-results/
+extension/webview/test-results/
 scripts/gen_subimages.py
 
 # Local build lock and agent scratch plans

@@ -10,6 +10,7 @@ const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', 'webview',
 test('code and diagrams keep their library-generated styling', () => {
   const shiki = read('components', 'coach', 'parts', 'ShikiCodeBlock.tsx');
   const mermaid = read('components', 'coach', 'MermaidBlock.tsx');
+  const mermaidRenderer = read('lib', 'mermaidDiagram.ts');
 
   // Shiki inline token colors are the syntax highlight; the model-HTML
   // sanitizer strips style attributes, so trusted library output must bypass it.
@@ -19,7 +20,10 @@ test('code and diagrams keep their library-generated styling', () => {
   assert.match(shiki, /loadLanguage/);
   assert.doesNotMatch(shiki, /className\?: string/);
   assert.doesNotMatch(mermaid, /sanitizePreviewHtml/);
-  assert.match(mermaid, /securityLevel: "strict"/);
+  // Mermaid runs strict from its one owner; the diagram keeps its theme
+  // because it is rebuilt and shadow-isolated rather than HTML-sanitized.
+  assert.match(mermaidRenderer, /securityLevel: "strict"/);
+  assert.match(mermaidRenderer, /htmlLabels: true/);
   assert.match(shiki, /new MutationObserver/);
   assert.match(mermaid, /new MutationObserver/);
 });

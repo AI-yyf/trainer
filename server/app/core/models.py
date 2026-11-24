@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from hashlib import sha1
 from typing import Any, Literal
@@ -1451,14 +1452,100 @@ class TrainingPlanBinding(BaseModel):
     revision: int | None = Field(default=None, ge=0)
 
 
+_FILE_NOTE_OPEN_RE = re.compile(r"\s*[(（\[【{<]")
+_SENTENCE_PUNCTUATION_RE = re.compile(r"[，。；：！？、（）【】「」“”‘’;!?]")
+_TRAILING_FILE_NAME_RE = re.compile(r"(?<![\w/])([A-Za-z0-9_.+-]+\.[A-Za-z0-9]{1,12})$")
+
+
+def _looks_like_training_file_target(text: str) -> bool:
+    """A path, not a sentence.
+
+    A file target has no line break or sentence punctuation and carries a path
+    separator, a dotfile name, a file extension, or a bare ASCII file name. A
+    path may contain spaces ("My Project/app.py"); a bare name may not.
+    """
+    if not text or "\n" in text or len(text) > 260 or _SENTENCE_PUNCTUATION_RE.search(text):
+        return False
+    without_line = re.sub(r":\d+(?:-\d+)?$", "", text)
+    if re.search(r'[<>"|?*]', without_line):
+        return False
+    name = without_line.rsplit("/", 1)[-1]
+    if "/" in without_line:
+        # A real path may contain spaces, but not a CJK prose annotation
+        # after them ("src/app.py 的入口").
+        if re.search(r"[\u4e00-\u9fff]", without_line) and any(
+            character.isspace() for character in without_line
+        ):
+            return False
+        return True
+    if any(character.isspace() for character in without_line):
+        return False
+    if name.startswith(".") or re.search(r"\.[A-Za-z0-9]{1,12}$", name):
+        return True
+    return bool(re.fullmatch(r"[A-Za-z0-9_.+-]{1,64}", name))
+
+
 def _normalize_training_file_path(value: object) -> str:
-    """Normalize a card-authored file target without guessing a new file."""
+    """Normalize a card-authored file target without guessing a new file.
+
+    Model-authored cards sometimes wrap the target in prose: an appended note
+    (``foo.py（建议新建，具体路径由学习者选择）``), a leading sentence
+    (``新建 foo.py``) or plain prose with no file at all. Such an entry is not
+    a path: it was shown to learners as the target file, and it made host
+    verification refuse every real file because the artifact name never
+    matched the "target". Keep the file when there is one, drop the prose.
+    A ``<placeholder>`` is kept verbatim; downstream logic already treats it as
+    "no concrete file".
+    """
     text = str(value).strip()
     text = text.strip("`'\"")
     text = text.replace("\\", "/")
     while text.startswith("./"):
         text = text[2:]
-    return text.strip()
+    text = text.strip()
+    if not text or (text.startswith("<") and text.endswith(">")):
+        return text
+    note = _FILE_NOTE_OPEN_RE.search(text)
+    if note and note.start() > 0:
+        candidate = text[: note.start()].strip()
+        if _looks_like_training_file_target(candidate):
+            return candidate
+    if _looks_like_training_file_target(text):
+        return text
+    if any(character.isspace() for character in text):
+        head = re.split(r"\s+", text, maxsplit=1)[0]
+        if "/" in head and _looks_like_training_file_target(head):
+            return head
+        if "/" not in text:
+            trailing = _TRAILING_FILE_NAME_RE.search(text)
+            if trailing and _looks_like_training_file_target(trailing.group(1)):
+                return trailing.group(1)
+    return ""
+
+
+_ALTERNATIVE_SYMBOL_PAIR_RE = re.compile(
+    r"`([^`\n]+)`([^`\n]{0,60}?(?:或|\bor\b)[^`\n]{0,60}?)`([^`\n]+)`"
+)
+
+
+def _drop_alternative_expected_symbols(symbols: list[str], texts: list[object]) -> list[str]:
+    """A card that says "`torch.minimum`（或 `torch.min`）" means either one.
+
+    Model-authored cards list both spellings as expected symbols, and the
+    evaluator requires every listed symbol: a correct `torch.minimum`
+    implementation then failed on `torch.min`. When the card's own text
+    presents two symbols as alternatives, the second stops being required on
+    its own. Symbols the card never presents as alternatives are untouched.
+    """
+    alternatives: set[str] = set()
+    for text in texts:
+        for _first, _separator, second in _ALTERNATIVE_SYMBOL_PAIR_RE.findall(str(text or "")):
+            normalized = str(second).strip().strip("`").strip()
+            if normalized:
+                alternatives.add(normalized)
+    if not alternatives:
+        return list(symbols)
+    return [symbol for symbol in symbols if str(symbol).strip() not in alternatives]
 
 
 class TrainingCardCandidateSnapshot(BaseModel):
@@ -1565,6 +1652,19 @@ class TrainingCardCandidateSnapshot(BaseModel):
                 seen_files.add(normalized)
                 normalized_files.append(normalized)
         self.files_to_touch = normalized_files
+        self.expected_symbols = _drop_alternative_expected_symbols(
+            self.expected_symbols,
+            [
+                *self.acceptance_criteria,
+                *self.api_hints,
+                *self.learner_deliverables,
+                *self.grading_rubric,
+                *self.hint_ladder,
+                self.problem_statement,
+                self.deliverable,
+                self.validation_method,
+            ],
+        )
         if not self.source_chain:
             self.source_chain = ["card_generation_router"]
         try:

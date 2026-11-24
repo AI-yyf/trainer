@@ -3785,6 +3785,57 @@ test('setProviderThinkingCommand persists an explicit disabled intent without ev
   assert.equal(saved.requestDefaults.temperature, 0.4);
 });
 
+test('thinking intensity is stored per model and restored when switching back', async () => {
+  const { setProviderThinkingCommand, switchProviderModelCommand } = loadWithVscodeMock(
+    providerWebviewCommandsModulePath,
+    {},
+  );
+  const context = createThinkingTestContext({
+    name: 'Local Compatible',
+    protocol: 'openai_responses',
+    baseUrl: 'http://localhost:1234/v1',
+    apiKeyRef: 'trainer.default',
+    model: 'o3',
+    availableModels: ['o3', 'gpt-4o'],
+    catalogModels: ['o3', 'gpt-4o'],
+    capabilities: {
+      chat: true,
+      responses: true,
+      vision: false,
+      embeddings: false,
+      tools: false,
+      jsonSchema: false,
+      structuredOutput: false,
+      streaming: true,
+      thinking: true,
+    },
+    modelCapabilities: {
+      o3: {
+        chat: true, responses: true, vision: false, embeddings: false, tools: false,
+        jsonSchema: false, structuredOutput: false, streaming: true, thinking: true,
+      },
+      'gpt-4o': {
+        chat: true, responses: true, vision: false, embeddings: false, tools: false,
+        jsonSchema: false, structuredOutput: false, streaming: true, thinking: true,
+      },
+    },
+    requestDefaults: { temperature: 0.4 },
+  });
+
+  await setProviderThinkingCommand(context, { mode: 'enabled', reasoningEffort: 'high' });
+  await switchProviderModelCommand(context, { model: 'gpt-4o' });
+  await setProviderThinkingCommand(context, { mode: 'enabled', reasoningEffort: 'low' });
+  await switchProviderModelCommand(context, { model: 'o3' });
+
+  const final = context.__savedConfigs[context.__savedConfigs.length - 1];
+  assert.equal(final.model, 'o3');
+  assert.deepEqual(final.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
+  assert.deepEqual(final.modelThinkingConfig, {
+    o3: { mode: 'enabled', reasoningEffort: 'high' },
+    'gpt-4o': { mode: 'enabled', reasoningEffort: 'low' },
+  });
+});
+
 test('saveProviderFromWebviewCommand persists draft thinkingConfig and re-emits it once evidence exists', async () => {
   const { saveProviderFromWebviewCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
   const context = createThinkingTestContext({

@@ -82,7 +82,16 @@ test('dimension labels cover every registry key in all eight languages', () => {
 });
 
 test('literature labels match the subject profile data (zh/en/anchor languages)', () => {
-  const profilePath = path.resolve(__dirname, '..', '..', 'profiles', 'literature.profile.json');
+  const profilePath = path.resolve(
+    __dirname,
+    '..',
+    '..',
+    'server',
+    'app',
+    'training',
+    'profiles',
+    'literature.profile.json',
+  );
   const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
   const labels = profile.dimension_labels;
   for (const language of LANGUAGES) {

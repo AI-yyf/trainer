@@ -716,14 +716,15 @@ def build_plan_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
             current = runtime.repository.get_latest_plan(workspace_id)
         if not current:
             raise HTTPException(status_code=404, detail="No learning plan is available yet.")
-        # Formal UI/API saves must carry the revision observed by the caller.
-        # A zero-head compatibility seed is still accepted for internal
-        # initialization; once a revision exists, omission is rejected unless
-        # the caller explicitly labels legacy/migration mode.
+        # Every save of an already-versioned plan must carry the revision the
+        # caller observed. The flag alone used to decide this, so a caller that
+        # left it at its default could still overwrite another window's plan.
+        # Omission is only tolerated for a zero-head plan (nothing to lose yet)
+        # or when the caller explicitly labels a legacy/migration save.
         current_head_revision = head_plan_revision(workspace_id, current.id)
         if (
-            request.formal_plan_mutation
-            and request.expected_revision is None
+            request.expected_revision is None
+            and current_head_revision > 0
             and not explicit_legacy_plan_save(payload)
         ):
             raise HTTPException(

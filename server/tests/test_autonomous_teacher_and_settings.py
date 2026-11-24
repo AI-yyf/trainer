@@ -254,6 +254,62 @@ async def test_web_search_and_fetch_web_page_tools_honor_network_switch_and_arxi
     assert "Full abstract excerpt" in fetched["content"]
 
 
+@pytest.mark.asyncio
+async def test_blocking_tool_io_runs_off_the_event_loop(monkeypatch, tmp_path: Path) -> None:
+    """A slow walk or web request must not stall the sidecar's event loop."""
+    import os
+    import threading
+
+    import app.llm.tools as tools_module
+
+    registry = build_default_tool_registry()
+    project = tmp_path / "repo"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text("print('hi')\n", encoding="utf-8")
+
+    walk_threads: list[str] = []
+    real_walk = os.walk
+
+    def recording_walk(*args, **kwargs):
+        walk_threads.append(threading.current_thread().name)
+        return real_walk(*args, **kwargs)
+
+    monkeypatch.setattr(tools_module.os, "walk", recording_walk)
+    runtime = SimpleNamespace(
+        resolve_workspace_path=lambda _ws: str(project),
+        research_network_fetch_enabled=True,
+    )
+    context = ToolContext(runtime=runtime, workspace_id="ws-offload", extra={})
+
+    listed = await registry.invoke(context, "list_workspace_files", {"pattern": "**/*"})
+    assert listed["ok"] is True
+    assert "src/app.py" in {item["path"] for item in listed["items"]}
+
+    fetch_threads: list[str] = []
+
+    def fake_fetch(url: str, **_kwargs) -> ControlledFetchResponse:
+        fetch_threads.append(threading.current_thread().name)
+        return ControlledFetchResponse(
+            body=b"<html><body><div>no matches</div></body></html>",
+            final_url=url,
+            status=200,
+            headers={"content-type": "text/html"},
+            fetched_at="2026-11-22T10:00:00+00:00",
+        )
+
+    monkeypatch.setattr("app.research.web_search.fetch_url", fake_fetch)
+    searched = await registry.invoke(
+        context,
+        "web_search",
+        {"query": "trainer", "limit": 1, "fetch_excerpts": False},
+    )
+    assert searched["ok"] is True
+
+    main_thread = threading.main_thread().name
+    assert walk_threads and all(name != main_thread for name in walk_threads)
+    assert fetch_threads and all(name != main_thread for name in fetch_threads)
+
+
 def test_lesson_prep_phrases_unlock_lecture_save_without_breaking_plain_turns() -> None:
     assert message_requests_lecture_note_save("帮我自主备课并生成讲稿") is True
     assert message_requests_lecture_note_save("Please prepare a lesson plan for this module") is True
@@ -901,3 +957,54 @@ def test_minimax_and_compatible_custom_thinking_budget_preserved_and_stripped() 
     assert applied_disabled["extra_body"]["thinking"] == {"type": "disabled"}
     assert "reasoning_effort" not in applied_disabled
 
+
+
+@pytest.mark.asyncio
+async def test_slow_tool_io_keeps_the_event_loop_responsive(monkeypatch, tmp_path: Path) -> None:
+    """Thread identity is not enough: while a slow search or tree walk is in
+    flight the loop must keep scheduling other tasks."""
+    import asyncio
+    import time as time_module
+
+    import app.llm.tools as tools_module
+    from app.research.web_search import WebSearchClient
+
+    registry = build_default_tool_registry()
+    runtime = SimpleNamespace(
+        resolve_workspace_path=lambda _ws: str(tmp_path),
+        research_network_fetch_enabled=True,
+    )
+    context = ToolContext(runtime=runtime, workspace_id="ws-responsive-loop", extra={})
+
+    async def tick_fifty_times(inflight):
+        for _ in range(50):
+            await asyncio.sleep(0)
+        return not inflight.done()
+
+    def slow_search(self, query, limit=5):
+        time_module.sleep(0.5)
+        return [{"url": "https://example.com/slow", "title": "Slow", "snippet": "result"}]
+
+    monkeypatch.setattr(WebSearchClient, "search", slow_search)
+    search = asyncio.create_task(
+        registry.invoke(
+            context, "web_search", {"query": "slow probe", "limit": 1, "fetch_excerpts": False}
+        )
+    )
+    search_still_running = await tick_fifty_times(search)
+    searched = await asyncio.wait_for(search, timeout=10)
+    assert search_still_running is True, "the event loop was blocked while the search ran"
+    assert searched["ok"] is True
+
+    def slow_walk(root, search_root, pattern, *, max_depth, limit):
+        time_module.sleep(0.5)
+        return [], 0
+
+    monkeypatch.setattr(tools_module, "_walk_workspace_files", slow_walk)
+    listed = asyncio.create_task(
+        registry.invoke(context, "list_workspace_files", {"pattern": "**/*"})
+    )
+    walk_still_running = await tick_fifty_times(listed)
+    walked = await asyncio.wait_for(listed, timeout=10)
+    assert walk_still_running is True, "the event loop was blocked while the tree was walked"
+    assert walked["ok"] is True

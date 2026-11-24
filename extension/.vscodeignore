@@ -11,8 +11,16 @@ src/**
 webview/node_modules
 webview/node_modules/**
 webview/src/**
-webview/vscode-preview.html
-webview/browserSidecar-test.js
+# Development-only surfaces of the (shared) webview dist. These are the
+# paths the files really have: the two rules that used to sit here named them
+# one directory too high, so they never matched anything and both files shipped.
+# Not listed: webview/dist/browserSidecar-test.js. Despite its name it is the
+# lazy chunk of a production module (lib/browserSidecar) the workbench loads.
+webview/dist/vscode-preview.html
+webview/dist/assets/preview-*.js
+webview/dist/assets/browserPreviewHarness-*.js
+# Local evidence and scratch output never ships.
+output/**
 scripts/**
 tests/**
 tsconfig.json

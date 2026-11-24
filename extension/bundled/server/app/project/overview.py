@@ -32,6 +32,8 @@ from typing import Any
 
 from app.project.symbols import SOURCE_SUFFIXES, RepoIndex
 
+from ..core.process_env import child_process_environment
+
 MAX_EDGES = 400
 MAX_MERMAID_NODES = 24
 MAX_MERMAID_EDGES = 30
@@ -442,6 +444,7 @@ def evidence_git_snapshot(repo_root: str | Path) -> dict[str, Any]:
                 text=True,
                 timeout=15,
                 check=False,
+                env=child_process_environment(),
             )
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             return ""

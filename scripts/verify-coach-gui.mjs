@@ -670,8 +670,16 @@ try {
     await commandPalette(page, "Trainer: Open Coach Sidebar");
     await page.waitForTimeout(5000);
     const frame = await findFrame(page);
-    const coachTab = frame.locator("button, a").filter({ hasText: /^对话$/ }).first();
-    if (await coachTab.count()) await coachTab.click();
+    // Opening the sidebar restores the last destination. Select Chat by its
+    // stable test id so a previous Resources run cannot turn this coach gate
+    // into a Resources assertion.
+    const coachTab = frame.locator('[data-testid="trainer-view-nav-coach"]').first();
+    if (await coachTab.count()) {
+      await coachTab.click();
+    } else {
+      const fallbackCoachTab = frame.locator("button, a").filter({ hasText: /^对话$/ }).first();
+      if (await fallbackCoachTab.count()) await fallbackCoachTab.click();
+    }
     await page.waitForTimeout(800);
 
     const composer = frame.locator("#coach-composer").first();
@@ -1119,6 +1127,14 @@ try {
         await newChat.click();
         await page.waitForTimeout(700);
       }
+    }
+    // A host snapshot can restore the last destination after the new-session
+    // command. Re-select Chat before the immediate first send so the gate
+    // asserts the coach thread, not whatever destination was left open.
+    const freshCoachTab = frame.locator('[data-testid="trainer-view-nav-coach"]').first();
+    if (await freshCoachTab.count()) {
+      await freshCoachTab.click();
+      await page.waitForTimeout(300);
     }
     const freshComposer = frame.locator("#coach-composer").first();
     await freshComposer.fill("这是新会话的第一条消息：请给我一个最小练习。");

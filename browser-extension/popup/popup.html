@@ -8,10 +8,11 @@
   <body>
     <!--
       en-US fallback text only; popup.js localizes via the shared copy map.
-      Zero pairing UI: the extension discovers Trainer and connects itself.
-      The card is capture-only — no connection status, no import history —
-      and the badge carries the queued count. Words live in tooltips; the
-      card stays quiet like a menu.
+      The card connects itself: the extension discovers Trainer and pairs
+      automatically. Only a browser Trainer has not authorised yet sees the
+      one-time pairing-code form. The card is capture-only — no connection
+      status, no import history — and the badge carries the queued count.
+      Words live in tooltips; the card stays quiet like a menu.
     -->
 
     <svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0">
@@ -54,6 +55,35 @@
         <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-close"></use></svg>
         <span class="visually-hidden" data-copy="close">Close</span>
       </button>
+
+      <!--
+        Shown only while Trainer is running but has not authorised this browser
+        extension yet. It appears once per browser: the learner pastes the code
+        "Trainer: Show Browser Pairing Code" displays in VS Code, and every
+        later connection is automatic.
+      -->
+      <section id="pair-panel" class="panel" hidden>
+        <h1 class="card-title" data-copy="connectHeading"></h1>
+        <label class="sectionlabel" for="pair-code" data-copy="pairCodeLabel"></label>
+        <form id="pair-form" class="row">
+          <input
+            id="pair-code"
+            class="pair-code"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            autocomplete="one-time-code"
+            maxlength="6"
+            data-copy-placeholder="pairCodePlaceholder"
+          />
+          <button id="pair-submit" class="iconbtn iconbtn--solid" type="submit" data-copy-label="pairAction">
+            <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-plug"></use></svg>
+            <span class="visually-hidden" data-copy="pairAction">Pair</span>
+          </button>
+        </form>
+        <p id="pair-feedback" class="feedback" role="status" aria-live="polite"></p>
+        <p class="feedback" data-copy="pairCodeHint"></p>
+      </section>
 
       <section id="capture-panel" class="panel" hidden>
         <h1 class="card-title" data-copy="captureHeading"></h1>

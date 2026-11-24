@@ -6,9 +6,10 @@
  * imports a real DOCX, PPTX, PDF and Markdown note through the extension's
  * own `trainer.resource.upload` command (the same handler the webview's import
  * menu calls), then drives the installed webview with Playwright Electron:
- * verify the library lists every file, open a canonical Markdown and retained
- * binary originals in editor tabs, verify the artifacts on disk, and follow
- * two pinned Research Brief sources into their editor selections. Screenshots are written to
+ * verify the library lists every file, open a canonical Markdown in VS Code's
+ * Markdown preview tab, verify the canonical artifacts on disk, confirm there
+ * is no retained-original action, and follow two pinned Research Brief sources
+ * into their editor selections. Screenshots are written to
  * `output/canonical-gui/<stamp>/`.
  *
  * No provider is required: everything here is local library work.
@@ -663,43 +664,56 @@ try {
     throw new Error("The retired Reader detail page is still rendered.");
   }
 
-  // Proving the unified library item: a DOCX row opens its complete
-  // canonical Markdown in a real VS Code editor tab (front matter + body +
-  // table + image reference), never a Reader detail page.
+  // Proving the unified library item: a DOCX row opens its canonical Markdown
+  // in VS Code's Markdown preview tab (the product's default for `.md`
+  // resources), never a Reader detail page. The canonical file itself must
+  // carry the full front matter and body.
+  const canonicalMarkdownDir = path.join(
+    trainerWorkspaceDir,
+    "Trainer Library",
+    ".trainer-resources",
+    "markdown",
+  );
+  const docxMarkdownPath = fs.readdirSync(canonicalMarkdownDir)
+    .filter((name) => name.endsWith(".md"))
+    .map((name) => path.join(canonicalMarkdownDir, name))
+    .find((filePath) => /source_type:\s*docx/.test(fs.readFileSync(filePath, "utf8")));
+  const docxMarkdownText = docxMarkdownPath ? fs.readFileSync(docxMarkdownPath, "utf8") : "";
   const docxItem = frame.getByRole("treeitem", { name: "Distributed Systems Notes", exact: true });
   await docxItem.waitFor({ state: "visible", timeout: 15_000 });
   await docxItem.focus();
   await docxItem.press("Enter");
   await page.waitForTimeout(2500);
-  const editorText = await page.locator(".monaco-editor").innerText().catch(() => "");
   const tabs = await page.locator(".tab").allInnerTexts().catch(() => []);
   record("markdown-open", {
-    ok: /resource_id:/.test(editorText) && /source_type:\s*docx/.test(editorText),
+    ok:
+      Boolean(docxMarkdownPath) &&
+      /resource_id:/.test(docxMarkdownText) &&
+      /source_type:\s*docx/.test(docxMarkdownText) &&
+      tabs.some((tab) => /Preview resource-.*\.md/i.test(tab)),
     screenshot: await screenshot(page, "markdown-open-dark"),
-    editorHead: editorText.slice(0, 400),
+    canonicalPath: docxMarkdownPath,
+    editorHead: docxMarkdownText.slice(0, 400),
     tabs: tabs.slice(0, 8),
   });
   if ((await frame.locator("[data-template=ResourceReader]").count()) !== 0) {
     throw new Error("The retired Reader detail page is still rendered.");
   }
 
-  for (const { title, key } of readerChecks) {
-    const original = driverReport.originals.find((resource) => resource.title === title);
-    if (!original) throw new Error(`Missing retained original for ${title}`);
-    const originalPath = fs.realpathSync(path.resolve(workspaceDir, original.path));
-    await frame.getByRole("treeitem", { name: title, exact: true }).click({ button: "right" });
-    const menu = frame.locator(".resources-row-menu");
-    await menu.getByRole("menuitem", { name: /在 VS Code 中打开原始文件|Open original file in VS Code/ }).click();
-    let activeFileTab;
-    let matched = false;
-    const deadline = Date.now() + 8_000;
-    do {
-      ({ activeFileTab } = await readEditorState(page));
-      matched = Boolean(activeFileTab && fs.existsSync(activeFileTab) && fs.realpathSync(activeFileTab) === originalPath);
-    } while (!matched && Date.now() < deadline);
-    record(`original-in-editor-${key}`, {
-      ok: matched, title, activeFileTab, screenshot: await screenshot(page, `original-${key}`),
-    });
+  // Markdown-only library: the canonical document is the only artifact, so a
+  // retained-original action must not exist for any resource.
+  await docxItem.click({ button: "right" });
+  const docxMenu = frame.locator(".resources-row-menu");
+  await docxMenu.waitFor({ state: "visible", timeout: 10_000 });
+  const menuLabels = await docxMenu.getByRole("menuitem").allInnerTexts().catch(() => []);
+  record("no-original-action", {
+    ok: !menuLabels.some((label) => /原始文件|original file/i.test(label)),
+    labels: menuLabels,
+    retainedOriginals: driverReport.originals,
+  });
+  await page.keyboard.press("Escape");
+  if (!Array.isArray(driverReport.originals) || driverReport.originals.length !== 0) {
+    throw new Error("The Markdown-only library retained binary originals.");
   }
 
   const briefLibrary = frame.locator("[data-research-briefs]");
@@ -707,7 +721,7 @@ try {
   const brief = briefLibrary.locator(`[data-research-brief-id="${driverReport.brief.id}"]`);
   await brief.locator(":scope > summary").click();
   for (const pin of driverReport.brief.pins) {
-    const canonicalPath = fs.realpathSync(path.resolve(workspaceDir, pin.canonicalPath));
+    const canonicalPath = fs.realpathSync(path.resolve(trainerWorkspaceDir, pin.canonicalPath));
     const matches = fs.readFileSync(canonicalPath, "utf8").split(/\r?\n/u)
       .flatMap((line, index) => line.includes(pin.excerpt) ? [index + 1] : []);
     if (matches.length !== 1) throw new Error(`Expected one occurrence of citation: ${pin.title}`);
@@ -792,7 +806,7 @@ function copyTree(source, target) {
     else fs.copyFileSync(from, to);
   }
 }
-copyTree(path.join(workspaceDir, "Trainer Library", ".trainer-resources"), artifactDir);
+copyTree(path.join(trainerWorkspaceDir, "Trainer Library", ".trainer-resources"), artifactDir);
 
 function readCanonicalArtifacts(dir) {
   const texts = [];

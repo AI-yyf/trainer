@@ -50,7 +50,8 @@ test('composer model switch prioritizes live models and excludes configured alia
   assert.match(source, /buildComposerProviderMenuItems\(data\.providerConfig, layout\.composerLanguage\)/);
   assert.match(source, /commandId:\s*trainerCommands\.switchProviderModel/);
   assert.match(source, /reason:\s*"composer_model_switch"/);
-  assert.match(source, /profile\.selectionKind === "profile"/);
+  assert.match(source, /profileId: normalizedProfileId/);
+  assert.match(source, /switchComposerProviderModelForProfile/);
 });
 
 test('composer model switch keeps current provider models visible even when saved profiles exist', () => {
@@ -103,18 +104,18 @@ test('Coach composer keeps model selection focused while setup stays in Settings
   assert.match(source, /menuItems=\{composerProviderMenuItems\}/);
   assert.match(source, /filteredMenuItems=\{filteredComposerProviderMenuItems\}/);
   assert.match(source, /onSwitchModel=\{switchComposerProviderModel\}/);
-  assert.match(source, /onSwitchProfile=\{switchComposerProviderProfile\}/);
+  assert.match(source, /onSwitchProviderModel=\{switchComposerProviderModelForProfile\}/);
   assert.match(source, /onThinkingChange=\{setComposerThinking\}/);
   assert.match(source, /initialOptionLimit=\{COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT\}/);
   assert.match(source, /id: "model-switch",/);
   assert.match(source, /label: composerContextUsage\.used[\s\S]*?: composerModelButtonDisplayLabel,/);
   assert.match(source, /onClick: toggleComposerModelMenu,/);
   assert.match(source, /onClick=\{\(\) => onSwitchModel\(profile\.model\)\}/);
-  assert.match(source, /onClick=\{\(\) => onSwitchProfile\(profile\.id\)\}/);
+  assert.match(source, /onClick=\{\(\) => onSwitchProviderModel\(group\.id, model\)\}/);
   assert.match(source, /const hasModelQuery = modelQuery\.trim\(\)\.length > 0;/);
   assert.match(
     source,
-    /const visibleModels = visibleSelections\.filter\(\s*\(profile\) => profile\.selectionKind === "model",\s*\);/,
+    /const visibleModels = filteredMenuItems\.filter\(\s*\(profile\) => profile\.selectionKind === "model",\s*\);/,
   );
   assert.match(source, /const defaultVisibleModels = menuItems/);
   assert.match(source, /const COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT = 6;/);
@@ -127,24 +128,29 @@ test('Coach composer keeps model selection focused while setup stays in Settings
     source,
     /\(item\) => item\.selectionKind === "model" && !item\.isActive,/,
   );
-  assert.match(source, /const showSearch = nonActiveModelCount > initialOptionLimit;/);
+  assert.match(source, /className="composer-model-menu__search"/);
   assert.match(source, /const activeModelItem = menuItems\.find\(/);
   assert.match(source, /const hasOnlyCurrentModel =/);
   assert.match(
     source,
-    /Boolean\(activeModelItem\) && nonActiveModelCount === 0 && savedProfiles\.length === 0/,
+    /Boolean\(activeModelItem\) &&\s*nonActiveModelCount === 0 &&\s*otherProviderGroups\.length === 0/,
   );
   assert.match(source, /const showModelSection =/);
-  assert.match(source, /hasModelQuery \|\| defaultVisibleModels\.length > 0 \|\| hasOnlyCurrentModel/);
+  assert.match(source, /defaultVisibleModels\.length > 0 \|\|/);
   assert.match(source, /providerCopy\.modelPicker\.onlyCurrentModel/);
   assert.match(source, /providerCopy\.modelPicker\.currentModel/);
-  assert.match(source, /\{showSearch \|\| hasModelQuery \? \(/);
+  assert.match(source, /<label className="composer-model-menu__search">/);
   assert.match(source, /localize\(composerLanguage, "刷新模型"\)/);
   assert.match(source, /\{showModelSection \? \(/);
   assert.doesNotMatch(source, /searchMoreModelsHint/);
-  assert.match(source, /!hasModelQuery && savedProfiles\.length > 0/);
-  assert.match(source, /<details className="composer-provider-group">/);
-  assert.doesNotMatch(source, /<div className="composer-provider-summary">/);
+  // Multiple saved providers each become their own model group; selecting a
+  // row carries the profile half of {profileId, modelId} to the host.
+  assert.match(source, /const otherProviderGroups = providerRecords\.flatMap/);
+  assert.match(source, /Array\.isArray\(providerConfig\.providerProfiles\)/);
+  assert.match(source, /const visibleOtherGroups = otherProviderGroups/);
+  assert.match(source, /visibleOtherGroups\.map\(\(group\) => \(/);
+  assert.match(source, /composer-model-menu__provider-group/);
+  assert.doesNotMatch(source, /composer-provider-summary/);
   assert.match(source, /const modelDisabled = profile\.isActive \|\| profile\.isSelectable === false;/);
   assert.match(source, /disabled=\{modelDisabled\}/);
   assert.match(source, /\[modelContextHint, policyHint\]\.filter\(Boolean\)\.join\(" · "\)/);

@@ -269,5 +269,116 @@ class TestCardGenerationStreamRetry(unittest.TestCase):
         self.assertEqual(provider.stream_calls, 1)
 
 
+class _GatewayError(RuntimeError):
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"gateway status {status_code}")
+        self.status_code = status_code
+
+
+def _provider_wrapped(status_code: int) -> RuntimeError:
+    """Mirror ProviderService.chat_completion: a plain RuntimeError caused by
+    the native transport error that carries the HTTP status."""
+    try:
+        try:
+            raise _GatewayError(status_code)
+        except _GatewayError as cause:
+            raise RuntimeError(f"Provider request failed (HTTP {status_code}).") from cause
+    except RuntimeError as wrapped:
+        return wrapped
+
+
+class TestProviderTransportFailureClassification(unittest.TestCase):
+    """A provider outage is not a model-content rejection."""
+
+    def test_upstream_5xx_is_reported_as_unavailable_and_retryable(self) -> None:
+        ledger = EventLedgerService()
+        provider = _ScriptedProvider([_provider_wrapped(502), _provider_wrapped(502)])
+        service = CardGenerationService(provider_service=provider, event_ledger=ledger)
+
+        with self.assertRaises(CardGenerationProviderFailure) as raised:
+            service.generate_card("conversation_gap", _ctx(focus_area="async patterns"))
+
+        failure = raised.exception
+        self.assertEqual(failure.reason, "provider_unavailable")
+        self.assertTrue(failure.retryable)
+        self.assertIn("temporarily unavailable", failure.detail)
+        self.assertNotIn("not accepted", failure.detail)
+        failures = ledger.query(
+            event_type="card_generation_failed",
+            project_id="ws-retry",
+        )
+        self.assertEqual(failures[0].payload_ref["reason"], "provider_unavailable")
+
+    def test_quota_exhaustion_is_not_reported_as_retryable(self) -> None:
+        provider = _ScriptedProvider([_provider_wrapped(402), _provider_wrapped(402)])
+        service = CardGenerationService(provider_service=provider)
+
+        with self.assertRaises(CardGenerationProviderFailure) as raised:
+            service.generate_card("conversation_gap", _ctx(focus_area="async patterns"))
+
+        failure = raised.exception
+        self.assertEqual(failure.reason, "provider_quota_exhausted")
+        self.assertFalse(failure.retryable)
+        self.assertIn("quota", failure.detail)
+
+    def test_rate_limit_shaped_quota_is_classified_as_quota(self) -> None:
+        # Some gateways report an exhausted account as HTTP 429. Retrying is
+        # pointless, so it must not be reported as a temporary outage.
+        def quota_429() -> RuntimeError:
+            try:
+                try:
+                    error = _GatewayError(429)
+                    error.body = {"error": {"code": "insufficient_quota"}}
+                    raise error
+                except _GatewayError as cause:
+                    raise RuntimeError("Provider request failed (HTTP 429).") from cause
+            except RuntimeError as wrapped:
+                return wrapped
+
+        provider = _ScriptedProvider([quota_429(), quota_429()])
+        service = CardGenerationService(provider_service=provider)
+        with self.assertRaises(CardGenerationProviderFailure) as raised:
+            service.generate_card("conversation_gap", _ctx(focus_area="async patterns"))
+
+        self.assertEqual(raised.exception.reason, "provider_quota_exhausted")
+        self.assertFalse(raised.exception.retryable)
+
+    def test_route_maps_each_failure_cause_to_its_own_status(self) -> None:
+        from app.api.routes.core import _card_generation_failure_response
+
+        outage = _card_generation_failure_response(
+            CardGenerationProviderFailure("provider_unavailable", response_language="en-US")
+        )
+        assert outage.status_code == 503
+        assert (outage.headers or {}).get("Retry-After") == "5"
+
+        quota = _card_generation_failure_response(
+            CardGenerationProviderFailure("provider_quota_exhausted", response_language="en-US")
+        )
+        assert quota.status_code == 402
+
+        rejected = _card_generation_failure_response(
+            CardGenerationProviderFailure("invalid_card", response_language="en-US")
+        )
+        assert rejected.status_code == 400
+
+    def test_stalled_provider_times_out_as_unavailable(self) -> None:
+        class _StalledProvider:
+            async def chat_completion(self, *args: object, **kwargs: object) -> str:
+                await asyncio.sleep(30)
+                return ""
+
+        service = CardGenerationService(provider_service=_StalledProvider())
+        with mock.patch(
+            "app.training.card_generator._CARD_GENERATION_ATTEMPT_TIMEOUT_SECONDS",
+            0.05,
+        ):
+            with self.assertRaises(CardGenerationProviderFailure) as raised:
+                service.generate_card("conversation_gap", _ctx(focus_area="async patterns"))
+
+        self.assertEqual(raised.exception.reason, "provider_unavailable")
+        self.assertTrue(raised.exception.retryable)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

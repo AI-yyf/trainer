@@ -48,6 +48,15 @@ jobs:
       - name: Product version gate
         run: npm run verify:version
 
+      - name: Plaintext credential gate
+        run: npm run verify:credentials
+
+      - name: i18n completeness gate
+        run: npm run verify:i18n
+
+      - name: Copy vocabulary gate
+        run: npm run verify:copy-vocabulary
+
       - name: Pyright (server)
         working-directory: server
         run: .venv/bin/python -m pyright app

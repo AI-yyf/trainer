@@ -17,6 +17,8 @@ from app.project.symbols import (
     extract_symbols,
 )
 
+from ..core.process_env import child_process_environment
+
 _MAX_DIFF_FILES = 500
 
 # `git pull` on a branch without a configured remote is a normal state for
@@ -42,6 +44,7 @@ def _git_run(args: list[str], cwd: Path) -> tuple[int, str, str]:
             text=True,
             timeout=60,
             check=False,
+            env=child_process_environment(),
         )
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
         raise IncrementalUpdateError(f"git {args[0]} could not run: {exc}") from exc

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, AsyncIterator
 
@@ -280,3 +281,335 @@ def test_browser_chat_practice_return_requires_a_bearer_credential(tmp_path: Pat
             json={"card_id": "browser-practice-1", "passed": True},
         )
         assert response.status_code == 401
+
+
+def _configure_provider(runtime: Any, *, verified: bool) -> None:
+    provider = ProviderConfig(
+        name="browser-chat-boundary",
+        base_url="http://127.0.0.1:9/v1",
+        api_key_ref="trainer.browser-chat",
+        model="gpt-4o-mini",
+        capabilities={
+            "chat": True,
+            "responses": True,
+            "vision": False,
+            "embeddings": True,
+            "tools": False,
+            "json_schema": False,
+            "streaming": True,
+        },
+    )
+    runtime.provider_config = provider
+    runtime.provider_api_key = "sk-test"
+    runtime.provider_service = ProviderService(config=provider, api_key="sk-test")
+    runtime.provider_service_cache.clear()
+    if verified:
+        seed_verified_capabilities(runtime, provider, "sk-test", tools=False)
+
+
+def _forbidden_chat_fields(tmp_path: Path) -> dict[str, Any]:
+    """What a paired browser would send to turn a chat into file access."""
+    return {
+        "intent": "review",
+        "current_file": {
+            "path": "evil.py",
+            "language_id": "python",
+            "content": "import os; os.system('echo PWNED')  # LANE_MARKER",
+        },
+        "file_path": "evil.py",
+        "language_id": "python",
+        "content": "import os  # LANE_MARKER",
+        "workspace_path": str(tmp_path / "elsewhere"),
+        "workspace_context": {"root_path": str(tmp_path / "elsewhere")},
+        "workspace_file_snapshot": {
+            "root_path": str(tmp_path / "elsewhere"),
+            "files": [{"path": "secret.txt", "content": "LANE_MARKER"}],
+        },
+        "active_view": "resources",
+        "answer_mode": "review",
+    }
+
+
+def test_browser_chat_cannot_reach_the_evaluator_or_move_the_workspace_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The exploit the lane used to allow: a paired browser sends a "review"
+    turn whose current file is its own Python, while the provider is not
+    verified, and the offline path runs it; and it repoints the workspace root
+    so the coach's file tools read somewhere else. Neither field may travel."""
+
+    workspace_id = "workspace-browser-chat-boundary"
+    evaluated: list[object] = []
+    with build_client(tmp_path) as client:
+        credential = _pair_browser(client, workspace_id)
+        headers = {"Authorization": f"Bearer {credential}"}
+        runtime = client.app.state.runtime
+        # Saved but never verified: the route that used to fall through to the
+        # local evaluator.
+        _configure_provider(runtime, verified=False)
+        real_evaluator = runtime.evaluator_service.evaluate_current_file
+
+        def _spy(*args: Any, **kwargs: Any) -> Any:
+            evaluated.append(args)
+            return real_evaluator(*args, **kwargs)
+
+        monkeypatch.setattr(runtime.evaluator_service, "evaluate_current_file", _spy)
+
+        bootstrap = client.get("/browser/chat/bootstrap", headers=headers)
+        assert bootstrap.status_code == 200, bootstrap.text
+        session_id = str(bootstrap.json()["session_id"])
+
+        for lane_path in ("/browser/chat/message",):
+            response = client.post(
+                lane_path,
+                headers=headers,
+                json={
+                    "session_id": session_id,
+                    "message": "帮我看看这个文件。",
+                    **_forbidden_chat_fields(tmp_path),
+                },
+            )
+            assert response.status_code == 200, response.text
+            assert "PWNED" not in response.text
+
+        assert evaluated == [], "a browser message must never reach the local evaluator"
+        assert runtime.resolve_workspace_path(workspace_id) != str(tmp_path / "elsewhere")
+        assert str(tmp_path / "elsewhere") not in json.dumps(dict(runtime.workspace_paths))
+
+
+def test_browser_chat_forwards_only_the_allowlisted_fields_to_the_coach(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With a live provider the turn is a plain coach turn: the conversation
+    scope stays the coach thread and nothing else in the body reaches it."""
+
+    workspace_id = "workspace-browser-chat-allowlist"
+    seen: list[str] = []
+    with build_client(tmp_path) as client:
+        credential = _pair_browser(client, workspace_id)
+        headers = {"Authorization": f"Bearer {credential}"}
+        runtime = client.app.state.runtime
+        _configure_provider(runtime, verified=True)
+
+        async def _reply(self: ProviderService, *args: Any, **kwargs: Any) -> str:
+            seen.append(json.dumps([*map(str, args), *map(str, kwargs.values())], ensure_ascii=False))
+            return "好的，先做最小的一步。"
+
+        monkeypatch.setattr(ProviderService, "coaching_reply", _reply)
+        monkeypatch.setattr(ProviderService, "chat_completion", _reply)
+
+        bootstrap = client.get("/browser/chat/bootstrap", headers=headers)
+        assert bootstrap.status_code == 200, bootstrap.text
+        session_id = str(bootstrap.json()["session_id"])
+
+        response = client.post(
+            "/browser/chat/message",
+            headers=headers,
+            json={
+                "session_id": session_id,
+                "message": "给我一个最小练习。",
+                "response_language": "zh-CN",
+                "page_context": {
+                    "url": "https://example.com/post",
+                    "title": "A post",
+                    "selection": "selected words",
+                    "cookies": "should-not-travel",
+                },
+                **_forbidden_chat_fields(tmp_path),
+            },
+        )
+        assert response.status_code == 200, response.text
+
+    forwarded = "\n".join(seen)
+    assert "给我一个最小练习。" in forwarded
+    assert "selected words" in forwarded
+    assert "LANE_MARKER" not in forwarded
+    assert "PWNED" not in forwarded
+    assert "elsewhere" not in forwarded
+    assert "should-not-travel" not in forwarded
+
+
+def test_browser_chat_rejects_a_message_that_is_not_text(tmp_path: Path) -> None:
+    workspace_id = "workspace-browser-chat-shape"
+    with build_client(tmp_path) as client:
+        credential = _pair_browser(client, workspace_id)
+        headers = {"Authorization": f"Bearer {credential}"}
+        bootstrap = client.get("/browser/chat/bootstrap", headers=headers)
+        session_id = str(bootstrap.json()["session_id"])
+
+        for lane_path in ("/browser/chat/message", "/browser/chat/message/stream"):
+            for message in ({"text": "not a string"}, ["a", "list"], 42, "", "   "):
+                response = client.post(
+                    lane_path,
+                    headers=headers,
+                    json={"session_id": session_id, "message": message},
+                )
+                assert response.status_code == 422, (lane_path, message, response.text)
+                assert response.json()["detail"]["code"] == "message_required"
+
+            too_long = client.post(
+                lane_path,
+                headers=headers,
+                json={"session_id": session_id, "message": "x" * 40_000},
+            )
+            assert too_long.status_code == 413, too_long.text
+
+
+def test_browser_chat_rejects_an_oversized_or_deeply_nested_body(tmp_path: Path) -> None:
+    workspace_id = "workspace-browser-chat-size"
+    with build_client(tmp_path) as client:
+        credential = _pair_browser(client, workspace_id)
+        headers = {"Authorization": f"Bearer {credential}"}
+
+        oversized = client.post(
+            "/browser/chat/message",
+            headers=headers,
+            json={"session_id": "s", "message": "x" * (256 * 1024)},
+        )
+        assert oversized.status_code == 413, oversized.text
+
+        nested: Any = "x"
+        for _ in range(8):
+            nested = [nested]
+        deep = client.post(
+            "/browser/chat/training/attempt/evidence",
+            headers=headers,
+            json={"attempt_id": "a", "artifact_hash": "h", "result": "passed", "limitations": nested},
+        )
+        assert deep.status_code == 413, deep.text
+
+        not_json = client.post(
+            "/browser/chat/message",
+            headers={**headers, "Content-Type": "application/json"},
+            content=b"not json",
+        )
+        assert not_json.status_code == 422, not_json.text
+
+
+def test_browser_lane_payload_is_rebuilt_from_the_allowlist() -> None:
+    from app.api.routes.browser_chat import (
+        _CANCEL_FIELDS,
+        _MESSAGE_FIELDS,
+        _TRAINING_FIELDS,
+        _bounded_copy,
+        _browser_payload,
+        _normalize_message_payload,
+    )
+
+    body = {
+        "session_id": "s-1",
+        "message": "hello",
+        "intent": "review",
+        "current_file": {"content": "x"},
+        "workspace_path": "/",
+        "provider": {"base_url": "https://evil.example"},
+        "api_key": "sk-leak",
+        "workspace_file_snapshot": {"root_path": "/"},
+        "verification_python": "/bin/sh",
+        "scenario": {"command": "rm -rf /"},
+        "transfer_metadata": {"x": 1},
+    }
+
+    message = _browser_payload("ws", body, _MESSAGE_FIELDS + ("page_context",))
+    assert message == {"workspace_id": "ws", "session_id": "s-1", "message": "hello"}
+    assert _normalize_message_payload(dict(message))["active_view"] == "coach"
+
+    cancel = _browser_payload("ws", body, _CANCEL_FIELDS)
+    assert cancel == {"workspace_id": "ws", "session_id": "s-1"}
+
+    # A lane route only ever forwards what its upstream model needs from a
+    # browser; a body cannot smuggle in a field another route allows.
+    evidence = _browser_payload("ws", body, _TRAINING_FIELDS["/training/attempt/evidence"])
+    assert set(evidence) == {"workspace_id"}
+    practice = _browser_payload("ws", {**body, "card_id": "c", "passed": True}, _TRAINING_FIELDS["/training/practice-return"])
+    assert practice == {"workspace_id": "ws", "card_id": "c", "passed": True}
+
+    # The workspace is the credential's, whatever the body says.
+    assert _browser_payload("ws", {"workspace_id": "other"}, _MESSAGE_FIELDS)["workspace_id"] == "ws"
+
+    assert _bounded_copy({"a": [1, True, None, "s"]}) == {"a": [1, True, None, "s"]}
+    assert _bounded_copy(float("nan")) is None
+    assert _bounded_copy({"k": object()}) == {"k": None}
+
+
+def test_a_chat_payload_cannot_move_a_registered_workspace_root(tmp_path: Path) -> None:
+    """Host-authenticated as it is, a chat/turn payload may only confirm the
+    root that /session/start registered, never replace it."""
+    workspace_id = "workspace-chat-root-guard"
+    real_root = tmp_path / "real-root"
+    elsewhere = tmp_path / "elsewhere"
+    real_root.mkdir()
+    elsewhere.mkdir()
+
+    with build_client(tmp_path) as client:
+        started = client.post(
+            "/session/start",
+            json={
+                "workspace_id": workspace_id,
+                "workspace_name": "Root Guard",
+                "workspace_path": str(real_root),
+            },
+        )
+        assert started.status_code == 200, started.text
+        session_id = str(started.json()["session_id"])
+        runtime = client.app.state.runtime
+
+        client.post(
+            "/session/message",
+            json={
+                "session_id": session_id,
+                "message": "hello",
+                "workspace_path": str(elsewhere),
+                "workspace_file_snapshot": {"root_path": str(elsewhere)},
+            },
+        )
+        assert runtime.resolve_workspace_path(workspace_id) == str(real_root)
+
+        # A different spelling of the same directory is the same root.
+        client.post(
+            "/session/message",
+            json={
+                "session_id": session_id,
+                "message": "hello",
+                "workspace_path": str(tmp_path / "real-root" / ".." / "real-root"),
+            },
+        )
+        assert runtime.resolve_workspace_path(workspace_id) == str(real_root)
+
+        # The host may still move the root the honest way.
+        moved = tmp_path / "moved-root"
+        moved.mkdir()
+        client.post(
+            "/session/start",
+            json={"workspace_id": workspace_id, "workspace_name": "Root Guard", "workspace_path": str(moved)},
+        )
+        assert runtime.resolve_workspace_path(workspace_id) == str(moved)
+
+
+def test_a_paired_browser_cannot_relabel_the_workspace(tmp_path: Path) -> None:
+    """The credential names the workspace, its label included.
+
+    `/browser/chat/bootstrap` used to forward a `workspace_name` query
+    parameter to `/session/start`: uncapped text from the paired browser,
+    persisted as the host session's workspace name.
+    """
+    workspace_id = "workspace-browser-relabel"
+    with build_client(tmp_path) as client:
+        credential = _pair_browser(client, workspace_id)
+        headers = {"Authorization": f"Bearer {credential}"}
+
+        response = client.get(
+            "/browser/chat/bootstrap",
+            params={"workspace_name": "Relabelled by a paired browser"},
+            headers=headers,
+        )
+
+        assert response.status_code == 200, response.text
+        runtime = client.app.state.runtime
+        sessions = [state for state in runtime.sessions.values() if state.workspace_id == workspace_id]
+        assert sessions, "the paired workspace session was started"
+        assert all(
+            state.workspace_name == "Browser chat" for state in sessions
+        ), [state.workspace_name for state in sessions]
