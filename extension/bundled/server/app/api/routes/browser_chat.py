@@ -18,6 +18,7 @@ narrow, bearer-authenticated proxy:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -344,7 +345,7 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
         credential = _require_browser_credential(runtime, request)
         body = await _read_json_object(request)
         payload = _normalize_message_payload(
-            _browser_payload(credential.workspace_id, body, _MESSAGE_FIELDS + ("page_context",))
+            _browser_payload(credential.workspace_id, body, _MESSAGE_FIELDS + ("page_context", "pageContext"))
         )
         context = _page_context_text(payload)
         if context:
@@ -362,47 +363,113 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
         credential = _require_browser_credential(runtime, request)
         body = await _read_json_object(request)
         payload = _normalize_message_payload(
-            _browser_payload(credential.workspace_id, body, _MESSAGE_FIELDS + ("page_context",))
+            _browser_payload(credential.workspace_id, body, _MESSAGE_FIELDS + ("page_context", "pageContext"))
         )
         payload["stream"] = True
         context = _page_context_text(payload)
         if context:
             payload["message"] = f"{payload['message'].strip()}\n\n{context}".strip()
 
-        headers: dict[str, str] = {"accept": "text/event-stream"}
+        raw_body = json.dumps(payload).encode("utf-8")
+        asgi_headers: list[tuple[bytes, bytes]] = [
+            (b"content-type", b"application/json"),
+            (b"accept", b"text/event-stream"),
+            (b"content-length", str(len(raw_body)).encode("ascii")),
+        ]
         token = _sidecar_token(request)
         if token:
-            headers["x-trainer-token"] = token
+            asgi_headers.append((b"x-trainer-token", token.encode("utf-8")))
 
-        client = httpx.AsyncClient(
-            transport=_transport(request),
-            base_url="http://trainer-browser-chat",
-        )
-        upstream = await client.send(
-            client.build_request(
-                "POST",
-                "/session/message/stream",
-                json=payload,
-                headers=headers,
-            ),
-            stream=True,
-        )
-        if upstream.status_code >= 400:
-            content = await upstream.aread()
-            await client.aclose()
+        scope: dict[str, Any] = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": request.scope.get("scheme", "http"),
+            "path": "/session/message/stream",
+            "raw_path": b"/session/message/stream",
+            "query_string": b"",
+            "headers": asgi_headers,
+            "client": request.scope.get("client"),
+            "server": request.scope.get("server"),
+        }
+
+        queue: asyncio.Queue[dict[str, Any] | Exception | None] = asyncio.Queue()
+        disconnect_event = asyncio.Event()
+        body_sent = False
+
+        async def receive() -> dict[str, Any]:
+            nonlocal body_sent
+            if not body_sent:
+                body_sent = True
+                return {"type": "http.request", "body": raw_body, "more_body": False}
+            await disconnect_event.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message: dict[str, Any]) -> None:
+            await queue.put(message)
+
+        async def run_upstream() -> None:
             try:
-                detail = content.decode("utf-8", errors="replace")
-            except Exception:
-                detail = "Browser chat stream failed."
-            return JSONResponse({"detail": detail}, status_code=upstream.status_code)
+                await request.app(scope, receive, send)
+            except Exception as exc:  # noqa: BLE001
+                await queue.put(exc)
+            finally:
+                await queue.put(None)
+
+        upstream_task = asyncio.create_task(run_upstream())
+
+        status_code = 500
+        first = await queue.get()
+        if isinstance(first, Exception):
+            upstream_task.cancel()
+            return JSONResponse({"detail": "Browser chat stream failed."}, status_code=500)
+        if isinstance(first, dict) and first.get("type") == "http.response.start":
+            status_code = int(first.get("status", 200))
+        elif first is None:
+            return JSONResponse({"detail": "Browser chat stream ended unexpectedly."}, status_code=502)
+
+        if status_code >= 400:
+            error_chunks: list[bytes] = []
+            try:
+                while True:
+                    item = await queue.get()
+                    if item is None or isinstance(item, Exception):
+                        break
+                    if item.get("type") == "http.response.body":
+                        chunk = item.get("body") or b""
+                        if chunk:
+                            error_chunks.append(bytes(chunk))
+                        if not item.get("more_body", False):
+                            break
+            finally:
+                disconnect_event.set()
+                upstream_task.cancel()
+            detail = b"".join(error_chunks).decode("utf-8", errors="replace") or "Browser chat stream failed."
+            return JSONResponse({"detail": detail}, status_code=status_code)
 
         async def body_stream():
             try:
-                async for chunk in upstream.aiter_raw():
-                    yield chunk
+                while True:
+                    item = await queue.get()
+                    if item is None:
+                        break
+                    if isinstance(item, Exception):
+                        raise item
+                    if item.get("type") == "http.response.body":
+                        chunk = item.get("body") or b""
+                        if chunk:
+                            yield bytes(chunk)
+                        if not item.get("more_body", False):
+                            break
             finally:
-                await upstream.aclose()
-                await client.aclose()
+                disconnect_event.set()
+                if not upstream_task.done():
+                    upstream_task.cancel()
+                    try:
+                        await upstream_task
+                    except BaseException:
+                        pass
 
         return StreamingResponse(
             body_stream(),

@@ -20,7 +20,9 @@ import {
   applyDerivedHostState,
   createDefaultBootstrapData,
   patchHostState,
+  toLiveContext,
 } from './core/workbenchData';
+import { providerBaseUrlIsLocalService } from '../../shared/src/providerStatus';
 import { WorkspaceTrustGuard } from './core/workspaceTrust';
 import { TrainerWorkspaceService } from './core/trainerWorkspaceService';
 import { resolveTrainerWorkspaceAdmission, resolveTrainerProjectsList } from './core/trainerWorkspaceAdmission';
@@ -90,13 +92,17 @@ export async function activate(
     initialWorkspace,
   );
   sidecarClient.setTrainerAdmissionMode(initialTrainerWorkspaceAdmission?.status);
+  const persistedInitialSessionId = getPersistedWorkspaceSessionId(
+    extensionContext,
+    initialWorkspace.workspaceFolder,
+  );
   let hostState: TrainerHostState = withTrainerWorkspaceSnapshot(
     {
       provider: providerStore.getConfig(),
       providerApiKeyConfigured: false,
       sidecar: sidecarManager.getStatus(),
       workspace: initialWorkspace,
-      sessionId: undefined,
+      sessionId: persistedInitialSessionId,
       streamingState: createEmptyTrainerStreamingState(),
       bootstrap: createDefaultBootstrapData(
         initialWorkspace,
@@ -164,6 +170,15 @@ export async function activate(
           ...cacheEntry.bootstrap,
           connection: hostState.bootstrap.connection,
           streamingState: hostState.bootstrap.streamingState,
+          memory: {
+            ...cacheEntry.bootstrap.memory,
+            workspace: {
+              ...(cacheEntry.bootstrap.memory?.workspace ?? {}),
+              trainerWorkspace: hostState.bootstrap.memory?.workspace?.trainerWorkspace,
+              trainerProjects: hostState.bootstrap.memory?.workspace?.trainerProjects,
+              resourceSandbox: hostState.bootstrap.memory?.workspace?.resourceSandbox,
+            },
+          },
         },
       };
       outputChannel.appendLine('[activation] seeded cached bootstrap (stale-while-revalidate)');
@@ -249,7 +264,7 @@ export async function activate(
       Boolean(apiKey?.trim()),
     );
 
-    if (!provider || !apiKey?.trim()) {
+    if (!provider || (!apiKey?.trim() && !providerBaseUrlIsLocalService(provider.baseUrl))) {
       hostState = {
         ...hostState,
         bootstrap: {
@@ -477,17 +492,47 @@ export async function activate(
     }),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       trustGuard.rememberActiveEditor(editor);
-      scheduleSyncLiveContext(workbench);
+      scheduleSyncLiveContext(() => {
+        const nextWorkspace = trustGuard.getSnapshot();
+        hostState = {
+          ...hostState,
+          workspace: nextWorkspace,
+          bootstrap: {
+            ...hostState.bootstrap,
+            liveContext: toLiveContext(nextWorkspace),
+          },
+        };
+      }, workbench);
     }),
     vscode.window.onDidChangeTextEditorSelection(() => {
-      scheduleSyncLiveContext(workbench);
+      scheduleSyncLiveContext(() => {
+        const nextWorkspace = trustGuard.getSnapshot();
+        hostState = {
+          ...hostState,
+          workspace: nextWorkspace,
+          bootstrap: {
+            ...hostState.bootstrap,
+            liveContext: toLiveContext(nextWorkspace),
+          },
+        };
+      }, workbench);
     }),
     vscode.workspace.onDidChangeTextDocument((event) => {
       if (event.contentChanges.length > 0) {
         codingGapTracker.recordEdit();
       }
       trustGuard.rememberDocumentEdit(event.document);
-      scheduleSyncLiveContext(workbench);
+      scheduleSyncLiveContext(() => {
+        const nextWorkspace = trustGuard.getSnapshot();
+        hostState = {
+          ...hostState,
+          workspace: nextWorkspace,
+          bootstrap: {
+            ...hostState.bootstrap,
+            liveContext: toLiveContext(nextWorkspace),
+          },
+        };
+      }, workbench);
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       const previousWorkspaceFolder = hostState.workspace.workspaceFolder;
@@ -791,12 +836,16 @@ async function syncExtensionState(context: CommandContext): Promise<void> {
 
 let liveContextSyncTimer: NodeJS.Timeout | undefined;
 
-function scheduleSyncLiveContext(workbench: WorkbenchSidebarController): void {
+function scheduleSyncLiveContext(
+  refreshLiveContext: () => void,
+  workbench: WorkbenchSidebarController,
+): void {
   if (liveContextSyncTimer) {
     clearTimeout(liveContextSyncTimer);
   }
   liveContextSyncTimer = setTimeout(() => {
     liveContextSyncTimer = undefined;
+    refreshLiveContext();
     void workbench.syncLiveContext();
   }, 250);
 }

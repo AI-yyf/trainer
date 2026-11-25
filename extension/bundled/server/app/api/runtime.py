@@ -5,12 +5,15 @@ import hashlib
 import json
 import logging
 import re
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Callable, Iterable, TypedDict, cast
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from ..affect.service import AffectService
@@ -62,6 +65,9 @@ if TYPE_CHECKING:
     from ..sandbox.service import SandboxService
 
 logger = logging.getLogger("trainer.runtime")
+_HELD_SESSION_LOCKS: ContextVar[frozenset[str]] = ContextVar(
+    "_held_session_locks", default=frozenset()
+)
 
 #: Background library organizer: one startup sweep, then purely event-driven.
 #: Arrival bursts coalesce into one debounced, single-flight pass. No recurring
@@ -202,15 +208,22 @@ def _provider_service_cache_key(
 
 
 def _provider_test_record_matches(record: dict[str, Any], config: Any) -> bool:
-    def normalized(value: object) -> str:
-        return str(value or "").strip().rstrip("/").casefold()
+    def normalized_endpoint(value: object) -> str:
+        text = str(value or "").strip().rstrip("/")
+        try:
+            parsed = urlsplit(text)
+            credentials, separator, authority = parsed.netloc.rpartition("@")
+            netloc = f"{credentials}{separator}{authority.lower()}"
+            return urlunsplit(parsed._replace(scheme=parsed.scheme.lower(), netloc=netloc))
+        except ValueError:
+            return text
 
-    record_base_url = normalized(record.get("baseUrl") or record.get("base_url"))
-    config_base_url = normalized(getattr(config, "base_url", None))
+    record_base_url = normalized_endpoint(record.get("baseUrl") or record.get("base_url"))
+    config_base_url = normalized_endpoint(getattr(config, "base_url", None))
     if not record_base_url or record_base_url != config_base_url:
         return False
-    record_model = normalized(record.get("model"))
-    config_model = normalized(getattr(config, "model", None))
+    record_model = str(record.get("model") or "").strip()
+    config_model = str(getattr(config, "model", None) or "").strip()
     if not record_model or record_model != config_model:
         return False
     record_protocol = str(record.get("protocol") or "").strip()
@@ -283,6 +296,43 @@ def _provider_capability_transport_markers(
     return (base_url, model, api_key_fingerprint)
 
 
+def _capability_cache_key_matches_transport(
+    cache_key: str,
+    *,
+    base_url: str,
+    model: str,
+    api_key_fingerprint: str = "",
+    protocol: str | None = None,
+) -> bool:
+    """Exact transport match against a serialized capability cache key.
+
+    Avoids substring false positives such as ``gpt-4`` invalidating ``gpt-4o``
+    or ``https://api.example.com`` invalidating ``https://api.example.com/v2``.
+    """
+    payload_part, sep, key_fp = cache_key.rpartition("::")
+    if not sep:
+        return False
+    if api_key_fingerprint and key_fp != api_key_fingerprint:
+        return False
+    try:
+        parsed = json.loads(payload_part)
+    except Exception:
+        return False
+    if not isinstance(parsed, dict):
+        return False
+    parsed_base = str(parsed.get("baseUrl") or parsed.get("base_url") or "").strip().rstrip("/")
+    parsed_model = str(parsed.get("model") or "").strip()
+    if base_url and parsed_base != base_url:
+        return False
+    if model and parsed_model != model:
+        return False
+    if protocol and parsed.get("protocol"):
+        parsed_protocol = normalize_provider_protocol(parsed.get("protocol"))
+        if parsed_protocol != normalize_provider_protocol(protocol):
+            return False
+    return True
+
+
 @dataclass
 class SessionState:
     session_id: str
@@ -313,6 +363,11 @@ class TrainerRuntime:
     )
     research_network_fetch_enabled: bool = False
     sessions: dict[str, SessionState] = field(default_factory=dict)
+    #: The provider the UI host last used for each workspace, in memory only.
+    #: The sidecar has no provider of its own: the host names one per request.
+    #: A lane that by design cannot carry it (the browser side panel, which must
+    #: never see a provider key) resolves the workspace's provider from here.
+    workspace_provider_services: dict[str, ProviderService] = field(default_factory=dict)
     provider_config: ProviderConfig | None = None
     provider_api_key: str | None = None
     provider_service_cache: dict[str, ProviderService] = field(default_factory=dict)
@@ -358,6 +413,32 @@ class TrainerRuntime:
     requested_workspace_files: dict[str, list[str]] = field(default_factory=dict)
     generated_images: dict[str, dict[str, Any]] = field(default_factory=dict)
     _steer_guard: Lock = field(default_factory=Lock, repr=False, compare=False)
+    _session_locks: dict[str, asyncio.Lock] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+    _session_locks_guard: Lock = field(
+        default_factory=Lock, init=False, repr=False, compare=False
+    )
+
+    @asynccontextmanager
+    async def acquire_session_lock(self, session_id: str | None):
+        """Serialize concurrent turns on the same session while staying task-reentrant."""
+        key = str(session_id or "").strip()
+        held = _HELD_SESSION_LOCKS.get()
+        if not key or key in held:
+            yield
+            return
+        with self._session_locks_guard:
+            lock = self._session_locks.get(key)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._session_locks[key] = lock
+        async with lock:
+            token = _HELD_SESSION_LOCKS.set(held | {key})
+            try:
+                yield
+            finally:
+                _HELD_SESSION_LOCKS.reset(token)
 
     def enqueue_steer_message(self, session_id: str, text: str) -> bool:
         key = str(session_id or "").strip()
@@ -876,8 +957,8 @@ class TrainerRuntime:
         if not material:
             return None
 
-        service = self.provider_service
-        if service is None or not service.has_api_key:
+        service = self.workspace_provider_service(workspace_id) or self.provider_service
+        if service is None or not service.has_usable_credential():
             return None
         raw = await service.chat_completion(
             [
@@ -1602,7 +1683,11 @@ class TrainerRuntime:
     ) -> None:
         target_key = _provider_capability_cache_key(provider_config, api_key)
         seen: set[int] = set()
-        for service in (self.provider_service, *self.provider_service_cache.values()):
+        for service in (
+            self.provider_service,
+            *self.provider_service_cache.values(),
+            *self.workspace_provider_services.values(),
+        ):
             marker = id(service)
             if marker in seen:
                 continue
@@ -1655,6 +1740,40 @@ class TrainerRuntime:
             if oldest_key != key:
                 self.provider_service_cache.pop(oldest_key, None)
         return self.overlay_last_test_on_service(created)
+
+    def remember_workspace_provider(
+        self,
+        workspace_id: str | None,
+        provider_config: ProviderConfig | None,
+        api_key: str | None,
+    ) -> None:
+        """Keep the provider the UI host just used for one workspace.
+
+        Only a request that carries a provider is recorded, so the host stays
+        the only party that chooses a provider. The stored object is the same
+        cached ``ProviderService`` every request-scoped lane already uses; it
+        lives in this process and is never written to disk.
+        """
+        raw = str(workspace_id or "").strip()
+        if not raw or provider_config is None:
+            return
+        workspace = self.repository.resolve_context_id(raw) or raw
+        self.workspace_provider_services[workspace] = self.provider_service_for(
+            provider_config, api_key
+        )
+        while len(self.workspace_provider_services) > 32:
+            oldest = next(iter(self.workspace_provider_services))
+            if oldest == workspace:
+                break
+            self.workspace_provider_services.pop(oldest, None)
+
+    def workspace_provider_service(self, workspace_id: str | None) -> ProviderService | None:
+        """The provider the UI host last used for this workspace, if any."""
+        raw = str(workspace_id or "").strip()
+        if not raw:
+            return None
+        resolved = self.repository.resolve_context_id(raw) or raw
+        return self.workspace_provider_services.get(resolved) or self.workspace_provider_services.get(raw)
 
     def remember_provider_capability_test(
         self,
@@ -1715,11 +1834,13 @@ class TrainerRuntime:
                 provider_config, api_key
             )
             for cache_key in list(self.provider_capability_cache):
-                if api_key_fingerprint and api_key_fingerprint not in cache_key:
-                    continue
-                if base_url and base_url not in cache_key:
-                    continue
-                if model and model not in cache_key:
+                if not _capability_cache_key_matches_transport(
+                    cache_key,
+                    base_url=base_url,
+                    model=model,
+                    api_key_fingerprint=api_key_fingerprint,
+                    protocol=getattr(provider_config, "protocol", None),
+                ):
                     continue
                 invalidated = {"connection": "unverified"}
                 self.provider_capability_cache[cache_key] = invalidated
@@ -1817,6 +1938,7 @@ class TrainerRuntime:
         self,
         provider_config: ProviderConfig,
         last_test: dict[str, Any],
+        api_key: str | None = None,
     ) -> bool:
         test_base = self._normalize_transport_marker(
             last_test.get("base_url") or last_test.get("baseUrl")
@@ -1832,6 +1954,13 @@ class TrainerRuntime:
         config_protocol = self._normalize_transport_marker(getattr(provider_config, "protocol", ""))
         if test_protocol and config_protocol and test_protocol != config_protocol:
             return False
+        record_key_fp = str(
+            last_test.get("api_key_fingerprint") or last_test.get("apiKeyFingerprint") or ""
+        ).strip()
+        if record_key_fp and api_key is not None:
+            current_fp = hashlib.sha256(api_key.strip().encode("utf-8")).hexdigest()
+            if record_key_fp != current_fp:
+                return False
         return True
 
     def _should_apply_rehydrated_record(
@@ -1869,7 +1998,7 @@ class TrainerRuntime:
         if provider_config is None:
             return
         if isinstance(last_test, dict) and self._last_test_targets_provider(
-            provider_config, last_test
+            provider_config, last_test, api_key
         ):
             if self._should_apply_rehydrated_record(provider_config, api_key, last_test):
                 self.remember_provider_capability_test(provider_config, api_key, last_test)
@@ -1885,7 +2014,9 @@ class TrainerRuntime:
         raw_workspace = getattr(snapshot, "workspace", None)
         if isinstance(raw_workspace, dict):
             record = raw_workspace.get(PROVIDER_CAPABILITY_KEY)
-        if isinstance(record, dict) and self._last_test_targets_provider(provider_config, record):
+        if isinstance(record, dict) and self._last_test_targets_provider(
+            provider_config, record, api_key
+        ):
             if self._should_apply_rehydrated_record(provider_config, api_key, record):
                 self.remember_provider_capability_test(provider_config, api_key, record)
 

@@ -854,11 +854,13 @@ export function CoachComposer({
     // Decided from the height-0 measurement: re-reading after the resize can
     // still report the clamped value and flip the scroller back to "hidden".
     textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
-    // A textarea that shrank (or re-grew) keeps its previous scrollTop, which
-    // left the first typed line clipped above the frame after multi-line
-    // input. Anchor the view to the top; real keystrokes re-scroll to the
-    // caret on their own.
-    textarea.scrollTop = 0;
+    // A textarea that shrank below maxHeight keeps its previous scrollTop,
+    // leaving the first typed line clipped above the frame. Only reset to top
+    // when content fits without scrolling so multi-line editing past maxHeight
+    // does not snap back to line 1 on every keystroke.
+    if (contentHeight <= maxHeight) {
+      textarea.scrollTop = 0;
+    }
   }, [compactMode, value, minRows]);
 
   return (

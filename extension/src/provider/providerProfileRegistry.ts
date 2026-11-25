@@ -1460,7 +1460,8 @@ export class ProviderProfileRegistry implements vscode.Disposable {
    * Get the current profile registry
    */
   getRegistry(): ProviderProfileRegistryData | undefined {
-    return this.extensionContext.globalState.get<ProviderProfileRegistryData>(STORAGE_KEYS.providerProfileRegistry);
+    const stored = this.extensionContext.globalState.get<ProviderProfileRegistryData>(STORAGE_KEYS.providerProfileRegistry);
+    return stored ? structuredClone(stored) : undefined;
   }
 
   /**

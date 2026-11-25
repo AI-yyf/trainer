@@ -13,7 +13,8 @@ override has two failure modes:
 
 This module makes the field *negotiated* instead of assumed:
 
-* ``disabled`` stays the default first attempt (it keeps probe replies short).
+* ``disabled`` stays the default first attempt where a probe or a
+  provider-specific rule declares it (it keeps probe replies short).
 * When a gateway rejects that field, the rejection is classified, the model
   remembers which policy actually worked, and the request is replayed.
 * A user-declared thinking config is always honoured; auto-tuning never
@@ -27,7 +28,11 @@ from typing import Any, Literal
 
 ThinkingPolicy = Literal["disabled", "omit", "enabled"]
 
-DEFAULT_POLICY: ThinkingPolicy = "disabled"
+#: What to send when a profile declares no thinking policy at all. ``omit``
+#: leaves the model's own default in charge, which is what the composer's
+#: "auto" choice promises. (``disabled`` is still the first *attempt* wherever a
+#: probe or a provider-specific rule declares it explicitly.)
+DEFAULT_POLICY: ThinkingPolicy = "omit"
 
 #: Where to go next, tried once each, when the gateway rejects a policy.
 _FALLBACK_ORDER: dict[ThinkingPolicy, tuple[ThinkingPolicy, ...]] = {
@@ -60,16 +65,19 @@ _REQUIRES_THINKING_RE = re.compile(
 
 
 # --- learned per-model state -------------------------------------------------
-# Once a gateway tells us it rejects a thinking policy we stop re-probing it on
-# every subsequent request for the rest of the process. Keyed by
-# (base_url, model) so one model never poisons another on the same gateway.
-_learned_policy: dict[tuple[str, str], ThinkingPolicy] = {}
+# Once a gateway tells us it rejects a thinking policy or parameter we stop
+# re-probing it on every subsequent request for the rest of the process. Keyed
+# by (base_url, model, protocol) so neither another model nor another protocol
+# on the same multi-protocol gateway is ever cross-poisoned.
+_learned_policy: dict[tuple[str, str, str], ThinkingPolicy] = {}
+_learned_param_repairs: dict[tuple[str, str, str], frozenset[str]] = {}
 
 
-def model_key(provider: Any) -> tuple[str, str]:
-    base = str(getattr(provider, "base_url", "") or "").strip().lower()
+def model_key(provider: Any) -> tuple[str, str, str]:
+    base = str(getattr(provider, "base_url", "") or "").strip().rstrip("/").lower()
     model = str(getattr(provider, "model", "") or "").strip().lower()
-    return base, model
+    protocol = str(getattr(provider, "protocol", "") or "").strip().lower()
+    return base, model, protocol
 
 
 def learned_policy(provider: Any) -> ThinkingPolicy | None:
@@ -80,9 +88,24 @@ def remember_policy(provider: Any, policy: ThinkingPolicy) -> None:
     _learned_policy[model_key(provider)] = policy
 
 
+def learned_param_repairs(provider: Any) -> tuple[str, ...]:
+    if provider is None:
+        return ()
+    return tuple(sorted(_learned_param_repairs.get(model_key(provider), ())))
+
+
+def remember_param_repairs(provider: Any, repairs: tuple[str, ...]) -> None:
+    if provider is None or not repairs:
+        return
+    key = model_key(provider)
+    existing = _learned_param_repairs.get(key, frozenset())
+    _learned_param_repairs[key] = existing | frozenset(repairs)
+
+
 def reset_learned_policies() -> None:
-    """Test hook — clears every learned per-model policy."""
+    """Test hook — clears every learned per-model policy and parameter repair."""
     _learned_policy.clear()
+    _learned_param_repairs.clear()
 
 
 # --- classification ----------------------------------------------------------
@@ -181,6 +204,8 @@ def declared_thinking(payload: dict[str, Any] | None) -> ThinkingPolicy | None:
 def resolve_thinking_policy(
     payload: dict[str, Any] | None,
     provider: Any,
+    *,
+    declared: ThinkingPolicy | None = None,
 ) -> ThinkingPolicy:
     """Pick the policy for this request.
 
@@ -191,9 +216,17 @@ def resolve_thinking_policy(
     2. A policy this model already taught us by rejecting the previous one
        (so mandatory-thinking models aren't re-sent an auto-injected ``disabled``).
     3. Any remaining declared policy (such as an explicit ``disabled`` default).
-    4. The default first attempt (``disabled``), which keeps probe replies short.
+    4. Nothing declared (``declared`` is ``None``): send nothing, so the model's
+       own default applies. The composer shows that state as "auto", and a
+       profile without request defaults already behaved this way; injecting
+       ``disabled`` here only for profiles that carry an unrelated default
+       (temperature, seed, …) silently turned thinking off for reasoning models.
+
+    ``declared`` carries a policy the caller read from a source the payload
+    cannot hold, such as a top-level ``thinking`` marker in the profile's
+    request defaults (the chat wire only accepts it inside ``extra_body``).
     """
-    explicit = declared_thinking(payload)
+    explicit = declared_thinking(payload) if declared is None else declared
     if explicit in {"enabled", "omit"}:
         return explicit
     learned = learned_policy(provider)
@@ -331,3 +364,106 @@ def clamp_wire_thinking_budget(
         out["generationConfig"] = next_gen
 
     return out
+
+
+#: Anthropic refuses an enabled ``budget_tokens`` below this value, and requires
+#: ``max_tokens`` to exceed the budget.
+ANTHROPIC_MIN_THINKING_BUDGET = 1024
+
+
+def clamp_anthropic_thinking_budget(
+    payload: dict[str, Any],
+    *,
+    enforce_min_budget: bool = True,
+) -> dict[str, Any]:
+    """Make an enabled Anthropic ``thinking`` record acceptable to the API.
+
+    Anthropic enforces three strict constraints when extended thinking is on:
+    1. ``budget_tokens >= 1024`` on official Anthropic endpoints.
+    2. ``max_tokens > budget_tokens``.
+    3. ``temperature`` (other than 1), ``top_k``, and ``top_p < 0.95`` are
+       rejected with HTTP 400.
+    """
+    thinking = payload.get("thinking")
+    if not isinstance(thinking, dict):
+        return payload
+    if str(thinking.get("type") or "").strip().lower() != "enabled":
+        return payload
+
+    out = dict(payload)
+    next_thinking = dict(thinking)
+    budget = next_thinking.get("budget_tokens", next_thinking.get("budgetTokens"))
+    if isinstance(budget, int) and not isinstance(budget, bool):
+        clamped_budget = (
+            max(budget, ANTHROPIC_MIN_THINKING_BUDGET) if enforce_min_budget else max(budget, 1)
+        )
+        next_thinking.pop("budgetTokens", None)
+        next_thinking["budget_tokens"] = clamped_budget
+        max_tokens = out.get("max_tokens")
+        if (
+            isinstance(max_tokens, int)
+            and not isinstance(max_tokens, bool)
+            and max_tokens <= clamped_budget
+        ):
+            out["max_tokens"] = clamped_budget + 1024
+    out["thinking"] = next_thinking
+    temp = out.get("temperature")
+    if temp is not None and temp != 1:
+        out.pop("temperature", None)
+    out.pop("top_k", None)
+    top_p = out.get("top_p")
+    if isinstance(top_p, (int, float)) and not isinstance(top_p, bool) and top_p < 0.95:
+        out.pop("top_p", None)
+    return out
+
+
+# --- unsupported-parameter repair ---------------------------------------------
+# Reasoning models on the OpenAI chat wire refuse parameters the runtime sends
+# by default: ``max_tokens`` ("use max_completion_tokens instead") and a
+# non-default ``temperature``. The provider names the offending parameter in its
+# HTTP 400, so one repaired replay is exact rather than guesswork.
+
+_MAX_TOKENS_PARAM_RE = re.compile(r"\bmax_tokens\b", re.IGNORECASE)
+_TEMPERATURE_PARAM_RE = re.compile(r"\btemperature\b", re.IGNORECASE)
+
+
+def chat_parameter_repairs(error: BaseException) -> tuple[str, ...]:
+    """Parameters an upstream HTTP 400 explicitly named as unsupported.
+
+    Returns any of ``("max_tokens", "temperature")``; ``()`` when the failure is
+    not a parameter rejection, so unrelated errors keep their normal handling.
+    """
+    status = _status_code(error)
+    if status is not None and status != 400:
+        return ()
+    text = _error_text(error)
+    if not text or not _REJECTION_RE.search(text):
+        return ()
+    repairs: list[str] = []
+    if _MAX_TOKENS_PARAM_RE.search(text):
+        repairs.append("max_tokens")
+    if _TEMPERATURE_PARAM_RE.search(text):
+        repairs.append("temperature")
+    return tuple(repairs)
+
+
+def repair_chat_parameters(
+    payload: dict[str, Any], repairs: tuple[str, ...]
+) -> dict[str, Any] | None:
+    """Rebuild ``payload`` without the named parameters.
+
+    ``max_tokens`` moves to ``max_completion_tokens`` (same value), which is the
+    documented replacement; ``temperature`` is simply omitted so the model's
+    default applies. Returns ``None`` when nothing there is left to repair.
+    """
+    if not repairs:
+        return None
+    out = dict(payload)
+    changed = False
+    if "max_tokens" in repairs and "max_tokens" in out and "max_completion_tokens" not in out:
+        out["max_completion_tokens"] = out.pop("max_tokens")
+        changed = True
+    if "temperature" in repairs and "temperature" in out:
+        out.pop("temperature")
+        changed = True
+    return out if changed else None

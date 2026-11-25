@@ -347,21 +347,32 @@ async def _try_provider_photorealistic_image(
     parsed = urlparse(base_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return None
-    endpoint = f"{base_url}/images/generations"
+    normalized_base = base_url
+    if not parsed.path.rstrip("/").lower().endswith("/v1") and parsed.path.rstrip("/") in {"", "/"}:
+        normalized_base = f"{base_url}/v1"
+    endpoint = f"{normalized_base}/images/generations"
     api_key = str(getattr(provider, "_api_key", "") or "").strip()
     headers: dict[str, str] = {"Content-Type": "application/json"}
+    request_defaults = getattr(config, "request_defaults", None)
+    if isinstance(request_defaults, dict):
+        extra_headers = request_defaults.get("extra_headers") or request_defaults.get("extraHeaders")
+        if isinstance(extra_headers, dict):
+            for header_key, header_val in extra_headers.items():
+                if isinstance(header_key, str) and isinstance(header_val, str) and header_key.strip():
+                    headers[header_key.strip()] = header_val
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
+    # gpt-image-1 always returns b64_json and rejects `response_format` with HTTP 400.
     payload = {
         "model": "gpt-image-1",
         "prompt": prompt[:2000],
         "size": size,
-        "response_format": "b64_json",
         "n": 1,
     }
+    trust_env = not bool(getattr(config, "ignore_system_proxy", False))
     try:
-        async with httpx.AsyncClient(timeout=25.0) as client:
+        async with httpx.AsyncClient(timeout=25.0, trust_env=trust_env) as client:
             resp = await client.post(endpoint, headers=headers, json=payload)
             if resp.status_code >= 400:
                 return None
@@ -473,7 +484,13 @@ async def generate_pedagogical_image(
     clean_title = " ".join(str(title or "").split()).strip() or "Concept Diagram"
 
     runtime = getattr(context, "runtime", None)
-    provider = getattr(runtime, "provider_service", None)
+    workspace_id = getattr(context, "workspace_id", None)
+    workspace_provider = (
+        runtime.workspace_provider_service(workspace_id)
+        if runtime is not None and callable(getattr(runtime, "workspace_provider_service", None))
+        else None
+    )
+    provider = workspace_provider or getattr(runtime, "provider_service", None)
 
     image_bytes: bytes | None = None
     mime_type = "image/svg+xml"

@@ -195,6 +195,7 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       requestId: z.string(),
       resourceId: z.string(),
       outcome: z.enum(["ready", "blocked", "not-current", "failed"]),
+      reason: z.string().optional(),
       generatedCardId: z.string().optional(),
       selectedCardId: z.string().optional(),
     }),
@@ -274,6 +275,7 @@ const hostMessageSchema = z.discriminatedUnion("type", [
       nextStep: z.string().nullish().transform((value) => value ?? undefined),
       stopReason: z.string().nullish().transform((value) => value ?? undefined),
       toolCount: z.number().nullish().transform((value) => value ?? undefined),
+      nextStepRequiresConfirmation: z.boolean().nullish().transform((value) => value ?? undefined),
       reliabilityPhase: z.string().nullish().transform((value) => value ?? undefined),
       reliabilityOutcome: z.string().nullish().transform((value) => value ?? undefined),
     }),
@@ -294,6 +296,7 @@ const hostMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("stream/cancelled"),
     payload: z.object({
       messageId: z.string().nullish().transform((value) => value ?? undefined),
+      partialContent: z.string().nullish().transform((value) => value ?? undefined),
     }),
   }),
   z.object({

@@ -401,6 +401,28 @@ test('applyDerivedHostState drops last provider test results from a different pr
   assert.equal(updated.providerConfig.lastTestResult, undefined);
 });
 
+test('provider projection cannot carry a previous model probe into a case-distinct transport', () => {
+  const workspace = createWorkspaceSnapshot();
+  const sidecar = { lifecycle: 'ready', port: 34891, canStart: true };
+  const provider = { ...createProvider(), baseUrl: 'https://relay.test/TeamA/v1', model: 'ModelA' };
+  const bootstrap = createDefaultBootstrapData(workspace, provider, sidecar);
+  bootstrap.providerConfig.lastTestResult = {
+    ok: true, providerName: provider.name, baseUrl: provider.baseUrl, model: provider.model,
+    checkedAt: new Date().toISOString(), status: 'connected', toolsReady: true,
+  };
+  bootstrap.providerConfig.modelTest = { ok: true };
+  bootstrap.providerConfig.resolvedModel = 'ModelA';
+  for (const changed of [
+    { ...provider, model: 'modela' },
+    { ...provider, baseUrl: 'https://relay.test/teama/v1' },
+  ]) {
+    const result = applyDerivedHostState(bootstrap, changed, sidecar, workspace, undefined, true);
+    assert.equal(result.providerConfig.lastTestResult, undefined);
+    assert.equal(result.providerConfig.modelTest, undefined);
+    assert.equal(result.providerConfig.resolvedModel, changed.model);
+  }
+});
+
 test('host bootstrap payload carries the current recoverable streaming snapshot', () => {
   const hostState = createHostState();
   const streamingState = {
@@ -7103,4 +7125,65 @@ test('mergeSessionStartSnapshot accepts the snake_case goal shape and activity r
   assert.equal(restored.goal.planId, 'plan-1');
   assert.equal(restored.goal.latestActivity.kind, 'evaluation');
   assert.deepEqual(restored.goal.latestActivity.evidenceRefs, ['evaluation:abc']);
+});
+
+test('applyDerivedHostState keeps saved connections through a host re-derive', () => {
+  // The real host re-derives this view after every patch, so the saved
+  // connections used to be dropped before the webview saw them: the composer
+  // showed no other connection group and Settings listed only the active one.
+  const capabilities = createProvider().capabilities;
+  const profile = (id, label, baseUrl, apiKeyRef, model) => ({
+    id,
+    label,
+    name: label,
+    protocol: 'openai_chat_completions_compatible',
+    baseUrl,
+    apiKeyRef,
+    model,
+    availableModels: [model],
+    capabilities,
+  });
+  const profiles = [
+    profile('p1', 'GLM', 'https://p1.example/v1', 'trainer.p1', 'glm-4.6'),
+    profile('p2', 'Local', 'http://localhost:1234/v1', 'trainer.default', 'demo-model'),
+    profile('p3', 'Kimi', 'https://p3.example/v1', 'trainer.p3', 'kimi-k3'),
+  ];
+  const provider = {
+    ...createProvider(),
+    protocol: 'openai_chat_completions_compatible',
+    profileId: 'p2',
+    profileLabel: 'Local',
+    profileCount: profiles.length,
+    profileHistory: [],
+    providerProfiles: profiles,
+  };
+  const sidecar = createSidecarStatus();
+  const workspace = createWorkspaceSnapshot();
+
+  const derived = applyDerivedHostState(
+    createDefaultBootstrapData(workspace, provider, sidecar),
+    provider,
+    sidecar,
+    workspace,
+    'session-1',
+  );
+
+  assert.equal(derived.providerConfig.profileCount, 3);
+  assert.deepEqual(derived.providerConfig.providerProfiles, profiles);
+
+  // The dashboard only ever arrives through a patch; it has to survive the
+  // re-derive that follows it.
+  const dashboard = { templateCount: 46, protocolCatalog: [] };
+  const rederived = applyDerivedHostState(
+    {
+      ...derived,
+      providerConfig: { ...derived.providerConfig, providerDashboard: dashboard },
+    },
+    provider,
+    sidecar,
+    workspace,
+    'session-1',
+  );
+  assert.equal(rederived.providerConfig.providerDashboard, dashboard);
+  assert.equal(rederived.providerConfig.providerProfiles.length, 3);
 });

@@ -45,7 +45,7 @@ def _allows_keyless_local_provider(provider: Any) -> bool:
     if cred_mode in {"local_no_auth", "none", "anonymous"}:
         return True
     try:
-        if urlsplit(str(base_url or "").strip()).port == 11434:
+        if urlsplit(str(base_url or "").strip()).port in {11434, 1234}:
             return True
     except ValueError:
         pass
@@ -55,7 +55,17 @@ def _allows_keyless_local_provider(provider: Any) -> bool:
     )
     return any(
         token in markers
-        for token in ("ollama", "lmstudio", "lm-studio", "lm studio", "vllm", "llamacpp", "llama.cpp")
+        for token in (
+            "ollama",
+            "lmstudio",
+            "lm-studio",
+            "lm studio",
+            "vllm",
+            "llamacpp",
+            "llama.cpp",
+            "localai",
+            "mlx",
+        )
     )
 
 
@@ -106,8 +116,8 @@ def _is_kimi_like_provider(provider: ProviderConfig | None) -> bool:
 # Reasoning-first model families whose hidden reasoning can consume an entire
 # small output budget before the first visible token, regardless of gateway.
 _REASONING_FIRST_MODEL_PATTERN = re.compile(
-    r"deepseek[-_. ]?r|deepseek[-_. ]?reasoner|deepseek[-_. ]?v\d|qwq|"
-    r"minimax[-_. ]?m3|"
+    r"deepseek[-_. ]?r|deepseek[-_. ]?reasoner|deepseek[-_. ]?v\d|qwq|qwen[-_. ]?3|"
+    r"minimax[-_. ]?m3|gpt[-_. ]?5|"
     r"o1(?:[-_.](?:mini|preview|pro))?|"
     r"o3(?:[-_.]mini)?|o4[-_.]mini|glm[-_. ]?\d*[-_. ]?z|thinking|reasoner",
     re.IGNORECASE,

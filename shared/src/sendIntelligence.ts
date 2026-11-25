@@ -1,4 +1,5 @@
 import { findSidebarControlCommand, type SidebarControlCommandId } from "./sidebarCommands";
+import { learnerActionText, requestsLearningPlanChange } from "./learnerInstructions";
 
 export type SendTarget = "idle" | "local_command" | "trainer";
 export type SendIntentSource = "explicit" | "inferred" | "none";
@@ -260,10 +261,8 @@ function inferNaturalLanguageIntent(draft: string): SendIntent | undefined {
 }
 
 function isExplicitFormalPlanSave(draft: string): boolean {
-  const instruction = draft.split(/[。！？!?\n]/, 1)[0];
-  const asksToChangePlan = /^(?:(?:请(?:你)?|帮我|麻烦(?:你)?)\s*)*(?:明确|直接)?(?:重新)?(?:生成|创建|修改|修正|修复|补齐|更新|重写)[^。！？\n]{0,48}计划/u.test(instruction) ||
-    /^(?:please\s+)?(?:create|generate|update|revise|fix|rewrite|repair|complete)\b.{0,90}\bplan\b/iu.test(instruction);
-  return asksToChangePlan && /保存|落库|存下|\bsave\b/iu.test(instruction);
+  const instruction = learnerActionText(draft);
+  return requestsLearningPlanChange(instruction) && /保存|落库|存下|\bsave\b|\bsave_formal_plan\b/iu.test(instruction);
 }
 
 function normalizeDraftText(value: string): string {

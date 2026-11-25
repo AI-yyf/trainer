@@ -176,6 +176,53 @@ function createContext() {
   };
 }
 
+function crossProfileSwitchContext() {
+  const context = createContext();
+  const first = { ...context.providerStore.getConfig(), profileId: 'first', model: 'first-model',
+    availableModels: ['first-model'], catalogModels: ['first-model'], baseUrl: 'https://first.test/v1' };
+  const second = { ...first, profileId: 'second', model: 'second-model', baseUrl: 'https://second.test/v1',
+    availableModels: ['second-model'], catalogModels: ['second-model'], apiKeyRef: 'second-key' };
+  let current = first;
+  let switches = 0;
+  context.providerStore.getConfig = () => current;
+  context.providerStore.getProfileRegistrySnapshot = () => ({ activeProfileId: current.profileId, profiles: [] });
+  context.providerStore.getProfileConfigForValidation = id => id === 'second' ? second : first;
+  context.providerStore.getLastTestResult = () => undefined;
+  context.providerStore.switchActiveProfile = async () => { switches += 1; current = second; return true; };
+  context.providerStore.saveConfig = async config => { current = config; };
+  Object.assign(context.getHostState().bootstrap.providerConfig, first);
+  return { context, switches: () => switches };
+}
+
+test('switching profiles cannot validate a model against another connection catalog', async () => {
+  const { switchProviderModelCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const { context, switches } = crossProfileSwitchContext();
+  const result = await switchProviderModelCommand(context, { profileId: 'second', model: 'first-model' });
+  assert.equal(result.ok, false);
+  assert.equal(switches(), 0);
+  assert.equal(context.providerStore.getConfig().profileId, 'first');
+});
+
+test('a valid profile switch keeps only that connection models and token limits', async () => {
+  const { switchProviderModelCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const { context } = crossProfileSwitchContext();
+  context.getHostState().bootstrap.providerConfig.modelTokenLimits = { 'first-model': { contextWindowTokens: 50000 } };
+  const result = await switchProviderModelCommand(context, { profileId: 'second', model: 'second-model' });
+  assert.equal(result.ok, true, result.message);
+  assert.deepEqual(context.providerStore.getConfig().availableModels, ['second-model']);
+  assert.deepEqual(context.providerStore.getConfig().catalogModels, ['second-model']);
+});
+
+test('selecting a saved profile activates it even when no registry profile is active', async () => {
+  const { switchProviderModelCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const { context, switches } = crossProfileSwitchContext();
+  context.providerStore.getProfileRegistrySnapshot = () => ({ activeProfileId: '', profiles: [] });
+  const result = await switchProviderModelCommand(context, { profileId: 'second', model: 'second-model' });
+  assert.equal(result.ok, true, result.message);
+  assert.equal(switches(), 1);
+  assert.equal(context.providerStore.getConfig().profileId, 'second');
+});
+
 test('saveProviderFromWebviewCommand rejects a blocked model before changing the saved connection', async () => {
   const { saveProviderFromWebviewCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
   const context = createContext();
@@ -703,7 +750,7 @@ test('saveProviderFromWebviewCommand keeps the model list ready but blocks coach
   const savedMessage = lastSaveOperationStatus(postedStatuses)?.payload.message ?? '';
   assert.match(savedMessage, /saved and active/i);
   assert.doesNotMatch(savedMessage, /cannot coach with this connection yet/i);
-  assert.equal(syncs.length, 2);
+  assert.equal(syncs.length, 1);
   assert.equal(patches[0].providerConfig.modelListStatus, 'idle');
   assert.equal(patches[0].providerConfig.resolvedModel, 'MiniMax-M3');
 });
@@ -870,7 +917,7 @@ test('saveProviderFromWebviewCommand keeps the model list ready when zh-CN integ
   assert.equal(savedLastTests.length, 0);
   const savedMessage = lastSaveOperationStatus(postedStatuses)?.payload.message ?? '';
   assert.match(savedMessage, /saved and active/i);
-  assert.equal(syncs.length, 2);
+  assert.equal(syncs.length, 1);
   assert.equal(patches[0].providerConfig.modelListStatus, 'idle');
   assert.equal(patches[0].providerConfig.resolvedModel, 'MiniMax-M3');
 });
@@ -3834,6 +3881,34 @@ test('thinking intensity is stored per model and restored when switching back', 
     o3: { mode: 'enabled', reasoningEffort: 'high' },
     'gpt-4o': { mode: 'enabled', reasoningEffort: 'low' },
   });
+});
+
+test('a thinking change waits for an in-flight model switch before reading its model', async () => {
+  const { setProviderThinkingCommand, switchProviderModelCommand } = loadWithVscodeMock(providerWebviewCommandsModulePath, {});
+  const context = createThinkingTestContext({
+    name: 'Local Compatible', protocol: 'openai_responses', baseUrl: 'http://localhost:1234/v1',
+    apiKeyRef: 'trainer.default', model: 'o3', availableModels: ['o3', 'gpt-4o'],
+    catalogModels: ['o3', 'gpt-4o'], capabilities: { chat: true, responses: true, thinking: true },
+  });
+  const save = context.providerStore.saveConfig;
+  let releaseSwitch;
+  let switchStarted;
+  const started = new Promise(resolve => { switchStarted = resolve; });
+  const gate = new Promise(resolve => { releaseSwitch = resolve; });
+  let first = true;
+  context.providerStore.saveConfig = async config => {
+    if (first && config.model === 'gpt-4o') { first = false; switchStarted(); await gate; }
+    return save(config);
+  };
+  const switching = switchProviderModelCommand(context, { model: 'gpt-4o' });
+  await started;
+  const thinking = setProviderThinkingCommand(context, { mode: 'enabled', reasoningEffort: 'high' });
+  await new Promise(resolve => setImmediate(resolve));
+  releaseSwitch();
+  await Promise.all([switching, thinking]);
+  const final = context.providerStore.getConfig();
+  assert.equal(final.model, 'gpt-4o');
+  assert.deepEqual(final.modelThinkingConfig['gpt-4o'], { mode: 'enabled', reasoningEffort: 'high' });
 });
 
 test('saveProviderFromWebviewCommand persists draft thinkingConfig and re-emits it once evidence exists', async () => {

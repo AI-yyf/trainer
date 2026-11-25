@@ -395,10 +395,13 @@ def find_cut_point(
     else:
         return leading
 
-    while cut > leading and message_role(messages[cut]) == "tool":
+    while cut > leading and message_role(messages[cut]) != "user":
         cut -= 1
-    if message_role(messages[cut]) == "tool":
-        return leading
+    if message_role(messages[cut]) != "user":
+        # Fall back to the earliest non-tool boundary only if no user message exists.
+        cut = leading
+        while cut < len(messages) and message_role(messages[cut]) == "tool":
+            cut += 1
     if cut <= leading:
         return leading
     return cut
@@ -702,8 +705,12 @@ def compact_history(
     if cut <= leading + 1:
         if force and len(history) > leading + 3:
             cut = max(leading + 1, len(history) - 2)
-            while cut > leading and message_role(history[cut]) == "tool":
+            while cut > leading and message_role(history[cut]) != "user":
                 cut -= 1
+            if cut <= leading:
+                cut = max(leading + 1, len(history) - 2)
+                while cut > leading and message_role(history[cut]) == "tool":
+                    cut -= 1
         else:
             prune_older_tool_results(history, history_char_budget=80_000)
             return None

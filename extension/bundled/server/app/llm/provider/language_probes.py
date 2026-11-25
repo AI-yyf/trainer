@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 from ...core.models import ProviderConfig
 from ..coaching_recovery import _localized_text
 from ..coaching_reply_drafts import _message_probe_variant
-from .capability import _visible_probe_max_tokens
 from .redaction import redact_provider_error
 from .text import (
     _compact_visible_text,
@@ -39,6 +38,7 @@ class LanguageProbeMixin:
         _api_key: str | None
         _apply_request_defaults: Any
         _record_last_reply_failure: Any
+        _visible_probe_budget: Any
 
 
     def _language_probe_result(
@@ -50,7 +50,7 @@ class LanguageProbeMixin:
         probe_message: str | None = None,
         response_language: str | None = None,
     ) -> dict[str, object]:
-        probe_max_tokens = _visible_probe_max_tokens(provider)
+        probe_max_tokens = self._visible_probe_budget(provider)
 
         def natural_language_probe_result() -> dict[str, object]:
             if not _prefers_chinese(response_language):
@@ -262,7 +262,9 @@ class LanguageProbeMixin:
         probe_message: str | None = None,
         response_language: str | None = None,
     ) -> dict[str, object]:
-        probe_max_tokens = _visible_probe_max_tokens(provider)
+        # A model already seen reasoning on this connection would spend the
+        # 96-token tier before its first visible token and stay inconclusive.
+        probe_max_tokens = self._visible_probe_budget(provider)
         zh_natural_success = (
             "\u81ea\u7136 zh-CN \u63a2\u6d4b\u5df2\u901a\u8fc7\uff1a"
             "\u867d\u7136\u4e25\u683c\u56de\u663e\u63a2\u6d4b\u4e0d\u7a33\u5b9a\uff0c"

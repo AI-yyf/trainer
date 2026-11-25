@@ -1,4 +1,5 @@
 import type { ProviderProtocol } from "./models";
+import { providerEndpointIdentity } from "./providerConnectionIdentity";
 import {
   normalizeProviderProtocol,
   providerProtocolCompletionLabel,
@@ -644,14 +645,12 @@ export function providerTestTargetsSameTransport(
   if (!lastTest) {
     return undefined;
   }
-  const testProvider = normalizeProviderTestTarget(lastTest.providerName);
-  const testBaseUrl = normalizeProviderTestTarget(lastTest.baseUrl);
-  const providerName = normalizeProviderTestTarget(provider.name);
-  const providerBaseUrl = normalizeProviderTestTarget(provider.baseUrl);
-  if (!testProvider || !testBaseUrl || !providerName || !providerBaseUrl) {
+  const testBaseUrl = providerEndpointIdentity(lastTest.baseUrl ?? '');
+  const providerBaseUrl = providerEndpointIdentity(provider.baseUrl ?? '');
+  if (!testBaseUrl || !providerBaseUrl) {
     return undefined;
   }
-  if (testProvider !== providerName || testBaseUrl !== providerBaseUrl) {
+  if (testBaseUrl !== providerBaseUrl) {
     return false;
   }
   const testProtocol = normalizeProviderTestTarget(lastTest.protocol);
@@ -667,18 +666,16 @@ export function providerTestTargetsCurrentConnection(
     return undefined;
   }
 
-  const testProvider = normalizeProviderTestTarget(lastTest.providerName);
-  const testBaseUrl = normalizeProviderTestTarget(lastTest.baseUrl);
-  const testModel = normalizeProviderTestTarget(lastTest.model);
-  const providerName = normalizeProviderTestTarget(provider.name);
-  const providerBaseUrl = normalizeProviderTestTarget(provider.baseUrl);
-  const providerModel = normalizeProviderTestTarget(provider.model);
+  const testBaseUrl = providerEndpointIdentity(lastTest.baseUrl ?? '');
+  const testModel = lastTest.model?.trim();
+  const providerBaseUrl = providerEndpointIdentity(provider.baseUrl ?? '');
+  const providerModel = provider.model?.trim();
 
-  if (!testProvider || !testBaseUrl || !testModel || !providerName || !providerBaseUrl || !providerModel) {
+  if (!testBaseUrl || !testModel || !providerBaseUrl || !providerModel) {
     return undefined;
   }
 
-  if (testProvider !== providerName || testBaseUrl !== providerBaseUrl || testModel !== providerModel) {
+  if (testBaseUrl !== providerBaseUrl || testModel !== providerModel) {
     return false;
   }
 
@@ -787,14 +784,19 @@ export function providerBaseUrlIsLocalService(baseUrl: string | undefined): bool
   if (!raw) {
     return false;
   }
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`;
   try {
-    const parsed = new URL(raw);
+    const parsed = new URL(candidate);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return false;
     }
-    const host = parsed.hostname.replace(/^\[|\]$/g, '');
+    const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
     return (
-      host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0'
+      host === 'localhost' ||
+      host.endsWith('.localhost') ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      host === '0.0.0.0'
     );
   } catch {
     return false;

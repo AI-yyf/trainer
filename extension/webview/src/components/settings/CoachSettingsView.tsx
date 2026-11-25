@@ -28,6 +28,7 @@ import {
   describeProviderTestReadiness,
   hasSavedProviderProfiles,
   PROVIDER_TEST_FRESHNESS_WINDOW_MS,
+  providerBaseUrlIsLocalService,
   providerErrorHint,
   type ProviderImageInputState,
   type ProviderSendState,
@@ -2134,6 +2135,12 @@ export function CoachSettingsView({
               ...patch,
               protocol: nextProtocol,
               model: "",
+              ...(hasModel && typeof patch.model === "string" ? { model: patch.model } : {}),
+              capabilities: patch.capabilities,
+              requestDefaults: patch.requestDefaults ?? {},
+              thinkingConfig: patch.thinkingConfig,
+              allowedModels: patch.allowedModels ?? [],
+              deniedModels: patch.deniedModels ?? [],
               contextWindowTokens: undefined,
               maxOutputTokens: undefined,
               modelTokenLimits: undefined,
@@ -2145,6 +2152,7 @@ export function CoachSettingsView({
             return {
               ...current,
               ...patch,
+              modelTokenLimits: undefined,
               catalogModels: [],
             };
           }
@@ -2668,8 +2676,10 @@ function CoachSettingsViewSheet({
   // Send readiness is configuration completeness only (P0 save-and-go): a
   // passing test and a verified streaming probe stay as diagnostic facts below,
   // never as a send gate.
+  const providerIsLocalService = providerBaseUrlIsLocalService(provider.baseUrl);
   const providerCoachReady = !coachSendState.blocked;
-  const providerNeedsApiKey = providerSaved && !provider.apiKeyConfigured;
+  const providerNeedsApiKey =
+    providerSaved && !provider.apiKeyConfigured && !providerIsLocalService;
   const providerCoachBlockReason = coachSendState.blocked
     ? coachSendState.reason
     : undefined;
@@ -2921,11 +2931,24 @@ function CoachSettingsViewSheet({
   const providerDraftTestReady = Boolean(
     providerDraft.baseUrl.trim() && providerDraft.model.trim(),
   );
+  const draftIsLocalService = providerBaseUrlIsLocalService(providerDraft.baseUrl);
+  const sameDraftVendorHost = (() => {
+    if (!normalizedDraftBaseUrl || !normalizedSavedBaseUrl) {
+      return false;
+    }
+    try {
+      const draftHost = new URL(normalizedDraftBaseUrl).hostname.toLowerCase();
+      const savedHost = new URL(normalizedSavedBaseUrl).hostname.toLowerCase();
+      return Boolean(draftHost && savedHost && draftHost === savedHost);
+    } catch {
+      return normalizedDraftBaseUrl === normalizedSavedBaseUrl;
+    }
+  })();
   const providerDraftCanReuseSavedApiKey =
     providerSaved &&
     provider.apiKeyConfigured &&
-    draftProtocol === savedProtocol &&
-    normalizedDraftBaseUrl === normalizedSavedBaseUrl;
+    ((draftProtocol === savedProtocol && normalizedDraftBaseUrl === normalizedSavedBaseUrl) ||
+      sameDraftVendorHost);
   const providerApiKeyDraftStatus = providerDraftHasApiKey
     ? {
         value: settingsText(language, "新 API key", "New API key"),
@@ -2936,6 +2959,11 @@ function CoachSettingsViewSheet({
           value: copy.apiKeySaved,
           state: "ok" as const,
         }
+      : draftIsLocalService
+        ? {
+            value: settingsText(language, "本地免密钥", "Local (no key needed)"),
+            state: "ok" as const,
+          }
       : provider.apiKeyConfigured
         ? {
             value: settingsStatusPhrase(language, "connectionSavedApiKeyMissing"),
@@ -2946,10 +2974,12 @@ function CoachSettingsViewSheet({
             state: "missing" as const,
           };
   const providerDraftReadyForModelDiscovery = Boolean(
-    normalizedDraftBaseUrl && (providerDraftHasApiKey || providerDraftCanReuseSavedApiKey),
+    normalizedDraftBaseUrl &&
+      (providerDraftHasApiKey || providerDraftCanReuseSavedApiKey || draftIsLocalService),
   );
   const providerDraftReadyForTestBase =
-    providerDraftTestReady && (providerDraftHasApiKey || providerDraftCanReuseSavedApiKey);
+    providerDraftTestReady &&
+    (providerDraftHasApiKey || providerDraftCanReuseSavedApiKey || draftIsLocalService);
   const attachedContextSummaryText = shortenSummary(attachedContextSummary, 54);
   const providerSummaryText = shortenSummary(providerSummary, 62);
   const advancedSummaryText = shortenSummary(advancedSummary, 82);
@@ -3109,6 +3139,7 @@ function CoachSettingsViewSheet({
         streaming: true,
         tools: nextAdaptation.supportsTools,
         vision: nextAdaptation.supportsVision,
+        thinking: nextAdaptation.supportsThinking,
         jsonSchema: nextAdaptation.supportsTools ? currentCapabilities.jsonSchema : false,
         structuredOutput: nextAdaptation.supportsTools
           ? currentCapabilities.structuredOutput
@@ -3126,6 +3157,10 @@ function CoachSettingsViewSheet({
         {
           ...draftThinkingContext,
           model: modelName,
+          capabilityEvidence: undefined,
+          modelCapabilities: undefined,
+          profileCapabilities: nextCapabilities,
+          supported: nextAdaptation.supportsThinking ? true : undefined,
         },
         draftRequestDefaults,
         nextThinking,
@@ -3269,7 +3304,7 @@ function CoachSettingsViewSheet({
       setRequestDefaultsText(formatRequestDefaultsDraft(draftRequestDefaults));
       setRequestDefaultsError(undefined);
     }
-  }, [draftRequestDefaults, draftRequestDefaultsSignature]);
+  }, [draftProtocol, normalizedDraftBaseUrl, draftRequestDefaults, draftRequestDefaultsSignature]);
   const normalizedManualModelDraft = manualModelDraft.trim();
   const manualModelPolicy = evaluateProviderModelPolicy(
     normalizedManualModelDraft,
@@ -3965,7 +4000,7 @@ function CoachSettingsViewSheet({
     currentDraftModelPolicyMessage ??
     (!normalizedDraftBaseUrl
       ? modelDiscoveryCopy.missingBaseUrl
-      : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey
+      : !providerDraftHasApiKey && !providerDraftCanReuseSavedApiKey && !draftIsLocalService
         ? modelDiscoveryCopy.missingApiKey
         : modelListStatus === "loading"
           ? copy.modelFetchLoading
@@ -3979,7 +4014,7 @@ function CoachSettingsViewSheet({
     if (
       !catalogMissing ||
       !providerSaved ||
-      !provider.apiKeyConfigured ||
+      (!provider.apiKeyConfigured && !providerIsLocalService) ||
       providerHasDraftChanges ||
       modelListStatus === "loading" ||
       !onRefreshProviderModels
@@ -4290,7 +4325,8 @@ function CoachSettingsViewSheet({
     providerHasDraftChanges &&
     providerDraftFieldsReady &&
     !providerDraftHasApiKey &&
-    !providerDraftCanReuseSavedApiKey;
+    !providerDraftCanReuseSavedApiKey &&
+    !draftIsLocalService;
   const shouldCompleteDraftSetup =
     providerHasDraftChanges &&
     !providerDraftReadyForTest &&
@@ -4760,7 +4796,7 @@ function CoachSettingsViewSheet({
     providerSaved &&
     !providerHasDraftChanges &&
     provider.configured &&
-    Boolean(provider.apiKeyConfigured) &&
+    (Boolean(provider.apiKeyConfigured) || providerIsLocalService) &&
     !connectionTestFailed;
   const connectionModelFull = provider.model || providerDraft.model || copy.notConfigured;
   const connectionModelLimitSummary = [
@@ -5455,180 +5491,187 @@ function CoachSettingsViewSheet({
   );
   const canNestModelLimitsInCatalog =
     canUseSavedModelMetadata && providerCatalogRows.length > 0;
-  const providerCatalogPanel =
-    canNestModelLimitsInCatalog ? (
-      <details className="settings-sheet__minor-panel settings-sheet__provider-catalog">
-        <summary>
-          {localizedCatalogPanelLabel} <span aria-hidden="true">·</span> {providerCatalogSummary}
-        </summary>
-        <div className="settings-sheet__minor-body settings-sheet__stack settings-sheet__stack--tight">
-          <p className="settings-sheet__note settings-sheet__note--compact">
-            {localizedCatalogPanelDetail}
-          </p>
-          <div className="settings-sheet__simple-list" aria-label={localizedCatalogPanelLabel}>
-            {providerCatalogRows.map((row) => (
-              <SimpleInfoRow key={row.label} label={row.label} value={row.value} />
-            ))}
+  const advancedRoutingBody = (
+      <div className="settings-sheet__minor-body settings-sheet__stack settings-sheet__stack--tight">
+        <p className="settings-sheet__note settings-sheet__note--compact">
+          {localizedAdvancedRoutingDetail}
+        </p>
+        <div className="settings-grid settings-grid--form">
+          <div className="settings-field">
+            <span>{localizedCredentialModeLabel}</span>
+            <ChoiceList
+              active={draftCredentialMode}
+              items={[
+                { label: localizedCredentialModeUiProxy, value: "ui_proxy" },
+                {
+                  label: localizedCredentialModeWorkspaceSecret,
+                  value: "workspace_secret",
+                },
+              ]}
+              onChange={(value) => onProviderDraftChange({ credentialMode: value })}
+            />
           </div>
-          {providerModelLimitsPanel}
-          <details className="settings-sheet__minor-panel">
-            <summary>{localizedAdvancedRoutingLabel}</summary>
-            <div className="settings-sheet__minor-body settings-sheet__stack settings-sheet__stack--tight">
-              <p className="settings-sheet__note settings-sheet__note--compact">
-                {localizedAdvancedRoutingDetail}
-              </p>
-              <div className="settings-grid settings-grid--form">
-                <div className="settings-field">
-                  <span>{localizedCredentialModeLabel}</span>
-                  <ChoiceList
-                    active={draftCredentialMode}
-                    items={[
-                      { label: localizedCredentialModeUiProxy, value: "ui_proxy" },
-                      {
-                        label: localizedCredentialModeWorkspaceSecret,
-                        value: "workspace_secret",
-                      },
-                    ]}
-                    onChange={(value) => onProviderDraftChange({ credentialMode: value })}
-                  />
-                </div>
 
-                <div className="settings-field">
-                  <span>{localizedCatalogSourceLabel}</span>
-                  <ChoiceList
-                    active={draftCatalogSource}
-                    items={[
-                      {
-                        label: modelCardCopy.liveFetch,
-                        value: "provider_live",
-                      },
-                      {
-                        label: modelCardCopy.cached,
-                        value: "cached",
-                      },
-                      {
-                        label: modelCardCopy.manual,
-                        value: "manual",
-                      },
-                    ]}
-                    onChange={(value) => onProviderDraftChange({ catalogSource: value })}
-                  />
-                </div>
+          <div className="settings-field">
+            <span>{localizedCatalogSourceLabel}</span>
+            <ChoiceList
+              active={draftCatalogSource}
+              items={[
+                {
+                  label: modelCardCopy.liveFetch,
+                  value: "provider_live",
+                },
+                {
+                  label: modelCardCopy.cached,
+                  value: "cached",
+                },
+                {
+                  label: modelCardCopy.manual,
+                  value: "manual",
+                },
+              ]}
+              onChange={(value) => onProviderDraftChange({ catalogSource: value })}
+            />
+          </div>
 
-                <label className="settings-field">
-                  <span>{localizedCatalogCacheTtlLabel}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={draftCacheTtlSeconds ?? ""}
-                    placeholder={provider.cacheTtlSeconds ? String(provider.cacheTtlSeconds) : ""}
-                    onChange={(event) =>
-                      onProviderDraftChange({
-                        cacheTtlSeconds: parsePositiveIntegerInput(event.target.value),
-                      })
-                    }
-                  />
-                  <p className="settings-sheet__note settings-sheet__note--compact">
-                    {localizedCacheTtlDetail}
-                  </p>
-                </label>
+          <label className="settings-field">
+            <span>{localizedCatalogCacheTtlLabel}</span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={draftCacheTtlSeconds ?? ""}
+              placeholder={provider.cacheTtlSeconds ? String(provider.cacheTtlSeconds) : ""}
+              onChange={(event) =>
+                onProviderDraftChange({
+                  cacheTtlSeconds: parsePositiveIntegerInput(event.target.value),
+                })
+              }
+            />
+            <p className="settings-sheet__note settings-sheet__note--compact">
+              {localizedCacheTtlDetail}
+            </p>
+          </label>
 
-                <label className="settings-field">
-                  <span>{localizedCatalogEmbeddingModelLabel}</span>
-                  <input
-                    value={draftEmbeddingModel}
-                    placeholder={localizedEmbeddingModelPlaceholder}
-                    onChange={(event) =>
-                      onProviderDraftChange({
-                        embeddingModel: event.target.value,
-                      })
-                    }
-                  />
-                </label>
+          <label className="settings-field">
+            <span>{localizedCatalogEmbeddingModelLabel}</span>
+            <input
+              value={draftEmbeddingModel}
+              placeholder={localizedEmbeddingModelPlaceholder}
+              onChange={(event) =>
+                onProviderDraftChange({
+                  embeddingModel: event.target.value,
+                })
+              }
+            />
+          </label>
 
-                <label className="settings-field">
-                  <span>{localizedCatalogAllowedModelsLabel}</span>
-                  <textarea
-                    rows={2}
-                    value={allowedModelsText}
-                    onFocus={() => {
-                      allowedModelsFocusedRef.current = true;
-                    }}
-                    onChange={(event) => {
-                      setAllowedModelsText(event.target.value);
-                      onProviderDraftChange({
-                        allowedModels: parseDraftStringList(event.target.value),
-                      });
-                    }}
-                    onBlur={() => {
-                      allowedModelsFocusedRef.current = false;
-                      setAllowedModelsText(draftAllowedModelsSource);
-                    }}
-                  />
-                  <p className="settings-sheet__note settings-sheet__note--compact">
-                    {localizedAllowedModelsInputDetail}
-                  </p>
-                </label>
+          <label className="settings-field">
+            <span>{localizedCatalogAllowedModelsLabel}</span>
+            <textarea
+              rows={2}
+              value={allowedModelsText}
+              onFocus={() => {
+                allowedModelsFocusedRef.current = true;
+              }}
+              onChange={(event) => {
+                setAllowedModelsText(event.target.value);
+                onProviderDraftChange({
+                  allowedModels: parseDraftStringList(event.target.value),
+                });
+              }}
+              onBlur={() => {
+                allowedModelsFocusedRef.current = false;
+                setAllowedModelsText(draftAllowedModelsSource);
+              }}
+            />
+            <p className="settings-sheet__note settings-sheet__note--compact">
+              {localizedAllowedModelsInputDetail}
+            </p>
+          </label>
 
-                <label className="settings-field">
-                  <span>{localizedCatalogDeniedModelsLabel}</span>
-                  <textarea
-                    rows={2}
-                    value={deniedModelsText}
-                    onFocus={() => {
-                      deniedModelsFocusedRef.current = true;
-                    }}
-                    onChange={(event) => {
-                      setDeniedModelsText(event.target.value);
-                      onProviderDraftChange({
-                        deniedModels: parseDraftStringList(event.target.value),
-                      });
-                    }}
-                    onBlur={() => {
-                      deniedModelsFocusedRef.current = false;
-                      setDeniedModelsText(draftDeniedModelsSource);
-                    }}
-                  />
-                  <p className="settings-sheet__note settings-sheet__note--compact">
-                    {localizedDeniedModelsInputDetail}
-                  </p>
-                </label>
+          <label className="settings-field">
+            <span>{localizedCatalogDeniedModelsLabel}</span>
+            <textarea
+              rows={2}
+              value={deniedModelsText}
+              onFocus={() => {
+                deniedModelsFocusedRef.current = true;
+              }}
+              onChange={(event) => {
+                setDeniedModelsText(event.target.value);
+                onProviderDraftChange({
+                  deniedModels: parseDraftStringList(event.target.value),
+                });
+              }}
+              onBlur={() => {
+                deniedModelsFocusedRef.current = false;
+                setDeniedModelsText(draftDeniedModelsSource);
+              }}
+            />
+            <p className="settings-sheet__note settings-sheet__note--compact">
+              {localizedDeniedModelsInputDetail}
+            </p>
+          </label>
 
-                <label className="settings-field">
-                  <span>{localizedCatalogRequestDefaultsLabel}</span>
-                  <textarea
-                    rows={6}
-                    spellCheck={false}
-                    value={requestDefaultsText}
-                    onFocus={() => {
-                      requestDefaultsFocusedRef.current = true;
-                    }}
-                    onChange={(event) => handleRequestDefaultsTextChange(event.target.value)}
-                    onBlur={() => {
-                      requestDefaultsFocusedRef.current = false;
-                      if (!requestDefaultsError) {
-                        setRequestDefaultsText(formatRequestDefaultsDraft(draftRequestDefaults));
-                      }
-                    }}
-                  />
-                  <p className="settings-sheet__note settings-sheet__note--compact">
-                    {localizedRequestDefaultsInputDetail}
-                  </p>
-                  <p
-                    className={`settings-sheet__note settings-sheet__note--compact${
-                      requestDefaultsError ? " settings-sheet__note--warning" : ""
-                    }`}
-                  >
-                    {requestDefaultsError ?? localizedRequestDefaultsInputHint}
-                  </p>
-                </label>
-              </div>
-            </div>
-          </details>
+          <label className="settings-field">
+            <span>{localizedCatalogRequestDefaultsLabel}</span>
+            <textarea
+              rows={6}
+              spellCheck={false}
+              value={requestDefaultsText}
+              onFocus={() => {
+                requestDefaultsFocusedRef.current = true;
+              }}
+              onChange={(event) => handleRequestDefaultsTextChange(event.target.value)}
+              onBlur={() => {
+                requestDefaultsFocusedRef.current = false;
+                if (!requestDefaultsError) {
+                  setRequestDefaultsText(formatRequestDefaultsDraft(draftRequestDefaults));
+                }
+              }}
+            />
+            <p className="settings-sheet__note settings-sheet__note--compact">
+              {localizedRequestDefaultsInputDetail}
+            </p>
+            <p
+              className={`settings-sheet__note settings-sheet__note--compact${
+                requestDefaultsError ? " settings-sheet__note--warning" : ""
+              }`}
+            >
+              {requestDefaultsError ?? localizedRequestDefaultsInputHint}
+            </p>
+          </label>
         </div>
-      </details>
-    ) : null;
+      </div>
+  );
+  const providerCatalogPanel = canNestModelLimitsInCatalog ? (
+    <details className="settings-sheet__minor-panel settings-sheet__provider-catalog">
+      <summary>
+        {localizedCatalogPanelLabel} <span aria-hidden="true">·</span> {providerCatalogSummary}
+      </summary>
+      <div className="settings-sheet__minor-body settings-sheet__stack settings-sheet__stack--tight">
+        <p className="settings-sheet__note settings-sheet__note--compact">
+          {localizedCatalogPanelDetail}
+        </p>
+        <div className="settings-sheet__simple-list" aria-label={localizedCatalogPanelLabel}>
+          {providerCatalogRows.map((row) => (
+            <SimpleInfoRow key={row.label} label={row.label} value={row.value} />
+          ))}
+        </div>
+        {providerModelLimitsPanel}
+        <details className="settings-sheet__minor-panel">
+          <summary>{localizedAdvancedRoutingLabel}</summary>
+          {advancedRoutingBody}
+        </details>
+      </div>
+    </details>
+  ) : (
+    <details className="settings-sheet__minor-panel">
+      <summary>{localizedAdvancedRoutingLabel}</summary>
+      {advancedRoutingBody}
+    </details>
+  );
   const providerListBar =
     providerIdentityListVisible &&
     (providerProfiles.length > 0 ||
@@ -6258,7 +6301,7 @@ function CoachSettingsViewSheet({
                     <input
                       value={currentDraftModel}
                       placeholder={modelPickerCopy.directModelPlaceholder}
-                      onChange={(event) => applyModelAdaptation(event.target.value)}
+                      onChange={(event) => onProviderDraftChange({ model: event.target.value })}
                     />
                     <p className="settings-sheet__note settings-sheet__note--compact">
                       {providerDraftReadyForModelDiscovery
@@ -6538,6 +6581,7 @@ function CoachSettingsViewSheet({
                 ) : null}
                 {thinkingDescriptor &&
                 !thinkingDescriptor.disabled &&
+                draftThinkingConfig?.mode !== "disabled" &&
                 (explicitDraftThinkingEnabled || thinkingDescriptor.kind === "reasoning_effort") ? (() => {
                   const isBudgetProtocol =
                     thinkingDescriptor.kind === "thinking_budget" ||
@@ -6553,18 +6597,20 @@ function CoachSettingsViewSheet({
                       ? draftThinkingConfig.budgetTokens
                       : undefined;
                   const activePreset = isBudgetProtocol
-                    ? currentBudget === plan.low
-                      ? "low"
-                      : currentBudget === plan.medium
-                        ? "medium"
-                        : currentBudget === plan.high
-                          ? "high"
-                          : (thinkingDescriptor.kind === "thinking_budget" ? currentBudget === 4096 : currentBudget === undefined)
-                            ? "auto"
+                    ? currentBudget === undefined
+                      ? "auto"
+                      : currentBudget === plan.low
+                        ? "low"
+                        : currentBudget === plan.medium
+                          ? "medium"
+                          : currentBudget === plan.high
+                            ? "high"
                             : "custom"
                     : currentBudget !== undefined
                       ? "custom"
-                      : draftThinkingConfig?.reasoningEffort ?? "auto";
+                      : draftThinkingConfig?.mode === "auto"
+                        ? "auto"
+                        : draftThinkingConfig?.reasoningEffort ?? "auto";
                   const quickTokenPresets = plan.presets.filter(
                     (value) => value <= effectiveBudgetMax,
                   );
@@ -6581,16 +6627,19 @@ function CoachSettingsViewSheet({
                         window.requestAnimationFrame(() => thinkingBudgetInputRef.current?.focus());
                         return;
                       }
+                      if (preset === "auto") {
+                        updateThinkingConfig({
+                          mode: "auto",
+                          budgetTokens: undefined,
+                        });
+                        return;
+                      }
                       const presetBudget =
                         preset === "low"
                           ? plan.low
                           : preset === "medium"
                             ? plan.medium
-                            : preset === "high"
-                              ? plan.high
-                              : thinkingDescriptor.kind === "thinking_budget"
-                                ? 4096
-                                : undefined;
+                            : plan.high;
                       updateThinkingConfig({
                         ...(draftThinkingConfig ?? { mode: "enabled" }),
                         mode: "enabled",
@@ -6610,14 +6659,7 @@ function CoachSettingsViewSheet({
                     }
                     if (preset === "auto") {
                       updateThinkingConfig({
-                        ...(draftThinkingConfig ?? { mode: "auto" }),
-                        mode:
-                          thinkingDescriptor.kind === "reasoning_effort" &&
-                          draftProtocol === "openai_responses"
-                            ? "auto"
-                            : explicitDraftThinkingEnabled
-                              ? "enabled"
-                              : "auto",
+                        mode: "auto",
                         reasoningEffort: undefined,
                         budgetTokens: undefined,
                       });
@@ -6684,13 +6726,15 @@ function CoachSettingsViewSheet({
                                 )
                                   .replace("{n}", String(plan.recommendedCustom))
                                   .replace("{max}", formatCompactTokenLimit(effectiveBudgetMax))}
-                                onChange={(event) =>
+                                onChange={(event) => {
+                                  const nextBudget = parsePositiveIntegerInput(event.target.value);
                                   updateThinkingConfig({
                                     ...(draftThinkingConfig ?? { mode: "enabled" }),
                                     mode: "enabled",
-                                    budgetTokens: parsePositiveIntegerInput(event.target.value),
-                                  })
-                                }
+                                    ...(nextBudget !== undefined ? { reasoningEffort: undefined } : {}),
+                                    budgetTokens: nextBudget,
+                                  });
+                                }}
                               />
                               {currentBudget !== undefined ? (
                                 <button

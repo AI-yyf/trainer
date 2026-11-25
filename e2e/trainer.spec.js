@@ -435,6 +435,9 @@ test.describe("Trainer two-destination shell", () => {
     const cardBefore = await page.evaluate(
       () => window.__TRAINER_BOOTSTRAP__?.workspaceTrainingState?.selectedCardId ?? null,
     );
+    // This surface is lazy-loaded. Wait for the seeded card before taking
+    // its baseline; otherwise loading it during the reply looks like minting.
+    await expect(page.locator('[data-template="FocusedPractice"]')).toHaveCount(cardBefore ? 1 : 0);
     const inlineCardsBefore = await page.locator('[data-template="FocusedPractice"]').count();
 
     await page.locator("#coach-composer").fill("Give me a practice exercise about thread locks.");

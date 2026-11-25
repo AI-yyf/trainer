@@ -193,10 +193,25 @@ class ModelCatalogMixin:
             incomplete=incomplete,
         )
 
+    @staticmethod
+    def _catalog_extra_headers(provider: ProviderConfig) -> dict[str, str]:
+        defaults = getattr(provider, "request_defaults", None)
+        if not isinstance(defaults, dict):
+            return {}
+        raw = defaults.get("extra_headers") or defaults.get("extraHeaders")
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            str(k).strip(): str(v)
+            for k, v in raw.items()
+            if isinstance(k, str) and isinstance(v, str) and k.strip()
+        }
+
     def _anthropic_list_models(self, provider: ProviderConfig, api_key: str) -> ProviderModelsResponse:
         diagnostics = ["Using native anthropic_messages model listing."]
         url = f"{self._anthropic_base_url(provider)}/v1/models"
         headers = {
+            **self._catalog_extra_headers(provider),
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
@@ -330,6 +345,7 @@ class ModelCatalogMixin:
         diagnostics = ["Using native gemini_generate_content model listing."]
         url = self._gemini_models_endpoint(provider)
         headers = {
+            **self._catalog_extra_headers(provider),
             "x-goog-api-key": api_key,
             "content-type": "application/json",
         }
@@ -511,19 +527,32 @@ class ModelCatalogMixin:
 
     def _openai_list_models(self, provider: ProviderConfig, api_key: str) -> ProviderModelsResponse:
         client = self._create_sync_client(provider, api_key)
-        response = client.models.list()
-        models: list[str] = []
-        model_token_limits: dict[str, ProviderModelTokenLimit] = {}
-        notes: list[str] = []
+        try:
+            extra_headers = self._catalog_extra_headers(provider)
+            response = (
+                client.models.list(extra_headers=extra_headers)
+                if extra_headers
+                else client.models.list()
+            )
+            models: list[str] = []
+            model_token_limits: dict[str, ProviderModelTokenLimit] = {}
+            notes: list[str] = []
 
-        items, incomplete = self._collect_listed_model_items(response, notes)
-        for item in items:
-            model_id = self._normalize_model_id(getattr(item, "id", None))
-            if model_id:
-                models.append(model_id)
-                token_limit = _extract_model_token_limit(item)
-                if token_limit is not None:
-                    model_token_limits[model_id] = token_limit
+            items, incomplete = self._collect_listed_model_items(response, notes)
+            for item in items:
+                model_id = self._normalize_model_id(getattr(item, "id", None))
+                if model_id:
+                    models.append(model_id)
+                    token_limit = _extract_model_token_limit(item)
+                    if token_limit is not None:
+                        model_token_limits[model_id] = token_limit
+        finally:
+            close = getattr(client, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:
+                    pass
 
         protocol = self._configured_protocol(provider)
         listing_note = (
@@ -606,7 +635,10 @@ class ModelCatalogMixin:
             with self._direct_http_client(provider, timeout=2.0) as client:
                 response = client.get(
                     f"{base_url.rstrip('/')}/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
+                    headers={
+                        **self._catalog_extra_headers(provider),
+                        "Authorization": f"Bearer {api_key}",
+                    },
                 )
             catalog_claims = catalog_endpoint_type_claims(
                 response.json() if response.status_code < 400 else None

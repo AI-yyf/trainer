@@ -16,6 +16,57 @@ const providerCommandsModulePath = path.resolve(
   'providerCommands.js',
 );
 
+for (const command of ['testProviderCommand', 'diagnoseProviderCommand']) {
+  for (const change of ['model', 'workspace']) test(`${command} drops results after the ${change} changes`, async () => {
+    const commands = loadWithVscodeMock(providerCommandsModulePath, { window: {
+      showInformationMessage() {}, showWarningMessage() {}, showErrorMessage() {},
+    } });
+    const workspace = { workspaceFolder: 'F:\\trainer-before' };
+    const context = createContext(workspace);
+    let current = context.providerStore.getConfig();
+    context.providerStore.getConfig = () => ({ ...current });
+    context.providerStore.getResolvedConfig = () => ({ ...current });
+    const saved = [];
+    context.providerStore.saveLastTestResult = async (...args) => { saved.push(args); };
+    let finish;
+    let begin;
+    const started = new Promise(resolve => { begin = resolve; });
+    context.sidecarClient.postJson = async () => { begin(); return new Promise(resolve => { finish = resolve; }); };
+    context.sidecarClient.getJson = async () => ({ memory: {} });
+    const pending = commands[command](context);
+    await started;
+    if (change === 'model') current = { ...current, model: 'another-model' };
+    else workspace.workspaceFolder = 'F:\\trainer-after';
+    finish({ ok: true, success: true, status: 'connected', detail: 'Earlier provider passed.' });
+    const result = await pending;
+    assert.equal(result.data.stale, true);
+    assert.deepEqual(context.__patches, []);
+    assert.deepEqual(saved, []);
+  });
+}
+
+test('a later connection check owns the result even for the same model and workspace', async () => {
+  const { testProviderCommand } = loadWithVscodeMock(providerCommandsModulePath, { window: {
+    showInformationMessage() {}, showWarningMessage() {}, showErrorMessage() {},
+  } });
+  const context = createContext();
+  const complete = [];
+  const saves = [];
+  context.providerStore.saveLastTestResult = async (...args) => { saves.push(args); };
+  context.sidecarClient.postJson = async () => new Promise(resolve => complete.push(resolve));
+  const first = testProviderCommand(context);
+  while (complete.length < 1) await new Promise(resolve => setImmediate(resolve));
+  const second = testProviderCommand(context);
+  while (complete.length < 2) await new Promise(resolve => setImmediate(resolve));
+  complete[1]({ ok: true, success: true, status: 'connected' });
+  assert.equal((await second).ok, true);
+  const patchCount = context.__patches.length;
+  complete[0]({ ok: false, status: 'failed', detail: 'Earlier failure' });
+  assert.equal((await first).data.stale, true);
+  assert.equal(context.__patches.length, patchCount);
+  assert.equal(saves.length, 1);
+});
+
 function createContext(workspace = { workspaceFolder: 'F:\\trainer-a' }, trainerWorkspaceStatus) {
   const patches = [];
   const trainerWorkspace =
@@ -837,6 +888,7 @@ test('testProviderCommand keeps a resolved API key out of the provider payload',
     ...context.providerStore.getConfig(),
     apiKey: 'sk-resolved-test-key',
   });
+  context.providerStore.getApiKey = async () => 'sk-resolved-test-key';
   context.sidecarClient = {
     async postJson(_port, requestPath, body) {
       assert.equal(requestPath, '/provider/test');
@@ -1022,6 +1074,7 @@ test('diagnoseProviderCommand maps diagnostics payload into provider view state'
       },
     };
   };
+  context.providerStore.getConfig = () => context.providerStore.getResolvedConfig();
   context.sidecarClient = {
     async postJson(port, requestPath, body) {
       if (requestPath === '/provider/test') {
@@ -1246,6 +1299,7 @@ test('diagnoseProviderCommand preserves profile and model state when sidecar ret
       },
     };
   };
+  context.providerStore.getConfig = () => context.providerStore.getResolvedConfig();
   context.sidecarClient = {
     async postJson(port, requestPath) {
       assert.equal(requestPath, '/provider/test');
@@ -3073,4 +3127,73 @@ test('testProviderCommand can be cancelled by request id', async () => {
 
   assert.equal(result.cancelled, true);
   assert.match(result.message ?? '', /cancelled/i);
+});
+
+test('configureProviderCommand keeps the stored API key when the key prompt is left blank', async () => {
+  // showInputBox resolves '' for a blank accept, and the store treats '' as an
+  // explicit clear. The prompt promises "leave blank to keep current", so a
+  // reconfigure that only changes the model must not delete the key.
+  const vscodeMock = {
+    window: {
+      async showInputBox(options) {
+        switch (options.title) {
+          case 'Provider name':
+            return 'OpenAI';
+          case 'Base URL':
+            return 'https://api.openai.com/v1';
+          case 'Chat model':
+            return 'gpt-4.1-mini';
+          case 'API key (leave blank to keep current or store none)':
+            return '';
+          default:
+            return '';
+        }
+      },
+      async showQuickPick(items) {
+        return items.filter((item) => item.picked);
+      },
+      async showInformationMessage() {
+        return undefined;
+      },
+    },
+  };
+  const { configureProviderCommand } = loadWithVscodeMock(providerCommandsModulePath, vscodeMock);
+  const savedKeys = [];
+  const context = createContext();
+  context.providerStore = {
+    getConfig() {
+      return {
+        name: 'OpenAI',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-4.1-mini',
+        apiKeyRef: 'openai.default',
+        capabilities: {
+          chat: true,
+          responses: true,
+          vision: true,
+          embeddings: false,
+          tools: true,
+          jsonSchema: true,
+          streaming: true,
+        },
+      };
+    },
+    async saveConfig(_config, apiKey) {
+      savedKeys.push(apiKey);
+    },
+    async getApiKey() {
+      return 'sk-kept';
+    },
+  };
+  context.patchWorkbenchData = async () => undefined;
+  context.workbench = {
+    async syncState() {
+      return undefined;
+    },
+  };
+
+  const result = await configureProviderCommand(context);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(savedKeys, [undefined]);
 });

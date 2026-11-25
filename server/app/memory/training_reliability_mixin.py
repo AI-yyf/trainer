@@ -35,6 +35,8 @@ from ..training.reliability import (
 )
 
 if TYPE_CHECKING:
+    from contextlib import AbstractContextManager
+
     from .service import StructuredMemoryService
 
 
@@ -46,6 +48,9 @@ class TrainingReliabilityMixin:
         def _resolve_workspace_for_write(self, workspace_id: str | None) -> str: ...
         def _structured_for(self, workspace_id: str) -> StructuredMemoryService: ...
         def _persist_structured(self, workspace_id: str) -> None: ...
+        def structured_write_batch(
+            self, workspace_id: str
+        ) -> AbstractContextManager[None]: ...
         def _iter_structured_workspaces(self) -> list[tuple[str, StructuredMemoryService]]: ...
 
     def _load_training_reliability(self, structured: StructuredMemoryService) -> dict[str, Any] | None:
@@ -333,7 +338,12 @@ class TrainingReliabilityMixin:
             self._save_training_reliability(resolved, structured, record)
 
             try:
-                result = work()
+                # The body updates card status, evidence, handoff and FSRS in
+                # several methods. Deferring their individual writes makes the
+                # event one structured-memory revision; a raised body leaves
+                # the stored record exactly where it was.
+                with self.structured_write_batch(resolved):
+                    result = work()
             except Exception as exc:
                 structured = self._structured_for(resolved)
                 failed = mark_failed(record, str(exc))

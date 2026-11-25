@@ -2366,7 +2366,7 @@ type HostMessageBody =
   | { type: "stream/chunk"; payload: StreamChunkEvent }
   | { type: "stream/complete"; payload: StreamCompleteEvent }
   | { type: "stream/error"; payload: StreamErrorEvent }
-  | { type: "stream/cancelled"; payload: { messageId?: string } }
+  | { type: "stream/cancelled"; payload: { messageId?: string; partialContent?: string } }
   // Agent-loop events
   | { type: "stream/tool_call"; payload: StreamAgentToolCallEvent }
   | { type: "stream/tool_result"; payload: StreamAgentToolResultEvent }

@@ -22,6 +22,7 @@ import {
   createProviderApiKeyRef,
   providerConnectionMatches,
   resolveProviderApiKeyRef,
+  sameProviderVendorHost,
 } from '../provider/providerConfigStore';
 import { PROVIDER_PROFILE_TEMPLATES } from '../provider/providerProfileRegistry';
 import {
@@ -93,6 +94,8 @@ function providerModelPolicyFailure<T>(
 type CreateProviderProfileFromDraftPayload = {
   name?: string;
   protocol?: string;
+  connectionType?: string;
+  mode?: ProviderConfig['mode'];
   baseUrl?: string;
   model?: string;
   contextWindowTokens?: number | null;
@@ -101,6 +104,9 @@ type CreateProviderProfileFromDraftPayload = {
   catalogModels?: string[];
   allowedModels?: string[];
   deniedModels?: string[];
+  embeddingModel?: string | null;
+  catalogSource?: ProviderConfig['catalogSource'];
+  cacheTtlSeconds?: number | null;
   apiKey?: string;
   credentialMode?: ProviderCredentialMode;
   ignoreSystemProxy?: boolean;
@@ -146,6 +152,26 @@ export type ProviderTestCommandPayload = {
 };
 
 const activeProviderTests = new Map<string, AbortController>();
+const providerCheckGenerations = new WeakMap<object, number>();
+
+function beginProviderCheck(context: object): number {
+  const generation = (providerCheckGenerations.get(context) ?? 0) + 1;
+  providerCheckGenerations.set(context, generation);
+  return generation;
+}
+
+function staleProviderCheck(context: CommandContext, language?: ComposerLanguage): CommandExecutionResult {
+  return { ok: false, cancelled: true, data: { stale: true },
+    message: providerHostCopy(resolveProviderResponseLanguage(context, language), 'testContextChanged') };
+}
+
+async function providerCheckIsCurrent(context: CommandContext, config: ProviderConfig,
+  apiKey: string | undefined, workspaceId: string, generation: number): Promise<boolean> {
+  return providerCheckGenerations.get(context) === generation &&
+    getRuntimeWorkspaceId(context) === workspaceId &&
+    await isCurrentProviderProfileModelLookup(context, config, apiKey ?? '') &&
+    getRuntimeWorkspaceId(context) === workspaceId && providerCheckGenerations.get(context) === generation;
+}
 
 export function cancelProviderTest(requestId: string): boolean {
   const id = String(requestId || "").trim();
@@ -580,6 +606,7 @@ function buildDraftTestConfig(
         name,
         baseUrl,
         model,
+        protocol,
         capabilities,
         modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model] : undefined,
       },
@@ -603,7 +630,7 @@ async function resolveDraftTestApiKey(
     return inlineApiKey;
   }
 
-  if (!providerConnectionMatches(existing, draft)) {
+  if (!providerConnectionMatches(existing, draft) && !sameProviderVendorHost(existing, draft)) {
     return undefined;
   }
 
@@ -674,6 +701,7 @@ export async function configureProviderCommand(
         name: name.trim(),
         baseUrl: normalizedBaseUrl,
         model: model.trim(),
+        protocol,
         capabilities,
         modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model.trim()] : undefined,
       },
@@ -692,7 +720,11 @@ export async function configureProviderCommand(
     );
   }
 
-  await context.providerStore.saveConfig(config, apiKey);
+  // A blank accept returns '' from showInputBox, and the store treats '' as an
+  // explicit clear (it deletes the stored secret). The prompt promises "leave
+  // blank to keep current", so pass undefined instead; a first-time connection
+  // then simply ends up without a key, exactly as before.
+  await context.providerStore.saveConfig(config, apiKey || undefined);
   const savedConfig = preferPersistedProviderConfig(context.providerStore.getConfig(), config);
   const storedApiKey = await context.providerStore.getApiKey();
   await context.patchWorkbenchData(
@@ -733,16 +765,33 @@ export async function clearProviderCommand(
   }
 
   await context.providerStore.clear();
-  await context.patchWorkbenchData(
-    applyDerivedHostState(
-      context.getHostState().bootstrap,
-      undefined,
-      context.getHostState().sidecar,
-      context.getHostState().workspace,
-      context.getSessionId(),
-      false,
-    ),
+  const clearedBootstrap = applyDerivedHostState(
+    context.getHostState().bootstrap,
+    undefined,
+    context.getHostState().sidecar,
+    context.getHostState().workspace,
+    context.getSessionId(),
+    false,
   );
+  const registrySnapshot =
+    typeof context.providerStore.getProfileRegistrySnapshot === 'function'
+      ? context.providerStore.getProfileRegistrySnapshot()
+      : undefined;
+  const remainingProfiles = Array.isArray(registrySnapshot?.profiles)
+    ? registrySnapshot.profiles
+    : [];
+  const remainingHistory = Array.isArray(registrySnapshot?.switchHistory)
+    ? registrySnapshot.switchHistory
+    : [];
+  await context.patchWorkbenchData({
+    ...clearedBootstrap,
+    providerConfig: {
+      ...clearedBootstrap.providerConfig,
+      profileCount: remainingProfiles.length,
+      providerProfiles: remainingProfiles.map((profile) => ({ ...profile })),
+      profileHistory: remainingHistory.map((entry) => ({ ...entry })),
+    },
+  });
   await context.workbench.syncState();
   return { ok: true, message: providerHostCopy(resolveProviderResponseLanguage(context), 'clearDone') };
 }
@@ -751,6 +800,7 @@ export async function testProviderCommand(
   context: CommandContext,
   payload?: ProviderTestCommandPayload,
 ): Promise<CommandExecutionResult> {
+  const checkGeneration = beginProviderCheck(context);
   const savedConfig = await context.providerStore.getResolvedConfig();
   const draftInput = payload?.draft;
   const draftConfig = draftInput ? buildDraftTestConfig(context, draftInput, savedConfig) : undefined;
@@ -828,6 +878,7 @@ export async function testProviderCommand(
     !draftInput &&
     (!payload?.protocol ||
       normalizeProviderProtocol(payload.protocol) === normalizeProviderProtocol(resolvedConfig.protocol));
+  const checkWorkspaceId = getRuntimeWorkspaceId(context);
   let response: ProviderTestResponse;
   // Network boundary counter (P0): an explicit "test connection" is a real
   // upstream attempt — it is the only /provider/test entry on this path.
@@ -874,6 +925,9 @@ export async function testProviderCommand(
     }
   }
 
+  if (shouldPersistResult && !await providerCheckIsCurrent(context, testConfig, apiKey, checkWorkspaceId, checkGeneration)) {
+    return staleProviderCheck(context, responseLanguage);
+  }
   const baseMessage = formatProviderTestMessage(response, testConfig.name, responseLanguage);
   // Fail-closed: never toast/persist raw key-shaped strings from provider detail.
   const message = sanitizeErrorSurfaceText(
@@ -889,7 +943,7 @@ export async function testProviderCommand(
       status: response.status ?? (ok ? 'connected' : 'failed'),
       detail: message,
       checkedAt: new Date().toISOString(),
-      workspaceId: getRuntimeWorkspaceId(context),
+      workspaceId: checkWorkspaceId,
       profileId: testConfig.profileId,
       providerName: testConfig.name,
       baseUrl: testConfig.baseUrl,
@@ -912,8 +966,11 @@ export async function testProviderCommand(
       thinkingProbeStatus: capabilityTruth.thinkingProbeStatus,
     };
     await context.providerStore.saveLastTestResult(testConfig, lastTestResult, {
-      workspaceId: getRuntimeWorkspaceId(context),
+      workspaceId: checkWorkspaceId,
     });
+    if (!await providerCheckIsCurrent(context, testConfig, apiKey, checkWorkspaceId, checkGeneration)) {
+      return staleProviderCheck(context, responseLanguage);
+    }
     await context.patchWorkbenchData({
       providerConfig: {
         ...context.getHostState().bootstrap.providerConfig,
@@ -1029,7 +1086,7 @@ function sameProviderModelLookupTarget(left: ProviderConfig, right: ProviderConf
   return (
     left.name.trim().toLowerCase() === right.name.trim().toLowerCase() &&
     providerConnectionMatches(left, right) &&
-    left.model.trim().toLowerCase() === right.model.trim().toLowerCase() &&
+    left.model.trim() === right.model.trim() &&
     left.apiKeyRef.trim() === right.apiKeyRef.trim() &&
     (left.profileId?.trim() ?? '') === (right.profileId?.trim() ?? '')
   );
@@ -1071,8 +1128,8 @@ async function isCurrentProviderProfileModelLookup(
     const currentApiKey = await Promise.resolve(store.getApiKey?.());
     return (
       activeProfileStillMatches(context, config) &&
-      Boolean(currentApiKey?.trim()) &&
-      currentApiKey?.trim() === apiKey.trim()
+      (currentApiKey?.trim() ?? '') === apiKey.trim() &&
+      sameProviderModelLookupTarget(config, context.providerStore.getConfig() ?? currentConfig)
     );
   } catch {
     return false;
@@ -1405,6 +1462,7 @@ async function activateProviderProfile(
 export async function diagnoseProviderCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
+  const checkGeneration = beginProviderCheck(context);
   const config = await resolveProviderConfig(context);
   if (!config) {
     return { ok: false, message: 'Provider is not configured.' };
@@ -1434,6 +1492,7 @@ export async function diagnoseProviderCommand(
 
   // Network boundary counter (P0): explicit diagnostics — never a hidden call.
   const diagnosticsRequestStartedAt = Date.now();
+  const checkWorkspaceId = getRuntimeWorkspaceId(context);
   let response: Record<string, unknown>;
   try {
     response = await context.sidecarClient.postJson<Record<string, unknown>>(
@@ -1446,6 +1505,9 @@ export async function diagnoseProviderCommand(
     recordProviderHttpRequest(Date.now() - diagnosticsRequestStartedAt);
   }
 
+  if (!await providerCheckIsCurrent(context, config, apiKey, checkWorkspaceId, checkGeneration)) {
+    return staleProviderCheck(context);
+  }
   const providerConfigPatch = buildProviderDiagnosticsPatch(context, config, response);
   await context.patchWorkbenchData({
     providerConfig: providerConfigPatch,
@@ -1457,6 +1519,9 @@ export async function diagnoseProviderCommand(
       withWorkspaceQuery('/memory/summary', context),
     );
     const memoryRecord = (memoryResponse.memory as Record<string, unknown> | undefined) ?? {};
+    if (!await providerCheckIsCurrent(context, config, apiKey, checkWorkspaceId, checkGeneration)) {
+      return staleProviderCheck(context);
+    }
     const providerDiagnostics = toProviderDiagnostics(memoryRecord.provider_diagnostics ?? memoryRecord.providerDiagnostics);
     await context.patchWorkbenchData({
       memory: {
@@ -1625,16 +1690,6 @@ export async function createProviderProfileFromDraftCommand(
   const input = (payload ?? {}) as CreateProviderProfileFromDraftPayload;
   const existing = await resolveProviderConfig(context);
 
-  const name = resolveProviderName(input.name, existing?.name);
-  const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl ?? '');
-  const model = (input.model ?? existing?.model ?? '').trim();
-  if (!baseUrl || !model) {
-    return {
-      ok: false,
-      message: 'Base URL and model are required before saving a profile.',
-    };
-  }
-
   const rawProtocol = input.protocol ?? existing?.protocol;
   const protocol = normalizeProviderProtocol(rawProtocol) ?? (rawProtocol ? undefined : DEFAULT_PROVIDER_PROTOCOL);
   if (!protocol) {
@@ -1644,10 +1699,19 @@ export async function createProviderProfileFromDraftCommand(
         'Select a chat protocol before saving. A gateway connection type is not a protocol, and unknown gateways are not assumed OpenAI-compatible.',
     };
   }
+  const name = resolveProviderName(input.name, existing?.name);
+  const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl ?? '', protocol);
+  const model = (input.model ?? existing?.model ?? '').trim();
+  if (!baseUrl || !model) {
+    return {
+      ok: false,
+      message: 'Base URL and model are required before saving a profile.',
+    };
+  }
   const sameConnection =
     Boolean(existing) &&
     normalizeProviderProtocol(existing?.protocol) === protocol &&
-    normalizeBaseUrl(existing?.baseUrl ?? '') === baseUrl;
+    normalizeBaseUrl(existing?.baseUrl ?? '', normalizeProviderProtocol(existing?.protocol)) === baseUrl;
   const profileLabel = input.profileLabel?.trim() || name;
   const allowedModels = input.allowedModels ?? (sameConnection ? existing?.allowedModels ?? [] : []);
   const deniedModels = input.deniedModels ?? (sameConnection ? existing?.deniedModels ?? [] : []);
@@ -1682,6 +1746,8 @@ export async function createProviderProfileFromDraftCommand(
   });
   const requestDefaultsInput =
     input.requestDefaults ?? (sameConnection ? existing?.requestDefaults ?? {} : {});
+  const hasEmbeddingModel = hasOwn(input, 'embeddingModel');
+  const hasCacheTtlSeconds = hasOwn(input, 'cacheTtlSeconds');
   const config: ProviderConfig = {
     name,
     label: profileLabel,
@@ -1689,8 +1755,9 @@ export async function createProviderProfileFromDraftCommand(
     baseUrl,
     model,
     protocol,
+    connectionType: input.connectionType ?? (sameConnection ? existing?.connectionType : undefined),
     apiKeyRef: createProviderApiKeyRef(),
-    mode: sameConnection ? existing?.mode : 'direct',
+    mode: input.mode ?? (sameConnection ? existing?.mode : 'direct'),
     credentialMode,
     ignoreSystemProxy:
       typeof input.ignoreSystemProxy === 'boolean'
@@ -1702,6 +1769,7 @@ export async function createProviderProfileFromDraftCommand(
         name,
         baseUrl,
         model,
+        protocol,
         capabilities,
         modelCapabilities: sameConnection ? existing?.modelCapabilities?.[model] : undefined,
       },
@@ -1711,9 +1779,15 @@ export async function createProviderProfileFromDraftCommand(
     // markers in the submitted defaults, then the stored intent — but only on
     // the same connection.
     thinkingConfig:
-      normalizeProviderThinkingConfig(input.thinkingConfig, protocol) ??
-      normalizeProviderThinkingConfig(requestDefaultsInput, protocol) ??
-      (sameConnection ? existing?.thinkingConfig : undefined),
+      hasOwn(input, 'thinkingConfig') && input.thinkingConfig === null
+        ? undefined
+        : normalizeProviderThinkingConfig(input.thinkingConfig, protocol) ??
+          normalizeProviderThinkingConfig(requestDefaultsInput, protocol) ??
+          (hasOwn(input, 'requestDefaults')
+            ? undefined
+            : sameConnection
+              ? existing?.thinkingConfig
+              : undefined),
     availableModels: sameConnection ? existing?.availableModels ?? [] : [],
     catalogModels: mergeCatalogModels(
       input.catalogModels,
@@ -1729,9 +1803,24 @@ export async function createProviderProfileFromDraftCommand(
     taskBindings: sameConnection ? existing?.taskBindings ?? {} : {},
     contextWindowTokens: tokenState.contextWindowTokens,
     maxOutputTokens: tokenState.maxOutputTokens,
-    embeddingModel: sameConnection ? existing?.embeddingModel : undefined,
-    catalogSource: sameConnection ? existing?.catalogSource : 'manual',
-    cacheTtlSeconds: sameConnection ? existing?.cacheTtlSeconds : undefined,
+    embeddingModel: hasEmbeddingModel
+      ? (typeof input.embeddingModel === 'string' && input.embeddingModel.trim()
+          ? input.embeddingModel.trim()
+          : undefined)
+      : sameConnection
+        ? existing?.embeddingModel
+        : undefined,
+    catalogSource:
+      input.catalogSource ?? (sameConnection ? existing?.catalogSource : undefined) ?? 'provider_live',
+    cacheTtlSeconds: hasCacheTtlSeconds
+      ? (typeof input.cacheTtlSeconds === 'number' &&
+        Number.isFinite(input.cacheTtlSeconds) &&
+        input.cacheTtlSeconds > 0
+          ? Math.round(input.cacheTtlSeconds)
+          : undefined)
+      : sameConnection
+        ? existing?.cacheTtlSeconds
+        : undefined,
   };
 
   const store = context.providerStore as typeof context.providerStore & {

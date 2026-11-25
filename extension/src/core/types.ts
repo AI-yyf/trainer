@@ -299,6 +299,11 @@ export interface ProviderConfigView {
   diagnostics?: string[];
   warnings?: string[];
   lastTestResult?: ProviderLastTestResult;
+  /** Saved connections, carried so the webview can list and switch between them. */
+  profileCount?: number;
+  profileHistory?: Array<Record<string, unknown>>;
+  providerProfiles?: Array<Record<string, unknown>>;
+  providerDashboard?: Record<string, unknown>;
 }
 
 export interface LiveContextView {

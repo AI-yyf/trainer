@@ -299,6 +299,12 @@ export type StreamingState = ReturnType<typeof normalizeTrainerStreamingState> &
    * artifacts carry the same marker instead.
    */
   completionNextStepRequiresConfirmation?: boolean;
+  /**
+   * Message id for which a `stream/complete` event has already been applied.
+   * Tracks deduplication independently of host `syncState()` setting
+   * `isStreaming: false, reliabilityPhase: "acked"` before `stream/complete`.
+   */
+  completionAppliedMessageId?: string;
 };
 type OperationMessage = TrainerOperationMessage;
 
@@ -1434,14 +1440,57 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
             })
           : nextData;
         const incomingStreaming = normalizeTrainerStreamingState(resolvedData.streamingState);
+        const scopeOrGenerationChanged =
+          runtimeDataChanged ||
+          Boolean(
+            versionedState &&
+              (versionedState.generation !== state.syncCursor.generation ||
+                versionedState.sessionId !== state.syncCursor.sessionId ||
+                versionedState.workspaceId !== state.syncCursor.workspaceId),
+          );
         const preserveOptimisticStream = Boolean(
-          !runtimeDataChanged &&
+          !scopeOrGenerationChanged &&
           state.streaming.isStreaming &&
           !state.streaming.streamMessageId &&
           !incomingStreaming.isStreaming &&
           resolvedData.conversation.length <= state.data.conversation.length,
         );
-        const nextStreaming = preserveOptimisticStream ? state.streaming : incomingStreaming;
+        const preserveLiveStream = Boolean(
+          !scopeOrGenerationChanged &&
+          state.streaming.isStreaming &&
+          state.streaming.streamMessageId &&
+          (
+            (!incomingStreaming.isStreaming &&
+              incomingStreaming.streamMessageId !== state.streaming.streamMessageId &&
+              resolvedData.conversation.length <= state.data.conversation.length) ||
+            (incomingStreaming.isStreaming &&
+              incomingStreaming.streamMessageId === state.streaming.streamMessageId)
+          ),
+        );
+        const nextStreaming = preserveOptimisticStream
+          ? state.streaming
+          : preserveLiveStream
+            ? incomingStreaming.isStreaming
+              ? {
+                  ...incomingStreaming,
+                  streamedContent:
+                    state.streaming.streamedContent.length >= incomingStreaming.streamedContent.length
+                      ? state.streaming.streamedContent
+                      : incomingStreaming.streamedContent,
+                  agentActivity:
+                    state.streaming.agentActivity.length >= incomingStreaming.agentActivity.length
+                      ? state.streaming.agentActivity
+                      : incomingStreaming.agentActivity,
+                  agentStep:
+                    Math.max(state.streaming.agentStep ?? 0, incomingStreaming.agentStep ?? 0) ||
+                    incomingStreaming.agentStep,
+                  liveStageKind: state.streaming.liveStageKind ?? incomingStreaming.liveStageKind,
+                  pendingVisibleContent: state.streaming.pendingVisibleContent,
+                  hasRejectedVisibleContent: state.streaming.hasRejectedVisibleContent,
+                  completionAppliedMessageId: state.streaming.completionAppliedMessageId,
+                }
+              : state.streaming
+            : incomingStreaming;
         return {
           data: resolvedData,
           layout: nextLayout,
@@ -1500,19 +1549,76 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           message.payload.streamingState !== undefined
             ? normalizeTrainerStreamingState(message.payload.streamingState)
             : undefined;
+        const scopeOrGenerationChanged =
+          workspaceChanged ||
+          Boolean(
+            versionedState &&
+              (versionedState.generation !== state.syncCursor.generation ||
+                versionedState.sessionId !== state.syncCursor.sessionId),
+          );
         const preserveOptimisticStream = Boolean(
-          !workspaceChanged &&
+          !scopeOrGenerationChanged &&
           state.streaming.isStreaming &&
           !state.streaming.streamMessageId &&
           incomingStreaming &&
           !incomingStreaming.isStreaming &&
           nextData.conversation.length <= state.data.conversation.length,
         );
+        const preserveLiveStream = Boolean(
+          !scopeOrGenerationChanged &&
+          state.streaming.isStreaming &&
+          state.streaming.streamMessageId &&
+          incomingStreaming &&
+          (
+            (!incomingStreaming.isStreaming &&
+              incomingStreaming.streamMessageId !== state.streaming.streamMessageId &&
+              nextData.conversation.length <= state.data.conversation.length) ||
+            (incomingStreaming.isStreaming &&
+              incomingStreaming.streamMessageId === state.streaming.streamMessageId)
+          ),
+        );
+        const preserveCancelledPartial = Boolean(
+          !scopeOrGenerationChanged &&
+          !state.streaming.isStreaming &&
+          state.streaming.completionStopReason === "cancelled" &&
+          state.streaming.streamedContent &&
+          incomingStreaming &&
+          !incomingStreaming.isStreaming &&
+          incomingStreaming.completionStopReason === "cancelled" &&
+          incomingStreaming.streamMessageId === state.streaming.streamMessageId &&
+          incomingStreaming.streamedContent.length < state.streaming.streamedContent.length,
+        );
         const nextStreaming = workspaceChanged
           ? createEmptyTrainerStreamingState()
           : preserveOptimisticStream
             ? state.streaming
-            : incomingStreaming ?? state.streaming;
+            : preserveLiveStream && incomingStreaming
+              ? incomingStreaming.isStreaming
+                ? {
+                    ...incomingStreaming,
+                    streamedContent:
+                      state.streaming.streamedContent.length >= incomingStreaming.streamedContent.length
+                        ? state.streaming.streamedContent
+                        : incomingStreaming.streamedContent,
+                    agentActivity:
+                      state.streaming.agentActivity.length >= incomingStreaming.agentActivity.length
+                        ? state.streaming.agentActivity
+                        : incomingStreaming.agentActivity,
+                    agentStep:
+                      Math.max(state.streaming.agentStep ?? 0, incomingStreaming.agentStep ?? 0) ||
+                      incomingStreaming.agentStep,
+                    liveStageKind: state.streaming.liveStageKind ?? incomingStreaming.liveStageKind,
+                    pendingVisibleContent: state.streaming.pendingVisibleContent,
+                    hasRejectedVisibleContent: state.streaming.hasRejectedVisibleContent,
+                    completionAppliedMessageId: state.streaming.completionAppliedMessageId,
+                  }
+                : state.streaming
+              : preserveCancelledPartial && incomingStreaming
+                ? {
+                    ...incomingStreaming,
+                    streamedContent: state.streaming.streamedContent,
+                  }
+                : incomingStreaming ?? state.streaming;
         const patchedStageMaterials = message.payload.stageMaterials;
         const stageScopeChanged = workspaceChanged || nextData.plan.id !== state.data.plan.id;
         return {
@@ -1696,10 +1802,15 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           return {};
         }
         // Owner already applied this streamMessageId — ignore waiter/replay duplicate complete.
+        // Track applied completion explicitly so a preceding host `syncState()`
+        // (which sets isStreaming=false, reliabilityPhase="acked") never drops
+        // the authoritative `stream/complete` metadata (tokens, summary, nextStep,
+        // dockReturnNotice, nextStepRequiresConfirmation).
+        const resolvedCompleteMessageId =
+          message.payload.messageId ?? state.streaming.streamMessageId;
         if (
-          !state.streaming.isStreaming &&
-          state.streaming.streamMessageId &&
-          state.streaming.reliabilityPhase === "acked"
+          resolvedCompleteMessageId &&
+          state.streaming.completionAppliedMessageId === resolvedCompleteMessageId
         ) {
           return {};
         }
@@ -1719,6 +1830,7 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           ...state.streaming,
           ...completedContent,
           isStreaming: false,
+          completionAppliedMessageId: resolvedCompleteMessageId,
           completionSummary: summary,
           completionNextStep: nextStep,
           completionNextStepRequiresConfirmation:
@@ -1797,6 +1909,12 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         if (!isCurrentStreamEvent(state.streaming, message.payload.messageId)) {
           return {};
         }
+        const flushedContent = finishSafeStreamContent(state.streaming);
+        const incomingPartial = sanitizeVisibleText(message.payload.partialContent ?? "");
+        const preservedContent =
+          flushedContent.streamedContent.length >= incomingPartial.length
+            ? flushedContent.streamedContent
+            : incomingPartial;
         const cancelledMessage = appUiCopy(
           state.layout.composerLanguage,
           "已取消本轮回复，已保留已生成内容。",
@@ -1804,6 +1922,8 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         return {
           streaming: {
             ...state.streaming,
+            ...flushedContent,
+            streamedContent: preservedContent,
             isStreaming: false,
             pendingVisibleContent: undefined,
             streamError: undefined,

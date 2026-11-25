@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
+import { providerBaseUrlIsLocalService } from "../../../../../shared/src/providerStatus";
 import type { ComposerLanguage } from "../../../../../shared/src/types";
 import { CheckMarkIcon } from "../icons";
 import { DoneIcon } from "../icons/inline";
@@ -48,7 +49,10 @@ export function ProviderQuickSetup({
   const [pasteHint, setPasteHint] = useState<string | null>(null);
 
   const baseUrlReady = draft.baseUrl.trim().length > 0;
-  const keyReady = draft.apiKey.trim().length > 0 || hasStoredApiKey;
+  const keyReady =
+    draft.apiKey.trim().length > 0 ||
+    hasStoredApiKey ||
+    providerBaseUrlIsLocalService(draft.baseUrl);
   const modelReady = draft.model.trim().length > 0;
   const step1Done = baseUrlReady;
   const step2Done = keyReady;
@@ -59,7 +63,11 @@ export function ProviderQuickSetup({
     () => Boolean(connected && savedBaseUrl),
     [connected, savedBaseUrl],
   );
-  const collapsed = connectedSummary && !open && !draft.baseUrl.trim() && !draft.apiKey.trim();
+  const collapsed =
+    connectedSummary &&
+    !open &&
+    (!draft.baseUrl.trim() || draft.baseUrl.trim() === savedBaseUrl.trim()) &&
+    !draft.apiKey.trim();
 
   const handlePasteOrType = (value: string) => {
     const parsed = parseProviderConnectionPaste(value);

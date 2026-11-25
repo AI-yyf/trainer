@@ -11,9 +11,10 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Upstreams occasionally send finish_reason and then keep the HTTP stream open
-# (observed with MiniMax M3.1). Without an idle bound the UI stays in
-# "streaming" forever even though the visible answer is complete.
-STREAM_IDLE_TIMEOUT_SECONDS = 30.0
+# (observed with MiniMax M3.1). Use a tight post-finish drain once finish_seen()
+# is true, while keeping the pre-finish idle ceiling generous so slow reasoning
+# models are not prematurely cut off mid-thought.
+STREAM_IDLE_TIMEOUT_SECONDS = 120.0
 POST_FINISH_DRAIN_TIMEOUT_SECONDS = 1.0
 
 

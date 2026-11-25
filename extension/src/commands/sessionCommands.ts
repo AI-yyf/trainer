@@ -6,6 +6,8 @@ import { SIDECAR_DEFAULTS } from '../core/constants';
 import { SidecarRequestAbortedError, type SSEMessage } from '../core/httpClient';
 import { recordSendFirstTokenMs } from '../core/runtimeMetrics';
 import { trainerSessionBlockReason } from '../core/runtimeRehydration';
+import { canConverseBeforeAdmission } from '../../../shared/src/conversationAdmission';
+import { sameProviderRequestIdentity } from '../../../shared/src/providerConnectionIdentity';
 import {
   bumpSessionActivationGeneration,
   currentSessionActivationGeneration,
@@ -37,6 +39,7 @@ import {
 import {
   describeProviderImageInputState,
   describeProviderSendState,
+  providerBaseUrlIsLocalService,
   providerTransportIsConfigured,
 } from '../../../shared/src/providerStatus';
 import {
@@ -367,7 +370,12 @@ async function notifyResourceOrganizationPending(
 
 function trainerWorkspaceSessionGate(
   context: CommandContext,
+  conversationPayload?: unknown,
 ): CommandExecutionResult | undefined {
+  if (canConverseBeforeAdmission(
+    context.getHostState().bootstrap.memory?.workspace?.trainerWorkspace?.status,
+    conversationPayload,
+  )) return undefined;
   const blockReason = trainerSessionBlockReason(context);
   if (!blockReason) {
     return undefined;
@@ -725,7 +733,11 @@ async function ensureCoachProviderReady(
     };
   }
 
-  if (!providerUsesWorkspaceSecret(providerConfig) && !apiKey?.trim()) {
+  if (
+    !providerUsesWorkspaceSecret(providerConfig) &&
+    !providerBaseUrlIsLocalService(providerConfig.baseUrl) &&
+    !apiKey?.trim()
+  ) {
     return {
       ok: false,
       message: `Trainer needs a saved provider and API key before it can ${action}.`,
@@ -1018,9 +1030,14 @@ function classifyProviderFailure(detail: string): ProviderFailureMeta {
 async function patchProviderFailureState(
   context: CommandContext,
   failure: ProviderFailureMeta,
+  requestConfig?: ProviderConfig,
+  requestApiKey?: string,
 ): Promise<void> {
-  const providerConfig = context.providerStore.getConfig();
+  const providerConfig = requestConfig ?? context.providerStore.getConfig();
+  if (requestConfig && !sameProviderRequestIdentity(requestConfig, context.providerStore.getConfig())) return;
   const apiKey = await context.providerStore.getApiKey();
+  if (requestConfig && !sameProviderRequestIdentity(requestConfig, context.providerStore.getConfig())) return;
+  if (requestApiKey !== undefined && apiKey?.trim() !== requestApiKey.trim()) return;
   const currentView = context.getHostState().bootstrap.providerConfig;
 
   if (!providerConfig) {
@@ -1044,6 +1061,8 @@ async function patchProviderFailureState(
     source: preserveModels ? 'cache' : 'live',
     apiKey,
   });
+  if (!sameProviderRequestIdentity(providerConfig, context.providerStore.getConfig())) return;
+  if (requestApiKey !== undefined && (await context.providerStore.getApiKey())?.trim() !== requestApiKey.trim()) return;
 
   await context.patchWorkbenchData({
     providerConfig: {
@@ -1272,6 +1291,8 @@ async function persistProviderLastTestResult(
     streamProbeStatus?: ReturnType<typeof normalizeProviderCapabilityTruth>['streamProbeStatus'];
   },
 ): Promise<void> {
+  if (providerConfig && !sameProviderRequestIdentity(providerConfig, context.providerStore.getConfig())) return;
+  const workspaceId = getRuntimeWorkspaceId(context);
   const currentView = context.getHostState().bootstrap.providerConfig;
   const protocol = normalizeProviderProtocol(
     result.protocol ?? providerConfig?.protocol ?? currentView.protocol,
@@ -1283,9 +1304,11 @@ async function persistProviderLastTestResult(
   };
   if (providerConfig && typeof context.providerStore.saveLastTestResult === 'function') {
     await context.providerStore.saveLastTestResult(providerConfig, normalizedResult, {
-      workspaceId: getRuntimeWorkspaceId(context),
+      workspaceId,
     });
   }
+  if (getRuntimeWorkspaceId(context) !== workspaceId ||
+    providerConfig && !sameProviderRequestIdentity(providerConfig, context.providerStore.getConfig())) return;
   await context.patchWorkbenchData({
     providerConfig: {
       ...currentView,
@@ -1367,11 +1390,15 @@ async function markProviderReplyUnusable(
   providerConfig: ProviderConfig | undefined,
   failure: ProviderFailureMeta,
   responseLanguage = resolveProviderGuardLanguage(context),
+  requestApiKey?: string,
 ): Promise<void> {
-  if (!failure.category) {
+  if (!failure.category || providerConfig && !sameProviderRequestIdentity(providerConfig, context.providerStore.getConfig())) {
     return;
   }
-  await patchProviderFailureState(context, failure);
+  if (requestApiKey !== undefined && (await context.providerStore.getApiKey())?.trim() !== requestApiKey.trim()) return;
+  await patchProviderFailureState(context, failure, providerConfig, requestApiKey);
+  if (providerConfig && !sameProviderRequestIdentity(providerConfig, context.providerStore.getConfig())) return;
+  if (requestApiKey !== undefined && (await context.providerStore.getApiKey())?.trim() !== requestApiKey.trim()) return;
   const currentView = context.getHostState().bootstrap.providerConfig;
   await persistProviderLastTestResult(context, providerConfig, {
     ok: false,
@@ -1821,7 +1848,7 @@ export async function sendMessageCommand(
     return { ok: false, message: 'Workspace trust is required for session messages.' };
   }
 
-  const workspaceGate = trainerWorkspaceSessionGate(context);
+  const workspaceGate = trainerWorkspaceSessionGate(context, payload);
   if (workspaceGate) {
     return workspaceGate;
   }
@@ -1865,7 +1892,11 @@ export async function sendMessageCommand(
       message: 'Trainer needs a saved provider before sending messages.',
     };
   }
-  if (!providerUsesWorkspaceSecret(providerConfig) && !apiKey?.trim()) {
+  if (
+    !providerUsesWorkspaceSecret(providerConfig) &&
+    !providerBaseUrlIsLocalService(providerConfig.baseUrl) &&
+    !apiKey?.trim()
+  ) {
     return {
       ok: false,
       message: 'Trainer needs a saved provider and API key before sending messages.',
@@ -1967,7 +1998,7 @@ export async function sendMessageCommand(
         }
         const retryFailure = classifyProviderFailure(normalizeErrorText(retryError));
         if (retryFailure.category) {
-          await patchProviderFailureState(context, retryFailure);
+          await patchProviderFailureState(context, retryFailure, providerConfig, apiKey);
         }
         throw retryError;
       });
@@ -1977,7 +2008,7 @@ export async function sendMessageCommand(
       }
       const failure = classifyProviderFailure(normalizeErrorText(error));
       if (failure.category) {
-        await patchProviderFailureState(context, failure);
+        await patchProviderFailureState(context, failure, providerConfig, apiKey);
       }
       if (isRetryableTimeoutFailure(error)) {
         return { ok: false, message: userFacingErrorText(error) };
@@ -2044,7 +2075,7 @@ export async function sendMessageCommand(
   }
   const replyFailure = extractUnusableReplyFailureFromResponse(response);
   if (replyFailure && requestIsCurrent()) {
-    await markProviderReplyUnusable(context, providerConfig, replyFailure);
+    await markProviderReplyUnusable(context, providerConfig, replyFailure, undefined, apiKey);
   }
   return {
     ok: true,
@@ -2061,7 +2092,7 @@ export async function sendStreamMessageCommand(
     return { ok: false, message: 'Workspace trust is required for session messages.' };
   }
 
-  const workspaceGate = trainerWorkspaceSessionGate(context);
+  const workspaceGate = trainerWorkspaceSessionGate(context, payload);
   if (workspaceGate) {
     return workspaceGate;
   }
@@ -2084,16 +2115,35 @@ export async function sendStreamMessageCommand(
   const streamGeneration = nextStreamGeneration(context);
   activeCoachStreamContexts.add(context);
   let activeCoachStream: ActiveCoachStream | undefined;
+  let requestProviderConfig: ProviderConfig | undefined;
+  let requestApiKey: string | undefined;
+  const CHUNK_COALESCE_WINDOW_MS = 66;
+  let pendingChunkText = '';
+  let streamedVisibleText = '';
+  let lastChunkFlushAt = 0;
+  let pendingFlushTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearPendingFlushTimer = (): void => {
+    if (pendingFlushTimer !== undefined) {
+      clearTimeout(pendingFlushTimer);
+      pendingFlushTimer = undefined;
+    }
+  };
   try {
     const providerConfig = context.providerStore.getConfig();
     const apiKey = await context.providerStore.getApiKey();
+    requestProviderConfig = providerConfig;
+    requestApiKey = apiKey;
     if (!providerConfig) {
       return {
         ok: false,
         message: 'Trainer needs a saved provider before streaming messages.',
       };
     }
-    if (!providerUsesWorkspaceSecret(providerConfig) && !apiKey?.trim()) {
+    if (
+      !providerUsesWorkspaceSecret(providerConfig) &&
+      !providerBaseUrlIsLocalService(providerConfig.baseUrl) &&
+      !apiKey?.trim()
+    ) {
       return {
         ok: false,
         message: 'Trainer needs a saved provider and API key before streaming messages.',
@@ -2232,19 +2282,25 @@ export async function sendStreamMessageCommand(
 
     // Coalesce token deltas into ~66ms frames so the webview receives one
     // postMessage (and the host persists streaming state once) per frame
-    // instead of per token.
-    const CHUNK_COALESCE_WINDOW_MS = 66;
-    let pendingChunkText = '';
-    let streamedVisibleText = '';
-    let lastChunkFlushAt = 0;
+    // instead of per token. A trailing timer guarantees chunks emitted right
+    // before a pause or tool call are never stranded until the next token.
     const flushChunkFrame = async (force = false): Promise<void> => {
       if (!pendingChunkText) {
+        clearPendingFlushTimer();
         return;
       }
       const now = Date.now();
-      if (!force && now - lastChunkFlushAt < CHUNK_COALESCE_WINDOW_MS) {
+      const elapsed = now - lastChunkFlushAt;
+      if (!force && elapsed < CHUNK_COALESCE_WINDOW_MS) {
+        if (pendingFlushTimer === undefined) {
+          pendingFlushTimer = setTimeout(() => {
+            pendingFlushTimer = undefined;
+            void flushChunkFrame(true);
+          }, CHUNK_COALESCE_WINDOW_MS - elapsed);
+        }
         return;
       }
+      clearPendingFlushTimer();
       const frame = pendingChunkText;
       pendingChunkText = '';
       streamedVisibleText += frame;
@@ -2322,12 +2378,18 @@ export async function sendStreamMessageCommand(
           try {
             const statusForSnapshot = await context.sidecarManager.ensureRunning();
             if (statusForSnapshot.lifecycle === 'ready' && statusForSnapshot.port) {
-              const sessionParam = context.getSessionId()
-                ? `&session_id=${encodeURIComponent(context.getSessionId() ?? '')}`
-                : '';
+              const targetSessionId =
+                asNonEmptyString(responseRecord.session_id) ?? context.getSessionId();
+              const snapshotParams = new URLSearchParams({
+                fields: 'full',
+                workspace_id: getRuntimeWorkspaceId(context),
+              });
+              if (targetSessionId) {
+                snapshotParams.set('session_id', targetSessionId);
+              }
               const full = await context.sidecarClient.getJson<{ snapshot?: unknown }>(
                 statusForSnapshot.port,
-                `/snapshot?fields=full${sessionParam}`,
+                `/snapshot?${snapshotParams.toString()}`,
               );
               if (full && full.snapshot) {
                 effectiveResponse = { ...responseRecord, snapshot: full.snapshot };
@@ -2341,6 +2403,7 @@ export async function sendStreamMessageCommand(
           }
         }
         completionResponse = effectiveResponse;
+        clearPendingFlushTimer();
         // The final coalesced chunk is still pending here; the completion
         // merge runs before the loop's final flush. Fold it into the fallback
         // now so an empty slim reply never persists a truncated answer.
@@ -2387,6 +2450,9 @@ export async function sendStreamMessageCommand(
               runtimeWorkspaceId,
               context.getSessionId(),
             );
+            if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
+              return { ok: true, message: 'Stream invalidated.' };
+            }
             await context.patchWorkbenchData(
               mergeMemorySummarySnapshot(
                 context.getHostState().bootstrap,
@@ -2406,6 +2472,7 @@ export async function sendStreamMessageCommand(
       }
 
       if (event.event === 'tool_call') {
+        await flushChunkFrame(true);
         const parsed = parseSseJson(event);
         if (parsed) {
           if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
@@ -2443,6 +2510,7 @@ export async function sendStreamMessageCommand(
       }
 
       if (event.event === 'tool_result') {
+        await flushChunkFrame(true);
         const parsed = parseSseJson(event);
         if (parsed) {
           if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
@@ -2490,6 +2558,7 @@ export async function sendStreamMessageCommand(
       }
 
       if (event.event === 'step') {
+        await flushChunkFrame(true);
         const parsed = parseSseJson(event);
         if (parsed) {
           if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
@@ -2519,6 +2588,7 @@ export async function sendStreamMessageCommand(
       }
 
       if (event.event === 'status') {
+        await flushChunkFrame(true);
         const parsed = parseSseJson(event);
         const phase = typeof parsed?.phase === 'string' ? parsed.phase : undefined;
         if (phase === 'model_reasoning' || phase === 'tool_intent') {
@@ -2590,17 +2660,22 @@ export async function sendStreamMessageCommand(
 
       const parsed = parseSseJson(event);
       const chunkText = typeof parsed?.chunk === 'string' ? parsed.chunk : undefined;
-      if (chunkText) {
-        totalTokens += 1;
-        pendingChunkText += chunkText;
-        await flushChunkFrame();
+      if (chunkText !== undefined) {
+        if (chunkText) {
+          totalTokens += 1;
+          pendingChunkText += chunkText;
+          await flushChunkFrame();
+        }
         continue;
       }
 
-      pendingChunkText += event.data;
-      await flushChunkFrame();
+      if (parsed === undefined && event.data) {
+        pendingChunkText += event.data;
+        await flushChunkFrame();
+      }
     }
 
+    clearPendingFlushTimer();
     await flushChunkFrame(true);
     context.outputChannel?.appendLine(
       `[stream] ${requestPath} loop-ended message=${messageId} complete=${sawCompletion} response=${completionResponse !== undefined}`,
@@ -2638,10 +2713,13 @@ export async function sendStreamMessageCommand(
     if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
       return { ok: true, message: 'Stream invalidated.' };
     }
-    if (replyFailure) {
-      await markProviderReplyUnusable(context, providerConfig, replyFailure);
+    const providerResultIsCurrent = sameProviderRequestIdentity(providerConfig, context.providerStore.getConfig()) &&
+      (apiKey?.trim() ?? '') === ((await context.providerStore.getApiKey())?.trim() ?? '') &&
+      sameProviderRequestIdentity(providerConfig, context.providerStore.getConfig());
+    if (replyFailure && providerResultIsCurrent) {
+      await markProviderReplyUnusable(context, providerConfig, replyFailure, undefined, apiKey);
     } else if (
-      providerConfig &&
+      !replyFailure && providerConfig && providerResultIsCurrent &&
       reliability.outcome !== 'failure' &&
       (completionResponse as { provider_failure_detected?: unknown }).provider_failure_detected !== true &&
       (completionResponse as { agent?: { fell_back?: unknown } }).agent?.fell_back !== true
@@ -2671,7 +2749,6 @@ export async function sendStreamMessageCommand(
     if (!activeCoachStream || !isCurrentCoachStream(context, activeCoachStream)) {
       return { ok: true, message: 'Stream invalidated.' };
     }
-    await context.workbench.syncState();
     await context.workbench.postMessage({
       type: 'stream/complete',
       payload: {
@@ -2687,11 +2764,17 @@ export async function sendStreamMessageCommand(
         reliabilityOutcome: reliability.outcome,
       },
     });
+    await context.workbench.syncState();
     return {
       ok: true,
       message: 'Stream message completed.',
     };
   } catch (error) {
+    clearPendingFlushTimer();
+    if (pendingChunkText) {
+      streamedVisibleText += pendingChunkText;
+      pendingChunkText = '';
+    }
     if (
       error instanceof SidecarRequestAbortedError ||
       activeCoachStream?.abortController.signal.aborted ||
@@ -2707,11 +2790,14 @@ export async function sendStreamMessageCommand(
           message: 'Stream invalidated.',
         };
       }
+      const partialContent =
+        currentStreamingState(context).streamedContent || streamedVisibleText || undefined;
       // Fail-closed OS timeline: pending→…→failure→ack (not silent success). Keep draft.
       await updateStreamingState(context, (state) => ({
         ...state,
         isStreaming: true,
         streamError: undefined,
+        streamedContent: state.streamedContent || partialContent || '',
         reliabilityPhase: 'failed',
         reliabilityOutcome: 'failure',
       }));
@@ -2720,16 +2806,17 @@ export async function sendStreamMessageCommand(
         ...state,
         isStreaming: false,
         streamError: undefined,
+        streamedContent: state.streamedContent || partialContent || '',
         completionStopReason: 'cancelled',
         reliabilityPhase: 'acked',
         reliabilityOutcome: 'failure',
       }));
       await postStreamReliabilityStatus(context, 'acked', responseLanguage);
-      await context.workbench.syncState();
       await context.workbench.postMessage({
         type: 'stream/cancelled',
-        payload: { messageId },
+        payload: { messageId, partialContent },
       });
+      await context.workbench.syncState();
       return {
         ok: true,
         message: 'Stream cancelled.',
@@ -2741,7 +2828,7 @@ export async function sendStreamMessageCommand(
       friendlyStreamFailureMessage(failure, responseLanguage),
     );
     if (failure.category) {
-      await patchProviderFailureState(context, failure);
+      if (requestProviderConfig) await patchProviderFailureState(context, failure, requestProviderConfig, requestApiKey);
     }
     await updateStreamingState(context, (state) => ({
       ...state,
@@ -2770,6 +2857,7 @@ export async function sendStreamMessageCommand(
     };
     }
   } finally {
+    clearPendingFlushTimer();
     if (activeCoachStream && activeCoachStreams.get(context) === activeCoachStream) {
       activeCoachStreams.delete(context);
       activeCoachStreamContexts.delete(context);
@@ -2797,6 +2885,11 @@ export async function cancelStreamMessageCommand(
     if (trainingCancellation) {
       return trainingCancellation;
     }
+    // Even before the SSE stream registers in activeCoachStreams (e.g., while
+    // awaiting SecretStorage or sidecar readiness), bump the stream generation
+    // so an in-flight pre-SSE send aborts cleanly instead of starting after Stop.
+    nextStreamGeneration(context);
+    activeCoachStreamContexts.delete(context);
     if (!streamingState.isStreaming) {
       await context.workbench.syncState();
       return { ok: true, message: 'The Trainer stream has already stopped.' };
@@ -2805,9 +2898,32 @@ export async function cancelStreamMessageCommand(
 
   const messageId = active?.messageId ?? streamingState.streamMessageId;
   if (!messageId) {
+    // An optimistic/in-flight streaming flag with no streamMessageId yet must
+    // still settle cleanly rather than trapping the UI in a non-cancellable state.
+    nextStreamGeneration(context);
+    activeCoachStreams.delete(context);
+    activeCoachStreamContexts.delete(context);
+    const responseLanguage = resolveProviderGuardLanguage(context);
+    await updateStreamingState(context, (state) => ({
+      ...state,
+      isStreaming: false,
+      streamError: undefined,
+      completionStopReason: 'cancelled',
+      reliabilityPhase: 'acked',
+      reliabilityOutcome: 'failure',
+    }));
+    await context.workbench.postMessage({
+      type: 'stream/cancelled',
+      payload: {
+        partialContent: streamingState.streamedContent || undefined,
+      },
+    });
+    await context.workbench.syncState();
     return {
-      ok: false,
-      message: 'No Trainer stream is currently running.',
+      ok: true,
+      message: responseLanguage === 'zh-CN'
+        ? '已取消本轮回复。'
+        : 'Reply cancelled.',
     };
   }
   if (typeof requestedMessageId === 'string' && requestedMessageId.trim() && requestedMessageId !== messageId) {
@@ -2834,12 +2950,14 @@ export async function cancelStreamMessageCommand(
       // The local abort remains the fallback when the sidecar has already
       // disconnected or is shutting down.
     });
+  const partialContent = streamingState.streamedContent || undefined;
   const responseLanguage = resolveProviderGuardLanguage(context);
   await postStreamReliabilityStatus(context, 'failed', responseLanguage);
   await updateStreamingState(context, (state) => ({
     ...state,
     isStreaming: false,
     streamError: undefined,
+    streamedContent: state.streamedContent || partialContent || '',
     completionStopReason: 'cancelled',
     reliabilityPhase: 'acked',
     reliabilityOutcome: 'failure',
@@ -2847,7 +2965,7 @@ export async function cancelStreamMessageCommand(
   await postStreamReliabilityStatus(context, 'acked', responseLanguage);
   await context.workbench.postMessage({
     type: 'stream/cancelled',
-    payload: { messageId },
+    payload: { messageId, partialContent },
   });
   await context.workbench.syncState();
   return {
@@ -3440,7 +3558,8 @@ export async function restartSessionCommand(
   }
   // A force-new chat owns the visible session. Invalidate any stored-session
   // restore or activation that started before this command.
-  bumpSessionActivationGeneration(context);
+  const activationGeneration = bumpSessionActivationGeneration(context);
+  const requestedWorkspaceId = getRuntimeWorkspaceContext(context).workspaceId;
 
   await invalidateActiveTrainerStreams(context);
 
@@ -3464,12 +3583,15 @@ export async function restartSessionCommand(
     force_new: true,
     ...(workspaceFileSnapshot ? { workspace_file_snapshot: workspaceFileSnapshot } : {}),
   });
+  if (
+    !isCurrentSessionActivation(context, activationGeneration) ||
+    getRuntimeWorkspaceContext(context).workspaceId !== requestedWorkspaceId
+  ) {
+    return { ok: true, cancelled: true };
+  }
   const startedSessionId =
     asNonEmptyString(asTrainingRecord(response)?.session_id) ?? context.getSessionId();
   await context.setStreamingState(createEmptyTrainerStreamingState());
-  // A restore that read the old id while /session/start was in flight must
-  // not commit after the new id becomes authoritative.
-  bumpSessionActivationGeneration(context);
   await context.setSessionId(startedSessionId);
   const startSnapshot = mergeSessionStartSnapshot(
     context.getHostState().bootstrap,
@@ -3500,6 +3622,12 @@ export async function restartSessionCommand(
     runtimeWorkspace.workspaceId,
     startedSessionId,
   );
+  if (
+    !isCurrentSessionActivation(context, activationGeneration) ||
+    getRuntimeWorkspaceContext(context).workspaceId !== requestedWorkspaceId
+  ) {
+    return { ok: true, cancelled: true };
+  }
   await context.patchWorkbenchData(
     mergeMemorySummarySnapshot(
       context.getHostState().bootstrap,
@@ -4703,19 +4831,27 @@ export async function activateCoachSessionCommand(
   const resolvedSessionId =
     asNonEmptyString(asTrainingRecord(activateResponse)?.session_id) ?? requestedSessionId;
   const snapshot = asTrainingRecord(activateResponse)?.snapshot;
+  const snapshotMessages = Array.isArray(asTrainingRecord(snapshot)?.messages)
+    ? (asTrainingRecord(snapshot)?.messages as unknown[])
+    : undefined;
+  await context.setStreamingState(createEmptyTrainerStreamingState());
+  // Set the session id before patching so bootstrapCache persists the restored
+  // session's transcript (never the previous session's) under resolvedSessionId.
+  await context.setSessionId(resolvedSessionId);
   try {
     // mergeMemorySummary maps snapshot.messages -> conversation so the restored
-    // session's transcript actually replaces the visible one. The narrower
-    // mergeMemorySummarySnapshot only stamps plan/task/memory and would leave
-    // the old conversation on screen.
+    // session's transcript actually replaces the visible one. When activating an
+    // empty session, explicitly clear conversation so the previous thread cannot
+    // leak across sessions.
+    const merged = mergeMemorySummary(context.getHostState().bootstrap, snapshot);
     await context.patchWorkbenchData(
-      mergeMemorySummary(context.getHostState().bootstrap, snapshot),
+      snapshotMessages && snapshotMessages.length === 0
+        ? { ...merged, conversation: [] }
+        : merged,
     );
   } catch {
     // Fall through to a plain resync if the embedded snapshot fails to merge.
   }
-  await context.setSessionId(resolvedSessionId);
-  await context.setStreamingState(createEmptyTrainerStreamingState());
   await context.workbench.show();
   await context.workbench.syncState();
   await context.workbench.postMessage({

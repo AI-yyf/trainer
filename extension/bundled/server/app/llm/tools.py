@@ -6817,6 +6817,12 @@ async def _handle_run_diagnostics(context: ToolContext, args: dict[str, Any]) ->
     if not path_raw:
         return {"ok": False, "error": "missing_path"}
     root = _resolve_workspace_root(context)
+    if root is None:
+        return {
+            "ok": False,
+            "error": "workspace_root_required",
+            "detail": "No workspace root is configured for diagnostics.",
+        }
     target = _safe_path_under(root, path_raw)
     if target is None or not target.is_file():
         return {"ok": False, "error": "not_found", "detail": f"{path_raw!r} is not a readable file."}

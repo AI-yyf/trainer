@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { TRAINER_OPERATION_COMPLETED_MARKER } from '../../../shared/src/protocol';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
 import type { CommandRegistry } from './commandRegistry';
-import { WORKBENCH_VIEW_TYPE } from './constants';
+import { COMMAND_IDS, WORKBENCH_VIEW_TYPE } from './constants';
 import type { TrainerHostState, TrainerWebviewMessage } from './types';
 import { buildWorkbenchHtml } from './webviewContent';
 import { resolveWebviewCommand } from './webviewCommandRouting';
@@ -240,6 +240,11 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
         case 'ui/coachDraftPrefillApplied':
           this.draftPrefillReceiptHandler?.(message.payload.draftId);
           return;
+        case 'provider/cancelTest': {
+          const { cancelProviderTest } = await import('../commands/providerCommands');
+          cancelProviderTest(message.payload.requestId);
+          return;
+        }
         case 'request/bootstrap':
           await this.syncState({ forceFull: true });
           return;
@@ -268,6 +273,17 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
       }
       const result = await this.commandRegistry.execute(command.commandId, command.payload);
       await this.syncState();
+      if (command.commandId === COMMAND_IDS.remoteCompanionState) {
+        const data = (result.data ?? {}) as { state?: string; remoteName?: string };
+        await this.postMessage({
+          type: 'remoteCompanion/state',
+          payload: {
+            state: data.state ?? 'not_installed',
+            ...(data.remoteName ? { remoteName: data.remoteName } : {}),
+          },
+        });
+        return;
+      }
       const handoff = resourceTrainingHandoffResult(command.commandId, command.payload, result);
       if (handoff) {
         await this.postMessage({ type: 'training/resourceHandoff', payload: handoff });
@@ -280,7 +296,32 @@ export class WorkbenchEditorPanel implements vscode.Disposable {
           message: result.message ? sanitizeErrorSurfaceText(result.message) : undefined,
         } });
       }
-      if (!result.cancelled) {
+      if (command.commandId === COMMAND_IDS.providerSpeedTest) {
+        await this.postMessage({
+          type: 'provider/speedTest',
+          payload: (result.data as { results: unknown[] } | undefined) ?? { results: [] },
+        });
+      }
+      if (command.commandId === COMMAND_IDS.listCoachSessions) {
+        await this.postMessage({
+          type: 'session/list',
+          payload: {
+            ok: result.ok,
+            sessions: result.ok && result.data ? (result.data as { sessions?: unknown[] }).sessions ?? [] : [],
+            ...(!result.ok ? { message: result.message ?? 'Trainer could not load sessions.' } : {}),
+          },
+        });
+      }
+      const silentOnSuccess =
+        result.ok &&
+        (command.commandId === COMMAND_IDS.sendMessage ||
+          command.commandId === COMMAND_IDS.sendStreamMessage ||
+          command.commandId === COMMAND_IDS.cancelStreamMessage ||
+          command.commandId === COMMAND_IDS.resumeLatestCoachCheckpoint ||
+          command.commandId === COMMAND_IDS.replayLatestCoachCheckpoint ||
+          command.commandId === COMMAND_IDS.goalControl ||
+          command.commandId === COMMAND_IDS.primeProviderModels);
+      if (!result.cancelled && !silentOnSuccess) {
         await this.postMessage(
           toOperationStatus(
             result.ok,

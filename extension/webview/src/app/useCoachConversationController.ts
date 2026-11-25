@@ -93,6 +93,31 @@ export function useCoachConversationController({
     });
   }, [conversation]);
 
+  // Expire orphaned optimistic echoes on a real timer even when no subsequent
+  // conversation update arrives (e.g., dropped host response or silent abort).
+  useEffect(() => {
+    if (optimisticTurns.length === 0) {
+      return;
+    }
+    const now = Date.now();
+    let earliestExpiry = Number.POSITIVE_INFINITY;
+    for (const entry of optimisticTurns) {
+      const expiresAt = entry.createdAt + OPTIMISTIC_TURN_TTL_MS;
+      if (expiresAt < earliestExpiry) {
+        earliestExpiry = expiresAt;
+      }
+    }
+    const delayMs = Math.max(0, earliestExpiry - now + 50);
+    const timer = window.setTimeout(() => {
+      const cutoff = Date.now();
+      setOptimisticTurns((current) => {
+        const next = current.filter((entry) => cutoff - entry.createdAt <= OPTIMISTIC_TURN_TTL_MS);
+        return next.length === current.length ? current : next;
+      });
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [optimisticTurns]);
+
   const [pendingMessageAction, setPendingMessageAction] = useState<string | null>(null);
   const pendingMessageActionRef = useRef<string | null>(null);
   const pendingMessageActionTimeoutRef = useRef<number | undefined>(undefined);

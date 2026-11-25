@@ -91,3 +91,45 @@ test('source version requests are available in all interface languages', () => {
   ]) assert.equal(route(request, 'resources').kind, 'resource-versions', request);
   assert.equal(route('/versions', 'coach').kind, 'resource-versions');
 });
+
+test('discussion, refusals and example code cannot start learning actions', () => {
+  for (const text of [
+    '不要给我生成一道练习，只解释这段代码。',
+    '我不需要你给我生成一道练习。',
+    '我现在不想你帮我生成练习。',
+    'Please do not create an exercise. Explain this function.',
+    '请解释如何修改学习计划。',
+    '不要修改并保存当前学习计划，先讨论一个例子。',
+    'How do I update my learning plan?',
+    '怎么把这篇文章加入我的学习计划？',
+    'Could you explain how to add this article to my learning plan?',
+    '请问怎样给我生成一道练习？',
+    'Explain this command:\n```text\n给我生成一道练习\n```',
+    'Explain this example:\n\n    给我生成一道练习',
+    "这句'给我生成一道练习'是什么意思？",
+    '这句“给我生成一道练习”是什么意思？',
+    '如果我要求你生成练习，你会做什么？',
+  ]) assert.deepEqual(route(text, 'coach'), { kind: 'message' }, text);
+});
+
+test('explicit requests still work after a refusal or a polite question', () => {
+  for (const text of [
+    '不要修改学习计划，给我一道练习。',
+    '先解释这个函数，然后给我生成一道练习。',
+    'Can you give me one exercise?',
+    '请问能不能给我一道练习？',
+  ]) assert.equal(route(text, 'coach').kind, 'practice', text);
+  for (const text of [
+    '保存刚才的学习计划。',
+    '请立即调用 save_formal_plan 工具保存正式学习计划。',
+    'Please save the learning plan we just discussed.',
+    '/plan 生成并保存正式学习计划：工作区范围验证。',
+  ]) assert.equal(route(text, 'coach').kind, 'plan', text);
+});
+
+test('exercise details inside a plan request do not bypass plan confirmation', () => {
+  for (const text of [
+    '生成并保存学习计划，第一阶段安排一道练习，最后运行测试。',
+    'Create and save my learning plan, then create an exercise for the first stage.',
+  ]) assert.equal(route(text, 'coach').kind, 'plan', text);
+});

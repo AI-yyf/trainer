@@ -687,7 +687,7 @@ test('restartSessionCommand blocks incomplete workspace admission before startin
   }
 });
 
-test('sendMessageCommand blocks root-missing admission before any provider or sidecar work', async () => {
+test('sendMessageCommand keeps formal plan writes behind library admission', async () => {
   const vscodeMock = {
     commands: {
       async executeCommand() {
@@ -707,13 +707,57 @@ test('sendMessageCommand blocks root-missing admission before any provider or si
     },
   };
 
-  const result = await sendMessageCommand(context, { text: 'Start a coaching session.' });
+  const result = await sendMessageCommand(context, { text: 'Save my learning plan.', intent: 'plan', formalPlanMutation: true });
 
   assert.equal(result.ok, false);
   assert.match(result.message ?? '', /选择 Trainer 工作区/);
   assert.equal(sidecarStarts, 0);
   assert.deepEqual(context.__postCalls, []);
 });
+
+test('first coaching messages reach the sidecar before library or project admission', async () => {
+  const { sendMessageCommand } = loadWithVscodeMock(sessionCommandsModulePath, {
+    commands: { async executeCommand() {} },
+  });
+  for (const status of ['root-missing', 'project-found']) {
+    const context = createContext({ trainerWorkspaceAdmission: { status }, trainerWorkspaceRoot: undefined });
+    const calls = [];
+    context.sidecarClient.postJson = async (_port, route, body) => {
+      calls.push({ route, body });
+      return { session_id: 'first-conversation', reply: { content: 'Let us read the function first.', metadata: {} },
+        snapshot: { messages: [], memory: {}, plan: null }, suggested_actions: [] };
+    };
+    const result = await sendMessageCommand(context, { text: 'Explain this function.', intent: 'coach', includeCurrentFile: false });
+    assert.equal(result.ok, true, result.message);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].route, '/session/message');
+    assert.equal(calls[0].body.message, 'Explain this function.');
+  }
+});
+
+for (const mode of ['sendMessageCommand', 'sendStreamMessageCommand']) {
+  for (const change of ['model', 'key']) test(`${mode} cannot attribute an earlier request failure to the changed ${change}`, async () => {
+    const commands = loadWithVscodeMock(sessionCommandsModulePath, { commands: { async executeCommand() {} } });
+    const context = createContext();
+    let config = context.providerStore.getConfig();
+    let key = 'sk-before';
+    context.providerStore.getConfig = () => config;
+    context.providerStore.getApiKey = async () => key;
+    const writes = [];
+    context.providerStore.saveModelCache = async (...args) => { writes.push(args); };
+    context.providerStore.saveLastTestResult = async (...args) => { writes.push(args); };
+    const fail = () => {
+      if (change === 'model') config = { ...config, model: 'another-model' };
+      else key = 'sk-after';
+      throw new Error('connect ECONNREFUSED 127.0.0.1:1234');
+    };
+    context.sidecarClient.postJson = async () => fail();
+    context.sidecarClient.fetchSSE = async function* () { fail(); };
+    await commands[mode](context, { text: 'Explain retries.', intent: 'coach', includeCurrentFile: false }).catch(() => undefined);
+    assert.deepEqual(writes, []);
+    assert.equal(context.__patches.some(patch => patch.providerConfig?.modelListStatus === 'error'), false);
+  });
+}
 
 test('restartSessionCommand prefers activeWorkspaceRoot when it differs from workspaceFolder', async () => {
   const vscodeMock = {

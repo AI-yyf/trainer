@@ -587,6 +587,9 @@ export function updateProviderThinking(
   const protocol = normalizeProviderProtocol(context.protocol);
   const minimax = /minimax/i.test(`${context.providerName ?? ''} ${context.baseUrl ?? ''} ${context.model ?? ''}`);
   if (minimax) {
+    if (config.mode === 'auto') {
+      return next;
+    }
     const enable = config.mode === 'enabled' && providerThinkingMayEmit(context);
     emitMiniMaxThinking(next, { ...config, mode: enable ? 'enabled' : 'disabled' });
     return next;

@@ -41,7 +41,8 @@ export function isLikelyMojibake(value: unknown): boolean {
   }
 
   return (
-    /[\ufffd\ue000-\uf8ff]/u.test(text) ||
+    /\ufffd/u.test(text) ||
+    /[\ue000-\uf8ff]{3,}/u.test(text) ||
     GBK_MOJIBAKE_FRAGMENTS.some((fragment) => text.includes(fragment)) ||
     GBK_MOJIBAKE_MARKERS.filter((marker) => text.includes(marker)).length >= 2 ||
     LATIN1_MOJIBAKE_PATTERN.test(text)

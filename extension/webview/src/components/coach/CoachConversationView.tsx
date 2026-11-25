@@ -91,6 +91,8 @@ function CoachConversationViewImpl({
 }: CoachConversationViewProps) {
   // Per-chunk streaming content lives here, not in App: the workbench shell
   // stays put while the in-flight reply grows (DESIGN.md §3 R3).
+  const storeIsStreaming = useWorkbenchState((state) => state.streaming.isStreaming);
+  const storeCompletionStopReason = useWorkbenchState((state) => state.streaming.completionStopReason);
   const storeStreamedContent = useWorkbenchState((state) => state.streaming.streamedContent);
   const storeStreamMessageId = useWorkbenchState((state) => state.streaming.streamMessageId);
   const storeAgentActivity = useWorkbenchState((state) => state.streaming.agentActivity);
@@ -99,6 +101,23 @@ function CoachConversationViewImpl({
   const resolvedAgentActivity = liveContentFromStore ? storeAgentActivity : agentActivity;
   const resolvedAgentStep = liveContentFromStore ? storeAgentStep : agentStep;
   const resolvedLiveStageKind = liveContentFromStore ? storeLiveStageKind : undefined;
+  const cancelledPartialBody =
+    !streamingMessage &&
+    liveContentFromStore &&
+    !storeIsStreaming &&
+    storeCompletionStopReason === "cancelled" &&
+    !storeStreamMessageId?.startsWith("training_") &&
+    storeStreamedContent.trim().length > 0
+      ? storeStreamedContent
+      : undefined;
+  const lastConversationMessage = messages[messages.length - 1];
+  const showCancelledPartial = Boolean(
+    cancelledPartialBody &&
+    !(
+      lastConversationMessage?.role === "assistant" &&
+      lastConversationMessage.body.trim() === cancelledPartialBody.trim()
+    ),
+  );
   const resolvedStreamingBody = streamingMessage
     ? liveContentFromStore
       ? streamingMessage.body?.trim()
@@ -120,7 +139,7 @@ function CoachConversationViewImpl({
     .filter(Boolean)
     .join(" ");
   const showHeader = Boolean(eyebrow || title || subtitle);
-  const hasMessages = messages.length > 0 || Boolean(streamingMessage);
+  const hasMessages = messages.length > 0 || Boolean(streamingMessage) || showCancelledPartial;
   const hasListContent = hasMessages || Boolean(footer);
 
   // One flat, append-only list. Keys are positional so the streaming slot and
@@ -153,6 +172,22 @@ function CoachConversationViewImpl({
         body: resolvedStreamingBody ?? streamingMessage.body,
         timestamp: streamingMessage.timestamp ?? "Streaming...",
         contextNote: streamingMessage.note,
+      },
+    });
+  } else if (showCancelledPartial && cancelledPartialBody) {
+    for (const item of items) {
+      item.isLatestAssistant = false;
+    }
+    items.push({
+      key: items.length,
+      streaming: false,
+      isLatestAssistant: true,
+      message: {
+        id: storeStreamMessageId ? `cancelled-${storeStreamMessageId}` : "cancelled-partial",
+        role: "assistant",
+        author: assistantLabel ?? "Trainer",
+        body: cancelledPartialBody,
+        timestamp: language === "zh-CN" ? "已停止" : "Stopped",
       },
     });
   }

@@ -321,7 +321,15 @@ export class SidecarHttpClient {
     try {
       if ((response.statusCode ?? 500) >= 400) {
         const errorBody = await this.readResponseBody(response);
-        throw new Error(`SSE request failed (${response.statusCode}): ${errorBody || path}`);
+        const statusCode = response.statusCode ?? 500;
+        const parsedError = parseSafeSidecarError(errorBody);
+        throw new SidecarHttpError(
+          statusCode,
+          parsedError.detail
+            ? `SSE request failed (${statusCode}): ${parsedError.detail}`
+            : `SSE request failed (${statusCode}): ${path}`,
+          parsedError,
+        );
       }
 
       let buffer = '';

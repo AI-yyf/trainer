@@ -372,12 +372,44 @@ class ContextBudgetMixin:
         if has_visible_budget():
             return compacted
 
-        while not has_visible_budget() and len(compacted) > 1:
-            first_role = str(compacted[0].get("role") or "").strip().lower()
-            oldest_history_index = 1 if first_role in {"system", "developer"} else 0
+        leading_system_count = 0
+        while leading_system_count < len(compacted) and (
+            str(compacted[leading_system_count].get("role") or "").strip().lower()
+            in {"system", "developer"}
+        ):
+            leading_system_count += 1
+
+        while not has_visible_budget() and len(compacted) > leading_system_count + 1:
+            oldest_history_index = leading_system_count
             if oldest_history_index >= len(compacted) - 1:
                 break
-            del compacted[oldest_history_index]
+            drop_end = oldest_history_index + 1
+            oldest_role = str(compacted[oldest_history_index].get("role") or "").strip().lower()
+            # Keep (assistant(tool_calls) + following tool results) atomic so we
+            # never leave orphan `tool` messages or split a tool-call turn.
+            if oldest_role == "assistant" and compacted[oldest_history_index].get("tool_calls"):
+                while (
+                    drop_end < len(compacted) - 1
+                    and str(compacted[drop_end].get("role") or "").strip().lower() == "tool"
+                ):
+                    drop_end += 1
+            elif oldest_role == "user":
+                # Dropping a user turn before an assistant/tool sequence would
+                # start the conversation with an assistant turn (rejected by
+                # Anthropic/Gemini). Drop the entire oldest turn group up to the
+                # next user turn when safe.
+                while (
+                    drop_end < len(compacted) - 1
+                    and str(compacted[drop_end].get("role") or "").strip().lower() != "user"
+                ):
+                    drop_end += 1
+            del compacted[oldest_history_index:drop_end]
+            # Scrub any stray leading tool messages if history was already uneven.
+            while (
+                leading_system_count < len(compacted) - 1
+                and str(compacted[leading_system_count].get("role") or "").strip().lower() == "tool"
+            ):
+                del compacted[leading_system_count]
 
         if has_visible_budget() or not compacted:
             return compacted

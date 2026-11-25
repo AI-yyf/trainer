@@ -4,6 +4,7 @@ import { postMessage } from "../lib/vscode";
 import { trainerCommands } from "../../../../shared/src/commands";
 import type { CoachSessionSummary } from "../lib/types";
 import type { ContextMenu } from "./useMenuState";
+import { useWorkbenchState } from "./useWorkbenchState";
 
 export type CoachHistoryStatus = "idle" | "loading" | "ready" | "error";
 
@@ -145,6 +146,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
   );
   const [coachSessionsMessage, setCoachSessionsMessage] = useState<string>();
   const prefetchedRef = useRef(false);
+  const previousCacheScopeRef = useRef(cacheScope);
   const requestInFlightRef = useRef(false);
   const requestTimerRef = useRef<number | undefined>(undefined);
 
@@ -219,8 +221,23 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
     });
   }, [conversationCount, isBrowserPreview, markRequestStarted, previewSessionId, zh]);
 
-  // Prefetch once on mount: the cache warms (and the sidecar starts warming)
-  // long before the first history click.
+  // Reset hydrated cache and prefetch guard whenever the active workspace scope
+  // changes so history never leaks sessions from a previous workspace.
+  useEffect(() => {
+    if (previousCacheScopeRef.current === cacheScope) {
+      return;
+    }
+    previousCacheScopeRef.current = cacheScope;
+    markRequestSettled();
+    prefetchedRef.current = false;
+    const cached = readCachedSessions(cacheScope);
+    setCoachSessions(cached);
+    setCoachSessionsStatus(cached.length > 0 ? "ready" : "idle");
+    setCoachSessionsMessage(undefined);
+  }, [cacheScope, markRequestSettled]);
+
+  // Prefetch once per workspace scope: the cache warms (and the sidecar starts
+  // warming) long before the first history click.
   useEffect(() => {
     if (prefetchedRef.current || isBrowserPreview) {
       return;
@@ -233,7 +250,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
       type: "command/execute",
       payload: { commandId: trainerCommands.listCoachSessions },
     });
-  }, [isBrowserPreview, markRequestStarted]);
+  }, [cacheScope, isBrowserPreview, markRequestStarted]);
 
   const toggleComposerHistoryMenu = useCallback(() => {
     setOpenMenu((current: ComposerContextMenu) => {
@@ -260,6 +277,7 @@ export function useCoachHistory(input: UseCoachHistoryInput): CoachHistoryContro
         return;
       }
       setOpenMenu(undefined);
+      useWorkbenchState.getState().resetStream();
       if (isBrowserPreview) {
         return;
       }

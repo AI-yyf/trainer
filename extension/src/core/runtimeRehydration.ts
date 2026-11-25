@@ -318,6 +318,7 @@ export async function ensureInitialSession(
 
     const runtimeWorkspace = getRuntimeWorkspaceContext(context);
     const workspaceIdAtStart = runtimeWorkspace.workspaceId;
+    const activationGeneration = currentSessionActivationGeneration(context);
 
     // Reload restore: a persisted session id is a claim, not a fact. Re-verify
     // it with the server (activate restores the stored transcript) so a stale
@@ -338,7 +339,10 @@ export async function ensureInitialSession(
       if (restored) {
         return restored;
       }
-      if (getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart) {
+      if (
+        getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart ||
+        !isCurrentSessionActivation(context, activationGeneration)
+      ) {
         return context.getSessionId();
       }
     }
@@ -363,9 +367,12 @@ export async function ensureInitialSession(
       },
     );
 
-    if (getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart) {
+    if (
+      getRuntimeWorkspaceContext(context).workspaceId !== workspaceIdAtStart ||
+      !isCurrentSessionActivation(context, activationGeneration)
+    ) {
       context.outputChannel.appendLine(
-        `[session] discarded initialization from stale workspace ${workspaceIdAtStart}`,
+        `[session] discarded initialization from stale workspace/session ${workspaceIdAtStart}`,
       );
       return context.getSessionId();
     }
@@ -471,7 +478,12 @@ async function restoreStoredSession(
     // no longer exists (the database was reset or the thread was pruned). Drop
     // it so later launches go straight to /session/start instead of paying for
     // and logging the same failing round trip on every open.
-    if (error instanceof SidecarHttpError && error.statusCode === 404) {
+    if (
+      error instanceof SidecarHttpError &&
+      error.statusCode === 404 &&
+      isCurrentSessionActivation(context, activationGeneration) &&
+      context.getSessionId() === sessionId
+    ) {
       await context.setSessionId(undefined);
     }
     return undefined;

@@ -10,12 +10,13 @@ import re
 
 from .assessment import _as_mapping
 
-_MOJIBAKE_FALLBACK_MARKERS = (
-    "\ufffd", "\ue000", "\ue1ec",
+_HARD_MOJIBAKE_MARKERS = ("\ufffd", "\ue000", "\ue1ec", "\u951f\u65a4\u62f7")
+_GBK_MOJIBAKE_MARKERS = (
     "锟", "闂", "濠", "閻", "缂", "鈧", "鐢", "鍙", "鏂",
     "瀹", "涓", "浣", "璇", "骞", "搴", "绠", "鎴", "灏",
     "鏄", "杩", "鍏", "鐩", "閸", "鐠", "娑",
 )
+_MOJIBAKE_FALLBACK_MARKERS = (*_HARD_MOJIBAKE_MARKERS, *_GBK_MOJIBAKE_MARKERS)
 _LATIN1_MOJIBAKE_PATTERN = re.compile(
     r"(?:[\u00C2\u00C3\u00C4\u00C5\u00C6\u00C7\u00C8\u00C9\u00CF\u00D0"
     r"\u00E2\u00E3\u00E4\u00E5\u00E6\u00E7\u00E8\u00E9\u00EF\u00F0]"
@@ -61,9 +62,15 @@ def _contains_latin(text: str | None) -> bool:
 
 def _looks_like_mojibake_text(value: object) -> bool:
     text = str(value or "")
-    return any(marker in text for marker in _MOJIBAKE_FALLBACK_MARKERS) or bool(
-        _LATIN1_MOJIBAKE_PATTERN.search(text)
-    )
+    if not text:
+        return False
+    if any(marker in text for marker in _HARD_MOJIBAKE_MARKERS):
+        return True
+    if _LATIN1_MOJIBAKE_PATTERN.search(text):
+        return True
+    # Single characters like "浣", "璇", "灏", "娑" appear in legitimate Chinese
+    # text; require at least 2 distinct GBK-as-UTF-8 markers to flag mojibake.
+    return sum(1 for marker in _GBK_MOJIBAKE_MARKERS if marker in text) >= 2
 
 
 def _strip_provider_control_markers(text: str) -> str:
@@ -175,6 +182,29 @@ def _has_hidden_reasoning(value: object | None) -> bool:
     return False
 
 
+_STRONG_INPUT_CORRUPTION_MARKERS = (
+    "cannot read",
+    "can't read",
+    "could not read",
+    "only saw",
+    "only see",
+    "\u53ea\u80fd\u770b\u5230\u4e00\u4e32",
+    "\u770b\u8d77\u6765\u4f60\u53d1\u8fc7\u6765\u7684\u5185\u5bb9\u91cc\u4e2d\u6587\u90fd\u53d8\u6210\u4e86\u95ee\u53f7",
+    "\u53d8\u6210\u4e86\u95ee\u53f7",
+    "\u5168\u662f\u95ee\u53f7",
+    "\u90fd\u662f\u95ee\u53f7",
+    "\u5168\u662f\u4e71\u7801",
+    "\u90fd\u662f\u4e71\u7801",
+    "turned into question marks",
+    "came through as question marks",
+    "message arrived garbled",
+    "input arrived garbled",
+    "came through garbled",
+    "your message looks garbled",
+    "your input looks garbled",
+)
+
+
 def _looks_like_input_corruption_reply(
     reply: str,
     *,
@@ -184,18 +214,31 @@ def _looks_like_input_corruption_reply(
     if not visible:
         return False
     lowered = visible.casefold()
-    has_marker = any(marker.casefold() in lowered for marker in _INPUT_CORRUPTION_MARKERS)
     if expected_probe and expected_probe in visible:
         return False
-    if has_marker and (
+    has_strong_marker = any(
+        marker.casefold() in lowered for marker in _STRONG_INPUT_CORRUPTION_MARKERS
+    )
+    has_marker = any(marker.casefold() in lowered for marker in _INPUT_CORRUPTION_MARKERS)
+    if _QUESTION_RUN_PATTERN.search(visible) and has_marker:
+        return True
+    if has_strong_marker and (
         "?" in visible
-        or _QUESTION_RUN_PATTERN.search(visible)
         or "question mark" in lowered
         or "\u95ee\u53f7" in visible
         or "\u4e71\u7801" in visible
+        or "corrupted" in lowered
+        or "garbled" in lowered
     ):
         return True
     if expected_probe:
+        if has_marker and (
+            "?" in visible
+            or "question mark" in lowered
+            or "\u95ee\u53f7" in visible
+            or "\u4e71\u7801" in visible
+        ):
+            return True
         ascii_tail = "".join(char for char in expected_probe if char.isascii() and char.isalnum())
         cjk_chars = "".join(char for char in expected_probe if _contains_cjk(char))
         if (
@@ -308,6 +351,13 @@ def _mixed_script_corruption_fragments(
     return []
 
 
+def _allows_cjk_response_language(response_language: str | None) -> bool:
+    if _prefers_chinese(response_language):
+        return True
+    normalized = str(response_language or "").strip().lower()
+    return normalized.startswith(("ja", "zh"))
+
+
 def _unexpected_cjk_corruption_fragments(
     reply: str,
     *,
@@ -317,9 +367,14 @@ def _unexpected_cjk_corruption_fragments(
     visible = _compact_visible_text(reply, limit=480)
     if not visible or not _contains_cjk(visible):
         return []
-    if _prefers_chinese(response_language):
+    if _allows_cjk_response_language(response_language):
         return []
     if message and _contains_cjk(message):
+        return []
+    # Strip backtick code spans and quoted strings so referencing a CJK filename
+    # or UI label inside an English coaching reply is not misclassified.
+    visible = re.sub(r"`[^`]*`|\"[^\"]*\"|'[^']*'", " ", visible)
+    if not _contains_cjk(visible):
         return []
 
     mixed_tokens: list[str] = []
@@ -356,7 +411,7 @@ def _wrong_language_cjk_reply_detail(
     message: str | None = None,
     response_language: str | None = None,
 ) -> str | None:
-    if _prefers_chinese(response_language):
+    if _allows_cjk_response_language(response_language):
         return None
     if message and _contains_cjk(message):
         # A CJK learner message invites a mirrored CJK reply; that is language
@@ -389,11 +444,15 @@ def _wrong_language_zh_reply_detail(
     """
     if not _prefers_chinese(response_language):
         return None
-    visible = _compact_visible_text(reply, limit=480)
-    if not visible or _contains_cjk(visible):
+    full_visible = _visible_model_text(reply).strip()
+    if not full_visible or _contains_cjk(full_visible):
         return None
-    prose = re.sub(r"```[\\s\\S]*?```", "", visible).strip()
-    prose = re.sub(r"`[^`]*`", "", prose).strip()
+    # Strip fenced and inline code BEFORE truncating so a code block longer
+    # than 480 chars does not lose its closing fence and look like prose.
+    prose = re.sub(r"```[\s\S]*?```", "", full_visible)
+    prose = re.sub(r"```[\s\S]*\Z", "", prose)
+    prose = re.sub(r"`[^`]*`", "", prose)
+    prose = " ".join(prose.split()).strip()[:480]
     latin_words = re.findall(r"[A-Za-z]{3,}", prose)
     # A one-line technical answer ("False", "It returns False immediately")
     # is not language corruption; only reject prose-length English. This keeps

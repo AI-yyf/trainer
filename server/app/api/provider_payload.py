@@ -24,7 +24,12 @@ from .router_support import looks_like_schemeless_provider_host, resolve_provide
 
 
 def provider_api_key_from_payload(payload: dict) -> str | None:
-    api_key_raw = payload.get("api_key") or payload.get("apiKey")
+    if "api_key" in payload:
+        api_key_raw = payload.get("api_key")
+    elif "apiKey" in payload:
+        api_key_raw = payload.get("apiKey")
+    else:
+        return None
     return api_key_raw.strip() if isinstance(api_key_raw, str) else None
 
 def normalize_provider_base_url(value: object, protocol: ProviderProtocol) -> str:
@@ -121,11 +126,13 @@ def provider_credential_mode_from_payload(
     raw_mode = provider_payload.get("credential_mode") or provider_payload.get("credentialMode")
     if not isinstance(raw_mode, str):
         return None
-    normalized_mode = raw_mode.strip()
+    normalized_mode = raw_mode.strip().lower()
     if normalized_mode == "workspace_secret":
         return "workspace_secret"
     if normalized_mode == "ui_proxy":
         return "ui_proxy"
+    if normalized_mode in {"local_no_auth", "none", "anonymous"}:
+        return "local_no_auth"
     return None
 
 def provider_payload_declares_protocol(provider_payload: dict) -> bool:
@@ -216,8 +223,11 @@ def provider_config_from_payload(payload: dict) -> ProviderConfig | None:
         or provider_payload.get("embeddingModel"),
         catalogSource=(provider_payload.get("catalog_source") or provider_payload.get("catalogSource") or "").strip()
         or None,
-        cacheTtlSeconds=provider_payload.get("cache_ttl_seconds")
-        or provider_payload.get("cacheTtlSeconds"),
+        cacheTtlSeconds=(
+            provider_payload["cache_ttl_seconds"]
+            if "cache_ttl_seconds" in provider_payload and provider_payload["cache_ttl_seconds"] is not None
+            else provider_payload.get("cacheTtlSeconds")
+        ),
         profileId=(provider_payload.get("profile_id") or provider_payload.get("profileId") or "").strip()
         or None,
         profileLabel=(provider_payload.get("profile_label") or provider_payload.get("profileLabel") or "").strip()

@@ -212,6 +212,8 @@ export function useProviderConnectionController({
 }: ProviderConnectionControllerOptions): ProviderConnectionController {
   const [providerDraft, setDraftState] = useState<ProviderDraft>(() => providerDraftFromFacts(facts));
   const providerDraftIsDirtyRef = useRef(false);
+  const providerDraftRef = useRef(providerDraft);
+  providerDraftRef.current = providerDraft;
   const providerDraftSourceKeyRef = useRef<string>();
   const prevFactsSwitchSignatureRef = useRef<string>(
     `${facts.profileId ?? ""}\0${facts.model ?? ""}`,
@@ -227,18 +229,26 @@ export function useProviderConnectionController({
 
   // Host facts changed (or the session scope changed): align the draft unless
   // the learner has unsaved edits that this very action is about to persist or
-  // discard. Always follow explicit external profile/model switches (e.g. Composer).
+  // discard. Follow explicit external profile switches immediately, and never
+  // wipe an actively edited Base URL / API key draft if a background model
+  // refresh only updated resolvedModel on the same profile.
   useEffect(() => {
-    const externalSelectionChanged =
-      prevFactsSwitchSignatureRef.current !== factsSwitchSignature;
+    const previousSignature = prevFactsSwitchSignatureRef.current;
+    const externalSelectionChanged = previousSignature !== factsSwitchSignature;
     prevFactsSwitchSignatureRef.current = factsSwitchSignature;
     if (providerDraftSourceKeyRef.current === providerDraftSourceKey && !externalSelectionChanged) {
       return;
     }
     providerDraftSourceKeyRef.current = providerDraftSourceKey;
 
+    const sameProfileBackgroundModelRefresh =
+      externalSelectionChanged &&
+      previousSignature.split("\0")[0] === factsSwitchSignature.split("\0")[0] &&
+      typeof providerDraftRef !== "undefined" &&
+      (providerDraftRef.current.apiKey.trim().length > 0 ||
+        providerDraftRef.current.baseUrl.trim() !== providerDraftSource.baseUrl.trim());
     const shouldKeepUnsavedProviderDraft =
-      !externalSelectionChanged &&
+      (!externalSelectionChanged || sameProfileBackgroundModelRefresh) &&
       providerDraftIsDirtyRef.current &&
       (settingsActionScopeRef.current !== settingsScopeKey ||
         (settingsActionKind !== "save-provider" && settingsActionKind !== "clear-provider"));
@@ -302,7 +312,7 @@ export function useProviderConnectionController({
       catalogSource: providerDraft.catalogSource,
       cacheTtlSeconds: providerDraft.cacheTtlSeconds ?? null,
       requestDefaults: providerDraft.requestDefaults ?? {},
-      ...(providerDraft.thinkingConfig ? { thinkingConfig: providerDraft.thinkingConfig } : {}),
+      thinkingConfig: providerDraft.thinkingConfig ?? null,
       ...(trimmedApiKey ? { apiKey: trimmedApiKey, replaceApiKey: true } : {}),
       capabilities: providerDraft.capabilities ?? facts.capabilities,
     };

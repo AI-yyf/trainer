@@ -1776,7 +1776,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "fsrs", specifier = ">=0.3.0" },
+    { name = "fsrs", specifier = ">=6.3.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.131.0" },
     { name = "markitdown", specifier = ">=0.1.6" },

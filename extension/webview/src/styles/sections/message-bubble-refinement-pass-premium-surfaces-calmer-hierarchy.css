@@ -79,13 +79,47 @@
   padding: 3px 0;
 }
 
-/* Compact working label: a quiet sheen across the text instead of a lone
- * pulsing dot. The elapsed duration is a separate tabular span. */
+/* Compact working line: three quiet pulsing dots, then the label. The elapsed
+ * duration is a separate tabular span. One loading idiom, no text sheen. */
 .coach-working {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   padding: 5px 0 2px;
+}
+
+.coach-working__dots {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.coach-working__dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fg-1) 72%, transparent);
+  animation: coach-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.coach-working__dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.coach-working__dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes coach-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
 }
 
 .coach-working__elapsed {
@@ -96,40 +130,10 @@
 }
 
 .coach-working__label {
-  position: relative;
-  display: inline-block;
   color: var(--fg-1);
   font-size: var(--trainer-font-sm);
   font-weight: 400;
   letter-spacing: 0.02em;
-}
-
-.coach-working__label::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 0;
-  color: transparent;
-  background: linear-gradient(
-    100deg,
-    transparent 0%,
-    color-mix(in srgb, var(--accent) 72%, white 28%) 46%,
-    transparent 82%
-  );
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: coach-working-sheen 2.2s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes coach-working-sheen {
-  0% {
-    background-position: 120% 0;
-  }
-  100% {
-    background-position: -120% 0;
-  }
 }
 
 .coach-work-trail {
@@ -277,10 +281,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .coach-working__label::after {
+  .coach-working__dots i {
     animation: none;
-    background: none;
-    opacity: 0;
+    opacity: 0.55;
+    transform: none;
   }
 
   .coach-streaming-orb {

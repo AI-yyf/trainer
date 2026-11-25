@@ -170,12 +170,20 @@ async def _await_with_stream_cancellation(
 async def _iterate_with_stream_cancellation(
     stream: AsyncIterator[dict[str, Any]],
     cancel_event: asyncio.Event | None,
+    *,
+    step_timeout: float | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
-    """Yield provider events while making cancellation close the upstream iterator."""
+    """Yield provider events while making cancellation and step timeouts close the upstream iterator."""
 
     iterator = stream.__aiter__()
     iterator_closed = False
     iterator_exhausted = False
+    loop = asyncio.get_running_loop()
+    deadline = (
+        loop.time() + step_timeout
+        if step_timeout is not None and step_timeout > 0
+        else None
+    )
 
     async def close_iterator() -> None:
         nonlocal iterator_closed
@@ -192,12 +200,22 @@ async def _iterate_with_stream_cancellation(
 
     try:
         while True:
+            remaining = (deadline - loop.time()) if deadline is not None else None
+            if remaining is not None and remaining <= 0:
+                await close_iterator()
+                raise asyncio.TimeoutError
             if cancel_event is None:
                 try:
-                    yield await iterator.__anext__()
+                    if remaining is None:
+                        yield await iterator.__anext__()
+                    else:
+                        yield await asyncio.wait_for(iterator.__anext__(), timeout=remaining)
                 except StopAsyncIteration:
                     iterator_exhausted = True
                     return
+                except asyncio.TimeoutError:
+                    await close_iterator()
+                    raise
                 continue
             if cancel_event.is_set():
                 await close_iterator()
@@ -207,8 +225,14 @@ async def _iterate_with_stream_cancellation(
             try:
                 done, _ = await asyncio.wait(
                     {next_event, cancellation},
+                    timeout=remaining,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
+                if not done:
+                    next_event.cancel()
+                    await asyncio.gather(next_event, return_exceptions=True)
+                    await close_iterator()
+                    raise asyncio.TimeoutError
                 if cancellation in done and cancel_event.is_set():
                     next_event.cancel()
                     await asyncio.gather(next_event, return_exceptions=True)
@@ -369,6 +393,11 @@ class CoachAgentLoop:
 
             assistant_text = str(response.get("content") or "")
             tool_calls = list(response.get("tool_calls") or [])
+            provider_reasoning = (
+                response.get("provider_reasoning")
+                if isinstance(response.get("provider_reasoning"), dict)
+                else None
+            )
             step = AgentStep(
                 index=index,
                 assistant_content=assistant_text,
@@ -376,7 +405,13 @@ class CoachAgentLoop:
             )
             steps.append(step)
 
-            history.append(_assistant_message(assistant_text, tool_calls))
+            history.append(
+                _assistant_message(
+                    assistant_text,
+                    tool_calls,
+                    provider_reasoning=provider_reasoning,
+                )
+            )
 
             if not tool_calls:
                 if assistant_text.strip() and self._continue_required_plan_save(history, steps):
@@ -505,6 +540,7 @@ class CoachAgentLoop:
         last_tool_calls_signature: tuple[tuple[str, str], ...] | None = None
         last_tool_results_signature: tuple[tuple[str, str], ...] | None = None
         identical_call_streak = 0
+        overflow_retries = 0
         previous_step: AgentStep | None = None
         streamed_steps: list[AgentStep] = []
         index = 0
@@ -535,7 +571,9 @@ class CoachAgentLoop:
             streamed_text_safe = False
             tool_calls: list[dict[str, Any]] = []
             stream_stop_reason: str | None = None
+            stream_provider_reasoning: dict[str, Any] | None = None
             provider_final_received = False
+            step_timeout = self._step_timeout_for(index)
             yield {"type": "step", "index": index, "stop_reason": None}
 
             stream_fn = self.provider.call_stream
@@ -569,6 +607,7 @@ class CoachAgentLoop:
                     async for event in _iterate_with_stream_cancellation(
                         stream_fn(history, tools_schema),
                         cancel_event,
+                        step_timeout=step_timeout,
                     ):
                         if provider_final_received:
                             continue
@@ -595,14 +634,36 @@ class CoachAgentLoop:
                             )
                             raw_stop = event.get("stop_reason") or event.get("finish_reason")
                             stream_stop_reason = str(raw_stop) if raw_stop else None
+                            raw_reasoning = event.get("provider_reasoning")
+                            if isinstance(raw_reasoning, dict):
+                                stream_provider_reasoning = {
+                                    str(k): v for k, v in raw_reasoning.items()
+                                }
                             # A final frame is logically terminal, but keep consuming until the
                             # tiny provider iterator naturally exhausts. Breaking here forces an
                             # early aclose() and triggers cleanup races in some compatible SDKs.
                             provider_final_received = True
                         else:
                             yield event
+                except asyncio.TimeoutError:
+                    summary, next_step = _build_runtime_failure_recovery(
+                        "timeout",
+                        context=self.context,
+                        response_language=self.context.response_language,
+                        previous_step=previous_step,
+                    )
+                    yield {
+                        "type": "final",
+                        "content": assistant_text or _visible_text_from_steps(streamed_steps, summary, next_step),
+                        "summary": summary,
+                        "next_step": next_step,
+                        "stop_reason": "timeout",
+                        "error": f"agent step {index} exceeded {step_timeout}s",
+                    }
+                    return
                 except Exception as exc:
-                    if is_prompt_too_long_error(exc):
+                    if is_prompt_too_long_error(exc) and overflow_retries < 2:
+                        overflow_retries += 1
                         compact_history(
                             history,
                             extra=self._extra(),
@@ -634,7 +695,13 @@ class CoachAgentLoop:
                     }
                     return
 
-            history.append(_assistant_message(assistant_text, tool_calls))
+            history.append(
+                _assistant_message(
+                    assistant_text,
+                    tool_calls,
+                    provider_reasoning=stream_provider_reasoning,
+                )
+            )
 
             if not tool_calls:
                 if assistant_text.strip() and self._continue_required_plan_save(history, streamed_steps):
@@ -663,13 +730,25 @@ class CoachAgentLoop:
                 # include it in the final frame. Emit that suffix exactly
                 # once, preserving the incremental contract for both direct
                 # and tool-capable streams.
-                if assistant_text.startswith(streamed_text):
+                if not streamed_text:
+                    missing_text = assistant_text
+                elif assistant_text.startswith(streamed_text):
                     missing_text = assistant_text[len(streamed_text) :]
                 else:
-                    # A provider is allowed to normalize its final content.
-                    # Do not duplicate a prefix already rendered; emit the
-                    # normalized final content as one replacement delta.
-                    missing_text = assistant_text
+                    # A provider may normalize whitespace/punctuation on text
+                    # already streamed. Never duplicate the entire reply; only
+                    # emit a genuine unstreamed suffix if present.
+                    stripped_streamed = streamed_text.strip()
+                    stripped_final = assistant_text.strip()
+                    if stripped_streamed and stripped_final.startswith(stripped_streamed):
+                        idx = assistant_text.find(stripped_streamed)
+                        missing_text = (
+                            assistant_text[idx + len(stripped_streamed) :]
+                            if idx >= 0
+                            else ""
+                        )
+                    else:
+                        missing_text = ""
                 if missing_text:
                     if stream_direct_text:
                         yield {"type": "text", "delta": missing_text}
@@ -816,7 +895,7 @@ class CoachAgentLoop:
                     return False
         self._formal_plan_commit_retries += 1
         history.append({
-            "role": "system",
+            "role": "user",
             "content": (
                 "The explicitly requested formal plan save is still pending. A text draft or "
                 "coach_finalize does not commit this turn. Re-read the latest learner request; "
@@ -964,7 +1043,7 @@ class CoachAgentLoop:
             invoked = await asyncio.gather(
                 *[self._invoke_one_tool(call, cancel_event) for call in tool_calls]
             )
-            for tool_id, tool_name, _arguments, tool_result in invoked:
+            for tool_id, tool_name, arguments, tool_result in invoked:
                 events.append(
                     {
                         "type": "tool_result",
@@ -974,13 +1053,15 @@ class CoachAgentLoop:
                         "result": tool_result,
                     }
                 )
-                step.tool_results.append({"id": tool_id, "name": tool_name, "result": tool_result})
+                step.tool_results.append(
+                    {"id": tool_id, "name": tool_name, "arguments": arguments, "result": tool_result}
+                )
                 history.append(_tool_message(tool_id, tool_name, tool_result))
             return None, None, events
 
         finalize_payload: dict[str, Any] | None = None
         finalize_arguments: Any = None
-        for call in tool_calls:
+        for call_idx, call in enumerate(tool_calls):
             tool_name = str(call.get("name") or "")
             tool_id = str(call.get("id") or tool_name)
             arguments = call.get("arguments")
@@ -1004,17 +1085,32 @@ class CoachAgentLoop:
                     "result": tool_result,
                 }
             )
-            step.tool_results.append({"id": tool_id, "name": tool_name, "result": tool_result})
+            step.tool_results.append(
+                {"id": tool_id, "name": tool_name, "arguments": arguments, "result": tool_result}
+            )
             history.append(_tool_message(tool_id, tool_name, tool_result))
             if tool_name == "coach_finalize" and tool_result.get("final"):
                 finalize_payload = tool_result
                 finalize_arguments = arguments
+                # Maintain strict 1:1 tool_call -> tool_result pairing in
+                # history in case the loop continues (e.g., pending plan save).
+                for skipped in tool_calls[call_idx + 1 :]:
+                    skipped_name = str(skipped.get("name") or "")
+                    skipped_id = str(skipped.get("id") or skipped_name)
+                    skipped_result = {
+                        "ok": False,
+                        "skipped": True,
+                        "detail": "Skipped because coach_finalize ran earlier in the same batch.",
+                    }
+                    history.append(_tool_message(skipped_id, skipped_name, skipped_result))
                 break
         return finalize_payload, finalize_arguments, events
 
 def _assistant_message(
     content: str,
     tool_calls: list[dict[str, Any]],
+    *,
+    provider_reasoning: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Append an assistant turn to the history in canonical OpenAI format."""
     message: dict[str, Any] = {"role": "assistant", "content": content or ""}
@@ -1030,6 +1126,8 @@ def _assistant_message(
             }
             for call in tool_calls
         ]
+    if provider_reasoning:
+        message["_provider_reasoning"] = dict(provider_reasoning)
     return message
 
 

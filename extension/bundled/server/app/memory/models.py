@@ -69,6 +69,14 @@ class MasteryRecord:
     fsrs_reps: int = 0
     fsrs_lapses: int = 0
     fsrs_state: str = "new"
+    # Full FSRS card identity. Dropping these on the concept-review path made
+    # py-fsrs treat a reviewed card as new: no elapsed time, no learning step,
+    # no previous due date. They are persisted so one scheduler decision can be
+    # resumed exactly after a restart.
+    fsrs_step: int = 0
+    fsrs_last_review_at: datetime | None = None
+    fsrs_due: datetime | None = None
+    fsrs_interval: int = 0
 
 
 @dataclass(slots=True)

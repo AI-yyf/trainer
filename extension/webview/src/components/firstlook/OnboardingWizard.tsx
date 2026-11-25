@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
+import { providerBaseUrlIsLocalService } from "../../../../../shared/src/providerStatus";
 import type { OnboardingStep } from "../../../../../shared/src/onboarding";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import type { CopyKey } from "../../lib/i18n/copy";
@@ -80,9 +81,10 @@ export function OnboardingWizard({
   );
   const modelDone = modelStep?.status === "done";
   const rootDone = workspaceStep?.status === "done";
+  const isLocalService = providerBaseUrlIsLocalService(draftBaseUrl);
   const connectionReady =
     Boolean(draftBaseUrl.trim()) &&
-    (Boolean(draftApiKey.trim()) || hasStoredApiKey) &&
+    (Boolean(draftApiKey.trim()) || hasStoredApiKey || isLocalService) &&
     Boolean(draftModel.trim());
 
   // A relay paste carries only address + key. The save path demands a model,
@@ -96,7 +98,7 @@ export function OnboardingWizard({
     if (expanded !== "true" || !listModels) {
       return;
     }
-    if (!base.trim() || !(key.trim() || hasStoredApiKey)) {
+    if (!base.trim() || !(key.trim() || hasStoredApiKey || providerBaseUrlIsLocalService(base))) {
       return;
     }
     if (fetchedModelsKeyRef.current === modelFetchKey) {

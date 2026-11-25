@@ -17,7 +17,11 @@ from ...llm.provider_gateway import NEWAPI_CONNECTION_TYPE
 from ...llm.provider_protocols import provider_protocol_family
 from ...llm.skill_draft import generate_skill_draft
 from .._helpers import contains_cjk_text, localized_text, prefers_chinese
-from ..runtime import TrainerRuntime, _provider_capability_transport_markers
+from ..runtime import (
+    TrainerRuntime,
+    _capability_cache_key_matches_transport,
+    _provider_capability_transport_markers,
+)
 from ._deps import RouterDeps
 
 
@@ -760,9 +764,12 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                 )
                 if transport_url and transport_model:
                     for cache_key in list(runtime.provider_capability_cache):
-                        if key_fp and key_fp not in cache_key:
-                            continue
-                        if transport_url in cache_key and transport_model in cache_key:
+                        if _capability_cache_key_matches_transport(
+                            cache_key,
+                            base_url=transport_url,
+                            model=transport_model,
+                            api_key_fingerprint=key_fp,
+                        ):
                             invalidated = {"connection": "unverified"}
                             runtime.provider_capability_cache[cache_key] = invalidated
                             try:
@@ -907,6 +914,18 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
             return missing_key_response
 
         if result.ok:
+            # A passed test is the same language-integrity evidence the
+            # turn-time preflight collects (it marks success on exactly this
+            # condition). Record it here too: without it, a connection whose
+            # optional zh-CN probe was inconclusive is probed again in full —
+            # tools, streaming, listing — right before the next coaching reply.
+            if not result.error_category:
+                provider_service.mark_language_integrity_success(
+                    message=probe_message,
+                    response_language=response_language,
+                    provider_config=provider,
+                    api_key=api_key,
+                )
             diagnostics.append("live connectivity check succeeded")
             diagnostics.extend(result.diagnostics)
             if result.detail and result.detail not in diagnostics:
@@ -939,6 +958,9 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                 **provider_test_capability_payload(provider, result),
             }
             persist_provider_last_test_recovery(payload, success_response, provider)
+            workspace_id = str(payload.get("workspace_id") or payload.get("workspaceId") or "").strip()
+            if workspace_id:
+                runtime.remember_workspace_provider(workspace_id, provider, api_key)
             return success_response
 
         # Failed protocol probes share one normalized, localized detail path.

@@ -7,6 +7,7 @@ instead of hiding 45 names inside a 25k-line function.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -6631,7 +6632,8 @@ async def execute_turn(deps: CoachSupportDeps,
             if guided_training_prefers_local_reply
             else None
         )
-        preflight_language_probe = deps.detect_provider_language_corruption(
+        preflight_language_probe = await asyncio.to_thread(
+            deps.detect_provider_language_corruption,
             coaching_service,
             message=request.message,
             response_language=request.response_language,
@@ -6705,6 +6707,7 @@ async def execute_turn(deps: CoachSupportDeps,
                     protocol=getattr(coaching_service._config, "protocol", None) if coaching_service._config else None,
                     history=deps.build_conversation_history(
                         state.snapshot.messages,
+                        active_view=request.active_view,
                         drop_latest_user=True,
                     ),
                 )
@@ -6780,6 +6783,7 @@ async def execute_turn(deps: CoachSupportDeps,
                             coach_context=dict(coach_turn["coach_context"]),
                             history=deps.build_conversation_history(
                                 state.snapshot.messages,
+                                active_view=request.active_view,
                                 drop_latest_user=True,
                             ),
                         )
@@ -6828,6 +6832,7 @@ async def execute_turn(deps: CoachSupportDeps,
                     coach_context=dict(coach_turn["coach_context"]),
                     history=deps.build_conversation_history(
                         state.snapshot.messages,
+                        active_view=request.active_view,
                         drop_latest_user=True,
                     ),
                 )
@@ -7264,6 +7269,7 @@ async def execute_turn(deps: CoachSupportDeps,
     if request.intent == "plan" and not stream and provider_live_usable:
         history = deps.build_conversation_history(
             state.snapshot.messages,
+            active_view=request.active_view,
             drop_latest_user=True,
         )
         if use_agent_loop:
@@ -7413,6 +7419,78 @@ async def execute_turn(deps: CoachSupportDeps,
                     "evidence": list(turn_summary.evidence or []),
                 }
     response_snapshot = state.snapshot.model_copy(deep=True)
+    if stream and request.intent != "coach":
+        # Non-coach streaming turns have not produced the real LLM reply yet.
+        # Defer grounding and reflection persistence to /turn/stream once the
+        # stream commits so cancelled/failed turns never pollute memory.
+        if not provider_live_usable:
+            suggested_actions = deps.honest_suggested_actions_without_usable_provider(
+                suggested_actions,
+                response_language=request.response_language,
+                snapshot=state.snapshot,
+                current_task=state.snapshot.current_task,
+                current_plan=state.snapshot.plan,
+                current_evaluation=state.snapshot.evaluation,
+            )
+        if agent_meta:
+            agent_meta["reliability"] = deps.operation_reliability_record(
+                phase="acked",
+                outcome=(
+                    "failure"
+                    if not provider_live_usable or provider_failure_detected
+                    else "success"
+                ),
+                request_id=str(request.request_id or "").strip() or None,
+            )
+        state.snapshot.memory = deps.runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.profile = deps.runtime.repository.get_profile(workspace_id) or profile
+        deps.hydrate_snapshot(
+            state.snapshot,
+            response_language=request.response_language,
+            answer_mode=request.answer_mode or profile.answer_policy,
+            scenario=scenario,
+            learner_signal=learner_signal,
+            message=request.message,
+            current_file=request.current_file,
+            active_view=request.active_view,
+            session_workspace_id=workspace_id,
+        )
+        if frozen_formal_plan_mutation_requested:
+            assistant_content = "\n\n".join(
+                part
+                for part in (
+                    deps.frozen_plan_mutation_notice(request.response_language),
+                    assistant_content,
+                )
+                if part
+            )
+            agent_meta["formal_plan_mutation_blocked"] = True
+        if not (scenario == "idea_implementation" and request.current_file is not None):
+            response_snapshot = state.snapshot
+        return (
+            {
+                "__turn_stream_preparation__": True,
+                "state": state,
+                "request": request,
+                "profile": profile,
+                "scenario": scenario,
+                "learner_signal": learner_signal,
+                "coach_turn_data": coach_turn_payload,
+                "artifacts": artifacts,
+                "suggested_actions": suggested_actions,
+                "agent_meta": agent_meta,
+                "response_snapshot": response_snapshot,
+                "attachment_delivery": attachment_delivery,
+                "fallback_reply": assistant_content,
+                "use_agent_loop": use_agent_loop,
+                "raw_requested_answer_mode": raw_requested_answer_mode,
+                "saved_answer_mode": saved_answer_mode,
+                "language_corruption_detected": language_corruption_detected,
+                "provider_failure_detected": provider_failure_detected,
+            },
+            artifacts,
+            coaching_service,
+        )
     # T-0048: repair a generic finalize step BEFORE grounding and memory
     # persistence so the recorded thread, the grounding gate and the
     # response surfaces all ship the same step. Only a non-empty
@@ -7514,28 +7592,6 @@ async def execute_turn(deps: CoachSupportDeps,
         agent_meta["formal_plan_mutation_blocked"] = True
     if not (scenario == "idea_implementation" and request.current_file is not None):
         response_snapshot = state.snapshot
-
-    if stream and request.intent != "coach":
-        return (
-            {
-                "__turn_stream_preparation__": True,
-                "state": state,
-                "request": request,
-                "profile": profile,
-                "scenario": scenario,
-                "learner_signal": learner_signal,
-                "coach_turn_data": coach_turn_payload,
-                "artifacts": artifacts,
-                "suggested_actions": suggested_actions,
-                "agent_meta": agent_meta,
-                "response_snapshot": response_snapshot,
-                "attachment_delivery": attachment_delivery,
-                "fallback_reply": assistant_content,
-                "use_agent_loop": use_agent_loop,
-            },
-            artifacts,
-            coaching_service,
-        )
 
     return (
         deps.build_session_response(

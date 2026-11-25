@@ -233,9 +233,6 @@ function CitationPartView({
     .join("\n");
   const content = (
     <>
-      <span className="resource-citation-chip__kind" aria-hidden="true">
-        {part.url ? "WEB" : "REF"}
-      </span>
       <span className="resource-citation-chip__title">{title}</span>
       {anchor ? <span className="resource-citation-chip__anchor">{anchor}</span> : null}
       {invalid ? null : (

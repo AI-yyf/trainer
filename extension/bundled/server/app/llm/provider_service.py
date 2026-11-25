@@ -216,15 +216,22 @@ from .provider.text import (
     _wrong_language_cjk_reply_detail,
 )
 from .provider.thinking import (
+    DEFAULT_POLICY,
     apply_thinking_policy,
+    chat_parameter_repairs,
+    clamp_anthropic_thinking_budget,
     clamp_wire_thinking_budget,
     declared_thinking,
+    learned_param_repairs,
     learned_policy,
+    remember_param_repairs,
     remember_policy,
+    repair_chat_parameters,
     resolve_thinking_policy,
     thinking_rejection_policy,
 )
 from .provider_protocols import (
+    _finish_reason_is_truncated,
     assess_provider_capabilities,
     assess_provider_tool_call_probe,
     normalize_provider_protocol,
@@ -287,7 +294,13 @@ LECTURE_OUTPUT_TOKENS = 4096
 GENERATION_CLIENT_TIMEOUT = httpx.Timeout(
     connect=10.0, write=60.0, pool=30.0, read=None
 )
+#: Sentinel: a rejected request named no repairable parameter.
+_NOT_REPAIRED = object()
+
 _TOOL_CAPABILITY_PROBE_NAME = "trainer_capability_probe"
+#: Output cap for the forced no-op tool call; a reasoning model gets one
+#: escalated retry (see ``_probe_tool_capability``).
+_TOOL_PROBE_OUTPUT_TOKENS = 64
 _TOOL_CAPABILITY_PROBE_PROMPT = (
     "Call the supplied trainer_capability_probe tool now with probe set to ok. "
     "Do not call external services and do not return text."
@@ -505,6 +518,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         self._client: Any | None = None
         self._models_cache: dict[tuple[str, str], tuple[float, ProviderModelsResponse]] = {}
         self._capability_truth: dict[str, str] = {}
+        # Models on this transport that already answered a probe with hidden
+        # reasoning. A service instance is per (config, api key), so this is
+        # scoped to the connection it was observed on.
+        self._reasoning_observed_models: set[str] = set()
         self._language_integrity_success: dict[str, float] = {}
         self._shared_language_integrity_resolver: (
             Callable[[ProviderConfig | None, str | None], dict[str, float] | None] | None
@@ -550,6 +567,43 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if name and state:
                 observed[name] = state
         self._capability_truth = observed
+
+    def _note_hidden_reasoning(self, provider: ProviderConfig | None) -> None:
+        """Remember that this connection's model answered with hidden reasoning.
+
+        The name patterns in ``_needs_generous_visible_probe_budget`` lag behind
+        thinking-by-default model families (glm-4.6, qwen3, kimi-k2, …), so a
+        model whose small probe budget was spent on reasoning is promoted by
+        live evidence: the remaining probes of this and later tests start from
+        the generous tier instead of re-paying the same blank attempt.
+        """
+        if provider is None:
+            return
+        model = str(getattr(provider, "model", "") or "").strip().lower()
+        if model:
+            self._reasoning_observed_models.add(model)
+
+    def _visible_probe_budget(self, provider: ProviderConfig | None, default: int = 96) -> int:
+        """Output cap for a probe that must yield one short visible token."""
+        budget = _visible_probe_max_tokens(provider, default)
+        model = str(getattr(provider, "model", "") or "").strip().lower()
+        if model and model in self._reasoning_observed_models:
+            return max(budget, 1024)
+        return budget
+
+    def _probe_retry_budget(self, provider: ProviderConfig, base: int) -> int | None:
+        """One-shot larger output cap for a probe that reasoning cut short.
+
+        Never exceeds the model's configured output limit, so the retry cannot
+        be rejected for asking for more output than the model allows.
+        """
+        escalated = self._escalated_chat_budget(base)
+        if not escalated:
+            return None
+        _, max_output_tokens = self._configured_token_limits(provider)
+        if isinstance(max_output_tokens, int) and max_output_tokens > 0:
+            escalated = min(escalated, max_output_tokens)
+        return escalated if escalated > base else None
 
     def supports_executable_tools(self) -> bool:
         """Return whether this live connection can run the tool loop.
@@ -1087,8 +1141,6 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         provider: ProviderConfig | None = None,
     ) -> dict[str, Any]:
         request_defaults = self._provider_request_defaults(provider)
-        if not request_defaults:
-            return payload
 
         merged = {**payload}
         chat_key_aliases = {
@@ -1161,9 +1213,6 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 continue
             if isinstance(value, str) and value.strip().lower() in skipped_values:
                 continue
-            if normalized_key == "max_tokens" and isinstance(value, int) and value > 0:
-                merged[normalized_key] = value
-                continue
             if normalized_key == "stop" and key == "stopSequences":
                 merged[normalized_key] = value
                 continue
@@ -1172,8 +1221,23 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         # Apply the negotiated thinking policy here, on the central chokepoint
         # every chat request passes through. Without this the policy learned
         # from a gateway rejection is never re-applied, so every later turn
-        # re-pays the same HTTP 400 round trip before succeeding.
-        applied = apply_thinking_policy(merged, resolve_thinking_policy(merged, self._thinking_scope(provider)))
+        # re-pays the same HTTP 400 round trip before succeeding. The chat wire
+        # cannot carry the profile's top-level ``thinking`` marker (the SDK
+        # rejects unknown kwargs, and the key filter above drops it), so the
+        # declared policy is also read from the defaults themselves: an explicit
+        # "off" still reaches the gateway, while an undeclared profile sends
+        # nothing and keeps the model's own default (the composer's "auto").
+        scope = self._thinking_scope(provider)
+        declared = declared_thinking(merged) or declared_thinking(request_defaults)
+        applied = apply_thinking_policy(
+            merged,
+            resolve_thinking_policy(merged, scope, declared=declared),
+        )
+        known_repairs = learned_param_repairs(scope)
+        if known_repairs:
+            repaired = repair_chat_parameters(applied, known_repairs)
+            if repaired is not None:
+                applied = repaired
         return clamp_wire_thinking_budget(applied)
 
 
@@ -1202,15 +1266,6 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         config = self._config
         if protocol is None and config is not None:
             protocol = getattr(config, "protocol", None)
-        if config is not None and self._capability_truth.get("vision") != "verified":
-            return {
-                "attachments_present": True,
-                "image_attachment_count": image_attachment_count,
-                "attachments_delivered_to_model": False,
-                "attachments_delivery_path": "not_sent",
-                "attachments_delivery_reason": "vision_not_available",
-            }
-
         if not attachments_present:
             return {
                 "attachments_present": False,
@@ -1218,6 +1273,15 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 "attachments_delivered_to_model": False,
                 "attachments_delivery_path": "not_sent",
                 "attachments_delivery_reason": "no_attachments",
+            }
+
+        if config is not None and self._capability_truth.get("vision") != "verified":
+            return {
+                "attachments_present": True,
+                "image_attachment_count": image_attachment_count,
+                "attachments_delivered_to_model": False,
+                "attachments_delivery_path": "not_sent",
+                "attachments_delivery_reason": "vision_not_available",
             }
 
         if image_attachment_count <= 0:
@@ -1562,17 +1626,28 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         max_tokens = _visible_probe_max_tokens(provider, max_tokens)
         if protocol == "openai_responses":
             client = self._create_sync_client(provider, api_key)
-            payload: dict[str, Any] = {
-                "model": provider.model,
-                "input": prompt,
-                "max_output_tokens": max_tokens,
-            }
-            if not _model_looks_reasoning_first(provider):
-                payload["temperature"] = 0
-            if system:
-                payload["instructions"] = system
-            response = client.responses.create(**payload)
-            return self._native_probe_preview(getattr(response, "output_text", ""))
+            try:
+                payload: dict[str, Any] = {
+                    "model": provider.model,
+                    "input": prompt,
+                    "max_output_tokens": max_tokens,
+                }
+                if not _model_looks_reasoning_first(provider):
+                    payload["temperature"] = 0
+                if system:
+                    payload["instructions"] = system
+                payload = self._apply_openai_responses_probe_defaults(payload, provider)
+                try:
+                    response = client.responses.create(**payload)
+                except Exception as temp_exc:  # noqa: BLE001
+                    if "temperature" in payload and "temperature" in str(temp_exc).lower():
+                        payload.pop("temperature", None)
+                        response = client.responses.create(**payload)
+                    else:
+                        raise
+                return self._native_probe_preview(getattr(response, "output_text", ""))
+            finally:
+                self._close_sync_client(client)
 
         if protocol == "anthropic_messages":
             payload = {
@@ -1587,11 +1662,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 response = client.post(
                     f"{self._anthropic_base_url(provider)}/v1/messages",
                     json=payload,
-                    headers={
-                        "x-api-key": api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
+                    headers=self._anthropic_probe_headers(provider, api_key),
                 )
             if response.status_code >= 400:
                 raise provider_http_failure(
@@ -1719,6 +1790,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         probe_message: str | None = None,
         response_language: str | None = None,
     ) -> ProviderTestResponse:
+        if hidden_reasoning_observed:
+            self._note_hidden_reasoning(provider)
         language_probe: dict[str, object] | None = None
         if not preview:
             language_probe = self._native_protocol_language_probe_result_resilient(
@@ -1849,45 +1922,110 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             ),
         ]
 
+    @staticmethod
+    def _extra_headers_from_defaults(provider: ProviderConfig) -> dict[str, str]:
+        defaults = _normalized_provider_request_defaults(provider)
+        raw = defaults.get("extra_headers") or defaults.get("extraHeaders")
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            str(k).strip(): str(v)
+            for k, v in raw.items()
+            if isinstance(k, str) and isinstance(v, str) and k.strip()
+        }
+
+    def _anthropic_probe_headers(self, provider: ProviderConfig, api_key: str) -> dict[str, str]:
+        return {
+            **self._extra_headers_from_defaults(provider),
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+
+    def _gemini_probe_headers(self, provider: ProviderConfig, api_key: str) -> dict[str, str]:
+        return {
+            **self._extra_headers_from_defaults(provider),
+            "x-goog-api-key": api_key,
+            "content-type": "application/json",
+        }
+
+    def _apply_openai_responses_probe_defaults(
+        self,
+        payload: dict[str, Any],
+        provider: ProviderConfig,
+    ) -> dict[str, Any]:
+        defaults = self._provider_request_defaults(provider)
+        merged = dict(payload)
+        extra_headers = self._extra_headers_from_defaults(provider)
+        if extra_headers:
+            merged["extra_headers"] = extra_headers
+        if defaults:
+            if isinstance(defaults.get("extra_body"), dict):
+                merged["extra_body"] = self._merge_request_records(
+                    dict(merged.get("extra_body") or {}),
+                    defaults["extra_body"],
+                )
+            if "store" in defaults:
+                merged["store"] = defaults["store"]
+            service_tier = defaults.get("service_tier", defaults.get("serviceTier"))
+            if service_tier is not None:
+                merged["service_tier"] = service_tier
+            effort = defaults.get("reasoning_effort", defaults.get("reasoningEffort"))
+            if isinstance(effort, str) and effort.strip() and effort.strip().lower() != "auto":
+                existing = merged.get("reasoning")
+                merged["reasoning"] = {
+                    **(dict(existing) if isinstance(existing, dict) else {}),
+                    "effort": effort.strip(),
+                }
+        if (
+            _model_looks_reasoning_first(provider)
+            or (isinstance(merged.get("reasoning"), dict) and merged["reasoning"])
+        ):
+            merged.pop("temperature", None)
+        return merged
+
+    @staticmethod
+    def _close_sync_client(client: Any) -> None:
+        close = getattr(client, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+
     def _apply_anthropic_native_probe_defaults(
         self,
         payload: dict[str, Any],
         provider: ProviderConfig,
     ) -> dict[str, Any]:
         defaults = self._provider_request_defaults(provider)
-        if not defaults:
-            return payload
         merged = dict(payload)
-        extra_body = defaults.get("extra_body")
-        if isinstance(extra_body, dict):
-            merged.update(extra_body)
-        max_tokens = defaults.get("max_tokens", defaults.get("maxTokens"))
-        if isinstance(max_tokens, int) and max_tokens > 0:
-            merged["max_tokens"] = min(max_tokens, max(64, int(merged.get("max_tokens") or 64)))
-        for key in ("temperature", "top_p", "top_k", "stop_sequences"):
-            if key in defaults and defaults[key] is not None:
-                merged[key] = defaults[key]
-        if not self._anthropic_base_url_is_official(provider):
-            # Previously an unconditional `thinking: disabled`. That is still the
-            # right first attempt for reasoning-first gateways (it keeps probe
-            # replies short), but it must not be a blanket override: a user's
-            # explicit request_defaults wins, and models that *require* thinking
-            # reject this field with HTTP 400. provider.thinking re-negotiates
-            # the policy per model at runtime and replays the request.
-            return apply_thinking_policy(
-                merged, resolve_thinking_policy(merged, provider)
-            )
-        thinking_budget = defaults.get("thinking_budget", defaults.get("thinkingBudget"))
-        if isinstance(thinking_budget, int) and thinking_budget > 0:
-            merged["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
-        elif isinstance(thinking_budget, str) and thinking_budget.strip().lower() == "disabled":
-            merged.pop("thinking", None)
-        merged_thinking = merged.get("thinking")
-        if isinstance(merged_thinking, dict) and merged_thinking.get("type") == "enabled":
-            if merged.get("temperature") not in (None, 1):
-                merged.pop("temperature", None)
-            merged.pop("top_k", None)
-        return _flatten_minimax_thinking_for_raw_http(merged, provider)
+        if defaults:
+            extra_body = defaults.get("extra_body")
+            if isinstance(extra_body, dict):
+                merged.update(extra_body)
+            max_tokens = defaults.get("max_tokens", defaults.get("maxTokens"))
+            if isinstance(max_tokens, int) and max_tokens > 0:
+                merged["max_tokens"] = min(max_tokens, max(64, int(merged.get("max_tokens") or 64)))
+            for key in ("temperature", "top_p", "top_k", "stop_sequences"):
+                if key in defaults and defaults[key] is not None:
+                    merged[key] = defaults[key]
+            if not self._anthropic_base_url_is_official(provider):
+                merged = apply_thinking_policy(
+                    merged, resolve_thinking_policy(merged, provider)
+                )
+            else:
+                thinking_budget = defaults.get("thinking_budget", defaults.get("thinkingBudget"))
+                if isinstance(thinking_budget, int) and thinking_budget > 0:
+                    merged["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+                elif isinstance(thinking_budget, str) and thinking_budget.strip().lower() == "disabled":
+                    merged.pop("thinking", None)
+        merged = _flatten_minimax_thinking_for_raw_http(merged, provider)
+        if isinstance(merged.get("extra_body"), dict):
+            raw_extra = merged.pop("extra_body")
+            if isinstance(raw_extra.get("thinking"), dict) and "thinking" not in merged:
+                merged["thinking"] = raw_extra["thinking"]
+        return clamp_anthropic_thinking_budget(merged)
 
     # --- thinking re-negotiation ------------------------------------------------
     # A gateway may reject the `thinking` request field outright (mandatory-
@@ -1922,31 +2060,77 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         """The provider identity a learned thinking policy is cached under."""
         return provider or self._config
 
+    @staticmethod
+    def _replay_with_repaired_parameters(client: Any, payload: dict[str, Any], error: Exception) -> Any:
+        """Replay once without a parameter the provider named as unsupported.
+
+        Returns ``_NOT_REPAIRED`` when the failure is not a named-parameter
+        rejection, so the caller keeps its normal error handling.
+        """
+        retry_payload = repair_chat_parameters(payload, chat_parameter_repairs(error))
+        if retry_payload is None:
+            return _NOT_REPAIRED
+        try:
+            return client.chat.completions.create(**retry_payload)
+        except Exception as retry_exc:
+            raise error from retry_exc
+
+    @staticmethod
+    async def _replay_with_repaired_parameters_async(
+        client: Any, payload: dict[str, Any], error: Exception
+    ) -> Any:
+        retry_payload = repair_chat_parameters(payload, chat_parameter_repairs(error))
+        if retry_payload is None:
+            return _NOT_REPAIRED
+        try:
+            return await client.chat.completions.create(**retry_payload)
+        except Exception as retry_exc:
+            raise error from retry_exc
+
     def _create_chat_completion_negotiated(
         self,
         client: Any,
         payload: dict[str, Any],
         provider: ProviderConfig | None = None,
     ) -> Any:
-        """Sync ``chat.completions.create`` with one thinking re-negotiation."""
+        """Sync ``chat.completions.create`` with bounded parameter and thinking repair."""
         scope = self._thinking_scope(provider)
-        attempted = declared_thinking(payload) or (learned_policy(scope) if scope else None) or "disabled"
-        try:
-            return client.chat.completions.create(**payload)
-        except Exception as exc:
-            policy = thinking_rejection_policy(exc, attempted)
-            if policy is None:
-                raise
-            retry_payload = self._retry_payload_for_thinking(payload, scope, attempted, policy)
-            if retry_payload is None:
-                raise
+        current_payload = dict(payload)
+        attempted = (
+            declared_thinking(current_payload)
+            or (learned_policy(scope) if scope else None)
+            or DEFAULT_POLICY
+        )
+        first_error: Exception | None = None
+        for _ in range(4):
             try:
-                return client.chat.completions.create(**retry_payload)
-            except Exception as retry_exc:
-                # The first rejection is the actionable diagnosis ("this model
-                # requires adaptive thinking"). Never let a retry's own failure
-                # mask it — re-raise the original and chain the retry detail.
-                raise exc from retry_exc
+                return client.chat.completions.create(**current_payload)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+                repairs = chat_parameter_repairs(exc)
+                repaired_payload = (
+                    repair_chat_parameters(current_payload, repairs) if repairs else None
+                )
+                if repaired_payload is not None:
+                    if scope is not None:
+                        remember_param_repairs(scope, repairs)
+                    current_payload = repaired_payload
+                    continue
+                policy = thinking_rejection_policy(exc, attempted)
+                if policy is not None:
+                    retry_payload = self._retry_payload_for_thinking(
+                        current_payload, scope, attempted, policy
+                    )
+                    if retry_payload is not None:
+                        attempted = policy
+                        current_payload = retry_payload
+                        continue
+                if first_error is not exc:
+                    raise first_error from exc
+                raise
+        assert first_error is not None
+        raise first_error
 
     async def _create_chat_completion_negotiated_async(
         self,
@@ -1954,22 +2138,44 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         payload: dict[str, Any],
         provider: ProviderConfig | None = None,
     ) -> Any:
-        """Async ``chat.completions.create`` with one thinking re-negotiation."""
+        """Async ``chat.completions.create`` with bounded parameter and thinking repair."""
         scope = self._thinking_scope(provider)
-        attempted = declared_thinking(payload) or (learned_policy(scope) if scope else None) or "disabled"
-        try:
-            return await client.chat.completions.create(**payload)
-        except Exception as exc:
-            policy = thinking_rejection_policy(exc, attempted)
-            if policy is None:
-                raise
-            retry_payload = self._retry_payload_for_thinking(payload, scope, attempted, policy)
-            if retry_payload is None:
-                raise
+        current_payload = dict(payload)
+        attempted = (
+            declared_thinking(current_payload)
+            or (learned_policy(scope) if scope else None)
+            or DEFAULT_POLICY
+        )
+        first_error: Exception | None = None
+        for _ in range(4):
             try:
-                return await client.chat.completions.create(**retry_payload)
-            except Exception as retry_exc:
-                raise exc from retry_exc
+                return await client.chat.completions.create(**current_payload)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+                repairs = chat_parameter_repairs(exc)
+                repaired_payload = (
+                    repair_chat_parameters(current_payload, repairs) if repairs else None
+                )
+                if repaired_payload is not None:
+                    if scope is not None:
+                        remember_param_repairs(scope, repairs)
+                    current_payload = repaired_payload
+                    continue
+                policy = thinking_rejection_policy(exc, attempted)
+                if policy is not None:
+                    retry_payload = self._retry_payload_for_thinking(
+                        current_payload, scope, attempted, policy
+                    )
+                    if retry_payload is not None:
+                        attempted = policy
+                        current_payload = retry_payload
+                        continue
+                if first_error is not exc:
+                    raise first_error from exc
+                raise
+        assert first_error is not None
+        raise first_error
 
     def _apply_gemini_native_probe_defaults(
         self,
@@ -1977,26 +2183,25 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         provider: ProviderConfig,
     ) -> dict[str, Any]:
         defaults = self._provider_request_defaults(provider)
-        if not defaults:
-            return payload
         merged = dict(payload)
-        extra_body = defaults.get("extra_body")
-        gemini_allowed_root = {"safetySettings", "cachedContent", "labels", "toolConfig", "thinkingConfig"}
-        if isinstance(extra_body, dict):
-            for key, value in extra_body.items():
-                if key in gemini_allowed_root:
-                    merged[key] = value
-        generation_config = dict(merged.get("generationConfig") or {})
-        if isinstance(defaults.get("generationConfig"), dict):
-            generation_config.update(defaults["generationConfig"])
-        max_tokens = defaults.get("maxOutputTokens", defaults.get("maxTokens"))
-        if isinstance(max_tokens, int) and max_tokens > 0:
-            generation_config["maxOutputTokens"] = max(max_tokens, int(generation_config.get("maxOutputTokens") or 256), 256)
-        for key in ("temperature", "topP", "topK", "candidateCount", "stopSequences"):
-            if key in defaults and defaults[key] is not None:
-                generation_config[key] = defaults[key]
-        merged["generationConfig"] = generation_config
-        return _flatten_minimax_thinking_for_raw_http(merged, provider)
+        if defaults:
+            extra_body = defaults.get("extra_body")
+            gemini_allowed_root = {"safetySettings", "cachedContent", "labels", "toolConfig", "thinkingConfig"}
+            if isinstance(extra_body, dict):
+                for key, value in extra_body.items():
+                    if key in gemini_allowed_root:
+                        merged[key] = value
+            generation_config = dict(merged.get("generationConfig") or {})
+            if isinstance(defaults.get("generationConfig"), dict):
+                generation_config.update(defaults["generationConfig"])
+            max_tokens = defaults.get("maxOutputTokens", defaults.get("maxTokens"))
+            if isinstance(max_tokens, int) and max_tokens > 0:
+                generation_config["maxOutputTokens"] = max(max_tokens, int(generation_config.get("maxOutputTokens") or 256), 256)
+            for key in ("temperature", "topP", "topK", "candidateCount", "stopSequences"):
+                if key in defaults and defaults[key] is not None:
+                    generation_config[key] = defaults[key]
+            merged["generationConfig"] = generation_config
+        return clamp_wire_thinking_budget(_flatten_minimax_thinking_for_raw_http(merged, provider))
 
     def _test_openai_responses_protocol(
         self,
@@ -2008,68 +2213,79 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         diagnostics = ["Using native openai_responses probe."]
         try:
             client = self._create_sync_client(provider, api_key)
-            last_error: Exception | None = None
-            response = None
-            chosen_model = provider.model
-            preview = ""
-            hidden_reasoning_observed = False
-            reasoning_budget_exhausted = False
-            probe_output_budget = _visible_probe_max_tokens(provider, default=32)
-            for candidate in self._model_candidates(provider.model):
-                chosen_model = candidate
-                try:
-                    for attempt, prompt in enumerate(
-                        self._native_probe_prompts(response_language),
-                        start=1,
-                    ):
-                        attempt_budget = (
-                            probe_output_budget if attempt == 1 else max(probe_output_budget * 2, 128)
-                        )
-                        request_kwargs: dict[str, Any] = {
-                            "model": candidate,
-                            "input": prompt,
-                            "max_output_tokens": attempt_budget,
-                        }
-                        if not _model_looks_reasoning_first(provider):
-                            request_kwargs["temperature"] = 0
-                        try:
-                            response = client.responses.create(**request_kwargs)
-                        except Exception as temp_exc:  # noqa: BLE001
-                            if (
-                                "temperature" in request_kwargs
-                                and "temperature" in str(temp_exc).lower()
-                            ):
-                                request_kwargs.pop("temperature", None)
-                                response = client.responses.create(**request_kwargs)
-                            else:
-                                raise
-                        hidden_reasoning_observed = _has_hidden_reasoning(response)
-                        reasoning_budget_exhausted = (
-                            reasoning_budget_exhausted
-                            or _reasoning_budget_exhausted(
-                                response,
-                                max_tokens=attempt_budget,
-                            )
-                        )
-                        preview = self._native_probe_preview(getattr(response, "output_text", ""))
-                        if preview:
-                            if attempt > 1:
-                                diagnostics.append(
-                                    "Responses probe returned visible text after empty first attempt."
+            try:
+                last_error: Exception | None = None
+                response = None
+                chosen_model = provider.model
+                preview = ""
+                hidden_reasoning_observed = False
+                reasoning_budget_exhausted = False
+                probe_output_budget = self._visible_probe_budget(provider, default=32)
+                for candidate in self._model_candidates(provider.model):
+                    chosen_model = candidate
+                    try:
+                        for attempt, prompt in enumerate(
+                            self._native_probe_prompts(response_language),
+                            start=1,
+                        ):
+                            attempt_budget = (
+                                probe_output_budget
+                                if attempt == 1
+                                else (
+                                    self._probe_retry_budget(provider, probe_output_budget)
+                                    or max(probe_output_budget * 2, 128)
                                 )
+                            )
+                            request_kwargs: dict[str, Any] = {
+                                "model": candidate,
+                                "input": prompt,
+                                "max_output_tokens": attempt_budget,
+                            }
+                            if not _model_looks_reasoning_first(provider):
+                                request_kwargs["temperature"] = 0
+                            request_kwargs = self._apply_openai_responses_probe_defaults(
+                                request_kwargs, provider
+                            )
+                            try:
+                                response = client.responses.create(**request_kwargs)
+                            except Exception as temp_exc:  # noqa: BLE001
+                                if (
+                                    "temperature" in request_kwargs
+                                    and "temperature" in str(temp_exc).lower()
+                                ):
+                                    request_kwargs.pop("temperature", None)
+                                    response = client.responses.create(**request_kwargs)
+                                else:
+                                    raise
+                            hidden_reasoning_observed = _has_hidden_reasoning(response)
+                            reasoning_budget_exhausted = (
+                                reasoning_budget_exhausted
+                                or _reasoning_budget_exhausted(
+                                    response,
+                                    max_tokens=attempt_budget,
+                                )
+                            )
+                            preview = self._native_probe_preview(getattr(response, "output_text", ""))
+                            if preview:
+                                if attempt > 1:
+                                    diagnostics.append(
+                                        "Responses probe returned visible text after empty first attempt."
+                                    )
+                                break
+                            diagnostics.append(
+                                f"Responses probe returned no visible text on attempt {attempt}."
+                            )
+                        if preview:
                             break
-                        diagnostics.append(
-                            f"Responses probe returned no visible text on attempt {attempt}."
-                        )
-                    if preview:
                         break
-                    break
-                except Exception as exc:  # noqa: BLE001
-                    last_error = exc
-                    if not self._is_model_not_supported_error(exc):
-                        raise
-            if response is None:
-                raise last_error or RuntimeError(f"Unable to resolve model {provider.model}.")
+                    except Exception as exc:  # noqa: BLE001
+                        last_error = exc
+                        if not self._is_model_not_supported_error(exc):
+                            raise
+                if response is None:
+                    raise last_error or RuntimeError(f"Unable to resolve model {provider.model}.")
+            finally:
+                self._close_sync_client(client)
             diagnostics.append(f"Responses probe succeeded with model {chosen_model}.")
             return self._finalize_native_protocol_test(
                 protocol="openai_responses",
@@ -2097,7 +2313,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
     def _anthropic_base_url(self, provider: ProviderConfig) -> str:
         base_url = str(provider.base_url or "").strip().rstrip("/")
-        if base_url.endswith("/v1"):
+        if base_url.lower().endswith("/v1"):
             base_url = base_url[: -len("/v1")]
         return base_url or "https://api.anthropic.com"
 
@@ -2119,7 +2335,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 ):
                     payload = {
                         "model": provider.model,
-                        "max_tokens": _visible_probe_max_tokens(provider, default=64),
+                        "max_tokens": self._visible_probe_budget(provider, default=64),
                         "system": (
                             "Return visible text in the message content. "
                             "Do not answer only with hidden reasoning."
@@ -2130,11 +2346,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     response = client.post(
                         f"{self._anthropic_base_url(provider)}/v1/messages",
                         json=payload,
-                        headers={
-                            "x-api-key": api_key,
-                            "anthropic-version": "2023-06-01",
-                            "content-type": "application/json",
-                        },
+                        headers=self._anthropic_probe_headers(provider, api_key),
                     )
                     if response.status_code >= 400:
                         raise provider_http_failure(
@@ -2228,10 +2440,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     response = client.post(
                         self._gemini_endpoint(provider),
                         json=payload,
-                        headers={
-                            "x-goog-api-key": api_key,
-                            "content-type": "application/json",
-                        },
+                        headers=self._gemini_probe_headers(provider, api_key),
                     )
                     if response.status_code >= 400:
                         raise provider_http_failure(
@@ -2250,7 +2459,11 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                             continue
                         content = candidate.get("content") or {}
                         for part in content.get("parts") or []:
-                            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                            if (
+                                isinstance(part, dict)
+                                and part.get("thought") is not True
+                                and isinstance(part.get("text"), str)
+                            ):
                                 text_parts.append(part["text"])
                     preview = self._native_probe_preview("".join(text_parts))
                     if preview:
@@ -2331,16 +2544,30 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         self,
         provider: ProviderConfig,
         api_key: str,
+        *,
+        max_tokens: int | None = None,
     ) -> tuple[str, object]:
         protocol = self._configured_protocol(provider)
         schema = self._tool_probe_schema()
+        # A forced no-op tool call is short, but a reasoning model thinks
+        # first and its reasoning counts against this cap.
+        budget = (
+            max_tokens
+            if isinstance(max_tokens, int) and max_tokens > 0
+            else self._visible_probe_budget(provider, _TOOL_PROBE_OUTPUT_TOKENS)
+        )
         if protocol == "anthropic_messages":
             payload: dict[str, Any] = {
                 "model": provider.model,
-                "max_tokens": 64,
+                "max_tokens": budget,
                 "messages": [{"role": "user", "content": _TOOL_CAPABILITY_PROBE_PROMPT}],
             }
             payload = self._apply_anthropic_native_probe_defaults(payload, provider)
+            # Anthropic forbids extended thinking alongside forced tool_choice
+            # (`{"type": "tool", "name": ...}`), returning HTTP 400.
+            thinking_obj = payload.get("thinking")
+            if isinstance(thinking_obj, dict) and str(thinking_obj.get("type") or "").lower() == "enabled":
+                payload.pop("thinking", None)
             payload["tools"] = [
                 {
                     "name": _TOOL_CAPABILITY_PROBE_NAME,
@@ -2353,11 +2580,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 response = client.post(
                     f"{self._anthropic_base_url(provider)}/v1/messages",
                     json=payload,
-                    headers={
-                        "x-api-key": api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
+                    headers=self._anthropic_probe_headers(provider, api_key),
                 )
             if response.status_code >= 400:
                 raise RuntimeError(f"Anthropic Messages tool probe failed (HTTP {response.status_code}).")
@@ -2373,21 +2596,28 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         }
         if protocol == "openai_responses":
             client = self._create_sync_client(provider, api_key)
-            response = client.responses.create(
-                model=provider.model,
-                input=_TOOL_CAPABILITY_PROBE_PROMPT,
-                tools=[
+            try:
+                req = self._apply_openai_responses_probe_defaults(
                     {
-                        "type": "function",
-                        "name": _TOOL_CAPABILITY_PROBE_NAME,
-                        "description": "Internal capability probe. Do not perform any action.",
-                        "parameters": schema,
-                    }
-                ],
-                tool_choice={"type": "function", "name": _TOOL_CAPABILITY_PROBE_NAME},
-                max_output_tokens=64,
-            )
-            return protocol, response
+                        "model": provider.model,
+                        "input": _TOOL_CAPABILITY_PROBE_PROMPT,
+                        "tools": [
+                            {
+                                "type": "function",
+                                "name": _TOOL_CAPABILITY_PROBE_NAME,
+                                "description": "Internal capability probe. Do not perform any action.",
+                                "parameters": schema,
+                            }
+                        ],
+                        "tool_choice": {"type": "function", "name": _TOOL_CAPABILITY_PROBE_NAME},
+                        "max_output_tokens": budget,
+                    },
+                    provider,
+                )
+                response = client.responses.create(**req)
+                return protocol, response
+            finally:
+                self._close_sync_client(client)
 
         if protocol == "gemini_generate_content" and self._gemini_base_url_is_google_native(provider):
             payload = self._apply_gemini_native_probe_defaults(
@@ -2398,7 +2628,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                             "parts": [{"text": _TOOL_CAPABILITY_PROBE_PROMPT}],
                         }
                     ],
-                    "generationConfig": {"temperature": 0, "maxOutputTokens": 64},
+                    "generationConfig": {"temperature": 0, "maxOutputTokens": budget},
                 },
                 provider,
             )
@@ -2423,31 +2653,33 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 response = client.post(
                     self._gemini_endpoint(provider),
                     json=payload,
-                    headers={
-                        "x-goog-api-key": api_key,
-                        "content-type": "application/json",
-                    },
+                    headers=self._gemini_probe_headers(provider, api_key),
                 )
             if response.status_code >= 400:
                 raise RuntimeError(f"Gemini GenerateContent tool probe failed (HTTP {response.status_code}).")
             return protocol, response.json()
 
         client = self._create_sync_client(provider, api_key)
-        payload = self._apply_request_defaults(
-            {
-                "model": provider.model,
-                "messages": [{"role": "user", "content": _TOOL_CAPABILITY_PROBE_PROMPT}],
-                "temperature": 0,
-                "max_tokens": 64,
-            },
-            provider,
-        )
-        payload["tools"] = [openai_tool]
-        payload["tool_choice"] = {
-            "type": "function",
-            "function": {"name": _TOOL_CAPABILITY_PROBE_NAME},
-        }
-        return "openai_chat_completions_compatible", client.chat.completions.create(**payload)
+        try:
+            payload = self._apply_request_defaults(
+                {
+                    "model": provider.model,
+                    "messages": [{"role": "user", "content": _TOOL_CAPABILITY_PROBE_PROMPT}],
+                    "temperature": 0,
+                    "max_tokens": budget,
+                },
+                provider,
+            )
+            payload["tools"] = [openai_tool]
+            payload["tool_choice"] = {
+                "type": "function",
+                "function": {"name": _TOOL_CAPABILITY_PROBE_NAME},
+            }
+            return "openai_chat_completions_compatible", self._create_chat_completion_negotiated(
+                client, payload, provider
+            )
+        finally:
+            self._close_sync_client(client)
 
     def _probe_vision_capability(
         self,
@@ -2466,37 +2698,55 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             return None, "Vision probe is unsupported for this provider protocol."
         challenge = build_vision_challenge()
         try:
+            effective_protocol = protocol
             if protocol == "openai_responses":
                 client = self._create_sync_client(provider, api_key)
-                response = client.responses.create(
-                    model=provider.model,
-                    input=openai_responses_input_image_parts(
-                        prompt=challenge.prompt,
-                        image_url=challenge.image_url,
-                    ),
-                    temperature=0,
-                    max_output_tokens=96,
+                try:
+                    req = self._apply_openai_responses_probe_defaults(
+                        {
+                            "model": provider.model,
+                            "input": openai_responses_input_image_parts(
+                                prompt=challenge.prompt,
+                                image_url=challenge.image_url,
+                            ),
+                            "temperature": 0,
+                            "max_output_tokens": 96,
+                        },
+                        provider,
+                    )
+                    response = client.responses.create(**req)
+                finally:
+                    self._close_sync_client(client)
+            elif protocol in {"openai_chat_completions", "openai_chat_completions_compatible"} or (
+                protocol == "gemini_generate_content" and not self._gemini_base_url_is_google_native(provider)
+            ):
+                effective_protocol = (
+                    "openai_chat_completions_compatible"
+                    if protocol == "gemini_generate_content"
+                    else protocol
                 )
-            elif protocol in {"openai_chat_completions", "openai_chat_completions_compatible"}:
                 client = self._create_sync_client(provider, api_key)
-                vision_max_tokens = 256 if _needs_generous_visible_probe_budget(provider) else 96
-                payload = self._apply_request_defaults(
-                    {
-                        "model": provider.model,
-                        "messages": [{"role": "user", "content": [
-                            {"type": "text", "text": challenge.prompt},
-                            {"type": "image_url", "image_url": {"url": challenge.image_url}},
-                        ]}],
-                        "temperature": 0,
-                        "max_tokens": vision_max_tokens,
-                    },
-                    provider,
-                )
-                if _is_minimax_like_provider(provider):
-                    extra_body = dict(payload.get("extra_body") or {})
-                    extra_body["thinking"] = {"type": "disabled"}
-                    payload["extra_body"] = extra_body
-                response = client.chat.completions.create(**payload)
+                try:
+                    vision_max_tokens = 256 if _needs_generous_visible_probe_budget(provider) else 96
+                    payload = self._apply_request_defaults(
+                        {
+                            "model": provider.model,
+                            "messages": [{"role": "user", "content": [
+                                {"type": "text", "text": challenge.prompt},
+                                {"type": "image_url", "image_url": {"url": challenge.image_url}},
+                            ]}],
+                            "temperature": 0,
+                            "max_tokens": vision_max_tokens,
+                        },
+                        provider,
+                    )
+                    if _is_minimax_like_provider(provider):
+                        extra_body = dict(payload.get("extra_body") or {})
+                        extra_body["thinking"] = {"type": "disabled"}
+                        payload["extra_body"] = extra_body
+                    response = self._create_chat_completion_negotiated(client, payload, provider)
+                finally:
+                    self._close_sync_client(client)
             elif protocol == "anthropic_messages":
                 from .agent_binding import _anthropic_image_blocks
 
@@ -2516,11 +2766,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     response = client.post(
                         f"{self._anthropic_base_url(provider)}/v1/messages",
                         json=payload,
-                        headers={
-                            "x-api-key": api_key,
-                            "anthropic-version": "2023-06-01",
-                            "content-type": "application/json",
-                        },
+                        headers=self._anthropic_probe_headers(provider, api_key),
                     )
                 if response.status_code >= 400:
                     return False, "Vision probe was rejected by the provider."
@@ -2538,15 +2784,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     response = client.post(
                         self._gemini_endpoint(provider),
                         json=payload,
-                        headers={
-                            "x-goog-api-key": api_key,
-                            "content-type": "application/json",
-                        },
+                        headers=self._gemini_probe_headers(provider, api_key),
                     )
                 if response.status_code >= 400:
                     return False, "Vision probe was rejected by the provider."
                 response = response.json()
-            assessment = normalize_provider_response(protocol, response, api_key=api_key)
+            assessment = normalize_provider_response(effective_protocol, response, api_key=api_key)
         except Exception:
             return None, "Vision capability probe could not complete safely."
         visible = assessment.content.strip()
@@ -2576,6 +2819,32 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             expected_tool_name=_TOOL_CAPABILITY_PROBE_NAME,
             api_key=api_key,
         )
+        if assessment.observed is None:
+            reply = normalize_provider_response(protocol, response, api_key=api_key)
+            if reply.hidden_reasoning_observed or reply.truncated:
+                self._note_hidden_reasoning(provider)
+                # The short cap was spent before the tool call. That says
+                # nothing about tool support, so buy one retry with real
+                # headroom before leaving the capability unverified.
+                retry_budget = self._probe_retry_budget(provider, _TOOL_PROBE_OUTPUT_TOKENS)
+                if retry_budget:
+                    try:
+                        protocol, retry_response = self._tool_probe_response(
+                            provider, api_key, max_tokens=retry_budget
+                        )
+                    except Exception:  # noqa: BLE001 - reduced to capability truth.
+                        return assessment.observed, assessment.diagnostic
+                    assessment = assess_provider_tool_call_probe(
+                        protocol,
+                        retry_response,
+                        expected_tool_name=_TOOL_CAPABILITY_PROBE_NAME,
+                        api_key=api_key,
+                    )
+                    if assessment.observed is True:
+                        return True, (
+                            "Provider returned the requested structured tool call after a "
+                            "larger output budget."
+                        )
         return assessment.observed, assessment.diagnostic
 
     def _probe_thinking_capability(
@@ -2587,46 +2856,69 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         protocol = self._configured_protocol(provider)
         prompt = "Reply with exactly THINKING_OK and no other text."
         try:
+            effective_protocol = protocol
             if protocol == "openai_responses":
                 client = self._create_sync_client(provider, api_key)
-                response = client.responses.create(
-                    model=provider.model,
-                    input=prompt,
-                    reasoning={"effort": "low"},
-                    max_output_tokens=128,
+                try:
+                    req = self._apply_openai_responses_probe_defaults(
+                        {
+                            "model": provider.model,
+                            "input": prompt,
+                            "reasoning": {"effort": "low"},
+                            "max_output_tokens": 128,
+                        },
+                        provider,
+                    )
+                    response = client.responses.create(**req)
+                finally:
+                    self._close_sync_client(client)
+            elif protocol in {"openai_chat_completions", "openai_chat_completions_compatible"} or (
+                protocol == "gemini_generate_content" and not self._gemini_base_url_is_google_native(provider)
+            ):
+                effective_protocol = (
+                    "openai_chat_completions_compatible"
+                    if protocol == "gemini_generate_content"
+                    else protocol
                 )
-            elif protocol in {"openai_chat_completions", "openai_chat_completions_compatible"}:
                 client = self._create_sync_client(provider, api_key)
-                payload: dict[str, Any] = {
-                    "model": provider.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0,
-                    "max_tokens": 256 if _is_minimax_like_provider(provider) else 128,
-                }
-                if _is_minimax_like_provider(provider):
-                    payload["extra_body"] = {"thinking": {"type": "enabled"}}
-                else:
-                    payload["reasoning_effort"] = "low"
-                payload = self._apply_request_defaults(payload, provider)
-                if _is_minimax_like_provider(provider):
-                    extra_body = dict(payload.get("extra_body") or {})
-                    extra_body["thinking"] = {"type": "enabled"}
-                    payload["extra_body"] = extra_body
-                if "reasoning_effort" in payload:
-                    payload.pop("temperature", None)
-                response = client.chat.completions.create(**payload)
+                try:
+                    payload: dict[str, Any] = {
+                        "model": provider.model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0,
+                        "max_tokens": 256 if _is_minimax_like_provider(provider) else 128,
+                    }
+                    if _is_minimax_like_provider(provider):
+                        payload["extra_body"] = {"thinking": {"type": "enabled"}}
+                    else:
+                        payload["reasoning_effort"] = "low"
+                    payload = self._apply_request_defaults(payload, provider)
+                    if _is_minimax_like_provider(provider):
+                        extra_body = dict(payload.get("extra_body") or {})
+                        extra_body["thinking"] = {"type": "enabled"}
+                        payload["extra_body"] = extra_body
+                    if "reasoning_effort" in payload:
+                        payload.pop("temperature", None)
+                    response = self._create_chat_completion_negotiated(client, payload, provider)
+                finally:
+                    self._close_sync_client(client)
             elif protocol == "anthropic_messages":
                 payload = self._apply_anthropic_native_probe_defaults({
                     "model": provider.model,
-                    "max_tokens": 256,
-                    "thinking": {"type": "enabled", "budget_tokens": 128},
+                    "max_tokens": 2048,
+                    # Anthropic rejects an enabled budget below 1024 (and a
+                    # max_tokens that does not exceed it). The old 128/256 pair
+                    # was refused for every thinking-capable Claude, and that
+                    # refusal was recorded as "unsupported".
+                    "thinking": {"type": "enabled", "budget_tokens": 1024},
                     "messages": [{"role": "user", "content": prompt}],
                 }, provider)
+                payload = clamp_anthropic_thinking_budget(payload)
                 with self._direct_http_client(provider, timeout=60.0) as client:
                     response = client.post(
                         f"{self._anthropic_base_url(provider)}/v1/messages",
                         json=payload,
-                        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                        headers=self._anthropic_probe_headers(provider, api_key),
                     )
                 if response.status_code >= 400:
                     return False, "Thinking probe was rejected by the provider."
@@ -2634,16 +2926,22 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             elif protocol == "gemini_generate_content":
                 payload = self._apply_gemini_native_probe_defaults({
                     "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0, "maxOutputTokens": 256, "thinkingConfig": {"thinkingBudget": 64}},
+                    # 512 is inside every Gemini 2.5 budget range (Pro >= 128,
+                    # Flash-Lite >= 512); 64 was refused and read as unsupported.
+                    "generationConfig": {"temperature": 0, "maxOutputTokens": 4096, "thinkingConfig": {"thinkingBudget": 512}},
                 }, provider)
                 with self._direct_http_client(provider, timeout=60.0) as client:
-                    response = client.post(self._gemini_endpoint(provider), json=payload, headers={"x-goog-api-key": api_key, "content-type": "application/json"})
+                    response = client.post(
+                        self._gemini_endpoint(provider),
+                        json=payload,
+                        headers=self._gemini_probe_headers(provider, api_key),
+                    )
                 if response.status_code >= 400:
                     return False, "Thinking probe was rejected by the provider."
                 response = response.json()
             else:
                 return None, "Thinking probe is unsupported for this provider protocol."
-            assessment = normalize_provider_response(protocol, response, api_key=api_key)
+            assessment = normalize_provider_response(effective_protocol, response, api_key=api_key)
         except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
             return None, "Thinking capability probe could not complete safely."
         if assessment.has_visible_text and assessment.content.strip() == "THINKING_OK":
@@ -2652,12 +2950,91 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             return False, "Thinking probe was rejected by the provider."
         return None, "Thinking probe did not return a trustworthy visible result."
 
+    def _streaming_probe_attempt(
+        self,
+        provider: ProviderConfig,
+        api_key: str,
+        max_tokens: int,
+    ) -> tuple[bool, bool] | None:
+        """Run one bounded chat-completions stream probe.
+
+        Returns ``(visible_observed, reasoning_limited)``. ``reasoning_limited``
+        is True when hidden reasoning or the output cap explains a missing
+        visible token: that is a fact about the model's thinking, never about
+        whether the transport can stream. ``None`` means the probe could not run.
+        """
+        client = None
+        stream = None
+        try:
+            client = self._create_sync_client(provider, api_key)
+            payload = self._apply_request_defaults(
+                {
+                    "model": provider.model,
+                    "messages": [
+                        {"role": "user", "content": "Reply with one short visible word: OK."}
+                    ],
+                    "temperature": 0,
+                    "max_tokens": max_tokens,
+                    "stream": True,
+                },
+                provider,
+            )
+            if _is_minimax_like_provider(provider):
+                extra_body = dict(payload.get("extra_body") or {})
+                extra_body["thinking"] = {"type": "disabled"}
+                payload["extra_body"] = extra_body
+            stream = self._create_chat_completion_negotiated(client, payload, provider)
+            reasoning_filter = ReasoningBlockFilter()
+            observed = False
+            reasoning_limited = False
+            for chunk in stream:
+                choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
+                if choice is None:
+                    continue
+                if _finish_reason_is_truncated(getattr(choice, "finish_reason", None)):
+                    reasoning_limited = True
+                delta = getattr(choice, "delta", None)
+                if delta is None:
+                    continue
+                for field_name in ("reasoning_content", "reasoning", "thinking"):
+                    reasoning_delta = getattr(delta, field_name, None)
+                    if isinstance(reasoning_delta, str) and reasoning_delta.strip():
+                        reasoning_limited = True
+                content = getattr(delta, "content", None)
+                if isinstance(content, str):
+                    if "<think" in content.lower():
+                        reasoning_limited = True
+                    if reasoning_filter.push(content).strip():
+                        observed = True
+            if reasoning_filter.flush().strip():
+                observed = True
+            return observed, reasoning_limited
+        except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+            return None
+        finally:
+            if stream is not None:
+                close = getattr(stream, "close", None)
+                if close is not None:
+                    close()
+            if client is not None:
+                close_client = getattr(client, "close", None)
+                if close_client is not None:
+                    close_client()
+
     def _probe_streaming_capability(
         self,
         provider: ProviderConfig,
         api_key: str,
     ) -> tuple[bool | None, str]:
-        """Run one real incremental request and observe visible streamed output."""
+        """Run one real incremental request and observe visible streamed output.
+
+        A stream that delivered only hidden reasoning is reported as
+        *unverified*, never as *unsupported*: the missing visible token came
+        from the probe's own output cap, and a persisted ``unsupported`` verdict
+        blocks every later streaming turn with HTTP 409. The probe first buys
+        one retry with real headroom; the first real send stays the live
+        confirmation when that is still not enough.
+        """
 
         protocol = self._configured_protocol(provider)
         uses_default_stream = (
@@ -2668,56 +3045,33 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             "openai_chat_completions",
             "openai_chat_completions_compatible",
         }:
-            client = None
-            stream = None
-            try:
-                client = self._create_sync_client(provider, api_key)
-                max_tokens = _visible_probe_max_tokens(provider, 16)
-                payload = self._apply_request_defaults(
-                    {
-                        "model": provider.model,
-                        "messages": [
-                            {"role": "user", "content": "Reply with one short visible word: OK."}
-                        ],
-                        "temperature": 0,
-                        "max_tokens": max_tokens,
-                        "stream": True,
-                    },
-                    provider,
-                )
-                if _is_minimax_like_provider(provider):
-                    extra_body = dict(payload.get("extra_body") or {})
-                    extra_body["thinking"] = {"type": "disabled"}
-                    payload["extra_body"] = extra_body
-                stream = self._create_chat_completion_negotiated(
-                    client, payload, provider
-                )
-                reasoning_filter = ReasoningBlockFilter()
-                observed = False
-                for chunk in stream:
-                    choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
-                    delta = getattr(choice, "delta", None)
-                    content = getattr(delta, "content", None)
-                    if isinstance(content, str) and reasoning_filter.push(content).strip():
-                        observed = True
-                if reasoning_filter.flush().strip():
-                    observed = True
-            except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+            max_tokens = self._visible_probe_budget(provider, 16)
+            outcome = self._streaming_probe_attempt(provider, api_key, max_tokens)
+            if outcome is None:
                 return None, "Streaming capability probe could not complete safely."
-            finally:
-                if stream is not None:
-                    close = getattr(stream, "close", None)
-                    if close is not None:
-                        close()
-                if client is not None:
-                    close_client = getattr(client, "close", None)
-                    if close_client is not None:
-                        close_client()
+            observed, reasoning_limited = outcome
+            if not observed and reasoning_limited:
+                self._note_hidden_reasoning(provider)
+                escalated = self._probe_retry_budget(provider, max_tokens)
+                retry = (
+                    self._streaming_probe_attempt(provider, api_key, escalated)
+                    if escalated
+                    else None
+                )
+                if retry is not None and retry[0]:
+                    return True, (
+                        "Streaming probe returned visible incremental content after a "
+                        "larger output budget."
+                    )
+                return None, (
+                    "Streaming probe returned only hidden reasoning within its output "
+                    "budget; streaming support remains unverified."
+                )
             if observed:
                 return True, "Streaming probe returned visible incremental content."
             return False, "Streaming probe completed without visible incremental content."
 
-        async def consume() -> bool:
+        async def consume(max_tokens: int) -> bool:
             target_service = (
                 self
                 if self._config is provider and self._api_key == api_key
@@ -2731,7 +3085,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 # before emitting their first visible token. Keep this probe
                 # aligned with the other visible-token probes so a working
                 # native stream is not reported as unavailable.
-                max_tokens=_visible_probe_max_tokens(provider, 16),
+                max_tokens=max_tokens,
             )
             try:
                 async for chunk in stream:
@@ -2741,23 +3095,44 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             finally:
                 await stream.aclose()
 
-        try:
+        def consume_from_event_loop(max_tokens: int) -> bool:
             try:
                 asyncio.get_running_loop()
             except RuntimeError:
-                observed = asyncio.run(consume())
-            else:
-                # Provider tests are normally synchronous FastAPI handlers, but
-                # keep the probe safe when called from an async test or host.
-                import concurrent.futures
+                return asyncio.run(consume(max_tokens))
+            # Provider tests are normally synchronous FastAPI handlers, but
+            # keep the probe safe when called from an async test or host.
+            import concurrent.futures
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    observed = pool.submit(asyncio.run, consume()).result()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, consume(max_tokens)).result()
+
+        # This path yields visible text only, so a silent stream cannot be
+        # attributed to reasoning from the outside. Buy one larger-budget
+        # attempt, then leave the capability unverified instead of reporting a
+        # working native stream as unsupported.
+        max_tokens = self._visible_probe_budget(provider, 16)
+        budgets = [max_tokens]
+        escalated = self._probe_retry_budget(provider, max_tokens)
+        if escalated:
+            budgets.append(escalated)
+        try:
+            for index, budget in enumerate(budgets):
+                if consume_from_event_loop(budget):
+                    return True, (
+                        "Streaming probe returned visible incremental content."
+                        if index == 0
+                        else (
+                            "Streaming probe returned visible incremental content "
+                            "after a larger output budget."
+                        )
+                    )
         except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
             return None, "Streaming capability probe could not complete safely."
-        if observed:
-            return True, "Streaming probe returned visible incremental content."
-        return False, "Streaming probe completed without visible incremental content."
+        return None, (
+            "Streaming probe returned no visible incremental content within its output "
+            "budget; streaming support remains unverified."
+        )
 
     def _probe_embeddings_capability(
         self,
@@ -2771,7 +3146,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             return False, "Embeddings probe has no model to call."
         try:
             client = self._create_sync_client(provider, api_key)
-            response = client.embeddings.create(model=embedding_model, input="ok")
+            try:
+                response = client.embeddings.create(model=embedding_model, input="ok")
+            finally:
+                self._close_sync_client(client)
         except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
             return None, "Embeddings capability probe could not complete safely."
         data = getattr(response, "data", None)
@@ -2805,32 +3183,39 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             }:
                 return None, "Structured output probe is unsupported for this provider protocol."
             client = self._create_sync_client(provider, api_key)
-            if protocol == "openai_responses":
-                response = client.responses.create(
-                    model=provider.model,
-                    input='Reply with JSON object {"ok": true} only.',
-                    temperature=0,
-                    max_output_tokens=32,
-                    text={"format": {"type": "json_object"}},
-                )
-                content = str(getattr(response, "output_text", "") or "")
-            else:
-                payload: dict[str, Any] = {
-                    "model": provider.model,
-                    "messages": [
+            try:
+                if protocol == "openai_responses":
+                    req = self._apply_openai_responses_probe_defaults(
                         {
-                            "role": "user",
-                            "content": 'Reply with JSON object {"ok": true} only.',
-                        }
-                    ],
-                    "temperature": 0,
-                    "max_tokens": 32,
-                    "response_format": {"type": "json_object"},
-                }
-                payload = self._apply_request_defaults(payload, provider)
-                response = client.chat.completions.create(**payload)
-                message = response.choices[0].message if getattr(response, "choices", None) else None
-                content = str(getattr(message, "content", "") or "")
+                            "model": provider.model,
+                            "input": 'Reply with JSON object {"ok": true} only.',
+                            "temperature": 0,
+                            "max_output_tokens": 32,
+                            "text": {"format": {"type": "json_object"}},
+                        },
+                        provider,
+                    )
+                    response = client.responses.create(**req)
+                    content = str(getattr(response, "output_text", "") or "")
+                else:
+                    payload: dict[str, Any] = {
+                        "model": provider.model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": 'Reply with JSON object {"ok": true} only.',
+                            }
+                        ],
+                        "temperature": 0,
+                        "max_tokens": 32,
+                        "response_format": {"type": "json_object"},
+                    }
+                    payload = self._apply_request_defaults(payload, provider)
+                    response = self._create_chat_completion_negotiated(client, payload, provider)
+                    message = response.choices[0].message if getattr(response, "choices", None) else None
+                    content = str(getattr(message, "content", "") or "")
+            finally:
+                self._close_sync_client(client)
         except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
             return None, "Structured output capability probe could not complete safely."
         try:
@@ -2883,6 +3268,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         result: ProviderTestResponse,
         provider: ProviderConfig,
         api_key: str | None,
+        *,
+        reuse_verified_capabilities: bool = False,
     ) -> ProviderTestResponse:
         protocol = self._configured_protocol(provider)
         openai_chat_family = protocol in {
@@ -2895,12 +3282,25 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if required_capability:
                 observations[required_capability] = True
 
+        # ``_capability_truth`` is keyed to this exact transport: the runtime
+        # overlays its persisted last-test states, and a live test on this
+        # instance writes them. A caller that only needs the language probes
+        # may reuse a verified observation instead of paying for it again.
+        verified_before = dict(self._capability_truth) if reuse_verified_capabilities else {}
+
+        def observe(
+            name: str, probe: Callable[[], tuple[bool | None, str]]
+        ) -> tuple[bool | None, str]:
+            if verified_before.get(name) == "verified":
+                return True, "Reused the verified observation recorded for this connection."
+            return self._retry_indeterminate_capability_probe(probe)
+
         tool_probe_diagnostic: str | None = None
         should_probe_tools = bool(provider.capabilities.tools) or openai_chat_family
         if should_probe_tools:
             if result.ok and api_key:
-                observations["tools"], tool_probe_diagnostic = self._retry_indeterminate_capability_probe(
-                    lambda: self._probe_tool_capability(provider, api_key)
+                observations["tools"], tool_probe_diagnostic = observe(
+                    "tools", lambda: self._probe_tool_capability(provider, api_key)
                 )
             else:
                 tool_probe_diagnostic = (
@@ -2910,10 +3310,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         stream_probe_diagnostic: str | None = None
         if provider.capabilities.streaming:
             if result.ok and api_key:
-                observations["streaming"], stream_probe_diagnostic = (
-                    self._retry_indeterminate_capability_probe(
-                        lambda: self._probe_streaming_capability(provider, api_key)
-                    )
+                observations["streaming"], stream_probe_diagnostic = observe(
+                    "streaming", lambda: self._probe_streaming_capability(provider, api_key)
                 )
             else:
                 stream_probe_diagnostic = (
@@ -2926,10 +3324,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         )
         if should_probe_thinking:
             if result.ok and api_key:
-                observations["thinking"], thinking_probe_diagnostic = (
-                    self._retry_indeterminate_capability_probe(
-                        lambda: self._probe_thinking_capability(provider, api_key)
-                    )
+                observations["thinking"], thinking_probe_diagnostic = observe(
+                    "thinking", lambda: self._probe_thinking_capability(provider, api_key)
                 )
             else:
                 thinking_probe_diagnostic = (
@@ -2939,10 +3335,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         vision_probe_diagnostic: str | None = None
         if provider.capabilities.vision:
             if result.ok and api_key:
-                observations["vision"], vision_probe_diagnostic = (
-                    self._retry_indeterminate_capability_probe(
-                        lambda: self._probe_vision_capability(provider, api_key)
-                    )
+                observations["vision"], vision_probe_diagnostic = observe(
+                    "vision", lambda: self._probe_vision_capability(provider, api_key)
                 )
             else:
                 vision_probe_diagnostic = (
@@ -2952,10 +3346,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         embeddings_probe_diagnostic: str | None = None
         if provider.capabilities.embeddings:
             if result.ok and api_key:
-                observations["embeddings"], embeddings_probe_diagnostic = (
-                    self._retry_indeterminate_capability_probe(
-                        lambda: self._probe_embeddings_capability(provider, api_key)
-                    )
+                observations["embeddings"], embeddings_probe_diagnostic = observe(
+                    "embeddings", lambda: self._probe_embeddings_capability(provider, api_key)
                 )
             else:
                 embeddings_probe_diagnostic = (
@@ -2968,10 +3360,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         )
         if should_probe_structured:
             if result.ok and api_key:
-                observations["structured_output"], structured_probe_diagnostic = (
-                    self._retry_indeterminate_capability_probe(
-                        lambda: self._probe_structured_output_capability(provider, api_key)
-                    )
+                observations["structured_output"], structured_probe_diagnostic = observe(
+                    "structured_output",
+                    lambda: self._probe_structured_output_capability(provider, api_key),
                 )
                 if provider.capabilities.json_schema:
                     observations["json_schema"] = observations.get("structured_output")
@@ -2982,10 +3373,8 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
         listing_probe_diagnostic: str | None = None
         if result.ok and api_key:
-            observations["model_listing"], listing_probe_diagnostic = (
-                self._retry_indeterminate_capability_probe(
-                    lambda: self._probe_model_listing_capability(provider, api_key)
-                )
+            observations["model_listing"], listing_probe_diagnostic = observe(
+                "model_listing", lambda: self._probe_model_listing_capability(provider, api_key)
             )
         elif api_key:
             listing_probe_diagnostic = (
@@ -3048,7 +3437,13 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             )
         if api_key and openai_chat_family and _should_fingerprint_gateway(provider):
             diagnostics.extend(self._gateway_fingerprint_diagnostics(provider, api_key))
-        self._capability_truth = {item.name: item.state for item in evidence}
+        transient_preflight_failure = (
+            reuse_verified_capabilities
+            and not result.ok
+            and result.error_category in {"rate_limit", "timeout", "network", "upstream_unavailable"}
+        )
+        if not transient_preflight_failure:
+            self._capability_truth = {item.name: item.state for item in evidence}
         return result.model_copy(
             update={
                 "diagnostics": diagnostics,
@@ -3071,14 +3466,28 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         *,
         probe_message: str | None = None,
         response_language: str | None = None,
+        reuse_verified_capabilities: bool = False,
     ) -> ProviderTestResponse:
+        """Run the connection test.
+
+        ``reuse_verified_capabilities`` is for the turn-time language preflight,
+        which only reads ``ok``/``error_category``: capabilities this exact
+        transport already verified are reused instead of being probed again
+        before every coaching reply. An explicit Settings test keeps live probes.
+        """
         result = self._test_connectivity(
             provider,
             api_key,
             probe_message=probe_message,
             response_language=response_language,
         )
-        result = self._with_capability_truth(result, provider, api_key)
+        effective_key = self._effective_wire_api_key(provider, api_key) or api_key
+        result = self._with_capability_truth(
+            result,
+            provider,
+            effective_key,
+            reuse_verified_capabilities=reuse_verified_capabilities,
+        )
         protocol = self._configured_protocol(provider)
         return result.model_copy(
             update={
@@ -3298,6 +3707,10 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                             model_supported=True,
                             probeUsage=_probe_usage_payload(latest_probe_response),
                         )
+                # Every compact attempt has run by now: later probes of this
+                # connection start from a budget that fits its reasoning.
+                if hidden_reasoning_observed:
+                    self._note_hidden_reasoning(provider)
                 language_probe = self._language_probe_result_resilient(
                     client=client,
                     model=chosen_model or provider.model,
@@ -4648,7 +5061,7 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         max_tokens: int | None = None,
         cancel_event: asyncio.Event | None = None,
     ):
-        if not self.has_api_key:
+        if not self.has_usable_credential():
             raise RuntimeError(
                 "API key not configured. Please set up your provider API key in settings."
             )
@@ -4814,12 +5227,20 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             )
             if self._plain_completion_uses_agent_binding():
                 raw_content = ""
+                emitted_content = ""
+                preserve_live = _should_preserve_visible_reply(
+                    message,
+                    answer_mode=answer_mode,
+                    profile=profile,
+                )
+                holdback = _stream_holdback_chars(response_language)
                 async for chunk in self._completion_stream_via_agent_binding(
                     messages,
                     temperature=0.7,
                     max_tokens=max_tokens,
                     prefer_configured_output=True,
                     allow_local_empty_fallback=True,
+                    cancel_event=cancel_event,
                 ):
                     raw_content += chunk
                     reply_corruption_detail = _mixed_script_reply_corruption_detail(
@@ -4830,6 +5251,18 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     if reply_corruption_detail:
                         self._record_reply_language_corruption(reply_corruption_detail)
                         return
+                    if preserve_live and len(raw_content) > holdback:
+                        candidate = _strip_internal_coach_meta(raw_content[:-holdback])
+                        if (
+                            candidate
+                            and candidate == _visible_model_text(raw_content[:-holdback]).strip()
+                            and _strip_short_cyrillic_noise(candidate, message=message) == candidate
+                            and candidate.startswith(emitted_content)
+                        ):
+                            delta_out = candidate[len(emitted_content) :]
+                            if delta_out:
+                                emitted_content = candidate
+                                yield delta_out
                 reply_corruption_detail = _mixed_script_reply_corruption_detail(
                     raw_content,
                     message=message,
@@ -4848,7 +5281,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     coach_context=coach_context,
                 )
                 if final_content:
-                    yield final_content
+                    if emitted_content and final_content.startswith(emitted_content):
+                        tail_out = final_content[len(emitted_content) :]
+                        if tail_out:
+                            yield tail_out
+                    elif not emitted_content:
+                        yield final_content
                 return
             client = self._get_client()
             stream, _ = await _await_provider_stream_with_cancellation(
@@ -4876,6 +5314,13 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 return trimmed
 
             raw_content = ""
+            emitted_content = ""
+            preserve_live = _should_preserve_visible_reply(
+                message,
+                answer_mode=answer_mode,
+                profile=profile,
+            )
+            holdback = _stream_holdback_chars(response_language)
             finish_reason: str | None = None
 
             def _finish_seen() -> bool:
@@ -4906,6 +5351,18 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     if reply_corruption_detail:
                         self._record_reply_language_corruption(reply_corruption_detail)
                         return
+                    if preserve_live and len(raw_content) > holdback:
+                        candidate = _strip_internal_coach_meta(raw_content[:-holdback])
+                        if (
+                            candidate
+                            and candidate == _visible_model_text(raw_content[:-holdback]).strip()
+                            and _strip_short_cyrillic_noise(candidate, message=message) == candidate
+                            and candidate.startswith(emitted_content)
+                        ):
+                            delta_out = candidate[len(emitted_content) :]
+                            if delta_out:
+                                emitted_content = candidate
+                                yield delta_out
             tail = _normalize_stream_chunk(reasoning_filter.flush())
             if tail:
                 raw_content += tail
@@ -4952,7 +5409,12 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                 coach_context=coach_context,
             )
             if final_content:
-                yield final_content
+                if emitted_content and final_content.startswith(emitted_content):
+                    tail_out = final_content[len(emitted_content) :]
+                    if tail_out:
+                        yield tail_out
+                elif not emitted_content:
+                    yield final_content
         except Exception as exc:
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
             provider_config = self._config or ProviderConfig(
@@ -6068,6 +6530,14 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     }
                     return
                 event_type = str(event.get("type") or "")
+                if event_type == "step":
+                    # Separate prose emitted in distinct agent steps so a
+                    # tool-calling preamble never glues directly onto the final
+                    # answer without a paragraph break.
+                    if buffered_text and not buffered_text.endswith("\n\n"):
+                        buffered_text = buffered_text.rstrip() + "\n\n"
+                    yield event
+                    continue
                 if event_type == "tool_call" or event_type == "tool_result":
                     tool_events.append(dict(event))
                 if event_type == "text":

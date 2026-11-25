@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import http from 'node:http';
+import https from 'node:https';
 
 import * as vscode from 'vscode';
 
@@ -15,7 +16,7 @@ import type {
 import { defaultProviderCredentialMode, normalizeProviderRequestDefaults } from '../core/providerDefaults';
 import { recordModelCatalogRequest, recordProviderHttpRequest } from '../core/runtimeMetrics';
 import { toOperationStatus } from '../core/workbenchData';
-import { resolveProviderApiKeyRef } from '../provider/providerConfigStore';
+import { resolveProviderApiKeyRef, sameProviderVendorHost } from '../provider/providerConfigStore';
 import { applyDerivedHostState } from '../core/workbenchData';
 import { getRuntimeWorkspaceId } from './workspaceContext';
 import { normalizeProviderConnectionType } from '../../../shared/src/providerGateway';
@@ -147,11 +148,11 @@ type ProviderDashboardSnapshot = Record<string, unknown>;
 const inflightModelLookups = new Map<string, Promise<ProviderModelLookupResult>>();
 const draftModelLookupGenerations = new WeakMap<object, number>();
 const activeProviderModelLookupGenerations = new WeakMap<object, number>();
-// P0 switch race guard: module-level generation counter + per-context mutex so
-// rapid A→B→C model switches always land on C, and a superseded switch can
-// never write state after the newest one.
+// Model generations discard superseded switches. Configuration mutations share
+// one context queue: save, model switch and thinking edits must read their base
+// only after the preceding mutation has committed.
 const providerModelSwitchGenerations = new WeakMap<object, number>();
-const providerModelSwitchQueues = new WeakMap<object, Promise<unknown>>();
+const providerConfigurationQueues = new WeakMap<object, Promise<unknown>>();
 
 function nextProviderModelSwitchGeneration(context: object): number {
   const next = (providerModelSwitchGenerations.get(context) ?? 0) + 1;
@@ -163,13 +164,13 @@ function isLatestProviderModelSwitch(context: object, generation: number): boole
   return providerModelSwitchGenerations.get(context) === generation;
 }
 
-function runExclusiveProviderModelSwitch<T>(
+function runExclusiveProviderConfiguration<T>(
   context: object,
   task: () => Promise<T>,
 ): Promise<T> {
-  const previous = providerModelSwitchQueues.get(context) ?? Promise.resolve();
+  const previous = providerConfigurationQueues.get(context) ?? Promise.resolve();
   const run = previous.then(task, task);
-  providerModelSwitchQueues.set(
+  providerConfigurationQueues.set(
     context,
     run.then(
       () => undefined,
@@ -337,7 +338,7 @@ function providerModelLookupTarget(config: ProviderConfig): ProviderModelLookupT
     name: config.name.trim().toLowerCase(),
     baseUrl: normalizeBaseUrl(config.baseUrl, protocol),
     protocol: protocol ?? '',
-    model: config.model.trim().toLowerCase(),
+    model: config.model.trim(),
     apiKeyRef: config.apiKeyRef.trim(),
     profileId: config.profileId?.trim() ?? '',
   };
@@ -402,12 +403,14 @@ async function isCurrentProviderModelLookup(
 
   try {
     const currentApiKey = await context.providerStore.getApiKey();
-    const normalizedCurrentApiKey = currentApiKey?.trim();
+    const normalizedCurrentApiKey = currentApiKey?.trim() ?? '';
+    const expectedApiKey = apiKey.trim();
+    const keylessLocal = !expectedApiKey && providerBaseUrlIsLocalService(config.baseUrl);
     return (
       (generation === undefined || generation === activeProviderModelLookupGeneration(context)) &&
       activeProfileStillMatches(context, config) &&
-      Boolean(normalizedCurrentApiKey) &&
-      normalizedCurrentApiKey === apiKey.trim()
+      (keylessLocal || Boolean(normalizedCurrentApiKey)) &&
+      normalizedCurrentApiKey === expectedApiKey
     );
   } catch {
     return false;
@@ -588,6 +591,13 @@ export async function saveProviderFromWebviewCommand(
   context: CommandContext,
   payload?: unknown,
 ): Promise<CommandExecutionResult<ProviderConfig>> {
+  return runExclusiveProviderConfiguration(context, () => saveProviderFromWebviewExclusive(context, payload));
+}
+
+async function saveProviderFromWebviewExclusive(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult<ProviderConfig>> {
   const input = (payload ?? {}) as SaveProviderPayload;
   const existing = context.providerStore.getConfig();
 
@@ -611,15 +621,60 @@ export async function saveProviderFromWebviewCommand(
     Boolean(existing) &&
     previousProtocol === resolvedProtocol &&
     normalizeBaseUrl(existing?.baseUrl ?? '', previousProtocol) === baseUrl;
-  // P0: no silent placeholder defaults. An explicit empty model or a changed
-  // vendor connection without a chosen model fails cleanly instead of falling
-  // back to the previous provider's model ID.
+  // P0: no silent placeholder defaults. When a draft names a service root
+  // without a model, auto-discover live models and adopt the first policy-
+  // allowed entry; only fail cleanly when no live model can be discovered.
   const hasModelField = hasOwn(input, 'model');
-  const model = hasModelField
+  let model = hasModelField
     ? (input.model?.trim() ?? '')
     : sameConnection
       ? (existing?.model?.trim() ?? '')
       : '';
+
+  if (baseUrl && !model) {
+    const inlineKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+    const reusableSavedKey =
+      !inlineKey &&
+      existing &&
+      (sameConnection || sameProviderVendorHost(existing, { baseUrl }))
+        ? (await context.providerStore.getApiKey())?.trim() ?? ''
+        : '';
+    const discoveryApiKey = inlineKey || reusableSavedKey;
+    const canDiscoverWithoutKey = providerBaseUrlIsLocalService(baseUrl);
+    if (discoveryApiKey || canDiscoverWithoutKey) {
+      const discoveryConfig: ProviderConfig = {
+        name,
+        baseUrl,
+        model: '',
+        protocol: resolvedProtocol,
+        apiKeyRef: existing?.apiKeyRef ?? 'trainer.draft.discovery',
+        credentialMode:
+          input.credentialMode ??
+          existing?.credentialMode ??
+          defaultProviderCredentialMode(context.getHostState().workspace),
+        ignoreSystemProxy:
+          typeof input.ignoreSystemProxy === 'boolean'
+            ? input.ignoreSystemProxy
+            : Boolean(existing?.ignoreSystemProxy),
+        capabilities: defaultCapabilitiesForProtocol(resolvedProtocol),
+        allowedModels: input.allowedModels ?? (sameConnection ? existing?.allowedModels ?? [] : []),
+        deniedModels: input.deniedModels ?? (sameConnection ? existing?.deniedModels ?? [] : []),
+        requestDefaults: {},
+      };
+      const discovered = await fetchProviderModels(context, discoveryConfig, discoveryApiKey, {
+        forceRefresh: true,
+        transient: true,
+        responseLanguage: input.responseLanguage,
+      });
+      const candidateModel =
+        discovered?.resolvedModel?.trim() ||
+        discovered?.availableModels.find((item) => item.trim().length > 0)?.trim() ||
+        '';
+      if (candidateModel) {
+        model = candidateModel;
+      }
+    }
+  }
 
   if (!baseUrl || !model) {
     const responseLanguage = resolveProviderResponseLanguage(context, input.responseLanguage);
@@ -725,14 +780,17 @@ export async function saveProviderFromWebviewCommand(
       },
       requestDefaultsInput,
     ),
-    // Explicit draft intent wins; wire fields in the edited defaults come next;
-    // only then does the stored intent carry over — and only on the same
-    // connection, so an unrelated save can't silently erase the choice while a
-    // different provider never inherits it.
+    // Explicit draft intent wins (including explicit null to clear); wire
+    // fields in the edited defaults come next; only then does the stored
+    // intent carry over — and only on the same connection, so an unrelated
+    // save can't silently erase the choice while a different provider never
+    // inherits it.
     thinkingConfig:
-      normalizeProviderThinkingConfig(input.thinkingConfig, resolvedProtocol) ??
-      normalizeProviderThinkingConfig(requestDefaultsInput, resolvedProtocol) ??
-      (sameConnection ? existing?.thinkingConfig : undefined),
+      hasOwn(input, 'thinkingConfig') && input.thinkingConfig === null
+        ? undefined
+        : normalizeProviderThinkingConfig(input.thinkingConfig, resolvedProtocol) ??
+          normalizeProviderThinkingConfig(requestDefaultsInput, resolvedProtocol) ??
+          (sameConnection ? existing?.thinkingConfig : undefined),
   };
 
   const modelPolicy = evaluateProviderModelPolicy(config.model, config);
@@ -854,59 +912,15 @@ async function finalizeSavedProviderConnection(
   const { savedConfig, providerChangeGeneration, responseLanguage } = inputs;
 
   // P0 save-and-go: the save already persisted and applied itself above. This
-  // detached tail re-syncs host state from local facts only — saved config,
-  // stored key presence, cached/known catalog — and never contacts
-  // /provider/models or /provider/test. If a newer save superseded this one,
-  // it owns the outcome and this tail is a no-op.
+  // The detached tail only acknowledges the local save. It never re-emits a
+  // provider snapshot or contacts /provider/models or /provider/test. If a
+  // newer save superseded this one, it owns the outcome.
   if (activeProviderModelLookupGeneration(context) !== providerChangeGeneration) {
     return;
   }
-  const effectiveConfig = context.providerStore.getConfig() ?? savedConfig;
-  if (!sameCurrentProviderConfig(context, savedConfig)) {
-    return;
-  }
-  const apiKey = await context.providerStore.getApiKey();
-  if (activeProviderModelLookupGeneration(context) !== providerChangeGeneration) {
-    return;
-  }
-  const hasApiKey = Boolean(apiKey?.trim());
-  const cachedModels = context.providerStore.getModelCache(effectiveConfig);
-  const configuredCatalog = Array.isArray(effectiveConfig.availableModels)
-    ? effectiveConfig.availableModels
-    : [];
-  const knownModels = mergeAvailableModels(
-    configuredCatalog.length > 0 ? configuredCatalog : cachedModels?.availableModels,
-    cachedModels?.availableModels ?? [],
-  );
-
-  await context.patchWorkbenchData({
-    providerConfig: {
-      ...applyDerivedHostState(
-        context.getHostState().bootstrap,
-        effectiveConfig,
-        context.getHostState().sidecar,
-        context.getHostState().workspace,
-        context.getSessionId(),
-        hasApiKey,
-      ).providerConfig,
-      availableModels: knownModels,
-      resolvedModel: effectiveConfig.model,
-      modelListStatus: knownModels.length > 0 ? 'ready' : 'idle',
-      modelListDetail:
-        knownModels.length > 0
-          ? `Trainer restored ${knownModels.length} known model${knownModels.length === 1 ? '' : 's'} for this connection. Refresh models any time.`
-          : 'Connection saved. Use “Refresh models” to discover live models.',
-      cacheFetchedAt: cachedModels?.fetchedAt,
-      cacheExpiresAt: cachedModels?.expiresAt,
-      cacheSource: knownModels.length > 0 ? 'cache' : undefined,
-      modelErrorCategory: undefined,
-      modelStatusCode: undefined,
-      modelRetryable: undefined,
-      lastTestResult: storedLastTestResult(context, effectiveConfig),
-    },
-  });
-  await context.workbench.syncState();
-
+  if (!sameCurrentProviderConfig(context, savedConfig)) return;
+  // saveProviderFromWebviewExclusive already emitted the saved snapshot.
+  // A detached duplicate can overwrite a newer UI draft with the same data.
   if (typeof context.workbench.postMessage !== 'function') {
     return;
   }
@@ -955,6 +969,7 @@ export async function openWorkspaceConfigCommand(
                   name: provider.name,
                   baseUrl: provider.baseUrl,
                   model: provider.model,
+                  protocol: normalizeProviderProtocol(provider.protocol) ?? OPENAI_COMPATIBLE_PROTOCOL,
                   capabilities: provider.capabilities,
                   modelCapabilities: provider.modelCapabilities?.[provider.model],
                 },
@@ -1046,6 +1061,7 @@ export async function refreshProviderProfilesCommand(
         name: currentConfig?.name ?? currentView.name,
         baseUrl: currentConfig?.baseUrl ?? currentView.baseUrl,
         model: currentConfig?.model ?? currentView.model,
+        protocol: currentProtocol,
         capabilities: currentConfig?.capabilities ?? currentView.capabilities,
         modelCapabilities:
           currentConfig?.modelCapabilities?.[currentConfig?.model ?? currentView.model] ??
@@ -1177,6 +1193,7 @@ function normalizeProviderProfileEntry(
         name: asString(profile.label) ?? asString(profile.name),
         baseUrl: asString(profile.baseUrl),
         model: asString(profile.model),
+        protocol: normalizeProviderProtocol(asString(profile.protocol)),
         capabilities: asRecord(profile.capabilities) as { thinking?: boolean } | undefined,
         modelCapabilities: asRecord(asRecord(profile.modelCapabilities)?.[asString(profile.model) ?? '']) as
           | { thinking?: boolean }
@@ -1323,19 +1340,25 @@ async function resolveDraftProviderModelLookup(
     return { config, apiKey: suppliedApiKey };
   }
 
-  // An omitted key can safely reuse the active secret only for the same service root and protocol.
+  // An omitted key can safely reuse the active secret for the same service root
+  // or same vendor host (matching save-time key preservation on protocol switch).
   if (!hasOwn(input, 'apiKey')) {
     const saved = context.providerStore.getConfig();
     if (
       saved &&
-      normalizeProviderProtocol(saved.protocol) === protocol &&
-      normalizeBaseUrl(saved.baseUrl, saved.protocol) === baseUrl
+      ((normalizeProviderProtocol(saved.protocol) === protocol &&
+        normalizeBaseUrl(saved.baseUrl, saved.protocol) === baseUrl) ||
+        sameProviderVendorHost(saved, { baseUrl }))
     ) {
       const storedApiKey = await context.providerStore.getApiKey();
       if (storedApiKey?.trim()) {
         return { config, apiKey: storedApiKey.trim() };
       }
     }
+  }
+
+  if (providerBaseUrlIsLocalService(baseUrl)) {
+    return { config, apiKey: '' };
   }
 
   return { config, message: 'Add an API key before finding models.' };
@@ -1688,7 +1711,8 @@ async function refreshDraftProviderModelsCommand(
   draftPayload: unknown,
 ): Promise<CommandExecutionResult<ProviderConfig>> {
   const draft = await resolveDraftProviderModelLookup(context, draftPayload);
-  if (!draft.config || !draft.apiKey) {
+  const draftIsKeylessLocal = Boolean(draft.config && providerBaseUrlIsLocalService(draft.config.baseUrl));
+  if (!draft.config || (draft.apiKey === undefined) || (!draft.apiKey && !draftIsKeylessLocal)) {
     return {
       ok: false,
       message: draft.message ?? 'Add the service root and API key before finding models.',
@@ -1781,8 +1805,8 @@ export async function refreshProviderModelsCommand(
     };
   }
 
-  const apiKey = await context.providerStore.getApiKey();
-  if (!apiKey?.trim()) {
+  const apiKey = (await context.providerStore.getApiKey())?.trim() ?? '';
+  if (!apiKey && !providerBaseUrlIsLocalService(config.baseUrl)) {
     return {
       ok: false,
       message: 'Add an API key before refreshing live models.',
@@ -1898,7 +1922,7 @@ export async function switchProviderModelCommand(
   // therefore always lands on C: B and A can neither interleave their saves
   // nor write stale host state after C.
   const switchGeneration = nextProviderModelSwitchGeneration(context);
-  return runExclusiveProviderModelSwitch(context, async () => {
+  return runExclusiveProviderConfiguration(context, async () => {
     const config = context.providerStore.getConfig();
     if (!config) {
       return {
@@ -1940,7 +1964,16 @@ export async function switchProviderModelCommand(
       nextActiveProviderModelLookupGeneration(context);
     }
 
-    const currentView = context.getHostState().bootstrap.providerConfig;
+    const hostProviderView = context.getHostState().bootstrap.providerConfig;
+    // The view still describes the active connection while validating a
+    // different profile. Its catalog must never authorize models on that target.
+    const viewMatchesTarget =
+      (effectiveCurrent.profileId?.trim() || activeProfileIdOf(context) || '') ===
+        (hostProviderView.profileId?.trim() || activeProfileIdOf(context) || '') &&
+      normalizeBaseUrl(effectiveCurrent.baseUrl, effectiveCurrent.protocol) ===
+        normalizeBaseUrl(hostProviderView.baseUrl ?? '', hostProviderView.protocol) &&
+      normalizeProviderProtocol(effectiveCurrent.protocol) === normalizeProviderProtocol(hostProviderView.protocol);
+    const currentView = viewMatchesTarget ? hostProviderView : effectiveCurrent;
     const availableModels = Array.from(
       new Set(
         [
@@ -1981,7 +2014,6 @@ export async function switchProviderModelCommand(
     const currentModel = effectiveCurrent.model?.trim() || currentView.model?.trim();
     const activeProfileMatches =
       !requestedProfileId ||
-      !activeProfileIdOf(context) ||
       activeProfileIdOf(context) === requestedProfileId;
     if (activeProfileMatches && currentModel?.toLowerCase() === model.toLowerCase()) {
       return {
@@ -1995,7 +2027,7 @@ export async function switchProviderModelCommand(
     // switch and the model write below are one logical commit.
     if (requestedProfileId) {
       const activeProfileId = activeProfileIdOf(context);
-      if (activeProfileId && activeProfileId !== requestedProfileId) {
+      if (activeProfileId !== requestedProfileId) {
         const switched = await context.providerStore.switchActiveProfile?.(requestedProfileId, 'model_switch');
         if (switched === false) {
           return {
@@ -2128,9 +2160,9 @@ export async function switchProviderModelCommand(
 export async function primeProviderModelsState(context: CommandContext): Promise<void> {
   const modelLookupGeneration = activeProviderModelLookupGeneration(context);
   const config = context.providerStore.getConfig();
-  const apiKey = await context.providerStore.getApiKey();
+  const apiKey = (await context.providerStore.getApiKey())?.trim() ?? '';
 
-  if (!config || !apiKey?.trim()) {
+  if (!config || (!apiKey && !providerBaseUrlIsLocalService(config.baseUrl))) {
     return;
   }
 
@@ -2254,7 +2286,8 @@ function speedTestOneEndpoint(
     const requestOnce = () =>
       new Promise<{ latencyMs: number; status: number | null }>((resolveOne, rejectOne) => {
         const startedAt = Date.now();
-        const request = http.request(
+        const transport = parsed.protocol === 'https:' ? https : http;
+        const request = transport.request(
           { method: 'GET', hostname: parsed.hostname, port: parsed.port || undefined, path: parsed.pathname + parsed.search, protocol: parsed.protocol, timeout: SPEED_TEST_TIMEOUT_MS },
           (incoming) => {
             incoming.resume();
@@ -2370,6 +2403,13 @@ function thinkingCapabilityEvidence(
 }
 
 export async function setProviderThinkingCommand(
+  context: CommandContext,
+  payload?: SetProviderThinkingPayload,
+): Promise<CommandExecutionResult<ProviderConfig>> {
+  return runExclusiveProviderConfiguration(context, () => setProviderThinkingExclusive(context, payload));
+}
+
+async function setProviderThinkingExclusive(
   context: CommandContext,
   payload?: SetProviderThinkingPayload,
 ): Promise<CommandExecutionResult<ProviderConfig>> {

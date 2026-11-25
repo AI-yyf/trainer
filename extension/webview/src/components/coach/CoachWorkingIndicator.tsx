@@ -87,9 +87,12 @@ export function CoachWorkingIndicator({
       aria-label={label}
       data-stage={stageKind}
     >
-      <span className="coach-working__label" data-text={label}>
-        {label}
+      <span className="coach-working__dots" aria-hidden="true">
+        <i />
+        <i />
+        <i />
       </span>
+      <span className="coach-working__label">{label}</span>
       {seconds >= 1 ? (
         <span className="coach-working__elapsed" aria-hidden="true">
           {elapsedLabel(seconds, language)}

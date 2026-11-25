@@ -66,26 +66,32 @@ class ReviewScheduler:
         state.stability = mastery.fsrs_stability
         state.difficulty = mastery.fsrs_difficulty or scheduler.DEFAULT_EASE_FACTOR
         state.state = mastery.fsrs_state or "new"
+        state.step = max(0, int(mastery.fsrs_step or 0))
         state.reps = mastery.fsrs_reps
         state.lapses = mastery.fsrs_lapses
+        state.interval = max(0, int(mastery.fsrs_interval or 0))
+        state.due = mastery.fsrs_due or mastery.next_review_at or now
+        state.next_due_at = state.due
+        # Records written before fsrs_last_review_at existed still have the
+        # write time of their last FSRS review; using it is exact enough to
+        # resume, while a non-FSRS record has no review evidence and stays new.
+        state.last_reviewed_at = (
+            mastery.fsrs_last_review_at
+            or (mastery.updated_at if mastery.review_source == "fsrs" else None)
+        )
         result = scheduler.process_review(
             card_id,
             getattr(TrainingRating, normalized_rating.name),
         )
-        next_score = self._next_score(mastery.score, normalized_rating)
-        next_confidence = self._next_confidence(mastery.confidence, normalized_rating)
-        retrievability = self._estimate_retrievability(
-            score=next_score,
-            confidence=next_confidence,
-            interval_days=result.new_interval,
-            rating=normalized_rating,
-        )
+        # A recall rating schedules memory. It does not award capability:
+        # score/confidence stay with the evidence projection so one flash
+        # answer cannot silently raise the learner's mastery number.
         return MasteryRecord(
             concept=mastery.concept,
-            score=next_score,
-            confidence=next_confidence,
-            state=state.state,
-            retrievability=retrievability,
+            score=mastery.score,
+            confidence=mastery.confidence,
+            state=result.new_state,
+            retrievability=result.retrievability,
             due_date=result.next_due,
             updated_at=now,
             next_review_at=result.next_due,
@@ -94,7 +100,11 @@ class ReviewScheduler:
             fsrs_difficulty=result.new_difficulty,
             fsrs_reps=result.reps,
             fsrs_lapses=result.lapses,
-            fsrs_state=state.state,
+            fsrs_state=result.new_state,
+            fsrs_step=result.step,
+            fsrs_last_review_at=result.last_reviewed_at,
+            fsrs_due=result.next_due,
+            fsrs_interval=result.new_interval,
         )
 
     def derive_due_reviews(
@@ -1144,58 +1154,6 @@ class ReviewScheduler:
             "good": ReviewRating.GOOD,
             "easy": ReviewRating.EASY,
         }.get(normalized, ReviewRating.GOOD)
-
-    def _next_state(self, mastery: MasteryRecord, rating: ReviewRating) -> str:
-        if rating == ReviewRating.AGAIN:
-            return "relearning" if mastery.score >= 0.25 else "learning"
-        if rating == ReviewRating.HARD:
-            return "learning" if mastery.score < 0.55 else "review"
-        return "review"
-
-    def _next_score(self, score: float, rating: ReviewRating) -> float:
-        delta = {
-            ReviewRating.AGAIN: -0.18,
-            ReviewRating.HARD: -0.05,
-            ReviewRating.GOOD: 0.08,
-            ReviewRating.EASY: 0.14,
-        }[rating]
-        return round(max(0.0, min(1.0, score + delta)), 3)
-
-    def _next_confidence(self, confidence: float, rating: ReviewRating) -> float:
-        delta = {
-            ReviewRating.AGAIN: -0.12,
-            ReviewRating.HARD: -0.04,
-            ReviewRating.GOOD: 0.05,
-            ReviewRating.EASY: 0.08,
-        }[rating]
-        return round(max(0.0, min(1.0, confidence + delta)), 3)
-
-    def _next_interval_days(self, rating: ReviewRating, score: float) -> int:
-        if rating == ReviewRating.AGAIN:
-            return 1
-        if rating == ReviewRating.HARD:
-            return 2 if score < 0.5 else 3
-        if rating == ReviewRating.EASY:
-            return max(4, int(round(5 + score * 7)))
-        return max(2, int(round(3 + score * 5)))
-
-    def _estimate_retrievability(
-        self,
-        *,
-        score: float,
-        confidence: float,
-        interval_days: int,
-        rating: ReviewRating,
-    ) -> float:
-        base = 0.22 + score * 0.45 + confidence * 0.2
-        interval_penalty = min(interval_days * 0.025, 0.25)
-        rating_bonus = {
-            ReviewRating.AGAIN: -0.08,
-            ReviewRating.HARD: -0.02,
-            ReviewRating.GOOD: 0.03,
-            ReviewRating.EASY: 0.06,
-        }[rating]
-        return round(max(0.0, min(1.0, base - interval_penalty + rating_bonus)), 3)
 
     def _workspace_value(self, lane_snapshot: LaneMemorySnapshot, field: str) -> str:
         workspace = lane_snapshot.workspace if isinstance(lane_snapshot.workspace, dict) else {}

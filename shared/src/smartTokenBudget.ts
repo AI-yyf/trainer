@@ -334,15 +334,23 @@ export function resolveEffectiveTokenBudgetProfile(input: {
     return Math.min(safeMax, best);
   };
 
-  const low = pickNearestAtOrBelow(safeMax >= 32_768 ? 8_192 : safeMax >= 8_192 ? 2_048 : 1_024);
-  const medium = Math.max(
-    low,
-    pickNearestAtOrBelow(safeMax >= 65_536 ? 16_384 : safeMax >= 16_384 ? 8_192 : Math.floor(safeMax * 0.5)),
-  );
-  const high = Math.max(
-    medium,
-    pickNearestAtOrBelow(safeMax >= 122_880 ? 65_536 : safeMax >= 32_768 ? 16_384 : Math.floor(safeMax * 0.85)),
-  );
+  const lowTarget = safeMax >= 32_768 ? 4_096 : safeMax >= 8_192 ? 2_048 : 1_024;
+  const mediumTarget = safeMax >= 65_536 ? 16_384 : safeMax >= 16_384 ? 8_192 : Math.floor(safeMax * 0.5);
+  const highTarget = safeMax >= 122_880 ? 65_536 : safeMax >= 32_768 ? 16_384 : Math.floor(safeMax * 0.85);
+
+  const low = pickNearestAtOrBelow(lowTarget);
+  const mediumCandidate = pickNearestAtOrBelow(mediumTarget);
+  const nextPresetAbove = (floor: number): number | undefined =>
+    presets.find((candidate) => candidate > floor && candidate <= safeMax);
+  const medium =
+    mediumCandidate > low
+      ? mediumCandidate
+      : nextPresetAbove(low) ?? Math.max(low, mediumCandidate);
+  const highCandidate = pickNearestAtOrBelow(highTarget);
+  const high =
+    highCandidate > medium
+      ? highCandidate
+      : nextPresetAbove(medium) ?? Math.max(medium, highCandidate);
   const recommendedCustom =
     presets.find((value) => value >= medium && value < high) ?? medium;
 

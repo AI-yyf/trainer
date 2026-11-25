@@ -579,17 +579,35 @@ function splitStreamingBody(body: string): { stableBlocks: string[]; tail: strin
   let inFence = false;
   let fence = "";
   let inMath = false;
+  let blockStart = 0;
   let lastStableLine = -1;
+  const stableBlocks: string[] = [];
+
+  const pushBlock = (from: number, toInclusive: number) => {
+    const chunk = lines.slice(from, toInclusive + 1).join("\n").trim();
+    if (chunk) {
+      stableBlocks.push(chunk);
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const trimmed = lines[i].trim();
     if (inFence) {
       if (trimmed.startsWith(fence)) {
         inFence = false;
+        pushBlock(blockStart, i);
         lastStableLine = i;
+        blockStart = i + 1;
       }
       continue;
     }
     if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+      // Flush any prose preceding the code fence before starting the fence block.
+      if (i > blockStart) {
+        pushBlock(blockStart, i - 1);
+        lastStableLine = i - 1;
+      }
+      blockStart = i;
       inFence = true;
       fence = trimmed.slice(0, 3);
       continue;
@@ -597,31 +615,34 @@ function splitStreamingBody(body: string): { stableBlocks: string[]; tail: strin
     if (trimmed === "$$") {
       if (inMath) {
         inMath = false;
+        pushBlock(blockStart, i);
         lastStableLine = i;
+        blockStart = i + 1;
       } else {
+        if (i > blockStart) {
+          pushBlock(blockStart, i - 1);
+          lastStableLine = i - 1;
+        }
+        blockStart = i;
         inMath = true;
       }
       continue;
     }
+    if (inMath) {
+      continue;
+    }
     if (trimmed === "") {
-      let previous = i - 1;
-      while (previous >= 0 && lines[previous].trim() === "") {
-        previous--;
+      if (i > blockStart) {
+        pushBlock(blockStart, i - 1);
+        lastStableLine = i - 1;
       }
-      if (previous >= 0) {
-        lastStableLine = previous;
-      }
+      blockStart = i + 1;
     }
   }
   if (lastStableLine < 0) {
     return { stableBlocks: [], tail: body };
   }
-  const stable = lines.slice(0, lastStableLine + 1).join("\n");
   const tail = lines.slice(lastStableLine + 1).join("\n");
-  const stableBlocks = stable
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
   return { stableBlocks, tail };
 }
 

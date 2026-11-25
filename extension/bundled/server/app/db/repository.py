@@ -201,6 +201,10 @@ class TrainerRepository:
         # together must wait for the lock instead of failing the request with
         # "database is locked" after sqlite's 5s default.
         connection.execute("PRAGMA busy_timeout = 5000")
+        try:
+            connection.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError:
+            pass
         committed = False
         try:
             yield connection
@@ -295,7 +299,8 @@ class TrainerRepository:
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
                     workspace_id TEXT NOT NULL,
-                    payload TEXT NOT NULL
+                    payload TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT ''
                 );
                 CREATE TABLE IF NOT EXISTS agent_turn_checkpoints (
                     checkpoint_id TEXT PRIMARY KEY,
@@ -450,6 +455,16 @@ class TrainerRepository:
                 "structured_memory",
                 "revision",
                 "INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                connection,
+                "sessions",
+                "updated_at",
+                "TEXT NOT NULL DEFAULT ''",
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_workspace_updated_at "
+                "ON sessions(workspace_id, updated_at DESC)"
             )
 
     @staticmethod
@@ -2449,14 +2464,17 @@ class TrainerRepository:
         return TeachingKnowledgeAsset.model_validate_json(row["payload"]) if row else None
 
     def save_session(self, session_id: str, workspace_id: str, payload: dict[str, Any]) -> None:
+        updated_at = utc_now_iso()
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO sessions (session_id, workspace_id, payload)
-                VALUES (?, ?, ?)
-                ON CONFLICT(session_id) DO UPDATE SET payload = excluded.payload
+                INSERT INTO sessions (session_id, workspace_id, payload, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    payload = excluded.payload,
+                    updated_at = excluded.updated_at
                 """,
-                (session_id, workspace_id, json.dumps(payload)),
+                (session_id, workspace_id, json.dumps(payload), updated_at),
             )
 
     def load_session(self, session_id: str) -> dict[str, Any] | None:
@@ -2473,7 +2491,7 @@ class TrainerRepository:
                 """
                 SELECT payload FROM sessions
                 WHERE workspace_id = ?
-                ORDER BY rowid DESC
+                ORDER BY updated_at DESC, rowid DESC
                 LIMIT 1
                 """,
                 (workspace_id,),
@@ -2494,7 +2512,7 @@ class TrainerRepository:
                 f"""
                 SELECT payload FROM sessions
                 WHERE workspace_id = ? AND session_id IN ({placeholders})
-                ORDER BY rowid DESC
+                ORDER BY updated_at DESC, rowid DESC
                 LIMIT 1
                 """,
                 [workspace_id, *cleaned_ids],
@@ -2513,7 +2531,7 @@ class TrainerRepository:
                 """
                 SELECT session_id, payload FROM sessions
                 WHERE workspace_id = ?
-                ORDER BY rowid DESC
+                ORDER BY updated_at DESC, rowid DESC
                 LIMIT ?
                 """,
                 (workspace_id, limit),

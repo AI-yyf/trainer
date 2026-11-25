@@ -509,8 +509,7 @@
 .resource-briefs__citation { padding-block-start: var(--space-2); }
 .resource-briefs__citation blockquote { padding-inline-start: var(--space-2); border-inline-start: 1px solid var(--line); background: transparent; white-space: pre-wrap; }
 .resource-briefs__citation figcaption { display: grid; min-width: 0; margin-block-start: var(--space-1); }
-.resource-briefs__citation .resource-citation-chip { width: fit-content; padding: var(--space-1) 0; border: 0; border-radius: 0; background: transparent; }
-.resource-briefs__citation .resource-citation-chip__kind { display: none; }
+.resource-briefs__citation .resource-citation-chip { width: fit-content; padding: var(--space-1) 0; }
 .resource-briefs summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .training-library { margin-block: var(--space-2); }
 .training-library > summary { padding-block: var(--space-1); font-weight: 600; }

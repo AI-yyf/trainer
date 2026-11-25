@@ -12,6 +12,7 @@ export type ProviderHostCopyKey =
   | 'testConnectedReady'
   | 'testMissingKey'
   | 'testCheckInterrupted'
+  | 'testContextChanged'
   | 'testIncomplete'
   | 'testLanguageCorruption'
   | 'testLanguageInconclusive'
@@ -62,6 +63,7 @@ type ProviderHostCopyTable = Record<ProviderHostCopyKey, string>;
 
 const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
   'zh-CN': {
+    testContextChanged: '连接或工作区已变化，已忽略上一次检查的结果。',
     testConnected: '{name} 已连通。',
     testConnectedReady: 'Trainer 现在可以使用这个模型。',
     testMissingKey: '{name} 已保存,但还没有存放 API 密钥。补上密钥后 Trainer 才能工作。',
@@ -113,6 +115,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     clearDone: '连接配置已清除。',
   },
   'en-US': {
+    testContextChanged: 'The connection or workspace changed. The earlier check result was ignored.',
     testConnected: '{name} is connected.',
     testConnectedReady: 'Trainer can use this model now.',
     testMissingKey: '{name} is saved, but no API key is stored yet. Trainer cannot work until you add one.',
@@ -171,6 +174,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     clearDone: 'Provider configuration cleared.',
   },
   'es-ES': {
+    testContextChanged: 'La conexión o el espacio de trabajo cambió. Se ignoró la comprobación anterior.',
     testConnected: '{name} está conectado.',
     testConnectedReady: 'Trainer ya puede usar este modelo.',
     testMissingKey:
@@ -236,6 +240,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     clearDone: 'Configuración del proveedor borrada.',
   },
   'fr-FR': {
+    testContextChanged: 'La connexion ou l’espace de travail a changé. Le résultat précédent a été ignoré.',
     testConnected: '{name} est connecté.',
     testConnectedReady: 'Trainer peut utiliser ce modèle.',
     testMissingKey:
@@ -304,6 +309,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     clearDone: 'Configuration du fournisseur effacée.',
   },
   'de-DE': {
+    testContextChanged: 'Die Verbindung oder der Arbeitsbereich wurde geändert. Das frühere Prüfergebnis wurde verworfen.',
     testConnected: '{name} ist verbunden.',
     testConnectedReady: 'Trainer kann dieses Modell jetzt verwenden.',
     testMissingKey:
@@ -373,6 +379,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     clearDone: 'Anbieterkonfiguration gelöscht.',
   },
   'ja-JP': {
+    testContextChanged: '接続またはワークスペースが変更されたため、前の確認結果を無視しました。',
     testConnected: '{name} に接続できました。',
     testConnectedReady: 'Trainer はこのモデルをすぐに使えます。',
     testMissingKey:
@@ -438,6 +445,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     clearDone: 'プロバイダー設定をクリアしました。',
   },
   'ko-KR': {
+    testContextChanged: '연결 또는 작업 공간이 변경되어 이전 확인 결과를 무시했습니다.',
     testConnected: '{name}에 연결되었습니다.',
     testConnectedReady: 'Trainer에서 이 모델을 바로 사용할 수 있습니다.',
     testMissingKey:
@@ -502,6 +510,7 @@ const providerHostCopyTable: Record<ComposerLanguage, ProviderHostCopyTable> = {
     clearDone: '공급자 설정이 삭제되었습니다.',
   },
   'pt-BR': {
+    testContextChanged: 'A conexão ou o espaço de trabalho mudou. O resultado anterior foi ignorado.',
     testConnected: '{name} está conectado.',
     testConnectedReady: 'O Trainer já pode usar este modelo.',
     testMissingKey:

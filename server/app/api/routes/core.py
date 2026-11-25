@@ -884,6 +884,23 @@ def build_core_router(
             if current_task is not None:
                 current_task.add_done_callback(_owner_task_cleanup)
         state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        async with runtime.acquire_session_lock(state.session_id):
+            return await _session_message_locked(
+                payload=payload,
+                request=request,
+                workspace_id=workspace_id,
+                state=state,
+                _finish_session_response=_finish_session_response,
+            )
+
+    async def _session_message_locked(
+        *,
+        payload: dict,
+        request: SessionMessageRequest,
+        workspace_id: str,
+        state: SessionState,
+        _finish_session_response: Callable[[dict[str, object]], dict[str, object]],
+    ) -> object:
         register_request_workspace_path(runtime, state.workspace_id, payload, request)
         profile = core.resolved_profile(state.workspace_id)
         raw_requested_answer_mode = str(
@@ -903,6 +920,10 @@ def build_core_router(
         api_key_override = core.provider_api_key_from_payload(payload)
         if override_config is not None or api_key_override is not None:
             coaching_service = runtime.provider_service_for(override_config, api_key_override)
+        elif (workspace_service := runtime.workspace_provider_service(state.workspace_id)) is not None:
+            # No inline provider: the browser side panel, which must never see
+            # a provider key. It uses the one the UI host last used here.
+            coaching_service = workspace_service
         if coaching_service is not None:
             runtime.adopt_request_provider_evidence(request, coaching_service)
         core.ensure_coach_provider_ready(
@@ -1049,7 +1070,8 @@ def build_core_router(
         agent_meta: dict[str, object] = {}
         language_corruption_detected = False
         provider_failure_detected = False
-        preflight_language_probe = core.detect_provider_language_corruption(
+        preflight_language_probe = await asyncio.to_thread(
+            core.detect_provider_language_corruption,
             coaching_service,
             message=request.message,
             response_language=request.response_language,
@@ -1800,51 +1822,56 @@ def build_core_router(
             if current_task is not None:
                 current_task.add_done_callback(_owner_task_cleanup)
 
-        response, artifacts, _ = await coach_support.execute_turn(core.coach_support_deps, request, payload)
-        if isinstance(response, SessionMessageResponse):
-            if preparation_requested(request.message):
-                await finish_research_preparation(
-                    request, response, workspace_id, core.build_coaching_service(payload),
-                )
-            response.snapshot.memory = core.repair_guided_lane_memory_snapshot_for_response(
-                runtime.memory_service.snapshot(workspace_id),
-                scenario=response.coach_turn.scenario if response.coach_turn else None,
-                response_language=request.response_language,
-                learner_message=request.message,
-            )
-            workspace_memory = (
-                response.snapshot.memory.workspace
-                if isinstance(response.snapshot.memory.workspace, dict)
-                else {}
-            )
-            coach_support.hydrate_snapshot(core.coach_support_deps,
-                response.snapshot,
-                preserve_turn_coaching_state=True,
-                response_language=request.response_language
-                or str(workspace_memory.get("response_language") or "").strip()
-                or None,
-                answer_mode=(
-                    str(workspace_memory.get("answer_mode") or "").strip()
-                    or (
-                        response.snapshot.profile.answer_policy
-                        if response.snapshot.profile is not None
-                        else None
+        lock_session_id = runtime.ensure_session(
+            request.session_id, workspace_id=workspace_id
+        ).session_id
+        async with runtime.acquire_session_lock(lock_session_id):
+            response, artifacts, _ = await coach_support.execute_turn(core.coach_support_deps, request, payload)
+            if isinstance(response, SessionMessageResponse):
+                if preparation_requested(request.message):
+                    await finish_research_preparation(
+                        request, response, workspace_id, core.build_coaching_service(payload),
                     )
-                ),
-                message=request.message,
-                session_workspace_id=workspace_id,
+                response.snapshot.memory = core.repair_guided_lane_memory_snapshot_for_response(
+                    runtime.memory_service.snapshot(workspace_id),
+                    scenario=response.coach_turn.scenario if response.coach_turn else None,
+                    response_language=request.response_language,
+                    learner_message=request.message,
+                )
+                workspace_memory = (
+                    response.snapshot.memory.workspace
+                    if isinstance(response.snapshot.memory.workspace, dict)
+                    else {}
+                )
+                coach_support.hydrate_snapshot(core.coach_support_deps,
+                    response.snapshot,
+                    preserve_turn_coaching_state=True,
+                    response_language=request.response_language
+                    or str(workspace_memory.get("response_language") or "").strip()
+                    or None,
+                    answer_mode=(
+                        str(workspace_memory.get("answer_mode") or "").strip()
+                        or (
+                            response.snapshot.profile.answer_policy
+                            if response.snapshot.profile is not None
+                            else None
+                        )
+                    ),
+                    message=request.message,
+                    session_workspace_id=workspace_id,
+                )
+            response_data = core.json_object_payload(response)
+            response_data["artifacts"] = artifacts
+            response_data["intent"] = original_intent
+            response_data = _attach_requested_workspace_files(response_data, runtime, workspace_id)
+            return _finish_turn_response(
+                core.attach_operation_reliability(
+                    response_data,
+                    phase="acked",
+                    outcome=core.reliability_outcome_from_payload(response_data),
+                    request_id=request_id or None,
+                )
             )
-        response_data = core.json_object_payload(response)
-        response_data["artifacts"] = artifacts
-        response_data["intent"] = original_intent
-        return _finish_turn_response(
-            core.attach_operation_reliability(
-                response_data,
-                phase="acked",
-                outcome=core.reliability_outcome_from_payload(response_data),
-                request_id=request_id or None,
-            )
-        )
 
     @router.post("/stream/cancel")
     async def cancel_stream(payload: dict) -> dict[str, object]:
@@ -1903,6 +1930,10 @@ def build_core_router(
         api_key_override = core.provider_api_key_from_payload(payload)
         if override_config is not None or api_key_override is not None:
             coaching_service = runtime.provider_service_for(override_config, api_key_override)
+        elif (workspace_service := runtime.workspace_provider_service(state.workspace_id)) is not None:
+            # No inline provider: the browser side panel, which must never see
+            # a provider key. It uses the one the UI host last used here.
+            coaching_service = workspace_service
         if coaching_service is not None:
             runtime.adopt_request_provider_evidence(request, coaching_service)
         core.ensure_coach_provider_ready(
@@ -2170,7 +2201,11 @@ def build_core_router(
                 async for _abort_frame in _abort_interrupted():
                     yield _abort_frame
 
+            session_lock_cm = runtime.acquire_session_lock(state.session_id)
+            session_lock_entered = False
             try:
+                await session_lock_cm.__aenter__()
+                session_lock_entered = True
                 if await stream_cancelled():
                     async for _abort_frame in _abort_for_cancellation():
                         yield _abort_frame
@@ -2353,6 +2388,8 @@ def build_core_router(
                                     else None
                                 )
                             elif event_type == "error":
+                                if event.get("terminal") is False:
+                                    continue
                                 async for _abort_frame in _abort_fail_closed(
                                     error_detail=redact_provider_error(
                                         event.get("detail"),
@@ -2461,6 +2498,16 @@ def build_core_router(
                     except Exception:
                         if not stream_recovery_requested or streamed_reply_content or full_content:
                             raise
+                        # Remove the provisional stream user message before the
+                        # synchronous recovery call re-records the turn, so we
+                        # neither duplicate the user bubble nor mark it interrupted.
+                        if stream_user_message is not None:
+                            state.snapshot.messages = [
+                                item
+                                for item in state.snapshot.messages
+                                if item.id != stream_user_message.id
+                            ]
+                            stream_user_message = None
                         # A grounded resource/project confirmation may recover through
                         # the existing synchronous contract only after the live stream
                         # failed before any visible provider text was emitted.
@@ -2489,6 +2536,7 @@ def build_core_router(
                         if reply_content:
                             token_count += 1
                             yield f"data: {json.dumps({'chunk': reply_content})}\n\n"
+                        stream_committed = True
                         response_payload = _publish_stream_session_response(response_payload)
                         stream_singleflight_published = True
                         yield core.sse_complete_frame(
@@ -2735,6 +2783,11 @@ def build_core_router(
                         attachment_delivery=attachment_delivery,
                     )
                 )
+                stream_assistant_message_ids.update(
+                    message.id
+                    for message in state.snapshot.messages
+                    if message.role == "assistant" and message.id not in preexisting_assistant_ids
+                )
                 reply_record = response_data.get("reply")
                 visible_content = (
                     str(reply_record.get("content") or "").strip()
@@ -2786,11 +2839,6 @@ def build_core_router(
                         provider_failure_detected=True,
                     )
                     return
-                stream_assistant_message_ids.update(
-                    message.id
-                    for message in state.snapshot.messages
-                    if message.role == "assistant" and message.id not in preexisting_assistant_ids
-                )
                 if (
                     coaching_service is not None
                     and not provider_failure_detected
@@ -2800,6 +2848,9 @@ def build_core_router(
                     runtime.mark_provider_live_turn_succeeded(coaching_service)
                 runtime.save_session_state(state.session_id)
                 stream_committed = True
+                response_data = _attach_requested_workspace_files(
+                    response_data, runtime, state.workspace_id
+                )
                 response_data = _publish_stream_session_response(response_data)
                 stream_singleflight_published = True
                 yield core.sse_complete_frame(
@@ -2810,9 +2861,8 @@ def build_core_router(
                 )
 
             except asyncio.CancelledError:
-                # Fail-closed: failed->acked + publish failure complete (no remint).
                 logger.info("trainer_stream_cancelled", extra={"stream_id": stream_id})
-                async for _abort_frame in _abort_fail_closed():
+                async for _abort_frame in _abort_for_cancellation():
                     yield _abort_frame
                 return
             except Exception as exc:
@@ -2848,6 +2898,8 @@ def build_core_router(
                     ),
                 )
                 core.unregister_stream_cancellation(stream_id)
+                if session_lock_entered:
+                    await session_lock_cm.__aexit__(None, None, None)
 
         core.register_stream_cancellation(stream_id)
         return StreamingResponse(
@@ -3149,7 +3201,13 @@ def build_core_router(
                 async for _abort_frame in _abort_interrupted():
                     yield _abort_frame
 
+            session_lock_cm = runtime.acquire_session_lock(
+                state.session_id if state is not None else request.session_id
+            )
+            session_lock_entered = False
             try:
+                await session_lock_cm.__aenter__()
+                session_lock_entered = True
                 if await stream_cancelled():
                     async for _abort_frame in _abort_for_cancellation():
                         yield _abort_frame
@@ -3236,7 +3294,18 @@ def build_core_router(
                     agent_tool_events: list[dict[str, object]] = []
                     agent_steps: list[dict[str, object]] = []
                     final_agent_meta: dict[str, object] = dict(prepared_agent_meta)
-                    provider_failure_detected = False
+                    prepared_raw_answer_mode = str(
+                        preparation.get("raw_requested_answer_mode") or raw_requested_answer_mode
+                    ).strip()
+                    prepared_saved_answer_mode = str(
+                        preparation.get("saved_answer_mode") or saved_answer_mode
+                    ).strip()
+                    language_corruption_detected = bool(
+                        preparation.get("language_corruption_detected")
+                    )
+                    provider_failure_detected = bool(
+                        preparation.get("provider_failure_detected")
+                    )
 
                     model_requested_at = time.perf_counter()
                     yield core.stream_status_event("requesting_model", stream_id)
@@ -3337,6 +3406,8 @@ def build_core_router(
                                     else None
                                 )
                             elif event_type == "error":
+                                if event.get("terminal") is False:
+                                    continue
                                 async for _abort_frame in _abort_fail_closed(
                                     error_detail=redact_provider_error(
                                         event.get("detail"),
@@ -3480,7 +3551,69 @@ def build_core_router(
                             evidence=agent_evidence,
                         )
 
+                    if await stream_cancelled():
+                        async for _abort_frame in _abort_for_cancellation():
+                            yield _abort_frame
+                        return
+
+                    coach_turn_data = core.repair_generic_finalize_next_step(
+                        full_content,
+                        final_agent_meta if isinstance(final_agent_meta, dict) and final_agent_meta else None,
+                        coach_turn_data,
+                        response_language=request.response_language,
+                    ) or coach_turn_data
+                    streaming_grounding_decision = await core.resolve_turn_grounding_async(
+                        coach_turn_payload=coach_turn_data,
+                        reply_content=full_content,
+                        request=request,
+                        agent_meta=final_agent_meta or None,
+                        history_text=core.turn_history_text(state.snapshot),
+                        coaching_service=coaching_service,
+                    )
+                    final_agent_meta = core.apply_grounding_decision(
+                        coach_turn_payload=coach_turn_data,
+                        decision=streaming_grounding_decision,
+                        agent_meta=final_agent_meta or None,
+                    ) or final_agent_meta
+                    coach_support.persist_turn_reflection(
+                        core.coach_support_deps,
+                        workspace_id=workspace_id,
+                        session_id=state.session_id,
+                        user_message=request.message,
+                        scenario=scenario,
+                        response_language=request.response_language,
+                        answer_mode=core.answer_mode_preference_for_persistence(
+                            prepared_raw_answer_mode,
+                            prepared_saved_answer_mode,
+                            request.answer_mode,
+                            profile.answer_policy,
+                        ),
+                        coach_defaults=request.coach_defaults,
+                        coach_turn_data=coach_turn_data,
+                        grounding_decision=streaming_grounding_decision,
+                        stop_reason=str(final_agent_meta.get("stop_reason") or ""),
+                        recovered_stop_reason=str(final_agent_meta.get("recovered_stop_reason") or ""),
+                        local_sequence_fallback=bool(final_agent_meta.get("local_sequence_fallback")),
+                    )
+                    core.persist_recovered_plan_resume_after_turn(
+                        workspace_id=workspace_id,
+                        request=request,
+                        reply_content=full_content,
+                        agent_meta=final_agent_meta if isinstance(final_agent_meta, dict) else None,
+                        coach_context=coach_context if isinstance(coach_context, dict) else None,
+                        recovered_status=state.snapshot.plan_runtime_status
+                        if isinstance(state.snapshot.plan_runtime_status, dict)
+                        else None,
+                    )
+                    if not language_corruption_detected and not provider_failure_detected:
+                        core.persist_external_references_as_background(
+                            workspace_id=workspace_id,
+                            scenario=scenario,
+                            coach_turn_data=coach_turn_data,
+                        )
+
                     state.snapshot.memory = runtime.memory_service.snapshot(workspace_id)
+                    state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
                     runtime.hydrate_plan_context(state.snapshot, workspace_id)
                     coach_support.hydrate_snapshot(core.coach_support_deps,
                         state.snapshot,
@@ -3506,25 +3639,6 @@ def build_core_router(
                             state.snapshot.plan = persisted_plan
                     response_snapshot = state.snapshot
 
-                    # This streaming pass may have replaced the next step the
-                    # preparation pass was decided on; the delivered text must
-                    # be decided for itself (Fingerprint mismatch invalidates
-                    # the cached decision) before the response consumes it.
-                    if core.grounding_decision_from_payload(coach_turn_data) is None:
-                        streaming_grounding_decision = await core.resolve_turn_grounding_async(
-                            coach_turn_payload=coach_turn_data,
-                            reply_content=full_content,
-                            request=request,
-                            agent_meta=final_agent_meta or None,
-                            history_text=core.turn_history_text(state.snapshot),
-                            coaching_service=coaching_service,
-                        )
-                        final_agent_meta = core.apply_grounding_decision(
-                            coach_turn_payload=coach_turn_data,
-                            decision=streaming_grounding_decision,
-                            agent_meta=final_agent_meta or None,
-                        ) or final_agent_meta
-
                     response_data = json_response_payload(
                         coach_support.build_session_response(core.coach_support_deps, 
                             state=state,
@@ -3539,6 +3653,11 @@ def build_core_router(
                             agent_meta=final_agent_meta or None,
                             attachment_delivery=attachment_delivery,
                         )
+                    )
+                    stream_assistant_message_ids.update(
+                        message.id
+                        for message in state.snapshot.messages
+                        if message.role == "assistant" and message.id not in preexisting_assistant_ids
                     )
                     response_data["artifacts"] = artifacts
                     response_data["intent"] = original_intent
@@ -3601,6 +3720,10 @@ def build_core_router(
                     ):
                         runtime.mark_provider_live_turn_succeeded(coaching_service)
                     runtime.save_session_state(state.session_id)
+                    stream_committed = True
+                    response_data = _attach_requested_workspace_files(
+                        response_data, runtime, workspace_id
+                    )
                     response_data = _publish_stream_turn_response(response_data)
                     stream_singleflight_published = True
                     yield core.sse_complete_frame(
@@ -3808,6 +3931,8 @@ def build_core_router(
                                     else None
                                 )
                             elif event_type == "error":
+                                if event.get("terminal") is False:
+                                    continue
                                 async for _abort_frame in _abort_fail_closed(
                                     error_detail=redact_provider_error(
                                         event.get("detail"),
@@ -3910,6 +4035,13 @@ def build_core_router(
                     except Exception:
                         if not stream_recovery_requested or streamed_reply_content or full_content:
                             raise
+                        if stream_user_message is not None:
+                            state.snapshot.messages = [
+                                item
+                                for item in state.snapshot.messages
+                                if item.id != stream_user_message.id
+                            ]
+                            stream_user_message = None
                         # Grounding recovery is deliberately exceptional: the
                         # nominal path above is always provider-backed SSE.
                         fallback_response, fallback_artifacts, _ = await coach_support.execute_turn(core.coach_support_deps, 
@@ -3971,6 +4103,7 @@ def build_core_router(
                         if reply_content:
                             token_count += 1
                             yield f"data: {json.dumps({'chunk': reply_content})}\n\n"
+                        stream_committed = True
                         response_data = _publish_stream_turn_response(response_data)
                         stream_singleflight_published = True
                         yield core.sse_complete_frame(
@@ -4223,6 +4356,11 @@ def build_core_router(
                     agent_meta=final_agent_meta or None,
                     attachment_delivery=attachment_delivery,
                 )
+                stream_assistant_message_ids.update(
+                    message.id
+                    for message in state.snapshot.messages
+                    if message.role == "assistant" and message.id not in preexisting_assistant_ids
+                )
                 response_data = json_response_payload(response)
                 response_data["artifacts"] = dict(coach_turn["artifacts"])
                 response_data["intent"] = original_intent
@@ -4277,11 +4415,6 @@ def build_core_router(
                         provider_failure_detected=True,
                     )
                     return
-                stream_assistant_message_ids.update(
-                    message.id
-                    for message in state.snapshot.messages
-                    if message.role == "assistant" and message.id not in preexisting_assistant_ids
-                )
                 if (
                     coaching_service is not None
                     and not provider_failure_detected
@@ -4297,6 +4430,9 @@ def build_core_router(
                     updated_response = json_response_payload(response)
                     response_data.update(reply=updated_response["reply"], snapshot=updated_response["snapshot"])
 
+                response_data = _attach_requested_workspace_files(
+                    response_data, runtime, workspace_id
+                )
                 response_data = _publish_stream_turn_response(response_data)
                 stream_singleflight_published = True
                 yield core.sse_complete_frame(
@@ -4306,9 +4442,8 @@ def build_core_router(
                     provider_failure_detected=provider_failure_detected,
                 )
             except asyncio.CancelledError:
-                # Fail-closed: failed->acked + publish failure complete (no remint).
                 logger.info("trainer_stream_cancelled", extra={"stream_id": stream_id})
-                async for _abort_frame in _abort_fail_closed():
+                async for _abort_frame in _abort_for_cancellation():
                     yield _abort_frame
                 return
             except Exception as exc:
@@ -4347,6 +4482,8 @@ def build_core_router(
                         ),
                     )
                 core.unregister_stream_cancellation(stream_id)
+                if session_lock_entered:
+                    await session_lock_cm.__aexit__(None, None, None)
 
         core.register_stream_cancellation(stream_id)
         return StreamingResponse(

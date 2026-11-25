@@ -11,6 +11,8 @@ import {
   formatCompactTokenLimit,
   resolveEffectiveTokenBudgetProfile,
 } from "../../../../../shared/src/smartTokenBudget";
+import { filterProviderModelOptions } from "../../../../../shared/src/providerModelPolicy";
+import { providerBaseUrlIsLocalService } from "../../../../../shared/src/providerStatus";
 import { ComposerIconButton } from "./ComposerIconButton";
 import {
   CheckMarkIcon,
@@ -161,20 +163,6 @@ export function ComposerModelMenu({
     activeModelItem && activeModelItem.id !== retainedBlockedActiveModel?.id
       ? [activeModelItem]
       : [];
-  const displayedModels = hasModelQuery
-    ? [
-        ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
-        ...activeModelPinned,
-        ...visibleModels.filter(
-          (item) =>
-            item.id !== retainedBlockedActiveModel?.id && item.id !== activeModelItem?.id,
-        ),
-      ]
-    : [
-        ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
-        ...activeModelPinned,
-        ...defaultVisibleModels.filter((item) => item.id !== activeModelItem?.id),
-      ];
   const nonActiveModelCount = menuItems.filter(
     (item) => item.selectionKind === "model" && !item.isActive,
   ).length;
@@ -203,8 +191,26 @@ export function ComposerModelMenu({
     const availableModels = Array.isArray(raw.availableModels)
       ? raw.availableModels.filter((value): value is string => typeof value === "string")
       : [];
-    const models = Array.from(
-      new Set([defaultModel, ...availableModels].map((value) => value.trim()).filter(Boolean)),
+    const catalogModels = Array.isArray(raw.catalogModels)
+      ? raw.catalogModels.filter((value): value is string => typeof value === "string")
+      : [];
+    const allowedModels = Array.isArray(raw.allowedModels)
+      ? raw.allowedModels.filter((value): value is string => typeof value === "string")
+      : [];
+    const deniedModels = Array.isArray(raw.deniedModels)
+      ? raw.deniedModels.filter((value): value is string => typeof value === "string")
+      : [];
+    const rawModels = Array.from(
+      new Set(
+        [defaultModel, ...availableModels, ...catalogModels]
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    );
+    const models = filterProviderModelOptions(
+      rawModels,
+      { allowedModels, deniedModels },
+      { retainModels: defaultModel ? [defaultModel] : [] },
     );
     if (models.length === 0) {
       return [];
@@ -224,9 +230,9 @@ export function ComposerModelMenu({
           modelCapability &&
           typeof modelCapability === "object" &&
           !Array.isArray(modelCapability) &&
-          (modelCapability as Record<string, unknown>).vision === true
+          typeof (modelCapability as Record<string, unknown>).vision === "boolean"
         ) {
-          return true;
+          return (modelCapability as Record<string, unknown>).vision === true;
         }
         return rawCapabilities.vision === true;
       }),
@@ -240,13 +246,37 @@ export function ComposerModelMenu({
   });
   const queryKey = modelQuery.trim().toLowerCase();
   const visibleOtherGroups = otherProviderGroups
-    .map((group) => ({
-      ...group,
-      models: hasModelQuery
-        ? group.models.filter((model) => model.toLowerCase().includes(queryKey))
-        : group.models.slice(0, initialOptionLimit),
-    }))
+    .map((group) => {
+      if (!hasModelQuery) {
+        return { ...group, models: group.models.slice(0, initialOptionLimit) };
+      }
+      const labelMatches = group.label.toLowerCase().includes(queryKey);
+      const matchingModels = group.models.filter((model) =>
+        model.toLowerCase().includes(queryKey),
+      );
+      return {
+        ...group,
+        models: matchingModels.length > 0 ? matchingModels : labelMatches ? group.models : [],
+      };
+    })
     .filter((group) => group.models.length > 0);
+  const hasQueryMatch = visibleModels.length > 0 || visibleOtherGroups.length > 0;
+  const displayedModels = hasModelQuery
+    ? hasQueryMatch
+      ? [
+          ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
+          ...activeModelPinned,
+          ...visibleModels.filter(
+            (item) =>
+              item.id !== retainedBlockedActiveModel?.id && item.id !== activeModelItem?.id,
+          ),
+        ]
+      : []
+    : [
+        ...(retainedBlockedActiveModel ? [retainedBlockedActiveModel] : []),
+        ...activeModelPinned,
+        ...defaultVisibleModels.filter((item) => item.id !== activeModelItem?.id),
+      ];
   const hasOnlyCurrentModel =
     Boolean(activeModelItem) &&
     nonActiveModelCount === 0 &&
@@ -271,14 +301,15 @@ export function ComposerModelMenu({
   const modelSectionLabel = hasModelQuery
     ? localize(composerLanguage, "匹配的模型")
     : localize(composerLanguage, "可切换模型");
+  const providerIsLocalService = providerBaseUrlIsLocalService(providerConfig.baseUrl);
   const refreshModelsDisabled =
     !providerApplied ||
-    !providerConfig.apiKeyConfigured ||
+    (!providerConfig.apiKeyConfigured && !providerIsLocalService) ||
     providerConfig.modelListStatus === "loading";
   const refreshModelsLabel = localize(composerLanguage, "刷新模型");
   const refreshModelsTitle = !providerApplied
     ? localize(composerLanguage, "先保存连接，再更新模型列表")
-    : !providerConfig.apiKeyConfigured
+    : !providerConfig.apiKeyConfigured && !providerIsLocalService
       ? localize(composerLanguage, "先在“设置”填写访问密钥，再更新模型列表")
       : providerConfig.modelListStatus === "loading"
         ? localize(composerLanguage, "正在更新模型列表")
@@ -305,6 +336,12 @@ export function ComposerModelMenu({
     if (thinking.mode === "enabled" && thinking.reasoningEffort) {
       return EFFORT_LABEL[thinking.reasoningEffort][composerLanguage];
     }
+    if (thinking.mode === "enabled" && typeof thinking.budgetTokens === "number") {
+      return formatCompactTokenLimit(thinking.budgetTokens) || localize(composerLanguage, "开启");
+    }
+    if (thinking.mode === "enabled") {
+      return localize(composerLanguage, "开启");
+    }
     return undefined;
   };
 
@@ -317,6 +354,9 @@ export function ComposerModelMenu({
   const thinkingIndex = (() => {
     if (!thinkingDescriptor || !thinkingStops) return 0;
     if (effortOptions) {
+      if (thinkingDescriptor.config.mode === "disabled") {
+        return 0;
+      }
       const effort = thinkingDescriptor.config.reasoningEffort ?? "medium";
       return Math.max(0, effortOptions.indexOf(effort));
     }
@@ -345,7 +385,6 @@ export function ComposerModelMenu({
     if (effortOptions) {
       const effort = effortOptions[index] ?? "medium";
       onThinkingChange({
-        ...thinkingDescriptor.config,
         mode: "enabled",
         reasoningEffort: effort,
       });
@@ -355,12 +394,22 @@ export function ComposerModelMenu({
     onThinkingChange({
       ...thinkingDescriptor.config,
       mode,
-      ...(mode === "enabled" &&
-      thinkingDescriptor.kind === "reasoning_effort" &&
-      !thinkingDescriptor.config.reasoningEffort
-        ? { reasoningEffort: "medium" as const }
-        : {}),
+      ...(mode !== "enabled" ? { budgetTokens: undefined, reasoningEffort: undefined } : {}),
     });
+  };
+  const onCycleEffortMode = () => {
+    if (!thinkingDescriptor || !effortOptions || thinkingDescriptor.disabled) return;
+    const nextMode =
+      thinkingDescriptor.config.mode === "enabled"
+        ? "auto"
+        : thinkingDescriptor.config.mode === "auto"
+          ? "disabled"
+          : "enabled";
+    onThinkingChange(
+      nextMode === "enabled"
+        ? { mode: "enabled", reasoningEffort: thinkingDescriptor.config.reasoningEffort ?? "medium" }
+        : { mode: nextMode },
+    );
   };
 
   return (
@@ -544,9 +593,20 @@ export function ComposerModelMenu({
         <footer className="composer-model-menu__thinking">
           <div className="composer-model-menu__thinking-header">
             <span>{localize(composerLanguage, "思考强度")}</span>
-            <span className="composer-model-menu__thinking-value">
-              {thinkingDescriptor.disabled ? localize(composerLanguage, "关闭") : thinkingValueLabel}
-            </span>
+            {effortOptions && !thinkingDescriptor.disabled ? (
+              <button
+                type="button"
+                className="composer-model-menu__thinking-value"
+                title={localize(composerLanguage, "点击在 自动 / 关闭 / 开启 之间切换")}
+                onClick={onCycleEffortMode}
+              >
+                {thinkingValueLabel}
+              </button>
+            ) : (
+              <span className="composer-model-menu__thinking-value">
+                {thinkingDescriptor.disabled ? localize(composerLanguage, "关闭") : thinkingValueLabel}
+              </span>
+            )}
           </div>
           <input
             className="composer-model-menu__thinking-range"
@@ -561,6 +621,11 @@ export function ComposerModelMenu({
               thinkingDescriptor.disabled ? localize(composerLanguage, "关闭") : thinkingValueLabel
             }
             onChange={(event) => onThinkingIndexChange(Number(event.target.value))}
+            onClick={(event) => {
+              if (effortOptions && thinkingDescriptor.config.mode !== "enabled") {
+                onThinkingIndexChange(Number(event.currentTarget.value));
+              }
+            }}
           />
           {thinkingDescriptor.kind === "thinking_budget" ||
           thinkingDescriptor.kind === "gemini_thinking" ||

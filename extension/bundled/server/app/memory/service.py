@@ -5,6 +5,7 @@ import logging
 import re
 from collections import Counter
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, fields, is_dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -378,6 +379,10 @@ class StructuredMemoryService:
         difficulty: float | None = None,
         reps: int | None = None,
         lapses: int | None = None,
+        step: int | None = None,
+        last_reviewed_at: datetime | None = None,
+        interval: int | None = None,
+        retrievability: float | None = None,
     ) -> MasteryRecord | None:
         """Attach a scheduler's next due date to an existing mastery record.
 
@@ -400,6 +405,15 @@ class StructuredMemoryService:
             current.fsrs_reps = reps
         if lapses is not None:
             current.fsrs_lapses = lapses
+        if step is not None:
+            current.fsrs_step = max(0, step)
+        if last_reviewed_at is not None:
+            current.fsrs_last_review_at = last_reviewed_at
+        if interval is not None:
+            current.fsrs_interval = max(0, interval)
+        if retrievability is not None:
+            current.retrievability = max(0.0, min(1.0, retrievability))
+        current.fsrs_due = next_review_at
         current.updated_at = utc_now()
         return current
 
@@ -440,6 +454,10 @@ class StructuredMemoryService:
             fsrs_reps=current.fsrs_reps,
             fsrs_lapses=current.fsrs_lapses,
             fsrs_state=current.fsrs_state,
+            fsrs_step=current.fsrs_step,
+            fsrs_last_review_at=current.fsrs_last_review_at,
+            fsrs_due=current.fsrs_due,
+            fsrs_interval=current.fsrs_interval,
         )
         self._mastery[concept] = updated
         return updated
@@ -1494,6 +1512,11 @@ class MemoryService(
         # keeps clock-derived derivations (FSRS due reviews) effectively fresh.
         self._persist_generation = 0
         self._snapshot_cache: dict[str, tuple[int, int, int, MemorySnapshot]] = {}
+        # One training event fans out into memory, card, mastery and review
+        # writes. A batch defers those individual structured-memory writes so
+        # the event lands as one revision instead of a chain of partial ones.
+        self._deferred_write_depth: dict[str, int] = {}
+        self._deferred_write_dirty: set[str] = set()
 
     def set_resource_dedupe_hook(
         self,
@@ -1933,9 +1956,43 @@ class MemoryService(
         self._structured_by_workspace[workspace_id] = structured
         return structured
 
+    @contextmanager
+    def structured_write_batch(self, workspace_id: str):
+        """Land every structured-memory mutation in this block as one write.
+
+        Nested ``_persist_structured`` calls only mark the workspace dirty; the
+        outermost successful block writes once. An exception discards the
+        pending write so a half-finished cross-domain event is not persisted.
+        The snapshot generation still advances per mutation, so in-memory
+        readers inside the block never see a stale cache.
+        """
+        key = self._canonical_workspace_id(workspace_id)
+        depth = self._deferred_write_depth.get(key, 0)
+        self._deferred_write_depth[key] = depth + 1
+        try:
+            yield
+        except BaseException:
+            if depth == 0:
+                self._deferred_write_depth.pop(key, None)
+                self._deferred_write_dirty.discard(key)
+            else:
+                self._deferred_write_depth[key] = depth
+            raise
+        else:
+            if depth == 0:
+                self._deferred_write_depth.pop(key, None)
+                if key in self._deferred_write_dirty:
+                    self._deferred_write_dirty.remove(key)
+                    self._persist_structured(key)
+            else:
+                self._deferred_write_depth[key] = depth
+
     def _persist_structured(self, workspace_id: str) -> None:
-        self._persist_generation += 1
         workspace_id = self._canonical_workspace_id(workspace_id)
+        self._persist_generation += 1
+        if self._deferred_write_depth.get(workspace_id, 0) > 0:
+            self._deferred_write_dirty.add(workspace_id)
+            return
         structured = self._structured_for(workspace_id)
         state = structured.export_state()
         expected_revision = self._structured_revisions.get(workspace_id)
@@ -4183,6 +4240,10 @@ class MemoryService(
                 "fail_streak": fail_streak,
             }
         )
+        # One transaction boundary for verify: the card update, FSRS state and
+        # mastery schedule are written by the single _persist_structured call
+        # below. Persisting the card here first could leave a card marked
+        # verified with no schedule if the second write failed.
         self.upsert_card(
             workspace_id,
             card.model_copy(
@@ -4191,6 +4252,7 @@ class MemoryService(
                     "review_schedule": review_schedule,
                 }
             ),
+            persist=False,
         )
         scheduled_mastery = None
         scheduled_concept = ""
@@ -4216,6 +4278,10 @@ class MemoryService(
                     difficulty=result.new_difficulty,
                     reps=result.reps,
                     lapses=result.lapses,
+                    step=result.step,
+                    last_reviewed_at=result.last_reviewed_at,
+                    interval=result.new_interval,
+                    retrievability=result.retrievability,
                 )
                 if scheduled_mastery is not None:
                     scheduled_concept = candidate
@@ -4960,6 +5026,8 @@ class MemoryService(
         self,
         workspace_id: str,
         card: TrainingCardCandidateSnapshot,
+        *,
+        persist: bool = True,
     ) -> TrainingCardCandidateSnapshot:
         structured = self._structured_for(workspace_id)
         normalized = card.model_copy(
@@ -4981,7 +5049,8 @@ class MemoryService(
                 "card_candidate_title": normalized.title,
             },
         )
-        self._persist_structured(workspace_id)
+        if persist:
+            self._persist_structured(workspace_id)
         return normalized
 
     def get_card(

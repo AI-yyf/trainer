@@ -732,7 +732,11 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if lane != normalized_scenario
             for marker in markers
         ]
-        return any(marker in lowered for marker in other_lane_markers)
+        def _marker_matches(marker: str) -> bool:
+            if marker.isascii():
+                return bool(re.search(rf"(?<![a-z0-9_]){re.escape(marker)}(?![a-z0-9_])", lowered))
+            return marker in lowered
+        return any(_marker_matches(marker) for marker in other_lane_markers)
 
     def guided_focus_display_value(
         focus: object,
@@ -1543,11 +1547,15 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             response_language=response_language,
         ):
             return None
+        # This preflight only reads ok/error_category from the result, so the
+        # capabilities this transport already verified are not probed again
+        # before a coaching reply; an explicit Settings test keeps live probes.
         probe_result = coaching_service.test(
             provider_config,
             provider_api_key,
             probe_message=message,
             response_language=response_language,
+            reuse_verified_capabilities=True,
         )
         if (
             not probe_result.ok
@@ -5568,7 +5576,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         drop_latest_user: bool = False,
         active_view: str | None = None,
     ) -> list[dict[str, str]]:
-        history_source = list(messages)
+        scope = composer_conversation_scope(active_view) if active_view else None
+        history_source = [
+            item
+            for item in messages
+            if not scope
+            or composer_conversation_scope((item.metadata or {}).get("active_view")) == scope
+        ]
         if (
             drop_latest_user
             and history_source
@@ -5577,11 +5591,8 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             history_source = history_source[:-1]
 
         history: list[dict[str, str]] = []
-        scope = composer_conversation_scope(active_view) if active_view else None
         for item in history_source:
             if item.role not in {"user", "assistant"}:
-                continue
-            if scope and composer_conversation_scope((item.metadata or {}).get("active_view")) != scope:
                 continue
             content = str(item.content or "").strip()
             if not content:
@@ -5732,6 +5743,12 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 "suggested_actions",
                 "reliability",
                 "timings",
+                "agent",
+                "agent_meta",
+                "coach_turn",
+                "next_step_requires_confirmation",
+                "provider_failure_detected",
+                "requested_workspace_files",
             )
             attached = {
                 key: value for key, value in attached.items() if key in slim_keep
@@ -9047,6 +9064,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 workspace_id=workspace_id,
             )
             return runtime.overlay_last_test_on_service(service)
+        # No inline provider. The browser side panel — which must never see a
+        # provider key — reaches the chat routes this way; it uses the provider
+        # the UI host last named for this workspace, when the host named one.
+        # Without that the sidecar's own (unconfigured) default answered 400.
+        workspace_service = runtime.workspace_provider_service(workspace_id)
+        if workspace_service is not None:
+            return runtime.overlay_last_test_on_service(workspace_service)
         runtime.rehydrate_last_test(
             getattr(runtime.provider_service, "_config", None),
             getattr(runtime.provider_service, "_api_key", None),

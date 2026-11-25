@@ -122,16 +122,23 @@ export function inferProviderModelAdaptation(
         },
         "DeepSeek family: tools are advertised; the v4/reasoner line can carry thinking.",
       );
-    case "anthropic":
+    case "anthropic": {
+      // Extended thinking started with Claude 3.7 Sonnet and the Claude 4 family;
+      // Claude 3 / 3.5 Sonnet & Opus reject thinking.type="enabled" with HTTP 400.
+      const claudeThinkingModel =
+        has(model, "3-7", "3.7", "thinking") ||
+        /\bclaude[-_. ]?(?:sonnet|opus|haiku)?[-_. ]?4(?:\b|[-_.])/.test(model) ||
+        /\b(?:sonnet|opus|haiku)[-_. ]?4(?:\b|[-_.])/.test(model);
       return base(
         {
           supportsTools: true,
           supportsVision: true,
-          supportsThinking: has(model, "3-7", "3.7", "4", "sonnet", "opus"),
+          supportsThinking: claudeThinkingModel,
           suggestedEffort: "high",
         },
         "Claude family: tools and vision are standard; extended thinking is model-version dependent.",
       );
+    }
     case "glm":
       return base(
         {

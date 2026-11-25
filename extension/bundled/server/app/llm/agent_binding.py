@@ -45,12 +45,16 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from inspect import isawaitable
 from typing import Any, cast
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 
 from .agent_loop import AgentProvider, CoachAgentLoop
-from .provider.capability import _allows_keyless_local_provider, _is_loopback_provider_url
+from .provider.capability import (
+    _allows_keyless_local_provider,
+    _is_loopback_provider_url,
+    _model_looks_reasoning_first,
+)
 from .provider.errors import ContextBudgetExhaustedError
 from .provider.streaming import (
     STREAM_IDLE_TIMEOUT_SECONDS,
@@ -58,7 +62,11 @@ from .provider.streaming import (
     extract_non_sse_json_stream_payload,
 )
 from .provider.text import ReasoningBlockFilter
-from .provider.thinking import clamp_wire_thinking_budget
+from .provider.thinking import (
+    clamp_anthropic_thinking_budget,
+    clamp_wire_thinking_budget,
+    learned_policy,
+)
 from .provider_protocols import (
     _finish_reason_is_truncated,
     assess_provider_error,
@@ -271,13 +279,20 @@ def _format_openai_messages(
             )
             continue
         if role == "assistant" and msg.get("tool_calls"):
-            formatted.append(
-                {
-                    "role": "assistant",
-                    "content": str(msg.get("content") or ""),
-                    "tool_calls": list(msg.get("tool_calls") or []),
-                }
+            assistant_entry: dict[str, Any] = {
+                "role": "assistant",
+                "content": str(msg.get("content") or ""),
+                "tool_calls": list(msg.get("tool_calls") or []),
+            }
+            provider_reasoning = msg.get("_provider_reasoning")
+            reasoning_content = (
+                provider_reasoning.get("openai_reasoning_content")
+                if isinstance(provider_reasoning, dict)
+                else msg.get("reasoning_content")
             )
+            if isinstance(reasoning_content, str) and reasoning_content:
+                assistant_entry["reasoning_content"] = reasoning_content
+            formatted.append(assistant_entry)
             continue
         if role == "user" and image_parts and index == last_user_index:
             text_value = str(msg.get("content") or "")
@@ -464,6 +479,9 @@ def _parse_openai_chat_response(response: Any) -> dict[str, Any]:
         if isinstance(raw_finish, str) and raw_finish.strip():
             finish_reason = raw_finish.strip()
     parsed: dict[str, Any] = {"content": content, "tool_calls": tool_calls}
+    reasoning_content = _get_field(message, "reasoning_content", None)
+    if isinstance(reasoning_content, str) and reasoning_content:
+        parsed["provider_reasoning"] = {"openai_reasoning_content": reasoning_content}
     if _finish_reason_is_truncated(finish_reason):
         parsed["stop_reason"] = "length"
     elif tool_calls:
@@ -511,6 +529,13 @@ def _format_openai_responses_input(
             )
             continue
         if role == "assistant" and msg.get("tool_calls"):
+            provider_reasoning = msg.get("_provider_reasoning")
+            if isinstance(provider_reasoning, dict):
+                reasoning_items = provider_reasoning.get("responses_reasoning_items")
+                if isinstance(reasoning_items, list):
+                    for reasoning_item in reasoning_items:
+                        if isinstance(reasoning_item, dict):
+                            input_items.append(dict(reasoning_item))
             text_value = str(msg.get("content") or "").strip()
             if text_value:
                 input_items.append({"role": "assistant", "content": text_value})
@@ -573,13 +598,45 @@ def _ensure_json_arguments(arguments: Any) -> str:
         return json.dumps({"_raw_arguments": str(arguments)}, ensure_ascii=False)
 
 
+def _serialize_responses_reasoning_item(item: Any) -> dict[str, Any] | None:
+    if isinstance(item, dict):
+        return dict(item)
+    model_dump = getattr(item, "model_dump", None)
+    if callable(model_dump):
+        try:
+            dumped = model_dump(exclude_none=True)
+            if isinstance(dumped, dict):
+                return dumped
+        except Exception:
+            pass
+    item_id = _get_field(item, "id", None)
+    summary = _get_field(item, "summary", None)
+    encrypted = _get_field(item, "encrypted_content", None)
+    if not any((item_id, summary, encrypted)):
+        return None
+    record: dict[str, Any] = {"type": "reasoning"}
+    if item_id:
+        record["id"] = str(item_id)
+    if summary is not None:
+        record["summary"] = summary
+    if encrypted is not None:
+        record["encrypted_content"] = encrypted
+    return record
+
+
 def _parse_openai_responses_response(response: Any) -> dict[str, Any]:
     direct_text = _get_field(response, "output_text", None)
     text_parts: list[str] = [str(direct_text)] if isinstance(direct_text, str) else []
     tool_calls: list[dict[str, Any]] = []
+    reasoning_items: list[dict[str, Any]] = []
     output_items = _get_field(response, "output", None) or []
     for item in output_items:
         item_type = str(_get_field(item, "type", "") or "")
+        if item_type == "reasoning":
+            serialized = _serialize_responses_reasoning_item(item)
+            if serialized:
+                reasoning_items.append(serialized)
+            continue
         if item_type == "message":
             for content_item in _get_field(item, "content", None) or []:
                 content_type = str(_get_field(content_item, "type", "") or "")
@@ -598,7 +655,16 @@ def _parse_openai_responses_response(response: Any) -> dict[str, Any]:
                     "arguments": _get_field(item, "arguments", None) or "{}",
                 }
             )
-    return {"content": _visible_model_text("".join(text_parts)), "tool_calls": tool_calls}
+    parsed: dict[str, Any] = {
+        "content": _visible_model_text("".join(text_parts)),
+        "tool_calls": tool_calls,
+    }
+    if reasoning_items:
+        parsed["provider_reasoning"] = {"responses_reasoning_items": reasoning_items}
+    status = str(_get_field(response, "status", "") or "").strip().lower()
+    if status == "incomplete" and not tool_calls:
+        parsed["stop_reason"] = "length"
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -640,23 +706,32 @@ def _format_gemini_payload(
             continue
         if role == "assistant":
             parts: list[dict[str, Any]] = []
+            provider_reasoning = msg.get("_provider_reasoning")
+            gemini_signatures = (
+                provider_reasoning.get("gemini_thought_signatures")
+                if isinstance(provider_reasoning, dict)
+                else None
+            )
             text_value = str(msg.get("content") or "").strip()
             if text_value:
                 parts.append({"text": text_value})
-            for call in msg.get("tool_calls") or []:
+            for call_idx, call in enumerate(msg.get("tool_calls") or []):
                 fn = call.get("function") if isinstance(call, dict) else None
                 name = (fn or {}).get("name") if isinstance(fn, dict) else call.get("name")
                 arguments = (
                     (fn or {}).get("arguments") if isinstance(fn, dict) else call.get("arguments")
                 )
-                parts.append(
-                    {
-                        "functionCall": {
-                            "name": str(name or ""),
-                            "args": _coerce_to_dict(arguments),
-                        }
+                fc_part: dict[str, Any] = {
+                    "functionCall": {
+                        "name": str(name or ""),
+                        "args": _coerce_to_dict(arguments),
                     }
-                )
+                }
+                if isinstance(gemini_signatures, list) and call_idx < len(gemini_signatures):
+                    sig = gemini_signatures[call_idx]
+                    if isinstance(sig, str) and sig:
+                        fc_part["thoughtSignature"] = sig
+                parts.append(fc_part)
             if parts:
                 contents.append({"role": "model", "parts": parts})
             continue
@@ -700,10 +775,15 @@ def _gemini_image_parts(
 def _parse_gemini_response(payload: dict[str, Any]) -> dict[str, Any]:
     text_parts: list[str] = []
     tool_calls: list[dict[str, Any]] = []
+    thought_signatures: list[str | None] = []
+    finish_reason: str | None = None
     candidates = payload.get("candidates") or []
     for candidate in candidates:
         if not isinstance(candidate, dict):
             continue
+        candidate_finish = candidate.get("finishReason") or candidate.get("finish_reason")
+        if isinstance(candidate_finish, str) and candidate_finish.strip():
+            finish_reason = candidate_finish.strip()
         content = candidate.get("content") or {}
         parts = content.get("parts") if isinstance(content, dict) else []
         for part in parts or []:
@@ -719,6 +799,8 @@ def _parse_gemini_response(payload: dict[str, Any]) -> dict[str, Any]:
                 name = str(function_call.get("name") or "")
                 if not name:
                     continue
+                sig = part.get("thoughtSignature") or part.get("thought_signature")
+                thought_signatures.append(str(sig) if isinstance(sig, str) and sig else None)
                 tool_calls.append(
                     {
                         "id": name,
@@ -726,7 +808,15 @@ def _parse_gemini_response(payload: dict[str, Any]) -> dict[str, Any]:
                         "arguments": function_call.get("args") or {},
                     }
                 )
-    return {"content": _visible_model_text("".join(text_parts)), "tool_calls": tool_calls}
+    parsed: dict[str, Any] = {
+        "content": _visible_model_text("".join(text_parts)),
+        "tool_calls": tool_calls,
+    }
+    if any(thought_signatures):
+        parsed["provider_reasoning"] = {"gemini_thought_signatures": thought_signatures}
+    if _finish_reason_is_truncated(finish_reason) and not tool_calls:
+        parsed["stop_reason"] = "length"
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -801,6 +891,13 @@ def _split_anthropic_messages(
             continue
         if role == "assistant":
             blocks: list[dict[str, Any]] = []
+            provider_reasoning = msg.get("_provider_reasoning")
+            if isinstance(provider_reasoning, dict):
+                thinking_blocks = provider_reasoning.get("anthropic_blocks")
+                if isinstance(thinking_blocks, list):
+                    for tb in thinking_blocks:
+                        if isinstance(tb, dict) and tb.get("type") in {"thinking", "redacted_thinking"}:
+                            blocks.append(dict(tb))
             text_value = str(msg.get("content") or "").strip()
             if text_value:
                 blocks.append({"type": "text", "text": text_value})
@@ -821,8 +918,11 @@ def _split_anthropic_messages(
                 )
                 pending_tool_uses.append(call)
             if not blocks:
-                blocks.append({"type": "text", "text": ""})
-            converted.append({"role": "assistant", "content": blocks})
+                continue
+            if converted and converted[-1].get("role") == "assistant" and isinstance(converted[-1].get("content"), list):
+                converted[-1]["content"].extend(blocks)
+            else:
+                converted.append({"role": "assistant", "content": blocks})
             continue
         if role == "user":
             user_blocks: list[dict[str, Any]] = []
@@ -832,8 +932,18 @@ def _split_anthropic_messages(
             if image_blocks and index == last_user_index:
                 user_blocks.extend(image_blocks)
             if not user_blocks:
-                user_blocks.append({"type": "text", "text": ""})
-            converted.append({"role": "user", "content": user_blocks})
+                continue
+            if (
+                converted
+                and converted[-1].get("role") == "user"
+                and isinstance(converted[-1].get("content"), list)
+                and converted[-1]["content"]
+                and isinstance(converted[-1]["content"][0], dict)
+                and converted[-1]["content"][0].get("type") == "tool_result"
+            ):
+                converted[-1]["content"].extend(user_blocks)
+            else:
+                converted.append({"role": "user", "content": user_blocks})
             continue
     return "\n\n".join(part for part in system_parts if part), converted
 
@@ -887,11 +997,25 @@ def _parse_anthropic_response(payload: dict[str, Any]) -> dict[str, Any]:
     content_blocks = payload.get("content") or []
     text_parts: list[str] = []
     tool_calls: list[dict[str, Any]] = []
+    thinking_blocks: list[dict[str, Any]] = []
     for block in content_blocks:
         if not isinstance(block, dict):
             continue
         block_type = str(block.get("type") or "")
-        if block_type == "text":
+        if block_type == "thinking":
+            thinking_block: dict[str, Any] = {
+                "type": "thinking",
+                "thinking": str(block.get("thinking") or ""),
+            }
+            if isinstance(block.get("signature"), str) and block["signature"]:
+                thinking_block["signature"] = block["signature"]
+            thinking_blocks.append(thinking_block)
+        elif block_type == "redacted_thinking":
+            redacted: dict[str, Any] = {"type": "redacted_thinking"}
+            if isinstance(block.get("data"), str):
+                redacted["data"] = block["data"]
+            thinking_blocks.append(redacted)
+        elif block_type == "text":
             text_parts.append(str(block.get("text") or ""))
         elif block_type == "tool_use":
             tool_calls.append(
@@ -901,7 +1025,13 @@ def _parse_anthropic_response(payload: dict[str, Any]) -> dict[str, Any]:
                     "arguments": block.get("input") or {},
                 }
             )
-    return {"content": "".join(text_parts), "tool_calls": tool_calls}
+    parsed: dict[str, Any] = {"content": "".join(text_parts), "tool_calls": tool_calls}
+    if thinking_blocks:
+        parsed["provider_reasoning"] = {"anthropic_blocks": thinking_blocks}
+    stop_reason = payload.get("stop_reason")
+    if isinstance(stop_reason, str) and _finish_reason_is_truncated(stop_reason) and not tool_calls:
+        parsed["stop_reason"] = "length"
+    return parsed
 
 
 def _format_anthropic_tools(tools: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
@@ -1073,15 +1203,27 @@ class ProviderAgentBinding:
             status_code=status_code,
             api_key=self._api_key_for_diagnostics(),
         )
+        category = assessment.category
+        retryable = assessment.retryable
+        if category == "provider_error":
+            if status_code in {401, 403}:
+                category = "invalid_key_or_permission"
+                retryable = False
+            elif status_code == 402:
+                category = "quota_exhausted"
+                retryable = False
+            elif status_code == 429:
+                category = "rate_limit"
+                retryable = True
         detail = (
             assessment.diagnostic
-            if assessment.category == "protocol_mismatch"
+            if category == "protocol_mismatch"
             else f"Provider request failed (HTTP {status_code})."
         )
         return ProviderRuntimeResponseError(
-            category=assessment.category,
+            category=category,
             detail=detail,
-            retryable=assessment.retryable,
+            retryable=retryable,
             status_code=status_code,
         )
 
@@ -1146,8 +1288,16 @@ class ProviderAgentBinding:
         model = self._provider_service._resolve_model()  # noqa: SLF001
         last_error: Exception | None = None
         for candidate in self._provider_service._model_candidates(model):  # noqa: SLF001
+            attempt_kwargs = dict(kwargs)
             try:
-                response = await client.responses.create(model=candidate, **kwargs)
+                try:
+                    response = await client.responses.create(model=candidate, **attempt_kwargs)
+                except Exception as temp_exc:  # noqa: BLE001
+                    if "temperature" in attempt_kwargs and "temperature" in str(temp_exc).lower():
+                        attempt_kwargs.pop("temperature", None)
+                        response = await client.responses.create(model=candidate, **attempt_kwargs)
+                    else:
+                        raise
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 if not self._provider_service._is_model_not_supported_error(exc):  # noqa: SLF001
@@ -1181,17 +1331,32 @@ class ProviderAgentBinding:
         kwargs = self._apply_openai_responses_request_defaults(kwargs)
         model = self._provider_service._resolve_model()  # noqa: SLF001
         last_error: Exception | None = None
-        stream = None
+        response_stream_cm = None
+        response_stream = None
         for candidate in self._provider_service._model_candidates(model):  # noqa: SLF001
+            attempt_kwargs = dict(kwargs)
             try:
-                stream = client.responses.stream(model=candidate, **kwargs)
-                break
+                try:
+                    cm = client.responses.stream(model=candidate, **attempt_kwargs)
+                    entered = await cm.__aenter__()
+                    response_stream_cm = cm
+                    response_stream = entered
+                    break
+                except Exception as temp_exc:  # noqa: BLE001
+                    if "temperature" in attempt_kwargs and "temperature" in str(temp_exc).lower():
+                        attempt_kwargs.pop("temperature", None)
+                        cm = client.responses.stream(model=candidate, **attempt_kwargs)
+                        entered = await cm.__aenter__()
+                        response_stream_cm = cm
+                        response_stream = entered
+                        break
+                    raise
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
                 if not self._provider_service._is_model_not_supported_error(exc):  # noqa: SLF001
                     raise
                 continue
-        if stream is None:
+        if response_stream is None or response_stream_cm is None:
             if last_error is not None:
                 raise last_error
             raise RuntimeError(f"Unable to resolve a usable OpenAI Responses model for {model!r}.")
@@ -1201,6 +1366,7 @@ class ProviderAgentBinding:
         emitted_visible = False
         emitted_reasoning = False
         emitted_tool_drafts: set[int] = set()
+        reasoning_items: list[dict[str, Any]] = []
 
         def _normalize_stream_chunk(text: str) -> str:
             nonlocal emitted_visible
@@ -1213,8 +1379,12 @@ class ProviderAgentBinding:
             return trimmed
 
         tool_call_state: dict[int, dict[str, Any]] = {}
-        async with stream as response_stream:
-            async for event in response_stream:
+        try:
+            async for event in _iterate_provider_stream_with_cancellation(
+                response_stream,
+                None,
+                idle_timeout=STREAM_IDLE_TIMEOUT_SECONDS,
+            ):
                 event_type = str(getattr(event, "type", "") or "")
                 if "reasoning" in event_type and not emitted_reasoning:
                     emitted_reasoning = True
@@ -1223,10 +1393,16 @@ class ProviderAgentBinding:
                 if event_type in {"response.output_item.added", "response.output_item.done"}:
                     item = getattr(event, "item", None)
                     item_type = str(getattr(item, "type", "") or "") if item is not None else ""
-                    if item_type == "reasoning" and not emitted_reasoning:
-                        emitted_reasoning = True
-                        if self._emit_activity:
-                            yield {"type": "provider_activity", "phase": "model_reasoning"}
+                    if item_type == "reasoning":
+                        if not emitted_reasoning:
+                            emitted_reasoning = True
+                            if self._emit_activity:
+                                yield {"type": "provider_activity", "phase": "model_reasoning"}
+                        if event_type == "response.output_item.done":
+                            serialized = _serialize_responses_reasoning_item(item)
+                            if serialized:
+                                reasoning_items.append(serialized)
+                        continue
                     if item is None or item_type != "function_call":
                         continue
                     index = int(getattr(event, "output_index", 0) or 0)
@@ -1269,6 +1445,8 @@ class ProviderAgentBinding:
                 if event_type == "response.completed":
                     break
             final_response = await response_stream.get_final_response()
+        finally:
+            await response_stream_cm.__aexit__(None, None, None)
 
         tail = _normalize_stream_chunk(reasoning_filter.flush())
         if tail:
@@ -1280,17 +1458,30 @@ class ProviderAgentBinding:
             for _, item in sorted(tool_call_state.items())
             if item["name"]
         ]
+        if not reasoning_items and final_response is not None:
+            parsed_final = _parse_openai_responses_response(final_response)
+            final_pr = parsed_final.get("provider_reasoning")
+            if isinstance(final_pr, dict) and isinstance(final_pr.get("responses_reasoning_items"), list):
+                reasoning_items = list(final_pr["responses_reasoning_items"])
+        final_status = str(_get_field(final_response, "status", "") or "").strip().lower()
         normalized = self._validated_result(
             final_response,
             {"content": _visible_model_text(text_buffer), "tool_calls": tool_calls},
             protocol="openai_responses",
         )
-        yield {
+        final_event: dict[str, Any] = {
             "type": "final",
             "content": normalized["content"],
             "tool_calls": tool_calls,
-            "stop_reason": "tool_calls" if tool_calls else "stop",
+            "stop_reason": (
+                "tool_calls"
+                if tool_calls
+                else ("length" if final_status == "incomplete" else "stop")
+            ),
         }
+        if reasoning_items:
+            final_event["provider_reasoning"] = {"responses_reasoning_items": reasoning_items}
+        yield final_event
 
     # -- Gemini GenerateContent --------------------------------------------
 
@@ -1315,10 +1506,7 @@ class ProviderAgentBinding:
             response = await client.post(
                 endpoint,
                 json=payload,
-                headers={
-                    "x-goog-api-key": api_key,
-                    "content-type": "application/json",
-                },
+                headers=self._gemini_headers(api_key),
             )
         if response.status_code >= 400:
             raise self._http_failure(status_code=response.status_code, body=response.text)
@@ -1347,10 +1535,7 @@ class ProviderAgentBinding:
                 "POST",
                 endpoint,
                 json=payload,
-                headers={
-                    "x-goog-api-key": api_key,
-                    "content-type": "application/json",
-                },
+                headers=self._gemini_headers(api_key),
             ) as response:
                 if response.status_code >= 400:
                     body = await response.aread()
@@ -1362,7 +1547,7 @@ class ProviderAgentBinding:
                 reasoning_filter = ReasoningBlockFilter()
                 emitted_visible = False
                 emitted_reasoning = False
-                emitted_tool_drafts: set[tuple[int, int]] = set()
+                finish_reason: str | None = None
 
                 def _normalize_stream_chunk(text: str) -> str:
                     nonlocal emitted_visible
@@ -1374,8 +1559,17 @@ class ProviderAgentBinding:
                     emitted_visible = True
                     return trimmed
 
-                tool_call_state: dict[tuple[int, int], dict[str, Any]] = {}
-                async for raw_line in response.aiter_lines():
+                def _finish_seen() -> bool:
+                    return bool(finish_reason)
+
+                tool_call_entries: list[dict[str, Any]] = []
+                thought_signatures: list[str | None] = []
+                async for raw_line in _iterate_provider_stream_with_cancellation(
+                    response.aiter_lines(),
+                    None,
+                    idle_timeout=STREAM_IDLE_TIMEOUT_SECONDS,
+                    finish_seen=_finish_seen,
+                ):
                     if not raw_line or not raw_line.startswith("data:"):
                         continue
                     data_text = raw_line[5:].strip()
@@ -1388,12 +1582,15 @@ class ProviderAgentBinding:
                     if not isinstance(event, dict):
                         continue
                     candidates = event.get("candidates") or []
-                    for candidate_index, candidate in enumerate(candidates):
+                    for candidate in candidates:
                         if not isinstance(candidate, dict):
                             continue
+                        candidate_finish = candidate.get("finishReason") or candidate.get("finish_reason")
+                        if isinstance(candidate_finish, str) and candidate_finish.strip():
+                            finish_reason = candidate_finish.strip()
                         content = candidate.get("content") or {}
                         parts = content.get("parts") if isinstance(content, dict) else []
-                        for part_index, part in enumerate(parts or []):
+                        for part in parts or []:
                             if not isinstance(part, dict):
                                 continue
                             if part.get("thought") is True:
@@ -1414,33 +1611,41 @@ class ProviderAgentBinding:
                             name = str(function_call.get("name") or "")
                             if not name:
                                 continue
-                            slot_key = (candidate_index, part_index)
-                            slot = tool_call_state.setdefault(
-                                slot_key,
-                                {"id": "", "name": "", "arguments": None},
+                            call_id = str(function_call.get("id") or "")
+                            args = function_call.get("args")
+                            if args is None:
+                                args = function_call.get("arguments")
+                            sig = part.get("thoughtSignature") or part.get("thought_signature")
+                            resolved_sig = str(sig) if isinstance(sig, str) and sig else None
+                            matched_entry = (
+                                next((e for e in tool_call_entries if call_id and e.get("id") == call_id), None)
+                                if call_id
+                                else None
                             )
-                            slot["name"] = name
-                            slot["id"] = slot["id"] or name
-                            if slot_key not in emitted_tool_drafts:
-                                emitted_tool_drafts.add(slot_key)
+                            if matched_entry is None:
+                                entry: dict[str, Any] = {
+                                    "id": call_id or name,
+                                    "name": name,
+                                    "arguments": dict(args) if isinstance(args, dict) else (str(args) if args is not None else {}),
+                                }
+                                tool_call_entries.append(entry)
+                                thought_signatures.append(resolved_sig)
                                 if self._emit_activity:
                                     yield {
                                         "type": "provider_activity",
                                         "phase": "tool_drafting",
                                         "name": name,
                                     }
-                            args = function_call.get("args")
-                            if args is None:
-                                args = function_call.get("arguments")
-                            if isinstance(args, dict):
-                                existing_args = slot.get("arguments")
-                                slot["arguments"] = (
-                                    self._merge_record(existing_args, args)
-                                    if isinstance(existing_args, dict)
-                                    else dict(args)
-                                )
-                            elif args is not None:
-                                slot["arguments"] = str(args)
+                            else:
+                                if isinstance(args, dict):
+                                    existing_args = matched_entry.get("arguments")
+                                    matched_entry["arguments"] = (
+                                        self._merge_record(existing_args, args)
+                                        if isinstance(existing_args, dict)
+                                        else dict(args)
+                                    )
+                                elif args is not None:
+                                    matched_entry["arguments"] = str(args)
                 tail = _normalize_stream_chunk(reasoning_filter.flush())
                 if tail:
                     text_buffer += tail
@@ -1452,7 +1657,7 @@ class ProviderAgentBinding:
                 "name": item["name"],
                 "arguments": item["arguments"] if item["arguments"] is not None else {},
             }
-            for _, item in sorted(tool_call_state.items())
+            for item in tool_call_entries
             if item["name"]
         ]
         final_payload = {
@@ -1473,7 +1678,8 @@ class ProviderAgentBinding:
                                 for item in tool_calls
                             ],
                         ]
-                    }
+                    },
+                    **({"finishReason": finish_reason} if finish_reason else {}),
                 }
             ]
         }
@@ -1482,12 +1688,19 @@ class ProviderAgentBinding:
             {"content": _visible_model_text(text_buffer), "tool_calls": tool_calls},
             protocol="gemini_generate_content",
         )
-        yield {
+        final_event: dict[str, Any] = {
             "type": "final",
             "content": normalized["content"],
             "tool_calls": tool_calls,
-            "stop_reason": "tool_calls" if tool_calls else "stop",
+            "stop_reason": (
+                "tool_calls"
+                if tool_calls
+                else ("length" if _finish_reason_is_truncated(finish_reason) else "stop")
+            ),
         }
+        if any(thought_signatures):
+            final_event["provider_reasoning"] = {"gemini_thought_signatures": thought_signatures}
+        yield final_event
 
     async def _create_openai_negotiated(
         self,
@@ -1738,6 +1951,7 @@ class ProviderAgentBinding:
 
         tool_call_state: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
+        reasoning_content_parts: list[str] = []
 
         def _finish_seen() -> bool:
             return finish_reason is not None
@@ -1755,6 +1969,9 @@ class ProviderAgentBinding:
             delta = getattr(choice, "delta", None)
             if delta is None:
                 continue
+            delta_reasoning_content = getattr(delta, "reasoning_content", None)
+            if isinstance(delta_reasoning_content, str) and delta_reasoning_content:
+                reasoning_content_parts.append(delta_reasoning_content)
             has_reasoning_delta = any(
                 bool(getattr(delta, field_name, None))
                 for field_name in ("reasoning_content", "reasoning", "thinking")
@@ -1860,7 +2077,16 @@ class ProviderAgentBinding:
                     "type": "final",
                     "content": budget_text,
                     "tool_calls": budget_tool_calls,
-                    "stop_reason": "tool_calls" if budget_tool_calls else "stop",
+                    "stop_reason": (
+                        "tool_calls"
+                        if budget_tool_calls
+                        else str(budget_result.get("stop_reason") or "stop")
+                    ),
+                    **(
+                        {"provider_reasoning": budget_result["provider_reasoning"]}
+                        if isinstance(budget_result.get("provider_reasoning"), dict)
+                        else {}
+                    ),
                 }
                 return
         normalized = self._validated_result(
@@ -1887,12 +2113,21 @@ class ProviderAgentBinding:
             {"content": text_buffer, "tool_calls": tool_calls},
             protocol="openai_chat_completions",
         )
-        yield {
+        final_event: dict[str, Any] = {
             "type": "final",
             "content": normalized["content"],
             "tool_calls": tool_calls,
-            "stop_reason": "tool_calls" if tool_calls else "stop",
+            "stop_reason": (
+                "tool_calls"
+                if tool_calls
+                else ("length" if _finish_reason_is_truncated(finish_reason) else "stop")
+            ),
         }
+        if reasoning_content_parts:
+            final_event["provider_reasoning"] = {
+                "openai_reasoning_content": "".join(reasoning_content_parts)
+            }
+        yield final_event
 
     # -- Anthropic Messages -------------------------------------------------
 
@@ -2019,6 +2254,7 @@ class ProviderAgentBinding:
                     return trimmed
 
                 tool_block_states: dict[int, dict[str, Any]] = {}
+                thinking_block_states: dict[int, dict[str, Any]] = {}
                 stop_reason: str | None = None
 
                 def _stop_seen() -> bool:
@@ -2043,13 +2279,33 @@ class ProviderAgentBinding:
                     if event_type == "content_block_start":
                         block = event.get("content_block") or {}
                         block_type = str(block.get("type") or "")
-                        if block_type == "thinking" and not emitted_reasoning:
-                            emitted_reasoning = True
-                            if self._emit_activity:
-                                yield {"type": "provider_activity", "phase": "model_reasoning"}
+                        block_index = int(event.get("index") or 0)
+                        if block_type == "thinking":
+                            thinking_block_states[block_index] = {
+                                "type": "thinking",
+                                "thinking": str(block.get("thinking") or ""),
+                                **(
+                                    {"signature": str(block["signature"])}
+                                    if isinstance(block.get("signature"), str) and block["signature"]
+                                    else {}
+                                ),
+                            }
+                            if not emitted_reasoning:
+                                emitted_reasoning = True
+                                if self._emit_activity:
+                                    yield {"type": "provider_activity", "phase": "model_reasoning"}
+                        elif block_type == "redacted_thinking":
+                            thinking_block_states[block_index] = {
+                                "type": "redacted_thinking",
+                                **(
+                                    {"data": str(block["data"])}
+                                    if isinstance(block.get("data"), str)
+                                    else {}
+                                ),
+                            }
                         if block_type == "tool_use":
                             block_name = str(block.get("name") or "")
-                            tool_block_states[int(event.get("index") or 0)] = {
+                            tool_block_states[block_index] = {
                                 "id": str(block.get("id") or ""),
                                 "name": block_name,
                                 "arguments": "",
@@ -2063,7 +2319,22 @@ class ProviderAgentBinding:
                     elif event_type == "content_block_delta":
                         delta = event.get("delta") or {}
                         delta_kind = str(delta.get("type") or "")
-                        if delta_kind == "text_delta":
+                        block_index = int(event.get("index") or 0)
+                        if delta_kind == "thinking_delta":
+                            slot = thinking_block_states.setdefault(
+                                block_index, {"type": "thinking", "thinking": ""}
+                            )
+                            slot["thinking"] = str(slot.get("thinking") or "") + str(
+                                delta.get("thinking") or ""
+                            )
+                        elif delta_kind == "signature_delta":
+                            slot = thinking_block_states.setdefault(
+                                block_index, {"type": "thinking", "thinking": ""}
+                            )
+                            slot["signature"] = str(slot.get("signature") or "") + str(
+                                delta.get("signature") or ""
+                            )
+                        elif delta_kind == "text_delta":
                             piece = str(delta.get("text") or "")
                             if piece:
                                 visible_piece = _normalize_stream_chunk(
@@ -2074,7 +2345,7 @@ class ProviderAgentBinding:
                                     yield {"type": "delta", "delta": visible_piece}
                         elif delta_kind == "input_json_delta":
                             slot = tool_block_states.setdefault(
-                                int(event.get("index") or 0),
+                                block_index,
                                 {"id": "", "name": "", "arguments": ""},
                             )
                             slot["arguments"] += str(delta.get("partial_json") or "")
@@ -2145,12 +2416,22 @@ class ProviderAgentBinding:
             },
             {"content": text_buffer, "tool_calls": tool_calls},
         )
-        yield {
+        anthropic_thinking_blocks = [
+            block for _, block in sorted(thinking_block_states.items())
+        ]
+        final_event: dict[str, Any] = {
             "type": "final",
             "content": normalized["content"],
             "tool_calls": tool_calls,
-            "stop_reason": "tool_calls" if tool_calls else "stop",
+            "stop_reason": (
+                "tool_calls"
+                if tool_calls
+                else ("length" if _finish_reason_is_truncated(stop_reason) else "stop")
+            ),
         }
+        if anthropic_thinking_blocks:
+            final_event["provider_reasoning"] = {"anthropic_blocks": anthropic_thinking_blocks}
+        yield final_event
 
     # -- helpers ------------------------------------------------------------
 
@@ -2371,6 +2652,7 @@ class ProviderAgentBinding:
             "thinking_budget",
             configured_defaults.get("thinkingBudget"),
         )
+        config = getattr(self._provider_service, "_config", None)
         if (
             not self._should_default_compatibility_thinking()
             or "thinking" in payload
@@ -2378,6 +2660,11 @@ class ProviderAgentBinding:
             or (isinstance(explicit_thinking_budget, int) and explicit_thinking_budget > 0)
             or self._configured_thinking_explicitly_on(configured_defaults)
         ):
+            return payload
+        # Respect a gateway-learned "enabled" policy (mandatory-thinking models),
+        # while keeping third-party Anthropic-compatible gateways defaulting to
+        # disabled when the user did not configure thinking explicitly.
+        if learned_policy(config) == "enabled":
             return payload
         return {**payload, "thinking": {"type": "disabled"}}
 
@@ -2405,18 +2692,40 @@ class ProviderAgentBinding:
             ),
         }
 
+    def _extra_headers(self) -> dict[str, str]:
+        defaults = self._request_defaults()
+        raw = defaults.get("extra_headers") or defaults.get("extraHeaders")
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            str(k).strip(): str(v)
+            for k, v in raw.items()
+            if isinstance(k, str) and isinstance(v, str) and k.strip()
+        }
+
     def _anthropic_credentials(self) -> tuple[str, str]:
         api_key = getattr(self._provider_service, "_api_key", None)
-        if not isinstance(api_key, str) or not api_key.strip():
-            raise RuntimeError("Anthropic provider requires an API key.")
         config = getattr(self._provider_service, "_config", None)
+        if not isinstance(api_key, str) or not api_key.strip():
+            if _allows_keyless_local_provider(config):
+                api_key = "local-no-key"
+            else:
+                raise RuntimeError("Anthropic provider requires an API key.")
         model = getattr(config, "model", None) or "claude-3-5-sonnet-latest"
         return api_key.strip(), str(model).strip()
 
     def _anthropic_headers(self, api_key: str) -> dict[str, str]:
         return {
+            **self._extra_headers(),
             "x-api-key": api_key,
             "anthropic-version": ANTHROPIC_API_VERSION,
+            "content-type": "application/json",
+        }
+
+    def _gemini_headers(self, api_key: str) -> dict[str, str]:
+        return {
+            **self._extra_headers(),
+            "x-goog-api-key": api_key,
             "content-type": "application/json",
         }
 
@@ -2459,42 +2768,48 @@ class ProviderAgentBinding:
 
     def _apply_openai_responses_request_defaults(self, payload: dict[str, Any]) -> dict[str, Any]:
         defaults = self._request_defaults()
-        if not defaults:
-            return payload
         merged = dict(payload)
-        if isinstance(defaults.get("extra_body"), dict):
-            merged["extra_body"] = self._merge_record(
-                dict(merged.get("extra_body") or {}),
-                defaults["extra_body"],
+        extra_headers = self._extra_headers()
+        if extra_headers:
+            merged["extra_headers"] = extra_headers
+        if defaults:
+            if isinstance(defaults.get("extra_body"), dict):
+                merged["extra_body"] = self._merge_record(
+                    dict(merged.get("extra_body") or {}),
+                    defaults["extra_body"],
+                )
+            if "store" in defaults:
+                merged["store"] = defaults["store"]
+            if isinstance(defaults.get("metadata"), dict):
+                merged["metadata"] = self._merge_record(
+                    dict(merged.get("metadata") or {}),
+                    defaults["metadata"],
+                )
+            for output_key, aliases in {
+                "service_tier": ("service_tier", "serviceTier"),
+                "temperature": ("temperature",),
+                "max_output_tokens": ("max_output_tokens", "maxOutputTokens", "maxTokens"),
+            }.items():
+                raw_value = self._first_default(defaults, *aliases)
+                value = raw_value if output_key == "service_tier" else self._usable_default(raw_value)
+                if value is not None:
+                    merged[output_key] = value
+            reasoning_effort = self._usable_default(
+                self._first_default(defaults, "reasoning_effort", "reasoningEffort")
             )
-        if "store" in defaults:
-            merged["store"] = defaults["store"]
-        if isinstance(defaults.get("metadata"), dict):
-            merged["metadata"] = self._merge_record(
-                dict(merged.get("metadata") or {}),
-                defaults["metadata"],
-            )
-        for output_key, aliases in {
-            "service_tier": ("service_tier", "serviceTier"),
-            "temperature": ("temperature",),
-            "max_output_tokens": ("max_output_tokens", "maxOutputTokens", "maxTokens"),
-        }.items():
-            raw_value = self._first_default(defaults, *aliases)
-            value = raw_value if output_key == "service_tier" else self._usable_default(raw_value)
-            if value is not None:
-                merged[output_key] = value
-        reasoning_effort = self._usable_default(
-            self._first_default(defaults, "reasoning_effort", "reasoningEffort")
+            if isinstance(reasoning_effort, str):
+                existing_reasoning = merged.get("reasoning")
+                existing = dict(existing_reasoning) if isinstance(existing_reasoning, dict) else {}
+                merged["reasoning"] = {**existing, "effort": reasoning_effort.strip()}
+        explicit_temperature = (
+            self._usable_default(self._first_default(defaults, "temperature"))
+            if defaults
+            else None
         )
-        if isinstance(reasoning_effort, str):
-            existing_reasoning = merged.get("reasoning")
-            existing = dict(existing_reasoning) if isinstance(existing_reasoning, dict) else {}
-            merged["reasoning"] = {**existing, "effort": reasoning_effort.strip()}
-        explicit_temperature = self._usable_default(self._first_default(defaults, "temperature"))
-        if (
-            explicit_temperature is None
-            and isinstance(merged.get("reasoning"), dict)
-            and merged["reasoning"]
+        config = getattr(self._provider_service, "_config", None)
+        if explicit_temperature is None and (
+            (isinstance(merged.get("reasoning"), dict) and merged["reasoning"])
+            or _model_looks_reasoning_first(config)
         ):
             merged.pop("temperature", None)
         return merged
@@ -2540,7 +2855,7 @@ class ProviderAgentBinding:
             top_p = merged.get("top_p")
             if isinstance(top_p, (int, float)) and top_p < 0.95:
                 merged.pop("top_p", None)
-            budget_tokens = merged_thinking.get("budget_tokens")
+            budget_tokens = merged_thinking.get("budget_tokens", merged_thinking.get("budgetTokens"))
             merged_max_tokens = merged.get("max_tokens")
             if (
                 isinstance(budget_tokens, int)
@@ -2563,7 +2878,15 @@ class ProviderAgentBinding:
                     # Anthropic requires max_tokens > budget_tokens; without a smaller
                     # explicit output cap, lift max_tokens to keep visible headroom.
                     merged["max_tokens"] = budget_tokens + 1024
-        return self._flatten_raw_http_thinking(merged)
+        config = getattr(self._provider_service, "_config", None)
+        base_url = str(getattr(config, "base_url", "") or "").strip()
+        is_official_anthropic = (urlsplit(base_url).hostname or "").lower().endswith("anthropic.com")
+        return self._flatten_raw_http_thinking(
+            clamp_anthropic_thinking_budget(
+                merged,
+                enforce_min_budget=is_official_anthropic,
+            )
+        )
 
     def _apply_gemini_request_defaults(self, payload: dict[str, Any]) -> dict[str, Any]:
         defaults = self._request_defaults()
@@ -2650,7 +2973,7 @@ class ProviderAgentBinding:
         url = getattr(config, "base_url", None)
         if isinstance(url, str) and url.strip().startswith("http"):
             stripped = url.strip().rstrip("/")
-            if stripped.endswith("/v1"):
+            if stripped.lower().endswith("/v1"):
                 stripped = stripped[: -len("/v1")]
             return stripped
         return None

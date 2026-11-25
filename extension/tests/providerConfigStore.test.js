@@ -1469,3 +1469,55 @@ test('provider save writes the secret before config and rolls it back when the c
   assert.equal(globalState.get('trainer.provider.config'), undefined);
   assert.equal(extensionContext.secrets._store.get('trainer.provider.apiKey.fresh.ref'), undefined);
 });
+
+test('a failed edit restores the active profile and its usable credential together', async () => {
+  const workspaceRoot = createWorkspaceRoot();
+  const { ProviderConfigStore } = loadWithVscodeMock(providerConfigStoreModulePath, createVscodeMock(workspaceRoot));
+  const globalState = createGlobalState();
+  const extensionContext = createExtensionContext(globalState);
+  const store = new ProviderConfigStore(extensionContext);
+  await store.createProfileFromConfig(thinkingStoreConfig({ apiKeyRef: 'original.ref' }), 'sk-original');
+  const before = store.getConfig();
+  const update = globalState.update.bind(globalState);
+  let fail = true;
+  globalState.update = async (key, value) => {
+    if (key === 'trainer.provider.config' && fail) { fail = false; throw new Error('config write failed'); }
+    return update(key, value);
+  };
+  await assert.rejects(() => store.saveConfig({ ...before, model: 'changed-model', apiKeyRef: 'replacement.ref' }, 'sk-replacement'), /config write failed/);
+  assert.equal(store.getConfig().model, before.model);
+  assert.equal(store.getConfig().apiKeyRef, before.apiKeyRef);
+  assert.equal(await store.getApiKey(), 'sk-original');
+  assert.equal(extensionContext.secrets._store.has('trainer.provider.apiKey.replacement.ref'), false);
+});
+
+test('model and endpoint caches retain case-sensitive transport identities', async () => {
+  const workspaceRoot = createWorkspaceRoot();
+  const { ProviderConfigStore } = loadWithVscodeMock(providerConfigStoreModulePath, createVscodeMock(workspaceRoot));
+  const store = new ProviderConfigStore(createExtensionContext(createGlobalState()));
+  const first = thinkingStoreConfig({ baseUrl: 'https://gateway.test/TeamA/v1', model: 'ModelA', apiKeyRef: 'KeyA' });
+  await store.saveModelCache(first, { availableModels: ['ModelA'], resolvedModel: 'ModelA' });
+  for (const other of [
+    { ...first, baseUrl: 'https://gateway.test/teama/v1' },
+    { ...first, model: 'modela' },
+    { ...first, apiKeyRef: 'keya' },
+  ]) assert.equal(store.getModelCache(other), undefined);
+});
+
+for (const replace of [false, true]) test(`a transient keyring read cannot destroy the previous credential, replace=${replace}`, async () => {
+  const workspaceRoot = createWorkspaceRoot();
+  const { ProviderConfigStore } = loadWithVscodeMock(providerConfigStoreModulePath, createVscodeMock(workspaceRoot));
+  const extensionContext = createExtensionContext(createGlobalState());
+  const store = new ProviderConfigStore(extensionContext);
+  await store.createProfileFromConfig(thinkingStoreConfig(), 'sk-original');
+  const before = store.getConfig();
+  const read = extensionContext.secrets.get.bind(extensionContext.secrets);
+  extensionContext.secrets.get = async key => {
+    if (key === `trainer.provider.apiKey.${before.apiKeyRef}`) throw new Error('keyring temporarily unavailable');
+    return read(key);
+  };
+  await assert.rejects(() => store.saveConfig({ ...before, apiKeyRef: replace ? before.apiKeyRef : 'moved-key' },
+    replace ? 'sk-replacement' : undefined), /temporarily unavailable/);
+  assert.equal(store.getConfig().apiKeyRef, before.apiKeyRef);
+  assert.equal(extensionContext.secrets._store.get(`trainer.provider.apiKey.${before.apiKeyRef}`), 'sk-original');
+});

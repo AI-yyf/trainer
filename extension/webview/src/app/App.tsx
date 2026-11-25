@@ -49,6 +49,7 @@ import {
   hasSavedProviderProfiles,
   describeProviderImageInputState,
   describeProviderSendState,
+  providerBaseUrlIsLocalService,
   providerErrorHint,
   PROVIDER_TEST_FRESHNESS_WINDOW_MS,
 } from "../../../../shared/src/providerStatus";
@@ -183,7 +184,11 @@ import { templateCopy } from "../templates/templateCopy";
 import { buildComposerProviderMenuItems, composerModelPolicyHint, compactComposerModelLabel, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
 import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
-import { getSurfaceScrollElement, resolveCoachBottomScrollTop, useSurfaceScroll } from "./useSurfaceScroll";
+import { useSurfaceScroll } from "./useSurfaceScroll";
+import { useCoachAutoScroll } from "./useCoachAutoScroll";
+import { useComposerActionPreview } from "./useComposerActionPreview";
+import { useComposerQueue } from "./useComposerQueue";
+import { canConverseBeforeAdmission } from "../../../../shared/src/conversationAdmission";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
 import { useComposerModelQuery } from "./useComposerModelQuery";
@@ -810,6 +815,9 @@ export function App() {
     useWorkbenchState.getState().writeComposerResourceRefs(composerSessionKey, ids, "replace");
   };
   const hostMessageSequenceRef = useRef(0);
+  const handleSubmitRef = useRef<
+    ((confirmedActionKey?: string, overrideSubmission?: { text: string; attachments?: MessageAttachment[] }) => Promise<void>) | null
+  >(null);
   const pendingPostAdmissionSendRef = useRef<{
     text: string;
     attachments: MessageAttachment[];
@@ -830,10 +838,6 @@ export function App() {
   );
   const resourceTrainingHandoffSequenceRef = useRef(0);
   const coachAutoScrollPinnedRef = useRef(true);
-  const coachWasStreamingRef = useRef(false);
-  const coachViewIdentityRef = useRef<string | null>(null);
-  const coachConversationLengthRef = useRef(0);
-  const coachOptimisticLengthRef = useRef(0);
   const pinCoachScrollToBottom = useCallback(() => {
     coachAutoScrollPinnedRef.current = true;
   }, []);
@@ -1205,7 +1209,13 @@ export function App() {
         return;
       }
       if (action === "retry") {
-        // Regenerate: re-send the user prompt that produced this reply.
+        if (streaming.isStreaming) {
+          return;
+        }
+        // Regenerate: re-send the user prompt that produced this reply through
+        // sendTurn so browser preview, provider guards, and user context
+        // preferences (current file, selection, diagnostics, coach defaults)
+        // all stay consistent with normal turns.
         const conversation = useWorkbenchState.getState().data.conversation;
         const index = conversation.findIndex((item) => item.id === message.id);
         let prompt: string | undefined;
@@ -1219,24 +1229,11 @@ export function App() {
         if (!prompt) {
           return;
         }
-        appendOptimisticTurn(prompt);
-        useWorkbenchState.getState().beginOptimisticStream();
-        postMessage({
-          type: "session/sendStreamMessage",
-          payload: {
-            text: prompt,
-            intent: "coach",
-            stream: true,
-            resourceIds: [],
-            includeCurrentFile: false,
-            includeSelection: false,
-            includeDiagnostics: false,
-            includeRelatedFiles: false,
-            contextDetail: "balanced",
-            responseLanguage: layout.composerLanguage,
-            activeView: "coach",
-            requestId: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-          },
+        sendTurnRef.current({
+          text: prompt,
+          intent: "coach",
+          activeView: "coach",
+          stream: true,
         });
         return;
       }
@@ -1384,9 +1381,12 @@ export function App() {
           tone: "error",
           message: sanitizeErrorSurfaceText(error instanceof Error ? error.message : String(error), layout.composerLanguage),
         });
+      } finally {
+        finishPendingMessageAction();
       }
     },
     [
+      finishPendingMessageAction,
       isBrowserPreview,
       layout.composerLanguage,
       previewSessionId,
@@ -1396,6 +1396,7 @@ export function App() {
       setActiveView,
       setOperationMessage,
       setResourceRestoreContext,
+      streaming.isStreaming,
     ],
   );
   const requestResourceSearch = useCallback(
@@ -1604,6 +1605,7 @@ export function App() {
     },
     [libraryMigrationOperations],
   );
+  const applySessionListRef = useRef<((payload: unknown) => void) | undefined>(undefined);
   const applyHostMessage = useCallback(
     (message: HostMessage, isProviderActionOverride = false) => {
       hostMessageSequenceRef.current += 1;
@@ -1650,7 +1652,7 @@ export function App() {
         return;
       }
       if (message.type === "session/list") {
-        applySessionList(message.payload);
+        applySessionListRef.current?.(message.payload);
         return;
       }
       const learningFeedbackStatus = parseLearningFeedbackStatus(message);
@@ -1723,6 +1725,17 @@ export function App() {
           return;
         }
       }
+      if (resolvedMessage.type === "stream/error") {
+        clearOptimisticTurns();
+      }
+      if (
+        resolvedMessage.type === "operation/status" &&
+        resolvedMessage.payload.tone === "error" &&
+        useWorkbenchState.getState().streaming.isStreaming &&
+        !useWorkbenchState.getState().streaming.streamMessageId
+      ) {
+        clearOptimisticTurns();
+      }
       if (resourceOperationStatus?.kind !== "search" && resourceOperationStatus?.kind !== "check-versions") {
         applyRawHostMessage(
           sanitizeHostFailureMessage(
@@ -1749,6 +1762,7 @@ export function App() {
     },
     [
       applyRawHostMessage,
+      clearOptimisticTurns,
       handleProviderSpeedTestMessage,
       handleRemoteVerificationCommandFailure,
       handleRemoteVerificationHostMessage,
@@ -2806,139 +2820,15 @@ export function App() {
     setSelectedCommandIndex(0);
   }, [normalizedDraft]);
 
-  useSurfaceScroll(viewContentRef, activeView, composerSessionKey);
+  const restoringSavedPosition = useSurfaceScroll(viewContentRef, activeView, composerSessionKey);
 
-  // The imperative streaming subscription below reads the active view without
-  // re-subscribing; keep the latest value in a ref.
-  const activeViewRef = useRef(activeView);
-  activeViewRef.current = activeView;
-
-  useEffect(() => {
-    const viewChanged =
-      coachViewIdentityRef.current !== null && coachViewIdentityRef.current !== activeView;
-    coachViewIdentityRef.current = activeView;
-    if (activeView !== "coach") {
-      return;
-    }
-
-    const container = viewContentRef.current && getSurfaceScrollElement(viewContentRef.current, "coach");
-    if (!container) {
-      return;
-    }
-
-    // Stick-to-bottom only while the reader is already at (or near) the
-    // bottom; scrolling up during a stream must stay respected.
-    const isPinnedToBottom = () =>
-      resolveCoachBottomScrollTop(container) - container.scrollTop < 120;
-
-    let lastScrollTop = container.scrollTop;
-    const handleScroll = () => {
-      const currentScrollTop = container.scrollTop;
-      const scrolledUp = currentScrollTop < lastScrollTop - 4;
-      lastScrollTop = currentScrollTop;
-      if (isPinnedToBottom()) {
-        coachAutoScrollPinnedRef.current = true;
-      } else if (scrolledUp) {
-        coachAutoScrollPinnedRef.current = false;
-      }
-    };
-    container.addEventListener("scroll", handleScroll, { passive: true });
-
-    // A send always reveals the turn the learner just started, even when they
-    // were reading older messages. Once streaming is running, the pin follows
-    // their scroll position again so browsing history stays respected.
-    const streamingStarted = streaming.isStreaming && !coachWasStreamingRef.current;
-    const streamingEnded = !streaming.isStreaming && coachWasStreamingRef.current;
-    coachWasStreamingRef.current = streaming.isStreaming;
-    // The learner's own turn must always be visible, even when the streaming
-    // edge was already consumed (a restored stream, or a mount that happened
-    // mid-turn). Otherwise the reply lands below the fold and the thread looks
-    // stuck.
-    const serverConversationGrew = data.conversation.length > coachConversationLengthRef.current;
-    const optimisticGrew = optimisticTurns.length > coachOptimisticLengthRef.current;
-    coachConversationLengthRef.current = data.conversation.length;
-    coachOptimisticLengthRef.current = optimisticTurns.length;
-    const conversationGrew = serverConversationGrew || optimisticGrew;
-    const learnerTurn =
-      optimisticGrew ||
-      (serverConversationGrew &&
-        data.conversation[data.conversation.length - 1]?.role === "user");
-    const previouslyPinned = coachAutoScrollPinnedRef.current;
-    coachAutoScrollPinnedRef.current =
-      (streamingStarted && !viewChanged) ||
-      learnerTurn ||
-      ((conversationGrew || streamingEnded) && !viewChanged && previouslyPinned) ||
-      isPinnedToBottom();
-    const scrollToBottom = () => {
-      container.scrollTop = resolveCoachBottomScrollTop(container);
-      lastScrollTop = container.scrollTop;
-    };
-    if (coachAutoScrollPinnedRef.current && (streamingStarted || learnerTurn || conversationGrew || streamingEnded)) {
-      scrollToBottom();
-    }
-    const handle = window.requestAnimationFrame(() => {
-      if (coachAutoScrollPinnedRef.current) {
-        scrollToBottom();
-      }
-    });
-    const settle =
-      streamingStarted || conversationGrew || streamingEnded
-        ? window.setTimeout(() => {
-            if (coachAutoScrollPinnedRef.current) {
-              scrollToBottom();
-            }
-          }, 90)
-        : undefined;
-
-    return () => {
-      window.cancelAnimationFrame(handle);
-      if (settle !== undefined) {
-        window.clearTimeout(settle);
-      }
-      container.removeEventListener("scroll", handleScroll);
-    };
-  }, [activeView, data.conversation.length, optimisticTurns.length, streaming.isStreaming]);
-
-  // Per-chunk content and agent stages are not part of App's subscription;
-  // the stick-to-bottom pin follows the store directly so every live stage
-  // transition, tool call, and chunk re-sticks without an App re-render.
-  useEffect(() => {
-    let rafHandle: number | undefined;
-    const unsubscribe = useWorkbenchState.subscribe((state, previous) => {
-      const streamProgressed =
-        state.streaming.streamedContent !== previous.streaming.streamedContent ||
-        state.streaming.agentActivity.length !== previous.streaming.agentActivity.length ||
-        state.streaming.liveStageKind !== previous.streaming.liveStageKind ||
-        (state.streaming.isStreaming && !previous.streaming.isStreaming);
-      if (!streamProgressed) {
-        return;
-      }
-      if (activeViewRef.current !== "coach" || !coachAutoScrollPinnedRef.current) {
-        return;
-      }
-      const container =
-        viewContentRef.current && getSurfaceScrollElement(viewContentRef.current, "coach");
-      if (!container) {
-        return;
-      }
-      container.scrollTop = resolveCoachBottomScrollTop(container);
-      if (rafHandle !== undefined) {
-        window.cancelAnimationFrame(rafHandle);
-      }
-      rafHandle = window.requestAnimationFrame(() => {
-        rafHandle = undefined;
-        if (activeViewRef.current === "coach" && coachAutoScrollPinnedRef.current) {
-          container.scrollTop = resolveCoachBottomScrollTop(container);
-        }
-      });
-    });
-    return () => {
-      if (rafHandle !== undefined) {
-        window.cancelAnimationFrame(rafHandle);
-      }
-      unsubscribe();
-    };
-  }, []);
+  useCoachAutoScroll({
+    viewContentRef, activeView, scope: composerSessionKey,
+    conversationLength: data.conversation.length,
+    lastMessageRole: data.conversation[data.conversation.length - 1]?.role,
+    optimisticLength: optimisticTurns.length, isStreaming: streaming.isStreaming,
+    coachAutoScrollPinnedRef, restoringSavedPosition,
+  });
 
   const hasFormalPlan = data.hasFormalPlan;
   const activePlanStage = hasFormalPlan
@@ -5696,10 +5586,10 @@ export function App() {
     workspaceSettings,
   ]);
 
-  const sendAnalysis = useMemo(
-    () =>
+  const analyzeComposerDraft = useCallback(
+    (text: string) =>
       analyzeSendIntent({
-        draft,
+        draft: text,
         activeView,
         hasResearchProject: false,
         activeFile: data.liveContext.activeFile,
@@ -5714,7 +5604,6 @@ export function App() {
         diagnosticWarnings: data.liveContext.diagnosticWarnings,
       }),
     [
-      draft,
       activeView,
       data.liveContext.activeFile,
       data.liveContext.selectionRange,
@@ -5728,6 +5617,8 @@ export function App() {
       data.liveContext.diagnosticWarnings,
     ],
   );
+
+  const sendAnalysis = useMemo(() => analyzeComposerDraft(draft), [analyzeComposerDraft, draft]);
 
   const reportLocalCommand = (message: string) => {
     setOperationMessage({ tone: "success", message });
@@ -6054,7 +5945,10 @@ export function App() {
     goalMode?: boolean;
     goalText?: string;
   }) => {
-    if (workspaceSessionBlocked) {
+    if (workspaceSessionBlocked && !canConverseBeforeAdmission(trainerWorkspaceAdmission?.status, {
+      text, intent, formalPlanMutation, goalMode: turnGoalMode,
+      activeView: activeViewOverride ?? activeView, resourceComposerIntent,
+    })) {
       openWorkspaceAdmission();
       setOperationMessage({
         tone: "info",
@@ -6194,6 +6088,7 @@ export function App() {
           onCancelled: (message) => applyHostMessage(message),
           }),
         ).catch(() => {
+          clearOptimisticTurns();
           useWorkbenchState.getState().resetStream();
           setOperationMessage({
             tone: "error",
@@ -6211,6 +6106,7 @@ export function App() {
           useWorkbenchState.getState().endStream();
         })
         .catch(() => {
+          clearOptimisticTurns();
           useWorkbenchState.getState().resetStream();
           setOperationMessage({
             tone: "error",
@@ -6264,6 +6160,10 @@ export function App() {
     if ((currentDraft ?? "").trim() === pending.text) {
       setComposerDraft("", pending.draftScope);
       setComposerAttachments([]);
+    }
+    if (!pending.goalMode) {
+      void handleSubmitRef.current?.(undefined, { text: pending.text, attachments: pending.attachments });
+      return;
     }
     sendTurnRef.current({
       text: pending.text,
@@ -7365,9 +7265,8 @@ export function App() {
     requestCoachComposerFocus();
   };
 
-  const [composerActionPreview, setComposerActionPreview] = useState<{
-    kind: "plan" | "browser" | "library"; key: string; scope: string; text: string; detail?: string;
-  }>();
+  const { preview: composerActionPreview, setPreview: setComposerActionPreview,
+    requestPreview: requestComposerActionPreview, confirmPreview: confirmComposerActionPreview } = useComposerActionPreview();
   const [resourceVersionCheck, setResourceVersionCheck] = useState<{
     scope: string; total: number; phase: "checking" | "done" | "interrupted";
     items: (ResourceVersionCheckResult & { title: string })[];
@@ -7377,12 +7276,10 @@ export function App() {
   }>();
   const resourceVersionCheckRequest = useRef<AbortController>();
   useEffect(() => () => resourceVersionCheckRequest.current?.abort(), [composerSessionKey]);
-  const [queuedFollowUps, setQueuedFollowUps] = useState<
-    Array<{ id: string; text: string; attachments: MessageAttachment[] }>
-  >([]);
-  const handleSubmitRef = useRef<
-    ((confirmedActionKey?: string, overrideSubmission?: { text: string; attachments?: MessageAttachment[] }) => Promise<void>) | null
-  >(null);
+
+  const { items: queuedFollowUps, setItems: setQueuedFollowUps } = useComposerQueue(composerSessionKey,
+    streaming.isStreaming || isOperationReliabilityInFlight(streaming.reliabilityPhase) ||
+    trainingPersistencePending || Boolean(composerActionPreview), handleSubmitRef);
   const queueCurrentComposerDraft = useCallback(() => {
     if (composerUsesTrainingFlow) {
       return;
@@ -7421,6 +7318,7 @@ export function App() {
         ? activityDraft
         : draft;
     const normalizedDraft = rawText.trim();
+    const submissionAnalysis = analyzeComposerDraft(normalizedDraft);
     const submissionAttachments = overrideSubmission
       ? (overrideSubmission.attachments ?? [])
       : composerUsesTrainingFlow
@@ -7430,7 +7328,11 @@ export function App() {
     const instruction = browserPrefill ? normalizedDraft.replace(browserPrefill, "").trim() : normalizedDraft;
     const startsGoal = activeView === "coach" && goalDraftPending && Boolean(instruction) &&
       !/^[/$]/u.test(instruction);
-    const unified = startsGoal ? { kind: "message" as const } : resolveUnifiedComposerIntent(instruction, activeView);
+    const unified = startsGoal
+      ? { kind: "message" as const }
+      : resolveUnifiedComposerIntent(instruction, activeView, {
+          inlineTrainingActive: inlinePracticeAwaitingComposerSubmission,
+        });
     const resourceAnalysis = unified.kind === "resource-turn" && unified.mode === "analyze";
     const practiceAfterLink = unified.kind === "resource-link" && unified.practiceAfterLink === true;
     if (confirmedActionKey && (composerActionPreview?.scope !== attachmentScope || composerActionPreview.text !== normalizedDraft)) return;
@@ -7459,7 +7361,12 @@ export function App() {
       return;
     }
 
-    if (canCaptureGoalBeforeWorkspaceSetup && normalizedDraft) {
+    const unboundConversation = unified.kind === "message" && !startsGoal &&
+      canConverseBeforeAdmission(trainerWorkspaceAdmission?.status, {
+        text: normalizedDraft, intent: submissionAnalysis.intent, activeView,
+        goalMode: goalMode || goalDraftPending,
+      });
+    if (canCaptureGoalBeforeWorkspaceSetup && normalizedDraft && !unboundConversation) {
       openWorkspaceAdmission();
       setOperationMessage({
         tone: "info",
@@ -7468,7 +7375,7 @@ export function App() {
       return;
     }
 
-    if (canChatBeforeProjectAdmission && normalizedDraft) {
+    if (canChatBeforeProjectAdmission && normalizedDraft && !unboundConversation) {
       // Zero-friction cold start: gently bind this project inside <LibraryRoot>
       // (zero writes inside the code repo) while preserving the learner's draft,
       // and auto-send the queued first message as soon as admission finishes.
@@ -7506,7 +7413,7 @@ export function App() {
       return;
     }
 
-    if (workspaceSessionBlocked) {
+    if (workspaceSessionBlocked && !unboundConversation) {
       openWorkspaceAdmission();
       setOperationMessage({
         tone: "info",
@@ -7583,7 +7490,7 @@ export function App() {
           intent: "coach",
           activeView: targetView,
           stream: true,
-          attachments: composerAttachments,
+          attachments: submissionAttachments,
         });
       } else if (followupText || hasImageAttachments) {
         if (!providerCanCoachNow || providerBlockReason) {
@@ -7618,7 +7525,7 @@ export function App() {
           activeView: targetView,
           stream: true,
           formalPlanMutation: formalPlanSkill,
-          attachments: composerAttachments,
+          attachments: submissionAttachments,
         });
       } else {
         const isLivePlanTaskMint =
@@ -7701,8 +7608,8 @@ export function App() {
       if (stage) {
         const key = JSON.stringify([attachmentScope, browserComposerSource.id, stage.id, data.plan.id, revision, normalizedDraft]);
         if (!confirmedActionKey) {
-          setComposerActionPreview({ kind: "browser", key, scope: attachmentScope, text: normalizedDraft,
-            detail: [stage.title, browserComposerSource.title || browserComposerSource.url].join(" · ") });
+          requestComposerActionPreview({ kind: "browser", key, scope: attachmentScope, text: normalizedDraft,
+            detail: [stage.title, browserComposerSource.title || browserComposerSource.url].join(" · ") }, overrideSubmission);
           return;
         }
         setComposerActionPreview(undefined);
@@ -7772,8 +7679,8 @@ export function App() {
       }
       const key = JSON.stringify([attachmentScope, stage.id, planId, revision, sources, normalizedDraft]);
       if (!confirmedActionKey) {
-        setComposerActionPreview({ kind: "library", key, scope: attachmentScope, text: normalizedDraft,
-          detail: [stage.title, ...targets.map((resource) => resource.title)].join(" · ") });
+        requestComposerActionPreview({ kind: "library", key, scope: attachmentScope, text: normalizedDraft,
+          detail: [stage.title, ...targets.map((resource) => resource.title)].join(" · ") }, overrideSubmission);
         return;
       }
       setComposerActionPreview(undefined);
@@ -7833,8 +7740,8 @@ export function App() {
       }
       const key = JSON.stringify([attachmentScope, unified, targets.map((resource) => [resource.id, resource.versionId, resource.contentHash])]);
       if (!confirmedActionKey) {
-        setComposerActionPreview({ kind: "library", key, scope: attachmentScope, text: normalizedDraft,
-          detail: targets.map((resource) => resource.title).join(" · ") });
+        requestComposerActionPreview({ kind: "library", key, scope: attachmentScope, text: normalizedDraft,
+          detail: targets.map((resource) => resource.title).join(" · ") }, overrideSubmission);
         return;
       }
       setComposerActionPreview(undefined);
@@ -7942,9 +7849,10 @@ export function App() {
     }
 
     if (!hasImageAttachments && unified.kind === "continue") {
-      if (activeView === "training" && trainingComposerPhase === "learn" && activeTrainingCardId && !leftoverTrainingHandoffChromeNotLive) {
+      const trainingCardContext = activeView === "training" || inlinePracticeAwaitingComposerSubmission;
+      if (trainingCardContext && trainingComposerPhase === "learn" && activeTrainingCardId && !leftoverTrainingHandoffChromeNotLive) {
         handleTrainingCardStatusTransition(activeTrainingCardId, "active", "start_step");
-      } else if (activeView === "training" && trainingComposerReturnMode && trainingHandoffReturnRequired) {
+      } else if (trainingCardContext && trainingComposerReturnMode && trainingHandoffReturnRequired) {
         await handleSubmitTrainingEvidence("").catch(() =>
           setOperationMessage({ tone: "error", message: trainingPersistenceFailureMessage(layout.composerLanguage) }, "training"));
       } else {
@@ -7963,7 +7871,7 @@ export function App() {
 
     if (!hasImageAttachments && unified.kind === "verify") {
       if (activeTrainingCardId && hasTrainingCard && !leftoverTrainingHandoffChromeNotLive &&
-          activeView === "training" && trainingCardType === "practice" &&
+          (activeView === "training" || inlinePracticeAwaitingComposerSubmission) && trainingCardType === "practice" &&
           (trainingPracticeVerificationMode === "file" || trainingFilesToTouch.length > 0) &&
           (trainingComposerPhase === "try" || trainingComposerPhase === "verify")) {
         handleVerifyCurrentFileFromCard();
@@ -7997,7 +7905,7 @@ export function App() {
       return;
     }
 
-    if (!hasImageAttachments && unified.kind === "hint" && composerUsesTrainingFlow) {
+    if (!hasImageAttachments && unified.kind === "hint" && (composerUsesTrainingFlow || inlinePracticeAwaitingComposerSubmission)) {
       const revealed = trainingHintLadderForCard[Math.min(composerHintLevel, trainingHintLadderForCard.length - 1)];
       if (revealed) {
         const level = Math.min(composerHintLevel + 1, trainingHintLadderForCard.length);
@@ -8077,8 +7985,7 @@ export function App() {
           contextDetail: "focused",
           attachments: submissionAttachments,
         });
-        setActivityDraft("");
-        setActivityAttachments([]);
+        clearSubmission();
         return;
       }
 
@@ -8211,7 +8118,7 @@ export function App() {
       dockAnchorControl.suppressed,
     );
     const analyzedIntent = composerUsesTrainingFlow || startsGoal ? "coach" :
-      sendAnalysis.intent === "local_command" ? "coach" : sendAnalysis.intent;
+      submissionAnalysis.intent === "local_command" ? "coach" : submissionAnalysis.intent;
     // The plan composer intent is a state, not a destination: it is set when
     // the learner picks an action on the plan card inside the learning drawer.
     const contextualPlanMode = coachPlanContext;
@@ -8229,7 +8136,7 @@ export function App() {
       const key = JSON.stringify([attachmentScope, composerSessionKey, data.plan?.id, data.plan?.revision,
         activeTrainingCardId, normalizedDraft, resourceIds, submissionAttachments.map((item) => item.id)]);
       if (!confirmedActionKey) {
-        setComposerActionPreview({ kind: "plan", key, scope: attachmentScope, text: normalizedDraft, detail: data.plan?.title });
+        requestComposerActionPreview({ kind: "plan", key, scope: attachmentScope, text: normalizedDraft, detail: data.plan?.title }, overrideSubmission);
         return;
       }
       setComposerActionPreview(undefined);
@@ -8254,14 +8161,17 @@ export function App() {
       });
       return;
     }
-    // The reply lives in the one conversation, so the learner stays where the
-    // answer is read: Chat. A resource intent still carries its resources.
-    if (turnView !== activeView && activeView !== "training" && !resourceAnalysis) {
-      setActiveView(turnView);
+    // Explicit confirmed formal-plan generation opens the learning drawer on
+    // the goal section; ordinary discussion turns stay in Chat so the modal
+    // drawer never pops over a live streaming reply.
+    if (formalPlanGeneration) {
+      setActiveView("plan");
+    } else if (activeView !== "coach" && activeView !== "training" && !resourceAnalysis) {
+      setActiveView("coach");
     }
     const intent = resourceAnalysis ? "coach" : formalPlanGeneration ? "plan" : analyzedIntent;
     const rawMessageText =
-      (composerUsesTrainingFlow || startsGoal ? normalizedDraft : sendAnalysis.draftBody) ||
+      (composerUsesTrainingFlow || startsGoal ? normalizedDraft : submissionAnalysis.draftBody) ||
       (hasImageAttachments
         ? buildGenericImageReviewPrompt(layout.composerLanguage, normalizedDraft)
         : defaultPromptText(intent, layout.composerLanguage));
@@ -8275,7 +8185,7 @@ export function App() {
     sendTurn({
       text: capturedContext ? messageText + "\n\n" + capturedContext : messageText,
       intent,
-      intentSource: formalPlanGeneration || planComposerSubmission ? "explicit" : sendAnalysis.intentSource,
+      intentSource: formalPlanGeneration || planComposerSubmission ? "explicit" : submissionAnalysis.intentSource,
       goals: formalPlanGeneration ? data.profile.goals : undefined,
       activeView: turnView,
       stream: true,
@@ -8361,7 +8271,10 @@ export function App() {
       return;
     }
 
-    if (!data.providerConfig.apiKeyConfigured) {
+    if (
+      !data.providerConfig.apiKeyConfigured &&
+      !providerBaseUrlIsLocalService(data.providerConfig.baseUrl)
+    ) {
       setOperationMessage({
         tone: "info",
         message:
@@ -8397,12 +8310,18 @@ export function App() {
   }, [
     applyPreviewHostMessages,
     data.providerConfig.apiKeyConfigured,
+    data.providerConfig.baseUrl,
     data.providerConfig.configured,
     isBrowserPreview,
     layout.composerLanguage,
     previewSessionId,
     setOperationMessage,
   ]);
+
+  const handleNewChatStart = useCallback(() => {
+    clearOptimisticTurns();
+    useWorkbenchState.getState().resetStream();
+  }, [clearOptimisticTurns]);
 
   const {
     coachSessions,
@@ -8421,8 +8340,9 @@ export function App() {
     cacheScope: data.workspaceName,
     setOpenMenu,
     setOperationMessage,
-    onNewChatStart: clearOptimisticTurns,
+    onNewChatStart: handleNewChatStart,
   });
+  applySessionListRef.current = (payload: unknown) => applySessionList(payload);
 
   const setComposerThinking = useCallback(
     (thinking: ProviderThinkingConfig) => {
@@ -8566,33 +8486,6 @@ export function App() {
   );
 
   handleSubmitRef.current = handleSubmit;
-
-  useEffect(() => {
-    setQueuedFollowUps([]);
-  }, [composerSessionKey]);
-
-  useEffect(() => {
-    const busy =
-      streaming.isStreaming ||
-      isOperationReliabilityInFlight(streaming.reliabilityPhase) ||
-      trainingPersistencePending;
-    if (busy || queuedFollowUps.length === 0) {
-      return;
-    }
-    const [nextItem, ...rest] = queuedFollowUps;
-    setQueuedFollowUps(rest);
-    if (nextItem) {
-      void handleSubmitRef.current?.(undefined, {
-        text: nextItem.text,
-        attachments: nextItem.attachments,
-      });
-    }
-  }, [
-    queuedFollowUps,
-    streaming.isStreaming,
-    streaming.reliabilityPhase,
-    trainingPersistencePending,
-  ]);
 
   // Phase-D training attempt lifecycle: entering a formal card starts/resumes
   // an attempt; the Try draft is throttled into attempt updates; hints bump
@@ -9169,12 +9062,16 @@ export function App() {
     return null;
   };
 
-  const handleCancelStream = useCallback(() => {
+  const handleCancelStream = useCallback((options?: { restoreDraft?: boolean }) => {
     if (!streaming.isStreaming) {
       return;
     }
+    const shouldRestoreDraft =
+      options && typeof options === "object" && "restoreDraft" in options
+        ? options.restoreDraft !== false
+        : true;
     const resumeDraft = streamResumeDraftRef.current;
-    if (resumeDraft.trim() && !draft.trim()) {
+    if (shouldRestoreDraft && resumeDraft.trim() && !draft.trim()) {
       // Restore the sent text only when the learner has not already started
       // editing a new draft while the reply was in flight.
       setComposerDraft(resumeDraft);
@@ -9659,14 +9556,59 @@ export function App() {
   }, [isBrowserPreview]);
 
   const onboardingListModels = useMemo(() => {
-    if (!isBrowserPreview) {
-      return undefined;
+    if (isBrowserPreview) {
+      return async (baseUrl: string, apiKey: string): Promise<string[]> => {
+        const browserPreview = await loadBrowserPreviewModule();
+        return browserPreview.listBrowserPreviewDraftModels({ baseUrl }, apiKey);
+      };
     }
-    return async (baseUrl: string, apiKey: string): Promise<string[]> => {
-      const browserPreview = await loadBrowserPreviewModule();
-      return browserPreview.listBrowserPreviewDraftModels({ baseUrl }, apiKey);
-    };
-  }, [isBrowserPreview]);
+    return (baseUrl: string, apiKey: string): Promise<string[]> =>
+      new Promise<string[]>((resolve) => {
+        const trimmedUrl = baseUrl.trim().replace(/\/+$/, "");
+        if (!trimmedUrl) {
+          resolve([]);
+          return;
+        }
+        let settled = false;
+        const finish = (models: string[]) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          unsubscribe();
+          resolve(models);
+        };
+        const unsubscribe = useWorkbenchState.subscribe((state) => {
+          const listing = state.data.providerConfig.modelListing as
+            | { source?: string; baseUrl?: string; status?: string; availableModels?: unknown }
+            | undefined;
+          if (!listing || listing.source !== "draft" || listing.status === "loading") {
+            return;
+          }
+          const listedUrl = String(listing.baseUrl ?? "").trim().replace(/\/+$/, "");
+          if (listedUrl && listedUrl !== trimmedUrl && !listedUrl.endsWith(trimmedUrl)) {
+            return;
+          }
+          const models = Array.isArray(listing.availableModels)
+            ? listing.availableModels.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+            : [];
+          finish(models);
+        });
+        const timer = window.setTimeout(() => finish([]), 15_000);
+        postMessage({
+          type: "command/execute",
+          payload: {
+            commandId: trainerCommands.refreshProviderModels,
+            payload: {
+              draft: {
+                baseUrl: trimmedUrl,
+                ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+                protocol: providerDraft.protocol,
+              },
+            },
+          },
+        });
+      });
+  }, [isBrowserPreview, providerDraft.protocol]);
   const startOnboardingTrial = () => {
     setSettingsActionState({
       kind: "start-provider-trial",
@@ -11852,7 +11794,7 @@ export function App() {
             {composerActionPreview.detail ? <span className="template-metadata">{composerActionPreview.detail}</span> : null}
             <p>{composerActionPreview.text}</p>
             <div className="unified-composer-preview__actions">
-              <button className="button button--accent" type="button" onClick={() => { void handleSubmit(composerActionPreview.key); }}>{unifiedCopy.confirm}</button>
+              <button className="button button--accent" type="button" onClick={() => confirmComposerActionPreview(handleSubmit)}>{unifiedCopy.confirm}</button>
               <button className="button button--ghost" type="button" onClick={() => setComposerActionPreview(undefined)}>{unifiedCopy.cancel}</button>
             </div>
           </div>
@@ -11951,7 +11893,7 @@ export function App() {
                             <button
                               type="button"
                               className="button button--ghost button--compact"
-                              onClick={() => handleCancelStream()}
+                              onClick={() => handleCancelStream({ restoreDraft: false })}
                             >
                               {queueCopy.sendNow}
                             </button>
@@ -11961,8 +11903,13 @@ export function App() {
                             className="button button--ghost button--compact"
                             onClick={() => {
                               setQueuedFollowUps((current) => current.filter((entry) => entry.id !== item.id));
-                              if (!composerUsesTrainingFlow && item.text) {
-                                setComposerDraft(draft.trim() ? `${draft.trim()}\n${item.text}` : item.text, composerDraftScope);
+                              if (!composerUsesTrainingFlow) {
+                                if (item.text) {
+                                  setComposerDraft(draft.trim() ? `${draft.trim()}\n${item.text}` : item.text, composerDraftScope);
+                                }
+                                if (item.attachments?.length) {
+                                  setComposerAttachments([...composerAttachments, ...item.attachments]);
+                                }
                                 requestCoachComposerFocus();
                               }
                             }}

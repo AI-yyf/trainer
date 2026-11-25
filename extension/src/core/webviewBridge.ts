@@ -451,7 +451,7 @@ export class WorkbenchSidebarController
       const operation = this.operationContext.getStore();
       const stateMessage = record?.type === 'bootstrap' || record?.type === 'state/patch' || record?.type === 'state/syncStatus';
       const scopedMessage = record && !stateMessage && (operation || record.scope) ? { ...record,
-        scope: record.scope ?? (operation ? { ...this.currentScope(), ...operation, messageId: '' } : this.currentScope()),
+        scope: record.scope ?? (operation ? { ...operation, ...this.currentScope(), messageId: '' } : this.currentScope()),
         ...(operation && !record.operation ? { operation } : {}),
       } : message;
       this.queueRestoreUntilWebviewReady(scopedMessage);
@@ -548,7 +548,11 @@ export class WorkbenchSidebarController
     const command = this.resolveCommand(message);
     const identity = message.operation && command ? { ...message.operation, commandId: command.commandId } : undefined;
     if (!identity) { await this.handleScopedMessage(message); return; }
-    const scope = this.currentScope();
+    const transportScope = this.stateTransport.scope;
+    const scope =
+      transportScope.generation > 0
+        ? transportScope
+        : this.currentScope();
     if (!/^[a-z0-9-]{1,128}$/i.test(identity.requestId)) return;
     if (identity.generation !== scope.generation ||
         identity.workspaceId !== scope.workspaceId || identity.sessionId !== scope.sessionId ||
@@ -666,7 +670,37 @@ export class WorkbenchSidebarController
           await this.postOperationPhase(identity, phase);
           const current = this.currentScope();
           if (identity.generation !== current.generation || identity.workspaceId !== current.workspaceId ||
-              identity.sessionId !== current.sessionId) { await this.syncState(); return; }
+              identity.sessionId !== current.sessionId) {
+            // Query data channels (history list, speed test, companion state)
+            // still need their settlement frame so pending UI loaders never hang
+            // when a background startup rehydration advances sessionId.
+            if (command.commandId === COMMAND_IDS.listCoachSessions) {
+              await this.deliverMessage({
+                type: 'session/list',
+                payload: {
+                  ok: result.ok,
+                  sessions: result.ok && result.data ? (result.data as { sessions?: unknown[] }).sessions ?? [] : [],
+                  ...(!result.ok ? { message: result.message ?? 'Trainer could not load sessions.' } : {}),
+                },
+              });
+            } else if (command.commandId === COMMAND_IDS.providerSpeedTest) {
+              await this.deliverMessage({
+                type: 'provider/speedTest',
+                payload: (result.data as { results: unknown[] } | undefined) ?? { results: [] },
+              });
+            } else if (command.commandId === COMMAND_IDS.remoteCompanionState) {
+              const companionData = (result.data ?? {}) as { state?: string; remoteName?: string };
+              await this.deliverMessage({
+                type: 'remoteCompanion/state',
+                payload: {
+                  state: companionData.state ?? 'not_installed',
+                  ...(companionData.remoteName ? { remoteName: companionData.remoteName } : {}),
+                },
+              });
+            }
+            await this.syncState();
+            return;
+          }
         }
         if (command.commandId === COMMAND_IDS.remoteCompanionState) {
           // A quiet query: the Settings panel consumes the dedicated state

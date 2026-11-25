@@ -103,15 +103,22 @@
   margin-bottom: 3px;
 }
 
-.message-markdown a {
-  color: var(--fg-0);
+/* A hyperlink is inline text in the platform link hue — never a chip. The
+   same rule covers the part-renderer markdown flow (`trainer-markdown-content`)
+   and table cell links (`cell-link`). */
+.message-markdown a,
+.trainer-markdown-content a,
+.cell-link {
+  color: var(--link);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--fg-muted) 64%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
   text-underline-offset: 2px;
 }
 
-.message-markdown a:hover {
-  text-decoration-color: var(--fg-0);
+.message-markdown a:hover,
+.trainer-markdown-content a:hover,
+.cell-link:hover {
+  text-decoration-color: var(--link);
 }
 
 .message-markdown blockquote {

@@ -213,7 +213,7 @@ TrainingCardCreatedFrom = Literal[
 ]
 TrainingCardTrustState = Literal["trusted", "fresh", "unknown", "stale", "untrusted"]
 DependencyMasteryStage = Literal["understood", "recalled", "practiced", "applied", "transferable"]
-ProviderCredentialMode = Literal["workspace_secret", "ui_proxy"]
+ProviderCredentialMode = Literal["workspace_secret", "ui_proxy", "local_no_auth"]
 FolderRole = Literal[
     "empty_new_project",
     "existing_engineering",

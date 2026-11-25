@@ -70,8 +70,10 @@ _INTERNAL_COACH_META_MARKERS = (
     "so i focused the explanation",
     # Variants observed on the real provider (2026-11-07): the model narrates
     # which files it read and announces a teaching order instead of teaching.
-    "\u5df2\u8bfb\u53d6",
     "\u6211\u5df2\u8bfb\u53d6",
+    "\u5df2\u8bfb\u53d6 ",
+    "\u5df2\u8bfb\u53d6\u5b8c\u6bd5",
+    "\u5df2\u8bfb\u53d6\u4ee5\u4e0b\u6587\u4ef6",
     "\u6559\u5b66\u987a\u5e8f\uff1a",
     "\u6559\u5b66\u987a\u5e8f:",
     "\u6559\u5b66\u91cd\u70b9\uff1a",

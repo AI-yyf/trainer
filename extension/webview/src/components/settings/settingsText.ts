@@ -2287,6 +2287,15 @@ export const SETTINGS_TEXT: Record<string, Partial<Record<ComposerLanguage, stri
     "ko-KR": "예: {n} (상한 {max}, 비우면 자동)",
     "pt-BR": "ex. {n} (teto {max}, vazio = auto)",
   },
+  "本地免密钥\u0000Local (no key needed)": {
+    "en-US": "Local (no key needed)",
+    "es-ES": "Local (sin clave)",
+    "fr-FR": "Local (sans clé)",
+    "de-DE": "Lokal (kein Schlüssel nötig)",
+    "ja-JP": "ローカル（キー不要）",
+    "ko-KR": "로컬 (키 불필요)",
+    "pt-BR": "Local (sem chave)",
+  },
 };
 
 /** Resolves the active-language text for a migrated zh/en pair. */

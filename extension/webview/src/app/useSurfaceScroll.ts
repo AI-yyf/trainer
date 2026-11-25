@@ -38,11 +38,13 @@ export function resolveCoachBottomScrollTop(container: HTMLElement): number {
 /** Preserve reading positions by real workspace/session identity, including reload. */
 export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeView: ActiveWorkbenchView, scope: string) {
   const positions = useRef(new Map(Object.entries(useWorkbenchState.getState().layout.surfaceScrollPositions ?? {})));
+  const restoringSavedPosition = useRef(false);
   useLayoutEffect(() => {
     const root = containerRef.current;
     if (!root) return;
     const key = `${scope}\u0000${activeView}`;
     const saved = positions.current.get(key);
+    restoringSavedPosition.current = saved !== undefined;
     let pane: HTMLElement | null = null;
     let restoring = true;
     let timeout: number | undefined;
@@ -54,6 +56,7 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
     const finishRestore = () => {
       if (!restoring) return;
       restoring = false;
+      restoringSavedPosition.current = false;
       resize.disconnect();
       if (pane) pane.style.overflowAnchor = previousOverflowAnchor;
       remember();
@@ -113,4 +116,5 @@ export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeVie
       persist();
     };
   }, [activeView, containerRef, scope]);
+  return restoringSavedPosition;
 }

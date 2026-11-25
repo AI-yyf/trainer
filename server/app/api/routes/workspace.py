@@ -249,14 +249,16 @@ def build_workspace_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRout
             workspace_file_snapshot=snapshot,
             remote_name=remote_name,
         )
-        classification_service = runtime.provider_service
+        classification_service = (
+            runtime.workspace_provider_service(workspace_id) or runtime.provider_service
+        )
         override_config = provider_config_from_payload(payload)
         api_key_override = provider_api_key_from_payload(payload)
         if override_config is not None or api_key_override is not None:
             # Do not retain request-scoped credentials in the runtime service cache.
             classification_service = ProviderService(config=override_config, api_key=api_key_override)
         if (
-            classification_service.has_api_key
+            classification_service.has_usable_credential()
             and runtime.provider_connection_verified(classification_service)
         ):
             summary = await classify_with_llm(

@@ -11,14 +11,13 @@ Reference: https://github.com/open-spaced-repetition/py-fsrs (MIT License)
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
 from fsrs import Card, Rating, Scheduler, State
 
 from ..core.clock import utc_now as _clock_now
-from ..pedagogy.evidence_controls import apply_review_frequency_bias
 
 
 class TrainingRating(Enum):
@@ -60,7 +59,6 @@ class TrainingCardState:
     card_type: str = "practice"  # practice, flash
     focus_area: str | None = None
     knowledge_type: str | None = None
-    mastery_score: float = 0.0
     
     # Timestamps
     created_at: datetime = field(default_factory=_clock_now)
@@ -70,13 +68,22 @@ class TrainingCardState:
 
 @dataclass
 class TrainingReviewResult:
-    """Result of a training card review"""
+    """Result of a training card review.
+
+    ``retrievability`` is the FSRS recall probability immediately *before*
+    this answer, not a capability score. Capability stays with evidence and
+    skill projection; FSRS only owns memory timing.
+    """
     card_id: str
     rating: TrainingRating
     new_stability: float
     new_difficulty: float
     new_interval: int
     next_due: datetime
+    new_state: str
+    step: int
+    last_reviewed_at: datetime
+    retrievability: float
     reps: int
     lapses: int
     elapsed_days: float
@@ -160,31 +167,33 @@ class FSRSTrainerCardScheduler:
         self,
         card_id: str,
         rating: TrainingRating | str,
-        *,
-        review_frequency: str = "normal",
     ) -> TrainingReviewResult:
         """
         Process a review response and update the card's FSRS state.
-        
-        This implements the FSRS scheduling algorithm to calculate
-        optimal next review intervals.
+
+        FSRS owns the due date. A learner preference such as "review sooner"
+        may change how the queue is surfaced, but it must not rewrite the
+        retention model's interval after the fact.
         """
         # Normalize rating
         if isinstance(rating, str):
             rating = self.RATING_MAP.get(rating.lower(), TrainingRating.GOOD)
-        
+
         card_state = self._card_states.get(card_id)
         if not card_state:
             raise ValueError(f"Card {card_id} not found")
-        
+
         now = _clock_now()
         fsrs_card = self._create_fsrs_card(card_state)
+        # The recall probability before this answer is retention evidence; the
+        # post-review value is always ~1.0 and would tell the learner nothing.
+        retrievability = self._scheduler.get_card_retrievability(fsrs_card, now)
         next_card, _ = self._scheduler.review_card(
             fsrs_card,
             self._fsrs_rating_map.get(rating, Rating.Good),
             now,
         )
-        
+
         previous_reviewed_at = card_state.last_reviewed_at
 
         # Update card state with new values
@@ -196,11 +205,11 @@ class FSRSTrainerCardScheduler:
         card_state.step = max(0, int(next_card.step or 0))
         card_state.due = next_card.due
         card_state.next_due_at = next_card.due
-        raw_interval = max(0, int(round((next_card.due - now).total_seconds() / 86400))) if next_card.due else 0
-        card_state.interval = apply_review_frequency_bias(raw_interval, review_frequency)
-        if next_card.due and card_state.interval != raw_interval:
-            card_state.due = now + timedelta(days=card_state.interval)
-            card_state.next_due_at = card_state.due
+        card_state.interval = (
+            max(0, int(round((next_card.due - now).total_seconds() / 86400)))
+            if next_card.due
+            else 0
+        )
         card_state.ease_factor = max(1.3, min(4.0, 5.0 - (card_state.difficulty or 0.0)))
         card_state.reps += 1
         if rating == TrainingRating.AGAIN:
@@ -211,10 +220,7 @@ class FSRSTrainerCardScheduler:
         elapsed_days = 0.0
         if previous_reviewed_at:
             elapsed_days = (now - previous_reviewed_at).total_seconds() / 86400
-        
-        # Calculate mastery score based on stability
-        card_state.mastery_score = self._calculate_mastery(card_state)
-        
+
         return TrainingReviewResult(
             card_id=card_id,
             rating=rating,
@@ -222,52 +228,27 @@ class FSRSTrainerCardScheduler:
             new_difficulty=card_state.difficulty,
             new_interval=card_state.interval,
             next_due=card_state.due or now,
+            new_state=card_state.state,
+            step=card_state.step,
+            last_reviewed_at=now,
+            retrievability=max(0.0, min(1.0, retrievability)),
             reps=card_state.reps,
             lapses=card_state.lapses,
             elapsed_days=elapsed_days,
         )
-    
-    def _calculate_mastery(self, card_state: TrainingCardState) -> float:
-        """
-        Calculate mastery score based on card stability and ease.
-        
-        Returns a value between 0.0 and 1.0:
-        - 0.0-0.3: Beginning learner
-        - 0.3-0.6: Developing skill
-        - 0.6-0.8: Competent performer
-        - 0.8-1.0: Expert/master
-        """
-        # Stability factor: higher stability = better retention
-        stability_factor = min(card_state.stability / 30.0, 1.0)
-        
-        # Ease factor: higher ease = easier to recall
-        ease_factor = (card_state.ease_factor - self.MIN_EASE_FACTOR) / (self.MAX_EASE_FACTOR - self.MIN_EASE_FACTOR)
-        ease_factor = max(0.0, min(1.0, ease_factor))
-        
-        # Review count bonus (more reviews = more practiced)
-        reps_factor = min(card_state.reps / 20.0, 1.0)
-        
-        # Lapse penalty (lapses indicate difficulty)
-        lapse_penalty = min(card_state.lapses * 0.1, 0.3)
-        
-        # Combined mastery score
-        mastery = (stability_factor * 0.4 + ease_factor * 0.3 + reps_factor * 0.3) - lapse_penalty
-        return max(0.0, min(1.0, mastery))
-    
+
     def get_card_metrics(self, card_id: str) -> dict[str, Any]:
-        """Get comprehensive metrics for a card"""
+        """Get comprehensive metrics for a card."""
         card_state = self._card_states.get(card_id)
         if not card_state:
             return {}
-        
-        # Calculate retrievability (probability of recall)
+
         now = _clock_now()
-        if card_state.last_reviewed_at:
-            elapsed = (now - card_state.last_reviewed_at).total_seconds() / 86400
-            retrievability = self._calculate_retrievability(card_state.stability, elapsed)
-        else:
-            retrievability = 0.0
-        
+        retrievability = self._scheduler.get_card_retrievability(
+            self._create_fsrs_card(card_state),
+            now,
+        )
+
         return {
             "card_id": card_id,
             "concept_id": card_state.concept_id,
@@ -275,26 +256,13 @@ class FSRSTrainerCardScheduler:
             "difficulty": round(card_state.difficulty, 2),
             "interval_days": card_state.interval,
             "ease_factor": round(card_state.ease_factor, 2),
-            "mastery_score": round(card_state.mastery_score, 3),
-            "retrievability": round(retrievability, 3),
+            "retrievability": round(max(0.0, min(1.0, retrievability)), 3),
             "reps": card_state.reps,
             "lapses": card_state.lapses,
             "state": card_state.state,
             "due": card_state.due.isoformat() if card_state.due else None,
             "next_due": card_state.next_due_at.isoformat() if card_state.next_due_at else None,
         }
-    
-    def _calculate_retrievability(self, stability: float, elapsed_days: float) -> float:
-        """
-        Calculate retrievability using the FSRS forgetting curve.
-        
-        R = e^(-t/S) where S is stability and t is elapsed time
-        """
-        import math
-        if stability <= 0:
-            return 0.0
-        retrievability = math.exp(-elapsed_days / stability)
-        return max(0.0, min(1.0, retrievability))
     
     def get_deck_statistics(self) -> dict[str, Any]:
         """Get overall deck statistics"""
@@ -309,8 +277,15 @@ class FSRSTrainerCardScheduler:
                      if c.due and c.due <= now and c.state != "new")
         
         avg_stability = sum(c.stability for c in self._card_states.values()) / max(total, 1)
-        avg_mastery = sum(c.mastery_score for c in self._card_states.values()) / max(total, 1)
-        
+        retrievabilities = [
+            self._scheduler.get_card_retrievability(self._create_fsrs_card(card), now)
+            for card in self._card_states.values()
+            if card.last_reviewed_at is not None and card.stability > 0
+        ]
+        avg_retrievability = (
+            sum(retrievabilities) / len(retrievabilities) if retrievabilities else 0.0
+        )
+
         return {
             "deck_id": self.deck_id,
             "total_cards": total,
@@ -319,7 +294,7 @@ class FSRSTrainerCardScheduler:
             "review_cards": review,
             "due_now": due_now,
             "average_stability": round(avg_stability, 2),
-            "average_mastery": round(avg_mastery, 3),
+            "average_retrievability": round(avg_retrievability, 3),
         }
     
     def delete_card(self, card_id: str) -> bool:
@@ -386,7 +361,6 @@ def card_state_to_payload(state: TrainingCardState) -> dict[str, Any]:
         "card_type": state.card_type,
         "focus_area": state.focus_area,
         "knowledge_type": state.knowledge_type,
-        "mastery_score": state.mastery_score,
         "created_at": state.created_at.isoformat() if state.created_at else None,
         "last_reviewed_at": state.last_reviewed_at.isoformat() if state.last_reviewed_at else None,
         "next_due_at": state.next_due_at.isoformat() if state.next_due_at else None,
@@ -430,7 +404,6 @@ def card_state_from_payload(payload: dict[str, Any]) -> TrainingCardState | None
         card_type=str(payload.get("card_type") or payload.get("cardType") or "practice").strip() or "practice",
         focus_area=str(payload.get("focus_area") or payload.get("focusArea") or "").strip() or None,
         knowledge_type=str(payload.get("knowledge_type") or payload.get("knowledgeType") or "").strip() or None,
-        mastery_score=float(payload.get("mastery_score") or payload.get("masteryScore") or 0.0),
         created_at=_parse_fsrs_datetime(payload.get("created_at") or payload.get("createdAt"))
         or _clock_now(),
         last_reviewed_at=_parse_fsrs_datetime(

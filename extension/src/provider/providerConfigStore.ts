@@ -19,8 +19,9 @@ import type {
 import type { ProviderCapabilityEvidence } from '../../../shared/src/providerTest';
 import { normalizeProviderRequestDefaults } from '../core/providerDefaults';
 import { mergeProviderRequestDefaults } from '../../../shared/src/providerRequestDefaults';
-import { defaultCapabilitiesForProtocol, normalizeProviderProtocol, OPENAI_COMPATIBLE_PROTOCOL } from '../../../shared/src/providerProtocols';
+import { defaultCapabilitiesForProtocol, normalizeProviderBaseUrl, normalizeProviderProtocol, OPENAI_COMPATIBLE_PROTOCOL } from '../../../shared/src/providerProtocols';
 import { normalizeProviderConnectionType } from '../../../shared/src/providerGateway';
+import { providerEndpointIdentity } from '../../../shared/src/providerConnectionIdentity';
 import { normalizeProviderModelThinkingConfig, normalizeProviderThinkingConfig, removeThinkingFields, updateProviderThinking } from '../../../shared/src/providerThinking';
 import {
   clearHostLastTest,
@@ -151,14 +152,14 @@ export function providerConnectionMatches(
     return false;
   }
 
-  const normalizeBaseUrl = (value: string) => value.trim().replace(/\/+$/, '').toLowerCase();
+  const normalizeBaseUrl = providerEndpointIdentity;
   return (
     normalizeProviderProtocol(existing.protocol) === normalizeProviderProtocol(candidate.protocol) &&
     normalizeBaseUrl(existing.baseUrl) === normalizeBaseUrl(candidate.baseUrl)
   );
 }
 
-function sameProviderVendorHost(
+export function sameProviderVendorHost(
   existing: Pick<ProviderConfig, 'baseUrl'> | undefined,
   candidate: Pick<ProviderConfig, 'baseUrl'> | undefined,
 ): boolean {
@@ -203,6 +204,7 @@ export function resolveProviderApiKeyRef(
 }
 
 export class ProviderConfigStore implements vscode.Disposable {
+  private configWriteQueue: Promise<unknown> = Promise.resolve();
   private readonly decryptionFailures = new Set<string>();
   /**
    * Keyring reads must never take the activation hostage (issue T-0001).
@@ -328,11 +330,20 @@ export class ProviderConfigStore implements vscode.Disposable {
   }
 
   async saveConfig(config: ProviderConfig, apiKey?: string): Promise<void> {
+    const write = this.configWriteQueue.then(() => this.saveConfigExclusive(config, apiKey));
+    this.configWriteQueue = write.catch(() => undefined);
+    return write;
+  }
+
+  private async saveConfigExclusive(config: ProviderConfig, apiKey?: string): Promise<void> {
     const previousStored = this.getStoredConfig();
     const previousEffective = this.getConfig();
     const targetProfileId = this.resolveKnownProfileId(config, previousEffective);
     const previousTargetProfile = targetProfileId
       ? this.getProfileConfigById(targetProfileId)
+      : undefined;
+    const previousRawProfile = targetProfileId
+      ? this.profileRegistry.getRegistry()?.profiles.find((profile) => profile.id === targetProfileId)
       : undefined;
     const requestedApiKeyRef = config.apiKeyRef?.trim();
     const conflictingApiKeyRef = Boolean(
@@ -347,6 +358,9 @@ export class ProviderConfigStore implements vscode.Disposable {
     const inheritedApiKey = shouldMoveSharedProfileCredential
       ? await this.safeSecretGet(requestedApiKeyRef ?? '')
       : undefined;
+    if (shouldMoveSharedProfileCredential && this.secretReadFailureKind(requestedApiKeyRef ?? '') === 'transient') {
+      throw new Error('Credential storage is temporarily unavailable. Retry saving; the existing connection has been kept.');
+    }
     const configWithSafeApiKeyRef: ProviderConfig = {
       ...config,
       apiKeyRef:
@@ -380,6 +394,9 @@ export class ProviderConfigStore implements vscode.Disposable {
           continue;
         }
         const secret = await this.safeSecretGet(apiKeyRef);
+        if (this.secretReadFailureKind(apiKeyRef) === 'transient') {
+          throw new Error('Credential storage is temporarily unavailable. Retry saving; the existing connection has been kept.');
+        }
         if (secret?.trim()) {
           carriedApiKey = secret.trim();
           break;
@@ -398,15 +415,20 @@ export class ProviderConfigStore implements vscode.Disposable {
         : inheritedApiKey?.trim() || carriedApiKey?.trim() || undefined;
     const secretRef = nextConfig.apiKeyRef;
     const previousSecret = secretValue ? await this.safeSecretGet(secretRef) : undefined;
+    if (secretValue && this.secretReadFailureKind(secretRef) === 'transient') {
+      throw new Error('Credential storage is temporarily unavailable. Retry saving; the existing connection has been kept.');
+    }
     if (secretValue) {
       await this.extensionContext.secrets.store(this.secretKey(secretRef), secretValue);
     }
 
+    let configWritten = false;
     try {
       if (targetProfileId) {
         await this.updateProfileConfig(targetProfileId, configWithSafeApiKeyRef);
       }
       await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, nextConfig);
+      configWritten = true;
       this.mirrorConfigToFile(nextConfig);
       await this.syncWorkspaceProviderOverride(nextConfig);
     } catch (error) {
@@ -420,6 +442,19 @@ export class ProviderConfigStore implements vscode.Disposable {
         } catch {
           // Best-effort rollback; the original failure is the one to report.
         }
+      }
+      // getConfig prefers the active profile over the standalone config.
+      // Restoring only the key leaves that profile pointing at a deleted key.
+      if (previousRawProfile) {
+        try {
+          await this.profileRegistry.updateProfile(previousRawProfile.id, previousRawProfile);
+        } catch { /* Preserve the original persistence error. */ }
+      }
+      if (configWritten) {
+        try {
+          await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, previousStored);
+          this.mirrorConfigToFile(previousStored);
+        } catch { /* Preserve the original persistence error. */ }
       }
       throw error;
     }
@@ -460,8 +495,12 @@ export class ProviderConfigStore implements vscode.Disposable {
     if (this.profileRegistry.getActiveProfileId()) {
       await this.profileRegistry.clearActiveProfile('manual_clear');
     }
+    // clearActiveProfile deactivates the selection while keeping all saved profiles
+    // in the registry. Check against EVERY remaining profile (do not exclude
+    // targetProfileId) so clearing the active connection never wipes a still-saved
+    // profile's SecretStorage credential.
     for (const apiKeyRef of this.collectPreviousApiKeyRefs([previousStored, previousEffective])) {
-      if (!this.isApiKeyRefUsedByAnotherProfile(apiKeyRef, targetProfileId)) {
+      if (!this.isApiKeyRefUsedByAnotherProfile(apiKeyRef, undefined)) {
         await this.extensionContext.secrets.delete(this.secretKey(apiKeyRef));
       }
     }
@@ -915,9 +954,9 @@ export class ProviderConfigStore implements vscode.Disposable {
     // not invalidate its model cache or verified test result.
     return [
       normalizeProviderProtocol(config.protocol) ?? '',
-      config.baseUrl.trim().toLowerCase(),
-      config.model.trim().toLowerCase(),
-      config.apiKeyRef.trim().toLowerCase(),
+      providerEndpointIdentity(config.baseUrl),
+      config.model.trim(),
+      config.apiKeyRef.trim(),
     ].join('::');
   }
 
@@ -1072,11 +1111,26 @@ export class ProviderConfigStore implements vscode.Disposable {
 
     const workspaceMode = this.readString(providerRecord, 'mode');
     const workspaceCredentialMode = this.readString(providerRecord, 'credentialMode');
+    const workspaceAvailableModels = this.readStringArray(providerRecord.availableModels);
+    const workspaceAllowedModels = this.readStringArray(providerRecord.allowedModels);
+    const workspaceDeniedModels = this.readStringArray(providerRecord.deniedModels);
+    const workspaceModelAliases = this.readStringRecord(providerRecord.modelAliases);
+    const workspaceTaskBindings = this.normalizeTaskBindings(
+      providerRecord.taskBindings ?? providerRecord.task_bindings,
+    );
+    const workspaceConnectionType = normalizeProviderConnectionType(
+      this.readString(providerRecord, 'connectionType') ?? this.readString(providerRecord, 'connection_type'),
+    );
+    const workspaceContextWindowTokens = this.readNumber(providerRecord, 'contextWindowTokens');
+    const workspaceMaxOutputTokens = this.readNumber(providerRecord, 'maxOutputTokens');
+    const workspaceEmbeddingModel = this.readString(providerRecord, 'embeddingModel');
+    const workspaceCatalogSource = this.readCatalogSource(providerRecord.catalogSource);
+    const workspaceCacheTtlSeconds = this.readNumber(providerRecord, 'cacheTtlSeconds');
     const workspaceOverride: ProviderConfig = {
       ...fallback,
       name: name.trim(),
       label: this.readString(providerRecord, 'label') ?? fallback.label ?? name.trim(),
-      baseUrl: this.normalizeBaseUrl(baseUrl),
+      baseUrl: normalizeProviderBaseUrl(baseUrl, protocol) || this.normalizeBaseUrl(baseUrl),
       apiKeyRef: fallback.apiKeyRef,
       model: model.trim(),
       protocol,
@@ -1084,6 +1138,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         workspaceMode === 'direct' || workspaceMode === 'gateway'
           ? workspaceMode
           : fallback.mode,
+      connectionType: workspaceConnectionType ?? fallback.connectionType,
       credentialMode:
         workspaceCredentialMode === 'workspace_secret' || workspaceCredentialMode === 'ui_proxy'
           ? workspaceCredentialMode
@@ -1108,7 +1163,20 @@ export class ProviderConfigStore implements vscode.Disposable {
           providerRecord.modelThinkingConfig ?? providerRecord.model_thinking_config,
           protocol,
         ) ?? fallback?.modelThinkingConfig,
+      availableModels:
+        workspaceAvailableModels !== undefined ? workspaceAvailableModels : fallback.availableModels,
       catalogModels,
+      allowedModels:
+        workspaceAllowedModels !== undefined ? workspaceAllowedModels : fallback.allowedModels,
+      deniedModels:
+        workspaceDeniedModels !== undefined ? workspaceDeniedModels : fallback.deniedModels,
+      modelAliases: workspaceModelAliases ?? fallback.modelAliases,
+      taskBindings: workspaceTaskBindings ?? fallback.taskBindings,
+      contextWindowTokens: workspaceContextWindowTokens ?? fallback.contextWindowTokens,
+      maxOutputTokens: workspaceMaxOutputTokens ?? fallback.maxOutputTokens,
+      embeddingModel: workspaceEmbeddingModel ?? fallback.embeddingModel,
+      catalogSource: workspaceCatalogSource ?? fallback.catalogSource,
+      cacheTtlSeconds: workspaceCacheTtlSeconds ?? fallback.cacheTtlSeconds,
       modelTokenLimits:
         normalizeProviderModelTokenLimits(providerRecord.modelTokenLimits) ??
         fallback?.modelTokenLimits,
@@ -1118,6 +1186,9 @@ export class ProviderConfigStore implements vscode.Disposable {
   }
 
   async syncWorkspaceProviderOverride(config: ProviderConfig | undefined): Promise<void> {
+    if (!this.workspaceOverridesAllowed()) {
+      return;
+    }
     const workspaceConfigPath = this.workspaceConfigPath();
     if (!workspaceConfigPath || !fs.existsSync(workspaceConfigPath)) {
       return;
@@ -1625,13 +1696,25 @@ export class ProviderConfigStore implements vscode.Disposable {
               ),
         );
       })(),
-      thinkingConfig: normalizeProviderThinkingConfig(
-        nextConfig.thinkingConfig ?? nextConfig.requestDefaults ?? currentProfile.thinkingConfig ?? currentProfile.requestDefaults,
-        nextConfig.protocol,
-      ),
+      thinkingConfig:
+        hasExplicitField('thinkingConfig') ||
+        hasExplicitField('modelThinkingConfig') ||
+        hasExplicitField('requestDefaults')
+          ? normalizeProviderThinkingConfig(nextConfig.thinkingConfig, nextConfig.protocol)
+          : normalizeProviderThinkingConfig(
+              nextConfig.thinkingConfig ??
+                nextConfig.requestDefaults ??
+                currentProfile.thinkingConfig ??
+                currentProfile.requestDefaults,
+              nextConfig.protocol,
+            ),
       modelThinkingConfig:
-        normalizeProviderModelThinkingConfig(nextConfig.modelThinkingConfig, nextConfig.protocol) ??
-        currentProfile.modelThinkingConfig,
+        hasExplicitField('modelThinkingConfig') ||
+        hasExplicitField('thinkingConfig') ||
+        hasExplicitField('requestDefaults')
+          ? normalizeProviderModelThinkingConfig(nextConfig.modelThinkingConfig, nextConfig.protocol)
+          : normalizeProviderModelThinkingConfig(nextConfig.modelThinkingConfig, nextConfig.protocol) ??
+            currentProfile.modelThinkingConfig,
       capabilities: nextConfig.capabilities,
       modelCapabilities: nextConfig.modelCapabilities ?? currentProfile.modelCapabilities,
     });

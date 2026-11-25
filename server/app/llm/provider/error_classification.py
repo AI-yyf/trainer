@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import socket
@@ -191,13 +192,22 @@ class ErrorClassificationMixin:
             )
         ):
             return ("network", True, status_code, False, None)
-        if "malformed" in lowered or "invalid json" in lowered or "unexpected response" in lowered:
+        if (
+            any(isinstance(item, json.JSONDecodeError) for item in chain)
+            or "JSONDecodeError" in chain_names
+            or "malformed" in lowered
+            or "invalid json" in lowered
+            or "unexpected response" in lowered
+        ):
             return ("malformed_response", False, status_code, True, None)
         if status_code and 500 <= status_code <= 599:
             # A 5xx means the endpoint answered — its own upstream failed. That
             # is not the same as "cannot reach the provider", and collapsing the
             # two sent users off to debug a base URL that was working fine.
             return ("upstream_unavailable", True, status_code, True, None)
+        if status_code and 400 <= status_code <= 499:
+            # Any HTTP 4xx response proves the endpoint is reachable.
+            return ("unknown", False, status_code, True, None)
         return ("unknown", False, status_code, False, None)
 
     def _detail_from_category(

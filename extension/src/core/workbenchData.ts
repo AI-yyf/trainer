@@ -18,6 +18,7 @@ import {
   providerProtocolFamily,
 } from '../../../shared/src/providerProtocols';
 import { providerTransportIsConfigured } from '../../../shared/src/providerStatus';
+import { providerEndpointIdentity } from '../../../shared/src/providerConnectionIdentity';
 import { describeWorkspaceAuthoritySummary } from '../../../shared/src/workspaceAuthority';
 import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
 import { normalizeCoachOrientationRecord } from '../../../shared/src/coachOrientationGovernance';
@@ -301,8 +302,8 @@ export function applyDerivedHostState(
 ): BootstrapData {
   const baseProviderConfig = toProviderConfigView(provider, providerHasApiKey);
   const preserveProviderSupplement =
-    data.providerConfig.name === baseProviderConfig.name &&
-    data.providerConfig.baseUrl === baseProviderConfig.baseUrl &&
+    providerEndpointIdentity(data.providerConfig.baseUrl) === providerEndpointIdentity(baseProviderConfig.baseUrl) &&
+    data.providerConfig.profileId === baseProviderConfig.profileId &&
     normalizeProviderProtocol(data.providerConfig.protocol) === normalizeProviderProtocol(baseProviderConfig.protocol);
   // Keep the memory subtree reference-stable when only the window-trust flag
   // is involved: incremental sync compares subtree identity first, and a
@@ -339,8 +340,12 @@ export function applyDerivedHostState(
       ? {
           ...baseProviderConfig,
           availableModels: data.providerConfig.availableModels,
-          resolvedModel: data.providerConfig.resolvedModel,
-          modelCapabilities: data.providerConfig.modelCapabilities ?? baseProviderConfig.modelCapabilities,
+          resolvedModel: data.providerConfig.model === baseProviderConfig.model
+            ? data.providerConfig.resolvedModel : baseProviderConfig.resolvedModel,
+          modelCapabilities:
+            Object.keys(data.providerConfig.modelCapabilities ?? {}).length > 0
+              ? data.providerConfig.modelCapabilities
+              : baseProviderConfig.modelCapabilities,
           modelListStatus: data.providerConfig.modelListStatus,
           modelListDetail: data.providerConfig.modelListDetail,
           cacheFetchedAt: data.providerConfig.cacheFetchedAt,
@@ -352,10 +357,16 @@ export function applyDerivedHostState(
           protocolDiagnostic: data.providerConfig.protocolDiagnostic,
           taskBindingDiagnostics: data.providerConfig.taskBindingDiagnostics,
           modelDiagnostics: data.providerConfig.modelDiagnostics,
-          modelTest: data.providerConfig.modelTest,
+          modelTest: data.providerConfig.model === baseProviderConfig.model ? data.providerConfig.modelTest : undefined,
           modelListing: data.providerConfig.modelListing,
           diagnostics: data.providerConfig.diagnostics,
           warnings: data.providerConfig.warnings,
+          // The dashboard (template catalog, diagnostics) only ever arrives
+          // through a patch; the profile list itself is re-read from the store.
+          profileCount: baseProviderConfig.profileCount ?? data.providerConfig.profileCount,
+          profileHistory: baseProviderConfig.profileHistory ?? data.providerConfig.profileHistory,
+          providerProfiles: baseProviderConfig.providerProfiles ?? data.providerConfig.providerProfiles,
+          providerDashboard: data.providerConfig.providerDashboard,
           lastTestResult: isCompatibleLastTestResult(baseProviderConfig, data.providerConfig.lastTestResult)
             ? (stripHostLastTestSecrets({
                 ...(data.providerConfig.lastTestResult as unknown as Record<string, unknown>),
@@ -1621,6 +1632,13 @@ function toProviderConfigView(
     profileId: provider?.profileId,
     profileLabel: provider?.profileLabel,
     profileMode: provider?.profileMode,
+    // Saved connections travel with the active config. The composer's other
+    // connection groups and the Settings connection list are rendered from
+    // them, and every host patch re-derives this view, so they have to be part
+    // of it: a one-off patch from refreshProviderProfiles was dropped here.
+    profileCount: provider?.profileCount,
+    profileHistory: provider?.profileHistory,
+    providerProfiles: provider?.providerProfiles,
     credentialMode: provider?.credentialMode,
     ignoreSystemProxy: Boolean(provider?.ignoreSystemProxy),
     availableModels: provider?.availableModels ?? [],
@@ -1665,9 +1683,8 @@ function isCompatibleLastTestResult(
     return false;
   }
   return (
-    result.providerName.trim().toLowerCase() === provider.name.trim().toLowerCase() &&
-    result.baseUrl.trim().toLowerCase() === provider.baseUrl.trim().toLowerCase() &&
-    result.model.trim().toLowerCase() === provider.model.trim().toLowerCase() &&
+    providerEndpointIdentity(result.baseUrl) === providerEndpointIdentity(provider.baseUrl) &&
+    result.model.trim() === provider.model.trim() &&
     (!resultProtocol || resultProtocol === normalizeProviderProtocol(provider.protocol))
   );
 }
@@ -1689,7 +1706,7 @@ function recoveryScopeFromProvider(
   };
 }
 
-function toLiveContext(workspace: WorkspaceSnapshot): LiveContextView {
+export function toLiveContext(workspace: WorkspaceSnapshot): LiveContextView {
   const diagnosticsSummary =
     workspace.diagnosticErrors || workspace.diagnosticWarnings
       ? `${workspace.diagnosticErrors ?? 0} 个错误，${workspace.diagnosticWarnings ?? 0} 个警告`

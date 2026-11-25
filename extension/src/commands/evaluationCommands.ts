@@ -6,7 +6,7 @@ import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import { mergeEvaluationResultSnapshot, mergeMemorySummarySnapshot } from '../core/workbenchData';
 import { getRuntimeWorkspaceContext, getRuntimeWorkspaceId, withWorkspaceQuery } from './workspaceContext';
-import { describeProviderSendState } from '../../../shared/src/providerStatus';
+import { describeProviderSendState, providerBaseUrlIsLocalService } from '../../../shared/src/providerStatus';
 import {
   normalizeTrainingFilePath,
   trainingFileMatchesEditorPath,
@@ -153,7 +153,12 @@ async function evaluateDocument(
   if (path === '/evaluate/snippet') {
     const providerConfig = context.providerStore.getConfig();
     const apiKey = await context.providerStore.getApiKey();
-    if (!providerConfig || !apiKey?.trim()) {
+    if (
+      !providerConfig ||
+      (!apiKey?.trim() &&
+        providerConfig.credentialMode !== 'workspace_secret' &&
+        !providerBaseUrlIsLocalService(providerConfig.baseUrl))
+    ) {
       return {
         ok: false,
         message: 'Trainer needs a saved provider and API key before evaluation can run.',

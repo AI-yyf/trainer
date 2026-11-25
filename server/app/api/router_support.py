@@ -337,6 +337,7 @@ def register_request_workspace_path(
     adoption and provisioning). Otherwise any caller that reaches a chat route
     could point the coach's file tools at another directory.
     """
+    remember_request_provider(runtime, workspace_id, payload)
     candidates: list[object] = []
     if request is not None:
         candidates.append(getattr(request, "workspace_path", None))
@@ -359,6 +360,28 @@ def register_request_workspace_path(
         if callable(register):
             register(workspace_id, resolved)
     return resolved
+
+
+def remember_request_provider(runtime: object, workspace_id: str | None, payload: dict | None) -> None:
+    """Record the provider the UI host named for this workspace, if it named one.
+
+    The sidecar has no provider of its own: the host sends config and key with
+    each request. A lane that by design cannot carry them (the browser side
+    panel, which must never see a provider key) resolves the workspace's provider
+    from this memory. Nothing is recorded for a payload without a provider.
+    """
+    if not isinstance(payload, dict):
+        return
+    remember = getattr(runtime, "remember_workspace_provider", None)
+    if not callable(remember):
+        return
+    # Local import: provider_payload imports this module for its URL helpers.
+    from .provider_payload import provider_api_key_from_payload, provider_config_from_payload
+
+    provider_config = provider_config_from_payload(payload)
+    if provider_config is None:
+        return
+    remember(workspace_id, provider_config, provider_api_key_from_payload(payload))
 
 
 def _same_directory(left: str, right: str) -> bool:
@@ -495,7 +518,7 @@ def _resolve_agent_loop_enabled(
     # attachments require the executable tools binding for grounded reads.
     if request.attachments:
         return bool(
-            coaching_service.has_api_key
+            coaching_service.has_usable_credential()
             and all(getattr(attachment, "kind", "image") == "image" for attachment in request.attachments)
         )
     if request.use_agent_loop is not None:
