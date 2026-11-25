@@ -5,11 +5,11 @@
 ## 1. 前置检查与安装（约 2 分钟）
 
 1. 确认最新干净源码态打包产物与安装态校验已通过：
-   - 打包 VSIX：`extension/trainer-extension-1.4.5-darwin-arm64.vsix`（构建凭据：`extension/trainer-extension-1.4.5-darwin-arm64.vsix.build.json`，`sourceDirty: false`）
+   - 打包 VSIX：`extension/trainer-extension-1.6.4-darwin-arm64.vsix`（构建凭据：`extension/trainer-extension-1.6.4-darwin-arm64.vsix.build.json`，`sourceDirty: false`）
    - 安装态冒烟：`TRAINER_SKIP_VSIX_REBUILD=1 node extension/scripts/verify-vsix-install.mjs`
 2. 在本机 VS Code 安装 VSIX（建议先备份或使用独立 `--user-data-dir` / `--extensions-dir`）：
    ```bash
-   code --install-extension extension/trainer-extension-1.4.5-darwin-arm64.vsix --force
+   code --install-extension extension/trainer-extension-1.6.4-darwin-arm64.vsix --force
    ```
 3. 打开任意本地代码项目目录，在左侧栏打开 Trainer 视图。
 

@@ -3876,11 +3876,7 @@ test('thinking intensity is stored per model and restored when switching back', 
 
   const final = context.__savedConfigs[context.__savedConfigs.length - 1];
   assert.equal(final.model, 'o3');
-  assert.deepEqual(final.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
-  assert.deepEqual(final.modelThinkingConfig, {
-    o3: { mode: 'enabled', reasoningEffort: 'high' },
-    'gpt-4o': { mode: 'enabled', reasoningEffort: 'low' },
-  });
+  assert.deepEqual(final.thinkingConfig, { mode: 'enabled', reasoningEffort: 'low' });
 });
 
 test('a thinking change waits for an in-flight model switch before reading its model', async () => {
@@ -3908,7 +3904,7 @@ test('a thinking change waits for an in-flight model switch before reading its m
   await Promise.all([switching, thinking]);
   const final = context.providerStore.getConfig();
   assert.equal(final.model, 'gpt-4o');
-  assert.deepEqual(final.modelThinkingConfig['gpt-4o'], { mode: 'enabled', reasoningEffort: 'high' });
+  assert.deepEqual(final.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
 });
 
 test('saveProviderFromWebviewCommand persists draft thinkingConfig and re-emits it once evidence exists', async () => {

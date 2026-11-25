@@ -110,60 +110,6 @@ ORTHOGONAL_PRIMITIVE_NAMES: tuple[str, ...] = (
 
 ORTHOGONAL_PRIMITIVE_SET: frozenset[str] = frozenset(ORTHOGONAL_PRIMITIVE_NAMES)
 
-# Maps legacy internal tool names to their owning orthogonal primitive so that
-# live turns expose only the 4-8 orthogonal schemas while direct/legacy
-# invocations remain transparently compatible when their owning primitive is allowed.
-LEGACY_TO_ORTHOGONAL_OWNER: dict[str, str] = {
-    # project_read
-    "inspect_current_file": "project_read",
-    "list_workspace_files": "project_read",
-    "read_workspace_file": "project_read",
-    "list_project_modules": "project_read",
-    "read_project_symbol": "project_read",
-    "analyze_project_impact": "project_read",
-    # project_verify
-    "run_diagnostics": "project_verify",
-    "verify_practice_current_file": "project_verify",
-    "run_rubric_review": "project_verify",
-    "compare_with_anchor": "project_verify",
-    # library_read
-    "search_resources": "library_read",
-    "read_resource_excerpt": "library_read",
-    "list_resources": "library_read",
-    "list_library_folders": "library_read",
-    "list_sandbox": "library_read",
-    "read_sandbox_file": "library_read",
-    # library_write
-    "write_sandbox_file": "library_write",
-    "index_sandbox_file": "library_write",
-    "delete_resource": "library_write",
-    "restore_resource": "library_write",
-    "refresh_resource_index": "library_write",
-    "organize_resources": "library_write",
-    "curate_library_resources": "library_write",
-    "import_resource_url": "library_write",
-    "import_workspace_file": "library_write",
-    "save_lecture_note": "library_write",
-    # web_fetch
-    "web_search": "web_fetch",
-    "fetch_web_page": "web_fetch",
-    "search_academic_papers": "web_fetch",
-    "search_learning_materials": "web_fetch",
-    "assess_research_evidence": "web_fetch",
-    # learning_inspect
-    "inspect_plan": "learning_inspect",
-    "inspect_learning_truth": "learning_inspect",
-    "recall_memory": "learning_inspect",
-    "list_skills": "learning_inspect",
-    # learning_action
-    "save_formal_plan": "learning_action",
-    "record_learning_note": "learning_action",
-    "specify_task": "learning_action",
-    "next_task": "learning_action",
-    "invoke_skill": "learning_action",
-    "generate_image": "learning_action",
-}
-
 _INDEXABLE_LIBRARY_EXTENSIONS: frozenset[str] = frozenset(
     {
         ".md",

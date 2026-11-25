@@ -54,7 +54,6 @@ export type ProviderConfig = {
   taskBindings?: Record<string, unknown>;
   requestDefaults?: Record<string, unknown>;
   thinkingConfig?: ProviderThinkingConfig;
-  modelThinkingConfig?: Record<string, ProviderThinkingConfig>;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
   embeddingModel?: string;

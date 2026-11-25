@@ -2066,17 +2066,10 @@ export async function switchProviderModelCommand(
       ),
       availableModels: availableModels.length > 0 ? availableModels : committedBaseConfig.availableModels,
     };
-    // Restore this model's own thinking intensity. A model without a saved
-    // intent starts from the connection's current choice, then owns its copy.
-    const selectedThinking = normalizeProviderThinkingConfig(
-      committedBaseConfig.modelThinkingConfig?.[model] ?? committedBaseConfig.thinkingConfig,
+    nextConfig.thinkingConfig = normalizeProviderThinkingConfig(
+      committedBaseConfig.thinkingConfig,
       committedBaseConfig.protocol,
     );
-    nextConfig.thinkingConfig = selectedThinking;
-    nextConfig.modelThinkingConfig = {
-      ...(committedBaseConfig.modelThinkingConfig ?? {}),
-      ...(selectedThinking ? { [model]: selectedThinking } : {}),
-    };
     // Atomic persistence: only the newest generation may write. If a newer
     // switch started while this awaited, skip both the save and the state
     // write — the newer switch owns the outcome.
@@ -2447,10 +2440,6 @@ async function setProviderThinkingExclusive(
     ...config,
     requestDefaults: nextRequestDefaults,
     thinkingConfig: normalizedThinking,
-    modelThinkingConfig: {
-      ...(config.modelThinkingConfig ?? {}),
-      ...(normalizedThinking ? { [config.model]: normalizedThinking } : {}),
-    },
   };
   await context.providerStore.saveConfig(nextConfig);
 
@@ -2470,7 +2459,6 @@ async function setProviderThinkingExclusive(
       ...nextViewState,
       requestDefaults: effectiveConfig.requestDefaults,
       thinkingConfig: effectiveConfig.thinkingConfig,
-      modelThinkingConfig: effectiveConfig.modelThinkingConfig,
       lastTestResult: storedLastTestResult(context, effectiveConfig),
     },
   });

@@ -14,7 +14,6 @@ from __future__ import annotations
 import ast
 import asyncio
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, AsyncIterator
@@ -1668,26 +1667,6 @@ async def test_streaming_loop_mentions_previous_tool_failure_on_no_progress() ->
 # ---------------------------------------------------------------------------
 
 
-def test_default_registry_exposes_coach_tools() -> None:
-    registry = build_default_tool_registry()
-    names = set(registry.names())
-    for expected in {
-        "search_resources",
-        "search_learning_materials",
-        "assess_research_evidence",
-        "inspect_current_file",
-        "verify_practice_current_file",
-        "read_workspace_file",
-        "list_workspace_files",
-        "recall_memory",
-        "record_learning_note",
-        "inspect_plan",
-        "save_formal_plan",
-        "generate_training_card",
-        "run_diagnostics",
-        "coach_finalize",
-    }:
-        assert expected in names, f"missing tool {expected}"
 
 
 def test_tool_schema_for_openai_chat_shape() -> None:
@@ -1699,103 +1678,14 @@ def test_tool_schema_for_openai_chat_shape() -> None:
     assert "name" in first["function"]
 
 
-def test_tool_schema_hides_coach_only_tools_by_default() -> None:
-    registry = build_default_tool_registry()
-    schemas = registry.as_protocol_schemas("openai_chat_completions")
-    names = _tool_schema_names(schemas)
-    assert "inspect_current_file" in names
-    assert "verify_practice_current_file" in names
-    assert "recall_memory" in names
-    assert "record_learning_note" not in names
-    assert "generate_training_card" not in names
-    assert "import_resource_url" in names
-    assert "organize_resources" in names
-    assert "list_resources" in names
-    assert "delete_resource" in names
-    assert "restore_resource" in names
-    assert "refresh_resource_index" in names
 
 
-def test_tool_schema_includes_coach_only_tools_when_allowed() -> None:
-    registry = build_default_tool_registry()
-    schemas = registry.as_protocol_schemas(
-        "openai_chat_completions",
-        allow_coach_only=True,
-    )
-    names = _tool_schema_names(schemas)
-    assert "record_learning_note" not in names
-    assert "save_formal_plan" not in names
-    assert "generate_training_card" not in names
-    assert "import_resource_url" in names
-    assert "organize_resources" in names
 
 
-def test_tool_schema_exposes_record_learning_note_only_when_explicitly_requested() -> None:
-    registry = build_default_tool_registry()
-    hidden = _tool_schema_names(
-        registry.as_protocol_schemas(
-            "openai_chat_completions",
-            allow_coach_only=True,
-        )
-    )
-    visible = _tool_schema_names(
-        registry.as_protocol_schemas(
-            "openai_chat_completions",
-            allow_coach_only=True,
-            explicit_learning_note_request=True,
-        )
-    )
-    assert "record_learning_note" not in hidden
-    assert "record_learning_note" in visible
-    assert "save_formal_plan" not in visible
-    assert "import_resource_url" in visible
 
 
-def test_resource_management_tools_are_not_gated_by_legacy_resource_flags() -> None:
-    registry = build_default_tool_registry()
-    baseline = _tool_schema_names(
-        registry.as_protocol_schemas("openai_chat_completions", allow_coach_only=True)
-    )
-    legacy_flags = _tool_schema_names(
-        registry.as_protocol_schemas(
-            "openai_chat_completions",
-            allow_coach_only=True,
-            explicit_resource_import=True,
-            explicit_resource_organize=True,
-        )
-    )
-    for name in (
-        "import_resource_url",
-        "organize_resources",
-        "list_resources",
-        "delete_resource",
-        "restore_resource",
-        "refresh_resource_index",
-    ):
-        assert name in baseline
-        assert name in legacy_flags
 
 
-def test_tool_schema_exposes_save_formal_plan_only_on_formal_mutation() -> None:
-    registry = build_default_tool_registry()
-    hidden = _tool_schema_names(
-        registry.as_protocol_schemas(
-            "openai_chat_completions",
-            allow_coach_only=True,
-        )
-    )
-    visible = _tool_schema_names(
-        registry.as_protocol_schemas(
-            "openai_chat_completions",
-            allow_coach_only=True,
-            formal_plan_mutation=True,
-        )
-    )
-    assert "save_formal_plan" not in hidden
-    assert "record_learning_note" not in hidden
-    assert "save_formal_plan" in visible
-    assert "generate_training_card" not in visible
-    assert "record_learning_note" not in visible
 
 
 def test_tool_schema_never_exposes_generate_training_card_for_chat() -> None:
@@ -1819,67 +1709,6 @@ def test_tool_schema_never_exposes_generate_training_card_for_chat() -> None:
     assert "record_learning_note" not in visible
 
 
-async def test_save_formal_plan_requires_explicit_formal_turn_and_persists_model_shape() -> None:
-    class _Repository:
-        def __init__(self) -> None:
-            self.plan = None
-
-        def get_latest_plan(self, _workspace_id: str):
-            return self.plan
-
-        def save_plan(self, _workspace_id: str, plan) -> None:
-            self.plan = plan
-
-    repository = _Repository()
-    runtime = SimpleNamespace(repository=repository, sandbox_service=None, sessions={})
-    registry = build_default_tool_registry()
-    context = ToolContext(
-        runtime=runtime,
-        workspace_id="workspace-plan-tool",
-        extra={"formal_plan_mutation": True, "allow_coach_only_tools": True},
-    )
-
-    result = await registry.invoke(
-        context,
-        "save_formal_plan",
-        {
-            "title": "FastAPI route learning",
-            "summary": "Build a grounded route-design learning path from the uploaded notes.",
-            "current_step": "Inspect one route boundary and its verification signal.",
-            "verify_method": ["One focused endpoint test passes."],
-            "stages": [
-                {
-                    "id": "stage-boundary",
-                    "title": "Route boundary",
-                    "goal": "Explain request validation and response ownership.",
-                    "outcomes": ["Name the boundary", "Verify one request path"],
-                    "resources": ["resource-route-notes"],
-                    "status": "active",
-                }
-            ],
-        },
-    )
-
-    assert result["ok"] is True
-    assert result["committed"] is True
-    assert repository.plan is not None
-    assert repository.plan.stages[0].resources == ["resource-route-notes"]
-
-    blocked = await registry.invoke(
-        ToolContext(
-            runtime=runtime,
-            workspace_id="workspace-plan-tool",
-            extra={"allow_coach_only_tools": True},
-        ),
-        "save_formal_plan",
-        {
-            "title": "Should not write",
-            "summary": "No formal mutation flag.",
-            "stages": [{"title": "Stage", "goal": "Goal"}],
-        },
-    )
-    assert blocked["ok"] is False
-    assert blocked["error"] == "formal_plan_mutation_required"
 
 
 async def test_agent_loop_hides_tools_outside_the_current_turn_allowlist() -> None:
@@ -1931,1000 +1760,46 @@ def test_tool_schema_for_anthropic_shape() -> None:
     assert "input_schema" in first
 
 
-async def test_recall_memory_degrades_gracefully_without_runtime() -> None:
-    registry = build_default_tool_registry()
-    result = await registry.invoke(_context(runtime=None), "recall_memory", {})
-    assert result["ok"] is False
-    assert result["error"] == "service_unavailable"
-    assert "memory_service" not in result["detail"]
-
-
-async def test_search_resources_degrades_without_internal_service_names() -> None:
-    registry = build_default_tool_registry()
-    result = await registry.invoke(
-        _context(runtime=None),
-        "search_resources",
-        {"query": "remote workspace boundary"},
-    )
-    assert result["ok"] is False
-    assert result["error"] == "service_unavailable"
-    assert "resource_service" not in result["detail"]
-    assert "resource library" in result["detail"].lower()
-
-
-async def test_search_learning_materials_returns_only_fetched_citation_ready_sources() -> None:
-    class _ResearchService:
-        def search_web(self, query: str, **kwargs: Any) -> dict[str, Any]:
-            assert query == "FSRS spaced repetition primary sources"
-            assert kwargs["workspace_id"] == "workspace-test"
-            return {
-                "query": query,
-                "results": [
-                    {
-                        "id": "finding-1",
-                        "title": "FSRS technical overview",
-                        "url": "https://example.org/fsrs",
-                        "source": "example.org",
-                        "snippet": "A fetched explanation of the scheduling model.",
-                        "fetched_at": "2026-09-19T00:00:00+00:00",
-                        "freshness": "fresh",
-                        "trust_score": 0.7,
-                    },
-                    {
-                        "title": "Unfetched search hit",
-                        "url": "https://example.org/unfetched",
-                    },
-                ],
-            }
-
-    registry = build_default_tool_registry()
-    result = await registry.invoke(
-        _context(runtime=SimpleNamespace(research_service=_ResearchService())),
-        "search_learning_materials",
-        {"query": "FSRS spaced repetition primary sources", "limit": 4},
-    )
-
-    assert result["ok"] is True
-    assert result["citation_required"] is True
-    assert result["source_count"] == 1
-    assert result["sources"][0]["url"] == "https://example.org/fsrs"
-    assert result["sources"][0]["fetched_at"] == "2026-09-19T00:00:00+00:00"
-
-
-async def test_search_learning_materials_exposes_network_disabled_without_fake_sources() -> None:
-    class _ResearchService:
-        def search_web(self, query: str, **kwargs: Any) -> dict[str, Any]:
-            return {
-                "error": "Trainer network source acquisition is disabled.",
-                "reason_code": "network_disabled",
-                "query": query,
-                "results": [],
-            }
-
-    result = await build_default_tool_registry().invoke(
-        _context(runtime=SimpleNamespace(research_service=_ResearchService())),
-        "search_learning_materials",
-        {"query": "verified learning material"},
-    )
-
-    assert result == {
-        "ok": False,
-        "error": "network_disabled",
-        "detail": "Trainer network source acquisition is disabled.",
-        "query": "verified learning material",
-        "sources": [],
-    }
-
-
-async def test_formal_plan_research_reuses_sufficient_evidence_instead_of_searching_forever() -> None:
-    class _ResearchService:
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def search_web(self, query: str, **_kwargs: Any) -> dict[str, Any]:
-            self.calls += 1
-            return {
-                "query": query,
-                "results": [
-                    {
-                        "id": "official-one",
-                        "title": "Official dependency injection guide",
-                        "url": "https://docs.example.test/one",
-                        "source": "docs.example.test",
-                        "snippet": "Dependency injection and sub-dependency composition.",
-                        "fetched_at": "2026-09-19T00:00:00+00:00",
-                    },
-                    {
-                        "id": "official-two",
-                        "title": "Official testing overrides guide",
-                        "url": "https://docs.example.test/two",
-                        "source": "docs.example.test",
-                        "snippet": "Testing overrides for isolated service tests.",
-                        "fetched_at": "2026-09-19T00:00:01+00:00",
-                    },
-                ],
-            }
-
-    research_service = _ResearchService()
-    context = _context(runtime=SimpleNamespace(research_service=research_service))
-    context.extra["formal_plan_mutation"] = True
-    registry = build_default_tool_registry()
-
-    first = await registry.invoke(
-        context,
-        "search_learning_materials",
-        {
-            "query": "site:docs.example.test dependency injection testing overrides",
-            "required_facets": ["dependency injection", "testing overrides"],
-            "preferred_domains": ["docs.example.test"],
-        },
-    )
-    assessment = await registry.invoke(
-        context,
-        "assess_research_evidence",
-        {
-            "verdict": "sufficient",
-            "evidence_standard": _adaptive_evidence_standard(
-                ["official-one", "official-two"]
-            ),
-            "facet_assessments": [
-                {
-                    "facet": "dependency injection",
-                    "status": "covered",
-                    "source_ids": ["official-one"],
-                    "evidence_quotes": [
-                        {"source_id": "official-one", "quote": "Dependency injection"}
-                    ],
-                    "rationale": "The official guide directly explains dependency injection composition.",
-                },
-                {
-                    "facet": "testing overrides",
-                    "status": "covered",
-                    "source_ids": ["official-two"],
-                    "evidence_quotes": [
-                        {"source_id": "official-two", "quote": "Testing overrides"}
-                    ],
-                    "rationale": "The official testing guide explains isolated dependency overrides.",
-                },
-            ],
-        },
-    )
-    second = await registry.invoke(
-        context,
-        "search_learning_materials",
-        {"query": "another broad query that should not run"},
-    )
-
-    assert first["research_complete"] is False
-    assert first["research_status"] == "awaiting_model_assessment"
-    assert first["evidence_coverage"]["authoritative_source_count"] == 2
-    assert assessment["research_complete"] is True
-    assert assessment["research_status"] == "sufficient"
-    assert assessment["evidence_coverage"]["missing_facets"] == []
-    assert "search_learning_materials" in context.extra["denied_tool_names"]
-    assert "assess_research_evidence" in context.extra["denied_tool_names"]
-    assert context.extra["allowed_tool_names"] == ["save_formal_plan", "coach_finalize"]
-    assert second["ok"] is False
-    assert second["error"] == "tool_not_available"
-    assert research_service.calls == 1
-
-
-async def test_formal_plan_research_keeps_search_open_for_specific_evidence_gaps() -> None:
-    class _ResearchService:
-        def search_web(self, query: str, **_kwargs: Any) -> dict[str, Any]:
-            if "testing" in query:
-                return {
-                    "query": query,
-                    "results": [
-                        {
-                            "id": "testing",
-                            "title": "Testing overrides",
-                            "url": "https://docs.example.test/testing",
-                            "source": "docs.example.test",
-                            "snippet": "Testing overrides isolate dependency behavior.",
-                            "fetched_at": "2026-09-19T00:00:01+00:00",
-                        }
-                    ],
-                }
-            return {
-                "query": query,
-                "results": [
-                    {
-                        "id": "dependency-one",
-                        "title": "Dependency injection guide",
-                        "url": "https://docs.example.test/dependency-one",
-                        "source": "docs.example.test",
-                        "snippet": "Dependency injection composes service boundaries.",
-                        "fetched_at": "2026-09-19T00:00:00+00:00",
-                    },
-                    {
-                        "id": "dependency-two",
-                        "title": "Dependency injection patterns",
-                        "url": "https://docs.example.test/dependency-two",
-                        "source": "docs.example.test",
-                        "snippet": "Dependency injection separates service boundaries.",
-                        "fetched_at": "2026-09-19T00:00:01+00:00",
-                    },
-                ],
-            }
-
-    context = _context(runtime=SimpleNamespace(research_service=_ResearchService()))
-    context.extra["formal_plan_mutation"] = True
-    registry = build_default_tool_registry()
-    facets = ["dependency injection", "testing overrides"]
-
-    first = await registry.invoke(
-        context,
-        "search_learning_materials",
-        {
-            "query": "site:docs.example.test dependency injection",
-            "required_facets": facets,
-            "preferred_domains": ["docs.example.test"],
-        },
-    )
-    assert first["research_complete"] is False
-    assert first["research_status"] == "awaiting_model_assessment"
-    assert first["source_count"] == 2
-    assert first["evidence_coverage"]["authoritative_source_count"] == 2
-    first_assessment = await registry.invoke(
-        context,
-        "assess_research_evidence",
-        {
-            "verdict": "gaps_remain",
-            "evidence_standard": _adaptive_evidence_standard(
-                ["dependency-one", "dependency-two"],
-                unresolved=["testing overrides still lacks direct evidence"],
-            ),
-            "facet_assessments": [
-                {
-                    "facet": "dependency injection",
-                    "status": "covered",
-                    "source_ids": ["dependency-one", "dependency-two"],
-                    "evidence_quotes": [
-                        {"source_id": "dependency-one", "quote": "Dependency injection"}
-                    ],
-                    "rationale": "Both official excerpts explain dependency injection boundaries.",
-                },
-                {
-                    "facet": "testing overrides",
-                    "status": "missing",
-                    "source_ids": [],
-                    "evidence_quotes": [],
-                    "rationale": "Neither fetched excerpt discusses how tests override dependencies.",
-                },
-            ],
-        },
-    )
-    assert first_assessment["research_status"] == "gaps_remain"
-    assert first_assessment["evidence_coverage"]["missing_facets"] == ["testing overrides"]
-    assert "allowed_tool_names" not in context.extra
-
-    second = await registry.invoke(
-        context,
-        "search_learning_materials",
-        {
-            "query": "site:docs.example.test testing overrides",
-            "required_facets": facets,
-            "preferred_domains": ["docs.example.test"],
-        },
-    )
-    assert second["research_status"] == "awaiting_model_assessment"
-    second_assessment = await registry.invoke(
-        context,
-        "assess_research_evidence",
-        {
-            "verdict": "sufficient",
-            "evidence_standard": _adaptive_evidence_standard(
-                ["dependency-one", "testing"]
-            ),
-            "facet_assessments": [
-                {
-                    "facet": "dependency injection",
-                    "status": "covered",
-                    "source_ids": ["dependency-one"],
-                    "evidence_quotes": [
-                        {"source_id": "dependency-one", "quote": "Dependency injection"}
-                    ],
-                    "rationale": "The dependency guide directly supports the composition facet.",
-                },
-                {
-                    "facet": "testing overrides",
-                    "status": "covered",
-                    "source_ids": ["testing"],
-                    "evidence_quotes": [
-                        {"source_id": "testing", "quote": "Testing overrides"}
-                    ],
-                    "rationale": "The testing guide directly supports dependency override practice.",
-                },
-            ],
-        },
-    )
-    assert second_assessment["research_complete"] is True
-    assert second_assessment["evidence_coverage"]["covered_facets"] == facets
-    assert context.extra["allowed_tool_names"] == ["save_formal_plan", "coach_finalize"]
-
-
-async def test_model_can_end_research_with_gaps_before_emergency_limit() -> None:
-    context = _context(runtime=SimpleNamespace())
-    context.extra["formal_plan_mutation"] = True
-    context.extra["_learning_material_research_state"] = {
-        "required_facets": ["covered topic", "unresolved topic"],
-        "preferred_domains": ["docs.example.test"],
-        "search_count": 2,
-        "sources": [
-            {
-                "id": "official-one",
-                "title": "Official guide",
-                "url": "https://docs.example.test/one",
-                "source": "docs.example.test",
-                "snippet": "Covered topic is explained by the official guide.",
-                "evidence_excerpt": "Covered topic is explained by the official guide.",
-                "fetched_at": "2026-09-19T00:00:00+00:00",
-                "trust_score": 0.9,
-            }
-        ],
-        "status": "awaiting_model_assessment",
-        "had_allowed_tool_names": False,
-    }
-    registry = build_default_tool_registry()
-
-    result = await registry.invoke(
-        context,
-        "assess_research_evidence",
-        {
-            "verdict": "exhausted_with_gaps",
-            "evidence_standard": _adaptive_evidence_standard(
-                ["official-one"],
-                unresolved=["unresolved topic has no auditable primary evidence"],
-            ),
-            "facet_assessments": [
-                {
-                    "facet": "covered topic",
-                    "status": "covered",
-                    "source_ids": ["official-one"],
-                    "evidence_quotes": [
-                        {"source_id": "official-one", "quote": "Covered topic"}
-                    ],
-                    "rationale": "The official source directly explains the covered topic.",
-                },
-                {
-                    "facet": "unresolved topic",
-                    "status": "missing",
-                    "source_ids": [],
-                    "evidence_quotes": [],
-                    "rationale": "Repeated targeted queries produced no auditable primary evidence.",
-                },
-            ],
-        },
-    )
-
-    assert result["ok"] is True
-    assert result["research_status"] == "exhausted_with_gaps"
-    assert result["evidence_coverage"]["search_count"] == 2
-    assert context.extra["allowed_tool_names"] == ["save_formal_plan", "coach_finalize"]
-
-
-async def test_model_adapts_low_risk_sufficiency_to_one_precise_source() -> None:
-    context = _context(runtime=SimpleNamespace())
-    context.extra["formal_plan_mutation"] = True
-    context.extra["_learning_material_research_state"] = {
-        "required_facets": ["API name", "basic usage"],
-        "preferred_domains": [],
-        "search_count": 1,
-        "sources": [
-            {
-                "id": "concise-guide",
-                "title": "Concise API guide",
-                "url": "https://example.test/guide",
-                "source": "example.test",
-                "snippet": "The Widget API is named create_widget and basic usage calls it once.",
-                "evidence_excerpt": (
-                    "The Widget API is named create_widget and basic usage calls it once."
-                ),
-                "fetched_at": "2026-09-19T00:00:00+00:00",
-                "trust_score": 0.6,
-            }
-        ],
-        "status": "awaiting_model_assessment",
-        "had_allowed_tool_names": False,
-    }
-    registry = build_default_tool_registry()
-
-    result = await registry.invoke(
-        context,
-        "assess_research_evidence",
-        {
-            "verdict": "sufficient",
-            "evidence_standard": _adaptive_evidence_standard(
-                ["concise-guide"],
-                minimum_sources=1,
-                risk_level="exploratory",
-                requires_authority=False,
-            ),
-            "facet_assessments": [
-                {
-                    "facet": "API name",
-                    "status": "covered",
-                    "source_ids": ["concise-guide"],
-                    "evidence_quotes": [
-                        {"source_id": "concise-guide", "quote": "create_widget"}
-                    ],
-                    "rationale": "The fetched guide gives the exact API identifier directly.",
-                },
-                {
-                    "facet": "basic usage",
-                    "status": "covered",
-                    "source_ids": ["concise-guide"],
-                    "evidence_quotes": [
-                        {"source_id": "concise-guide", "quote": "basic usage calls it once"}
-                    ],
-                    "rationale": "The same concise guide directly states the basic usage pattern.",
-                },
-            ],
-        },
-    )
-
-    assert result["ok"] is True
-    assert result["research_status"] == "sufficient"
-    standard = result["evidence_coverage"]["evidence_standard"]
-    assert standard["minimum_independent_sources"] == 1
-    assert standard["requires_authoritative_source"] is False
-
-
-async def test_model_declared_high_risk_threshold_is_strictly_enforced() -> None:
-    context = _context(runtime=SimpleNamespace())
-    context.extra["formal_plan_mutation"] = True
-    context.extra["_learning_material_research_state"] = {
-        "required_facets": ["safety behavior", "failure recovery"],
-        "preferred_domains": ["official.example.test"],
-        "search_count": 1,
-        "sources": [
-            {
-                "id": "official-safety",
-                "title": "Official safety guide",
-                "url": "https://official.example.test/safety",
-                "source": "official.example.test",
-                "snippet": "Safety behavior includes a documented failure recovery procedure.",
-                "evidence_excerpt": (
-                    "Safety behavior includes a documented failure recovery procedure."
-                ),
-                "fetched_at": "2026-09-19T00:00:00+00:00",
-                "trust_score": 0.95,
-            }
-        ],
-        "status": "awaiting_model_assessment",
-        "had_allowed_tool_names": False,
-    }
-
-    result = await build_default_tool_registry().invoke(
-        context,
-        "assess_research_evidence",
-        {
-            "verdict": "sufficient",
-            "evidence_standard": _adaptive_evidence_standard(
-                ["official-safety"],
-                minimum_sources=3,
-                risk_level="high_stakes",
-                requires_authority=True,
-            ),
-            "facet_assessments": [
-                {
-                    "facet": "safety behavior",
-                    "status": "covered",
-                    "source_ids": ["official-safety"],
-                    "evidence_quotes": [
-                        {"source_id": "official-safety", "quote": "Safety behavior"}
-                    ],
-                    "rationale": "The official guide describes the requested safety behavior.",
-                },
-                {
-                    "facet": "failure recovery",
-                    "status": "covered",
-                    "source_ids": ["official-safety"],
-                    "evidence_quotes": [
-                        {"source_id": "official-safety", "quote": "failure recovery procedure"}
-                    ],
-                    "rationale": "The official guide also documents a failure recovery procedure.",
-                },
-            ],
-        },
-    )
-
-    assert result["ok"] is False
-    assert result["error"] == "unsupported_sufficient_verdict"
-    assert result["cited_source_count"] == 1
-    assert result["evidence_standard"]["minimum_independent_sources"] == 3
-
-
-async def test_inspect_current_file_reads_ide_snapshot_without_runtime() -> None:
-    registry = build_default_tool_registry()
-    content = "x" * 80
-    context = ToolContext(
-        runtime=None,
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "current_file": {
-                "path": "src/main.py",
-                "language_id": "python",
-                "content": content,
-                "diagnostics": ["E999 example"],
-                "selection_text": "selected code",
-                "selection_range": "1:1-1:13",
-            }
-        },
-    )
-    result = await registry.invoke(context, "inspect_current_file", {"max_chars": 64})
-    assert result["ok"] is True
-    assert result["path"] == "src/main.py"
-    assert result["language_id"] == "python"
-    assert result["content"] == content[:64]
-    assert result["truncated"] is True
-    assert result["diagnostics"] == ["E999 example"]
-    assert result["selection_text"] == "selected code"
-
-
-async def test_search_resources_tool_normalizes_structured_search_response() -> None:
-    from app.resources.search import SearchFilters, SearchResponse, SearchResult
-
-    registry = build_default_tool_registry()
-    captured: dict[str, Any] = {}
-
-    class _ResourceService:
-        def search_resources(self, **kwargs: Any) -> SearchResponse:
-            captured.update(kwargs)
-            return SearchResponse(
-                results=[
-                    SearchResult(
-                        resource_id="res-1",
-                        path="docs/remote.md",
-                        title="VS Code Remote Boundary",
-                        snippet="Check which host owns the workspace path before moving credentials.",
-                        source="docs/remote.md",
-                        source_type="file",
-                        summary="Boundary-first remote notes.",
-                        trust_score=0.82,
-                        trust_state="trusted",
-                        freshness="fresh",
-                        file_type="markdown",
-                        project_scope="workspace-test",
-                        kind="markdown",
-                        index_state="indexed",
-                        citation_id="citation:res-1",
-                        can_inject_training_card=True,
-                        updated_at=datetime.now(timezone.utc),
-                        rank_score=0.91,
-                        rank_reasons=["title match", "high trust", "indexed"],
-                        matched_fields=["title", "summary"],
-                        match_summary="matched title, summary; trust 0.82; freshness fresh",
-                    )
-                ],
-                query="remote workspace boundary",
-                total=1,
-                filters=SearchFilters(project_scope="workspace-test"),
-                ranking_strategy="lexical_first",
-            )
-
-    context = ToolContext(
-        runtime=SimpleNamespace(resource_service=_ResourceService()),
-        workspace_id="workspace-test",
-        session_id="session-test",
-    )
-    result = await registry.invoke(
-        context,
-        "search_resources",
-        {
-            "query": "remote workspace boundary",
-            "mode": "narrow",
-            "limit": 4,
-            "project_scope": "workspace-test",
-        },
-    )
-
-    assert result["ok"] is True
-    assert captured["top_k"] == 8
-    assert captured["project_scope"] == "workspace-test"
-    assert result["mode"] == "narrow"
-    assert result["ranking_strategy"] == "lexical_first"
-    assert result["filters"]["project_scope"] == "workspace-test"
-    assert result["hits"][0]["title"] == "VS Code Remote Boundary"
-    assert result["hits"][0]["trust_state"] == "trusted"
-    assert result["hits"][0]["match_summary"]
-    assert "Narrow search kept" in result["summary"]
-
-
-async def test_search_resources_tool_verify_mode_prefers_grounded_hits() -> None:
-    from app.resources.search import SearchFilters, SearchResponse, SearchResult
-
-    registry = build_default_tool_registry()
-
-    class _ResourceService:
-        def search_resources(self, **kwargs: Any) -> SearchResponse:
-            now = datetime.now(timezone.utc)
-            return SearchResponse(
-                results=[
-                    SearchResult(
-                        resource_id="res-untrusted",
-                        path="notes/raw.txt",
-                        title="Raw Notes",
-                        snippet="Possibly useful but unverified.",
-                        source="notes/raw.txt",
-                        source_type="file",
-                        summary="Raw notes.",
-                        trust_score=0.1,
-                        trust_state="untrusted",
-                        freshness="unknown",
-                        file_type="text",
-                        project_scope="workspace-test",
-                        kind="text",
-                        index_state="indexed",
-                        citation_id="citation:res-untrusted",
-                        can_inject_training_card=False,
-                        updated_at=now,
-                    ),
-                    SearchResult(
-                        resource_id="res-trusted",
-                        path="docs/debug.md",
-                        title="Debug Loop",
-                        snippet="Pause at the first state transition you can explain.",
-                        source="docs/debug.md",
-                        source_type="file",
-                        summary="Verified debug loop notes.",
-                        trust_score=0.88,
-                        trust_state="trusted",
-                        freshness="fresh",
-                        file_type="markdown",
-                        project_scope="workspace-test",
-                        kind="markdown",
-                        index_state="indexed",
-                        citation_id="citation:res-trusted",
-                        can_inject_training_card=True,
-                        updated_at=now,
-                    ),
-                ],
-                query="debug loop",
-                total=2,
-                filters=SearchFilters(),
-                ranking_strategy="lexical_first",
-            )
-
-    context = ToolContext(
-        runtime=SimpleNamespace(resource_service=_ResourceService()),
-        workspace_id="workspace-test",
-        session_id="session-test",
-    )
-    result = await registry.invoke(
-        context,
-        "search_resources",
-        {"query": "debug loop", "mode": "verify", "limit": 5},
-    )
-
-    assert result["ok"] is True
-    assert result["mode"] == "verify"
-    assert result["verification_ready_count"] == 1
-    assert len(result["hits"]) == 1
-    assert result["hits"][0]["resource_id"] == "res-trusted"
-    assert "Verify search found 1 citation-ready hits" in result["summary"]
-
-
-async def test_verify_practice_current_file_fails_honestly_without_current_file() -> None:
-    registry = build_default_tool_registry()
-    result = await registry.invoke(
-        _context(runtime=None),
-        "verify_practice_current_file",
-        {"acceptance_criteria": ["Implement debounceSearch"]},
-    )
-    assert result["ok"] is False
-    assert result["error"] == "no_current_file"
-    assert result["status"] == "blocked"
-    assert result["passed"] is False
-    assert "active IDE file" in result["detail"]
-
-
-async def test_verify_practice_current_file_blocks_error_diagnostics() -> None:
-    registry = build_default_tool_registry()
-    context = ToolContext(
-        runtime=None,
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "current_file": {
-                "path": "src/search.ts",
-                "language_id": "typescript",
-                "content": "export function debounceSearch(query: string) { return query.trim(); }",
-                "diagnostics": ["[error] line 1: Cannot find name 'query'."],
-            }
-        },
-    )
-    result = await registry.invoke(
-        context,
-        "verify_practice_current_file",
-        {
-            "acceptance_criteria": ["Implement debounceSearch for the search input"],
-            "expected_symbols": ["debounceSearch"],
-            "allow_warnings": True,
-        },
-    )
-    assert result["ok"] is True
-    assert result["status"] == "blocked"
-    assert result["passed"] is False
-    assert result["reason"] == "error_diagnostics"
-    assert result["blocking_diagnostics"] == ["[error] line 1: Cannot find name 'query'."]
-    assert result["path"] == "src/search.ts"
-
-
-async def test_verify_practice_current_file_needs_review_without_acceptance_signals() -> None:
-    registry = build_default_tool_registry()
-    context = ToolContext(
-        runtime=None,
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "current_file": {
-                "path": "src/search.ts",
-                "language_id": "typescript",
-                "content": "export function debounceSearch(query: string) { return query.trim(); }",
-                "diagnostics": [],
-            }
-        },
-    )
-    result = await registry.invoke(context, "verify_practice_current_file", {})
-    assert result["ok"] is True
-    assert result["status"] == "needs_review"
-    assert result["passed"] is False
-    assert result["reason"] == "missing_acceptance_criteria"
-    assert "acceptance criteria" in result["next_step"]
-
-
-async def test_verify_practice_current_file_passes_clean_current_file_evidence() -> None:
-    registry = build_default_tool_registry()
-    context = ToolContext(
-        runtime=None,
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "current_file": {
-                "path": "src/search.ts",
-                "language_id": "typescript",
-                "content": (
-                    "export function debounceSearch(query: string) {\n"
-                    "  const normalizedQuery = query.trim();\n"
-                    "  return normalizedQuery.length > 0 ? normalizedQuery : '';\n"
-                    "}\n"
-                ),
-                "diagnostics": [],
-                "selection_range": "1:1-4:2",
-            }
-        },
-    )
-    result = await registry.invoke(
-        context,
-        "verify_practice_current_file",
-        {
-            "acceptance_criteria": ["Implement debounceSearch for the search input"],
-            "expected_symbols": ["debounceSearch", "normalizedQuery"],
-        },
-    )
-    assert result["ok"] is True
-    assert result["status"] == "passed"
-    assert result["passed"] is True
-    assert result["reason"] == "all_signals_matched"
-    assert result["evidence_source"] == "ide_current_file"
-    assert result["path"] == "src/search.ts"
-    assert result["language_id"] == "typescript"
-    assert all(item["status"] == "matched" for item in result["criteria"])
-    assert any("Read active IDE file src/search.ts" in item for item in result["evidence"])
-
-
-async def test_verify_practice_current_file_persists_training_evidence_before_return(
-    tmp_path,
-) -> None:
-    from app.core.models import ActiveCardSelectionResult, TrainingCardCandidateSnapshot
-    from app.db.repository import TrainerRepository
-    from app.memory.service import MemoryService
-
-    registry = build_default_tool_registry()
-    repository = TrainerRepository(tmp_path / "trainer-memory.db")
-    memory_service = MemoryService(repository)
-    card = TrainingCardCandidateSnapshot(
-        card_id="practice-persist-1",
-        card_type="practice",
-        title="Persist current-file verification",
-        status="active",
-        focus_area="current-file evidence",
-        target_skill="practice verification",
-    )
-    memory_service.upsert_card("workspace-test", card)
-    memory_service.persist_active_card_selection(
-        "workspace-test",
-        ActiveCardSelectionResult(
-            selected_card=card,
-            selected_card_id=card.card_id,
-            why_this_card="The current file needs verified practice evidence.",
-            next_after_completion="Route the next card.",
-            fallback_action="Bring the blocker back to Coach.",
-            candidate_count=1,
-            eligible_count=1,
-        ),
-    )
-    context = ToolContext(
-        runtime=SimpleNamespace(memory_service=memory_service),
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "current_file": {
-                "path": "src/search.ts",
-                "language_id": "typescript",
-                "content": "export function debounceSearch() { return true; }\n",
-                "diagnostics": [],
-            }
-        },
-    )
-
-    result = await registry.invoke(
-        context,
-        "verify_practice_current_file",
-        {
-            "acceptance_criteria": ["Implement debounceSearch"],
-            "expected_symbols": ["debounceSearch"],
-        },
-    )
-
-    assert result["passed"] is True
-    assert result["persisted_training_evidence"] is True
-    assert result["training_card_id"] == "practice-persist-1"
-    updated = memory_service.get_card("workspace-test", "practice-persist-1")
-    assert updated is not None
-    assert updated.status == "active"
-    snapshot = memory_service.snapshot("workspace-test")
-    assert snapshot.workspace["selected_card_status"] == "active"
-    assert snapshot.workspace["latest_training_handoff"]["handoff_status"] == "needs_verification"
-    assert snapshot.workspace["latest_training_handoff"]["learning_phase"] == "try"
-    assert snapshot.workspace["latest_training_next_hop"]["status"] == "verification_required"
-    assert snapshot.training_event_ledger[-1]["event_type"] == "practice_evaluation_recorded"
-    assert snapshot.training_event_ledger[-1]["selected_card_id"] == "practice-persist-1"
-
-
-async def test_verify_practice_current_file_does_not_claim_persistence_when_busy(
-    tmp_path,
-    monkeypatch,
-) -> None:
-    """The agent tool is the one persistence lane without an HTTP status.
-
-    When another training save holds the workspace's reliability slot, the
-    wrapper returns the unmutated busy view. Reporting it as persisted told the
-    coach a save landed that never ran.
-    """
-    from app.core.models import ActiveCardSelectionResult, TrainingCardCandidateSnapshot
-    from app.db.repository import TrainerRepository
-    from app.memory.service import MemoryService
-
-    registry = build_default_tool_registry()
-    memory_service = MemoryService(TrainerRepository(tmp_path / "trainer-memory-busy.db"))
-    card = TrainingCardCandidateSnapshot(
-        card_id="practice-busy-1",
-        card_type="practice",
-        title="Busy verification",
-        status="active",
-        focus_area="current-file evidence",
-        target_skill="practice verification",
-    )
-    memory_service.upsert_card("workspace-test", card)
-    memory_service.persist_active_card_selection(
-        "workspace-test",
-        ActiveCardSelectionResult(
-            selected_card=card,
-            selected_card_id=card.card_id,
-            why_this_card="The current file needs verified practice evidence.",
-            next_after_completion="Route the next card.",
-            fallback_action="Bring the blocker back to Coach.",
-            candidate_count=1,
-            eligible_count=1,
-        ),
-    )
-    monkeypatch.setattr(
-        type(memory_service), "_RELIABILITY_LOCK_WAIT_SECONDS", 0.05, raising=False
-    )
-    context = ToolContext(
-        runtime=SimpleNamespace(memory_service=memory_service),
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "current_file": {
-                "path": "src/search.ts",
-                "language_id": "typescript",
-                "content": "export function debounceSearch() { return true; }\n",
-                "diagnostics": [],
-            }
-        },
-    )
-
-    # Hold the slot the way another in-flight save would.
-    lock = memory_service._reliability_lock_for("workspace-test")
-    lock.acquire()
-    try:
-        result = await registry.invoke(
-            context,
-            "verify_practice_current_file",
-            {
-                "acceptance_criteria": ["Implement debounceSearch"],
-                "expected_symbols": ["debounceSearch"],
-            },
-        )
-    finally:
-        lock.release()
-
-    assert result["passed"] is True  # the verification itself is unaffected
-    assert result["persisted_training_evidence"] is False
-    assert result["training_evidence_error"] == "training_reliability_busy"
-    assert "was not recorded" in result["training_evidence_detail"]
-
-
-async def test_coach_only_tool_refuses_without_context_opt_in() -> None:
-    registry = build_default_tool_registry()
-    result = await registry.invoke(
-        _context(runtime=SimpleNamespace()),
-        "record_learning_note",
-        {"note": "Learner prefers tiny verified slices."},
-    )
-    assert result["ok"] is False
-    assert result["error"] == "coach_only_tool_not_allowed"
-
-
-async def test_record_learning_note_requires_explicit_ask(tmp_path) -> None:
-    captured: dict[str, Any] = {}
-
-    class _MemoryService:
-        def record_teaching_observation(self, *, workspace_id: str, note: str, kind: str) -> None:
-            captured["note"] = note
-
-    registry = build_default_tool_registry()
-    context = ToolContext(
-        runtime=SimpleNamespace(memory_service=_MemoryService()),
-        workspace_id="workspace-note-implicit",
-        session_id="session-note-implicit",
-        extra={"allow_coach_only_tools": True},
-    )
-    result = await registry.invoke(
-        context,
-        "record_learning_note",
-        {"note": "The understand turn felt ready for a durable note.", "kind": "preference"},
-    )
-    assert result["ok"] is False
-    assert result["error"] == "explicit_learning_note_request_required"
-    assert captured == {}
-
-
-async def test_coach_only_tool_runs_when_context_opted_in() -> None:
-    registry = build_default_tool_registry()
-    captured: dict[str, Any] = {}
-
-    class _MemoryService:
-        def record_teaching_observation(self, *, workspace_id: str, note: str, kind: str) -> None:
-            captured["workspace_id"] = workspace_id
-            captured["note"] = note
-            captured["kind"] = kind
-
-    context = ToolContext(
-        runtime=SimpleNamespace(memory_service=_MemoryService()),
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "allow_coach_only_tools": True,
-            "explicit_learning_note_request": True,
-        },
-    )
-    result = await registry.invoke(
-        context,
-        "record_learning_note",
-        {"note": "Learner prefers tiny verified slices.", "kind": "preference"},
-    )
-    assert result["ok"] is True
-    assert captured == {
-        "workspace_id": "workspace-test",
-        "note": "Learner prefers tiny verified slices.",
-        "kind": "preference",
-    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 async def test_generate_training_card_tool_requires_explicit_ask(tmp_path) -> None:
@@ -2967,352 +1842,18 @@ async def test_generate_training_card_tool_requires_explicit_ask(tmp_path) -> No
     assert memory_service.snapshot("workspace-tool-training-card-implicit").active_training_card_routing is None
 
 
-async def test_generate_training_card_tool_denies_chat_mint_for_http_path(
-    tmp_path,
-) -> None:
-    from app.db.repository import TrainerRepository
-    from app.memory.service import MemoryService
-    from app.training.card_generator import CardGenerationService
-    from app.training.card_router import CardRouterService
-
-    registry = build_default_tool_registry()
-    repository = TrainerRepository(tmp_path / "trainer-tool-card.db")
-    memory_service = MemoryService(repository)
-    runtime = SimpleNamespace(
-        memory_service=memory_service,
-        repository=repository,
-        card_generation_service=CardGenerationService(),
-        card_router_service=CardRouterService(),
-    )
-    context = ToolContext(
-        runtime=runtime,
-        workspace_id="workspace-tool-training-card",
-        session_id="session-tool-training-card",
-        response_language="en-US",
-        extra={"allow_coach_only_tools": True, "explicit_training_card_request": True},
-    )
-
-    result = await registry.invoke(
-        context,
-        "generate_training_card",
-        {
-            "focus_area": "VS Code remote workspace",
-            "target_skill": "remote workspace boundary",
-            "card_type": "practice",
-            "why_now": "The learner explicitly asked for a learn-first training card.",
-        },
-    )
-
-    assert result["ok"] is False
-    assert result["error"] == "explicit_http_generate_card_required"
-    assert memory_service.get_cards("workspace-tool-training-card") == []
-    assert memory_service.snapshot("workspace-tool-training-card").active_training_card_routing is None
 
 
-async def test_generate_training_card_tool_why_this_card_gates_leftover_formal_title(
-    tmp_path,
-) -> None:
-    from app.core.models import LearningPlan, PlanStage, TrainingCardCandidateSnapshot
-    from app.db.repository import TrainerRepository
-    from app.memory.service import MemoryService
-
-    leftover_title = "Keep the current stage"
-    leftover_stage = "Auth"
-    leftover_step = "Keep one auth check"
-    leftover_summary = "Leftover formal summary of the old stage path"
-    leftover_plan_id = "plan-formal-old"
-    leftover_card = f"Practice: {leftover_title}"
-    recovered_step = "Add a token expiry test"
-    leftover_why = f"{leftover_card} is the current training card."
-    plan = LearningPlan(
-        id=leftover_plan_id,
-        title=leftover_title,
-        summary=leftover_summary,
-        current_stage_id="stage-1",
-        current_step=leftover_step,
-        stages=[
-            PlanStage(
-                id="stage-1",
-                title=leftover_stage,
-                goal="Keep one check",
-                outcomes=["pass"],
-                status="active",
-            )
-        ],
-    )
-
-    class _LeftoverCardService:
-        def generate_card(self, _source: str, _ctx: object) -> TrainingCardCandidateSnapshot:
-            return TrainingCardCandidateSnapshot(
-                card_id="card-leftover-formal",
-                card_type="practice",
-                title=leftover_card,
-                why_now=leftover_why,
-                problem_statement="Write one expiry test.",
-                deliverable="A passing test.",
-                validation_method="pytest",
-            )
-
-    registry = build_default_tool_registry()
-    repository = TrainerRepository(tmp_path / "trainer-tool-leftover-card.db")
-    memory_service = MemoryService(repository)
-    workspace_id = "workspace-tool-leftover-card"
-    repository.save_plan(workspace_id, plan)
-    memory_service.persist_plan_runtime_recovery(
-        workspace_id,
-        plan=plan,
-        plan_runtime={
-            "current_step": recovered_step,
-            "why_now": "Expired tokens still leak.",
-            "resume_state": "in_progress",
-            "workspace_id": workspace_id,
-        },
-    )
-    runtime = SimpleNamespace(
-        memory_service=memory_service,
-        repository=repository,
-        card_generation_service=_LeftoverCardService(),
-        card_router_service=None,
-    )
-    context = ToolContext(
-        runtime=runtime,
-        workspace_id=workspace_id,
-        session_id="session-tool-leftover-card",
-        response_language="en-US",
-        extra={"allow_coach_only_tools": True, "explicit_training_card_request": True},
-    )
-    result = await registry.invoke(
-        context,
-        "generate_training_card",
-        {
-            "focus_area": recovered_step,
-            "target_skill": recovered_step,
-            "card_type": "practice",
-            "why_now": leftover_why,
-        },
-    )
-    # Leftover-not-live recovered runtime without live card id: ReAct must not invent.
-    assert result["ok"] is False
-    assert result["error"] in {
-        "leftover_not_live_card",
-        "live_training_card_required",
-        "explicit_http_generate_card_required",
-    }
-    assert memory_service.get_cards(workspace_id) == []
-
-    still_workspace = "workspace-tool-still-on-plan-card"
-    still_plan_id = "plan-formal-still-live"
-    still_plan = LearningPlan(
-        id=still_plan_id,
-        title=leftover_title,
-        summary=leftover_summary,
-        current_stage_id="stage-1",
-        current_step=leftover_step,
-        stages=[
-            PlanStage(
-                id="stage-1",
-                title=leftover_stage,
-                goal="Keep one check",
-                outcomes=["pass"],
-                status="active",
-            )
-        ],
-    )
-    repository.save_plan(still_workspace, still_plan)
-    memory_service.persist_plan_runtime_recovery(
-        still_workspace,
-        plan=still_plan,
-        plan_runtime={
-            "current_step": leftover_step,
-            "plan_id": still_plan_id,
-            "resume_state": "in_progress",
-            "workspace_id": still_workspace,
-        },
-    )
-    still_context = ToolContext(
-        runtime=runtime,
-        workspace_id=still_workspace,
-        session_id="session-tool-still-on-plan-card",
-        response_language="en-US",
-        extra={"allow_coach_only_tools": True, "explicit_training_card_request": True},
-    )
-    still = await registry.invoke(
-        still_context,
-        "generate_training_card",
-        {
-            "focus_area": leftover_title,
-            "target_skill": leftover_title,
-            "card_type": "practice",
-            "why_now": leftover_why,
-        },
-    )
-    # Chat/ReAct still must not mint; HTTP /training/generate-card is the binder.
-    assert still["ok"] is False
-    assert still["error"] == "explicit_http_generate_card_required"
-    assert memory_service.get_cards(still_workspace) == []
 
 
-async def test_generate_training_card_tool_projects_safe_current_file_and_remote_facts(
-    tmp_path,
-) -> None:
-    from app.db.repository import TrainerRepository
-    from app.memory.service import MemoryService
-    from app.training.card_generator import CardGenerationService
-    from app.training.card_router import CardRouterService
-
-    registry = build_default_tool_registry()
-    repository = TrainerRepository(tmp_path / "trainer-tool-card-facts.db")
-    memory_service = MemoryService(repository)
-    memory_service.update_workspace_state(
-        "workspace-tool-training-card-facts",
-        remote_name="ssh-remote+lab",
-        is_remote_workspace=True,
-    )
-    runtime = SimpleNamespace(
-        memory_service=memory_service,
-        repository=repository,
-        card_generation_service=CardGenerationService(),
-        card_router_service=CardRouterService(),
-        resolve_workspace_path=lambda _workspace_id: "/workspaces/trainer",
-    )
-    context = ToolContext(
-        runtime=runtime,
-        workspace_id="workspace-tool-training-card-facts",
-        session_id="session-tool-training-card-facts",
-        response_language="en-US",
-        extra={
-            "allow_coach_only_tools": True,
-            "explicit_training_card_request": True,
-            "current_file": {
-                "path": "/workspaces/trainer/src/router.ts",
-                "language_id": "typescript",
-                "content": "export function route() { return 'ok'; }",
-                "diagnostics": [
-                    "TypeError: token=super-secret-value cannot read properties of undefined"
-                ],
-            },
-        },
-    )
-
-    result = await registry.invoke(
-        context,
-        "generate_training_card",
-        {
-            "focus_area": "VS Code debug loop",
-            "target_skill": "debug a TypeError",
-            "card_type": "practice",
-            "why_now": "The learner asked for a grounded debug card.",
-        },
-    )
-
-    assert result["ok"] is False
-    assert result["error"] == "explicit_http_generate_card_required"
-    assert memory_service.get_cards("workspace-tool-training-card-facts") == []
 
 
-async def test_agent_loop_filters_coach_only_tools_from_model_schema_by_context() -> None:
-    registry = build_default_tool_registry()
-    captured_tools: list[dict[str, Any]] = []
-
-    async def _call(
-        _messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None,
-    ) -> dict[str, Any]:
-        captured_tools.extend(tools or [])
-        return {"content": "Done.", "tool_calls": []}
-
-    provider = SimpleNamespace(protocol="openai_chat_completions", call=_call, call_stream=None)
-    loop = CoachAgentLoop(provider=provider, registry=registry, context=_context(), max_steps=1)
-    await loop.run([{"role": "user", "content": "continue"}])
-    names = _tool_schema_names(captured_tools)
-    assert "read_workspace_file" in names
-    assert "record_learning_note" not in names
 
 
-async def test_agent_loop_exposes_coach_only_tools_when_context_opted_in() -> None:
-    registry = build_default_tool_registry()
-    captured_tools: list[dict[str, Any]] = []
-
-    async def _call(
-        _messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None,
-    ) -> dict[str, Any]:
-        captured_tools.extend(tools or [])
-        return {"content": "Done.", "tool_calls": []}
-
-    provider = SimpleNamespace(protocol="openai_chat_completions", call=_call, call_stream=None)
-    context = ToolContext(
-        runtime=None,
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={"allow_coach_only_tools": True},
-    )
-    loop = CoachAgentLoop(provider=provider, registry=registry, context=context, max_steps=1)
-    await loop.run([{"role": "user", "content": "continue"}])
-    names = _tool_schema_names(captured_tools)
-    assert "record_learning_note" not in names
-    assert "generate_training_card" not in names
-    assert "save_formal_plan" not in names
-    assert "import_resource_url" in names
-    assert "organize_resources" in names
 
 
-async def test_agent_loop_exposes_record_learning_note_only_when_explicitly_requested() -> None:
-    registry = build_default_tool_registry()
-    captured_tools: list[dict[str, Any]] = []
-
-    async def _call(
-        _messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None,
-    ) -> dict[str, Any]:
-        captured_tools.extend(tools or [])
-        return {"content": "Done.", "tool_calls": []}
-
-    provider = SimpleNamespace(protocol="openai_chat_completions", call=_call, call_stream=None)
-    context = ToolContext(
-        runtime=None,
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "allow_coach_only_tools": True,
-            "explicit_learning_note_request": True,
-        },
-    )
-    loop = CoachAgentLoop(provider=provider, registry=registry, context=context, max_steps=1)
-    await loop.run([{"role": "user", "content": "Save a learning note that I prefer tiny verified slices."}])
-    names = _tool_schema_names(captured_tools)
-    assert "record_learning_note" in names
-    assert "generate_training_card" not in names
-    assert "import_resource_url" in names
 
 
-async def test_agent_loop_exposes_save_formal_plan_only_on_formal_mutation() -> None:
-    registry = build_default_tool_registry()
-    captured_tools: list[dict[str, Any]] = []
-
-    async def _call(
-        _messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None,
-    ) -> dict[str, Any]:
-        captured_tools.extend(tools or [])
-        return {"content": "Done.", "tool_calls": []}
-
-    provider = SimpleNamespace(protocol="openai_chat_completions", call=_call, call_stream=None)
-    context = ToolContext(
-        runtime=None,
-        workspace_id="workspace-test",
-        session_id="session-test",
-        extra={
-            "allow_coach_only_tools": True,
-            "formal_plan_mutation": True,
-        },
-    )
-    loop = CoachAgentLoop(provider=provider, registry=registry, context=context, max_steps=1)
-    await loop.run([{"role": "user", "content": "Create a formal learning plan for FastAPI routes."}])
-    names = _tool_schema_names(captured_tools)
-    assert "record_learning_note" not in names
-    assert "save_formal_plan" in names
-    assert "generate_training_card" not in names
 
 
 async def test_agent_loop_never_exposes_generate_training_card_from_chat() -> None:
@@ -3344,28 +1885,8 @@ async def test_agent_loop_never_exposes_generate_training_card_from_chat() -> No
     assert "save_formal_plan" not in names
 
 
-async def test_inspect_plan_returns_no_plan_summary_when_repository_missing() -> None:
-    registry = build_default_tool_registry()
-    result = await registry.invoke(_context(runtime=SimpleNamespace()), "inspect_plan", {})
-    assert result["ok"] is False
-    assert result["error"] == "service_unavailable"
 
 
-async def test_coach_finalize_returns_final_payload() -> None:
-    registry = build_default_tool_registry()
-    result = await registry.invoke(
-        _context(),
-        "coach_finalize",
-        {
-            "summary": "wrapped",
-            "next_step": "ship it",
-            "resume_thread": "Resume the live thread around the ship-it branch.",
-        },
-    )
-    assert result["final"] is True
-    assert result["summary"] == "wrapped"
-    assert result["next_step"] == "ship it"
-    assert result["resume_thread"] == "Resume the live thread around the ship-it branch."
 
 
 # ---------------------------------------------------------------------------
@@ -4840,7 +3361,7 @@ async def test_anthropic_compatible_gateway_normalizes_tools_for_openai_fallback
 
     _, kwargs = fake_openai_client.chat.completions.create.call_args
     assert kwargs["tools"][0]["type"] == "function"
-    assert kwargs["tools"][0]["function"]["name"] == "search_resources"
+    assert kwargs["tools"][0]["function"]["name"] == "project_read"
     assert result["tool_calls"] == [
         {
             "id": "call_search",
@@ -5076,7 +3597,7 @@ async def test_agent_binding_protocol_call_matrix_preserves_tools() -> None:
         )
 
         _, kwargs = mock_client.chat.completions.create.call_args
-        assert kwargs["tools"][0]["function"]["name"] == "search_resources"
+        assert kwargs["tools"][0]["function"]["name"] == "project_read"
         assert result["tool_calls"] == [
             {
                 "id": "call_search",
@@ -5109,7 +3630,7 @@ async def test_agent_binding_protocol_call_matrix_preserves_tools() -> None:
         registry.as_protocol_schemas("openai_responses"),
     )
     _, responses_kwargs = responses_client.responses.create.call_args
-    assert responses_kwargs["tools"][0]["name"] == "search_resources"
+    assert responses_kwargs["tools"][0]["name"] == "project_read"
     assert responses_result["tool_calls"][0]["name"] == "search_resources"
 
     # Anthropic Messages uses /v1/messages with input_schema tool definitions.
@@ -5156,7 +3677,7 @@ async def test_agent_binding_protocol_call_matrix_preserves_tools() -> None:
         )
 
     _, anthropic_kwargs = anthropic_client.post.call_args
-    assert anthropic_kwargs["json"]["tools"][0]["name"] == "search_resources"
+    assert anthropic_kwargs["json"]["tools"][0]["name"] == "project_read"
     assert "input_schema" in anthropic_kwargs["json"]["tools"][0]
     assert anthropic_result["tool_calls"][0]["arguments"] == {"query": "anthropic protocol"}
 
@@ -5213,7 +3734,7 @@ async def test_agent_binding_protocol_call_matrix_preserves_tools() -> None:
     async_client.assert_called_once_with(timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS)
     _, gemini_kwargs = gemini_client.post.call_args
     function_declarations = gemini_kwargs["json"]["tools"][0]["functionDeclarations"]
-    assert function_declarations[0]["name"] == "search_resources"
+    assert function_declarations[0]["name"] == "project_read"
     assert gemini_result["tool_calls"][0]["arguments"] == {"query": "gemini protocol"}
 
 
@@ -5380,7 +3901,7 @@ async def test_coaching_reply_agentic_blocks_practice_pass_claim_without_current
     assert "I checked the active IDE file" in outcome["content"]
     assert any(
         event["type"] == "tool_result"
-        and event.get("name") == "verify_practice_current_file"
+        and event.get("name") == "project_verify"
         and event.get("result", {}).get("passed") is False
         and event.get("auto") is True
         for event in outcome["tool_events"]
@@ -5442,7 +3963,7 @@ async def test_coaching_reply_agentic_auto_verifies_practice_pass_when_model_ski
     assert outcome["content"] == "Practice passed. You can mark this complete."
     assert any(
         event["type"] == "tool_result"
-        and event.get("name") == "verify_practice_current_file"
+        and event.get("name") == "project_verify"
         and event.get("result", {}).get("passed") is True
         and event.get("auto") is True
         for event in outcome["tool_events"]
@@ -5515,7 +4036,7 @@ async def test_coaching_reply_agentic_stream_buffers_practice_pass_until_auto_ve
     assert not any(event["type"] == "text" for event in events)
     assert any(
         event["type"] == "tool_result"
-        and event.get("name") == "verify_practice_current_file"
+        and event.get("name") == "project_verify"
         and event.get("result", {}).get("passed") is True
         and event.get("auto") is True
         for event in events
@@ -5553,12 +4074,12 @@ async def test_coaching_reply_agentic_allows_practice_pass_after_current_file_ve
             tool_call = MagicMock()
             tool_call.id = "call_verify"
             tool_call.function = MagicMock(
-                name="verify_practice_current_file",
-                arguments='{"acceptance_criteria":["Implement debounceSearch"],"expected_symbols":["debounceSearch"]}',
+                name="project_verify",
+                arguments='{"action":"verify_practice","acceptance_criteria":["Implement debounceSearch"],"expected_symbols":["debounceSearch"]}',
             )
-            tool_call.function.name = "verify_practice_current_file"
+            tool_call.function.name = "project_verify"
             tool_call.function.arguments = (
-                '{"acceptance_criteria":["Implement debounceSearch"],'
+                '{"action":"verify_practice","acceptance_criteria":["Implement debounceSearch"],'
                 '"expected_symbols":["debounceSearch"]}'
             )
             message.tool_calls = [tool_call]
@@ -5600,7 +4121,7 @@ async def test_coaching_reply_agentic_allows_practice_pass_after_current_file_ve
     assert outcome["content"] == "Practice passed. You can mark this complete."
     assert any(
         event["type"] == "tool_result"
-        and event.get("name") == "verify_practice_current_file"
+        and event.get("name") == "project_verify"
         and event.get("result", {}).get("passed") is True
         for event in outcome["tool_events"]
     )

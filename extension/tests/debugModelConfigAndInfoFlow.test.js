@@ -256,7 +256,6 @@ test('ProviderConfigStore.getWorkspaceOverrideConfig preserves full extended pro
         modelAliases: { fast: 'claude-sonnet-4-20250514' },
         taskBindings: { coach_reply: { alias: 'fast', fallbackAliases: [] } },
         thinkingConfig: { mode: 'enabled', budgetTokens: 8192 },
-        modelThinkingConfig: { 'claude-sonnet-4-20250514': { mode: 'enabled', budgetTokens: 8192 } },
         requestDefaults: { temperature: 0.2, maxTokens: 16384 },
         modelCapabilities: { 'claude-sonnet-4-20250514': { vision: true, thinking: true } },
       },

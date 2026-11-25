@@ -113,22 +113,23 @@ async def _maybe_auto_verify_practice_current_file(
     if not arguments.get("acceptance_criteria") and not arguments.get("expected_symbols"):
         return []
 
-    tool_id = "auto_verify_practice_current_file"
+    tool_id = "auto_project_verify_practice"
+    verify_args = {"action": "verify_practice", **arguments}
     tool_call = {
         "type": "tool_call",
         "id": tool_id,
-        "name": "verify_practice_current_file",
-        "arguments": arguments,
+        "name": "project_verify",
+        "arguments": verify_args,
         "step": "auto",
         "auto": True,
     }
-    tool_result = await registry.invoke(context, "verify_practice_current_file", arguments)
+    tool_result = await registry.invoke(context, "project_verify", verify_args)
     return [
         tool_call,
         {
             "type": "tool_result",
             "id": tool_id,
-            "name": "verify_practice_current_file",
+            "name": "project_verify",
             "ok": bool(tool_result.get("ok")) if isinstance(tool_result, dict) else False,
             "result": tool_result,
             "step": "auto",

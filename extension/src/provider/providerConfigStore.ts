@@ -22,7 +22,7 @@ import { mergeProviderRequestDefaults } from '../../../shared/src/providerReques
 import { defaultCapabilitiesForProtocol, normalizeProviderBaseUrl, normalizeProviderProtocol, OPENAI_COMPATIBLE_PROTOCOL } from '../../../shared/src/providerProtocols';
 import { normalizeProviderConnectionType } from '../../../shared/src/providerGateway';
 import { providerEndpointIdentity } from '../../../shared/src/providerConnectionIdentity';
-import { normalizeProviderModelThinkingConfig, normalizeProviderThinkingConfig, removeThinkingFields, updateProviderThinking } from '../../../shared/src/providerThinking';
+import { normalizeProviderThinkingConfig, removeThinkingFields, updateProviderThinking } from '../../../shared/src/providerThinking';
 import {
   clearHostLastTest,
   selectHostLastTest,
@@ -1158,11 +1158,6 @@ export class ProviderConfigStore implements vscode.Disposable {
         protocol,
       ),
       modelCapabilities,
-      modelThinkingConfig:
-        normalizeProviderModelThinkingConfig(
-          providerRecord.modelThinkingConfig ?? providerRecord.model_thinking_config,
-          protocol,
-        ) ?? fallback?.modelThinkingConfig,
       availableModels:
         workspaceAvailableModels !== undefined ? workspaceAvailableModels : fallback.availableModels,
       catalogModels,
@@ -1229,7 +1224,6 @@ export class ProviderConfigStore implements vscode.Disposable {
         this.readRequestDefaults(normalized.requestDefaults) ?? {},
       ),
       thinkingConfig: normalized.thinkingConfig,
-      modelThinkingConfig: normalized.modelThinkingConfig,
       modelCapabilities: normalized.modelCapabilities,
       modelTokenLimits: normalized.modelTokenLimits,
       availableModels: normalized.availableModels,
@@ -1316,10 +1310,6 @@ export class ProviderConfigStore implements vscode.Disposable {
       profile.thinkingConfig ?? profile.requestDefaults,
       profile.protocol,
     );
-    const profileModelThinkingConfig = normalizeProviderModelThinkingConfig(
-      profile.modelThinkingConfig,
-      profile.protocol,
-    );
 
     return {
       name: profile.label,
@@ -1357,8 +1347,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         },
         profile.requestDefaults,
       ),
-      thinkingConfig: profileModelThinkingConfig?.[profile.model] ?? profileThinkingConfig,
-      modelThinkingConfig: profileModelThinkingConfig,
+      thinkingConfig: profileThinkingConfig,
       capabilities: { ...profile.capabilities },
       profileId: profile.id,
       profileLabel: profile.label,
@@ -1413,7 +1402,6 @@ export class ProviderConfigStore implements vscode.Disposable {
       modelTokenLimits: normalizeProviderModelTokenLimits(normalized.modelTokenLimits),
       taskBindings: this.normalizeTaskBindings(normalized.taskBindings) ?? {},
       thinkingConfig: normalizeProviderThinkingConfig(normalized.thinkingConfig ?? normalized.requestDefaults, protocol),
-      modelThinkingConfig: normalized.modelThinkingConfig,
       requestDefaults: normalizeProviderRequestDefaults(
         {
           name: normalized.name,
@@ -1497,36 +1485,17 @@ export class ProviderConfigStore implements vscode.Disposable {
     };
     const modelCapabilities = config.modelCapabilities ?? fallback?.modelCapabilities ?? {};
     // Per-model intent is the durable store; the flat thinkingConfig mirrors
-    // the current model so requests and older readers keep working. Switching
-    // models restores that model's own intensity instead of carrying the
-    // previous model's choice forward. A fresh requestDefaults save without any
-    // thinking fields clears the current model instead of resurrecting a stale
-    // map entry (the explicit-clear contract).
-    const configuredModelThinkingConfig = normalizeProviderModelThinkingConfig(
-      config.modelThinkingConfig ?? fallback?.modelThinkingConfig,
-      protocol,
-    ) ?? {};
     const hasExplicitThinking = hasOwnField('thinkingConfig');
-    const hasExplicitModelThinking = hasOwnField('modelThinkingConfig');
     const hasFreshRequestDefaults = hasOwnField('requestDefaults');
     const explicitThinkingConfig = normalizeProviderThinkingConfig(config.thinkingConfig, protocol);
-    const thinkingConfig = hasExplicitModelThinking
-      ? configuredModelThinkingConfig[model] ?? explicitThinkingConfig
-      : hasExplicitThinking
-        ? explicitThinkingConfig
-        : hasFreshRequestDefaults
-          ? normalizeProviderThinkingConfig(config.requestDefaults, protocol)
-          : configuredModelThinkingConfig[model] ??
-            normalizeProviderThinkingConfig(
-              config.requestDefaults ?? fallback?.thinkingConfig ?? fallback?.requestDefaults,
-              protocol,
-            );
-    const modelThinkingConfig = { ...configuredModelThinkingConfig };
-    if (thinkingConfig) {
-      modelThinkingConfig[model] = thinkingConfig;
-    } else {
-      delete modelThinkingConfig[model];
-    }
+    const thinkingConfig = hasExplicitThinking
+      ? explicitThinkingConfig
+      : hasFreshRequestDefaults
+        ? normalizeProviderThinkingConfig(config.requestDefaults, protocol)
+        : normalizeProviderThinkingConfig(
+            config.requestDefaults ?? fallback?.thinkingConfig ?? fallback?.requestDefaults,
+            protocol,
+          );
     const thinkingEvidence = this.thinkingEvidenceContext(
       { ...config, profileId: fallback?.profileId ?? config.profileId },
       model,
@@ -1590,7 +1559,6 @@ export class ProviderConfigStore implements vscode.Disposable {
           )
         : normalizedRequestDefaults,
       thinkingConfig,
-      modelThinkingConfig,
       modelCapabilities,
     };
   }
@@ -1697,9 +1665,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         );
       })(),
       thinkingConfig:
-        hasExplicitField('thinkingConfig') ||
-        hasExplicitField('modelThinkingConfig') ||
-        hasExplicitField('requestDefaults')
+        hasExplicitField('thinkingConfig') || hasExplicitField('requestDefaults')
           ? normalizeProviderThinkingConfig(nextConfig.thinkingConfig, nextConfig.protocol)
           : normalizeProviderThinkingConfig(
               nextConfig.thinkingConfig ??
@@ -1708,13 +1674,6 @@ export class ProviderConfigStore implements vscode.Disposable {
                 currentProfile.requestDefaults,
               nextConfig.protocol,
             ),
-      modelThinkingConfig:
-        hasExplicitField('modelThinkingConfig') ||
-        hasExplicitField('thinkingConfig') ||
-        hasExplicitField('requestDefaults')
-          ? normalizeProviderModelThinkingConfig(nextConfig.modelThinkingConfig, nextConfig.protocol)
-          : normalizeProviderModelThinkingConfig(nextConfig.modelThinkingConfig, nextConfig.protocol) ??
-            currentProfile.modelThinkingConfig,
       capabilities: nextConfig.capabilities,
       modelCapabilities: nextConfig.modelCapabilities ?? currentProfile.modelCapabilities,
     });
@@ -1808,10 +1767,7 @@ export class ProviderConfigStore implements vscode.Disposable {
         record.thinkingConfig ?? record.thinking_config ?? record.requestDefaults ?? record.request_defaults,
         protocol,
       ),
-      modelThinkingConfig: normalizeProviderModelThinkingConfig(
-        record.modelThinkingConfig ?? record.model_thinking_config,
-        protocol,
-      ),
+
       requestDefaults: normalizeProviderRequestDefaults(
         {
           name: label ?? '',

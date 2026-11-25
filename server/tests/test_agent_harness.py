@@ -238,8 +238,9 @@ async def test_one_million_token_compaction_preserves_research_evidence_ledger()
     )
     continued = await build_default_tool_registry().invoke(
         context,
-        "search_learning_materials",
+        "web_fetch",
         {
+            "action": "learning_materials",
             "query": "site:docs.example.test continuation after restart",
             "required_facets": research_state["required_facets"],
             "preferred_domains": ["docs.example.test"],

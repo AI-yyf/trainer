@@ -1,9 +1,8 @@
 import type { ComposerLanguage, ProviderConfigView } from "../../lib/types";
 import type { Copy } from "../../lib/i18n/copyTypes";
-import {
-  normalizeProviderModelThinkingConfig,
-  type ProviderThinkingConfig,
-  type ProviderThinkingDescriptor,
+import type {
+  ProviderThinkingConfig,
+  ProviderThinkingDescriptor,
 } from "../../../../../shared/src/providerThinking";
 import type { ComposerProviderMenuItem } from "../../lib/composerModelHelpers";
 import { composerModelPolicyHint } from "../../lib/composerModelHelpers";
@@ -62,17 +61,6 @@ const VISION_LABEL: Record<ComposerLanguage, string> = {
   "pt-BR": "Visão",
 };
 
-const THINKING_LABEL: Record<ComposerLanguage, string> = {
-  "zh-CN": "思考",
-  "en-US": "Thinking",
-  "es-ES": "Razonamiento",
-  "fr-FR": "Réflexion",
-  "de-DE": "Denken",
-  "ja-JP": "思考",
-  "ko-KR": "사고",
-  "pt-BR": "Raciocínio",
-};
-
 const EFFORT_LABEL: Record<"low" | "medium" | "high", Record<ComposerLanguage, string>> = {
   low: {
     "zh-CN": "低",
@@ -111,7 +99,6 @@ type OtherProviderGroup = {
   label: string;
   models: string[];
   visionModels: Set<string>;
-  thinkingByModel: Record<string, ProviderThinkingConfig>;
 };
 
 /**
@@ -237,12 +224,7 @@ export function ComposerModelMenu({
         return rawCapabilities.vision === true;
       }),
     );
-    const thinkingByModel =
-      normalizeProviderModelThinkingConfig(
-        raw.modelThinkingConfig,
-        typeof raw.protocol === "string" ? raw.protocol : undefined,
-      ) ?? {};
-    return [{ id, label, models, visionModels, thinkingByModel }];
+    return [{ id, label, models, visionModels }];
   });
   const queryKey = modelQuery.trim().toLowerCase();
   const visibleOtherGroups = otherProviderGroups
@@ -326,25 +308,6 @@ export function ComposerModelMenu({
     }
     return providerConfig.capabilities.vision === true;
   };
-  const savedThinkingLabelFor = (
-    thinking: ProviderThinkingConfig | undefined,
-  ): string | undefined => {
-    if (!thinking) return undefined;
-    if (thinking.mode === "disabled") {
-      return localize(composerLanguage, "关闭");
-    }
-    if (thinking.mode === "enabled" && thinking.reasoningEffort) {
-      return EFFORT_LABEL[thinking.reasoningEffort][composerLanguage];
-    }
-    if (thinking.mode === "enabled" && typeof thinking.budgetTokens === "number") {
-      return formatCompactTokenLimit(thinking.budgetTokens) || localize(composerLanguage, "开启");
-    }
-    if (thinking.mode === "enabled") {
-      return localize(composerLanguage, "开启");
-    }
-    return undefined;
-  };
-
   const effortOptions: readonly ("low" | "medium" | "high")[] | undefined =
     thinkingDescriptor?.kind === "reasoning_effort"
       ? thinkingDescriptor.effortOptions ?? ["low", "medium", "high"]
@@ -484,9 +447,6 @@ export function ComposerModelMenu({
                         )
                       : undefined;
                     const vision = modelHasVision(profile.model);
-                    const savedThinkingLabel = savedThinkingLabelFor(
-                      providerConfig.modelThinkingConfig?.[profile.model],
-                    );
                     return (
                       <button
                         key={profile.id}
@@ -506,14 +466,6 @@ export function ComposerModelMenu({
                             <span className="composer-model-menu__vision">
                               <EyeIcon size={12} />
                               {visionLabel}
-                            </span>
-                          ) : null}
-                          {savedThinkingLabel ? (
-                            <span
-                              className="composer-model-menu__thinking-badge"
-                              title={localizeAlt(composerLanguage, "思考强度")}
-                            >
-                              {THINKING_LABEL[composerLanguage]} {savedThinkingLabel}
                             </span>
                           ) : null}
                           {profile.isActive ? (
@@ -547,38 +499,25 @@ export function ComposerModelMenu({
                     role="list"
                     aria-label={group.label}
                   >
-                    {group.models.map((model) => {
-                      const groupThinkingLabel = savedThinkingLabelFor(
-                        group.thinkingByModel[model],
-                      );
-                      return (
-                        <button
-                          key={`${group.id}:${model}`}
-                          className="composer-provider-list__item"
-                          type="button"
-                          title={model}
-                          onClick={() => onSwitchProviderModel(group.id, model)}
-                        >
-                          <span className="composer-model-menu__row">
-                            <span className="composer-provider-list__model">{model}</span>
-                            {group.visionModels.has(model) ? (
-                              <span className="composer-model-menu__vision">
-                                <EyeIcon size={12} />
-                                {visionLabel}
-                              </span>
-                            ) : null}
-                            {groupThinkingLabel ? (
-                              <span
-                                className="composer-model-menu__thinking-badge"
-                                title={localizeAlt(composerLanguage, "思考强度")}
-                              >
-                                {THINKING_LABEL[composerLanguage]} {groupThinkingLabel}
-                              </span>
-                            ) : null}
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {group.models.map((model) => (
+                      <button
+                        key={`${group.id}:${model}`}
+                        className="composer-provider-list__item"
+                        type="button"
+                        title={model}
+                        onClick={() => onSwitchProviderModel(group.id, model)}
+                      >
+                        <span className="composer-model-menu__row">
+                          <span className="composer-provider-list__model">{model}</span>
+                          {group.visionModels.has(model) ? (
+                            <span className="composer-model-menu__vision">
+                              <EyeIcon size={12} />
+                              {visionLabel}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </section>
               ))}

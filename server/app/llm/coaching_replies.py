@@ -650,11 +650,11 @@ def _current_file_practice_verification_result(tool_events: list[dict[str, Any]]
     for event in tool_events:
         if str(event.get("type") or "") != "tool_result":
             continue
-        if str(event.get("name") or "") != "verify_practice_current_file":
-            continue
+        name = str(event.get("name") or "")
         result = event.get("result")
-        if isinstance(result, dict):
-            return result
+        if name == "project_verify" and isinstance(result, dict):
+            if str(result.get("action") or "") in {"", "verify_practice"}:
+                return result
     return None
 
 

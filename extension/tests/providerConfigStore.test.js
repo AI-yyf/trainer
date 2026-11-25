@@ -1364,57 +1364,23 @@ test('ProviderConfigStore keeps explicit thinking intent on the wire without cap
   assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
 });
 
-test('ProviderConfigStore keeps one thinking intensity per model and restores it on switch', async () => {
+test('ProviderConfigStore persists flat thinkingConfig across save and reload', async () => {
   const { store, extensionContext, ProviderConfigStore } = createThinkingStore();
-  const modelThinkingConfig = {
-    o3: { mode: 'enabled', reasoningEffort: 'high' },
-    'gpt-4o': { mode: 'enabled', reasoningEffort: 'low' },
-  };
   await store.saveConfig(
     thinkingStoreConfig({
       model: 'o3',
-      modelThinkingConfig,
       thinkingConfig: { mode: 'enabled', reasoningEffort: 'high' },
     }),
     'sk-test',
   );
 
   const saved = store.getConfig();
-  assert.deepEqual(saved.modelThinkingConfig, modelThinkingConfig);
   assert.deepEqual(saved.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
-
-  // Switching model restores gpt-4o's own low intensity, not o3's high one.
-  await store.saveConfig(
-    thinkingStoreConfig({
-      model: 'gpt-4o',
-      modelCapabilities: { 'gpt-4o': { ...THINKING_MODEL_CAPABILITIES } },
-      modelThinkingConfig,
-    }),
-    'sk-test',
-  );
-  const switched = store.getConfig();
-  assert.deepEqual(switched.thinkingConfig, { mode: 'enabled', reasoningEffort: 'low' });
-  assert.equal(switched.requestDefaults.reasoning_effort, 'low');
-  assert.deepEqual(switched.modelThinkingConfig, modelThinkingConfig);
-
-  // Switching back restores o3's high intensity on the wire too.
-  await store.saveConfig(
-    thinkingStoreConfig({
-      model: 'o3',
-      modelCapabilities: { o3: { ...THINKING_MODEL_CAPABILITIES } },
-      modelThinkingConfig,
-    }),
-    'sk-test',
-  );
-  const restored = store.getConfig();
-  assert.deepEqual(restored.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
-  assert.equal(restored.requestDefaults.reasoning_effort, 'high');
-  assert.deepEqual(restored.modelThinkingConfig, modelThinkingConfig);
+  assert.equal(saved.requestDefaults.reasoning_effort, 'high');
 
   const reloaded = new ProviderConfigStore(extensionContext).getConfig();
   assert.deepEqual(reloaded.thinkingConfig, { mode: 'enabled', reasoningEffort: 'high' });
   assert.equal(reloaded.requestDefaults.reasoning_effort, 'high');
-  assert.deepEqual(reloaded.modelThinkingConfig, modelThinkingConfig);
 });
 
 test('ProviderConfigStore keeps an explicit disabled choice disabled when an effort rides along', async () => {

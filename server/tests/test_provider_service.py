@@ -3041,10 +3041,9 @@ def test_confirmed_formal_plan_can_research_and_save_without_practice_tools() ->
     assert extra["allow_coach_only_tools"] is True
     available = set(extra["allowed_tool_names"]) - set(extra["denied_tool_names"])
     assert {
-        "inspect_plan", "recall_memory", "read_workspace_file", "search_learning_materials",
-        "assess_research_evidence", "read_resource_excerpt", "save_formal_plan",
+        "learning_inspect", "learning_action", "project_read", "library_read", "web_fetch",
     } <= available
-    assert available.isdisjoint({"run_diagnostics", "verify_practice_current_file", "generate_training_card"})
+    assert available.isdisjoint({"project_verify", "library_exec", "generate_training_card"})
 
 
 def test_pressure_blocks_denies_generate_training_card_even_when_explicitly_asked() -> None:

@@ -15,9 +15,11 @@ from .prompts import normalize_answer_policy
 from .provider.redaction import _compact_text
 
 _FORMAL_PLAN_TOOLS = (
-    "inspect_plan", "inspect_learning_truth", "recall_memory", "inspect_current_file", "list_workspace_files",
-    "read_workspace_file", "list_resources", "search_resources", "read_resource_excerpt",
-    "search_learning_materials", "assess_research_evidence", "save_formal_plan", "coach_finalize",
+    "learning_inspect",
+    "learning_action",
+    "project_read",
+    "library_read",
+    "web_fetch",
 )
 
 

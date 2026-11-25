@@ -1628,7 +1628,6 @@ function toProviderConfigView(
     connectionType: provider?.connectionType,
     requestDefaults: provider?.requestDefaults ?? {},
     thinkingConfig: provider?.thinkingConfig,
-    modelThinkingConfig: provider?.modelThinkingConfig,
     profileId: provider?.profileId,
     profileLabel: provider?.profileLabel,
     profileMode: provider?.profileMode,

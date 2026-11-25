@@ -60,27 +60,6 @@ export function normalizeProviderThinkingConfig(
   return normalized;
 }
 
-/**
- * Normalize the per-model thinking map. Each model keeps its own durable
- * intent, so switching models restores that model's intensity instead of
- * inheriting the previous model's choice.
- */
-export function normalizeProviderModelThinkingConfig(
-  value: unknown,
-  protocol?: ProviderProtocol | string,
-): Record<string, ProviderThinkingConfig> | undefined {
-  const input = record(value);
-  if (!input) return undefined;
-  const normalized: Record<string, ProviderThinkingConfig> = {};
-  for (const [rawModel, rawConfig] of Object.entries(input)) {
-    const model = rawModel.trim();
-    if (!model) continue;
-    const config = normalizeProviderThinkingConfig(rawConfig, protocol);
-    if (config) normalized[model] = config;
-  }
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-}
-
 export interface ProviderThinkingEvidenceEntry {
   name?: unknown;
   declared?: unknown;
