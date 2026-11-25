@@ -122,6 +122,29 @@ from ..training_card_identity import (
 
 logger = logging.getLogger(__name__)
 
+_BACKGROUND_TAIL_TASKS: set[asyncio.Task[Any]] = set()
+
+
+def _schedule_background_tail(fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> None:
+    """Run non-critical post-stream work in the background so SSE complete is never blocked."""
+
+    async def _runner() -> None:
+        try:
+            result = fn(*args, **kwargs)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:  # noqa: BLE001 - background tail must never crash the event loop
+            logger.warning("trainer_stream_background_tail_failed", exc_info=True)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        fn(*args, **kwargs)
+        return
+    task = loop.create_task(_runner())
+    _BACKGROUND_TAIL_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TAIL_TASKS.discard)
+
 
 def _build_stream_timings(
     *,
@@ -2726,7 +2749,8 @@ def build_core_router(
                     else None,
                 )
                 if not provider_failure_detected:
-                    core.persist_external_references_as_background(
+                    _schedule_background_tail(
+                        core.persist_external_references_as_background,
                         workspace_id=workspace_id,
                         scenario=str(coach_turn["scenario"]),
                         coach_turn_data=core.coach_turn_mapping(coach_turn),
@@ -3606,7 +3630,8 @@ def build_core_router(
                         else None,
                     )
                     if not language_corruption_detected and not provider_failure_detected:
-                        core.persist_external_references_as_background(
+                        _schedule_background_tail(
+                            core.persist_external_references_as_background,
                             workspace_id=workspace_id,
                             scenario=scenario,
                             coach_turn_data=coach_turn_data,
@@ -4295,7 +4320,8 @@ def build_core_router(
                     else None,
                 )
                 if not provider_failure_detected:
-                    core.persist_external_references_as_background(
+                    _schedule_background_tail(
+                        core.persist_external_references_as_background,
                         workspace_id=workspace_id,
                         scenario=str(coach_turn["scenario"]),
                         coach_turn_data=core.coach_turn_mapping(coach_turn),

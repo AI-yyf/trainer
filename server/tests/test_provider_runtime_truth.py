@@ -250,7 +250,7 @@ async def test_coaching_reply_stream_keeps_failed_retry_out_of_visible_output() 
         yield SimpleNamespace(
             choices=[
                 SimpleNamespace(
-                    delta=SimpleNamespace(content="partial visible answer"),
+                    delta=SimpleNamespace(content="partial"),
                     finish_reason="length",
                 )
             ]
@@ -275,7 +275,7 @@ async def test_coaching_reply_stream_keeps_failed_retry_out_of_visible_output() 
     failure = service.peek_last_reply_failure()
     assert failure is not None
     assert failure["error_category"] == "truncated_or_empty"
-    assert "partial visible answer" not in "".join(chunks)
+    assert "partial" not in "".join(chunks)
     assert "second partial answer" not in "".join(chunks)
     assert client.chat.completions.create.await_count == 2
 

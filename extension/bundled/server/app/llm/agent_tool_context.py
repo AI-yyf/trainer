@@ -323,7 +323,7 @@ def _build_agent_tool_context_extra(
         current_file=current_file,
     ):
         extra["allowed_tool_names"] = []
-    elif "allowed_tool_names" not in extra and coach_context.get("legacy_tool_surface") is not True:
+    elif "allowed_tool_names" not in extra:
         from .tool_primitives import select_orthogonal_tools_for_turn
 
         extra["allowed_tool_names"] = select_orthogonal_tools_for_turn(

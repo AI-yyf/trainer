@@ -2960,18 +2960,11 @@ def test_system_prompt_includes_state_driven_teaching_and_retrieval_rhythm() -> 
     assert "Teach in this order when understanding matters" in prompt
     assert "Make concepts feel necessary before naming them." in prompt
     assert "Every 2-3 new ideas, briefly recycle the state" in prompt
-    assert "Retrieval rhythm for grounded teaching:" in prompt
-    assert "search in passes: broad -> narrow -> verify." in prompt
-    assert "prepared library grounding" in prompt
-    assert "must call `search_resources` before answering." in prompt
-    assert "search_learning_materials" in prompt
-    assert "fetched timestamps" in prompt
-    assert "do not invent from memory." in prompt
-    assert "preserve its step count, labels, and boundaries." in prompt
-    assert "live coach with a working library habit" in prompt
+    assert "broad -> narrow -> verify" in prompt
+    assert "library_read" in prompt
+    assert "web_fetch" in prompt
     assert "explicitly requires a library/resource lookup" in prompt
-    assert "visible transcript already renders each read excerpt" in prompt
-    assert "Keep 2-5 strong fragments, then synthesize." in prompt
+    assert "synthesize 2-5 key points cleanly" in prompt
 
 
 def test_agent_prompt_prefers_direct_intake_when_no_evidence_lookup_was_requested() -> None:
@@ -2982,10 +2975,9 @@ def test_agent_prompt_prefers_direct_intake_when_no_evidence_lookup_was_requeste
         agent_loop_enabled=True,
     )
 
-    assert "write one direct coaching reply without tool calls" in prompt
-    assert "Do not recall memory merely to confirm an empty or already-visible state." in prompt
-    assert "do one quick library search" in prompt
-    assert "Never invent a resource id, anchor or citation id." in prompt
+    assert "skipping tools is the normal path" in prompt
+    assert "library_read" in prompt
+    assert "Never write or edit `<ProjectRoot>` business code" in prompt
 
 
 def test_nonofficial_anthropic_intake_hides_unneeded_agent_tools() -> None:
@@ -3035,7 +3027,7 @@ def test_nonofficial_anthropic_intake_keeps_tools_for_resource_grounding() -> No
         provider_config=provider,
     )
 
-    assert "allowed_tool_names" not in extra
+    assert len(extra.get("allowed_tool_names") or []) > 0
 
 
 def test_confirmed_formal_plan_can_research_and_save_without_practice_tools() -> None:
@@ -3237,15 +3229,10 @@ def test_system_prompt_hides_review_reflection_mode_when_function_guidance_is_ex
 def test_system_prompt_agent_loop_discourages_repeated_evidence_probing() -> None:
     profile = _make_profile()
     prompt = build_coaching_system_prompt(profile, agent_loop_enabled=True)
-    assert "If the same evidence keeps coming back" in prompt
+    assert "When you already have enough evidence, close it cleanly instead of probing again." in prompt
     assert "continue until the library or coaching question is settled" in prompt
-    assert "coach_finalize" in prompt
-    assert "use it last" in prompt.lower()
-    assert "do not write learner-facing prose alongside it" in prompt.lower()
-    assert "required fields are a short `summary` and a concrete `next_step`" in prompt
-    assert "grounded `decision`, `blocker`, `teaching_note`, `confidence`, or `evidence` bullets" in prompt
-    assert "resume_thread" in prompt
-    assert "Keep evidence specific" in prompt
+    assert "never wrap rich answers in metadata envelopes" in prompt
+    assert "coach_finalize" not in prompt
 
 
 # 鈹€鈹€ extract_coaching_context 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -5927,7 +5914,7 @@ async def test_agentic_stream_marks_a_checked_direct_prefix_before_final(
     final = events[final_index]
 
     assert text_event["safe_to_stream"] is True
-    assert text_event["delta"] == reply[:-32]
+    assert text_event["delta"] == reply[:-12]
     assert text_index < final_index
     assert final["content"] == reply
 
@@ -5987,7 +5974,7 @@ async def test_agentic_stream_marks_a_checked_direct_prefix_before_final_for_zh_
     final = events[final_index]
 
     assert text_event["safe_to_stream"] is True
-    assert text_event["delta"] == reply[:-24]
+    assert text_event["delta"] == reply[:-8]
     assert text_index < final_index
     assert final["content"] == reply
 

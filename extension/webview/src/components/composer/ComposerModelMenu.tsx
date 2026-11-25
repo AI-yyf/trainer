@@ -627,24 +627,6 @@ export function ComposerModelMenu({
               }
             }}
           />
-          {thinkingDescriptor.kind === "thinking_budget" ||
-          thinkingDescriptor.kind === "gemini_thinking" ||
-          typeof thinkingDescriptor.config.budgetTokens === "number" ? (
-            <p className="composer-menu-panel__hint">
-              {localize(
-                composerLanguage,
-                typeof thinkingDescriptor.config.budgetTokens === "number"
-                  ? "思考预算 {n}，可在“设置”里调整。"
-                  : "思考预算 自动，可在“设置”里调整。",
-              ).replace(
-                "{n}",
-                typeof thinkingDescriptor.config.budgetTokens === "number"
-                  ? formatCompactTokenLimit(thinkingDescriptor.config.budgetTokens) ||
-                      String(thinkingDescriptor.config.budgetTokens)
-                  : "",
-              )}
-            </p>
-          ) : null}
         </footer>
       ) : null}
     </section>

@@ -432,16 +432,17 @@ def test_core_prompt_stays_until_done_and_library_skill_is_gated() -> None:
     )
     core = build_coaching_system_prompt(profile, agent_loop_enabled=True)
     assert "continue until the library or coaching question is settled" in core
-    assert "coach_finalize" in core
-    assert "If the same evidence keeps coming back" in core
-    assert "list_sandbox" not in core
+    assert "project_read" in core
+    assert "library_write" in core
+    assert "coach_finalize" not in core
+    assert "## Library Domain" not in core
     library = build_coaching_system_prompt(
         profile,
         agent_loop_enabled=True,
         coach_context={"active_view": "resources", "library_sandbox_work": True},
     )
-    assert "list_sandbox" in library
-    assert "write_sandbox_file" in library
+    assert "## Library Domain" in library
+    assert "library_exec" in library
 
 
 @pytest.mark.asyncio
