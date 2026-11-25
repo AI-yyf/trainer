@@ -198,8 +198,13 @@ class ToolRegistry:
         explicit_resource_import: bool = False,
         explicit_resource_organize: bool = False,
         live_formal_plan_for_task_mint: bool = False,
+        orthogonal_only: bool = False,
     ) -> list[dict[str, Any]]:
         allowed = _tool_name_allowlist(allowed_tool_names)
+        if orthogonal_only and allowed is None:
+            from .tool_primitives import ORTHOGONAL_PRIMITIVE_SET
+
+            allowed = set(ORTHOGONAL_PRIMITIVE_SET)
         denied = _tool_name_allowlist(denied_tool_names) or set()
         # Learning OS: never expose project/business-code writers to the coach agent.
         denied.update(PROJECT_WRITE_TOOL_NAMES)
@@ -222,7 +227,11 @@ class ToolRegistry:
             tool.schema_for(protocol)
             for tool in self._tools.values()
             if (allow_coach_only or not tool.coach_only)
-            and (allowed is None or tool.name in allowed)
+            and (
+                allowed is None
+                or tool.name in allowed
+                or (bool(allowed) and tool.name.startswith("mcp_"))
+            )
             and tool.name not in denied
         ]
 
@@ -242,11 +251,18 @@ class ToolRegistry:
             }
         allowed = _tool_name_allowlist(context.extra.get("allowed_tool_names"))
         if allowed is not None and name not in allowed:
-            return {
-                "ok": False,
-                "error": "tool_not_available",
-                "detail": "This tool is not available for the current coaching turn.",
-            }
+            from .tool_primitives import LEGACY_TO_ORTHOGONAL_OWNER
+
+            owning_primitive = LEGACY_TO_ORTHOGONAL_OWNER.get(name)
+            if not (
+                owning_primitive is not None
+                and owning_primitive in allowed
+            ) and not (bool(allowed) and name.startswith("mcp_")):
+                return {
+                    "ok": False,
+                    "error": "tool_not_available",
+                    "detail": "This tool is not available for the current coaching turn.",
+                }
         denied = _tool_name_allowlist(context.extra.get("denied_tool_names")) or set()
         denied.update(PROJECT_WRITE_TOOL_NAMES)
         if name == "generate_training_card" and not _explicit_training_card_request_allowed(context):
@@ -8684,6 +8700,10 @@ def build_default_tool_registry(
             handler=_handle_coach_finalize,
         )
     )
+
+    from .tool_primitives import register_orthogonal_primitives
+
+    register_orthogonal_primitives(registry)
 
     for extra_tool in extra_tools or ():
         if registry.get(extra_tool.name) is not None:

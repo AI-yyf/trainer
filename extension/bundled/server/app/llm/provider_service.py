@@ -6484,7 +6484,9 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             holdback_chars = _stream_holdback_chars(response_language)
 
             def safe_direct_reply_prefix() -> str:
-                if not native_stream_available:
+                if not native_stream_available or (
+                    isinstance(coach_context, dict) and bool(coach_context.get("exercise_prompt"))
+                ):
                     return ""
                 visible = _streamable_visible_prefix(buffered_text)
                 if "trainer-image://" in visible:

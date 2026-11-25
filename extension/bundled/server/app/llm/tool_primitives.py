@@ -1,0 +1,1291 @@
+"""Phase 2: 8 dual-domain orthogonal tool primitives for Trainer 2.0 (Pi-agent paradigm).
+
+Converges the 43 legacy coach tools into 8 clean, composable primitives split
+strictly across two authority domains plus learning state:
+
+- ``<ProjectRoot>`` (STRICTLY READ-ONLY — learner's codebase):
+  1. ``project_read``   — inspect current file, list/read project files, modules, symbols, diff impact
+  2. ``project_verify`` — diagnostics, practice verification, rubric review, anchor comparison
+
+- ``<LibraryRoot>`` (FULL PI AUTONOMY + ``.trash/`` soft-delete + auto FTS5 indexing):
+  3. ``library_read``   — search FTS5 library, read excerpts, list/read/grep sandbox files & folders
+  4. ``library_write``  — write, surgical edit, mkdir, rename/move, ``.trash/`` soft_delete, restore,
+                          import URL/workspace file, organize, curate, save lecture note, refresh index
+                          (every content mutation auto-indexes into SQLite FTS5!)
+  5. ``library_exec``   — bounded shell/script execution strictly inside ``cwd=<LibraryRoot>``
+                          (blocks irreversible deletes & ``<ProjectRoot>`` escapes; auto-indexes outputs)
+  6. ``web_fetch``      — web search, page fetch, academic papers, learning materials, evidence check
+
+- Learning State Domain:
+  7. ``learning_inspect`` — inspect plan, learning truth, recall memory, list skills
+  8. ``learning_action``  — host-gated formal plan commit, learning note, task mint, skill invoke, image gen
+"""
+
+from __future__ import annotations
+
+import asyncio
+import inspect
+import logging
+import os
+import re
+import time
+from pathlib import Path
+from typing import Any
+
+from ..core.models import (
+    SandboxDeleteRequest,
+    SandboxMkdirRequest,
+    SandboxRenameRequest,
+    SandboxRestoreRequest,
+    SandboxWriteRequest,
+)
+from .tools import (
+    ToolContext,
+    ToolDefinition,
+    ToolRegistry,
+    _enum,
+    _explicit_learning_note_request_allowed,
+    _formal_plan_mutation_allowed,
+    _handle_analyze_project_impact,
+    _handle_assess_research_evidence,
+    _handle_compare_with_anchor,
+    _handle_curate_library_resources,
+    _handle_delete_resource,
+    _handle_fetch_web_page,
+    _handle_generate_image,
+    _handle_import_resource_url,
+    _handle_import_workspace_file,
+    _handle_index_sandbox_file,
+    _handle_inspect_current_file,
+    _handle_inspect_learning_truth,
+    _handle_inspect_plan,
+    _handle_invoke_skill,
+    _handle_list_library_folders,
+    _handle_list_project_modules,
+    _handle_list_resources,
+    _handle_list_sandbox,
+    _handle_list_skills,
+    _handle_list_workspace_files,
+    _handle_next_task,
+    _handle_organize_resources,
+    _handle_read_project_symbol,
+    _handle_read_resource_excerpt,
+    _handle_read_sandbox_file,
+    _handle_read_workspace_file,
+    _handle_recall_memory,
+    _handle_record_learning_note,
+    _handle_refresh_resource_index,
+    _handle_restore_resource,
+    _handle_run_diagnostics,
+    _handle_run_rubric_review,
+    _handle_save_formal_plan,
+    _handle_save_lecture_note,
+    _handle_search_academic_papers,
+    _handle_search_learning_materials,
+    _handle_search_resources,
+    _handle_specify_task,
+    _handle_verify_practice_current_file,
+    _handle_web_search,
+    _handle_write_sandbox_file,
+    _match_resource_by_sandbox_path,
+    _reindex_matching_sandbox_resource,
+    _safe_sandbox_relative_path,
+    _sandbox_service,
+    _string,
+    _task_mint_tool_allowed,
+)
+
+logger = logging.getLogger("trainer.llm.tool_primitives")
+
+ORTHOGONAL_PRIMITIVE_NAMES: tuple[str, ...] = (
+    "project_read",
+    "project_verify",
+    "library_read",
+    "library_write",
+    "library_exec",
+    "web_fetch",
+    "learning_inspect",
+    "learning_action",
+)
+
+ORTHOGONAL_PRIMITIVE_SET: frozenset[str] = frozenset(ORTHOGONAL_PRIMITIVE_NAMES)
+
+# Maps legacy internal tool names to their owning orthogonal primitive so that
+# live turns expose only the 4-8 orthogonal schemas while direct/legacy
+# invocations remain transparently compatible when their owning primitive is allowed.
+LEGACY_TO_ORTHOGONAL_OWNER: dict[str, str] = {
+    # project_read
+    "inspect_current_file": "project_read",
+    "list_workspace_files": "project_read",
+    "read_workspace_file": "project_read",
+    "list_project_modules": "project_read",
+    "read_project_symbol": "project_read",
+    "analyze_project_impact": "project_read",
+    # project_verify
+    "run_diagnostics": "project_verify",
+    "verify_practice_current_file": "project_verify",
+    "run_rubric_review": "project_verify",
+    "compare_with_anchor": "project_verify",
+    # library_read
+    "search_resources": "library_read",
+    "read_resource_excerpt": "library_read",
+    "list_resources": "library_read",
+    "list_library_folders": "library_read",
+    "list_sandbox": "library_read",
+    "read_sandbox_file": "library_read",
+    # library_write
+    "write_sandbox_file": "library_write",
+    "index_sandbox_file": "library_write",
+    "delete_resource": "library_write",
+    "restore_resource": "library_write",
+    "refresh_resource_index": "library_write",
+    "organize_resources": "library_write",
+    "curate_library_resources": "library_write",
+    "import_resource_url": "library_write",
+    "import_workspace_file": "library_write",
+    "save_lecture_note": "library_write",
+    # web_fetch
+    "web_search": "web_fetch",
+    "fetch_web_page": "web_fetch",
+    "search_academic_papers": "web_fetch",
+    "search_learning_materials": "web_fetch",
+    "assess_research_evidence": "web_fetch",
+    # learning_inspect
+    "inspect_plan": "learning_inspect",
+    "inspect_learning_truth": "learning_inspect",
+    "recall_memory": "learning_inspect",
+    "list_skills": "learning_inspect",
+    # learning_action
+    "save_formal_plan": "learning_action",
+    "record_learning_note": "learning_action",
+    "specify_task": "learning_action",
+    "next_task": "learning_action",
+    "invoke_skill": "learning_action",
+    "generate_image": "learning_action",
+}
+
+_INDEXABLE_LIBRARY_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".md",
+        ".markdown",
+        ".txt",
+        ".rst",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".csv",
+        ".py",
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+        ".html",
+        ".htm",
+        ".tex",
+        ".pdf",
+        ".epub",
+        ".docx",
+    }
+)
+
+# Guardrails for library_exec: forbid irreversible deletes, privilege escalation,
+# pipe-to-shell, and path traversal outside <LibraryRoot>.
+_LIBRARY_EXEC_FORBIDDEN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"(?:^|[;&|]\s*)rm\s+", re.IGNORECASE), "Use library_write(action='soft_delete') instead of rm so deletions stay recoverable in .trash/."),
+    (re.compile(r"\bunlink\s+", re.IGNORECASE), "Use library_write(action='soft_delete') instead of unlink."),
+    (re.compile(r"\brmdir\s+", re.IGNORECASE), "Use library_write(action='soft_delete') instead of rmdir."),
+    (re.compile(r"\bsudo\b|\bsu\b|\bchmod\b|\bchown\b|\bmkfs\b|\bdd\s+if=", re.IGNORECASE), "Privileged or destructive system commands are forbidden in library_exec."),
+    (re.compile(r"\|\s*(?:ba|z|da)?sh\b", re.IGNORECASE), "Piping remote or generated content directly into a shell is forbidden."),
+    (re.compile(r"\bgit\s+push\b", re.IGNORECASE), "Remote git push is forbidden in library_exec."),
+    (re.compile(r"(?:^|[\s'\"=/])(?:\.\./|\.\.\\)"), "Parent directory traversal ('..') is forbidden; library_exec is strictly confined to <LibraryRoot>."),
+)
+
+_MAX_EXEC_TIMEOUT_SECONDS = 30.0
+_DEFAULT_EXEC_TIMEOUT_SECONDS = 15.0
+_MAX_EXEC_OUTPUT_BYTES = 16_384
+
+
+# ---------------------------------------------------------------------------
+# Auto-indexing helpers for <LibraryRoot>
+# ---------------------------------------------------------------------------
+
+
+async def _auto_index_library_path(
+    context: ToolContext,
+    relative_path: str,
+    *,
+    tags: list[str] | None = None,
+) -> dict[str, Any]:
+    """Ensure a file inside <LibraryRoot> is indexed in SQLite FTS5 right after mutation."""
+    sandbox_service = _sandbox_service(context)
+    resource_service = getattr(context.runtime, "resource_service", None) if context.runtime is not None else None
+    if sandbox_service is None or resource_service is None:
+        return {"auto_indexed": False, "reason": "service_unavailable"}
+    try:
+        root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
+        candidate = (root / relative_path).resolve()
+        if not candidate.exists() or not candidate.is_file():
+            return {"auto_indexed": False, "reason": "not_a_file"}
+        if candidate.suffix.lower() not in _INDEXABLE_LIBRARY_EXTENSIONS:
+            return {"auto_indexed": False, "reason": "extension_skipped"}
+        existing = _match_resource_by_sandbox_path(context.runtime, context.workspace_id, relative_path)
+        if existing is not None:
+            reindexed = _reindex_matching_sandbox_resource(context, relative_path)
+            return {
+                "auto_indexed": True,
+                "mode": "reindexed",
+                "resource_id": getattr(existing, "id", None),
+                "library": reindexed,
+            }
+        indexed = await _handle_index_sandbox_file(
+            context,
+            {
+                "path": relative_path,
+                "name": Path(relative_path).name,
+                **({"tags": tags} if tags else {}),
+            },
+        )
+        return {
+            "auto_indexed": bool(indexed.get("ok")),
+            "mode": "indexed_new",
+            "resource_id": indexed.get("resource_id"),
+            "library": indexed,
+        }
+    except Exception as exc:  # noqa: BLE001 - best-effort auto-indexing never fails the write
+        logger.warning("library_auto_index_failed path=%s err=%s", relative_path, exc)
+        return {"auto_indexed": False, "reason": exc.__class__.__name__, "detail": str(exc)}
+
+
+def _is_within_root(root: Path, candidate: Path) -> bool:
+    try:
+        candidate.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _workspace_project_root(context: ToolContext) -> Path | None:
+    runtime = context.runtime
+    resolver = getattr(runtime, "resolve_workspace_path", None) if runtime is not None else None
+    if not callable(resolver):
+        return None
+    raw = resolver(context.workspace_id)
+    if not raw:
+        return None
+    try:
+        return Path(str(raw)).resolve()
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# 1. project_read (<ProjectRoot> strictly read-only)
+# ---------------------------------------------------------------------------
+
+
+async def _handle_project_read(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    action = str(args.get("action") or "read").strip().lower()
+    if action == "inspect_current":
+        result = await _handle_inspect_current_file(context, args)
+    elif action == "list":
+        result = await _handle_list_workspace_files(context, args)
+    elif action == "read":
+        result = await _handle_read_workspace_file(context, args)
+    elif action == "modules":
+        result = await _handle_list_project_modules(context, args)
+    elif action == "symbol":
+        result = await _handle_read_project_symbol(context, args)
+    elif action == "impact":
+        result = await _handle_analyze_project_impact(context, args)
+    else:
+        return {
+            "ok": False,
+            "error": "invalid_action",
+            "detail": (
+                f"Unsupported project_read action {action!r}. "
+                "Use one of: inspect_current, list, read, modules, symbol, impact."
+            ),
+        }
+    if isinstance(result, dict):
+        result.setdefault("domain", "project_readonly")
+        result.setdefault("action", action)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 2. project_verify (<ProjectRoot> strictly read-only verification)
+# ---------------------------------------------------------------------------
+
+
+async def _handle_project_verify(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    action = str(args.get("action") or "diagnostics").strip().lower()
+    if action == "diagnostics":
+        result = await _handle_run_diagnostics(context, args)
+    elif action == "verify_practice":
+        result = await _handle_verify_practice_current_file(context, args)
+    elif action == "rubric_review":
+        if context.extra.get("rubric_review_allowed") is not True:
+            return {
+                "ok": False,
+                "error": "rubric_review_not_allowed",
+                "detail": "rubric_review is only available in a host-gated practice turn with a card rubric attached.",
+            }
+        result = await _handle_run_rubric_review(context, args)
+    elif action == "compare_anchor":
+        result = await _handle_compare_with_anchor(context, args)
+    else:
+        return {
+            "ok": False,
+            "error": "invalid_action",
+            "detail": (
+                f"Unsupported project_verify action {action!r}. "
+                "Use one of: diagnostics, verify_practice, rubric_review, compare_anchor."
+            ),
+        }
+    if isinstance(result, dict):
+        result.setdefault("domain", "project_readonly")
+        result.setdefault("action", action)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 3. library_read (<LibraryRoot> search, read, list, grep)
+# ---------------------------------------------------------------------------
+
+
+def _grep_library_root(
+    root: Path,
+    pattern: str,
+    *,
+    subdir: str | None = None,
+    limit: int = 40,
+    include_trash: bool = False,
+) -> dict[str, Any]:
+    base = root
+    if subdir:
+        safe_sub = _safe_sandbox_relative_path(subdir, field_name="path")
+        base = (root / safe_sub).resolve()
+        if not _is_within_root(root, base):
+            return {"ok": False, "error": "invalid_path", "detail": "Search path escapes <LibraryRoot>."}
+        if not base.exists():
+            return {"ok": False, "error": "not_found", "detail": f"Path not found in library: {safe_sub}"}
+    try:
+        regex = re.compile(pattern, re.IGNORECASE)
+    except re.error:
+        regex = re.compile(re.escape(pattern), re.IGNORECASE)
+    matches: list[dict[str, Any]] = []
+    scanned_files = 0
+    for dirpath, dirnames, filenames in os.walk(base):
+        if not include_trash:
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if d not in {".trash", "trash", ".trainer-trash"} and not d.startswith(".git")
+            ]
+        for filename in sorted(filenames):
+            file_path = Path(dirpath) / filename
+            if file_path.suffix.lower() not in _INDEXABLE_LIBRARY_EXTENSIONS:
+                continue
+            try:
+                if file_path.stat().st_size > 1_048_576:
+                    continue
+                text = file_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            scanned_files += 1
+            rel = file_path.resolve().relative_to(root.resolve()).as_posix()
+            for line_no, line in enumerate(text.splitlines(), start=1):
+                if regex.search(line):
+                    matches.append({"path": rel, "line": line_no, "text": line.strip()[:240]})
+                    if len(matches) >= limit:
+                        return {
+                            "ok": True,
+                            "domain": "library_sandbox",
+                            "action": "grep",
+                            "pattern": pattern,
+                            "scanned_files": scanned_files,
+                            "truncated": True,
+                            "matches": matches,
+                        }
+    return {
+        "ok": True,
+        "domain": "library_sandbox",
+        "action": "grep",
+        "pattern": pattern,
+        "scanned_files": scanned_files,
+        "truncated": False,
+        "matches": matches,
+    }
+
+
+async def _handle_library_read(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    action = str(args.get("action") or "search").strip().lower()
+    if action == "search":
+        result = await _handle_search_resources(context, args)
+    elif action == "excerpt":
+        result = await _handle_read_resource_excerpt(context, args)
+    elif action == "list_resources":
+        result = await _handle_list_resources(context, args)
+    elif action == "list_folders":
+        result = await _handle_list_library_folders(context, args)
+    elif action == "list_files":
+        result = await _handle_list_sandbox(context, args)
+    elif action == "read_file":
+        result = await _handle_read_sandbox_file(context, args)
+    elif action == "grep":
+        sandbox_service = _sandbox_service(context)
+        if sandbox_service is None:
+            return {"ok": False, "error": "service_unavailable", "detail": "The managed library sandbox is not configured."}
+        pattern = str(args.get("query") or args.get("pattern") or "").strip()
+        if not pattern:
+            return {"ok": False, "error": "missing_pattern", "detail": "library_read(action='grep') requires query or pattern."}
+        root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
+        try:
+            limit = max(1, min(int(args.get("limit", 40)), 100))
+        except Exception:
+            limit = 40
+        result = _grep_library_root(
+            root,
+            pattern,
+            subdir=str(args.get("path") or "").strip() or None,
+            limit=limit,
+            include_trash=args.get("include_trash") is True,
+        )
+    else:
+        return {
+            "ok": False,
+            "error": "invalid_action",
+            "detail": (
+                f"Unsupported library_read action {action!r}. "
+                "Use one of: search, excerpt, list_resources, list_folders, list_files, read_file, grep."
+            ),
+        }
+    if isinstance(result, dict):
+        result.setdefault("domain", "library_sandbox")
+        result.setdefault("action", action)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 4. library_write (<LibraryRoot> full Pi writes + .trash/ soft-delete + auto FTS5)
+# ---------------------------------------------------------------------------
+
+
+async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    action = str(args.get("action") or "write").strip().lower()
+    sandbox_service = _sandbox_service(context)
+
+    if action == "write":
+        result = await _handle_write_sandbox_file(context, args)
+        if isinstance(result, dict) and result.get("ok") and result.get("path"):
+            index_info = await _auto_index_library_path(
+                context,
+                str(result["path"]),
+                tags=args.get("tags") if isinstance(args.get("tags"), list) else None,
+            )
+            result["auto_indexed"] = index_info.get("auto_indexed", False)
+            if index_info.get("resource_id"):
+                result["resource_id"] = index_info["resource_id"]
+        return _stamp_library_result(result, action)
+
+    if action == "edit":
+        if sandbox_service is None:
+            return {"ok": False, "error": "service_unavailable", "detail": "The managed library sandbox is not configured."}
+        try:
+            relative = _safe_sandbox_relative_path(args.get("path"), field_name="path")
+        except ValueError as exc:
+            return {"ok": False, "error": "invalid_path", "detail": str(exc)}
+        old_text = args.get("old_text")
+        new_text = args.get("new_text")
+        if not isinstance(old_text, str) or not old_text:
+            return {"ok": False, "error": "missing_old_text", "detail": "library_write(action='edit') requires non-empty old_text."}
+        if not isinstance(new_text, str):
+            return {"ok": False, "error": "missing_new_text", "detail": "library_write(action='edit') requires string new_text."}
+        root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
+        target = (root / relative).resolve()
+        if not _is_within_root(root, target):
+            return {"ok": False, "error": "invalid_path", "detail": "Edit path escapes <LibraryRoot>."}
+        if not target.exists() or not target.is_file():
+            return {"ok": False, "error": "not_found", "detail": f"File not found in library: {relative}"}
+        current_content = target.read_text(encoding="utf-8", errors="replace")
+        occurrences = current_content.count(old_text)
+        if occurrences == 0:
+            return {"ok": False, "error": "old_text_not_found", "detail": f"old_text was not found in {relative}."}
+        replace_all = args.get("replace_all") is True
+        if occurrences > 1 and not replace_all:
+            return {
+                "ok": False,
+                "error": "ambiguous_edit",
+                "detail": f"old_text matched {occurrences} times in {relative}; provide more context or set replace_all=true.",
+            }
+        updated_content = (
+            current_content.replace(old_text, new_text)
+            if replace_all
+            else current_content.replace(old_text, new_text, 1)
+        )
+        try:
+            sandbox_service.write(
+                context.workspace_id,
+                SandboxWriteRequest(
+                    workspace_id=context.workspace_id,
+                    path=relative,
+                    content=updated_content,
+                    create=False,
+                    explicitDestructivePolicy=True,
+                ),
+            )
+        except Exception as exc:
+            return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+        index_info = await _auto_index_library_path(context, relative)
+        return {
+            "ok": True,
+            "domain": "library_sandbox",
+            "action": "edit",
+            "path": relative,
+            "replacements": occurrences if replace_all else 1,
+            "bytes": len(updated_content.encode("utf-8", errors="replace")),
+            "auto_indexed": index_info.get("auto_indexed", False),
+            **({"resource_id": index_info["resource_id"]} if index_info.get("resource_id") else {}),
+        }
+
+    if action == "mkdir":
+        if sandbox_service is None:
+            return {"ok": False, "error": "service_unavailable", "detail": "The managed library sandbox is not configured."}
+        try:
+            relative = _safe_sandbox_relative_path(args.get("path"), field_name="path")
+        except ValueError as exc:
+            return {"ok": False, "error": "invalid_path", "detail": str(exc)}
+        try:
+            sandbox_service.mkdir(
+                context.workspace_id,
+                SandboxMkdirRequest(workspace_id=context.workspace_id, path=relative),
+            )
+        except Exception as exc:
+            return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+        return {"ok": True, "domain": "library_sandbox", "action": "mkdir", "path": relative, "created": True}
+
+    if action in {"rename", "move"}:
+        if sandbox_service is None:
+            return {"ok": False, "error": "service_unavailable", "detail": "The managed library sandbox is not configured."}
+        try:
+            src_rel = _safe_sandbox_relative_path(args.get("path"), field_name="path")
+            dst_rel = _safe_sandbox_relative_path(args.get("new_path") or args.get("destination"), field_name="new_path")
+        except ValueError as exc:
+            return {"ok": False, "error": "invalid_path", "detail": str(exc)}
+        try:
+            sandbox_service.rename(
+                context.workspace_id,
+                SandboxRenameRequest(
+                    path=src_rel,
+                    new_path=dst_rel,
+                ),
+            )
+        except Exception as exc:
+            return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+        index_info = await _auto_index_library_path(context, dst_rel)
+        return {
+            "ok": True,
+            "domain": "library_sandbox",
+            "action": action,
+            "path": src_rel,
+            "new_path": dst_rel,
+            "auto_indexed": index_info.get("auto_indexed", False),
+            **({"resource_id": index_info["resource_id"]} if index_info.get("resource_id") else {}),
+        }
+
+    if action == "soft_delete":
+        if args.get("resource_id"):
+            return _stamp_library_result(await _handle_delete_resource(context, args), action)
+        if sandbox_service is None:
+            return {"ok": False, "error": "service_unavailable", "detail": "The managed library sandbox is not configured."}
+        try:
+            relative = _safe_sandbox_relative_path(args.get("path"), field_name="path")
+        except ValueError as exc:
+            return {"ok": False, "error": "invalid_path", "detail": str(exc)}
+        try:
+            sandbox_service.delete(
+                context.workspace_id,
+                SandboxDeleteRequest(
+                    workspace_id=context.workspace_id,
+                    path=relative,
+                    explicitDestructivePolicy=True,
+                ),
+            )
+        except Exception as exc:
+            return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+        # Discover the trashed path inside trash/.trash/ so the model can report or restore it easily.
+        root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
+        trashed_rel = None
+        for trash_name in (".trash", "trash", ".trainer-trash"):
+            trash_dir = root / trash_name
+            if trash_dir.exists():
+                matches = sorted(
+                    trash_dir.rglob(Path(relative).name),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                if matches:
+                    trashed_rel = matches[0].resolve().relative_to(root).as_posix()
+                    break
+        return {
+            "ok": True,
+            "domain": "library_sandbox",
+            "action": "soft_delete",
+            "path": relative,
+            "soft_deleted": True,
+            "trashed_path": trashed_rel,
+        }
+
+    if action == "restore":
+        if args.get("resource_id"):
+            return _stamp_library_result(await _handle_restore_resource(context, args), action)
+        if sandbox_service is None:
+            return {"ok": False, "error": "service_unavailable", "detail": "The managed library sandbox is not configured."}
+        raw_path = str(args.get("path") or args.get("trashed_path") or "").strip()
+        if not raw_path:
+            return {"ok": False, "error": "missing_path", "detail": "library_write(action='restore') requires path or resource_id."}
+        restore_path = str(args.get("restore_path") or "").strip() or None
+        try:
+            sandbox_service.restore(
+                context.workspace_id,
+                SandboxRestoreRequest(
+                    workspace_id=context.workspace_id,
+                    path=raw_path,
+                    restore_path=restore_path,
+                    explicitDestructivePolicy=True,
+                ),
+            )
+        except Exception as exc:
+            return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
+        index_target = restore_path or raw_path
+        index_info = await _auto_index_library_path(context, index_target)
+        return {
+            "ok": True,
+            "domain": "library_sandbox",
+            "action": "restore",
+            "path": raw_path,
+            "restored_path": restore_path,
+            "auto_indexed": index_info.get("auto_indexed", False),
+        }
+
+    if action == "import_url":
+        return _stamp_library_result(await _handle_import_resource_url(context, args), action)
+    if action == "import_workspace":
+        return _stamp_library_result(await _handle_import_workspace_file(context, args), action)
+    if action == "organize":
+        return _stamp_library_result(await _handle_organize_resources(context, args), action)
+    if action == "curate":
+        return _stamp_library_result(await _handle_curate_library_resources(context, args), action)
+    if action == "save_lecture_note":
+        return _stamp_library_result(await _handle_save_lecture_note(context, args), action)
+    if action == "refresh_index":
+        if args.get("path") and not args.get("resource_id"):
+            return _stamp_library_result(await _handle_index_sandbox_file(context, args), action)
+        return _stamp_library_result(await _handle_refresh_resource_index(context, args), action)
+
+    return {
+        "ok": False,
+        "error": "invalid_action",
+        "detail": (
+            f"Unsupported library_write action {action!r}. Use one of: write, edit, mkdir, "
+            "rename, move, soft_delete, restore, import_url, import_workspace, organize, curate, "
+            "save_lecture_note, refresh_index."
+        ),
+    }
+
+
+def _stamp_library_result(result: dict[str, Any], action: str) -> dict[str, Any]:
+    if isinstance(result, dict):
+        result.setdefault("domain", "library_sandbox")
+        result.setdefault("action", action)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 5. library_exec (<LibraryRoot> bounded shell/script execution)
+# ---------------------------------------------------------------------------
+
+
+def _validate_library_exec_command(
+    command: str,
+    *,
+    library_root: Path,
+    project_root: Path | None,
+) -> str | None:
+    cleaned = command.strip()
+    if not cleaned:
+        return "library_exec requires a non-empty command."
+    for pattern, reason in _LIBRARY_EXEC_FORBIDDEN_PATTERNS:
+        if pattern.search(cleaned):
+            return reason
+    if project_root is not None:
+        project_str = str(project_root)
+        if project_str and project_str != str(library_root) and project_str in cleaned:
+            return "library_exec cannot access <ProjectRoot>; use project_read for read-only codebase inspection."
+    # Reject absolute paths pointing outside <LibraryRoot> (except standard binaries like /usr/bin, /bin, /opt/homebrew/bin).
+    for token in re.findall(r"(?:^|\s)(/[^\s'\"|;&]+)", cleaned):
+        if token.startswith(("/usr/", "/bin/", "/opt/homebrew/", "/dev/null")):
+            continue
+        try:
+            candidate = Path(token).resolve()
+        except Exception:
+            continue
+        if not _is_within_root(library_root, candidate):
+            return f"Absolute path {token!r} escapes <LibraryRoot>."
+    return None
+
+
+async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    sandbox_service = _sandbox_service(context)
+    if sandbox_service is None:
+        return {"ok": False, "error": "service_unavailable", "detail": "The managed library sandbox is not configured."}
+    command = str(args.get("command") or "").strip()
+    library_root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
+    project_root = _workspace_project_root(context)
+    rejection = _validate_library_exec_command(
+        command,
+        library_root=library_root,
+        project_root=project_root,
+    )
+    if rejection is not None:
+        return {
+            "ok": False,
+            "domain": "library_sandbox",
+            "error": "command_blocked",
+            "detail": rejection,
+        }
+    try:
+        timeout = max(1.0, min(float(args.get("timeout_seconds", _DEFAULT_EXEC_TIMEOUT_SECONDS)), _MAX_EXEC_TIMEOUT_SECONDS))
+    except Exception:
+        timeout = _DEFAULT_EXEC_TIMEOUT_SECONDS
+
+    started_at = time.time()
+    proc = await asyncio.create_subprocess_shell(
+        command,
+        cwd=str(library_root),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        raw_stdout, raw_stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        return {
+            "ok": False,
+            "domain": "library_sandbox",
+            "error": "timeout",
+            "detail": f"library_exec timed out after {timeout:.1f}s.",
+        }
+
+    stdout_text = raw_stdout[:_MAX_EXEC_OUTPUT_BYTES].decode("utf-8", errors="replace")
+    stderr_text = raw_stderr[:_MAX_EXEC_OUTPUT_BYTES].decode("utf-8", errors="replace")
+    auto_indexed_paths: list[str] = []
+    if proc.returncode == 0 and args.get("auto_index") is not False:
+        # Auto-index any newly created or modified indexable files in <LibraryRoot> (excluding .trash).
+        for dirpath, dirnames, filenames in os.walk(library_root):
+            dirnames[:] = [d for d in dirnames if d != ".trash" and not d.startswith(".")]
+            for filename in filenames:
+                file_path = Path(dirpath) / filename
+                if file_path.suffix.lower() not in _INDEXABLE_LIBRARY_EXTENSIONS:
+                    continue
+                try:
+                    if file_path.stat().st_mtime >= started_at - 0.5:
+                        rel = file_path.resolve().relative_to(library_root).as_posix()
+                        info = await _auto_index_library_path(context, rel)
+                        if info.get("auto_indexed"):
+                            auto_indexed_paths.append(rel)
+                except OSError:
+                    continue
+                if len(auto_indexed_paths) >= 12:
+                    break
+
+    return {
+        "ok": proc.returncode == 0,
+        "domain": "library_sandbox",
+        "exit_code": int(proc.returncode or 0),
+        "cwd": str(library_root),
+        "stdout": stdout_text,
+        "stderr": stderr_text,
+        "truncated": len(raw_stdout) > _MAX_EXEC_OUTPUT_BYTES or len(raw_stderr) > _MAX_EXEC_OUTPUT_BYTES,
+        "auto_indexed_paths": auto_indexed_paths,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 6. web_fetch (web search, page fetch, papers, learning materials, evidence)
+# ---------------------------------------------------------------------------
+
+
+async def _handle_web_fetch(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    action = str(args.get("action") or ("fetch" if args.get("url") else "search")).strip().lower()
+    if action == "search":
+        result = await _handle_web_search(context, args)
+    elif action == "fetch":
+        result = await _handle_fetch_web_page(context, args)
+    elif action == "papers":
+        result = await _handle_search_academic_papers(context, args)
+    elif action == "learning_materials":
+        result = await _handle_search_learning_materials(context, args)
+    elif action == "assess_evidence":
+        result = await _handle_assess_research_evidence(context, args)
+    elif action == "import_url":
+        result = await _handle_import_resource_url(context, args)
+    else:
+        return {
+            "ok": False,
+            "error": "invalid_action",
+            "detail": (
+                f"Unsupported web_fetch action {action!r}. "
+                "Use one of: search, fetch, papers, learning_materials, assess_evidence, import_url."
+            ),
+        }
+    if isinstance(result, dict):
+        result.setdefault("domain", "web_research")
+        result.setdefault("action", action)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 7. learning_inspect (plan, truth, memory, skills)
+# ---------------------------------------------------------------------------
+
+
+async def _handle_learning_inspect(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    action = str(args.get("action") or "plan").strip().lower()
+    if action == "plan":
+        result = await _handle_inspect_plan(context, args)
+    elif action == "truth":
+        result = await _handle_inspect_learning_truth(context, args)
+    elif action == "memory":
+        result = await _handle_recall_memory(context, args)
+    elif action == "skills":
+        result = await _handle_list_skills(context, args)
+    else:
+        return {
+            "ok": False,
+            "error": "invalid_action",
+            "detail": (
+                f"Unsupported learning_inspect action {action!r}. "
+                "Use one of: plan, truth, memory, skills."
+            ),
+        }
+    if inspect.isawaitable(result):
+        result = await result
+    if isinstance(result, dict):
+        result.setdefault("domain", "learning_state")
+        result.setdefault("action", action)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 8. learning_action (host-gated mutations: formal plan, note, task, skill, image)
+# ---------------------------------------------------------------------------
+
+
+async def _handle_learning_action(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    action = str(args.get("action") or "").strip().lower()
+    if action == "save_formal_plan":
+        if not _formal_plan_mutation_allowed(context):
+            return {
+                "ok": False,
+                "error": "formal_plan_mutation_required",
+                "detail": "save_formal_plan is only available during an explicit formal plan turn.",
+            }
+        result = await _handle_save_formal_plan(context, args)
+    elif action == "record_note":
+        if not _explicit_learning_note_request_allowed(context):
+            return {
+                "ok": False,
+                "error": "explicit_learning_note_request_required",
+                "detail": "record_note is only available when the learner explicitly asked to save a note.",
+            }
+        result = await _handle_record_learning_note(context, args)
+    elif action == "specify_task":
+        if not _task_mint_tool_allowed(context):
+            return {
+                "ok": False,
+                "error": "live_formal_plan_required",
+                "detail": "specify_task requires a live-bound formal plan.",
+            }
+        result = await _handle_specify_task(context, args)
+    elif action == "next_task":
+        if not _task_mint_tool_allowed(context):
+            return {
+                "ok": False,
+                "error": "live_formal_plan_required",
+                "detail": "next_task requires a live-bound formal plan.",
+            }
+        result = await _handle_next_task(context, args)
+    elif action == "invoke_skill":
+        result = await _handle_invoke_skill(context, args)
+    elif action == "generate_image":
+        result = await _handle_generate_image(context, args)
+    else:
+        return {
+            "ok": False,
+            "error": "invalid_action",
+            "detail": (
+                f"Unsupported learning_action action {action!r}. "
+                "Use one of: save_formal_plan, record_note, specify_task, next_task, invoke_skill, generate_image."
+            ),
+        }
+    if inspect.isawaitable(result):
+        result = await result
+    if isinstance(result, dict):
+        result.setdefault("domain", "learning_state")
+        result.setdefault("action", action)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Tool definitions & dynamic per-turn mounting
+# ---------------------------------------------------------------------------
+
+
+def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
+    """Return the 8 dual-domain orthogonal ToolDefinition primitives."""
+    return [
+        ToolDefinition(
+            name="project_read",
+            description=(
+                "Read-only inspection of the learner's project codebase (<ProjectRoot>). "
+                "Never modifies project code. Use action='inspect_current' for the active editor file, "
+                "'list' to browse project files, 'read' to read a source file, 'modules' for repo overview, "
+                "'symbol' to locate a function/class, or 'impact' for git diff caller impact."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum(
+                        "Read-only project inspection action.",
+                        ["inspect_current", "list", "read", "modules", "symbol", "impact"],
+                    ),
+                    "path": _string("Relative file or directory path inside <ProjectRoot> (for read/list)."),
+                    "name": _string("Symbol name to locate (for action='symbol')."),
+                    "file": _string("Optional path substring filter (for action='symbol')."),
+                    "query": _string("Optional filename or substring filter (for action='list')."),
+                    "start_line": {"type": "integer", "description": "Optional 1-based start line (for read)."},
+                    "end_line": {"type": "integer", "description": "Optional 1-based end line (for read)."},
+                    "since": _string("Optional git ref for impact diff."),
+                    "depth": {"type": "integer", "description": "Caller depth 1-3 for impact."},
+                    "resource_id": _string("Optional imported-project resource id."),
+                },
+                "required": ["action"],
+            },
+            handler=_handle_project_read,
+        ),
+        ToolDefinition(
+            name="project_verify",
+            description=(
+                "Read-only verification of the learner's work in <ProjectRoot>: run editor/project "
+                "diagnostics, verify practice code against checks, run host-gated rubric review, "
+                "or compare an imitation submission with an anchor passage."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum(
+                        "Verification action.",
+                        ["diagnostics", "verify_practice", "rubric_review", "compare_anchor"],
+                    ),
+                    "path": _string("Optional relative file path for diagnostics/practice verification."),
+                    "submission": _string("Learner text submission (for compare_anchor / rubric_review)."),
+                    "anchor_text": _string("Optional inline anchor passage (for compare_anchor)."),
+                    "resource_id": _string("Optional library resource id (for compare_anchor)."),
+                    "anchor_id": _string("Optional paragraph anchor id (for compare_anchor)."),
+                },
+                "required": ["action"],
+            },
+            handler=_handle_project_verify,
+        ),
+        ToolDefinition(
+            name="library_read",
+            description=(
+                "Read and search the learner's managed resource library (<LibraryRoot>): "
+                "FTS5 full-text search ('search'), anchored excerpts ('excerpt'), list resources/folders/files, "
+                "read a library file ('read_file'), or regex grep across library files ('grep')."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum(
+                        "Library read/search action.",
+                        ["search", "excerpt", "list_resources", "list_folders", "list_files", "read_file", "grep"],
+                    ),
+                    "query": _string("Search query or grep pattern."),
+                    "path": _string("Relative path inside <LibraryRoot> (for read_file or scoped grep)."),
+                    "resource_id": _string("Resource id (for excerpt)."),
+                    "anchor_id": _string("Optional ¶ anchor id (for excerpt)."),
+                    "mode": _enum("Optional search mode.", ["broad", "narrow", "verify"]),
+                    "limit": {"type": "integer", "description": "Maximum results to return."},
+                    "max_chars": {"type": "integer", "description": "Maximum characters to read."},
+                },
+                "required": ["action"],
+            },
+            handler=_handle_library_read,
+        ),
+        ToolDefinition(
+            name="library_write",
+            description=(
+                "Full autonomous file & resource management inside <LibraryRoot> (never touches <ProjectRoot>). "
+                "Supports write, surgical edit (old_text -> new_text), mkdir, rename/move, safe .trash/ soft_delete, "
+                "restore, import_url, import_workspace, organize, curate, save_lecture_note, and refresh_index. "
+                "Every content write/edit/rename/restore automatically updates the SQLite FTS5 index."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum(
+                        "Library mutation action.",
+                        [
+                            "write",
+                            "edit",
+                            "mkdir",
+                            "rename",
+                            "move",
+                            "soft_delete",
+                            "restore",
+                            "import_url",
+                            "import_workspace",
+                            "organize",
+                            "curate",
+                            "save_lecture_note",
+                            "refresh_index",
+                        ],
+                    ),
+                    "path": _string("Relative path inside <LibraryRoot> (or workspace file path for import_workspace)."),
+                    "new_path": _string("Destination relative path inside <LibraryRoot> (for rename/move)."),
+                    "restore_path": _string("Optional destination path when restoring from .trash/."),
+                    "content": _string("Full text content (for write / save_lecture_note)."),
+                    "old_text": _string("Exact text to replace (for action='edit')."),
+                    "new_text": _string("Replacement text (for action='edit')."),
+                    "replace_all": {"type": "boolean", "description": "Replace all occurrences in edit (default false)."},
+                    "url": _string("Web URL to import (for import_url)."),
+                    "resource_id": _string("Resource id (for soft_delete / restore / refresh_index)."),
+                    "title": _string("Optional title (for save_lecture_note / import_url)."),
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags."},
+                },
+                "required": ["action"],
+            },
+            handler=_handle_library_write,
+        ),
+        ToolDefinition(
+            name="library_exec",
+            description=(
+                "Run a bounded shell/script command (e.g. python3, rg, wc, pandoc, awk) strictly inside "
+                "cwd=<LibraryRoot> to batch-process notes, parse PDFs/CSV, or organize library data. "
+                "Irreversible delete commands (rm/unlink) and paths escaping <LibraryRoot> are blocked; "
+                "newly created/updated text files are automatically indexed into FTS5."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "command": _string("Shell command to execute inside <LibraryRoot>."),
+                    "timeout_seconds": {
+                        "type": "number",
+                        "description": "Execution timeout in seconds (1-30, default 15).",
+                    },
+                    "auto_index": {
+                        "type": "boolean",
+                        "description": "Automatically FTS5-index newly modified files in <LibraryRoot> (default true).",
+                    },
+                },
+                "required": ["command"],
+            },
+            handler=_handle_library_exec,
+        ),
+        ToolDefinition(
+            name="web_fetch",
+            description=(
+                "Retrieve external web and academic evidence: search the web ('search'), fetch a specific URL ('fetch'), "
+                "search academic papers ('papers'), find curated learning materials ('learning_materials'), "
+                "assess research evidence ('assess_evidence'), or import a URL into <LibraryRoot> ('import_url')."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum(
+                        "Web/research action.",
+                        ["search", "fetch", "papers", "learning_materials", "assess_evidence", "import_url"],
+                    ),
+                    "query": _string("Search query (for search / papers / learning_materials / assess_evidence)."),
+                    "url": _string("Target URL (for fetch / import_url)."),
+                    "limit": {"type": "integer", "description": "Maximum search results."},
+                },
+                "required": ["action"],
+            },
+            handler=_handle_web_fetch,
+        ),
+        ToolDefinition(
+            name="learning_inspect",
+            description=(
+                "Inspect the learner's current learning state: active learning plan ('plan'), "
+                "verified mastery/progress truth ('truth'), recalled memory ('memory'), or available skills ('skills')."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum("Inspection target.", ["plan", "truth", "memory", "skills"]),
+                    "query": _string("Optional query for memory recall or truth lookup."),
+                },
+                "required": ["action"],
+            },
+            handler=_handle_learning_inspect,
+        ),
+        ToolDefinition(
+            name="learning_action",
+            description=(
+                "Perform governed learning-state actions: commit a formal learning plan ('save_formal_plan'), "
+                "save an explicit learning note ('record_note'), mint/advance a plan task ('specify_task'/'next_task'), "
+                "invoke a skill ('invoke_skill'), or generate an instructional diagram ('generate_image')."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "action": _enum(
+                        "Governed learning action.",
+                        ["save_formal_plan", "record_note", "specify_task", "next_task", "invoke_skill", "generate_image"],
+                    ),
+                    "prompt": _string("Prompt or instruction (for generate_image / invoke_skill)."),
+                    "skill_name": _string("Skill name (for invoke_skill)."),
+                    "content": _string("Note content (for record_note)."),
+                    "title": _string("Title (for record_note / save_formal_plan)."),
+                },
+                "required": ["action"],
+            },
+            handler=_handle_learning_action,
+        ),
+    ]
+
+
+def register_orthogonal_primitives(registry: ToolRegistry) -> None:
+    """Register all 8 dual-domain orthogonal primitives on a ToolRegistry."""
+    for tool in build_orthogonal_primitive_tools():
+        if registry.get(tool.name) is None:
+            registry.register(tool)
+
+
+_WEB_RESEARCH_HINTS = (
+    "联网",
+    "上网",
+    "搜索",
+    "搜一下",
+    "查一下",
+    "论文",
+    "arxiv",
+    "最新进展",
+    "前沿进展",
+    "研究进展",
+    "http://",
+    "https://",
+    "web search",
+    "search online",
+    "latest research",
+)
+
+_LIBRARY_HINTS = (
+    "资料库",
+    "讲稿",
+    "备课",
+    "笔记",
+    "沙箱",
+    "library",
+    "sandbox",
+    "resource",
+    "resources",
+    "整理",
+    "归档",
+    "导入",
+    "回收站",
+    ".trash",
+)
+
+_PROJECT_HINTS = (
+    "这个项目",
+    "当前项目",
+    "工作区",
+    "代码库",
+    "仓库",
+    "源码",
+    "文件结构",
+    "项目结构",
+    "项目架构",
+    "代码架构",
+    "报错",
+    "诊断",
+    "测试",
+    "this project",
+    "this repo",
+    "workspace",
+    "codebase",
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".go",
+    ".rs",
+)
+
+
+def select_orthogonal_tools_for_turn(
+    extra: dict[str, Any],
+    learner_message: str | None = None,
+) -> list[str]:
+    """Dynamically mount only the orthogonal primitives needed for this turn (4-8 tools)."""
+    active_view = str(extra.get("active_view") or "").strip().lower()
+    lowered = " ".join(str(learner_message or "").split()).lower()
+
+    is_library_turn = (
+        active_view == "resources"
+        or extra.get("library_sandbox_work") is True
+        or bool(extra.get("resource_composer_intent"))
+        or any(hint in lowered for hint in _LIBRARY_HINTS)
+    )
+    is_web_turn = any(hint in lowered for hint in _WEB_RESEARCH_HINTS)
+    is_project_turn = (
+        bool(extra.get("current_file"))
+        or bool(extra.get("workspace_file_snapshot"))
+        or any(hint in lowered for hint in _PROJECT_HINTS)
+    )
+    is_plan_turn = active_view == "plan" or extra.get("formal_plan_mutation") is True
+
+    selected: list[str] = []
+
+    def _add(*names: str) -> None:
+        for name in names:
+            if name not in selected:
+                selected.append(name)
+
+    if is_library_turn:
+        _add("library_read", "library_write", "library_exec", "web_fetch", "learning_inspect")
+    if is_web_turn:
+        _add("web_fetch", "library_read", "library_write", "learning_inspect")
+    if is_project_turn:
+        _add("project_read", "project_verify", "library_read", "learning_inspect")
+    if is_plan_turn:
+        _add("learning_inspect", "learning_action", "library_read", "project_read")
+
+    # Add learning_action when explicit learning-state writes or skills/images are requested.
+    if (
+        extra.get("explicit_learning_note_request") is True
+        or extra.get("live_formal_plan_for_task_mint") is True
+        or any(k in lowered for k in ("画图", "配图", "示意图", "diagram", "skill", "技能"))
+    ):
+        _add("learning_action")
+
+    if not selected:
+        # Fallback for generic tool-lane turns: mount the 8 orthogonal primitives (never 43).
+        return list(ORTHOGONAL_PRIMITIVE_NAMES)
+    return selected
+
+
+__all__ = [
+    "ORTHOGONAL_PRIMITIVE_NAMES",
+    "ORTHOGONAL_PRIMITIVE_SET",
+    "build_orthogonal_primitive_tools",
+    "register_orthogonal_primitives",
+    "select_orthogonal_tools_for_turn",
+]

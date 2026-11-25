@@ -186,6 +186,12 @@ def _build_agent_tool_context_extra(
         )
         if isinstance(resolved_learner_message, str) and resolved_learner_message.strip():
             extra["learner_message"] = resolved_learner_message
+        if "allowed_tool_names" not in extra:
+            from .tool_primitives import select_orthogonal_tools_for_turn
+
+            extra["allowed_tool_names"] = select_orthogonal_tools_for_turn(
+                extra, resolved_learner_message
+            )
         return extra
 
     if isinstance(current_file, dict):
@@ -317,5 +323,11 @@ def _build_agent_tool_context_extra(
         current_file=current_file,
     ):
         extra["allowed_tool_names"] = []
+    elif "allowed_tool_names" not in extra and coach_context.get("legacy_tool_surface") is not True:
+        from .tool_primitives import select_orthogonal_tools_for_turn
+
+        extra["allowed_tool_names"] = select_orthogonal_tools_for_turn(
+            extra, resolved_learner_message
+        )
 
     return extra
