@@ -92,10 +92,6 @@ _CASUAL_GREETING_EXACT = frozenset(
 )
 
 _EXPLORATORY_OR_RESEARCH_TOKENS = (
-    "讲解一下",
-    "介绍一下",
-    "讲讲这个",
-    "讲一下这个",
     "看看这个项目",
     "看看这个文件夹",
     "解释一下这个项目",
@@ -109,7 +105,6 @@ _EXPLORATORY_OR_RESEARCH_TOKENS = (
     "explain this folder",
     "overview of this project",
     "what is this project",
-    "walk me through",
     "研究进展",
     "最新进展",
     "前沿进展",

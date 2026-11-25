@@ -6484,24 +6484,15 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             holdback_chars = _stream_holdback_chars(response_language)
 
             def safe_direct_reply_prefix() -> str:
-                if (
-                    not native_stream_available
-                    or tool_events
-                    or not _should_preserve_visible_reply(
-                        message,
-                        answer_mode=answer_mode,
-                        profile=profile,
-                    )
-                ):
+                if not native_stream_available:
                     return ""
-                visible = _strip_internal_coach_meta(buffered_text)
+                visible = _streamable_visible_prefix(buffered_text)
                 if "trainer-image://" in visible:
                     cut_idx = visible.find("trainer-image://")
                     bang_idx = visible.rfind("![", 0, cut_idx)
                     visible = visible[: bang_idx if bang_idx >= 0 else cut_idx].rstrip()
                 if (
                     not visible
-                    or visible != _visible_model_text(buffered_text).strip()
                     or _mixed_script_reply_corruption_detail(
                         visible,
                         message=message,

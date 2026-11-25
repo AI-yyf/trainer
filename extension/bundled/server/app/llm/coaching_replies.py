@@ -842,9 +842,9 @@ def _agentic_completion_continuity(
 
 
 def _stream_holdback_chars(response_language: str | None) -> int:
-    """Keep a shorter Chinese tail in reserve so real deltas appear sooner."""
+    """Keep a minimal tail in reserve so real deltas appear immediately."""
 
-    return 24 if _prefers_chinese(response_language) else 32
+    return 8 if _prefers_chinese(response_language) else 12
 
 
 def _prefer_structured_next_step(
