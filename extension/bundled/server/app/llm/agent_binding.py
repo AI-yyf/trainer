@@ -2616,12 +2616,12 @@ class ProviderAgentBinding:
         generationConfig.thinkingConfig — so compatibility defaults never
         contradict it with an injected disabled flag."""
         effort = defaults.get("reasoning_effort", defaults.get("reasoningEffort"))
-        if isinstance(effort, str) and effort.strip().lower() not in {"", "auto"}:
+        if isinstance(effort, str) and effort.strip().lower() not in {"", "auto", "off", "none", "disabled"}:
             return True
         reasoning = defaults.get("reasoning")
         if isinstance(reasoning, dict):
             nested_effort = reasoning.get("effort")
-            if isinstance(nested_effort, str) and nested_effort.strip().lower() not in {"", "auto"}:
+            if isinstance(nested_effort, str) and nested_effort.strip().lower() not in {"", "auto", "off", "none", "disabled"}:
                 return True
         if cls._thinking_record_enabled(defaults.get("thinking")):
             return True
@@ -2794,13 +2794,15 @@ class ProviderAgentBinding:
                 value = raw_value if output_key == "service_tier" else self._usable_default(raw_value)
                 if value is not None:
                     merged[output_key] = value
+            from .provider.thinking import apply_reasoning_effort_to_payload
+
             reasoning_effort = self._usable_default(
                 self._first_default(defaults, "reasoning_effort", "reasoningEffort")
             )
             if isinstance(reasoning_effort, str):
-                existing_reasoning = merged.get("reasoning")
-                existing = dict(existing_reasoning) if isinstance(existing_reasoning, dict) else {}
-                merged["reasoning"] = {**existing, "effort": reasoning_effort.strip()}
+                merged = apply_reasoning_effort_to_payload(
+                    merged, reasoning_effort, "openai_responses"
+                )
         explicit_temperature = (
             self._usable_default(self._first_default(defaults, "temperature"))
             if defaults
@@ -2836,7 +2838,12 @@ class ProviderAgentBinding:
             value = self._usable_default(self._first_default(defaults, *aliases))
             if value is not None:
                 merged[output_key] = value
+        from .provider.thinking import apply_reasoning_effort_to_payload
+
         thinking_budget = self._first_default(defaults, "thinking_budget", "thinkingBudget")
+        reasoning_effort = self._usable_default(
+            self._first_default(defaults, "reasoning_effort", "reasoningEffort")
+        )
         explicit_wire_thinking = isinstance(defaults.get("thinking"), dict) or (
             isinstance(defaults.get("extra_body"), dict)
             and isinstance(defaults["extra_body"].get("thinking"), dict)
@@ -2845,6 +2852,10 @@ class ProviderAgentBinding:
             merged["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         elif not explicit_wire_thinking and isinstance(thinking_budget, str) and thinking_budget.strip().lower() == "disabled":
             merged.pop("thinking", None)
+        elif not explicit_wire_thinking and isinstance(reasoning_effort, str):
+            merged = apply_reasoning_effort_to_payload(
+                merged, reasoning_effort, "anthropic_messages"
+            )
         merged_thinking = merged.get("thinking")
         if isinstance(merged_thinking, dict) and merged_thinking.get("type") == "enabled":
             # Anthropic Messages rejects temperature != 1 and top_k when extended thinking is enabled.
@@ -2915,6 +2926,16 @@ class ProviderAgentBinding:
             if value is not None:
                 generation_config[output_key] = value
         merged["generationConfig"] = generation_config
+        reasoning_effort = self._usable_default(
+            self._first_default(defaults, "reasoning_effort", "reasoningEffort")
+        )
+        has_explicit_gemini_thinking = isinstance(generation_config.get("thinkingConfig"), dict)
+        if not has_explicit_gemini_thinking and isinstance(reasoning_effort, str):
+            from .provider.thinking import apply_reasoning_effort_to_payload
+
+            merged = apply_reasoning_effort_to_payload(
+                merged, reasoning_effort, "gemini_generate_content"
+            )
         return clamp_wire_thinking_budget(merged)
 
     def _gemini_credentials(self) -> tuple[str, str]:

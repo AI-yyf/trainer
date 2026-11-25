@@ -27,6 +27,99 @@ import re
 from typing import Any, Literal
 
 ThinkingPolicy = Literal["disabled", "omit", "enabled"]
+ReasoningEffortLevel = Literal["off", "low", "medium", "high"]
+
+#: Canonical token budgets when mapping request-level ``reasoning_effort`` to
+#: budget-based protocols (Anthropic ``thinking.budget_tokens`` and Gemini
+#: ``generationConfig.thinkingConfig.thinkingBudget``).
+REASONING_EFFORT_BUDGET_TOKENS: dict[ReasoningEffortLevel, int] = {
+    "off": 0,
+    "low": 2048,
+    "medium": 8192,
+    "high": 24576,
+}
+
+
+def normalize_reasoning_effort(value: object) -> ReasoningEffortLevel | None:
+    """Normalize any user/config reasoning_effort alias to ``off|low|medium|high``.
+
+    Returns ``None`` for empty / ``auto`` / unrecognized values so callers leave
+    the model's native default untouched.
+    """
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip().lower()
+    if cleaned in {"", "auto", "default"}:
+        return None
+    if cleaned in {"off", "none", "disabled", "false", "0"}:
+        return "off"
+    if cleaned in {"low", "minimal"}:
+        return "low"
+    if cleaned in {"medium", "med", "balanced"}:
+        return "medium"
+    if cleaned in {"high", "max", "deep"}:
+        return "high"
+    return None
+
+
+def apply_reasoning_effort_to_payload(
+    payload: dict[str, Any],
+    effort: object,
+    protocol: str,
+) -> dict[str, Any]:
+    """Map a unified request-level ``reasoning_effort`` onto the wire protocol.
+
+    - OpenAI Chat Completions: ``reasoning_effort`` (omitted when ``off``)
+    - OpenAI Responses: ``reasoning = {"effort": ...}`` (omitted when ``off``)
+    - Anthropic Messages: ``thinking = {"type": "disabled"}`` or ``{"type": "enabled", "budget_tokens": N}``
+    - Gemini GenerateContent: ``generationConfig.thinkingConfig = {"thinkingBudget": 0 | N}``
+    """
+    level = normalize_reasoning_effort(effort)
+    if level is None:
+        return payload
+    out = dict(payload)
+    proto = str(protocol or "").strip().lower()
+
+    if proto in {"openai_chat_completions", "openai_chat_completions_compatible"}:
+        if level == "off":
+            out.pop("reasoning_effort", None)
+            out.pop("reasoningEffort", None)
+        else:
+            out["reasoning_effort"] = level
+        return out
+
+    if proto == "openai_responses":
+        if level == "off":
+            out.pop("reasoning", None)
+            out.pop("reasoning_effort", None)
+        else:
+            existing = out.get("reasoning")
+            merged_reasoning = dict(existing) if isinstance(existing, dict) else {}
+            merged_reasoning["effort"] = level
+            out["reasoning"] = merged_reasoning
+        return out
+
+    if proto == "anthropic_messages":
+        if level == "off":
+            out["thinking"] = {"type": "disabled"}
+        else:
+            out["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": REASONING_EFFORT_BUDGET_TOKENS[level],
+            }
+        return out
+
+    if proto == "gemini_generate_content":
+        gen_cfg = dict(out.get("generationConfig") or {}) if isinstance(out.get("generationConfig"), dict) else {}
+        existing_tc = gen_cfg.get("thinkingConfig")
+        next_tc = dict(existing_tc) if isinstance(existing_tc, dict) else {}
+        next_tc["thinkingBudget"] = REASONING_EFFORT_BUDGET_TOKENS[level]
+        gen_cfg["thinkingConfig"] = next_tc
+        out["generationConfig"] = gen_cfg
+        return out
+
+    return out
+
 
 #: What to send when a profile declares no thinking policy at all. ``omit``
 #: leaves the model's own default in charge, which is what the composer's

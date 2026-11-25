@@ -420,12 +420,14 @@ function renderPart(
       // Internal reasoning stays out of the transcript.
       return null;
     case "coach_visible_status": {
-      const stopReasonLabel = describeTrainerStopReason(part.stopReason, language);
-      const decision = part.decision?.trim();
       const blocker = part.blocker?.trim();
-      const teachingNote = part.teachingNote?.trim();
-      const confidence = part.confidence?.trim();
-      const evidence = part.evidence?.map((item) => item.trim()).filter(Boolean) ?? [];
+      const needsConfirmation = Boolean(options?.nextStepConfirmation);
+      // Minimalist info-flow (Phase 3): hide routine "done" audit cards so the
+      // learner reads a clean reply; surface only blockers, degraded/working
+      // states, or explicit next-step confirmation prompts.
+      if (part.status === "done" && !blocker && !needsConfirmation) {
+        return null;
+      }
       return (
         <div
           key={`part-${index}`}
@@ -439,15 +441,18 @@ function renderPart(
               {coachVisibleStatusLabel(part.status, language)}
             </span>
           </div>
-          <p>{sanitizeErrorSurfaceText(part.summary, language)}</p>
-          {part.detail ? (
-            <p className="message-part__meta">{sanitizeErrorSurfaceText(part.detail, language)}</p>
+          {part.summary ? <p>{sanitizeErrorSurfaceText(part.summary, language)}</p> : null}
+          {blocker ? (
+            <p className="message-part__meta">
+              {copy(language, "卡点：")}
+              {blocker}
+            </p>
           ) : null}
           {part.nextStep ? (
             <p className="message-part__meta">
               {copy(language, "下一步：")}
               {part.nextStep}
-              {options?.nextStepConfirmation ? (
+              {needsConfirmation ? (
                 <span
                   className="message-part__confirm-mark"
                   data-next-step-requires-confirmation="true"
@@ -458,60 +463,10 @@ function renderPart(
               ) : null}
             </p>
           ) : null}
-          {options?.nextStepConfirmation ? (
+          {needsConfirmation ? (
             <p className="message-part__confirm-note" data-next-step-confirm-note="true">
               {resolveCopy(language).nextStepConfirmNote}
             </p>
-          ) : null}
-          {part.resumeThread ? (
-            <p className="message-part__meta">{part.resumeThread}</p>
-          ) : null}
-          {decision ? (
-            <p className="message-part__meta">
-              {copy(language, "决定：")}
-              {decision}
-            </p>
-          ) : null}
-          {blocker ? (
-            <p className="message-part__meta">
-              {copy(language, "卡点：")}
-              {blocker}
-            </p>
-          ) : null}
-          {teachingNote ? (
-            <p className="message-part__meta">
-              {copy(language, "教学提示：")}
-              {teachingNote}
-            </p>
-          ) : null}
-          {confidence ? (
-            <p className="message-part__meta">
-              {copy(language, "置信度：")}
-              {confidence}
-            </p>
-          ) : null}
-          {evidence.length ? (
-            <div className="message-part__facts">
-              {evidence.map((item) => (
-                <span key={item} className="message-part__fact-pill">
-                  {item}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {stopReasonLabel ? (
-            <div className="message-part__facts">
-              <span className="message-part__fact-pill">{stopReasonLabel}</span>
-            </div>
-          ) : null}
-          {part.toolNames?.length ? (
-            <div className="message-part__facts">
-              {part.toolNames.map((toolName) => (
-                <span key={toolName} className="message-part__fact-pill">
-                  {humanizeToolName(toolName)}
-                </span>
-              ))}
-            </div>
           ) : null}
         </div>
       );

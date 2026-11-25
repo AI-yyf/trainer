@@ -175,30 +175,34 @@ function TablePartRenderer({ part, context }: { part: TablePart; context?: PartR
 }
 
 function CitationPartRenderer({ part, context }: { part: CitationPart; context?: PartRenderContext }) {
-  const trustText =
-    typeof part.trustScore === "number"
-      ? `${label(context?.language, "Trust")} ${part.trustScore.toFixed(2)}`
-      : "";
-  const sourceMeta = [part.sourceType, part.freshness, trustText].filter(Boolean).join(" | ");
+  const pillTitle = part.title || part.label || part.resourceId;
+  const hasDetails = Boolean(part.source || part.summary || part.snippet || part.whyItMatters);
+  if (!hasDetails) {
+    return (
+      <span className="message-part message-part--citation message-part--citation-pill" data-citation-pill="true">
+        <span>{pillTitle}</span>
+        {part.chunkId ? <span className="message-part__meta">{` · ${part.chunkId}`}</span> : null}
+      </span>
+    );
+  }
   return (
-    <div className="message-part message-part--citation">
-      <span className="eyebrow">{part.label}</span>
-      {part.title && part.title !== part.label ? <p><strong>{part.title}</strong></p> : null}
-      <p className="message-part__meta">
-        <code>{part.resourceId}</code>
-        {part.chunkId ? <span>{` | ${part.chunkId}`}</span> : null}
-      </p>
-      {part.source ? <p className="message-part__meta">{part.source}</p> : null}
-      {sourceMeta ? <p className="message-part__meta">{sourceMeta}</p> : null}
-      {part.summary ? <p>{part.summary}</p> : null}
-      {part.snippet ? <p>{part.snippet}</p> : null}
-      {part.whyItMatters ? (
-        <p className="message-part__meta">
-          {label(context?.language, "Why it matters: ")}
-          {part.whyItMatters}
-        </p>
-      ) : null}
-    </div>
+    <details className="message-part message-part--citation message-part--citation-pill" data-citation-pill="true">
+      <summary className="message-part__citation-summary">
+        <span>{pillTitle}</span>
+        {part.chunkId ? <span className="message-part__meta">{` · ${part.chunkId}`}</span> : null}
+      </summary>
+      <div className="message-part__citation-body">
+        {part.source ? <p className="message-part__meta">{part.source}</p> : null}
+        {part.summary ? <p>{part.summary}</p> : null}
+        {part.snippet ? <p>{part.snippet}</p> : null}
+        {part.whyItMatters ? (
+          <p className="message-part__meta">
+            {label(context?.language, "Why it matters: ")}
+            {part.whyItMatters}
+          </p>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
