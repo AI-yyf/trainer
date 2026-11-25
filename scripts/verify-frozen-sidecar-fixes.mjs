@@ -37,6 +37,7 @@ const WORKSPACE_ID = "frozen-sidecar-probe";
 const PLAN_ID = "frozen-probe-plan";
 const PLAN_TITLE_ACCEPTED = "Renamed with the observed revision";
 const PLAN_TITLE_STALE = "Stale save must never land";
+const FSRS_CONCEPT = "frozen fsrs concept";
 
 // A content-changing plan save is gated on a usable provider (the real host
 // configures one through its preflight). The probe supplies a one-request
@@ -115,6 +116,24 @@ repository.save_plan(sys.argv[2], plan)
 print(json.dumps({"revision": repository.get_plan_revision(sys.argv[2], plan.id)}))
 `;
 
+const SEED_MASTERY = `
+import json, sys
+from pathlib import Path
+from app.db.repository import TrainerRepository
+from app.memory.service import StructuredMemoryService
+repository = TrainerRepository(Path(sys.argv[1]))
+entry = repository.load_structured_memory_entry(sys.argv[2])
+payload, revision = entry if entry else (None, None)
+service = StructuredMemoryService.from_state(payload)
+service.update_mastery(sys.argv[3], delta=0.2, confidence=0.66)
+repository.save_structured_memory(
+    sys.argv[2],
+    service.export_state(),
+    expected_revision=revision,
+)
+print(json.dumps({"score": service._mastery[sys.argv[3]].score}))
+`;
+
 const READ_TRUTH = `
 import json, sys
 from pathlib import Path
@@ -175,7 +194,9 @@ async function main() {
   };
 
   const call = async (baseUrl, route, { method = "POST", body, authorized = true } = {}) => {
-    const headers = {};
+    // Synchronous SQLite seed/read helpers can outlive Uvicorn's idle timeout.
+    // Avoid reusing a socket closed while Node was blocked in spawnSync.
+    const headers = { connection: "close" };
     if (body !== undefined) headers["content-type"] = "application/json";
     if (authorized) headers["x-trainer-token"] = token;
     const response = await fetch(`${baseUrl}${route}`, {
@@ -220,6 +241,10 @@ async function main() {
     // 2. Optimistic lock on a versioned plan.
     const seeded = runPython(SEED_PLAN, [database, WORKSPACE_ID, PLAN_ID]);
     record("plan-seeded", seeded.revision === 1, seeded);
+    // Seed one heuristic mastery row before the sidecar opens the workspace;
+    // the review action below must turn it into a full FSRS card.
+    const seededMastery = runPython(SEED_MASTERY, [database, WORKSPACE_ID, FSRS_CONCEPT]);
+    record("mastery-seeded", seededMastery.score === 0.2, seededMastery);
 
     const session = await call(first.baseUrl, "/session/start", {
       body: {
@@ -302,6 +327,19 @@ async function main() {
       second: secondWrite.status,
     });
 
+    const reviewReset = await call(first.baseUrl, "/training/review-queue/action", {
+      body: {
+        workspace_id: contextId,
+        concept: FSRS_CONCEPT,
+        action: "reset",
+        note: "Frozen probe: record a delayed-recall FSRS state.",
+      },
+    });
+    record("fsrs-review-recorded", reviewReset.status === 200 && reviewReset.json?.ok === true, {
+      status: reviewReset.status,
+      ok: reviewReset.json?.ok ?? null,
+    });
+
     await stopChildren();
 
     const truth = runPython(READ_TRUTH, [database, contextId, PLAN_ID]);
@@ -319,8 +357,28 @@ async function main() {
       truth.plan_title === PLAN_TITLE_ACCEPTED && truth.plan_revision === 2,
       { planTitle: truth.plan_title, planRevision: truth.plan_revision },
     );
+    const mastery = (truth.memory?.mastery ?? []).find(
+      (item) => item?.concept === FSRS_CONCEPT,
+    );
+    record(
+      "fsrs-state-persisted",
+      mastery?.review_source === "fsrs" &&
+        Boolean(mastery?.fsrs_last_review_at) &&
+        Number(mastery?.fsrs_lapses) >= 1 &&
+        Boolean(mastery?.fsrs_due) &&
+        mastery?.fsrs_due === mastery?.next_review_at &&
+        Number(mastery?.score) === 0.2,
+      {
+        reviewSource: mastery?.review_source ?? null,
+        fsrsStep: mastery?.fsrs_step ?? null,
+        lapses: mastery?.fsrs_lapses ?? null,
+        lastReview: mastery?.fsrs_last_review_at ?? null,
+        interval: mastery?.fsrs_interval ?? null,
+        score: mastery?.score ?? null,
+      },
+    );
   } catch (error) {
-    record("fatal", false, { error: error instanceof Error ? error.stack : String(error) });
+    record("fatal", false, { error: error instanceof Error ? error.stack : String(error), cause: error instanceof Error && error.cause instanceof Error ? { message: error.cause.message, code: error.cause.code } : undefined });
   } finally {
     await stopChildren();
     fs.rmSync(dataDir, { recursive: true, force: true });

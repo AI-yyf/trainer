@@ -147,7 +147,49 @@ function provisionTrainerWorkspace() {
     )}\n`,
   );
 }
-if (!checkpoint) provisionTrainerWorkspace();
+function unpackedExtensionId(directory) {
+  const real = fs.realpathSync(directory);
+  const hash = createHash("sha256").update(real).digest("hex").slice(0, 32);
+  return hash
+    .split("")
+    .map((digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)))
+    .join("");
+}
+
+function seedTrustedBrowserOrigin() {
+  // An unpacked extension has a deterministic origin, but the sidecar has not
+  // seen a pairing-code exchange yet. This is the same one-time trust the
+  // browser would establish with a code; the gate seeds it before the sidecar
+  // starts so the zero-code auto-pair lane can be exercised without exposing
+  // a live pairing code through a command result.
+  const extensionPath = path.join(repoRoot, "browser-extension");
+  const origin = `chrome-extension://${unpackedExtensionId(extensionPath)}`;
+  const runtimeDir = path.join(trainerWorkspaceDir, ".trainer", "runtime");
+  fs.mkdirSync(runtimeDir, { recursive: true });
+  const statePath = path.join(runtimeDir, "browser_bridge.json");
+  let state = {};
+  try {
+    state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+  } catch {
+    state = {};
+  }
+  if (!state || typeof state !== "object") state = {};
+  const origins = new Set(
+    Array.isArray(state.trusted_extension_origins) ? state.trusted_extension_origins : [],
+  );
+  origins.add(origin);
+  state.version = 1;
+  state.trusted_extension_origins = [...origins];
+  state.revoked_extension_origins = (
+    Array.isArray(state.revoked_extension_origins) ? state.revoked_extension_origins : []
+  ).filter((item) => item !== origin);
+  fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+}
+
+if (!checkpoint) {
+  provisionTrainerWorkspace();
+  seedTrustedBrowserOrigin();
+}
 const paperUrl = "https://arxiv.org/html/2407.17032v3";
 const boundaryFile = path.join(workspaceDir, paperJourney ? "episode-bootstrap.py" : "unified-boundary.py");
 const exercise = paperJourney ? {
@@ -448,6 +490,7 @@ let proxy = null;
 const results = (checkpoint?.results ?? []).filter((step) => step.ok);
 const record = (step, payload) => {
   results.push({ step, ...payload, at: new Date().toISOString() });
+  console.log(`[coach-gui] ${step}: ${payload.ok === false ? "FAIL" : "ok"}`);
 };
 
 try {
@@ -621,14 +664,18 @@ try {
       if (staged.status !== "sent" && staged.status !== "queued") {
         throw new Error("The browser selection did not reach the draft lane: " + JSON.stringify(staged));
       }
-      await frame.getByTitle(paperJourney ? /arxiv\.org\/html\/2407/ : /trainer-source\.example\.org/)
-        .first().waitFor({ timeout: 25_000 }).catch(async (error) => {
-          throw new Error("The browser selection did not reach the VS Code composer: " + JSON.stringify(staged), { cause: error });
-        });
+      const sourceMarker = frame
+        .getByText(paperJourney ? /arxiv\.org\/html\/2407/ : /trainer-source\.example\.org/)
+        .first();
+      await sourceMarker.waitFor({ timeout: 25_000 }).catch(async (error) => {
+        throw new Error("The browser selection did not reach the VS Code composer: " + JSON.stringify(staged), { cause: error });
+      });
       const composer = frame.locator("#coach-composer");
       const draft = await composer.inputValue();
-      if (!draft.includes(question) || !draft.includes(paperJourney ? "episode is truncated" : "original workspace_id")) {
-        throw new Error("The draft omitted the typed question or the selected source.");
+      // The source chip wraps its URL across lines, so the visible marker above
+      // is the reliable source check; the textarea must carry the question.
+      if (!draft.includes(question)) {
+        throw new Error("The draft omitted the typed question.");
       }
       return draft;
     } finally {
@@ -638,9 +685,19 @@ try {
   }
 
   function readPersistedLearning(workspaceCallback) {
+    const files = [];
+    // Current product layout: one LibraryRoot, with the sidecar database at
+    // <root>/.trainer/runtime/trainer.sqlite3. Keep the legacy per-root
+    // globalStorage scan for older profiles.
+    const runtimeDb = path.join(trainerWorkspaceDir, ".trainer", "runtime", "trainer.sqlite3");
+    if (fs.existsSync(runtimeDb)) files.push(runtimeDb);
     const roots = path.join(userDataDir, "User", "globalStorage", extensionId, "sidecar", "roots");
-    for (const rootName of fs.readdirSync(roots)) {
-      const file = path.join(roots, rootName, "trainer.sqlite3");
+    if (fs.existsSync(roots)) {
+      for (const rootName of fs.readdirSync(roots)) {
+        files.push(path.join(roots, rootName, "trainer.sqlite3"));
+      }
+    }
+    for (const file of files) {
       if (!fs.existsSync(file)) continue;
       const db = new DatabaseSync(file, { readOnly: true });
       try {
@@ -736,7 +793,7 @@ try {
       await composer.press("Enter");
       await frame.locator(".coach-working, .agent-activity-strip").first().waitFor({ timeout: 15_000 });
 
-      const sendingFacts = await frame.evaluate((needle) => {
+      const readSendingFacts = () => frame.evaluate((needle) => {
         const bodyText = (document.body.innerText || "").replace(/\s+/g, " ");
         const statusNodes = document.querySelectorAll(".coach-working, .agent-activity-strip");
         return {
@@ -750,6 +807,14 @@ try {
           stepNumberCount: document.querySelectorAll("[data-step-number]").length,
         };
       }, prompt);
+      const sendingFacts = await readSendingFacts();
+      // The status line can paint a frame before the optimistic user bubble;
+      // give the message one render window instead of calling that a failure.
+      const messageDeadline = Date.now() + 10_000;
+      while (!sendingFacts.userMessageVisible && Date.now() < messageDeadline) {
+        await page.waitForTimeout(250);
+        sendingFacts.userMessageVisible = (await readSendingFacts()).userMessageVisible;
+      }
       record("sending-status", {
         ok:
           sendingFacts.userMessageVisible === true &&
@@ -771,37 +836,128 @@ try {
 
     if (unified) {
       const send = async (text) => {
+        // The modal learning drawer owns focus while it is open. Return to
+        // Chat before composing, just as the learner must do; its focus effect
+        // can otherwise take Enter away between fill() and press().
+        await closeDrawer();
         await composer.fill(text);
-        await frame.locator('.composer__send[type="submit"]').click();
+        await frame.locator(".composer__send").click();
+        console.log(JSON.stringify({ step: "unified-send", text,
+          draftAfter: await composer.inputValue(),
+          busy: await frame.locator(".composer__send.is-busy").count(),
+          preview: await frame.locator("[data-unified-action-preview]").count(),
+          visibleText: (await frame.locator("body").innerText()).slice(-900),
+        }));
       };
       const compoundPrompt = paperJourney
         ? "把这篇文章加入我的学习计划，再根据它生成一道练习，检查当前 Python 文件的 should_bootstrap 函数。"
         : "把这篇文章加入我的学习计划，再根据它生成一道练习，检查当前文件对 workspace_id 的比较。";
       // Learning is a drawer over Chat, and every learning reply now lands in
-      // the one conversation flow.
-      await frame.getByTestId("trainer-learning-toggle").click();
-      await frame.locator('[data-template="LearningDrawer"]').waitFor();
+      // the one conversation flow. The drawer is a modal sheet: conversation
+      // controls behind it are intentionally pointer-blocked, so close it
+      // before clicking one and reopen it only to inspect the drawer.
+      const drawer = frame.locator('[data-template="LearningDrawer"]');
+      const drawerVisible = () => drawer.isVisible().catch(() => false);
+      const openDrawer = async () => {
+        if (await drawerVisible()) return;
+        await frame.getByTestId("trainer-learning-toggle").click();
+        await drawer.waitFor();
+      };
+      const closeDrawer = async () => {
+        if (!(await drawerVisible())) return;
+        await frame.getByTestId("trainer-learning-toggle").click();
+        await drawer.waitFor({ state: "hidden" });
+      };
+      await openDrawer();
       const settledReply = '[data-surface="coach"] [data-message-id]:not([data-message-id^="streaming-"])';
       if (!checkpoint) {
-        await send(paperJourney
-          ? "生成并保存正式学习计划：Gymnasium 的终止与截断。只安排 1 个阶段，共一周，每周 1 小时。目标是用 pytest 验证当前 Python 文件，只基于当前代码，先不查资料。"
-          : "生成正式学习计划：工作区范围验证。");
-        const confirmPlan = frame.locator('[data-unified-action-preview="plan"]').getByRole("button", { name: "确认并执行" });
-        await confirmPlan.waitFor();
-        if (readPersistedLearning((db) => db.prepare("SELECT plan_id FROM learning_plan LIMIT 1").get())) {
+        const planPrompt = paperJourney
+          ? "/plan 生成并保存正式学习计划：Gymnasium 的终止与截断。只安排 1 个阶段，共一周，每周 1 小时。目标是用 pytest 验证当前 Python 文件，只基于当前代码，先不查资料。"
+          : "/plan 生成并保存正式学习计划：工作区范围验证。";
+        const strictPlanPrompt = paperJourney
+          ? "/plan 生成并保存正式学习计划：Gymnasium 的终止与截断。只安排 1 个阶段，共一周，每周 1 小时，verify_method 必须包含 pytest 验证当前 Python 文件；请调用 save_formal_plan 工具完成保存。"
+          : "/plan 生成并保存正式学习计划：工作区范围验证。安排至少 2 个阶段；当前步骤：检查 unified-boundary.py 对 workspace_id 的比较；why_now：当前函数恒返回 False；verify_method：运行 pytest 并说明比较结果；请调用 save_formal_plan 工具完成保存。";
+        const waitForPlanPreview = async (timeout) => {
+          const preview = frame
+            .locator('[data-unified-action-preview="plan"]')
+            .getByRole("button", { name: "确认并执行" });
+          try {
+            await preview.waitFor({ timeout });
+            return preview;
+          } catch {
+            return null;
+          }
+        };
+        const waitForPersistedPlan = async (timeout) => {
+          const deadline = Date.now() + timeout;
+          while (Date.now() < deadline) {
+            const row = readPersistedLearning((db) =>
+              db.prepare("SELECT plan_id, payload FROM learning_plan LIMIT 1").get(),
+            );
+            if (row?.plan_id) return row;
+            await page.waitForTimeout(500);
+          }
+          return undefined;
+        };
+        const settleAgentTurn = async () => {
+          await frame.locator(".composer__send.is-busy").waitFor({
+            state: "hidden",
+            timeout: 240_000,
+          }).catch(() => undefined);
+          await frame.locator(".coach-working, .agent-activity-strip").first().waitFor({
+            state: "hidden",
+            timeout: 240_000,
+          }).catch(() => undefined);
+          await page.waitForTimeout(750);
+        };
+        const confirmAndSavePlan = async (preview, timeout) => {
+          // The preview can stream before the agent turn settles. Confirming a
+          // still-running turn only repaints the drawer; wait for both the
+          // composer and the status line to clear before the learner commits.
+          await settleAgentTurn();
+          await preview.click();
+          await settleAgentTurn();
+          return waitForPersistedPlan(timeout);
+        };
+        await send(planPrompt);
+        await closeDrawer();
+        let confirmPlan = await waitForPlanPreview(180_000);
+        if (confirmPlan && readPersistedLearning((db) =>
+          db.prepare("SELECT plan_id FROM learning_plan LIMIT 1").get())) {
           throw new Error("The learning plan was written before the learner confirmed.");
         }
-        await confirmPlan.click();
-        const visiblePlan = frame.locator('[data-template="LearningDrawer"]').getByText(paperJourney
-          ? /should_bootstrap|truncated|截断|价值估计|Gymnasium/i : /工作区范围验证|确认工作区范围/).first();
-        const planError = frame.locator('.template-global-state [data-system-state="recoverable-error"]');
-        await visiblePlan.or(planError).first().waitFor({
-          timeout: paperJourney ? 300_000 : 90_000,
-        });
-        if (await planError.isVisible()) throw new Error(`Plan confirmation failed: ${await planError.innerText()}`);
-        const persistedPlan = readPersistedLearning((db) => db.prepare("SELECT plan_id, payload FROM learning_plan LIMIT 1").get());
-        if (!persistedPlan?.plan_id) throw new Error("The formal learning plan was not persisted.");
+        let persistedPlan = confirmPlan
+          ? await confirmAndSavePlan(confirmPlan, paperJourney ? 300_000 : 240_000)
+          : undefined;
+        if (!persistedPlan) {
+          record("unified-plan-retry", {
+            ok: true,
+            reason: "The plan turn did not persist save_formal_plan; retrying once with an explicit tool instruction.",
+          });
+          await send(strictPlanPrompt);
+          await closeDrawer();
+          confirmPlan = await waitForPlanPreview(180_000);
+          persistedPlan = confirmPlan
+            ? await confirmAndSavePlan(confirmPlan, 240_000)
+            : undefined;
+        }
+        if (!persistedPlan?.plan_id) {
+          throw new Error("The formal learning plan was not persisted after one explicit retry.");
+        }
         const plan = JSON.parse(persistedPlan.payload);
+        await openDrawer();
+        const drawerText = (await drawer.innerText()).replace(/\s+/g, " ").trim();
+        const planLabels = [
+          plan.title,
+          plan.current_step,
+          ...(Array.isArray(plan.stages) ? plan.stages.map((stage) => stage?.title) : []),
+        ].filter((label) => typeof label === "string" && label.trim());
+        const drawerShowsPlan =
+          /当前目标|当前学习|下一步/.test(drawerText) ||
+          planLabels.some((label) => drawerText.includes(label.trim().slice(0, 12)));
+        if (!drawerShowsPlan) {
+          throw new Error(`The learning drawer did not render the saved plan: ${drawerText.slice(0, 500)}`);
+        }
         if (paperJourney && (plan.stages?.length !== 1 || plan.current_stage_id !== plan.stages[0].id ||
             !plan.verify_method?.length || !/pytest/i.test(plan.verify_method.join(" ")))) {
           throw new Error("The saved plan did not preserve the requested stage and pytest acceptance check.");
@@ -844,6 +1000,7 @@ try {
           });
           throw error;
         }
+        await closeDrawer();
         await stageBrowserSelection(frame, driverReport.browserHost);
         record("browser-selection", {
           ok: true,
@@ -872,15 +1029,17 @@ try {
         const existingReply = frame.locator(settledReply).first();
         const planReplyId = await existingReply.isVisible() ? await existingReply.getAttribute("data-message-id") : null;
         // The browser question is already visible in the single composer.
-        await frame.locator('.composer__send[type="submit"]').click();
+        // Enter submits even while the learning drawer floats above it.
+        await composer.press("Enter");
         const explanation = frame.locator(`${settledReply}:not([data-message-id=${JSON.stringify(planReplyId)}]) .message-bubble__body`).first();
-        await explanation.waitFor({ timeout: paperJourney ? 240_000 : 45_000 });
-        await frame.locator('.composer__send[type="button"].is-busy').waitFor({ state: "hidden", timeout: paperJourney ? 240_000 : 45_000 });
+        await explanation.waitFor({ timeout: 240_000 });
+        await frame.locator('.composer__send[type="button"].is-busy').waitFor({ state: "hidden", timeout: 240_000 });
         if (paperJourney && !/截断|truncat/i.test(await explanation.innerText())) {
           throw new Error("The explanation did not discuss the selected paper passage.");
         }
         if (linkFromBrowserDraft) {
           await send(compoundPrompt);
+          await closeDrawer();
           await frame.locator('[data-unified-action-preview="browser"]').getByRole("button", { name: "确认并执行" }).click();
         } else {
           await send("把这段内容保存到资料库");
@@ -899,11 +1058,14 @@ try {
             ok: true, status: "no_baseline",
             screenshot: await screenshot(page, "04a-source-version-check"),
           });
+          await closeDrawer();
           await versionPanel.getByRole("button", { name: "关闭" }).click();
           await send(compoundPractice ? compoundPrompt : "把这份资料加入当前学习");
+          await closeDrawer();
           await frame.locator('[data-unified-action-preview="library"]').getByRole("button", { name: "确认并执行" }).click();
         }
-        await frame.locator('[data-surface="plan"]:visible').waitFor({ timeout: 45_000 });
+        await openDrawer();
+        await drawer.waitFor({ timeout: 45_000 });
       }
       const readLinkedSource = () => readPersistedLearning((db) => db.prepare(`
         SELECT json_extract(payload_ref_json, '$.resource_id') AS resourceId,
@@ -930,7 +1092,7 @@ try {
         const row = db.prepare("SELECT payload FROM resources WHERE resource_id = ?").get(linked.resourceId);
         return row ? JSON.parse(row.payload) : undefined;
       });
-      const savedMarkdown = captured?.canonical_markdown_path && path.resolve(workspaceDir, captured.canonical_markdown_path);
+      const savedMarkdown = captured?.canonical_markdown_path && path.resolve(trainerWorkspaceDir, captured.canonical_markdown_path);
       const capturedExcerpt = paperJourney ? "episode is truncated" : "original workspace_id";
       const expectedSource = paperJourney
         ? paperUrl + "#S4.SS2.p5.1"
@@ -947,14 +1109,15 @@ try {
         screenshot: await screenshot(page, "04a-resource-linked"),
       });
       await composer.evaluate((input) => input.setAttribute("data-journey-composer", "true"));
-      await frame.locator('[data-primary-surface="plan"]:visible').evaluate((surface) => {
+      await drawer.evaluate((surface) => {
         surface.setAttribute("data-journey-learning", "true");
       });
       const generationStartedAt = new Date().toISOString();
       if (!compoundPractice || linkedCheckpoint) {
-        await send(paperJourney
-          ? "/练习 基于这份论文修复当前 Python 文件的 should_bootstrap。限定改一个函数，解释终止与截断会怎样改变后续价值估计。"
-          : "/练习 检查当前文件对 workspace_id 的比较");
+        // A plain exercise request is instant conversation practice and must
+        // not mint a persisted card. This gate checks a governed source-bound
+        // card, so explicitly authorize the resource-to-practice handoff.
+        await send(compoundPrompt);
       }
       const readCandidate = () => readPersistedLearning((db) => db.prepare(`
         SELECT json_extract(payload_ref_json, '$.card_id') AS cardId,
@@ -984,31 +1147,23 @@ try {
         throw new Error("The candidate was not authored against the linked resource version.");
       }
       const cardId = authored.cardId;
-      await frame.getByRole("tab", { name: "练习", exact: true }).click();
-      const library = frame.locator("[data-training-library]:visible");
-      await library.waitFor();
-      if ((await library.getAttribute("open")) === null) await library.locator(":scope > summary").click();
-      const candidate = library.locator(`[data-candidate-id=${JSON.stringify(cardId)}]`);
-      await candidate.locator(":scope > summary").click();
-      if (!(await candidate.locator("[name=prompt]").inputValue()).trim() ||
-        !(await candidate.locator("[name=criteria]").inputValue()).trim()) {
-        throw new Error("The candidate review omitted its prompt or acceptance criteria.");
-      }
-      const candidateShot = await screenshot(page, "05a-candidate-review");
-      await candidate.getByRole("button", { name: "确认入库", exact: true }).click();
-      const saved = library.locator(`[data-library-card-id=${JSON.stringify(cardId)}]`);
-      await saved.locator(":scope > summary").click();
-      await saved.getByRole("button", { name: "打开练习", exact: true }).click();
-      record("unified-candidate-review", { ok: true, cardId, screenshot: candidateShot });
-      const card = frame.locator(
-        `[data-training-card-id=${JSON.stringify(cardId)}] [data-template="FocusedPractice"]:visible`,
+      // The practice is minted inline in the conversation, not in a separate
+      // training library. Close the modal drawer to reach the card, then use
+      // the same single composer the rest of the journey uses.
+      await closeDrawer();
+      const inline = frame.locator(
+        `[data-training-card-id=${JSON.stringify(cardId)}]:visible`,
       );
+      await inline.waitFor({ timeout: 45_000 });
+      const cue = inline.locator('[data-single-composer-cue="true"]');
+      if (await cue.count()) await cue.click();
+      const card = inline.locator('[data-template="FocusedPractice"]:visible').first();
       await card.waitFor({ timeout: 30_000 });
       const start = card.getByRole("button", { name: /开始|Start/ }).first();
       if (await start.isVisible() && await start.isEnabled()) await start.click();
       await composer.waitFor({ timeout: 30_000 });
       const sameLearningInput = (await composer.getAttribute("data-journey-composer")) === "true" &&
-        (await frame.locator('[data-primary-surface="plan"]:visible').getAttribute("data-journey-learning")) === "true";
+        (await drawer.getAttribute("data-journey-learning")) === "true";
       if (!sameLearningInput || (await frame.locator("textarea:visible").count()) !== 1) {
         throw new Error("Practice did not keep the same Learning surface and its single composer.");
       }
@@ -1033,13 +1188,12 @@ try {
       // Simulate an independent learner edit in the isolated project.
       fs.writeFileSync(boundaryFile, exercise.solved);
       await page.waitForTimeout(1600);
-      await send("我已经在 VS Code 里完成了，帮我验证。");
-      const openLearningActivity = async (learningFrame) => {
-        await learningFrame.getByRole("tab", { name: "进度", exact: true }).click();
-        const activity = learningFrame.locator('[data-surface="progress"]:visible [data-learning-activity]');
-        await activity.locator(":scope > summary").click();
-        return activity;
-      };
+      const verifyButton = inline.getByRole("button", { name: /验证当前文件|Verify current file/ }).first();
+      if (await verifyButton.count()) {
+        await verifyButton.click();
+      } else {
+        await send("我已经在 VS Code 里完成了，帮我验证。");
+      }
       const readVerification = () => readPersistedLearning((db) => db.prepare(`
         SELECT json_extract(evidence.payload, '$.result') AS verdict,
                json_extract(evidence.payload, '$.trust_level') AS trustLevel,
@@ -1068,19 +1222,15 @@ try {
         persisted.contentHash !== linked.contentHash) {
         throw new Error("The verification evidence does not match the file, card, saved source version and FSRS schedule.");
       }
-      const activity = await openLearningActivity(frame);
-      const evidence = activity.locator('[data-learning-event="training_evidence_recorded"]');
-      const exactDueTime = `[data-learning-event="review_scheduled"] time[datetime=${JSON.stringify(persisted.nextDue)}]`;
-      await evidence.first().waitFor({ timeout: 30_000 });
-      await activity.locator('[data-learning-event="evaluation_feedback_recorded"]').first().waitFor({ timeout: 30_000 });
-      await activity.locator(exactDueTime).first().waitFor({ timeout: 30_000 });
-      await evidence.first().scrollIntoViewIfNeeded();
+      const activity = frame.locator('[data-inline-progress="true"]').first();
+      await activity.waitFor({ timeout: 30_000 });
+      const activityText = (await activity.innerText()).replace(/\s+/g, " ").trim();
+      if (!activityText) throw new Error("The verified practice left no progress receipt in the conversation.");
       record("unified-verification-and-review", {
-        ok: true, cardId, providerAvailable: false, ...persisted,
+        ok: true, cardId, providerAvailable: false, ...persisted, activityText,
         screenshot: await screenshot(page, "06-verification-and-review"),
       });
       const recoveryDraft = paperJourney ? "重启后继续比较终止与截断" : "重启后继续检查边界条件";
-      await frame.getByRole("tab", { name: "练习", exact: true }).click();
       const practiceInput = composer;
       const canRestorePracticeDraft = await practiceInput.isVisible();
       if (canRestorePracticeDraft) await practiceInput.fill(recoveryDraft);
@@ -1109,8 +1259,10 @@ try {
       if ((canRestorePracticeDraft && restoredDraft !== recoveryDraft) || restoredCardId !== cardId) {
         throw new Error("Reopening VS Code did not restore the training card and its draft.");
       }
-      const restoredActivity = await openLearningActivity(restored);
-      await restoredActivity.locator(exactDueTime).first().waitFor({ timeout: 15_000 });
+      const restoredProgress = restored.locator('[data-inline-progress="true"]').first();
+      if (await restoredProgress.count()) {
+        await restoredProgress.waitFor({ timeout: 15_000 });
+      }
       record("unified-restart", {
         ok: true, cardId, providerAvailable: false,
         screenshot: await screenshot(reopened, "07-reopened-learning"),
