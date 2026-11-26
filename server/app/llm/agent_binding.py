@@ -50,6 +50,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 
 from .agent_loop import AgentProvider, CoachAgentLoop
+from .harness import extract_provider_usage
 from .provider.capability import (
     _allows_keyless_local_provider,
     _is_loopback_provider_url,
@@ -479,6 +480,17 @@ def _parse_openai_chat_response(response: Any) -> dict[str, Any]:
         if isinstance(raw_finish, str) and raw_finish.strip():
             finish_reason = raw_finish.strip()
     parsed: dict[str, Any] = {"content": content, "tool_calls": tool_calls}
+    usage = extract_provider_usage(response)
+    if usage is not None:
+        parsed["usage"] = {
+            "input_tokens": usage.estimated_input_tokens,
+            "output_tokens": usage.output_tokens,
+            "reasoning_tokens": usage.reasoning_tokens,
+            "cache_read_tokens": usage.cache_read_tokens,
+            "cache_write_tokens": usage.cache_write_tokens,
+            "total_tokens": usage.total_tokens,
+            "total_cost": usage.total_cost,
+        }
     reasoning_content = _get_field(message, "reasoning_content", None)
     if isinstance(reasoning_content, str) and reasoning_content:
         parsed["provider_reasoning"] = {"openai_reasoning_content": reasoning_content}
@@ -659,6 +671,17 @@ def _parse_openai_responses_response(response: Any) -> dict[str, Any]:
         "content": _visible_model_text("".join(text_parts)),
         "tool_calls": tool_calls,
     }
+    usage = extract_provider_usage(response)
+    if usage is not None:
+        parsed["usage"] = {
+            "input_tokens": usage.estimated_input_tokens,
+            "output_tokens": usage.output_tokens,
+            "reasoning_tokens": usage.reasoning_tokens,
+            "cache_read_tokens": usage.cache_read_tokens,
+            "cache_write_tokens": usage.cache_write_tokens,
+            "total_tokens": usage.total_tokens,
+            "total_cost": usage.total_cost,
+        }
     if reasoning_items:
         parsed["provider_reasoning"] = {"responses_reasoning_items": reasoning_items}
     status = str(_get_field(response, "status", "") or "").strip().lower()
@@ -812,6 +835,17 @@ def _parse_gemini_response(payload: dict[str, Any]) -> dict[str, Any]:
         "content": _visible_model_text("".join(text_parts)),
         "tool_calls": tool_calls,
     }
+    usage = extract_provider_usage(payload)
+    if usage is not None:
+        parsed["usage"] = {
+            "input_tokens": usage.estimated_input_tokens,
+            "output_tokens": usage.output_tokens,
+            "reasoning_tokens": usage.reasoning_tokens,
+            "cache_read_tokens": usage.cache_read_tokens,
+            "cache_write_tokens": usage.cache_write_tokens,
+            "total_tokens": usage.total_tokens,
+            "total_cost": usage.total_cost,
+        }
     if any(thought_signatures):
         parsed["provider_reasoning"] = {"gemini_thought_signatures": thought_signatures}
     if _finish_reason_is_truncated(finish_reason) and not tool_calls:
@@ -1026,6 +1060,17 @@ def _parse_anthropic_response(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             )
     parsed: dict[str, Any] = {"content": "".join(text_parts), "tool_calls": tool_calls}
+    usage = extract_provider_usage(payload)
+    if usage is not None:
+        parsed["usage"] = {
+            "input_tokens": usage.estimated_input_tokens,
+            "output_tokens": usage.output_tokens,
+            "reasoning_tokens": usage.reasoning_tokens,
+            "cache_read_tokens": usage.cache_read_tokens,
+            "cache_write_tokens": usage.cache_write_tokens,
+            "total_tokens": usage.total_tokens,
+            "total_cost": usage.total_cost,
+        }
     if thinking_blocks:
         parsed["provider_reasoning"] = {"anthropic_blocks": thinking_blocks}
     stop_reason = payload.get("stop_reason")

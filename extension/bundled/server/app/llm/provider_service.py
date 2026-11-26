@@ -5228,11 +5228,6 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
             if self._plain_completion_uses_agent_binding():
                 raw_content = ""
                 emitted_content = ""
-                preserve_live = _should_preserve_visible_reply(
-                    message,
-                    answer_mode=answer_mode,
-                    profile=profile,
-                )
                 holdback = _stream_holdback_chars(response_language)
                 async for chunk in self._completion_stream_via_agent_binding(
                     messages,
@@ -5243,20 +5238,21 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     cancel_event=cancel_event,
                 ):
                     raw_content += chunk
-                    reply_corruption_detail = _mixed_script_reply_corruption_detail(
-                        raw_content,
-                        message=message,
-                        response_language=response_language,
-                    )
-                    if reply_corruption_detail:
-                        self._record_reply_language_corruption(reply_corruption_detail)
-                        return
-                    if preserve_live and len(raw_content) > holdback:
-                        candidate = _strip_internal_coach_meta(raw_content[:-holdback])
+                    if any("\u0370" <= ch <= "\u0e7f" for ch in chunk):
+                        reply_corruption_detail = _mixed_script_reply_corruption_detail(
+                            raw_content[-256:],
+                            message=message,
+                            response_language=response_language,
+                        )
+                        if reply_corruption_detail:
+                            self._record_reply_language_corruption(reply_corruption_detail)
+                            return
+                    if len(raw_content) > holdback:
+                        window = raw_content if holdback <= 0 else raw_content[:-holdback]
+                        candidate = _strip_internal_coach_meta(window)
                         if (
                             candidate
-                            and candidate == _visible_model_text(raw_content[:-holdback]).strip()
-                            and _strip_short_cyrillic_noise(candidate, message=message) == candidate
+                            and candidate == _visible_model_text(window).strip()
                             and candidate.startswith(emitted_content)
                         ):
                             delta_out = candidate[len(emitted_content) :]
@@ -5315,11 +5311,6 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
 
             raw_content = ""
             emitted_content = ""
-            preserve_live = _should_preserve_visible_reply(
-                message,
-                answer_mode=answer_mode,
-                profile=profile,
-            )
             holdback = _stream_holdback_chars(response_language)
             finish_reason: str | None = None
 
@@ -5343,20 +5334,21 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     if not text:
                         continue
                     raw_content += text
-                    reply_corruption_detail = _mixed_script_reply_corruption_detail(
-                        raw_content,
-                        message=message,
-                        response_language=response_language,
-                    )
-                    if reply_corruption_detail:
-                        self._record_reply_language_corruption(reply_corruption_detail)
-                        return
-                    if preserve_live and len(raw_content) > holdback:
-                        candidate = _strip_internal_coach_meta(raw_content[:-holdback])
+                    if any("\u0370" <= ch <= "\u0e7f" for ch in text):
+                        reply_corruption_detail = _mixed_script_reply_corruption_detail(
+                            raw_content[-256:],
+                            message=message,
+                            response_language=response_language,
+                        )
+                        if reply_corruption_detail:
+                            self._record_reply_language_corruption(reply_corruption_detail)
+                            return
+                    if len(raw_content) > holdback:
+                        window = raw_content if holdback <= 0 else raw_content[:-holdback]
+                        candidate = _strip_internal_coach_meta(window)
                         if (
                             candidate
-                            and candidate == _visible_model_text(raw_content[:-holdback]).strip()
-                            and _strip_short_cyrillic_noise(candidate, message=message) == candidate
+                            and candidate == _visible_model_text(window).strip()
                             and candidate.startswith(emitted_content)
                         ):
                             delta_out = candidate[len(emitted_content) :]
@@ -6505,18 +6497,24 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
                     cut_idx = visible.find("trainer-image://")
                     bang_idx = visible.rfind("![", 0, cut_idx)
                     visible = visible[: bang_idx if bang_idx >= 0 else cut_idx].rstrip()
+                tail_sample = visible[-256:]
                 if (
                     not visible
-                    or _mixed_script_reply_corruption_detail(
-                        visible,
-                        message=message,
-                        response_language=response_language,
+                    or (
+                        any("\u0370" <= ch <= "\u0e7f" for ch in tail_sample)
+                        and (
+                            _mixed_script_reply_corruption_detail(
+                                tail_sample,
+                                message=message,
+                                response_language=response_language,
+                            )
+                            or _strip_short_cyrillic_noise(tail_sample, message=message) != tail_sample
+                        )
                     )
-                    or _strip_short_cyrillic_noise(visible, message=message) != visible
                     or len(visible) <= holdback_chars
                 ):
                     return ""
-                available = visible[:-holdback_chars]
+                available = visible if holdback_chars <= 0 else visible[:-holdback_chars]
                 if not available.startswith(streamed_visible_text):
                     return ""
                 return available[len(streamed_visible_text) :]
@@ -7268,28 +7266,33 @@ async def _provider_service_coaching_reply_stream(
             ):
                 raw_content += chunk
                 pending_visible += chunk
-                reply_corruption_detail = _mixed_script_reply_corruption_detail(
-                    raw_content,
-                    message=message,
-                    response_language=response_language,
-                )
-                if reply_corruption_detail:
-                    self._record_reply_language_corruption(reply_corruption_detail)
-                    if not yielded_visible:
-                        recovery_override = _build_language_corruption_recovery_override(
-                            message,
-                            current_file=current_file,
-                            coach_context=coach_context,
-                            response_language=response_language,
-                        )
-                        if isinstance(recovery_override, dict):
-                            reply_override = str(recovery_override.get("reply") or "").strip()
-                            if reply_override:
-                                yield reply_override
-                    return
+                if any("\u0370" <= ch <= "\u0e7f" for ch in chunk):
+                    reply_corruption_detail = _mixed_script_reply_corruption_detail(
+                        raw_content[-256:],
+                        message=message,
+                        response_language=response_language,
+                    )
+                    if reply_corruption_detail:
+                        self._record_reply_language_corruption(reply_corruption_detail)
+                        if not yielded_visible:
+                            recovery_override = _build_language_corruption_recovery_override(
+                                message,
+                                current_file=current_file,
+                                coach_context=coach_context,
+                                response_language=response_language,
+                            )
+                            if isinstance(recovery_override, dict):
+                                reply_override = str(recovery_override.get("reply") or "").strip()
+                                if reply_override:
+                                    yield reply_override
+                        return
                 if len(pending_visible) > holdback_chars:
-                    safe_prefix = pending_visible[:-holdback_chars]
-                    pending_visible = pending_visible[-holdback_chars:]
+                    if holdback_chars <= 0:
+                        safe_prefix = pending_visible
+                        pending_visible = ""
+                    else:
+                        safe_prefix = pending_visible[:-holdback_chars]
+                        pending_visible = pending_visible[-holdback_chars:]
                     if safe_prefix:
                         yielded_visible = True
                         yield safe_prefix
@@ -7381,28 +7384,33 @@ async def _provider_service_coaching_reply_stream(
                     continue
                 raw_content += text
                 pending_visible += text
-                reply_corruption_detail = _mixed_script_reply_corruption_detail(
-                    raw_content,
-                    message=message,
-                    response_language=response_language,
-                )
-                if reply_corruption_detail:
-                    self._record_reply_language_corruption(reply_corruption_detail)
-                    if not yielded_visible:
-                        recovery_override = _build_language_corruption_recovery_override(
-                            message,
-                            current_file=current_file,
-                            coach_context=coach_context,
-                            response_language=response_language,
-                        )
-                        if isinstance(recovery_override, dict):
-                            reply_override = str(recovery_override.get("reply") or "").strip()
-                            if reply_override:
-                                yield reply_override
-                    return
+                if any("\u0370" <= ch <= "\u0e7f" for ch in text):
+                    reply_corruption_detail = _mixed_script_reply_corruption_detail(
+                        raw_content[-256:],
+                        message=message,
+                        response_language=response_language,
+                    )
+                    if reply_corruption_detail:
+                        self._record_reply_language_corruption(reply_corruption_detail)
+                        if not yielded_visible:
+                            recovery_override = _build_language_corruption_recovery_override(
+                                message,
+                                current_file=current_file,
+                                coach_context=coach_context,
+                                response_language=response_language,
+                            )
+                            if isinstance(recovery_override, dict):
+                                reply_override = str(recovery_override.get("reply") or "").strip()
+                                if reply_override:
+                                    yield reply_override
+                        return
                 if len(pending_visible) > holdback_chars:
-                    safe_prefix = pending_visible[:-holdback_chars]
-                    pending_visible = pending_visible[-holdback_chars:]
+                    if holdback_chars <= 0:
+                        safe_prefix = pending_visible
+                        pending_visible = ""
+                    else:
+                        safe_prefix = pending_visible[:-holdback_chars]
+                        pending_visible = pending_visible[-holdback_chars:]
                     if safe_prefix:
                         yielded_visible = True
                         yield safe_prefix

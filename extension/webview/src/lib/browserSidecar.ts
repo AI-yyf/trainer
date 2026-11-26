@@ -1615,20 +1615,11 @@ export function inBrowserPreviewMode(): boolean {
   return typeof window !== "undefined" && !window.acquireVsCodeApi;
 }
 
-/** Fixture previews own their bootstrap locally; live previews must use the Sidecar. */
-export function isBrowserPreviewFixtureMode(): boolean {
-  return isBrowserPreviewFixture();
-}
+import { isBrowserPreviewFixtureMode } from "./browserPreviewMode";
+export { isBrowserPreviewFixtureMode };
 
 function isBrowserPreviewFixture(): boolean {
-  if (typeof window === "undefined" || window.__TRAINER_BROWSER_PREVIEW__ !== true) {
-    return false;
-  }
-  const previewSearch = new URLSearchParams(window.location.search);
-  if (previewSearch.get("live") === "1") {
-    return false;
-  }
-  return Boolean(window.__TRAINER_BOOTSTRAP__) && typeof window.__TRAINER_BOOTSTRAP__ === "object";
+  return isBrowserPreviewFixtureMode();
 }
 
 function compactPreviewGoal(value: string): string {

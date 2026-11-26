@@ -61,6 +61,11 @@ jobs:
         working-directory: server
         run: .venv/bin/python -m pyright app
 
+      - name: Bundled server parity gate
+        run: |
+          node extension/scripts/sync-bundled-server.mjs
+          git diff --exit-code extension/bundled/server
+
       - name: Build
         run: npm run build
 

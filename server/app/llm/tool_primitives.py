@@ -24,11 +24,16 @@ strictly across two authority domains plus learning state:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import logging
 import os
 import re
 import shlex
+import shutil
+import signal
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -201,6 +206,20 @@ _LIBRARY_EXEC_FORBIDDEN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         re.compile(r"(?:^|[\s'\"=/(\[])\.\.(?:[/\\]|$|[\s'\"])" ),
         "Parent directory traversal ('..') is forbidden; library_exec is strictly confined to <LibraryRoot>.",
     ),
+    (
+        re.compile(
+            r"\bxargs\b|\beval\b|\bbase64\s+(?:-[dD]|--decode)\b|\b(?:chr|b64decode|fromhex)\s*\(",
+            re.IGNORECASE,
+        ),
+        "Dynamic command/path decoding (xargs / eval / base64 -d / chr / b64decode) is forbidden in library_exec.",
+    ),
+    (
+        re.compile(
+            r"\bpython[0-9.]*\s+-[A-Za-z]*[SIE]|\b(?:node|perl|ruby)\s+-e\b|\bosascript\b",
+            re.IGNORECASE,
+        ),
+        "Bypassing Python site sandbox flags (-S/-I/-E) or unsandboxed inline interpreters is forbidden in library_exec.",
+    ),
 )
 
 _ALLOWED_SYSTEM_EXEC_PREFIXES: tuple[str, ...] = (
@@ -236,7 +255,127 @@ _STRIPPED_SUBPROCESS_ENV_KEYS: frozenset[str] = frozenset(
 
 _MAX_EXEC_TIMEOUT_SECONDS = 30.0
 _DEFAULT_EXEC_TIMEOUT_SECONDS = 15.0
-_MAX_EXEC_OUTPUT_BYTES = 16_384
+_MAX_EXEC_OUTPUT_BYTES = 30_000
+_MAX_RAW_CAPTURE_BYTES = 262_144
+
+_MACOS_SANDBOX_USABLE: bool | None = None
+_LINUX_BWRAP_BIN: str | None | bool = False
+
+_PYTHON_AUDIT_SITECUSTOMIZE = '''"""Trainer C-level PEP 578 sys.addaudithook sandbox guard for library_exec."""
+import os
+import sys
+from pathlib import Path
+
+_LIB_ROOT = Path(os.environ.get("TRAINER_LIBRARY_ROOT", os.getcwd())).resolve()
+_RAW_PROJ = os.environ.get("TRAINER_PROJECT_ROOT", "").strip()
+_PROJ_ROOT = Path(_RAW_PROJ).resolve() if _RAW_PROJ else None
+_SYS_READ_ROOTS = tuple(
+    Path(p).resolve()
+    for p in (
+        "/usr",
+        "/bin",
+        "/sbin",
+        "/opt",
+        "/Library",
+        "/System",
+        "/private/etc",
+        "/etc",
+        "/dev",
+        "/var/select",
+        "/private/var/select",
+        sys.prefix,
+        sys.base_prefix,
+        sys.exec_prefix,
+    )
+    if os.path.exists(p)
+)
+_WRITE_FLAGS = (
+    os.O_WRONLY
+    | os.O_RDWR
+    | getattr(os, "O_CREAT", 0)
+    | getattr(os, "O_TRUNC", 0)
+    | getattr(os, "O_APPEND", 0)
+)
+
+def _under(root: Path, target: Path) -> bool:
+    try:
+        target.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+def _resolve_arg(raw) -> Path | None:
+    if isinstance(raw, int) or raw is None:
+        return None
+    try:
+        p = Path(os.fsdecode(raw))
+        if not p.is_absolute():
+            p = Path(os.getcwd()) / p
+        return p.resolve()
+    except Exception:
+        return None
+
+def _check_read(target: Path, event: str) -> None:
+    if str(target).startswith("/dev/"):
+        return
+    if _under(_LIB_ROOT, target):
+        return
+    if _PROJ_ROOT is not None and _PROJ_ROOT != _LIB_ROOT and _under(_PROJ_ROOT, target):
+        raise PermissionError(f"Sandbox blocked {event} on <ProjectRoot>: {target}")
+    if any(_under(r, target) for r in _SYS_READ_ROOTS):
+        return
+    raise PermissionError(f"Sandbox blocked {event} outside <LibraryRoot>: {target}")
+
+def _check_write(target: Path, event: str) -> None:
+    if str(target) == "/dev/null":
+        return
+    if _PROJ_ROOT is not None and _PROJ_ROOT != _LIB_ROOT and _under(_PROJ_ROOT, target):
+        raise PermissionError(f"Sandbox blocked write to read-only <ProjectRoot>: {target}")
+    if not _under(_LIB_ROOT, target):
+        raise PermissionError(f"Sandbox blocked write outside <LibraryRoot>: {target}")
+
+def _audit(event: str, args: tuple) -> None:
+    if event == "open":
+        raw_path, mode, flags = (args + (None, None, 0))[:3]
+        target = _resolve_arg(raw_path)
+        if target is None:
+            return
+        is_write = bool(isinstance(flags, int) and (flags & _WRITE_FLAGS)) or (
+            isinstance(mode, str) and any(m in mode for m in ("w", "a", "x", "+"))
+        )
+        if is_write:
+            _check_write(target, event)
+        else:
+            _check_read(target, event)
+    elif event in ("os.chdir", "os.listdir", "os.scandir", "glob.glob", "glob.glob/2"):
+        target = _resolve_arg(args[0] if args else None)
+        if target is not None and not _under(_LIB_ROOT, target):
+            raise PermissionError(f"Sandbox blocked {event} outside <LibraryRoot>: {target}")
+    elif event in (
+        "os.remove",
+        "os.unlink",
+        "os.rmdir",
+        "shutil.rmtree",
+        "os.symlink",
+        "os.link",
+        "os.chmod",
+        "os.chown",
+    ):
+        raise PermissionError(f"Sandbox blocked destructive {event}; use library_write(action='soft_delete').")
+    elif event in ("os.rename", "os.replace"):
+        src = _resolve_arg(args[0] if len(args) > 0 else None)
+        dst = _resolve_arg(args[1] if len(args) > 1 else None)
+        if (src and not _under(_LIB_ROOT, src)) or (dst and not _under(_LIB_ROOT, dst)):
+            raise PermissionError(f"Sandbox blocked {event} outside <LibraryRoot>.")
+    elif event in ("os.mkdir", "os.makedirs"):
+        target = _resolve_arg(args[0] if args else None)
+        if target is not None:
+            _check_write(target, event)
+    elif event in ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.fork"):
+        raise PermissionError(f"Nested process spawning ({event}) is blocked inside library_exec Python scripts.")
+
+sys.addaudithook(_audit)
+'''
 
 
 # ---------------------------------------------------------------------------
@@ -996,7 +1135,133 @@ def _extract_candidate_absolute_paths(cleaned: str) -> tuple[list[str], str | No
     return candidates, None
 
 
-def _build_library_exec_env(library_root: Path) -> dict[str, str]:
+def _ensure_python_audit_guard_dir(library_root: Path) -> Path:
+    guard_dir = library_root / ".trainer-exec-guard"
+    tmp_dir = library_root / ".trainer-tmp"
+    guard_dir.mkdir(parents=True, exist_ok=True)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    site_file = guard_dir / "sitecustomize.py"
+    if not site_file.exists() or site_file.read_text(encoding="utf-8", errors="ignore") != _PYTHON_AUDIT_SITECUSTOMIZE:
+        site_file.write_text(_PYTHON_AUDIT_SITECUSTOMIZE, encoding="utf-8")
+    return guard_dir
+
+
+def _macos_sandbox_exec_usable() -> bool:
+    global _MACOS_SANDBOX_USABLE
+    if _MACOS_SANDBOX_USABLE is not None:
+        return _MACOS_SANDBOX_USABLE
+    if sys.platform != "darwin":
+        _MACOS_SANDBOX_USABLE = False
+        return False
+    sb = shutil.which("sandbox-exec")
+    if not sb:
+        _MACOS_SANDBOX_USABLE = False
+        return False
+    try:
+        probe = subprocess.run(
+            [sb, "-p", "(version 1)(allow default)", "/usr/bin/true"],
+            capture_output=True,
+            timeout=2.0,
+        )
+        _MACOS_SANDBOX_USABLE = probe.returncode == 0
+    except Exception:
+        _MACOS_SANDBOX_USABLE = False
+    return _MACOS_SANDBOX_USABLE
+
+
+def _linux_bwrap_bin() -> str | None:
+    global _LINUX_BWRAP_BIN
+    if _LINUX_BWRAP_BIN is not False:
+        return _LINUX_BWRAP_BIN if isinstance(_LINUX_BWRAP_BIN, str) else None
+    if not sys.platform.startswith("linux"):
+        _LINUX_BWRAP_BIN = None
+        return None
+    bwrap = shutil.which("bwrap")
+    if not bwrap:
+        _LINUX_BWRAP_BIN = None
+        return None
+    try:
+        probe = subprocess.run(
+            [bwrap, "--ro-bind", "/", "/", "/bin/true"],
+            capture_output=True,
+            timeout=2.0,
+        )
+        _LINUX_BWRAP_BIN = bwrap if probe.returncode == 0 else None
+    except Exception:
+        _LINUX_BWRAP_BIN = None
+    return _LINUX_BWRAP_BIN
+
+
+def _sbpl_escape(path: Path) -> str:
+    return str(path.resolve()).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _build_macos_seatbelt_profile(library_root: Path, project_root: Path | None) -> str:
+    lib_escaped = _sbpl_escape(library_root)
+    lines = [
+        "(version 1)",
+        "(allow default)",
+        "(deny file-write*)",
+        f'(allow file-write* (subpath "{lib_escaped}") (literal "/dev/null") (literal "/dev/dtracehelper"))',
+    ]
+    if project_root is not None and project_root.resolve() != library_root.resolve():
+        if not _is_within_root(library_root, project_root):
+            proj_escaped = _sbpl_escape(project_root)
+            lines.append(f'(deny file-read* (subpath "{proj_escaped}"))')
+    return "\n".join(lines)
+
+
+def _build_sandboxed_exec_argv(
+    command: str,
+    *,
+    library_root: Path,
+    project_root: Path | None,
+) -> tuple[list[str], str]:
+    """Return (argv, sandbox_backend) preferring OS kernel sandboxes over plain /bin/sh."""
+    if _macos_sandbox_exec_usable():
+        sb = shutil.which("sandbox-exec") or "/usr/bin/sandbox-exec"
+        profile = _build_macos_seatbelt_profile(library_root, project_root)
+        return [sb, "-p", profile, "/bin/sh", "-c", command], "macos_seatbelt"
+    bwrap = _linux_bwrap_bin()
+    if bwrap:
+        argv = [
+            bwrap,
+            "--ro-bind",
+            "/",
+            "/",
+            "--bind",
+            str(library_root),
+            str(library_root),
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+        ]
+        if project_root is not None and project_root.resolve() != library_root.resolve():
+            if not _is_within_root(library_root, project_root) and project_root.exists():
+                argv.extend(["--tmpfs", str(project_root.resolve())])
+        argv.extend(["--chdir", str(library_root), "/bin/sh", "-c", command])
+        return argv, "linux_bwrap"
+    return ["/bin/sh", "-c", command], "python_audit_hook"
+
+
+def _terminate_process_group(proc: asyncio.subprocess.Process) -> None:
+    if proc.returncode is not None:
+        return
+    if proc.pid:
+        with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+            return
+    with contextlib.suppress(ProcessLookupError, OSError):
+        proc.kill()
+
+
+def _build_library_exec_env(
+    library_root: Path,
+    *,
+    project_root: Path | None = None,
+    inject_audit_guard: bool = False,
+) -> dict[str, str]:
     """Build an isolated subprocess environment safe under packaged PyInstaller sidecars."""
     clean_env: dict[str, str] = {}
     for key, value in os.environ.items():
@@ -1024,6 +1289,13 @@ def _build_library_exec_env(library_root: Path) -> dict[str, str]:
     clean_env["PATH"] = os.pathsep.join(merged_path)
     clean_env["HOME"] = str(library_root)
     clean_env["PWD"] = str(library_root)
+    clean_env["TMPDIR"] = str(library_root / ".trainer-tmp")
+    clean_env["TRAINER_LIBRARY_ROOT"] = str(library_root)
+    if project_root is not None:
+        clean_env["TRAINER_PROJECT_ROOT"] = str(project_root.resolve())
+    if inject_audit_guard:
+        guard_dir = _ensure_python_audit_guard_dir(library_root)
+        clean_env["PYTHONPATH"] = str(guard_dir)
     clean_env["PYTHONIOENCODING"] = "utf-8"
     clean_env["PYTHONNOUSERSITE"] = "1"
     clean_env.setdefault("LANG", "en_US.UTF-8")
@@ -1124,32 +1396,84 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
     except Exception:
         timeout = _DEFAULT_EXEC_TIMEOUT_SECONDS
 
+    from .harness import invalidate_sandbox_operations, truncate_tool_payload
+
     started_at = time.time()
-    exec_env = _build_library_exec_env(library_root)
-    proc = await asyncio.create_subprocess_shell(
+    exec_env = _build_library_exec_env(
+        library_root,
+        project_root=project_root,
+        inject_audit_guard=True,
+    )
+    argv, sandbox_backend = _build_sandboxed_exec_argv(
         command,
+        library_root=library_root,
+        project_root=project_root,
+    )
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    raw_cancel = extra.get("_stream_cancel_event") or extra.get("stream_cancel_event")
+    cancel_event = raw_cancel if isinstance(raw_cancel, asyncio.Event) else None
+    if cancel_event is not None and cancel_event.is_set():
+        raise asyncio.CancelledError
+
+    proc = await asyncio.create_subprocess_exec(
+        *argv,
         cwd=str(library_root),
         env=exec_env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,
+    )
+    comm_task = asyncio.create_task(proc.communicate())
+    cancel_wait_task: asyncio.Task[bool] | None = (
+        asyncio.create_task(cancel_event.wait()) if cancel_event is not None else None
     )
     try:
-        raw_stdout, raw_stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        if cancel_wait_task is not None:
+            done, _ = await asyncio.wait(
+                {comm_task, cancel_wait_task},
+                timeout=timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if cancel_wait_task in done:
+                _terminate_process_group(proc)
+                with contextlib.suppress(Exception):
+                    await comm_task
+                raise asyncio.CancelledError
+            if comm_task not in done:
+                raise asyncio.TimeoutError
+            raw_stdout, raw_stderr = comm_task.result()
+        else:
+            raw_stdout, raw_stderr = await asyncio.wait_for(comm_task, timeout=timeout)
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
+        _terminate_process_group(proc)
+        with contextlib.suppress(Exception):
+            await comm_task
         return {
             "ok": False,
             "domain": "library_sandbox",
             "error": "timeout",
             "detail": f"library_exec timed out after {timeout:.1f}s.",
         }
+    except BaseException:
+        _terminate_process_group(proc)
+        with contextlib.suppress(Exception):
+            await comm_task
+        raise
+    finally:
+        if cancel_wait_task is not None and not cancel_wait_task.done():
+            cancel_wait_task.cancel()
 
-    stdout_text = raw_stdout[:_MAX_EXEC_OUTPUT_BYTES].decode("utf-8", errors="replace")
-    stderr_text = raw_stderr[:_MAX_EXEC_OUTPUT_BYTES].decode("utf-8", errors="replace")
+    decoded_stdout = raw_stdout[:_MAX_RAW_CAPTURE_BYTES].decode("utf-8", errors="replace")
+    decoded_stderr = raw_stderr[:_MAX_RAW_CAPTURE_BYTES].decode("utf-8", errors="replace")
+    stdout_text = truncate_tool_payload(decoded_stdout, limit=_MAX_EXEC_OUTPUT_BYTES)
+    stderr_text = truncate_tool_payload(decoded_stderr, limit=_MAX_EXEC_OUTPUT_BYTES)
+    was_truncated = (
+        len(raw_stdout) > _MAX_RAW_CAPTURE_BYTES
+        or len(raw_stderr) > _MAX_RAW_CAPTURE_BYTES
+        or len(decoded_stdout) > _MAX_EXEC_OUTPUT_BYTES
+        or len(decoded_stderr) > _MAX_EXEC_OUTPUT_BYTES
+    )
     if proc.returncode == 0:
-        from .harness import invalidate_sandbox_operations
-
         invalidate_sandbox_operations(context.runtime, context.workspace_id)
     auto_indexed_paths: list[str] = []
     if proc.returncode == 0 and args.get("auto_index") is not False:
@@ -1173,12 +1497,12 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
     return {
         "ok": proc.returncode == 0,
         "domain": "library_sandbox",
+        "sandbox_backend": sandbox_backend,
         "exit_code": int(proc.returncode or 0),
         "cwd": str(library_root),
         "stdout": stdout_text,
         "stderr": stderr_text,
-        "truncated": len(raw_stdout) > _MAX_EXEC_OUTPUT_BYTES
-        or len(raw_stderr) > _MAX_EXEC_OUTPUT_BYTES,
+        "truncated": was_truncated,
         "auto_indexed_paths": auto_indexed_paths,
     }
 

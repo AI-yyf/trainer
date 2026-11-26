@@ -25,8 +25,7 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "files": [
-    "src/main.tsx",
-    "src/vite-env.d.ts"
+  "include": [
+    "src"
   ]
 }

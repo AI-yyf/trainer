@@ -333,7 +333,7 @@ import {
   TRAINING_CARD_STATUS_TEXT,
   TRAINING_HANDOFF_STATUS_TEXT,
 } from "../lib/i18n/appUiCopy";
-import { isBrowserPreviewFixtureMode } from "../lib/browserSidecar";
+import { isBrowserPreviewFixtureMode } from "../lib/browserPreviewMode";
 import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
 import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
 import { formatReviewDueLabel, learnerSignalLabel } from "../components/settings/useCoachSettingsViewState";

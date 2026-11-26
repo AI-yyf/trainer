@@ -72,7 +72,7 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         return None
     usage_obj = getattr(response, "usage", None)
     if usage_obj is None and isinstance(response, dict):
-        usage_obj = response.get("usage")
+        usage_obj = response.get("usage") or response.get("usageMetadata")
     if usage_obj is None:
         return None
 
@@ -80,7 +80,7 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         raw = getattr(usage_obj, key, None)
         if raw is None and isinstance(usage_obj, dict):
             raw = usage_obj.get(key)
-        if raw is None:
+        if raw is None or isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
             return None
         try:
             value = float(raw)
@@ -92,7 +92,7 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         raw = getattr(usage_obj, key, None)
         if raw is None and isinstance(usage_obj, dict):
             raw = usage_obj.get(key)
-        if raw is None:
+        if raw is None or isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
             return None
         try:
             value = int(raw)
@@ -100,21 +100,35 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         except (TypeError, ValueError):
             return None
 
-    input_tokens = _int("prompt_tokens") or _int("input_tokens")
-    output_tokens = _int("completion_tokens") or _int("output_tokens")
-    total = _int("total_tokens")
+    input_tokens = (
+        _int("prompt_tokens")
+        or _int("input_tokens")
+        or _int("promptTokenCount")
+    )
+    output_tokens = (
+        _int("completion_tokens")
+        or _int("output_tokens")
+        or _int("candidatesTokenCount")
+    )
+    total = _int("total_tokens") or _int("totalTokenCount")
+    if total is None and input_tokens is not None and output_tokens is not None:
+        total = input_tokens + output_tokens
     if input_tokens is None and output_tokens is None and total is None:
         return None
     return ProviderUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        reasoning_tokens=_int("reasoning_tokens"),
-        cache_read_tokens=_int("cache_read_input_tokens") or _int("cache_read_tokens"),
+        reasoning_tokens=_int("reasoning_tokens") or _int("thoughtsTokenCount"),
+        cache_read_tokens=(
+            _int("cache_read_input_tokens")
+            or _int("cache_read_tokens")
+            or _int("cachedContentTokenCount")
+        ),
         cache_write_tokens=_int("cache_creation_input_tokens") or _int("cache_write_tokens"),
         total_tokens=total,
-    input_cost=_float("input_cost") or _float("prompt_cost"),
-    output_cost=_float("output_cost") or _float("completion_cost"),
-    total_cost=_float("total_cost"),
+        input_cost=_float("input_cost") or _float("prompt_cost"),
+        output_cost=_float("output_cost") or _float("completion_cost"),
+        total_cost=_float("total_cost"),
     )
 COMPACTION_TOOL_SERIALIZE_CHARS = 2_000
 COMPACTION_RESEARCH_SOURCE_LIMIT = 48
@@ -272,10 +286,18 @@ def tool_output_limit(name: str | None) -> int:
 
 
 def truncate_tool_payload(content_text: str, *, limit: int) -> str:
+    """Head+tail truncation so trailing tracebacks and exit summaries survive."""
     text = str(content_text or "")
     if len(text) <= limit:
         return text
-    return text[: max(0, limit)] + "\n…[truncated]"
+    capped = max(0, int(limit))
+    if capped < 400:
+        return text[:capped] + "\n…[truncated]"
+    marker = "\n…[truncated]…\n"
+    budget = max(0, capped - len(marker))
+    head_len = (budget * 65) // 100
+    tail_len = max(0, budget - head_len)
+    return text[:head_len] + marker + (text[-tail_len:] if tail_len else "")
 
 
 def _compact_tool_dict_for_llm(name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -796,14 +818,22 @@ def compact_history(
     keep_recent_tokens: int = KEEP_RECENT_TOKENS,
     reason: str = "threshold",
     force: bool = False,
+    last_provider_input_tokens: int | None = None,
 ) -> CompactionRecord | None:
     """Replace older turns with a structured summary. Mutates ``history`` in place."""
 
     if len(history) < 6 and not force:
         return None
-    tokens_before = estimate_tokens(history)
+    tokens_before = (
+        last_provider_input_tokens
+        if last_provider_input_tokens is not None and last_provider_input_tokens > 0
+        else estimate_tokens(history)
+    )
     if not force and not should_compact(
-        history, extra=extra, keep_recent_tokens=keep_recent_tokens
+        history,
+        extra=extra,
+        keep_recent_tokens=keep_recent_tokens,
+        last_provider_input_tokens=last_provider_input_tokens,
     ):
         return None
     cut = find_cut_point(history, keep_recent_tokens=keep_recent_tokens)
@@ -876,6 +906,7 @@ def prepare_next_turn(
     extra: dict[str, Any] | None = None,
     keep_recent_tokens: int = KEEP_RECENT_TOKENS,
     history_char_budget: int = 80_000,
+    last_provider_input_tokens: int | None = None,
 ) -> CompactionRecord | None:
     """Pi prepareNextTurn: prune, then compact if the next LLM call would overflow."""
 
@@ -885,6 +916,7 @@ def prepare_next_turn(
         extra=extra,
         keep_recent_tokens=keep_recent_tokens,
         reason="threshold",
+        last_provider_input_tokens=last_provider_input_tokens,
     )
 
 

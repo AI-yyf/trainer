@@ -85,6 +85,7 @@ class AgentStep:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     tool_results: list[dict[str, Any]] = field(default_factory=list)
     stop_reason: str | None = None
+    usage: dict[str, Any] | None = None
 
 
 @dataclass
@@ -103,6 +104,7 @@ class AgentRunResult:
     resume_thread: str | None = None
     confidence: str | None = None
     evidence: list[str] | None = None
+    usage: dict[str, Any] | None = None
 
 
 class AgentLoopError(RuntimeError):
@@ -331,6 +333,8 @@ class CoachAgentLoop:
             )
         self.first_step_timeout = self._bounded_step_timeout(resolved_first_step_timeout)
         self._formal_plan_commit_retries = 0
+        self._last_provider_input_tokens: int | None = None
+        self._accumulated_usage: dict[str, Any] = {}
 
     # ---- non-streaming -----------------------------------------------------
 
@@ -394,6 +398,7 @@ class CoachAgentLoop:
 
             assistant_text = str(response.get("content") or "")
             tool_calls = list(response.get("tool_calls") or [])
+            step_usage = self._record_step_usage(response.get("usage"))
             provider_reasoning = (
                 response.get("provider_reasoning")
                 if isinstance(response.get("provider_reasoning"), dict)
@@ -403,6 +408,7 @@ class CoachAgentLoop:
                 index=index,
                 assistant_content=assistant_text,
                 tool_calls=tool_calls,
+                usage=step_usage,
             )
             steps.append(step)
 
@@ -633,6 +639,7 @@ class CoachAgentLoop:
                             tool_calls = list(
                                 cast("list[dict[str, Any]]", event.get("tool_calls") or [])
                             )
+                            self._record_step_usage(event.get("usage"))
                             raw_stop = event.get("stop_reason") or event.get("finish_reason")
                             stream_stop_reason = str(raw_stop) if raw_stop else None
                             raw_reasoning = event.get("provider_reasoning")
@@ -640,9 +647,6 @@ class CoachAgentLoop:
                                 stream_provider_reasoning = {
                                     str(k): v for k, v in raw_reasoning.items()
                                 }
-                            # A final frame is logically terminal, but keep consuming until the
-                            # tiny provider iterator naturally exhausts. Breaking here forces an
-                            # early aclose() and triggers cleanup races in some compatible SDKs.
                             provider_final_received = True
                         else:
                             yield event
@@ -972,6 +976,31 @@ class CoachAgentLoop:
         extra = self.context.extra if isinstance(self.context.extra, dict) else {}
         return extra
 
+    def _record_step_usage(self, raw_usage: object) -> dict[str, Any] | None:
+        if not isinstance(raw_usage, dict):
+            return None
+        in_tok = raw_usage.get("input_tokens")
+        if isinstance(in_tok, int) and in_tok > 0:
+            self._last_provider_input_tokens = in_tok
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "reasoning_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "total_tokens",
+        ):
+            val = raw_usage.get(key)
+            if isinstance(val, int) and val >= 0:
+                self._accumulated_usage[key] = int(self._accumulated_usage.get(key) or 0) + val
+        cost = raw_usage.get("total_cost")
+        if isinstance(cost, (int, float)) and cost >= 0:
+            self._accumulated_usage["total_cost"] = float(self._accumulated_usage.get("total_cost") or 0.0) + float(cost)
+        extra = self.context.extra
+        if isinstance(extra, dict) and self._accumulated_usage:
+            extra["_last_provider_usage"] = dict(self._accumulated_usage)
+        return dict(raw_usage)
+
     def _prepare_next_turn(self, history: list[dict[str, Any]]) -> None:
         steered = drain_steering_messages(self.context)
         append_steering_messages(history, steered)
@@ -979,6 +1008,7 @@ class CoachAgentLoop:
             history,
             extra=self._extra(),
             history_char_budget=self.MAX_TURN_HISTORY_CHARS,
+            last_provider_input_tokens=self._last_provider_input_tokens,
         )
 
     async def _call_provider(
@@ -1003,9 +1033,12 @@ class CoachAgentLoop:
                 keep_recent_tokens=OVERFLOW_KEEP_RECENT_TOKENS,
                 reason="overflow",
                 force=True,
+                last_provider_input_tokens=self._last_provider_input_tokens,
             )
             prune_older_tool_results(history, history_char_budget=40_000)
-            return await asyncio.wait_for(self.provider.call(history, tools_schema), timeout=timeout)
+            return await asyncio.wait_for(
+                self.provider.call(history, tools_schema), timeout=wait_timeout
+            )
 
     async def _invoke_one_tool(
         self,
@@ -1122,8 +1155,6 @@ class CoachAgentLoop:
             if tool_name == "coach_finalize" and isinstance(ui_details, dict) and ui_details.get("final"):
                 finalize_payload = ui_details
                 finalize_arguments = arguments
-                # Maintain strict 1:1 tool_call -> tool_result pairing in
-                # history in case the loop continues (e.g., pending plan save).
                 for skipped in tool_calls[call_idx + 1 :]:
                     skipped_name = str(skipped.get("name") or "")
                     skipped_id = str(skipped.get("id") or skipped_name)
@@ -1133,6 +1164,36 @@ class CoachAgentLoop:
                         "detail": "Skipped because coach_finalize ran earlier in the same batch.",
                     }
                     history.append(_tool_message(skipped_id, skipped_name, skipped_result))
+                break
+            mid_steered = drain_steering_messages(self.context)
+            if mid_steered:
+                for skipped in tool_calls[call_idx + 1 :]:
+                    skipped_name = str(skipped.get("name") or "")
+                    skipped_id = str(skipped.get("id") or skipped_name)
+                    skipped_result = {
+                        "ok": False,
+                        "skipped": True,
+                        "detail": "Skipped because the learner sent a steering message.",
+                    }
+                    events.append(
+                        {
+                            "type": "tool_result",
+                            "id": skipped_id,
+                            "name": skipped_name,
+                            "ok": False,
+                            "result": skipped_result,
+                        }
+                    )
+                    step.tool_results.append(
+                        {
+                            "id": skipped_id,
+                            "name": skipped_name,
+                            "arguments": skipped.get("arguments"),
+                            "result": skipped_result,
+                        }
+                    )
+                    history.append(_tool_message(skipped_id, skipped_name, skipped_result))
+                append_steering_messages(history, mid_steered)
                 break
         return finalize_payload, finalize_arguments, events
 

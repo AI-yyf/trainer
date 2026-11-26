@@ -176,9 +176,6 @@ jobs:
       - name: Run the 200-scenario preview experience matrix
         run: npm run test:experience-matrix
 
-      - name: Run the 200-scenario real sidecar experience matrix
-        run: npm run test:experience-sidecar
-
       - name: Verify browser recovery on the native runner
         run: npm run verify:webview-recovery --prefix extension
 

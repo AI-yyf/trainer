@@ -908,7 +908,13 @@ class TrainerRuntime:
                 finally:
                     self._digest_queued.discard(resource_id)
 
-        asyncio.create_task(drain())
+        bg_tasks = getattr(self, "_background_digest_tasks", None)
+        if not isinstance(bg_tasks, set):
+            bg_tasks = set()
+            self._background_digest_tasks = bg_tasks
+        task = asyncio.create_task(drain())
+        bg_tasks.add(task)
+        task.add_done_callback(bg_tasks.discard)
 
     async def digest_resource_for_teaching(
         self,

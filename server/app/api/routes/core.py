@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import re
@@ -126,13 +127,16 @@ _BACKGROUND_TAIL_TASKS: set[asyncio.Task[Any]] = set()
 
 
 def _schedule_background_tail(fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> None:
-    """Run non-critical post-stream work in the background so SSE complete is never blocked."""
+    """Run non-critical post-stream work in the background without blocking the event loop."""
 
     async def _runner() -> None:
         try:
-            result = fn(*args, **kwargs)
-            if asyncio.iscoroutine(result):
-                await result
+            if inspect.iscoroutinefunction(fn):
+                await fn(*args, **kwargs)
+            else:
+                result = await asyncio.to_thread(fn, *args, **kwargs)
+                if asyncio.iscoroutine(result):
+                    await result
         except Exception:  # noqa: BLE001 - background tail must never crash the event loop
             logger.warning("trainer_stream_background_tail_failed", exc_info=True)
 
@@ -144,6 +148,16 @@ def _schedule_background_tail(fn: Callable[..., Any], /, *args: Any, **kwargs: A
     task = loop.create_task(_runner())
     _BACKGROUND_TAIL_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TAIL_TASKS.discard)
+
+
+async def drain_background_tail_tasks(timeout: float = 3.0) -> None:
+    """Await in-flight background tail writes during graceful sidecar shutdown."""
+    pending = [task for task in list(_BACKGROUND_TAIL_TASKS) if not task.done()]
+    if not pending:
+        return
+    _, still_running = await asyncio.wait(pending, timeout=max(0.1, timeout))
+    for task in still_running:
+        task.cancel()
 
 
 def _build_stream_timings(

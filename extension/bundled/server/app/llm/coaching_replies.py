@@ -848,8 +848,7 @@ def _agentic_completion_continuity(
 
 
 def _stream_holdback_chars(response_language: str | None) -> int:
-    """Keep a minimal tail in reserve so real deltas appear immediately."""
-
+    """Keep a minimal 8/12-char tail so truncation retries stay invisible while deltas stream live."""
     return 8 if _prefers_chinese(response_language) else 12
 
 

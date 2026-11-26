@@ -719,3 +719,168 @@ def test_build_coaching_messages_preserves_atomic_tool_call_pairs_and_drops_orph
     assert "def greet(): return 42" in built[3]["content"]
 
 
+@pytest.mark.asyncio
+async def test_library_exec_blocks_all_obfuscated_p0_4_bypasses_and_honors_cancel_event(
+    tmp_path,
+) -> None:
+    import asyncio
+    import base64
+    import time
+
+    from app.core.config import Settings
+    from app.llm.tools import build_default_tool_registry
+    from app.main import create_app
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    readme = proj / "README.md"
+    readme.write_text("READ_ONLY_PROJECT", encoding="utf-8")
+
+    app = create_app(Settings(data_dir=tmp_path / "data"))
+    rt = app.state.runtime
+    rt.register_workspace_path("ws-sec", str(proj))
+    ctx = ToolContext(
+        runtime=rt,
+        workspace_id="ws-sec",
+        session_id="sess-sec",
+        extra={"library_sandbox_work": True},
+    )
+    reg = build_default_tool_registry()
+
+    b64_write = base64.b64encode(f"open('{readme}', 'w').write('PWN')".encode()).decode()
+    exploits = [
+        'python3 -c "import os;os.chdir(chr(47));print(os.listdir())"',
+        f'python3 -c "import base64;exec(base64.b64decode(\'{b64_write}\'))"',
+        "echo L1VzZXJz | base64 -d | xargs ls",
+        f'python3 -c "import pathlib;[q.write_text(\'\') for q in pathlib.Path(\'{proj.parent}\').glob(\'*/README.md\')]"',
+        f'python3 -c "import os;fd=os.open(\'{readme}\', os.O_WRONLY);os.write(fd, b\'X\')"',
+    ]
+    for cmd in exploits:
+        res = await reg.invoke(ctx, "library_exec", {"command": cmd})
+        assert res["ok"] is False, f"Obfuscated exploit should fail closed: {cmd}"
+    assert readme.read_text(encoding="utf-8") == "READ_ONLY_PROJECT"
+
+    # Verify cancel_event kills process group promptly instead of waiting 15s timeout:
+    cancel_ev = asyncio.Event()
+    ctx.extra["_stream_cancel_event"] = cancel_ev
+
+    async def _trigger_cancel() -> None:
+        await asyncio.sleep(0.15)
+        cancel_ev.set()
+
+    t0 = time.monotonic()
+    cancel_task = asyncio.create_task(_trigger_cancel())
+    with pytest.raises(asyncio.CancelledError):
+        await reg.invoke(
+            ctx,
+            "library_exec",
+            {"command": "python3 -c \"import time; time.sleep(20)\"", "timeout_seconds": 20},
+        )
+    await cancel_task
+    assert (time.monotonic() - t0) < 3.0
+
+
+@pytest.mark.asyncio
+async def test_provider_usage_compaction_math_inf_overflow_and_mid_batch_steering() -> None:
+    import math
+
+    from app.llm.harness import extract_provider_usage, truncate_tool_payload
+
+    # 1. Gemini usageMetadata + Head+Tail truncation check
+    gem_usage = extract_provider_usage(
+        {
+            "usageMetadata": {
+                "promptTokenCount": 4200,
+                "candidatesTokenCount": 300,
+                "cachedContentTokenCount": 3800,
+                "totalTokenCount": 4500,
+            }
+        }
+    )
+    assert gem_usage is not None
+    assert gem_usage.estimated_input_tokens == 4200
+    assert gem_usage.cache_read_tokens == 3800
+
+    long_err = ("HEAD_LINE\n" * 80) + ("MIDDLE_NOISE\n" * 400) + "Traceback:\nZeroDivisionError: boom"
+    truncated = truncate_tool_payload(long_err, limit=1200)
+    assert "HEAD_LINE" in truncated
+    assert "ZeroDivisionError: boom" in truncated
+    assert "…[truncated]" in truncated
+
+    # 2. Mid-batch steering + math.inf overflow retry check
+    executed: list[str] = []
+    ctx = _context(extra={"context_window_tokens": 4_096, "reserve_tokens": 1_024})
+    reg = ToolRegistry()
+
+    async def _mut_tool(c: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+        step_id = str(args.get("step"))
+        executed.append(step_id)
+        if step_id == "1":
+            c.extra["steering_messages"] = ["停一下，改看另一个文件"]
+        return {"ok": True, "step": step_id}
+
+    reg.register(
+        ToolDefinition(
+            name="library_write",
+            description="Mutate",
+            parameters={"type": "object", "properties": {}},
+            handler=_mut_tool,
+        )
+    )
+
+    call_idx = 0
+
+    async def _provider_call(messages: list[dict[str, Any]], _tools: list[dict[str, Any]]) -> dict[str, Any]:
+        nonlocal call_idx
+        call_idx += 1
+        if call_idx == 1:
+            raise RuntimeError("prompt is too long: maximum context length exceeded")
+        if call_idx == 2:
+            return {
+                "content": "",
+                "usage": {"input_tokens": 3500, "output_tokens": 50, "total_tokens": 3550},
+                "tool_calls": [
+                    {"id": "t1", "name": "library_write", "arguments": {"step": "1"}},
+                    {"id": "t2", "name": "library_write", "arguments": {"step": "2"}},
+                    {"id": "t3", "name": "library_write", "arguments": {"step": "3"}},
+                ],
+            }
+        # Confirm t2 and t3 were skipped with 1:1 paired tool messages and steering arrived:
+        tool_msgs = [m for m in messages if m.get("role") == "tool"]
+        assert [m["tool_call_id"] for m in tool_msgs] == ["t1", "t2", "t3"]
+        assert "skipped" in tool_msgs[1]["content"]
+        assert any("停一下，改看另一个文件" in str(m.get("content") or "") for m in messages if m.get("role") == "user")
+        return {"content": "已按你的新指令切换。", "tool_calls": []}
+
+    loop = CoachAgentLoop(
+        provider=AgentProvider(protocol="openai_chat_completions", call=_provider_call),
+        registry=reg,
+        context=ctx,
+        step_timeout=math.inf,
+        first_step_timeout=math.inf,
+    )
+    res = await loop.run([_user("start"), _assistant("ok"), _user("more"), _assistant("ok2"), _user("go")])
+    assert res.stop_reason == "completed"
+    assert executed == ["1"]
+    assert ctx.extra["_last_provider_usage"]["input_tokens"] == 3500
+
+
+@pytest.mark.asyncio
+async def test_schedule_background_tail_runs_sync_fn_off_event_loop_thread() -> None:
+    import threading
+
+    from app.api.routes.core import _schedule_background_tail, drain_background_tail_tasks
+
+    main_tid = threading.get_ident()
+    seen_tids: list[int] = []
+
+    def _sync_sqlite_work(val: int) -> None:
+        seen_tids.append(threading.get_ident() + val * 0)
+
+    _schedule_background_tail(_sync_sqlite_work, 1)
+    await drain_background_tail_tasks(timeout=2.0)
+    assert len(seen_tids) == 1
+    assert seen_tids[0] != main_tid
+
+
+

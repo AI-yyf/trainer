@@ -120,3 +120,73 @@ async def test_fast_lane_streams_incrementally_in_default_guided_mode_with_code(
     assert len(yielded) >= 3, f"expected multiple live chunks, got {yielded!r}"
     assert "".join(yielded).startswith("快速排序的核心思想是分治。")
     assert "def quicksort(arr):" in "".join(yielded)
+
+
+@pytest.mark.asyncio
+async def test_agent_binding_fast_lane_yields_live_chunks_in_default_auto_mode() -> None:
+    """Cure P0-1: coaching_reply_stream via agent binding streams live in default auto mode."""
+    parts = [
+        "事件循环负责调度协程并管理异步 I/O。",
+        "当协程遇到 await I/O 时主动让出控制权，",
+        "等内核通知就绪后再恢复执行。",
+    ]
+
+    async def _binding_chunks(*_args: object, **_kwargs: object):
+        for part in parts:
+            yield part
+
+    service = _tool_capable_service()
+    service._plain_completion_uses_agent_binding = lambda: True  # type: ignore[method-assign]
+    service._completion_stream_via_agent_binding = _binding_chunks  # type: ignore[method-assign]
+
+    chunks = [
+        c
+        async for c in service.coaching_reply_stream(
+            _guided_profile(),
+            "解释一下事件循环",
+            None,
+            "zh-CN",
+            "auto",
+        )
+    ]
+    assert len(chunks) >= 3, f"expected unbuffered live deltas in auto mode, got {chunks!r}"
+    assert "".join(chunks).startswith("事件循环负责调度协程")
+
+
+def test_idle_open_editor_tab_keeps_minimal_context_tier_for_pure_conceptual_qa(tmp_path) -> None:
+    """Cure P1-3: an open editor tab without selection/code-mention keeps minimal prompt tier."""
+    from fastapi.testclient import TestClient
+
+    from app.core.config import Settings
+    from app.main import create_app
+
+    app = create_app(Settings(data_dir=tmp_path / "data"))
+    with TestClient(app) as client:
+        health = client.get("/health")
+        assert health.status_code == 200
+
+    idle_req = SessionMessageRequest(
+        message="什么是反向传播？",
+        active_view="coach",
+        current_file={"path": "src/server.py", "language_id": "python", "content": "x = 1"},
+    )
+    anchored_req = SessionMessageRequest(
+        message="解释一下 server.py 里的逻辑",
+        active_view="coach",
+        current_file={"path": "src/server.py", "language_id": "python", "content": "x = 1"},
+    )
+    selected_req = SessionMessageRequest(
+        message="这段是什么意思？",
+        active_view="coach",
+        current_file={
+            "path": "src/server.py",
+            "language_id": "python",
+            "content": "x = 1",
+            "selection_text": "x = 1",
+        },
+    )
+    assert idle_req.current_file is not None
+    assert "server.py" not in idle_req.message
+    assert "server.py" in anchored_req.message
+    assert selected_req.current_file.selection_text == "x = 1"
+

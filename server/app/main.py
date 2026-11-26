@@ -178,10 +178,15 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         sweep_task = getattr(runtime, "_organizer_sweep_task", None)
         if sweep_task is not None:
             sweep_task.cancel()
+        for digest_task in list(getattr(runtime, "_background_digest_tasks", ()) or ()):
+            if not digest_task.done():
+                digest_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await organizer_task
+        from .api.routes.core import drain_background_tail_tasks
         from .llm.mcp_client import aclose_runtime_mcp_sessions
 
+        await drain_background_tail_tasks(timeout=3.0)
         await aclose_runtime_mcp_sessions(runtime)
         runtime.resource_service.close()
 

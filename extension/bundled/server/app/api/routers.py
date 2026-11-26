@@ -242,10 +242,6 @@ _LOCAL_PROVIDER_HOST_RE = re.compile(
     r"|.+\.(?:localhost|local|test))$",
     re.IGNORECASE,
 )
-# Scheme resolution probes each host once per sidecar process; a relay's TLS
-# support does not change mid-session, and every request path
-# (test/models/turn) re-normalizes the base URL.
-_PROVIDER_SCHEME_CACHE: dict[str, str] = {}
 
 
 
@@ -5371,12 +5367,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
     ) -> str:
         """Classify a turn as a pure conversational Q&A ("minimal") or "full".
 
-        Minimal turns carry no code anchors, no resources, no attachments, no
-        agent-loop demand, and stay on the coach view. They need the coaching
-        identity plus the question — not the learner archive, resource
-        retrieval, or the run's pedagogy injections. Anything ambiguous
-        classifies as full; minimal is only ever a prompt/IO reduction, never
-        a behavior gate.
+        Having an idle editor tab open in VS Code (current_file with no selection
+        and a pure conceptual question that never mentions code/files/workspace)
+        must NOT force the 5k-token full archive prompt.
         """
         try:
             if getattr(request, "use_agent_loop", None):
@@ -5384,10 +5377,6 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if getattr(request, "formal_plan_mutation", False):
                 return "full"
             if getattr(request, "plan_runtime_recovery", None):
-                return "full"
-            if getattr(request, "current_file", None) is not None:
-                return "full"
-            if getattr(request, "workspace_file_snapshot", None):
                 return "full"
             if getattr(request, "attachments", None):
                 return "full"
@@ -5403,6 +5392,46 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 return "full"
             if active_view and active_view != "coach":
                 return "full"
+            current_file = getattr(request, "current_file", None)
+            snapshot = getattr(request, "workspace_file_snapshot", None)
+            if current_file is not None or snapshot:
+                cf_dict = (
+                    current_file.model_dump()
+                    if current_file is not None and hasattr(current_file, "model_dump")
+                    else (current_file if isinstance(current_file, dict) else {})
+                )
+                if str(cf_dict.get("selection_text") or "").strip():
+                    return "full"
+                msg_lower = str(getattr(request, "message", "") or "").casefold()
+                cf_path = str(cf_dict.get("path") or "").strip()
+                cf_name = Path(cf_path).name.casefold() if cf_path else ""
+                if cf_name and cf_name in msg_lower:
+                    return "full"
+                code_anchor_hints = (
+                    "current file",
+                    "this file",
+                    "this function",
+                    "this repo",
+                    "this project",
+                    "workspace",
+                    "codebase",
+                    "diagnostic",
+                    "traceback",
+                    "error",
+                    "bug",
+                    "当前文件",
+                    "这个文件",
+                    "这个函数",
+                    "这段代码",
+                    "当前项目",
+                    "这个项目",
+                    "工作区",
+                    "代码库",
+                    "报错",
+                    "诊断",
+                )
+                if any(hint in msg_lower for hint in code_anchor_hints):
+                    return "full"
         except Exception:
             return "full"
         return "minimal"
