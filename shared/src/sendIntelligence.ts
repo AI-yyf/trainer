@@ -262,7 +262,10 @@ function inferNaturalLanguageIntent(draft: string): SendIntent | undefined {
 
 function isExplicitFormalPlanSave(draft: string): boolean {
   const instruction = learnerActionText(draft);
-  return requestsLearningPlanChange(instruction) && /保存|落库|存下|\bsave\b|\bsave_formal_plan\b/iu.test(instruction);
+  return (
+    requestsLearningPlanChange(instruction) &&
+    /保存|落库|存下|\bsave\b|\bsave_formal_plan\b|\blearning_action\b/iu.test(instruction)
+  );
 }
 
 function normalizeDraftText(value: string): string {

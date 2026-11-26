@@ -483,7 +483,7 @@ function ToolResultPartRenderer({ part, context }: { part: ToolResultPart; conte
   if (resultRecord && looksLikeWorkspaceResult) {
     return <WorkspaceToolResultRenderer part={part} context={context} resultRecord={resultRecord} />;
   }
-  const acceptanceFeedback = parseAcceptanceFeedbackFromToolResult(part.result);
+  const acceptanceFeedback = parseAcceptanceFeedbackFromToolResult(part.result, part.name);
   if (resultRecord && acceptanceFeedback) {
     return (
       <div className="message-part message-part--tool-result">

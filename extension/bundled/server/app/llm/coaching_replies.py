@@ -168,21 +168,27 @@ def enforce_truthful_saved_note_path(
     reply: str,
     tool_events: list[dict[str, Any]] | None,
 ) -> str:
-    """Replace any guessed `Trainer Library/*.md` path with the real `save_lecture_note` path."""
+    """Replace any guessed `Trainer Library/*.md` path with the real saved lecture note path."""
     if not reply or not tool_events:
         return reply
     saved_path = ""
     for event in tool_events:
         if str(event.get("type") or "") != "tool_result":
             continue
-        if str(event.get("name") or "") != "save_lecture_note":
-            continue
+        name = str(event.get("name") or "").strip()
         raw_result = event.get("result")
         payload = raw_result if isinstance(raw_result, dict) else None
-        if payload and payload.get("ok") is True:
-            candidate = str(payload.get("saved_path") or "").strip()
-            if candidate:
-                saved_path = candidate
+        if payload is None or payload.get("ok") is not True:
+            continue
+        is_lecture_save = name == "save_lecture_note" or (
+            name == "library_write"
+            and str(payload.get("action") or "").strip().lower() == "save_lecture_note"
+        )
+        if not is_lecture_save:
+            continue
+        candidate = str(payload.get("saved_path") or "").strip()
+        if candidate:
+            saved_path = candidate
     if not saved_path:
         return reply
     return _SAVED_NOTE_PATH_PATTERN.sub(saved_path, reply)

@@ -343,7 +343,11 @@ class ToolRegistry:
         stateful_research_tool = name in {
             "search_learning_materials",
             "assess_research_evidence",
-        }
+        } or (
+            name == "web_fetch"
+            and str(parsed_arguments.get("action") or "").strip().lower()
+            in {"learning_materials", "assess_evidence"}
+        )
         if not stateful_research_tool:
             cached = lookup_sandbox_operation(context.runtime, operation_key)
             if cached is not None:
@@ -1090,6 +1094,7 @@ def _source_trust_score(source: dict[str, Any]) -> float:
 
 
 def _transition_formal_research_to_synthesis(context: ToolContext) -> None:
+    context.extra["_formal_research_synthesizing"] = True
     denied_raw = context.extra.get("denied_tool_names")
     denied = (
         [str(name).strip() for name in denied_raw if str(name).strip()]
@@ -1100,6 +1105,8 @@ def _transition_formal_research_to_synthesis(context: ToolContext) -> None:
         dict.fromkeys(
             [
                 *denied,
+                "web_fetch",
+                "library_read",
                 "search_learning_materials",
                 "assess_research_evidence",
                 "search_resources",
@@ -1107,12 +1114,15 @@ def _transition_formal_research_to_synthesis(context: ToolContext) -> None:
         )
     )
     existing_allowed_raw = context.extra.get("allowed_tool_names")
-    synthesis_tools = ["save_formal_plan", "coach_finalize"]
+    synthesis_candidates = ["learning_action", "save_formal_plan"]
     if isinstance(existing_allowed_raw, (list, tuple, set)):
         existing_allowed = {
             str(name).strip() for name in existing_allowed_raw if str(name).strip()
         }
-        synthesis_tools = [name for name in synthesis_tools if name in existing_allowed]
+        filtered = [name for name in synthesis_candidates if name in existing_allowed]
+        synthesis_tools = filtered or ["learning_action"]
+    else:
+        synthesis_tools = ["learning_action"]
     context.extra["allowed_tool_names"] = synthesis_tools
 
 
@@ -1304,14 +1314,19 @@ async def _handle_search_learning_materials(
     if formal_plan_research:
         existing_allowed = context.extra.get("allowed_tool_names")
         if isinstance(existing_allowed, (list, tuple, set)):
-            state["had_allowed_tool_names"] = True
-            state["allowed_tool_names_before_assessment"] = [
+            saved_allowed = [
                 str(name).strip() for name in existing_allowed if str(name).strip()
             ]
+            state["had_allowed_tool_names"] = True
+            state["allowed_tool_names_before_assessment"] = saved_allowed
+            if "assess_research_evidence" in saved_allowed and "web_fetch" not in saved_allowed:
+                context.extra["allowed_tool_names"] = ["assess_research_evidence"]
+            else:
+                context.extra["allowed_tool_names"] = ["web_fetch"]
         else:
             state["had_allowed_tool_names"] = False
             state["allowed_tool_names_before_assessment"] = []
-        context.extra["allowed_tool_names"] = ["assess_research_evidence"]
+            context.extra["allowed_tool_names"] = ["web_fetch", "assess_research_evidence"]
     context.extra[state_key] = state
     return {
         "ok": True,
@@ -1330,7 +1345,7 @@ async def _handle_search_learning_materials(
         },
         "sources": accumulated_sources,
         "instruction": (
-            "Read the fetched excerpts and call assess_research_evidence. You—not a keyword "
+            "Read the fetched excerpts and call web_fetch(action='assess_evidence', ...). You—not a keyword "
             "counter—must judge every required facet, cite supporting source IDs, and explain "
             "your reasoning. Do not search again until the assessment returns gaps_remain."
         ),
@@ -1704,11 +1719,11 @@ async def _handle_assess_research_evidence(
             "safety_searches_remaining": max(0, MAX_RESEARCH_SEARCH_ROUNDS - search_count),
         },
         "instruction": (
-            "The model judged the evidence sufficient. Stop searching and call save_formal_plan."
+            "The model judged the evidence sufficient. Stop searching and call learning_action(action='save_formal_plan', ...)."
             if verdict == "sufficient"
             else "Search only for the model-identified missing facets, then assess again."
             if verdict == "gaps_remain"
-            else "The model judged further search unproductive. Save a plan that explicitly marks the gaps."
+            else "The model judged further search unproductive. Save a plan via learning_action(action='save_formal_plan', ...) that explicitly marks the gaps."
         ),
     }
 
@@ -5552,6 +5567,26 @@ async def _handle_record_learning_note(context: ToolContext, args: dict[str, Any
         or getattr(memory_service, "record_session_note", None)
     )
     if record_fn is None:
+        structured_getter = getattr(memory_service, "structured_for_workspace", None)
+        if callable(structured_getter):
+            try:
+                import hashlib
+
+                structured = cast(Any, structured_getter(context.workspace_id))
+                signal_key = f"{kind}:{hashlib.sha1(note.encode('utf-8')).hexdigest()[:10]}"
+                structured.remember_teaching_signal(
+                    signal_key,
+                    note,
+                    source="coach",
+                )
+                if context.session_id and hasattr(structured, "add_session_highlight"):
+                    structured.add_session_highlight(context.session_id, note)
+                persist_fn = getattr(memory_service, "_persist_structured", None)
+                if callable(persist_fn):
+                    persist_fn(context.workspace_id)
+                return {"ok": True, "kind": kind, "note": note}
+            except Exception as exc:
+                return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         return {
             "ok": False,
             "error": "unsupported",
@@ -5920,44 +5955,66 @@ async def _handle_save_lecture_note(
 
     if repository is not None and carrier_resolver is not None and callable(carrier_resolver):
         carrier_authority: WorkspaceAuthority | None = carrier_resolver(context.workspace_id)
+        project_root = (
+            runtime.resolve_workspace_path(context.workspace_id)
+            if hasattr(runtime, "resolve_workspace_path")
+            else None
+        )
+        project_resolved = (
+            Path(str(project_root)).expanduser().resolve(strict=False)
+            if project_root
+            else None
+        )
         resolved_library_root = (
             resource_service._resolved_library_root(context.workspace_id)
             if hasattr(resource_service, "_resolved_library_root")
             else None
         )
+        lib_candidate = (
+            Path(resolved_library_root).expanduser().resolve(strict=False)
+            if resolved_library_root is not None
+            else None
+        )
+        if (lib_candidate is None or lib_candidate == project_resolved) and not (
+            carrier_authority is not None and carrier_authority.is_remote_workspace
+        ):
+            sb_service = _sandbox_service(context)
+            if sb_service is not None:
+                try:
+                    sb_root = Path(sb_service.ensure_operation_root(context.workspace_id)).expanduser().resolve(strict=False)
+                    if sb_root.is_dir() and sb_root != project_resolved:
+                        lib_candidate = sb_root
+                except Exception:
+                    pass
         effective_resolver: Callable[[str], WorkspaceAuthority | None] = carrier_resolver
         if (
-            carrier_authority is not None
-            and carrier_authority.destructive_mutation_block_reason() is not None
-            and resolved_library_root is not None
-        ):
-            project_root = (
-                runtime.resolve_workspace_path(context.workspace_id)
-                if hasattr(runtime, "resolve_workspace_path")
-                else None
-            )
-            project_resolved = (
-                Path(str(project_root)).expanduser().resolve(strict=False)
-                if project_root
-                else None
-            )
-            lib_resolved = Path(resolved_library_root).expanduser().resolve(strict=False)
-            # Only create an explicit local carrier for dedicated <LibraryRoot>
-            # in direct unit tests that omitted /workspace/adopt trust handshake.
-            if lib_resolved.is_dir() and lib_resolved != project_resolved:
-                dedicated_carrier = WorkspaceAuthority(
-                    root_path=str(lib_resolved),
-                    initial_permission=PermissionLevel.INSPECT,
+            (
+                carrier_authority is None
+                or not carrier_authority.has_active_workspace_root
+                or carrier_authority.destructive_mutation_block_reason() is not None
+                or (
+                    project_resolved is not None
+                    and Path(str(carrier_authority.active_workspace_root)).expanduser().resolve(strict=False)
+                    == project_resolved
                 )
-                dedicated_carrier.set_workspace_context(workspace_trusted=True)
+            )
+            and lib_candidate is not None
+            and lib_candidate.is_dir()
+            and lib_candidate != project_resolved
+        ):
+            dedicated_carrier = WorkspaceAuthority(
+                root_path=str(lib_candidate),
+                initial_permission=PermissionLevel.INSPECT,
+            )
+            dedicated_carrier.set_workspace_context(workspace_trusted=True)
 
-                def _resolve_dedicated_carrier(
-                    _ws: str,
-                    _auth: WorkspaceAuthority = dedicated_carrier,
-                ) -> WorkspaceAuthority | None:
-                    return _auth
+            def _resolve_dedicated_carrier(
+                _ws: str,
+                _auth: WorkspaceAuthority = dedicated_carrier,
+            ) -> WorkspaceAuthority | None:
+                return _auth
 
-                effective_resolver = _resolve_dedicated_carrier
+            effective_resolver = _resolve_dedicated_carrier
         library_service = LibraryService(
             repository,
             workspace_authority_resolver=effective_resolver,
@@ -5969,7 +6026,7 @@ async def _handle_save_lecture_note(
                 markdown_content=markdown_content,
                 folder=folder,
             )
-        except LibraryError:
+        except LibraryError as first_exc:
             # Retry with the safe default folder if a model supplied an invalid folder name.
             if folder != default_folder:
                 try:
@@ -5983,7 +6040,11 @@ async def _handle_save_lecture_note(
                 except LibraryError as exc:
                     return {"ok": False, "error": exc.code, "detail": exc.message(context.response_language)}
             else:
-                raise
+                return {
+                    "ok": False,
+                    "error": first_exc.code,
+                    "detail": first_exc.message(context.response_language),
+                }
         if library_download is not None:
             parts = library_download.relative_path.split("/")
             if len(parts) >= 3 and parts[0] == LIBRARY_DIRECTORY_NAME:
@@ -6012,7 +6073,18 @@ async def _handle_save_lecture_note(
             content_language=context.response_language,
         )
     try:
-        uploaded = resource_service.upload(context.workspace_id, upload_req)
+        if saved_abs_path is not None and library_service is not None:
+            carrier_root_str = str(library_service.workspace_root(context.workspace_id))
+            try:
+                uploaded = resource_service.upload(
+                    context.workspace_id,
+                    upload_req,
+                    workspace_path=carrier_root_str,
+                )
+            except TypeError:
+                uploaded = resource_service.upload(context.workspace_id, upload_req)
+        else:
+            uploaded = resource_service.upload(context.workspace_id, upload_req)
         indexed = resource_service.index(
             context.workspace_id,
             ResourceIndexRequest(workspace_id=context.workspace_id, resource_id=uploaded.id),
@@ -6979,33 +7051,72 @@ def _resolve_tool_library_service(
     )
     effective_resolver: Callable[[str], WorkspaceAuthority | None] | None = carrier_resolver
     carrier = carrier_resolver(context.workspace_id) if callable(carrier_resolver) else None
+    project_raw = (
+        runtime.resolve_workspace_path(context.workspace_id)
+        if hasattr(runtime, "resolve_workspace_path")
+        else None
+    )
+    project_resolved = Path(str(project_raw)).expanduser().resolve(strict=False) if project_raw else None
     resolved_lib_raw = (
         resource_service._resolved_library_root(context.workspace_id)
         if hasattr(resource_service, "_resolved_library_root")
         else None
     )
-    if (
-        (carrier is None or not carrier.has_active_workspace_root or carrier.destructive_mutation_block_reason() is not None)
-        and resolved_lib_raw
+    lib_candidate = (
+        Path(str(resolved_lib_raw)).expanduser().resolve(strict=False)
+        if resolved_lib_raw
+        else None
+    )
+    if (lib_candidate is None or lib_candidate == project_resolved) and not (
+        carrier is not None and carrier.is_remote_workspace
     ):
-        project_raw = (
-            runtime.resolve_workspace_path(context.workspace_id)
-            if hasattr(runtime, "resolve_workspace_path")
-            else None
-        )
-        project_resolved = Path(str(project_raw)).expanduser().resolve(strict=False) if project_raw else None
-        lib_resolved = Path(str(resolved_lib_raw)).expanduser().resolve(strict=False)
-        if lib_resolved.is_dir() and lib_resolved != project_resolved:
-            dedicated = WorkspaceAuthority(
-                root_path=str(lib_resolved),
-                initial_permission=PermissionLevel.INSPECT,
+        memory_service = getattr(runtime, "memory_service", None)
+        explicitly_blocked = False
+        if memory_service is not None:
+            try:
+                ws_meta = memory_service.snapshot(context.workspace_id).workspace
+                if isinstance(ws_meta, dict) and (
+                    ws_meta.get("workspace_trusted") is False
+                    or ws_meta.get("is_remote_workspace") is True
+                    or bool(str(ws_meta.get("remote_name") or "").strip())
+                ):
+                    explicitly_blocked = True
+            except Exception:
+                pass
+        if not explicitly_blocked:
+            sb_service = _sandbox_service(context)
+            if sb_service is not None:
+                try:
+                    sb_root = Path(sb_service.ensure_operation_root(context.workspace_id)).expanduser().resolve(strict=False)
+                    if sb_root.is_dir() and sb_root != project_resolved:
+                        lib_candidate = sb_root
+                except Exception:
+                    pass
+    if (
+        (
+            carrier is None
+            or not carrier.has_active_workspace_root
+            or carrier.destructive_mutation_block_reason() is not None
+            or (
+                project_resolved is not None
+                and Path(str(carrier.active_workspace_root)).expanduser().resolve(strict=False)
+                == project_resolved
             )
-            dedicated.set_workspace_context(workspace_trusted=True)
+        )
+        and lib_candidate is not None
+        and lib_candidate.is_dir()
+        and lib_candidate != project_resolved
+    ):
+        dedicated = WorkspaceAuthority(
+            root_path=str(lib_candidate),
+            initial_permission=PermissionLevel.INSPECT,
+        )
+        dedicated.set_workspace_context(workspace_trusted=True)
 
-            def _resolve_dedicated(_ws: str, _auth: WorkspaceAuthority = dedicated) -> WorkspaceAuthority | None:
-                return _auth
+        def _resolve_dedicated(_ws: str, _auth: WorkspaceAuthority = dedicated) -> WorkspaceAuthority | None:
+            return _auth
 
-            effective_resolver = _resolve_dedicated
+        effective_resolver = _resolve_dedicated
 
     if not callable(effective_resolver):
         if require_writable:
@@ -7369,7 +7480,7 @@ async def _handle_invoke_skill(context: ToolContext, args: dict[str, Any]) -> di
     return {
         "ok": False,
         "error": "skill_not_found",
-        "detail": f"No skill matched {query!r}. Call list_skills to inspect available skills.",
+        "detail": f"No skill matched {query!r}. Call learning_inspect(action='skills') to inspect available skills.",
     }
 
 

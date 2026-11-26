@@ -2701,10 +2701,13 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         for event in tool_events if isinstance(tool_events, list) else []:
             if not isinstance(event, dict):
                 continue
-            if str(event.get("name") or "").strip() != "search_resources":
+            event_name = str(event.get("name") or "").strip()
+            if event_name not in {"library_read", "search_resources"}:
                 continue
             result_payload = event.get("result")
             if not isinstance(result_payload, dict):
+                continue
+            if event_name == "library_read" and str(result_payload.get("action") or "search").strip().lower() != "search":
                 continue
             hits = result_payload.get("hits")
             if not isinstance(hits, list):
@@ -4151,12 +4154,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             result["prepared_sequences"] = sequence_guidance[:2]
 
         call_id = "auto-search-resources"
+        result_with_domain = {"domain": "library_sandbox", "action": "search", **result}
         return [
             {
                 "type": "tool_call",
                 "id": call_id,
-                "name": "search_resources",
+                "name": "library_read",
                 "arguments": {
+                    "action": "search",
                     "query": selected_query,
                     "mode": "narrow",
                     "auto": True,
@@ -4167,9 +4172,9 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             {
                 "type": "tool_result",
                 "id": call_id,
-                "name": "search_resources",
+                "name": "library_read",
                 "ok": True,
-                "result": result,
+                "result": result_with_domain,
                 "step": 0,
                 "auto": True,
             },
@@ -4183,7 +4188,7 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         if not auto_events:
             return events
         already_has_auto_resource_evidence = any(
-            str(item.get("name") or "").strip() == "search_resources"
+            str(item.get("name") or "").strip() in {"library_read", "search_resources"}
             and (
                 str(item.get("id") or "").strip() == "auto-search-resources"
                 or item.get("auto") is True
@@ -6351,6 +6356,14 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         response_language: str | None,
     ) -> str:
         labels = {
+            "project_read": ("project inspection", "代码检视"),
+            "project_verify": ("project verification", "练习与诊断核验"),
+            "library_read": ("library search", "资料库检索"),
+            "library_write": ("library update", "资料库更新"),
+            "library_exec": ("library script", "资料库批处理"),
+            "web_fetch": ("web research", "联网检索"),
+            "learning_inspect": ("learning state check", "学习档案核对"),
+            "learning_action": ("learning state update", "学习动作执行"),
             "search_resources": ("resource search", "资料搜索"),
             "read_workspace_file": ("file read", "代码读取"),
             "list_workspace_files": ("file listing", "文件浏览"),
@@ -6753,10 +6766,19 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 }
                 if tool_name:
                     part["name"] = tool_name
-                if (
-                    tool_name == "verify_practice_current_file"
-                    and isinstance(result_payload, dict)
-                ):
+                is_practice_verify = (
+                    isinstance(result_payload, dict)
+                    and (
+                        tool_name == "verify_practice_current_file"
+                        or (
+                            tool_name == "project_verify"
+                            and str(result_payload.get("action") or "verify_practice").strip().lower()
+                            == "verify_practice"
+                            and "passed" in result_payload
+                        )
+                    )
+                )
+                if is_practice_verify and isinstance(result_payload, dict):
                     part["displayKind"] = "practice_verification"
                     if result_payload.get("status"):
                         part["status"] = str(result_payload["status"])
@@ -7286,10 +7308,17 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 continue
             if str(raw_event.get("type") or "").strip() != "tool_result":
                 continue
-            if str(raw_event.get("name") or "").strip() != "save_formal_plan":
+            event_name = str(raw_event.get("name") or "").strip()
+            if event_name not in {"learning_action", "save_formal_plan"}:
                 continue
             result = raw_event.get("result")
             if not isinstance(result, dict):
+                continue
+            if (
+                event_name == "learning_action"
+                and str(result.get("action") or "save_formal_plan").strip().lower()
+                != "save_formal_plan"
+            ):
                 continue
             if result.get("ok") is True and result.get("committed") is True:
                 return True

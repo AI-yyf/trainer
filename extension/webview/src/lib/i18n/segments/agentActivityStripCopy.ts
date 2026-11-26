@@ -341,4 +341,301 @@ export const TOOL_LABELS: Record<string, Record<ComposerLanguage, string>> = {
     "fr-FR": "Générer une figure", "de-DE": "Abbildung erstellen",
     "ja-JP": "図解を生成", "ko-KR": "도해 생성", "pt-BR": "Gerar figura",
   },
+  // 8 dual-domain orthogonal primitives & action-specific labels (Trainer 2.0)
+  project_read: {
+    "zh-CN": "读取项目代码", "en-US": "Read project", "es-ES": "Leer proyecto",
+    "fr-FR": "Lire le projet", "de-DE": "Projekt lesen",
+    "ja-JP": "プロジェクト読取", "ko-KR": "프로젝트 읽기", "pt-BR": "Ler projeto",
+  },
+  "project_read:inspect_current": {
+    "zh-CN": "查看当前文件", "en-US": "Inspect active file", "es-ES": "Inspeccionar archivo",
+    "fr-FR": "Inspecter le fichier actif", "de-DE": "Aktive Datei prüfen",
+    "ja-JP": "現在のファイルを確認", "ko-KR": "현재 파일 확인", "pt-BR": "Inspecionar arquivo",
+  },
+  "project_read:list": {
+    "zh-CN": "浏览项目文件", "en-US": "List project files", "es-ES": "Listar archivos",
+    "fr-FR": "Lister les fichiers", "de-DE": "Projektdateien auflisten",
+    "ja-JP": "ファイル一覧", "ko-KR": "파일 목록", "pt-BR": "Listar arquivos",
+  },
+  "project_read:read": {
+    "zh-CN": "读取源码文件", "en-US": "Read source file", "es-ES": "Leer archivo",
+    "fr-FR": "Lire le fichier", "de-DE": "Quelldatei lesen",
+    "ja-JP": "ファイルを読み取り", "ko-KR": "파일 읽기", "pt-BR": "Ler arquivo",
+  },
+  "project_read:modules": {
+    "zh-CN": "浏览项目模块", "en-US": "List modules", "es-ES": "Listar módulos",
+    "fr-FR": "Lister les modules", "de-DE": "Module auflisten",
+    "ja-JP": "モジュール一覧", "ko-KR": "모듈 목록", "pt-BR": "Listar módulos",
+  },
+  "project_read:symbol": {
+    "zh-CN": "定位代码符号", "en-US": "Read symbol", "es-ES": "Leer símbolo",
+    "fr-FR": "Lire le symbole", "de-DE": "Symbol lesen",
+    "ja-JP": "シンボルを読む", "ko-KR": "심볼 읽기", "pt-BR": "Ler símbolo",
+  },
+  "project_read:impact": {
+    "zh-CN": "分析改动影响", "en-US": "Analyze impact", "es-ES": "Analizar impacto",
+    "fr-FR": "Analyser l'impact", "de-DE": "Auswirkung prüfen",
+    "ja-JP": "影響範囲を分析", "ko-KR": "영향 분석", "pt-BR": "Analisar impacto",
+  },
+  project_verify: {
+    "zh-CN": "验证项目练习", "en-US": "Verify project", "es-ES": "Verificar proyecto",
+    "fr-FR": "Vérifier le projet", "de-DE": "Projekt prüfen",
+    "ja-JP": "プロジェクト検証", "ko-KR": "프로젝트 검증", "pt-BR": "Verificar projeto",
+  },
+  "project_verify:diagnostics": {
+    "zh-CN": "运行项目诊断", "en-US": "Run diagnostics", "es-ES": "Ejecutar diagnóstico",
+    "fr-FR": "Exécuter le diagnostic", "de-DE": "Diagnose ausführen",
+    "ja-JP": "診断を実行", "ko-KR": "진단 실행", "pt-BR": "Executar diagnóstico",
+  },
+  "project_verify:verify_practice": {
+    "zh-CN": "验证实战代码", "en-US": "Verify practice", "es-ES": "Verificar práctica",
+    "fr-FR": "Vérifier la pratique", "de-DE": "Praxis prüfen",
+    "ja-JP": "実践を検証", "ko-KR": "실습 검증", "pt-BR": "Verificar prática",
+  },
+  "project_verify:rubric_review": {
+    "zh-CN": "核对评分标准", "en-US": "Check rubric", "es-ES": "Revisar rúbrica",
+    "fr-FR": "Vérifier les critères", "de-DE": "Bewertungskriterien prüfen",
+    "ja-JP": "評価基準を確認", "ko-KR": "평가 기준 확인", "pt-BR": "Verificar critérios",
+  },
+  "project_verify:compare_anchor": {
+    "zh-CN": "对比锚点段落", "en-US": "Compare anchor", "es-ES": "Comparar referencia",
+    "fr-FR": "Comparer avec l'ancre", "de-DE": "Mit Anker vergleichen",
+    "ja-JP": "アンカーと比較", "ko-KR": "앵커와 비교", "pt-BR": "Comparar referência",
+  },
+  library_read: {
+    "zh-CN": "检索资料库", "en-US": "Search library", "es-ES": "Buscar en biblioteca",
+    "fr-FR": "Chercher dans la bibliothèque", "de-DE": "Bibliothek durchsuchen",
+    "ja-JP": "ライブラリ検索", "ko-KR": "라이브러리 검색", "pt-BR": "Buscar na biblioteca",
+  },
+  "library_read:search": {
+    "zh-CN": "搜索资料库", "en-US": "Search resources", "es-ES": "Buscar recursos",
+    "fr-FR": "Rechercher des ressources", "de-DE": "Ressourcen durchsuchen",
+    "ja-JP": "資料を検索", "ko-KR": "자료 검색", "pt-BR": "Buscar recursos",
+  },
+  "library_read:excerpt": {
+    "zh-CN": "精读资料片段", "en-US": "Read excerpt", "es-ES": "Leer extracto",
+    "fr-FR": "Lire l'extrait", "de-DE": "Auszug lesen",
+    "ja-JP": "資料を抜粋読取", "ko-KR": "자료 발췌 읽기", "pt-BR": "Ler trecho",
+  },
+  "library_read:list_resources": {
+    "zh-CN": "浏览资料列表", "en-US": "List resources", "es-ES": "Listar recursos",
+    "fr-FR": "Lister les ressources", "de-DE": "Ressourcen auflisten",
+    "ja-JP": "資料一覧", "ko-KR": "자료 목록", "pt-BR": "Listar recursos",
+  },
+  "library_read:list_folders": {
+    "zh-CN": "查看资料文件夹", "en-US": "List folders", "es-ES": "Listar carpetas",
+    "fr-FR": "Lister les dossiers", "de-DE": "Ordner auflisten",
+    "ja-JP": "フォルダ一覧", "ko-KR": "폴더 목록", "pt-BR": "Listar pastas",
+  },
+  "library_read:list_files": {
+    "zh-CN": "浏览资料目录", "en-US": "Browse library", "es-ES": "Explorar biblioteca",
+    "fr-FR": "Parcourir la bibliothèque", "de-DE": "Bibliothek durchsuchen",
+    "ja-JP": "ライブラリ参照", "ko-KR": "자료실 탐색", "pt-BR": "Explorar biblioteca",
+  },
+  "library_read:read_file": {
+    "zh-CN": "读取资料文件", "en-US": "Read library file", "es-ES": "Leer archivo",
+    "fr-FR": "Lire le fichier", "de-DE": "Bibliotheksdatei lesen",
+    "ja-JP": "資料ファイルを読む", "ko-KR": "자료 파일 읽기", "pt-BR": "Ler arquivo",
+  },
+  "library_read:grep": {
+    "zh-CN": "全文检索资料文件", "en-US": "Grep library", "es-ES": "Buscar texto",
+    "fr-FR": "Rechercher le motif", "de-DE": "Textmuster suchen",
+    "ja-JP": "全文パターン検索", "ko-KR": "라이브러리 본문 검색", "pt-BR": "Buscar padrão",
+  },
+  library_write: {
+    "zh-CN": "更新资料库", "en-US": "Update library", "es-ES": "Actualizar biblioteca",
+    "fr-FR": "Mettre à jour la bibliothèque", "de-DE": "Bibliothek aktualisieren",
+    "ja-JP": "ライブラリ更新", "ko-KR": "라이브러리 업데이트", "pt-BR": "Atualizar biblioteca",
+  },
+  "library_write:write": {
+    "zh-CN": "写入资料文件", "en-US": "Write library file", "es-ES": "Escribir archivo",
+    "fr-FR": "Écrire un fichier", "de-DE": "Datei schreiben",
+    "ja-JP": "ファイル書き込み", "ko-KR": "파일 쓰기", "pt-BR": "Escrever arquivo",
+  },
+  "library_write:edit": {
+    "zh-CN": "修订资料文件", "en-US": "Edit library file", "es-ES": "Editar archivo",
+    "fr-FR": "Modifier le fichier", "de-DE": "Datei bearbeiten",
+    "ja-JP": "ファイルを編集", "ko-KR": "파일 편집", "pt-BR": "Editar arquivo",
+  },
+  "library_write:mkdir": {
+    "zh-CN": "创建资料目录", "en-US": "Create folder", "es-ES": "Crear carpeta",
+    "fr-FR": "Créer un dossier", "de-DE": "Ordner erstellen",
+    "ja-JP": "フォルダ作成", "ko-KR": "폴더 생성", "pt-BR": "Criar pasta",
+  },
+  "library_write:rename": {
+    "zh-CN": "重命名资料", "en-US": "Rename in library", "es-ES": "Renombrar",
+    "fr-FR": "Renommer", "de-DE": "Umbenennen",
+    "ja-JP": "名前を変更", "ko-KR": "이름 변경", "pt-BR": "Renomear",
+  },
+  "library_write:move": {
+    "zh-CN": "移动资料", "en-US": "Move in library", "es-ES": "Mover recurso",
+    "fr-FR": "Déplacer", "de-DE": "Verschieben",
+    "ja-JP": "資料を移動", "ko-KR": "자료 이동", "pt-BR": "Mover recurso",
+  },
+  "library_write:soft_delete": {
+    "zh-CN": "移入资料库回收站", "en-US": "Move to trash", "es-ES": "Mover a papelera",
+    "fr-FR": "Déplacer vers la corbeille", "de-DE": "In Papierkorb verschieben",
+    "ja-JP": "ゴミ箱へ移動", "ko-KR": "휴지통으로 이동", "pt-BR": "Mover para lixeira",
+  },
+  "library_write:restore": {
+    "zh-CN": "从回收站恢复资料", "en-US": "Restore resource", "es-ES": "Restaurar recurso",
+    "fr-FR": "Restaurer la ressource", "de-DE": "Ressource wiederherstellen",
+    "ja-JP": "資料を復元", "ko-KR": "자료 복원", "pt-BR": "Restaurar recurso",
+  },
+  "library_write:import_url": {
+    "zh-CN": "导入网页到资料库", "en-US": "Import webpage", "es-ES": "Importar página",
+    "fr-FR": "Importer la page", "de-DE": "Seite importieren",
+    "ja-JP": "ページをインポート", "ko-KR": "페이지 가져오기", "pt-BR": "Importar página",
+  },
+  "library_write:import_workspace": {
+    "zh-CN": "导入项目文件到资料库", "en-US": "Import to library", "es-ES": "Importar a biblioteca",
+    "fr-FR": "Importer vers la bibliothèque", "de-DE": "In Bibliothek importieren",
+    "ja-JP": "ライブラリに取込", "ko-KR": "라이브러리로 가져오기", "pt-BR": "Importar para biblioteca",
+  },
+  "library_write:organize": {
+    "zh-CN": "整理资料库结构", "en-US": "Organize library", "es-ES": "Organizar biblioteca",
+    "fr-FR": "Organiser la bibliothèque", "de-DE": "Bibliothek organisieren",
+    "ja-JP": "ライブラリ整理", "ko-KR": "라이브러리 정리", "pt-BR": "Organizar biblioteca",
+  },
+  "library_write:curate": {
+    "zh-CN": "编目整理资料", "en-US": "Curate library", "es-ES": "Catalogar biblioteca",
+    "fr-FR": "Classer les ressources", "de-DE": "Bibliothek ordnen",
+    "ja-JP": "資料を整理", "ko-KR": "자료실 정리", "pt-BR": "Catalogar biblioteca",
+  },
+  "library_write:save_lecture_note": {
+    "zh-CN": "保存讲稿到资料库", "en-US": "Save lecture note", "es-ES": "Guardar apunte",
+    "fr-FR": "Enregistrer la note", "de-DE": "Notiz speichern",
+    "ja-JP": "講義ノートを保存", "ko-KR": "강의 노트 저장", "pt-BR": "Salvar nota",
+  },
+  "library_write:refresh_index": {
+    "zh-CN": "刷新资料库索引", "en-US": "Refresh index", "es-ES": "Actualizar índice",
+    "fr-FR": "Actualiser l'index", "de-DE": "Index aktualisieren",
+    "ja-JP": "インデックス更新", "ko-KR": "색인 새로 고침", "pt-BR": "Atualizar índice",
+  },
+  library_exec: {
+    "zh-CN": "批处理资料库文件", "en-US": "Process library files", "es-ES": "Procesar biblioteca",
+    "fr-FR": "Traiter les fichiers", "de-DE": "Bibliotheksdateien verarbeiten",
+    "ja-JP": "資料を一括処理", "ko-KR": "자료 일괄 처리", "pt-BR": "Processar arquivos",
+  },
+  web_fetch: {
+    "zh-CN": "联网检索与精读", "en-US": "Web research", "es-ES": "Investigación web",
+    "fr-FR": "Recherche web", "de-DE": "Web-Recherche",
+    "ja-JP": "Webリサーチ", "ko-KR": "웹 리서치", "pt-BR": "Pesquisa na web",
+  },
+  "web_fetch:search": {
+    "zh-CN": "联网检索", "en-US": "Web search", "es-ES": "Búsqueda web",
+    "fr-FR": "Recherche web", "de-DE": "Websuche",
+    "ja-JP": "Web検索", "ko-KR": "웹 검색", "pt-BR": "Busca na web",
+  },
+  "web_fetch:fetch": {
+    "zh-CN": "读取网页", "en-US": "Read webpage", "es-ES": "Leer página",
+    "fr-FR": "Lire la page", "de-DE": "Webseite lesen",
+    "ja-JP": "Webページを読む", "ko-KR": "웹페이지 읽기", "pt-BR": "Ler página",
+  },
+  "web_fetch:papers": {
+    "zh-CN": "检索学术论文", "en-US": "Search papers", "es-ES": "Buscar artículos",
+    "fr-FR": "Chercher des articles", "de-DE": "Paper suchen",
+    "ja-JP": "論文を検索", "ko-KR": "논문 검색", "pt-BR": "Buscar artigos",
+  },
+  "web_fetch:learning_materials": {
+    "zh-CN": "搜寻权威学习资料", "en-US": "Find materials", "es-ES": "Buscar materiales",
+    "fr-FR": "Chercher des ressources", "de-DE": "Lernmaterial suchen",
+    "ja-JP": "学習資料を検索", "ko-KR": "학습 자료 검색", "pt-BR": "Buscar materiais",
+  },
+  "web_fetch:assess_evidence": {
+    "zh-CN": "评估研究证据", "en-US": "Assess evidence", "es-ES": "Evaluar evidencia",
+    "fr-FR": "Évaluer les preuves", "de-DE": "Belege bewerten",
+    "ja-JP": "研究根拠を評価", "ko-KR": "연구 근거 평가", "pt-BR": "Avaliar evidências",
+  },
+  "web_fetch:import_url": {
+    "zh-CN": "导入网页到资料库", "en-US": "Import webpage", "es-ES": "Importar página",
+    "fr-FR": "Importer la page", "de-DE": "Seite importieren",
+    "ja-JP": "ページをインポート", "ko-KR": "페이지 가져오기", "pt-BR": "Importar página",
+  },
+  learning_inspect: {
+    "zh-CN": "查阅学习状态", "en-US": "Inspect learning state", "es-ES": "Consultar estado",
+    "fr-FR": "Consulter l'apprentissage", "de-DE": "Lernstand prüfen",
+    "ja-JP": "学習状態を確認", "ko-KR": "학습 상태 확인", "pt-BR": "Consultar aprendizagem",
+  },
+  "learning_inspect:plan": {
+    "zh-CN": "查看学习计划", "en-US": "Inspect plan", "es-ES": "Inspeccionar plan",
+    "fr-FR": "Inspecter le plan", "de-DE": "Plan prüfen",
+    "ja-JP": "プランを確認", "ko-KR": "계획 확인", "pt-BR": "Inspecionar plano",
+  },
+  "learning_inspect:truth": {
+    "zh-CN": "查阅学习档案", "en-US": "Inspect progress", "es-ES": "Consultar progreso",
+    "fr-FR": "Consulter la progression", "de-DE": "Fortschritt prüfen",
+    "ja-JP": "学習状況を確認", "ko-KR": "학습 현황 확인", "pt-BR": "Consultar progresso",
+  },
+  "learning_inspect:memory": {
+    "zh-CN": "回顾教学记忆", "en-US": "Recall memory", "es-ES": "Recordar memoria",
+    "fr-FR": "Retrouver la mémoire", "de-DE": "Erinnerung abrufen",
+    "ja-JP": "記憶を思い出す", "ko-KR": "기억 불러오기", "pt-BR": "Recordar memória",
+  },
+  "learning_inspect:skills": {
+    "zh-CN": "查看可用技能", "en-US": "List skills", "es-ES": "Listar habilidades",
+    "fr-FR": "Lister les compétences", "de-DE": "Skills auflisten",
+    "ja-JP": "スキル一覧", "ko-KR": "스킬 목록", "pt-BR": "Listar habilidades",
+  },
+  learning_action: {
+    "zh-CN": "执行学习动作", "en-US": "Update learning state", "es-ES": "Actualizar aprendizaje",
+    "fr-FR": "Mettre à jour l'apprentissage", "de-DE": "Lernstand aktualisieren",
+    "ja-JP": "学習アクション実行", "ko-KR": "학습 작업 실행", "pt-BR": "Atualizar aprendizagem",
+  },
+  "learning_action:save_formal_plan": {
+    "zh-CN": "保存正式学习计划", "en-US": "Save formal plan", "es-ES": "Guardar plan",
+    "fr-FR": "Enregistrer le plan", "de-DE": "Plan speichern",
+    "ja-JP": "正式プランを保存", "ko-KR": "공식 계획 저장", "pt-BR": "Salvar plano",
+  },
+  "learning_action:record_note": {
+    "zh-CN": "保存教学观察", "en-US": "Save note", "es-ES": "Guardar observación",
+    "fr-FR": "Enregistrer l'observation", "de-DE": "Beobachtung speichern",
+    "ja-JP": "観察を保存", "ko-KR": "관찰 저장", "pt-BR": "Salvar observação",
+  },
+  "learning_action:specify_task": {
+    "zh-CN": "明确练习目标", "en-US": "Specify task", "es-ES": "Definir tarea",
+    "fr-FR": "Préciser la tâche", "de-DE": "Aufgabe festlegen",
+    "ja-JP": "課題を明確化", "ko-KR": "과제 정의", "pt-BR": "Especificar tarefa",
+  },
+  "learning_action:next_task": {
+    "zh-CN": "推进下一步练习", "en-US": "Next task", "es-ES": "Siguiente tarea",
+    "fr-FR": "Tâche suivante", "de-DE": "Nächste Aufgabe",
+    "ja-JP": "次の課題へ", "ko-KR": "다음 과제", "pt-BR": "Próxima tarefa",
+  },
+  "learning_action:invoke_skill": {
+    "zh-CN": "调用教学技能", "en-US": "Run skill", "es-ES": "Ejecutar habilidad",
+    "fr-FR": "Exécuter la compétence", "de-DE": "Skill ausführen",
+    "ja-JP": "スキルを実行", "ko-KR": "스킬 실행", "pt-BR": "Executar habilidade",
+  },
+  "learning_action:generate_image": {
+    "zh-CN": "生成教学配图", "en-US": "Generate figure", "es-ES": "Generar figura",
+    "fr-FR": "Générer une figure", "de-DE": "Abbildung erstellen",
+    "ja-JP": "図解を生成", "ko-KR": "도해 생성", "pt-BR": "Gerar figura",
+  },
 };
+
+export function resolveToolActivityLabel(
+  name: string,
+  language: ComposerLanguage,
+  args?: Record<string, unknown> | null,
+  result?: unknown,
+): string | undefined {
+  const normalizedName = String(name ?? "").trim();
+  if (!normalizedName) {
+    return undefined;
+  }
+  const argAction =
+    args && typeof args === "object" ? String(args.action ?? "").trim().toLowerCase() : "";
+  const resAction =
+    result && typeof result === "object" && !Array.isArray(result)
+      ? String((result as Record<string, unknown>).action ?? "").trim().toLowerCase()
+      : "";
+  const action = argAction || resAction;
+  if (action) {
+    const qualified = TOOL_LABELS[`${normalizedName}:${action}`]?.[language];
+    if (qualified) {
+      return qualified;
+    }
+  }
+  return TOOL_LABELS[normalizedName]?.[language];
+}

@@ -882,29 +882,56 @@ class CoachAgentLoop:
         """Give an authorized, incomplete save one bounded model repair turn."""
         if self._extra().get("formal_plan_mutation") is not True or self._formal_plan_commit_retries:
             return False
-        save_tool = self.registry.get("save_formal_plan")
-        if save_tool is None or save_tool.schema_for(self.provider.protocol) not in self._tools_schema():
+        exposed_schemas = self._tools_schema()
+        learning_action_tool = self.registry.get("learning_action")
+        legacy_save_tool = self.registry.get("save_formal_plan")
+        uses_orthogonal = (
+            learning_action_tool is not None
+            and learning_action_tool.schema_for(self.provider.protocol) in exposed_schemas
+        )
+        uses_legacy = (
+            not uses_orthogonal
+            and legacy_save_tool is not None
+            and legacy_save_tool.schema_for(self.provider.protocol) in exposed_schemas
+        )
+        if not uses_orthogonal and not uses_legacy:
             return False
         if finalize and (finalize.get("blocker") or finalize.get("decision") == "blocked"):
             return False
         for step in steps:
             for event in step.tool_results:
                 result = event.get("result")
-                if (event.get("name") == "save_formal_plan" and isinstance(result, dict)
-                        and result.get("ok") is True and result.get("committed") is True):
+                event_name = str(event.get("name") or "").strip()
+                if (
+                    event_name in {"learning_action", "save_formal_plan"}
+                    and isinstance(result, dict)
+                    and result.get("ok") is True
+                    and result.get("committed") is True
+                    and (
+                        event_name == "save_formal_plan"
+                        or str(result.get("action") or "save_formal_plan").strip().lower()
+                        == "save_formal_plan"
+                    )
+                ):
                     return False
         self._formal_plan_commit_retries += 1
+        commit_call_text = (
+            "learning_action(action='save_formal_plan', ...)"
+            if uses_orthogonal
+            else "save_formal_plan"
+        )
         history.append({
             "role": "user",
             "content": (
-                "The explicitly requested formal plan save is still pending. A text draft or "
-                "coach_finalize does not commit this turn. Re-read the latest learner request; "
+                "The explicitly requested formal plan save is still pending. A text draft "
+                "does not commit this turn. Re-read the latest learner request; "
                 "its corrections take priority over older plan, memory and verification summaries. "
                 "Preserve its plan identity, stage count, stage statuses and unexecuted work. "
-                "Call save_formal_plan with the plan you shaped, then inspect its result. "
+                f"Call {commit_call_text} with the plan you shaped, then inspect its result. "
                 "Do not invent test counts or claim a save before ok=true and committed=true. "
-                "If a concrete requirement prevents saving, use coach_finalize with "
-                "decision=blocked and a specific blocker. Do not retry indefinitely."
+                "If a concrete requirement prevents saving, state the exact blocker clearly "
+                "and ask one concise question without claiming the plan was saved. "
+                "Do not retry indefinitely."
             ),
         })
         return True

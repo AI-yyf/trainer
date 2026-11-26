@@ -197,8 +197,46 @@ function organizationProposalOperationCount(result: Record<string, unknown>): nu
   return Array.isArray(operations) ? operations.length : undefined;
 }
 
+const LEGACY_RESOURCE_MUTATION_TOOLS = new Set([
+  'import_resource_url',
+  'import_workspace_file',
+  'save_lecture_note',
+  'delete_resource',
+  'restore_resource',
+  'refresh_resource_index',
+  'organize_resources',
+  'curate_library_resources',
+  'write_sandbox_file',
+  'index_sandbox_file',
+  'generate_image',
+]);
+
+export function isLibraryMutatingActivity(
+  name: unknown,
+  args?: unknown,
+  result?: unknown,
+): boolean {
+  const normalized = String(name ?? '').trim();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized === 'library_write' || normalized === 'library_exec') {
+    return true;
+  }
+  const argRecord = asToolResultRecord(args);
+  const resRecord = asToolResultRecord(result);
+  const action = String(argRecord?.action ?? resRecord?.action ?? '').trim().toLowerCase();
+  if (normalized === 'web_fetch') {
+    return action === 'import_url';
+  }
+  if (normalized === 'learning_action') {
+    return action === 'generate_image';
+  }
+  return LEGACY_RESOURCE_MUTATION_TOOLS.has(normalized);
+}
+
 /**
- * Track organize_resources proposal/commit from agent tool results.
+ * Track library_write(action='organize') / organize_resources proposal/commit from agent tool results.
  * Returns a webview payload when pending state changes; null when irrelevant.
  */
 export function noteResourceOrganizationToolResult(
@@ -206,11 +244,17 @@ export function noteResourceOrganizationToolResult(
   name: unknown,
   result: unknown,
 ): { pending: boolean; operationCount?: number } | null {
-  if (String(name ?? '').trim() !== 'organize_resources') {
-    return null;
-  }
+  const normalizedName = String(name ?? '').trim();
   const record = asToolResultRecord(result);
   if (!record) {
+    return null;
+  }
+  const isOrganizeResult =
+    normalizedName === 'organize_resources' ||
+    (normalizedName === 'library_write' &&
+      (String(record.action ?? '').trim().toLowerCase() === 'organize' ||
+        (!record.action && record.requires_confirmation === true)));
+  if (!isOrganizeResult) {
     return null;
   }
   if (record.committed === true) {
@@ -2429,18 +2473,8 @@ export async function sendStreamMessageCommand(
         // Agent resource tools mutate the library inside the sidecar. The turn
         // snapshot can be built before those writes land, so refresh the
         // authoritative resource list once when a mutating resource tool ran.
-        const resourceMutationTools = new Set([
-          'import_resource_url',
-          'save_lecture_note',
-          'delete_resource',
-          'restore_resource',
-          'refresh_resource_index',
-          'organize_resources',
-          'write_sandbox_file',
-          'index_sandbox_file',
-        ]);
         const usedResourceTool = (context.getStreamingState().agentActivity ?? []).some(
-          (activity) => resourceMutationTools.has(activity.name),
+          (activity) => isLibraryMutatingActivity(activity.name, activity.args, activity.result),
         );
         if (usedResourceTool) {
           try {

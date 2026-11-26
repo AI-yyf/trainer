@@ -123,6 +123,14 @@ COMPACTION_RECORD_LIMIT = 12
 
 # Character caps aligned with Pi toolOutputLimits (bash 30k / read 100k / default 30k).
 TOOL_OUTPUT_LIMITS: dict[str, int] = {
+    "project_read": 100_000,
+    "project_verify": 30_000,
+    "library_read": 100_000,
+    "library_write": 20_000,
+    "library_exec": 30_000,
+    "web_fetch": 30_000,
+    "learning_inspect": 24_000,
+    "learning_action": 24_000,
     "read_sandbox_file": 100_000,
     "read_workspace_file": 100_000,
     "inspect_current_file": 50_000,
@@ -157,6 +165,10 @@ PRUNED_TOOL_RESULT_MARK = "…[earlier tool result pruned]"
 
 READ_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
     {
+        "project_read",
+        "project_verify",
+        "library_read",
+        "learning_inspect",
         "search_resources",
         "list_sandbox",
         "read_sandbox_file",
@@ -178,6 +190,7 @@ READ_ONLY_TOOL_NAMES: frozenset[str] = frozenset(
 )
 IDEMPOTENT_SANDBOX_TOOLS: frozenset[str] = frozenset(
     {
+        "library_write",
         "write_sandbox_file",
         "index_sandbox_file",
     }
@@ -289,11 +302,38 @@ def truncated_tool_failure(name: str) -> dict[str, Any]:
     }
 
 
+def _call_action(call: dict[str, Any]) -> str:
+    raw_args = call.get("arguments")
+    if isinstance(raw_args, dict):
+        return str(raw_args.get("action") or "").strip().lower()
+    if isinstance(raw_args, str) and raw_args.strip():
+        try:
+            parsed = json.loads(raw_args)
+            if isinstance(parsed, dict):
+                return str(parsed.get("action") or "").strip().lower()
+        except (TypeError, ValueError):
+            return ""
+    return ""
+
+
+def _is_read_only_tool_call(call: dict[str, Any]) -> bool:
+    name = str(call.get("name") or "").strip()
+    if not name:
+        return False
+    if name in READ_ONLY_TOOL_NAMES:
+        return True
+    action = _call_action(call)
+    if name == "web_fetch":
+        return action in {"", "search", "fetch", "papers"}
+    if name == "learning_action":
+        return action == "invoke_skill"
+    return False
+
+
 def tools_are_read_only(tool_calls: list[dict[str, Any]]) -> bool:
     if not tool_calls:
         return False
-    names = [str(call.get("name") or "").strip() for call in tool_calls]
-    return bool(names) and all(name in READ_ONLY_TOOL_NAMES for name in names)
+    return all(_is_read_only_tool_call(call) for call in tool_calls)
 
 
 def resolved_context_window(extra: dict[str, Any] | None) -> int:
@@ -823,6 +863,10 @@ def sandbox_operation_key(
     if name not in IDEMPOTENT_SANDBOX_TOOLS:
         return None
     payload = arguments if isinstance(arguments, dict) else {}
+    if name == "library_write":
+        action = str(payload.get("action") or "write").strip().lower()
+        if action not in {"write", "refresh_index"}:
+            return None
     try:
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     except (TypeError, ValueError):

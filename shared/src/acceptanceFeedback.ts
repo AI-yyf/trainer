@@ -1,7 +1,7 @@
 /**
  * Acceptance progress feedback (batch 4).
  *
- * Turns the structured signal breakdown of `verify_practice_current_file`
+ * Turns the structured signal breakdown of `project_verify(action='verify_practice')`
  * results (and the training-acceptance check detail lines) into the
  * "matched N/M + which signals are missing + next minimal action" feedback
  * rendered in the training flow. Pure parsing only — the passed verdict
@@ -71,14 +71,29 @@ function feedbackFromCriteria(
 }
 
 /**
- * Parse a `verify_practice_current_file` tool-result payload. Returns null
- * for results that are not practice verifications.
+ * Parse a `project_verify(action='verify_practice')` (or historical
+ * `verify_practice_current_file`) tool-result payload. Returns null for
+ * results that are not practice verifications.
  */
 export function parseAcceptanceFeedbackFromToolResult(
   result: unknown,
+  toolName?: unknown,
 ): AcceptanceFeedback | null {
   const record = asRecord(result);
-  if (!record || record.tool !== "verify_practice_current_file") {
+  if (!record) {
+    return null;
+  }
+  const declaredTool = typeof record.tool === "string" ? record.tool.trim() : "";
+  const declaredAction = typeof record.action === "string" ? record.action.trim().toLowerCase() : "";
+  const callerTool = typeof toolName === "string" ? toolName.trim() : "";
+  const isPracticeVerification =
+    (declaredTool === "project_verify" &&
+      (declaredAction === "" || declaredAction === "verify_practice")) ||
+    declaredTool === "verify_practice_current_file" ||
+    declaredAction === "verify_practice" ||
+    (callerTool === "project_verify" &&
+      (declaredAction === "verify_practice" || Array.isArray(record.criteria)));
+  if (!isPracticeVerification) {
     return null;
   }
   const feedback = feedbackFromCriteria(
@@ -88,8 +103,10 @@ export function parseAcceptanceFeedbackFromToolResult(
   if (feedback) {
     return feedback;
   }
-  const matched = typeof record.matched_signal_count === "number" ? record.matched_signal_count : undefined;
-  const total = typeof record.total_signal_count === "number" ? record.total_signal_count : undefined;
+  const matched =
+    typeof record.matched_signal_count === "number" ? record.matched_signal_count : undefined;
+  const total =
+    typeof record.total_signal_count === "number" ? record.total_signal_count : undefined;
   if (matched !== undefined && total !== undefined && total > 0) {
     return { matched, total, matchedItems: [], missingItems: [] };
   }

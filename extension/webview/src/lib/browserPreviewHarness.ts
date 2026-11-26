@@ -4522,14 +4522,16 @@ function applyPreviewScenario(bootstrap: typeof mockBootstrapData, state: Browse
       agentActivity: [
         {
           id: "recovery-tool-1",
-          name: "read_workspace_file",
+          name: "project_read",
+          args: { action: "read" },
           status: "succeeded",
           result: previewText(language, "已读到当前文件上下文。", "Current file context is loaded."),
           step: 1,
         },
         {
           id: "recovery-tool-2",
-          name: "run_diagnostics",
+          name: "project_verify",
+          args: { action: "diagnostics" },
           status: "failed",
           result: previewText(language, "连接还没有完成。", "The connection is not set up yet."),
           step: 2,

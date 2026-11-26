@@ -196,7 +196,7 @@ export const starterTemplates: StarterTemplateDef[] = [
         title: "仿写一段：从读到写",
         summary: "先做确定性节奏统计，再写同构仿写，最后用对照统计自查——仿写不作为证据。",
         stages: [
-          { title: "统计锚点节奏", objective: "数出锚点段落的句数、平均句长与标点密度（用 compare_with_anchor 的信号）。" },
+          { title: "统计锚点节奏", objective: "数出锚点段落的句数、平均句长与标点密度（用 project_verify(compare_anchor) 的信号）。" },
           { title: "同构仿写", objective: "写一段句式结构相同的仿写，并明确标注你有意改变的地方。" },
           { title: "对照自查", objective: "用确定性信号对照两段，说清哪些差异是故意的、哪些是失误。" },
         ],
@@ -205,16 +205,16 @@ export const starterTemplates: StarterTemplateDef[] = [
         title: "Imitate one passage: from reading to writing",
         summary: "Deterministic rhythm stats first, then a structurally parallel imitation, then a comparison pass — the imitation is not evidence.",
         stages: [
-          { title: "Take the anchor's rhythm stats", objective: "Count sentences, mean length, and punctuation density using compare_with_anchor signals." },
+          { title: "Take the anchor's rhythm stats", objective: "Count sentences, mean length, and punctuation density using project_verify(compare_anchor) signals." },
           { title: "Write the parallel imitation", objective: "Draft a passage with the same sentence structure, explicitly marking what you changed on purpose." },
           { title: "Compare and self-check", objective: "Compare both passages on the deterministic signals and state which differences are intentional." },
         ],
       },
       "es-ES": {
         title: "Imita un pasaje: de leer a escribir",
-        summary: "Primero estadísticas rítmicas deterministas, luego una imitación estructurada y una pasada comparativa — la imitación no es evidencia.",
+        summary: "Primero estadísticas rítmicas deterministas, luego una imitación estructurada y uma pasada comparativa — la imitación no es evidencia.",
         stages: [
-          { title: "Toma el ritmo del ancla", objective: "Cuenta oraciones, longitud media y densidad de puntuación con las señales de compare_with_anchor." },
+          { title: "Toma el ritmo del ancla", objective: "Cuenta oraciones, longitud media y densidad de puntuación con las señales de project_verify(compare_anchor)." },
           { title: "Escribe la imitación paralela", objective: "Redacta un pasaje con la misma estructura sintáctica, marcando lo que cambiaste a propósito." },
           { title: "Compara y autocorrige", objective: "Compara ambos pasajes con las señales deterministas y aclara qué diferencias son intencionales." },
         ],
@@ -223,7 +223,7 @@ export const starterTemplates: StarterTemplateDef[] = [
         title: "Imiter un passage : de la lecture à l'écriture",
         summary: "D'abord les statistiques rythmiques déterministes, puis une imitation structurée, enfin un passage comparatif — l'imitation n'est pas une preuve.",
         stages: [
-          { title: "Prendre le rythme de l'ancre", objective: "Compte phrases, longueur moyenne et densité de ponctuation avec les signaux de compare_with_anchor." },
+          { title: "Prendre le rythme de l'ancre", objective: "Compte phrases, longueur moyenne et densité de ponctuation avec les signaux de project_verify(compare_anchor)." },
           { title: "Écrire l'imitation parallèle", objective: "Rédige un passage de même structure syntaxique en marquant ce que tu as changé volontairement." },
           { title: "Comparer et s'autocontrôler", objective: "Compare les deux passages sur les signaux déterministes et précise quelles différences sont intentionnelles." },
         ],
@@ -232,7 +232,7 @@ export const starterTemplates: StarterTemplateDef[] = [
         title: "Eine Passage nachahmen: vom Lesen zum Schreiben",
         summary: "Zuerst die deterministische Rhythmusstatistik, dann eine strukturell parallele Nachahmung, zuletzt ein Vergleichslauf — die Nachahmung ist kein Beleg.",
         stages: [
-          { title: "Den Rhythmus des Ankers erfassen", objective: "Zähle Sätze, mittlere Länge und Satzzeichen-Dichte mit den compare_with_anchor-Signalen." },
+          { title: "Den Rhythmus des Ankers erfassen", objective: "Zähle Sätze, mittlere Länge und Satzzeichen-Dichte mit den project_verify(compare_anchor)-Signalen." },
           { title: "Die parallele Nachahmung schreiben", objective: "Entwirf eine Passage gleicher Satzstruktur und markiere, was du absichtlich geändert hast." },
           { title: "Vergleichen und selbst prüfen", objective: "Vergleiche beide Passagen über die deterministischen Signale und benenne die absichtlichen Unterschiede." },
         ],
@@ -241,7 +241,7 @@ export const starterTemplates: StarterTemplateDef[] = [
         title: "一節を模倣する：読みから書きへ",
         summary: "決定論的なリズム統計→同型の模倣→対照統計で自己点検。模倣はエビデンスにならない。",
         stages: [
-          { title: "アンカーのリズムを数える", objective: "compare_with_anchor の信号で文数・平均文長・句読点密度を出す。" },
+          { title: "アンカーのリズムを数える", objective: "project_verify(compare_anchor) の信号で文数・平均文長・句読点密度を出す。" },
           { title: "同型の模倣を書く", objective: "同じ文構造の模倣文を書き、意図的に変えた箇所を明示する。" },
           { title: "対照して自己点検する", objective: "決定論的信号で両者を比較し、どの差異が意図的かを言い切る。" },
         ],
@@ -250,7 +250,7 @@ export const starterTemplates: StarterTemplateDef[] = [
         title: "한 구절 모방하기: 읽기에서 쓰기로",
         summary: "결정론적 리듬 통계 → 같은 구조의 모방 → 대조 통계로 자기 점검. 모방은 증거가 아닙니다.",
         stages: [
-          { title: "앵커의 리듬 재기", objective: "compare_with_anchor 신호로 문장 수·평균 길이·문장부호 밀도를 셉니다." },
+          { title: "앵커의 리듬 재기", objective: "project_verify(compare_anchor) 신호로 문장 수·평균 길이·문장부호 밀도를 셉니다." },
           { title: "평행 모방 쓰기", objective: "같은 문장 구조의 모방문을 쓰고 의도적으로 바꾼 곳을 표시합니다." },
           { title: "대조하며 자기 점검", objective: "결정론적 신호로 두 구절을 비교하고 어떤 차이가 의도적인지 말합니다." },
         ],
@@ -259,7 +259,7 @@ export const starterTemplates: StarterTemplateDef[] = [
         title: "Imitar um trecho: da leitura à escrita",
         summary: "Primeiro as estatísticas rítmicas determinísticas, depois uma imitação estrutural e uma passagem comparativa — a imitação não é evidência.",
         stages: [
-          { title: "Colher o ritmo da âncora", objective: "Conte frases, comprimento médio e densidade de pontuação com os sinais de compare_with_anchor." },
+          { title: "Colher o ritmo da âncora", objective: "Conte frases, comprimento médio e densidade de pontuação com os sinais de project_verify(compare_anchor)." },
           { title: "Escrever a imitação paralela", objective: "Rascunhe um trecho com a mesma estrutura de frases, marcando o que mudou de propósito." },
           { title: "Comparar e autoavaliar", objective: "Compare os dois trechos nos sinais determinísticos e diga quais diferenças são intencionais." },
         ],

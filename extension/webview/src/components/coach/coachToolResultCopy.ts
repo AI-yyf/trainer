@@ -105,7 +105,11 @@ export function summarizeSafeCoachToolResult(
       ? record.items
       : Array.isArray(record.results)
         ? record.results
-        : undefined;
+        : Array.isArray(record.matches)
+          ? record.matches
+          : Array.isArray(record.sources)
+            ? record.sources
+            : undefined;
   if (items) {
     return text.found(items.length);
   }

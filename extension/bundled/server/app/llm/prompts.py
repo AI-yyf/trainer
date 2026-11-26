@@ -583,13 +583,13 @@ def _agent_loop_plan_instructions() -> str:
     return (
         "\n\n## Plan Skill\n"
         "- For a complex plan that depends on current external material, call "
-        "`search_learning_materials` before `save_formal_plan`. Build stages from the fetched "
-        "evidence, retain its source IDs in stage resources, and do not present unfetched or "
-        "uncited material as verified. If retrieval is unavailable, state that boundary instead "
+        "`web_fetch(action='learning_materials', ...)` before `learning_action(action='save_formal_plan', ...)`. "
+        "Build stages from the fetched evidence, retain its source IDs in stage resources, and do not present "
+        "unfetched or uncited material as verified. If retrieval is unavailable, state that boundary instead "
         "of claiming the plan is research-verified.\n"
         "- On the first formal-plan search, pass one stable `required_facets` list covering every "
         "distinct concept or decision the requested plan must substantiate, plus authoritative "
-        "`preferred_domains` when known. After every search, call `assess_research_evidence`; do "
+        "`preferred_domains` when known. After every search, call `web_fetch(action='assess_evidence', ...)`; do "
         "not let source count or literal keyword matching decide sufficiency. Continue only for "
         "the facets you judge missing. Stop when your structured verdict is `sufficient`; if it "
         "is `exhausted_with_gaps`, save an honest plan that marks those gaps instead of claiming "
@@ -599,12 +599,12 @@ def _agent_loop_plan_instructions() -> str:
         "continuation checkpoint instead of restarting broad research. If a preferred domain "
         "cannot cover a remaining facet, broaden the next query to another reputable first-party "
         "or standards source instead of repeatedly fetching the same site.\n"
-        "- `save_formal_plan` - on an explicit formal plan-generation turn, use the "
+        "- `learning_action(action='save_formal_plan', ...)` - on an explicit formal plan-generation turn, use the "
         "learner's confirmed request plus the prepared library evidence to commit "
         "the structured plan. Do not call it while the learner is only discussing "
         "the current plan, and do not commit until ambiguity about goal, time, or "
         "scope is resolved.\n"
-        "- `specify_task` / `next_task` - use only when a live formal plan is already bound; "
+        "- `learning_action(action='specify_task' | 'next_task', ...)` - use only when a live formal plan is already bound; "
         "never invent a TaskSpec, second plan, or card without one."
     )
 
@@ -612,14 +612,15 @@ def _agent_loop_plan_instructions() -> str:
 def _agent_loop_training_instructions() -> str:
     return (
         "\n\n## Training Skill\n"
-        "- `verify_practice_current_file` - verify a hands-on training card against the active "
+        "- `project_verify(action='verify_practice', ...)` - verify a hands-on training card against the active "
         "IDE file, diagnostics, and acceptance signals before you say practice passed.\n"
-        "- `record_learning_note` - persist one durable observation only when the learner "
+        "- `project_verify(action='rubric_review' | 'compare_anchor', ...)` - verify host-gated rubric checks "
+        "or compare an imitation submission with an anchor passage when applicable.\n"
+        "- `learning_action(action='record_note', ...)` - persist one durable observation only when the learner "
         "explicitly asked to record or save a learning note. Never mint a note on a normal "
         "coach, understand, diagnose, or learn-first turn.\n"
-        "- `generate_training_card` - use only when the learner explicitly asked to create or "
-        "generate a training card. Never mint a card on a normal coach, understand, diagnose, "
-        "or learn-first turn."
+        "- Training cards are minted only through the host Training surface, never directly in chat; "
+        "if the learner asks for a card in chat, outline a focused practice candidate without inventing a card ID."
     )
 
 
@@ -668,7 +669,7 @@ def _agent_loop_skill_instructions(
     if _message_explicitly_requests_resource_search(message):
         blocks.append(
             "\n- This turn explicitly requires a library/resource lookup. "
-            "Call `search_resources` before you write the final answer. "
+            "Call `library_read(action='search', ...)` before you write the final answer. "
             "If nothing relevant is found, say that plainly instead of inventing from memory."
         )
     return "".join(blocks)
@@ -755,7 +756,7 @@ def _build_state_driven_teaching_block(
                 "- This turn is a lecture/derivation request. Organize it as a chain of claims: current state -> gap -> object -> constraint -> check -> next state. The learner should be able to predict each formula before it appears.",
                 "- Cover the mechanism, the derivation, and the implementation as one chain; do not turn it into a concept list or bullet wall. A short heading is allowed only when it genuinely helps navigation. If the topic has no formula or no code, omit that part instead of forcing it.",
                 "- Apply the 4-feeling end bar internally before finishing: the learner can state what problem it solves, why every formula/design must take that form, where each variable/function comes from, and how to reconstruct it from constraints even if they forget the syntax or formula.",
-                "- Close by naming the capability or insight the learner now has and the one edge still worth checking, not with a generic summary. If the learner explicitly asks to save the lecture into Resources, call `save_lecture_note`.",
+                "- Close by naming the capability or insight the learner now has and the one edge still worth checking, not with a generic summary. If the learner explicitly asks to save the lecture into Resources, call `library_write(action='save_lecture_note', ...)`.",
             ]
         )
     elif is_review:
@@ -870,9 +871,9 @@ def build_coaching_system_prompt(
             "scope is ambiguous. Reuse facts already in the prompt and read only missing evidence. "
             "Describe planned checks as acceptance criteria for the learner; executing them "
             "is a separate learning step. Respect any explicit restriction on source scope. "
-            "Once the request is sufficiently clear, call `search_learning_materials` first "
+            "Once the request is sufficiently clear, call `web_fetch(action='learning_materials', ...)` first "
             "only when the requested plan depends on current external sources, then call "
-            "`save_formal_plan` with concrete stages, outcomes, resources, and verification "
+            "`learning_action(action='save_formal_plan', ...)` with concrete stages, outcomes, resources, and verification "
             "signals, then explain the committed plan in natural language. The tool result "
             "is the source of truth for persisted plan state."
         )
@@ -886,7 +887,7 @@ def build_coaching_system_prompt(
             recovered_why = str(recovery.get("why_now") or "").strip()
             resume_lines = [
                 "Resume the recovered current step. Do not create, replace, or invent a formal learning plan.",
-                "Do not call save_formal_plan.",
+                "Do not call learning_action(action='save_formal_plan').",
             ]
             if recovered_action:
                 resume_lines.append(f"- Recovered action: {recovered_action}.")

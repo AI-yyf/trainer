@@ -92,6 +92,16 @@ const STAGE_COPY: Record<ComposerLanguage, StageCopy> = {
 };
 
 const TOOL_STAGES: Record<string, TrainerStageKind> = {
+  // 8 dual-domain orthogonal primitives (Trainer 2.0)
+  project_read: "retrieve",
+  project_verify: "retrieve",
+  library_read: "retrieve",
+  library_write: "organize",
+  library_exec: "organize",
+  web_fetch: "retrieve",
+  learning_inspect: "retrieve",
+  learning_action: "finalize",
+  // Legacy transcript compatibility
   search_resources: "retrieve",
   list_resources: "retrieve",
   read_resource_excerpt: "retrieve",
@@ -139,8 +149,32 @@ const TOOL_STAGES: Record<string, TrainerStageKind> = {
   next_task: "finalize",
 };
 
-export function trainerStageKindForTool(toolName: string | undefined): TrainerStageKind {
-  return TOOL_STAGES[String(toolName ?? "").trim()] ?? "think";
+export function trainerStageKindForTool(
+  toolName: string | undefined,
+  args?: Record<string, unknown> | null,
+): TrainerStageKind {
+  const normalized = String(toolName ?? "").trim();
+  const action =
+    args && typeof args === "object" ? String(args.action ?? "").trim().toLowerCase() : "";
+  if (normalized === "library_write") {
+    if (action === "import_url" || action === "import_workspace") {
+      return "download";
+    }
+    return "organize";
+  }
+  if (normalized === "web_fetch") {
+    return action === "import_url" ? "download" : "retrieve";
+  }
+  if (normalized === "learning_action") {
+    if (action === "invoke_skill") {
+      return "reason";
+    }
+    if (action === "record_note") {
+      return "organize";
+    }
+    return "finalize";
+  }
+  return TOOL_STAGES[normalized] ?? "think";
 }
 
 export function trainerStageLabel(kind: TrainerStageKind, language: ComposerLanguage): string {
@@ -150,6 +184,7 @@ export function trainerStageLabel(kind: TrainerStageKind, language: ComposerLang
 type ActivityLike = {
   name?: string;
   status?: string;
+  args?: Record<string, unknown>;
 };
 
 /**
@@ -164,6 +199,8 @@ export function currentTrainerStage(
   const list = activities ?? [];
   const running = [...list].reverse().find((activity) => activity.status === "running");
   const latest = running ?? [...list].reverse().find((activity) => activity.status === "succeeded");
-  const kind = latest ? trainerStageKindForTool(latest.name) : (fallbackKind ?? "think");
+  const kind = latest
+    ? trainerStageKindForTool(latest.name, latest.args)
+    : (fallbackKind ?? "think");
   return { kind, label: trainerStageLabel(kind, language) };
 }

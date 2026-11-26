@@ -36,7 +36,7 @@ export function learnerActionText(message: string): string {
 const NON_LEARNING_PLAN_CLAUSE =
   /(?:测试|迁移|发布|部署|上线|回滚|重构|执行|应急|项目|排期|开发|营销|商业|运营|扩容|升级|灾备)计划|\b(?:test|testing|migration|release|deployment|rollout|rollback|execution|refactoring|project|sprint|business|marketing|incident|recovery|capacity|upgrade)\s+plan\b/iu;
 const EXPLICIT_LEARNING_PLAN_CONTEXT =
-  /学习|训练|课程|教学|正式计划|阶段计划|save_formal_plan|\b(?:learning|study|training|curriculum|course|formal)\s+plan\b/iu;
+  /学习|训练|课程|教学|正式计划|阶段计划|save_formal_plan|learning_action|\b(?:learning|study|training|curriculum|course|formal)\s+plan\b/iu;
 
 /** Explicit plan requests share one vocabulary across the composer and host. */
 export function requestsLearningPlanChange(message: string): boolean {
@@ -48,7 +48,7 @@ export function requestsLearningPlanChange(message: string): boolean {
     return (
       /^(?:(?:请(?:你)?|帮我|麻烦(?:你)?|请问|能不能|能否|可以|可不可以)\s*)*(?:明确|直接|立即)?(?:重新)?(?:制定|生成|创建|调整|修改|修正|修复|补齐|更新|重写|保存)[^。！？\n]{0,90}计划/u.test(clause) ||
       /^(?:please\s+|(?:can|could|would) you\s+)*(?:create|make|generate|update|revise|adjust|fix|rewrite|repair|complete|save)\b.{0,90}\bplan\b/iu.test(clause) ||
-      /^(?:(?:请(?:你)?|帮我)\s*)*(?:立即|直接)?调用\s*save_formal_plan\b/iu.test(clause)
+      /^(?:(?:请(?:你)?|帮我)\s*)*(?:立即|直接)?调用\s*(?:learning_action|save_formal_plan)\b/iu.test(clause)
     );
   });
 }

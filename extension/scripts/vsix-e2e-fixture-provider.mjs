@@ -331,19 +331,26 @@ function sendChatCompletionStream(response, responseId, payload, reply, toolCall
 
 function fixtureToolCallFor(payload, requestedName) {
   if (requestedName === "trainer_capability_probe") return fixtureToolCall(requestedName, { probe: "ok" });
-  const planToolOffered = payload.tools?.some((tool) => (tool.function?.name ?? tool.name) === "save_formal_plan");
+  const hasLearningAction = payload.tools?.some((tool) => (tool.function?.name ?? tool.name) === "learning_action");
+  const hasLegacySavePlan = payload.tools?.some((tool) => (tool.function?.name ?? tool.name) === "save_formal_plan");
+  const planToolOffered = Boolean(hasLearningAction || hasLegacySavePlan);
   const alreadyCalled = payload.messages?.some((message) =>
-    message.role === "tool" || message.tool_calls?.some((call) => call.function?.name === "save_formal_plan"));
+    message.role === "tool" ||
+    message.tool_calls?.some((call) =>
+      call.function?.name === "learning_action" || call.function?.name === "save_formal_plan"));
   if (process.env.TRAINER_VSIX_E2E_FILE_FIXTURE !== "1" || !planToolOffered || alreadyCalled ||
     !latestUserText(payload).includes("工作区范围验证")) return undefined;
-  return fixtureToolCall("save_formal_plan", {
+  const planArgs = {
     title: "工作区范围验证",
     summary: "核对异步返回所携带的工作区标识。",
     current_step: "运行检查以验证不匹配的结果会被拒绝。",
     verify_method: ["同名工作区接受结果，不同工作区拒绝结果。"],
     stages: [{ id: "check-scope", title: "确认工作区范围", goal: "比较原始与返回的 workspace_id。",
       outcomes: ["用项目测试验证匹配和不匹配的结果"], status: "active" }],
-  });
+  };
+  return hasLearningAction
+    ? fixtureToolCall("learning_action", { action: "save_formal_plan", ...planArgs })
+    : fixtureToolCall("save_formal_plan", planArgs);
 }
 
 function fixtureToolCall(name, input) {

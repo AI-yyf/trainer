@@ -86,6 +86,33 @@ def _event_tool_name(item: dict[str, Any], result: dict[str, Any]) -> str:
     return _as_text(item.get("name")) or _as_text(result.get("tool")) or _as_text(item.get("tool_name"))
 
 
+def _is_excerpt_read_event(tool_name: str, result: dict[str, Any]) -> bool:
+    if tool_name == "read_resource_excerpt":
+        return True
+    if tool_name == "library_read":
+        action = _as_text(result.get("action")).lower()
+        return action == "excerpt" or isinstance(result.get("excerpts"), list)
+    return False
+
+
+def _is_resource_search_event(tool_name: str, result: dict[str, Any]) -> bool:
+    if tool_name == "search_resources":
+        return True
+    if tool_name == "library_read":
+        action = _as_text(result.get("action")).lower()
+        return action in {"", "search"} and isinstance(result.get("hits"), list)
+    return False
+
+
+def _is_web_source_event(tool_name: str, result: dict[str, Any]) -> bool:
+    if tool_name == "search_learning_materials":
+        return True
+    if tool_name == "web_fetch":
+        action = _as_text(result.get("action")).lower()
+        return action in {"learning_materials", "search", "papers", "fetch"}
+    return False
+
+
 def _part_key(part: dict[str, Any]) -> str:
     return "|".join(
         [
@@ -130,7 +157,7 @@ def _read_resource_ids(events: list[dict[str, Any]]) -> set[str]:
         result = _event_result(item)
         if result is None:
             continue
-        if _event_tool_name(item, result) != "read_resource_excerpt":
+        if not _is_excerpt_read_event(_event_tool_name(item, result), result):
             continue
         resource = _as_dict(result.get("resource"))
         resource_id = _as_text(resource.get("id"))
@@ -166,8 +193,6 @@ def _read_citation_parts(
     parts: list[dict[str, Any]] = []
     for raw in raw_excerpts[:_MAX_READ_EXCERPTS]:
         excerpt = _as_dict(raw)
-        # A successful read always returns passage text; require it as the
-        # evidence that this citation names a real, readable location.
         if not _as_text(excerpt.get("text")):
             continue
         anchor = _as_text(excerpt.get("paragraph_anchor")) or _as_text(excerpt.get("anchor_id"))
@@ -294,7 +319,13 @@ def _search_hit_parts(
 def _web_source_parts(result: dict[str, Any], labels: dict[str, str]) -> list[dict[str, Any]]:
     raw_sources = result.get("sources")
     if not isinstance(raw_sources, list):
-        return []
+        raw_results = result.get("results")
+        if isinstance(raw_results, list):
+            raw_sources = raw_results
+        elif _as_text(result.get("url")):
+            raw_sources = [result]
+        else:
+            return []
     parts: list[dict[str, Any]] = []
     for raw in raw_sources[:_MAX_WEB_CITATIONS]:
         source = _as_dict(raw)
@@ -355,18 +386,18 @@ def build_resource_display_parts(
         if result is None:
             continue
         tool_name = _event_tool_name(item, result)
-        if tool_name == "read_resource_excerpt":
+        if _is_excerpt_read_event(tool_name, result):
             for part in _read_citation_parts(result, labels):
                 _append_unique(parts, seen, part)
-        elif tool_name == "search_resources":
+        elif _is_resource_search_event(tool_name, result):
             for part in _search_hit_parts(
                 result,
                 labels,
                 read_resource_ids=read_resource_ids,
-                auto=result.get("auto") is True,
+                auto=result.get("auto") is True or item.get("auto") is True,
             ):
                 _append_unique(parts, seen, part)
-        elif tool_name == "search_learning_materials":
+        elif _is_web_source_event(tool_name, result):
             for part in _web_source_parts(result, labels):
                 _append_unique(parts, seen, part)
     return parts

@@ -66,17 +66,30 @@ export function noteRequestedWorkspaceFileToolResult(
   result: unknown,
 ): void {
   const name = String(toolName ?? '').trim();
-  if (name !== 'read_workspace_file' && name !== 'import_workspace_file') {
+  if (
+    name !== 'project_read' &&
+    name !== 'library_write' &&
+    name !== 'read_workspace_file' &&
+    name !== 'import_workspace_file'
+  ) {
     return;
   }
   if (!result || typeof result !== 'object') {
     return;
   }
-  const record = result as { error?: unknown; path?: unknown; listed?: unknown };
+  const record = result as {
+    error?: unknown;
+    path?: unknown;
+    paths?: unknown;
+    listed?: unknown;
+  };
   if (String(record.error ?? '') !== 'snapshot_content_unavailable') {
     return;
   }
-  rememberRequestedWorkspaceFiles(owner, [record.path]);
+  rememberRequestedWorkspaceFiles(owner, [
+    record.path,
+    ...(Array.isArray(record.paths) ? record.paths : []),
+  ]);
 }
 
 export function noteRequestedWorkspaceFilesFromSessionResponse(

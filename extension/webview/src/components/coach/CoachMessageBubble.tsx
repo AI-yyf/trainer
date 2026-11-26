@@ -97,7 +97,7 @@ import {
 import { CoachMessageParts } from "./CoachMessageParts";
 import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
 import { currentTrainerStage } from "../../lib/trainerStage";
-import { TOOL_LABELS } from "../../lib/i18n/segments/agentActivityStripCopy";
+import { resolveToolActivityLabel } from "../../lib/i18n/segments/agentActivityStripCopy";
 import {
   resolveCoachToolResultCopy,
   summarizeSafeCoachToolResult,
@@ -290,8 +290,14 @@ function humanizeToolName(name: string): string {
   return normalized.length > 0 ? normalized : name;
 }
 
-function toolTrailLabel(name: string, language: ComposerLanguage): string {
-  return TOOL_LABELS[name]?.[language] ?? humanizeToolName(name);
+function toolTrailLabel(
+  activity: { name: string; args?: Record<string, unknown>; result?: unknown },
+  language: ComposerLanguage,
+): string {
+  return (
+    resolveToolActivityLabel(activity.name, language, activity.args, activity.result) ??
+    humanizeToolName(activity.name)
+  );
 }
 
 function toolTrailTarget(activity: { args?: Record<string, unknown> }): string {
@@ -301,16 +307,24 @@ function toolTrailTarget(activity: { args?: Record<string, unknown> }): string {
   }
   const candidate =
     args.path ??
+    args.new_path ??
+    args.folder_path ??
     args.directory ??
     args.query ??
+    args.pattern ??
     args.url ??
     args.symbol ??
+    args.name ??
+    args.skill_id ??
+    args.skill_name ??
     args.module ??
     args.topic ??
+    args.focus_area ??
     args.title ??
-    args.name ??
     args.folder ??
-    args.pattern;
+    args.natural_language_goal ??
+    args.goal ??
+    args.command;
   if (typeof candidate === "string") {
     let cleaned = candidate.replace(/\s+/g, " ").trim();
     if (/^https?:\/\//i.test(cleaned)) {
@@ -580,7 +594,7 @@ function CoachMessageBubbleImpl({
                 return (
                   <li key={activity.id} className="coach-work-trail__row">
                     <span>
-                      <span>{toolTrailLabel(activity.name, language)}</span>
+                      <span>{toolTrailLabel(activity, language)}</span>
                       {target ? <code className="coach-work-trail__target">{target}</code> : null}
                     </span>
                     <span className="coach-work-trail__hint">

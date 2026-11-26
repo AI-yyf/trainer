@@ -819,6 +819,7 @@ def build_coach_visible_status(deps: CoachSupportDeps,
 
     raw_events = agent_meta.get("tool_events")
     tool_call_names: list[str] = []
+    tool_call_pairs: list[tuple[str, str]] = []
     practice_verification_result: dict[str, object] | None = None
     had_failure = False
     if isinstance(raw_events, list):
@@ -830,8 +831,13 @@ def build_coach_visible_status(deps: CoachSupportDeps,
                 tool_name = str(item.get("name") or "").strip()
                 if tool_name == "coach_finalize":
                     continue
+                raw_args = item.get("arguments")
+                call_action = ""
+                if isinstance(raw_args, dict):
+                    call_action = str(raw_args.get("action") or "").strip().lower()
                 if tool_name:
                     tool_call_names.append(tool_name)
+                    tool_call_pairs.append((tool_name, call_action))
                 continue
             if event_type != "tool_result":
                 continue
@@ -841,12 +847,14 @@ def build_coach_visible_status(deps: CoachSupportDeps,
             if isinstance(result_payload, dict) and result_payload.get("error"):
                 had_failure = True
             tool_name = str(item.get("name") or item.get("tool_name") or "").strip()
-            if (
-                tool_name == "verify_practice_current_file"
-                and practice_verification_result is None
-                and isinstance(result_payload, dict)
-            ):
-                practice_verification_result = result_payload
+            if practice_verification_result is None and isinstance(result_payload, dict):
+                if tool_name == "verify_practice_current_file" or (
+                    tool_name == "project_verify"
+                    and str(result_payload.get("action") or "verify_practice").strip().lower()
+                    == "verify_practice"
+                    and "passed" in result_payload
+                ):
+                    practice_verification_result = result_payload
 
     stop_reason = str(agent_meta.get("stop_reason") or "").strip()
     fell_back = bool(agent_meta.get("fell_back"))
@@ -890,17 +898,34 @@ def build_coach_visible_status(deps: CoachSupportDeps,
         return None
 
     categories: set[str] = set()
-    for tool_name in unique_tool_names:
+    for tool_name, call_action in tool_call_pairs:
         if tool_name in {"recall_memory", "record_learning_note"}:
             categories.add("memory")
         elif tool_name == "inspect_plan":
             categories.add("plan")
-        elif tool_name == "search_resources":
+        elif tool_name in {"search_resources", "library_read", "library_write", "library_exec", "web_fetch"}:
             categories.add("resources")
-        elif tool_name in {"read_workspace_file", "list_workspace_files"}:
+        elif tool_name in {"read_workspace_file", "list_workspace_files", "project_read"}:
             categories.add("workspace")
         elif tool_name == "run_diagnostics":
             categories.add("diagnostics")
+        elif tool_name == "project_verify":
+            if call_action == "diagnostics":
+                categories.add("diagnostics")
+            elif call_action in {"verify_practice", "rubric_review", "compare_anchor"}:
+                categories.add("training")
+            else:
+                categories.add("workspace")
+        elif tool_name == "learning_inspect":
+            if call_action == "plan":
+                categories.add("plan")
+            else:
+                categories.add("memory")
+        elif tool_name == "learning_action":
+            if call_action in {"save_formal_plan", "specify_task", "next_task"}:
+                categories.add("plan")
+            elif call_action == "record_note":
+                categories.add("memory")
         elif tool_name == "generate_training_card":
             categories.add("training")
 
@@ -6206,8 +6231,8 @@ def build_session_response(deps: CoachSupportDeps,
         reply_content = deps.formal_plan_commit_missing_reply(request.response_language)
         next_step = deps.formal_plan_commit_missing_next_step(request.response_language)
         blocker = localized_text(
-            "The model did not complete the required save_formal_plan tool call, so no formal plan was committed.",
-            "模型没有完成必须的 save_formal_plan 工具调用，因此没有正式计划被提交。",
+            "The model did not complete the required learning_action(action='save_formal_plan') tool call, so no formal plan was committed.",
+            "模型没有完成必须的 learning_action(action='save_formal_plan') 工具调用，因此没有正式计划被提交。",
             request.response_language,
         )
         agent_meta = {
