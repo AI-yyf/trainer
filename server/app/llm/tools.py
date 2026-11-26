@@ -191,8 +191,11 @@ class ToolRegistry:
         explicit_resource_organize: bool = False,
         live_formal_plan_for_task_mint: bool = False,
         orthogonal_only: bool = False,
+        stabilize_orthogonal_schema: bool = False,
     ) -> list[dict[str, Any]]:
         allowed = _tool_name_allowlist(allowed_tool_names)
+        if allowed is not None and len(allowed) == 0:
+            return []
         if orthogonal_only and allowed is None:
             from .tool_primitives import ORTHOGONAL_PRIMITIVE_SET
 
@@ -202,7 +205,7 @@ class ToolRegistry:
         denied.update(PROJECT_WRITE_TOOL_NAMES)
         # Composer chat / ReAct never mints; POST /training/generate-card binds ids.
         denied.add("generate_training_card")
-        _ = explicit_training_card_request
+        _ = (explicit_training_card_request, explicit_resource_import, explicit_resource_organize)
         if formal_plan_mutation is not True:
             denied.add("save_formal_plan")
         if explicit_learning_note_request is not True:
@@ -215,6 +218,29 @@ class ToolRegistry:
         if live_formal_plan_for_task_mint is not True:
             denied.add("specify_task")
             denied.add("next_task")
+
+        if stabilize_orthogonal_schema and allowed:
+            from .tool_primitives import ORTHOGONAL_PRIMITIVE_NAMES, ORTHOGONAL_PRIMITIVE_SET
+
+            if allowed.issubset(ORTHOGONAL_PRIMITIVE_SET) and all(
+                self._tools.get(prim) is not None for prim in ORTHOGONAL_PRIMITIVE_NAMES
+            ):
+                # Emit the fixed 8-primitive schema array in canonical order across all
+                # orthogonal tool-enabled turns & steps so Prefix KV Cache stays byte-invariant,
+                # while ToolRegistry.invoke enforces per-turn allowed/denied gates fail-closed.
+                stable_schemas = [
+                    self._tools[prim].schema_for(protocol)
+                    for prim in ORTHOGONAL_PRIMITIVE_NAMES
+                ]
+                for tool in self._tools.values():
+                    if (
+                        tool.name.startswith("mcp_")
+                        and (allow_coach_only or not tool.coach_only)
+                        and tool.name not in denied
+                    ):
+                        stable_schemas.append(tool.schema_for(protocol))
+                return stable_schemas
+
         return [
             tool.schema_for(protocol)
             for tool in self._tools.values()

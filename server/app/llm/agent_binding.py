@@ -304,6 +304,9 @@ def _format_openai_messages(
     image_parts = _openai_image_parts(attachments) if vision_enabled else []
     for index, msg in enumerate(messages):
         role = str(msg.get("role") or "")
+        if role == "control":
+            formatted.append({"role": "system", "content": str(msg.get("content") or "")})
+            continue
         if role == "tool":
             formatted.append(
                 {
@@ -552,6 +555,11 @@ def _format_openai_responses_input(
     image_urls = _openai_responses_image_urls(attachments) if vision_enabled else []
     for index, msg in enumerate(messages):
         role = str(msg.get("role") or "")
+        if role == "control":
+            text = str(msg.get("content") or "").strip()
+            if text:
+                input_items.append({"role": "developer", "content": text})
+            continue
         if role == "system":
             text = str(msg.get("content") or "").strip()
             if text:
@@ -728,6 +736,11 @@ def _format_gemini_payload(
     image_parts = _gemini_image_parts(attachments) if vision_enabled else []
     for index, msg in enumerate(messages):
         role = str(msg.get("role") or "")
+        if role == "control":
+            text = str(msg.get("content") or "").strip()
+            if text:
+                contents.append({"role": "user", "parts": [{"text": text}]})
+            continue
         if role == "system":
             text = str(msg.get("content") or "").strip()
             if text:
@@ -910,6 +923,11 @@ def _split_anthropic_messages(
     pending_tool_uses: list[dict[str, Any]] = []
     for index, msg in enumerate(messages):
         role = str(msg.get("role") or "")
+        if role == "control":
+            ctrl_text = str(msg.get("content") or "").strip()
+            if ctrl_text:
+                converted.append({"role": "user", "content": [{"type": "text", "text": ctrl_text}]})
+            continue
         if role == "system":
             system_parts.append(str(msg.get("content") or ""))
             continue

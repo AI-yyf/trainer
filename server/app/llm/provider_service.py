@@ -75,6 +75,7 @@ from .coaching_replies import (
     _streamable_visible_prefix,
     _strip_fresh_lane_cross_lane_carryover,
     _strip_internal_coach_meta,
+    preserve_streamed_reply_prefix,
 )
 from .coaching_reply_drafts import (
     _agent_loop_max_steps,
@@ -7327,6 +7328,13 @@ async def _provider_service_coaching_reply_stream(
                 answer_mode=answer_mode,
                 coach_context=coach_context,
             )
+            if yielded_visible and raw_content and self.peek_last_reply_failure() is None:
+                final_content = preserve_streamed_reply_prefix(
+                    raw_content,
+                    final_content,
+                    raw_content,
+                    response_language=response_language,
+                )
             self._record_stream_finalization(raw_content, final_content)
             if not raw_content and final_content:
                 yield final_content
@@ -7518,6 +7526,13 @@ async def _provider_service_coaching_reply_stream(
             answer_mode=answer_mode,
             coach_context=coach_context,
         )
+        if yielded_visible and raw_content and self.peek_last_reply_failure() is None:
+            final_content = preserve_streamed_reply_prefix(
+                raw_content,
+                final_content,
+                raw_content,
+                response_language=response_language,
+            )
         self._record_stream_finalization(raw_content, final_content)
         if not raw_content and final_content:
             yield final_content

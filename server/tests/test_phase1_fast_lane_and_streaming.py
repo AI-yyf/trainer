@@ -190,3 +190,166 @@ def test_idle_open_editor_tab_keeps_minimal_context_tier_for_pure_conceptual_qa(
     assert "server.py" in anchored_req.message
     assert selected_req.current_file.selection_text == "x = 1"
 
+
+@pytest.mark.asyncio
+async def test_wave2_zero_post_stream_mutation_control_role_and_kv_cache_tool_schema_invariance() -> None:
+    """Wave 2 (P0-B):
+    1) Already-streamed SSE prefixes are never retroactively rewritten on stream completion.
+    2) Formal-plan commit repair uses role='control' (never impersonating role='user' or stealing vision attachments).
+    3) Orthogonal tool schemas stay byte-identical across diverse turns & intra-turn steps for Prefix KV Cache.
+    """
+    import json
+
+    from app.llm.agent_binding import (
+        _format_openai_messages,
+        _format_openai_responses_input,
+        _split_anthropic_messages,
+    )
+    from app.llm.agent_loop import AgentProvider, CoachAgentLoop
+    from app.llm.agent_tool_context import _build_agent_tool_context_extra
+    from app.llm.coaching_replies import preserve_streamed_reply_prefix
+    from app.llm.tool_primitives import ORTHOGONAL_PRIMITIVE_NAMES
+    from app.llm.tools import ToolContext, build_default_tool_registry
+
+    # 1) Zero post-stream text mutation:
+    streamed_prefix = "在调试闭环里，你可以把鼠标 hover 到变量上观察当前帧值，并对比 remote host 环境。"
+    retroactive_rewrite = "这一轮先只搭一条可信的 VS Code debug loop。先定一个 breakpoint。"
+    preserved = preserve_streamed_reply_prefix(
+        streamed_prefix,
+        retroactive_rewrite,
+        streamed_prefix + "\nThis follows the teaching lane from debug_loop.\n<system-reminder>internal</system-reminder>",
+        response_language="zh-CN",
+    )
+    assert preserved == streamed_prefix
+
+    # Append-only truthful lecture note path correction when guessed path was already streamed:
+    streamed_with_guess = "讲稿已保存至 `Trainer Library/wrong/guess.md`。"
+    preserved_note = preserve_streamed_reply_prefix(
+        streamed_with_guess,
+        streamed_with_guess,
+        streamed_with_guess,
+        tool_events=[
+            {
+                "type": "tool_result",
+                "name": "library_write",
+                "ok": True,
+                "result": {
+                    "ok": True,
+                    "action": "save_lecture_note",
+                    "saved_path": "Trainer Library/notes/real-note.md",
+                },
+            }
+        ],
+        response_language="zh-CN",
+    )
+    assert preserved_note.startswith(streamed_with_guess)
+    assert "Trainer Library/notes/real-note.md" in preserved_note
+
+    # 2) Non-impersonating role='control' preserves real user vision attachment binding:
+    registry = build_default_tool_registry()
+    seen_histories: list[list[dict[str, Any]]] = []
+    seen_schemas: list[list[dict[str, Any]]] = []
+
+    async def _plan_call(
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        seen_histories.append([dict(m) for m in messages])
+        seen_schemas.append(list(tools or []))
+        if len(seen_histories) == 1:
+            return {"content": "先给出一份草稿，尚未调用保存工具。", "tool_calls": []}
+        return {"content": "需要你先确认每周可投入时长后再正式保存计划。", "tool_calls": []}
+
+    plan_ctx = ToolContext(
+        runtime=None,
+        workspace_id="ws-kv",
+        session_id="sess-kv",
+        response_language="zh-CN",
+        extra={
+            "allow_coach_only_tools": True,
+            "formal_plan_mutation": True,
+            "allowed_tool_names": ["learning_inspect", "learning_action", "web_fetch"],
+        },
+    )
+    loop = CoachAgentLoop(
+        provider=AgentProvider(protocol="openai_chat_completions", call=_plan_call),
+        registry=registry,
+        context=plan_ctx,
+        max_steps=4,
+    )
+    await loop.run([{"role": "user", "content": "请根据这张架构图制定正式计划"}])
+    assert len(seen_histories) == 2
+    injected = seen_histories[1][-1]
+    assert injected["role"] == "control"
+    assert injected.get("_harness_control") is True
+    assert "<system-reminder>" in str(injected["content"])
+
+    # Verify vision attachments stay bound to the real learner message (index 1), not the control message!
+    fake_attachment = [{"kind": "image", "mime_type": "image/png", "data_base64": "iVBORw0KGgo="}]
+    oai_msgs = _format_openai_messages(
+        [{"role": "system", "content": "sys"}, *seen_histories[1]],
+        attachments=fake_attachment,
+        vision_enabled=True,
+    )
+    assert isinstance(oai_msgs[1]["content"], list)  # real user message got the image_url part!
+    assert oai_msgs[-1]["role"] == "system"
+
+    sys_inst, resp_items = _format_openai_responses_input(
+        [{"role": "system", "content": "STATIC_SYS"}, *seen_histories[1]],
+        attachments=fake_attachment,
+        vision_enabled=True,
+    )
+    assert sys_inst == "STATIC_SYS"  # top-level system prefix untouched!
+    assert resp_items[-1]["role"] == "developer"
+
+    anth_sys, anth_msgs = _split_anthropic_messages(
+        [{"role": "system", "content": "STATIC_SYS"}, *seen_histories[1]],
+        attachments=fake_attachment,
+        vision_enabled=True,
+    )
+    assert anth_sys == "STATIC_SYS"  # top-level Anthropic system prompt untouched!
+    assert len(anth_msgs[0]["content"]) == 2  # real user message keeps text + image block!
+
+    # 3) Byte-identical wire tool schemas across project, library, and plan turns for Prefix KV Cache:
+    proj_extra = _build_agent_tool_context_extra(
+        coach_context={"active_view": "coach"},
+        attachment_delivery={},
+        answer_mode="auto",
+        current_file={"path": "app.py", "content": "x = 1"},
+        learner_message="看看 app.py",
+    )
+    lib_extra = _build_agent_tool_context_extra(
+        coach_context={"active_view": "resources", "library_sandbox_work": True},
+        attachment_delivery={},
+        answer_mode="auto",
+        current_file=None,
+        learner_message="整理资料库",
+    )
+    for protocol in (
+        "openai_chat_completions",
+        "openai_responses",
+        "anthropic_messages",
+        "gemini_generate_content",
+    ):
+        proj_loop_schemas = CoachAgentLoop(
+            provider=AgentProvider(protocol=protocol, call=_plan_call),
+            registry=registry,
+            context=ToolContext(runtime=None, workspace_id="w", extra=proj_extra),
+        )._tools_schema()
+        lib_loop_schemas = CoachAgentLoop(
+            provider=AgentProvider(protocol=protocol, call=_plan_call),
+            registry=registry,
+            context=ToolContext(runtime=None, workspace_id="w", extra=lib_extra),
+        )._tools_schema()
+        assert json.dumps(proj_loop_schemas, sort_keys=True) == json.dumps(
+            lib_loop_schemas, sort_keys=True
+        )
+        assert len(proj_loop_schemas) == len(ORTHOGONAL_PRIMITIVE_NAMES) == 8
+
+    # Runtime ToolRegistry.invoke still strictly enforces per-turn allowed_tool_names fail-closed!
+    proj_ctx = ToolContext(runtime=None, workspace_id="w", extra=proj_extra)
+    blocked_exec = await registry.invoke(proj_ctx, "library_exec", {"command": "echo nope"})
+    assert blocked_exec["ok"] is False
+    assert blocked_exec["error"] == "tool_not_available"
+
+

@@ -26,7 +26,7 @@ from ...core.models import (
     UserProfile,
     WorkbenchSnapshot,
 )
-from ...llm.coaching_replies import enforce_truthful_saved_note_path
+from ...llm.coaching_replies import preserve_streamed_reply_prefix
 from ...llm.provider.service_support import has_successful_agent_tool_result
 from ...llm.provider_service import ProviderService, redact_provider_error
 from ...llm.stream_agent_metadata import merge_stream_agent_metadata
@@ -397,8 +397,9 @@ async def _consume_agentic_coach_events(
             return
 
     if st.full_content:
-        st.full_content = coaching_service.finalize_coaching_reply(
-            st.full_content,
+        raw_before_finalize = st.full_content
+        finalized = coaching_service.finalize_coaching_reply(
+            raw_before_finalize,
             profile=profile,
             message=request.message,
             current_file=request.current_file.model_dump() if request.current_file else None,
@@ -407,7 +408,13 @@ async def _consume_agentic_coach_events(
             coach_context=dict(coach_context),
             grounded_completion=has_successful_agent_tool_result(st.agent_tool_events),
         )
-        st.full_content = enforce_truthful_saved_note_path(st.full_content, st.agent_tool_events)
+        st.full_content = preserve_streamed_reply_prefix(
+            st.streamed_reply_content,
+            finalized,
+            raw_before_finalize,
+            tool_events=st.agent_tool_events,
+            response_language=request.response_language,
+        )
 
 
 async def _consume_plain_coach_chunks(
@@ -467,12 +474,13 @@ async def _consume_plain_coach_chunks(
             st.streamed_reply_content += visible_chunk
             yield f"data: {json.dumps({'chunk': visible_chunk})}\n\n"
 
+    raw_before_finalize = st.full_content
     stream_finalization = coaching_service.consume_stream_finalization()
     if stream_finalization is not None:
-        st.full_content = stream_finalization[1]
+        candidate_final = stream_finalization[1]
     elif finalize_even_if_empty or st.full_content:
-        st.full_content = coaching_service.finalize_coaching_reply(
-            st.full_content,
+        candidate_final = coaching_service.finalize_coaching_reply(
+            raw_before_finalize,
             profile=profile,
             message=request.message,
             current_file=request.current_file.model_dump() if request.current_file else None,
@@ -480,6 +488,17 @@ async def _consume_plain_coach_chunks(
             answer_mode=request.answer_mode,
             coach_context=dict(coach_context),
         )
+    else:
+        candidate_final = raw_before_finalize
+    if coaching_service.peek_last_reply_failure() is None:
+        st.full_content = preserve_streamed_reply_prefix(
+            st.streamed_reply_content,
+            candidate_final,
+            raw_before_finalize,
+            response_language=request.response_language,
+        )
+    else:
+        st.full_content = candidate_final
 
 
 def _apply_stream_provider_overrides(
@@ -552,7 +571,7 @@ def _apply_stream_guided_repairs_and_card(
         "agentic": use_agent_stream and not guided_training_prefers_local_reply,
         **st.final_agent_meta,
     }
-    st.full_content, updated_coach_turn, st.final_agent_meta, _ = (
+    candidate_guided_reply, updated_coach_turn, st.final_agent_meta, _ = (
         core.domain.apply_guided_lane_visible_fallback(
             reply=st.full_content,
             scenario=str(coach_turn.get("scenario") or scenario),
@@ -561,6 +580,13 @@ def _apply_stream_guided_repairs_and_card(
             coach_turn=core.domain.coach_turn_mapping(coach_turn),
             agent_meta=visible_agent_meta,
         )
+    )
+    st.full_content = preserve_streamed_reply_prefix(
+        st.streamed_reply_content,
+        candidate_guided_reply,
+        st.full_content,
+        tool_events=st.agent_tool_events,
+        response_language=request.response_language,
     )
     coach_turn = core.domain.extract_coach_turn_payload(updated_coach_turn)
     repaired_summary = st.final_agent_meta.get("summary")
@@ -1001,6 +1027,7 @@ async def _run_non_coach_prepared_turn_stream(
         response_snapshot=response_snapshot,
         agent_meta=st.final_agent_meta or None,
         attachment_delivery=attachment_delivery,
+        streamed_prefix=st.streamed_reply_content if not st.provider_failure_detected else "",
     )
     response_data = core.domain.json_object_payload(built_response)
     response_data["artifacts"] = artifacts
@@ -1419,6 +1446,7 @@ async def _run_coach_lane_stream(
         coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
         agent_meta=st.final_agent_meta or None,
         attachment_delivery=attachment_delivery,
+        streamed_prefix=st.streamed_reply_content if not st.provider_failure_detected else "",
     )
     response_data = core.domain.json_object_payload(built_response)
     if original_intent is not None:

@@ -926,8 +926,10 @@ class CoachAgentLoop:
             else "save_formal_plan"
         )
         history.append({
-            "role": "user",
+            "role": "control",
+            "_harness_control": True,
             "content": (
+                "<system-reminder>\n"
                 "The explicitly requested formal plan save is still pending. A text draft "
                 "does not commit this turn. Re-read the latest learner request; "
                 "its corrections take priority over older plan, memory and verification summaries. "
@@ -936,7 +938,8 @@ class CoachAgentLoop:
                 "Do not invent test counts or claim a save before ok=true and committed=true. "
                 "If a concrete requirement prevents saving, state the exact blocker clearly "
                 "and ask one concise question without claiming the plan was saved. "
-                "Do not retry indefinitely."
+                "Do not retry indefinitely.\n"
+                "</system-reminder>"
             ),
         })
         return True
@@ -955,6 +958,7 @@ class CoachAgentLoop:
             explicit_resource_import=extra.get("explicit_resource_import") is True,
             explicit_resource_organize=extra.get("explicit_resource_organize") is True,
             live_formal_plan_for_task_mint=extra.get("live_formal_plan_for_task_mint") is True,
+            stabilize_orthogonal_schema=extra.get("stabilize_orthogonal_schema", True) is not False,
         )
 
     @classmethod

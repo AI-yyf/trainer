@@ -5844,6 +5844,7 @@ def build_session_response(deps: CoachSupportDeps,
     response_snapshot: WorkbenchSnapshot | None = None,
     agent_meta: dict[str, object] | None = None,
     attachment_delivery: dict[str, object] | None = None,
+    streamed_prefix: str = "",
 ) -> SessionMessageResponse:
     if isinstance(agent_meta, dict):
         agent_meta = {key: value for key, value in agent_meta.items() if value is not None}
@@ -6154,7 +6155,10 @@ def build_session_response(deps: CoachSupportDeps,
                 next_step=agent_meta.get("next_step"),
                 response_language=request.response_language,
             )
-    reply_content, refreshed_coach_turn_data, repaired_agent_meta, _guided_lane_repaired = (
+    from ..llm.coaching_replies import preserve_streamed_reply_prefix
+
+    raw_reply_before_repairs = reply_content
+    candidate_reply, refreshed_coach_turn_data, repaired_agent_meta, _guided_lane_repaired = (
         deps.apply_guided_lane_visible_fallback(
             reply=reply_content,
             scenario=response_scenario,
@@ -6164,9 +6168,15 @@ def build_session_response(deps: CoachSupportDeps,
             agent_meta=agent_meta,
         )
     )
-    reply_content = deps.sanitize_visible_coach_reply_content(
-        reply_content,
+    sanitized_candidate = deps.sanitize_visible_coach_reply_content(
+        candidate_reply,
         request.response_language,
+    )
+    reply_content = preserve_streamed_reply_prefix(
+        streamed_prefix,
+        sanitized_candidate,
+        raw_reply_before_repairs,
+        response_language=request.response_language,
     )
     agent_meta = repaired_agent_meta or None
     # T-0027/T-0035/T-0048 repair — see repair_generic_finalize_next_step.
@@ -6198,7 +6208,12 @@ def build_session_response(deps: CoachSupportDeps,
             coach_context=coach_context,
         )
         if stable_reply is not None:
-            reply_content = stable_reply["reply"]
+            reply_content = preserve_streamed_reply_prefix(
+                streamed_prefix,
+                stable_reply["reply"],
+                reply_content,
+                response_language=request.response_language,
+            )
             stabilized_agent_meta = dict(agent_meta or {})
             stabilized_agent_meta["summary"] = stable_reply["summary"]
             stabilized_agent_meta["next_step"] = stable_reply["next_step"]

@@ -164,13 +164,9 @@ def _strip_leaked_internal_prose_tokens(text: str) -> str:
     return re.sub(r"\s+([,.;:!?，。；：！？])", r"\1", cleaned).strip()
 
 
-def enforce_truthful_saved_note_path(
-    reply: str,
-    tool_events: list[dict[str, Any]] | None,
-) -> str:
-    """Replace any guessed `Trainer Library/*.md` path with the real saved lecture note path."""
-    if not reply or not tool_events:
-        return reply
+def _extract_saved_lecture_note_path(tool_events: list[dict[str, Any]] | None) -> str:
+    if not tool_events:
+        return ""
     saved_path = ""
     for event in tool_events:
         if str(event.get("type") or "") != "tool_result":
@@ -189,9 +185,79 @@ def enforce_truthful_saved_note_path(
         candidate = str(payload.get("saved_path") or "").strip()
         if candidate:
             saved_path = candidate
+    return saved_path
+
+
+def enforce_truthful_saved_note_path(
+    reply: str,
+    tool_events: list[dict[str, Any]] | None,
+) -> str:
+    """Replace any guessed `Trainer Library/*.md` path with the real saved lecture note path."""
+    if not reply or not tool_events:
+        return reply
+    saved_path = _extract_saved_lecture_note_path(tool_events)
     if not saved_path:
         return reply
     return _SAVED_NOTE_PATH_PATTERN.sub(saved_path, reply)
+
+
+def preserve_streamed_reply_prefix(
+    streamed_prefix: str,
+    candidate_final: str,
+    raw_full_content: str = "",
+    *,
+    tool_events: list[dict[str, Any]] | None = None,
+    response_language: str | None = None,
+) -> str:
+    """Guarantee zero post-stream mutation of any prefix already emitted to SSE chunks."""
+    if not streamed_prefix:
+        return enforce_truthful_saved_note_path(candidate_final, tool_events)
+
+    trimmed_prefix = streamed_prefix.rstrip()
+    active_prefix = (
+        streamed_prefix
+        if candidate_final.startswith(streamed_prefix)
+        else (trimmed_prefix if trimmed_prefix and candidate_final.startswith(trimmed_prefix) else "")
+    )
+    if active_prefix:
+        patched = enforce_truthful_saved_note_path(candidate_final, tool_events)
+        if patched.startswith(active_prefix):
+            return patched
+        base = candidate_final
+    else:
+        source_full = raw_full_content if raw_full_content else streamed_prefix
+        if source_full.startswith(streamed_prefix):
+            raw_tail = source_full[len(streamed_prefix) :]
+            raw_tail = re.sub(
+                r"<system-reminder>.*?</system-reminder>",
+                "",
+                raw_tail,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            leading_ws = raw_tail[: len(raw_tail) - len(raw_tail.lstrip())]
+            cleaned_tail = _strip_internal_coach_meta(raw_tail)
+            base = (
+                f"{streamed_prefix}{leading_ws}{cleaned_tail}"
+                if cleaned_tail
+                else streamed_prefix.rstrip()
+            )
+        else:
+            base = streamed_prefix.rstrip() or streamed_prefix
+
+    saved_path = _extract_saved_lecture_note_path(tool_events)
+    if saved_path and saved_path not in base:
+        patched_base = enforce_truthful_saved_note_path(base, tool_events)
+        check_prefix = trimmed_prefix or streamed_prefix
+        if patched_base.startswith(check_prefix):
+            return patched_base
+        lang = str(response_language or "").strip().lower()
+        note_suffix = (
+            f"\n\n（实际保存路径：`{saved_path}`）"
+            if lang.startswith("zh")
+            else f"\n\n(Actual saved path: `{saved_path}`)"
+        )
+        return f"{base.rstrip()}{note_suffix}"
+    return base
 
 
 _STREAM_UNSAFE_LINE_TAIL_PREFIXES = (
