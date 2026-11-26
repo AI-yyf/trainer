@@ -88,10 +88,12 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         except (TypeError, ValueError):
             return None
 
-    def _int(key: str) -> int | None:
-        raw = getattr(usage_obj, key, None)
-        if raw is None and isinstance(usage_obj, dict):
-            raw = usage_obj.get(key)
+    def _int_from(container: object | None, key: str) -> int | None:
+        if container is None:
+            return None
+        raw = getattr(container, key, None)
+        if raw is None and isinstance(container, dict):
+            raw = container.get(key)
         if raw is None or isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
             return None
         try:
@@ -100,11 +102,60 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
         except (TypeError, ValueError):
             return None
 
-    input_tokens = (
-        _int("prompt_tokens")
-        or _int("input_tokens")
-        or _int("promptTokenCount")
+    def _int(key: str) -> int | None:
+        return _int_from(usage_obj, key)
+
+    def _nested_int(containers: tuple[str, ...], keys: tuple[str, ...]) -> int | None:
+        for container_name in containers:
+            sub = getattr(usage_obj, container_name, None)
+            if sub is None and isinstance(usage_obj, dict):
+                sub = usage_obj.get(container_name)
+            if sub is None:
+                continue
+            for key in keys:
+                found = _int_from(sub, key)
+                if found is not None:
+                    return found
+        return None
+
+    anthropic_cache_read = _int("cache_read_input_tokens")
+    anthropic_cache_write = _int("cache_creation_input_tokens")
+    cache_read_tokens = (
+        anthropic_cache_read
+        or _int("cache_read_tokens")
+        or _int("cachedContentTokenCount")
+        or _nested_int(("prompt_tokens_details", "input_tokens_details"), ("cached_tokens", "cache_read_tokens"))
     )
+    cache_write_tokens = (
+        anthropic_cache_write
+        or _int("cache_write_tokens")
+        or _nested_int(("prompt_tokens_details", "input_tokens_details"), ("cache_creation_tokens", "cache_write_tokens"))
+    )
+    reasoning_tokens = (
+        _int("reasoning_tokens")
+        or _int("thoughtsTokenCount")
+        or _nested_int(("completion_tokens_details", "output_tokens_details"), ("reasoning_tokens",))
+    )
+
+    prompt_tokens = _int("prompt_tokens")
+    raw_input_tokens = _int("input_tokens")
+    gemini_prompt_tokens = _int("promptTokenCount")
+    if (
+        prompt_tokens is None
+        and gemini_prompt_tokens is None
+        and raw_input_tokens is not None
+        and (anthropic_cache_read is not None or anthropic_cache_write is not None)
+    ):
+        input_tokens: int | None = (
+            raw_input_tokens + (anthropic_cache_read or 0) + (anthropic_cache_write or 0)
+        )
+    else:
+        input_tokens = (
+            prompt_tokens
+            if prompt_tokens is not None
+            else (raw_input_tokens if raw_input_tokens is not None else gemini_prompt_tokens)
+        )
+
     output_tokens = (
         _int("completion_tokens")
         or _int("output_tokens")
@@ -118,13 +169,9 @@ def extract_provider_usage(response: object | None) -> ProviderUsage | None:
     return ProviderUsage(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        reasoning_tokens=_int("reasoning_tokens") or _int("thoughtsTokenCount"),
-        cache_read_tokens=(
-            _int("cache_read_input_tokens")
-            or _int("cache_read_tokens")
-            or _int("cachedContentTokenCount")
-        ),
-        cache_write_tokens=_int("cache_creation_input_tokens") or _int("cache_write_tokens"),
+        reasoning_tokens=reasoning_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
         total_tokens=total,
         input_cost=_float("input_cost") or _float("prompt_cost"),
         output_cost=_float("output_cost") or _float("completion_cost"),

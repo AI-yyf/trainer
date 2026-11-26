@@ -5616,6 +5616,43 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
         )
         runtime.save_session_state(state.session_id)
 
+    def _summarize_message_tool_parts(metadata: dict[str, object] | None) -> str:
+        if not isinstance(metadata, dict):
+            return ""
+        raw_parts = metadata.get("parts")
+        if not isinstance(raw_parts, list) or not raw_parts:
+            return ""
+        entries: list[str] = []
+        for part in raw_parts:
+            if not isinstance(part, dict) or part.get("type") != "tool_result":
+                continue
+            name = str(part.get("name") or "").strip()
+            if not name:
+                continue
+            result = part.get("result")
+            if isinstance(result, dict):
+                action = str(result.get("action") or "").strip()
+                target = str(
+                    result.get("path")
+                    or result.get("sandbox_path")
+                    or result.get("resource_id")
+                    or result.get("query")
+                    or result.get("url")
+                    or ""
+                ).strip()
+                status = "ok" if result.get("ok") is not False else "err"
+                label = f"{name}({action})" if action else name
+                detail = f"{label}:{target[:48]}[{status}]" if target else f"{label}[{status}]"
+            else:
+                detail = name
+            if detail and detail not in entries:
+                entries.append(detail)
+            if len(entries) >= 4:
+                break
+        if not entries:
+            return ""
+        return f"[Prior turn tool trace: {'; '.join(entries)}]"
+
     def build_conversation_history(
         messages: list[ChatMessage],
         *,
@@ -5645,6 +5682,10 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
                 continue
             if item.role == "assistant" and looks_like_mojibake_text(content):
                 continue
+            if item.role == "assistant":
+                tool_trace = _summarize_message_tool_parts(item.metadata)
+                if tool_trace and tool_trace not in content:
+                    content = f"{content}\n{tool_trace}"
             history.append({"role": item.role, "content": content})
         return history
 

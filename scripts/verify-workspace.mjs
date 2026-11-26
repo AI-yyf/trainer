@@ -79,6 +79,7 @@ export function verifyWorkspace() {
     label: "Server Ruff check",
   });
   runNpm(["run", "verify:server-pyright"], "Server Pyright gate");
+  runNpm(["run", "test:experience-sidecar"], "Real sidecar experience matrix");
   return runServerTests({ serverRoot });
 }
 

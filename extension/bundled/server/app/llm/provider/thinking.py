@@ -24,6 +24,7 @@ This module makes the field *negotiated* instead of assumed:
 from __future__ import annotations
 
 import re
+from threading import Lock
 from typing import Any, Literal
 
 ThinkingPolicy = Literal["disabled", "omit", "enabled"]
@@ -162,8 +163,20 @@ _REQUIRES_THINKING_RE = re.compile(
 # re-probing it on every subsequent request for the rest of the process. Keyed
 # by (base_url, model, protocol) so neither another model nor another protocol
 # on the same multi-protocol gateway is ever cross-poisoned.
+_LEARNED_CACHE_LIMIT = 128
+_LEARNED_STATE_GUARD = Lock()
 _learned_policy: dict[tuple[str, str, str], ThinkingPolicy] = {}
 _learned_param_repairs: dict[tuple[str, str, str], frozenset[str]] = {}
+
+
+def _lru_put(cache: dict[Any, Any], key: Any, value: Any) -> None:
+    cache.pop(key, None)
+    cache[key] = value
+    while len(cache) > _LEARNED_CACHE_LIMIT:
+        oldest = next(iter(cache), None)
+        if oldest is None or oldest == key:
+            break
+        cache.pop(oldest, None)
 
 
 def model_key(provider: Any) -> tuple[str, str, str]:
@@ -174,31 +187,47 @@ def model_key(provider: Any) -> tuple[str, str, str]:
 
 
 def learned_policy(provider: Any) -> ThinkingPolicy | None:
-    return _learned_policy.get(model_key(provider))
+    key = model_key(provider)
+    with _LEARNED_STATE_GUARD:
+        if key not in _learned_policy:
+            return None
+        value = _learned_policy.pop(key)
+        _learned_policy[key] = value
+        return value
 
 
 def remember_policy(provider: Any, policy: ThinkingPolicy) -> None:
-    _learned_policy[model_key(provider)] = policy
+    key = model_key(provider)
+    with _LEARNED_STATE_GUARD:
+        _lru_put(_learned_policy, key, policy)
 
 
 def learned_param_repairs(provider: Any) -> tuple[str, ...]:
     if provider is None:
         return ()
-    return tuple(sorted(_learned_param_repairs.get(model_key(provider), ())))
+    key = model_key(provider)
+    with _LEARNED_STATE_GUARD:
+        existing = _learned_param_repairs.pop(key, None)
+        if existing is None:
+            return ()
+        _learned_param_repairs[key] = existing
+        return tuple(sorted(existing))
 
 
 def remember_param_repairs(provider: Any, repairs: tuple[str, ...]) -> None:
     if provider is None or not repairs:
         return
     key = model_key(provider)
-    existing = _learned_param_repairs.get(key, frozenset())
-    _learned_param_repairs[key] = existing | frozenset(repairs)
+    with _LEARNED_STATE_GUARD:
+        existing = _learned_param_repairs.get(key, frozenset())
+        _lru_put(_learned_param_repairs, key, existing | frozenset(repairs))
 
 
 def reset_learned_policies() -> None:
     """Test hook — clears every learned per-model policy and parameter repair."""
-    _learned_policy.clear()
-    _learned_param_repairs.clear()
+    with _LEARNED_STATE_GUARD:
+        _learned_policy.clear()
+        _learned_param_repairs.clear()
 
 
 # --- classification ----------------------------------------------------------

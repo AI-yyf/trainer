@@ -155,6 +155,40 @@ OPENAI_VISIBLE_REPLY_RETRY_HINT = (
 # ---------------------------------------------------------------------------
 
 
+class _StreamWhitespaceTrimmer:
+    """Strip leading whitespace only prior to the first visible streamed token."""
+
+    __slots__ = ("emitted_visible",)
+
+    def __init__(self) -> None:
+        self.emitted_visible = False
+
+    def push(self, text: str) -> str:
+        if self.emitted_visible:
+            return text
+        trimmed = text.lstrip()
+        if not trimmed:
+            return ""
+        self.emitted_visible = True
+        return trimmed
+
+
+def _usage_payload(raw: Any) -> dict[str, Any] | None:
+    """Extract canonical provider token/cost usage for agent loop accounting."""
+    usage = extract_provider_usage(raw)
+    if usage is None:
+        return None
+    return {
+        "input_tokens": usage.estimated_input_tokens,
+        "output_tokens": usage.output_tokens,
+        "reasoning_tokens": usage.reasoning_tokens,
+        "cache_read_tokens": usage.cache_read_tokens,
+        "cache_write_tokens": usage.cache_write_tokens,
+        "total_tokens": usage.total_tokens,
+        "total_cost": usage.total_cost,
+    }
+
+
 def resolve_agent_protocol(raw: str | None, *, base_url: str | None = None) -> str:
     """Map the configured provider protocol/name to one the agent loop knows.
 
@@ -480,17 +514,9 @@ def _parse_openai_chat_response(response: Any) -> dict[str, Any]:
         if isinstance(raw_finish, str) and raw_finish.strip():
             finish_reason = raw_finish.strip()
     parsed: dict[str, Any] = {"content": content, "tool_calls": tool_calls}
-    usage = extract_provider_usage(response)
-    if usage is not None:
-        parsed["usage"] = {
-            "input_tokens": usage.estimated_input_tokens,
-            "output_tokens": usage.output_tokens,
-            "reasoning_tokens": usage.reasoning_tokens,
-            "cache_read_tokens": usage.cache_read_tokens,
-            "cache_write_tokens": usage.cache_write_tokens,
-            "total_tokens": usage.total_tokens,
-            "total_cost": usage.total_cost,
-        }
+    usage_payload = _usage_payload(response)
+    if usage_payload is not None:
+        parsed["usage"] = usage_payload
     reasoning_content = _get_field(message, "reasoning_content", None)
     if isinstance(reasoning_content, str) and reasoning_content:
         parsed["provider_reasoning"] = {"openai_reasoning_content": reasoning_content}
@@ -671,17 +697,9 @@ def _parse_openai_responses_response(response: Any) -> dict[str, Any]:
         "content": _visible_model_text("".join(text_parts)),
         "tool_calls": tool_calls,
     }
-    usage = extract_provider_usage(response)
-    if usage is not None:
-        parsed["usage"] = {
-            "input_tokens": usage.estimated_input_tokens,
-            "output_tokens": usage.output_tokens,
-            "reasoning_tokens": usage.reasoning_tokens,
-            "cache_read_tokens": usage.cache_read_tokens,
-            "cache_write_tokens": usage.cache_write_tokens,
-            "total_tokens": usage.total_tokens,
-            "total_cost": usage.total_cost,
-        }
+    usage_payload = _usage_payload(response)
+    if usage_payload is not None:
+        parsed["usage"] = usage_payload
     if reasoning_items:
         parsed["provider_reasoning"] = {"responses_reasoning_items": reasoning_items}
     status = str(_get_field(response, "status", "") or "").strip().lower()
@@ -835,17 +853,9 @@ def _parse_gemini_response(payload: dict[str, Any]) -> dict[str, Any]:
         "content": _visible_model_text("".join(text_parts)),
         "tool_calls": tool_calls,
     }
-    usage = extract_provider_usage(payload)
-    if usage is not None:
-        parsed["usage"] = {
-            "input_tokens": usage.estimated_input_tokens,
-            "output_tokens": usage.output_tokens,
-            "reasoning_tokens": usage.reasoning_tokens,
-            "cache_read_tokens": usage.cache_read_tokens,
-            "cache_write_tokens": usage.cache_write_tokens,
-            "total_tokens": usage.total_tokens,
-            "total_cost": usage.total_cost,
-        }
+    usage_payload = _usage_payload(payload)
+    if usage_payload is not None:
+        parsed["usage"] = usage_payload
     if any(thought_signatures):
         parsed["provider_reasoning"] = {"gemini_thought_signatures": thought_signatures}
     if _finish_reason_is_truncated(finish_reason) and not tool_calls:
@@ -1060,17 +1070,9 @@ def _parse_anthropic_response(payload: dict[str, Any]) -> dict[str, Any]:
                 }
             )
     parsed: dict[str, Any] = {"content": "".join(text_parts), "tool_calls": tool_calls}
-    usage = extract_provider_usage(payload)
-    if usage is not None:
-        parsed["usage"] = {
-            "input_tokens": usage.estimated_input_tokens,
-            "output_tokens": usage.output_tokens,
-            "reasoning_tokens": usage.reasoning_tokens,
-            "cache_read_tokens": usage.cache_read_tokens,
-            "cache_write_tokens": usage.cache_write_tokens,
-            "total_tokens": usage.total_tokens,
-            "total_cost": usage.total_cost,
-        }
+    usage_payload = _usage_payload(payload)
+    if usage_payload is not None:
+        parsed["usage"] = usage_payload
     if thinking_blocks:
         parsed["provider_reasoning"] = {"anthropic_blocks": thinking_blocks}
     stop_reason = payload.get("stop_reason")
@@ -1408,21 +1410,10 @@ class ProviderAgentBinding:
 
         text_buffer = ""
         reasoning_filter = ReasoningBlockFilter()
-        emitted_visible = False
+        trimmer = _StreamWhitespaceTrimmer()
         emitted_reasoning = False
         emitted_tool_drafts: set[int] = set()
         reasoning_items: list[dict[str, Any]] = []
-
-        def _normalize_stream_chunk(text: str) -> str:
-            nonlocal emitted_visible
-            if emitted_visible:
-                return text
-            trimmed = text.lstrip()
-            if not trimmed:
-                return ""
-            emitted_visible = True
-            return trimmed
-
         tool_call_state: dict[int, dict[str, Any]] = {}
         try:
             async for event in _iterate_provider_stream_with_cancellation(
@@ -1475,7 +1466,7 @@ class ProviderAgentBinding:
                 if event_type == "response.output_text.delta":
                     piece = str(getattr(event, "delta", "") or "")
                     if piece:
-                        visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
+                        visible_piece = trimmer.push(reasoning_filter.push(piece))
                         if visible_piece:
                             text_buffer += visible_piece
                             yield {"type": "delta", "delta": visible_piece}
@@ -1493,7 +1484,7 @@ class ProviderAgentBinding:
         finally:
             await response_stream_cm.__aexit__(None, None, None)
 
-        tail = _normalize_stream_chunk(reasoning_filter.flush())
+        tail = trimmer.push(reasoning_filter.flush())
         if tail:
             text_buffer += tail
             yield {"type": "delta", "delta": tail}
@@ -1524,6 +1515,9 @@ class ProviderAgentBinding:
                 else ("length" if final_status == "incomplete" else "stop")
             ),
         }
+        usage_payload = _usage_payload(final_response)
+        if usage_payload is not None:
+            final_event["usage"] = usage_payload
         if reasoning_items:
             final_event["provider_reasoning"] = {"responses_reasoning_items": reasoning_items}
         yield final_event
@@ -1590,19 +1584,10 @@ class ProviderAgentBinding:
                     )
                 text_buffer = ""
                 reasoning_filter = ReasoningBlockFilter()
-                emitted_visible = False
+                trimmer = _StreamWhitespaceTrimmer()
                 emitted_reasoning = False
                 finish_reason: str | None = None
-
-                def _normalize_stream_chunk(text: str) -> str:
-                    nonlocal emitted_visible
-                    if emitted_visible:
-                        return text
-                    trimmed = text.lstrip()
-                    if not trimmed:
-                        return ""
-                    emitted_visible = True
-                    return trimmed
+                last_usage_event: dict[str, Any] | None = None
 
                 def _finish_seen() -> bool:
                     return bool(finish_reason)
@@ -1626,6 +1611,8 @@ class ProviderAgentBinding:
                         continue
                     if not isinstance(event, dict):
                         continue
+                    if isinstance(event.get("usageMetadata") or event.get("usage_metadata"), dict):
+                        last_usage_event = event
                     candidates = event.get("candidates") or []
                     for candidate in candidates:
                         if not isinstance(candidate, dict):
@@ -1646,7 +1633,7 @@ class ProviderAgentBinding:
                                 continue
                             piece = part.get("text")
                             if isinstance(piece, str) and piece:
-                                visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
+                                visible_piece = trimmer.push(reasoning_filter.push(piece))
                                 if visible_piece:
                                     text_buffer += visible_piece
                                     yield {"type": "delta", "delta": visible_piece}
@@ -1691,7 +1678,7 @@ class ProviderAgentBinding:
                                     )
                                 elif args is not None:
                                     matched_entry["arguments"] = str(args)
-                tail = _normalize_stream_chunk(reasoning_filter.flush())
+                tail = trimmer.push(reasoning_filter.flush())
                 if tail:
                     text_buffer += tail
                     yield {"type": "delta", "delta": tail}
@@ -1743,6 +1730,9 @@ class ProviderAgentBinding:
                 else ("length" if _finish_reason_is_truncated(finish_reason) else "stop")
             ),
         }
+        usage_payload = _usage_payload(last_usage_event) if last_usage_event is not None else None
+        if usage_payload is not None:
+            final_event["usage"] = usage_payload
         if any(thought_signatures):
             final_event["provider_reasoning"] = {"gemini_thought_signatures": thought_signatures}
         yield final_event
@@ -1980,23 +1970,13 @@ class ProviderAgentBinding:
 
         text_buffer = ""
         reasoning_filter = ReasoningBlockFilter()
-        emitted_visible = False
+        trimmer = _StreamWhitespaceTrimmer()
         emitted_reasoning = False
         emitted_tool_drafts: set[int] = set()
-
-        def _normalize_stream_chunk(text: str) -> str:
-            nonlocal emitted_visible
-            if emitted_visible:
-                return text
-            trimmed = text.lstrip()
-            if not trimmed:
-                return ""
-            emitted_visible = True
-            return trimmed
-
         tool_call_state: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
         reasoning_content_parts: list[str] = []
+        stream_usage_payload: dict[str, Any] | None = None
 
         def _finish_seen() -> bool:
             return finish_reason is not None
@@ -2005,6 +1985,10 @@ class ProviderAgentBinding:
             stream,
             finish_seen=_finish_seen,
         ):
+            if _get_field(chunk, "usage", None) is not None:
+                candidate_usage = _usage_payload(chunk)
+                if candidate_usage is not None:
+                    stream_usage_payload = candidate_usage
             choice = chunk.choices[0] if getattr(chunk, "choices", None) else None
             if choice is None:
                 continue
@@ -2027,11 +2011,11 @@ class ProviderAgentBinding:
                     yield {"type": "provider_activity", "phase": "model_reasoning"}
             piece = getattr(delta, "content", None)
             if isinstance(piece, str) and piece:
-                visible_piece = _normalize_stream_chunk(reasoning_filter.push(piece))
+                visible_piece = trimmer.push(reasoning_filter.push(piece))
                 if visible_piece:
                     text_buffer += visible_piece
                     yield {"type": "delta", "delta": visible_piece}
-                elif not emitted_reasoning and ("<think" in piece.lower() or not emitted_visible):
+                elif not emitted_reasoning and ("<think" in piece.lower() or not trimmer.emitted_visible):
                     emitted_reasoning = True
                     if self._emit_activity:
                         yield {"type": "provider_activity", "phase": "model_reasoning"}
@@ -2056,7 +2040,7 @@ class ProviderAgentBinding:
                 if getattr(fn, "arguments", None):
                     slot["arguments"] += str(fn.arguments)
 
-        tail = _normalize_stream_chunk(reasoning_filter.flush())
+        tail = trimmer.push(reasoning_filter.flush())
         if tail:
             text_buffer += tail
             yield {"type": "delta", "delta": tail}
@@ -2070,7 +2054,7 @@ class ProviderAgentBinding:
             json_fallback = extract_non_sse_json_stream_payload(stream)
             if json_fallback is not None:
                 parsed_json = _parse_openai_chat_response(json_fallback)
-                json_text = _normalize_stream_chunk(str(parsed_json.get("content") or ""))
+                json_text = trimmer.push(str(parsed_json.get("content") or ""))
                 json_tools = list(parsed_json.get("tool_calls") or [])
                 if json_text.strip() or json_tools:
                     if json_text:
@@ -2082,6 +2066,11 @@ class ProviderAgentBinding:
                         "stop_reason": str(
                             parsed_json.get("stop_reason")
                             or ("tool_calls" if json_tools else "stop")
+                        ),
+                        **(
+                            {"usage": parsed_json["usage"]}
+                            if isinstance(parsed_json.get("usage"), dict)
+                            else {}
                         ),
                     }
                     return
@@ -2102,6 +2091,11 @@ class ProviderAgentBinding:
                     "content": retry_text,
                     "tool_calls": retry_tool_calls,
                     "stop_reason": "tool_calls" if retry_tool_calls else "stop",
+                    **(
+                        {"usage": retry_result["usage"]}
+                        if isinstance(retry_result.get("usage"), dict)
+                        else {}
+                    ),
                 }
                 return
         if not text_buffer.strip() and (not tool_calls or _finish_reason_is_truncated(finish_reason)):
@@ -2126,6 +2120,11 @@ class ProviderAgentBinding:
                         "tool_calls"
                         if budget_tool_calls
                         else str(budget_result.get("stop_reason") or "stop")
+                    ),
+                    **(
+                        {"usage": budget_result["usage"]}
+                        if isinstance(budget_result.get("usage"), dict)
+                        else {}
                     ),
                     **(
                         {"provider_reasoning": budget_result["provider_reasoning"]}
@@ -2168,6 +2167,8 @@ class ProviderAgentBinding:
                 else ("length" if _finish_reason_is_truncated(finish_reason) else "stop")
             ),
         }
+        if stream_usage_payload is not None:
+            final_event["usage"] = stream_usage_payload
         if reasoning_content_parts:
             final_event["provider_reasoning"] = {
                 "openai_reasoning_content": "".join(reasoning_content_parts)
@@ -2285,21 +2286,11 @@ class ProviderAgentBinding:
                     )
                 text_buffer = ""
                 reasoning_filter = ReasoningBlockFilter()
-                emitted_visible = False
+                trimmer = _StreamWhitespaceTrimmer()
                 emitted_reasoning = False
-
-                def _normalize_stream_chunk(text: str) -> str:
-                    nonlocal emitted_visible
-                    if emitted_visible:
-                        return text
-                    trimmed = text.lstrip()
-                    if not trimmed:
-                        return ""
-                    emitted_visible = True
-                    return trimmed
-
                 tool_block_states: dict[int, dict[str, Any]] = {}
                 thinking_block_states: dict[int, dict[str, Any]] = {}
+                anthropic_usage_raw: dict[str, Any] = {}
                 stop_reason: str | None = None
 
                 def _stop_seen() -> bool:
@@ -2321,7 +2312,12 @@ class ProviderAgentBinding:
                     except json.JSONDecodeError:
                         continue
                     event_type = str(event.get("type") or "")
-                    if event_type == "content_block_start":
+                    if event_type == "message_start":
+                        msg_obj = event.get("message")
+                        msg_usage = msg_obj.get("usage") if isinstance(msg_obj, dict) else None
+                        if isinstance(msg_usage, dict):
+                            anthropic_usage_raw.update(msg_usage)
+                    elif event_type == "content_block_start":
                         block = event.get("content_block") or {}
                         block_type = str(block.get("type") or "")
                         block_index = int(event.get("index") or 0)
@@ -2382,7 +2378,7 @@ class ProviderAgentBinding:
                         elif delta_kind == "text_delta":
                             piece = str(delta.get("text") or "")
                             if piece:
-                                visible_piece = _normalize_stream_chunk(
+                                visible_piece = trimmer.push(
                                     reasoning_filter.push(piece)
                                 )
                                 if visible_piece:
@@ -2399,9 +2395,12 @@ class ProviderAgentBinding:
                         candidate_stop_reason = delta.get("stop_reason")
                         if isinstance(candidate_stop_reason, str) and candidate_stop_reason.strip():
                             stop_reason = candidate_stop_reason
+                        delta_usage = event.get("usage")
+                        if isinstance(delta_usage, dict):
+                            anthropic_usage_raw.update(delta_usage)
                     elif event_type == "message_stop":
                         break
-                tail = _normalize_stream_chunk(reasoning_filter.flush())
+                tail = trimmer.push(reasoning_filter.flush())
                 if tail:
                     text_buffer += tail
                     yield {"type": "delta", "delta": tail}
@@ -2426,6 +2425,11 @@ class ProviderAgentBinding:
                     "tool_calls": list(retry_result.get("tool_calls") or []),
                     "stop_reason": (
                         "tool_calls" if list(retry_result.get("tool_calls") or []) else "stop"
+                    ),
+                    **(
+                        {"usage": retry_result["usage"]}
+                        if isinstance(retry_result.get("usage"), dict)
+                        else {}
                     ),
                 }
                 return
@@ -2474,6 +2478,9 @@ class ProviderAgentBinding:
                 else ("length" if _finish_reason_is_truncated(stop_reason) else "stop")
             ),
         }
+        usage_payload = _usage_payload({"usage": anthropic_usage_raw}) if anthropic_usage_raw else None
+        if usage_payload is not None:
+            final_event["usage"] = usage_payload
         if anthropic_thinking_blocks:
             final_event["provider_reasoning"] = {"anthropic_blocks": anthropic_thinking_blocks}
         yield final_event

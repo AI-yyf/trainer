@@ -883,4 +883,259 @@ async def test_schedule_background_tail_runs_sync_fn_off_event_loop_thread() -> 
     assert seen_tids[0] != main_tid
 
 
+@pytest.mark.asyncio
+async def test_four_protocol_streaming_usage_feeds_agent_loop() -> None:
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from app.llm.agent_binding import ProviderAgentBinding
+
+    class _AsyncList:
+        def __init__(self, items: list[Any]) -> None:
+            self._items = items
+
+        def __aiter__(self):
+            async def _gen():
+                for item in self._items:
+                    yield item
+
+            return _gen()
+
+    # 1) OpenAI Chat Completions stream with trailing choices=[] usage chunk
+    chat_svc = MagicMock()
+    chat_svc._config = SimpleNamespace(
+        base_url="https://api.openai.com/v1",
+        model="gpt-4o-mini",
+        protocol="openai_chat_completions",
+        capabilities=SimpleNamespace(vision=False),
+        request_defaults={},
+    )
+    chat_svc._api_key = "sk-test"
+    chat_svc._resolve_model.return_value = "gpt-4o-mini"
+    chat_svc._model_candidates.return_value = ["gpt-4o-mini"]
+    chat_svc._apply_request_defaults.side_effect = lambda d: d
+    chat_svc._create_chat_completion_negotiated_async = AsyncMock(
+        return_value=_AsyncList([
+            SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content="  Streamed ok.", tool_calls=None), finish_reason=None)],
+                usage=None,
+            ),
+            SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content=None, tool_calls=None), finish_reason="stop")],
+                usage=None,
+            ),
+            SimpleNamespace(
+                choices=[],
+                usage=SimpleNamespace(
+                    prompt_tokens=140,
+                    completion_tokens=19,
+                    total_tokens=159,
+                    prompt_tokens_details=SimpleNamespace(cached_tokens=80),
+                    completion_tokens_details=SimpleNamespace(reasoning_tokens=5),
+                ),
+            ),
+        ])
+    )
+    chat_provider = ProviderAgentBinding(
+        provider_service=chat_svc, protocol="openai_chat_completions"
+    ).build_agent_provider()
+    ctx = ToolContext(runtime=SimpleNamespace(), workspace_id="ws-u", extra={})
+    loop = CoachAgentLoop(provider=chat_provider, registry=ToolRegistry(), context=ctx)
+    loop_events = [ev async for ev in loop.run_stream([_user("hello")])]
+    assert any(ev.get("type") == "text" and ev.get("delta") == "Streamed ok." for ev in loop_events)
+    assert ctx.extra["_last_provider_usage"]["input_tokens"] == 140
+    assert ctx.extra["_last_provider_usage"]["cache_read_tokens"] == 80
+    assert ctx.extra["_last_provider_usage"]["output_tokens"] == 19
+    assert ctx.extra["_last_provider_usage"]["reasoning_tokens"] == 5
+
+    # 2) Anthropic Messages stream (message_start + message_delta usage merge)
+    class _FakeSSEResp:
+        def __init__(self, lines: list[str]) -> None:
+            self.status_code = 200
+            self._lines = lines
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a: Any):
+            return False
+
+        async def aiter_lines(self):
+            for ln in self._lines:
+                yield ln
+
+    class _FakeHTTP:
+        def __init__(self, lines: list[str]) -> None:
+            self._lines = lines
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a: Any):
+            return False
+
+        def stream(self, *_a: Any, **_kw: Any):
+            return _FakeSSEResp(self._lines)
+
+    anth_svc = MagicMock()
+    anth_svc._config = SimpleNamespace(
+        base_url="https://api.anthropic.com",
+        model="claude-sonnet-4-20250514",
+        protocol="anthropic_messages",
+        capabilities=SimpleNamespace(vision=False),
+        request_defaults={},
+    )
+    anth_svc._api_key = "sk-ant"
+    anth_binding = ProviderAgentBinding(provider_service=anth_svc, protocol="anthropic_messages")
+    anth_lines = [
+        "data: " + json.dumps({
+            "type": "message_start",
+            "message": {"usage": {"input_tokens": 60, "cache_read_input_tokens": 30, "cache_creation_input_tokens": 10, "output_tokens": 1}},
+        }),
+        "data: " + json.dumps({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Claude ok."}}),
+        "data: " + json.dumps({"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 25}}),
+        "data: " + json.dumps({"type": "message_stop"}),
+    ]
+    with patch.object(anth_binding, "_async_http_client", return_value=_FakeHTTP(anth_lines)):
+        anth_events = [ev async for ev in anth_binding.build_agent_provider().call_stream([_user("hi")], None)]
+    assert anth_events[-1]["usage"]["input_tokens"] == 100
+    assert anth_events[-1]["usage"]["output_tokens"] == 25
+    assert anth_events[-1]["usage"]["cache_read_tokens"] == 30
+    assert anth_events[-1]["usage"]["cache_write_tokens"] == 10
+
+    # 3) Gemini GenerateContent stream usageMetadata
+    gem_svc = MagicMock()
+    gem_svc._config = SimpleNamespace(
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+        model="gemini-2.5-flash",
+        protocol="gemini_generate_content",
+        capabilities=SimpleNamespace(vision=False),
+        request_defaults={},
+    )
+    gem_svc._api_key = "gem-key"
+    gem_binding = ProviderAgentBinding(provider_service=gem_svc, protocol="gemini_generate_content")
+    gem_lines = [
+        "data: " + json.dumps({
+            "candidates": [{"content": {"parts": [{"text": "Gemini ok."}]}, "finishReason": "STOP"}],
+            "usageMetadata": {
+                "promptTokenCount": 180,
+                "candidatesTokenCount": 16,
+                "thoughtsTokenCount": 7,
+                "cachedContentTokenCount": 90,
+                "totalTokenCount": 203,
+            },
+        }),
+    ]
+    with patch.object(gem_binding, "_async_http_client", return_value=_FakeHTTP(gem_lines)):
+        gem_events = [ev async for ev in gem_binding.build_agent_provider().call_stream([_user("hi")], None)]
+    assert gem_events[-1]["usage"]["input_tokens"] == 180
+    assert gem_events[-1]["usage"]["output_tokens"] == 16
+    assert gem_events[-1]["usage"]["reasoning_tokens"] == 7
+    assert gem_events[-1]["usage"]["cache_read_tokens"] == 90
+
+
+def test_bounded_session_dict_evicts_cold_and_protects_locked() -> None:
+    from app.api.runtime import BoundedSessionDict, SessionState
+    from app.core.models import WorkbenchSnapshot
+
+    evicted: list[str] = []
+    locked_ids = {"s-1"}
+
+    store = BoundedSessionDict(
+        max_entries=4,
+        on_evict=lambda st: evicted.append(st.session_id),
+        is_locked=lambda sid: sid in locked_ids,
+    )
+    for idx in range(6):
+        sid = f"s-{idx}"
+        store[sid] = SessionState(
+            session_id=sid,
+            workspace_id="ws",
+            workspace_name="WS",
+            snapshot=WorkbenchSnapshot(contextId="ws"),
+        )
+        if sid == "s-2":
+            _ = store.get("s-0")  # touch s-0 so s-2 becomes older than s-0!
+
+    # s-1 is locked so never evicted; s-0 was touched after s-2 so s-2 and s-0/s-3 get evicted in LRU order
+    assert len(store) == 4
+    assert "s-1" in dict.keys(store)
+    assert "s-2" in evicted
+
+
+def test_thinking_learned_state_thread_safe_lru_bound() -> None:
+    from types import SimpleNamespace
+
+    from app.llm.provider.thinking import (
+        _LEARNED_CACHE_LIMIT,
+        learned_param_repairs,
+        learned_policy,
+        remember_param_repairs,
+        remember_policy,
+        reset_learned_policies,
+    )
+
+    reset_learned_policies()
+    try:
+        for i in range(_LEARNED_CACHE_LIMIT + 10):
+            p = SimpleNamespace(base_url="https://gw.example.com", model=f"m-{i}", protocol="openai")
+            remember_policy(p, "enabled")
+            remember_param_repairs(p, ("temperature",))
+            if i == 5:
+                # Touch m-0 so it stays hot
+                p0 = SimpleNamespace(base_url="https://gw.example.com", model="m-0", protocol="openai")
+                assert learned_policy(p0) == "enabled"
+        oldest_untouched = SimpleNamespace(base_url="https://gw.example.com", model="m-1", protocol="openai")
+        newest = SimpleNamespace(
+            base_url="https://gw.example.com",
+            model=f"m-{_LEARNED_CACHE_LIMIT + 9}",
+            protocol="openai",
+        )
+        assert learned_policy(oldest_untouched) is None
+        assert learned_param_repairs(oldest_untouched) == ()
+        assert learned_policy(newest) == "enabled"
+        assert learned_param_repairs(newest) == ("temperature",)
+    finally:
+        reset_learned_policies()
+
+
+def test_dead_legacy_tool_handlers_retired_from_tools_module() -> None:
+    import app.llm.tools as tools_mod
+
+    assert not hasattr(tools_mod, "_handle_generate_training_card")
+    assert not hasattr(tools_mod, "_handle_coach_finalize")
+
+
+def test_general_coach_followup_retains_history_and_prior_tool_trace() -> None:
+    from app.core.models import UserProfile
+    from app.llm.prompts import build_coaching_messages
+
+    profile = UserProfile(long_term_goal="Master distributed systems")
+    history = [
+        {"role": "user", "content": "帮我看看项目里的 README.md 入口"},
+        {
+            "role": "assistant",
+            "content": "我已经读取了 README.md。\n[Prior turn tool trace: project_read(read):README.md[ok]]",
+        },
+    ]
+    built = build_coaching_messages(
+        profile,
+        "确认一下刚才读了哪个文件？",
+        response_language="zh-CN",
+        coach_context={
+            "scenario": "general",
+            "history_mode": "fresh_lane",
+            "active_view": "coach",
+        },
+        history=history,
+    )
+    assert any(
+        "[Prior turn tool trace: project_read(read):README.md[ok]]" in str(m.get("content") or "")
+        for m in built
+    )
+
+
+
+
 

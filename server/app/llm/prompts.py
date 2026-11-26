@@ -1710,8 +1710,25 @@ def build_coaching_messages(
         agent_loop_enabled=agent_loop_enabled,
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-    history_mode = str(extract_coaching_context(message, current_file, coach_context).get("history_mode") or "").strip().lower()
-    suppress_history = history_mode == "fresh_lane"
+    extracted_ctx = extract_coaching_context(message, current_file, coach_context)
+    history_mode = str(extracted_ctx.get("history_mode") or "").strip().lower()
+    explicit_turn_scenario = str((coach_context or {}).get("scenario") or "").strip().lower()
+    inferred_turn_scenario = infer_coaching_scenario(
+        message or "",
+        current_file,
+        {"history_mode": "fresh_lane"},
+        default="general",
+    )
+    resolved_scenario = (
+        explicit_turn_scenario
+        if explicit_turn_scenario not in {"", "general"}
+        else inferred_turn_scenario
+    )
+    active_view_name = str((coach_context or {}).get("active_view") or "").strip().lower()
+    suppress_history = history_mode == "fresh_lane" and (
+        resolved_scenario not in {"", "general"}
+        or active_view_name in {"plan", "resources", "training", "settings"}
+    )
 
     if history and not suppress_history:
         # Pi-style transcript preservation: keep user/assistant text turns AND

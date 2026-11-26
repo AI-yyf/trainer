@@ -333,12 +333,71 @@ def _capability_cache_key_matches_transport(
     return True
 
 
+MAX_RESIDENT_SESSIONS = 64
+
+
 @dataclass
 class SessionState:
     session_id: str
     workspace_id: str
     workspace_name: str
     snapshot: WorkbenchSnapshot
+
+
+class BoundedSessionDict(dict[str, SessionState]):
+    """Touch-on-hit LRU resident session map that persists cold victims on eviction."""
+
+    def __init__(
+        self,
+        initial: dict[str, SessionState] | None = None,
+        *,
+        max_entries: int = MAX_RESIDENT_SESSIONS,
+        on_evict: Callable[[SessionState], None] | None = None,
+        is_locked: Callable[[str], bool] | None = None,
+    ) -> None:
+        super().__init__()
+        self.max_entries = max(4, int(max_entries))
+        self._on_evict = on_evict
+        self._is_locked = is_locked
+        if initial:
+            for key, value in initial.items():
+                super().__setitem__(key, value)
+            self._evict_overflow(protected_key=None)
+
+    def _touch(self, key: str) -> SessionState:
+        value = super().pop(key)
+        super().__setitem__(key, value)
+        return value
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if super().__contains__(key):
+            return self._touch(key)
+        return default
+
+    def __getitem__(self, key: str) -> SessionState:
+        if super().__contains__(key):
+            return self._touch(key)
+        return super().__getitem__(key)
+
+    def __setitem__(self, key: str, value: SessionState) -> None:
+        if super().__contains__(key):
+            super().pop(key)
+        super().__setitem__(key, value)
+        self._evict_overflow(protected_key=key)
+
+    def _evict_overflow(self, *, protected_key: str | None) -> None:
+        if len(self) <= self.max_entries:
+            return
+        for candidate_key in list(super().keys()):
+            if len(self) <= self.max_entries:
+                break
+            if candidate_key == protected_key:
+                continue
+            if self._is_locked is not None and self._is_locked(candidate_key):
+                continue
+            victim = super().pop(candidate_key, None)
+            if victim is not None and self._on_evict is not None:
+                self._on_evict(victim)
 
 
 @dataclass
@@ -493,7 +552,25 @@ class TrainerRuntime:
             self.steer_queues[key] = []
         return [str(item).strip() for item in queued if str(item).strip()]
 
+    def _is_session_locked(self, session_id: str) -> bool:
+        with self._session_locks_guard:
+            lock = self._session_locks.get(session_id)
+        return bool(lock is not None and lock.locked())
+
+    def _persist_evicted_session(self, state: SessionState) -> None:
+        try:
+            self._persist_session(state)
+        except Exception:
+            logger.warning("[runtime] cold session persist on eviction failed", exc_info=True)
+
     def __post_init__(self) -> None:
+        if not isinstance(self.sessions, BoundedSessionDict):
+            self.sessions = BoundedSessionDict(
+                self.sessions,
+                max_entries=MAX_RESIDENT_SESSIONS,
+                on_evict=self._persist_evicted_session,
+                is_locked=self._is_session_locked,
+            )
         if self.goal_service is None:
             self.goal_service = GoalService(self.repository, event_ledger=self.event_ledger)
         if self.learner_state_service is None:
@@ -617,7 +694,7 @@ class TrainerRuntime:
         return self.sessions[latest_session_id]
 
     def save_session_state(self, session_id: str) -> None:
-        state = self.sessions.get(session_id)
+        state = dict.get(self.sessions, session_id)
         if state is None:
             return
         self._persist_session(state)

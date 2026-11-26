@@ -83,6 +83,9 @@ jobs:
             grep -aB1 -A14 "^✖" extension-test.log | head -160
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Real sidecar experience matrix
+        run: npm run test:experience-sidecar
+
       - name: Server tests (full)
         working-directory: server
         run: |
