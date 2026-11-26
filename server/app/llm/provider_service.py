@@ -5776,7 +5776,13 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         except Exception:
             logger.warning("skill_guidance_selection_failed", exc_info=True)
         if skill_guidance:
-            messages = [{"role": "system", "content": skill_guidance}, *messages]
+            if messages and messages[0].get("role") == "system":
+                messages = [
+                    {**messages[0], "content": f"{messages[0].get('content', '')}\n\n{skill_guidance}"},
+                    *messages[1:],
+                ]
+            else:
+                messages = [{"role": "system", "content": skill_guidance}, *messages]
         registry = build_default_tool_registry(
             extra_tools=await build_coach_mcp_tools(runtime_obj, workspace_id)
         )
@@ -6406,7 +6412,13 @@ class ProviderService(LanguageProbeMixin, ErrorClassificationMixin, ContextBudge
         except Exception:
             logger.warning("skill_guidance_selection_failed", exc_info=True)
         if skill_guidance:
-            messages = [{"role": "system", "content": skill_guidance}, *messages]
+            if messages and messages[0].get("role") == "system":
+                messages = [
+                    {**messages[0], "content": f"{messages[0].get('content', '')}\n\n{skill_guidance}"},
+                    *messages[1:],
+                ]
+            else:
+                messages = [{"role": "system", "content": skill_guidance}, *messages]
         registry = build_default_tool_registry(
             extra_tools=await build_coach_mcp_tools(runtime_obj, workspace_id)
         )

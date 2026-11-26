@@ -52,11 +52,12 @@ from .harness import (
     append_steering_messages,
     compact_history,
     drain_steering_messages,
+    format_tool_result_for_llm,
     is_prompt_too_long_error,
     is_truncated_stop,
     prepare_next_turn,
     prune_older_tool_results,
-    tool_output_limit,
+    split_tool_result_channels,
     tools_are_read_only,
     truncated_tool_failure,
 )
@@ -1071,19 +1072,20 @@ class CoachAgentLoop:
                 *[self._invoke_one_tool(call, cancel_event) for call in tool_calls]
             )
             for tool_id, tool_name, arguments, tool_result in invoked:
+                llm_content, ui_details = split_tool_result_channels(tool_name, tool_result)
                 events.append(
                     {
                         "type": "tool_result",
                         "id": tool_id,
                         "name": tool_name,
-                        "ok": bool(tool_result.get("ok")),
-                        "result": tool_result,
+                        "ok": bool(ui_details.get("ok")) if isinstance(ui_details, dict) else True,
+                        "result": ui_details,
                     }
                 )
                 step.tool_results.append(
-                    {"id": tool_id, "name": tool_name, "arguments": arguments, "result": tool_result}
+                    {"id": tool_id, "name": tool_name, "arguments": arguments, "result": ui_details}
                 )
-                history.append(_tool_message(tool_id, tool_name, tool_result))
+                history.append(_tool_message(tool_id, tool_name, llm_content))
             return None, None, events
 
         finalize_payload: dict[str, Any] | None = None
@@ -1103,21 +1105,22 @@ class CoachAgentLoop:
             _tool_id, _tool_name, _arguments, tool_result = await self._invoke_one_tool(
                 call, cancel_event
             )
+            llm_content, ui_details = split_tool_result_channels(tool_name, tool_result)
             events.append(
                 {
                     "type": "tool_result",
                     "id": tool_id,
                     "name": tool_name,
-                    "ok": bool(tool_result.get("ok")),
-                    "result": tool_result,
+                    "ok": bool(ui_details.get("ok")) if isinstance(ui_details, dict) else True,
+                    "result": ui_details,
                 }
             )
             step.tool_results.append(
-                {"id": tool_id, "name": tool_name, "arguments": arguments, "result": tool_result}
+                {"id": tool_id, "name": tool_name, "arguments": arguments, "result": ui_details}
             )
-            history.append(_tool_message(tool_id, tool_name, tool_result))
-            if tool_name == "coach_finalize" and tool_result.get("final"):
-                finalize_payload = tool_result
+            history.append(_tool_message(tool_id, tool_name, llm_content))
+            if tool_name == "coach_finalize" and isinstance(ui_details, dict) and ui_details.get("final"):
+                finalize_payload = ui_details
                 finalize_arguments = arguments
                 # Maintain strict 1:1 tool_call -> tool_result pairing in
                 # history in case the loop continues (e.g., pending plan save).
@@ -1166,21 +1169,11 @@ def _truncate_tool_payload(content_text: str, *, limit: int) -> str:
 
 
 def _tool_message(call_id: str, name: str, result: Any) -> dict[str, Any]:
-    if not isinstance(result, str):
-        try:
-            content_text = json.dumps(result, ensure_ascii=False)
-        except (TypeError, ValueError):
-            content_text = str(result)
-    else:
-        content_text = result
     return {
         "role": "tool",
         "tool_call_id": call_id,
         "name": name,
-        "content": _truncate_tool_payload(
-            content_text,
-            limit=tool_output_limit(name),
-        ),
+        "content": format_tool_result_for_llm(name, result),
     }
 
 

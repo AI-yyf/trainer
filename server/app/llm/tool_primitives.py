@@ -1379,53 +1379,35 @@ async def _handle_learning_action(context: ToolContext, args: dict[str, Any]) ->
 
 
 def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
-    """Return the 8 dual-domain orthogonal ToolDefinition primitives."""
+    """Return the 8 dual-domain orthogonal ToolDefinition primitives (slimmed Pi-style schemas)."""
     return [
         ToolDefinition(
             name="project_read",
             description=(
-                "Read-only inspection of the learner's project codebase (<ProjectRoot>). "
-                "Never modifies project code. Use action='inspect_current' for the active editor file, "
-                "'list' to browse project files, 'read' to read a source file, 'modules' for repo overview, "
-                "'symbol' to locate a function/class, or 'impact' for git diff caller impact."
+                "Read-only inspection of <ProjectRoot> (never edits code): "
+                "'inspect_current', 'list', 'read', 'modules', 'symbol', or 'impact'."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "action": _enum(
-                        "Read-only project inspection action.",
+                        "Action.",
                         ["inspect_current", "list", "read", "modules", "symbol", "impact"],
                     ),
-                    "path": _string(
-                        "Relative file or directory path inside <ProjectRoot> (for read/list)."
-                    ),
-                    "directory": _string(
-                        "Optional directory path inside <ProjectRoot> (for action='list')."
-                    ),
-                    "pattern": _string("Optional glob pattern (for action='list')."),
-                    "name": _string("Symbol name to locate (for action='symbol')."),
-                    "symbol": _string("Alias for symbol name (for action='symbol')."),
-                    "file": _string("Optional path substring filter (for action='symbol')."),
-                    "query": _string("Optional filename or substring filter (for action='list')."),
-                    "start_line": {
-                        "type": "integer",
-                        "description": "Optional 1-based start line (for read).",
-                    },
-                    "end_line": {
-                        "type": "integer",
-                        "description": "Optional 1-based end line (for read).",
-                    },
-                    "max_chars": {
-                        "type": "integer",
-                        "description": "Optional character cap (for read).",
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Optional item cap (for list/modules).",
-                    },
-                    "since": _string("Optional git ref for impact diff."),
-                    "depth": {"type": "integer", "description": "Caller depth 1-3 for impact."},
-                    "resource_id": _string("Optional imported-project resource id."),
+                    "path": _string("Relative path in <ProjectRoot> (read/list)."),
+                    "directory": _string("Directory in <ProjectRoot> (list)."),
+                    "pattern": _string("Glob filter (list)."),
+                    "name": _string("Symbol name (symbol)."),
+                    "symbol": _string("Alias of name (symbol)."),
+                    "file": _string("Path filter (symbol)."),
+                    "query": _string("Substring filter (list)."),
+                    "start_line": {"type": "integer", "description": "1-based start line."},
+                    "end_line": {"type": "integer", "description": "1-based end line."},
+                    "max_chars": {"type": "integer", "description": "Char cap."},
+                    "limit": {"type": "integer", "description": "Item cap."},
+                    "since": _string("Git ref (impact)."),
+                    "depth": {"type": "integer", "description": "Caller depth 1-3 (impact)."},
+                    "resource_id": _string("Imported-project resource id."),
                 },
                 "required": ["action"],
             },
@@ -1434,36 +1416,31 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
         ToolDefinition(
             name="project_verify",
             description=(
-                "Read-only verification of the learner's work in <ProjectRoot>: run editor/project "
-                "diagnostics, verify practice code against checks, run host-gated rubric review, "
-                "or compare an imitation submission with an anchor passage."
+                "Read-only verification in <ProjectRoot>: 'diagnostics', 'verify_practice', "
+                "'rubric_review', or 'compare_anchor'."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "action": _enum(
-                        "Verification action.",
+                        "Action.",
                         ["diagnostics", "verify_practice", "rubric_review", "compare_anchor"],
                     ),
-                    "path": _string(
-                        "Optional relative file path for diagnostics/practice verification."
-                    ),
+                    "path": _string("Relative file path."),
                     "acceptance_criteria": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Observable acceptance criteria (for verify_practice).",
+                        "description": "Checks for verify_practice.",
                     },
                     "expected_symbols": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Expected function/class/variable names (for verify_practice).",
+                        "description": "Expected symbols (verify_practice).",
                     },
-                    "submission": _string(
-                        "Learner text submission (for compare_anchor / rubric_review)."
-                    ),
-                    "anchor_text": _string("Optional inline anchor passage (for compare_anchor)."),
-                    "resource_id": _string("Optional library resource id (for compare_anchor)."),
-                    "anchor_id": _string("Optional paragraph anchor id (for compare_anchor)."),
+                    "submission": _string("Learner submission (compare_anchor/rubric_review)."),
+                    "anchor_text": _string("Inline anchor text (compare_anchor)."),
+                    "resource_id": _string("Library resource id (compare_anchor)."),
+                    "anchor_id": _string("Anchor id (compare_anchor)."),
                 },
                 "required": ["action"],
             },
@@ -1472,15 +1449,14 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
         ToolDefinition(
             name="library_read",
             description=(
-                "Read and search the learner's managed resource library (<LibraryRoot>): "
-                "FTS5 full-text search ('search'), anchored excerpts ('excerpt'), list resources/folders/files, "
-                "read a library file ('read_file'), or regex grep across library files ('grep')."
+                "Search or read <LibraryRoot>: FTS5 'search', anchored 'excerpt', "
+                "'list_resources', 'list_folders', 'list_files', 'read_file', or 'grep'."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "action": _enum(
-                        "Library read/search action.",
+                        "Action.",
                         [
                             "search",
                             "excerpt",
@@ -1492,35 +1468,24 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                         ],
                     ),
                     "query": _string("Search query or grep pattern."),
-                    "pattern": _string("Regex or literal pattern (for action='grep')."),
-                    "path": _string(
-                        "Relative path inside <LibraryRoot> (for read_file, list_files, or scoped grep)."
-                    ),
-                    "resource_id": _string("Resource id (for excerpt)."),
+                    "pattern": _string("Alias for grep pattern."),
+                    "path": _string("Relative path in <LibraryRoot>."),
+                    "resource_id": _string("Resource id (excerpt)."),
                     "resource_ids": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Optional resource ID filter list (for search).",
+                        "description": "Filter resource IDs (search).",
                     },
-                    "anchor_id": _string("Optional ¶ anchor id (for excerpt)."),
-                    "version_id": _string("Optional pinned resource version id (for excerpt)."),
-                    "content_hash": _string("Optional pinned content hash (for excerpt)."),
-                    "mode": _enum("Optional search mode.", ["broad", "narrow", "verify"]),
-                    "start_line": {
-                        "type": "integer",
-                        "description": "Optional 1-based start line (for read_file).",
-                    },
-                    "end_line": {
-                        "type": "integer",
-                        "description": "Optional 1-based end line (for read_file).",
-                    },
-                    "limit": {"type": "integer", "description": "Maximum results to return."},
-                    "max_chars": {"type": "integer", "description": "Maximum characters to read."},
-                    "chars": {"type": "integer", "description": "Alias for max_chars (for excerpt)."},
-                    "include_trash": {
-                        "type": "boolean",
-                        "description": "Include .trash/ entries when listing or grepping (default false).",
-                    },
+                    "anchor_id": _string("Paragraph ¶ anchor id (excerpt)."),
+                    "version_id": _string("Pinned version id (excerpt)."),
+                    "content_hash": _string("Pinned content hash (excerpt)."),
+                    "mode": _enum("Search mode.", ["broad", "narrow", "verify"]),
+                    "start_line": {"type": "integer", "description": "1-based start line."},
+                    "end_line": {"type": "integer", "description": "1-based end line."},
+                    "limit": {"type": "integer", "description": "Max items."},
+                    "max_chars": {"type": "integer", "description": "Max chars."},
+                    "chars": {"type": "integer", "description": "Alias of max_chars."},
+                    "include_trash": {"type": "boolean", "description": "Include .trash/."},
                 },
                 "required": ["action"],
             },
@@ -1529,16 +1494,15 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
         ToolDefinition(
             name="library_write",
             description=(
-                "Full autonomous file & resource management inside <LibraryRoot> (never touches <ProjectRoot>). "
-                "Supports write, surgical edit (old_text -> new_text), mkdir, rename/move, safe .trash/ soft_delete, "
-                "restore, import_url, import_workspace, organize, curate, save_lecture_note, and refresh_index. "
-                "Every content write/edit/rename/restore automatically updates the SQLite FTS5 index."
+                "Manage files/resources inside <LibraryRoot> (auto-FTS5 indexed; soft_delete uses .trash/): "
+                "write, edit, mkdir, rename, move, soft_delete, restore, import_url, import_workspace, "
+                "organize, curate, save_lecture_note, refresh_index."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "action": _enum(
-                        "Library mutation action.",
+                        "Action.",
                         [
                             "write",
                             "edit",
@@ -1555,50 +1519,27 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                             "refresh_index",
                         ],
                     ),
-                    "path": _string(
-                        "Relative path inside <LibraryRoot> (or workspace file path for import_workspace)."
-                    ),
+                    "path": _string("Relative path in <LibraryRoot> (or workspace path for import_workspace)."),
                     "paths": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Batch workspace paths (for action='import_workspace').",
+                        "description": "Batch workspace paths (import_workspace).",
                     },
-                    "directory": _string(
-                        "Workspace directory to import (for action='import_workspace')."
-                    ),
-                    "new_path": _string(
-                        "Destination relative path inside <LibraryRoot> (for rename/move)."
-                    ),
-                    "restore_path": _string(
-                        "Optional destination path when restoring from .trash/."
-                    ),
-                    "content": _string("Full text content (for write / save_lecture_note)."),
-                    "markdown_content": _string(
-                        "Markdown lecture content (alias of content for save_lecture_note)."
-                    ),
-                    "folder": _string(
-                        "Target library folder name (for save_lecture_note / import_url / import_workspace)."
-                    ),
-                    "old_text": _string("Exact text to replace (for action='edit')."),
-                    "new_text": _string("Replacement text (for action='edit')."),
-                    "replace_all": {
-                        "type": "boolean",
-                        "description": "Replace all occurrences in edit (default false).",
-                    },
-                    "url": _string("Web URL to import (for import_url)."),
-                    "resource_id": _string(
-                        "Resource id (for soft_delete / restore / refresh_index / curate)."
-                    ),
-                    "title": _string(
-                        "Optional title (for save_lecture_note / import_url / curate)."
-                    ),
-                    "tags": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Optional tags.",
-                    },
+                    "directory": _string("Workspace directory (import_workspace)."),
+                    "new_path": _string("Target path in <LibraryRoot> (rename/move)."),
+                    "restore_path": _string("Target path (restore)."),
+                    "content": _string("Text content (write/save_lecture_note)."),
+                    "markdown_content": _string("Alias of content (save_lecture_note)."),
+                    "folder": _string("Target folder."),
+                    "old_text": _string("Exact text to replace (edit)."),
+                    "new_text": _string("Replacement text (edit)."),
+                    "replace_all": {"type": "boolean", "description": "Replace all matches (edit)."},
+                    "url": _string("Source URL (import_url)."),
+                    "resource_id": _string("Resource id."),
+                    "title": _string("Title."),
+                    "tags": {"type": "array", "items": {"type": "string"}},
                     "curate_action": _enum(
-                        "Sub-operation when action='curate'.",
+                        "Sub-action for curate.",
                         [
                             "create_folder",
                             "rename_folder",
@@ -1607,14 +1548,14 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                             "tag_resource",
                         ],
                     ),
-                    "folder_path": _string("Library folder path (for curate)."),
-                    "new_folder_path": _string("New library folder path (for curate rename_folder)."),
+                    "folder_path": _string("Folder path (curate)."),
+                    "new_folder_path": _string("New folder path (curate)."),
                     "operations": {
                         "type": "array",
                         "items": {"type": "object"},
-                        "description": "Sandbox organization operations list (for action='organize').",
+                        "description": "Batch ops (organize).",
                     },
-                    "undo_id": _string("Optional organization undo history ID (for action='organize')."),
+                    "undo_id": _string("Undo history id (organize)."),
                 },
                 "required": ["action"],
             },
@@ -1623,23 +1564,14 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
         ToolDefinition(
             name="library_exec",
             description=(
-                "Run a bounded shell/script command (e.g. python3, rg, wc, pandoc, awk) strictly inside "
-                "cwd=<LibraryRoot> to batch-process notes, parse PDFs/CSV, or organize library data. "
-                "Irreversible delete commands (rm/unlink) and paths escaping <LibraryRoot> are blocked; "
-                "newly created/updated text files are automatically indexed into FTS5."
+                "Run a bounded command strictly inside cwd=<LibraryRoot> (blocks rm/escapes; auto-indexes new files)."
             ),
             parameters={
                 "type": "object",
                 "properties": {
-                    "command": _string("Shell command to execute inside <LibraryRoot>."),
-                    "timeout_seconds": {
-                        "type": "number",
-                        "description": "Execution timeout in seconds (1-30, default 15).",
-                    },
-                    "auto_index": {
-                        "type": "boolean",
-                        "description": "Automatically FTS5-index newly modified files in <LibraryRoot> (default true).",
-                    },
+                    "command": _string("Shell command in <LibraryRoot>."),
+                    "timeout_seconds": {"type": "number", "description": "Timeout 1-30s (default 15)."},
+                    "auto_index": {"type": "boolean", "description": "Auto-index modified files (default true)."},
                 },
                 "required": ["command"],
             },
@@ -1648,15 +1580,14 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
         ToolDefinition(
             name="web_fetch",
             description=(
-                "Retrieve external web and academic evidence: search the web ('search'), fetch a specific URL ('fetch'), "
-                "search academic papers ('papers'), find curated learning materials ('learning_materials'), "
-                "assess research evidence ('assess_evidence'), or import a URL into <LibraryRoot> ('import_url')."
+                "External research: 'search', 'fetch', 'papers', 'learning_materials', "
+                "'assess_evidence', or 'import_url' (into <LibraryRoot>)."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "action": _enum(
-                        "Web/research action.",
+                        "Action.",
                         [
                             "search",
                             "fetch",
@@ -1666,114 +1597,61 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                             "import_url",
                         ],
                     ),
-                    "query": _string("Search query (for search / papers / learning_materials)."),
-                    "url": _string("Target URL (for fetch / import_url)."),
-                    "limit": {"type": "integer", "description": "Maximum search results."},
-                    "max_chars": {
-                        "type": "integer",
-                        "description": "Optional character cap (for fetch).",
-                    },
-                    "include_github": {
-                        "type": "boolean",
-                        "description": "Include GitHub repositories alongside arXiv papers (for action='papers').",
-                    },
-                    "focus_area": _string("Optional focus area label (for learning_materials)."),
+                    "query": _string("Search query."),
+                    "url": _string("Target URL (fetch/import_url)."),
+                    "limit": {"type": "integer", "description": "Max results."},
+                    "max_chars": {"type": "integer", "description": "Char cap (fetch)."},
+                    "include_github": {"type": "boolean", "description": "Include GitHub repos (papers)."},
+                    "focus_area": _string("Focus label (learning_materials)."),
                     "required_facets": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "2-8 distinct facets the research must substantiate (for learning_materials).",
+                        "description": "2-8 facets (learning_materials).",
                     },
                     "preferred_domains": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Optional authoritative domains to prioritize (for learning_materials).",
+                        "description": "Preferred domains.",
                     },
                     "verdict": _enum(
-                        "Structured sufficiency verdict (for assess_evidence).",
+                        "Sufficiency verdict (assess_evidence).",
                         ["sufficient", "gaps_remain", "exhausted_with_gaps"],
                     ),
                     "evidence_standard": {
                         "type": "object",
                         "properties": {
-                            "risk_level": _enum(
-                                "Task risk level.",
-                                ["exploratory", "normal", "high_stakes"],
-                            ),
-                            "minimum_independent_sources": {
-                                "type": "integer",
-                                "description": "Minimum independent sources required (1-8).",
-                            },
-                            "requires_authoritative_source": {
-                                "type": "boolean",
-                                "description": "Whether primary/official documentation is required.",
-                            },
-                            "claim_types": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
+                            "risk_level": _enum("Risk.", ["exploratory", "normal", "high_stakes"]),
+                            "minimum_independent_sources": {"type": "integer"},
+                            "requires_authoritative_source": {"type": "boolean"},
+                            "claim_types": {"type": "array", "items": {"type": "string"}},
                             "freshness_requirement": _enum(
-                                "Evidence freshness requirement.",
-                                ["historical", "stable", "current", "latest"],
+                                "Freshness.", ["historical", "stable", "current", "latest"]
                             ),
-                            "applicability_scope": _string(
-                                "Concrete scope (>=16 chars) this evidence applies to."
-                            ),
-                            "stopping_rule": _string(
-                                "Explicit stopping rule (>=20 chars) for concluding search."
-                            ),
-                            "unresolved_uncertainties": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                            "quality_checks": {
-                                "type": "array",
-                                "items": {"type": "object"},
-                                "description": (
-                                    "Checks for coverage, source_quality, recency, contradictions, applicability."
-                                ),
-                            },
+                            "applicability_scope": _string("Scope (>=16 chars)."),
+                            "stopping_rule": _string("Stop rule (>=20 chars)."),
+                            "unresolved_uncertainties": {"type": "array", "items": {"type": "string"}},
+                            "quality_checks": {"type": "array", "items": {"type": "object"}},
                         },
-                        "description": (
-                            "Task-adapted evidence standard (risk_level, minimum_independent_sources, "
-                            "requires_authoritative_source, claim_types, freshness_requirement, "
-                            "applicability_scope, stopping_rule, unresolved_uncertainties, quality_checks) "
-                            "for action='assess_evidence'."
-                        ),
+                        "description": "Evidence standard (assess_evidence).",
                     },
                     "facet_assessments": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "facet": _string("Required facet name."),
-                                "status": _enum(
-                                    "Facet coverage status.",
-                                    ["covered", "partial", "missing"],
-                                ),
-                                "source_ids": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                                "evidence_quotes": {
-                                    "type": "array",
-                                    "items": {"type": "object"},
-                                },
-                                "rationale": _string("Concrete rationale (>=16 chars)."),
+                                "facet": _string("Facet."),
+                                "status": _enum("Status.", ["covered", "partial", "missing"]),
+                                "source_ids": {"type": "array", "items": {"type": "string"}},
+                                "evidence_quotes": {"type": "array", "items": {"type": "object"}},
+                                "rationale": _string("Rationale (>=16 chars)."),
                             },
                         },
-                        "description": (
-                            "Per-facet judgments ({facet, status, source_ids, evidence_quotes, rationale}) "
-                            "for action='assess_evidence'."
-                        ),
+                        "description": "Per-facet judgments (assess_evidence).",
                     },
-                    "title": _string("Optional resource title (for import_url)."),
-                    "name": _string("Alias for resource title (for import_url)."),
-                    "folder": _string("Optional target folder (for import_url)."),
-                    "tags": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Optional tags (for import_url).",
-                    },
+                    "title": _string("Title (import_url)."),
+                    "name": _string("Alias of title."),
+                    "folder": _string("Folder (import_url)."),
+                    "tags": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["action"],
             },
@@ -1781,28 +1659,19 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
         ),
         ToolDefinition(
             name="learning_inspect",
-            description=(
-                "Inspect the learner's current learning state: active learning plan ('plan'), "
-                "verified mastery/progress truth ('truth'), recalled memory ('memory'), or available skills ('skills')."
-            ),
+            description="Inspect learning state: 'plan', 'truth', 'memory', or 'skills'.",
             parameters={
                 "type": "object",
                 "properties": {
-                    "action": _enum("Inspection target.", ["plan", "truth", "memory", "skills"]),
-                    "query": _string("Optional query for memory recall or truth lookup."),
-                    "focus": _string("Optional focus topic for memory recall."),
+                    "action": _enum("Target.", ["plan", "truth", "memory", "skills"]),
+                    "query": _string("Lookup query."),
+                    "focus": _string("Focus topic (memory)."),
                     "section": _enum(
-                        "Optional truth section filter (for action='truth').",
+                        "Section (truth).",
                         ["all", "plan", "goal", "evidence", "progress", "mastery", "review", "practice"],
                     ),
-                    "evidence_limit": {
-                        "type": "integer",
-                        "description": "Maximum evidence records to return (for action='truth').",
-                    },
-                    "kind": _enum(
-                        "Optional skill kind filter (for action='skills').",
-                        ["tutor", "knowledge", "action", "custom"],
-                    ),
+                    "evidence_limit": {"type": "integer"},
+                    "kind": _enum("Skill kind.", ["tutor", "knowledge", "action", "custom"]),
                 },
                 "required": ["action"],
             },
@@ -1811,15 +1680,14 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
         ToolDefinition(
             name="learning_action",
             description=(
-                "Perform governed learning-state actions: commit a formal learning plan ('save_formal_plan'), "
-                "save an explicit learning note ('record_note'), mint/advance a plan task ('specify_task'/'next_task'), "
-                "invoke a skill ('invoke_skill'), or generate an instructional diagram ('generate_image')."
+                "Governed learning actions: 'save_formal_plan', 'record_note', "
+                "'specify_task', 'next_task', 'invoke_skill', or 'generate_image'."
             ),
             parameters={
                 "type": "object",
                 "properties": {
                     "action": _enum(
-                        "Governed learning action.",
+                        "Action.",
                         [
                             "save_formal_plan",
                             "record_note",
@@ -1829,68 +1697,43 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                             "generate_image",
                         ],
                     ),
-                    "title": _string("Plan or diagram title (for save_formal_plan / generate_image)."),
-                    "summary": _string("Plan summary/objective (for save_formal_plan)."),
+                    "title": _string("Plan/image title."),
+                    "summary": _string("Plan summary."),
                     "stages": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "id": _string("Optional stage identifier."),
+                                "id": _string("Stage id."),
                                 "title": _string("Stage title."),
-                                "goal": _string("Concrete stage goal."),
-                                "outcomes": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                                "resources": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                                "status": _enum(
-                                    "Stage status.", ["pending", "active", "completed"]
-                                ),
+                                "goal": _string("Stage goal."),
+                                "outcomes": {"type": "array", "items": {"type": "string"}},
+                                "resources": {"type": "array", "items": {"type": "string"}},
+                                "status": _enum("Status.", ["pending", "active", "completed"]),
                             },
                             "required": ["title", "goal"],
                         },
-                        "description": "Ordered formal plan stages (for save_formal_plan).",
+                        "description": "Plan stages.",
                     },
-                    "cadence": _string("Optional study/review cadence (for save_formal_plan)."),
-                    "current_step": _string(
-                        "Concrete current step to execute first (for save_formal_plan)."
-                    ),
-                    "why_now": _string("Why this plan/step matters now (for save_formal_plan)."),
-                    "verify_method": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Verification criteria (for save_formal_plan).",
-                    },
-                    "blocked_reason": _string("Optional blocker note (for save_formal_plan)."),
-                    "next_after_current": _string(
-                        "Next step after current_step completes (for save_formal_plan)."
-                    ),
-                    "note": _string("Observation text to record (for record_note)."),
-                    "content": _string("Alias for observation text (for record_note)."),
-                    "kind": _string("Optional note kind (for record_note, default 'observation')."),
-                    "natural_language_goal": _string(
-                        "Concrete task objective (for specify_task)."
-                    ),
-                    "goal": _string("Alias for task objective (for specify_task)."),
-                    "focus_area": _string("Optional focus area (for next_task)."),
-                    "skill_id": _string("Skill id, $trigger, or name (for invoke_skill)."),
-                    "skill_name": _string("Alias for skill_id (for invoke_skill)."),
-                    "task_note": _string("Optional task context passed to skill (for invoke_skill)."),
-                    "prompt": _string(
-                        "Visual description prompt (for generate_image) or task instruction."
-                    ),
-                    "style": _string("Optional visual style (for generate_image, default 'diagram')."),
-                    "aspect_ratio": _string(
-                        "Optional aspect ratio (for generate_image, default '16:9')."
-                    ),
-                    "save_to_library": {
-                        "type": "boolean",
-                        "description": "Persist generated image in <LibraryRoot> (default true).",
-                    },
+                    "cadence": _string("Review cadence."),
+                    "current_step": _string("First concrete step."),
+                    "why_now": _string("Why now."),
+                    "verify_method": {"type": "array", "items": {"type": "string"}},
+                    "blocked_reason": _string("Blocker."),
+                    "next_after_current": _string("Next step."),
+                    "note": _string("Note text (record_note)."),
+                    "content": _string("Alias of note."),
+                    "kind": _string("Note kind."),
+                    "natural_language_goal": _string("Task objective (specify_task)."),
+                    "goal": _string("Alias of natural_language_goal."),
+                    "focus_area": _string("Focus area (next_task)."),
+                    "skill_id": _string("Skill id/name (invoke_skill)."),
+                    "skill_name": _string("Alias of skill_id."),
+                    "task_note": _string("Task context (invoke_skill)."),
+                    "prompt": _string("Image description (generate_image) or task prompt."),
+                    "style": _string("Image style (default 'diagram')."),
+                    "aspect_ratio": _string("Aspect ratio (default '16:9')."),
+                    "save_to_library": {"type": "boolean"},
                 },
                 "required": ["action"],
             },

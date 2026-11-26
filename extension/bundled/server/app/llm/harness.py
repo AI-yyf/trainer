@@ -250,6 +250,22 @@ def estimate_tokens(messages: list[dict[str, Any]] | None) -> int:
     return estimated
 
 
+_UI_ONLY_TOOL_RESULT_KEYS: frozenset[str] = frozenset(
+    {
+        "_llm_content",
+        "undo_operations",
+        "idempotent_key",
+        "audit_recorded",
+        "sessions_refreshed",
+        "proposal_restored",
+        "cancel_failed_already_committed",
+        "checkpoint_id",
+        "before_state_ref",
+        "after_state_ref",
+    }
+)
+
+
 def tool_output_limit(name: str | None) -> int:
     key = str(name or "").strip()
     return int(TOOL_OUTPUT_LIMITS.get(key, DEFAULT_TOOL_OUTPUT_LIMIT))
@@ -260,6 +276,58 @@ def truncate_tool_payload(content_text: str, *, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: max(0, limit)] + "\n…[truncated]"
+
+
+def _compact_tool_dict_for_llm(name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Strip UI-only plumbing and echoed write bodies before serializing for LLM tool history."""
+    action = str(payload.get("action") or "").strip().lower()
+    is_write_echo = name in {"write_sandbox_file", "save_lecture_note"} or (
+        name == "library_write" and action in {"write", "save_lecture_note"}
+    )
+    cleaned: dict[str, Any] = {}
+    for key, value in payload.items():
+        if key in _UI_ONLY_TOOL_RESULT_KEYS or value is None:
+            continue
+        if key == "library" and "auto_indexed" in payload and isinstance(value, dict):
+            continue
+        if is_write_echo and key in {"content", "markdown_content"} and isinstance(value, str):
+            cleaned[f"{key}_chars"] = len(value)
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
+def format_tool_result_for_llm(name: str, result: Any) -> str:
+    """Pi-style LLM channel formatter: concise high-signal text/JSON without UI bloat."""
+    limit = tool_output_limit(name)
+    if isinstance(result, str):
+        return truncate_tool_payload(result, limit=limit)
+    if isinstance(result, dict):
+        explicit_llm = result.get("_llm_content")
+        if isinstance(explicit_llm, str) and explicit_llm.strip():
+            return truncate_tool_payload(explicit_llm.strip(), limit=limit)
+        compact_dict = _compact_tool_dict_for_llm(name, result)
+        try:
+            serialized = json.dumps(
+                compact_dict, ensure_ascii=False, separators=(",", ":"), default=str
+            )
+        except (TypeError, ValueError):
+            serialized = str(compact_dict)
+        return truncate_tool_payload(serialized, limit=limit)
+    try:
+        serialized = json.dumps(result, ensure_ascii=False, separators=(",", ":"), default=str)
+    except (TypeError, ValueError):
+        serialized = str(result)
+    return truncate_tool_payload(serialized, limit=limit)
+
+
+def split_tool_result_channels(name: str, raw_result: Any) -> tuple[str, Any]:
+    """Split a raw tool result into (llm_content, ui_details) per Pi's AgentTool contract."""
+    llm_content = format_tool_result_for_llm(name, raw_result)
+    if isinstance(raw_result, dict) and "_llm_content" in raw_result:
+        ui_details = {k: v for k, v in raw_result.items() if k != "_llm_content"}
+        return llm_content, ui_details
+    return llm_content, raw_result
 
 
 def message_role(message: dict[str, Any] | None) -> str:

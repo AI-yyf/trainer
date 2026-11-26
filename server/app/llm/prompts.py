@@ -624,12 +624,12 @@ def _agent_loop_training_instructions() -> str:
     )
 
 
-def _agent_loop_skill_instructions(
+def _agent_loop_lane_skill_suffix(
     *,
     message: str | None,
     coach_context: dict[str, Any] | None,
 ) -> str:
-    """Pi-style progressive disclosure: load lane skills only when the turn needs them."""
+    """Dynamic per-turn lane skill instructions appended after the static KV-cached prefix."""
 
     context = coach_context if isinstance(coach_context, dict) else {}
     active_view = str(context.get("active_view") or "").strip().lower()
@@ -643,8 +643,6 @@ def _agent_loop_skill_instructions(
         or bool(context.get("resource_composer_intent"))
         or context.get("explicit_resource_organize") is True
         or context.get("explicit_resource_import") is True
-        # Auto-grounded turns carry prepared library material; the Library Skill
-        # block tells the loop to restate prepared sequences before narrowing.
         or context.get("auto_resource_lookup") is True
         or _message_explicitly_requests_resource_search(message)
     )
@@ -659,7 +657,7 @@ def _agent_loop_skill_instructions(
         or active_view == "training"
         or scenario in {"training", "practice", "review"}
     )
-    blocks = [_agent_loop_core_instructions()]
+    blocks: list[str] = []
     if library_turn:
         blocks.append(_agent_loop_library_instructions())
     if plan_turn:
@@ -673,6 +671,18 @@ def _agent_loop_skill_instructions(
             "If nothing relevant is found, say that plainly instead of inventing from memory."
         )
     return "".join(blocks)
+
+
+def _agent_loop_skill_instructions(
+    *,
+    message: str | None,
+    coach_context: dict[str, Any] | None,
+) -> str:
+    """Pi-style progressive disclosure: core loop rules + turn-specific lane skills."""
+    return _agent_loop_core_instructions() + _agent_loop_lane_skill_suffix(
+        message=message,
+        coach_context=coach_context,
+    )
 
 
 _RETHINKFUN_LECTURE_MARKERS = (
@@ -770,6 +780,71 @@ def _build_state_driven_teaching_block(
     return "\n".join(lines)
 
 
+def build_static_coaching_prefix(
+    profile: UserProfile,
+    response_language: str | None = None,
+    answer_mode: str | None = None,
+    *,
+    minimal_context: bool = False,
+    use_minimal_template: bool = False,
+    agent_loop_enabled: bool = False,
+) -> str:
+    """Build the session-invariant system prompt prefix placed at byte 0 for KV caching."""
+    raw_answer_policy = answer_mode or profile.answer_policy
+    answer_policy = _answer_policy_label(raw_answer_policy)
+    teaching_style = _teaching_style_label(profile.teaching_style)
+    template = (
+        MINIMAL_COACHING_SYSTEM_TEMPLATE if use_minimal_template else COACHING_SYSTEM_TEMPLATE
+    )
+    prefix = template.format(
+        goal=profile.long_term_goal or "Not specified",
+        background=profile.background or "Not specified",
+        weekly_hours=profile.weekly_hours,
+        teaching_style=teaching_style,
+        answer_policy=answer_policy,
+        target_project=profile.target_project or "Not specified",
+        libraries=", ".join(profile.preferred_libraries) if profile.preferred_libraries else "None specified",
+    )
+    if use_minimal_template and str(response_language or "").strip().lower().startswith("zh"):
+        prefix += (
+            "\n- 中文回答严禁使用空洞垫词与套话（“大家都知道”“众所周知”“显然”“其实很简单”"
+            "“换句话说”“接下来我们来看一下”“非常巧妙”“代入即得”“希望对你有帮助”）。\n"
+        )
+    prefix += (
+        "\n\n## Teaching Style Bias\n"
+        f"- Active style: {teaching_style}\n"
+        f"- {_teaching_style_instruction(profile.teaching_style)}"
+    )
+    prefix += (
+        "\n\n## Answer Policy Bias\n"
+        f"- Active policy: {answer_policy}\n"
+        f"- {_answer_policy_instruction(raw_answer_policy)}"
+    )
+    if answer_policy == "guided":
+        prefix += f"\n{_guided_mode_requirements(response_language)}"
+    prefix += (
+        "\n\n## Request Priority\n"
+        "- The learner's explicit question, requested format, requested length, and requested directness override generic coaching habits.\n"
+        "- For a factual or conceptual question, answer the question before offering a plan, lane choice, training card, or follow-up.\n"
+        "- Do not add a generic next action when the requested answer is already complete."
+    )
+    if not minimal_context:
+        prefix += (
+            "\n\n## Teaching Method\n"
+            "- Teach in this order when understanding matters: current state -> gap -> object or boundary -> constraint -> code or API move -> verification -> new state.\n"
+            "- Make concepts feel necessary before naming them.\n"
+            "- Do not start with a definition when the learner first needs the failure mode, pressure, or boundary.\n"
+            "- Every important variable, function, API, or branch should answer: why is it needed now, what does it connect to, and what breaks without it?\n"
+            "- Treat each code block as the implementation of the concepts just built: say which gap it closes and what state it maintains before walking the syntax, and refer each part back to the concept it realizes.\n"
+            "- Every 2-3 new ideas, briefly recycle the state so the learner knows what is already known, what is still missing, and what proof comes next."
+        )
+    if agent_loop_enabled:
+        prefix += _agent_loop_core_instructions()
+    if response_language:
+        prefix += f"\n\n## Language\n{_language_instruction(response_language)}"
+    return prefix
+
+
 def build_coaching_system_prompt(
     profile: UserProfile,
     response_language: str | None = None,
@@ -779,14 +854,11 @@ def build_coaching_system_prompt(
     coach_context: dict[str, Any] | None = None,
     *,
     agent_loop_enabled: bool = False,
+    omit_active_thread_block: bool = False,
 ) -> str:
     if coach_context is not None and _resource_composer_mode(coach_context) == "analyze":
         return _library_analysis_system_prompt(profile, coach_context, response_language, message)
     raw_answer_policy = answer_mode or profile.answer_policy
-    answer_policy = _answer_policy_label(raw_answer_policy)
-    teaching_style = _teaching_style_label(profile.teaching_style)
-    # Minimal tier: a pure conversational Q&A turn. Keep identity, hard teaching
-    # boundary, and request precedence without archive/lecture bloat.
     minimal_context = isinstance(coach_context, dict) and (
         coach_context.get("context_tier") == "minimal"
     )
@@ -797,27 +869,25 @@ def build_coaching_system_prompt(
             or coach_context.get("completed_training_return_feedback") is True
         )
     )
-    template = (
-        MINIMAL_COACHING_SYSTEM_TEMPLATE if use_minimal_template else COACHING_SYSTEM_TEMPLATE
+    # 1. Session-invariant static prefix at byte 0 (protects LLM Prompt KV Cache across turns).
+    system_prompt = build_static_coaching_prefix(
+        profile,
+        response_language,
+        answer_mode,
+        minimal_context=minimal_context,
+        use_minimal_template=use_minimal_template,
+        agent_loop_enabled=agent_loop_enabled,
     )
-    system_prompt = template.format(
-        goal=profile.long_term_goal or "Not specified",
-        background=profile.background or "Not specified",
-        weekly_hours=profile.weekly_hours,
-        teaching_style=teaching_style,
-        answer_policy=answer_policy,
-        target_project=profile.target_project or "Not specified",
-        libraries=", ".join(profile.preferred_libraries) if profile.preferred_libraries else "None specified",
-    )
-    if use_minimal_template and str(response_language or "").strip().lower().startswith("zh"):
+
+    # 2. Turn-dynamic state & progressive lane instructions appended after the cached prefix.
+    pedagogy_mode = None if minimal_context else _resolve_pedagogy_mode(coach_context)
+    if pedagogy_mode:
         system_prompt += (
-            "\n- 中文回答严禁使用空洞垫词与套话（“大家都知道”“众所周知”“显然”“其实很简单”"
-            "“换句话说”“接下来我们来看一下”“非常巧妙”“代入即得”“希望对你有帮助”）。\n"
+            "\n\n## Pedagogy Mode\n"
+            f"- Active mode: {pedagogy_mode}\n"
+            f"- {_pedagogy_mode_instruction(pedagogy_mode)}"
         )
-    # This flag is stamped by the server only after checking a completed Return
-    # against the current file path/hash and current controlled-check evidence.
-    # It must survive context compaction: the learner's pasted summary is not
-    # the authority for the already recorded verification.
+
     if isinstance(coach_context, dict) and coach_context.get("completed_training_return_feedback") is True:
         system_prompt += (
             "\n\nCurrent returned training artifact: Trainer has verified the unchanged "
@@ -844,7 +914,11 @@ def build_coaching_system_prompt(
     if context_block:
         system_prompt += f"\n\n## Current Coaching Context\n{context_block}"
 
-    active_thread_block = None if minimal_context else _build_active_thread_block(coaching_context)
+    active_thread_block = (
+        None
+        if (minimal_context or omit_active_thread_block)
+        else _build_active_thread_block(coaching_context)
+    )
     if active_thread_block:
         system_prompt += f"\n\n## Active Thread\n{active_thread_block}"
 
@@ -921,46 +995,6 @@ def build_coaching_system_prompt(
             f"Recorded answer: {_compact_text(recall.get('verified_result'), 1000)}"
         )
 
-    system_prompt += (
-        "\n\n## Teaching Style Bias\n"
-        f"- Active style: {teaching_style}\n"
-        f"- {_teaching_style_instruction(profile.teaching_style)}"
-    )
-
-    pedagogy_mode = None if minimal_context else _resolve_pedagogy_mode(coach_context)
-    if pedagogy_mode:
-        system_prompt += (
-            "\n\n## Pedagogy Mode\n"
-            f"- Active mode: {pedagogy_mode}\n"
-            f"- {_pedagogy_mode_instruction(pedagogy_mode)}"
-        )
-
-    system_prompt += (
-        "\n\n## Answer Policy Bias\n"
-        f"- Active policy: {answer_policy}\n"
-        f"- {_answer_policy_instruction(raw_answer_policy)}"
-    )
-    if answer_policy == "guided":
-        system_prompt += f"\n{_guided_mode_requirements(response_language)}"
-
-    system_prompt += (
-        "\n\n## Request Priority\n"
-        "- The learner's explicit question, requested format, requested length, and requested directness override generic coaching habits.\n"
-        "- For a factual or conceptual question, answer the question before offering a plan, lane choice, training card, or follow-up.\n"
-        "- Do not add a generic next action when the requested answer is already complete."
-    )
-
-    if not minimal_context:
-        system_prompt += (
-            "\n\n## Teaching Method\n"
-            "- Teach in this order when understanding matters: current state -> gap -> object or boundary -> constraint -> code or API move -> verification -> new state.\n"
-            "- Make concepts feel necessary before naming them.\n"
-            "- Do not start with a definition when the learner first needs the failure mode, pressure, or boundary.\n"
-            "- Every important variable, function, API, or branch should answer: why is it needed now, what does it connect to, and what breaks without it?\n"
-            "- Treat each code block as the implementation of the concepts just built: say which gap it closes and what state it maintains before walking the syntax, and refer each part back to the concept it realizes.\n"
-            "- Every 2-3 new ideas, briefly recycle the state so the learner knows what is already known, what is still missing, and what proof comes next."
-        )
-
     tone_block = (
         None
         if minimal_context
@@ -977,7 +1011,7 @@ def build_coaching_system_prompt(
         )
 
     if agent_loop_enabled:
-        system_prompt += _agent_loop_skill_instructions(
+        system_prompt += _agent_loop_lane_skill_suffix(
             message=message,
             coach_context=coach_context if isinstance(coach_context, dict) else None,
         )
@@ -1030,8 +1064,6 @@ def build_coaching_system_prompt(
             "When relevant to the learner's question, connect this symptom back to that concept in one calm sentence "
             "and suggest one small verification step; do not nag or interrupt if they asked about something else."
         )
-    if response_language:
-        system_prompt += f"\n\n## Language\n{_language_instruction(response_language)}"
     return system_prompt
 
 
@@ -1677,30 +1709,97 @@ def build_coaching_messages(
         coach_context=coach_context,
         agent_loop_enabled=agent_loop_enabled,
     )
-    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     history_mode = str(extract_coaching_context(message, current_file, coach_context).get("history_mode") or "").strip().lower()
     suppress_history = history_mode == "fresh_lane"
 
     if history and not suppress_history:
-        cleaned_history: list[dict[str, str]] = []
-        for item in history:
+        # Pi-style transcript preservation: keep user/assistant text turns AND
+        # atomically paired assistant(tool_calls) -> tool(tool_call_id) groups,
+        # dropping only orphan tool entries or stale system messages.
+        atomic_groups: list[list[dict[str, Any]]] = []
+        idx = 0
+        raw_items = list(history)
+        while idx < len(raw_items):
+            item = raw_items[idx]
             if not isinstance(item, dict):
+                idx += 1
                 continue
             role = str(item.get("role") or "").strip()
             content = str(item.get("content") or "").strip()
-            if role not in {"user", "assistant"} or not content:
-                # Drop system messages (we rebuild fresh) and empty/tool
-                # entries; those would confuse a fresh-system run.
+            raw_tool_calls = item.get("tool_calls")
+            if role == "assistant" and isinstance(raw_tool_calls, list) and raw_tool_calls:
+                call_ids = {
+                    str(tc.get("id") or "").strip()
+                    for tc in raw_tool_calls
+                    if isinstance(tc, dict) and str(tc.get("id") or "").strip()
+                }
+                paired_tools: list[dict[str, Any]] = []
+                lookahead = idx + 1
+                while lookahead < len(raw_items):
+                    nxt = raw_items[lookahead]
+                    if not isinstance(nxt, dict) or str(nxt.get("role") or "").strip() != "tool":
+                        break
+                    tc_id = str(nxt.get("tool_call_id") or "").strip()
+                    if tc_id and tc_id in call_ids:
+                        paired_tools.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                **({"name": str(nxt["name"])} if nxt.get("name") else {}),
+                                "content": _truncate_coaching_history_content(
+                                    str(nxt.get("content") or ""), token_budget=600
+                                ),
+                            }
+                        )
+                    lookahead += 1
+                returned_ids = {t["tool_call_id"] for t in paired_tools}
+                if call_ids and call_ids.issubset(returned_ids):
+                    assistant_entry: dict[str, Any] = {
+                        "role": "assistant",
+                        "content": content,
+                        "tool_calls": raw_tool_calls,
+                    }
+                    atomic_groups.append([assistant_entry, *paired_tools])
+                    idx = lookahead
+                    continue
+                if content:
+                    atomic_groups.append([{"role": "assistant", "content": content}])
+                idx = lookahead
                 continue
-            cleaned_history.append({"role": role, "content": content})
-        if cleaned_history:
-            messages.extend(
-                _budget_coaching_history(
-                    cleaned_history,
-                    history_limit=max(0, int(history_limit)),
-                    history_token_budget=max(0, int(history_token_budget)),
+            if role in {"user", "assistant"} and content:
+                atomic_groups.append([{"role": role, "content": content}])
+            idx += 1
+
+        if atomic_groups:
+            has_tool_groups = any(len(g) > 1 for g in atomic_groups)
+            if not has_tool_groups:
+                flat_history = [g[0] for g in atomic_groups]
+                messages.extend(
+                    _budget_coaching_history(
+                        flat_history,
+                        history_limit=max(0, int(history_limit)),
+                        history_token_budget=max(0, int(history_token_budget)),
+                    )
                 )
-            )
+            else:
+                kept_groups: list[list[dict[str, Any]]] = []
+                remaining_msgs = max(0, int(history_limit))
+                remaining_tokens = max(0, int(history_token_budget))
+                for group in reversed(atomic_groups):
+                    if remaining_msgs <= 0 or remaining_tokens <= 0:
+                        break
+                    group_tokens = sum(
+                        _estimate_coaching_history_tokens(str(m.get("content") or ""))
+                        for m in group
+                    )
+                    if kept_groups and group_tokens > remaining_tokens:
+                        break
+                    kept_groups.append(group)
+                    remaining_msgs -= 1
+                    remaining_tokens = max(0, remaining_tokens - group_tokens)
+                for group in reversed(kept_groups):
+                    messages.extend(group)
 
     coaching_context = _prioritize_current_request_context(
         extract_coaching_context(message, current_file, coach_context)

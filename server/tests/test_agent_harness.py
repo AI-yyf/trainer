@@ -572,3 +572,150 @@ async def test_singleflight_completed_requests_enforce_true_lru_touch_on_hit() -
     # Touching key_a again moves it after key_c.
     assert list(completed.keys()) == [key_c, key_a]
 
+
+def test_static_coaching_prefix_stays_byte_identical_across_diverse_turns_and_skill_append() -> None:
+    from app.core.models import UserProfile
+    from app.llm.prompts import build_coaching_messages, build_static_coaching_prefix
+
+    profile = UserProfile(
+        long_term_goal="Master distributed systems",
+        background="Python backend developer",
+        weekly_hours=8,
+    )
+    static_prefix = build_static_coaching_prefix(
+        profile,
+        "zh-CN",
+        "auto",
+        agent_loop_enabled=True,
+    )
+    turn1 = build_coaching_messages(
+        profile,
+        "解释一下 app.py 里的异步锁边界",
+        current_file={"path": "app.py", "language_id": "python", "content": "async def run(): pass"},
+        response_language="zh-CN",
+        answer_mode="auto",
+        coach_context={"active_view": "coach"},
+        agent_loop_enabled=True,
+    )
+    turn2 = build_coaching_messages(
+        profile,
+        "帮我检索资料库里的 Raft 笔记并整理",
+        current_file=None,
+        response_language="zh-CN",
+        answer_mode="auto",
+        coach_context={"active_view": "resources", "library_sandbox_work": True},
+        agent_loop_enabled=True,
+    )
+    # Appending skill guidance at the tail of messages[0] keeps byte-0 prefix intact.
+    skill_guidance = "## Active Skill Guidance\nFollow Socratic micro-steps."
+    turn2_with_skill = [
+        {**turn2[0], "content": f"{turn2[0]['content']}\n\n{skill_guidance}"},
+        *turn2[1:],
+    ]
+    assert len(static_prefix) > 3000
+    assert turn1[0]["role"] == "system"
+    assert turn2_with_skill[0]["role"] == "system"
+    assert turn1[0]["content"].startswith(static_prefix)
+    assert turn2[0]["content"].startswith(static_prefix)
+    assert turn2_with_skill[0]["content"].startswith(static_prefix)
+    assert skill_guidance in turn2_with_skill[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_dual_channel_tool_output_separates_llm_content_from_ui_details() -> None:
+    registry = ToolRegistry()
+    seen_messages: list[list[dict[str, Any]]] = []
+
+    async def _verbose_write(_ctx: ToolContext, _args: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "action": "write",
+            "path": "notes/raft.md",
+            "content": "# Huge echoed body\n" + ("x" * 2_000),
+            "auto_indexed": True,
+            "library": {"ok": True, "resource_id": "res-dup", "chunks": 12},
+            "undo_operations": [{"op": "delete", "path": "notes/raft.md"}],
+            "audit_recorded": True,
+            "idempotent_key": "ws:library_write:abc",
+        }
+
+    registry.register(
+        ToolDefinition(
+            name="library_write",
+            description="Write library note",
+            parameters={"type": "object", "properties": {}},
+            handler=_verbose_write,
+        )
+    )
+
+    responses = [
+        {
+            "content": "",
+            "tool_calls": [{"id": "cw-1", "name": "library_write", "arguments": {"action": "write"}}],
+        },
+        {"content": "Saved cleanly.", "tool_calls": []},
+    ]
+
+    async def _call(messages: list[dict[str, Any]], _tools: list[dict[str, Any]]) -> dict[str, Any]:
+        seen_messages.append([dict(m) for m in messages])
+        return responses[len(seen_messages) - 1]
+
+    loop = CoachAgentLoop(
+        provider=AgentProvider(protocol="openai_chat_completions", call=_call),
+        registry=registry,
+        context=_context(),
+        max_steps=4,
+    )
+    result = await loop.run([_user("save note")])
+    assert result.stop_reason == "completed"
+    # UI/host details channel keeps full structured fields intact:
+    ui_payload = result.steps[0].tool_results[0]["result"]
+    assert ui_payload["undo_operations"] == [{"op": "delete", "path": "notes/raft.md"}]
+    assert ui_payload["audit_recorded"] is True
+    assert "Huge echoed body" in ui_payload["content"]
+
+    # LLM tool channel strips UI plumbing & echoed write body, replacing with content_chars:
+    tool_msgs = [m for m in seen_messages[1] if m.get("role") == "tool"]
+    assert len(tool_msgs) == 1
+    llm_tool_text = str(tool_msgs[0]["content"])
+    assert "notes/raft.md" in llm_tool_text
+    assert "content_chars" in llm_tool_text
+    assert "Huge echoed body" not in llm_tool_text
+    assert "undo_operations" not in llm_tool_text
+    assert "idempotent_key" not in llm_tool_text
+
+
+def test_build_coaching_messages_preserves_atomic_tool_call_pairs_and_drops_orphans() -> None:
+    from app.core.models import UserProfile
+    from app.llm.prompts import build_coaching_messages
+
+    profile = UserProfile()
+    history: list[dict[str, Any]] = [
+        {"role": "tool", "tool_call_id": "orphan-0", "name": "project_read", "content": "should drop"},
+        {"role": "user", "content": "看看 app.py 里写了什么"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call-read-1",
+                    "type": "function",
+                    "function": {"name": "project_read", "arguments": '{"action":"read","path":"app.py"}'},
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call-read-1",
+            "name": "project_read",
+            "content": '{"ok":true,"path":"app.py","content":"def greet(): return 42"}',
+        },
+        {"role": "assistant", "content": "app.py 定义了 greet() 返回 42。"},
+    ]
+    built = build_coaching_messages(profile, "那如果改成返回字符串呢？", history=history)
+    roles = [m["role"] for m in built]
+    assert roles == ["system", "user", "assistant", "tool", "assistant", "user"]
+    assert all("orphan-0" not in str(m.get("tool_call_id") or "") for m in built)
+    assert "def greet(): return 42" in built[3]["content"]
+
+
