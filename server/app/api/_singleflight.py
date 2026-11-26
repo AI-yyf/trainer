@@ -20,6 +20,36 @@ from typing import Literal
 COMPLETED_REQUEST_REPLAY_LIMIT = 64
 
 
+def _touch_and_trim_lru(
+    completed: dict[tuple[str, str, str], dict[str, object]],
+    request_key: tuple[str, str, str],
+    payload: dict[str, object],
+    *,
+    limit: int,
+) -> None:
+    effective_limit = max(1, int(limit))
+    completed.pop(request_key, None)
+    completed[request_key] = payload
+    while len(completed) > effective_limit:
+        completed.pop(next(iter(completed)), None)
+
+
+def get_completed_request(
+    completed: dict[tuple[str, str, str], dict[str, object]],
+    request_key: tuple[str, str, str],
+    *,
+    guard: Lock,
+    limit: int = COMPLETED_REQUEST_REPLAY_LIMIT,
+) -> dict[str, object] | None:
+    """Fetch a completed request payload with true LRU touch-on-hit ordering."""
+    with guard:
+        cached = completed.get(request_key)
+        if cached is None:
+            return None
+        _touch_and_trim_lru(completed, request_key, cached, limit=limit)
+        return cached
+
+
 def remember_completed_request(
     completed: dict[tuple[str, str, str], dict[str, object]],
     request_key: tuple[str, str, str],
@@ -28,12 +58,9 @@ def remember_completed_request(
     guard: Lock,
     limit: int = COMPLETED_REQUEST_REPLAY_LIMIT,
 ) -> None:
-    """Store one completed response for replay, newest last, bounded."""
+    """Store one completed response for replay, most-recently-used last, bounded."""
     with guard:
-        completed.pop(request_key, None)
-        completed[request_key] = payload
-        while len(completed) > max(1, limit):
-            completed.pop(next(iter(completed)), None)
+        _touch_and_trim_lru(completed, request_key, payload, limit=limit)
 
 
 def claim_session_request_singleflight(
@@ -42,11 +69,13 @@ def claim_session_request_singleflight(
     completed: dict[tuple[str, str, str], dict[str, object]],
     inflight: dict[tuple[str, str, str], asyncio.Future],
     guard: Lock,
+    limit: int = COMPLETED_REQUEST_REPLAY_LIMIT,
 ) -> tuple[Literal["cached", "owner", "wait"], dict[str, object] | None, asyncio.Future | None]:
     """Fail-closed: same request_id is single-flight — wait or own, never double-exec."""
     with guard:
         cached = completed.get(request_key)
         if cached is not None:
+            _touch_and_trim_lru(completed, request_key, cached, limit=limit)
             return "cached", cached, None
         existing = inflight.get(request_key)
         if existing is not None and not existing.done():
@@ -65,13 +94,11 @@ def publish_session_request_singleflight(
     completed: dict[tuple[str, str, str], dict[str, object]],
     inflight: dict[tuple[str, str, str], asyncio.Future],
     guard: Lock,
+    limit: int = COMPLETED_REQUEST_REPLAY_LIMIT,
 ) -> dict[str, object]:
-    """Store completed payload and release any same-request_id waiters."""
+    """Store completed payload (LRU-bounded) and release any same-request_id waiters."""
     with guard:
-        completed.pop(request_key, None)
-        completed[request_key] = payload
-        while len(completed) > COMPLETED_REQUEST_REPLAY_LIMIT:
-            completed.pop(next(iter(completed)), None)
+        _touch_and_trim_lru(completed, request_key, payload, limit=limit)
         future = inflight.pop(request_key, None)
     if future is not None and not future.done():
         future.set_result(payload)

@@ -488,3 +488,87 @@ def test_shrink_helper_still_delegates_to_harness_prune() -> None:
     _shrink_older_tool_history(history)
     assert len(str(history[0]["content"])) <= CoachAgentLoop.MAX_KEPT_TOOL_RESULT_CHARS + 20
     assert "notes.md" in str(history[3]["content"])
+
+
+def test_sandbox_operation_log_enforces_lru_bound_and_path_invalidation() -> None:
+    from types import SimpleNamespace
+
+    from app.llm.harness import (
+        invalidate_sandbox_operations,
+        lookup_sandbox_operation,
+        sandbox_operation_key,
+        store_sandbox_operation,
+    )
+
+    runtime = SimpleNamespace(sandbox_operation_log={})
+    k1 = sandbox_operation_key("ws1", "library_write", {"action": "write", "path": "a.md", "content": "1"})
+    k2 = sandbox_operation_key("ws1", "library_write", {"action": "write", "path": "b.md", "content": "2"})
+    k3 = sandbox_operation_key("ws1", "library_write", {"action": "write", "path": "c.md", "content": "3"})
+    assert k1 and k2 and k3
+
+    store_sandbox_operation(runtime, k1, {"ok": True, "path": "a.md"}, limit=2)
+    store_sandbox_operation(runtime, k2, {"ok": True, "path": "b.md"}, limit=2)
+    # Touch k1 so k2 becomes the LRU victim when k3 arrives.
+    assert lookup_sandbox_operation(runtime, k1, limit=2) is not None
+    store_sandbox_operation(runtime, k3, {"ok": True, "path": "c.md"}, limit=2)
+    assert lookup_sandbox_operation(runtime, k1, limit=2) is not None
+    assert lookup_sandbox_operation(runtime, k2, limit=2) is None
+    assert lookup_sandbox_operation(runtime, k3, limit=2) is not None
+
+    # Writing a new version of a.md evicts the older key for a.md immediately.
+    k1_v2 = sandbox_operation_key("ws1", "library_write", {"action": "write", "path": "a.md", "content": "2"})
+    store_sandbox_operation(runtime, k1_v2, {"ok": True, "path": "a.md"}, limit=4)
+    assert lookup_sandbox_operation(runtime, k1, limit=4) is None
+    assert lookup_sandbox_operation(runtime, k1_v2, limit=4) is not None
+
+    evicted = invalidate_sandbox_operations(runtime, "ws1", paths=["./a.md"])
+    assert evicted == 1
+    assert lookup_sandbox_operation(runtime, k1_v2, limit=4) is None
+
+
+@pytest.mark.asyncio
+async def test_singleflight_completed_requests_enforce_true_lru_touch_on_hit() -> None:
+    from threading import Lock
+
+    from app.api._singleflight import (
+        claim_session_request_singleflight,
+        get_completed_request,
+        publish_session_request_singleflight,
+        remember_completed_request,
+    )
+
+    completed: dict[tuple[str, str, str], dict[str, object]] = {}
+    inflight: dict[tuple[str, str, str], Any] = {}
+    guard = Lock()
+
+    key_a = ("ws", "turn", "req-a")
+    key_b = ("ws", "turn", "req-b")
+    key_c = ("ws", "turn", "req-c")
+
+    remember_completed_request(completed, key_a, {"id": "a"}, guard=guard, limit=2)
+    remember_completed_request(completed, key_b, {"id": "b"}, guard=guard, limit=2)
+
+    # Touch key_a via claim_session_request_singleflight so key_b becomes coldest.
+    mode, cached_a, fut = claim_session_request_singleflight(
+        key_a, completed=completed, inflight=inflight, guard=guard, limit=2
+    )
+    assert mode == "cached"
+    assert cached_a == {"id": "a"}
+    assert fut is None
+
+    # Publishing key_c with limit=2 must evict cold key_b while retaining hot key_a.
+    mode_c, _, fut_c = claim_session_request_singleflight(
+        key_c, completed=completed, inflight=inflight, guard=guard, limit=2
+    )
+    assert mode_c == "owner"
+    assert fut_c is not None
+    publish_session_request_singleflight(
+        key_c, {"id": "c"}, completed=completed, inflight=inflight, guard=guard, limit=2
+    )
+    assert fut_c.done() and fut_c.result() == {"id": "c"}
+    assert list(completed.keys()) == [key_a, key_c]
+    assert get_completed_request(completed, key_b, guard=guard, limit=2) is None
+    assert get_completed_request(completed, key_a, guard=guard, limit=2) == {"id": "a"}
+    # Touching key_a again moves it after key_c.
+    assert list(completed.keys()) == [key_c, key_a]
+

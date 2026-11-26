@@ -17,6 +17,7 @@ from app.llm.prompts import build_coaching_system_prompt
 from app.llm.resource_message_parts import build_resource_display_parts
 from app.llm.tool_primitives import (
     ORTHOGONAL_PRIMITIVE_NAMES,
+    _build_library_exec_env,
     _validate_library_exec_command,
     select_orthogonal_tools_for_turn,
 )
@@ -675,4 +676,168 @@ async def test_line_slicing_excerpt_forwarding_grounding_and_turn_write_gates(
     )
     assert blocked_import["ok"] is False
     assert blocked_import["error"] == "library_write_not_requested"
+
+
+@pytest.mark.asyncio
+async def test_sandbox_operation_log_never_replays_stale_after_edit_delete_or_exec(
+    tmp_path: Path,
+) -> None:
+    _runtime, ctx, _project_root, library_root = _setup_ctx(tmp_path)
+    ctx.extra = {"library_sandbox_work": True}
+    registry = build_default_tool_registry()
+
+    first_write = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "write", "path": "notes/versioned.md", "content": "# v1\nalpha\n"},
+    )
+    assert first_write["ok"] is True
+    assert first_write.get("replayed") is not True
+
+    # Identical repeat while disk still matches v1 SHOULD replay idempotently.
+    same_write = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "write", "path": "notes/versioned.md", "content": "# v1\nalpha\n"},
+    )
+    assert same_write["ok"] is True
+    assert same_write.get("replayed") is True
+
+    # Mutate file via surgical edit -> v2, then write v1 again: MUST NOT stale-replay!
+    edited = await registry.invoke(
+        ctx,
+        "library_write",
+        {
+            "action": "edit",
+            "path": "notes/versioned.md",
+            "old_text": "# v1\nalpha",
+            "new_text": "# v2\nbeta",
+        },
+    )
+    assert edited["ok"] is True
+    assert (library_root / "notes/versioned.md").read_text(encoding="utf-8") == "# v2\nbeta\n"
+
+    rewrite_v1 = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "write", "path": "notes/versioned.md", "content": "# v1\nalpha\n"},
+    )
+    assert rewrite_v1["ok"] is True
+    assert rewrite_v1.get("replayed") is not True
+    assert (library_root / "notes/versioned.md").read_text(encoding="utf-8") == "# v1\nalpha\n"
+
+    # Soft-delete to .trash/, then write v1 again: MUST recreate file on disk!
+    deleted = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "soft_delete", "path": "notes/versioned.md"},
+    )
+    assert deleted["ok"] is True
+    assert not (library_root / "notes/versioned.md").exists()
+
+    recreated = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "write", "path": "notes/versioned.md", "content": "# v1\nalpha\n"},
+    )
+    assert recreated["ok"] is True
+    assert recreated.get("replayed") is not True
+    assert (library_root / "notes/versioned.md").is_file()
+
+    # refresh_index must never be cached across external/exec file mutations.
+    assert sandbox_operation_key(ctx.workspace_id, "library_write", {"action": "refresh_index", "path": "notes/versioned.md"}) is None
+    assert sandbox_operation_key(ctx.workspace_id, "index_sandbox_file", {"path": "notes/versioned.md"}) is None
+    first_refresh = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "refresh_index", "path": "notes/versioned.md"},
+    )
+    assert first_refresh["ok"] is True
+    (library_root / "notes/versioned.md").write_text("# v3\ngamma_updated_token\n", encoding="utf-8")
+    second_refresh = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "refresh_index", "path": "notes/versioned.md"},
+    )
+    assert second_refresh["ok"] is True
+    assert second_refresh.get("replayed") is not True
+
+
+def test_library_exec_blocks_quoted_tilde_env_and_inline_delete_escapes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _runtime, _ctx, project_root, library_root = _setup_ctx(tmp_path)
+    outside_secret = tmp_path / "outside_secret.txt"
+    outside_secret.write_text("top-secret", encoding="utf-8")
+
+    forbidden_commands = [
+        f'cat "{outside_secret}"',
+        f"cat '{outside_secret}'",
+        f"grep --file={outside_secret} root",
+        f"python3 -c \"print(open('{outside_secret}').read())\"",
+        f'cat "{project_root / "app.py"}"',
+        "cat ~/Documents/secret.txt",
+        'cat "~/Documents/secret.txt"',
+        "cat $HOME/.ssh/id_rsa",
+        'cat "${HOME}/.ssh/id_rsa"',
+        "find . -name '*.md' -delete",
+        "find . -type f -exec rm {} +",
+        "echo note.md | xargs rm",
+        '"rm" -rf notes',
+        "python3 -c 'import os; os.remove(\"a.md\")'",
+        "python3 -c 'import shutil; shutil.rmtree(\"notes\")'",
+        "node -e 'fs.rmSync(\"a.md\")'",
+        "ln -s /etc/passwd leak.txt",
+        "git clean -fd",
+        "cd",
+        "cd -",
+        'cat "unterminated_quote',
+    ]
+    for cmd in forbidden_commands:
+        reason = _validate_library_exec_command(
+            cmd,
+            library_root=library_root,
+            project_root=project_root,
+        )
+        assert reason is not None, f"Expected command to be blocked: {cmd!r}"
+
+    # Safe commands inside <LibraryRoot> (including quoted relative filenames and /usr/bin tools) pass.
+    safe_commands = [
+        'python3 -c "from pathlib import Path; Path(\'summary.md\').write_text(\'ok\')"',
+        '/usr/bin/env python3 -c "print(1 + 1)"',
+        'grep -rn "alpha" "notes/my file.md" || true',
+    ]
+    for cmd in safe_commands:
+        assert (
+            _validate_library_exec_command(
+                cmd,
+                library_root=library_root,
+                project_root=project_root,
+            )
+            is None
+        ), f"Expected safe command to pass: {cmd!r}"
+
+    # Packaged PyInstaller env isolation check.
+    monkeypatch.setenv("_MEIPASS", "/var/folders/xx/_MEI12345")
+    monkeypatch.setenv("_MEIPASS2", "/var/folders/xx/_MEI12345")
+    monkeypatch.setenv("DYLD_LIBRARY_PATH", "/var/folders/xx/_MEI12345")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/var/folders/xx/_MEI12345")
+    monkeypatch.setenv("PYTHONPATH", "/var/folders/xx/_MEI12345/pkgs")
+    monkeypatch.setenv("PYTHONHOME", "/var/folders/xx/_MEI12345")
+    monkeypatch.setenv("PATH", "/var/folders/xx/_MEI12345:/usr/bin:/bin")
+    clean_env = _build_library_exec_env(library_root)
+    for stripped in (
+        "_MEIPASS",
+        "_MEIPASS2",
+        "DYLD_LIBRARY_PATH",
+        "LD_LIBRARY_PATH",
+        "PYTHONPATH",
+        "PYTHONHOME",
+    ):
+        assert stripped not in clean_env
+    path_parts = clean_env["PATH"].split(":")
+    assert all("_MEI" not in part for part in path_parts)
+    assert path_parts[:2] == ["/opt/homebrew/bin", "/usr/local/bin"]
+    assert clean_env["HOME"] == str(library_root)
 

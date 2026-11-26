@@ -192,9 +192,9 @@ IDEMPOTENT_SANDBOX_TOOLS: frozenset[str] = frozenset(
     {
         "library_write",
         "write_sandbox_file",
-        "index_sandbox_file",
     }
 )
+SANDBOX_OPERATION_LOG_LIMIT = 128
 
 _PROMPT_TOO_LONG_MARKERS = (
     "contextlength",
@@ -855,6 +855,10 @@ def append_steering_messages(history: list[dict[str, Any]], texts: list[str]) ->
     return count
 
 
+def _normalize_sandbox_op_relpath(raw_path: Any) -> str:
+    return str(raw_path or "").strip().replace("\\", "/").lstrip("./").rstrip("/")
+
+
 def sandbox_operation_key(
     workspace_id: str,
     name: str,
@@ -865,7 +869,9 @@ def sandbox_operation_key(
     payload = arguments if isinstance(arguments, dict) else {}
     if name == "library_write":
         action = str(payload.get("action") or "write").strip().lower()
-        if action not in {"write", "refresh_index"}:
+        # Only exact file-content writes are candidates for idempotent replay;
+        # refresh_index exists specifically to re-read mutated disk files.
+        if action != "write":
             return None
     try:
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
@@ -875,17 +881,98 @@ def sandbox_operation_key(
     return f"{workspace_id}:{name}:{digest}"
 
 
-def lookup_sandbox_operation(runtime: Any, key: str | None) -> dict[str, Any] | None:
+def invalidate_sandbox_operations(
+    runtime: Any,
+    workspace_id: str,
+    *,
+    paths: list[str] | tuple[str, ...] | None = None,
+) -> int:
+    """Evict cached sandbox write entries for a workspace (all paths or specific paths)."""
+    if runtime is None or not workspace_id:
+        return 0
+    log = getattr(runtime, "sandbox_operation_log", None)
+    if not isinstance(log, dict) or not log:
+        return 0
+    prefix = f"{workspace_id}:"
+    normalized_targets = {
+        _normalize_sandbox_op_relpath(item).casefold()
+        for item in (paths or ())
+        if _normalize_sandbox_op_relpath(item)
+    }
+    to_remove: list[str] = []
+    for existing_key, entry in list(log.items()):
+        if not str(existing_key).startswith(prefix):
+            continue
+        if not normalized_targets:
+            to_remove.append(existing_key)
+            continue
+        entry_path = (
+            _normalize_sandbox_op_relpath(entry.get("path")).casefold()
+            if isinstance(entry, dict)
+            else ""
+        )
+        if not entry_path or entry_path in normalized_targets:
+            to_remove.append(existing_key)
+    for existing_key in to_remove:
+        log.pop(existing_key, None)
+    return len(to_remove)
+
+
+def lookup_sandbox_operation(
+    runtime: Any,
+    key: str | None,
+    *,
+    workspace_id: str | None = None,
+    expected_path: str | None = None,
+    expected_content: str | None = None,
+    limit: int = SANDBOX_OPERATION_LOG_LIMIT,
+) -> dict[str, Any] | None:
     if not key or runtime is None:
         return None
     log = getattr(runtime, "sandbox_operation_log", None)
     if not isinstance(log, dict):
         return None
     cached = log.get(key)
-    return dict(cached) if isinstance(cached, dict) else None
+    if not isinstance(cached, dict):
+        return None
+    # Verify live disk state whenever sandbox_service is attached so prior edits,
+    # renames, soft_deletes, or external changes never trigger a stale replay.
+    sandbox_service = getattr(runtime, "sandbox_service", None)
+    effective_ws = str(workspace_id or key.split(":", 1)[0] or "").strip()
+    rel_path = _normalize_sandbox_op_relpath(expected_path or cached.get("path"))
+    if sandbox_service is not None and effective_ws and rel_path:
+        try:
+            from pathlib import Path
+
+            root = Path(sandbox_service.ensure_operation_root(effective_ws)).resolve()
+            target = (root / rel_path).resolve()
+            target.relative_to(root)
+            if not target.is_file():
+                log.pop(key, None)
+                return None
+            if expected_content is not None:
+                disk_text = target.read_text(encoding="utf-8", errors="replace")
+                if disk_text != str(expected_content):
+                    log.pop(key, None)
+                    return None
+        except Exception:
+            log.pop(key, None)
+            return None
+    # Touch on hit for true LRU ordering and enforce bound.
+    log.pop(key, None)
+    log[key] = cached
+    while len(log) > max(1, limit):
+        log.pop(next(iter(log)), None)
+    return dict(cached)
 
 
-def store_sandbox_operation(runtime: Any, key: str | None, result: dict[str, Any]) -> None:
+def store_sandbox_operation(
+    runtime: Any,
+    key: str | None,
+    result: dict[str, Any],
+    *,
+    limit: int = SANDBOX_OPERATION_LOG_LIMIT,
+) -> None:
     if not key or runtime is None or not isinstance(result, dict):
         return
     if result.get("ok") is not True:
@@ -897,9 +984,16 @@ def store_sandbox_operation(runtime: Any, key: str | None, result: dict[str, Any
     log = getattr(runtime, "sandbox_operation_log", None)
     if not isinstance(log, dict):
         return
+    workspace_id = key.split(":", 1)[0]
+    rel_path = _normalize_sandbox_op_relpath(result.get("path"))
+    if workspace_id and rel_path:
+        invalidate_sandbox_operations(runtime, workspace_id, paths=[rel_path])
     stored = dict(result)
     stored["idempotent_key"] = key
+    log.pop(key, None)
     log[key] = stored
+    while len(log) > max(1, limit):
+        log.pop(next(iter(log)), None)
     ledger = getattr(runtime, "event_ledger", None)
     record = getattr(ledger, "record_event", None) if ledger is not None else None
     if not callable(record):

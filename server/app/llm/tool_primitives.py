@@ -28,6 +28,7 @@ import inspect
 import logging
 import os
 import re
+import shlex
 import time
 from pathlib import Path
 from typing import Any
@@ -136,19 +137,41 @@ _INDEXABLE_LIBRARY_EXTENSIONS: frozenset[str] = frozenset(
 )
 
 # Guardrails for library_exec: forbid irreversible deletes, privilege escalation,
-# pipe-to-shell, and path traversal outside <LibraryRoot>.
+# symlinks, tilde/env home escapes, pipe-to-shell, and path traversal outside <LibraryRoot>.
 _LIBRARY_EXEC_FORBIDDEN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
-        re.compile(r"(?:^|[;&|]\s*)rm\s+", re.IGNORECASE),
+        re.compile(
+            r"(?:^|[;&|\n`$(]\s*|(?:xargs|env|command)\s+)(?:['\"]?/(?:bin|usr/bin)/)?['\"]?rm['\"]?(?:\s|$)",
+            re.IGNORECASE,
+        ),
         "Use library_write(action='soft_delete') instead of rm so deletions stay recoverable in .trash/.",
     ),
     (
-        re.compile(r"\bunlink\s+", re.IGNORECASE),
+        re.compile(r"\bunlink\b\s*(?:\(|[^\s])", re.IGNORECASE),
         "Use library_write(action='soft_delete') instead of unlink.",
     ),
     (
-        re.compile(r"\brmdir\s+", re.IGNORECASE),
+        re.compile(r"\brmdir\b\s*(?:\(|[^\s])", re.IGNORECASE),
         "Use library_write(action='soft_delete') instead of rmdir.",
+    ),
+    (
+        re.compile(r"\bfind\b[^\n;|&]*\s-(?:delete|exec\s+(?:['\"]?/(?:bin|usr/bin)/)?['\"]?rm\b)", re.IGNORECASE),
+        "Use library_write(action='soft_delete') instead of find -delete / -exec rm.",
+    ),
+    (
+        re.compile(
+            r"\b(?:os\.(?:remove|unlink|rmdir|removedirs)|shutil\.rmtree|Path\([^)]*\)\.unlink|fs\.(?:rmSync|unlinkSync|rmdirSync|rm\b))\s*\(",
+            re.IGNORECASE,
+        ),
+        "Direct file deletion in inline scripts is forbidden; use library_write(action='soft_delete') so deletions stay recoverable in .trash/.",
+    ),
+    (
+        re.compile(r"\b(?:git\s+clean\b|shred\b)", re.IGNORECASE),
+        "Irreversible cleanup commands (git clean / shred) are forbidden in library_exec.",
+    ),
+    (
+        re.compile(r"(?:^|[;&|\n`$(]\s*)ln\s+|\bos\.symlink\s*\(", re.IGNORECASE),
+        "Creating symlinks is forbidden in library_exec to prevent sandbox path escapes.",
     ),
     (
         re.compile(r"\bsudo\b|\bsu\b|\bchmod\b|\bchown\b|\bmkfs\b|\bdd\s+if=", re.IGNORECASE),
@@ -163,9 +186,52 @@ _LIBRARY_EXEC_FORBIDDEN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         "Remote git push is forbidden in library_exec.",
     ),
     (
-        re.compile(r"(?:^|[\s'\"=/])(?:\.\./|\.\.\\)"),
+        re.compile(r"(?:^|[\s'\"=:(])~(?:/|\s|$|['\"])"),
+        "Home-directory (~) expansion is forbidden; use relative paths inside <LibraryRoot>.",
+    ),
+    (
+        re.compile(r"\$(?:\{)?(?:HOME|USERPROFILE|OLDPWD|TMPDIR)(?:\})?\b", re.IGNORECASE),
+        "Environment-variable directory escapes ($HOME / $OLDPWD / $TMPDIR) are forbidden in library_exec.",
+    ),
+    (
+        re.compile(r"(?:^|[;&|\n]\s*)cd(?:\s*|\s+-)(?:$|[;&|\n])"),
+        "Bare 'cd' / 'cd -' escapes <LibraryRoot>; stay inside relative paths under <LibraryRoot>.",
+    ),
+    (
+        re.compile(r"(?:^|[\s'\"=/(\[])\.\.(?:[/\\]|$|[\s'\"])" ),
         "Parent directory traversal ('..') is forbidden; library_exec is strictly confined to <LibraryRoot>.",
     ),
+)
+
+_ALLOWED_SYSTEM_EXEC_PREFIXES: tuple[str, ...] = (
+    "/usr/bin/",
+    "/usr/local/bin/",
+    "/usr/sbin/",
+    "/bin/",
+    "/sbin/",
+    "/opt/homebrew/bin/",
+    "/opt/homebrew/opt/",
+    "/opt/homebrew/Cellar/",
+    "/Library/Developer/CommandLineTools/usr/bin/",
+)
+
+_STRIPPED_SUBPROCESS_ENV_KEYS: frozenset[str] = frozenset(
+    {
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "PYTHONSTARTUP",
+        "PYTHONEXECUTABLE",
+        "__PYVENV_LAUNCHER__",
+        "PYINSTALLER_RESET_ENVIRONMENT",
+        "_MEIPASS",
+        "_MEIPASS2",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "DYLD_LIBRARY_PATH",
+        "DYLD_FALLBACK_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_FRAMEWORK_PATH",
+    }
 )
 
 _MAX_EXEC_TIMEOUT_SECONDS = 30.0
@@ -899,6 +965,72 @@ def _stamp_library_result(result: dict[str, Any], action: str) -> dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
+def _extract_candidate_absolute_paths(cleaned: str) -> tuple[list[str], str | None]:
+    try:
+        lexed_tokens = shlex.split(cleaned, posix=True)
+    except ValueError:
+        return [], "Malformed shell quoting in library_exec command."
+
+    candidates: list[str] = []
+
+    def _add(raw_token: str) -> None:
+        token = raw_token.strip().strip("'\"")
+        if token.startswith("/") and len(token) > 1 and token not in candidates:
+            candidates.append(token)
+
+    for token in lexed_tokens:
+        _add(token)
+        if "=" in token:
+            _, rhs = token.split("=", 1)
+            _add(rhs)
+        for embedded in re.findall(
+            r"(?:^|[\s'\"=(,\[])(/(?!/)[A-Za-z0-9._+@~-]+(?:/[A-Za-z0-9._+@~ -]*)*)",
+            token,
+        ):
+            _add(embedded)
+
+    for quoted in re.findall(r"['\"](/(?!/)[^'\"\n;|&<>()]+)['\"]", cleaned):
+        _add(quoted)
+    for unquoted in re.findall(r"(?:^|[\s=(,\[])(/(?!/)[^\s'\"|;&<>()]+)", cleaned):
+        _add(unquoted)
+    return candidates, None
+
+
+def _build_library_exec_env(library_root: Path) -> dict[str, str]:
+    """Build an isolated subprocess environment safe under packaged PyInstaller sidecars."""
+    clean_env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        upper_key = key.upper()
+        if (
+            key in _STRIPPED_SUBPROCESS_ENV_KEYS
+            or upper_key in _STRIPPED_SUBPROCESS_ENV_KEYS
+            or upper_key.startswith(("_MEI", "PYINSTALLER_"))
+        ):
+            continue
+        clean_env[key] = value
+
+    raw_path_parts = [part.strip() for part in clean_env.get("PATH", "").split(os.pathsep) if part.strip()]
+    filtered_parts = [
+        part
+        for part in raw_path_parts
+        if "_MEI" not in part and "PyInstaller" not in part
+    ]
+    preferred_prefixes = ["/opt/homebrew/bin", "/usr/local/bin"]
+    fallback_suffixes = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    merged_path: list[str] = []
+    for segment in [*preferred_prefixes, *filtered_parts, *fallback_suffixes]:
+        if segment and segment not in merged_path:
+            merged_path.append(segment)
+    clean_env["PATH"] = os.pathsep.join(merged_path)
+    clean_env["HOME"] = str(library_root)
+    clean_env["PWD"] = str(library_root)
+    clean_env["PYTHONIOENCODING"] = "utf-8"
+    clean_env["PYTHONNOUSERSITE"] = "1"
+    clean_env.setdefault("LANG", "en_US.UTF-8")
+    clean_env.setdefault("LC_ALL", "en_US.UTF-8")
+    return clean_env
+
+
 def _validate_library_exec_command(
     command: str,
     *,
@@ -911,18 +1043,39 @@ def _validate_library_exec_command(
     for pattern, reason in _LIBRARY_EXEC_FORBIDDEN_PATTERNS:
         if pattern.search(cleaned):
             return reason
-    if project_root is not None:
-        project_str = str(project_root)
-        if project_str and project_str != str(library_root) and project_str in cleaned:
+    resolved_library_root = library_root.resolve()
+    resolved_project_root = project_root.resolve() if project_root is not None else None
+    if resolved_project_root is not None and resolved_project_root != resolved_library_root:
+        project_str = str(resolved_project_root)
+        raw_project_str = str(project_root)
+        lowered_cmd = cleaned.casefold()
+        if (
+            (project_str and project_str.casefold() in lowered_cmd)
+            or (raw_project_str and raw_project_str.casefold() in lowered_cmd)
+        ):
             return "library_exec cannot access <ProjectRoot>; use project_read for read-only codebase inspection."
-    for token in re.findall(r"(?:^|\s)(/[^\s'\"|;&]+)", cleaned):
-        if token.startswith(("/usr/", "/bin/", "/opt/homebrew/", "/dev/null")):
+    candidates, lex_error = _extract_candidate_absolute_paths(cleaned)
+    if lex_error is not None:
+        return lex_error
+    for token in candidates:
+        if token == "/dev/null":
+            continue
+        if ".." in Path(token).parts:
+            return f"Path traversal in {token!r} escapes <LibraryRoot>."
+        if token.startswith(_ALLOWED_SYSTEM_EXEC_PREFIXES):
             continue
         try:
             candidate = Path(token).resolve()
         except Exception:
-            continue
-        if not _is_within_root(library_root, candidate):
+            return f"Invalid absolute path {token!r} in library_exec."
+        if (
+            resolved_project_root is not None
+            and resolved_project_root != resolved_library_root
+            and _is_within_root(resolved_project_root, candidate)
+            and not _is_within_root(resolved_library_root, candidate)
+        ):
+            return "library_exec cannot access <ProjectRoot>; use project_read for read-only codebase inspection."
+        if not _is_within_root(resolved_library_root, candidate):
             return f"Absolute path {token!r} escapes <LibraryRoot>."
     return None
 
@@ -972,9 +1125,11 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
         timeout = _DEFAULT_EXEC_TIMEOUT_SECONDS
 
     started_at = time.time()
+    exec_env = _build_library_exec_env(library_root)
     proc = await asyncio.create_subprocess_shell(
         command,
         cwd=str(library_root),
+        env=exec_env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -992,6 +1147,10 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
 
     stdout_text = raw_stdout[:_MAX_EXEC_OUTPUT_BYTES].decode("utf-8", errors="replace")
     stderr_text = raw_stderr[:_MAX_EXEC_OUTPUT_BYTES].decode("utf-8", errors="replace")
+    if proc.returncode == 0:
+        from .harness import invalidate_sandbox_operations
+
+        invalidate_sandbox_operations(context.runtime, context.workspace_id)
     auto_indexed_paths: list[str] = []
     if proc.returncode == 0 and args.get("auto_index") is not False:
         for dirpath, dirnames, filenames in os.walk(library_root):

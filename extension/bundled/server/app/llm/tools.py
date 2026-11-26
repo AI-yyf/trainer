@@ -334,6 +334,7 @@ class ToolRegistry:
             }
         parsed_arguments = _coerce_arguments(arguments)
         from .harness import (
+            invalidate_sandbox_operations,
             lookup_sandbox_operation,
             sandbox_operation_key,
             store_sandbox_operation,
@@ -348,8 +349,25 @@ class ToolRegistry:
             and str(parsed_arguments.get("action") or "").strip().lower()
             in {"learning_materials", "assess_evidence"}
         )
+        expected_path = (
+            str(parsed_arguments.get("path") or "").strip() or None
+            if isinstance(parsed_arguments, dict)
+            else None
+        )
+        raw_expected_content = (
+            parsed_arguments.get("content") if isinstance(parsed_arguments, dict) else None
+        )
+        expected_content = (
+            raw_expected_content if isinstance(raw_expected_content, str) else None
+        )
         if not stateful_research_tool:
-            cached = lookup_sandbox_operation(context.runtime, operation_key)
+            cached = lookup_sandbox_operation(
+                context.runtime,
+                operation_key,
+                workspace_id=context.workspace_id,
+                expected_path=expected_path,
+                expected_content=expected_content,
+            )
             if cached is not None:
                 replayed = dict(cached)
                 replayed["replayed"] = True
@@ -365,7 +383,21 @@ class ToolRegistry:
                 result = dict(result)
                 result.setdefault("ok", True)
             if not stateful_research_tool:
-                store_sandbox_operation(context.runtime, operation_key, result)
+                if operation_key is not None:
+                    store_sandbox_operation(context.runtime, operation_key, result)
+                elif result.get("ok") is True and name in {
+                    "library_write",
+                    "library_exec",
+                    "organize_resources",
+                    "curate_library_resources",
+                    "delete_resource",
+                    "restore_resource",
+                    "save_lecture_note",
+                    "import_resource_url",
+                    "import_workspace_file",
+                    "index_sandbox_file",
+                }:
+                    invalidate_sandbox_operations(context.runtime, context.workspace_id)
             return result
         except Exception as exc:  # pragma: no cover - belt and braces
             logger.exception("tool_invocation_failed", extra={"tool": name})
@@ -2597,6 +2629,9 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
         stored = history.get(undo_id) if isinstance(history, dict) else None
         if not isinstance(stored, dict) or str(stored.get("workspace_id") or "") != context.workspace_id:
             return {"ok": False, "error": "unknown_undo_id", "detail": "The organization change is no longer available for undo."}
+        if isinstance(history, dict):
+            history.pop(undo_id, None)
+            history[undo_id] = stored
         raw_operations = stored.get("undo_operations")
         operations = raw_operations if isinstance(raw_operations, list) else []
     else:
@@ -2834,10 +2869,13 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
             }
         history_id = f"org-{uuid4().hex}"
         if isinstance(history, dict):
+            history.pop(history_id, None)
             history[history_id] = {
                 "workspace_id": context.workspace_id,
                 "undo_operations": undo_operations,
             }
+            while len(history) > 64:
+                history.pop(next(iter(history)), None)
         # Pending already consumed at commit start; clear is a no-op safety net.
         _clear_resource_organization_pending(runtime, context.workspace_id)
         # Completed write wins over a late cancel latch; ack honest failure-to-cancel.
