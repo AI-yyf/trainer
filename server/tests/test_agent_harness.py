@@ -1136,6 +1136,72 @@ def test_general_coach_followup_retains_history_and_prior_tool_trace() -> None:
     )
 
 
+def test_p0_6_backend_structural_governance_invariants() -> None:
+    import ast
+    import dataclasses
+    from pathlib import Path
 
+    from app.api.routes.core import CoreRouteDeps
 
+    server_app = Path(__file__).resolve().parents[1] / "app"
+    routers_path = server_app / "api" / "routers.py"
+    core_path = server_app / "api" / "routes" / "core.py"
+    domains_dir = server_app / "api" / "router_domains"
+
+    routers_src = routers_path.read_text(encoding="utf-8")
+    core_src = core_path.read_text(encoding="utf-8")
+
+    # 1. routers.py and core.py stay slim orchestrators (< 150 lines, 0 nested closures in build_router)
+    assert len(routers_src.splitlines()) <= 150
+    assert len(core_src.splitlines()) <= 150
+    routers_tree = ast.parse(routers_src)
+    build_router_fn = next(
+        n for n in routers_tree.body if isinstance(n, ast.FunctionDef) and n.name == "build_router"
+    )
+    nested_in_build_router = [
+        n for n in build_router_fn.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    assert nested_in_build_router == []
+
+    # 2. CoreRouteDeps parameter bag is collapsed to <= 4 typed collaborators with 0 Any fields
+    fields = dataclasses.fields(CoreRouteDeps)
+    assert 1 <= len(fields) <= 4
+    assert all(str(f.type) != "Any" and f.type is not Any for f in fields)
+
+    # 3. Zero Pyright complexity bailouts (reportGeneralTypeIssues) anywhere in server/app
+    for py_file in server_app.rglob("*.py"):
+        text = py_file.read_text(encoding="utf-8")
+        assert "reportGeneralTypeIssues" not in text, f"Found complexity exemption in {py_file}"
+
+    # 4. Decomposed core route modules and router_domains modules exist and stay bounded
+    expected_core_modules = (
+        "core_shared.py",
+        "core_sessions.py",
+        "core_streaming.py",
+        "core_evaluation.py",
+        "core_training.py",
+    )
+    for mod_name in expected_core_modules:
+        mod_path = server_app / "api" / "routes" / mod_name
+        assert mod_path.is_file(), f"Missing {mod_name}"
+        mod_tree = ast.parse(mod_path.read_text(encoding="utf-8"))
+        for node in ast.walk(mod_tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.end_lineno:
+                span = node.end_lineno - node.lineno + 1
+                assert span <= 500, f"{mod_name}:{node.name} is {span} lines (> 500 limit)"
+
+    expected_domain_modules = (
+        "stream_and_locks.py",
+        "guided_focus.py",
+        "provider_recovery.py",
+        "resource_grounding.py",
+        "coach_turn_artifacts.py",
+        "turn_grounding.py",
+        "workspace_and_honesty.py",
+        "training_cards.py",
+        "pedagogy_and_evaluation.py",
+        "context.py",
+    )
+    for dom_name in expected_domain_modules:
+        assert (domains_dir / dom_name).is_file(), f"Missing router_domains/{dom_name}"
 

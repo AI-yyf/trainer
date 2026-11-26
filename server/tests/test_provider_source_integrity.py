@@ -50,6 +50,32 @@ SOURCE_PAIRS = (
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "api" / "routers.py",
     ),
     (
+        SERVER_ROOT / "app" / "api" / "routes" / "core.py",
+        REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "api" / "routes" / "core.py",
+    ),
+    (
+        SERVER_ROOT / "app" / "api" / "routes" / "core_streaming.py",
+        REPOSITORY_ROOT
+        / "extension"
+        / "bundled"
+        / "server"
+        / "app"
+        / "api"
+        / "routes"
+        / "core_streaming.py",
+    ),
+    (
+        SERVER_ROOT / "app" / "api" / "router_domains" / "context.py",
+        REPOSITORY_ROOT
+        / "extension"
+        / "bundled"
+        / "server"
+        / "app"
+        / "api"
+        / "router_domains"
+        / "context.py",
+    ),
+    (
         SERVER_ROOT / "app" / "api" / "_singleflight.py",
         REPOSITORY_ROOT / "extension" / "bundled" / "server" / "app" / "api" / "_singleflight.py",
     ),
