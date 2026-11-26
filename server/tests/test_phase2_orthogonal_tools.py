@@ -841,3 +841,143 @@ def test_library_exec_blocks_quoted_tilde_env_and_inline_delete_escapes(
     assert path_parts[:2] == ["/opt/homebrew/bin", "/usr/local/bin"]
     assert clean_env["HOME"] == str(library_root)
 
+
+@pytest.mark.asyncio
+async def test_library_exec_seatbelt_denies_network_and_host_secrets_and_fails_closed_without_sandbox(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.llm.tool_primitives import (
+        _build_macos_seatbelt_profile,
+        _build_sandboxed_exec_argv,
+    )
+
+    _runtime, ctx, project_root, library_root = _setup_ctx(tmp_path)
+    ctx.extra = {"library_sandbox_work": True}
+    registry = build_default_tool_registry()
+
+    fake_home = tmp_path / "fake_host_home"
+    ssh_dir = fake_home / ".ssh"
+    ssh_dir.mkdir(parents=True, exist_ok=True)
+    secret_key = ssh_dir / "id_rsa"
+    secret_key.write_text("PRIVATE_KEY_PAYLOAD", encoding="utf-8")
+    netrc_file = fake_home / ".netrc"
+    netrc_file.write_text("machine api.example.com password topsecret", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    profile = _build_macos_seatbelt_profile(library_root, project_root)
+    assert "(deny network*)" in profile
+    assert f'(deny file-read* (subpath "{ssh_dir.resolve()}"))' in profile
+    assert f'(deny file-read* (literal "{netrc_file.resolve()}"))' in profile
+    assert f'(deny file-read* (subpath "{project_root.resolve()}"))' in profile
+
+    # Static command validator blocks outbound CLI network tools upfront.
+    for net_cmd in ("curl https://example.com", "wget -qO- https://example.com", "nc 1.1.1.1 80"):
+        assert (
+            _validate_library_exec_command(
+                net_cmd,
+                library_root=library_root,
+                project_root=project_root,
+            )
+            is not None
+        )
+
+    # Live runtime execution: outbound TCP socket and host secret reads are blocked,
+    # while in-<LibraryRoot> Python work succeeds cleanly.
+    net_res = await registry.invoke(
+        ctx,
+        "library_exec",
+        {
+            "command": (
+                "python3 -c \"import socket; s = socket.socket(); "
+                "s.settimeout(1.0); s.connect(('1.1.1.1', 80))\""
+            )
+        },
+    )
+    assert net_res["ok"] is False
+
+    # Attempt to read host secret via indirect path construction (bypassing static token check)
+    # is caught at runtime by Seatbelt / PEP 578 audit hook.
+    monkeypatch.setenv("TEST_SECRET_DIR", str(ssh_dir.resolve()))
+    secret_res = await registry.invoke(
+        ctx,
+        "library_exec",
+        {
+            "command": (
+                "python3 -c \"import os, pathlib; "
+                "p = pathlib.Path(os.environ['TEST_SECRET_DIR']) / 'id_rsa'; "
+                "print(p.read_text())\""
+            )
+        },
+    )
+    assert secret_res["ok"] is False
+    assert "PRIVATE_KEY_PAYLOAD" not in secret_res.get("stdout", "")
+
+    ok_res = await registry.invoke(
+        ctx,
+        "library_exec",
+        {
+            "command": (
+                "python3 -c \"from pathlib import Path; "
+                "Path('seatbelt_ok.md').write_text('# Seatbelt OK\\n', encoding='utf-8'); "
+                "print('seatbelt_clean')\""
+            )
+        },
+    )
+    assert ok_res["ok"] is True
+    assert "seatbelt_clean" in ok_res["stdout"]
+    assert (library_root / "seatbelt_ok.md").is_file()
+
+    # Verify macOS Seatbelt argv generation when kernel sandbox is usable.
+    monkeypatch.setattr("app.llm.tool_primitives._macos_sandbox_exec_usable", lambda: True)
+    sb_argv, sb_backend = _build_sandboxed_exec_argv(
+        "ls -la",
+        library_root=library_root,
+        project_root=project_root,
+    )
+    assert sb_backend == "macos_seatbelt"
+    assert sb_argv is not None and "(deny network*)" in sb_argv[2]
+
+    # Verify Linux bwrap argv generation includes --unshare-net and --tmpfs secret masking.
+    monkeypatch.setattr("app.llm.tool_primitives._macos_sandbox_exec_usable", lambda: False)
+    monkeypatch.setattr("app.llm.tool_primitives._linux_bwrap_bin", lambda: "/usr/bin/bwrap")
+    bwrap_argv, bwrap_backend = _build_sandboxed_exec_argv(
+        "ls -la",
+        library_root=library_root,
+        project_root=project_root,
+    )
+    assert bwrap_backend == "linux_bwrap"
+    assert bwrap_argv is not None
+    assert "--unshare-net" in bwrap_argv
+    assert str(ssh_dir.resolve()) in bwrap_argv
+
+    # Verify fail-closed rejection of shell / non-audited commands (zero /bin/sh fallback!)
+    # when neither macOS Seatbelt nor Linux bwrap is available.
+    monkeypatch.setattr("app.llm.tool_primitives._linux_bwrap_bin", lambda: None)
+    for unsandboxed_shell_cmd in (
+        "ls -la",
+        "cat seatbelt_ok.md",
+        "echo a && echo b",
+        "echo a | cat",
+        "echo leak > out.txt",
+        "sh -c 'echo hi'",
+    ):
+        none_argv, none_backend = _build_sandboxed_exec_argv(
+            unsandboxed_shell_cmd,
+            library_root=library_root,
+            project_root=project_root,
+        )
+        assert none_argv is None, f"Expected no /bin/sh fallback for {unsandboxed_shell_cmd!r}"
+        assert none_backend == "unavailable"
+
+    fail_closed_res = await registry.invoke(
+        ctx,
+        "library_exec",
+        {"command": "ls -la"},
+    )
+    assert fail_closed_res["ok"] is False
+    assert fail_closed_res["error"] == "sandbox_unavailable"
+    assert fail_closed_res["sandbox_backend"] == "unavailable"
+
+
+

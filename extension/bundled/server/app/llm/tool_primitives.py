@@ -220,6 +220,42 @@ _LIBRARY_EXEC_FORBIDDEN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         "Bypassing Python site sandbox flags (-S/-I/-E) or unsandboxed inline interpreters is forbidden in library_exec.",
     ),
+    (
+        re.compile(
+            r"(?:^|[;&|\n`$(]\s*|(?:env|command)\s+)(?:['\"]?/(?:bin|usr/bin|usr/local/bin|opt/homebrew/bin)/)?['\"]?(?:curl|wget|nc|ncat|netcat|ssh|scp|sftp|rsync|ftp|telnet)['\"]?(?:\s|$)",
+            re.IGNORECASE,
+        ),
+        "Outbound network commands are forbidden in library_exec; use web_fetch instead.",
+    ),
+)
+
+_SENSITIVE_HOST_HOME_SUBPATHS: tuple[str, ...] = (
+    ".ssh",
+    ".aws",
+    ".gnupg",
+    ".kube",
+    ".docker",
+    ".azure",
+    ".config/gcloud",
+    ".config/gh",
+    "Library/Keychains",
+    "Library/Cookies",
+    "Library/Accounts",
+    "Library/Mail",
+    "Library/Messages",
+    "Library/Safari",
+)
+
+_SENSITIVE_HOST_HOME_LITERALS: tuple[str, ...] = (
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    ".gitconfig",
+    ".git-credentials",
+    ".env",
+    ".bash_history",
+    ".zsh_history",
+    ".python_history",
 )
 
 _ALLOWED_SYSTEM_EXEC_PREFIXES: tuple[str, ...] = (
@@ -371,6 +407,18 @@ def _audit(event: str, args: tuple) -> None:
         target = _resolve_arg(args[0] if args else None)
         if target is not None:
             _check_write(target, event)
+    elif event in (
+        "socket.connect",
+        "socket.bind",
+        "socket.sendto",
+        "socket.sendmsg",
+        "socket.getaddrinfo",
+        "urllib.Request",
+        "http.client.connect",
+        "ftplib.connect",
+        "smtplib.connect",
+    ):
+        raise PermissionError(f"Network access ({event}) is blocked inside library_exec; use web_fetch instead.")
     elif event in ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.fork"):
         raise PermissionError(f"Nested process spawning ({event}) is blocked inside library_exec Python scripts.")
 
@@ -1192,23 +1240,189 @@ def _linux_bwrap_bin() -> str | None:
     return _LINUX_BWRAP_BIN
 
 
+def _lexical_norm_path(raw: str | Path) -> Path:
+    return Path(os.path.normpath(os.path.abspath(str(raw))))
+
+
+def _sbpl_escape_str(raw_path: str | Path) -> str:
+    return str(raw_path).replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _sbpl_escape(path: Path) -> str:
-    return str(path.resolve()).replace("\\", "\\\\").replace('"', '\\"')
+    return _sbpl_escape_str(path.resolve())
+
+
+def _resolve_real_host_homes() -> list[Path]:
+    """Return deduplicated lexical host home directories without stat()ing restricted paths."""
+    raw_candidates: list[str] = []
+    if hasattr(os, "getuid"):
+        with contextlib.suppress(Exception):
+            import pwd
+
+            pw_dir = pwd.getpwuid(os.getuid()).pw_dir
+            if pw_dir:
+                raw_candidates.append(pw_dir)
+    for env_key in ("HOME", "USERPROFILE"):
+        env_val = os.environ.get(env_key, "").strip()
+        if env_val:
+            raw_candidates.append(env_val)
+
+    homes: list[Path] = []
+    seen: set[str] = set()
+    for raw in raw_candidates:
+        if not raw or not os.path.isabs(raw):
+            continue
+        normed = _lexical_norm_path(raw)
+        for variant in (
+            normed,
+            *(
+                [_lexical_norm_path(f"/private{normed}")]
+                if str(normed).startswith("/var/")
+                else []
+            ),
+        ):
+            key = str(variant)
+            if key not in seen:
+                seen.add(key)
+                homes.append(variant)
+    return homes
+
+
+def _is_within_lexical(root: Path, candidate: Path) -> bool:
+    try:
+        _lexical_norm_path(candidate).relative_to(_lexical_norm_path(root))
+        return True
+    except ValueError:
+        return False
 
 
 def _build_macos_seatbelt_profile(library_root: Path, project_root: Path | None) -> str:
-    lib_escaped = _sbpl_escape(library_root)
+    resolved_lib = library_root.resolve()
+    lib_escaped = _sbpl_escape(resolved_lib)
     lines = [
         "(version 1)",
         "(allow default)",
+        "(deny network*)",
         "(deny file-write*)",
         f'(allow file-write* (subpath "{lib_escaped}") (literal "/dev/null") (literal "/dev/dtracehelper"))',
     ]
-    if project_root is not None and project_root.resolve() != library_root.resolve():
-        if not _is_within_root(library_root, project_root):
-            proj_escaped = _sbpl_escape(project_root)
-            lines.append(f'(deny file-read* (subpath "{proj_escaped}"))')
+    emitted_rules: set[str] = set()
+
+    def _emit_rule(rule: str) -> None:
+        if rule not in emitted_rules:
+            emitted_rules.add(rule)
+            lines.append(rule)
+
+    if project_root is not None and project_root.resolve() != resolved_lib:
+        resolved_proj = project_root.resolve()
+        if not _is_within_root(resolved_lib, resolved_proj) and not _is_within_root(
+            resolved_proj, resolved_lib
+        ):
+            proj_escaped = _sbpl_escape(resolved_proj)
+            _emit_rule(f'(deny file-read* (subpath "{proj_escaped}"))')
+
+    for host_home in _resolve_real_host_homes():
+        if _lexical_norm_path(host_home) == _lexical_norm_path(resolved_lib):
+            continue
+        for rel_sub in _SENSITIVE_HOST_HOME_SUBPATHS:
+            cand_sub = _lexical_norm_path(host_home / rel_sub)
+            if _is_within_lexical(cand_sub, resolved_lib) or _is_within_lexical(
+                resolved_lib, cand_sub
+            ):
+                continue
+            _emit_rule(f'(deny file-read* (subpath "{_sbpl_escape_str(cand_sub)}"))')
+        for rel_lit in _SENSITIVE_HOST_HOME_LITERALS:
+            cand_lit = _lexical_norm_path(host_home / rel_lit)
+            if cand_lit == _lexical_norm_path(resolved_lib) or _is_within_lexical(
+                resolved_lib, cand_lit
+            ):
+                continue
+            _emit_rule(f'(deny file-read* (literal "{_sbpl_escape_str(cand_lit)}"))')
     return "\n".join(lines)
+
+
+def _has_unquoted_shell_operators(command: str) -> bool:
+    """Return True if command contains shell control/redirect/expansion operators."""
+    in_single = False
+    in_double = False
+    escaped = False
+    length = len(command)
+    for idx, ch in enumerate(command):
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\" and not in_single:
+            escaped = True
+            continue
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            continue
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            continue
+        if not in_single and ch == "`":
+            return True
+        if in_double and ch == "$":
+            nxt = command[idx + 1] if idx + 1 < length else ""
+            if nxt in ("(", "{") or nxt.isalpha() or nxt == "_":
+                return True
+        if not in_single and not in_double:
+            if ch in "|&;<>()\n\r$":
+                return True
+    return in_single or in_double or escaped
+
+
+def _build_direct_audited_fallback_argv(command: str) -> tuple[list[str] | None, str]:
+    """Build a zero-/bin/sh argv for audited Python -c or literal echo when kernel sandboxes are absent."""
+    if _has_unquoted_shell_operators(command):
+        return None, "unavailable"
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return None, "unavailable"
+    if not tokens:
+        return None, "unavailable"
+
+    head = tokens[0]
+    if head in {"echo", "/bin/echo"}:
+        echo_bin = "/bin/echo" if os.path.exists("/bin/echo") else (shutil.which("echo") or "")
+        if not echo_bin:
+            return None, "unavailable"
+        return [echo_bin, *tokens[1:]], "direct_echo_no_shell"
+
+    idx = 0
+    if head in {"env", "/usr/bin/env"}:
+        if len(tokens) < 4:
+            return None, "unavailable"
+        idx = 1
+        head = tokens[idx]
+
+    py_basenames = {"python", "python3", f"python{sys.version_info.major}.{sys.version_info.minor}"}
+    head_name = os.path.basename(head)
+    if head_name not in py_basenames:
+        return None, "unavailable"
+    if os.path.isabs(head) and not head.startswith(_ALLOWED_SYSTEM_EXEC_PREFIXES):
+        return None, "unavailable"
+
+    rest = tokens[idx + 1 :]
+    allowed_flags: list[str] = []
+    while rest and rest[0].startswith("-") and rest[0] != "-c":
+        if rest[0] in {"-B", "-u"}:
+            allowed_flags.append(rest.pop(0))
+        else:
+            return None, "unavailable"
+
+    if len(rest) != 2 or rest[0] != "-c" or not rest[1]:
+        return None, "unavailable"
+
+    py_bin = (
+        sys.executable
+        if not getattr(sys, "frozen", False) and sys.executable and os.path.exists(sys.executable)
+        else (shutil.which("python3") or shutil.which("python") or "")
+    )
+    if not py_bin:
+        return None, "unavailable"
+    return [py_bin, "-B", *allowed_flags, "-c", rest[1]], "python_audit_exec"
 
 
 def _build_sandboxed_exec_argv(
@@ -1216,33 +1430,74 @@ def _build_sandboxed_exec_argv(
     *,
     library_root: Path,
     project_root: Path | None,
-) -> tuple[list[str], str]:
-    """Return (argv, sandbox_backend) preferring OS kernel sandboxes over plain /bin/sh."""
+) -> tuple[list[str] | None, str]:
+    """Return (argv, sandbox_backend) preferring OS kernel sandboxes and forbidding raw /bin/sh."""
+    resolved_lib = library_root.resolve()
     if _macos_sandbox_exec_usable():
         sb = shutil.which("sandbox-exec") or "/usr/bin/sandbox-exec"
-        profile = _build_macos_seatbelt_profile(library_root, project_root)
+        profile = _build_macos_seatbelt_profile(resolved_lib, project_root)
         return [sb, "-p", profile, "/bin/sh", "-c", command], "macos_seatbelt"
     bwrap = _linux_bwrap_bin()
     if bwrap:
         argv = [
             bwrap,
+            "--unshare-net",
+            "--die-with-parent",
             "--ro-bind",
             "/",
             "/",
             "--bind",
-            str(library_root),
-            str(library_root),
+            str(resolved_lib),
+            str(resolved_lib),
             "--dev",
             "/dev",
             "--proc",
             "/proc",
         ]
-        if project_root is not None and project_root.resolve() != library_root.resolve():
-            if not _is_within_root(library_root, project_root) and project_root.exists():
-                argv.extend(["--tmpfs", str(project_root.resolve())])
-        argv.extend(["--chdir", str(library_root), "/bin/sh", "-c", command])
+        mounted_targets: set[str] = set()
+        if project_root is not None and project_root.resolve() != resolved_lib:
+            resolved_proj = project_root.resolve()
+            if (
+                not _is_within_root(resolved_lib, resolved_proj)
+                and not _is_within_root(resolved_proj, resolved_lib)
+                and resolved_proj.exists()
+            ):
+                mounted_targets.add(str(resolved_proj))
+                argv.extend(["--tmpfs", str(resolved_proj)])
+        for host_home in _resolve_real_host_homes():
+            if _lexical_norm_path(host_home) == _lexical_norm_path(resolved_lib):
+                continue
+            # Never stat() real /Users/* paths on macOS; only probe on Linux or inside temp test dirs.
+            can_probe = sys.platform.startswith("linux") or str(host_home).startswith(
+                ("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
+            )
+            if not can_probe:
+                continue
+            for rel_sub in _SENSITIVE_HOST_HOME_SUBPATHS:
+                cand_sub = _lexical_norm_path(host_home / rel_sub)
+                if _is_within_lexical(cand_sub, resolved_lib) or _is_within_lexical(
+                    resolved_lib, cand_sub
+                ):
+                    continue
+                is_existing_dir = False
+                with contextlib.suppress(OSError):
+                    is_existing_dir = cand_sub.is_dir()
+                if is_existing_dir and str(cand_sub) not in mounted_targets:
+                    mounted_targets.add(str(cand_sub))
+                    argv.extend(["--tmpfs", str(cand_sub)])
+            for rel_lit in _SENSITIVE_HOST_HOME_LITERALS:
+                cand_lit = _lexical_norm_path(host_home / rel_lit)
+                if _is_within_lexical(resolved_lib, cand_lit):
+                    continue
+                is_existing_file = False
+                with contextlib.suppress(OSError):
+                    is_existing_file = cand_lit.is_file()
+                if is_existing_file and str(cand_lit) not in mounted_targets:
+                    mounted_targets.add(str(cand_lit))
+                    argv.extend(["--ro-bind", "/dev/null", str(cand_lit)])
+        argv.extend(["--chdir", str(resolved_lib), "/bin/sh", "-c", command])
         return argv, "linux_bwrap"
-    return ["/bin/sh", "-c", command], "python_audit_hook"
+    return _build_direct_audited_fallback_argv(command)
 
 
 def _terminate_process_group(proc: asyncio.subprocess.Process) -> None:
@@ -1409,6 +1664,17 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
         library_root=library_root,
         project_root=project_root,
     )
+    if argv is None:
+        return {
+            "ok": False,
+            "domain": "library_sandbox",
+            "sandbox_backend": sandbox_backend,
+            "error": "sandbox_unavailable",
+            "detail": (
+                "library_exec requires an OS kernel sandbox (macOS Seatbelt sandbox-exec "
+                "or Linux bubblewrap bwrap) and fails closed when neither is available."
+            ),
+        }
     extra = context.extra if isinstance(context.extra, dict) else {}
     raw_cancel = extra.get("_stream_cancel_event") or extra.get("stream_cancel_event")
     cancel_event = raw_cancel if isinstance(raw_cancel, asyncio.Event) else None
