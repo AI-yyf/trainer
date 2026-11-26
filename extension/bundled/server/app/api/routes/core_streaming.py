@@ -708,11 +708,16 @@ async def _commit_and_emit_complete_frame(
         and st.token_count > 0
     ):
         runtime.mark_provider_live_turn_succeeded(coaching_service)
-    runtime.save_session_state(state.session_id)
+    await asyncio.to_thread(runtime.save_session_state, state.session_id)
     st.stream_committed = True
     if post_save_hook is not None:
         await post_save_hook(response_data)
-    response_data = _attach_requested_workspace_files(response_data, runtime, workspace_id)
+    response_data = await asyncio.to_thread(
+        _attach_requested_workspace_files,
+        response_data,
+        runtime,
+        workspace_id,
+    )
     response_data = publish_fn(response_data)
     st.stream_singleflight_published = True
     yield core.domain.sse_complete_frame(
@@ -950,36 +955,6 @@ async def _run_non_coach_prepared_turn_stream(
         )
         or st.final_agent_meta
     )
-    coach_support.persist_turn_reflection(
-        core.coach_support_deps,
-        workspace_id=workspace_id,
-        session_id=state.session_id,
-        user_message=request.message,
-        scenario=scenario,
-        response_language=request.response_language,
-        answer_mode=core.domain.answer_mode_preference_for_persistence(
-            prepared_raw_answer_mode,
-            prepared_saved_answer_mode,
-            request.answer_mode,
-            profile.answer_policy,
-        ),
-        coach_defaults=request.coach_defaults,
-        coach_turn_data=coach_turn_data,
-        grounding_decision=streaming_grounding_decision,
-        stop_reason=str(st.final_agent_meta.get("stop_reason") or ""),
-        recovered_stop_reason=str(st.final_agent_meta.get("recovered_stop_reason") or ""),
-        local_sequence_fallback=bool(st.final_agent_meta.get("local_sequence_fallback")),
-    )
-    core.domain.persist_recovered_plan_resume_after_turn(
-        workspace_id=workspace_id,
-        request=request,
-        reply_content=st.full_content,
-        agent_meta=st.final_agent_meta,
-        coach_context=coach_context,
-        recovered_status=state.snapshot.plan_runtime_status
-        if isinstance(state.snapshot.plan_runtime_status, dict)
-        else None,
-    )
     if not language_corruption_detected and not st.provider_failure_detected:
         _schedule_background_tail(
             core.domain.persist_external_references_as_background,
@@ -988,48 +963,79 @@ async def _run_non_coach_prepared_turn_stream(
             coach_turn_data=coach_turn_data,
         )
 
-    state.snapshot.memory = runtime.memory_service.snapshot(workspace_id)
-    state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
-    runtime.hydrate_plan_context(state.snapshot, workspace_id)
-    coach_support.hydrate_snapshot(
-        core.coach_support_deps,
-        state.snapshot,
-        response_language=request.response_language,
-        answer_mode=request.answer_mode or profile.answer_policy,
-        scenario=scenario,
-        learner_signal=learner_signal,
-        message=request.message,
-        current_file=request.current_file,
-        active_view=request.active_view,
-        session_workspace_id=workspace_id,
-    )
-    if request.intent == "plan" and request.formal_plan_mutation:
-        persisted_plan = runtime.repository.get_latest_plan(workspace_id)
-        _leftover_after, leftover_runtime_after = core.domain.leftover_runtime_for_workspace(workspace_id)
-        if persisted_plan is not None and leftover_formal_plan_is_live_for_fill(
-            plan=persisted_plan,
-            runtime=leftover_runtime_after,
-            existing=leftover_runtime_after,
-        ):
-            state.snapshot.plan = persisted_plan
-    response_snapshot = state.snapshot
+    def _persist_and_build_non_coach() -> dict[str, object]:
+        coach_support.persist_turn_reflection(
+            core.coach_support_deps,
+            workspace_id=workspace_id,
+            session_id=state.session_id,
+            user_message=request.message,
+            scenario=scenario,
+            response_language=request.response_language,
+            answer_mode=core.domain.answer_mode_preference_for_persistence(
+                prepared_raw_answer_mode,
+                prepared_saved_answer_mode,
+                request.answer_mode,
+                profile.answer_policy,
+            ),
+            coach_defaults=request.coach_defaults,
+            coach_turn_data=coach_turn_data,
+            grounding_decision=streaming_grounding_decision,
+            stop_reason=str(st.final_agent_meta.get("stop_reason") or ""),
+            recovered_stop_reason=str(st.final_agent_meta.get("recovered_stop_reason") or ""),
+            local_sequence_fallback=bool(st.final_agent_meta.get("local_sequence_fallback")),
+        )
+        core.domain.persist_recovered_plan_resume_after_turn(
+            workspace_id=workspace_id,
+            request=request,
+            reply_content=st.full_content,
+            agent_meta=st.final_agent_meta,
+            coach_context=coach_context,
+            recovered_status=state.snapshot.plan_runtime_status
+            if isinstance(state.snapshot.plan_runtime_status, dict)
+            else None,
+        )
+        state.snapshot.memory = runtime.memory_service.snapshot(workspace_id)
+        state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
+        runtime.hydrate_plan_context(state.snapshot, workspace_id)
+        coach_support.hydrate_snapshot(
+            core.coach_support_deps,
+            state.snapshot,
+            response_language=request.response_language,
+            answer_mode=request.answer_mode or profile.answer_policy,
+            scenario=scenario,
+            learner_signal=learner_signal,
+            message=request.message,
+            current_file=request.current_file,
+            active_view=request.active_view,
+            session_workspace_id=workspace_id,
+        )
+        if request.intent == "plan" and request.formal_plan_mutation:
+            persisted_plan = runtime.repository.get_latest_plan(workspace_id)
+            _leftover_after, leftover_runtime_after = core.domain.leftover_runtime_for_workspace(workspace_id)
+            if persisted_plan is not None and leftover_formal_plan_is_live_for_fill(
+                plan=persisted_plan,
+                runtime=leftover_runtime_after,
+                existing=leftover_runtime_after,
+            ):
+                state.snapshot.plan = persisted_plan
+        built = coach_support.build_session_response(
+            core.coach_support_deps,
+            state=state,
+            request=request,
+            reply_content=st.full_content,
+            artifacts=artifacts,
+            suggested_actions=suggested_actions,
+            scenario=scenario,
+            learner_signal=learner_signal,
+            coach_turn_data=coach_turn_data,
+            response_snapshot=state.snapshot,
+            agent_meta=st.final_agent_meta or None,
+            attachment_delivery=attachment_delivery,
+            streamed_prefix=st.streamed_reply_content if not st.provider_failure_detected else "",
+        )
+        return core.domain.json_object_payload(built)
 
-    built_response = coach_support.build_session_response(
-        core.coach_support_deps,
-        state=state,
-        request=request,
-        reply_content=st.full_content,
-        artifacts=artifacts,
-        suggested_actions=suggested_actions,
-        scenario=scenario,
-        learner_signal=learner_signal,
-        coach_turn_data=coach_turn_data,
-        response_snapshot=response_snapshot,
-        agent_meta=st.final_agent_meta or None,
-        attachment_delivery=attachment_delivery,
-        streamed_prefix=st.streamed_reply_content if not st.provider_failure_detected else "",
-    )
-    response_data = core.domain.json_object_payload(built_response)
+    response_data = await asyncio.to_thread(_persist_and_build_non_coach)
     response_data["artifacts"] = artifacts
     response_data["intent"] = original_intent
 
@@ -1086,60 +1092,76 @@ async def _run_coach_lane_stream(
         attachment_delivery=attachment_delivery,
         stream_id=stream_id,
     )
-    core.domain.safe_activate_training_card_from_coach_request(
-        workspace_id=state.workspace_id,
-        snapshot=state.snapshot,
-        message=request.message,
-        current_file=request.current_file,
-        response_language=request.response_language,
-        provider_service_override=coaching_service,
-    )
-    state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-    coach_turn: CoachTurnPayload = coach_support.resolve_coach_turn(
-        core.coach_support_deps,
-        state=state,
-        profile=profile,
-        request=request,
-        message=request.message,
-        coaching_service=coaching_service,
-        current_task=state.snapshot.current_task,
-        current_plan=state.snapshot.plan,
-        current_evaluation=state.snapshot.evaluation,
-    )
-    scenario = str(coach_turn.get("scenario") or "general")
-    if core.domain.guarantee_guided_learn_first_training_card(
-        workspace_id=state.workspace_id,
-        scenario=str(coach_turn["scenario"] or ""),
-        message=request.message,
-        current_file=request.current_file,
-        response_language=request.response_language,
-        active_thread=state.snapshot.memory.active_thread,
-        requested_answer_mode=raw_requested_answer_mode,
-        saved_answer_mode=saved_answer_mode,
-        profile=profile,
-    ):
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-    guided_training_prefers_local_reply = core.domain.should_bypass_agent_loop_for_guided_training(
-        workspace_id=state.workspace_id,
-        scenario=str(coach_turn["scenario"] or scenario),
-        message=request.message,
-        active_view=request.active_view,
-        requested_answer_mode=raw_requested_answer_mode,
-        saved_answer_mode=saved_answer_mode,
-        profile=profile,
-    )
-    guided_training_local_reply = (
-        core.domain.build_guided_training_visible_fallback(
+    def _prepare_coach_stream_turn() -> tuple[
+        CoachTurnPayload,
+        str,
+        bool,
+        dict[str, str] | None,
+        list[dict[str, object]],
+    ]:
+        core.domain.safe_activate_training_card_from_coach_request(
             workspace_id=state.workspace_id,
+            snapshot=state.snapshot,
+            message=request.message,
+            current_file=request.current_file,
             response_language=request.response_language,
+            provider_service_override=coaching_service,
         )
-        if guided_training_prefers_local_reply
-        else None
-    )
-    auto_resource_events = core.domain.auto_resource_lookup_tool_events(
-        dict(coach_turn["coach_context"]),
-        request.message,
-    )
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        resolved_turn: CoachTurnPayload = coach_support.resolve_coach_turn(
+            core.coach_support_deps,
+            state=state,
+            profile=profile,
+            request=request,
+            message=request.message,
+            coaching_service=coaching_service,
+            current_task=state.snapshot.current_task,
+            current_plan=state.snapshot.plan,
+            current_evaluation=state.snapshot.evaluation,
+        )
+        resolved_scenario = str(resolved_turn.get("scenario") or "general")
+        if core.domain.guarantee_guided_learn_first_training_card(
+            workspace_id=state.workspace_id,
+            scenario=str(resolved_turn["scenario"] or ""),
+            message=request.message,
+            current_file=request.current_file,
+            response_language=request.response_language,
+            active_thread=state.snapshot.memory.active_thread,
+            requested_answer_mode=raw_requested_answer_mode,
+            saved_answer_mode=saved_answer_mode,
+            profile=profile,
+        ):
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        prefers_local = core.domain.should_bypass_agent_loop_for_guided_training(
+            workspace_id=state.workspace_id,
+            scenario=str(resolved_turn["scenario"] or resolved_scenario),
+            message=request.message,
+            active_view=request.active_view,
+            requested_answer_mode=raw_requested_answer_mode,
+            saved_answer_mode=saved_answer_mode,
+            profile=profile,
+        )
+        local_reply = (
+            core.domain.build_guided_training_visible_fallback(
+                workspace_id=state.workspace_id,
+                response_language=request.response_language,
+            )
+            if prefers_local
+            else None
+        )
+        res_events = core.domain.auto_resource_lookup_tool_events(
+            dict(resolved_turn["coach_context"]),
+            request.message,
+        )
+        return resolved_turn, resolved_scenario, prefers_local, local_reply, res_events
+
+    (
+        coach_turn,
+        scenario,
+        guided_training_prefers_local_reply,
+        guided_training_local_reply,
+        auto_resource_events,
+    ) = await asyncio.to_thread(_prepare_coach_stream_turn)
 
     if guided_training_local_reply is None:
         st.model_requested_at = time.perf_counter()
@@ -1298,7 +1320,8 @@ async def _run_coach_lane_stream(
     coach_turn = core.domain.extract_coach_turn_payload(updated_turn_map)
 
     if not st.provider_failure_detected:
-        coach_turn = _apply_stream_guided_repairs_and_card(
+        coach_turn = await asyncio.to_thread(
+            _apply_stream_guided_repairs_and_card,
             core,
             st,
             state=state,
@@ -1348,36 +1371,6 @@ async def _run_coach_lane_stream(
     )
     if repaired_turn is not None:
         coach_turn = core.domain.extract_coach_turn_payload(repaired_turn)
-    coach_support.persist_turn_reflection(
-        core.coach_support_deps,
-        workspace_id=workspace_id,
-        session_id=state.session_id,
-        user_message=request.message,
-        scenario=str(coach_turn["scenario"]),
-        response_language=request.response_language,
-        answer_mode=core.domain.answer_mode_preference_for_persistence(
-            raw_requested_answer_mode,
-            saved_answer_mode,
-            request.answer_mode,
-            profile.answer_policy if profile else None,
-        ),
-        coach_defaults=request.coach_defaults,
-        coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
-        grounding_decision=grounding_decision,
-        stop_reason=str(st.final_agent_meta.get("stop_reason") or ""),
-        recovered_stop_reason=str(st.final_agent_meta.get("recovered_stop_reason") or ""),
-        local_sequence_fallback=bool(st.final_agent_meta.get("local_sequence_fallback")),
-    )
-    core.domain.persist_recovered_plan_resume_after_turn(
-        workspace_id=workspace_id,
-        request=request,
-        reply_content=st.full_content,
-        agent_meta=st.final_agent_meta,
-        coach_context=coach_turn.get("coach_context") if isinstance(coach_turn, dict) else None,
-        recovered_status=state.snapshot.plan_runtime_status
-        if isinstance(state.snapshot.plan_runtime_status, dict)
-        else None,
-    )
     if not st.provider_failure_detected:
         _schedule_background_tail(
             core.domain.persist_external_references_as_background,
@@ -1385,70 +1378,102 @@ async def _run_coach_lane_stream(
             scenario=str(coach_turn["scenario"]),
             coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
         )
-    state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-    state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
-    runtime.hydrate_plan_context(state.snapshot, workspace_id)
-    coach_support.hydrate_snapshot(
-        core.coach_support_deps,
-        state.snapshot,
-        response_language=request.response_language,
-        answer_mode=request.answer_mode or (profile.answer_policy if profile else None),
-        scenario=str(coach_turn["scenario"]),
-        learner_signal=str(coach_turn["learner_signal"]),
-        message=request.message,
-        session_workspace_id=workspace_id,
-    )
-    if update_plan_on_turn:
-        core.domain.update_snapshot_plan_from_turn(
-            state=state,
+
+    def _persist_and_build_coach() -> tuple[SessionMessageResponse, dict[str, object]]:
+        coach_support.persist_turn_reflection(
+            core.coach_support_deps,
+            workspace_id=workspace_id,
+            session_id=state.session_id,
+            user_message=request.message,
+            scenario=str(coach_turn["scenario"]),
+            response_language=request.response_language,
+            answer_mode=core.domain.answer_mode_preference_for_persistence(
+                raw_requested_answer_mode,
+                saved_answer_mode,
+                request.answer_mode,
+                profile.answer_policy if profile else None,
+            ),
+            coach_defaults=request.coach_defaults,
+            coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
+            grounding_decision=grounding_decision,
+            stop_reason=str(st.final_agent_meta.get("stop_reason") or ""),
+            recovered_stop_reason=str(st.final_agent_meta.get("recovered_stop_reason") or ""),
+            local_sequence_fallback=bool(st.final_agent_meta.get("local_sequence_fallback")),
+        )
+        core.domain.persist_recovered_plan_resume_after_turn(
+            workspace_id=workspace_id,
+            request=request,
             reply_content=st.full_content,
-            coach_turn=core.domain.coach_turn_mapping(coach_turn),
-            allow_formal_plan_mutation=core.domain.requires_formal_plan_commit(request),
+            agent_meta=st.final_agent_meta,
+            coach_context=coach_turn.get("coach_context") if isinstance(coach_turn, dict) else None,
+            recovered_status=state.snapshot.plan_runtime_status
+            if isinstance(state.snapshot.plan_runtime_status, dict)
+            else None,
         )
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
+        runtime.hydrate_plan_context(state.snapshot, workspace_id)
+        coach_support.hydrate_snapshot(
+            core.coach_support_deps,
+            state.snapshot,
+            response_language=request.response_language,
+            answer_mode=request.answer_mode or (profile.answer_policy if profile else None),
+            scenario=str(coach_turn["scenario"]),
+            learner_signal=str(coach_turn["learner_signal"]),
+            message=request.message,
+            session_workspace_id=workspace_id,
+        )
+        if update_plan_on_turn:
+            core.domain.update_snapshot_plan_from_turn(
+                state=state,
+                reply_content=st.full_content,
+                coach_turn=core.domain.coach_turn_mapping(coach_turn),
+                allow_formal_plan_mutation=core.domain.requires_formal_plan_commit(request),
+            )
+        if use_agent_stream and not guided_training_prefers_local_reply:
+            stream_agent_meta: dict[str, object] = {
+                "stop_reason": st.agent_stop_reason,
+                "summary": st.agent_summary,
+                "next_step": st.agent_next_step,
+                "decision": st.agent_decision,
+                "blocker": st.agent_blocker,
+                "teaching_note": st.agent_teaching_note,
+                "confidence": st.agent_confidence,
+                "evidence": st.agent_evidence,
+                "steps": st.agent_steps,
+                "tool_events": st.agent_tool_events,
+                "agentic": True,
+                **(core.domain.normalize_attachment_delivery_payload(attachment_delivery) or {}),
+            }
+            if include_resume_thread_in_stream_meta:
+                stream_agent_meta["resume_thread"] = st.agent_resume_thread
+            st.final_agent_meta = merge_stream_agent_metadata(
+                st.final_agent_meta,
+                stream_agent_meta,
+                preserve_failure=st.provider_failure_detected,
+            )
+        if core.domain.should_attach_auto_resource_events(st.final_agent_meta):
+            st.final_agent_meta = core.domain.apply_auto_resource_agent_evidence(
+                st.final_agent_meta,
+                auto_resource_events,
+            )
+        built = coach_support.build_session_response(
+            core.coach_support_deps,
+            state=state,
+            request=request,
+            reply_content=st.full_content,
+            artifacts=dict(coach_turn["artifacts"]),
+            suggested_actions=list(coach_turn["suggested_actions"]),
+            scenario=str(coach_turn["scenario"]),
+            learner_signal=str(coach_turn["learner_signal"]),
+            coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
+            agent_meta=st.final_agent_meta or None,
+            attachment_delivery=attachment_delivery,
+            streamed_prefix=st.streamed_reply_content if not st.provider_failure_detected else "",
+        )
+        return built, core.domain.json_object_payload(built)
 
-    if use_agent_stream and not guided_training_prefers_local_reply:
-        stream_agent_meta: dict[str, object] = {
-            "stop_reason": st.agent_stop_reason,
-            "summary": st.agent_summary,
-            "next_step": st.agent_next_step,
-            "decision": st.agent_decision,
-            "blocker": st.agent_blocker,
-            "teaching_note": st.agent_teaching_note,
-            "confidence": st.agent_confidence,
-            "evidence": st.agent_evidence,
-            "steps": st.agent_steps,
-            "tool_events": st.agent_tool_events,
-            "agentic": True,
-            **(core.domain.normalize_attachment_delivery_payload(attachment_delivery) or {}),
-        }
-        if include_resume_thread_in_stream_meta:
-            stream_agent_meta["resume_thread"] = st.agent_resume_thread
-        st.final_agent_meta = merge_stream_agent_metadata(
-            st.final_agent_meta,
-            stream_agent_meta,
-            preserve_failure=st.provider_failure_detected,
-        )
-    if core.domain.should_attach_auto_resource_events(st.final_agent_meta):
-        st.final_agent_meta = core.domain.apply_auto_resource_agent_evidence(
-            st.final_agent_meta,
-            auto_resource_events,
-        )
-
-    built_response = coach_support.build_session_response(
-        core.coach_support_deps,
-        state=state,
-        request=request,
-        reply_content=st.full_content,
-        artifacts=dict(coach_turn["artifacts"]),
-        suggested_actions=list(coach_turn["suggested_actions"]),
-        scenario=str(coach_turn["scenario"]),
-        learner_signal=str(coach_turn["learner_signal"]),
-        coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
-        agent_meta=st.final_agent_meta or None,
-        attachment_delivery=attachment_delivery,
-        streamed_prefix=st.streamed_reply_content if not st.provider_failure_detected else "",
-    )
-    response_data = core.domain.json_object_payload(built_response)
+    built_response, response_data = await asyncio.to_thread(_persist_and_build_coach)
     if original_intent is not None:
         response_data["artifacts"] = dict(coach_turn["artifacts"])
         response_data["intent"] = original_intent

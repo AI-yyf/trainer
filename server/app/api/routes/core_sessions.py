@@ -756,51 +756,67 @@ async def _run_session_message_locked(
     if prompt_response is not None:
         return finish_session_response(prompt_response)
 
-    coach_turn: CoachTurnPayload = coach_support.resolve_coach_turn(
-        core.coach_support_deps,
-        state=state,
-        profile=profile,
-        request=request,
-        message=request.message,
-        coaching_service=coaching_service,
-        current_task=state.snapshot.current_task,
-        current_plan=state.snapshot.plan,
-        current_evaluation=state.snapshot.evaluation,
-    )
-    scenario = str(coach_turn.get("scenario") or "general")
-    if core.domain.guarantee_guided_learn_first_training_card(
-        workspace_id=state.workspace_id,
-        scenario=str(coach_turn["scenario"] or ""),
-        message=request.message,
-        current_file=request.current_file,
-        response_language=request.response_language,
-        active_thread=state.snapshot.memory.active_thread,
-        requested_answer_mode=raw_requested_answer_mode,
-        saved_answer_mode=saved_answer_mode,
-        profile=profile,
-    ):
-        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-    auto_resource_events = core.domain.auto_resource_lookup_tool_events(
-        dict(coach_turn["coach_context"]),
-        request.message,
-    )
-    guided_training_prefers_local_reply = core.domain.should_bypass_agent_loop_for_guided_training(
-        workspace_id=state.workspace_id,
-        scenario=str(coach_turn["scenario"] or scenario),
-        message=request.message,
-        active_view=request.active_view,
-        requested_answer_mode=raw_requested_answer_mode,
-        saved_answer_mode=saved_answer_mode,
-        profile=profile,
-    )
-    guided_training_local_reply = (
-        core.domain.build_guided_training_visible_fallback(
-            workspace_id=state.workspace_id,
-            response_language=request.response_language,
+    def _resolve_session_coach_turn_sync() -> tuple[
+        CoachTurnPayload,
+        str,
+        list[dict[str, object]],
+        bool,
+        dict[str, str] | None,
+    ]:
+        resolved_turn: CoachTurnPayload = coach_support.resolve_coach_turn(
+            core.coach_support_deps,
+            state=state,
+            profile=profile,
+            request=request,
+            message=request.message,
+            coaching_service=coaching_service,
+            current_task=state.snapshot.current_task,
+            current_plan=state.snapshot.plan,
+            current_evaluation=state.snapshot.evaluation,
         )
-        if guided_training_prefers_local_reply
-        else None
-    )
+        resolved_scenario = str(resolved_turn.get("scenario") or "general")
+        if core.domain.guarantee_guided_learn_first_training_card(
+            workspace_id=state.workspace_id,
+            scenario=str(resolved_turn["scenario"] or ""),
+            message=request.message,
+            current_file=request.current_file,
+            response_language=request.response_language,
+            active_thread=state.snapshot.memory.active_thread,
+            requested_answer_mode=raw_requested_answer_mode,
+            saved_answer_mode=saved_answer_mode,
+            profile=profile,
+        ):
+            state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        res_events = core.domain.auto_resource_lookup_tool_events(
+            dict(resolved_turn["coach_context"]),
+            request.message,
+        )
+        prefers_local = core.domain.should_bypass_agent_loop_for_guided_training(
+            workspace_id=state.workspace_id,
+            scenario=str(resolved_turn["scenario"] or resolved_scenario),
+            message=request.message,
+            active_view=request.active_view,
+            requested_answer_mode=raw_requested_answer_mode,
+            saved_answer_mode=saved_answer_mode,
+            profile=profile,
+        )
+        local_reply = (
+            core.domain.build_guided_training_visible_fallback(
+                workspace_id=state.workspace_id,
+                response_language=request.response_language,
+            )
+            if prefers_local
+            else None
+        )
+        return resolved_turn, resolved_scenario, res_events, prefers_local, local_reply
+
+    (
+        coach_turn,
+        scenario,
+        auto_resource_events,
+        guided_training_prefers_local_reply,
+        guided_training_local_reply,
+    ) = await asyncio.to_thread(_resolve_session_coach_turn_sync)
 
     (
         assistant_content,
@@ -870,80 +886,83 @@ async def _run_session_message_locked(
         )
         or agent_meta
     )
-    coach_support.persist_turn_reflection(
-        core.coach_support_deps,
-        workspace_id=workspace_id,
-        session_id=state.session_id,
-        user_message=request.message,
-        scenario=str(coach_turn["scenario"]),
-        response_language=request.response_language,
-        answer_mode=core.domain.answer_mode_preference_for_persistence(
-            raw_requested_answer_mode,
-            saved_answer_mode,
-            request.answer_mode,
-            profile.answer_policy if profile else None,
-        ),
-        coach_defaults=request.coach_defaults,
-        coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
-        grounding_decision=grounding_decision,
-        stop_reason=str(agent_meta.get("stop_reason") or ""),
-        recovered_stop_reason=str(agent_meta.get("recovered_stop_reason") or ""),
-        local_sequence_fallback=bool(agent_meta.get("local_sequence_fallback")),
-    )
-    core.domain.persist_recovered_plan_resume_after_turn(
-        workspace_id=workspace_id,
-        request=request,
-        reply_content=assistant_content,
-        agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
-        coach_context=coach_turn.get("coach_context") if isinstance(coach_turn, dict) else None,
-        recovered_status=state.snapshot.plan_runtime_status
-        if isinstance(state.snapshot.plan_runtime_status, dict)
-        else None,
-    )
-    if not language_corruption_detected and not provider_failure_detected:
-        core.domain.persist_external_references_as_background(
+    def _persist_and_build_session_sync() -> dict[str, object]:
+        coach_support.persist_turn_reflection(
+            core.coach_support_deps,
             workspace_id=workspace_id,
+            session_id=state.session_id,
+            user_message=request.message,
             scenario=str(coach_turn["scenario"]),
-            coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
-        )
-    state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
-    state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
-    runtime.hydrate_plan_context(state.snapshot, workspace_id)
-    coach_support.hydrate_snapshot(
-        core.coach_support_deps,
-        state.snapshot,
-        response_language=request.response_language,
-        answer_mode=request.answer_mode or (profile.answer_policy if profile else None),
-        scenario=str(coach_turn["scenario"]),
-        learner_signal=str(coach_turn["learner_signal"]),
-        message=request.message,
-        session_workspace_id=workspace_id,
-    )
-    session_suggested_actions = list(coach_turn["suggested_actions"])
-    if not provider_live_usable:
-        session_suggested_actions = core.domain.honest_suggested_actions_without_usable_provider(
-            session_suggested_actions,
             response_language=request.response_language,
-            snapshot=state.snapshot,
-            current_task=state.snapshot.current_task,
-            current_plan=state.snapshot.plan,
-            current_evaluation=state.snapshot.evaluation,
+            answer_mode=core.domain.answer_mode_preference_for_persistence(
+                raw_requested_answer_mode,
+                saved_answer_mode,
+                request.answer_mode,
+                profile.answer_policy if profile else None,
+            ),
+            coach_defaults=request.coach_defaults,
+            coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
+            grounding_decision=grounding_decision,
+            stop_reason=str(agent_meta.get("stop_reason") or ""),
+            recovered_stop_reason=str(agent_meta.get("recovered_stop_reason") or ""),
+            local_sequence_fallback=bool(agent_meta.get("local_sequence_fallback")),
         )
-    response = coach_support.build_session_response(
-        core.coach_support_deps,
-        state=state,
-        request=request,
-        reply_content=assistant_content,
-        artifacts=dict(coach_turn["artifacts"]),
-        suggested_actions=session_suggested_actions,
-        scenario=str(coach_turn["scenario"]),
-        learner_signal=str(coach_turn["learner_signal"]),
-        coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
-        agent_meta=agent_meta or None,
-        attachment_delivery=attachment_delivery,
-    )
-    runtime.save_session_state(state.session_id)
-    response_payload = core.domain.json_object_payload(response)
+        core.domain.persist_recovered_plan_resume_after_turn(
+            workspace_id=workspace_id,
+            request=request,
+            reply_content=assistant_content,
+            agent_meta=agent_meta if isinstance(agent_meta, dict) else None,
+            coach_context=coach_turn.get("coach_context") if isinstance(coach_turn, dict) else None,
+            recovered_status=state.snapshot.plan_runtime_status
+            if isinstance(state.snapshot.plan_runtime_status, dict)
+            else None,
+        )
+        if not language_corruption_detected and not provider_failure_detected:
+            core.domain.persist_external_references_as_background(
+                workspace_id=workspace_id,
+                scenario=str(coach_turn["scenario"]),
+                coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
+            )
+        state.snapshot.memory = runtime.memory_service.snapshot(state.workspace_id)
+        state.snapshot.profile = runtime.repository.get_profile(workspace_id) or profile
+        runtime.hydrate_plan_context(state.snapshot, workspace_id)
+        coach_support.hydrate_snapshot(
+            core.coach_support_deps,
+            state.snapshot,
+            response_language=request.response_language,
+            answer_mode=request.answer_mode or (profile.answer_policy if profile else None),
+            scenario=str(coach_turn["scenario"]),
+            learner_signal=str(coach_turn["learner_signal"]),
+            message=request.message,
+            session_workspace_id=workspace_id,
+        )
+        session_suggested_actions = list(coach_turn["suggested_actions"])
+        if not provider_live_usable:
+            session_suggested_actions = core.domain.honest_suggested_actions_without_usable_provider(
+                session_suggested_actions,
+                response_language=request.response_language,
+                snapshot=state.snapshot,
+                current_task=state.snapshot.current_task,
+                current_plan=state.snapshot.plan,
+                current_evaluation=state.snapshot.evaluation,
+            )
+        built = coach_support.build_session_response(
+            core.coach_support_deps,
+            state=state,
+            request=request,
+            reply_content=assistant_content,
+            artifacts=dict(coach_turn["artifacts"]),
+            suggested_actions=session_suggested_actions,
+            scenario=str(coach_turn["scenario"]),
+            learner_signal=str(coach_turn["learner_signal"]),
+            coach_turn_data=core.domain.coach_turn_mapping(coach_turn),
+            agent_meta=agent_meta or None,
+            attachment_delivery=attachment_delivery,
+        )
+        runtime.save_session_state(state.session_id)
+        return core.domain.json_object_payload(built)
+
+    response_payload = await asyncio.to_thread(_persist_and_build_session_sync)
     if agent_meta:
         response_payload.setdefault("agent_meta", agent_meta)
     return finish_session_response(response_payload)
@@ -1244,7 +1263,11 @@ def _register_snapshot_and_session_lifecycle_routes(
                     )
                 )
 
-        state = runtime.ensure_session(request.session_id, workspace_id=workspace_id)
+        state = await asyncio.to_thread(
+            runtime.ensure_session,
+            request.session_id,
+            workspace_id=workspace_id,
+        )
         async with runtime.acquire_session_lock(state.session_id):
             return await _run_session_message_locked(
                 runtime,

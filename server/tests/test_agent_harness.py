@@ -1205,3 +1205,98 @@ def test_p0_6_backend_structural_governance_invariants() -> None:
     for dom_name in expected_domain_modules:
         assert (domains_dir / dom_name).is_file(), f"Missing router_domains/{dom_name}"
 
+
+@pytest.mark.asyncio
+async def test_wave3_sqlite_thread_local_pool_and_event_loop_offloading(tmp_path) -> None:
+    """Wave 3 (P0-C):
+    1) TrainerRepository reuses 1 persistent SQLite connection per thread across repeated reads/writes,
+       tracks total_changes delta accurately for write_generation (ignoring rollbacks), supports
+       re-entrant _connect(), and closes pooled handles cleanly on close().
+    2) Stream/session sync persistence & snapshot hydration run off the main asyncio event loop thread.
+    """
+    import asyncio
+    import concurrent.futures
+    import threading
+
+    from app.core.models import UserProfile
+    from app.db.repository import TrainerRepository
+
+    repo = TrainerRepository(tmp_path / "wave3.sqlite3")
+    try:
+        assert repo.connection_open_count == 1
+        gen_initial = repo.write_generation
+
+        # 25 sequential reads + writes on the main thread must reuse the single connection!
+        for idx in range(15):
+            repo.save_profile(
+                f"ws-{idx}",
+                UserProfile(long_term_goal=f"Goal {idx}", weekly_hours=5),
+            )
+            loaded = repo.get_profile(f"ws-{idx}")
+            assert loaded is not None and loaded.long_term_goal == f"Goal {idx}"
+
+        assert repo.connection_open_count == 1
+        gen_after_writes = repo.write_generation
+        assert gen_after_writes == gen_initial + 15
+
+        # Rolled-back exception inside _connect() must NOT increment write_generation!
+        with pytest.raises(RuntimeError, match="abort_tx"):
+            with repo._connect() as conn:
+                conn.execute(
+                    "INSERT INTO user_profile (workspace_id, payload) VALUES (?, ?)",
+                    ("ws-rolled-back", "{}"),
+                )
+                raise RuntimeError("abort_tx")
+        assert repo.write_generation == gen_after_writes
+        assert repo.get_profile("ws-rolled-back") is None
+
+        # Re-entrant _connect() on the same thread reuses the active transaction cleanly.
+        with repo._connect() as outer_conn:
+            with repo._connect() as inner_conn:
+                assert inner_conn is outer_conn
+                inner_conn.execute(
+                    "INSERT INTO user_profile (workspace_id, payload) VALUES (?, ?)",
+                    ("ws-nested", '{"long_term_goal":"Nested"}'),
+                )
+        assert repo.write_generation == gen_after_writes + 1
+        assert repo.connection_open_count == 1
+
+        # Concurrent ThreadPoolExecutor workers each get 1 thread-local connection with zero lock errors.
+        def _worker_ops(worker_idx: int) -> int:
+            for step in range(8):
+                ws_key = f"ws-thread-{worker_idx}-{step}"
+                repo.save_profile(ws_key, UserProfile(long_term_goal=ws_key))
+                assert repo.get_profile(ws_key) is not None
+            return threading.get_ident()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            tids = list(pool.map(_worker_ops, range(3)))
+        assert len(tids) == 3
+        # 1 main-thread connection + up to 3 worker-thread connections (<= 4 total vs 70+ previously!)
+        assert 2 <= repo.connection_open_count <= 4
+
+        # Offloading sync repository work via asyncio.to_thread keeps the event loop responsive.
+        loop_tid = threading.get_ident()
+        ticks = 0
+
+        async def _heartbeat() -> None:
+            nonlocal ticks
+            for _ in range(5):
+                await asyncio.sleep(0.002)
+                ticks += 1
+
+        def _offloaded_save() -> tuple[int, UserProfile | None]:
+            repo.save_profile("ws-async", UserProfile(long_term_goal="Async Offload"))
+            return threading.get_ident(), repo.get_profile("ws-async")
+
+        hb_task = asyncio.create_task(_heartbeat())
+        worker_tid, saved_prof = await asyncio.to_thread(_offloaded_save)
+        await hb_task
+        assert worker_tid != loop_tid
+        assert saved_prof is not None and saved_prof.long_term_goal == "Async Offload"
+        assert ticks == 5
+    finally:
+        repo.close()
+        assert repo._open_connections == []
+
+

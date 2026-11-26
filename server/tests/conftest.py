@@ -104,8 +104,12 @@ _original_sqlite_connect = sqlite3.connect
 
 def _fast_sqlite_connect(*args: object, **kwargs: object) -> sqlite3.Connection:
     connection = _original_sqlite_connect(*args, **kwargs)
+    connection.execute("PRAGMA busy_timeout = 5000")
     connection.execute("PRAGMA synchronous = OFF")
-    connection.execute("PRAGMA journal_mode = MEMORY")
+    try:
+        connection.execute("PRAGMA journal_mode = MEMORY")
+    except sqlite3.OperationalError:
+        pass
     return connection
 
 

@@ -5,7 +5,7 @@ import re
 import sqlite3
 import threading
 from collections.abc import Callable
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -186,41 +186,114 @@ class TrainerRepository:
         self.database_path = database_path
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         # Monotonic counter bumped whenever a statement mutates rows (INSERT/
-        # UPDATE/DELETE detected via sqlite total_changes). Consumers such as
-        # MemoryService.snapshot use it as a cheap "did any persisted state
+        # UPDATE/DELETE detected via sqlite total_changes delta). Consumers such
+        # as MemoryService.snapshot use it as a cheap "did any persisted state
         # change" key; it never decreases for the lifetime of the repository.
         self.write_generation = 0
         self._write_generation_lock = threading.Lock()
+        self._local = threading.local()
+        self._connections_lock = threading.Lock()
+        self._open_connections: list[sqlite3.Connection] = []
+        self.connection_open_count = 0
         self._initialize()
+
+    def _get_thread_connection(self) -> sqlite3.Connection:
+        target_path = str(self.database_path)
+        cached_conn: sqlite3.Connection | None = getattr(self._local, "connection", None)
+        cached_path: str | None = getattr(self._local, "database_path", None)
+        if cached_conn is not None and cached_path == target_path:
+            try:
+                _ = cached_conn.in_transaction
+                return cached_conn
+            except sqlite3.ProgrammingError:
+                self._discard_thread_connection(cached_conn)
+        elif cached_conn is not None:
+            self._discard_thread_connection(cached_conn)
+
+        self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        # check_same_thread=False allows deterministic cross-thread close() on shutdown
+        # while threading.local() strictly confines active query execution to one thread.
+        connection = sqlite3.connect(self.database_path, timeout=5.0, check_same_thread=False)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA busy_timeout = 5000")
+        try:
+            mode_row = connection.execute("PRAGMA journal_mode").fetchone()
+            current_mode = str(mode_row[0]).strip().lower() if mode_row else ""
+            if current_mode not in {"wal", "memory"}:
+                connection.execute("PRAGMA journal_mode = WAL")
+            if current_mode != "memory":
+                connection.execute("PRAGMA synchronous = NORMAL")
+        except sqlite3.OperationalError:
+            pass
+        self._local.connection = connection
+        self._local.database_path = target_path
+        self._local.depth = 0
+        with self._connections_lock:
+            self._open_connections.append(connection)
+            self.connection_open_count += 1
+        return connection
+
+    def _discard_thread_connection(self, connection: sqlite3.Connection | None = None) -> None:
+        conn = connection or getattr(self._local, "connection", None)
+        if getattr(self._local, "connection", None) is conn:
+            self._local.connection = None
+            self._local.database_path = None
+            self._local.depth = 0
+        if conn is not None:
+            with self._connections_lock:
+                with suppress(ValueError):
+                    self._open_connections.remove(conn)
+            with suppress(sqlite3.Error):
+                conn.close()
+
+    def close(self) -> None:
+        """Close all pooled thread-local SQLite connections for clean shutdown."""
+        self._local.connection = None
+        self._local.database_path = None
+        self._local.depth = 0
+        with self._connections_lock:
+            conns = list(self._open_connections)
+            self._open_connections.clear()
+        for conn in conns:
+            with suppress(sqlite3.Error):
+                conn.close()
 
     @contextmanager
     def _connect(self):
-        connection = sqlite3.connect(self.database_path)
-        connection.row_factory = sqlite3.Row
-        # FastAPI serves requests from a threadpool; two writers arriving
-        # together must wait for the lock instead of failing the request with
-        # "database is locked" after sqlite's 5s default.
-        connection.execute("PRAGMA busy_timeout = 5000")
-        try:
-            connection.execute("PRAGMA journal_mode = WAL")
-        except sqlite3.OperationalError:
-            pass
+        connection = self._get_thread_connection()
+        depth = int(getattr(self._local, "depth", 0))
+        if depth > 0:
+            self._local.depth = depth + 1
+            try:
+                yield connection
+            finally:
+                self._local.depth = depth
+            return
+
+        changes_before = connection.total_changes
+        self._local.depth = 1
         committed = False
+        broken = False
         try:
             yield connection
             connection.commit()
             committed = True
+        except sqlite3.DatabaseError:
+            broken = True
+            with suppress(sqlite3.Error):
+                connection.rollback()
+            raise
         except Exception:
-            connection.rollback()
+            with suppress(sqlite3.Error):
+                connection.rollback()
             raise
         finally:
-            # A rolled-back statement still raises total_changes, which used to
-            # bump the snapshot generation and invalidate caches for a write
-            # that never landed.
-            if committed and connection.total_changes:
+            self._local.depth = 0
+            if committed and connection.total_changes > changes_before:
                 with self._write_generation_lock:
                     self.write_generation += 1
-            connection.close()
+            if broken:
+                self._discard_thread_connection(connection)
 
     def _initialize(self) -> None:
         with self._connect() as connection:
