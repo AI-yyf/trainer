@@ -38,6 +38,9 @@ def _agent_result_visible_text(result: Any) -> str:
 
 def _agentic_has_grounded_resource_evidence(tool_events: list[dict[str, Any]]) -> bool:
     grounded_tool_names = {
+        "library_read",
+        "project_read",
+        "web_fetch",
         "search_learning_materials",
         "search_resources",
         "read_workspace_file",
@@ -46,8 +49,15 @@ def _agentic_has_grounded_resource_evidence(tool_events: list[dict[str, Any]]) -
         if not isinstance(event, dict):
             continue
         name = str(event.get("name") or "").strip()
-        if name in grounded_tool_names:
-            return True
+        if name not in grounded_tool_names:
+            continue
+        if str(event.get("type") or "").strip() == "tool_result":
+            if event.get("ok") is False:
+                continue
+            result = event.get("result")
+            if isinstance(result, dict) and result.get("ok") is False:
+                continue
+        return True
     return False
 
 

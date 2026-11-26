@@ -89,11 +89,14 @@ function startFixtureProvider() {
         const id = `chatcmpl-fixture-${Date.now()}`;
         const model = payload.model || "fixture-v4-gui";
         const tools = Array.isArray(payload.tools) ? payload.tools : [];
-        const toolNames = tools.map((tool) => tool?.function?.name).filter(Boolean);
+        const toolNames = tools.map((tool) => tool?.function?.name ?? tool?.name).filter(Boolean);
         const hasToolResult = messages.some((message) => message.role === "tool");
-        const savePlanRequested = toolNames.includes("save_formal_plan") && !hasToolResult;
+        const usesLearningAction = toolNames.includes("learning_action");
+        const savePlanRequested =
+          (usesLearningAction || toolNames.includes("save_formal_plan")) && !hasToolResult;
         if (savePlanRequested) {
           const planArgs = {
+            ...(usesLearningAction ? { action: "save_formal_plan" } : {}),
             title: "PPO Clip 实现计划",
             summary: "用最小切片实现 PPO Clip，并逐步接入训练循环。",
             cadence: "每周 4 小时",
@@ -107,6 +110,7 @@ function startFixtureProvider() {
               { id: "stage-practice", title: "练习", goal: "实现最小 PPO 更新。", outcomes: ["运行通过并解释 clip 边界"], resources: [], status: "pending" },
             ],
           };
+          const saveToolName = usesLearningAction ? "learning_action" : "save_formal_plan";
           if (payload.stream) {
             response.writeHead(200, {
               "content-type": "text/event-stream",
@@ -114,7 +118,7 @@ function startFixtureProvider() {
               connection: "keep-alive",
             });
             const base = { id, object: "chat.completion.chunk", model };
-            response.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { role: "assistant", tool_calls: [{ index: 0, id: "call_save_formal_plan", type: "function", function: { name: "save_formal_plan", arguments: "" } }] }, finish_reason: null }] })}\n\n`);
+            response.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { role: "assistant", tool_calls: [{ index: 0, id: "call_save_formal_plan", type: "function", function: { name: saveToolName, arguments: "" } }] }, finish_reason: null }] })}\n\n`);
             response.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: JSON.stringify(planArgs) } }] }, finish_reason: null }] })}\n\n`);
             response.write(`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] })}\n\n`);
             response.write("data: [DONE]\n\n");
@@ -132,7 +136,7 @@ function startFixtureProvider() {
                 tool_calls: [{
                   id: "call_save_formal_plan",
                   type: "function",
-                  function: { name: "save_formal_plan", arguments: JSON.stringify(planArgs) },
+                  function: { name: saveToolName, arguments: JSON.stringify(planArgs) },
                 }],
               },
               finish_reason: "tool_calls",

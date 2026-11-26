@@ -426,8 +426,23 @@ async def _handle_library_read(context: ToolContext, args: dict[str, Any]) -> di
     action = str(args.get("action") or "search").strip().lower()
     if action == "search":
         result = await _handle_search_resources(context, args)
+        raw_ids = args.get("resource_ids")
+        if isinstance(raw_ids, list) and raw_ids and isinstance(result, dict):
+            allowed_ids = {str(rid).strip() for rid in raw_ids if str(rid).strip()}
+            hits = result.get("hits")
+            if allowed_ids and isinstance(hits, list):
+                result = dict(result)
+                result["hits"] = [
+                    h
+                    for h in hits
+                    if isinstance(h, dict)
+                    and str(h.get("resource_id") or h.get("id") or "").strip() in allowed_ids
+                ]
     elif action == "excerpt":
-        result = await _handle_read_resource_excerpt(context, args)
+        mapped = dict(args)
+        if mapped.get("chars") is None and mapped.get("max_chars") is not None:
+            mapped["chars"] = mapped["max_chars"]
+        result = await _handle_read_resource_excerpt(context, mapped)
     elif action == "list_resources":
         result = await _handle_list_resources(context, args)
     elif action == "list_folders":
@@ -504,8 +519,81 @@ def _infer_curate_sub_action(args: dict[str, Any]) -> str:
     return ""
 
 
+_LIBRARY_WRITE_INTENT_HINTS: tuple[str, ...] = (
+    "资料库",
+    "讲稿",
+    "备课",
+    "笔记",
+    "沙箱",
+    "整理",
+    "归档",
+    "导入",
+    "保存",
+    "写入",
+    "新建",
+    "创建",
+    "重命名",
+    "移动",
+    "删除",
+    "移入回收站",
+    "恢复",
+    "刷新索引",
+    ".trash",
+    "library",
+    "sandbox",
+    "resource",
+    "resources",
+    "save",
+    "write",
+    "edit",
+    "mkdir",
+    "rename",
+    "move",
+    "delete",
+    "trash",
+    "restore",
+    "import",
+    "organize",
+    "curate",
+    "reindex",
+)
+
+
+def _library_mutation_allowed_in_agent_turn(context: ToolContext, action: str) -> bool:
+    extra = context.extra if isinstance(context.extra, dict) else {}
+    # Direct unit/API invocations without agent-loop turn flags stay unrestricted.
+    if "allow_coach_only_tools" not in extra:
+        return True
+    if (
+        extra.get("library_sandbox_work") is True
+        or str(extra.get("active_view") or "").strip().lower() == "resources"
+        or bool(extra.get("resource_composer_intent"))
+        or extra.get("explicit_resource_organize") is True
+        or extra.get("explicit_resource_import") is True
+        or extra.get("explicit_lecture_note_save_request") is True
+        or extra.get("explicit_learning_note_request") is True
+    ):
+        return True
+    if action == "save_lecture_note":
+        # Let _handle_save_lecture_note return its canonical error code.
+        return True
+    lowered = " ".join(str(extra.get("learner_message") or "").split()).lower()
+    return any(hint in lowered for hint in _LIBRARY_WRITE_INTENT_HINTS)
+
+
 async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     action = str(args.get("action") or "write").strip().lower()
+    if not _library_mutation_allowed_in_agent_turn(context, action):
+        return {
+            "ok": False,
+            "domain": "library_sandbox",
+            "action": action,
+            "error": "library_write_not_requested",
+            "detail": (
+                "Library mutations require working in Resources or an explicit learner "
+                "request to save, import, edit, or organize library materials."
+            ),
+        }
     sandbox_service = _sandbox_service(context)
 
     if action == "write":
@@ -755,7 +843,10 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
         }
 
     if action == "import_url":
-        return _stamp_library_result(await _handle_import_resource_url(context, args), action)
+        mapped = dict(args)
+        if not mapped.get("name") and mapped.get("title"):
+            mapped["name"] = mapped["title"]
+        return _stamp_library_result(await _handle_import_resource_url(context, mapped), action)
     if action == "import_workspace":
         return _stamp_library_result(await _handle_import_workspace_file(context, args), action)
     if action == "organize":
@@ -837,6 +928,16 @@ def _validate_library_exec_command(
 
 
 async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    if not _library_mutation_allowed_in_agent_turn(context, "exec"):
+        return {
+            "ok": False,
+            "domain": "library_sandbox",
+            "error": "library_write_not_requested",
+            "detail": (
+                "library_exec requires working in Resources or an explicit learner "
+                "request to process or organize library files."
+            ),
+        }
     sandbox_service = _sandbox_service(context)
     if sandbox_service is None:
         return {
@@ -967,7 +1068,21 @@ async def _handle_web_fetch(context: ToolContext, args: dict[str, Any]) -> dict[
     elif action == "assess_evidence":
         result = await _handle_assess_research_evidence(context, args)
     elif action == "import_url":
-        result = await _handle_import_resource_url(context, args)
+        if not _library_mutation_allowed_in_agent_turn(context, "import_url"):
+            return {
+                "ok": False,
+                "domain": "web_research",
+                "action": "import_url",
+                "error": "library_write_not_requested",
+                "detail": (
+                    "Importing a URL into <LibraryRoot> requires working in Resources "
+                    "or an explicit learner request to import/save the resource."
+                ),
+            }
+        mapped = dict(args)
+        if not mapped.get("name") and mapped.get("title"):
+            mapped["name"] = mapped["title"]
+        result = await _handle_import_resource_url(context, mapped)
     else:
         return {
             "ok": False,
@@ -1068,7 +1183,10 @@ async def _handle_learning_action(context: ToolContext, args: dict[str, Any]) ->
                 "error": "live_formal_plan_required",
                 "detail": "next_task requires a live-bound formal plan.",
             }
-        result = await _handle_next_task(context, args)
+        mapped = dict(args)
+        if not mapped.get("focus_area") and (mapped.get("focus") or mapped.get("goal")):
+            mapped["focus_area"] = mapped.get("focus") or mapped.get("goal")
+        result = await _handle_next_task(context, mapped)
     elif action == "invoke_skill":
         mapped = dict(args)
         if not mapped.get("skill_id") and mapped.get("skill_name"):
@@ -1226,6 +1344,8 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                         "description": "Optional resource ID filter list (for search).",
                     },
                     "anchor_id": _string("Optional ¶ anchor id (for excerpt)."),
+                    "version_id": _string("Optional pinned resource version id (for excerpt)."),
+                    "content_hash": _string("Optional pinned content hash (for excerpt)."),
                     "mode": _enum("Optional search mode.", ["broad", "narrow", "verify"]),
                     "start_line": {
                         "type": "integer",
@@ -1237,6 +1357,7 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                     },
                     "limit": {"type": "integer", "description": "Maximum results to return."},
                     "max_chars": {"type": "integer", "description": "Maximum characters to read."},
+                    "chars": {"type": "integer", "description": "Alias for max_chars (for excerpt)."},
                     "include_trash": {
                         "type": "boolean",
                         "description": "Include .trash/ entries when listing or grepping (default false).",
@@ -1487,6 +1608,7 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                         ),
                     },
                     "title": _string("Optional resource title (for import_url)."),
+                    "name": _string("Alias for resource title (for import_url)."),
                     "folder": _string("Optional target folder (for import_url)."),
                     "tags": {
                         "type": "array",
@@ -1595,6 +1717,7 @@ def build_orthogonal_primitive_tools() -> list[ToolDefinition]:
                         "Concrete task objective (for specify_task)."
                     ),
                     "goal": _string("Alias for task objective (for specify_task)."),
+                    "focus_area": _string("Optional focus area (for next_task)."),
                     "skill_id": _string("Skill id, $trigger, or name (for invoke_skill)."),
                     "skill_name": _string("Alias for skill_id (for invoke_skill)."),
                     "task_note": _string("Optional task context passed to skill (for invoke_skill)."),

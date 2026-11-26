@@ -540,3 +540,139 @@ async def test_lecture_note_record_note_curate_skill_and_citation_parts(tmp_path
     )
     assert any(p.get("referenceOrigin") == "library" for p in parts)
     assert any(p.get("referenceOrigin") == "web_research" for p in parts)
+
+
+@pytest.mark.asyncio
+async def test_line_slicing_excerpt_forwarding_grounding_and_turn_write_gates(
+    tmp_path: Path,
+) -> None:
+    from app.llm.coaching_reply_drafts import _agentic_has_grounded_resource_evidence
+
+    _runtime, ctx, project_root, _library_root = _setup_ctx(tmp_path)
+    registry = build_default_tool_registry()
+
+    ten_lines = "\n".join(f"line-{idx}" for idx in range(1, 11)) + "\n"
+    (project_root / "multiline.py").write_text(ten_lines, encoding="utf-8")
+
+    # 1. project_read(read) honors 1-based start_line / end_line before max_chars truncation
+    sliced_proj = await registry.invoke(
+        ctx,
+        "project_read",
+        {"action": "read", "path": "multiline.py", "start_line": 4, "end_line": 6},
+    )
+    assert sliced_proj["ok"] is True
+    assert sliced_proj["content"] == "line-4\nline-5\nline-6"
+    assert sliced_proj["start_line"] == 4
+    assert sliced_proj["end_line"] == 6
+    assert sliced_proj["total_lines"] == 10
+    assert sliced_proj["line_count"] == 3
+
+    # 2. library_write(write) + library_read(read_file) honors start_line / end_line
+    padding = "padding_segment_" * 4
+    written_a = await registry.invoke(
+        ctx,
+        "library_write",
+        {
+            "action": "write",
+            "path": "notes/alpha.md",
+            "content": "\n".join(
+                f"alpha-{i}: unique_token_alpha {padding}" for i in range(1, 21)
+            ),
+        },
+    )
+    written_b = await registry.invoke(
+        ctx,
+        "library_write",
+        {
+            "action": "write",
+            "path": "notes/beta.md",
+            "content": "\n".join(f"beta-{i}: unique_token_alpha" for i in range(1, 6)),
+        },
+    )
+    assert written_a["ok"] is True and written_b["ok"] is True
+
+    sliced_lib = await registry.invoke(
+        ctx,
+        "library_read",
+        {"action": "read_file", "path": "notes/alpha.md", "start_line": 3, "end_line": 5},
+    )
+    assert sliced_lib["ok"] is True
+    assert sliced_lib["content"] == "\n".join(
+        f"alpha-{i}: unique_token_alpha {padding}" for i in range(3, 6)
+    )
+    assert sliced_lib["line_count"] == 3
+
+    # 3. library_read(search) filters by resource_ids and library_read(excerpt) maps max_chars -> chars
+    res_a_id = str(written_a["resource_id"])
+    filtered_search = await registry.invoke(
+        ctx,
+        "library_read",
+        {
+            "action": "search",
+            "query": "unique_token_alpha",
+            "resource_ids": [res_a_id],
+        },
+    )
+    assert filtered_search["ok"] is True
+    assert filtered_search["hits"]
+    assert all(
+        str(hit.get("resource_id") or hit.get("id")) == res_a_id
+        for hit in filtered_search["hits"]
+    )
+
+    excerpt_res = await registry.invoke(
+        ctx,
+        "library_read",
+        {"action": "excerpt", "resource_id": res_a_id, "max_chars": 240},
+    )
+    assert excerpt_res["ok"] is True
+    assert excerpt_res["excerpts"]
+    assert len(str(excerpt_res["excerpts"][0]["text"])) <= 260
+
+    # 4. _agentic_has_grounded_resource_evidence recognizes orthogonal primitives and ignores failures
+    assert (
+        _agentic_has_grounded_resource_evidence(
+            [{"type": "tool_result", "name": "project_read", "ok": False, "result": {"ok": False}}]
+        )
+        is False
+    )
+    for prim_name in ("project_read", "library_read", "web_fetch"):
+        assert (
+            _agentic_has_grounded_resource_evidence(
+                [{"type": "tool_result", "name": prim_name, "ok": True, "result": {"ok": True}}]
+            )
+            is True
+        )
+
+    # 5. Unsolicited library mutations fail-closed on non-library agent-loop Q&A turns
+    ctx.extra = _build_agent_tool_context_extra(
+        coach_context={"active_view": "coach"},
+        attachment_delivery={},
+        answer_mode="guided",
+        current_file=None,
+        learner_message="请解释什么是尾递归优化",
+    )
+    blocked_write = await registry.invoke(
+        ctx,
+        "library_write",
+        {"action": "write", "path": "notes/unrequested.md", "content": "should not write"},
+    )
+    assert blocked_write["ok"] is False
+    assert blocked_write["error"] == "library_write_not_requested"
+
+    blocked_exec = await registry.invoke(
+        ctx,
+        "library_exec",
+        {"command": "echo unrequested"},
+    )
+    assert blocked_exec["ok"] is False
+    assert blocked_exec["error"] == "library_write_not_requested"
+
+    blocked_import = await registry.invoke(
+        ctx,
+        "web_fetch",
+        {"action": "import_url", "url": "https://example.com"},
+    )
+    assert blocked_import["ok"] is False
+    assert blocked_import["error"] == "library_write_not_requested"
+

@@ -3290,6 +3290,45 @@ async def _handle_list_sandbox(context: ToolContext, args: dict[str, Any]) -> di
     }
 
 
+def _slice_text_by_lines(
+    text: str,
+    *,
+    start_line_raw: Any,
+    end_line_raw: Any,
+    max_chars: int,
+) -> dict[str, Any]:
+    lines = text.splitlines()
+    total_lines = len(lines)
+    has_line_window = start_line_raw is not None or end_line_raw is not None
+    if has_line_window:
+        try:
+            start_line = max(1, int(start_line_raw)) if start_line_raw is not None else 1
+        except (TypeError, ValueError):
+            start_line = 1
+        try:
+            end_line = max(start_line, int(end_line_raw)) if end_line_raw is not None else total_lines
+        except (TypeError, ValueError):
+            end_line = total_lines
+        selected = lines[start_line - 1 : end_line]
+        joined = "\n".join(selected)
+        truncated = len(joined) > max_chars or end_line < total_lines or start_line > 1
+        return {
+            "content": joined[:max_chars],
+            "truncated": truncated,
+            "start_line": start_line,
+            "end_line": min(end_line, total_lines) if total_lines else 0,
+            "total_lines": total_lines,
+            "line_count": len(joined[:max_chars].splitlines()),
+        }
+    sliced = text[:max_chars]
+    return {
+        "content": sliced,
+        "truncated": len(text) > max_chars,
+        "total_lines": total_lines,
+        "line_count": len(sliced.splitlines()),
+    }
+
+
 async def _handle_read_sandbox_file(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     sandbox_service = _sandbox_service(context)
     if sandbox_service is None:
@@ -3302,6 +3341,8 @@ async def _handle_read_sandbox_file(context: ToolContext, args: dict[str, Any]) 
         max_chars = max(64, min(int(args.get("max_chars", 8000)), 32000))
     except Exception:
         max_chars = 8000
+    start_line_raw = args.get("start_line")
+    end_line_raw = args.get("end_line")
     try:
         preview = sandbox_service.preview(
             context.workspace_id,
@@ -3309,7 +3350,26 @@ async def _handle_read_sandbox_file(context: ToolContext, args: dict[str, Any]) 
         )
     except Exception as exc:
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
-    payload = _sandbox_preview_payload(preview, max_chars=max_chars)
+    if start_line_raw is not None or end_line_raw is not None:
+        root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
+        target = (root / relative).resolve()
+        try:
+            full_text = target.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            full_text = str(getattr(preview, "content", "") or "")
+        payload = _sandbox_preview_payload(preview, max_chars=max_chars)
+        payload.update(
+            _slice_text_by_lines(
+                full_text,
+                start_line_raw=start_line_raw,
+                end_line_raw=end_line_raw,
+                max_chars=max_chars,
+            )
+        )
+    else:
+        payload = _sandbox_preview_payload(preview, max_chars=max_chars)
+        content_str = str(payload.get("content") or "")
+        payload["line_count"] = len(content_str.splitlines())
     payload["ok"] = True
     payload["path"] = relative
     return payload
@@ -4473,7 +4533,7 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
         max_chars = max(200, min(int(args.get("chars", 1600) or 1600), 4000))
     except Exception:
         max_chars = 1600
-    per_excerpt = max(400, max_chars // max(1, len(selected)))
+    per_excerpt = max(200, max_chars // max(1, len(selected)))
     resource_display = _resource_display(record)
     current_version = _current_resource_version(context, record)
     excerpts: list[dict[str, Any]] = []
@@ -4909,6 +4969,8 @@ async def _handle_read_workspace_file(context: ToolContext, args: dict[str, Any]
     except Exception:
         max_chars = 4000
 
+    start_line_raw = args.get("start_line")
+    end_line_raw = args.get("end_line")
     root = _resolve_workspace_root(context)
     target = _safe_path_under(root, path_raw) if root is not None else None
     if target is not None and target.is_file():
@@ -4916,28 +4978,36 @@ async def _handle_read_workspace_file(context: ToolContext, args: dict[str, Any]
             text = target.read_text(encoding="utf-8", errors="replace")
         except Exception as exc:
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
-        truncated = len(text) > max_chars
+        sliced_info = _slice_text_by_lines(
+            text,
+            start_line_raw=start_line_raw,
+            end_line_raw=end_line_raw,
+            max_chars=max_chars,
+        )
         return {
             "ok": True,
             "path": str(target.relative_to(root)) if root is not None else str(target),
             "absolute_path": str(target),
             "source": "workspace_disk",
-            "truncated": truncated,
-            "content": text[:max_chars],
             "byte_size": len(text.encode("utf-8", errors="replace")),
+            **sliced_info,
         }
     record = _snapshot_file_record(context, path_raw)
     if record is not None:
         text = str(record.get("content") or "")
-        truncated = len(text) > max_chars
+        sliced_info = _slice_text_by_lines(
+            text,
+            start_line_raw=start_line_raw,
+            end_line_raw=end_line_raw,
+            max_chars=max_chars,
+        )
         return {
             "ok": True,
             "path": str(record.get("path") or path_raw),
             "source": "workspace_snapshot",
-            "truncated": truncated,
-            "content": text[:max_chars],
             "byte_size": len(text.encode("utf-8", errors="replace")),
             "language_id": record.get("language_id"),
+            **sliced_info,
         }
     if _snapshot_file_listed(context, path_raw):
         relative = _normalize_workspace_relpath(path_raw)

@@ -106,14 +106,20 @@ def tool_event_summary(
                     "detail": result.get("detail"),
                 }
             )
-        if name == "assess_research_evidence" and result.get("research_status"):
+        action = str(result.get("action") or "").strip().lower()
+        if (
+            name == "assess_research_evidence"
+            or (name == "web_fetch" and action == "assess_evidence")
+        ) and result.get("research_status"):
             research_evaluation = {
                 "status": result.get("research_status"),
                 "complete": result.get("research_complete") is True,
                 "exhausted": result.get("research_exhausted") is True,
                 "coverage": result.get("evidence_coverage") or {},
             }
-        if name != "search_learning_materials":
+        if name != "search_learning_materials" and not (
+            name == "web_fetch" and action == "learning_materials"
+        ):
             continue
         for source in result.get("sources", []):
             if not isinstance(source, dict):
@@ -333,9 +339,14 @@ def main() -> int:
                         "committed"
                         if any(
                             event.get("type") == "tool_result"
-                            and event.get("name") == "save_formal_plan"
+                            and event.get("name") in {"learning_action", "save_formal_plan"}
                             and isinstance(event.get("result"), dict)
                             and event["result"].get("ok") is True
+                            and (
+                                event.get("name") == "save_formal_plan"
+                                or str(event["result"].get("action") or "").strip().lower()
+                                == "save_formal_plan"
+                            )
                             for event in agent_events
                         )
                         else "missing"
@@ -395,10 +406,11 @@ def main() -> int:
             report["long_horizon_turn"]["http_status"] == 200
             and report["long_horizon_turn"]["fell_back"] is not True
         ),
-        "public_research_used": "search_learning_materials" in tool_names,
+        "public_research_used": bool({"web_fetch", "search_learning_materials"} & set(tool_names)),
         "verified_sources_found": len(sources) >= 2,
         "evidence_coverage_sufficient": research_evaluation.get("status") == "sufficient",
-        "formal_plan_saved": "save_formal_plan" in tool_names and generated_plan.get("present") is True,
+        "formal_plan_saved": bool({"learning_action", "save_formal_plan"} & set(tool_names))
+        and generated_plan.get("present") is True,
         "complex_plan_has_six_stages": generated_plan.get("stage_count") == 6,
         "every_stage_has_evidence_and_outcome": bool(stages)
         and all(

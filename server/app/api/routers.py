@@ -2702,12 +2702,24 @@ def build_router(runtime: TrainerRuntime) -> APIRouter:
             if not isinstance(event, dict):
                 continue
             event_name = str(event.get("name") or "").strip()
-            if event_name not in {"library_read", "search_resources"}:
+            if event_name not in {"library_read", "search_resources", "read_resource_excerpt"}:
                 continue
             result_payload = event.get("result")
             if not isinstance(result_payload, dict):
                 continue
-            if event_name == "library_read" and str(result_payload.get("action") or "search").strip().lower() != "search":
+            action = str(result_payload.get("action") or "").strip().lower()
+            if event_name == "read_resource_excerpt" or (
+                event_name == "library_read" and action == "excerpt"
+            ):
+                res_obj = result_payload.get("resource")
+                if isinstance(res_obj, dict):
+                    res_id = str(res_obj.get("id") or "").strip()
+                    record = by_id.get(res_id)
+                    if record is not None and record.id not in seen_ids:
+                        seen_ids.add(record.id)
+                        ordered.append(record)
+                continue
+            if event_name == "library_read" and action not in {"", "search"}:
                 continue
             hits = result_payload.get("hits")
             if not isinstance(hits, list):

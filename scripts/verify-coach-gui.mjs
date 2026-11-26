@@ -875,8 +875,8 @@ try {
           ? "/plan 生成并保存正式学习计划：Gymnasium 的终止与截断。只安排 1 个阶段，共一周，每周 1 小时。目标是用 pytest 验证当前 Python 文件，只基于当前代码，先不查资料。"
           : "/plan 生成并保存正式学习计划：工作区范围验证。";
         const strictPlanPrompt = paperJourney
-          ? "/plan 生成并保存正式学习计划：Gymnasium 的终止与截断。只安排 1 个阶段，共一周，每周 1 小时，verify_method 必须包含 pytest 验证当前 Python 文件；请调用 save_formal_plan 工具完成保存。"
-          : "/plan 生成并保存正式学习计划：工作区范围验证。安排至少 2 个阶段；当前步骤：检查 unified-boundary.py 对 workspace_id 的比较；why_now：当前函数恒返回 False；verify_method：运行 pytest 并说明比较结果；请调用 save_formal_plan 工具完成保存。";
+          ? "/plan 生成并保存正式学习计划：Gymnasium 的终止与截断。只安排 1 个阶段，共一周，每周 1 小时，verify_method 必须包含 pytest 验证当前 Python 文件；请调用 learning_action(action='save_formal_plan') 完成保存。"
+          : "/plan 生成并保存正式学习计划：工作区范围验证。安排至少 2 个阶段；当前步骤：检查 unified-boundary.py 对 workspace_id 的比较；why_now：当前函数恒返回 False；verify_method：运行 pytest 并说明比较结果；请调用 learning_action(action='save_formal_plan') 完成保存。";
         const waitForPlanPreview = async (timeout) => {
           const preview = frame
             .locator('[data-unified-action-preview="plan"]')
@@ -968,7 +968,7 @@ try {
           do {
             commit = readPersistedLearning((db) => db.prepare(`
               SELECT checkpoint_id FROM agent_turn_checkpoints, json_each(payload, '$.trace.tool_events') AS event
-              WHERE json_extract(event.value, '$.name') = 'save_formal_plan'
+              WHERE json_extract(event.value, '$.name') IN ('learning_action', 'save_formal_plan')
                 AND json_extract(event.value, '$.result.committed') = 1
                 AND json_extract(event.value, '$.result.plan.id') = ?
               LIMIT 1

@@ -227,17 +227,24 @@ def _collect_grounding_evidence(
     for item in tool_events if isinstance(tool_events, list) else []:
         if not isinstance(item, dict):
             continue
-        if str(item.get("name") or "").strip() != "search_resources":
+        item_name = str(item.get("name") or "").strip()
+        if item_name not in {"library_read", "search_resources"}:
             continue
         if str(item.get("type") or "").strip() == "tool_call":
+            args_obj = item.get("arguments")
+            if item_name == "library_read" and isinstance(args_obj, dict):
+                if str(args_obj.get("action") or "search").strip().lower() not in {"search", "excerpt"}:
+                    continue
             search_calls += 1
             continue
         if str(item.get("type") or "").strip() != "tool_result":
             continue
-        search_results += 1
         result_payload = item.get("result")
         if not isinstance(result_payload, dict):
             continue
+        if item_name == "library_read" and str(result_payload.get("action") or "search").strip().lower() not in {"search", "excerpt"}:
+            continue
+        search_results += 1
         hits = result_payload.get("hits")
         if not isinstance(hits, list):
             continue
@@ -379,7 +386,7 @@ def main() -> int:
         )
         _require(
             evidence["searchResults"] > 0,
-            f"{case['protocol']}: expected search_resources tool results, got {evidence}",
+            f"{case['protocol']}: expected library_read/search_resources tool results, got {evidence}",
         )
         _require(
             evidence["matchedExpectedTitle"],

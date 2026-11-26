@@ -210,14 +210,16 @@ async function verifyInProgressBootstrapCoachRecovery(page, previewUrl) {
     agentActivity: [
       {
         id: "inspect-plan",
-        name: "inspect_plan",
+        name: "learning_inspect",
+        args: { action: "plan" },
         status: "succeeded",
-        result: { summary: "Plan anchor found." },
+        result: { action: "plan", summary: "Plan anchor found." },
         step: 1,
       },
       {
         id: "recall-memory",
-        name: "recall_memory",
+        name: "learning_inspect",
+        args: { action: "memory" },
         status: "running",
         step: 1,
       },
@@ -271,7 +273,8 @@ async function verifyInProgressPatchRefresh(page, previewUrl) {
     agentActivity: [
       {
         id: "inspect-plan",
-        name: "inspect_plan",
+        name: "learning_inspect",
+        args: { action: "plan" },
         status: "running",
         step: 1,
       },
@@ -288,9 +291,10 @@ async function verifyInProgressPatchRefresh(page, previewUrl) {
     agentActivity: [
       {
         id: "inspect-plan",
-        name: "inspect_plan",
+        name: "learning_inspect",
+        args: { action: "plan" },
         status: "succeeded",
-        result: { summary: "Plan anchor found." },
+        result: { action: "plan", summary: "Plan anchor found." },
         step: 2,
       },
       {
@@ -370,8 +374,8 @@ async function verifyInteractiveCoachLoopProgression(page, previewUrl) {
     type: "stream/tool_call",
     payload: {
       id: "inspect-plan",
-      name: "inspect_plan",
-      arguments: { target: "current plan" },
+      name: "learning_inspect",
+      arguments: { action: "plan" },
       step: 0,
     },
   });
@@ -401,9 +405,9 @@ async function verifyInteractiveCoachLoopProgression(page, previewUrl) {
     type: "stream/tool_result",
     payload: {
       id: "inspect-plan",
-      name: "inspect_plan",
+      name: "learning_inspect",
       ok: true,
-      result: { summary: "Plan anchor found." },
+      result: { action: "plan", summary: "Plan anchor found." },
       step: 0,
     },
   });
@@ -411,8 +415,8 @@ async function verifyInteractiveCoachLoopProgression(page, previewUrl) {
     type: "stream/tool_call",
     payload: {
       id: "recall-memory",
-      name: "recall_memory",
-      arguments: { scope: "project" },
+      name: "learning_inspect",
+      arguments: { action: "memory", focus: "project" },
       step: 0,
     },
   });

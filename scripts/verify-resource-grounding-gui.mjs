@@ -528,11 +528,19 @@ function fixtureMessage(payload, statePath, searchQuery) {
   if (/provider ready/i.test(userText)) {
     return { content: "provider ready" };
   }
+  const tools = Array.isArray(payload?.tools) ? payload.tools : [];
+  const hasLibraryRead = tools.some((t) => (t?.function?.name ?? t?.name) === "library_read");
   const toolMessages = toolContents(messages);
   const searchContent = toolMessages[0];
   const readContent = toolMessages[1];
   if (!searchContent) {
-    return { toolCalls: [toolCall("search_resources", { query: searchQuery, mode: "narrow" })] };
+    return {
+      toolCalls: [
+        hasLibraryRead
+          ? toolCall("library_read", { action: "search", query: searchQuery, mode: "narrow" })
+          : toolCall("search_resources", { query: searchQuery, mode: "narrow" }),
+      ],
+    };
   }
   if (!readContent) {
     const parsed = parseToolContent(searchContent);
@@ -544,11 +552,18 @@ function fixtureMessage(payload, statePath, searchQuery) {
     );
     return {
       toolCalls: [
-        toolCall("read_resource_excerpt", {
-          ...(resourceId ? { resource_id: resourceId } : {}),
-          ...(anchorId ? { anchor_id: anchorId } : {}),
-          chars: 1400,
-        }),
+        hasLibraryRead
+          ? toolCall("library_read", {
+              action: "excerpt",
+              ...(resourceId ? { resource_id: resourceId } : {}),
+              ...(anchorId ? { anchor_id: anchorId } : {}),
+              max_chars: 1400,
+            })
+          : toolCall("read_resource_excerpt", {
+              ...(resourceId ? { resource_id: resourceId } : {}),
+              ...(anchorId ? { anchor_id: anchorId } : {}),
+              chars: 1400,
+            }),
       ],
     };
   }
