@@ -3,7 +3,6 @@ import { useLearningDrawerSections } from "../components/learning/useLearningDra
 import { LearningStrip } from "../components/learning/LearningStrip";
 import { InlineProgressCard } from "../components/learning/InlineProgressCard";
 import { InlinePracticeAnswer } from "../components/learning/InlinePracticeAnswer";
-import { VerificationResult } from "../templates/VerificationResult";
 import { MessageRichContent } from "../components/coach/MessageRichContent";
 import { unifiedComposerCopy } from "../lib/i18n/unifiedComposerCopy";
 import { resourceVersionCopy } from "../lib/i18n/resourceVersionCopy";
@@ -17,8 +16,6 @@ import { readTrainingCardList, readTrainingCardText, resolveBoundTrainingCardFac
 import { CommandPalette } from "../templates/CommandPalette";
 import {
   Suspense,
-  forwardRef,
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -27,74 +24,31 @@ import {
   type ReactNode,
 } from "react";
 import { reviewConceptLabel } from "../lib/reviewLabel";
-import { buildProviderSettingsActions } from "./providerSettingsActions";
 import { SettingsRoute } from "./SettingsRoute";
 import { goalTitleFromConversation } from "../lib/coachGoalTitle";
 import { researchBriefResourceIds, upsertResearchBrief } from "../../../../shared/src/researchBrief";
-import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 
 import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import { trainerCommands } from "../../../../shared/src/commands";
-import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
-import type { ResourceVersionCheckResult, ResourceVersionPin, TrainingPlanBinding } from "../../../../shared/src/models";
-import { isComposerLanguage } from "../../../../shared/src/types";
-import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
-import { analyzeSendIntent, messageReferencesWorkspaceFile, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
-import { deriveTrainerCapabilityVerdict } from "../../../../shared/src/capabilityVerdict";
-import {
-  selectScopedSettingsLastTest,
-  scopedSettingsCapabilityTruth,
-} from "../../../../shared/src/settingsCapabilityGovernance";
-import {
-  hasSavedProviderProfiles,
-  describeProviderImageInputState,
-  describeProviderSendState,
-  providerBaseUrlIsLocalService,
-  providerErrorHint,
-  PROVIDER_TEST_FRESHNESS_WINDOW_MS,
-} from "../../../../shared/src/providerStatus";
+import type { ResourceVersionCheckResult, TrainingPlanBinding } from "../../../../shared/src/models";
+import { analyzeSendIntent, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
 import {
   filterTrainerSkills,
-  mergeSkillCatalog,
-  normalizeTrainerCustomSkill,
-  normalizeTrainerCustomSkills,
-  parseTrainerSkillShare,
   resolveTrainerSkillText,
-  serializeTrainerSkillShare,
-  trainerSkillCatalog,
-  trainerSkillSectionLabel,
   trainerSkillTriggerToken,
-  TRAINER_CUSTOM_SKILL_LIMIT,
-  type TrainerCustomSkill,
-  type TrainerSkillCatalogItem,
-  type TrainerSkillContext,
-  type TrainerSkillSection,
 } from "../../../../shared/src/skillCatalog";
-import {
-  matchesSavedCoachDefaults,
-  sameCoachDefaults,
-} from "../../../../shared/src/coachDefaults";
-import {
-  evaluateProviderModelPolicy,
-  filterProviderModelOptions,
-  type ProviderModelPolicyReason,
-} from "../../../../shared/src/providerModelPolicy";
 import {
   buildTrainingCoachBridge,
   composeTrainingCoachBridgeDraft,
 } from "../../../../shared/src/trainingCoachBridge";
 import {
   deriveTrainingExecutionState,
-  isTrainingPrimerLike as isSharedTrainingPrimerLike,
-  normalizeTrainingStatus as normalizeSharedTrainingStatus,
   normalizeTrainingSubmode as normalizeSharedTrainingSubmode,
 } from "../../../../shared/src/trainingExecutionGovernance";
 import { localizeTrainingNextHopLabel } from "../../../../shared/src/trainingHandoffGovernance";
 import {
-  type SidebarControlCommandId,
   filterSidebarControlCommands,
   findSidebarControlCommand,
-  sidebarControlCommandLabel,
 } from "../../../../shared/src/sidebarCommands";
 import {
   deriveCoachOrientation,
@@ -163,25 +117,15 @@ import {
   sanitizeErrorSurfaceText,
   waitingComposerEnqueueFailureText,
 } from "../../../../shared/src/errorSurfaceSanitizer";
-import { readWorkspaceTrustStateFromCapabilitySummary } from "../../../../shared/src/workspaceTrustState";
-import {
-  deriveOnboardingSteps,
-  resolveEffectiveTrustState,
-} from "../../../../shared/src/onboarding";
 import {
   blockedComposerPresenceMessage,
-  blockedComposerSetupMessage,
-  providerCoachBanner,
   providerRecoveryLocale,
   providerRecoverySummary,
-  providerRecoveryStatusLabel,
-  providerSetupSummary,
 } from "./providerRecoveryCopy";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
 import { UtilityOverlay } from "../templates/UtilityOverlay";
 import { templateCopy } from "../templates/templateCopy";
-import { type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
 import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
 import { useSurfaceScroll } from "./useSurfaceScroll";
@@ -202,9 +146,18 @@ import {
 import { useLibraryResourceController } from "./useLibraryResourceController";
 import { useOperationStatusController } from "./useOperationStatusController";
 import { useProviderConnectionController } from "./useProviderConnectionController";
+import {
+  useCoachSettingsController,
+  useCoachSettingsState,
+  useProviderReadinessState,
+} from "./useCoachSettingsController";
+import {
+  useWorkspaceAdmissionFlow,
+  useWorkspaceAdmissionState,
+} from "./useWorkspaceAdmissionController";
 import { useTrainingCardController } from "./useTrainingCardController";
 import { useShallow } from "zustand/react/shallow";
-import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
+import { coachReplyMarkdown } from "../lib/shareUtils";
 import { formatTokenCount } from "../lib/formatUtils";
 import {
   planRuntimeStatusFromRecovery,
@@ -215,33 +168,18 @@ import {
   type CoachArtifactBlockData,
   type CoachMessageAction,
   CoachConversationView,
-  CoachMessageBubble,
 } from "../components/coach";
 import { AppShell } from "../templates/AppShell";
-import { ActivityHeader } from "../templates/ActivityHeader";
 import { resolveUnifiedComposerIntent, unifiedComposerCommands } from "../lib/unifiedComposerIntent";
-import { primaryDestinationForRoute } from "../lib/workbenchDestinations";
-import { deriveLearningSummary, isSameLearningFact, sanitizeBogusLearningStep } from "../lib/learningSummary";
+import { deriveLearningSummary, sanitizeBogusLearningStep } from "../lib/learningSummary";
 import { normalizeTrainingStateTextFields } from "../lib/hostText";
-import { useHostOperationResolver } from "../lib/useHostOperationResolver";
 import { appendDockAnchor, composerDockDraftScope, docksComposer, resolveDockContextAnchor } from "../lib/composerDock";
 import { useComposerDockAnchor } from "./useComposerDockAnchor";
 import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
 import {
-  attestationUndeliveredMessage,
-  detectAttestationUndelivered,
-  detectTrainerResourceFailure,
-  trainerResourceFailureMessage,
-  detectTrainingVerificationTargetMismatch,
-  detectOperationScopeChanged,
   detectPlanRevisionConflict,
-  livePlanTaskGateFailureMessage,
   parseLivePlanTaskGateMarker,
-  planRevisionConflictMessage,
-  operationScopeChangedMessage,
-  trainingVerificationTargetMismatchMessage,
   operationStatusMessageText,
-  providerRecoveryMessage,
   recoverableFailureMessage,
   resolveOperationMessageSurface,
   type OperationMessageSurface,
@@ -251,26 +189,11 @@ import {
   CoachComposer,
   ComposerContextMenu,
   type ComposerMentionItem,
-  ComposerIconButton,
   ComposerModelMenu,
   ComposerResourcesMenu,
-  DockReturnToSurfaceBar,
 } from "../components/composer";
-import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
+import { type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
 import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
-import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
-import type {
-  ResourceCaptureInput,
-  ResourceCaptureFocusOption,
-  ResourceMutationOutcome,
-  ResourceOrganizeInput,
-  ResourceSearchRequest,
-} from "../components/resources/ResourcesWorkbenchView";
-import {
-  parseLibraryFolderTree,
-  type LibraryFolderHostAnswer,
-  type LibraryFolderListResult,
-} from "../lib/libraryFolders";
 import {
   applyTrainingCardGrade,
   applyTrainingCardSkip,
@@ -286,66 +209,33 @@ import {
   ArrowRightIcon,
   CheckMarkIcon,
   ChevronRightIcon,
-  ContextLayersIcon,
   ResourcesIcon,
   SkillCubeIcon,
   TargetIcon,
-  UploadIcon,
   WarningIcon,
 } from "../components/icons";
-import { StatusPill } from "../components/StatusPill";
 import { applyWorkbenchTheme } from "../lib/theme";
 import { I18nProvider } from "../lib/i18n/context";
-import { resolveCopy as resolveWorkbenchCopy, type Copy } from "../lib/i18n/copy";
+import { resolveCopy as resolveWorkbenchCopy } from "../lib/i18n/copy";
 import { resolvePlanComposerCopy } from "../lib/i18n/planComposerCopy";
 import { composerAddCopy, GOAL_MODE_COPY } from "../lib/i18n/segments/coachInlineText";
 import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
-import { resolveTextDirection, type TextDirection } from "../lib/i18n/direction";
-import {
-  classifyProviderThinkingSupport,
-  describeProviderThinking,
-  normalizeProviderThinkingConfig,
-  synthesizeProviderThinkingDescriptor,
-  thinkingProtocolSupportsWire,
-} from "../../../../shared/src/providerThinking";
-import type {
-  ProviderThinkingConfig,
-  ProviderThinkingDescriptor,
-} from "../../../../shared/src/providerThinking";
+import { resolveTextDirection } from "../lib/i18n/direction";
 import type {
   ActiveWorkbenchView,
   BootstrapData,
-  BrowserUploadResourceInput as BrowserUploadResourceInputType,
-  CoachAnswerMode,
-  CoachDefaults,
-  CoachSessionSummary,
   ComposerLanguage,
   ConversationMessage,
   DebugVisibleTrainingFacts,
-  EvaluationCheck,
   HostMessage,
-  HostProviderTestSummary,
   MessageAttachment,
-  LibraryMigrationHostAnswer,
-  LibraryMigrationSummary,
-  PlanStage,
-  ProviderConfigView,
   ResourceComposerIntent,
-  ResourceTrainingHandoffResult,
-  SidebarView,
   SuggestedAction,
-  TeachingStyle,
-  ThemePreference,
-  TrainingCardCandidate,
-  TrainingLearningFamily,
-  WorkspaceTrainingState,
 } from "../lib/types";
 import {
   normalizeSidebarView,
-  normalizeTeachingStyle,
 } from "../lib/types";
 import {
-  announceReady,
   getInjectedBootstrapState,
   getWorkbenchSurface,
   persistBrowserPreviewProviderConfig,
@@ -353,7 +243,6 @@ import {
   postMessage,
   requestCollapseToSidebar,
   subscribeToHostMessages,
-  requestNativeSkillDraft,
   resourceVersionResultsSchema,
   inVsCodeWebview,
 } from "../lib/vscode";
@@ -366,79 +255,43 @@ import {
 import {
   appUiAltCopy,
   appUiCopy,
-  COACH_STARTER_PROMPTS,
-  PLAN_DRAFT_REPLACEMENT_COPY,
-  SCENARIO_TEXT,
-  TRAINING_CARD_STATUS_TEXT,
-  TRAINING_HANDOFF_STATUS_TEXT,
 } from "../lib/i18n/appUiCopy";
 import { isBrowserPreviewFixtureMode } from "../lib/browserPreviewMode";
 import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
-import { composerSessionKeyFor, type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
+import { composerSessionKeyFor, useWorkbenchState } from "./useWorkbenchState";
 import { formatReviewDueLabel, learnerSignalLabel } from "../components/settings/useCoachSettingsViewState";
 import { ProviderConnectionContext } from "./providerConnectionContext";
 import type { PlanReviewItem } from "../components/plan/CoachPlanView";
-import type {
-  SettingsActionFeedback,
-  SettingsSectionStatus,
-} from "../components/settings/CoachSettingsView";
 
 // ContextMenu type imported from useMenuState
 import {
   CAPTURE_CONFIRMATION_TIMEOUT_MS,
   COACH_REPLY_BODY_MAX_CHARS,
-  COACH_SETTINGS_AUTOSAVE_DELAY_MS,
   COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT,
   CoachPlanView,
-  CoachSettingsView,
   ComposerDeckKind,
-  DEFAULT_ANSWER_MODE,
-  DEFAULT_TEACHING_STYLE,
   DirectoryInput,
   DockedView,
-  LIBRARY_FOLDER_OPERATION_TIMEOUT_MS,
-  LIBRARY_MIGRATION_TIMEOUT_MS,
   LocalCommandSuggestion,
   LocalSkillSuggestion,
   OPEN_RESOURCE_SYNC_TIMEOUT_MS,
-  ORGANIZE_CONFIRMATION_TIMEOUT_MS,
-  PendingResourceOperation,
-  PendingResourceTrainingHandoff,
   RESOURCE_COMPOSER_MAX_IDS,
-  RESOURCE_OPERATION_TIMEOUT_MS,
-  RESOURCE_TRAINING_HANDOFF_TIMEOUT_MS,
   RESOURCE_UPLOAD_LIMIT,
-  ResourceMutationOperationKind,
   ResourcesWorkbenchView,
-  SettingsActionState,
-  SettingsFeedbackState,
   TrainingWorkbenchView,
   UtilityComposerModeOption,
   ViewFallback,
   WorkbenchDataSnapshot,
   activeStageObjectiveText,
   resetBootstrapRequestSent,
-  browserFileSupported,
-  browserUploadLooksLikeFolder,
-  buildLocalCommandSuggestions,
-  buildSettingsFeedback,
-  captureTargetKind,
-  coachDefaultsStatusNote,
   coachFirstComposerPlaceholder,
   coachLaneLabel,
   coachingScenarioLabel,
   compactCoachLine,
-  compactDefinedValues,
   composerHintText,
   defaultPromptText,
   describeSidecarFailure,
-  effectiveConnectionState,
-  exportDownloadName,
   focusComposerInput,
-  formatCoachDefaultsValue,
-  formatContextBundleValue,
-  formatSparseCoachDefaultsSavedValue,
-  formatSparseWorkspaceControlValue,
   inBrowserPreviewEnvironment,
   isCoachCheckpointRecoveryState,
   isEditingAnotherField,
@@ -451,18 +304,12 @@ import {
   localizeConversationMessage,
   localizeUiViewReferences,
   normalizeInlineComparisonText,
-  normalizeOperationMessageKey,
   parseLearningFeedbackStatus,
   parseResourceOperationStatus,
   composerShortcutHint,
   pickFirstText,
   pickLanguageAlignedTrainingList,
   planComposerDraftReplacementCopy,
-  providerBlockingReason,
-  providerHasVerifiedToolsProbe,
-  providerModelRuntimeNote,
-  providerSettingsLocale,
-  readBrowserFiles,
   readBrowserPreviewLocationOverrides,
   requestBootstrapOnce,
   resolveCoachBlockingSurface,
@@ -485,11 +332,8 @@ import {
   trainingHandoffComposerText,
   trainingHandoffStatusLabel,
   trainingPersistenceFailureMessage,
-  triggerLocalDownload,
   triggerResourceUpload,
   truncateInlineText,
-  waitForCapturedResource,
-  waitForOrganizedResource,
   waitForResourceInSnapshot,
 } from "./appHelpers";
 
@@ -730,15 +574,46 @@ export function App() {
   const { openMenu, setOpenMenu } = useMenuState();
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [dismissedComposerDeck, setDismissedComposerDeck] = useState<ComposerDeckKind>();
-  const [settingsSectionRequest, setSettingsSectionRequest] = useState<{ category: "teaching"; requestId: number; skillTrigger?: string }>();
-  const [pendingDeleteSkillId, setPendingDeleteSkillId] = useState<string>();
-  const [skillDraftFields, setSkillDraftFields] = useState({
-    trigger: "",
-    title: "",
-    detail: "",
-    prompt: "",
+  const isBrowserPreview = inBrowserPreviewEnvironment();
+  const activeView = normalizeSidebarView(layout.activeView);
+  const t = resolveWorkbenchCopy(layout.composerLanguage);
+  const {
+    settingsSectionRequest,
+    setSettingsSectionRequest,
+    skillImportText,
+    setSkillImportText,
+    settingsActionState,
+    settingsFeedbackState,
+    setSettingsFeedbackState,
+    settingsScopeKey,
+    settingsActionScopeRef,
+    setSettingsActionState,
+    companionInstallState,
+    setCompanionInstallState,
+  } = useCoachSettingsState({
+    syncCursor,
+    activeView,
+    isBrowserPreview,
+    setOperationMessage,
   });
-  const [skillImportText, setSkillImportText] = useState("");
+  const {
+    pendingPostAdmissionSendRef,
+    trainerWorkspaceAdmission,
+    canCaptureGoalBeforeWorkspaceSetup,
+    canChatBeforeProjectAdmission,
+    workspaceAuthority,
+    resourceWriteAccess,
+    workspaceSessionBlocked,
+    workspaceSessionBlockTitle,
+    workspaceSessionBlockMessage,
+    openWorkspaceAdmission,
+    runWorkspaceAdmissionCommand,
+  } = useWorkspaceAdmissionState({
+    data,
+    composerLanguage: layout.composerLanguage,
+    t,
+    setActiveView,
+  });
   const composerDeckRef = useRef<HTMLDivElement | null>(null);
   const streamResumeDraftRef = useRef("");
   const sendRecoveredPlanResumeRef = useRef<
@@ -757,20 +632,6 @@ export function App() {
   const applyServerGoal = useWorkbenchState((state) => state.applyServerGoal);
   const goalModeCopy = GOAL_MODE_COPY[layout.composerLanguage] ?? GOAL_MODE_COPY["en-US"];
   const [composerModelActionDensity, setComposerModelActionDensity] = useState<"compact" | "default">("default");
-  const [settingsActionState, updateSettingsActionState] = useState<SettingsActionState>();
-  const [settingsFeedbackState, setSettingsFeedbackState] = useState<SettingsFeedbackState>({});
-  const settingsScopeKey = `${syncCursor.generation}\0${syncCursor.workspaceId}\0${syncCursor.sessionId}`;
-  const settingsScopeRef = useRef(settingsScopeKey);
-  const settingsActionScopeRef = useRef(settingsScopeKey);
-  useEffect(() => {
-    if (settingsScopeRef.current !== settingsScopeKey) {
-      // An old request cannot finish a new conversation's local busy state.
-      // Keep the connection draft so the learner can retry after the handshake.
-      updateSettingsActionState(undefined);
-      setSettingsFeedbackState({});
-      settingsScopeRef.current = settingsScopeKey;
-    }
-  }, [settingsScopeKey]);
   // §三: the provider-connection controller owns the editable draft (derived
   // from the single ProviderFacts record), its save payload, the endpoint
   // speed test and the API-key focus request. The instance is published to the
@@ -793,11 +654,6 @@ export function App() {
     handleProviderSpeedTestMessage,
     requestProviderApiKeyFocus,
   } = providerConnection;
-  // §十一: companion install state for the Settings remote-support panel.
-  const [companionInstallState, setCompanionInstallState] = useState<
-    import("../../../../shared/src/companionInstallState").CompanionInstallState
-  >("not_installed");
-  const companionStateQueriedRef = useRef(false);
   const composerSessionKey = composerSessionKeyFor(data);
   const [pendingGoalScope, setPendingGoalScope] = useState<string>();
   const goalDraftPending = !goalMode && pendingGoalScope === composerSessionKey;
@@ -819,14 +675,6 @@ export function App() {
   const handleSubmitRef = useRef<
     ((confirmedActionKey?: string, overrideSubmission?: { text: string; attachments?: MessageAttachment[] }) => Promise<void>) | null
   >(null);
-  const pendingPostAdmissionSendRef = useRef<{
-    text: string;
-    attachments: MessageAttachment[];
-    draftScope: typeof composerDraftScope;
-    goalMode: boolean;
-    goalText?: string;
-    activeView: ActiveWorkbenchView;
-  } | null>(null);
   const coachRuntimeContextSignatureRef = useRef<string | undefined>(undefined);
   const composerModelSearchRef = useRef<HTMLInputElement | null>(null);
   const viewContentRef = useRef<HTMLElement | null>(null);
@@ -940,8 +788,6 @@ export function App() {
     });
   }, []);
   const resolvedTheme = useMemo(() => resolveTheme(layout.themePreference), [layout.themePreference]);
-  const isBrowserPreview = inBrowserPreviewEnvironment();
-  const activeView = normalizeSidebarView(layout.activeView);
   const browserPreviewFixture = isBrowserPreviewFixtureMode();
   // The same bundle runs in the sidebar view and in the full-width editor
   // panel; only the sidebar offers "open in editor", and only the panel offers
@@ -955,7 +801,6 @@ export function App() {
     });
   }, []);
   const expandToEditorLabel = appUiCopy(layout.composerLanguage, "在编辑器中打开");
-  const t = resolveWorkbenchCopy(layout.composerLanguage);
   const openProviderSetup = useCallback(() => {
     // Deep link: Settings retains its surfaces, so pin the connection category
     // instead of landing on whatever detail was visited last.
@@ -967,18 +812,6 @@ export function App() {
   }, [data.providerConfig.apiKeyConfigured, requestProviderApiKeyFocus, setActiveView]);
   const localizedResourceOperationFallback = t.stageDone;
   const planText = resolvePlanViewCopy(layout.composerLanguage);
-  const setSettingsActionState = useCallback((next?: SettingsActionState) => {
-    // A repeated connection test can return the same text as the previous one.
-    // Clear the previous outcome when starting, rather than treating identical
-    // text as an outstanding operation forever.
-    if (next) {
-      settingsActionScopeRef.current = settingsScopeKey;
-      setOperationMessage(undefined);
-      updateSettingsActionState({ ...next, baselineMessageKey: undefined });
-    } else {
-      updateSettingsActionState(undefined);
-    }
-  }, [setOperationMessage, settingsScopeKey]);
   const handleResourceSelectionChange = setSelectedResourceContextIds;
   const {
     resolveResourceOperationStatus,
@@ -1486,81 +1319,6 @@ export function App() {
     onOpenCoachWithBridge: openTrainingCoachBridge,
     requestTrainingPersistence,
   });
-  const workspaceSettings = data.memory.workspace;
-  const trainerWorkspaceAdmission = workspaceSettings?.trainerWorkspace;
-  const canCaptureGoalBeforeWorkspaceSetup =
-    trainerWorkspaceAdmission?.status === "root-missing";
-  const canChatBeforeProjectAdmission =
-    trainerWorkspaceAdmission?.status === "project-found";
-  const workspaceAuthority = data.memory.sandboxState?.authority;
-  const resourceWriteAccess = trainerWorkspaceAdmission
-    ? {
-        allowed: trainerWorkspaceAdmission.status === "managed",
-        reason:
-          trainerWorkspaceAdmission.status === "root-missing"
-            ? t.workspaceAdmissionRootMissingDetail
-            : undefined,
-      }
-    : workspaceAuthority?.resourceWriteAllowed === true
-      ? {
-          allowed: workspaceAuthority.authorityScope === "trainer_sandbox" &&
-            workspaceAuthority.resourceWriteEvidence?.operation === "write" &&
-            workspaceAuthority.resourceWriteEvidence.scope === "trainer_sandbox" &&
-            workspaceAuthority.resourceWriteEvidence.allowed === true,
-          reason: workspaceAuthority.resourceWriteEvidence?.reason,
-        }
-      : {
-        allowed: false,
-        reason:
-          appUiCopy(layout.composerLanguage, "资料写入权限还没确认。先在设置里选工作区根目录。"),
-      };
-  const workspaceSessionBlocked =
-    trainerWorkspaceAdmission?.status === "root-missing" ||
-    trainerWorkspaceAdmission?.status === "project-found" ||
-    trainerWorkspaceAdmission?.status === "browse" ||
-    trainerWorkspaceAdmission?.status === "ignored";
-  const workspaceSessionBlockTitle =
-    trainerWorkspaceAdmission?.status === "root-missing"
-      ? t.workspaceAdmissionRootMissing
-      : trainerWorkspaceAdmission?.status === "project-found"
-        ? t.workspaceAdmissionProjectFound
-        : trainerWorkspaceAdmission?.status === "browse"
-          ? t.workspaceAdmissionBrowse
-        : trainerWorkspaceAdmission?.status === "ignored"
-          ? t.workspaceAdmissionIgnored
-          : undefined;
-  const workspaceSessionBlockMessage =
-    trainerWorkspaceAdmission?.status === "root-missing"
-      ? t.workspaceAdmissionRootMissingDetail
-      : trainerWorkspaceAdmission?.status === "project-found"
-        ? t.workspaceAdmissionProjectFoundDetail
-        : trainerWorkspaceAdmission?.status === "browse"
-          ? t.workspaceAdmissionBrowseDetail
-        : trainerWorkspaceAdmission?.status === "ignored"
-          ? t.workspaceAdmissionIgnoredDetail
-          : undefined;
-  const openWorkspaceAdmission = useCallback(() => {
-    if (trainerWorkspaceAdmission?.status === "root-missing") {
-      useWorkbenchState.getState().requestSettingsCategory("workspace");
-      setActiveView("settings");
-      return;
-    }
-    setActiveView("coach");
-  }, [setActiveView, trainerWorkspaceAdmission?.status]);
-  const defaultCoachDefaults = useMemo(
-    () => ({
-      memoryScope: "project" as const,
-      workingSetMode: "balanced" as const,
-      reviewCadence: "steady" as const,
-      reviewReminderMode: "due" as const,
-      workspaceMemoryToggles: {
-        decisions: true,
-        patterns: true,
-        resources: true,
-      },
-    }),
-    [],
-  );
   const draft = layout.composerDraft;
   const surfaceInstanceKey = `${composerSessionKey}\u0000${data.runtimeDataGeneration ?? ""}`;
   const composerDraftScope = composerDockDraftScope(activeView, composerSessionKey);
@@ -1686,199 +1444,27 @@ export function App() {
     },
     [applyHostMessage],
   );
-  const providerTestCheckedAt = data.providerConfig.lastTestResult?.checkedAt;
-  const [providerTestClock, setProviderTestClock] = useState(() => Date.now());
-  useEffect(() => {
-    const checkedAtMs = Date.parse(providerTestCheckedAt ?? "");
-    if (!Number.isFinite(checkedAtMs)) {
-      return;
-    }
-
-    const now = Date.now();
-    setProviderTestClock(now);
-    const expiresAt = checkedAtMs + PROVIDER_TEST_FRESHNESS_WINDOW_MS;
-    if (expiresAt <= now) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => setProviderTestClock(Date.now()), expiresAt - now + 1);
-    return () => window.clearTimeout(timeoutId);
-  }, [providerTestCheckedAt]);
-  const settingsWorkspaceId =
-    data.memory.workspace?.workspaceId ??
-    data.workspaceTrainingState?.workspaceId ??
-    data.providerConfig.lastTestResult?.workspaceId;
-  const settingsLastTestScope = {
-    workspaceId: settingsWorkspaceId,
-    providerProfileId: data.providerConfig.profileId,
-  };
-  const scopedProviderLastTest = selectScopedSettingsLastTest(
-    data.providerConfig.lastTestResult,
-    settingsLastTestScope,
-  );
-  const providerSendState = useMemo(
-    () =>
-      describeProviderSendState(
-        { ...data.providerConfig, lastTestResult: scopedProviderLastTest },
-        layout.composerLanguage,
-        providerTestClock,
-      ),
-    [data.providerConfig, scopedProviderLastTest, layout.composerLanguage, providerTestClock],
-  );
-  const providerImageInputState = useMemo(
-    () =>
-      describeProviderImageInputState(
-        { ...data.providerConfig, lastTestResult: scopedProviderLastTest },
-        layout.composerLanguage,
-        providerTestClock,
-      ),
-    [data.providerConfig, scopedProviderLastTest, layout.composerLanguage, providerTestClock],
-  );
-  // Chat is gated only by configuration + API key; the first real send is the
-  // confirmation. Streaming/tools/vision/formal plan still require a probe
-  // observation, and sidecar connection state never locks the workbench.
-  const capabilityVerdict = useMemo(
-    () => deriveTrainerCapabilityVerdict({
-      connectionState: data.connection.state,
-      providerConfigured: data.providerConfig.configured,
-      apiKeyConfigured: data.providerConfig.apiKeyConfigured,
-      sendBlocked: providerSendState.blocked,
-      lastTestOk: scopedProviderLastTest?.ok === true,
-      capabilityTruth: scopedSettingsCapabilityTruth(
-        data.providerConfig.lastTestResult,
-        {
-          workspaceId: settingsWorkspaceId,
-          providerProfileId: data.providerConfig.profileId,
-        },
-      ),
-      imageProtocolSupported: providerImageInputState.supported,
-      authority: workspaceAuthority,
-      workspaceManaged: false,
-      workspaceReadOnly: true,
-    }),
-    [
-      data.connection.state,
-      data.providerConfig,
-      providerSendState.blocked,
-      scopedProviderLastTest,
-      settingsWorkspaceId,
-      trainerWorkspaceAdmission?.status,
-      workspaceAuthority,
-      providerImageInputState.supported,
-    ],
-  );
-  const providerCanCoachNow = !providerSendState.blocked;
-  const providerSupportsFormalPlanTools = providerHasVerifiedToolsProbe({
-    lastTestResult: scopedProviderLastTest,
+  const {
+    providerSendState,
+    providerImageInputState,
+    capabilityVerdict,
+    providerCanCoachNow,
+    providerSupportsFormalPlanTools,
+    providerCanMutateFormalPlan,
+    formalPlanCapabilityMessage,
+    providerToolsExplicitlyUnsupported,
+    agentToolsCapabilityMessage,
+    providerBlockReason,
+    blockedComposerGuidance,
+    providerCoachNotice,
+    providerSetupState,
+    displayConnectionState,
+  } = useProviderReadinessState({
+    data,
+    composerLanguage: layout.composerLanguage,
+    activeView,
+    workspaceAuthority,
   });
-  const providerCanMutateFormalPlan = capabilityVerdict.formalPlan;
-  const formalPlanCapabilityMessage = useMemo(() => {
-    const messages: Record<ComposerLanguage, string> = {
-      "zh-CN": "正式计划需要支持工具调用的模型。请在设置中选择并测试支持 tools 的 Provider。",
-      "en-US": "A formal plan needs a provider that supports tool calls. Choose and test a tools-capable provider in Settings.",
-      "es-ES": "El plan formal necesita un proveedor con llamadas a herramientas. Elige y prueba uno compatible en Ajustes.",
-      "fr-FR": "Le plan formel exige un fournisseur compatible avec les appels d'outils. Choisissez-en un et testez-le dans Réglages.",
-      "de-DE": "Ein formeller Plan benötigt einen Provider mit Tool-Aufrufen. Wählen und testen Sie einen passenden Provider in Einstellungen.",
-      "ja-JP": "正式な計画にはツール呼び出し対応の Provider が必要です。設定で対応 Provider を選び、テストしてください。",
-      "ko-KR": "정식 계획에는 도구 호출을 지원하는 Provider가 필요합니다. 설정에서 지원 Provider를 선택하고 테스트하세요.",
-      "pt-BR": "Um plano formal precisa de um provider com chamadas de ferramenta. Escolha e teste um provider compatível em Configurações.",
-    };
-    return messages[layout.composerLanguage];
-  }, [layout.composerLanguage]);
-  const chatToolsEvidence = scopedProviderLastTest?.capabilityEvidence?.find(
-    (entry) => entry.name.trim().toLowerCase() === "tools",
-  );
-  const providerToolsExplicitlyUnsupported =
-    (chatToolsEvidence?.state === "unsupported" ||
-      chatToolsEvidence?.state === "disabled" ||
-      scopedProviderLastTest?.toolsReady === false) &&
-    data.providerConfig.capabilities?.tools !== true;
-  const agentToolsCapabilityMessage = useMemo(() => {
-    const messages: Record<ComposerLanguage, string> = {
-      "zh-CN": "当前视图需要已经通过工具调用验证的 Provider。请在设置中选择并测试支持 tools 的连接。",
-      "en-US": "This view needs a provider verified for tool calls. Choose and test a tools-capable connection in Settings.",
-      "es-ES": "Esta vista necesita un provider verificado para llamadas de herramientas. Elige y prueba una conexión compatible con tools en Ajustes.",
-      "fr-FR": "Cette vue nécessite un provider vérifié pour les appels d'outils. Choisissez et testez une connexion compatible dans Réglages.",
-      "de-DE": "Diese Ansicht benötigt einen für Tool-Aufrufe verifizierten Provider. Wählen und testen Sie in Einstellungen eine passende Verbindung.",
-      "ja-JP": "このビューには、ツール呼び出しを検証済みの Provider が必要です。設定で対応する接続を選び、テストしてください。",
-      "ko-KR": "이 보기에는 도구 호출이 검증된 Provider가 필요합니다. 설정에서 tools를 지원하는 연결을 선택하고 테스트하세요.",
-      "pt-BR": "Esta visualização precisa de um provider verificado para chamadas de ferramenta. Escolha e teste uma conexão compatível em Configurações.",
-    };
-    return messages[layout.composerLanguage];
-  }, [layout.composerLanguage]);
-  const providerBlockReason = useMemo(
-    () => providerBlockingReason(data.providerConfig, layout.composerLanguage, data.connection.state),
-    [data.connection.state, data.providerConfig, layout.composerLanguage],
-  );
-  const blockedComposerGuidance = useMemo(
-    () =>
-      localizeUiViewReferences(
-        blockedComposerSetupMessage(
-          data.providerConfig,
-          layout.composerLanguage,
-          activeView,
-          data.connection.state,
-        ),
-        layout.composerLanguage,
-      ) ??
-      blockedComposerSetupMessage(
-        data.providerConfig,
-        layout.composerLanguage,
-        activeView,
-        data.connection.state,
-      ),
-    [activeView, data.connection.state, data.providerConfig, layout.composerLanguage],
-  );
-  const blockedCoachGuidance = useMemo(
-    () =>
-      localizeUiViewReferences(
-        blockedComposerSetupMessage(
-          data.providerConfig,
-          layout.composerLanguage,
-          "coach",
-          data.connection.state,
-        ),
-        layout.composerLanguage,
-      ) ??
-      blockedComposerSetupMessage(
-        data.providerConfig,
-        layout.composerLanguage,
-        "coach",
-        data.connection.state,
-      ),
-    [data.connection.state, data.providerConfig, layout.composerLanguage],
-  );
-  const providerCoachNotice = useMemo(
-    () =>
-      (() => {
-        const notice = providerCoachBanner(
-          data.providerConfig,
-          layout.composerLanguage,
-          data.connection.state,
-          blockedCoachGuidance,
-        );
-        return notice
-          ? {
-              ...notice,
-              message: localizeUiViewReferences(notice.message, layout.composerLanguage) ?? notice.message,
-            }
-          : undefined;
-      })(),
-    [blockedCoachGuidance, data.connection.state, data.providerConfig, layout.composerLanguage],
-  );
-  const providerSetupState = useMemo(
-    () => {
-      const summary = providerSetupSummary(data.providerConfig, layout.composerLanguage, data.connection.state);
-      return {
-        title: localizeUiViewReferences(summary.title, layout.composerLanguage) ?? summary.title,
-        detail: localizeUiViewReferences(summary.detail, layout.composerLanguage) ?? summary.detail,
-        actionLabel:
-          localizeUiViewReferences(summary.actionLabel, layout.composerLanguage) ?? summary.actionLabel,
-      };
-    },
-    [data.connection.state, data.providerConfig, layout.composerLanguage],
-  );
-  const displayConnectionState = effectiveConnectionState(data.connection.state);
   // The neutral takeover is reserved for a provider that genuinely cannot run
   // (not configured / blocked) — never for a connecting or offline sidecar.
   const shouldShowNeutralEmptyState =
@@ -1901,11 +1487,6 @@ export function App() {
   const isFirstCoachConversation =
     !data.conversation.some((message) => message.role === "user") &&
     !hasDurableCoachContext;
-  const baselineConnectedMessage = useMemo(
-    () =>
-      appUiCopy(layout.composerLanguage, "已连接到扩展宿主。"),
-    [layout.composerLanguage],
-  );
   const {
     composerHasSavedProfiles,
     composerProviderCopy,
@@ -2129,47 +1710,6 @@ export function App() {
   }, [operationMessage, setComposerDraft]);
 
   useEffect(() => {
-    if (!settingsActionState) {
-      return;
-    }
-
-    // Backend readiness/progress can arrive while a connection test is active.
-    // Only its final success/error should settle the settings operation.
-    if (!operationMessage || operationMessage.tone === "info") {
-      return;
-    }
-
-    const normalized = operationMessage.message.trim().toLowerCase();
-    if (settingsActionState.baselineMessageKey && normalized === settingsActionState.baselineMessageKey) {
-      return;
-    }
-
-    setSettingsFeedbackState((current) => {
-      const next: SettingsFeedbackState = { ...current };
-      for (const slot of settingsActionState.targets) {
-        const feedback = buildSettingsFeedback(
-          settingsActionState,
-          operationMessage,
-          layout.composerLanguage,
-          slot,
-        );
-        if (feedback) {
-          next[slot] = feedback;
-        }
-      }
-      return next;
-    });
-    if (
-      settingsActionState.kind === "save-provider" &&
-      settingsActionState.targets.includes("provider") &&
-      operationMessage.tone === "success"
-    ) {
-      markProviderDraftSaved();
-    }
-    setSettingsActionState(undefined);
-  }, [layout.composerLanguage, markProviderDraftSaved, operationMessage, settingsActionState]);
-
-  useEffect(() => {
     applyWorkbenchTheme(resolvedTheme, layout.themePreference === "system");
   }, [resolvedTheme, layout.themePreference]);
 
@@ -2351,7 +1891,6 @@ export function App() {
       composerModelSearchRef.current?.focus();
     });
   }, [openMenu]);
-
 
   useEffect(() => {
     setSelectedCommandIndex(0);
@@ -4808,320 +4347,70 @@ export function App() {
     trainingCardVerified,
     trainingState?.selectedCardId,
   ]);
-  const providerConnectionSummary = useMemo(
-    () =>
-      data.providerConfig.configured
-        ? compactDefinedValues(
-            [
-              data.providerConfig.name || null,
-              data.providerConfig.baseUrl || null,
-              data.providerConfig.model || null,
-              data.providerConfig.apiKeyConfigured ? t.apiKeySaved : t.apiKeyMissing,
-            ],
-            t.notConfigured,
-          )
-        : t.notConfigured,
-    [
-      data.providerConfig.apiKeyConfigured,
-      data.providerConfig.baseUrl,
-      data.providerConfig.model,
-      data.providerConfig.name,
-      data.providerConfig.configured,
-      t.apiKeySaved,
-      t.apiKeyMissing,
-      t.notConfigured,
-    ],
-  );
-  const providerStatus = useMemo<SettingsSectionStatus>(() => {
-    const copy = providerSettingsLocale(layout.composerLanguage);
-    const draftSummary = compactDefinedValues(
-      [
-        providerDraft.name || null,
-        providerDraft.baseUrl || null,
-        providerDraft.model || null,
-        providerDraftHasUnsavedApiKey ? copy.draftKey : null,
-      ],
-      data.providerConfig.configured ? providerConnectionSummary : t.notConfigured,
-    );
-    const feedback =
-      buildSettingsFeedback(settingsActionState, operationMessage, layout.composerLanguage, "provider") ??
-      (settingsActionState?.kind === "save-provider" && settingsActionState.targets.includes("provider")
-        ? {
-            tone: "pending" as const,
-            ...copy.pending.save,
-          }
-        : settingsActionState?.kind === "refresh-provider-models" &&
-            settingsActionState.targets.includes("provider")
-          ? {
-              tone: "pending" as const,
-              ...copy.pending.refresh,
-            }
-        : settingsActionState?.kind === "test-provider" && settingsActionState.targets.includes("provider")
-          ? {
-              actionKind: "test-provider",
-              tone: "pending" as const,
-              ...copy.pending.test,
-            }
-          : settingsActionState?.kind === "clear-provider" && settingsActionState.targets.includes("provider")
-            ? {
-                tone: "pending" as const,
-                ...copy.pending.clear,
-              }
-            : settingsActionState?.kind === "open-config" && settingsActionState.targets.includes("provider")
-              ? {
-                  tone: "pending" as const,
-                  ...copy.pending.open,
-                }
-              : undefined) ??
-      settingsFeedbackState.provider;
-
-    return {
-      saveState:
-        data.providerConfig.configured || providerDraftHasChanges
-          ? providerDraftHasChanges
-            ? "unsaved"
-            : "saved"
-          : "empty",
-      effectiveValue: providerConnectionSummary,
-      savedValue: data.providerConfig.configured ? providerConnectionSummary : undefined,
-      editingValue: providerDraftHasChanges ? draftSummary : undefined,
-      note:
-        data.providerConfig.configured && providerDraftHasChanges
-          ? copy.draftNotApplied
-          : providerModelRuntimeNote(data.providerConfig, layout.composerLanguage),
-      feedback,
-    };
-  }, [
-    data.providerConfig,
-    layout.composerLanguage,
+  const composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode;
+  const activeSkillDraft = (composerUsesTrainingFlow ? activityDraft : draft).trim();
+  const {
+    providerStatus,
+    coachDefaultsStatus,
+    workspaceControlStatus,
+    localCommandMap,
+    trainerSkillContext,
+    customSkills,
+    availableSkillCatalog,
+    composerMenuSkills,
+    persistCoachSettings,
+    queueCoachSettingsSave,
+    selectSkillSuggestion,
+    installCustomSkillFromPaste,
+    copyCustomSkillShare,
+    openSkillSettings,
+    useProviderTemplateByLabel,
+    saveProviderDraft,
+    providerSettingsActions,
+    cancelProviderTest,
+  } = useCoachSettingsController({
+    data,
+    layout,
+    activeView,
+    t,
+    isBrowserPreview,
+    previewSessionId,
+    setPreviewSessionId,
+    leftoverSettingsProfileRhythmNotLive,
     operationMessage,
-    providerConnectionSummary,
+    setOperationMessage,
+    settingsActionState,
+    setSettingsActionState,
+    settingsFeedbackState,
+    setSettingsFeedbackState,
+    setSettingsSectionRequest,
+    skillImportText,
+    setSkillImportText,
     providerDraft,
     providerDraftHasChanges,
     providerDraftHasUnsavedApiKey,
-    settingsActionState,
-    settingsFeedbackState.provider,
-    t.apiKeySaved,
-    t.apiKeyMissing,
-    t.notConfigured,
-  ]);
-  const coachDefaultsStatus = useMemo<SettingsSectionStatus>(() => {
-    const liveWorkspaceCoachDefaults = leftoverSettingsProfileRhythmNotLive
-      ? undefined
-      : workspaceSettings?.coachDefaults;
-    const formCoachDefaults = leftoverSettingsProfileRhythmNotLive
-      ? defaultCoachDefaults
-      : layout.coachDefaults;
-    const savedCoachDefaults: CoachDefaults = {
-      memoryScope: liveWorkspaceCoachDefaults?.memoryScope ?? defaultCoachDefaults.memoryScope,
-      workingSetMode: liveWorkspaceCoachDefaults?.workingSetMode ?? defaultCoachDefaults.workingSetMode,
-      reviewCadence: liveWorkspaceCoachDefaults?.reviewCadence ?? defaultCoachDefaults.reviewCadence,
-      reviewReminderMode:
-        liveWorkspaceCoachDefaults?.reviewReminderMode ?? defaultCoachDefaults.reviewReminderMode,
-      // Pass the snapshot's skills through — omitting the key would pin the
-      // saved side to [] and report "unsaved" forever once a skill exists.
-      customSkills: liveWorkspaceCoachDefaults?.customSkills,
-      workspaceMemoryToggles: {
-        decisions:
-          liveWorkspaceCoachDefaults?.workspaceMemoryToggles?.decisions ??
-          defaultCoachDefaults.workspaceMemoryToggles.decisions,
-        patterns:
-          liveWorkspaceCoachDefaults?.workspaceMemoryToggles?.patterns ??
-          defaultCoachDefaults.workspaceMemoryToggles.patterns,
-        resources:
-          liveWorkspaceCoachDefaults?.workspaceMemoryToggles?.resources ??
-          defaultCoachDefaults.workspaceMemoryToggles.resources,
-        },
-    };
-    const savedLanguage = workspaceSettings?.responseLanguage ?? layout.composerLanguage;
-    const savedAnswerMode = workspaceSettings?.answerMode ?? DEFAULT_ANSWER_MODE;
-    const savedTeachingStyle = data.profile.preferredStyle.trim()
-      ? normalizeTeachingStyle(data.profile.preferredStyle)
-      : layout.teachingStyle;
-    const savedValue = leftoverSettingsProfileRhythmNotLive
-      ? undefined
-      : workspaceSettings
-        ? formatSparseCoachDefaultsSavedValue(workspaceSettings, t, savedTeachingStyle)
-        : undefined;
-    const editingValue = formatCoachDefaultsValue(
-      {
-        language: layout.composerLanguage,
-        answerMode: layout.composerAnswerMode,
-        teachingStyle: layout.teachingStyle,
-        memoryScope: formCoachDefaults.memoryScope,
-        workingSetMode: formCoachDefaults.workingSetMode,
-        reviewCadence: formCoachDefaults.reviewCadence,
-        reviewReminderMode: formCoachDefaults.reviewReminderMode,
-      },
-      t,
-    );
-    const effectiveValue = leftoverSettingsProfileRhythmNotLive
-      ? editingValue
-      : workspaceSettings
-        ? formatCoachDefaultsValue(
-            {
-              language: workspaceSettings.responseLanguage ?? layout.composerLanguage,
-              answerMode: workspaceSettings.answerMode ?? DEFAULT_ANSWER_MODE,
-              teachingStyle: savedTeachingStyle,
-              memoryScope: savedCoachDefaults.memoryScope,
-              workingSetMode: savedCoachDefaults.workingSetMode,
-              reviewCadence: savedCoachDefaults.reviewCadence,
-              reviewReminderMode: savedCoachDefaults.reviewReminderMode,
-            },
-            t,
-          )
-        : editingValue;
-    const isSaved =
-      !leftoverSettingsProfileRhythmNotLive &&
-      (workspaceSettings?.responseLanguage ?? layout.composerLanguage) === layout.composerLanguage &&
-      (workspaceSettings?.answerMode ?? DEFAULT_ANSWER_MODE) === layout.composerAnswerMode &&
-      savedTeachingStyle === layout.teachingStyle &&
-      sameCoachDefaults(savedCoachDefaults, layout.coachDefaults);
-    const feedback =
-      buildSettingsFeedback(settingsActionState, operationMessage, layout.composerLanguage, "coachDefaults") ??
-      (settingsActionState &&
-      (settingsActionState.kind === "save-coach" || settingsActionState.kind === "reset-defaults") &&
-      settingsActionState.targets.includes("coachDefaults")
-        ? {
-            tone: "pending" as const,
-            title: appUiCopy(
-              layout.composerLanguage,
-              settingsActionState.kind === "reset-defaults" ? "恢复中" : "保存中",
-            ),
-            detail:
-              appUiCopy(layout.composerLanguage, "正在同步语言、回复方式、教学风格和教练默认策略。"),
-          }
-        : undefined) ??
-      settingsFeedbackState.coachDefaults;
-
-    const coachDefaultsSaveState = leftoverSettingsProfileRhythmNotLive
-      ? "empty"
-      : workspaceSettings
-        ? isSaved
-          ? "saved"
-          : "unsaved"
-        : "empty";
-    const noteAnswerMode = coachDefaultsSaveState === "saved" ? savedAnswerMode : layout.composerAnswerMode;
-    const noteTeachingStyle = coachDefaultsSaveState === "saved" ? savedTeachingStyle : layout.teachingStyle;
-
-    return {
-      saveState: coachDefaultsSaveState,
-      effectiveValue,
-      savedValue: leftoverSettingsProfileRhythmNotLive
-        ? undefined
-        : savedValue ??
-          formatCoachDefaultsValue(
-            {
-              language: savedLanguage,
-              answerMode: savedAnswerMode,
-              teachingStyle: savedTeachingStyle,
-              memoryScope: savedCoachDefaults.memoryScope,
-              workingSetMode: savedCoachDefaults.workingSetMode,
-              reviewCadence: savedCoachDefaults.reviewCadence,
-              reviewReminderMode: savedCoachDefaults.reviewReminderMode,
-            },
-            t,
-          ),
-      editingValue: isSaved ? undefined : editingValue,
-      note: coachDefaultsStatusNote({
-        language: layout.composerLanguage,
-        saveState: coachDefaultsSaveState,
-        answerMode: noteAnswerMode,
-        teachingStyle: noteTeachingStyle,
-        t,
-      }),
-      /*
-      note:
-        appUiCopy(layout.composerLanguage, "这里会一起保存语言、反馈方式、教学风格和教练默认策略。"),
-      */
-      feedback,
-    };
-  }, [
-    data.profile.preferredStyle,
-    defaultCoachDefaults,
-    leftoverSettingsProfileRhythmNotLive,
-    layout.coachDefaults,
-    layout.composerAnswerMode,
-    layout.composerLanguage,
-    layout.teachingStyle,
-    operationMessage,
-    settingsActionState,
-    settingsFeedbackState.coachDefaults,
-    t,
-    workspaceSettings,
-  ]);
-  const workspaceControlStatus = useMemo<SettingsSectionStatus>(() => {
-    const savedValue = workspaceSettings ? formatSparseWorkspaceControlValue(workspaceSettings, t) : undefined;
-    const effectiveValue = workspaceSettings
-      ? formatContextBundleValue(
-          {
-            followCurrentFile: workspaceSettings.followCurrentFile ?? layout.followCurrentFile,
-            contextDetail: workspaceSettings.contextDetail ?? layout.contextDetail,
-            includeCurrentFile: workspaceSettings.includeCurrentFile ?? layout.includeCurrentFile,
-            includeSelection: workspaceSettings.includeSelection ?? layout.includeSelection,
-            includeDiagnostics: workspaceSettings.includeDiagnostics ?? layout.includeDiagnostics,
-            includeRelatedFiles: workspaceSettings.includeRelatedFiles ?? layout.includeRelatedFiles,
-          },
-          t,
-        )
-      : formatContextBundleValue(
-          {
-            followCurrentFile: layout.followCurrentFile,
-            contextDetail: layout.contextDetail,
-            includeCurrentFile: layout.includeCurrentFile,
-            includeSelection: layout.includeSelection,
-            includeDiagnostics: layout.includeDiagnostics,
-            includeRelatedFiles: layout.includeRelatedFiles,
-          },
-          t,
-        );
-    const isSaved =
-      (workspaceSettings?.followCurrentFile ?? true) === layout.followCurrentFile &&
-      (workspaceSettings?.contextDetail ?? "balanced") === layout.contextDetail &&
-      (workspaceSettings?.includeCurrentFile ?? true) === layout.includeCurrentFile &&
-      (workspaceSettings?.includeSelection ?? true) === layout.includeSelection &&
-      (workspaceSettings?.includeDiagnostics ?? true) === layout.includeDiagnostics &&
-      (workspaceSettings?.includeRelatedFiles ?? true) === layout.includeRelatedFiles;
-    const feedback =
-      buildSettingsFeedback(settingsActionState, operationMessage, layout.composerLanguage, "workspaceControl") ??
-      (settingsActionState &&
-      (settingsActionState.kind === "save-coach" || settingsActionState.kind === "reset-defaults") &&
-      settingsActionState.targets.includes("workspaceControl")
-        ? {
-            tone: "pending" as const,
-            title: appUiCopy(
-              layout.composerLanguage,
-              settingsActionState.kind === "reset-defaults" ? "恢复中" : "保存中",
-            ),
-            detail:
-              appUiCopy(layout.composerLanguage, "正在写入这组工作区上下文控制。"),
-          }
-        : undefined) ??
-      settingsFeedbackState.workspaceControl;
-
-    return {
-      saveState: workspaceSettings ? (isSaved ? "saved" : "unsaved") : "empty",
-      effectiveValue,
-      savedValue: savedValue ?? (appUiCopy(layout.composerLanguage, "工作区未单独覆盖")),
-      editingValue: isSaved ? undefined : effectiveValue,
-      note:
-        appUiCopy(layout.composerLanguage, "这些开关现在就会影响发送，但保存后工作区重开仍会保持。"),
-      feedback,
-    };
-  }, [
-    layout.composerLanguage,
-    layout.contextDetail,
-    layout.followCurrentFile,
-    layout.includeCurrentFile,
-    layout.includeDiagnostics,
-    layout.includeRelatedFiles,
-    layout.includeSelection,
-    operationMessage,
-    settingsActionState,
-    settingsFeedbackState.workspaceControl,
-    t,
-    workspaceSettings,
-  ]);
+    providerSavePayload,
+    markProviderDraftSaved,
+    applyHostMessage,
+    applyPreviewHostMessages,
+    setActiveView,
+    setComposerLanguage,
+    setComposerAnswerMode,
+    setContextDetail,
+    setIncludeCurrentFile,
+    setIncludeSelection,
+    setIncludeDiagnostics,
+    setIncludeRelatedFiles,
+    setFollowCurrentFile,
+    setCoachDefaults,
+    activeSkillDraft,
+    composerUsesTrainingFlow,
+    setActivityDraft,
+    setComposerDraft,
+    setDismissedComposerDeck,
+    setOpenMenu,
+    setSelectedCommandIndex,
+  });
 
   const analyzeComposerDraft = useCallback(
     (text: string) =>
@@ -5157,107 +4446,6 @@ export function App() {
 
   const sendAnalysis = useMemo(() => analyzeComposerDraft(draft), [analyzeComposerDraft, draft]);
 
-  const reportLocalCommand = (message: string) => {
-    setOperationMessage({ tone: "success", message });
-  };
-
-  const localCommands = useMemo<LocalCommandSuggestion[]>(
-    () =>
-      buildLocalCommandSuggestions({
-        t,
-        language: layout.composerLanguage,
-        applyView: (view, message) => {
-          setActiveView(view);
-          reportLocalCommand(message);
-        },
-        applyLanguage: (language, message) => {
-          setComposerLanguage(language);
-          reportLocalCommand(message);
-        },
-        applyAnswerMode: (mode, message) => {
-          setComposerAnswerMode(mode);
-          reportLocalCommand(message);
-        },
-        applyContextDetail: (detail, message) => {
-          setContextDetail(detail);
-          reportLocalCommand(message);
-        },
-        applyAttachmentPreset: (enabled, message) => {
-          setIncludeCurrentFile(enabled);
-          setIncludeSelection(enabled);
-          setIncludeDiagnostics(enabled);
-          setIncludeRelatedFiles(enabled);
-          reportLocalCommand(message);
-        },
-        applySingleAttachment: (key, enabled, message) => {
-          if (key === "current_file") {
-            setIncludeCurrentFile(enabled);
-          } else if (key === "selection") {
-            setIncludeSelection(enabled);
-          } else if (key === "diagnostics") {
-            setIncludeDiagnostics(enabled);
-          } else {
-            setIncludeRelatedFiles(enabled);
-          }
-          reportLocalCommand(message);
-        },
-        applyLiveFollow: (enabled, message) => {
-          setFollowCurrentFile(enabled);
-          reportLocalCommand(message);
-        },
-      }),
-    [
-      layout.composerLanguage,
-      setActiveView,
-      setComposerLanguage,
-      setComposerAnswerMode,
-      setContextDetail,
-      setIncludeCurrentFile,
-      setIncludeSelection,
-      setIncludeDiagnostics,
-      setIncludeRelatedFiles,
-      setFollowCurrentFile,
-      t,
-    ],
-  );
-
-  const localCommandMap = useMemo(
-    () => new Map(localCommands.map((command) => [command.id, command])),
-    [localCommands],
-  );
-  const trainerSkillContext = useMemo<TrainerSkillContext>(
-    () => ({
-      activeView,
-      hasActiveFile: Boolean(data.liveContext.activeFile),
-      hasSelection: Boolean(data.liveContext.selectionRange),
-      relatedFilesCount: data.liveContext.relatedFiles.length,
-      resourceCount: data.resources.length,
-      subjectFamily: resolveStarterSubjectFamily(data.workspaceTrainingState?.skillProjection),
-    }),
-    [
-      activeView,
-      data.liveContext.activeFile,
-      data.liveContext.selectionRange,
-      data.liveContext.relatedFiles.length,
-      data.resources.length,
-      data.workspaceTrainingState?.skillProjection,
-    ],
-  );
-  const customSkills = useMemo(
-    () => layout.coachDefaults.customSkills ?? [],
-    [layout.coachDefaults.customSkills],
-  );
-  const availableSkillCatalog = useMemo(
-    () => mergeSkillCatalog(customSkills),
-    [customSkills],
-  );
-  const composerMenuSkills = useMemo(
-    () => filterTrainerSkills("$", trainerSkillContext, availableSkillCatalog.length, availableSkillCatalog),
-    [availableSkillCatalog, trainerSkillContext],
-  );
-  const activeSkillDraft = (
-    trainingComposerEnabled && !trainingComposerTalkMode ? activityDraft : draft
-  ).trim();
   const matchingLocalSkills = useMemo<LocalSkillSuggestion[]>(() => {
     // Only the first `$token` selects a skill — text after it is arguments
     // handed to the skill on submit. Filtering on the full draft would drop
@@ -5409,7 +4597,6 @@ export function App() {
     setOperationMessage,
     workspaceSessionBlocked,
   ]);
-  const composerUsesTrainingFlow = trainingComposerEnabled && !trainingComposerTalkMode;
   // A missing provider must not destroy a useful draft. Let submission surface the
   // in-place recovery state and keep the learner in the view where they were working.
   const composerSendBlocked = workspaceSessionBlocked;
@@ -5672,57 +4859,6 @@ export function App() {
   const sendTurnRef = useRef(sendTurn);
   sendTurnRef.current = sendTurn;
 
-  useEffect(() => {
-    const admissionStatus = trainerWorkspaceAdmission?.status;
-    if (admissionStatus === "browse" || admissionStatus === "ignored") {
-      pendingPostAdmissionSendRef.current = null;
-      return;
-    }
-    if (admissionStatus !== "managed" || workspaceSessionBlocked || streaming.isStreaming) {
-      return;
-    }
-    const pending = pendingPostAdmissionSendRef.current;
-    if (!pending) {
-      return;
-    }
-    pendingPostAdmissionSendRef.current = null;
-    if (!providerCanCoachNow || providerBlockReason || capabilitySendBlocked) {
-      return;
-    }
-    const { layout: currentLayout } = useWorkbenchState.getState();
-    const currentDraft =
-      currentLayout.composerDraftScope === pending.draftScope
-        ? currentLayout.composerDraft
-        : currentLayout.composerDrafts?.[pending.draftScope];
-    if ((currentDraft ?? "").trim() === pending.text) {
-      setComposerDraft("", pending.draftScope);
-      setComposerAttachments([]);
-    }
-    if (!pending.goalMode) {
-      void handleSubmitRef.current?.(undefined, { text: pending.text, attachments: pending.attachments });
-      return;
-    }
-    sendTurnRef.current({
-      text: pending.text,
-      intent: "coach",
-      intentSource: "explicit",
-      stream: true,
-      activeView: pending.activeView,
-      attachments: pending.attachments.length ? pending.attachments : undefined,
-      goalMode: pending.goalMode,
-      goalText: pending.goalText,
-    });
-  }, [
-    trainerWorkspaceAdmission?.status,
-    workspaceSessionBlocked,
-    streaming.isStreaming,
-    providerCanCoachNow,
-    providerBlockReason,
-    capabilitySendBlocked,
-    setComposerDraft,
-    setComposerAttachments,
-  ]);
-
   sendRecoveredPlanResumeRef.current = (action) => {
     const resume = buildRecoveredPlanResumeTurn(action, {
       recovered: planRuntimeStatus?.recovered === true,
@@ -5761,151 +4897,6 @@ export function App() {
       contextDetail: "focused",
     });
   };
-
-
-  const persistCoachSettings = useCallback(
-    (overrides?: Partial<{
-      responseLanguage: ComposerLanguage;
-      answerMode: CoachAnswerMode;
-      resourceSearchMode: ResourceSearchMode;
-      teachingStyle: TeachingStyle;
-      coachDefaults: typeof layout.coachDefaults;
-      followCurrentFile: boolean;
-      contextDetail: "focused" | "balanced" | "full";
-      includeCurrentFile: boolean;
-      includeSelection: boolean;
-      includeDiagnostics: boolean;
-      includeRelatedFiles: boolean;
-    }>) => {
-      const payload = {
-        responseLanguage: overrides?.responseLanguage ?? layout.composerLanguage,
-        answerMode: overrides?.answerMode ?? layout.composerAnswerMode,
-        resourceSearchMode: overrides?.resourceSearchMode ?? layout.resourceSearchMode,
-        teachingStyle: overrides?.teachingStyle ?? layout.teachingStyle,
-        coachDefaults: overrides?.coachDefaults ?? layout.coachDefaults,
-        followCurrentFile: overrides?.followCurrentFile ?? layout.followCurrentFile,
-        contextDetail: overrides?.contextDetail ?? layout.contextDetail,
-        includeCurrentFile: overrides?.includeCurrentFile ?? layout.includeCurrentFile,
-        includeSelection: overrides?.includeSelection ?? layout.includeSelection,
-        includeDiagnostics: overrides?.includeDiagnostics ?? layout.includeDiagnostics,
-        includeRelatedFiles: overrides?.includeRelatedFiles ?? layout.includeRelatedFiles,
-      };
-
-      // Persisting identical values would only round-trip the sidecar and
-      // re-apply a snapshot. Compare against the last server-applied settings
-      // snapshot (not the optimistic layout state, which already reflects the
-      // pending change) so explicit user changes still save while redundant
-      // identical writes are dropped.
-      const savedWorkspaceSettings = data.memory.workspace;
-      const savedTeachingStyle = data.profile.preferredStyle.trim()
-        ? normalizeTeachingStyle(data.profile.preferredStyle)
-        : undefined;
-      const matchesSavedSettings = Boolean(
-        savedWorkspaceSettings &&
-          payload.responseLanguage === savedWorkspaceSettings.responseLanguage &&
-          payload.answerMode === savedWorkspaceSettings.answerMode &&
-          payload.resourceSearchMode === savedWorkspaceSettings.resourceSearchMode &&
-          (savedTeachingStyle === undefined
-            ? payload.teachingStyle === DEFAULT_TEACHING_STYLE
-            : payload.teachingStyle === savedTeachingStyle) &&
-          payload.followCurrentFile === savedWorkspaceSettings.followCurrentFile &&
-          payload.contextDetail === savedWorkspaceSettings.contextDetail &&
-          payload.includeCurrentFile === savedWorkspaceSettings.includeCurrentFile &&
-          payload.includeSelection === savedWorkspaceSettings.includeSelection &&
-          payload.includeDiagnostics === savedWorkspaceSettings.includeDiagnostics &&
-          payload.includeRelatedFiles === savedWorkspaceSettings.includeRelatedFiles &&
-          matchesSavedCoachDefaults(payload.coachDefaults, savedWorkspaceSettings.coachDefaults),
-      );
-      if (matchesSavedSettings) {
-        return;
-      }
-
-      if (isBrowserPreview) {
-        setSettingsActionState({
-          kind: "save-coach",
-          targets: ["coachDefaults", "workspaceControl"],
-          baselineMessageKey: normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-        });
-        void loadBrowserPreviewModule()
-          .then((browserPreview) =>
-            browserPreview.saveBrowserPreviewCoachSettings(payload, previewSessionId),
-          )
-          .then(({ sessionId, message }) => {
-            setPreviewSessionId(sessionId);
-            applyHostMessage(message);
-            setOperationMessage({
-              tone: "success",
-              message:
-                appUiCopy(payload.responseLanguage, "已保存教练默认设置。"),
-            });
-          })
-          .catch(() => {
-            setOperationMessage({
-              tone: "error",
-              message: recoverableFailureMessage("operation", layout.composerLanguage),
-            });
-          });
-        return;
-      }
-
-      setSettingsActionState({
-        kind: "save-coach",
-        targets: ["coachDefaults", "workspaceControl"],
-        baselineMessageKey: normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-      });
-      postMessage({
-        type: "settings/saveCoach",
-        payload,
-      });
-    },
-    [
-      applyHostMessage,
-      baselineConnectedMessage,
-      data.memory.workspace,
-      data.profile.preferredStyle,
-      isBrowserPreview,
-      layout.coachDefaults,
-      layout.composerAnswerMode,
-      layout.composerLanguage,
-      layout.contextDetail,
-      layout.followCurrentFile,
-      layout.resourceSearchMode,
-      layout.teachingStyle,
-      layout.includeCurrentFile,
-      layout.includeDiagnostics,
-      layout.includeRelatedFiles,
-      layout.includeSelection,
-      operationMessage,
-      previewSessionId,
-      setSettingsActionState,
-      setOperationMessage,
-    ],
-  );
-
-  // Settings save on change. Preset clicks fan out to several setters in one
-  // tick, so the flush is debounced and reads the *latest* persist closure —
-  // by then the layout store already holds every pending change.
-  const persistCoachSettingsRef = useRef(persistCoachSettings);
-  persistCoachSettingsRef.current = persistCoachSettings;
-  const coachSettingsAutosaveTimerRef = useRef<number | null>(null);
-  const queueCoachSettingsSave = useCallback(() => {
-    if (coachSettingsAutosaveTimerRef.current !== null) {
-      window.clearTimeout(coachSettingsAutosaveTimerRef.current);
-    }
-    coachSettingsAutosaveTimerRef.current = window.setTimeout(() => {
-      coachSettingsAutosaveTimerRef.current = null;
-      persistCoachSettingsRef.current();
-    }, COACH_SETTINGS_AUTOSAVE_DELAY_MS);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (coachSettingsAutosaveTimerRef.current !== null) {
-        window.clearTimeout(coachSettingsAutosaveTimerRef.current);
-      }
-    },
-    [],
-  );
 
   const handleSuggestedAction = (
     action: SuggestedAction["action"],
@@ -6946,8 +5937,6 @@ export function App() {
     });
   };
 
-
-
   const handleNewChatStart = useCallback(() => {
     clearOptimisticTurns();
     useWorkbenchState.getState().resetStream();
@@ -6973,8 +5962,6 @@ export function App() {
     onNewChatStart: handleNewChatStart,
   });
   applySessionListRef.current = (payload: unknown) => applySessionList(payload);
-
-
 
   handleSubmitRef.current = handleSubmit;
 
@@ -7728,157 +6715,6 @@ export function App() {
     );
   };
 
-  const selectSkillSuggestion = (skill: LocalSkillSuggestion, preserveDraft = false) => {
-    // Replace only the typed `$token` — text after it is skill arguments and
-    // must survive autocomplete ("$exp notes" → "$explain notes").
-    const triggerToken = trainerSkillTriggerToken(activeSkillDraft);
-    const remainder =
-      triggerToken !== undefined ? activeSkillDraft.slice(triggerToken.length).trim() : preserveDraft ? activeSkillDraft : "";
-    const nextValue = remainder ? `${skill.trigger} ${remainder}` : `${skill.trigger} `;
-    if (composerUsesTrainingFlow) {
-      setActivityDraft(nextValue);
-    } else {
-      setComposerDraft(nextValue);
-    }
-    setDismissedComposerDeck("skill");
-    setOpenMenu(undefined);
-    setSelectedCommandIndex(0);
-    window.requestAnimationFrame(() => {
-      focusComposerInput();
-    });
-  };
-
-  const persistCustomSkills = (next: TrainerCustomSkill[]) => {
-    // Keep local state identical to what the server stores — the payload is
-    // normalized (deduped, capped) on the way out, so an un-normalized list
-    // would leave the save-dedup comparison permanently mismatched.
-    setCoachDefaults({ customSkills: normalizeTrainerCustomSkills(next) });
-    queueCoachSettingsSave();
-  };
-
-  const saveCustomSkillDraft = () => {
-    const skill = normalizeTrainerCustomSkill({
-      ...skillDraftFields,
-      id: undefined,
-      createdAt: new Date().toISOString(),
-    });
-    if (!skill) {
-      setOperationMessage({
-        tone: "error",
-        message:
-          appUiCopy(layout.composerLanguage, "技能需要 $触发词 和提示词。"),
-      });
-      return;
-    }
-    const builtinCollision = trainerSkillCatalog.some(
-      (entry) => entry.trigger.toLowerCase() === skill.trigger.toLowerCase(),
-    );
-    if (builtinCollision) {
-      setOperationMessage({
-        tone: "error",
-        message:
-          appUiCopy(layout.composerLanguage, "{v} 已经是内置技能，换个触发词。").replace("{v}", skill.trigger),
-      });
-      return;
-    }
-    const remaining = customSkills.filter(
-      (entry) => entry.trigger.toLowerCase() !== skill.trigger.toLowerCase(),
-    );
-    if (remaining.length >= TRAINER_CUSTOM_SKILL_LIMIT) {
-      setOperationMessage({
-        tone: "error",
-        message:
-          appUiCopy(layout.composerLanguage, "最多只能有 {v} 个自定义技能，先删除一个。").replace("{v}", String(TRAINER_CUSTOM_SKILL_LIMIT)),
-      });
-      return;
-    }
-    persistCustomSkills([...remaining, skill]);
-    setSkillDraftFields({ trigger: "", title: "", detail: "", prompt: "" });
-    setOperationMessage({
-      tone: "success",
-      message:
-        appUiCopy(layout.composerLanguage, "已保存 {v}。").replace("{v}", skill.trigger),
-    });
-  };
-
-  const installCustomSkillFromPaste = () => {
-    const skill = parseTrainerSkillShare(skillImportText);
-    if (!skill) {
-      setOperationMessage({
-        tone: "error",
-        message:
-          appUiCopy(layout.composerLanguage, "粘贴的内容不是有效的技能分享包。"),
-      });
-      return;
-    }
-    const builtinCollision = trainerSkillCatalog.some(
-      (entry) => entry.trigger.toLowerCase() === skill.trigger.toLowerCase(),
-    );
-    if (builtinCollision) {
-      setOperationMessage({
-        tone: "error",
-        message:
-          appUiCopy(layout.composerLanguage, "{v} 与内置技能冲突，未安装。").replace("{v}", skill.trigger),
-      });
-      return;
-    }
-    const remaining = customSkills.filter(
-      (entry) => entry.trigger.toLowerCase() !== skill.trigger.toLowerCase(),
-    );
-    if (remaining.length >= TRAINER_CUSTOM_SKILL_LIMIT) {
-      setOperationMessage({
-        tone: "error",
-        message:
-          appUiCopy(layout.composerLanguage, "最多只能有 {v} 个自定义技能，先删除一个。").replace("{v}", String(TRAINER_CUSTOM_SKILL_LIMIT)),
-      });
-      return;
-    }
-    persistCustomSkills([...remaining, skill]);
-    setSkillImportText("");
-    setOperationMessage({
-      tone: "success",
-      message:
-        appUiCopy(layout.composerLanguage, "已安装 {v}。").replace("{v}", skill.trigger),
-    });
-  };
-
-  const removeCustomSkill = (skillId: string) => {
-    if (pendingDeleteSkillId !== skillId) {
-      setPendingDeleteSkillId(skillId);
-      return;
-    }
-    setPendingDeleteSkillId(undefined);
-    const skill = customSkills.find((entry) => entry.id === skillId);
-    persistCustomSkills(customSkills.filter((entry) => entry.id !== skillId));
-    setOperationMessage({
-      tone: "info",
-      message: appUiCopy(layout.composerLanguage, "已删除 {v}。").replace(
-        "{v}",
-        () => skill?.trigger ?? "skill",
-      ),
-    });
-  };
-
-  const copyCustomSkillShare = async (skill: TrainerCustomSkill) => {
-    try {
-      await navigator.clipboard.writeText(serializeTrainerSkillShare(skill));
-      setOperationMessage({
-        tone: "success",
-        message:
-          appUiCopy(layout.composerLanguage, "{v} 分享包已复制，可粘贴给其他工作区。").replace("{v}", skill.trigger),
-      });
-    } catch {
-      setOperationMessage({
-        tone: "error",
-        message: appUiCopy(layout.composerLanguage, "复制失败，请重试。"),
-      });
-    }
-  };
-
-  const openSkillSettings = (skillTrigger?: string) => {
-    setSettingsSectionRequest({ category: "teaching", requestId: Date.now(), skillTrigger });
-    setActiveView("settings");
-  };
   const renderSkillSharing = () => <details className="template-disclosure"><summary>{appUiCopy(layout.composerLanguage, "分享")}</summary><div>
     {customSkills.map((skill) => <div className="template-context" key={skill.id}><span>{skill.trigger} · {skill.title}</span><button type="button" className="template-back" onClick={() => void copyCustomSkillShare(skill)}>{appUiCopy(layout.composerLanguage, "复制分享包")}</button></div>)}
     <textarea className="settings-skill-import" value={skillImportText} placeholder={appUiCopy(layout.composerLanguage, "粘贴技能分享包 JSON 进行安装")} aria-label={appUiCopy(layout.composerLanguage, "安装技能")} rows={2} onChange={(event) => setSkillImportText(event.target.value)} />
@@ -7913,11 +6749,6 @@ export function App() {
     }
 
     const visibleActions = liveSuggestedActions;
-
-    if (!coachTrainingInlineAction && visibleActions.length === 0) {
-      return null;
-    }
-
     return (
       <div className="suggested-inline">
         {leftoverSuggestedActionNotLive ? (
@@ -7968,245 +6799,39 @@ export function App() {
       label: providerSetupState.actionLabel,
     },
   };
-  const useProviderTemplateByLabel = (templateLabel: string) => {
-    setSettingsActionState({
-      kind: "save-provider",
-      targets: ["provider"],
-      baselineMessageKey:
-        normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-    });
-    if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
-        .then((browserPreview) =>
-          browserPreview.useBrowserPreviewProviderTemplate(
-            templateLabel,
-            previewSessionId,
-          ),
-        )
-        .then(({ sessionId, messages }) => {
-          setPreviewSessionId(sessionId);
-          applyPreviewHostMessages(messages, true);
-        })
-        .catch(() => {
-          setOperationMessage({
-            tone: "error",
-            message: recoverableFailureMessage("provider", layout.composerLanguage),
-          });
-        });
-      return;
-    }
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId: trainerCommands.useProviderTemplate,
-        payload: {
-          templateLabel,
-          skipPicker: true,
-        },
-      },
-    });
-  };
-  const runWorkspaceAdmissionCommand = (commandId: string, payload?: unknown) => {
-    postMessage({
-      type: "command/execute",
-      payload: payload === undefined ? { commandId } : { commandId, payload },
-    });
-  };
-  // First runs have no capability summary yet; the host window trust verdict
-  // fills the gap so a trusted window is never asked to trust itself again.
-  const effectiveWorkspaceTrustState = resolveEffectiveTrustState(
-    readWorkspaceTrustStateFromCapabilitySummary(
+  const {
+    onboarding,
+    onboardingWizard,
+    workspaceAdmissionContent,
+  } = useWorkspaceAdmissionFlow({
+    trainerWorkspaceAdmission,
+    workspaceSessionBlocked,
+    windowTrusted: data.memory.workspace?.windowTrusted === true,
+    liveSandboxCapabilitySummary:
       liveSandboxState?.capabilitySummary as Record<string, unknown> | undefined,
-    ),
-    data.memory.workspace?.windowTrusted === true,
-  );
-  const onboarding = deriveOnboardingSteps({
-    workspaceAdmissionStatus: trainerWorkspaceAdmission?.status,
-    workspaceTrustState: effectiveWorkspaceTrustState,
-    providerConfigured: data.providerConfig.configured,
-    providerApiKeyConfigured: data.providerConfig.apiKeyConfigured,
+    firstLookSubjectFamily: firstLookSummary?.subjectFamily,
+    providerConfig: data.providerConfig,
     providerSendBlocked: providerSendState.blocked,
+    providerCanCoachNow,
+    providerBlockReason,
+    capabilitySendBlocked,
+    isStreaming: streaming.isStreaming,
+    isBrowserPreview,
+    composerLanguage: layout.composerLanguage,
+    providerDraft,
+    setProviderDraft,
+    settingsActionState,
+    setSettingsActionState,
+    setOperationMessage,
+    setComposerDraft,
+    setComposerAttachments,
+    pendingPostAdmissionSendRef,
+    handleSubmitRef,
+    sendTurnRef,
+    runWorkspaceAdmissionCommand,
+    saveProviderDraft,
+    openProviderSetup,
   });
-  // Only true cold starts get the wizard: a saved connection that merely lost
-  // its key keeps the existing scenario-aware recovery surface.
-  const onboardingActive = !onboarding.complete && !data.providerConfig.configured;
-  // The onboarding paste only fills address + key, but a saveable provider
-  // needs a model id. The browser preview can list models for an unsaved
-  // draft directly; the VS Code host keeps the field free-form so the learner
-  // can type it (the full settings picker stays available either way).
-  // Smart skill authoring: the settings panel describes a skill in one line;
-  // the preview generates the trigger/title/prompt with the configured model.
-  const onGenerateSkillDraft = useMemo(() => {
-    if (!isBrowserPreview) {
-      return requestNativeSkillDraft;
-    }
-    return async (description: string) => {
-      const browserPreview = await loadBrowserPreviewModule();
-      return browserPreview.generateBrowserPreviewSkillDraft(description);
-    };
-  }, [isBrowserPreview]);
-
-  const onboardingListModels = useMemo(() => {
-    if (isBrowserPreview) {
-      return async (baseUrl: string, apiKey: string): Promise<string[]> => {
-        const browserPreview = await loadBrowserPreviewModule();
-        return browserPreview.listBrowserPreviewDraftModels({ baseUrl }, apiKey);
-      };
-    }
-    return (baseUrl: string, apiKey: string): Promise<string[]> =>
-      new Promise<string[]>((resolve) => {
-        const trimmedUrl = baseUrl.trim().replace(/\/+$/, "");
-        if (!trimmedUrl) {
-          resolve([]);
-          return;
-        }
-        let settled = false;
-        const finish = (models: string[]) => {
-          if (settled) return;
-          settled = true;
-          window.clearTimeout(timer);
-          unsubscribe();
-          resolve(models);
-        };
-        const unsubscribe = useWorkbenchState.subscribe((state) => {
-          const listing = state.data.providerConfig.modelListing as
-            | { source?: string; baseUrl?: string; status?: string; availableModels?: unknown }
-            | undefined;
-          if (!listing || listing.source !== "draft" || listing.status === "loading") {
-            return;
-          }
-          const listedUrl = String(listing.baseUrl ?? "").trim().replace(/\/+$/, "");
-          if (listedUrl && listedUrl !== trimmedUrl && !listedUrl.endsWith(trimmedUrl)) {
-            return;
-          }
-          const models = Array.isArray(listing.availableModels)
-            ? listing.availableModels.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
-            : [];
-          finish(models);
-        });
-        const timer = window.setTimeout(() => finish([]), 15_000);
-        postMessage({
-          type: "command/execute",
-          payload: {
-            commandId: trainerCommands.refreshProviderModels,
-            payload: {
-              draft: {
-                baseUrl: trimmedUrl,
-                ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
-                protocol: providerDraft.protocol,
-              },
-            },
-          },
-        });
-      });
-  }, [isBrowserPreview, providerDraft.protocol]);
-  const startOnboardingTrial = () => {
-    setSettingsActionState({
-      kind: "start-provider-trial",
-      targets: ["provider"],
-      baselineMessageKey:
-        normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-    });
-    if (isBrowserPreview) {
-      setOperationMessage({
-        tone: "info",
-        message:
-          appUiCopy(layout.composerLanguage, "练习模式需要在 VS Code 扩展中启动。"),
-      });
-      return;
-    }
-    postMessage({
-      type: "command/execute",
-      payload: { commandId: trainerCommands.startProviderTrial },
-    });
-  };
-  const saveProviderDraft = () => {
-    setSettingsActionState({
-      kind: "save-provider",
-      targets: ["provider"],
-      baselineMessageKey:
-        normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase(),
-    });
-    if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
-        .then((browserPreview) =>
-          browserPreview.saveBrowserPreviewProvider(providerSavePayload, previewSessionId),
-        )
-        .then(({ sessionId, messages }) => {
-          setPreviewSessionId(sessionId);
-          applyPreviewHostMessages(messages, true);
-        })
-        .catch(() => {
-          setOperationMessage({
-            tone: "error",
-            message: recoverableFailureMessage("provider", layout.composerLanguage),
-          });
-        });
-      return;
-    }
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId: "trainer.provider.save",
-        payload: { ...providerSavePayload, responseLanguage: layout.composerLanguage },
-      },
-    });
-  };
-  const onboardingWizard = onboardingActive ? (
-    <OnboardingWizard
-      steps={onboarding.steps}
-      activeStepId={onboarding.activeStepId}
-      complete={onboarding.complete}
-      busy={settingsActionState?.kind === "save-provider"}
-      trialBusy={settingsActionState?.kind === "start-provider-trial"}
-      draftBaseUrl={providerDraft.baseUrl}
-      draftApiKey={providerDraft.apiKey}
-      draftModel={providerDraft.model}
-      hasStoredApiKey={data.providerConfig.apiKeyConfigured}
-      onDraftChange={(patch) => setProviderDraft((draft) => ({ ...draft, ...patch }))}
-      onListModels={onboardingListModels}
-      onChooseWorkspaceRoot={() =>
-        runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot)
-      }
-      onTrustWindow={() =>
-        postMessage({
-          type: "command/execute",
-          payload: { commandId: trainerCommands.trustWorkspaceWindow },
-        })
-      }
-      onSaveConnection={saveProviderDraft}
-      onStartTrial={startOnboardingTrial}
-      onOpenSettings={() => openProviderSetup()}
-    />
-  ) : null;
-  const workspaceAdmissionContent = trainerWorkspaceAdmission ? (
-    <>
-      <WorkspaceAdmissionPanel
-        status={trainerWorkspaceAdmission.status}
-        projectName={trainerWorkspaceAdmission.projectName}
-        projectPath={trainerWorkspaceAdmission.projectPath}
-        subjectFamily={firstLookSummary?.subjectFamily}
-        reconciliation={trainerWorkspaceAdmission.reconciliation}
-        onRetryAdmission={() => runWorkspaceAdmissionCommand(trainerCommands.retryWorkspaceAdmission, { responseLanguage: layout.composerLanguage })}
-        onContinueAdmission={() => runWorkspaceAdmissionCommand(trainerCommands.continueWorkspaceAdmission, { responseLanguage: layout.composerLanguage })}
-        onAbandonAdmission={() => runWorkspaceAdmissionCommand(trainerCommands.abandonWorkspaceAdmission)}
-        onSelectWorkspaceRoot={() =>
-          runWorkspaceAdmissionCommand(trainerCommands.chooseTrainerWorkspaceRoot)
-        }
-        onSelectProject={() =>
-          runWorkspaceAdmissionCommand(trainerCommands.chooseWorkspaceProject)
-        }
-        onAddProject={() =>
-          runWorkspaceAdmissionCommand(trainerCommands.adoptWorkspaceProject, {
-            responseLanguage: layout.composerLanguage,
-          })
-        }
-        onBrowseProject={() => runWorkspaceAdmissionCommand(trainerCommands.browseWorkspaceProject)}
-        onIgnoreProject={() => runWorkspaceAdmissionCommand(trainerCommands.ignoreWorkspaceProject)}
-        onDeleteProject={() => runWorkspaceAdmissionCommand(trainerCommands.deleteWorkspaceProject)}
-      />
-    </>
-  ) : null;
   const coachSuperEntryContent = (embedded = false) => {
     if (embedded || workspaceSessionBlocked) {
       return null;
@@ -8545,7 +7170,6 @@ export function App() {
       </section>
     );
   };
-
 
   const renderCoachRootView = () => (
     <section className="coach-view">
@@ -8932,16 +7556,6 @@ export function App() {
       payload: { commandId: trainerCommands.trainingCardMerge, payload: { keepCardId, duplicateCardIds } },
     });
   }, []);
-  useEffect(() => {
-    if (activeView !== "settings" || isBrowserPreview || companionStateQueriedRef.current) {
-      return;
-    }
-    companionStateQueriedRef.current = true;
-    postMessage({
-      type: "command/execute",
-      payload: { commandId: trainerCommands.remoteCompanionState },
-    });
-  }, [activeView, isBrowserPreview]);
   const handleStopRemoteVerification = () => {
     stopRemoteVerification();
   };
@@ -10068,33 +8682,6 @@ export function App() {
     !learningPrimaryAction.disabled && !learningPrimaryAction.busy,
   );
 
-  const providerSettingsActions = buildProviderSettingsActions({
-    language: layout.composerLanguage,
-    isBrowserPreview,
-    previewSessionId,
-    providerSavePayload,
-    providerDraftHasChanges,
-    providerConfigured: data.providerConfig.configured,
-    operationMessage,
-    baselineConnectedMessage,
-    setSettingsActionState,
-    setPreviewSessionId,
-    applyPreviewHostMessages,
-    persistCoachSettings,
-    defaultCoachDefaults,
-  });
-
-  const cancelProviderTest = useCallback(() => {
-    const requestId = settingsActionState?.requestId;
-    if (requestId && !isBrowserPreview) {
-      postMessage({
-        type: "provider/cancelTest",
-        payload: { requestId },
-      });
-    }
-    setSettingsActionState(undefined);
-  }, [isBrowserPreview, settingsActionState?.requestId, setSettingsActionState]);
-
   const renderSettingsView = () => (
     <SettingsRoute
       language={layout.composerLanguage}
@@ -10253,7 +8840,6 @@ export function App() {
             />
         </UtilityOverlay>
       ) : null}
-
 
       {operationMessage && operationMessageVisible
         && operationMessageSurface !== "training"

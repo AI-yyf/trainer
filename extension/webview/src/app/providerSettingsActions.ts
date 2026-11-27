@@ -2,9 +2,7 @@ import {
   DEFAULT_ANSWER_MODE,
   DEFAULT_TEACHING_STYLE,
   loadBrowserPreviewModule,
-  normalizeOperationMessageKey,
   type BrowserPreviewModule,
-  type OperationMessage,
   type SettingsActionState,
 } from "./appHelpers";
 import { useWorkbenchState } from "./useWorkbenchState";
@@ -31,8 +29,6 @@ export interface ProviderSettingsActionsDeps {
   providerSavePayload: ProviderSavePayload;
   providerDraftHasChanges: boolean;
   providerConfigured: boolean;
-  operationMessage?: OperationMessage;
-  baselineConnectedMessage: string;
   setSettingsActionState: (next?: SettingsActionState) => void;
   setPreviewSessionId: (sessionId: string) => void;
   applyPreviewHostMessages: (messages: HostMessage[], isProviderAction?: boolean) => void;
@@ -54,9 +50,8 @@ export interface ProviderSettingsActionsDeps {
 /**
  * Provider connection actions for the Settings route.
  *
- * The browser-preview branches and host command payloads live here so
- * App.tsx keeps only state wiring; each action keeps the same baseline
- * message key and single-flight semantics as the original inline handlers.
+ * `setSettingsActionState` clears any stale operation banner on start, so callers
+ * do not need to thread `operationMessage` or compute a dead `baselineMessageKey`.
  */
 export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) {
   const {
@@ -66,8 +61,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
     providerSavePayload,
     providerDraftHasChanges,
     providerConfigured,
-    operationMessage,
-    baselineConnectedMessage,
     setSettingsActionState,
     setPreviewSessionId,
     applyPreviewHostMessages,
@@ -75,11 +68,7 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
     defaultCoachDefaults,
   } = deps;
 
-  const baselineMessageKey = () =>
-    normalizeOperationMessageKey(operationMessage) ?? baselineConnectedMessage.toLowerCase();
-
-  const previewFailure = () =>
-    recoverableFailureMessage("provider", language);
+  const previewFailure = () => recoverableFailureMessage("provider", language);
 
   const runPreviewAction = async (
     action: (browserPreview: BrowserPreviewModule) => Promise<{
@@ -105,7 +94,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "save-provider",
         targets: ["provider"],
-        baselineMessageKey: baselineMessageKey(),
       });
       if (isBrowserPreview) {
         void runPreviewAction((browserPreview) =>
@@ -125,7 +113,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "refresh-provider-models",
         targets: ["provider"],
-        baselineMessageKey: baselineMessageKey(),
       });
       if (isBrowserPreview) {
         void runPreviewAction((browserPreview) =>
@@ -142,7 +129,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "save-provider",
         targets: ["provider"],
-        baselineMessageKey: baselineMessageKey(),
       });
       if (isBrowserPreview) {
         void runPreviewAction((browserPreview) =>
@@ -163,7 +149,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "refresh-provider-models",
         targets: ["provider"],
-        baselineMessageKey: baselineMessageKey(),
       });
       if (isBrowserPreview) {
         void runPreviewAction((browserPreview) =>
@@ -187,7 +172,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "test-provider",
         targets: ["provider"],
-        baselineMessageKey: baselineMessageKey(),
         requestId,
       });
       if (isBrowserPreview) {
@@ -222,7 +206,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "clear-provider",
         targets: ["provider"],
-        baselineMessageKey: baselineMessageKey(),
       });
       if (isBrowserPreview) {
         void runPreviewAction((browserPreview) =>
@@ -239,7 +222,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "open-config",
         targets: ["provider"],
-        baselineMessageKey: baselineMessageKey(),
       });
       if (isBrowserPreview) {
         useWorkbenchState.getState().setOperationMessage({
@@ -264,7 +246,6 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
       setSettingsActionState({
         kind: "reset-defaults",
         targets: ["coachDefaults", "workspaceControl"],
-        baselineMessageKey: baselineMessageKey(),
       });
       const store = useWorkbenchState.getState();
       store.setThemePreference("system");
