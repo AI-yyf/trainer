@@ -1,4311 +1,791 @@
 from __future__ import annotations
 
-import logging
-import re
-from datetime import datetime, timezone
-from hashlib import sha1
-from typing import Any, Literal
-
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    ValidationInfo,
-    computed_field,
-    field_validator,
-    model_validator,
+from .model_domains.foundations_and_provider import (
+    RESOURCE_TRAINING_BLOCKING_QUALITY_FLAGS as RESOURCE_TRAINING_BLOCKING_QUALITY_FLAGS,
 )
-
-from .image_attachments import (
-    MAX_IMAGE_BASE64_LENGTH,
-    MAX_IMAGE_COUNT,
-    MAX_TOTAL_IMAGE_BYTES,
-    validate_image_payload,
+from .model_domains.foundations_and_provider import (
+    AssetLink as AssetLink,
 )
-
-CoachRequestAnswerMode = Literal["auto", "coach-first", "guided", "balanced", "direct"]
-ResponseLanguage = Literal[
-    "zh-CN",
-    "en-US",
-    "es-ES",
-    "fr-FR",
-    "de-DE",
-    "ja-JP",
-    "ko-KR",
-    "pt-BR",
-]
-CoachActionType = Literal["plan", "next_task", "review", "hint", "retry_review", "task"]
-CoachScenario = Literal[
-    "general",
-    "onboarding",
-    "idea_implementation",
-    "project_idea",
-    "project_adaptation",
-    "project_sourcing",
-    "principle",
-    "remote_workspace",
-    "debug_loop",
-    "function_guidance",
-    "review",
-    "plan",
-    "task",
-    "next_task",
-]
-LearnerSignal = Literal["steady", "blocked", "uncertain", "curious"]
-TeachingMode = Literal[
-    "onboarding",
-    "idea_implementation",
-    "project_idea_mining",
-    "project_adaptation",
-    "planning",
-    "concept_teaching",
-    "engineering_challenge",
-    "review_reflection",
-    "project_sourcing",
-    "principle_explanation",
-    "guided",
-    "scaffold",
-    "balanced",
-    "direct_rescue",
-    "challenge",
-    "reflection",
-]
-ToneName = Literal["steady", "encouraging", "concise_rescue", "reflective"]
-VerbosityBias = Literal["short", "medium", "expanded"]
-CoachArtifactKind = Literal[
-    "task",
-    "plan",
-    "evaluation",
-    "idea_implementation",
-    "project_idea",
-    "project_adaptation",
-    "project_source",
-    "principle",
-    "review",
-    "plan_update",
-    "next_step",
-]
-CoachMemoryScope = Literal["project", "personal", "session"]
-MemoryShareCategory = Literal["preferences", "mastery"]
-WorkingSetMode = Literal["focused", "balanced", "broad"]
-ReviewCadence = Literal["light", "steady", "active"]
-ReviewReminderMode = Literal["due", "ahead", "digest"]
-ResourceTrustState = Literal["trusted", "unknown", "stale", "untrusted"]
-
-RESOURCE_TRAINING_BLOCKING_QUALITY_FLAGS = frozenset(
-    {
-        "network_disabled",
-        "fetch_failed",
-        "blocked_source",
-        "no_content",
-        "source_conflict",
-    }
+from .model_domains.foundations_and_provider import (
+    AssetLinkRelation as AssetLinkRelation,
 )
-
-
-def derive_resource_trust_state(
-    trust_score: float,
-    freshness: str,
-    quality_flags: list[str],
-) -> ResourceTrustState:
-    normalized_flags = {
-        normalized
-        for flag in quality_flags
-        if (normalized := str(flag or "").strip().lower())
-    }
-    if RESOURCE_TRAINING_BLOCKING_QUALITY_FLAGS & normalized_flags:
-        return "untrusted"
-    if str(freshness or "").strip().lower() == "stale":
-        return "stale"
-    if trust_score >= 0.75 and not normalized_flags:
-        return "trusted"
-    if trust_score >= 0.45:
-        return "unknown"
-    return "untrusted"
-LearningSignalOutcome = Literal[
-    "code_landed",
-    "tests_passed",
-    "evaluation",
-    "repeated_error",
-    "concept_answered_correctly",
-    "task_abandoned",
-    "blocked",
-]
-UserFeedbackKind = Literal[
-    "too_hard",
-    "too_simple",
-    "misunderstood",
-    "resource_incorrect",
-    "plan_mismatch",
-    "card_unrealistic",
-]
-TeachingAssetKind = Literal[
-    "concept_card",
-    "implementation_pattern",
-    "common_pitfall",
-    "exercise_seed",
-    "explanation_recipe",
-    "study_guide",
-    "cheat_sheet",
-    "exercise_set",
-    "code_examples",
-]
-TeachingAssetScope = Literal["general", "personal", "project"]
-TeachingAssetOrigin = Literal[
-    "resource",
-    "workspace_understanding",
-    "reflection",
-    "learning_outcome",
-    "manual",
-]
-LibraryAssetType = Literal[
-    "knowledge",
-    "project",
-    "skill",
-    "agent",
-    "asset",
-    "runtime_artifact",
-    "external_source",
-    "plan",
-    "training_card",
-    "memory",
-    "habit",
-    "skill_definition",
-    "research_brief",
-]
-LibraryAssetScope = Literal["library", "personal", "project"]
-LibraryAssetStatus = Literal["active", "deleted"]
-AssetSourceKind = Literal[
-    "url",
-    "resource",
-    "project",
-    "context",
-    "asset",
-    "memory",
-    "runtime",
-    "manual",
-]
-AssetLinkRelation = Literal["available_to", "derived_from", "references", "pinned"]
-TrainingCardType = Literal["practice", "flash", "drill", "transfer"]
-TrainingLearningFamily = Literal["code", "theory", "literature"]
-TrainingCardStatus = Literal[
-    "candidate",
-    "active",
-    "needs_primer",
-    "answered",
-    "implemented",
-    "completed",
-    "reviewed",
-    "fed_back",
-    "archived",
-    "skipped",
-    "blocked",
-]
-TrainingLearningPhase = Literal["learn", "try", "verify", "reflect", "return"]
-TrainingCardCreatedFrom = Literal[
-    "conversation",
-    "plan",
-    "resource",
-    "practice_feedback",
-    "dependency_mastery",
-    "review_due",
-    "recovery",
-]
-TrainingCardTrustState = Literal["trusted", "fresh", "unknown", "stale", "untrusted"]
-DependencyMasteryStage = Literal["understood", "recalled", "practiced", "applied", "transferable"]
-ProviderCredentialMode = Literal["workspace_secret", "ui_proxy", "local_no_auth"]
-FolderRole = Literal[
-    "empty_new_project",
-    "existing_engineering",
-    "algorithm_model",
-    "idea_scratchpad",
-    "learning_materials",
-    "mixed_uncertain",
-]
-# P2 #24: subject family mirrors the literature/code pivot. Detection lives in
-# workspace.subject_scan; the default keeps every historical workspace on
-# ``code`` so adoption payloads never change meaning silently.
-WorkspaceSubjectFamily = Literal["code", "literature"]
-ProjectTypeGuess = Literal[
-    "web_app",
-    "api_service",
-    "cli_tool",
-    "library_package",
-    "ml_model",
-    "notebook_research",
-    "mobile_app",
-    "desktop_app",
-    "embedded_iot",
-    "data_pipeline",
-    "monorepo",
-    "documentation",
-    "game",
-    "config_dotfiles",
-    "unknown",
-]
-ProviderProtocol = Literal[
-    "openai_responses",
-    "openai_chat_completions",
-    "anthropic_messages",
-    "openai_chat_completions_compatible",
-    "gemini_generate_content",
-]
-ProviderProtocolFamily = Literal["openai", "anthropic", "gemini"]
-ProviderProtocolTestMode = Literal["openai_chat", "responses", "anthropic", "gemini"]
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-class CapabilityFlags(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    chat: bool = True
-    responses: bool = True
-    vision: bool = False
-    embeddings: bool = True
-    tools: bool = False
-    json_schema: bool = Field(default=False, alias="jsonSchema")
-    structured_output: bool = Field(default=False, alias="structuredOutput")
-    streaming: bool = True
-    thinking: bool = False
-
-
-class ProviderProtocolCatalogEntry(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    protocol: ProviderProtocol
-    protocol_family: ProviderProtocolFamily = Field(alias="protocolFamily")
-    client_kind: str = Field(alias="clientKind")
-    completion_label: str = Field(alias="completionLabel")
-    endpoint_hint: str = Field(alias="endpointHint")
-    test_mode: ProviderProtocolTestMode = Field(alias="testMode")
-    required_capability: str | None = Field(default=None, alias="requiredCapability")
-    diagnostic_notes: list[str] = Field(default_factory=list, alias="diagnosticNotes")
-
-
-class ProviderModelTokenLimit(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    context_window_tokens: int | None = Field(default=None, alias="contextWindowTokens")
-    max_output_tokens: int | None = Field(default=None, alias="maxOutputTokens")
-
-
-class ProviderConfig(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    name: str
-    base_url: str = Field(alias="baseUrl")
-    api_key_ref: str = Field(alias="apiKeyRef")
-    model: str
-    protocol: ProviderProtocol = "openai_chat_completions_compatible"
-    label: str | None = None
-    mode: Literal["direct", "gateway"] | None = None
-    connection_type: str | None = Field(default=None, alias="connectionType")
-    credential_mode: ProviderCredentialMode | None = Field(default=None, alias="credentialMode")
-    ignore_system_proxy: bool = Field(default=False, alias="ignoreSystemProxy")
-    available_models: list[str] = Field(default_factory=list, alias="availableModels")
-    allowed_models: list[str] = Field(default_factory=list, alias="allowedModels")
-    denied_models: list[str] = Field(default_factory=list, alias="deniedModels")
-    model_aliases: dict[str, str] = Field(default_factory=dict, alias="modelAliases")
-    model_capabilities: dict[str, CapabilityFlags] = Field(
-        default_factory=dict,
-        alias="modelCapabilities",
-    )
-    model_token_limits: dict[str, ProviderModelTokenLimit] = Field(
-        default_factory=dict,
-        alias="modelTokenLimits",
-    )
-    task_bindings: dict[str, Any] = Field(default_factory=dict, alias="taskBindings")
-    context_window_tokens: int | None = Field(default=None, alias="contextWindowTokens")
-    max_output_tokens: int | None = Field(default=None, alias="maxOutputTokens")
-    embedding_model: str | None = Field(default=None, alias="embeddingModel")
-    catalog_source: str | None = Field(default=None, alias="catalogSource")
-    cache_ttl_seconds: int | None = Field(default=None, alias="cacheTtlSeconds")
-    profile_id: str | None = Field(default=None, alias="profileId")
-    profile_label: str | None = Field(default=None, alias="profileLabel")
-    profile_mode: str | None = Field(default=None, alias="profileMode")
-    request_defaults: dict[str, Any] = Field(default_factory=dict, alias="requestDefaults")
-    capabilities: CapabilityFlags = Field(default_factory=CapabilityFlags)
-
-
-class UserProfile(BaseModel):
-    long_term_goal: str = ""
-    long_term_goals: list[str] = Field(default_factory=list)
-    background: str = ""
-    weekly_hours: int = 4
-    teaching_style: str = "auto"
-    answer_policy: Literal["auto", "guided", "balanced", "direct"] = "auto"
-    target_project: str | None = None
-    preferred_libraries: list[str] = Field(default_factory=list)
-
-    @field_validator("answer_policy", mode="before")
-    @classmethod
-    def normalize_answer_policy_aliases(cls, value: Any) -> Any:
-        normalized = str(value or "").strip().lower()
-        if not normalized:
-            return "auto"
-        if normalized == "coach-first":
-            return "guided"
-        return normalized
-
-    @model_validator(mode="after")
-    def sync_goals(self) -> "UserProfile":
-        if not self.long_term_goal and self.long_term_goals:
-            self.long_term_goal = self.long_term_goals[0]
-        if self.long_term_goal and not self.long_term_goals:
-            self.long_term_goals = [self.long_term_goal]
-        return self
-
-
-class PlanPhase(BaseModel):
-    title: str
-    objective: str
-    exercises: list[str] = Field(default_factory=list)
-    completion_signal: str = ""
-
-
-class PlanStage(BaseModel):
-    id: str
-    title: str
-    goal: str
-    outcomes: list[str]
-    resources: list[str] = Field(default_factory=list)
-    status: Literal["pending", "active", "completed"] = "pending"
-
-
-class LearningPlan(BaseModel):
-    # extra="allow" keeps the stored `_plan_revision` optimistic-lock anchor
-    # alive through parse/dump round-trips, so every snapshot carries the
-    # revision the client must base its next formal save on.
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
-
-    id: str = ""
-    title: str
-    summary: str = ""
-    stages: list[PlanStage] = Field(default_factory=list)
-    cadence: str = ""
-    frozen: bool = False
-    current_stage_id: str | None = None
-    current_step: str = ""
-    why_now: str = ""
-    verify_method: list[str] = Field(default_factory=list)
-    blocked_reason: str = ""
-    next_after_current: str = ""
-    plan_id: str | None = None
-    session_id: str | None = None
-    objective: str | None = None
-    phases: list[PlanPhase] = Field(default_factory=list)
-    weekly_cadence: str | None = None
-    default_answer_policy: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
-    workspace_id: str = Field(default="", alias="workspaceId")
-
-    @model_validator(mode="after")
-    def sync_compat_fields(self, info: ValidationInfo) -> "LearningPlan":
-        from app.memory.workspace_recovery import (
-            leftover_formal_plan_is_live_for_fill,
-            live_plan_current_step_fill,
-            live_plan_next_after_current,
-        )
-
-        if not self.id and self.plan_id:
-            self.id = self.plan_id
-        if not self.plan_id:
-            self.plan_id = self.id
-        if not self.weekly_cadence:
-            self.weekly_cadence = self.cadence
-        if not self.cadence and self.weekly_cadence:
-            self.cadence = self.weekly_cadence
-        if not self.objective:
-            self.objective = self.summary
-        if not self.summary and self.objective:
-            self.summary = self.objective
-        if not self.default_answer_policy:
-            self.default_answer_policy = "auto"
-        if not self.created_at:
-            self.created_at = utc_now_iso()
-        if not self.updated_at:
-            self.updated_at = utc_now_iso()
-        context = info.context if isinstance(info.context, dict) else {}
-        runtime = context.get("runtime")
-        existing = context.get("existing")
-        live_plan = leftover_formal_plan_is_live_for_fill(
-            plan=self,
-            runtime=runtime if isinstance(runtime, dict) else None,
-            existing=existing if isinstance(existing, dict) else None,
-        )
-        active_stage_index = next(
-            (
-                index
-                for index, stage in enumerate(self.stages)
-                if stage.id == self.current_stage_id or stage.status == "active"
-            ),
-            0,
-        )
-        active_stage = self.stages[active_stage_index] if self.stages else None
-        next_stage = self.stages[active_stage_index + 1] if active_stage and active_stage_index + 1 < len(self.stages) else None
-        if not self.phases and self.stages:
-            self.phases = [
-                PlanPhase(
-                    title=stage.title,
-                    objective=stage.goal,
-                    exercises=stage.outcomes,
-                    completion_signal=", ".join(stage.outcomes),
-                )
-                for stage in self.stages
-            ]
-        if not self.stages and self.phases:
-            self.stages = [
-                PlanStage(
-                    id=f"phase-{index}",
-                    title=phase.title,
-                    goal=phase.objective,
-                    outcomes=phase.exercises or ([phase.completion_signal] if phase.completion_signal else []),
-                    resources=[],
-                    status="active" if index == 0 else "pending",
-                )
-                for index, phase in enumerate(self.phases)
-            ]
-        if not self.current_step:
-            phase_objective = ""
-            if self.phases:
-                phase_objective = (
-                    self.phases[active_stage_index].objective
-                    if active_stage_index < len(self.phases)
-                    else self.phases[0].objective
-                )
-            self.current_step = live_plan_current_step_fill(
-                plan=self,
-                runtime=runtime if isinstance(runtime, dict) else None,
-                existing=existing if isinstance(existing, dict) else None,
-                stage_goal=active_stage.goal if active_stage else "",
-                phase_objective=phase_objective,
-                summary=self.summary,
-                objective=self.objective or "",
-                title=self.title,
-            )
-        if not self.why_now:
-            if self.current_step:
-                self.why_now = "Stay on the current live step before widening scope."
-            elif live_plan and self.summary:
-                self.why_now = self.summary
-            elif live_plan and self.objective:
-                self.why_now = self.objective
-            else:
-                self.why_now = "Stay on the current live step before widening scope."
-        if not self.verify_method:
-            if active_stage and active_stage.outcomes:
-                self.verify_method = [item for item in active_stage.outcomes if item]
-            elif self.phases and active_stage_index < len(self.phases):
-                phase = self.phases[active_stage_index]
-                self.verify_method = [item for item in phase.exercises if item] or (
-                    [phase.completion_signal] if phase.completion_signal else []
-                )
-            if not self.verify_method:
-                self.verify_method = ["Run the smallest relevant check."]
-        if not self.next_after_current:
-            next_phase_objective = ""
-            if len(self.phases) > active_stage_index + 1:
-                next_phase_objective = self.phases[active_stage_index + 1].objective
-            self.next_after_current = live_plan_next_after_current(
-                plan=self,
-                runtime=runtime if isinstance(runtime, dict) else None,
-                existing=existing if isinstance(existing, dict) else None,
-                next_stage_goal=next_stage.goal if next_stage else "",
-                next_phase_objective=next_phase_objective,
-            )
-        return self
-
-
-class GlobalPlan(BaseModel):
-    """The local Trainer's explicit, cross-project learning plan."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str
-    owner_id: str = Field(alias="ownerId")
-    title: str
-    summary: str = ""
-    goals: list[str] = Field(default_factory=list)
-    stages: list[PlanStage] = Field(default_factory=list)
-    frozen: bool = False
-    current_project_plan_id: str | None = Field(default=None, alias="currentProjectPlanId")
-    current_stage_id: str | None = Field(default=None, alias="currentStageId")
-    current_step: str = Field(default="", alias="currentStep")
-    why_now: str = Field(default="", alias="whyNow")
-    verify_method: list[str] = Field(default_factory=list, alias="verifyMethod")
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @field_validator("id", "owner_id", "title")
-    @classmethod
-    def require_identity_fields(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("global plan identity fields are required")
-        return normalized
-
-
-class GlobalPlanProjectLink(BaseModel):
-    """An explicit association between one global plan and one project plan."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    global_plan_id: str = Field(alias="globalPlanId")
-    workspace_id: str = Field(alias="workspaceId")
-    project_plan_id: str = Field(alias="projectPlanId")
-    linked_at: str = Field(default_factory=utc_now_iso, alias="linkedAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @field_validator("global_plan_id", "workspace_id", "project_plan_id")
-    @classmethod
-    def require_link_identity_fields(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("global plan project link identity fields are required")
-        return normalized
-
-
-class TrainerRoot(BaseModel):
-    """A stable user-owned container for one or more managed projects."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    root_id: str = Field(alias="rootId")
-    root_path: str = Field(alias="rootPath")
-    display_name: str = Field(alias="displayName")
-    path_history: list[str] = Field(default_factory=list, alias="pathHistory")
-    revision: int = Field(default=1, ge=1, alias="revision")
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @field_validator("root_id", "root_path", "display_name")
-    @classmethod
-    def require_root_identity(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("trainer root identity fields are required")
-        return normalized
-
-
-class TrainerProject(BaseModel):
-    """A stable project identity whose location may be reconciled over time."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    project_id: str = Field(alias="projectId")
-    root_id: str = Field(alias="rootId")
-    project_path: str = Field(alias="projectPath")
-    project_name: str = Field(alias="projectName")
-    path_history: list[str] = Field(default_factory=list, alias="pathHistory")
-    revision: int = Field(default=1, ge=1, alias="revision")
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @field_validator("project_id", "root_id", "project_path", "project_name")
-    @classmethod
-    def require_project_identity(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("trainer project identity fields are required")
-        return normalized
-
-
-class ProjectContext(BaseModel):
-    """The isolated runtime, memory, plan, and training lane for one project."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    context_id: str = Field(alias="contextId")
-    root_id: str = Field(alias="rootId")
-    project_id: str = Field(alias="projectId")
-    project_memory_id: str = Field(alias="projectMemoryId")
-    project_plan_id: str = Field(alias="projectPlanId")
-    project_training_id: str = Field(alias="projectTrainingId")
-    project_agent_context_id: str = Field(alias="projectAgentContextId")
-    agent_session_id: str = Field(alias="agentSessionId")
-    legacy_workspace_id: str | None = Field(default=None, alias="legacyWorkspaceId")
-    global_plan_id: str | None = Field(default=None, alias="globalPlanId")
-    status: Literal["provisioned"] = "provisioned"
-    revision: int = Field(default=1, ge=1, alias="revision")
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @field_validator(
-        "context_id",
-        "root_id",
-        "project_id",
-        "project_memory_id",
-        "project_plan_id",
-        "project_training_id",
-        "project_agent_context_id",
-        "agent_session_id",
-    )
-    @classmethod
-    def require_context_identity(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("project context identity fields are required")
-        return normalized
-
-
-class ProjectProvisioning(ProjectContext):
-    """Durable project context plus its compatibility workspace alias."""
-
-    workspace_id: str = Field(alias="workspaceId")
-    project_path: str = Field(alias="projectPath")
-    project_name: str = Field(alias="projectName")
-    root_path: str = Field(alias="rootPath")
-    root_revision: int = Field(default=1, ge=1, alias="rootRevision")
-    project_revision: int = Field(default=1, ge=1, alias="projectRevision")
-
-    @field_validator("workspace_id", "project_path", "project_name", "root_path")
-    @classmethod
-    def require_provisioning_identity(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("project provisioning identity fields are required")
-        return normalized
-
-    @model_validator(mode="after")
-    def sync_workspace_alias(self) -> "ProjectProvisioning":
-        if self.workspace_id != self.context_id:
-            raise ValueError("workspace_id is a compatibility alias for context_id")
-        return self
-
-    def adoption_artifacts(self) -> dict[str, str]:
-        return {
-            "root_id": self.root_id,
-            "project_id": self.project_id,
-            "context_id": self.context_id,
-            "project_memory_id": self.project_memory_id,
-            "project_plan_id": self.project_plan_id,
-            "project_training_id": self.project_training_id,
-            "project_agent_context_id": self.project_agent_context_id,
-        }
-
-
-class SubPlan(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str = ""
-    parent_plan_id: str = Field(default="", alias="parentPlanId")
-    title: str
-    description: str = ""
-    stages: list[PlanStage] = Field(default_factory=list)
-    status: Literal["draft", "active", "completed", "archived"] = "draft"
-    progress_percent: float = Field(default=0.0, alias="progressPercent")
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-
-class SourceIntakeDeclaration(BaseModel):
-    """Unverified source metadata supplied during resource intake.
-
-    Declarations are preserved for a reviewer but never make a source eligible
-    for commercial reuse by themselves. The derived governance record below
-    distinguishes declarations from evidence observed in the imported content.
-    """
-
-    license_expression: str = ""
-    license_evidence_uri: str = ""
-    maintenance_updated_at: str = ""
-    maintenance_evidence_uri: str = ""
-
-
-class SourceIntakeGovernance(BaseModel):
-    """Auditable policy result for a source that may be reused commercially."""
-
-    policy_version: str = "source-intake-v1"
-    assessed_at: str | None = None
-    source_provenance_status: str = "unknown"
-    license_status: Literal["unknown", "declared", "observed"] = "unknown"
-    license_expression: str = ""
-    license_evidence_kind: Literal["none", "user_declaration", "source_spdx"] = "none"
-    license_evidence_source: str = ""
-    license_evidence_excerpt: str = ""
-    maintenance_status: Literal[
-        "unknown", "declared", "reported_recent", "reported_stale"
-    ] = "unknown"
-    maintenance_updated_at: str | None = None
-    maintenance_evidence_kind: Literal[
-        "none", "user_declaration", "source_last_updated"
-    ] = "none"
-    maintenance_evidence_source: str = ""
-    maintenance_evidence_excerpt: str = ""
-    commercial_reuse_policy: str = "permissive-spdx-v1"
-    commercial_reuse_status: Literal["eligible", "review_required", "blocked"] = (
-        "review_required"
-    )
-    commercial_reuse_reason_codes: list[str] = Field(
-        default_factory=lambda: [
-            "controlled_provenance_missing",
-            "license_unknown",
-            "maintenance_unknown",
-        ]
-    )
-
-
-class ResourceRecord(BaseModel):
-    id: str
-    kind: Literal[
-        "pdf",
-        "epub",
-        "docx",
-        "pptx",
-        "html",
-        "image",
-        "text",
-        "markdown",
-        "code",
-        "url",
-        "video",
-    ]
-    name: str
-    source: str
-    tags: list[str] = Field(default_factory=list)
-    # Preserve the capture identity when a learner edits the visible library tags.
-    capture_provenance_tags: list[str] = Field(default_factory=list)
-    source_items: list[str] = Field(default_factory=list)
-    content_language: str | None = None
-    # Stable display path inside a resource collection. This is intentionally
-    # separate from the sandbox artifact path, which may include an isolation key.
-    collection_path: str | None = None
-    # Canonical local directory that proves the collection boundary for collection_path.
-    collection_root: str | None = None
-    summary: str = ""
-    parse_status: Literal["pending", "parsed", "failed"] = "pending"
-    index_status: Literal["pending", "indexed", "failed"] = "pending"
-    source_type: str = ""
-    canonical_source: str = ""
-    fetched_at: str | None = None
-    source_declaration: SourceIntakeDeclaration = Field(default_factory=SourceIntakeDeclaration)
-    source_governance: SourceIntakeGovernance = Field(default_factory=SourceIntakeGovernance)
-    trust_score: float = 0.0
-    freshness: Literal["fresh", "stale", "unknown"] = "unknown"
-    duplicate_key: str = ""
-    quality_flags: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    knowledge_fragments: list[dict[str, Any]] = Field(default_factory=list)
-    sandbox_path: str | None = None
-    sandbox_origin: str | None = None
-    sandbox_synced_at: str | None = None
-    sandbox_dirty: bool = False
-    extracted_artifact_path: str | None = None
-    # TR-059: SHA-256 of the uploaded content, pinned at upload time so
-    # evidence records can cite the exact content version they were built on.
-    content_hash: str | None = None
-    version_id: str | None = None
-    # Fingerprint of the fetched URL text before the library adds a title
-    # and creates its canonical document and version.
-    indexed_source_hash: str | None = None
-    # Canonical Markdown digest of this resource (workspace-relative POSIX
-    # path). Search, the reader, training cards and agent context read this
-    # document; the original file stays untouched next to it in the library.
-    canonical_markdown_path: str | None = None
-    canonical_original_path: str | None = None
-    parser: str = ""
-    parser_version: str = ""
-    page_count: int | None = None
-    slide_count: int | None = None
-    # Trainer Library bookkeeping: workspace-relative POSIX paths of downloaded
-    # copies of this resource's source (see ``app.resources.library``). Empty
-    # for captures that were never downloaded into a library folder; kept in
-    # sync by library folder renames and trash moves.
-    library_paths: list[str] = Field(default_factory=list)
-
-    @computed_field(return_type=ResourceTrustState)
-    @property
-    def trust_state(self) -> ResourceTrustState:
-        return derive_resource_trust_state(
-            self.trust_score,
-            self.freshness,
-            self.quality_flags,
-        )
-
-
-class ResourceCaptureResponse(ResourceRecord):
-    """Browser-capture result: the landed resource plus the capture envelope.
-
-    The full resource record stays on the wire (the library, memory summary and
-    evidence lanes all read it), and the three capture-specific fields let the
-    browser extension render "added" vs "already in the library" and offer the
-    deep link back into the workbench without a second request.
-    """
-
-    resource_id: str = ""
-    deduped: bool = False
-    deep_link: str = ""
-    # Workspace-relative path of the downloaded artifact when the capture asked
-    # to save its source into a library folder (``download=true``).
-    saved_path: str | None = None
-
-
-class ResourceTrashItem(BaseModel):
-    """Minimal, display-safe projection of a deleted resource."""
-
-    resource_id: str
-    title: str
-    collection_path: str | None = None
-    deleted_at: str
-    recoverable: bool
-
-
-class ResourceTrashResponse(BaseModel):
-    workspace_id: str
-    items: list[ResourceTrashItem] = Field(default_factory=list)
-
-
-class LibraryGroupNode(BaseModel):
-    """One real folder in the Trainer Library group tree.
-
-    ``path`` is relative to the library management root (``Trainer Library``),
-    ``workspace_path`` is relative to the workspace root.
-    """
-
-    path: str
-    name: str
-    workspace_path: str = ""
-    resource_count: int = 0
-    children: list["LibraryGroupNode"] = Field(default_factory=list)
-
-
-class LibraryGroupsResponse(BaseModel):
-    """The real-folder group tree under the library management root."""
-
-    workspace_id: str
-    managed_root: str = ""
-    exists: bool = False
-    trash_root: str = ""
-    total_resource_count: int = 0
-    groups: list[LibraryGroupNode] = Field(default_factory=list)
-
-
-class LocalOwner(BaseModel):
-    """The local Trainer profile that owns a cross-project asset library."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str
-    display_name: str = Field(default="", alias="displayName")
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-
-class GlobalMemoryCapability(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    concept: str = Field(alias="concept")
-    verified_count: int = Field(default=0, alias="verifiedCount")
-    last_outcome: str = Field(default="", alias="lastOutcome")
-    last_verified_at: str = Field(default_factory=utc_now_iso, alias="lastVerifiedAt")
-    workspace_ids: list[str] = Field(default_factory=list, alias="workspaceIds")
-    scene_count: int = Field(default=0, alias="sceneCount")
-
-
-class GlobalMemoryGrowthRecord(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    outcome: str = Field(alias="outcome")
-    concepts: list[str] = Field(default_factory=list, alias="concepts")
-    verified_at: str = Field(default_factory=utc_now_iso, alias="verifiedAt")
-
-
-class GlobalMemory(BaseModel):
-    """Owner-scoped memory that intentionally excludes project state."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    owner_id: str = Field(alias="ownerId")
-    preferences: dict[str, str] = Field(default_factory=dict, alias="preferences")
-    long_term_goals: list[str] = Field(default_factory=list, alias="longTermGoals")
-    capability_profile: dict[str, GlobalMemoryCapability] = Field(
-        default_factory=dict,
-        alias="capabilityProfile",
-    )
-    growth_history: list[GlobalMemoryGrowthRecord] = Field(default_factory=list, alias="growthHistory")
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @field_validator("long_term_goals")
-    @classmethod
-    def normalize_long_term_goals(cls, value: list[str]) -> list[str]:
-        return list(dict.fromkeys(item.strip() for item in value if item and item.strip()))[:24]
-
-
-class AssetSourceReference(BaseModel):
-    """A durable provenance entry for a canonical library asset."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    kind: AssetSourceKind = "manual"
-    ref: str
-    label: str = ""
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-    @field_validator("ref")
-    @classmethod
-    def require_source_ref(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("asset source reference is required")
-        return normalized
-
-
-class LibraryAsset(BaseModel):
-    """A durable, owner-scoped asset that may be linked into many workspaces."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str
-    owner_id: str = Field(alias="ownerId")
-    asset_type: LibraryAssetType = Field(alias="assetType")
-    scope: LibraryAssetScope = "library"
-    title: str
-    canonical_source: str = Field(default="", alias="canonicalSource")
-    source_chain: list[AssetSourceReference] = Field(default_factory=list, alias="sourceChain")
-    project_id: str | None = Field(default=None, alias="projectId")
-    context_id: str | None = Field(default=None, alias="contextId")
-    status: LibraryAssetStatus = "active"
-    deleted_at: str | None = Field(default=None, alias="deletedAt")
-    deletion_reason: str = Field(default="", alias="deletionReason")
-    current_revision_id: str | None = Field(default=None, alias="currentRevisionId")
-    payload: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @field_validator("id", "owner_id", "title")
-    @classmethod
-    def require_library_asset_identity(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("library asset identity fields are required")
-        return normalized
-
-    @model_validator(mode="after")
-    def normalize_asset_lifecycle(self) -> "LibraryAsset":
-        self.canonical_source = self.canonical_source.strip()
-        self.project_id = self.project_id.strip() if self.project_id else None
-        self.context_id = self.context_id.strip() if self.context_id else None
-        self.deletion_reason = self.deletion_reason.strip()
-        if self.status == "active":
-            self.deleted_at = None
-            self.deletion_reason = ""
-        return self
-
-
-class AssetSourceState(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    kind: AssetSourceKind
-    ref: str
-    state: Literal["available", "missing", "unknown", "unsupported"]
-
-
-class LibraryAssetCatalogEntry(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    asset: LibraryAsset
-    capabilities: dict[str, Literal["supported", "unsupported"]] = Field(default_factory=dict)
-    source_state: list[AssetSourceState] = Field(default_factory=list, alias="sourceState")
-
-
-class LibraryAssetCatalogSnapshot(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    context_id: str = Field(default="", alias="contextId")
-    revision: str = ""
-    active: list[LibraryAssetCatalogEntry] = Field(default_factory=list)
-    deleted: list[LibraryAssetCatalogEntry] = Field(default_factory=list)
-
-
-class AssetRevision(BaseModel):
-    """One retained version of a library asset, including optional local snapshot metadata."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str
-    asset_id: str = Field(alias="assetId")
-    owner_id: str = Field(alias="ownerId")
-    parent_revision_id: str | None = Field(default=None, alias="parentRevisionId")
-    content_hash: str = Field(default="", alias="contentHash")
-    storage_path: str | None = Field(default=None, alias="storagePath")
-    media_type: str = Field(default="", alias="mediaType")
-    source_url: str | None = Field(default=None, alias="sourceUrl")
-    fetched_at: str | None = Field(default=None, alias="fetchedAt")
-    extraction_metadata: dict[str, Any] = Field(default_factory=dict, alias="extractionMetadata")
-    payload: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-
-class AssetLink(BaseModel):
-    """An owner-scoped relationship between an asset and a workspace or artifact."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str
-    owner_id: str = Field(alias="ownerId")
-    asset_id: str = Field(alias="assetId")
-    workspace_id: str = Field(alias="workspaceId")
-    project_id: str | None = Field(default=None, alias="projectId")
-    context_id: str | None = Field(default=None, alias="contextId")
-    relation: AssetLinkRelation = "available_to"
-    source_ref: str = Field(default="", alias="sourceRef")
-    payload: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=utc_now_iso, alias="createdAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-
-    @model_validator(mode="after")
-    def sync_context_alias(self) -> "AssetLink":
-        self.workspace_id = self.workspace_id.strip()
-        self.project_id = self.project_id.strip() if self.project_id else None
-        self.context_id = self.context_id.strip() if self.context_id else None
-        if not self.workspace_id:
-            raise ValueError("asset link workspace identity is required")
-        if self.context_id and self.workspace_id != self.context_id:
-            raise ValueError("asset link workspace_id must match context_id when both are provided")
-        return self
-
-
-class LibraryAssetUpsertRequest(BaseModel):
-    """Public request contract for the durable Resources asset library."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    asset_id: str | None = Field(default=None, alias="assetId")
-    asset_type: LibraryAssetType = Field(alias="assetType")
-    scope: LibraryAssetScope = "library"
-    title: str
-    canonical_source: str = Field(default="", alias="canonicalSource")
-    source_chain: list[AssetSourceReference] = Field(default_factory=list, alias="sourceChain")
-    project_id: str | None = Field(default=None, alias="projectId")
-    context_id: str | None = Field(default=None, alias="contextId")
-    payload: dict[str, Any] = Field(default_factory=dict)
-    approved: bool = False
-
-
-class LibraryAssetLinkRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    context_id: str = Field(alias="contextId")
-    project_id: str | None = Field(default=None, alias="projectId")
-    relation: AssetLinkRelation = "available_to"
-    source_ref: str = Field(default="", alias="sourceRef")
-    payload: dict[str, Any] = Field(default_factory=dict)
-    approved: bool = False
-
-
-class LibraryAssetLifecycleRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    approved: bool = False
-    reason: str = ""
-
-
-ResearchBriefClaimStatus = Literal["sourced", "inferred", "unverified"]
-
-
-class ResearchBriefFinding(BaseModel):
-    """One research conclusion with explicit provenance.
-
-    ``sourced`` claims must carry at least one source reference so every key
-    conclusion stays traceable to its resource, version and location. Model
-    inference and still-unverified assumptions are separate statuses and must
-    never be presented as sourced facts.
-    """
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    statement: str
-    claim_status: ResearchBriefClaimStatus = Field(default="inferred", alias="claimStatus")
-    source_refs: list[AssetSourceReference] = Field(default_factory=list, alias="sourceRefs")
-    location: str = ""
-
-    @field_validator("statement", "location")
-    @classmethod
-    def _strip_text(cls, value: str) -> str:
-        return value.strip()
-
-    @model_validator(mode="after")
-    def _require_sources_for_sourced_claims(self) -> "ResearchBriefFinding":
-        self.location = self.location.strip()
-        if self.claim_status == "sourced" and not self.source_refs:
-            raise ValueError("sourced research findings require at least one sourceRef")
-        return self
-
-
-class ResearchBriefCheckQuestion(BaseModel):
-    """One learning check with its acceptance bar (备课验收)."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    question: str
-    acceptance: list[str] = Field(default_factory=list)
-
-    @field_validator("question")
-    @classmethod
-    def _strip_question(cls, value: str) -> str:
-        return value.strip()
-
-
-class ResearchBrief(BaseModel):
-    """Preparation Engine output: one research + lesson-preparation result.
-
-    Stored as a ``research_brief`` library asset payload so研究成果 become
-    manageable, traceable library assets instead of a second dashboard.
-    """
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    research_goal: str = Field(alias="researchGoal")
-    key_questions: list[str] = Field(default_factory=list, alias="keyQuestions")
-    findings: list[ResearchBriefFinding] = Field(default_factory=list)
-    source_disagreements: list[str] = Field(default_factory=list, alias="sourceDisagreements")
-    concepts: list[str] = Field(default_factory=list)
-    prerequisites: list[str] = Field(default_factory=list)
-    knowledge_structure: list[str] = Field(default_factory=list, alias="knowledgeStructure")
-    teaching_order: list[str] = Field(default_factory=list, alias="teachingOrder")
-    explanation_strategy: str = Field(default="", alias="explanationStrategy")
-    examples: list[str] = Field(default_factory=list)
-    misconceptions: list[str] = Field(default_factory=list)
-    check_questions: list[ResearchBriefCheckQuestion] = Field(default_factory=list, alias="checkQuestions")
-    acceptance_criteria: list[str] = Field(default_factory=list, alias="acceptanceCriteria")
-    open_questions: list[str] = Field(default_factory=list, alias="openQuestions")
-    follow_up_research: list[str] = Field(default_factory=list, alias="followUpResearch")
-    plan_id: str | None = Field(default=None, alias="planId")
-    stage_id: str | None = Field(default=None, alias="stageId")
-
-    @field_validator("research_goal", "explanation_strategy")
-    @classmethod
-    def _strip_brief_text(cls, value: str) -> str:
-        return value.strip()
-
-    @field_validator("plan_id", "stage_id")
-    @classmethod
-    def _strip_optional_id(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
-    @model_validator(mode="after")
-    def _normalize_brief_lines(self) -> "ResearchBrief":
-        self.research_goal = (self.research_goal or "").strip()
-        line_fields = (
-            "key_questions", "source_disagreements", "concepts", "prerequisites",
-            "knowledge_structure", "teaching_order", "examples", "misconceptions",
-            "acceptance_criteria", "open_questions", "follow_up_research",
-        )
-        for field_name in line_fields:
-            values = getattr(self, field_name)
-            setattr(self, field_name, [line.strip() for line in values if line.strip()])
-        self.explanation_strategy = (self.explanation_strategy or "").strip()
-        self.plan_id = self.plan_id or None
-        self.stage_id = self.stage_id or None
-        if not self.research_goal:
-            raise ValueError("research_goal is required")
-        return self
-
-
-class ResearchBriefUpsertRequest(BaseModel):
-    """Save (or update) one Research Brief as a traceable library asset."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    asset_id: str | None = Field(default=None, alias="assetId")
-    scope: LibraryAssetScope = "library"
-    title: str
-    brief: ResearchBrief
-    source_chain: list[AssetSourceReference] = Field(default_factory=list, alias="sourceChain")
-    project_id: str | None = Field(default=None, alias="projectId")
-    context_id: str | None = Field(default=None, alias="contextId")
-    approved: bool = False
-
-    @field_validator("title")
-    @classmethod
-    def _require_title(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("research brief title is required")
-        return normalized
-
-
-class ResearchBriefDraftRequest(BaseModel):
-    """Draft (and optionally save) a Research Brief from one finished turn.
-
-    The webview sends the learner's stated research goal, the reply text and
-    the resource ids the turn was grounded in. The server drafts the brief
-    with the provider, downgrades claims whose sources do not resolve, and
-    pins every sourced citation to the real resource version and hash.
-    """
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    research_goal: str = Field(alias="researchGoal")
-    reply: str
-    title: str = ""
-    resource_ids: list[str] = Field(default_factory=list, alias="resourceIds")
-    response_language: str | None = Field(default=None, alias="responseLanguage")
-    scope: LibraryAssetScope = "library"
-    context_id: str | None = Field(default=None, alias="contextId")
-    project_id: str | None = Field(default=None, alias="projectId")
-    save: bool = False
-    asset_id: str | None = Field(default=None, alias="assetId")
-    # Per-request provider override (same contract as /plan/generate): the
-    # journey/host passes the provider explicitly instead of a saved profile.
-    provider: dict[str, Any] | None = None
-    api_key: str | None = None
-
-    @field_validator("research_goal", "reply", "title")
-    @classmethod
-    def _strip_draft_text(cls, value: str) -> str:
-        return value.strip()
-
-
-class TeachingKnowledgeAsset(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str = ""
-    kind: TeachingAssetKind
-    scope: TeachingAssetScope = "project"
-    workspace_id: str = ""
-    title: str
-    summary: str = ""
-    concept_card: str = ""
-    implementation_pattern: str = ""
-    common_pitfall: str = ""
-    exercise_seed: str = ""
-    explanation_recipe: str = ""
-    why_it_matters: str = ""
-    example: str = ""
-    anti_pattern: str = ""
-    focus_area: str = ""
-    scenario: str = ""
-    origin: TeachingAssetOrigin = "manual"
-    source_key: str = ""
-    source_ids: list[str] = Field(default_factory=list)
-    source_fragments: list[str] = Field(default_factory=list)
-    evidence_snippets: list[str] = Field(default_factory=list)
-    retrieval_hints: list[str] = Field(default_factory=list)
-    source_summary: str = ""
-    source_quality_flags: list[str] = Field(default_factory=list)
-    source_freshness: Literal["fresh", "stale", "unknown"] = "unknown"
-    source_retrieved_at: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    trust_score: float = 0.0
-    usage_count: int = 0
-    plan_stage_id: str = ""
-    success_count: int = 0
-    failure_count: int = 0
-    last_outcome: str = ""
-    last_effective_at: str | None = None
-    effectiveness_by_scenario: dict[str, dict[str, int]] = Field(default_factory=dict)
-    last_used_at: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
-
-    @model_validator(mode="after")
-    def sync_identity(self) -> "TeachingKnowledgeAsset":
-        if not self.workspace_id:
-            # Empty general assets must not auto-promote into the global catalog.
-            self.workspace_id = ""
-        if not self.source_key:
-            source_bits = [
-                self.scope,
-                self.kind,
-                self.workspace_id or "__global__",
-                self.focus_area or self.scenario or self.title,
-                ",".join(sorted({item.strip() for item in self.source_ids if item.strip()})),
-            ]
-            cleaned_source_key = "::".join(
-                item.strip().lower().replace(" ", "-")
-                for item in source_bits
-                if isinstance(item, str) and item.strip()
-            )
-            self.source_key = cleaned_source_key or f"{self.scope}::{self.kind}::{self.title}"
-        if not self.id:
-            self.id = f"asset-{sha1(self.source_key.encode('utf-8')).hexdigest()[:12]}"
-        if not self.summary:
-            for candidate in (
-                self.concept_card,
-                self.implementation_pattern,
-                self.common_pitfall,
-                self.exercise_seed,
-                self.explanation_recipe,
-                self.why_it_matters,
-                self.example,
-                self.anti_pattern,
-            ):
-                cleaned = candidate.strip()
-                if cleaned:
-                    self.summary = cleaned
-                    break
-        if not self.source_summary:
-            for candidate in (
-                self.why_it_matters,
-                self.example,
-                self.explanation_recipe,
-                self.summary,
-            ):
-                cleaned = candidate.strip()
-                if cleaned:
-                    self.source_summary = cleaned
-                    break
-        if not self.evidence_snippets:
-            derived_evidence = [
-                item.strip()
-                for item in [
-                    self.example,
-                    self.anti_pattern,
-                    *self.source_fragments[:2],
-                ]
-                if isinstance(item, str) and item.strip()
-            ]
-            self.evidence_snippets = derived_evidence[:3]
-        if not self.retrieval_hints:
-            hints = [
-                self.focus_area.strip(),
-                self.scenario.strip(),
-                *[item.strip() for item in self.tags if item.strip()],
-                self.title.strip(),
-            ]
-            seen_hints: set[str] = set()
-            normalized_hints: list[str] = []
-            for item in hints:
-                lowered = item.lower()
-                if not item or lowered in seen_hints:
-                    continue
-                seen_hints.add(lowered)
-                normalized_hints.append(item)
-            self.retrieval_hints = normalized_hints[:8]
-        if not self.created_at:
-            self.created_at = utc_now_iso()
-        if not self.updated_at:
-            self.updated_at = utc_now_iso()
-        return self
-
-
-class TaskSpec(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str
-    title: str
-    natural_language_goal: str
-    inputs: list[str] = Field(default_factory=list)
-    outputs: list[str] = Field(default_factory=list)
-    constraints: list[str] = Field(default_factory=list)
-    edge_cases: list[str] = Field(default_factory=list)
-    failure_conditions: list[str] = Field(default_factory=list)
-    verification_strategy: list[str] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    workspace_id: str = Field(default="", alias="workspaceId")
-
-
-class EvaluationCheck(BaseModel):
-    id: str
-    label: str
-    status: Literal["passed", "failed", "warning", "skipped"]
-    detail: str
-
-
-class EvaluationReport(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    task_spec_id: str | None = None
-    summary: str
-    static_checks: list[EvaluationCheck] = Field(default_factory=list)
-    dynamic_checks: list[EvaluationCheck] = Field(default_factory=list)
-    semantic_checks: list[EvaluationCheck] = Field(default_factory=list)
-    next_step: str
-    reflection: str | None = None
-    passed: bool
-    workspace_id: str = Field(default="", alias="workspaceId")
-
-
-class ReviewQueueItem(BaseModel):
-    concept: str
-    reason: str
-    due_at: str | None = None
-    source: Literal["weakness", "mastery", "reflection", "plan"] = "weakness"
-    severity: Literal["low", "medium", "high"] = "medium"
-    surface_mode: Literal["due", "ahead", "digest"] = "due"
-    task_hint: str = ""
-    focus_area: str = ""
-    linked_context: str = ""
-    interval_days: int | None = None
-    mastery_score: float | None = None
-    evidence_basis: Literal["fsrs_recall", "no_recall_evidence"] = "no_recall_evidence"
-
-
-class TrainingPlanBinding(BaseModel):
-    """Formal identity captured when a practice is minted, never supplied by the model."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    plan_id: str = Field(alias="planId", min_length=1)
-    stage_id: str = Field(alias="stageId", min_length=1)
-    step: str = Field(min_length=1)
-    revision: int | None = Field(default=None, ge=0)
-
-
-_FILE_NOTE_OPEN_RE = re.compile(r"\s*[(（\[【{<]")
-_SENTENCE_PUNCTUATION_RE = re.compile(r"[，。；：！？、（）【】「」“”‘’;!?]")
-_TRAILING_FILE_NAME_RE = re.compile(r"(?<![\w/])([A-Za-z0-9_.+-]+\.[A-Za-z0-9]{1,12})$")
-
-
-def _looks_like_training_file_target(text: str) -> bool:
-    """A path, not a sentence.
-
-    A file target has no line break or sentence punctuation and carries a path
-    separator, a dotfile name, a file extension, or a bare ASCII file name. A
-    path may contain spaces ("My Project/app.py"); a bare name may not.
-    """
-    if not text or "\n" in text or len(text) > 260 or _SENTENCE_PUNCTUATION_RE.search(text):
-        return False
-    without_line = re.sub(r":\d+(?:-\d+)?$", "", text)
-    if re.search(r'[<>"|?*]', without_line):
-        return False
-    name = without_line.rsplit("/", 1)[-1]
-    if "/" in without_line:
-        # A real path may contain spaces, but not a CJK prose annotation
-        # after them ("src/app.py 的入口").
-        if re.search(r"[\u4e00-\u9fff]", without_line) and any(
-            character.isspace() for character in without_line
-        ):
-            return False
-        return True
-    if any(character.isspace() for character in without_line):
-        return False
-    if name.startswith(".") or re.search(r"\.[A-Za-z0-9]{1,12}$", name):
-        return True
-    return bool(re.fullmatch(r"[A-Za-z0-9_.+-]{1,64}", name))
-
-
-def _normalize_training_file_path(value: object) -> str:
-    """Normalize a card-authored file target without guessing a new file.
-
-    Model-authored cards sometimes wrap the target in prose: an appended note
-    (``foo.py（建议新建，具体路径由学习者选择）``), a leading sentence
-    (``新建 foo.py``) or plain prose with no file at all. Such an entry is not
-    a path: it was shown to learners as the target file, and it made host
-    verification refuse every real file because the artifact name never
-    matched the "target". Keep the file when there is one, drop the prose.
-    A ``<placeholder>`` is kept verbatim; downstream logic already treats it as
-    "no concrete file".
-    """
-    text = str(value).strip()
-    text = text.strip("`'\"")
-    text = text.replace("\\", "/")
-    while text.startswith("./"):
-        text = text[2:]
-    text = text.strip()
-    if not text or (text.startswith("<") and text.endswith(">")):
-        return text
-    note = _FILE_NOTE_OPEN_RE.search(text)
-    if note and note.start() > 0:
-        candidate = text[: note.start()].strip()
-        if _looks_like_training_file_target(candidate):
-            return candidate
-    if _looks_like_training_file_target(text):
-        return text
-    if any(character.isspace() for character in text):
-        head = re.split(r"\s+", text, maxsplit=1)[0]
-        if "/" in head and _looks_like_training_file_target(head):
-            return head
-        if "/" not in text:
-            trailing = _TRAILING_FILE_NAME_RE.search(text)
-            if trailing and _looks_like_training_file_target(trailing.group(1)):
-                return trailing.group(1)
-    return ""
-
-
-_ALTERNATIVE_SYMBOL_PAIR_RE = re.compile(
-    r"`([^`\n]+)`([^`\n]{0,60}?(?:或|\bor\b)[^`\n]{0,60}?)`([^`\n]+)`"
+from .model_domains.foundations_and_provider import (
+    AssetRevision as AssetRevision,
 )
-
-
-def _drop_alternative_expected_symbols(symbols: list[str], texts: list[object]) -> list[str]:
-    """A card that says "`torch.minimum`（或 `torch.min`）" means either one.
-
-    Model-authored cards list both spellings as expected symbols, and the
-    evaluator requires every listed symbol: a correct `torch.minimum`
-    implementation then failed on `torch.min`. When the card's own text
-    presents two symbols as alternatives, the second stops being required on
-    its own. Symbols the card never presents as alternatives are untouched.
-    """
-    alternatives: set[str] = set()
-    for text in texts:
-        for _first, _separator, second in _ALTERNATIVE_SYMBOL_PAIR_RE.findall(str(text or "")):
-            normalized = str(second).strip().strip("`").strip()
-            if normalized:
-                alternatives.add(normalized)
-    if not alternatives:
-        return list(symbols)
-    return [symbol for symbol in symbols if str(symbol).strip() not in alternatives]
-
-
-class TrainingCardCandidateSnapshot(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
-
-    card_id: str = ""
-    card_type: TrainingCardType = "practice"
-    title: str = ""
-    status: TrainingCardStatus = "candidate"
-    learning_phase: TrainingLearningPhase = "learn"
-    created_from: TrainingCardCreatedFrom = "conversation"
-    scenario_pack: str = ""
-    why_now: str = ""
-    focus_area: str = ""
-    target_skill: str = ""
-    learning_family: TrainingLearningFamily = "theory"
-    learning_subtype: str = "concept"
-    scenario: str = ""
-    problem_statement: str = ""
-    suggested_workspace_action: str = ""
-    api_hints: list[str] = Field(default_factory=list)
-    constraints: list[str] = Field(default_factory=list)
-    deliverable: str = ""
-    self_check: list[str] = Field(default_factory=list)
-    expected_answer_shape: str = ""
-    validation_method: str = ""
-    grading_rubric: list[str] = Field(default_factory=list)
-    acceptance_criteria: list[str] = Field(default_factory=list)
-    trainer_review_input: str = ""
-    stuck_recovery: str = ""
-    reflection_prompt: str = ""
-    knowledge_type: str = ""
-    question: str = ""
-    context: str = ""
-    answer_mode: str = "text"
-    options: list[str] = Field(default_factory=list)
-    correct_option_index: int | None = None
-    correct_option_indices: list[int] = Field(default_factory=list)
-    correct_sort_order: list[int] = Field(default_factory=list)
-    fill_blank_answers: dict[str, str] = Field(default_factory=dict)
-    expected_answer: str = ""
-    rubric: list[str] = Field(default_factory=list)
-    hint_ladder: list[str] = Field(default_factory=list)
-    feedback: dict[str, str] = Field(default_factory=dict)
-    last_feedback: dict[str, Any] = Field(default_factory=dict)
-    learner_answer: str = ""
-    learner_selected_option_indices: list[int] = Field(default_factory=list)
-    learner_fill_blank_answers: dict[str, str] = Field(default_factory=dict)
-    learner_sort_order: list[int] = Field(default_factory=list)
-    common_mistakes: list[str] = Field(default_factory=list)
-    review_schedule: dict[str, Any] = Field(default_factory=dict)
-    difficulty: str = "medium"
-    plan_links: list[str] = Field(default_factory=list)
-    plan_binding: TrainingPlanBinding | None = Field(default=None, alias="planBinding")
-    source_chain: list[str] = Field(default_factory=list)
-    project_id: str = ""
-    project_scope: str = ""
-    requires_project_context: bool = False
-    project_context_ready: bool = True
-    trust_state: TrainingCardTrustState = "unknown"
-    trust_acknowledged: bool = False
-    resource_id: str = ""
-    resource_version_id: str = ""
-    resource_content_hash: str = ""
-    resource_location: dict[str, Any] = Field(default_factory=dict)
-    dependency_key: str = ""
-    dependency_layer: str = ""
-    question_style: str = ""
-    verification_method: str = ""
-    next_steps: list[str] = Field(default_factory=list)
-    files_to_touch: list[str] = Field(default_factory=list)
-    learner_deliverables: list[str] = Field(default_factory=list)
-    verification_steps: list[str] = Field(default_factory=list)
-    expected_symbols: list[str] = Field(default_factory=list)
-    success_signal: str = ""
-    return_with: str = ""
-    next_after_completion: str = ""
-    created_at: str = ""
-    updated_at: str = ""
-    # P1.4 candidate management: the learner decides which candidates are
-    # worth keeping. These ride the existing card record and ledger — merging
-    # archives the duplicate in place (merged_into) instead of inventing a
-    # second card store.
-    important: bool = False
-    card_priority: int = Field(default=0, alias="cardPriority")
-    merged_into: str = Field(default="", alias="mergedInto")
-    # Cards from before the review flow retain their existing library status.
-    review_state: Literal["pending", "deferred", "saved", "rejected"] = "saved"
-    reviewed_at: str = ""
-
-    @model_validator(mode="after")
-    def sync_training_defaults(self) -> "TrainingCardCandidateSnapshot":
-        if not self.created_at:
-            self.created_at = utc_now_iso()
-        if not self.updated_at:
-            self.updated_at = utc_now_iso()
-        if not self.title:
-            self.title = self.question or self.problem_statement or self.target_skill or self.focus_area or "Training Card"
-        normalized_files: list[str] = []
-        seen_files: set[str] = set()
-        for path in self.files_to_touch:
-            normalized = _normalize_training_file_path(path)
-            if normalized and normalized not in seen_files:
-                seen_files.add(normalized)
-                normalized_files.append(normalized)
-        self.files_to_touch = normalized_files
-        self.expected_symbols = _drop_alternative_expected_symbols(
-            self.expected_symbols,
-            [
-                *self.acceptance_criteria,
-                *self.api_hints,
-                *self.learner_deliverables,
-                *self.grading_rubric,
-                *self.hint_ladder,
-                self.problem_statement,
-                self.deliverable,
-                self.validation_method,
-            ],
-        )
-        if not self.source_chain:
-            self.source_chain = ["card_generation_router"]
-        try:
-            from app.training.subject_taxonomy import classify_learning_subject
-
-            subject = classify_learning_subject(
-                self.focus_area,
-                self.target_skill,
-                self.scenario,
-                self.problem_statement,
-                self.question,
-                self.knowledge_type,
-                self.verification_method,
-                self.scenario_pack,
-                self.suggested_workspace_action,
-            )
-            default_family = not self.learning_family or self.learning_family == "theory"
-            default_subtype = not self.learning_subtype or self.learning_subtype == "concept"
-            if default_family and (subject.family != "theory" or subject.subtype != "concept"):
-                self.learning_family = subject.family
-            if default_subtype and subject.subtype != "concept":
-                self.learning_subtype = subject.subtype
-        except Exception:
-            # Subject classification is a best-effort enrichment. A failure
-            # used to disappear entirely, so a broken taxonomy import looked
-            # exactly like a card that genuinely had no subject.
-            logging.getLogger("trainer.models").debug(
-                "learning subject classification failed; keeping theory/concept defaults",
-                exc_info=True,
-            )
-        self.learning_family = self.learning_family or "theory"
-        self.learning_subtype = self.learning_subtype or "concept"
-        # A hands-on implementation card must point at at least one concrete
-        # file. If the generator omitted the file target, the card is actually
-        # a reading/orientation task; downgrade it so the UI uses manual
-        # verification instead of forcing "verify current file".
-        if self.learning_subtype.strip().lower() == "implementation":
-            concrete_files = [
-                str(path).strip()
-                for path in self.files_to_touch
-                if str(path).strip()
-                and not (str(path).strip().startswith("<") and str(path).strip().endswith(">"))
-            ]
-            if not concrete_files:
-                self.learning_subtype = "reading"
-        # Inspection/note tasks that only reference a file must not force a
-        # current-file edit verification. Keep a real change verb as hands-on.
-        if self.learning_subtype.strip().lower() in {"implementation", "function", "debug"}:
-            task_text = " ".join(
-                str(value or "")
-                for value in (
-                    self.title,
-                    self.problem_statement,
-                    self.suggested_workspace_action,
-                    self.deliverable,
-                    self.success_signal,
-                    self.target_skill,
-                    self.focus_area,
-                )
-            ).lower()
-            analysis_markers = (
-                "梳理",
-                "记录",
-                "说明",
-                "不要先改",
-                "不要修改",
-                "阅读",
-                "检查",
-                "分析",
-                "review",
-                "inspect",
-                "explain",
-                "describe",
-                "record",
-                "note",
-                "do not modify",
-            )
-            change_markers = (
-                "实现",
-                "新增",
-                "增加",
-                "添加",
-                "补充",
-                "编写",
-                "创建",
-                "修改",
-                "修复",
-                "重构",
-                "优化",
-                "更新",
-                "完善",
-                "implement",
-                "add ",
-                "modify",
-                "fix",
-                "refactor",
-                "create",
-                "update",
-                "optimize",
-                "improve",
-                "write",
-                "build",
-            )
-            if any(marker in task_text for marker in analysis_markers) and not any(
-                marker in task_text for marker in change_markers
-            ):
-                self.learning_subtype = "reading"
-        if self.learning_phase not in {"learn", "try", "verify", "reflect", "return"}:
-            self.learning_phase = "learn"
-        return self
-
-
-class ResourceKnowledgeEvidence(BaseModel):
-    """Server-projected indexed fragment that may ground a resource training card."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    resource_id: str = Field(default="", alias="resourceId")
-    fragment_id: str = Field(default="", alias="fragmentId")
-    source_type: str = Field(default="", alias="sourceType")
-    focus_area: str = Field(default="", alias="focusArea")
-    summary: str = ""
-    excerpt: str = ""
-
-
-class DependencyUsageEvidence(BaseModel):
-    """Server-projected import, call, or declared dependency usage fact."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    file_path: str = Field(default="", alias="filePath")
-    kind: str = ""
-    identifier: str = ""
-    summary: str = ""
-
-
-class CardGenerationContext(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str = ""
-    source: str = "conversation_gap"
-    card_type: TrainingCardType = "practice"
-    context_hint: str = ""
-    target_skill: str = ""
-    focus_area: str = ""
-    plan_stage_id: str = ""
-    plan_binding: TrainingPlanBinding | None = Field(default=None, alias="planBinding")
-    resource_id: str = ""
-    resource_version_id: str = ""
-    resource_content_hash: str = ""
-    resource_location: dict[str, Any] = Field(default_factory=dict)
-    difficulty: str = "medium"
-    hint_count: int | None = None
-    code_reveal: str = ""
-    practice_type: str = ""
-    review_frequency: str = ""
-    material_recommendation: str = ""
-    next_plan_step: str = ""
-    should_reveal_code: bool | None = None
-    pedagogy_mode: str = ""
-    why_now: str = ""
-    resource_quality_flags: list[str] = Field(default_factory=list)
-    resource_trust_score: float = 0.0
-    resource_trust_state: str = ""
-    resource_missing: bool = False
-    resource_missing_reason: str = ""
-    resource_freshness: str = ""
-    resource_knowledge_evidence: ResourceKnowledgeEvidence | None = Field(
-        default=None,
-        alias="resourceKnowledgeEvidence",
-    )
-    response_language: ResponseLanguage | None = None
-    current_file_path: str = Field(default="", alias="currentFilePath")
-    current_file_language_id: str = Field(default="", alias="currentFileLanguageId")
-    current_file_content: str = Field(default="", alias="currentFileContent")
-    current_file_excerpt: str = Field(default="", alias="currentFileExcerpt")
-    current_file_selection: str = Field(default="", alias="currentFileSelection")
-    current_file_selection_range: str = Field(default="", alias="currentFileSelectionRange")
-    current_file_diagnostics: list[str] = Field(
-        default_factory=list,
-        alias="currentFileDiagnostics",
-    )
-    project_verification_steps: list[str] = Field(default_factory=list)
-    dependency_usage_evidence: list[DependencyUsageEvidence] = Field(
-        default_factory=list,
-        alias="dependencyUsageEvidence",
-    )
-    workspace_root_path: str = Field(default="", alias="workspaceRootPath")
-    remote_workspace_name: str = Field(default="", alias="remoteWorkspaceName")
-    remote_workspace_facts: list[str] = Field(
-        default_factory=list,
-        alias="remoteWorkspaceFacts",
-    )
-
-    @field_validator("source", mode="before")
-    @classmethod
-    def normalize_legacy_conversation_source(cls, value: object) -> str:
-        """Keep older Training clients on the canonical card-generation path."""
-
-        source = str(value or "").strip()
-        if not source or source == "conversation":
-            return "conversation_gap"
-        return source
-
-
-class ExpectedResourceVersion(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    version_id: str = Field(alias="versionId", min_length=1, max_length=128)
-    content_hash: str = Field(alias="contentHash", min_length=1, max_length=128)
-
-
-class CardGenerationRequest(CardGenerationContext):
-    source: str = "conversation_gap"
-    card_type: TrainingCardType = "practice"
-    submode: str = ""
-    current_file: dict[str, Any] | None = Field(default=None, alias="currentFile")
-    expected_resource_version: ExpectedResourceVersion | None = Field(
-        default=None, alias="expectedResourceVersion",
-    )
-    # Stream cancel remint identity — same request_id must not double-mint.
-    request_id: str = Field(default="", alias="requestId", max_length=128)
-    provider: dict[str, Any] | None = None
-    api_key: str | None = Field(default=None, alias="apiKey")
-    last_test_result: dict[str, Any] | None = Field(default=None, alias="lastTestResult")
-
-
-class TrainingCardScoreFactors(BaseModel):
-    plan_relevance: float = 0.0
-    blocking_power: float = 0.0
-    evidence_gap: float = 0.0
-    recency_need: float = 0.0
-    resource_trust: float = 0.0
-    difficulty_fit: float = 0.0
-    project_fit: float = 0.0
-    transfer_value: float = 0.0
-    recovery_priority: float = 0.0
-
-
-class BlockedCandidateDetail(BaseModel):
-    card_id: str = ""
-    card_type: TrainingCardType = "practice"
-    title: str = ""
-    reasons: list[str] = Field(default_factory=list)
-
-
-class ActiveCardSelectionResult(BaseModel):
-    selected_card: TrainingCardCandidateSnapshot | None = None
-    selected_card_id: str | None = None
-    selection_score: float = 0.0
-    score_factors: TrainingCardScoreFactors = Field(default_factory=TrainingCardScoreFactors)
-    why_this_card: str = ""
-    why_not_others: list[str] = Field(default_factory=list)
-    blocked_candidates: list[BlockedCandidateDetail] = Field(default_factory=list)
-    fallback_action: str = ""
-    next_after_completion: str = ""
-    candidate_count: int = 0
-    eligible_count: int = 0
-
-
-class CardGenerationResponse(BaseModel):
-    card: TrainingCardCandidateSnapshot
-    score: float = 0.0
-    success: bool = True
-    reason: str = ""
-    active_routing: ActiveCardSelectionResult | None = None
-
-
-class TrainingReliabilityRequestFields(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    request_id: str = Field(default="", alias="requestId")
-    idempotency_key: str = Field(default="", alias="idempotencyKey")
-    revision: int = 0
-    timeout_ms: int = Field(default=30_000, alias="timeoutMs")
-    cancel: bool = False
-
-
-class CardStatusTransitionRequest(TrainingReliabilityRequestFields):
-    workspace_id: str
-    card_id: str
-    new_status: TrainingCardStatus
-    reason: str = ""
-
-
-class CardLibraryActionRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    workspace_id: str = Field(min_length=1)
-    card_id: str = Field(min_length=1)
-    action: Literal["save", "defer", "reject", "start", "archive"]
-    prompt: str | None = Field(default=None, max_length=8000)
-    acceptance_criteria: list[str] | None = Field(default=None, max_length=20)
-
-
-class CardImportanceRequest(BaseModel):
-    """P1.4 candidate management: mark/unmark a candidate as important."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    workspace_id: str
-    card_id: str
-    important: bool
-
-
-class CardPriorityRequest(BaseModel):
-    """P1.4 candidate management: adjust a candidate's practice priority."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    workspace_id: str
-    card_id: str
-    priority: int
-
-
-class CardMergeRequest(BaseModel):
-    """P1.4 candidate management: merge duplicate candidates into one keeper."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    workspace_id: str
-    keep_card_id: str = Field(alias="keepCardId")
-    duplicate_card_ids: list[str] = Field(default_factory=list, alias="duplicateCardIds")
-
-
-class EvidenceItem(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
-
-    id: str = ""
-    workspace_id: str = ""
-    summary: str = ""
-    source: str = "card_result"
-    source_card_id: str = ""
-    concepts: list[str] = Field(default_factory=list)
-    outcome: str = "partial"
-    confidence: float = 0.0
-    verified: bool = False
-    verification_source: str = ""
-    # The trusted remote attestation boundary validates this observation.
-    verification_artifact: dict[str, str] | None = None
-    timestamp: str = ""
-    target_plan_stage_id: str = ""
-    target_plan_id: str = ""
-    target_plan_step: str = ""
-    adopted: bool = False
-    adopted_at: str | None = None
-    deferred_at: str | None = None
-    deferral_reason: str = ""
-    rejected_at: str | None = None
-    rejection_reason: str = ""
-    # Unified Evidence contract (schema 1): the adoption queue keeps its
-    # lifecycle fields, while trust/version facts share one vocabulary with
-    # AttemptStore and handoff evidence.
-    schema_version: int = 1
-    source_store: Literal["memory"] = "memory"
-    trust_level: str = "self_reported"
-    artifact_hash: str = ""
-    resource_id: str = ""
-    resource_version_id: str = ""
-    resource_content_hash: str = ""
-    resource_location: dict[str, Any] = Field(default_factory=dict)
-    resource_git_sha: str | None = None
-    canonical_evidence_id: str = ""
-
-    @model_validator(mode="after")
-    def sync_evidence_defaults(self) -> "EvidenceItem":
-        if not self.timestamp:
-            self.timestamp = utc_now_iso()
-        return self
-
-
-class EvidenceQueueSnapshot(BaseModel):
-    pending: list[EvidenceItem] = Field(default_factory=list)
-    deferred: list[EvidenceItem] = Field(default_factory=list)
-    adopted: list[EvidenceItem] = Field(default_factory=list)
-    rejected: list[EvidenceItem] = Field(default_factory=list)
-    history: list[EvidenceItem] = Field(default_factory=list)
-    unscoped: list[EvidenceItem] = Field(default_factory=list)
-    total_count: int = 0
-
-
-PlanChangeCandidateStatus = Literal["pending", "acknowledged", "rejected"]
-
-
-class PlanChangeCandidate(BaseModel):
-    id: str = ""
-    workspace_id: str
-    plan_id: str = ""
-    feedback_id: str = ""
-    reason: str
-    diff: dict[str, Any] = Field(default_factory=dict)
-    impact: dict[str, Any] = Field(default_factory=dict)
-    status: PlanChangeCandidateStatus = "pending"
-    created_at: str = Field(default_factory=utc_now_iso)
-    acknowledged_at: str | None = None
-    acknowledgement_note: str = ""
-
-
-class EvidenceAdoptResponse(BaseModel):
-    evidence: EvidenceItem
-    plan_updated: bool = False
-    plan_change_summary: str = ""
-
-
-class CardStatusTransitionResponse(BaseModel):
-    card: TrainingCardCandidateSnapshot
-    ledger_entry: dict[str, Any] | None = None
-    evidence_item: EvidenceItem | None = None
-
-
-class DependencyMasterySnapshot(BaseModel):
-    dependency_key: str
-    dependency_name: str = ""
-    apis: list[str] = Field(default_factory=list)
-    use_cases: list[str] = Field(default_factory=list)
-    scenarios: list[str] = Field(default_factory=list)
-    weakest_points: list[str] = Field(default_factory=list)
-    evidence: list[str] = Field(default_factory=list)
-    mastery_stage: DependencyMasteryStage = "understood"
-    mastery_stage_progress: list[str] = Field(default_factory=lambda: ["understood"])
-    latest_transfer_blocked_reason: str = ""
-    latest_transfer_evidence_id: str = ""
-    latest_transfer_evidence_summary: str = ""
-    latest_transfer_source_workspace_id: str = ""
-    latest_transfer_target_workspace_id: str = ""
-    latest_transfer_source_context: str = ""
-    latest_transfer_target_context: str = ""
-    updated_at: str = Field(default_factory=utc_now_iso)
-
-
-class DependencySkillItemSnapshot(BaseModel):
-    key: str
-    label: str
-    layer: str
-    related_api: str = ""
-    scenario: str = ""
-    knowledge_type: str = ""
-    question_style: str = ""
-    verification_method: str = ""
-    hint_ladder: list[str] = Field(default_factory=list)
-    priority: float = 0.0
-
-    @field_validator("priority", mode="before")
-    @classmethod
-    def normalize_priority(cls, value: Any) -> float:
-        if isinstance(value, (int, float)):
-            return float(value)
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized == "high":
-                return 0.9
-            if normalized == "medium":
-                return 0.6
-            if normalized == "low":
-                return 0.3
-            try:
-                return float(normalized)
-            except ValueError:
-                return 0.0
-        return 0.0
-
-
-class DependencySkillMapSnapshot(BaseModel):
-    dependency_key: str
-    dependency_name: str = ""
-    version: int = 1
-    covered_layers: list[str] = Field(default_factory=list)
-    items: list[DependencySkillItemSnapshot] = Field(default_factory=list)
-    top_review_items: list[DependencySkillItemSnapshot] = Field(default_factory=list)
-    priority_summary: str = ""
-    project_first_cut: str = ""
-    suggested_scenario_lab: list[str] = Field(default_factory=list)
-    last_action: str = "derived"
-    last_action_note: str = ""
-    updated_at: str = Field(default_factory=utc_now_iso)
-
-    @field_validator("project_first_cut", mode="before")
-    @classmethod
-    def normalize_project_first_cut(cls, value: Any) -> str:
-        if value is None:
-            return ""
-        if isinstance(value, str):
-            return value
-        if isinstance(value, bool):
-            return "Build one minimum project slice first." if value else ""
-        return str(value)
-
-    @field_validator("suggested_scenario_lab", mode="before")
-    @classmethod
-    def normalize_suggested_scenario_lab(cls, value: Any) -> list[str]:
-        if value is None:
-            return []
-        if isinstance(value, list):
-            return [str(item) for item in value if str(item).strip()]
-        if isinstance(value, str):
-            return [value] if value.strip() else []
-        return [str(value)]
-
-
-class DependencySkillMapHistoryEntry(BaseModel):
-    entry_id: str
-    dependency_key: str
-    action: str
-    version: int
-    focus_item_key: str = ""
-    focus_label: str = ""
-    note: str = ""
-    before_snapshot: dict[str, Any] = Field(default_factory=dict)
-    after_snapshot: dict[str, Any] = Field(default_factory=dict)
-    after_summary: str = ""
-    created_at: str = Field(default_factory=utc_now_iso)
-
-
-class FlashDeckSnapshot(BaseModel):
-    id: str
-    title: str = ""
-    focus_area: str = ""
-    cards: list[TrainingCardCandidateSnapshot] = Field(default_factory=list)
-    generated_at: str = Field(default_factory=utc_now_iso)
-
-
-class FlashcardAttempt(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    card_id: str
-    correct: bool
-    score: float = 0.0
-    detail: str = ""
-    learner_answer: str = ""
-    selected_option_index: int | None = None
-    selected_option_indices: list[int] = Field(
-        default_factory=list,
-        alias="selectedOptionIndices",
-    )
-    fill_blank_answers: dict[str, str] = Field(
-        default_factory=dict,
-        alias="fillBlankAnswers",
-    )
-    sort_order: list[int] = Field(default_factory=list, alias="sortOrder")
-    answer_mode: str = "text"
-    feedback: dict[str, Any] = Field(default_factory=dict)
-    recorded_at: str = Field(default_factory=utc_now_iso)
-    dependency_key: str = ""
-    dependency_layer: str = ""
-    question_style: str = ""
-    knowledge_type: str = ""
-    dependency_mastery: list[DependencyMasterySnapshot] = Field(default_factory=list)
-    dependency_skill_map_history: list[DependencySkillMapHistoryEntry] = Field(default_factory=list)
-
-
-class ReviewQueueAction(BaseModel):
-    entry_id: str = ""
-    concept: str
-    action: str
-    outcome: str
-    focus_area: str = ""
-    task_hint: str = ""
-    note: str = ""
-    scope: str = "single"
-    created_at: str = Field(default_factory=utc_now_iso)
-    next_review_at: str = ""
-
-    @model_validator(mode="after")
-    def sync_review_action_defaults(self) -> "ReviewQueueAction":
-        if not self.entry_id:
-            digest = sha1(f"{self.concept}:{self.action}:{self.created_at}".encode("utf-8")).hexdigest()[:10]
-            self.entry_id = f"review-{digest}"
-        return self
-
-
-class ReviewArtifactSnapshot(BaseModel):
-    id: str
-    title: str = ""
-    focus_area: str = ""
-    source: str = ""
-    status: str = "active"
-    summary: str = ""
-    root_cause: str = ""
-    guardrail: str = ""
-    next_self_implementation_rule: str = ""
-    recommended_recovery_mode: str = ""
-    recommended_actions: list[str] = Field(default_factory=list)
-    verified_result: str = ""
-    blocker: str = ""
-    blocked_reason: str = ""
-    partial_progress: str = ""
-    last_action: str = "reviewed"
-    version: int = 1
-    updated_at: str = Field(default_factory=utc_now_iso)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class ReviewArtifactHistoryEntry(BaseModel):
-    entry_id: str
-    review_artifact_id: str
-    action: str
-    version: int
-    note: str = ""
-    before_snapshot: dict[str, Any] = Field(default_factory=dict)
-    after_snapshot: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=utc_now_iso)
-
-
-class ScenarioLab(BaseModel):
-    id: str
-    title: str = ""
-    focus_area: str = ""
-    status: str = "ready"
-    summary: str = ""
-    success_signal: str = ""
-    review_outcome: str = ""
-    learner_deliverables: list[str] = Field(default_factory=list)
-    verification_steps: list[str] = Field(default_factory=list)
-    migrate_back_guidance: list[str] = Field(default_factory=list)
-    dependency_keys: list[str] = Field(default_factory=list)
-    related_apis: list[str] = Field(default_factory=list)
-    minimum_environment: list[str] = Field(default_factory=list)
-    last_action: str = "created"
-    version: int = 1
-    updated_at: str = Field(default_factory=utc_now_iso)
-
-
-class ScenarioLabHistoryEntry(BaseModel):
-    entry_id: str
-    scenario_lab_id: str
-    action: str
-    version: int
-    note: str = ""
-    before_snapshot: dict[str, Any] = Field(default_factory=dict)
-    after_snapshot: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=utc_now_iso)
-
-
-class TheoryDrillQuestion(BaseModel):
-    id: str
-    prompt: str
-    choices: list[str] = Field(default_factory=list)
-    answer: str = ""
-    explanation: str = ""
-    dependency_key: str = ""
-    dependency_layer: str = ""
-    knowledge_type: str = ""
-    question_style: str = ""
-
-
-class TheoryDrillSnapshot(BaseModel):
-    id: str
-    title: str = ""
-    focus_area: str = ""
-    status: str = "ready"
-    summary: str = ""
-    success_signal: str = ""
-    return_with: str = ""
-    questions: list[TheoryDrillQuestion] = Field(default_factory=list)
-    dependency_keys: list[str] = Field(default_factory=list)
-    last_action: str = "created"
-    version: int = 1
-    updated_at: str = Field(default_factory=utc_now_iso)
-
-
-class TheoryDrillHistoryEntry(BaseModel):
-    entry_id: str
-    theory_drill_id: str
-    action: str
-    version: int
-    note: str = ""
-    before_snapshot: dict[str, Any] = Field(default_factory=dict)
-    after_snapshot: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=utc_now_iso)
-
-
-class FlashcardAnswerRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    workspace_id: str
-    card_id: str
-    learner_answer: str = ""
-    selected_option_index: int | None = None
-    selected_option_indices: list[int] = Field(
-        default_factory=list,
-        alias="selectedOptionIndices",
-    )
-    fill_blank_answers: dict[str, str] = Field(
-        default_factory=dict,
-        alias="fillBlankAnswers",
-    )
-    sort_order: list[int] = Field(default_factory=list, alias="sortOrder")
-
-
-class TheoryDrillAnswerRequest(BaseModel):
-    workspace_id: str
-    theory_drill_id: str
-    question_id: str
-    learner_answer: str = ""
-    selected_option_index: int | None = None
-
-
-class TrainingReliabilityRecord(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    request_id: str = Field(default="", alias="requestId")
-    idempotency_key: str = Field(default="", alias="idempotencyKey")
-    command_id: str = Field(default="", alias="commandId")
-    card_id: str = Field(default="", alias="cardId")
-    handoff_id: str = Field(default="", alias="handoffId")
-    phase: Literal[
-        "intent",
-        "pending",
-        "executing",
-        "succeeded",
-        "failed",
-        "acked",
-        "cancelled",
-    ] = "intent"
-    revision: int = 1
-    snapshot_revision: int = Field(default=0, alias="snapshotRevision")
-    created_at: str = Field(default="", alias="createdAt")
-    updated_at: str = Field(default="", alias="updatedAt")
-    acked_at: str = Field(default="", alias="ackedAt")
-    timeout_at: str = Field(default="", alias="timeoutAt")
-    cancel_requested: bool = Field(default=False, alias="cancelRequested")
-    outcome: Literal["success", "failure", "cancelled", "timeout", ""] = ""
-    error: str = ""
-    recoverable: bool = False
-    recovery_action: str = Field(default="", alias="recoveryAction")
-    learning_phase: str = Field(default="", alias="learningPhase")
-
-
-class TrainingReliabilityControlRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    workspace_id: str
-    request_id: str = Field(default="", alias="requestId")
-    action: Literal["cancel", "recover", "expire"]
-    card_id: str = Field(default="", alias="cardId")
-    command_id: str = Field(default="", alias="commandId")
-    idempotency_key: str = Field(default="", alias="idempotencyKey")
-    revision: int = 0
-    timeout_ms: int = Field(default=30_000, alias="timeoutMs")
-
-
-class PracticeReturnRequest(TrainingReliabilityRequestFields):
-    workspace_id: str
-    card_id: str = ""
-    passed: bool = False
-    summary: str = ""
-    next_step: str = ""
-    focus_area: str = ""
-    failed_checks: list[str] = Field(default_factory=list)
-    missing_requirements: list[str] = Field(default_factory=list)
-    evidence_source: str = "learner_return"
-
-
-class TrainingHandoffReflectionRequest(TrainingReliabilityRequestFields):
-    workspace_id: str
-    card_id: str
-    handoff_id: str = ""
-    reflection: str = Field(min_length=1, max_length=4000)
-
-
-class TrainingHandoffReturnRequest(TrainingReliabilityRequestFields):
-    workspace_id: str
-    card_id: str
-    handoff_id: str = ""
-
-
-class TrainingHandoffActionResponse(BaseModel):
-    ok: bool = True
-    workspace: dict[str, Any] = Field(default_factory=dict)
-
-
-class ReviewQueueActionRequest(BaseModel):
-    workspace_id: str
-    concept: str
-    action: Literal["accept", "snooze", "reset", "skip", "done"]
-    scope: str = "single"
-    focus_area: str = ""
-    task_hint: str = ""
-    note: str = ""
-    batch_limit: int = 4
-
-
-class ReviewArtifactActionRequest(BaseModel):
-    workspace_id: str
-    review_artifact_id: str
-    action: str
-    note: str = ""
-    edit_patch: dict[str, Any] = Field(default_factory=dict)
-
-
-class RestoreHistoryRequest(BaseModel):
-    workspace_id: str
-    history_entry_id: str
-    history_version: int
-    note: str = ""
-
-
-class ScenarioLabActionRequest(BaseModel):
-    workspace_id: str
-    scenario_lab_id: str
-    action: str
-    note: str = ""
-    review_outcome: str = ""
-
-
-class ScenarioLabRestoreRequest(RestoreHistoryRequest):
-    scenario_lab_id: str
-
-
-class TheoryDrillActionRequest(BaseModel):
-    workspace_id: str
-    theory_drill_id: str
-    action: str
-    note: str = ""
-
-
-class TheoryDrillRestoreRequest(RestoreHistoryRequest):
-    theory_drill_id: str
-
-
-class ReviewArtifactRestoreRequest(RestoreHistoryRequest):
-    review_artifact_id: str
-
-
-class DependencySkillMapActionRequest(BaseModel):
-    workspace_id: str
-    dependency_key: str
-    action: str
-    note: str = ""
-    focus_item_key: str = ""
-    related_api: str = ""
-    scenario: str = ""
-
-
-class DependencySkillMapRestoreRequest(RestoreHistoryRequest):
-    dependency_key: str
-
-
-class EvidenceAdoptRequest(BaseModel):
-    workspace_id: str
-    evidence_id: str
-
-
-class EvidenceRejectRequest(BaseModel):
-    workspace_id: str
-    evidence_id: str
-    reason: str = ""
-
-
-class EvidenceDeferRequest(BaseModel):
-    workspace_id: str
-    evidence_id: str
-    reason: str = ""
-
-
-class WorkspaceResetRequest(BaseModel):
-    workspace_id: str
-
-
-class CoachingState(BaseModel):
-    scenario: CoachScenario = "general"
-    answer_mode: Literal["guided", "balanced", "direct"] = "guided"
-    learner_signal: LearnerSignal = "steady"
-    summary: str = ""
-    next_step: str = ""
-    encouragement: str = ""
-    intervention_strategy: str = ""
-    teaching_goal: str = ""
-    resume_thread: str = ""
-    decision: str = ""
-    blocker: str = ""
-    teaching_note: str = ""
-    confidence: str = ""
-    evidence: list[str] = Field(default_factory=list)
-    support_strategy: str = ""
-    updated_at: str = Field(default_factory=utc_now_iso)
-
-
-class CoachingAdaptationProfile(BaseModel):
-    challenge_level: Literal["lower", "steady", "raise"] = "steady"
-    hint_depth: Literal["direct", "guided", "lighter"] = "guided"
-    review_urgency: Literal["high", "normal", "low"] = "normal"
-    explanation_mode: Literal["rebuild", "grounded", "transfer"] = "grounded"
-    next_step_bias: Literal["shrink", "steady", "widen"] = "steady"
-    summary: str = ""
-    evidence: list[str] = Field(default_factory=list)
-    difficulty: Literal["easy", "medium", "hard"] = "medium"
-    hint_count: int = 2
-    explanation_depth: Literal["rebuild", "grounded", "transfer"] = "grounded"
-    code_reveal: Literal["full", "scaffold", "withhold"] = "scaffold"
-    practice_type: Literal["recover", "focused", "stretch"] = "focused"
-    review_frequency: Literal["sooner", "normal", "later"] = "normal"
-    material_recommendation: Literal["simpler", "current", "transfer"] = "current"
-    next_plan_step: Literal["shrink", "hold", "widen"] = "hold"
-    should_reveal_code: bool = False
-    success_streak: int = 0
-    failure_streak: int = 0
-    pedagogy_mode: Literal["socratic", "direct", "debug_guide"] = "direct"
-    transfer_scene_count: int = 0
-    time_budget: Literal["tight", "normal", "ample"] = "normal"
-    project_complexity: Literal["simple", "moderate", "complex"] = "moderate"
-    task_urgency: Literal["low", "medium", "high"] = "medium"
-
-
-class LearnerState(BaseModel):
-    current_confidence: float = 0.5
-    frustration_level: float = 0.0
-    attempt_count_recent: int = 0
-    needs_rescue: bool = False
-    needs_review: bool = False
-    preferred_hint_depth: Literal["small", "medium", "expanded"] = "medium"
-    learner_signal: LearnerSignal = "steady"
-    active_focus: str = ""
-    evidence: list[str] = Field(default_factory=list)
-
-
-class TeachingDecision(BaseModel):
-    mode: TeachingMode = "guided"
-    reason: str = ""
-    primary_goal: str = ""
-    lesson_shape: str = ""
-    exercise_shape: str = ""
-    teaching_strategy: str = ""
-    closing_move: str = ""
-    artifact_priority: list[str] = Field(default_factory=list)
-    should_end_with_question: bool = False
-    should_generate_exercise: bool = False
-    should_reveal_code: bool = False
-    should_produce_plan_artifact: bool = False
-    should_trigger_deep_analysis: bool = False
-    should_focus_on_implementation_steps: bool = True
-    tone_profile: str = "steady"
-    focus_area: str = ""
-
-
-class AffectState(BaseModel):
-    frustration_level: float = 0.0
-    confidence_level: float = 0.5
-    momentum_level: float = 0.5
-    needs_reassurance: bool = False
-    urgency_level: Literal["low", "medium", "high"] = "medium"
-    recovery_signal: Literal["steady", "recovering", "fragile", "overloaded"] = "steady"
-
-
-class ToneDecision(BaseModel):
-    tone: ToneName = "steady"
-    verbosity_bias: VerbosityBias = "medium"
-    acknowledge_progress: bool = False
-    avoid_overwhelm: bool = False
-
-
-class ImplementationGuide(BaseModel):
-    idea_summary: str = ""
-    scope_boundary: str = ""
-    mvp_definition: str = ""
-    current_step: str = ""
-    next_steps: list[str] = Field(default_factory=list)
-    validation_strategy: list[str] = Field(default_factory=list)
-    open_questions: list[str] = Field(default_factory=list)
-    codebase_entry_points: list[str] = Field(default_factory=list)
-    risk_notes: list[str] = Field(default_factory=list)
-    teaching_goal: str = ""
-    success_signal: str = ""
-    fallback_step: str = ""
-
-
-class ProjectIdea(BaseModel):
-    id: str
-    title: str
-    summary: str
-    source_area: str = ""
-    idea_kind: Literal["feature", "refactor", "test", "architecture", "developer_experience"] = "feature"
-    learning_value: str = ""
-    engineering_value: str = ""
-    difficulty: Literal["small", "medium", "stretch"] = "small"
-    suggested_scope: str = ""
-    first_step: str = ""
-    acceptance_signals: list[str] = Field(default_factory=list)
-    why_now: str = ""
-
-
-class ProjectOpportunitySignal(BaseModel):
-    file_path: str = ""
-    signal_type: Literal[
-        "repetition",
-        "missing_test",
-        "diagnostic_cluster",
-        "coupling_hotspot",
-        "rough_edge",
-        "feature_gap",
-    ] = "feature_gap"
-    evidence: str = ""
-    confidence: float = 0.5
-
-
-class ProjectAdaptationGuide(BaseModel):
-    target_outcome: str = ""
-    current_constraints: list[str] = Field(default_factory=list)
-    affected_areas: list[str] = Field(default_factory=list)
-    preserve_areas: list[str] = Field(default_factory=list)
-    first_migration_step: str = ""
-    migration_sequence: list[str] = Field(default_factory=list)
-    validation_checkpoints: list[str] = Field(default_factory=list)
-    rollback_notes: list[str] = Field(default_factory=list)
-
-
-class ProjectSourceSuggestion(BaseModel):
-    title: str
-    source_kind: Literal["reference_repo", "reference_impl", "training_repo"] = "reference_repo"
-    repo_hint: str = ""
-    fit_reason: str = ""
-    training_value: str = ""
-    first_filter: str = ""
-    first_task: str = ""
-    caution: str = ""
-    tags: list[str] = Field(default_factory=list)
-    source_url: str = ""
-    retrieved_at: str = ""
-    trust_score: float = 0.0
-    quality_flags: list[str] = Field(default_factory=list)
-
-
-class PrincipleNotes(BaseModel):
-    current_principle: str = ""
-    why_it_matters: str = ""
-    common_mistake: str = ""
-    apply_now: str = ""
-    transfer_targets: list[str] = Field(default_factory=list)
-    concrete_anchor: str = ""
-    transferable_lesson: str = ""
-    related_checks: list[str] = Field(default_factory=list)
-    source_asset_title: str = ""
-
-
-class ActiveThreadSnapshot(BaseModel):
-    scenario: str = ""
-    focus_area: str = ""
-    summary: str = ""
-    next_step: str = ""
-    blocker: str = ""
-    verified_result: str = ""
-    decision: str = ""
-    teaching_note: str = ""
-    confidence: str = ""
-    evidence: list[str] = Field(default_factory=list)
-    updated_at: str = ""
-
-
-class FirstLookSummary(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    folder_role: FolderRole = "mixed_uncertain"
-    project_type_guess: ProjectTypeGuess = "unknown"
-    subject_family: WorkspaceSubjectFamily = "code"
-    confidence: float = 0.0
-    why_this_guess: str = ""
-    entry_points: list[str] = Field(default_factory=list)
-    directory_anchors: list[str] = Field(default_factory=list)
-    core_modules_or_materials: list[str] = Field(default_factory=list)
-    risk_zones: list[str] = Field(default_factory=list)
-    training_opportunities: list[str] = Field(default_factory=list)
-    unknowns: list[str] = Field(default_factory=list)
-    recommended_next_step: str = ""
-    classification_method: Literal["heuristic", "llm_enhanced"] = "heuristic"
-    classified_at: str = Field(default_factory=utc_now_iso)
-
-    @field_validator("confidence", mode="before")
-    @classmethod
-    def clamp_confidence(cls, value: Any) -> float:
-        try:
-            normalized = float(value)
-        except (TypeError, ValueError):
-            return 0.0
-        return max(0.0, min(1.0, normalized))
-
-
-class WorkspaceUnderstandingSnapshot(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    repo_summary: str = ""
-    entry_points: list[str] = Field(default_factory=list)
-    feature_lanes: list[str] = Field(default_factory=list)
-    risk_zones: list[str] = Field(default_factory=list)
-    training_opportunities: list[str] = Field(default_factory=list)
-    resource_brief: str = ""
-    first_look_summary: FirstLookSummary | None = Field(default=None, alias="firstLookSummary")
-    updated_at: str = Field(default_factory=utc_now_iso)
-
-
-class MemoryShareGrant(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    source_workspace_id: str
-    target_workspace_id: str
-    categories: list[MemoryShareCategory]
-    created_at: str = Field(default_factory=utc_now_iso)
-    updated_at: str = Field(default_factory=utc_now_iso)
-
-    @field_validator("source_workspace_id", "target_workspace_id")
-    @classmethod
-    def require_workspace_id(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("workspace_id is required")
-        return normalized
-
-    @field_validator("categories")
-    @classmethod
-    def normalize_categories(cls, value: list[MemoryShareCategory]) -> list[MemoryShareCategory]:
-        normalized = list(dict.fromkeys(value))
-        if not normalized:
-            raise ValueError("at least one memory share category is required")
-        return normalized
-
-    @model_validator(mode="after")
-    def require_distinct_workspaces(self) -> "MemoryShareGrant":
-        if self.source_workspace_id == self.target_workspace_id:
-            raise ValueError("memory share source and target must differ")
-        return self
-
-
-class LearningActivityEntry(BaseModel):
-    event_id: str
-    event_type: str
-    occurred_at: str
-    title: str = ""
-    card_id: str = ""
-    resource_id: str = ""
-    next_due: str = ""
-    trust_level: str = ""
-    result: str = ""
-
-
-class MemorySnapshot(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    profile: UserProfile | None = None
-    learning_activity: list[LearningActivityEntry] = Field(default_factory=list)
-    global_memory: GlobalMemory | None = Field(default=None, alias="globalMemory")
-    active_plan: LearningPlan | None = None
-    subplans: list[SubPlan] = Field(default_factory=list)
-    resources: list[ResourceRecord] = Field(default_factory=list)
-    asset_catalog: LibraryAssetCatalogSnapshot = Field(
-        default_factory=LibraryAssetCatalogSnapshot,
-        alias="assetCatalog",
-    )
-    teaching_assets: list[TeachingKnowledgeAsset] = Field(default_factory=list)
-    memory_share_grants: list[MemoryShareGrant] = Field(default_factory=list)
-    teaching_knowledge_catalog: dict[str, Any] = Field(default_factory=dict)
-    coaching_adaptation: CoachingAdaptationProfile | None = None
-    teaching_strategy_effectiveness: list[dict[str, Any]] = Field(default_factory=list)
-    learning_outcomes: list[dict[str, Any]] = Field(default_factory=list)
-    weaknesses: list[str] = Field(default_factory=list)
-    reflections: list[str] = Field(default_factory=list)
-    recent_summary: str = ""
-    current_focus: str = ""
-    coach_anchor: str = ""
-    top_weakness: str = ""
-    lowest_mastery_concepts: list[str] = Field(default_factory=list)
-    recent_wins: list[str] = Field(default_factory=list)
-    review_rhythm: str = ""
-    due_reviews: list[ReviewQueueItem] = Field(default_factory=list)
-    due_review_count: int = 0
-    pace_signal: str = ""
-    teaching_observations: list[str] = Field(default_factory=list)
-    user_feedback: list[dict[str, Any]] = Field(default_factory=list, alias="userFeedback")
-    workspace: dict[str, Any] = Field(default_factory=dict)
-    active_thread: ActiveThreadSnapshot | None = None
-    memory_evidence: list[str] = Field(default_factory=list)
-    workspace_understanding: WorkspaceUnderstandingSnapshot | None = None
-    dependency_mastery: list[DependencyMasterySnapshot] = Field(default_factory=list)
-    dependency_skill_maps: list[DependencySkillMapSnapshot] = Field(default_factory=list)
-    dependency_skill_map_history: list[DependencySkillMapHistoryEntry] = Field(default_factory=list)
-    flash_deck: FlashDeckSnapshot | None = None
-    recent_flash_attempts: list[FlashcardAttempt] = Field(default_factory=list)
-    theory_drill: TheoryDrillSnapshot | None = None
-    theory_drill_history: list[TheoryDrillHistoryEntry] = Field(default_factory=list)
-    scenario_lab: ScenarioLab | None = None
-    scenario_lab_history: list[ScenarioLabHistoryEntry] = Field(default_factory=list)
-    review_queue_actions: list[ReviewQueueAction] = Field(default_factory=list)
-    review_artifact: ReviewArtifactSnapshot | None = None
-    review_artifact_history: list[ReviewArtifactHistoryEntry] = Field(default_factory=list)
-    training_card_candidates: list[TrainingCardCandidateSnapshot] = Field(default_factory=list)
-    active_training_card_routing: ActiveCardSelectionResult | None = None
-    training_event_ledger: list[dict[str, Any]] = Field(default_factory=list)
-    evidence_queue: EvidenceQueueSnapshot | None = None
-    plan_change_candidates: list[PlanChangeCandidate] = Field(default_factory=list, alias="planChangeCandidates")
-
-
-class ChatMessage(BaseModel):
-    id: str = Field(default="message")
-    role: Literal["user", "assistant", "system"]
-    content: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: str | None = None
-
-    @model_validator(mode="after")
-    def sync_created_at(self) -> "ChatMessage":
-        if not self.created_at:
-            self.created_at = self.timestamp.isoformat()
-        return self
-
-
-class StageMaterialItem(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str
-    plan_stage_id: str = Field(alias="planStageId")
-    kind: str
-    title: str
-    summary: str
-    content: str
-    focus_area: str = Field(default="", alias="focusArea")
-    created_at: str = Field(default="", alias="createdAt")
-    generation_source: Literal["model", "template"] = Field(alias="generationSource")
-
-
-class GoalActivity(BaseModel):
-    """One real learning activity attributed to a goal.
-
-    Only evidence-bearing surfaces (evaluation, training attempt, host
-    attestation, review) create activities; ordinary chat never does.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    activity_id: str = Field(alias="activityId")
-    kind: Literal["evaluation", "training_attempt", "verification", "review"] = "evaluation"
-    summary: str = ""
-    result: Literal["passed", "failed", "pending", "completed", "unknown"] = "unknown"
-    concept: str = ""
-    occurred_at: str = Field(default_factory=utc_now_iso, alias="occurredAt")
-    evidence_refs: list[str] = Field(default_factory=list, alias="evidenceRefs")
-    event_key: str = Field(default="", alias="eventKey")
-
-
-class GoalSession(BaseModel):
-    """Server-owned continuous capability goal.
-
-    ``GoalBar`` renders and operates this record but never owns its truth.
-    A goal is not mastery: completing or pausing it only ends the focus, it
-    never promotes competency or rewrites history.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    goal_id: str = Field(alias="goalId")
-    workspace_id: str = Field(default="", alias="workspaceId")
-    session_id: str | None = Field(default=None, alias="sessionId")
-    title: str
-    concept: str = ""
-    capability: str = ""
-    plan_id: str | None = Field(default=None, alias="planId")
-    stage_id: str | None = Field(default=None, alias="stageId")
-    status: Literal["active", "paused", "completed"] = "active"
-    source: Literal["user_explicit", "coach_detected", "plan_stage"] = "user_explicit"
-    current_position: str = Field(default="", alias="currentPosition")
-    latest_activity: GoalActivity | None = Field(default=None, alias="latestActivity")
-    activities: list[GoalActivity] = Field(default_factory=list)
-    activity_count: int = Field(default=0, alias="activityCount")
-    evidence_count: int = Field(default=0, alias="evidenceCount")
-    started_at: str = Field(default_factory=utc_now_iso, alias="startedAt")
-    updated_at: str = Field(default_factory=utc_now_iso, alias="updatedAt")
-    last_activity_at: str | None = Field(default=None, alias="lastActivityAt")
-    completed_at: str | None = Field(default=None, alias="completedAt")
-
-
-class WorkbenchSnapshot(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    context_id: str = Field(default="", alias="contextId")
-    sidecar_status: Literal["unknown", "starting", "ready", "error"] = "ready"
-    active_panel: Literal["chat", "plan", "task", "evaluate"] = "chat"
-    snapshot_revision: int = Field(default=0, alias="snapshotRevision")
-    messages: list[ChatMessage] = Field(default_factory=list)
-    stage_materials: dict[str, list[StageMaterialItem]] = Field(default_factory=dict, alias="stageMaterials")
-    session_history_restored: bool = Field(default=False, alias="sessionHistoryRestored")
-    profile: UserProfile | None = None
-    plan: LearningPlan | None = None
-    goal: GoalSession | None = None
-    global_plan: GlobalPlan | None = None
-    project_plan_link: GlobalPlanProjectLink | None = None
-    current_task: TaskSpec | None = None
-    evaluation: EvaluationReport | None = None
-    memory: MemorySnapshot = Field(default_factory=MemorySnapshot)
-    provider: ProviderConfig | None = None
-    coaching_state: CoachingState | None = None
-    learner_state: LearnerState | None = None
-    teaching_decision: TeachingDecision | None = None
-    affect_state: AffectState | None = None
-    tone_decision: ToneDecision | None = None
-    implementation_guide: ImplementationGuide | None = None
-    project_ideas: list[ProjectIdea] = Field(default_factory=list)
-    project_adaptation_guide: ProjectAdaptationGuide | None = None
-    project_sources: list[ProjectSourceSuggestion] = Field(default_factory=list)
-    principle_notes: PrincipleNotes | None = None
-    selected_teaching_assets: list[TeachingKnowledgeAsset] = Field(default_factory=list)
-    exercise_prompt: dict[str, Any] | None = None
-    review_queue_summary: str = ""
-    next_review_due: str | None = None
-    plan_runtime_status: dict[str, Any] | None = None
-    coach_orientation: dict[str, Any] | None = Field(default=None, alias="coachOrientation")
-    suggested_actions: list["SuggestedAction"] = Field(default_factory=list, alias="suggestedActions")
-
-
-class SessionStartRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    profile: UserProfile | None = None
-    workspace_id: str
-    workspace_name: str
-    workspace_path: str | None = None
-    root_id: str | None = Field(default=None, alias="rootId")
-    root_path: str | None = Field(default=None, alias="rootPath")
-    remote_name: str | None = Field(default=None, alias="remoteName")
-    workspace_trusted: bool | None = Field(default=None, alias="workspaceTrusted")
-
-    @field_validator("workspace_id")
-    @classmethod
-    def normalize_workspace_id(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("workspace_id must be a non-empty local identifier")
-        if any(ord(character) < 32 or ord(character) == 127 for character in normalized):
-            raise ValueError("workspace_id must not contain control characters")
-
-        path_segments = [segment for segment in normalized.replace("\\", "/").split("/") if segment]
-        if any(segment in {".", ".."} for segment in path_segments):
-            raise ValueError("workspace_id must not contain path traversal segments")
-
-        # Workspace paths are retained as read-compatible aliases by the host
-        # during project admission and rehydration. Relative path-shaped IDs
-        # are rejected while absolute aliases remain valid.
-        has_separator = "/" in normalized or "\\" in normalized
-        is_absolute_path = normalized.startswith(("/", "\\")) or (
-            len(normalized) >= 3
-            and normalized[1] == ":"
-            and normalized[2] in {"/", "\\"}
-        )
-        if has_separator and not is_absolute_path:
-            raise ValueError("workspace_id must be an opaque identifier or absolute workspace path")
-        return normalized
-
-
-class CurrentFilePayload(BaseModel):
-    path: str
-    language_id: str
-    content: str
-    content_excerpt: str | None = None
-    content_line_span: str | None = None
-    content_strategy: str | None = None
-    selection_text: str | None = None
-    selection_range: str | None = None
-    diagnostics: list[str] = Field(default_factory=list)
-    recent_files: list[str] = Field(default_factory=list)
-    recent_edited_files: list[str] = Field(default_factory=list)
-    related_files: list[dict[str, str]] = Field(default_factory=list)
-
-
-class MessageAttachment(BaseModel):
-    """A multimodal attachment carried alongside a user coaching message.
-
-    `kind="image"` items are forwarded to vision-capable models as content
-    parts; the agent loop also surfaces them as `tool_result`/`reasoning`
-    grounding so non-vision models still see *that* an image was attached.
-    """
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str = ""
-    kind: Literal["image", "file"] = "image"
-    mime_type: str = Field(default="image/png", alias="mimeType")
-    data_base64: str | None = Field(default=None, alias="dataBase64", max_length=MAX_IMAGE_BASE64_LENGTH)
-    source_path: str | None = Field(default=None, alias="sourcePath")
-    name: str | None = None
-    caption: str | None = None
-    byte_size: int | None = Field(default=None, alias="byteSize", ge=0)
-
-    @model_validator(mode="after")
-    def validate_image_transport(self) -> MessageAttachment:
-        if self.kind == "image" and self.data_base64 is not None:
-            self.byte_size = validate_image_payload(self.data_base64, self.mime_type, self.byte_size)
-        return self
-
-
-class WorkspaceMemoryToggles(BaseModel):
-    decisions: bool = True
-    patterns: bool = True
-    resources: bool = True
-
-
-class CustomSkill(BaseModel):
-    """A user-authored `$trigger` prompt persisted with the workspace coach defaults.
-
-    Custom skills are created, imported, and removed entirely through the
-    coach-settings channel; the agent loop never executes them directly — the
-    webview expands a skill into a normal coach prompt before sending.
-    """
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    id: str = Field(default="", max_length=120)
-    trigger: str = Field(default="", max_length=64)
-    title: str = Field(default="", max_length=200)
-    detail: str = Field(default="", max_length=500)
-    prompt: str = Field(default="", max_length=4000)
-    keywords: list[str] = Field(default_factory=list, max_length=16)
-    created_at: str | None = Field(default=None, alias="createdAt")
-
-
-class CoachDefaults(BaseModel):
-    # The extension sends camelCase keys (memoryScope, workspaceMemoryToggles,
-    # customSkills) while stored snapshots are snake_case; populate_by_name keeps
-    # both representations valid.
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    memory_scope: CoachMemoryScope = Field(default="project", alias="memoryScope")
-    working_set_mode: WorkingSetMode = Field(default="balanced", alias="workingSetMode")
-    review_cadence: ReviewCadence = Field(default="steady", alias="reviewCadence")
-    review_reminder_mode: ReviewReminderMode = Field(default="due", alias="reviewReminderMode")
-    workspace_memory_toggles: WorkspaceMemoryToggles = Field(
-        default_factory=WorkspaceMemoryToggles, alias="workspaceMemoryToggles"
-    )
-    custom_skills: list[CustomSkill] = Field(default_factory=list, alias="customSkills", max_length=24)
-
-
-class ResourceComposerIntent(BaseModel):
-    """Advisory Resources-composer context with no path or write authority."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    mode: Literal["locate", "analyze", "download", "organize", "cards"]
-    resource_ids: list[str] = Field(default_factory=list, alias="resourceIds", max_length=12)
-
-    @field_validator("resource_ids")
-    @classmethod
-    def normalize_opaque_resource_ids(cls, value: list[str]) -> list[str]:
-        normalized_ids: list[str] = []
-        for raw_id in value:
-            resource_id = raw_id.strip()
-            if (
-                not resource_id
-                or len(resource_id) > 160
-                or "\x00" in resource_id
-                or "/" in resource_id
-                or "\\" in resource_id
-                or ".." in resource_id
-            ):
-                raise ValueError("resource composer IDs must be opaque resource identifiers")
-            if resource_id not in normalized_ids:
-                normalized_ids.append(resource_id)
-        return normalized_ids
-
-
-class SessionMessageRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    message: str
-    # The client reports whether its intent came from an explicit user action
-    # (slash command, skill button, review/task control) or from natural
-    # language inference. Only an explicit source may start formal flows.
-    intent_source: Literal["explicit", "inferred", "none"] = Field(
-        default="explicit", alias="intentSource"
-    )
-    # Host-recorded live test evidence. The streaming route adopts it for this
-    # exact provider when a project admission restarted the sidecar and the
-    # in-process capability cache is empty. Snake case and the camelCase alias
-    # both parse (the host sends both).
-    last_test_result: dict[str, Any] | None = Field(default=None, alias="lastTestResult")
-    active_view: Literal[
-        "coach",
-        "plan",
-        "resources",
-        "training",
-        "progress",
-        "settings",
-    ] | None = Field(
-        default=None,
-        alias="activeView",
-    )
-    resource_ids: list[str] = Field(default_factory=list)
-    resource_composer_intent: ResourceComposerIntent | None = Field(
-        default=None,
-        alias="resourceComposerIntent",
-    )
-    current_file: CurrentFilePayload | None = None
-    workspace_file_snapshot: dict[str, Any] | None = Field(
-        default=None,
-        alias="workspaceFileSnapshot",
-    )
-    response_language: str | None = Field(default=None, alias="responseLanguage")
-    answer_mode: CoachRequestAnswerMode | None = None
-    # Goal mode: one small learning goal, learner does the work. The flag only
-    # changes the coaching contract; explicit plan/card actions stay separate.
-    goal_mode: bool = Field(default=False, alias="goalMode")
-    # The title shown in GoalBar. Persisted as the server-owned GoalSession;
-    # the webview no longer owns goal truth across restarts.
-    goal_text: str | None = Field(default=None, alias="goalText", max_length=240)
-    teaching_style: str | None = None
-    coach_defaults: CoachDefaults | None = None
-    attachments: list[MessageAttachment] = Field(default_factory=list, max_length=MAX_IMAGE_COUNT)
-    use_agent_loop: bool | None = Field(default=None, alias="useAgentLoop")
-    formal_plan_mutation: bool = Field(default=False, alias="formalPlanMutation")
-    # Host/user attestation only — never trust model tool-arg self-attestation.
-    resource_organization_confirmed: bool = Field(
-        default=False,
-        alias="resourceOrganizationConfirmed",
-    )
-    request_id: str | None = Field(default=None, alias="requestId", max_length=128)
-    plan_runtime_recovery: dict[str, Any] | None = Field(
-        default=None,
-        alias="planRuntimeRecovery",
-    )
-
-    @model_validator(mode="after")
-    def validate_attachment_budget(self) -> SessionMessageRequest:
-        if sum(item.byte_size or 0 for item in self.attachments if item.kind == "image") > MAX_TOTAL_IMAGE_BYTES:
-            raise ValueError("attachment_image_total_size_exceeded")
-        return self
-
-
-class GoalControlRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    action: Literal["start", "pause", "resume", "complete"]
-    title: str | None = Field(default=None, max_length=240)
-    goal_id: str | None = Field(default=None, alias="goalId")
-
-
-class CoachSettingsRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    session_id: str | None = Field(default=None, alias="sessionId")
-    workspace_id: str | None = Field(default=None, alias="workspaceId")
-    response_language: ResponseLanguage | None = Field(default=None, alias="responseLanguage")
-    answer_mode: CoachRequestAnswerMode | None = Field(default=None, alias="answerMode")
-    teaching_style: str | None = Field(default=None, alias="teachingStyle")
-    coach_defaults: CoachDefaults | None = Field(default=None, alias="coachDefaults")
-    follow_current_file: bool | None = Field(default=None, alias="followCurrentFile")
-    context_detail: Literal["focused", "balanced", "full"] | None = Field(
-        default=None,
-        alias="contextDetail",
-    )
-    include_current_file: bool | None = Field(default=None, alias="includeCurrentFile")
-    include_selection: bool | None = Field(default=None, alias="includeSelection")
-    include_diagnostics: bool | None = Field(default=None, alias="includeDiagnostics")
-    include_related_files: bool | None = Field(default=None, alias="includeRelatedFiles")
-    resource_search_mode: str | None = Field(default=None, alias="resourceSearchMode")
-
-
-class GlobalMemoryUpdateRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    session_id: str | None = Field(default=None, alias="sessionId")
-    workspace_id: str | None = Field(default=None, alias="workspaceId")
-    preferences: dict[str, str] | None = Field(default=None, alias="preferences")
-    long_term_goals: list[str] | None = Field(default=None, alias="longTermGoals")
-
-
-class MemoryShareGrantUpsertRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    source_workspace_id: str
-    categories: list[MemoryShareCategory]
-
-    @field_validator("source_workspace_id")
-    @classmethod
-    def require_source_workspace_id(cls, value: str) -> str:
-        return MemoryShareGrant.require_workspace_id(value)
-
-    @field_validator("categories")
-    @classmethod
-    def require_categories(cls, value: list[MemoryShareCategory]) -> list[MemoryShareCategory]:
-        return MemoryShareGrant.normalize_categories(value)
-
-
-class TransferPromotionScopeRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    session_id: str | None = Field(default=None, alias="sessionId")
-    workspace_id: str | None = Field(default=None, alias="workspaceId")
-    workspace_ids: list[str] = Field(default_factory=list, alias="workspaceIds")
-
-
-class MemoryShareGrantRevokeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    source_workspace_id: str
-
-    @field_validator("source_workspace_id")
-    @classmethod
-    def require_source_workspace_id(cls, value: str) -> str:
-        return MemoryShareGrant.require_workspace_id(value)
-
-
-class TurnRequest(SessionMessageRequest):
-    intent: Literal["coach", "next_task", "review", "plan", "task", "resources"] = "coach"
-    goals: list[str] = Field(default_factory=list)
-    focus_area: str | None = None
-
-
-class SuggestedAction(BaseModel):
-    id: str
-    label: str
-    action: CoachActionType
-    rationale: str | None = None
-    artifact_kind: CoachArtifactKind | None = None
-    prompt: str | None = None
-    focus_area: str | None = None
-
-
-class CoachArtifact(BaseModel):
-    kind: CoachArtifactKind
-    title: str
-    summary: str = ""
-    content: str | None = None
-    bullets: list[str] = Field(default_factory=list)
-    teaser: str | None = None
-    recommended_action: CoachActionType | None = None
-    rationale: str | None = None
-    focus_area: str | None = None
-    verification: list[str] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class CoachTurnSummary(BaseModel):
-    scenario: CoachScenario
-    learner_signal: LearnerSignal
-    summary: str
-    next_step: str
-    encouragement: str = ""
-    teaching_mode: Literal["coach", "practice", "review", "principle", "plan"] = "coach"
-    emotional_tone: Literal["steady", "supportive", "challenging"] = "steady"
-    review_rhythm: str = ""
-    teaching_observation: str = ""
-    intervention_strategy: str = ""
-    teaching_goal: str = ""
-    resume_thread: str = ""
-    decision: str = ""
-    blocker: str = ""
-    teaching_note: str = ""
-    confidence: str = ""
-    evidence: list[str] = Field(default_factory=list)
-    support_strategy: str = ""
-    decision_reason: str = ""
-    tone: ToneName = "steady"
-    verbosity_bias: VerbosityBias = "medium"
-    active_stage: str | None = None
-    active_task: str | None = None
-    due_review_count: int = 0
-    review_queue_summary: str = ""
-    failing_checks: list[str] = Field(default_factory=list)
-    artifact_kinds: list[CoachArtifactKind] = Field(default_factory=list)
-    suggested_action_types: list[CoachActionType] = Field(default_factory=list)
-    background_mode: Literal["embedded"] = "embedded"
-    # Teaching-turn grounding downgrade: True when next_step referenced code
-    # symbols that appear nowhere in the reply/code facts (see
-    # app/llm/turn_grounding.py). The UI renders such a next step as a
-    # suggestion needing confirmation instead of a plan-ready instruction.
-    requires_confirmation: bool = False
-
-
-class AgentMeta(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
-
-    agentic: bool = True
-    summary: str = ""
-    next_step: str = ""
-    stop_reason: str = ""
-    decision: str = ""
-    blocker: str = ""
-    teaching_note: str = ""
-    confidence: str = ""
-    evidence: list[str] = Field(default_factory=list)
-    resume_thread: str = ""
-    fell_back: bool = False
-    tool_events: list[dict[str, Any]] = Field(default_factory=list)
-    steps: list[dict[str, Any]] = Field(default_factory=list)
-    attachments_present: bool = False
-    image_attachment_count: int = 0
-    attachments_delivered_to_model: bool = False
-    attachments_delivery_path: str = ""
-    attachments_delivery_reason: str = ""
-    coach_visible_status: dict[str, Any] | None = None
-    next_step_hint: dict[str, Any] | None = None
-    checkpoint_id: str = ""
-    recovery_available: bool = False
-
-
-class SessionMessageResponse(BaseModel):
-    session_id: str
-    reply: ChatMessage
-    snapshot: WorkbenchSnapshot
-    suggested_actions: list[SuggestedAction] = Field(default_factory=list)
-    artifacts: dict[str, Any] = Field(default_factory=dict)
-    coach_turn: CoachTurnSummary | None = None
-    agent_meta: AgentMeta | None = None
-    agent: AgentMeta | None = None
-
-
-class AgentCheckpointAccessRequest(BaseModel):
-    """Scope a checkpoint read to the workspace that owns it."""
-
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
-
-    workspace_id: str = Field(alias="workspaceId", min_length=1, max_length=256)
-    session_id: str | None = Field(default=None, alias="sessionId", max_length=256)
-
-    @field_validator("workspace_id")
-    @classmethod
-    def normalize_workspace_id(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized or "\x00" in normalized:
-            raise ValueError("workspace_id must be a non-empty local identifier")
-        return normalized
-
-    @field_validator("session_id")
-    @classmethod
-    def normalize_session_id(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        if not normalized or "\x00" in normalized:
-            raise ValueError("session_id must be a local identifier when supplied")
-        return normalized
-
-
-class PlanGenerateRequest(BaseModel):
-    workspace_id: str | None = None
-    profile: UserProfile
-    goals: list[str]
-    constraints: list[str] = Field(default_factory=list)
-    resource_ids: list[str] = Field(default_factory=list)
-
-
-class PlanUpdateRequest(BaseModel):
-    plan_id: str
-    workspace_id: str | None = None
-    instructions: str = ""
-    freeze: bool = False
-    title: str | None = None
-    frozen: bool | None = None
-    weekly_cadence: str | None = None
-    # Formal UI saves must provide expected_revision; legacy callers can opt
-    # into the compatibility path until their transport is migrated.
-    formal_plan_mutation: bool = False
-    expected_revision: int | None = None
-
-
-class GlobalPlanUpdateRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    title: str | None = None
-    summary: str | None = None
-    goals: list[str] | None = None
-    stages: list[PlanStage] | None = None
-    frozen: bool | None = None
-    current_project_plan_id: str | None = None
-    current_stage_id: str | None = None
-    current_step: str | None = None
-    why_now: str | None = None
-    verify_method: list[str] | None = None
-
-
-class GlobalPlanProjectLinkRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    project_plan_id: str | None = None
-
-
-class ProviderTestRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    provider: ProviderConfig
-    api_key: str | None = Field(default=None, alias="apiKey")
-    probe_message: str | None = Field(default=None, alias="probeMessage")
-    response_language: str | None = Field(default=None, alias="responseLanguage")
-
-
-ProviderCapabilityState = Literal["verified", "unsupported", "unverified", "disabled"]
-
-
-class ProviderCapabilityEvidence(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    name: str
-    declared: bool
-    observed: bool | None = None
-    state: ProviderCapabilityState
-
-
-class ProviderProbeUsage(BaseModel):
-    """§二十一: provider-reported usage from the live provider-test probe.
-
-    Fields are echoed only when the provider itself reported them — Trainer
-    never estimates or fabricates cost numbers.
-    """
-
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    input_tokens: int | None = Field(default=None, alias="inputTokens")
-    output_tokens: int | None = Field(default=None, alias="outputTokens")
-    total_tokens: int | None = Field(default=None, alias="totalTokens")
-    input_cost: float | None = Field(default=None, alias="inputCost")
-    output_cost: float | None = Field(default=None, alias="outputCost")
-    total_cost: float | None = Field(default=None, alias="totalCost")
-
-
-class ProviderTestResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    ok: bool
-    detail: str
-    configured: bool = True
-    api_key_supplied: bool = False
-    success: bool = False
-    provider_name: str | None = None
-    base_url: str | None = None
-    model: str | None = None
-    protocol: ProviderProtocol | None = None
-    protocol_family: ProviderProtocolFamily | None = None
-    status: str | None = None
-    warnings: list[str] = Field(default_factory=list)
-    error_category: str | None = None
-    retryable: bool = False
-    status_code: int | None = None
-    diagnostics: list[str] = Field(default_factory=list)
-    provider_reachable: bool = False
-    model_supported: bool | None = None
-    capability_evidence: list[ProviderCapabilityEvidence] = Field(
-        default_factory=list,
-        alias="capabilityEvidence",
-    )
-    tools_ready: bool = Field(default=False, alias="toolsReady")
-    tool_probe_status: ProviderCapabilityState = Field(
-        default="unverified",
-        alias="toolProbeStatus",
-    )
-    streaming_ready: bool = Field(default=False, alias="streamingReady")
-    stream_probe_status: ProviderCapabilityState = Field(
-        default="unverified",
-        alias="streamProbeStatus",
-    )
-    vision_ready: bool = Field(default=False, alias="visionReady")
-    vision_probe_status: ProviderCapabilityState = Field(
-        default="unverified",
-        alias="visionProbeStatus",
-    )
-    thinking_ready: bool = Field(default=False, alias="thinkingReady")
-    thinking_probe_status: ProviderCapabilityState = Field(
-        default="unverified",
-        alias="thinkingProbeStatus",
-    )
-    probe_usage: ProviderProbeUsage | None = Field(default=None, alias="probeUsage")
-
-
-class ProviderModelsRequest(BaseModel):
-    provider: ProviderConfig
-    api_key: str | None = None
-
-
-class ProviderModelsResponse(BaseModel):
-    ok: bool
-    detail: str
-    available_models: list[str] = Field(default_factory=list)
-    resolved_model: str | None = None
-    model_token_limits: dict[str, ProviderModelTokenLimit] = Field(default_factory=dict)
-    resolved_from_input: bool = False
-    listed: bool = False
-    error_category: str | None = None
-    retryable: bool = False
-    status_code: int | None = None
-    diagnostics: list[str] = Field(default_factory=list)
-    cache_hit: bool = False
-    incomplete: bool = False
-
-
-class ResourceUploadRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    kind: Literal[
-        "pdf",
-        "epub",
-        "docx",
-        "pptx",
-        "html",
-        "image",
-        "text",
-        "markdown",
-        "code",
-        "url",
-        "video",
-    ]
-    name: str
-    source: str
-    content: str | None = None
-    content_encoding: Literal["utf-8", "base64"] | None = None
-    content_language: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    source_type: Literal["file", "folder", "url"] = "file"
-    source_items: list[str] = Field(default_factory=list)
-    collection_path: str | None = None
-    collection_root: str | None = None
-    source_declaration: SourceIntakeDeclaration = Field(default_factory=SourceIntakeDeclaration)
-
-
-class ResourceIndexRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    resource_id: str
-    enable_network: bool | None = None
-
-
-class ResourceCanonicalizeRequest(BaseModel):
-    """Batch canonical-document stages for imported library resources."""
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    resource_ids: list[str] = Field(default_factory=list)
-
-
-class ResourceDigestRequest(BaseModel):
-    """One-resource teaching digestion (总结/预备题目/直观案例/常见误区)."""
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    resource_id: str
-
-
-class ResourceCaptureRequest(BaseModel):
-    """Browser-capture intake: one URL handed over by the Trainer Capture extension.
-
-    The extension stays a pure data channel — it never injects scripts and never
-    sends page bodies. The sidecar performs the controlled fetch and extraction
-    for every kind (see ``app.resources.capture``).
-    """
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    url: str
-    kind: Literal["web", "pdf", "github_repo", "gitee_repo", "gitlab_repo", "repo"]
-    title: str | None = None
-    capture_mode: Literal["snapshot", "link", "selection"] = "snapshot"
-    # Selection captures still store the full readable body; the excerpt is kept
-    # as capture metadata so the source stays honest after the page changes.
-    selection: str | None = None
-    # Optional learning-focus binding (a plan stage id). An unknown focus is
-    # reported per-field instead of failing the whole capture.
-    bind_focus_id: str | None = None
-    bind_plan_id: str | None = None
-    bind_plan_revision: int | None = None
-    # Client-generated idempotency key: a retry with the same id replays the
-    # original result instead of capturing twice.
-    client_capture_id: str | None = None
-    # GitHub only: also snapshot the repository's docs/ listing.
-    include_docs: bool = False
-    # Task two (Trainer Library folder lane): also download the original
-    # artifact — the PDF bytes for ``kind=pdf`` or the whole repository for
-    # ``kind=github_repo`` — into a real folder inside the workspace.
-    download: bool = False
-    # Workspace-relative target folder for the download; created on demand and
-    # validated against the workspace authority boundary. Defaults to
-    # ``Trainer Library`` under the workspace root.
-    target_dir: str | None = None
-
-    @model_validator(mode="after")
-    def require_capture_url(self) -> "ResourceCaptureRequest":
-        if not self.url.strip():
-            raise ValueError("Capture requires a non-empty source URL.")
-        if self.capture_mode == "selection" and not str(self.selection or "").strip():
-            raise ValueError("Selection capture requires a non-empty excerpt.")
-        if self.capture_mode != "snapshot" and self.download:
-            raise ValueError("Only a full source capture can download an artifact.")
-        if str(self.target_dir or "").strip() and not self.download:
-            raise ValueError("target_dir requires download=true.")
-        return self
-
-
-class ResourceOrganizeRequest(BaseModel):
-    """User-driven library organization for one already-registered resource.
-
-    The actions reuse the existing resource record structure (name, tags,
-    collection_path/collection_root) — no second organizational model is
-    introduced.
-    """
-
-    session_id: str | None = None
-    workspace_id: str | None = None
-    resource_id: str
-    action: Literal["rename", "set_tags", "set_group"]
-    title: str | None = None
-    tags: list[str] | None = None
-    group: str | None = None
-
-    @model_validator(mode="after")
-    def require_action_payload(self) -> "ResourceOrganizeRequest":
-        if not self.resource_id.strip():
-            raise ValueError("Organize requires a resource_id.")
-        if self.action == "rename" and not str(self.title or "").strip():
-            raise ValueError("rename requires a non-empty title.")
-        if self.action == "set_tags" and self.tags is None:
-            raise ValueError("set_tags requires the tags list (use [] to clear).")
-        if self.action == "set_group":
-            # An empty group clears the grouping (the resource returns to the
-            # library root); None means the caller sent nothing at all.
-            if self.group is None:
-                raise ValueError("set_group requires the group value (use \"\" to clear).")
-        return self
-
-
-class ResourceSearchRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    query: str = ""
-    top_k: int = 10
-    semantic_rerank: bool = False
-    provider_rerank: bool = False
-    project_scope: str | None = None
-    trust_state: str | None = None
-    file_type: str | None = None
-    source_type: str | None = None
-    kind: str | None = None
-    index_state: str | None = None
-
-    @model_validator(mode="after")
-    def reject_unavailable_reranking(self) -> "ResourceSearchRequest":
-        if self.semantic_rerank:
-            raise ValueError("semantic_rerank is not available; resource search is lexical only")
-        if self.provider_rerank:
-            raise ValueError("provider_rerank is not available; resource search is lexical only")
-        return self
-
-
-class ResourceDeleteRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    resource_id: str
-
-
-class ResourceRestoreRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    resource_id: str
-
-
-class TaskNextRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    focus_area: str | None = None
-    response_language: str | None = None
-
-
-class TaskSpecifyRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    natural_language_goal: str
-
-
-class EvaluateCurrentFileRequest(BaseModel):
-    verification_python: str | None = None
-    session_id: str | None = None
-    workspace_id: str | None = None
-    task_spec_id: str | None = None
-    file_path: str
-    language_id: str
-    content: str
-    diagnostics: list[str] = Field(default_factory=list)
-    evaluation_source: str | None = None
-    training_card_id: str | None = None
-    training_card_title: str | None = None
-    # Explicit phase lets a failed Verify record FSRS AGAIN; without it the
-    # legacy pass-only behavior is retained (Try and Verify share this route).
-    training_phase: TrainingLearningPhase | None = None
-    acceptance_criteria: list[str] = Field(default_factory=list)
-    learner_deliverables: list[str] = Field(default_factory=list)
-    expected_symbols: list[str] = Field(default_factory=list)
-
-
-class EvaluateSnippetRequest(BaseModel):
-    verification_python: str | None = None
-    session_id: str | None = None
-    workspace_id: str | None = None
-    task_spec_id: str | None = None
-    language_id: str
-    content: str
-    diagnostics: list[str] = Field(default_factory=list)
-    evaluation_source: str | None = None
-    training_card_id: str | None = None
-    training_card_title: str | None = None
-    acceptance_criteria: list[str] = Field(default_factory=list)
-    learner_deliverables: list[str] = Field(default_factory=list)
-    expected_symbols: list[str] = Field(default_factory=list)
-
-
-class LearningSignalRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    concepts: list[str] = Field(default_factory=list)
-    outcome: LearningSignalOutcome
-    summary: str = ""
-    checks: list[str] = Field(default_factory=list)
-    missing_requirements: list[str] = Field(default_factory=list)
-    action_type: str = ""
-    repetition_count: int | None = None
-    focus_area: str | None = None
-    scenario: str | None = None
-    verified_result: str | None = None
-    blocked_reason: str | None = None
-    abandoned_reason: str | None = None
-    selected_teaching_asset_ids: list[str] = Field(default_factory=list)
-
-
-class UserFeedbackRequest(BaseModel):
-    session_id: str | None = None
-    workspace_id: str | None = None
-    kind: UserFeedbackKind
-    message: str = ""
-    focus_area: str | None = None
-    scenario: str | None = None
-    training_card_id: str | None = None
-    plan_id: str | None = None
-
-    @field_validator("message")
-    @classmethod
-    def require_message(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("feedback message is required")
-        return normalized
-
-
-class WorkspaceContext(BaseModel):
-    name: str
-    root_path: str | None = None
-
-
-class SessionRecord(BaseModel):
-    session_id: str
-    stage: str
-    summary: str
-    user_profile: UserProfile
-    workspace_context: WorkspaceContext
-    created_at: str
-    updated_at: str
-
-
-EventReversibility = Literal["reversible", "compensatable", "irreversible", "append_only"]
-
-
-class EventLedgerEntry(BaseModel):
-    event_id: str = ""
-    event_type: str
-    occurred_at: str = Field(default_factory=utc_now_iso)
-    actor: str = "system"
-    scope: str = ""
-    project_id: str = ""
-    source_chain: list[str] = Field(default_factory=list)
-    payload_ref: dict[str, Any] = Field(default_factory=dict)
-    before_state_ref: dict[str, Any] = Field(default_factory=dict)
-    after_state_ref: dict[str, Any] = Field(default_factory=dict)
-    reversibility: EventReversibility = "irreversible"
-    audit_note: str = ""
-
-
-class WorkspaceAuthoritySummary(BaseModel):
-    has_workspace_root: bool = False
-    active_workspace_root: str = ""
-    root_uri: str = ""
-    root_detail: str = ""
-    source: str = ""
-    source_detail: str = ""
-    authority_source: str = ""
-    remote_name: str = ""
-    is_remote_workspace: bool = False
-    permission_level: str = ""
-    permission_label: str = ""
-    permission_detail: str = ""
-    authority_mode: str = ""
-    authority_scope: str = "project"
-    resource_write_allowed: bool = False
-    resource_write_evidence: dict[str, Any] = Field(default_factory=dict)
-    allowed_operations: list[str] = Field(default_factory=list)
-    allowed_operations_text: str = ""
-    mounted_sources: list[str] = Field(default_factory=list)
-    ledger_entry_count: int = 0
-    checkpoint_count: int = 0
-    counts_text: str = ""
-    trash_root: str = ""
-    trash_detail: str = ""
-    next_safe_action: str = ""
-    summary_text: str = ""
-
-
-class SandboxPlatformInfo(BaseModel):
-    os: Literal["windows", "macos", "linux"] | str = ""
-    architecture: str = ""
-    shell_family: Literal["powershell", "posix"] | str = ""
-    path_separator: str = ""
-    case_sensitivity: Literal["case-sensitive", "case-insensitive"] | str = ""
-    default_encoding: str = "utf-8"
-    workspace_trust_state: str = "unknown"
-
-
-class SandboxCommandEntry(BaseModel):
-    id: str
-    command: str
-    cwd: str
-    status: str
-    exit_code: int | None = None
-    stdout: str = ""
-    stderr: str = ""
-    started_at: str
-    finished_at: str
-    truncated: bool = False
-
-
-class SandboxNode(BaseModel):
-    path: str
-    relative_path: str = ""
-    name: str
-    node_kind: Literal["file", "directory"] | str
-    file_kind: str = ""
-    resource_id: str | None = None
-    source_uri: str | None = None
-    size_bytes: int = 0
-    updated_at: str = ""
-    children_count: int = 0
-    is_editable: bool = False
-    children: list["SandboxNode"] = Field(default_factory=list)
-
-
-class SandboxPreview(BaseModel):
-    path: str
-    relative_path: str = ""
-    title: str = ""
-    node_kind: Literal["file", "directory"] | str = "file"
-    file_kind: str = ""
-    preview_tier: Literal["rich", "converted", "metadata"] | str = "rich"
-    preview_kind: str = "text"
-    language_hint: str = ""
-    rendered_from: str = ""
-    content: str = ""
-    html: str | None = None
-    excerpt: str = ""
-    is_binary: bool = False
-    is_editable: bool = False
-    can_native_open: bool = True
-    structured_data: dict[str, Any] | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class SandboxCapabilityStatus(BaseModel):
-    status: str
-    summary: str = ""
-    policy: str = ""
-    reason_code: str = ""
-    reasons: list[str] = Field(default_factory=list)
-    network_facts: SandboxNetworkExecutionFacts | dict[str, Any] | None = None
-
-
-class SandboxOsContainerExecutorProbe(BaseModel):
-    availability: str
-    selected_runtime: str = ""
-    selected_executor_mode: str = ""
-    selected_entry_runtime: str = ""
-    supported_entry_runtimes: list[str] = Field(default_factory=list)
-    reason_code: str = ""
-    reason: str = ""
-    checked_at: str = ""
-    runtime_path: str = ""
-    probe_command: list[str] = Field(default_factory=list)
-    probe_stdout_excerpt: str = ""
-    probe_stderr_excerpt: str = ""
-    probe_exit_code: int | None = None
-    image_reference: str = ""
-    image_repo_digests: list[str] = Field(default_factory=list)
-    selected_image_repo_digest: str = ""
-    image_trust_policy: str = ""
-    image_trust_status: str = ""
-
-
-class SandboxOsContainerExecutionPlan(BaseModel):
-    status: str
-    runtime: str = ""
-    executor_mode: str = ""
-    selected_entry_runtime: str = ""
-    container_root_path: str = ""
-    container_workdir: str = ""
-    container_input_path: str = ""
-    container_output_paths: list[str] = Field(default_factory=list)
-    mount_root_path: str = ""
-    mount_root_read_only: bool = True
-    network_allowlist: list[str] = Field(default_factory=list)
-    runtime_command: list[str] = Field(default_factory=list)
-    container_image: str = ""
-    container_image_repo_digest: str = ""
-    image_trust_policy: str = ""
-    image_trust_status: str = ""
-    reason_code: str = ""
-    reason: str = ""
-
-
-class SandboxNetworkExecutionFacts(BaseModel):
-    audited_python: dict[str, Any] = Field(default_factory=dict)
-    unaudited_python: dict[str, Any] = Field(default_factory=dict)
-    non_python: dict[str, Any] = Field(default_factory=dict)
-    child_process: dict[str, Any] = Field(default_factory=dict)
-    os_container: dict[str, Any] = Field(default_factory=dict)
-    os_container_probe: SandboxOsContainerExecutorProbe | None = None
-
-
-class SandboxCapabilitySummary(BaseModel):
-    platform: SandboxPlatformInfo
-    permission_state: str = ""
-    path_guard_status: SandboxCapabilityStatus
-    archive_audit_status: SandboxCapabilityStatus
-    skill_manifest_status: SandboxCapabilityStatus
-    skill_runtime_status: SandboxCapabilityStatus
-    network_execution_status: SandboxCapabilityStatus
-    output_boundary_status: SandboxCapabilityStatus
-    cross_system_degradation: list[str] = Field(default_factory=list)
-
-
-class SandboxStateThreatSummary(BaseModel):
-    archive_threat_count: int = 0
-    path_escape_count: int = 0
-    mutation_block_count: int = 0
-    skill_threat_count: int = 0
-    prompt_injection_count: int = 0
-    credential_access_count: int = 0
-    network_exfiltration_count: int = 0
-    supply_chain_count: int = 0
-    malicious_document_count: int = 0
-    resource_threat_count: int = 0
-
-
-class SandboxState(BaseModel):
-    workspace_id: str
-    root_path: str = ""
-    sandbox_root_path: str = ""
-    workspace_root_path: str = ""
-    active_workspace_root: str = ""
-    trash_root_path: str = ""
-    managed_roots: list[str] = Field(default_factory=list)
-    ready: bool = False
-    linked_resource_count: int = 0
-    total_files: int = 0
-    total_directories: int = 0
-    total_size_bytes: int = 0
-    last_updated_at: str = ""
-    nodes: list[SandboxNode] = Field(default_factory=list)
-    selected_path: str | None = None
-    preview: SandboxPreview | None = None
-    recent_commands: list[SandboxCommandEntry] = Field(default_factory=list)
-    latest_command: SandboxCommandEntry | None = None
-    notes: list[str] = Field(default_factory=list)
-    capability_summary: SandboxCapabilitySummary | None = None
-    authority: WorkspaceAuthoritySummary | dict[str, Any] | None = None
-    threat_summary: SandboxStateThreatSummary | None = None
-
-
-class SandboxPreviewRequest(BaseModel):
-    workspace_id: str
-    path: str
-
-
-class SandboxMkdirRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str
-    path: str
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxWriteRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str
-    path: str
-    content: str = ""
-    create: bool = False
-    encoding: str | None = None
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxDeleteRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str
-    path: str
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxRestoreRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str
-    path: str
-    restore_path: str | None = None
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxRenameRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    path: str
-    new_path: str
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxRenamePathRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str
-    path: str
-    new_path: str
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxBatchRenameRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str
-    items: list[SandboxRenameRequest] = Field(default_factory=list)
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxPatchOperation(BaseModel):
-    op: str
-    path: str = ""
-    new_path: str = ""
-    content: str = ""
-    create: bool = False
-    encoding: str | None = None
-    source: str = ""
-    target: str = ""
-
-
-class SandboxPatchRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    workspace_id: str
-    label: str = ""
-    note: str = ""
-    items: list[SandboxPatchOperation] = Field(default_factory=list)
-    explicit_destructive_policy: bool = Field(
-        default=False,
-        alias="explicitDestructivePolicy",
-    )
-
-
-class SandboxCommandRequest(BaseModel):
-    workspace_id: str
-    command: str
-    cwd: str | None = None
-    timeout_ms: int | None = None
-    timeout_seconds: int = 30
-
-
-class SandboxArchiveAuditFinding(BaseModel):
-    category: str
-    severity: str
-    reason: str
-    evidence: str = ""
-    source_path: str = ""
-
-
-class SandboxArchiveAuditEntry(BaseModel):
-    name: str
-    normalized_path: str = ""
-    target_path: str = ""
-    entry_kind: str = ""
-    uncompressed_bytes: int = 0
-    blocked: bool = False
-    reasons: list[str] = Field(default_factory=list)
-
-
-class SandboxArchiveAuditResult(BaseModel):
-    workspace_id: str
-    path: str
-    archive_path: str
-    destination_path: str
-    archive_format: str
-    status: str
-    allowed: bool
-    policy: str
-    findings: list[SandboxArchiveAuditFinding] = Field(default_factory=list)
-    entry_count: int = 0
-    total_uncompressed_bytes: int = 0
-    max_entries: int = 0
-    max_total_uncompressed_bytes: int = 0
-    entries: list[SandboxArchiveAuditEntry] = Field(default_factory=list)
-
-
-class SandboxSkillManifestFinding(BaseModel):
-    category: str
-    severity: str
-    reason: str
-    evidence: str = ""
-    source_path: str = ""
-
-
-class SandboxSkillManifestAuditResult(BaseModel):
-    workspace_id: str
-    path: str
-    manifest_path: str = ""
-    skill_name: str = ""
-    status: str
-    allowed: bool
-    policy: str
-    findings: list[SandboxSkillManifestFinding] = Field(default_factory=list)
-    requested_permissions: list[str] = Field(default_factory=list)
-    network_allowlist: list[str] = Field(default_factory=list)
-    execution_entrypoints: list[str] = Field(default_factory=list)
-    audited_paths: list[str] = Field(default_factory=list)
-
-
-class SandboxSkillRuntimePolicy(BaseModel):
-    platform: Literal["cross_platform", "windows", "macos", "linux"] | str = "cross_platform"
-    command_templates: list[str] = Field(default_factory=list)
-    network_allowlist: list[str] = Field(default_factory=list)
-    env_whitelist: list[str] = Field(default_factory=list)
-    output_paths: list[str] = Field(default_factory=list)
-    timeout_ms: int = 20_000
-
-
-class SandboxSkillRuntimePreflightResult(BaseModel):
-    workspace_id: str
-    path: str
-    manifest_path: str = ""
-    skill_name: str = ""
-    status: str
-    allowed: bool
-    policy: str
-    manifest_policy: str = ""
-    current_platform: str = ""
-    runtime_platform: str = ""
-    command_templates: list[str] = Field(default_factory=list)
-    network_allowlist: list[str] = Field(default_factory=list)
-    env_whitelist: list[str] = Field(default_factory=list)
-    output_paths: list[str] = Field(default_factory=list)
-    normalized_output_paths: list[str] = Field(default_factory=list)
-    timeout_ms: int = 0
-    max_timeout_ms: int = 0
-    manifest_audit: SandboxSkillManifestAuditResult | None = None
-    findings: list[SandboxSkillManifestFinding] = Field(default_factory=list)
-    audited_paths: list[str] = Field(default_factory=list)
-
-
-class SandboxSkillEgressDecision(BaseModel):
-    policy: str
-    status: str
-    allowed: bool
-    enforcement_available: bool
-    requested_hosts: list[str] = Field(default_factory=list)
-    allowed_hosts: list[str] = Field(default_factory=list)
-    blocked_hosts: list[str] = Field(default_factory=list)
-    lane: str = ""
-    required_executor: str = ""
-    required_executor_probe: SandboxOsContainerExecutorProbe | None = None
-    container_execution_plan: SandboxOsContainerExecutionPlan | None = None
-    enforcement_mode: str = ""
-    verified_command_paths: list[str] = Field(default_factory=list)
-    limitations: list[str] = Field(default_factory=list)
-    reason_code: str = ""
-    reason: str = ""
-    operation_log: list[str] = Field(default_factory=list)
-
-
-class SandboxSkillRunResult(BaseModel):
-    run_id: str
-    workspace_id: str
-    path: str
-    manifest_path: str = ""
-    skill_name: str = ""
-    status: str
-    allowed: bool
-    dry_run: bool = False
-    execution_status: str = ""
-    execution_performed: bool = False
-    execution_reason: str = ""
-    policy: str
-    preflight_policy: str = ""
-    preflight: SandboxSkillRuntimePreflightResult | None = None
-    egress_decision: SandboxSkillEgressDecision | None = None
-    command_templates: list[str] = Field(default_factory=list)
-    normalized_output_paths: list[str] = Field(default_factory=list)
-    derived_artifact_paths: list[str] = Field(default_factory=list)
-    impact_scope: list[str] = Field(default_factory=list)
-    operation_log: list[str] = Field(default_factory=list)
-    command_results: list[SandboxCommandEntry] = Field(default_factory=list)
-    execution_cwd: str = ""
-    exit_code: int | None = None
-    stdout: str = ""
-    stderr: str = ""
-    truncated: bool = False
-    blockers: list[SandboxSkillManifestFinding] = Field(default_factory=list)
-    requested_by: str = "trainer"
-    reason: str = ""
-
-
-class SandboxSkillRunRequest(BaseModel):
-    workspace_id: str
-    path: str
-    runtime_policy: SandboxSkillRuntimePolicy
-    current_platform: Literal["windows", "macos", "linux"] | None = None
-    include_manifest_scripts: bool = True
-    dry_run: bool = True
-    requested_by: str = "trainer"
-    reason: str = ""
-
-
-ResourceRecord.model_rebuild()
-SandboxNode.model_rebuild()
+from .model_domains.foundations_and_provider import (
+    AssetSourceKind as AssetSourceKind,
+)
+from .model_domains.foundations_and_provider import (
+    AssetSourceReference as AssetSourceReference,
+)
+from .model_domains.foundations_and_provider import (
+    AssetSourceState as AssetSourceState,
+)
+from .model_domains.foundations_and_provider import (
+    CapabilityFlags as CapabilityFlags,
+)
+from .model_domains.foundations_and_provider import (
+    CoachActionType as CoachActionType,
+)
+from .model_domains.foundations_and_provider import (
+    CoachArtifactKind as CoachArtifactKind,
+)
+from .model_domains.foundations_and_provider import (
+    CoachMemoryScope as CoachMemoryScope,
+)
+from .model_domains.foundations_and_provider import (
+    CoachRequestAnswerMode as CoachRequestAnswerMode,
+)
+from .model_domains.foundations_and_provider import (
+    CoachScenario as CoachScenario,
+)
+from .model_domains.foundations_and_provider import (
+    DependencyMasteryStage as DependencyMasteryStage,
+)
+from .model_domains.foundations_and_provider import (
+    FolderRole as FolderRole,
+)
+from .model_domains.foundations_and_provider import (
+    GlobalMemory as GlobalMemory,
+)
+from .model_domains.foundations_and_provider import (
+    GlobalMemoryCapability as GlobalMemoryCapability,
+)
+from .model_domains.foundations_and_provider import (
+    GlobalMemoryGrowthRecord as GlobalMemoryGrowthRecord,
+)
+from .model_domains.foundations_and_provider import (
+    GlobalPlan as GlobalPlan,
+)
+from .model_domains.foundations_and_provider import (
+    GlobalPlanProjectLink as GlobalPlanProjectLink,
+)
+from .model_domains.foundations_and_provider import (
+    LearnerSignal as LearnerSignal,
+)
+from .model_domains.foundations_and_provider import (
+    LearningPlan as LearningPlan,
+)
+from .model_domains.foundations_and_provider import (
+    LearningSignalOutcome as LearningSignalOutcome,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAsset as LibraryAsset,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAssetCatalogEntry as LibraryAssetCatalogEntry,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAssetCatalogSnapshot as LibraryAssetCatalogSnapshot,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAssetLinkRequest as LibraryAssetLinkRequest,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAssetScope as LibraryAssetScope,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAssetStatus as LibraryAssetStatus,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAssetType as LibraryAssetType,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryAssetUpsertRequest as LibraryAssetUpsertRequest,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryGroupNode as LibraryGroupNode,
+)
+from .model_domains.foundations_and_provider import (
+    LibraryGroupsResponse as LibraryGroupsResponse,
+)
+from .model_domains.foundations_and_provider import (
+    LocalOwner as LocalOwner,
+)
+from .model_domains.foundations_and_provider import (
+    MemoryShareCategory as MemoryShareCategory,
+)
+from .model_domains.foundations_and_provider import (
+    PlanPhase as PlanPhase,
+)
+from .model_domains.foundations_and_provider import (
+    PlanStage as PlanStage,
+)
+from .model_domains.foundations_and_provider import (
+    ProjectContext as ProjectContext,
+)
+from .model_domains.foundations_and_provider import (
+    ProjectProvisioning as ProjectProvisioning,
+)
+from .model_domains.foundations_and_provider import (
+    ProjectTypeGuess as ProjectTypeGuess,
+)
+from .model_domains.foundations_and_provider import (
+    ProviderConfig as ProviderConfig,
+)
+from .model_domains.foundations_and_provider import (
+    ProviderCredentialMode as ProviderCredentialMode,
+)
+from .model_domains.foundations_and_provider import (
+    ProviderModelTokenLimit as ProviderModelTokenLimit,
+)
+from .model_domains.foundations_and_provider import (
+    ProviderProtocol as ProviderProtocol,
+)
+from .model_domains.foundations_and_provider import (
+    ProviderProtocolCatalogEntry as ProviderProtocolCatalogEntry,
+)
+from .model_domains.foundations_and_provider import (
+    ProviderProtocolFamily as ProviderProtocolFamily,
+)
+from .model_domains.foundations_and_provider import (
+    ProviderProtocolTestMode as ProviderProtocolTestMode,
+)
+from .model_domains.foundations_and_provider import (
+    ResourceCaptureResponse as ResourceCaptureResponse,
+)
+from .model_domains.foundations_and_provider import (
+    ResourceRecord as ResourceRecord,
+)
+from .model_domains.foundations_and_provider import (
+    ResourceTrashItem as ResourceTrashItem,
+)
+from .model_domains.foundations_and_provider import (
+    ResourceTrashResponse as ResourceTrashResponse,
+)
+from .model_domains.foundations_and_provider import (
+    ResourceTrustState as ResourceTrustState,
+)
+from .model_domains.foundations_and_provider import (
+    ResponseLanguage as ResponseLanguage,
+)
+from .model_domains.foundations_and_provider import (
+    ReviewCadence as ReviewCadence,
+)
+from .model_domains.foundations_and_provider import (
+    ReviewReminderMode as ReviewReminderMode,
+)
+from .model_domains.foundations_and_provider import (
+    SourceIntakeDeclaration as SourceIntakeDeclaration,
+)
+from .model_domains.foundations_and_provider import (
+    SourceIntakeGovernance as SourceIntakeGovernance,
+)
+from .model_domains.foundations_and_provider import (
+    SubPlan as SubPlan,
+)
+from .model_domains.foundations_and_provider import (
+    TeachingAssetKind as TeachingAssetKind,
+)
+from .model_domains.foundations_and_provider import (
+    TeachingAssetOrigin as TeachingAssetOrigin,
+)
+from .model_domains.foundations_and_provider import (
+    TeachingAssetScope as TeachingAssetScope,
+)
+from .model_domains.foundations_and_provider import (
+    TeachingMode as TeachingMode,
+)
+from .model_domains.foundations_and_provider import (
+    ToneName as ToneName,
+)
+from .model_domains.foundations_and_provider import (
+    TrainerProject as TrainerProject,
+)
+from .model_domains.foundations_and_provider import (
+    TrainerRoot as TrainerRoot,
+)
+from .model_domains.foundations_and_provider import (
+    TrainingCardCreatedFrom as TrainingCardCreatedFrom,
+)
+from .model_domains.foundations_and_provider import (
+    TrainingCardStatus as TrainingCardStatus,
+)
+from .model_domains.foundations_and_provider import (
+    TrainingCardTrustState as TrainingCardTrustState,
+)
+from .model_domains.foundations_and_provider import (
+    TrainingCardType as TrainingCardType,
+)
+from .model_domains.foundations_and_provider import (
+    TrainingLearningFamily as TrainingLearningFamily,
+)
+from .model_domains.foundations_and_provider import (
+    TrainingLearningPhase as TrainingLearningPhase,
+)
+from .model_domains.foundations_and_provider import (
+    UserFeedbackKind as UserFeedbackKind,
+)
+from .model_domains.foundations_and_provider import (
+    UserProfile as UserProfile,
+)
+from .model_domains.foundations_and_provider import (
+    VerbosityBias as VerbosityBias,
+)
+from .model_domains.foundations_and_provider import (
+    WorkingSetMode as WorkingSetMode,
+)
+from .model_domains.foundations_and_provider import (
+    WorkspaceSubjectFamily as WorkspaceSubjectFamily,
+)
+from .model_domains.foundations_and_provider import (
+    derive_resource_trust_state as derive_resource_trust_state,
+)
+from .model_domains.foundations_and_provider import (
+    utc_now_iso as utc_now_iso,
+)
+from .model_domains.memory_and_coach import (
+    ActiveThreadSnapshot as ActiveThreadSnapshot,
+)
+from .model_domains.memory_and_coach import (
+    AffectState as AffectState,
+)
+from .model_domains.memory_and_coach import (
+    AgentMeta as AgentMeta,
+)
+from .model_domains.memory_and_coach import (
+    ChatMessage as ChatMessage,
+)
+from .model_domains.memory_and_coach import (
+    CoachArtifact as CoachArtifact,
+)
+from .model_domains.memory_and_coach import (
+    CoachDefaults as CoachDefaults,
+)
+from .model_domains.memory_and_coach import (
+    CoachingAdaptationProfile as CoachingAdaptationProfile,
+)
+from .model_domains.memory_and_coach import (
+    CoachingState as CoachingState,
+)
+from .model_domains.memory_and_coach import (
+    CoachSettingsRequest as CoachSettingsRequest,
+)
+from .model_domains.memory_and_coach import (
+    CoachTurnSummary as CoachTurnSummary,
+)
+from .model_domains.memory_and_coach import (
+    CurrentFilePayload as CurrentFilePayload,
+)
+from .model_domains.memory_and_coach import (
+    CustomSkill as CustomSkill,
+)
+from .model_domains.memory_and_coach import (
+    DependencySkillMapActionRequest as DependencySkillMapActionRequest,
+)
+from .model_domains.memory_and_coach import (
+    DependencySkillMapRestoreRequest as DependencySkillMapRestoreRequest,
+)
+from .model_domains.memory_and_coach import (
+    EvidenceAdoptRequest as EvidenceAdoptRequest,
+)
+from .model_domains.memory_and_coach import (
+    EvidenceDeferRequest as EvidenceDeferRequest,
+)
+from .model_domains.memory_and_coach import (
+    EvidenceRejectRequest as EvidenceRejectRequest,
+)
+from .model_domains.memory_and_coach import (
+    FirstLookSummary as FirstLookSummary,
+)
+from .model_domains.memory_and_coach import (
+    FlashcardAnswerRequest as FlashcardAnswerRequest,
+)
+from .model_domains.memory_and_coach import (
+    GlobalMemoryUpdateRequest as GlobalMemoryUpdateRequest,
+)
+from .model_domains.memory_and_coach import (
+    GoalActivity as GoalActivity,
+)
+from .model_domains.memory_and_coach import (
+    GoalControlRequest as GoalControlRequest,
+)
+from .model_domains.memory_and_coach import (
+    GoalSession as GoalSession,
+)
+from .model_domains.memory_and_coach import (
+    ImplementationGuide as ImplementationGuide,
+)
+from .model_domains.memory_and_coach import (
+    LearnerState as LearnerState,
+)
+from .model_domains.memory_and_coach import (
+    LearningActivityEntry as LearningActivityEntry,
+)
+from .model_domains.memory_and_coach import (
+    MemoryShareGrant as MemoryShareGrant,
+)
+from .model_domains.memory_and_coach import (
+    MemoryShareGrantRevokeRequest as MemoryShareGrantRevokeRequest,
+)
+from .model_domains.memory_and_coach import (
+    MemoryShareGrantUpsertRequest as MemoryShareGrantUpsertRequest,
+)
+from .model_domains.memory_and_coach import (
+    MemorySnapshot as MemorySnapshot,
+)
+from .model_domains.memory_and_coach import (
+    MessageAttachment as MessageAttachment,
+)
+from .model_domains.memory_and_coach import (
+    PracticeReturnRequest as PracticeReturnRequest,
+)
+from .model_domains.memory_and_coach import (
+    PrincipleNotes as PrincipleNotes,
+)
+from .model_domains.memory_and_coach import (
+    ProjectAdaptationGuide as ProjectAdaptationGuide,
+)
+from .model_domains.memory_and_coach import (
+    ProjectIdea as ProjectIdea,
+)
+from .model_domains.memory_and_coach import (
+    ProjectOpportunitySignal as ProjectOpportunitySignal,
+)
+from .model_domains.memory_and_coach import (
+    ProjectSourceSuggestion as ProjectSourceSuggestion,
+)
+from .model_domains.memory_and_coach import (
+    ResourceComposerIntent as ResourceComposerIntent,
+)
+from .model_domains.memory_and_coach import (
+    RestoreHistoryRequest as RestoreHistoryRequest,
+)
+from .model_domains.memory_and_coach import (
+    ReviewArtifactActionRequest as ReviewArtifactActionRequest,
+)
+from .model_domains.memory_and_coach import (
+    ReviewArtifactHistoryEntry as ReviewArtifactHistoryEntry,
+)
+from .model_domains.memory_and_coach import (
+    ReviewArtifactRestoreRequest as ReviewArtifactRestoreRequest,
+)
+from .model_domains.memory_and_coach import (
+    ReviewArtifactSnapshot as ReviewArtifactSnapshot,
+)
+from .model_domains.memory_and_coach import (
+    ReviewQueueActionRequest as ReviewQueueActionRequest,
+)
+from .model_domains.memory_and_coach import (
+    ScenarioLab as ScenarioLab,
+)
+from .model_domains.memory_and_coach import (
+    ScenarioLabActionRequest as ScenarioLabActionRequest,
+)
+from .model_domains.memory_and_coach import (
+    ScenarioLabHistoryEntry as ScenarioLabHistoryEntry,
+)
+from .model_domains.memory_and_coach import (
+    ScenarioLabRestoreRequest as ScenarioLabRestoreRequest,
+)
+from .model_domains.memory_and_coach import (
+    SessionMessageRequest as SessionMessageRequest,
+)
+from .model_domains.memory_and_coach import (
+    SessionMessageResponse as SessionMessageResponse,
+)
+from .model_domains.memory_and_coach import (
+    SessionStartRequest as SessionStartRequest,
+)
+from .model_domains.memory_and_coach import (
+    StageMaterialItem as StageMaterialItem,
+)
+from .model_domains.memory_and_coach import (
+    SuggestedAction as SuggestedAction,
+)
+from .model_domains.memory_and_coach import (
+    TeachingDecision as TeachingDecision,
+)
+from .model_domains.memory_and_coach import (
+    TheoryDrillActionRequest as TheoryDrillActionRequest,
+)
+from .model_domains.memory_and_coach import (
+    TheoryDrillAnswerRequest as TheoryDrillAnswerRequest,
+)
+from .model_domains.memory_and_coach import (
+    TheoryDrillHistoryEntry as TheoryDrillHistoryEntry,
+)
+from .model_domains.memory_and_coach import (
+    TheoryDrillQuestion as TheoryDrillQuestion,
+)
+from .model_domains.memory_and_coach import (
+    TheoryDrillRestoreRequest as TheoryDrillRestoreRequest,
+)
+from .model_domains.memory_and_coach import (
+    TheoryDrillSnapshot as TheoryDrillSnapshot,
+)
+from .model_domains.memory_and_coach import (
+    ToneDecision as ToneDecision,
+)
+from .model_domains.memory_and_coach import (
+    TrainingHandoffActionResponse as TrainingHandoffActionResponse,
+)
+from .model_domains.memory_and_coach import (
+    TrainingHandoffReflectionRequest as TrainingHandoffReflectionRequest,
+)
+from .model_domains.memory_and_coach import (
+    TrainingHandoffReturnRequest as TrainingHandoffReturnRequest,
+)
+from .model_domains.memory_and_coach import (
+    TrainingReliabilityControlRequest as TrainingReliabilityControlRequest,
+)
+from .model_domains.memory_and_coach import (
+    TrainingReliabilityRecord as TrainingReliabilityRecord,
+)
+from .model_domains.memory_and_coach import (
+    TransferPromotionScopeRequest as TransferPromotionScopeRequest,
+)
+from .model_domains.memory_and_coach import (
+    TurnRequest as TurnRequest,
+)
+from .model_domains.memory_and_coach import (
+    WorkbenchSnapshot as WorkbenchSnapshot,
+)
+from .model_domains.memory_and_coach import (
+    WorkspaceMemoryToggles as WorkspaceMemoryToggles,
+)
+from .model_domains.memory_and_coach import (
+    WorkspaceResetRequest as WorkspaceResetRequest,
+)
+from .model_domains.memory_and_coach import (
+    WorkspaceUnderstandingSnapshot as WorkspaceUnderstandingSnapshot,
+)
+from .model_domains.resources_and_training import (
+    _ALTERNATIVE_SYMBOL_PAIR_RE as _ALTERNATIVE_SYMBOL_PAIR_RE,
+)
+from .model_domains.resources_and_training import (
+    _FILE_NOTE_OPEN_RE as _FILE_NOTE_OPEN_RE,
+)
+from .model_domains.resources_and_training import (
+    _SENTENCE_PUNCTUATION_RE as _SENTENCE_PUNCTUATION_RE,
+)
+from .model_domains.resources_and_training import (
+    _TRAILING_FILE_NAME_RE as _TRAILING_FILE_NAME_RE,
+)
+from .model_domains.resources_and_training import (
+    ActiveCardSelectionResult as ActiveCardSelectionResult,
+)
+from .model_domains.resources_and_training import (
+    BlockedCandidateDetail as BlockedCandidateDetail,
+)
+from .model_domains.resources_and_training import (
+    CardGenerationContext as CardGenerationContext,
+)
+from .model_domains.resources_and_training import (
+    CardGenerationRequest as CardGenerationRequest,
+)
+from .model_domains.resources_and_training import (
+    CardGenerationResponse as CardGenerationResponse,
+)
+from .model_domains.resources_and_training import (
+    CardImportanceRequest as CardImportanceRequest,
+)
+from .model_domains.resources_and_training import (
+    CardLibraryActionRequest as CardLibraryActionRequest,
+)
+from .model_domains.resources_and_training import (
+    CardMergeRequest as CardMergeRequest,
+)
+from .model_domains.resources_and_training import (
+    CardPriorityRequest as CardPriorityRequest,
+)
+from .model_domains.resources_and_training import (
+    CardStatusTransitionRequest as CardStatusTransitionRequest,
+)
+from .model_domains.resources_and_training import (
+    CardStatusTransitionResponse as CardStatusTransitionResponse,
+)
+from .model_domains.resources_and_training import (
+    DependencyMasterySnapshot as DependencyMasterySnapshot,
+)
+from .model_domains.resources_and_training import (
+    DependencySkillItemSnapshot as DependencySkillItemSnapshot,
+)
+from .model_domains.resources_and_training import (
+    DependencySkillMapHistoryEntry as DependencySkillMapHistoryEntry,
+)
+from .model_domains.resources_and_training import (
+    DependencySkillMapSnapshot as DependencySkillMapSnapshot,
+)
+from .model_domains.resources_and_training import (
+    DependencyUsageEvidence as DependencyUsageEvidence,
+)
+from .model_domains.resources_and_training import (
+    EvaluationCheck as EvaluationCheck,
+)
+from .model_domains.resources_and_training import (
+    EvaluationReport as EvaluationReport,
+)
+from .model_domains.resources_and_training import (
+    EvidenceAdoptResponse as EvidenceAdoptResponse,
+)
+from .model_domains.resources_and_training import (
+    EvidenceItem as EvidenceItem,
+)
+from .model_domains.resources_and_training import (
+    EvidenceQueueSnapshot as EvidenceQueueSnapshot,
+)
+from .model_domains.resources_and_training import (
+    ExpectedResourceVersion as ExpectedResourceVersion,
+)
+from .model_domains.resources_and_training import (
+    FlashcardAttempt as FlashcardAttempt,
+)
+from .model_domains.resources_and_training import (
+    FlashDeckSnapshot as FlashDeckSnapshot,
+)
+from .model_domains.resources_and_training import (
+    LibraryAssetLifecycleRequest as LibraryAssetLifecycleRequest,
+)
+from .model_domains.resources_and_training import (
+    PlanChangeCandidate as PlanChangeCandidate,
+)
+from .model_domains.resources_and_training import (
+    PlanChangeCandidateStatus as PlanChangeCandidateStatus,
+)
+from .model_domains.resources_and_training import (
+    ResearchBrief as ResearchBrief,
+)
+from .model_domains.resources_and_training import (
+    ResearchBriefCheckQuestion as ResearchBriefCheckQuestion,
+)
+from .model_domains.resources_and_training import (
+    ResearchBriefClaimStatus as ResearchBriefClaimStatus,
+)
+from .model_domains.resources_and_training import (
+    ResearchBriefDraftRequest as ResearchBriefDraftRequest,
+)
+from .model_domains.resources_and_training import (
+    ResearchBriefFinding as ResearchBriefFinding,
+)
+from .model_domains.resources_and_training import (
+    ResearchBriefUpsertRequest as ResearchBriefUpsertRequest,
+)
+from .model_domains.resources_and_training import (
+    ResourceKnowledgeEvidence as ResourceKnowledgeEvidence,
+)
+from .model_domains.resources_and_training import (
+    ReviewQueueAction as ReviewQueueAction,
+)
+from .model_domains.resources_and_training import (
+    ReviewQueueItem as ReviewQueueItem,
+)
+from .model_domains.resources_and_training import (
+    TaskSpec as TaskSpec,
+)
+from .model_domains.resources_and_training import (
+    TeachingKnowledgeAsset as TeachingKnowledgeAsset,
+)
+from .model_domains.resources_and_training import (
+    TrainingCardCandidateSnapshot as TrainingCardCandidateSnapshot,
+)
+from .model_domains.resources_and_training import (
+    TrainingCardScoreFactors as TrainingCardScoreFactors,
+)
+from .model_domains.resources_and_training import (
+    TrainingPlanBinding as TrainingPlanBinding,
+)
+from .model_domains.resources_and_training import (
+    TrainingReliabilityRequestFields as TrainingReliabilityRequestFields,
+)
+from .model_domains.resources_and_training import (
+    _drop_alternative_expected_symbols as _drop_alternative_expected_symbols,
+)
+from .model_domains.resources_and_training import (
+    _looks_like_training_file_target as _looks_like_training_file_target,
+)
+from .model_domains.resources_and_training import (
+    _normalize_training_file_path as _normalize_training_file_path,
+)
+from .model_domains.workspace_and_sandbox import (
+    AgentCheckpointAccessRequest as AgentCheckpointAccessRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    EvaluateCurrentFileRequest as EvaluateCurrentFileRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    EvaluateSnippetRequest as EvaluateSnippetRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    EventLedgerEntry as EventLedgerEntry,
+)
+from .model_domains.workspace_and_sandbox import (
+    EventReversibility as EventReversibility,
+)
+from .model_domains.workspace_and_sandbox import (
+    GlobalPlanProjectLinkRequest as GlobalPlanProjectLinkRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    GlobalPlanUpdateRequest as GlobalPlanUpdateRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    LearningSignalRequest as LearningSignalRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    PlanGenerateRequest as PlanGenerateRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    PlanUpdateRequest as PlanUpdateRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ProviderCapabilityEvidence as ProviderCapabilityEvidence,
+)
+from .model_domains.workspace_and_sandbox import (
+    ProviderCapabilityState as ProviderCapabilityState,
+)
+from .model_domains.workspace_and_sandbox import (
+    ProviderModelsRequest as ProviderModelsRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ProviderModelsResponse as ProviderModelsResponse,
+)
+from .model_domains.workspace_and_sandbox import (
+    ProviderProbeUsage as ProviderProbeUsage,
+)
+from .model_domains.workspace_and_sandbox import (
+    ProviderTestRequest as ProviderTestRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ProviderTestResponse as ProviderTestResponse,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceCanonicalizeRequest as ResourceCanonicalizeRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceCaptureRequest as ResourceCaptureRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceDeleteRequest as ResourceDeleteRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceDigestRequest as ResourceDigestRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceIndexRequest as ResourceIndexRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceOrganizeRequest as ResourceOrganizeRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceRestoreRequest as ResourceRestoreRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceSearchRequest as ResourceSearchRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    ResourceUploadRequest as ResourceUploadRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxArchiveAuditEntry as SandboxArchiveAuditEntry,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxArchiveAuditFinding as SandboxArchiveAuditFinding,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxArchiveAuditResult as SandboxArchiveAuditResult,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxBatchRenameRequest as SandboxBatchRenameRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxCapabilityStatus as SandboxCapabilityStatus,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxCapabilitySummary as SandboxCapabilitySummary,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxCommandEntry as SandboxCommandEntry,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxCommandRequest as SandboxCommandRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxDeleteRequest as SandboxDeleteRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxMkdirRequest as SandboxMkdirRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxNetworkExecutionFacts as SandboxNetworkExecutionFacts,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxNode as SandboxNode,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxOsContainerExecutionPlan as SandboxOsContainerExecutionPlan,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxOsContainerExecutorProbe as SandboxOsContainerExecutorProbe,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxPatchOperation as SandboxPatchOperation,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxPatchRequest as SandboxPatchRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxPlatformInfo as SandboxPlatformInfo,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxPreview as SandboxPreview,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxPreviewRequest as SandboxPreviewRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxRenamePathRequest as SandboxRenamePathRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxRenameRequest as SandboxRenameRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxRestoreRequest as SandboxRestoreRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxSkillEgressDecision as SandboxSkillEgressDecision,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxSkillManifestAuditResult as SandboxSkillManifestAuditResult,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxSkillManifestFinding as SandboxSkillManifestFinding,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxSkillRunRequest as SandboxSkillRunRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxSkillRunResult as SandboxSkillRunResult,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxSkillRuntimePolicy as SandboxSkillRuntimePolicy,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxSkillRuntimePreflightResult as SandboxSkillRuntimePreflightResult,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxState as SandboxState,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxStateThreatSummary as SandboxStateThreatSummary,
+)
+from .model_domains.workspace_and_sandbox import (
+    SandboxWriteRequest as SandboxWriteRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    SessionRecord as SessionRecord,
+)
+from .model_domains.workspace_and_sandbox import (
+    TaskNextRequest as TaskNextRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    TaskSpecifyRequest as TaskSpecifyRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    UserFeedbackRequest as UserFeedbackRequest,
+)
+from .model_domains.workspace_and_sandbox import (
+    WorkspaceAuthoritySummary as WorkspaceAuthoritySummary,
+)
+from .model_domains.workspace_and_sandbox import (
+    WorkspaceContext as WorkspaceContext,
+)

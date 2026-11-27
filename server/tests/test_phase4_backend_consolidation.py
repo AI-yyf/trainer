@@ -18,6 +18,9 @@ FORMER_MONOLITH_CEILINGS = {
     "sandbox/service.py": 2200,
     "llm/tools.py": 900,
     "training/card_generator.py": 2000,
+    "resources/service.py": 2000,
+    "core/models.py": 2000,
+    "llm/prompts.py": 2000,
 }
 
 EXTRACTED_DOMAIN_DIRS = (
@@ -28,6 +31,12 @@ EXTRACTED_DOMAIN_DIRS = (
     "sandbox",
     "llm/tool_handlers",
     "training/card_generator_domains",
+)
+
+PHASE5_STRICT_2K_DOMAIN_DIRS = (
+    "resources",
+    "core/model_domains",
+    "llm/prompt_domains",
 )
 
 
@@ -82,12 +91,22 @@ def test_phase4_backend_module_line_ceilings() -> None:
                 oversized.append(f"{py_path.relative_to(SERVER_APP).as_posix()} ({line_count} lines)")
     assert oversized == [], f"Extracted backend modules must stay < 2500 lines: {oversized}"
 
-    over_5k = [
+    oversized_2k: list[str] = []
+    for rel_dir in PHASE5_STRICT_2K_DOMAIN_DIRS:
+        for py_path in sorted((SERVER_APP / rel_dir).glob("*.py")):
+            if py_path.name == "preview.py":
+                continue
+            line_count = len(py_path.read_text(encoding="utf-8").splitlines())
+            if line_count >= 2000:
+                oversized_2k.append(f"{py_path.relative_to(SERVER_APP).as_posix()} ({line_count} lines)")
+    assert oversized_2k == [], f"Phase 5 extracted modules must stay < 2000 lines: {oversized_2k}"
+
+    over_4k = [
         f"{p.relative_to(SERVER_APP).as_posix()} ({len(p.read_text(encoding='utf-8').splitlines())} lines)"
         for p in sorted(SERVER_APP.rglob("*.py"))
-        if len(p.read_text(encoding="utf-8").splitlines()) >= 5000
+        if len(p.read_text(encoding="utf-8").splitlines()) >= 4000
     ]
-    assert over_5k == [], f"No server/app module may exceed 5000 lines: {over_5k}"
+    assert over_4k == [], f"No server/app module may exceed 4000 lines: {over_4k}"
 
 
 def test_bundled_server_app_python_mirror_parity() -> None:
