@@ -1,16 +1,22 @@
 import { create } from "zustand";
 import {
-  emptyWebviewSyncCursor, decideWebviewSync, appliedWebviewSyncCursor,
-  type WebviewSyncCursor, type WebviewSyncStatus, type WebviewOperationIdentity, type WebviewOperationPhase,
-  operationMatchesWebviewScope, webviewOperationTargetKey,
+  appliedWebviewSyncCursor,
+  decideWebviewSync,
+  emptyWebviewSyncCursor,
+  operationMatchesWebviewScope,webviewOperationTargetKey,
+  type WebviewOperationIdentity,type WebviewOperationPhase,
+  type WebviewSyncCursor,type WebviewSyncStatus,
 } from "../../../../shared/src/webviewSync";
 
 import { trainerCommands } from "../../../../shared/src/commands";
-import type { GoalSession } from "../../../../shared/src/models";
-import { isCurrentStreamEvent } from "../../../../shared/src/streamEventScope";
 import { sanitizeErrorSurfaceText } from "../../../../shared/src/errorSurfaceSanitizer";
 import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
-import { formalPlanIdentityIsLive } from "../../../../shared/src/workspaceRecoveryGovernance";
+import type { GoalSession } from "../../../../shared/src/models";
+import {
+  mapStreamStatusToReliabilityPhase,
+  normalizeOperationReliabilityOutcome,
+  normalizeOperationReliabilityPhase,
+} from "../../../../shared/src/operationReliabilityGovernance";
 import {
   createEmptyTrainerStreamingState,
   deriveTrainerStreamingOperationMessage,
@@ -19,18 +25,33 @@ import {
   type TrainerOperationMessage,
   type TrainerToolActivity,
 } from "../../../../shared/src/protocol";
-import {
-  mapStreamStatusToReliabilityPhase,
-  normalizeOperationReliabilityOutcome,
-  normalizeOperationReliabilityPhase,
-} from "../../../../shared/src/operationReliabilityGovernance";
+import { isCurrentStreamEvent } from "../../../../shared/src/streamEventScope";
+import { formalPlanIdentityIsLive } from "../../../../shared/src/workspaceRecoveryGovernance";
 import { composerDockDraftScope } from "../lib/composerDock";
+import { appUiCopy } from "../lib/i18n/appUiCopy";
 import { createNeutralBootstrapData } from "../lib/neutralBootstrap";
-import { trainerStageKindForTool } from "../lib/trainerStage";
 import {
   resolveOperationMessageSurface,
   type OperationMessageSurface,
 } from "../lib/operationMessageGovernance";
+import { setRemoteImageLanguageResolver } from "../lib/remoteImages";
+import { trainerStageKindForTool } from "../lib/trainerStage";
+import type {
+  ActiveWorkbenchView,
+  BootstrapData,
+  CoachDefaults,
+  ComposerLanguage,
+  HostMessage,
+  LearningSection,
+  LearningSurfaceAlignment,
+  PersistedWorkbenchState,
+  ProviderConfigView,
+  ProviderSummary,
+  StageMaterialItem,
+  TeachingStyle,
+  ThemePreference,
+} from "../lib/types";
+import { COACH_DRAFT_APPLIED_LIMIT,normalizeLearningSection,normalizeSidebarView,normalizeTeachingStyle } from "../lib/types";
 import {
   sanitizeVisibleData,
   sanitizeVisibleText,
@@ -44,25 +65,6 @@ import {
   postMessage,
   setPersistedState,
 } from "../lib/vscode";
-import { normalizeLearningSection, normalizeSidebarView } from "../lib/types";
-import { appUiCopy } from "../lib/i18n/appUiCopy";
-import { setRemoteImageLanguageResolver } from "../lib/remoteImages";
-import type {
-  ActiveWorkbenchView,
-  BootstrapData,
-  ComposerLanguage,
-  CoachDefaults,
-  LearningSection,
-  LearningSurfaceAlignment,
-  HostMessage,
-  PersistedWorkbenchState,
-  ProviderConfigView,
-  ProviderSummary,
-  StageMaterialItem,
-  TeachingStyle,
-  ThemePreference,
-} from "../lib/types";
-import { COACH_DRAFT_APPLIED_LIMIT, normalizeTeachingStyle } from "../lib/types";
 
 type WorkbenchMemoryState = BootstrapData["memory"] & {
   memoryEvidence: string[];

@@ -1,5 +1,5 @@
+import { MenuList,MenuToggleRow } from "../../app/appHelpers";
 import type { Copy } from "../../lib/i18n/copyTypes";
-import { MenuList, MenuToggleRow } from "../../app/appHelpers";
 
 export type ComposerContextDetail = "focused" | "balanced" | "full";
 

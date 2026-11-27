@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback,useEffect,useRef,useState } from "react";
 
-import type { ActiveWorkbenchView, ConversationMessage } from "../lib/types";
+import type { ActiveWorkbenchView,ConversationMessage } from "../lib/types";
 
 /**
  * Coach-conversation controller (DESIGN.md §3, round 3).

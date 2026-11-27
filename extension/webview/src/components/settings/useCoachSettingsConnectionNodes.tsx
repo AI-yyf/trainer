@@ -1,264 +1,53 @@
-import { templateCopy } from "../../templates/templateCopy";
-import { SettingsIndex, type SettingsSectionId } from "../../templates/SettingsIndex";
-import { SettingsDetail } from "../../templates/SettingsDetail";
+import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
+import type { ProviderModelTokenLimit } from "../../../../../shared/src/models";
 import {
-  ChoiceList,
-  ContextList,
-  SimpleInfoRow,
-  SummaryCard,
-} from "./SettingsControls";
-import { SystemState } from "../../templates/SystemState";
-import { useWorkbenchState } from "../../app/useWorkbenchState";
+  evaluateProviderModelPolicy
+} from "../../../../../shared/src/providerModelPolicy";
 import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  countSavedProviderProfiles,
-  describeProviderCapabilityMatrixGroups,
-  describeProviderDiagnosticVerdict,
-  describeProviderProfileSummary,
-  describeProviderProtocolSummary,
-  describeProviderImageInputState,
-  describeProviderSendState,
-  describeProviderTestReadiness,
-  hasSavedProviderProfiles,
-  PROVIDER_TEST_FRESHNESS_WINDOW_MS,
-  providerBaseUrlIsLocalService,
-  providerErrorHint,
-  type ProviderImageInputState,
-  type ProviderSendState,
-  type ProviderSendStateStatus,
-} from "../../../../../shared/src/providerStatus";
-import {
-  normalizeProviderBaseUrl,
-  normalizeProviderProtocol,
-  providerProtocolCompletionLabel,
-  providerProtocolEndpointHint,
-  looksLikeSchemelessProviderUrl,
-  SUPPORTED_PROVIDER_PROTOCOLS,
-} from "../../../../../shared/src/providerProtocols";
-import {
-  providerModelTokenLimitsKey,
   readProviderModelTokenLimit,
-  resolveProviderModelTokenState,
-  withProviderModelTokenLimit,
+  withProviderModelTokenLimit
 } from "../../../../../shared/src/providerModelTokenLimits";
 import {
-  SMART_CONTEXT_WINDOW_PRESETS,
-  SMART_MAX_OUTPUT_PRESETS,
-  formatCompactTokenLimit,
-  inferModelDefaultTokenLimits,
-  resolveEffectiveTokenBudgetProfile,
-} from "../../../../../shared/src/smartTokenBudget";
-import {
-  evaluateProviderModelPolicy,
-  filterProviderModelOptions,
-} from "../../../../../shared/src/providerModelPolicy";
-import type { ProviderModelTokenLimit, ProviderProtocol } from "../../../../../shared/src/models";
-import {
-  providerConnectionNameLabel,
-  providerFailureCopy,
-  providerModelCardCopy,
-  sidecarRestartCopy,
-} from "../../lib/i18n/segments/providerSettingsCopy";
-import { MemorySharingPanel } from "./MemorySharingPanel";
-import { TelemetryOptInPanel } from "./TelemetryOptInPanel";
-import { providerRecoveryLocale } from "../../app/providerRecoveryCopy";
-import {
-  deriveProviderSetupState,
-  type ProviderSetupReason,
-} from "../../../../../shared/src/providerSetupState";
-import type { LocalUsageInsights, ProviderEndpointSpeedTestResult } from "../../lib/types";
-import {
-  isNewApiConnectionType,
-  parseProviderConnectionPaste,
-} from "../../../../../shared/src/providerGateway";
-import {
-  PROVIDER_TEMPLATE_GROUPS,
-  type ProviderTemplateGroup,
   PROVIDER_TEMPLATE_GROUP_ORDER,
-  PROVIDER_TEMPLATE_LABELS,
+  PROVIDER_TEMPLATE_GROUPS,
+  PROVIDER_TEMPLATE_LABELS
 } from "../../../../../shared/src/providerTemplateCatalog";
-import { classifyProviderThinkingSupport, describeProviderThinking, normalizeProviderThinkingConfig, synthesizeProviderThinkingDescriptor, thinkingProtocolSupportsWire, updateProviderThinking } from "../../../../../shared/src/providerThinking";
-import type { ProviderThinkingConfig } from "../../../../../shared/src/providerThinking";
-import type { TrainerCapabilityVerdict } from "../../../../../shared/src/capabilityVerdict";
+import { type SettingsSectionId } from "../../templates/SettingsIndex";
+import { SystemState } from "../../templates/SystemState";
+import { templateCopy } from "../../templates/templateCopy";
 import {
-  describeWorkspaceTrustState,
-  normalizeWorkspaceTrustState,
-  type WorkspaceTrustState,
-} from "../../../../../shared/src/workspaceTrustState";
-import {
-  selectScopedSettingsLastTest,
-  settingsCapabilityChipsVisible,
-  settingsCapabilitySurfaceStatus,
-  settingsProtocolIsKnown,
-} from "../../../../../shared/src/settingsCapabilityGovernance";
-import {
-  inferProviderModelAdaptation,
-  recommendProviderModel,
-  type ProviderModelAdaptation,
-} from "../../../../../shared/src/providerModelAdaptation";
-import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
+  ChoiceList,
+  SimpleInfoRow
+} from "./SettingsControls";
 
+import { LANGUAGE_LABELS } from "../../../../../shared/src";
 import { ActionButton } from "../common";
-import { ProviderEndpointSpeedTest } from "./ProviderEndpointSpeedTest";
-import { ProviderQuickSetup } from "./ProviderQuickSetup";
-import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
-import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
-import { CollapseSection } from "../common/CollapseSection";
-import { StatusPill } from "../StatusPill";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ComposeIcon, EyeIcon, FileIcon, PlayIcon, PlusIcon, RefreshIcon, TrashIcon, UploadIcon } from "../icons";
-import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
-import { RemoteIcon } from "../icons/brand/trainerBrand";
-import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
+import { ChevronDownIcon,ComposeIcon,PlayIcon,PlusIcon,TrashIcon } from "../icons";
+import { DataFolderIcon,DoneIcon,ReloadIcon } from "../icons/inline";
 import { CoachNavIcon } from "../icons/navigation/primaryNav";
-import { SettingsAdvancedIcon, SettingsConnectionIcon, SettingsPreferencesIcon, SettingsSkillsIcon, SettingsTeachingIcon, SettingsWorkspaceIcon } from "../icons/navigation/settingsNav";
-import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
-import { trainerCommands } from "../../../../../shared/src/commands";
-import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "../../lib/i18n/segments/remoteSupportCopy";
-import { settingsText } from "./settingsText";
-import { languageIntegrityText } from "./languageIntegrityCopy";
-import { useCoachSettingsViewState, useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
-import { useProviderConnection } from "../../app/providerConnectionContext";
-import { postMessage as postWebviewMessage, requestLocalUsageInsights } from "../../lib/vscode";
+import { SettingsConnectionIcon,SettingsPreferencesIcon,SettingsTeachingIcon,SettingsWorkspaceIcon } from "../icons/navigation/settingsNav";
+import { StatusPill } from "../StatusPill";
 import {
-  trainerSkillCatalog,
-  normalizeCustomSkillTrigger,
-  resolveTrainerSkillText,
-  trainerSkillSectionLabel,
-  type TrainerCustomSkill,
-  type TrainerSkillSection,
-} from "../../../../../shared/src/skillCatalog";
-import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
-import {
-  SETTINGS_FALLBACK_LABELS,
-  englishLabels,
-  extraLocalizedSettingsLabels,
-  firstScreenRowLabels,
-  localizedCatalogSavedModelsLabel,
-  providerConnectionTruthCopyTable,
-  providerDetailLabelTable,
-  providerModelDiscoveryCopyTable,
-  providerModelPickerCopyTable,
-  providerTemplateGroupLabelTable,
-  settingsPhraseTable,
-  settingsStatusPhraseTable,
-  settingsSupportPhraseTable,
-  streamingVerificationCopyTable,
-  toolsVerificationCopyTable,
-  type ProviderConnectionTruthCopy,
-  type ProviderDetailLabelKey,
-  type SettingsPhraseKey,
-  type SettingsStatusPhraseKey,
-  type SettingsSupportPhraseKey,
-  type ToolsVerificationCopy,
-} from "../../lib/i18n/segments/settingsInlineText";
-import type {
-  CapabilityFlags,
-  CoachAnswerMode,
-  ComposerLanguage,
-  ProviderConfigView,
-  ProviderProbeUsage,
-  TeachingStyle,
-  WorkspaceMemoryToggles,
-  WorkspaceAuthority,
-} from "../../lib/types";
-import {
-  type AnswerMode,
-  type SaveState,
-  type CapabilityVerdictKey,
-  CAPABILITY_VERDICT_LABELS,
-  type AnswerStylePreset,
-  DEFAULT_PROVIDER_CONNECTION_NAME,
-  MODEL_PICKER_DEFENSIVE_OPTION_LIMIT,
-  ANSWER_STYLE_STORAGE_KEY,
-  SETTINGS_SECTION_FLASH_MS,
-  type AnswerStyleValues,
-  ANSWER_STYLE_PRESETS,
-  deriveAnswerStylePreset,
-  readStoredAnswerStyle,
-  writeStoredAnswerStyle,
-  prefersReducedMotion,
-  learningSurfaceAlignmentCopy,
-  browserCaptureSettingsCopy,
-  type ProviderProfileView,
-  asRecord,
-  asString,
-  asStringArray,
-  asNumber,
-  normalizeProviderBaseUrlDraft,
-  looksLikeProviderServiceAddress,
-  looksLikeProviderApiKeyToken,
-  providerConnectionLabelFromPaste,
-  providerConnectionTruthCopy,
-  providerTemplateGroupLabel,
-  providerDetailLabel,
-  providerBaseUrlGuidance,
-  providerModelDiscoveryCopy,
-  providerModelPickerCopy,
-  modelPolicyHint,
-  normalizeComparablePath,
-  memoryShareSourceLabel,
-  normalizeProviderProfileView,
-  normalizeProviderProfileViews,
-  type ProviderDraft,
-  type SettingsActionFeedback,
-  type SettingsSectionStatus,
-  type CoachSettingsLabels,
-  type CoachSettingsViewProps,
-  type CoachSettingsViewSheetProps,
-  localizedSettingsLabels,
-  settingsPhrase,
-  settingsSupportPhrase,
-  settingsStatusPhrase,
-  providerVerdictTone,
-  capabilityLabels,
-  capabilitySummaryText,
-  stringifyNode,
-  compactSummaryValue,
-  shortenSummary,
   adaptiveBehaviorLabel,
-  formatTokenValue,
-  formatProbeCostValue,
-  describeProbeUsageDetail,
-  formatDurationSeconds,
-  summarizeProviderRequestDefaults,
-  formatDraftStringList,
-  parseDraftStringList,
-  mergeDraftStringList,
-  stringArrayKey,
-  canonicalJsonValue,
-  requestDefaultsKey,
-  providerCapabilitiesKey,
+  compactSummaryValue,
   formatRequestDefaultsDraft,
+  formatTokenValue,
+  mergeDraftStringList,
+  modelPolicyHint,
+  parseDraftStringList,
   parsePositiveIntegerInput,
-  formatTimestamp,
-  toolsVerificationCopy,
-  describeToolsVerificationFact,
-  streamingVerificationCopy,
-  describeStreamingVerificationFact,
-  streamingProbeIsVerified,
-  thinkingVerificationCopy,
-  describeThinkingVerificationFact,
-  visionVerificationCopy,
-  describeVisionVerificationFact,
-  gatewayFingerprintNote,
-  protocolChoiceLabel,
-  isMiniMaxLikeProvider,
-  describeLanguageIntegrityFact,
+  providerTemplateGroupLabel,
+  settingsPhrase,
+  settingsStatusPhrase,
+  shortenSummary
 } from "./coachSettingsHelpers";
+import { settingsText } from "./settingsText";
 
 import type { CoachSettingsCoreState } from "./useCoachSettingsSheetController";
 
 export function buildCoachSettingsConnectionNodes(core: CoachSettingsCoreState) {
   const {
     providerDraft,
-    className,
     onProviderDraftChange,
     onResetProviderDraft,
     providerStatus,
@@ -311,7 +100,6 @@ export function buildCoachSettingsConnectionNodes(core: CoachSettingsCoreState) 
     backendRecovery,
     providerCredentialsRejected,
     lastTestLabel,
-    providerSummary,
     providerHasDraftChanges,
     providerDraftHasApiKey,
     providerDraftCanReuseSavedApiKey,
@@ -407,7 +195,6 @@ export function buildCoachSettingsConnectionNodes(core: CoachSettingsCoreState) 
     canSaveProviderConnection,
     saveProviderConnectionLabel,
     saveProviderConnectionTitle,
-    localizedCalmIntro,
     providerSetupChecks,
     canRetestProvider,
     availabilityMode,
@@ -578,32 +365,6 @@ export function buildCoachSettingsConnectionNodes(core: CoachSettingsCoreState) 
       ) : null}
     </div>
   ) : null;
-  const appliedProviderFactValue =
-    (providerSaved
-      ? provider.profileLabel?.trim() || provider.name?.trim()
-      : providerHasDraftChanges
-        ? providerDraft.name.trim()
-        : undefined) ||
-    copy.notConfigured;
-  const appliedModelFactValue =
-    (providerSaved
-      ? provider.resolvedModel?.trim() || provider.model?.trim()
-      : providerHasDraftChanges
-        ? providerDraft.model.trim()
-        : undefined) ||
-    copy.notConfigured;
-  const providerPreviewSummaryText = shortenSummary(
-    compactSummaryValue(
-      [
-        availabilityMode === "ready" ? copy.currentWorkspace : undefined,
-        providerHasDraftChanges ? (settingsText(language, "草稿中", "Draft")) : undefined,
-        appliedProviderFactValue !== copy.notConfigured ? appliedProviderFactValue : undefined,
-        appliedModelFactValue !== copy.notConfigured ? appliedModelFactValue : undefined,
-      ].filter(Boolean) as string[],
-      providerSummaryText,
-    ),
-    44,
-  );
   const showAvailabilityChecklist =
     providerHasDraftChanges || (!providerCoachReady && !shouldRoutePrimaryToSavedProfiles);
   const renderProviderSetupChecks = (className: string) => (
@@ -758,12 +519,6 @@ export function buildCoachSettingsConnectionNodes(core: CoachSettingsCoreState) 
       issue.target === activeSettingsCategory &&
       !(issue.id === "unsaved" && connectionView === "edit"),
   );
-  const showProviderDetailTestAction =
-    availabilityStripReduced ||
-    !canRetestProvider ||
-    effectiveAvailabilityPrimaryCta.action !== onTestProvider;
-  const providerConnectionSummary =
-    `${settingsPhrase(language, "currentConnectionPrefix")}: ${providerSummary}`;
   const coachBehaviorSummary = shortenSummary(
     compactSummaryValue(
       answerMode === "auto" && teachingStyle === "auto"
@@ -816,12 +571,6 @@ export function buildCoachSettingsConnectionNodes(core: CoachSettingsCoreState) 
         72,
       )
     : undefined;
-  const headerEyebrow = copy.eyebrow.trim();
-  const rawHeaderSubtitle = copy.intro.trim();
-  const headerSubtitle =
-    rawHeaderSubtitle && rawHeaderSubtitle !== copy.title.trim() && rawHeaderSubtitle !== localizedCalmIntro.trim()
-      ? rawHeaderSubtitle
-      : "";
   const updateDraftModelTokenLimit = (
     modelName: string,
     patch: Partial<ProviderModelTokenLimit>,

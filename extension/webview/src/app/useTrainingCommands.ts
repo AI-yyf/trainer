@@ -1,8 +1,8 @@
-import { useCallback, useMemo } from "react";
+import { useCallback,useMemo } from "react";
 import { trainerCommands } from "../../../../shared/src/commands";
-import { postMessage } from "../lib/vscode";
-import type { ActiveWorkbenchView } from "../lib/types";
 import type { TrainingPlanBinding } from "../../../../shared/src/models";
+import type { ActiveWorkbenchView } from "../lib/types";
+import { postMessage } from "../lib/vscode";
 
 const TRAINING_PERSISTENCE_REQUEST_ID_KEY = "__trainerTrainingPersistenceId";
 

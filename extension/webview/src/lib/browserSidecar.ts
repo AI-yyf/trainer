@@ -1,67 +1,38 @@
-import { mapResearchBriefAsset, mapResearchBriefCatalog, mapResearchPreparation, type ResearchBriefView } from "../../../../shared/src/researchBrief";
-import type {
-  ActiveWorkbenchView,
-  BootstrapData,
-  BrowserUploadResourceInput,
-  CapabilityFlags,
-  CoachDefaults,
-  ComposerLanguage,
-  CoachSettingsRequest,
-  CoachFocusView,
-  CoachTurnSummaryView,
-  ConversationArtifactKind,
-  ConversationMessage,
-  HostMessage,
-  ImplementationGuide,
-  PrincipleNote,
-  ProviderConfigView,
-  ProviderLastTestResult,
-  ProviderProtocol,
-  ProjectAdaptationGuide,
-  ProjectIdea,
-  PlanRuntimeReviewPoint,
-  ResourceRecord,
-  ResourceSearchState,
-  SandboxPreview,
-  SessionMessageRequest,
-  StreamCompleteEvent,
-  StreamErrorEvent,
-  SuggestedAction,
-} from "./types";
+import { normalizeCoachOrientationRecord } from "../../../../shared/src/coachOrientationGovernance";
 import {
   createEmptyTrainerStreamingState,
-  normalizeTrainerMessageParts,
   normalizeNextStepHint,
+  normalizeTrainerMessageParts,
 } from "../../../../shared/src/protocol";
-import {
-  defaultCapabilitiesForProtocol,
-  normalizeProviderProtocol,
-  providerProtocolFamily,
-} from "../../../../shared/src/providerProtocols";
-import { providerErrorHint } from "../../../../shared/src/providerStatus";
-import { normalizeProviderRequestDefaults } from "../../../../shared/src/providerRequestDefaults";
-import { normalizeProviderThinkingConfig } from "../../../../shared/src/providerThinking";
-import {
-  normalizeCustomSkillTrigger,
-  normalizeTrainerCustomSkills,
-} from "../../../../shared/src/skillCatalog";
+import { evaluateProviderModelPolicy } from "../../../../shared/src/providerModelPolicy";
 import {
   applyProviderModelCatalog,
   mergeProviderModelTokenLimits,
   normalizeProviderModelTokenLimits,
   resolveProviderModelTokenState,
 } from "../../../../shared/src/providerModelTokenLimits";
-import { evaluateProviderModelPolicy } from "../../../../shared/src/providerModelPolicy";
+import {
+  defaultCapabilitiesForProtocol,
+  normalizeProviderProtocol,
+  providerProtocolFamily,
+} from "../../../../shared/src/providerProtocols";
+import { normalizeProviderRequestDefaults } from "../../../../shared/src/providerRequestDefaults";
+import { providerErrorHint } from "../../../../shared/src/providerStatus";
+import { PROVIDER_TEMPLATE_PRESETS } from "../../../../shared/src/providerTemplateCatalog";
+import { normalizeProviderCapabilityTruth } from "../../../../shared/src/providerTest";
+import { normalizeProviderThinkingConfig } from "../../../../shared/src/providerThinking";
+import { mapResearchBriefAsset,mapResearchBriefCatalog,mapResearchPreparation,type ResearchBriefView } from "../../../../shared/src/researchBrief";
 import {
   normalizeResourceSearchMode,
   resourceSearchModeRequest,
   type ResourceSearchMode,
 } from "../../../../shared/src/resourceSearch";
-import { normalizeProviderCapabilityTruth } from "../../../../shared/src/providerTest";
-import { isComposerLanguage } from "../../../../shared/src/types";
-import { normalizeCoachOrientationRecord } from "../../../../shared/src/coachOrientationGovernance";
-import { PROVIDER_TEMPLATE_PRESETS } from "../../../../shared/src/providerTemplateCatalog";
+import {
+  normalizeCustomSkillTrigger,
+  normalizeTrainerCustomSkills,
+} from "../../../../shared/src/skillCatalog";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
+import { isComposerLanguage } from "../../../../shared/src/types";
 import {
   normalizePlanRuntimeRecovery,
   normalizePlanRuntimeResumeState,
@@ -79,13 +50,42 @@ import {
   type BrowserPreviewBootstrap,
   type BrowserPreviewPatch,
 } from "./browserPreviewActions";
-export { runBrowserPreviewAction };
 import { resolveCopy } from "./i18n/copy";
+import type {
+  ActiveWorkbenchView,
+  BootstrapData,
+  BrowserUploadResourceInput,
+  CapabilityFlags,
+  CoachDefaults,
+  CoachFocusView,
+  CoachSettingsRequest,
+  CoachTurnSummaryView,
+  ComposerLanguage,
+  ConversationArtifactKind,
+  ConversationMessage,
+  HostMessage,
+  ImplementationGuide,
+  PlanRuntimeReviewPoint,
+  PrincipleNote,
+  ProjectAdaptationGuide,
+  ProjectIdea,
+  ProviderConfigView,
+  ProviderLastTestResult,
+  ProviderProtocol,
+  ResourceRecord,
+  ResourceSearchState,
+  SandboxPreview,
+  SessionMessageRequest,
+  StreamCompleteEvent,
+  StreamErrorEvent,
+  SuggestedAction,
+} from "./types";
 import {
   getInjectedBootstrapState,
   getPersistedState,
   persistBrowserPreviewProviderConfig,
 } from "./vscode";
+export { runBrowserPreviewAction };
 
 const DEV_SIDECAR_PORT = 34891;
 const DEV_SIDECAR_PORT_MAX = 34911;
@@ -226,8 +226,6 @@ type TrainingBlockedCardCandidateStateView = NonNullable<
 type TrainingEventLedgerEntryStateView = NonNullable<
   WorkspaceTrainingStateView["trainingEventLedger"]
 >[number];
-type EvidenceQueueStateView = NonNullable<BootstrapData["memory"]["evidenceQueue"]>;
-type EvidenceItemStateView = NonNullable<EvidenceQueueStateView["pending"]>[number];
 type ReviewArtifactStateView = NonNullable<WorkspaceTrainingStateView["reviewArtifact"]>;
 type ScenarioLabStateView = NonNullable<WorkspaceTrainingStateView["scenarioLab"]>;
 type TheoryDrillStateView = NonNullable<WorkspaceTrainingStateView["theoryDrill"]>;
@@ -5480,62 +5478,7 @@ function mapTrainingCardVerificationFields(
   };
 }
 
-function mapEvidenceQueue(
-  value: unknown,
-  fallback: BootstrapData["memory"]["evidenceQueue"],
-): BootstrapData["memory"]["evidenceQueue"] {
-  const record = asRecord(value);
-  if (!record) {
-    return fallback;
-  }
-  return {
-    pending: mapEvidenceItems(record.pending, fallback?.pending),
-    deferred: mapEvidenceItems(record.deferred, fallback?.deferred),
-    adopted: mapEvidenceItems(record.adopted, fallback?.adopted),
-    rejected: mapEvidenceItems(record.rejected, fallback?.rejected),
-    history: mapEvidenceItems(record.history, fallback?.history),
-    totalCount: asNumber(record.total_count) ?? asNumber(record.totalCount) ?? fallback?.totalCount ?? 0,
-  };
-}
 
-function mapEvidenceItems(
-  value: unknown,
-  fallback: EvidenceItemStateView[] | undefined,
-): EvidenceItemStateView[] {
-  if (!Array.isArray(value)) {
-    return fallback ?? [];
-  }
-  return value.reduce<EvidenceItemStateView[]>((items, entry) => {
-    const record = asRecord(entry);
-    const id = asString(record?.id);
-    const summary = asString(record?.summary);
-    if (!id || !summary) {
-      return items;
-    }
-    items.push({
-      id,
-      workspaceId: asString(record?.workspace_id) ?? asString(record?.workspaceId) ?? undefined,
-      summary,
-      source: asString(record?.source) ?? "card_result",
-      sourceCardId: asString(record?.source_card_id) ?? asString(record?.sourceCardId) ?? undefined,
-      concepts: asStringArray(record?.concepts) ?? [],
-      outcome: asString(record?.outcome) ?? "partial",
-      confidence: asNumber(record?.confidence) ?? 0,
-      timestamp: asString(record?.timestamp) ?? undefined,
-      targetPlanStageId:
-        asString(record?.target_plan_stage_id) ?? asString(record?.targetPlanStageId) ?? undefined,
-      adopted: asBoolean(record?.adopted) ?? undefined,
-      adoptedAt: asString(record?.adopted_at) ?? asString(record?.adoptedAt) ?? null,
-      deferredAt: asString(record?.deferred_at) ?? asString(record?.deferredAt) ?? null,
-      deferralReason:
-        asString(record?.deferral_reason) ?? asString(record?.deferralReason) ?? undefined,
-      rejectedAt: asString(record?.rejected_at) ?? asString(record?.rejectedAt) ?? null,
-      rejectionReason:
-        asString(record?.rejection_reason) ?? asString(record?.rejectionReason) ?? undefined,
-    });
-    return items;
-  }, []);
-}
 
 function mapActiveTrainingCardRouting(
   value: unknown,

@@ -1,4 +1,4 @@
-import type { Element, Root, Text } from "hast";
+import type { Element,Root,Text } from "hast";
 import type { Parent } from "unist";
 
 const SCRIPT_PATTERN = /(\^[^\s^<>]{1,16}\^|~[^\s~<>/\\:]{1,16}~)/g;

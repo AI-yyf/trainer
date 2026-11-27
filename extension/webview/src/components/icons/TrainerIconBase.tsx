@@ -1,4 +1,4 @@
-import type { ReactNode, SVGProps } from "react";
+import type { ReactNode,SVGProps } from "react";
 
 /**
  * §四十六 Premium Soft Outline + Selective Fill icon base.

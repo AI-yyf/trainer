@@ -1,10 +1,10 @@
-import { NextAction } from "../../templates/NextAction";
 import type { ReactNode } from "react";
+import { NextAction } from "../../templates/NextAction";
 
-import type { ComposerLanguage } from "../../lib/types";
 import { resolveCopy } from "../../lib/i18n/copy";
-import { artifactBlockCopy, artifactInlineLeadCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
+import { artifactBlockCopy,artifactInlineLeadCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
 import { reviewConceptLabel } from "../../lib/reviewLabel";
+import type { ComposerLanguage } from "../../lib/types";
 import { MessageRichContent } from "./MessageRichContent";
 
 export type CoachArtifactKind =

@@ -1,75 +1,21 @@
-import { SystemState } from "../../templates/SystemState";
+import { useEffect,useId,useMemo,useRef,useState,type KeyboardEvent } from "react";
 import { Library } from "../../templates/Library";
 import { ResourceReader } from "../../templates/ResourceReader";
+import { SystemState } from "../../templates/SystemState";
 import { templateCopy } from "../../templates/templateCopy";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
-import { useTranslation } from "../../lib/i18n/useTranslation";
-import { resolveCopy } from "../../lib/i18n/copy";
-import { resolveResourceOrganizationConfirmCopy } from "../../lib/i18n/resourceComposerCopy";
-import {
-  resolveResourceOpenTarget,
-} from "../../../../../shared/src/resourceOpen";
 import {
   coachOrientationTone,
   type CoachOrientationState,
 } from "../../../../../shared/src/coachOrientationGovernance";
-import type { ResourcesOrientationRecord } from "../../../../../shared/src/resourcesOrientationGovernance";
 import type { ResearchBriefView } from "../../../../../shared/src/researchBrief";
-import { ResearchBriefLibrary } from "./ResearchBriefLibrary";
-import { ResourceCaptureDialog } from "./ResourceCaptureDialog";
-import type {
-  ComposerLanguage,
-  DebugVisibleResourcesFacts,
-  DeletedResource,
-  LibraryMigrationHostAnswer,
-  LibraryMigrationSummary,
-  ResourceRecord,
-  ResourceSearchState,
-  ResourceTrainingHandoffResult,
-  SandboxState,
-} from "../../lib/types";
 import {
-  INTERNAL_LAYOUT_SEGMENT_PATTERN,
-  collectionPathSegments,
-  collectionSegmentPrefix,
-  compactSandboxPath,
-  fallbackCollectionSegments,
-  isUrl,
-  normalizePath,
-  pathSegments,
-  relativeSandboxPath,
-  resourcePathCandidates,
-  resourceTreeSegments,
-  sourcePathSegments,
-  toSandboxNodePaths,
-  visibleCollectionSegments,
-  type SandboxNodePath,
-} from "./libraryPaths";
-import {
-  ArrowRightIcon,
-  CheckMarkIcon,
-  ChevronDownIcon,
-  ComposeIcon,
-  EditRenameIcon,
-  FileIcon,
-  FolderIcon,
-  LinkIcon,
-  PageIcon,
-  PlusIcon,
-  RefreshIcon,
-  TrashIcon,
-  UploadIcon,
-  XMarkIcon,
-} from "../icons";
-import {
-  resourceFolderIconUrl,
-  resourceFolderOpenIconUrl,
-  resourceIconKey,
-  resourceIconUrl,
-} from "./resourceIconAssets";
-import { CollapseSection } from "../common/CollapseSection";
-import { WorkbenchSurfaceButton } from "../common/WorkbenchSurfaceButton";
+  resolveResourceOpenTarget,
+} from "../../../../../shared/src/resourceOpen";
+import type { ResourcesOrientationRecord } from "../../../../../shared/src/resourcesOrientationGovernance";
+import { resolveCopy } from "../../lib/i18n/copy";
+import { resolveResourceOrganizationConfirmCopy } from "../../lib/i18n/resourceComposerCopy";
+import { useTranslation } from "../../lib/i18n/useTranslation";
 import {
   addLibraryFolderPath,
   flattenLibraryFolders,
@@ -81,28 +27,72 @@ import {
   normalizeLibraryFolderPath,
   removeLibraryFolderPath,
   renameLibraryFolderPath,
-  type LibraryFolderFlatEntry,
   type LibraryFolderListResult,
-  type LibraryFolderNode,
+  type LibraryFolderNode
 } from "../../lib/libraryFolders";
+import type {
+  ComposerLanguage,
+  DebugVisibleResourcesFacts,
+  DeletedResource,
+  LibraryMigrationHostAnswer,
+  LibraryMigrationSummary,
+  ResourceRecord,
+  ResourceSearchState,
+  ResourceTrainingHandoffResult,
+  SandboxState,
+} from "../../lib/types";
+import { CollapseSection } from "../common/CollapseSection";
+import { WorkbenchSurfaceButton } from "../common/WorkbenchSurfaceButton";
+import {
+  ArrowRightIcon,
+  CheckMarkIcon,
+  ComposeIcon,
+  EditRenameIcon,
+  FolderIcon,
+  LinkIcon,
+  PageIcon,
+  PlusIcon,
+  RefreshIcon,
+  TrashIcon,
+  UploadIcon,
+  XMarkIcon
+} from "../icons";
+import {
+  collectionPathSegments,
+  collectionSegmentPrefix,
+  INTERNAL_LAYOUT_SEGMENT_PATTERN,
+  isUrl,
+  pathSegments,
+  resourcePathCandidates,
+  resourceTreeSegments,
+  toSandboxNodePaths,
+  type SandboxNodePath
+} from "./libraryPaths";
+import { ResearchBriefLibrary } from "./ResearchBriefLibrary";
+import { ResourceCaptureDialog } from "./ResourceCaptureDialog";
+import {
+  resourceFolderIconUrl,
+  resourceFolderOpenIconUrl,
+  resourceIconKey,
+  resourceIconUrl,
+} from "./resourceIconAssets";
 
 import {
   compactResourceSearchPlaceholder,
   englishSingularResourceMutationText,
-  projectStructureCopy,
   resourceLibraryText as localize,
+  projectStructureCopy,
   resourceRowOpenPreviewLabel,
   resourceRowOpenSourceLabel,
   resourceTrainingReadinessCopy,
   type ResourceTextKey,
 } from "../../lib/i18n/segments/resourcesInlineText";
-import { requestProjectStructure, type ProjectStructure } from "../../lib/vscode";
-export type { DeletedResource } from "../../lib/types";
+import { requestProjectStructure,type ProjectStructure } from "../../lib/vscode";
 import {
   deletedResourceId,
-  isDeletedResourceRecoverable,
-  ResourcesTrashPanel,
+  ResourcesTrashPanel
 } from "./ResourcesTrashPanel";
+export type { DeletedResource } from "../../lib/types";
 
 export interface ResourceWriteAccess {
   allowed: boolean;
@@ -297,19 +287,6 @@ function resourceReadOnlyNotice(language: ComposerLanguage): string {
   return localize(language, "readOnlyNotice");
 }
 
-function chooseWorkspaceRootLabel(language: ComposerLanguage): string {
-  const labels: Record<ComposerLanguage, string> = {
-    "zh-CN": "选择 Trainer 工作区",
-    "en-US": "Choose Trainer workspace",
-    "es-ES": "Elegir espacio de trabajo de Trainer",
-    "fr-FR": "Choisir l'espace de travail Trainer",
-    "de-DE": "Trainer-Arbeitsbereich auswählen",
-    "ja-JP": "Trainer のワークスペースを選択",
-    "ko-KR": "Trainer 작업 공간 선택",
-    "pt-BR": "Escolher espaço de trabalho do Trainer",
-  };
-  return labels[language];
-}
 
 function localizeCount(language: ComposerLanguage, key: ResourceTextKey, count: number): string {
   const text =
@@ -1775,7 +1752,7 @@ export function ResourcesWorkbenchView({
     | undefined
   >(undefined);
   const [libraryFolders, setLibraryFolders] = useState<LibraryFolderNode[] | undefined>(undefined);
-  const [libraryFoldersState, setLibraryFoldersState] = useState<
+  const [, setLibraryFoldersState] = useState<
     { phase: "idle" | "loading" | "ready" | "failed"; message?: string }
   >({ phase: "idle" });
   const [activeFolderPath, setActiveFolderPath] = useState<string>("");
@@ -1784,8 +1761,8 @@ export function ResourcesWorkbenchView({
   // The reader's file-action section starts open (the actions stay reachable
   // and keyboard-discoverable); collapsing it is the reader's own choice.
   const [fileActionsOpen, setFileActionsOpen] = useState(true);
-  const [expandedFolderPaths, setExpandedFolderPaths] = useState<string[]>([]);
-  const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
+  const [, setExpandedFolderPaths] = useState<string[]>([]);
+  const [, setSelectedFolderPath] = useState<string | null>(null);
   const [folderRowMenu, setFolderRowMenu] = useState<{
     folderPath: string;
     label: string;
@@ -3270,9 +3247,6 @@ export function ResourcesWorkbenchView({
   };
 
   const sandboxRoot = sandboxState?.sandboxRootPath ?? sandboxState?.rootPath;
-  const sandboxReady = Boolean(sandboxState?.ready);
-  const linkedResources = sandboxState?.linkedResourceCount ?? 0;
-  const sandboxFileCount = sandboxState?.totalFiles ?? 0;
   const selectedResourceSource = selectedResource ? sourceChain(selectedResource) : [];
   const selectedResourceSourceLabel = Array.from(
     new Set(selectedResourceSource.map(compactSourceLabel).filter(Boolean)),
@@ -3305,12 +3279,6 @@ export function ResourcesWorkbenchView({
   const hasSelectedResourceFacts = Boolean(
     selectedResourceSource.length || selectedResourceStatusSegments.length || selectedResourceTrainingReadiness,
   );
-  const selectedResourceStateLabel =
-    selectedResourceIndexNotice?.label
-    ?? selectedResourceTrust
-    ?? (selectedResourceFreshness && selectedResourceFreshness !== "unknown"
-      ? describeFreshness(selectedResourceFreshness, language)
-      : undefined);
   const selectedResourceWhy =
     selectedResourceIndexNotice
       ? selectedResourceIndexNotice.label
@@ -5020,4 +4988,4 @@ export function ResourcesWorkbenchView({
   );
 }
 
-export { localize as resourceLibraryText, compactResourceSearchPlaceholder };
+export { compactResourceSearchPlaceholder,localize as resourceLibraryText };

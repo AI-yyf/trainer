@@ -7,7 +7,7 @@
  * strings, languages, keys and constant names are unchanged.
  */
 
-import type { ComposerLanguage, TrainingSkillDimensionKey, TrainingSkillDimensionState } from "../../types";
+import type { ComposerLanguage,TrainingSkillDimensionKey,TrainingSkillDimensionState } from "../../types";
 
 /** P2 #21: dimension keys come from the subject-scoped registry (code adds
  * implementation/debugging; literature adds expression/appreciation). */

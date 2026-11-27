@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo,useState } from "react";
 import { endpointLatencyTier } from "../../../../../shared/src/providerStatus";
 import type { ComposerLanguage } from "../../../../../shared/src/types";
-import type { ProviderEndpointSpeedTestResult } from "../../lib/types";
 import { SPEED_TEST_TEXT } from "../../lib/i18n/segments/speedTestCopy";
+import type { ProviderEndpointSpeedTestResult } from "../../lib/types";
 
 interface ProviderEndpointSpeedTestProps {
   language: ComposerLanguage;

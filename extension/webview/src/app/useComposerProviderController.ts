@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type Dispatch, type SetStateAction } from "react";
+import { useCallback,useMemo,type Dispatch,type SetStateAction } from "react";
 
 import { trainerCommands } from "../../../../shared/src/commands";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
@@ -33,7 +33,7 @@ import type {
   ProviderConfigView,
 } from "../lib/types";
 import { postMessage } from "../lib/vscode";
-import { requireBrowserPreviewAdapter, providerSettingsLocale } from "./appHelpers";
+import { providerSettingsLocale,requireBrowserPreviewAdapter } from "./appHelpers";
 import { useComposerModelQuery } from "./useComposerModelQuery";
 import type { ContextMenu } from "./useMenuState";
 import { useWorkbenchState } from "./useWorkbenchState";

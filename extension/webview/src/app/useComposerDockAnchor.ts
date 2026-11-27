@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect,useState } from "react";
 import { resolveDockContextAnchor } from "../lib/composerDock";
 import type { ActiveWorkbenchView } from "../lib/types";
 

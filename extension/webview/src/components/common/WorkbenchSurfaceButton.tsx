@@ -1,4 +1,4 @@
-import { CollapsePanelIcon, ExpandPanelIcon } from "../icons";
+import { CollapsePanelIcon,ExpandPanelIcon } from "../icons";
 
 export interface WorkbenchSurfaceButtonProps {
   /** `expand` opens a full-width editor tab; `collapse` returns to the sidebar. */

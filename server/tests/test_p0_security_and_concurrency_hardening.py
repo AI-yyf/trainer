@@ -226,3 +226,31 @@ def test_p0_5_openai_chat_stream_requests_include_usage_with_fallback() -> None:
     assert len(captured_payloads) == 2
     assert captured_payloads[0].get("stream_options") == {"include_usage": True}
     assert "stream_options" not in captured_payloads[1]
+
+
+def test_p2_multiturn_kv_cache_prefix_stays_byte_stable() -> None:
+    from app.core.models import UserProfile
+    from app.llm.prompts import build_coaching_messages
+
+    profile = UserProfile(workspace_id="ws-kv", current_goal="Master async Python", current_level="intermediate")
+    history = [
+        {"role": "user", "content": "Explain asyncio.gather"},
+        {"role": "assistant", "content": "asyncio.gather runs awaitables concurrently."},
+    ]
+    turn_a = build_coaching_messages(
+        profile,
+        "How does cancellation work?",
+        coach_context={"active_focus": "gather cancellation", "turn_note": "first note"},
+        history=history,
+    )
+    turn_b = build_coaching_messages(
+        profile,
+        "How does asyncio.wait_for handle timeout?",
+        coach_context={"active_focus": "asyncio.wait_for", "turn_note": "different dynamic note"},
+        history=[*history, {"role": "user", "content": "How does cancellation work?"}, {"role": "assistant", "content": "Tasks cancel downstream."}],
+    )
+    # messages[0] system prompt stays byte-for-byte identical across multi-turn dynamic context changes
+    assert turn_a[0]["content"] == turn_b[0]["content"]
+    assert "## Runtime Context" not in turn_a[0]["content"]
+    assert turn_a[-1]["content"].startswith("How does cancellation work?")
+    assert "## Runtime Context" in turn_a[-1]["content"]

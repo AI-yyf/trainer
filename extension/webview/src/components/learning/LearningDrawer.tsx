@@ -1,8 +1,8 @@
-import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import type { CSSProperties,ReactNode } from "react";
+import { useEffect,useRef } from "react";
 
-import { MAX_CAPABILITY_LEVEL, type LearningProgressAchievement } from "../../lib/learningSummary";
-import type { ComposerLanguage, LearningSection } from "../../lib/types";
+import { MAX_CAPABILITY_LEVEL,type LearningProgressAchievement } from "../../lib/learningSummary";
+import type { ComposerLanguage,LearningSection } from "../../lib/types";
 
 const COPY: Record<ComposerLanguage, {
   title: string;

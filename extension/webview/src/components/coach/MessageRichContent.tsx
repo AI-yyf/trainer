@@ -1,15 +1,15 @@
-import { memo, Suspense, createContext, lazy, useContext, useEffect, useId, useMemo, useState } from "react";
 import type { Element } from "hast";
+import { createContext,lazy,memo,Suspense,useContext,useEffect,useId,useMemo,useState } from "react";
 
-import type { ComposerLanguage } from "../../lib/types";
+import { normalizeLatexDelimiters } from "../../../../../shared/src/latexDelimiters";
 import { messageRichContentCopy } from "../../lib/i18n/segments/messageRichContentCopy";
-import { classifyImageUrl, describeRemoteImageHost, remoteImageLabels } from "../../lib/remoteImages";
+import { rehypeChatScripts } from "../../lib/rehypeChatScripts";
+import { remarkChatBreaks } from "../../lib/remarkChatBreaks";
+import { classifyImageUrl,describeRemoteImageHost,remoteImageLabels } from "../../lib/remoteImages";
+import type { ComposerLanguage } from "../../lib/types";
 import { MermaidBlock } from "./MermaidBlock";
 import { RichCodeBlock } from "./RichCodeBlock";
 import { resolveCodeBlockCopy } from "./codeBlockCopy";
-import { normalizeLatexDelimiters } from "../../../../../shared/src/latexDelimiters";
-import { remarkChatBreaks } from "../../lib/remarkChatBreaks";
-import { rehypeChatScripts } from "../../lib/rehypeChatScripts";
 
 const ReactMarkdown = lazy(async () => {
   const module = await import("react-markdown");

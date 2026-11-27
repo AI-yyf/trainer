@@ -592,11 +592,6 @@ function providerHasVisionCapability(
   return providerCapabilityIsVerified(provider, 'vision');
 }
 
-function providerHasToolCapability(
-  provider: Pick<ProviderStatusLike, 'capabilities' | 'lastTestResult'> | undefined,
-): boolean {
-  return providerCapabilityIsVerified(provider, 'tools');
-}
 
 function providerSupportsImageProtocol(
   provider: Pick<ProviderStatusLike, 'protocol'> | undefined,
@@ -770,9 +765,6 @@ export function providerErrorHint(
   return undefined;
 }
 
-function providerGenericCheckHint(language: ProviderSurfaceLanguage): string {
-  return providerStatusPhrase(language, 'generic_check_hint');
-}
 
 /**
  * LM Studio / Ollama / llama.cpp style servers listen on loopback and accept
@@ -928,18 +920,6 @@ const REQUEST_FAILURE_OWNER_PHRASE: Record<
   request: 'generic_check_hint',
 };
 
-const REQUEST_FAILURE_RECOVERY_PHRASE: Record<
-  ProviderRequestFailureRecovery,
-  ProviderStatusPhraseKey
-> = {
-  retry: 'recover_retry',
-  switch_model: 'recover_switch_model',
-  edit_key: 'recover_edit_key',
-  restore_quota: 'recover_restore_quota',
-  check_connection: 'recover_check_connection',
-  start_sidecar: 'recover_start_sidecar',
-  trust_workspace: 'workspace_trust',
-};
 
 function providerRequestFailureActions(
   owner: ProviderRequestFailureOwner,
@@ -1766,9 +1746,6 @@ const capabilityKeyByName: Record<string, ProviderCapabilityLabel> = {
   'structured output': 'structuredOutput',
 };
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-}
 
 function asText(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;

@@ -1,7 +1,7 @@
-import { Suspense, type ComponentProps, type ReactNode } from "react";
+import { Suspense,type ComponentProps,type ReactNode } from "react";
 
-import { CoachSettingsView, ViewFallback } from "./appHelpers";
 import type { ComposerLanguage } from "../lib/types";
+import { CoachSettingsView,ViewFallback } from "./appHelpers";
 
 type CoachSettingsViewProps = ComponentProps<typeof CoachSettingsView>;
 

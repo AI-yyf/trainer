@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import type { ComposerLanguage, MessageAttachment } from "../lib/types";
+import type { ComposerLanguage,MessageAttachment } from "../lib/types";
 import { useImageAttachmentStaging } from "../lib/useImageAttachmentStaging";
 import { SystemState } from "./SystemState";
 

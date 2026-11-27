@@ -1912,14 +1912,8 @@ class ProviderService(
         raise first_error
 
 
-ProviderService._onboarding_reply = _provider_service_onboarding_reply
-ProviderService._error_reply = _provider_service_error_reply
-ProviderService._missing_api_key_reply = _provider_service_missing_api_key_reply
 ProviderService.coaching_reply_stream = _provider_service_coaching_reply_stream
-
-
 ProviderService._onboarding_reply = _clean_provider_service_onboarding_reply
-ProviderService._error_reply = _clean_provider_service_error_reply
 ProviderService._missing_api_key_reply = _clean_provider_service_missing_api_key_reply
 ProviderService.provider_failure_summary = _clean_provider_failure_summary
 ProviderService.provider_failure_next_step = _clean_provider_failure_next_step

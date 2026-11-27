@@ -1,4 +1,4 @@
-import { TrainerIconBase, type TrainerIconProps } from "./TrainerIconBase";
+import { TrainerIconBase,type TrainerIconProps } from "./TrainerIconBase";
 
 type CoachIconProps = Omit<TrainerIconProps, "children" | "active">;
 

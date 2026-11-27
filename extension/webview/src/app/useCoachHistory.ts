@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback,useEffect,useMemo,useRef,useState,type Dispatch,type SetStateAction } from "react";
 
-import { postMessage } from "../lib/vscode";
 import { trainerCommands } from "../../../../shared/src/commands";
 import type { CoachSessionSummary } from "../lib/types";
+import { postMessage } from "../lib/vscode";
 import type { ContextMenu } from "./useMenuState";
 import { useWorkbenchState } from "./useWorkbenchState";
 

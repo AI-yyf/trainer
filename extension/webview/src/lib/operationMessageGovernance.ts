@@ -1,4 +1,4 @@
-import { TRAINER_OPERATION_COMPLETED_MARKER, type TrainerOperationMessage } from "../../../../shared/src/protocol";
+import { TRAINER_OPERATION_COMPLETED_MARKER,type TrainerOperationMessage } from "../../../../shared/src/protocol";
 import type { ComposerLanguage } from "./types";
 
 // Pure operation-message governance: message parsing markers, localized

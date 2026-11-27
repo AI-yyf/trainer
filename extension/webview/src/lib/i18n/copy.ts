@@ -4,6 +4,7 @@
  */
 
 import type { ComposerLanguage } from "../types";
+import type { Copy,CopyTable } from "./copyTypes";
 import { deDE } from "./locales/de-DE";
 import { enUS } from "./locales/en-US";
 import { esES } from "./locales/es-ES";
@@ -12,9 +13,8 @@ import { jaJP } from "./locales/ja-JP";
 import { koKR } from "./locales/ko-KR";
 import { ptBR } from "./locales/pt-BR";
 import { zhCN } from "./locales/zh-CN";
-import type { Copy, CopyTable } from "./copyTypes";
 
-export type { Copy, CopyKey } from "./copyTypes";
+export type { Copy,CopyKey } from "./copyTypes";
 
 // =============================================================================
 // 翻译表

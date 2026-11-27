@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect,useState } from "react";
 
 import { COACH_WORKING_LABELS } from "../../lib/i18n/segments/coachInlineText";
-import type { ComposerLanguage } from "../../lib/types";
 import type { TrainerStage } from "../../lib/trainerStage";
+import type { ComposerLanguage } from "../../lib/types";
 
 /**
  * Elapsed label borrowed from ZCode's ChatLoading: the working line carries a

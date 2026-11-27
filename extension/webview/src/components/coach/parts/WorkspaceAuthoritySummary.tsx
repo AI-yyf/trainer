@@ -1,7 +1,7 @@
-import { StatusPill } from "../../StatusPill";
 import { describeWorkspaceAuthoritySummary } from "../../../../../../shared/src/workspaceAuthority";
-import type { ComposerLanguage, WorkspaceAuthority } from "../../../lib/types";
 import { workspaceAuthoritySummaryCopy } from "../../../lib/i18n/segments/coachInlineText";
+import type { ComposerLanguage,WorkspaceAuthority } from "../../../lib/types";
+import { StatusPill } from "../../StatusPill";
 
 
 function summaryCopy(language: ComposerLanguage) {

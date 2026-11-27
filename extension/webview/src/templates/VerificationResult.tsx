@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { ComposerLanguage, EvaluationCheck } from "../lib/types";
 import { DoneIcon } from "../components/icons/inline";
+import type { ComposerLanguage,EvaluationCheck } from "../lib/types";
 import { templateCopy } from "./templateCopy";
 
 export type VerificationVerdict = "passed" | "failed" | "unknown";

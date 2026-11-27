@@ -1,38 +1,29 @@
-import { LearningHome } from "../../templates/LearningHome";
-import { NextAction, type NextActionProps } from "../../templates/NextAction";
-import { SystemState, type SystemStateKind } from "../../templates/SystemState";
-import { templateCopy } from "../../templates/templateCopy";
-import { trainingViewLabel } from "../../lib/viewLabels";
-import { starterTemplate, starterTemplates, starterTemplateDefsFor, resolveStarterSubjectFamily } from "../../lib/courseTemplates";
-import { isVerifiedTrainingReturn } from "../../lib/learningActionResolver";
-import {
-  DIMENSION_LABELS,
-  STATE_LABELS,
-  type DimensionKey,
-} from "../../lib/i18n/segments/progressInlineText";
 import {
   isValidElement,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type ReactNode,
+  type ReactNode
 } from "react";
+import { resolveStarterSubjectFamily,starterTemplateDefsFor,starterTemplates } from "../../lib/courseTemplates";
+import {
+  DIMENSION_LABELS,
+  STATE_LABELS,
+  type DimensionKey,
+} from "../../lib/i18n/segments/progressInlineText";
+import { isVerifiedTrainingReturn } from "../../lib/learningActionResolver";
+import { trainingViewLabel } from "../../lib/viewLabels";
+import { LearningHome } from "../../templates/LearningHome";
+import { NextAction,type NextActionProps } from "../../templates/NextAction";
+import { SystemState,type SystemStateKind } from "../../templates/SystemState";
+import { templateCopy } from "../../templates/templateCopy";
 
 import {
   sanitizeErrorSurfaceText,
 } from "../../../../../shared/src/errorSurfaceSanitizer";
 
-import { ActionButton, WorkbenchSurfaceButton } from "../common";
-import { MessageRichContent } from "../coach/MessageRichContent";
-import {
-  CheckMarkIcon,
-  ArrowRightIcon,
-  LinkIcon,
-  PlanIcon,
-} from "../icons";
-import { useTranslation } from "../../lib/i18n/useTranslation";
+import { useWorkbenchState } from "../../app/useWorkbenchState";
 import { resolvePlanViewCopy } from "../../lib/i18n/planViewCopy";
 import { resolveLearningTodayCopy } from "../../lib/i18n/segments/learningTodayCopy";
 import {
@@ -40,19 +31,23 @@ import {
   type PlanCopyKey,
   type PlanLanguage,
 } from "../../lib/i18n/segments/planInlineText";
-import { reviewConceptLabel } from "../../lib/reviewLabel";
-import { useWorkbenchState } from "../../app/useWorkbenchState";
+import { useTranslation } from "../../lib/i18n/useTranslation";
 import type {
   EvidenceQueueView,
   GlobalPlan,
-  PlanChangeCandidateView,
   GlobalPlanProjectLink,
   LearningPlan,
-  PlanRuntimeReviewPoint,
+  PlanChangeCandidateView,
   PlanStage,
-  ReviewQueueItem,
-  TrainingSkillProjection,
+  TrainingSkillProjection
 } from "../../lib/types";
+import { MessageRichContent } from "../coach/MessageRichContent";
+import { ActionButton,WorkbenchSurfaceButton } from "../common";
+import {
+  CheckMarkIcon,
+  LinkIcon,
+  PlanIcon
+} from "../icons";
 
 export interface PlanReviewItem {
   id: string;
@@ -117,14 +112,6 @@ export interface EvidenceQueueActionHandlers {
   onDeferEvidence?: (evidenceId: string, reason?: string) => void;
 }
 
-interface PlanDecisionStripState {
-  tone: "good" | "warning" | "danger" | "muted";
-  eyebrow: string;
-  title: string;
-  /** Optional: the merged evidence strip states the fact in the title alone. */
-  detail?: string;
-  next: string;
-}
 
 export interface CoachPlanViewProps {
   plan: LearningPlan | null;
@@ -293,21 +280,6 @@ function resolveStageStatusLabel(
   return defaultStageLabel(status, language);
 }
 
-function defaultProjectSubplanStatusLabel(
-  status: ProjectSubplanStatus,
-  language: PlanLanguage,
-): string {
-  if (status === "active") {
-    return planCopy(language, "active");
-  }
-  if (status === "pending") {
-    return planCopy(language, "pending");
-  }
-  if (status === "blocked") {
-    return planCopy(language, "blocked");
-  }
-  return planCopy(language, "frozen");
-}
 
 function projectSubplanDetail(subplan: ProjectSubplanView, language: PlanLanguage): string {
   if (subplan.status === "blocked") {
@@ -324,64 +296,10 @@ function projectSubplanDetail(subplan: ProjectSubplanView, language: PlanLanguag
     : planCopy(language, "waitingMainPlan");
 }
 
-function formatQueuedStageSummary(count: number, language: PlanLanguage): string {
-  if (count <= 0) {
-    return planCopy(language, "lastStage");
-  }
-  return planCopy(language, "queuedStages", { count });
-}
 
-function surfaceModeLabel(
-  mode: PlanReviewItem["surfaceMode"],
-  language: PlanLanguage,
-): string | undefined {
-  if (mode === "ahead") {
-    return planCopy(language, "surfaceAhead");
-  }
-  if (mode === "digest") {
-    return planCopy(language, "surfaceDigest");
-  }
-  if (mode === "due") {
-    return planCopy(language, "surfaceDue");
-  }
-  return undefined;
-}
 
-/**
- * §八: canonical capability band for review mastery scores — one honest state
- * label instead of a fake percentage. Unscored items stay unlabeled. Shared
- * wording with the progress surface: >=0.8 independent, >=0.5 assisted,
- * otherwise emerging. No numeric percent, no bars implying precision.
- */
-function capabilityBandLabel(score: number | undefined, language: PlanLanguage): string | undefined {
-  if (typeof score !== "number" || Number.isNaN(score) || score <= 0) {
-    return undefined;
-  }
-  if (score >= 0.8) {
-    return planCopy(language, "masteryBandIndependent");
-  }
-  if (score >= 0.5) {
-    return planCopy(language, "masteryBandAssisted");
-  }
-  return planCopy(language, "masteryBandEmerging");
-}
 
-function intervalLabel(days: number | undefined, language: PlanLanguage): string | undefined {
-  if (typeof days !== "number" || Number.isNaN(days)) {
-    return undefined;
-  }
-  return planCopy(language, "intervalDays", { days });
-}
 
-function compactReviewMeta(item: PlanReviewItem, language: PlanLanguage): string | undefined {
-  const meta = [
-    item.meta,
-    surfaceModeLabel(item.surfaceMode, language),
-    intervalLabel(item.intervalDays, language),
-    capabilityBandLabel(item.masteryScore, language),
-  ].filter(Boolean) as string[];
-  return meta.length > 0 ? meta.join(" · ") : undefined;
-}
 
 function compactReviewLane(item: PlanReviewItem, language: PlanLanguage): string {
   const lead =
@@ -583,17 +501,9 @@ function EvidenceDecisionControls({
 export function CoachPlanView(props: CoachPlanViewProps) {
   const {
     plan,
-    className,
-    titleNote,
     composerDraftReplacement,
-    emptyState,
     actions,
-    resumeActionLabel,
-    onResumeThread,
-    onStageSelect,
     stageStatusLabels,
-    compactPrimary = false,
-    hideDecisionStrip = false,
     evidenceQueue,
     evidenceActions,
     planChangeCandidates = [],
@@ -621,60 +531,21 @@ export function CoachPlanView(props: CoachPlanViewProps) {
     composerDraftReplacementCancelRef.current?.focus();
   }, [composerDraftReplacement?.source, composerDraftReplacement?.title]);
 
-  const resolvedEyebrow = props.eyebrow ?? t("plan");
-  const resolvedEmptyTitle = props.title ?? t("plan");
-  const resolvedCurrentStageLabel =
-    props.currentStageLabel ?? t("planStages");
-  const resolvedGoalLabel = props.goalLabel ?? t("goals");
-  const resolvedNextStepLabel =
-    props.nowLabel ?? props.nextStepLabel ?? t("nextMove");
-  const resolvedNextStepHint =
-    props.nextStepHint ?? planCopy(language, "narrowNextHint");
-  const resolvedNextStepResumeThread = props.nextStepResumeThread?.trim();
   const resolvedStagesLabel = props.stagesLabel ?? t("planStages");
   const resolvedMemoryLabel = props.memoryLabel ?? t("currentFocus");
   const resolvedWinsLabel = props.winsLabel ?? t("recentWins");
   const resolvedWeakSpotsLabel = props.weakSpotsLabel ?? t("weakSpots");
   const resolvedReviewLabel = props.reviewLabel ?? t("reviewRhythm");
-  const resolvedReviewFocusLabel =
-    props.reviewFocusLabel ?? planCopy(language, "reviewFocusFallback");
   const resolvedCoachingStateLabel = props.coachingStateLabel ?? t("backgroundCoachWork");
-  const resolvedSupportSummaryLabel = props.supportSummaryLabel ?? t("backgroundCoachWork");
-  const resolvedNotesLabel = props.notesLabel ?? planCopy(language, "notesLabel");
-  const resolvedSupportHint = props.supportHint ?? planCopy(language, "supportHint");
-  const resolvedWhyNowLabel = props.whyNowLabel ?? props.summaryLabel ?? t("trainingWhyNow");
-  const resolvedVerifyLabel = props.verifyLabel ?? t("acceptance");
   const resolvedReviewWindowLabel =
     props.reviewWindowLabel ?? planCopy(language, "revisitLabel");
-  const resolvedActionsLabel = props.actionsLabel ?? planCopy(language, "actionsLabel");
-  const resolvedResumeActionLabel =
-    resumeActionLabel ?? planCopy(language, "resumeInCoach");
-  const resolvedReturnLabel =
-    props.returnLabel ??
-    props.laterLabel ??
-    props.pathSummaryLabel ??
-    planCopy(language, "returnLabel");
   const resolvedDetailsSummaryLabel =
     props.detailsSummaryLabel ?? planCopy(language, "moreLabel");
-  const resolvedLinearOverviewLabel =
-    props.overviewLabel ?? planCopy(language, "followOneThread");
-  const resolvedMainlineLabel =
-    props.planAtGlanceLabel ?? planCopy(language, "currentThread");
-  const shouldRepeatGoalLabel =
-    resolvedGoalLabel.trim().length > 0 && resolvedGoalLabel.trim() !== resolvedMainlineLabel.trim();
-  const resolvedRevisitSummaryLabel =
-    props.revisitSummaryLabel ?? planCopy(language, "revisitLabel");
-  const resolvedGovernanceLabel =
-    props.governanceLabel ?? planCopy(language, "planStatusLabel");
   const resolvedProjectSubplansLabel =
     props.projectSubplansLabel ?? planCopy(language, "projectPlansLabel");
   const projectSubplans = (props.projectSubplans ?? []).filter(
     (subplan) => subplan.id.trim().length > 0 && subplan.title.trim().length > 0,
   );
-  const showEyebrow = resolvedEyebrow.trim().length > 0;
-  const resolvedTitleText = nodeText(props.title ?? plan?.title).trim();
-  const showHeader = showEyebrow || Boolean(resolvedTitleText) || Boolean(titleNote);
-  const classes = ["section-block", "coach-plan-view", className].filter(Boolean).join(" ");
   const globalPlan = props.globalPlan;
   const globalPlanTitle = globalPlan?.title.trim() || t("globalPlanLabel");
   const hasCurrentProjectPlanLink = Boolean(
@@ -952,120 +823,11 @@ export function CoachPlanView(props: CoachPlanViewProps) {
   const activeStageTitle = liveStageIsCurrent
     ? activeStage?.title ?? (props.title ?? plan.title)
     : liveCurrentStep;
-  const activeStageObjective = liveStageIsCurrent
-    ? activeStage?.objective ?? plan.summary
-    : "";
-  const currentGoalSummary = props.goalSummary ?? (compactPrimary ? undefined : activeStageObjective);
-  const queuedStageCount = plan.stages.filter((stage) => stage.status === "queued").length;
   const totalStageCount = Math.max(plan.stages.length, 1);
   const activeStageIndex = Math.max(plan.stages.findIndex((stage) => stage.id === activeStage?.id), 0) + 1;
-  const upcomingStages = plan.stages.filter((stage) => stage.status === "queued");
-  const previewStages = upcomingStages.slice(0, 3);
-  const laterSecondaryStage = previewStages[1] ?? null;
-  const pathProgressNote =
-    plan.stages.length === 0 ? "" : formatQueuedStageSummary(queuedStageCount, language);
-  const laterContinuationNote = laterSecondaryStage
-    ? planCopy(language, "thenPrefix", { step: laterSecondaryStage.title })
-    : undefined;
-  const verifyFallback = planCopy(language, "verifyFallback");
-  const recoveredVerifyLocked =
-    Boolean(plan.currentStep?.trim()) &&
-    !(plan.verifyMethod ?? []).some((item) => Boolean(item.trim()));
-  const returnFallback = planCopy(language, "returnFallback");
-  const currentStepText = props.nextStep ?? activeStageObjective;
-  const verifyNowInline = inlineText(props.verifyNow);
-  const verifyText = verifyNowInline
-    ? props.verifyNow
-    : recoveredVerifyLocked
-      ? planCopy(language, "continueCurrent")
-      : verifyFallback;
-  const returnPathText = props.returnPath ?? returnFallback;
   const stageProgressText = !liveStageIsCurrent
     ? ""
     : planCopy(language, "stageProgress", { index: activeStageIndex, total: totalStageCount });
-  const currentGoalText = inlineText(currentGoalSummary, compactPrimary ? "" : activeStageObjective || activeStageTitle);
-  const currentMainlineText = currentGoalText || activeStageTitle;
-  const showGoalSummary = Boolean(!compactPrimary && currentGoalText && currentGoalText !== activeStageTitle);
-  const showGoalLead = Boolean(currentMainlineText);
-  const currentStepInline = inlineText(currentStepText, activeStageObjective);
-  const recoveredWhyLocked = Boolean(plan.currentStep?.trim()) && !plan.whyNow?.trim();
-  const whyFallback = recoveredWhyLocked ? "" : (plan.whyNow?.trim() || activeStageObjective);
-  const whyNowInline = inlineText(props.whyNow, whyFallback);
-  const verifyInline = inlineText(verifyText, recoveredVerifyLocked ? "" : verifyFallback);
-  const returnInline = inlineText(returnPathText, returnFallback);
-  const whyNowBody =
-    props.whyNow && whyNowInline && whyNowInline !== currentStepInline
-      ? props.whyNow
-      : whyFallback && whyFallback !== currentStepInline
-        ? whyFallback
-        : pathProgressNote;
-  const summaryChips = [stageProgressText, plan.cadence].filter(Boolean) as string[];
-  const mainLanes: Array<{
-    id: string;
-    label: string;
-    body: ReactNode;
-    detail?: ReactNode;
-    accent?: boolean;
-  }> = [
-    {
-      id: "current",
-      label: resolvedNextStepLabel,
-      body: currentStepText,
-      detail: compactPrimary ? verifyText : resolvedNextStepHint,
-      accent: true,
-    },
-    {
-      id: "why",
-      label: resolvedWhyNowLabel,
-      body: whyNowBody,
-    },
-    {
-      id: "verify",
-      label: resolvedVerifyLabel,
-      body: verifyText,
-    },
-    {
-      id: "return",
-      label: resolvedReturnLabel,
-      body: returnPathText,
-      detail: !compactPrimary && laterContinuationNote ? laterContinuationNote : undefined,
-    },
-  ];
-  const currentLane = mainLanes[0];
-  const compactLaterText = (() => {
-    const now = inlineText(currentLane.body);
-    const done = inlineText(currentLane.detail);
-    const reviewText = inlineText(props.reviewWindow);
-    const reviewFirst = reviewText.match(/^[\s\S]*?[。.!?]/)?.[0]?.trim() || reviewText;
-    const queued = upcomingStages[0]?.title?.trim() ?? "";
-    return [compactPrimary ? "" : reviewFirst, queued].find((text) => text && text !== now && text !== done) ?? "";
-  })();
-  const routeStripItems = [
-    {
-      id: "current",
-      label: resolvedCurrentStageLabel,
-      body: activeStageTitle,
-      detail: stageProgressText,
-    },
-    {
-      id: "why",
-      label: resolvedWhyNowLabel,
-      body: whyNowBody,
-      detail: undefined,
-    },
-    {
-      id: "verify",
-      label: resolvedVerifyLabel,
-      body: verifyText,
-      detail: undefined,
-    },
-    {
-      id: "return",
-      label: resolvedReturnLabel,
-      body: returnPathText,
-      detail: laterContinuationNote,
-    },
-  ];
   const supportRows = [
     props.reviewWindow
       ? {
@@ -1129,17 +891,8 @@ export function CoachPlanView(props: CoachPlanViewProps) {
         }
       : null,
   ].filter(Boolean) as Array<{ id: string; label: string; value: string }>;
-  const trajectoryRows = (props.trajectoryItems ?? []).slice(0, 3).map((item) => ({
-    id: item.id,
-    label: item.label,
-    value: inlineText(item.value),
-    detail: inlineText(item.detail),
-  }));
 
-  const hasStageDetails = plan.stages.length > 1;
   const hasReviewDetails = Boolean(props.dueReviewItems?.length) || Boolean(reviewSupportRow);
-  const hasTrajectoryDetails = trajectoryRows.length > 0;
-  const hasBackgroundDetails = backgroundRows.length > 0 || noteRows.length > 0 || hasTrajectoryDetails;
   const evidenceTone = evidenceCounts.pending > 0 ? "warning" : evidenceCounts.deferred > 0 ? "muted" : "good";
   const evidenceDebtCount = evidenceCounts.pending + evidenceCounts.deferred;
   const hasEvidenceDetails = evidenceCounts.total > 0;

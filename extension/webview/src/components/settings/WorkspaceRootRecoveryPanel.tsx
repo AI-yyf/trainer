@@ -1,7 +1,7 @@
-import { ActionButton } from "../common";
-import { FolderIcon } from "../icons";
 import { useTranslation } from "../../lib/i18n/useTranslation";
 import type { TrainerWorkspaceAdmission } from "../../lib/types";
+import { ActionButton } from "../common";
+import { FolderIcon } from "../icons";
 
 export interface WorkspaceRootRecoveryPanelProps {
   trainerWorkspace?: TrainerWorkspaceAdmission;

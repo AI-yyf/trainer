@@ -6,7 +6,7 @@
  * runs past the newest message. Any history growth resets the cursor.
  */
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback,useEffect,useMemo,useRef } from "react";
 
 export function useComposerHistoryNavigation(options: {
   conversation: ReadonlyArray<{ role: string; body: string }>;

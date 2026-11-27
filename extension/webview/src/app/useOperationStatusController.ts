@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback,useEffect,useRef } from "react";
 
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
 import {

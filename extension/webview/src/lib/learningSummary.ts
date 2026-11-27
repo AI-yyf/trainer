@@ -1,7 +1,7 @@
-import { DIMENSION_LABELS, STATE_LABELS } from "./i18n/segments/progressInlineText";
 import { normalizeHostText } from "./hostText";
+import { DIMENSION_LABELS,STATE_LABELS } from "./i18n/segments/progressInlineText";
 import { dimensionKeysFor } from "./progressDimensions";
-import type { ComposerLanguage, TrainingSkillDimensionState, TrainingSkillProjection } from "./types";
+import type { ComposerLanguage,TrainingSkillDimensionState,TrainingSkillProjection } from "./types";
 
 export interface LearningProgressRow {
   label: string;

@@ -4,10 +4,10 @@
  * render body; behavior and copy are unchanged.
  */
 
-import { ActionButton } from "../common";
-import { FolderIcon, TrashIcon } from "../icons";
-import type { CoachSettingsLabels } from "./CoachSettingsView";
 import type { MemoryShareGrant } from "../../lib/types";
+import { ActionButton } from "../common";
+import { FolderIcon,TrashIcon } from "../icons";
+import type { CoachSettingsLabels } from "./CoachSettingsView";
 
 interface MemorySharingPanelProps {
   copy: CoachSettingsLabels;

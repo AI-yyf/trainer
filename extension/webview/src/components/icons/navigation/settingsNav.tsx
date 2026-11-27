@@ -16,7 +16,7 @@
  *
  * Each icon accepts `active` to show its Selective Fill element.
  */
-import { TrainerIconBase, type TrainerIconProps } from "../TrainerIconBase";
+import { TrainerIconBase,type TrainerIconProps } from "../TrainerIconBase";
 
 type SettingsNavIconProps = Omit<TrainerIconProps, "active"> & { active?: boolean };
 

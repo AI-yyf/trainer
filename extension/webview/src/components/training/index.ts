@@ -2,18 +2,15 @@
 // TrainingWorkbenchView. The former multi-panel chrome (CoachTrainingView,
 // welcome/motivation/rhythm/memory/card panels, tip panel) and the practice /
 // flash sub-views it mounted were unreachable dead code and were removed.
-export { TrainingWorkbenchView } from "./TrainingWorkbenchView";
-export type { TrainingWorkbenchViewProps } from "./TrainingWorkbenchView";
 export {
   applyTrainingCardGrade,
   applyTrainingCardSkip,
   interpretTrainingComposerCardCommand,
   type TrainingCardGrade,
-  type TrainingComposerCardCommand,
+  type TrainingComposerCardCommand
 } from "../../lib/i18n/segments/trainingCardActions";
+export { TrainingWorkbenchView,resolveTrainingCardMismatchRecovery } from "./TrainingWorkbenchView";
 export type {
-  TrainingReviewAction,
-  TrainingReviewItem,
-  TrainingCardMismatchRecovery,
+  TrainingCardMismatchRecovery,TrainingReviewAction,
+  TrainingReviewItem,TrainingWorkbenchViewProps
 } from "./TrainingWorkbenchView";
-export { resolveTrainingCardMismatchRecovery } from "./TrainingWorkbenchView";

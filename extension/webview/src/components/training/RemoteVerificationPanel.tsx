@@ -1,7 +1,7 @@
-import { SystemState } from "../../templates/SystemState";
-import { VerificationResult } from "../../templates/VerificationResult";
 import { COPY } from "../../lib/i18n/segments/trainingInlineText";
 import type { ComposerLanguage } from "../../lib/types";
+import { SystemState } from "../../templates/SystemState";
+import { VerificationResult } from "../../templates/VerificationResult";
 
 export type RemoteVerificationViewState = {
   running: boolean;

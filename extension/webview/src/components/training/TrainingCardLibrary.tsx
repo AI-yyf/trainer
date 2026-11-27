@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import type { ComposerLanguage, TrainingCardCandidate } from "../../lib/types";
+import type { ComposerLanguage,TrainingCardCandidate } from "../../lib/types";
 
 const labels: Record<ComposerLanguage, readonly string[]> = {
   "zh-CN": ["练习记录", "待确认", "已保存", "题目", "验收标准（每行一项）", "保存练习", "暂缓", "拒绝", "打开练习", "归档", "标记重要", "取消重要标记", "优先级", "合并到此练习", "已暂缓"],

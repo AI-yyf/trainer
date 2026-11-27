@@ -5,7 +5,7 @@
  * Reference: docs/open-source-fit-and-provider-strategy.md §7.7
  */
 
-import React, { useState } from "react";
+import React,{ useState } from "react";
 
 export interface PPTXSlide {
   index: number;

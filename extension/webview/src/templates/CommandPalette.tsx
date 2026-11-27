@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect,useRef,useState,type ReactNode } from "react";
 
 export interface PaletteEntry {
   id: string;

@@ -1144,13 +1144,20 @@ class AgenticExecutionMixin:
                         # mixed-script corruption, while preserving single-newline
                         # fenced code blocks so long lectures stream incrementally.
                         visible = _streamable_visible_prefix(buffered_text)
+                        tail_sample = visible[-256:]
+                        has_non_latin_tail = any("\u0370" <= ch <= "\u0e7f" for ch in tail_sample)
                         if (
                             visible
-                            and _strip_short_cyrillic_noise(visible, message=message) == visible
-                            and not _mixed_script_reply_corruption_detail(
-                                visible,
-                                message=message,
-                                response_language=response_language,
+                            and (
+                                not has_non_latin_tail
+                                or (
+                                    _strip_short_cyrillic_noise(tail_sample, message=message) == tail_sample
+                                    and not _mixed_script_reply_corruption_detail(
+                                        tail_sample,
+                                        message=message,
+                                        response_language=response_language,
+                                    )
+                                )
                             )
                             and visible.startswith(streamed_visible_text)
                         ):

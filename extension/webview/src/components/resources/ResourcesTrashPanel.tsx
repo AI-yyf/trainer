@@ -1,10 +1,10 @@
-import type { ComposerLanguage, DeletedResource } from "../../lib/types";
 import {
   resourceText,
   resourceTextLocaleOverrides,
   type ResourceTextKey,
 } from "../../lib/i18n/segments/resourcesInlineText";
-import { RefreshIcon, TrashIcon } from "../icons";
+import type { ComposerLanguage,DeletedResource } from "../../lib/types";
+import { RefreshIcon,TrashIcon } from "../icons";
 
 /**
  * 资料库「回收站」面板 (P2 模块化，自 ResourcesWorkbenchView 迁出)。

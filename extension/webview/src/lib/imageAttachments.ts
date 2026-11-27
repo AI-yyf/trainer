@@ -1,7 +1,7 @@
-import type { MessageAttachment } from "./types";
-import ImageWorker from "./imageAttachmentWorker?worker&inline";
-import { IMAGE_ATTACHMENT_LIMITS as LIMITS, type ImageAttachmentErrorCode } from "../../../../shared/src/imageAttachmentPolicy";
+import { IMAGE_ATTACHMENT_LIMITS as LIMITS,type ImageAttachmentErrorCode } from "../../../../shared/src/imageAttachmentPolicy";
 import type { ImageAttachmentWorkerReply } from "./imageAttachmentWorker";
+import ImageWorker from "./imageAttachmentWorker?worker&inline";
+import type { MessageAttachment } from "./types";
 
 export class ImageAttachmentError extends Error {
   constructor(readonly code: ImageAttachmentErrorCode) { super(code); }

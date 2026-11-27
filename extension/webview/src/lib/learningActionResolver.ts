@@ -1,5 +1,5 @@
-import type { ComposerLanguage } from "./types";
 import { learningActionCopy } from "./i18n/learningActionCopy";
+import type { ComposerLanguage } from "./types";
 
 export interface LearningScope {
   workspaceId: string;

@@ -16,7 +16,8 @@ import {
 } from "../../../../shared/src/onboarding";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
 import { readWorkspaceTrustStateFromCapabilitySummary } from "../../../../shared/src/workspaceTrustState";
-import { OnboardingWizard, WorkspaceAdmissionPanel } from "../components/firstlook";
+import { OnboardingWizard,WorkspaceAdmissionPanel } from "../components/firstlook";
+import type { ProviderDraft } from "../components/settings/CoachSettingsView";
 import type { composerDockDraftScope } from "../lib/composerDock";
 import { appUiCopy } from "../lib/i18n/appUiCopy";
 import type { Copy } from "../lib/i18n/copy";
@@ -29,8 +30,7 @@ import type {
   ProviderConfigView,
 } from "../lib/types";
 import { postMessage } from "../lib/vscode";
-import { requireBrowserPreviewAdapter, type SettingsActionState } from "./appHelpers";
-import type { ProviderDraft } from "../components/settings/CoachSettingsView";
+import { requireBrowserPreviewAdapter,type SettingsActionState } from "./appHelpers";
 import { useWorkbenchState } from "./useWorkbenchState";
 
 export type ComposerDraftScopeKey = ReturnType<typeof composerDockDraftScope>;

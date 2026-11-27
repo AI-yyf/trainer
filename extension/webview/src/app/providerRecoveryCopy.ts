@@ -3,9 +3,9 @@
  * batch 7). Pure helpers over the provider view — no component state.
  */
 
-import { describeProviderSendState, hasSavedProviderProfiles } from "../../../../shared/src/providerStatus";
+import { describeProviderSendState,hasSavedProviderProfiles } from "../../../../shared/src/providerStatus";
 import type { ComposerLanguage } from "../../../../shared/src/types";
-import type { ActiveWorkbenchView, ProviderConfigView } from "../lib/types";
+import type { ActiveWorkbenchView,ProviderConfigView } from "../lib/types";
 
 function providerHasVerifiedStreamingProbe(
   provider: Pick<ProviderConfigView, "lastTestResult">,
@@ -617,5 +617,5 @@ export {
   streamingCapabilityBlockReason,
   type ProviderRecoveryLocale,
   type ProviderRecoveryScenario,
-  type ProviderRecoverySummary,
+  type ProviderRecoverySummary
 };

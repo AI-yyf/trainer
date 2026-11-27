@@ -1102,7 +1102,6 @@ export function resolveTrainingNextHop(
   const reviewArtifactId = compact(nextHop.reviewArtifactId);
   const planEvidenceId = compact(nextHop.planEvidenceId);
   const cardTitle = compact(nextHop.cardTitle);
-  const hasRenderableCopy = Boolean(title || summary || whyNow || cardTitle);
   const hasStructuredTarget = Boolean(
     candidateType ||
       targetKind ||

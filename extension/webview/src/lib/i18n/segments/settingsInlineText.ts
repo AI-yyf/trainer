@@ -6,9 +6,9 @@
  * phrase tables here.
  */
 
-import type { ComposerLanguage } from "../../types";
-import type { CoachSettingsLabels } from "../../../components/settings/CoachSettingsView";
 import type { ProviderTemplateGroup } from "../../../../../../shared/src/providerTemplateCatalog";
+import type { CoachSettingsLabels } from "../../../components/settings/CoachSettingsView";
+import type { ComposerLanguage } from "../../types";
 
 /**
  * §十五: settings labels the shared workbench copy does not cover, in eight

@@ -1,257 +1,147 @@
-import { templateCopy } from "../../templates/templateCopy";
-import { SettingsIndex, type SettingsSectionId } from "../../templates/SettingsIndex";
-import { SettingsDetail } from "../../templates/SettingsDetail";
 import {
-  ChoiceList,
-  ContextList,
-  SimpleInfoRow,
-  SummaryCard,
-} from "./SettingsControls";
-import { SystemState } from "../../templates/SystemState";
-import { useWorkbenchState } from "../../app/useWorkbenchState";
-import {
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import {
-  countSavedProviderProfiles,
+  isNewApiConnectionType,
+  parseProviderConnectionPaste,
+} from "../../../../../shared/src/providerGateway";
+import {
+  inferProviderModelAdaptation,
+  type ProviderModelAdaptation
+} from "../../../../../shared/src/providerModelAdaptation";
+import {
+  evaluateProviderModelPolicy,
+  filterProviderModelOptions,
+} from "../../../../../shared/src/providerModelPolicy";
+import {
+  providerModelTokenLimitsKey
+} from "../../../../../shared/src/providerModelTokenLimits";
+import {
+  normalizeProviderProtocol,
+  providerProtocolEndpointHint,
+  SUPPORTED_PROVIDER_PROTOCOLS
+} from "../../../../../shared/src/providerProtocols";
+import {
+  deriveProviderSetupState,
+  type ProviderSetupReason,
+} from "../../../../../shared/src/providerSetupState";
+import {
   describeProviderCapabilityMatrixGroups,
-  describeProviderDiagnosticVerdict,
-  describeProviderProfileSummary,
-  describeProviderProtocolSummary,
-  describeProviderImageInputState,
   describeProviderSendState,
   describeProviderTestReadiness,
   hasSavedProviderProfiles,
   PROVIDER_TEST_FRESHNESS_WINDOW_MS,
   providerBaseUrlIsLocalService,
   providerErrorHint,
-  type ProviderImageInputState,
-  type ProviderSendState,
-  type ProviderSendStateStatus,
+  type ProviderSendStateStatus
 } from "../../../../../shared/src/providerStatus";
-import {
-  normalizeProviderBaseUrl,
-  normalizeProviderProtocol,
-  providerProtocolCompletionLabel,
-  providerProtocolEndpointHint,
-  looksLikeSchemelessProviderUrl,
-  SUPPORTED_PROVIDER_PROTOCOLS,
-} from "../../../../../shared/src/providerProtocols";
-import {
-  providerModelTokenLimitsKey,
-  readProviderModelTokenLimit,
-  resolveProviderModelTokenState,
-  withProviderModelTokenLimit,
-} from "../../../../../shared/src/providerModelTokenLimits";
-import {
-  SMART_CONTEXT_WINDOW_PRESETS,
-  SMART_MAX_OUTPUT_PRESETS,
-  formatCompactTokenLimit,
-  inferModelDefaultTokenLimits,
-  resolveEffectiveTokenBudgetProfile,
-} from "../../../../../shared/src/smartTokenBudget";
-import {
-  evaluateProviderModelPolicy,
-  filterProviderModelOptions,
-} from "../../../../../shared/src/providerModelPolicy";
-import type { ProviderModelTokenLimit, ProviderProtocol } from "../../../../../shared/src/models";
-import {
-  providerConnectionNameLabel,
-  providerFailureCopy,
-  providerModelCardCopy,
-  sidecarRestartCopy,
-} from "../../lib/i18n/segments/providerSettingsCopy";
-import { MemorySharingPanel } from "./MemorySharingPanel";
-import { TelemetryOptInPanel } from "./TelemetryOptInPanel";
-import { providerRecoveryLocale } from "../../app/providerRecoveryCopy";
-import {
-  deriveProviderSetupState,
-  type ProviderSetupReason,
-} from "../../../../../shared/src/providerSetupState";
-import type { LocalUsageInsights, ProviderEndpointSpeedTestResult } from "../../lib/types";
-import {
-  isNewApiConnectionType,
-  parseProviderConnectionPaste,
-} from "../../../../../shared/src/providerGateway";
-import {
-  PROVIDER_TEMPLATE_GROUPS,
-  type ProviderTemplateGroup,
-  PROVIDER_TEMPLATE_GROUP_ORDER,
-  PROVIDER_TEMPLATE_LABELS,
-} from "../../../../../shared/src/providerTemplateCatalog";
-import { classifyProviderThinkingSupport, describeProviderThinking, normalizeProviderThinkingConfig, synthesizeProviderThinkingDescriptor, thinkingProtocolSupportsWire, updateProviderThinking } from "../../../../../shared/src/providerThinking";
 import type { ProviderThinkingConfig } from "../../../../../shared/src/providerThinking";
-import type { TrainerCapabilityVerdict } from "../../../../../shared/src/capabilityVerdict";
-import {
-  describeWorkspaceTrustState,
-  normalizeWorkspaceTrustState,
-  type WorkspaceTrustState,
-} from "../../../../../shared/src/workspaceTrustState";
+import { describeProviderThinking,normalizeProviderThinkingConfig,synthesizeProviderThinkingDescriptor,thinkingProtocolSupportsWire,updateProviderThinking } from "../../../../../shared/src/providerThinking";
 import {
   selectScopedSettingsLastTest,
   settingsCapabilityChipsVisible,
-  settingsCapabilitySurfaceStatus,
-  settingsProtocolIsKnown,
+  settingsCapabilitySurfaceStatus
 } from "../../../../../shared/src/settingsCapabilityGovernance";
 import {
-  inferProviderModelAdaptation,
-  recommendProviderModel,
-  type ProviderModelAdaptation,
-} from "../../../../../shared/src/providerModelAdaptation";
-import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
-
-import { ActionButton } from "../common";
-import { ProviderEndpointSpeedTest } from "./ProviderEndpointSpeedTest";
-import { ProviderQuickSetup } from "./ProviderQuickSetup";
-import { WorkspaceRootRecoveryPanel } from "./WorkspaceRootRecoveryPanel";
-import { WorkspaceAuthoritySummary } from "../coach/parts/WorkspaceAuthoritySummary";
-import { CollapseSection } from "../common/CollapseSection";
-import { StatusPill } from "../StatusPill";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, ComposeIcon, EyeIcon, FileIcon, PlayIcon, PlusIcon, RefreshIcon, TrashIcon, UploadIcon } from "../icons";
-import { AlertTriangleIcon, DataFolderIcon, DoneIcon, ReloadIcon, SettingsShareIcon } from "../icons/inline";
-import { RemoteIcon } from "../icons/brand/trainerBrand";
-import { ResourcesNavIcon, TrainingNavIcon } from "../icons/navigation/coreNav";
-import { CoachNavIcon } from "../icons/navigation/primaryNav";
-import { SettingsAdvancedIcon, SettingsConnectionIcon, SettingsPreferencesIcon, SettingsSkillsIcon, SettingsTeachingIcon, SettingsWorkspaceIcon } from "../icons/navigation/settingsNav";
-import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES } from "../../../../../shared/src";
-import { trainerCommands } from "../../../../../shared/src/commands";
-import { remoteSupportStateView, REMOTE_SUPPORT_COPY } from "../../lib/i18n/segments/remoteSupportCopy";
-import { settingsText } from "./settingsText";
-import { languageIntegrityText } from "./languageIntegrityCopy";
-import { useCoachSettingsViewState, useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
-import { useProviderConnection } from "../../app/providerConnectionContext";
-import { postMessage as postWebviewMessage, requestLocalUsageInsights } from "../../lib/vscode";
+  inferModelDefaultTokenLimits,
+  resolveEffectiveTokenBudgetProfile
+} from "../../../../../shared/src/smartTokenBudget";
 import {
-  trainerSkillCatalog,
-  normalizeCustomSkillTrigger,
-  resolveTrainerSkillText,
-  trainerSkillSectionLabel,
-  type TrainerCustomSkill,
-  type TrainerSkillSection,
-} from "../../../../../shared/src/skillCatalog";
+  describeWorkspaceTrustState,
+  normalizeWorkspaceTrustState
+} from "../../../../../shared/src/workspaceTrustState";
+import { providerRecoveryLocale } from "../../app/providerRecoveryCopy";
+import { useWorkbenchState } from "../../app/useWorkbenchState";
+import {
+  providerFailureCopy,
+  providerModelCardCopy,
+  sidecarRestartCopy
+} from "../../lib/i18n/segments/providerSettingsCopy";
+import type { LocalUsageInsights } from "../../lib/types";
+import { type SettingsSectionId } from "../../templates/SettingsIndex";
+import {
+  ChoiceList
+} from "./SettingsControls";
+
 import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import {
-  SETTINGS_FALLBACK_LABELS,
   englishLabels,
-  extraLocalizedSettingsLabels,
-  firstScreenRowLabels,
   localizedCatalogSavedModelsLabel,
-  providerConnectionTruthCopyTable,
-  providerDetailLabelTable,
-  providerModelDiscoveryCopyTable,
-  providerModelPickerCopyTable,
-  providerTemplateGroupLabelTable,
-  settingsPhraseTable,
-  settingsStatusPhraseTable,
-  settingsSupportPhraseTable,
-  streamingVerificationCopyTable,
-  toolsVerificationCopyTable,
-  type ProviderConnectionTruthCopy,
-  type ProviderDetailLabelKey,
-  type SettingsPhraseKey,
-  type SettingsStatusPhraseKey,
-  type SettingsSupportPhraseKey,
-  type ToolsVerificationCopy,
+  SETTINGS_FALLBACK_LABELS
 } from "../../lib/i18n/segments/settingsInlineText";
 import type {
-  CapabilityFlags,
-  CoachAnswerMode,
-  ComposerLanguage,
-  ProviderConfigView,
-  ProviderProbeUsage,
-  TeachingStyle,
-  WorkspaceMemoryToggles,
-  WorkspaceAuthority,
+  WorkspaceMemoryToggles
 } from "../../lib/types";
+import { requestLocalUsageInsights } from "../../lib/vscode";
+import { DoneIcon,ReloadIcon } from "../icons/inline";
+import { SettingsPreferencesIcon,SettingsSkillsIcon } from "../icons/navigation/settingsNav";
 import {
-  type AnswerMode,
-  type SaveState,
-  type CapabilityVerdictKey,
-  CAPABILITY_VERDICT_LABELS,
-  type AnswerStylePreset,
-  DEFAULT_PROVIDER_CONNECTION_NAME,
-  MODEL_PICKER_DEFENSIVE_OPTION_LIMIT,
-  ANSWER_STYLE_STORAGE_KEY,
-  SETTINGS_SECTION_FLASH_MS,
-  type AnswerStyleValues,
+  adaptiveBehaviorLabel,
   ANSWER_STYLE_PRESETS,
-  deriveAnswerStylePreset,
-  readStoredAnswerStyle,
-  writeStoredAnswerStyle,
-  prefersReducedMotion,
-  learningSurfaceAlignmentCopy,
-  browserCaptureSettingsCopy,
-  type ProviderProfileView,
   asRecord,
   asString,
   asStringArray,
-  asNumber,
-  normalizeProviderBaseUrlDraft,
-  looksLikeProviderServiceAddress,
+  browserCaptureSettingsCopy,
+  compactSummaryValue,
+  deriveAnswerStylePreset,
+  describeProbeUsageDetail,
+  describeStreamingVerificationFact,
+  describeThinkingVerificationFact,
+  describeToolsVerificationFact,
+  describeVisionVerificationFact,
+  formatDraftStringList,
+  formatDurationSeconds,
+  formatRequestDefaultsDraft,
+  formatTimestamp,
+  formatTokenValue,
+  isMiniMaxLikeProvider,
+  learningSurfaceAlignmentCopy,
+  localizedSettingsLabels,
   looksLikeProviderApiKeyToken,
-  providerConnectionLabelFromPaste,
-  providerConnectionTruthCopy,
-  providerTemplateGroupLabel,
-  providerDetailLabel,
-  providerBaseUrlGuidance,
-  providerModelDiscoveryCopy,
-  providerModelPickerCopy,
+  looksLikeProviderServiceAddress,
+  mergeDraftStringList,
+  MODEL_PICKER_DEFENSIVE_OPTION_LIMIT,
   modelPolicyHint,
   normalizeComparablePath,
-  memoryShareSourceLabel,
-  normalizeProviderProfileView,
+  normalizeProviderBaseUrlDraft,
   normalizeProviderProfileViews,
-  type ProviderDraft,
-  type SettingsActionFeedback,
-  type SettingsSectionStatus,
-  type CoachSettingsLabels,
-  type CoachSettingsViewProps,
-  type CoachSettingsViewSheetProps,
-  localizedSettingsLabels,
-  settingsPhrase,
-  settingsSupportPhrase,
-  settingsStatusPhrase,
-  providerVerdictTone,
-  capabilityLabels,
-  capabilitySummaryText,
-  stringifyNode,
-  compactSummaryValue,
-  shortenSummary,
-  adaptiveBehaviorLabel,
-  formatTokenValue,
-  formatProbeCostValue,
-  describeProbeUsageDetail,
-  formatDurationSeconds,
-  summarizeProviderRequestDefaults,
-  formatDraftStringList,
-  parseDraftStringList,
-  mergeDraftStringList,
-  stringArrayKey,
-  canonicalJsonValue,
-  requestDefaultsKey,
-  providerCapabilitiesKey,
-  formatRequestDefaultsDraft,
   parsePositiveIntegerInput,
-  formatTimestamp,
-  toolsVerificationCopy,
-  describeToolsVerificationFact,
-  streamingVerificationCopy,
-  describeStreamingVerificationFact,
-  streamingProbeIsVerified,
-  thinkingVerificationCopy,
-  describeThinkingVerificationFact,
-  visionVerificationCopy,
-  describeVisionVerificationFact,
-  gatewayFingerprintNote,
+  prefersReducedMotion,
   protocolChoiceLabel,
-  isMiniMaxLikeProvider,
-  describeLanguageIntegrityFact,
+  providerBaseUrlGuidance,
+  providerCapabilitiesKey,
+  providerConnectionLabelFromPaste,
+  providerConnectionTruthCopy,
+  providerDetailLabel,
+  providerModelDiscoveryCopy,
+  providerModelPickerCopy,
+  readStoredAnswerStyle,
+  requestDefaultsKey,
+  SETTINGS_SECTION_FLASH_MS,
+  settingsPhrase,
+  settingsStatusPhrase,
+  settingsSupportPhrase,
+  shortenSummary,
+  streamingProbeIsVerified,
+  streamingVerificationCopy,
+  stringArrayKey,
+  stringifyNode,
+  summarizeProviderRequestDefaults,
+  thinkingVerificationCopy,
+  toolsVerificationCopy,
+  visionVerificationCopy,
+  writeStoredAnswerStyle,
+  type AnswerStylePreset,
+  type CoachSettingsLabels,
+  type CoachSettingsViewSheetProps
 } from "./coachSettingsHelpers";
+import { settingsText } from "./settingsText";
+import { useCoachSettingsViewState } from "./useCoachSettingsViewState";
 
 import { buildCoachSettingsConnectionNodes } from "./useCoachSettingsConnectionNodes";
 
@@ -359,7 +249,6 @@ function useCoachSettingsCoreState({
     onRemoveTrainerProject,
     onMoveManagedDataUnderRoot,
     onRefreshMemory,
-    onShareSession,
   } = useCoachSettingsViewState({ onCoachSettingsMutated });
   // §十五: user-visible labels for all eight languages resolve through
   // localizedSettingsLabels (shared workbench copy + extraLocalizedSettingsLabels).
@@ -715,25 +604,9 @@ function useCoachSettingsCoreState({
   const providerTestPassed =
     providerTestReadiness.ready && !providerTestPending && !providerTestTransportFailed;
   const coachSendState = describeProviderSendState(scopedProvider, language, providerTestClock);
-  const reportedImageInputState =
-    providerImageInputState ?? describeProviderImageInputState(scopedProvider, language, providerTestClock);
-  const imageInputState =
-    reportedImageInputState.supported && !providerTestReadiness.ready
-      ? {
-          ...reportedImageInputState,
-          supported: false,
-          status: "setup_required" as const,
-          detail: settingsStatusPhrase(language, "connectionSavedNeedsTest"),
-        }
-      : reportedImageInputState;
   // Keep the normalized catalog state alongside the provider facts so every
   // downstream readiness branch reads an initialized value.
   const modelListStatus = provider.modelListStatus ?? "idle";
-  const languageIntegrityFact = describeLanguageIntegrityFact({
-    language,
-    provider: scopedProvider,
-    coachSendState,
-  });
   const resolvedWorkspaceTrustState = normalizeWorkspaceTrustState(workspaceTrustState);
   const workspaceTrustSentence = describeWorkspaceTrustState(resolvedWorkspaceTrustState, language);
   const providerSaved = provider.configured;
@@ -750,20 +623,6 @@ function useCoachSettingsCoreState({
     ? coachSendState.reason
     : undefined;
   const reviewSummary = reviewRhythmSummary ?? copy.off;
-  const runtimeStatusLabel = providerCoachReady
-    ? settingsText(language, "可发送", "Ready")
-    : providerNeedsApiKey
-      ? settingsText(language, "需补密钥", "Add API key")
-    : providerSaved
-      ? settingsText(language, "需检查", "Needs attention")
-    : settingsText(language, "待配置", "Setup");
-  const providerStatusLabel = providerCoachReady
-    ? copy.configured
-    : providerNeedsApiKey
-      ? copy.apiKeyMissing
-    : providerSaved
-      ? settingsText(language, "需检查", "Needs attention")
-      : copy.notConfigured;
   const teachingStyleItems = [
     { label: copy.auto, value: "auto" as const },
     { label: copy.teachingGuided, value: "guided" as const },
@@ -824,23 +683,6 @@ function useCoachSettingsCoreState({
             : safeProviderFailureHint
       }${probeUsageDetail ? ` · ${probeUsageDetail}` : ""}`
     : undefined;
-  const coachStateText =
-    stringifyNode(coachStateSummary) ??
-    (coachStateSummary ? (settingsText(language, "已生成", "Available")) : undefined);
-  const localizedRuntimeStatusLabel = providerCoachReady
-    ? settingsStatusPhrase(language, "ready")
-    : providerNeedsApiKey
-      ? settingsPhrase(language, "addApiKey")
-      : providerSaved
-        ? settingsStatusPhrase(language, "needsAttention")
-        : settingsStatusPhrase(language, "setup");
-  const localizedProviderStatusLabel = providerCoachReady
-    ? copy.configured
-    : providerNeedsApiKey
-      ? copy.apiKeyMissing
-      : providerSaved
-        ? settingsStatusPhrase(language, "needsAttention")
-        : copy.notConfigured;
   const localizedLastTestDetail = lastTestDetail;
   const localizedCoachStateText =
     stringifyNode(coachStateSummary) ??
@@ -851,11 +693,6 @@ function useCoachSettingsCoreState({
     ) as string[],
     longTermMemoryStateLabel ?? copy.off,
   );
-  const memoryPreviewRows = [
-    workspaceMemoryToggles.decisions ? copy.rememberDecisions : null,
-    workspaceMemoryToggles.patterns ? copy.rememberPatterns : null,
-    workspaceMemoryToggles.resources ? copy.rememberResources : null,
-  ].filter(Boolean) as string[];
   const memoryScopeRuntimeSummary =
     memoryScope === "personal"
       ? copy.memorySharingDetail
@@ -915,7 +752,6 @@ function useCoachSettingsCoreState({
   const savedProtocol = normalizeProviderProtocol(provider.protocol);
   const draftProtocol = normalizeProviderProtocol(providerDraft.protocol);
   const selectedProtocol = draftProtocol;
-  const selectedProtocolLabel = providerProtocolCompletionLabel(selectedProtocol);
   const localizedSelectedProtocolLabel = protocolChoiceLabel(selectedProtocol, language);
   const selectedProtocolEndpoint = providerProtocolEndpointHint(selectedProtocol);
   const providerBaseUrlLabel = providerDetailLabel(language, "baseUrl");
@@ -1469,38 +1305,8 @@ function useCoachSettingsCoreState({
           : "pending";
   const providerProfiles = useMemo(() => normalizeProviderProfileViews(provider), [provider]);
   const customSkills = coachDefaults.customSkills ?? [];
-  const providerProfileCount = countSavedProviderProfiles(provider);
 
   const liveProtocol = normalizeProviderProtocol(provider.protocol);
-  const liveProtocolLabel = protocolChoiceLabel(liveProtocol, language);
-  const liveProtocolEndpoint = providerProtocolEndpointHint(liveProtocol);
-  const protocolVerdict = describeProviderProtocolSummary(
-    {
-      protocol: liveProtocol,
-      protocolDiagnostic: provider.protocolDiagnostic,
-    },
-    language,
-  );
-  const diagnosticsVerdict = describeProviderDiagnosticVerdict(
-    {
-      protocolDiagnostic: provider.protocolDiagnostic,
-      taskBindingDiagnostics: provider.taskBindingDiagnostics,
-      modelDiagnostics: provider.modelDiagnostics,
-      modelTest: provider.modelTest,
-      modelListStatus,
-    },
-    language,
-  );
-  const profileVerdict = describeProviderProfileSummary(
-    {
-      profileId: provider.profileId,
-      profileLabel: provider.profileLabel,
-      profileMode: provider.profileMode,
-      profileCount: providerProfileCount,
-      profileHistory: provider.profileHistory,
-    },
-    language,
-  );
   const providerTruthCopy = providerConnectionTruthCopy(language);
   const toolsCopy = toolsVerificationCopy(language);
   const settingsCapabilityScope = {
@@ -1565,64 +1371,6 @@ function useCoachSettingsCoreState({
     testReady: providerTestReadiness.ready,
     lastTest,
   });
-  const gatewayNote = gatewayFingerprintNote(provider.diagnostics, language, provider.connectionType);
-  const capabilitySummaryDetail = capabilityChipsAllowed
-    ? `${capabilityHonestyStatus} ${toolsVerificationFact.detail} ${streamingVerificationFact.detail} ${thinkingVerificationFact.detail} ${visionVerificationFact.detail}${
-    gatewayNote ? ` ${gatewayNote}` : ""
-  }`
-    : `${capabilityHonestyStatus}${gatewayNote ? ` ${gatewayNote}` : ""}`;
-  const taskBindingDiagnostics = Array.isArray(provider.taskBindingDiagnostics)
-    ? provider.taskBindingDiagnostics
-    : [];
-  const modelDiagnostics = Array.isArray(provider.modelDiagnostics) ? provider.modelDiagnostics : [];
-  const blockedTaskBindingCount = taskBindingDiagnostics.filter((item) => item.supported === false).length;
-  const blockedModelCount = modelDiagnostics.filter((item) => item.supported === false).length;
-  const modelCapabilityRows = Object.entries(provider.modelCapabilities ?? {}).slice(0, 3).map(
-    ([modelName, capabilities]) => ({
-      label: modelName,
-      value: capabilitySummaryText(capabilities, language),
-    }),
-  );
-  const diagnosticNotes = (provider.diagnostics ?? [])
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-  const warningNotes = (provider.warnings ?? [])
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 2);
-  const protocolFactTone = providerHasDraftChanges
-    ? "pending"
-    : providerVerdictTone(protocolVerdict.tone);
-  const protocolFactValue = providerHasDraftChanges
-    ? localizedSelectedProtocolLabel
-    : protocolVerdict.status;
-  const protocolFactDetail = providerHasDraftChanges
-    ? providerTruthCopy.protocolDraftDetail(
-        localizedSelectedProtocolLabel,
-        selectedProtocolEndpoint,
-        liveProtocolLabel,
-        liveProtocolEndpoint,
-      )
-    : protocolVerdict.detail;
-  const diagnosticsFactTone =
-    providerHasDraftChanges || !providerTestReadiness.ready
-      ? "pending"
-      : providerVerdictTone(diagnosticsVerdict.tone);
-  const diagnosticsFactValue = providerHasDraftChanges
-    ? providerTruthCopy.draftNotTested
-    : !providerSaved
-      ? providerTruthCopy.saveFirstStatus
-      : !providerTestReadiness.ready
-        ? providerTruthCopy.needsLiveTest
-        : diagnosticsVerdict.status;
-  const diagnosticsFactDetail = providerHasDraftChanges
-    ? providerTruthCopy.diagnosticsDraftDetail
-    : !providerSaved
-      ? providerTruthCopy.saveFirst
-      : !providerTestReadiness.ready
-        ? providerTruthCopy.diagnosticsNeedsTest
-        : diagnosticsVerdict.detail;
   const profileDraftReady = Boolean(
     providerDraft.name.trim() && providerDraft.baseUrl.trim() && providerDraft.model.trim(),
   );
@@ -1632,7 +1380,6 @@ function useCoachSettingsCoreState({
   const localizedProviderProfilesLabel = providerDetailLabel(language, "savedProfiles");
   const localizedProviderDirectoryLabel = settingsPhrase(language, "providerDirectoryLabel");
   const localizedRefreshProfilesLabel = providerDetailLabel(language, "refreshProfiles");
-  const localizedRefreshProfilesDetail = providerDetailLabel(language, "reloadProfiles");
   const localizedSaveProfileLabel = providerDetailLabel(language, "saveProfile");
   const localizedSaveProfileDetail = providerDetailLabel(language, "saveProfileDetail");
   const localizedPerModelLimitsLabel = providerDetailLabel(language, "perModelLimits");
@@ -2192,9 +1939,6 @@ function useCoachSettingsCoreState({
     (providerTestTransportFailed || Boolean(lastTestFailure)) &&
     providerSaved &&
     !providerHasDraftChanges;
-  const calmIntro =
-    copy.intro ||
-    (settingsText(language, "连接与默认项。", "Connection and defaults."));
   const localizedCalmIntro =
     copy.intro && copy.intro !== "Only the most common coach settings here."
       ? copy.intro
@@ -2256,76 +2000,6 @@ function useCoachSettingsCoreState({
       state: providerTestPending ? "warn" : draftConnectionFactsChanged ? "warn" : providerTestPassed ? "ok" : provider.configured ? "warn" : "missing",
     },
   ];
-  const coachCapabilityLabel = providerCoachReady
-    ? settingsText(language, "已就绪", "Ready")
-    : providerNeedsApiKey
-      ? settingsText(language, "缺少密钥", "Missing key")
-      : providerSaved
-        ? settingsText(language, "被阻塞", "Blocked")
-        : settingsText(language, "待配置", "Setup");
-  const coachCapabilityTone = providerCoachReady ? "connected" : providerNeedsApiKey ? "warn" : providerSaved ? "warn" : "offline";
-  const imageCapabilityLabel = imageInputState.supported
-    ? settingsText(language, "已就绪", "Ready")
-    : imageInputState.status === "setup_required"
-      ? settingsText(language, "待配置", "Setup")
-      : settingsText(language, "未开启", "Off");
-  const imageCapabilityTone = imageInputState.supported
-    ? "connected"
-    : imageInputState.status === "setup_required"
-      ? "pending"
-      : "warn";
-  const imageCapabilityDetail =
-    imageInputState.detail ?? imageInputState.reason ?? (settingsText(language, "未验证图片输入。", "Image input not verified."));
-  const availabilityTone: "connected" | "pending" | "warn" | "offline" = providerHasDraftChanges
-    ? currentDraftModelBlockedByPolicy
-      ? "warn"
-      : "pending"
-    : providerCoachReady
-      ? "connected"
-      : providerSaved
-        ? "warn"
-        : "offline";
-  const availabilityStatusLabel = providerHasDraftChanges
-    ? settingsText(language, "草稿未生效", "Draft not applied")
-    : providerCoachReady
-      ? runtimeStatusLabel
-      : providerStatusLabel;
-  const availabilityHeadline = providerHasDraftChanges && currentDraftModelPolicyMessage
-    ? settingsPhrase(language, "chooseModel")
-    : providerHasDraftChanges
-      ? settingsText(language, "连接草稿未保存", "Connection draft not saved")
-    : providerCoachReady
-      ? settingsText(language, "模型可用", "Model ready")
-      : providerNeedsApiKey
-        ? settingsText(language, "缺少 API key", "API key required")
-        : providerSaved
-          ? settingsText(language, "连接待验证", "Connection needs test")
-          : settingsText(language, "设置模型连接", "Set up model access");
-  const availabilityDetail = providerHasDraftChanges && currentDraftModelPolicyMessage
-    ? currentDraftModelPolicyMessage
-    : providerHasDraftChanges
-      ? providerDraftReadyForTest
-        ? settingsText(language, "当前草稿已经可以测试。保存后会成为当前连接。", "This draft can be tested now. Save when you want to apply it.")
-        : settingsText(language, "保存后测试。", "Save before testing.")
-      : providerCoachReady
-      ? settingsText(language, "对话、计划、训练使用此连接。", "Chat, plan, and training use this connection.")
-      : providerRequirementNote ?? providerPrimaryAction;
-  const availabilityPrimaryLabel = providerHasDraftChanges
-    ? settingsText(language, "保存草稿", "Save draft")
-    : providerCoachReady
-      ? settingsText(language, "重新测试", "Test again")
-      : providerSaved && providerNeedsApiKey
-        ? settingsText(language, "补上 API key", "Add API key")
-        : copy.setupAction;
-  const availabilityPrimaryDetail = providerCoachReady && !providerHasDraftChanges
-    ? settingsText(language, "测试当前连接", "Test current connection")
-    : settingsText(language, "保存后生效", "Save to apply");
-  const availabilityPrimaryIcon = providerCoachReady && !providerHasDraftChanges
-    ? <AlertTriangleIcon size={14} />
-    : <DoneIcon size={14} />;
-  const availabilityPrimaryAction = providerCoachReady && !providerHasDraftChanges
-    ? onTestProvider
-    : onSaveProvider;
   const canRetestProvider = providerDraftReadyForTest && !providerTestPending;
   const providerNeedsFirstTest =
     providerSaved && provider.apiKeyConfigured && !providerHasDraftChanges && !lastTest?.checkedAt;
@@ -2337,26 +2011,6 @@ function useCoachSettingsCoreState({
     (providerNeedsFirstTest ||
       providerTestFreshness !== "fresh" ||
       (lastTest?.ok === true && (!providerTestReadiness.ready || !providerStreamingReady)));
-  const resolvedCoachCapabilityLabel =
-    shouldSurfaceRecentTestFailure || coachSendState.blocked
-      ? providerFailureState.statusLabel
-      : providerNeedsRetest
-        ? settingsStatusPhrase(language, "needsAttention")
-        : coachCapabilityLabel;
-  const resolvedCoachCapabilityTone =
-    shouldSurfaceRecentTestFailure || coachSendState.blocked
-      ? "warn"
-      : providerNeedsRetest
-        ? "warn"
-        : coachCapabilityTone;
-  const resolvedCoachCapabilityDetail =
-    shouldSurfaceRecentTestFailure || coachSendState.blocked
-      ? availabilityFailureHint ?? providerCoachBlockReason ?? providerPrimaryAction
-      : providerNeedsRetest
-        ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
-        : providerCoachReady
-          ? settingsText(language, "\u53EF\u53D1\u9001", "Send enabled")
-          : providerCoachBlockReason ?? providerPrimaryAction;
   const availabilityMode: ProviderSendStateStatus | "draft" | "recent_failure" | "needs_test" | "warming" = providerHasDraftChanges
     ? "draft"
     : providerTestPending
@@ -2462,37 +2116,6 @@ function useCoachSettingsCoreState({
   };
   const resolvedAvailabilityTone: "connected" | "pending" | "warn" | "offline" =
     backendStarting ? "pending" : backendUnavailable ? "offline" : PROVIDER_SETUP_STRIP_TONE[providerSetupReason];
-  const localizedCoachCapabilityLabel =
-    providerCoachReady
-      ? settingsStatusPhrase(language, "ready")
-      : providerNeedsRetest
-        ? settingsStatusPhrase(language, "needsAttention")
-      : providerNeedsApiKey
-        ? settingsStatusPhrase(language, "missingKey")
-        : providerSaved
-          ? settingsStatusPhrase(language, "blocked")
-          : settingsStatusPhrase(language, "setup");
-  const localizedImageCapabilityLabel = imageInputState.supported
-    ? settingsStatusPhrase(language, "ready")
-    : imageInputState.status === "setup_required"
-      ? settingsStatusPhrase(language, "setup")
-      : settingsStatusPhrase(language, "off");
-  const localizedImageCapabilityDetail =
-    imageInputState.detail ?? imageInputState.reason ?? settingsStatusPhrase(language, "imageInputNotVerified");
-  const localizedResolvedCoachCapabilityLabel =
-    shouldSurfaceRecentTestFailure || coachSendState.blocked
-      ? providerFailureState.statusLabel
-      : providerNeedsRetest
-        ? settingsStatusPhrase(language, "needsAttention")
-        : localizedCoachCapabilityLabel;
-  const localizedResolvedCoachCapabilityDetail =
-    shouldSurfaceRecentTestFailure || coachSendState.blocked
-      ? availabilityFailureHint ?? providerCoachBlockReason ?? providerPrimaryAction
-      : providerNeedsRetest
-        ? settingsStatusPhrase(language, "connectionSavedNeedsTest")
-      : providerCoachReady
-        ? settingsStatusPhrase(language, "sendEnabled")
-        : providerCoachBlockReason ?? providerPrimaryAction;
   const PROVIDER_SETUP_STATUS_COPY: Record<ProviderSetupReason, string> = {
     workspace_root_missing: settingsText(language, "待选目录", "No folder yet"),
     workspace_untrusted: settingsText(language, "待信任", "Trust needed"),

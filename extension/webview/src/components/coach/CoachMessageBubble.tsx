@@ -1,7 +1,7 @@
-import { CoachReply } from "../../templates/CoachReply";
-import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo,useEffect,useRef,useState,type ReactNode } from "react";
 import { resolveCopy } from "../../lib/i18n/copy";
 import { viewLabels } from "../../lib/viewLabels";
+import { CoachReply } from "../../templates/CoachReply";
 
 import { TrainerIconBase } from "../icons/TrainerIconBase";
 
@@ -74,35 +74,35 @@ const GLYPH_MORE = (
   </>
 );
 
+import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
 import {
   deriveTrainerToolActivity,
   findCoachVisibleStatusPart,
 } from "../../../../../shared/src/protocol";
-import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
-import type { ComposerLanguage, ConversationMessage, ResourceRecord } from "../../lib/types";
+import { resolveToolActivityLabel } from "../../lib/i18n/segments/agentActivityStripCopy";
+import { artifactBlockCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
+import {
+  COACH_MESSAGE_ACTION_LABELS,
+  coachMessageBubbleCopy,
+  MORE_ACTIONS_TEXT,
+  OPEN_RESEARCH_PREPARATION_TEXT,
+  RESEARCH_PREPARATION_TEXT,
+} from "../../lib/i18n/segments/coachMessageBubbleCopy";
 import {
   nextStepRequiresConfirmationFromArtifacts,
   resolveNextStepConfirmationOwner,
   statusNextStepPartIndex,
 } from "../../lib/nextStepConfirmation";
-import { CoachArtifactBlock, type CoachArtifactBlockData } from "./CoachArtifactBlock";
-import { artifactBlockCopy } from "../../lib/i18n/segments/coachArtifactBlockCopy";
-import {
-  coachMessageBubbleCopy,
-  COACH_MESSAGE_ACTION_LABELS,
-  MORE_ACTIONS_TEXT,
-  OPEN_RESEARCH_PREPARATION_TEXT,
-  RESEARCH_PREPARATION_TEXT,
-} from "../../lib/i18n/segments/coachMessageBubbleCopy";
-import { CoachMessageParts } from "./CoachMessageParts";
-import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
 import { currentTrainerStage } from "../../lib/trainerStage";
-import { resolveToolActivityLabel } from "../../lib/i18n/segments/agentActivityStripCopy";
+import type { ComposerLanguage,ConversationMessage,ResourceRecord } from "../../lib/types";
+import { CoachArtifactBlock,type CoachArtifactBlockData } from "./CoachArtifactBlock";
+import { CoachMessageParts } from "./CoachMessageParts";
 import {
   resolveCoachToolResultCopy,
   summarizeSafeCoachToolResult,
 } from "./coachToolResultCopy";
-import { MessageImageGallery, MessageRichContent } from "./MessageRichContent";
+import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
+import { MessageImageGallery,MessageRichContent } from "./MessageRichContent";
 
 export type CoachMessageAction =
   | "copy"

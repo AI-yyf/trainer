@@ -849,8 +849,8 @@ class StreamAndLocksDomainMixin(RouterDomainBase):
         delta: str,
         full_content: str,
     ) -> tuple[str, str]:
-        if looks_like_mojibake_text(full_content):
-            return "", ""
+        if looks_like_mojibake_text(full_content[-256:]):
+            return "", "" 
 
         candidate = f"{pending_content}{delta}"
         if looks_like_mojibake_text(candidate):

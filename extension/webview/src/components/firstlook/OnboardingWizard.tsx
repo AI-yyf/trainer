@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
+import type { OnboardingStep } from "../../../../../shared/src/onboarding";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
 import { providerBaseUrlIsLocalService } from "../../../../../shared/src/providerStatus";
-import type { OnboardingStep } from "../../../../../shared/src/onboarding";
-import { useTranslation } from "../../lib/i18n/useTranslation";
 import type { CopyKey } from "../../lib/i18n/copy";
+import { useTranslation } from "../../lib/i18n/useTranslation";
 
 /**
  * §十六 conversation-first cold start (§四十八: extracted component).

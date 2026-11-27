@@ -1,13 +1,13 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect,useId,useState } from "react";
 
-import { MermaidDiagramView } from "../common/MermaidDiagramView";
-import { TrainerSpinner } from "../common/TrainerSpinner";
-import { ShikiCodeBlock } from "./parts/ShikiCodeBlock";
 import {
   renderMermaidDiagram,
   resolveMermaidTheme,
   type MermaidThemeName,
 } from "../../lib/mermaidDiagram";
+import { MermaidDiagramView } from "../common/MermaidDiagramView";
+import { TrainerSpinner } from "../common/TrainerSpinner";
+import { ShikiCodeBlock } from "./parts/ShikiCodeBlock";
 
 export interface MermaidBlockProps {
   chart: string;

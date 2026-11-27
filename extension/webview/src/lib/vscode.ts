@@ -1,11 +1,18 @@
-import type { WebviewSyncCursor, WebviewOperationIdentity } from "../../../../shared/src/webviewSync";
 import { z } from "zod";
-import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
-import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
-import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
 import { trainerCommands } from "../../../../shared/src/commands";
-import { resourceVersionCheckBases, resourceVersionCheckStatuses } from "../../../../shared/src/models";
+import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
+import { resourceVersionCheckBases,resourceVersionCheckStatuses } from "../../../../shared/src/models";
+import { normalizeTrainerCustomSkills } from "../../../../shared/src/skillCatalog";
+import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
+import type { WebviewOperationIdentity,WebviewSyncCursor } from "../../../../shared/src/webviewSync";
 
+import {
+  isBrowserSidePanelSurface,
+  registerWorkbenchHostTransport,
+  resolveWorkbenchHostTransport,
+  type WorkbenchHostSurface,
+  type WorkbenchHostTransport,
+} from "./hostTransport";
 import type {
   CoachDefaults,
   DebugVisibleWorkbenchFacts,
@@ -14,21 +21,14 @@ import type {
   PersistedWorkbenchState,
   WebviewAction,
 } from "./types";
-import { COACH_DRAFT_APPLIED_LIMIT, normalizeSidebarView, normalizeTeachingStyle } from "./types";
-import {
-  isBrowserSidePanelSurface,
-  registerWorkbenchHostTransport,
-  resolveWorkbenchHostTransport,
-  type WorkbenchHostSurface,
-  type WorkbenchHostTransport,
-} from "./hostTransport";
+import { COACH_DRAFT_APPLIED_LIMIT,normalizeSidebarView,normalizeTeachingStyle } from "./types";
 
 export {
   isBrowserSidePanelSurface,
   registerWorkbenchHostTransport,
   resolveWorkbenchHostTransport,
   type WorkbenchHostSurface,
-  type WorkbenchHostTransport,
+  type WorkbenchHostTransport
 };
 
 interface VsCodeApi {

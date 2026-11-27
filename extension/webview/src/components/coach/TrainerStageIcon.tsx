@@ -1,3 +1,4 @@
+import type { TrainerStageKind } from "../../lib/trainerStage";
 import {
   CheckMarkIcon,
   FolderIcon,
@@ -6,7 +7,6 @@ import {
   SearchIcon,
   UploadIcon,
 } from "../icons";
-import type { TrainerStageKind } from "../../lib/trainerStage";
 
 export function TrainerStageIcon({ kind, size = 14 }: { kind: TrainerStageKind; size?: 12 | 14 | 16 | 18 | 20 }) {
   const props = { size, "aria-hidden": true as const };

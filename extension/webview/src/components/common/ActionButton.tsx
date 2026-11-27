@@ -1,4 +1,4 @@
-import type { ReactNode, ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes,ReactNode } from "react";
 
 import { ArrowRightIcon } from "../icons";
 

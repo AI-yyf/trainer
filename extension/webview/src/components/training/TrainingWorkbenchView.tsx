@@ -1,29 +1,17 @@
+import { useEffect,useMemo,useRef,type ReactNode } from "react";
 import { FocusedPractice } from "../../templates/FocusedPractice";
 import { NextAction } from "../../templates/NextAction";
 import { VerificationResult } from "../../templates/VerificationResult";
 import { templateCopy } from "../../templates/templateCopy";
-import { useEffect, useRef, useMemo, type ReactNode } from "react";
 
+import { groupReviewQueueByFocusArea } from "../../../../../shared/src/reviewQueueGovernance";
+import type { TrainingCardStatus } from "../../../../../shared/src/trainingCardRouting";
 import {
   deriveTrainingExecutionState,
   type TrainingExecutionState,
 } from "../../../../../shared/src/trainingExecutionGovernance";
-import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
-import {
-  describeTrainingReliability,
-  type TrainingReliabilityRecord,
-} from "../../../../../shared/src/trainingReliabilityGovernance";
-import type { TrainingReliability } from "../../lib/types";
-import { RemoteVerificationPanel } from "./RemoteVerificationPanel";
-import { remoteVerifyCopy } from "./remoteVerificationCopy";
-import { useTrainingWorkbenchViewState } from "./useTrainingWorkbenchViewState";
-import { MessageRichContent } from "../coach/MessageRichContent";
-import { ArrowRightIcon } from "../icons";
-import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
-import type { ComposerLanguage, TrainingCardCandidate, TrainingCardType } from "../../lib/types";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
-import type { TrainingCardStatus } from "../../../../../shared/src/trainingCardRouting";
-import { groupReviewQueueByFocusArea } from "../../../../../shared/src/reviewQueueGovernance";
+import { resolveCopy as resolveWorkbenchCopy } from "../../lib/i18n/copy";
 import {
   manualPracticeFallbackCopy,
   manualPracticeSubtypeCopy,
@@ -32,14 +20,19 @@ import {
   trainingSurfaceLabels,
   trainingVerificationReturnCopy,
   trainingWorkbenchTextCopy,
-  type ManualPracticeSubtypeCopyKey,
   type ManualPracticeVerificationCopy,
   type TrainingCardOnlyCopyKey,
   type TrainingCardOnlySurfaceCopyKey,
   type TrainingSurfaceLabelKey,
   type TrainingVerificationReturnCopyKey,
-  type TrainingWorkbenchTextKey,
+  type TrainingWorkbenchTextKey
 } from "../../lib/i18n/segments/trainingInlineText";
+import type { ComposerLanguage,TrainingCardCandidate,TrainingCardType,TrainingReliability } from "../../lib/types";
+import { MessageRichContent } from "../coach/MessageRichContent";
+import { ArrowRightIcon } from "../icons";
+import { RemoteVerificationPanel } from "./RemoteVerificationPanel";
+import { remoteVerifyCopy } from "./remoteVerificationCopy";
+import { useTrainingWorkbenchViewState } from "./useTrainingWorkbenchViewState";
 
 export type TrainingReviewAction = "accept" | "snooze" | "reset" | "skip" | "done";
 
@@ -225,12 +218,7 @@ export {
   applyTrainingCardSkip,
   interpretTrainingComposerCardCommand,
   type TrainingCardGrade,
-  type TrainingComposerCardCommand,
-} from "../../lib/i18n/segments/trainingCardActions";
-import {
-  applyTrainingCardGrade as applyTrainingCardGradeImpl,
-  applyTrainingCardSkip as applyTrainingCardSkipImpl,
-  interpretTrainingComposerCardCommand as interpretTrainingComposerCardCommandImpl,
+  type TrainingComposerCardCommand
 } from "../../lib/i18n/segments/trainingCardActions";
 
 function normalizeCardText(value: string | undefined): string {
@@ -249,35 +237,7 @@ function compactCardText(value: string | undefined, limit: number): string {
   return `${normalized.slice(0, Math.max(0, limit - 1)).trimEnd()}\u2026`;
 }
 
-function compactArtifactText(value: string, limit: number): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "";
-  }
-  if (/[\\/]/.test(normalized)) {
-    const segments = normalized.split(/[\\/]+/).filter(Boolean);
-    const tail = segments.length > 3 ? segments.slice(-3).join("/") : segments.join("/");
-    return compactCardText(tail, limit);
-  }
-  return compactCardText(normalized, limit);
-}
 
-function compactArtifactList(values: Array<string | undefined>, limit: number, maxItems: number): string[] {
-  const seen = new Set<string>();
-  const compacted: string[] = [];
-  for (const value of values) {
-    const label = compactArtifactText(value ?? "", limit);
-    if (!label || seen.has(label)) {
-      continue;
-    }
-    seen.add(label);
-    compacted.push(label);
-    if (compacted.length >= maxItems) {
-      break;
-    }
-  }
-  return compacted;
-}
 
 function stripTrainingCardTitlePrefix(value: string): string {
   const normalized = value.trim();
@@ -705,7 +665,6 @@ export function TrainingWorkbenchView({
     latestTrainingHandoffStatus,
     latestTrainingVerificationState,
     latestTrainingLearningPhase,
-    latestTrainingReliability,
     reliabilityInFlight = false,
     latestTrainingNextHopStatus,
     latestTrainingNextHopReason,
@@ -782,36 +741,6 @@ export function TrainingWorkbenchView({
     latestVerifiedResult,
     latestLearningBlocker,
     learningPhase: latestTrainingLearningPhase,
-  });
-  const reliabilityRecord: TrainingReliabilityRecord | undefined =
-    latestTrainingReliability?.requestId && latestTrainingReliability.phase
-    ? {
-        requestId: latestTrainingReliability.requestId,
-        idempotencyKey: latestTrainingReliability.idempotencyKey ?? latestTrainingReliability.requestId,
-        commandId: latestTrainingReliability.commandId ?? "",
-        cardId: latestTrainingReliability.cardId,
-        handoffId: latestTrainingReliability.handoffId,
-        phase: latestTrainingReliability.phase,
-        revision: latestTrainingReliability.revision ?? 1,
-        snapshotRevision: latestTrainingReliability.snapshotRevision,
-        createdAt: latestTrainingReliability.createdAt,
-        updatedAt: latestTrainingReliability.updatedAt,
-        ackedAt: latestTrainingReliability.ackedAt,
-        timeoutAt: latestTrainingReliability.timeoutAt,
-        cancelRequested: latestTrainingReliability.cancelRequested,
-        outcome: latestTrainingReliability.outcome,
-        error: latestTrainingReliability.error
-          ? sanitizeErrorSurfaceText(latestTrainingReliability.error, language)
-          : undefined,
-        recoverable: latestTrainingReliability.recoverable,
-        recoveryAction: latestTrainingReliability.recoveryAction,
-        learningPhase: latestTrainingReliability.learningPhase,
-      }
-    : undefined;
-  const reliabilityCopy = describeTrainingReliability({
-    record: reliabilityRecord,
-    localInFlight: reliabilityInFlight,
-    language,
   });
   const needsPrimerState = trainingExecutionState.needsPrimer;
   const displayTitle = stripTrainingCardTitlePrefix(title);

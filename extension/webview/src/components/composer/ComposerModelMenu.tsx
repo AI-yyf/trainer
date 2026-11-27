@@ -1,18 +1,17 @@
-import type { ComposerLanguage, ProviderConfigView } from "../../lib/types";
-import type { Copy } from "../../lib/i18n/copyTypes";
+import { filterProviderModelOptions } from "../../../../../shared/src/providerModelPolicy";
+import { providerBaseUrlIsLocalService } from "../../../../../shared/src/providerStatus";
 import type {
   ProviderThinkingConfig,
   ProviderThinkingDescriptor,
 } from "../../../../../shared/src/providerThinking";
-import type { ComposerProviderMenuItem } from "../../lib/composerModelHelpers";
-import { composerModelPolicyHint } from "../../lib/composerModelHelpers";
 import {
   formatCompactTokenLimit,
   resolveEffectiveTokenBudgetProfile,
 } from "../../../../../shared/src/smartTokenBudget";
-import { filterProviderModelOptions } from "../../../../../shared/src/providerModelPolicy";
-import { providerBaseUrlIsLocalService } from "../../../../../shared/src/providerStatus";
-import { ComposerIconButton } from "./ComposerIconButton";
+import type { ComposerProviderMenuItem } from "../../lib/composerModelHelpers";
+import { composerModelPolicyHint } from "../../lib/composerModelHelpers";
+import type { Copy } from "../../lib/i18n/copyTypes";
+import type { ComposerLanguage,ProviderConfigView } from "../../lib/types";
 import {
   CheckMarkIcon,
   EyeIcon,
@@ -20,6 +19,7 @@ import {
   SearchIcon,
   TerminalIcon,
 } from "../icons";
+import { ComposerIconButton } from "./ComposerIconButton";
 
 export interface ComposerModelMenuProps {
   copy: Copy;
@@ -94,12 +94,6 @@ const EFFORT_LABEL: Record<"low" | "medium" | "high", Record<ComposerLanguage, s
   },
 };
 
-type OtherProviderGroup = {
-  id: string;
-  label: string;
-  models: string[];
-  visionModels: Set<string>;
-};
 
 /**
  * Composer 的“切换模型”菜单面板。

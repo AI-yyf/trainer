@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo,useState } from "react";
 import { parseProviderConnectionPaste } from "../../../../../shared/src/providerGateway";
 import { providerBaseUrlIsLocalService } from "../../../../../shared/src/providerStatus";
 import type { ComposerLanguage } from "../../../../../shared/src/types";
+import { QUICK_SETUP_COPY,type QuickSetupLanguage } from "../../lib/i18n/segments/settingsInlineText";
 import { CheckMarkIcon } from "../icons";
 import { DoneIcon } from "../icons/inline";
-import { QUICK_SETUP_COPY, type QuickSetupLanguage } from "../../lib/i18n/segments/settingsInlineText";
 
 interface ProviderQuickSetupDraft {
   name: string;

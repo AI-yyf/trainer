@@ -1,5 +1,5 @@
-import { primaryDestinationForRoute } from "./workbenchDestinations";
 import type { ActiveWorkbenchView } from "./types";
+import { primaryDestinationForRoute } from "./workbenchDestinations";
 
 /**
  * The persistent composer belongs to the two primary destinations. Learning

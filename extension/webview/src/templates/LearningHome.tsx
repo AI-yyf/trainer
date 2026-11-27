@@ -1,5 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
-import { NextAction, type NextActionProps } from "./NextAction";
+import type { CSSProperties,ReactNode } from "react";
+import { NextAction,type NextActionProps } from "./NextAction";
 
 export interface LearningHomeSlot {
   label: string;

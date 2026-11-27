@@ -1,3 +1,14 @@
+import { trainerCommands } from "../../../../shared/src/commands";
+import { appUiCopy } from "../lib/i18n/appUiCopy";
+import { recoverableFailureMessage } from "../lib/operationMessageGovernance";
+import type {
+  CoachAnswerMode,
+  CoachDefaults,
+  ComposerLanguage,
+  HostMessage,
+  TeachingStyle,
+} from "../lib/types";
+import { postMessage } from "../lib/vscode";
 import {
   DEFAULT_ANSWER_MODE,
   DEFAULT_TEACHING_STYLE,
@@ -6,17 +17,6 @@ import {
   type SettingsActionState,
 } from "./appHelpers";
 import { useWorkbenchState } from "./useWorkbenchState";
-import { appUiCopy } from "../lib/i18n/appUiCopy";
-import { recoverableFailureMessage } from "../lib/operationMessageGovernance";
-import { postMessage } from "../lib/vscode";
-import type {
-  CoachAnswerMode,
-  CoachDefaults,
-  ComposerLanguage,
-  HostMessage,
-  TeachingStyle,
-} from "../lib/types";
-import { trainerCommands } from "../../../../shared/src/commands";
 
 type ProviderSavePayload = Parameters<
   BrowserPreviewAdapter["saveBrowserPreviewProviderProfile"]

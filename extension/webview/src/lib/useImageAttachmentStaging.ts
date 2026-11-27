@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ComposerLanguage, MessageAttachment } from "./types";
-import { ImageAttachmentError, readImageAttachments } from "./imageAttachments";
+import { useCallback,useEffect,useRef,useState } from "react";
+import { ImageAttachmentError,readImageAttachments } from "./imageAttachments";
+import type { ComposerLanguage,MessageAttachment } from "./types";
 
 const COPY: Record<ComposerLanguage, { unreadable: string; limit: string; crop: string }> = {
   "zh-CN": { unreadable: "图片无法读取。请选择有效的 PNG、JPEG、GIF 或 WebP 图片。", limit: "最多附加四张图片。单张不超过 6 MB，总大小不超过 12 MB。", crop: "图片过大。请裁剪到需要讨论的代码或错误内容后重试。" },

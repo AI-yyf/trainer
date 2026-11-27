@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 
+import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
+import type { TrainerOperationMessage } from "../../../../../shared/src/protocol";
+import { GOAL_MODE_COPY } from "../../lib/i18n/segments/coachInlineText";
+import { isSameLearningFact,type LearningProgressAchievement,type LearningSummary } from "../../lib/learningSummary";
+import { operationStatusMessageText,type OperationMessageSurface } from "../../lib/operationMessageGovernance";
+import type { ComposerLanguage } from "../../lib/types";
 import { SystemState } from "../../templates/SystemState";
 import { templateCopy } from "../../templates/templateCopy";
-import { GOAL_MODE_COPY } from "../../lib/i18n/segments/coachInlineText";
-import { sanitizeErrorSurfaceText } from "../../../../../shared/src/errorSurfaceSanitizer";
-import { operationStatusMessageText, type OperationMessageSurface } from "../../lib/operationMessageGovernance";
-import { isSameLearningFact, type LearningProgressAchievement, type LearningSummary } from "../../lib/learningSummary";
-import type { ComposerLanguage } from "../../lib/types";
-import type { TrainerOperationMessage } from "../../../../../shared/src/protocol";
 
 /**
  * The learning drawer's three sections, assembled outside App.

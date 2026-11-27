@@ -1,5 +1,5 @@
+import { resolveCopy,type CopyKey } from "../../lib/i18n/copy";
 import type { ComposerLanguage } from "../../lib/types";
-import { resolveCopy, type CopyKey } from "../../lib/i18n/copy";
 
 export type UserFeedbackKind =
   | "too_hard"

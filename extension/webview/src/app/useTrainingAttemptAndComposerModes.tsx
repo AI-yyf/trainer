@@ -1,375 +1,75 @@
-import { LearningDrawer } from "../components/learning/LearningDrawer";
-import { useLearningDrawerSections } from "../components/learning/useLearningDrawerSections";
-import { LearningStrip } from "../components/learning/LearningStrip";
-import { InlineProgressCard } from "../components/learning/InlineProgressCard";
-import { InlinePracticeAnswer } from "../components/learning/InlinePracticeAnswer";
-import { MessageRichContent } from "../components/coach/MessageRichContent";
-import { unifiedComposerCopy } from "../lib/i18n/unifiedComposerCopy";
-import { resourceVersionCopy } from "../lib/i18n/resourceVersionCopy";
-import { SystemState } from "../templates/SystemState";
 import {
-  executeLearningPrimaryAction,
-  resolveLearningPrimaryAction,
-  type LearningFacts,
-} from "../lib/learningActionResolver";
-import { readTrainingCardList, readTrainingCardText, resolveBoundTrainingCardFacts } from "../lib/boundTrainingCardFacts";
-import { CommandPalette } from "../templates/CommandPalette";
-import {
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
-  useRef,
-  useState,
-  type ReactNode,
+  useRef
 } from "react";
-import { reviewConceptLabel } from "../lib/reviewLabel";
-import { SettingsRoute } from "./SettingsRoute";
-import { goalTitleFromConversation } from "../lib/coachGoalTitle";
-import { researchBriefResourceIds, upsertResearchBrief } from "../../../../shared/src/researchBrief";
+import { readTrainingCardList,readTrainingCardText } from "../lib/boundTrainingCardFacts";
+import { CommandPalette } from "../templates/CommandPalette";
 
-import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
 import { trainerCommands } from "../../../../shared/src/commands";
-import type { ResourceVersionCheckResult, TrainingPlanBinding } from "../../../../shared/src/models";
-import { analyzeSendIntent, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
 import {
-  filterTrainerSkills,
   resolveTrainerSkillText,
-  trainerSkillTriggerToken,
+  trainerSkillTriggerToken
 } from "../../../../shared/src/skillCatalog";
 import {
-  buildTrainingCoachBridge,
-  composeTrainingCoachBridgeDraft,
+  composeTrainingCoachBridgeDraft
 } from "../../../../shared/src/trainingCoachBridge";
 import {
-  deriveTrainingExecutionState,
-  normalizeTrainingSubmode as normalizeSharedTrainingSubmode,
-} from "../../../../shared/src/trainingExecutionGovernance";
-import { localizeTrainingNextHopLabel } from "../../../../shared/src/trainingHandoffGovernance";
-import {
-  filterSidebarControlCommands,
-  findSidebarControlCommand,
-} from "../../../../shared/src/sidebarCommands";
-import {
-  deriveCoachOrientation,
-} from "../../../../shared/src/coachOrientationGovernance";
-import { isOperationReliabilityInFlight } from "../../../../shared/src/operationReliabilityGovernance";
-import { resolveEffectiveTokenBudgetProfile } from "../../../../shared/src/smartTokenBudget";
-import {
-  buildRecoveredPlanResumeTurn,
-  derivePlanOrientation,
-  formalPlanIsLiveRuntimeIdentity,
-  liveEvidenceBinding,
-  liveFormalPlanCadence,
-  liveFormalPlanFrozen,
-  liveFormalPlanStages,
-  liveFormalPlanSummary,
-  liveFormalPlanTitle,
-  formalTaskIsLiveRuntimeIdentity,
-  leftoverTaskGuideFocusIsNotLive,
-  leftoverCoachTurnChromeIsNotLive,
-  leftoverCoachConversationIsNotLive,
-  leftoverSuggestedActionsIsNotLive,
-  leftoverMintingSuggestedActionsAreNotLive,
-  leftoverFirstLookHeadlineIsNotLive,
-  leftoverEvaluationHeadlineIsNotLive,
-  leftoverStreamingCheckpointIsNotLive,
-  leftoverTransferSkillIsNotLive,
-  leftoverTrainingFocusChromeIsNotLive,
-  leftoverTrainingHandoffChromeIsNotLive,
-  independentTrainingSelectionIsLive,
-  leftoverResourceSelectedDetailIsNotLive,
-  leftoverResourceSandboxStateIsNotLive,
-  leftoverResourceLibraryListIsNotLive,
-  leftoverSettingsProfileRhythmIsNotLive,
-  leftoverSettingsLearnerProjectOnboardingIsNotLive,
-  streakAdaptsWithoutInventingLiveObjects,
-  pressureAdaptsWithoutInventingLiveObjects,
-  preferRecoveredCoachTaskChrome,
-  preferRecoveredCoachTurnChrome,
-  preferRecoveredTransferSkill,
-  preferRecoveredTrainingFocusChrome,
-  preferRecoveredTrainingHandoffChrome,
-  formalCardIsLiveRuntimeIdentity,
-  liveTrainingFormalSummary,
-  liveTrainingSourceFallback,
-  liveTrainingFocusFallback,
-  liveTrainingTargetSkill,
-  liveTrainingTitleFallback,
-  liveTrainingNextChallengeTitle,
-  liveTrainingWhyNow,
-  liveTrainingCoachSummary,
-  lockRecoveredPlanVerifyItems,
-  preferRecoveredPlanRuntimeFacts,
-  scopeEvidenceQueueToRuntimeStep,
-  recoveredPlanResumeMessage,
-  resolveLivePlanStageChrome,
-  type PlanOrientationAction,
-  type RecoveredPlanResumeTurn,
-} from "../../../../shared/src/planOrientationGovernance";
-import {
-  deriveResourcesOrientation,
-  resolveResourcesBindingIds,
-  type ResourcesOrientationAction,
-} from "../../../../shared/src/resourcesOrientationGovernance";
-import { resolveResourceOpenTarget } from "../../../../shared/src/resourceOpen";
-import {
-  sanitizeErrorSurfaceText,
-  waitingComposerEnqueueFailureText,
-} from "../../../../shared/src/errorSurfaceSanitizer";
-import {
-  blockedComposerPresenceMessage,
-  providerRecoveryLocale,
-  providerRecoverySummary,
-} from "./providerRecoveryCopy";
-import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
-import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
-import { UtilityOverlay } from "../templates/UtilityOverlay";
-import { templateCopy } from "../templates/templateCopy";
-import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
-import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
-import { useSurfaceScroll } from "./useSurfaceScroll";
-import { useCoachAutoScroll } from "./useCoachAutoScroll";
-import { useComposerActionPreview } from "./useComposerActionPreview";
-import { useComposerQueue } from "./useComposerQueue";
-import { canConverseBeforeAdmission } from "../../../../shared/src/conversationAdmission";
-import { useCoachHistory } from "./useCoachHistory";
-import { useMenuState } from "./useMenuState";
-import { useComposerHistoryNavigation } from "./useComposerHistoryNavigation";
-import { useCoachConversationController } from "./useCoachConversationController";
-import { useComposerProviderController } from "./useComposerProviderController";
-import {
-  useLearningPlanController,
-  type PlanComposerDraftReplacement,
-  type PlanComposerMode,
-} from "./useLearningPlanController";
-import { useLibraryResourceController } from "./useLibraryResourceController";
-import { useOperationStatusController } from "./useOperationStatusController";
-import { useProviderConnectionController } from "./useProviderConnectionController";
-import {
-  useCoachSettingsController,
-  useCoachSettingsState,
-  useProviderReadinessState,
-} from "./useCoachSettingsController";
-import {
-  useWorkspaceAdmissionFlow,
-  useWorkspaceAdmissionState,
-} from "./useWorkspaceAdmissionController";
-import { useTrainingCardController } from "./useTrainingCardController";
-import { useShallow } from "zustand/react/shallow";
-import { coachReplyMarkdown } from "../lib/shareUtils";
-import { formatTokenCount } from "../lib/formatUtils";
-import {
-  planRuntimeStatusFromRecovery,
-  selectStreamingCheckpointForScope,
-  streamingCheckpointToOrientation,
-} from "../../../../shared/src/workspaceRecoveryGovernance";
-import {
-  type CoachArtifactBlockData,
-  type CoachMessageAction,
-  CoachConversationView,
-} from "../components/coach";
-import { AppShell } from "../templates/AppShell";
-import { resolveUnifiedComposerIntent, unifiedComposerCommands } from "../lib/unifiedComposerIntent";
-import { deriveLearningSummary, sanitizeBogusLearningStep } from "../lib/learningSummary";
-import { normalizeTrainingStateTextFields } from "../lib/hostText";
-import { appendDockAnchor, composerDockDraftScope, docksComposer, resolveDockContextAnchor } from "../lib/composerDock";
-import { useComposerDockAnchor } from "./useComposerDockAnchor";
-import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
-import {
-  detectPlanRevisionConflict,
-  parseLivePlanTaskGateMarker,
-  operationStatusMessageText,
-  recoverableFailureMessage,
-  resolveOperationMessageSurface,
-  type OperationMessageSurface,
-} from "../lib/operationMessageGovernance";
-import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
-import {
-  CoachComposer,
   ComposerContextMenu,
-  type ComposerMentionItem,
   ComposerModelMenu,
-  ComposerResourcesMenu,
+  ComposerResourcesMenu
 } from "../components/composer";
-import { type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
-import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
 import {
-  applyTrainingCardGrade,
-  applyTrainingCardSkip,
-  interpretTrainingComposerCardCommand,
-} from "../lib/i18n/segments/trainingCardActions";
-import type {
-  TrainingReviewItem,
-  TrainingSummaryCard,
-} from "../components/training/TrainingWorkbenchView";
-import { TrainingCardLibrary, type TrainingCardLibraryAction } from "../components/training/TrainingCardLibrary";
-import { COACH_MESSAGE_ACTION_LABELS } from "../lib/i18n/segments/coachMessageBubbleCopy";
-import {
-  ArrowRightIcon,
-  CheckMarkIcon,
-  ChevronRightIcon,
-  ResourcesIcon,
-  SkillCubeIcon,
-  TargetIcon,
-  WarningIcon,
+  SkillCubeIcon
 } from "../components/icons";
-import { applyWorkbenchTheme } from "../lib/theme";
-import { I18nProvider } from "../lib/i18n/context";
-import { resolveCopy as resolveWorkbenchCopy } from "../lib/i18n/copy";
-import { resolvePlanComposerCopy } from "../lib/i18n/planComposerCopy";
-import { composerAddCopy, GOAL_MODE_COPY } from "../lib/i18n/segments/coachInlineText";
-import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
-import { resolveTextDirection } from "../lib/i18n/direction";
-import type {
-  ActiveWorkbenchView,
-  BootstrapData,
-  ComposerLanguage,
-  ConversationMessage,
-  DebugVisibleTrainingFacts,
-  HostMessage,
-  MessageAttachment,
-  ResourceComposerIntent,
-  SuggestedAction,
-} from "../lib/types";
-import {
-  normalizeSidebarView,
-} from "../lib/types";
-import {
-  getInjectedBootstrapState,
-  getWorkbenchSurface,
-  isBrowserSidePanelSurface,
-  persistBrowserPreviewProviderConfig,
-  postDebugVisibleFacts,
-  postMessage,
-  requestCollapseToSidebar,
-  subscribeToHostMessages,
-  resourceVersionResultsSchema,
-  inVsCodeWebview,
-} from "../lib/vscode";
-import {
-  buildGenericImageReviewPrompt,
-  buildScratchPaperVerificationPrompt,
-  buildTrainingFeedbackPrompt,
-  type TrainingFeedbackPromptInput,
-} from "../lib/universalLearningPrompts";
 import {
   appUiAltCopy,
   appUiCopy,
 } from "../lib/i18n/appUiCopy";
-import { isBrowserPreviewFixtureMode } from "../lib/browserPreviewMode";
-import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
-import { composerSessionKeyFor, useWorkbenchState } from "./useWorkbenchState";
-import { formatReviewDueLabel, learnerSignalLabel } from "../components/settings/useCoachSettingsViewState";
-import { ProviderConnectionContext } from "./providerConnectionContext";
-import type { PlanReviewItem } from "../components/plan/CoachPlanView";
+import { resolvePlanComposerCopy } from "../lib/i18n/planComposerCopy";
+import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
+import { unifiedComposerCommands } from "../lib/unifiedComposerIntent";
+import {
+  postMessage
+} from "../lib/vscode";
+import { useComposerDockAnchor } from "./useComposerDockAnchor";
+import {
+  type PlanComposerMode
+} from "./useLearningPlanController";
+import { useTrainingAttemptLifecycle } from "./useTrainingCommands";
 
 // ContextMenu type imported from useMenuState
 import {
-  CAPTURE_CONFIRMATION_TIMEOUT_MS,
-  COACH_REPLY_BODY_MAX_CHARS,
+  type WorkbenchCtxAfterE5a
+} from "./App";
+import {
   COMPOSER_MODEL_PICKER_INITIAL_OPTION_LIMIT,
-  CoachPlanView,
-  ComposerDeckKind,
-  DirectoryInput,
-  DockedView,
-  LocalCommandSuggestion,
-  LocalSkillSuggestion,
-  OPEN_RESOURCE_SYNC_TIMEOUT_MS,
-  RESOURCE_COMPOSER_MAX_IDS,
   RESOURCE_UPLOAD_LIMIT,
-  ResourcesWorkbenchView,
-  TrainingWorkbenchView,
   UtilityComposerModeOption,
-  ViewFallback,
-  WorkbenchDataSnapshot,
-  activeStageObjectiveText,
-  resetBootstrapRequestSent,
-  coachFirstComposerPlaceholder,
-  coachLaneLabel,
-  coachingScenarioLabel,
-  compactCoachLine,
-  composerHintText,
-  defaultPromptText,
-  describeSidecarFailure,
   focusComposerInput,
-  inBrowserPreviewEnvironment,
-  isCoachCheckpointRecoveryState,
-  isEditingAnotherField,
-  isLanguageAlignedUiText,
-  isTerminallyTruncatedText,
-  joinInlineMeta,
-  livePlanTaskMintPendingMessage,
-  livePlanUpdatePendingMessage,
-  requireBrowserPreviewAdapter,
-  localizeConversationMessage,
-  localizeUiViewReferences,
-  normalizeInlineComparisonText,
-  parseLearningFeedbackStatus,
-  parseResourceOperationStatus,
-  composerShortcutHint,
-  pickFirstText,
-  pickLanguageAlignedTrainingList,
-  planComposerDraftReplacementCopy,
-  readBrowserPreviewLocationOverrides,
-  requestBootstrapOnce,
-  resolveCoachBlockingSurface,
-  resolveTheme,
-  resolveTrainingLearningFamily,
-  resolveTrainingLearningSubtype,
-  resolveTrainingPracticeVerificationMode,
-  restoredTrainingCard,
-  sanitizeHostFailureMessage,
   sendContextShortSummary,
-  sendStatuslineText,
-  skillSectionTargetView,
-  syncBootstrapLifecycleOnVisible,
-  toPlanReviewItem,
-  trainingCardStatusLabel,
-  trainingComposerModeText,
-  trainingExpectedSymbols,
-  trainingFilePracticeText,
-  trainingGenerateCardPendingMessage,
-  trainingHandoffComposerText,
-  trainingHandoffStatusLabel,
   trainingPersistenceFailureMessage,
   triggerResourceUpload,
-  truncateInlineText,
-  waitForResourceInSnapshot,
+  truncateInlineText
 } from "./appHelpers";
-import {
-  RESOURCE_VERSION_CHECK_TIMEOUT_MS,
-  type WorkbenchSendTurnInput,
-  type WorkbenchCtxAfterK0,
-  type WorkbenchCtxAfterK1,
-  type WorkbenchCtxAfterE2,
-  type WorkbenchCtxAfterE3,
-  type WorkbenchCtxAfterK2,
-  type WorkbenchCtxAfterE5a,
-  type WorkbenchCtxAfterK3,
-  type WorkbenchCtxAfterE7,
-} from "./App";
 
 export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
   const {
-    planHasFormalThread,
     planIsFrozen,
     resolvedPlanComposerMode,
     data,
     layout,
     setActiveView,
     setComposerDraft,
-    clearDockReturnNotice,
     setContextDetail,
     setIncludeRelatedFiles,
     setFollowCurrentFile,
     setOperationMessage,
-    trainingComposerFlashMode,
     trainingComposerPracticeReturnMode,
     setTrainingComposerRoute,
     setTrainingVerifyNotice,
     requestTrainingPersistence,
-    planComposerMode,
     streaming,
     openMenu,
     setOpenMenu,
@@ -382,7 +82,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
     t,
     composerDeckRef,
     streamResumeDraftRef,
-    resourceConversationContextIds,
     composerModelSearchRef,
     uploadFilesInputRef,
     uploadFolderInputRef,
@@ -403,20 +102,14 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
     switchComposerProviderModelForProfile,
     hasFormalPlan,
     activePlanStage,
-    recoveredRuntime,
     leftoverTrainingHandoffChromeNotLive,
     leftoverResourceSelectedDetailNotLive,
-    latestCoachArtifact,
     resolvedCoachFocus,
     resolvedCoachStage,
     recoveredDisplayFacts,
     formalPlanLive,
-    livePlanFrozen,
     livePlanTitle,
     livePlanSummary,
-    leftoverSuggestedActionNotLive,
-    liveSuggestedActions,
-    liveResources,
     liveSandboxState,
     trainingState,
     selectedTrainingCardCandidate,
@@ -427,7 +120,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
     activityDraft,
     setActivityDraft,
     visibleTrainingCardTitle,
-    coachTrainingInlineAction,
     trainingFilesToTouch,
     trainingDeliverables,
     authoritativeVerifyItems,
@@ -442,10 +134,8 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
     trainingComposerReflectReason,
     trainingComposerStudyMode,
     trainingCoachBridge,
-    normalizedTrainingFlashChoices,
     trainingComposerSelectedVerifyItem,
     boundTrainingCardFacts,
-    trainingComposerUsesAnswerMode,
     trainingComposerManualPracticeMode,
     trainingComposerFilePracticeMode,
     trainingComposerReflectMode,
@@ -458,7 +148,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
     activeSkillDraft,
     matchingLocalSkills,
     matchingLocalCommands,
-    handleSuggestedAction,
     runComposerCommand,
   } = ctx;
   // Phase-D training attempt lifecycle: entering a formal card starts/resumes
@@ -687,8 +376,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
         typeof selectedCardStatus === "string" ? selectedCardStatus : undefined;
     }
 
-    const manualPracticePassed =
-      trainingComposerManualPracticeMode && practiceResultMode;
     const manualPracticeBlocked =
       trainingComposerManualPracticeMode && practiceBlockedMode;
     const filePracticeBlocked = trainingComposerFilePracticeMode && practiceBlockedMode;
@@ -805,16 +492,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
     trainingState?.selectedCardId,
   ]);
 
-  const queueComposerPrompt = useCallback(
-    (prompt: string) => {
-      setOpenMenu(undefined);
-      setComposerDraft(prompt);
-      window.requestAnimationFrame(() => {
-        focusComposerInput();
-      });
-    },
-    [setComposerDraft],
-  );
 
   const selectedResourceNavigationLabel = leftoverResourceSelectedDetailNotLive
     ? undefined
@@ -844,27 +521,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
     dockStageProgressLabel,
     selectedResourceNavigationLabel,
   );
-  const resourceConversationContextLabel = useMemo(() => {
-    if (resourceConversationContextIds.length === 0) {
-      return undefined;
-    }
-    const selectedNames = resourceConversationContextIds
-      .map((resourceId) => liveResources.find((resource) => resource.id === resourceId)?.title?.trim())
-      .filter((title): title is string => Boolean(title));
-    const total = resourceConversationContextIds.length;
-    const visibleNames = selectedNames.slice(0, 2);
-    const overflowCount = Math.max(total - visibleNames.length, 0);
-    if (layout.composerLanguage === "zh-CN") {
-      const names = visibleNames.join("、");
-      return names
-        ? `已带入资料：${names}${overflowCount > 0 ? ` 等 ${total} 份` : ""}`
-        : `已带入 ${total} 份资料`;
-    }
-    const names = visibleNames.join(", ");
-    return names
-      ? `Resource context: ${names}${overflowCount > 0 ? ` +${overflowCount}` : ""}`
-      : `${total} resource${total === 1 ? "" : "s"} attached`;
-  }, [layout.composerLanguage, liveResources, resourceConversationContextIds]);
   const planComposerModes = useMemo<UtilityComposerModeOption<PlanComposerMode>[]>(() => {
     const planComposerText = resolvePlanComposerCopy(layout.composerLanguage);
     const isZh = layout.composerLanguage === "zh-CN";
@@ -980,49 +636,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
   const activePlanComposerMode =
     planComposerModes.find((mode) => mode.id === resolvedPlanComposerMode) ??
     planComposerModes[0];
-  const renderTrainingComposerAccessory = () => {
-    if (!composerUsesTrainingFlow) {
-      return null;
-    }
-
-    if (
-      trainingComposerUsesAnswerMode &&
-      trainingComposerFlashMode === "choice" &&
-      normalizedTrainingFlashChoices.length > 0
-    ) {
-      return (
-        <section
-          className="composer-training-panel composer-training-panel--choices-only"
-          aria-label={appUiCopy(layout.composerLanguage, "训练选项")}
-        >
-          <div className="composer-context-strip__chips composer-context-strip__chips--training-choice">
-            {normalizedTrainingFlashChoices.slice(0, 4).map((choice, index) => {
-              const isActive = normalizeInlineComparisonText(choice) === normalizeInlineComparisonText(activityDraft);
-              return (
-                <button
-                  key={`${choice}:${index}`}
-                  className={`composer-context-chip ${isActive ? "is-active" : "is-enabled"}`.trim()}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => {
-                    setActivityDraft(choice);
-                    window.requestAnimationFrame(() => {
-                      focusComposerInput();
-                    });
-                  }}
-                >
-                  <span>{String.fromCharCode(65 + index)}</span>
-                  <span className="composer-context-chip__label">{choice}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      );
-    }
-
-    return null;
-  };
 
   const handleCancelStream = useCallback((options?: { restoreDraft?: boolean }) => {
     if (!streaming.isStreaming) {
@@ -1049,11 +662,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
   // returnToSurface notice (raised inside the stream/complete reducer, so a
   // batched fixture completion still closes the loop); the App only navigates
   // or dismisses.
-  const handleDockReturnViewReply = useCallback(() => {
-    clearDockReturnNotice();
-    setActiveView("coach");
-  }, [clearDockReturnNotice, setActiveView]);
-  const handleDockReturnDismiss = useCallback(() => clearDockReturnNotice(), [clearDockReturnNotice]);
   useEffect(() => {
     if (!openMenu) {
       return;
@@ -1218,60 +826,6 @@ export function useTrainingAttemptAndComposerModes(ctx: WorkbenchCtxAfterE5a) {
       footer={<><button type="button" className="template-back" onClick={() => openSkillSettings(creatableTrigger)}>{creatableTrigger ? appUiCopy(layout.composerLanguage, "创建技能 {v}").replace("{v}", creatableTrigger) : appUiCopy(layout.composerLanguage, "管理技能")}</button></>} />;
   };
 
-  const renderSuggestedActions = () => {
-    if (latestCoachArtifact && !coachTrainingInlineAction) {
-      return null;
-    }
-
-    if (!coachTrainingInlineAction && liveSuggestedActions.length === 0) {
-      return null;
-    }
-
-    const visibleActions = liveSuggestedActions;
-    return (
-      <div className="suggested-inline">
-        {leftoverSuggestedActionNotLive ? (
-          <p
-            className="coach-leftover-note"
-            data-coach-leftover-note="true"
-            role="status"
-            aria-live="polite"
-          >
-            {t.leftoverNotLiveHint}
-          </p>
-        ) : null}
-        <div className="suggested-actions">
-          {coachTrainingInlineAction ? (
-            <button
-              className="button button--ghost"
-              type="button"
-              title={coachTrainingInlineAction.title}
-              onClick={() => setActiveView("training")}
-            >
-              {coachTrainingInlineAction.label}
-            </button>
-          ) : (
-            visibleActions.slice(0, 1).map((item) => (
-              <button
-                key={item.id}
-                className="button button--ghost"
-                type="button"
-                title={item.rationale ?? item.focusArea ?? item.prompt ?? item.label}
-                onClick={() =>
-                  handleSuggestedAction(item.action, {
-                    prompt: item.prompt,
-                    focusArea: item.focusArea,
-                  })
-                }
-              >
-                {appUiCopy(layout.composerLanguage, "接着做：{v}").replace("{v}", item.label)}
-              </button>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return {
     attemptLifecycle,

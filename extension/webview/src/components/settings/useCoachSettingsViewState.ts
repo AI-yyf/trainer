@@ -1,25 +1,25 @@
-import { useMemo, useState } from "react";
+import { useMemo,useState } from "react";
+import { trainerCommands } from "../../../../../shared/src/commands";
+import { resolveEffectiveTrustState } from "../../../../../shared/src/onboarding";
 import {
   leftoverResourceSandboxStateIsNotLive,
   leftoverSettingsLearnerProjectOnboardingIsNotLive,
   leftoverSettingsProfileRhythmIsNotLive,
 } from "../../../../../shared/src/planOrientationGovernance";
-import { resolveEffectiveTrustState } from "../../../../../shared/src/onboarding";
+import type { TrainerOperationMessage } from "../../../../../shared/src/protocol";
+import { planRuntimeStatusFromRecovery } from "../../../../../shared/src/workspaceRecoveryGovernance";
 import {
   readWorkspaceTrustStateFromCapabilitySummary,
   type WorkspaceTrustState,
 } from "../../../../../shared/src/workspaceTrustState";
-import { planRuntimeStatusFromRecovery } from "../../../../../shared/src/workspaceRecoveryGovernance";
-import type { TrainerOperationMessage } from "../../../../../shared/src/protocol";
-import { trainerCommands } from "../../../../../shared/src/commands";
+import { useWorkbenchState } from "../../app/useWorkbenchState";
+import { requireBrowserPreviewAdapter } from "../../lib/browserPreviewAdapter";
+import { appUiCopy } from "../../lib/i18n/appUiCopy";
 import {
   resolveOperationMessageSurface,
   sanitizeOperationFailureMessage,
   type OperationMessageSurface,
 } from "../../lib/operationMessageGovernance";
-import { appUiCopy } from "../../lib/i18n/appUiCopy";
-import { requireBrowserPreviewAdapter } from "../../lib/browserPreviewAdapter";
-import { inVsCodeWebview, postMessage, requestNativeSkillDraft } from "../../lib/vscode";
 import type {
   CoachDefaults,
   ComposerLanguage,
@@ -32,7 +32,7 @@ import type {
   TrainerProjectsList,
   TrainerWorkspaceAdmission,
 } from "../../lib/types";
-import { useWorkbenchState } from "../../app/useWorkbenchState";
+import { inVsCodeWebview,postMessage,requestNativeSkillDraft } from "../../lib/vscode";
 
 /**
  * Selector module for CoachSettingsView (props-debt round: store-driven data).
@@ -608,9 +608,6 @@ export function useCoachSettingsHostFacts(): CoachSettingsHostFacts {
   const sandboxState = useWorkbenchState((state) => state.data.memory.sandboxState);
   const workspaceTrainingState = useWorkbenchState(
     (state) => state.data.workspaceTrainingState,
-  );
-  const sessionHistoryRestored = useWorkbenchState(
-    (state) => state.data.sessionHistoryRestored,
   );
   const plan = useWorkbenchState((state) => state.data.plan);
   const planRuntimeStatus = useWorkbenchState((state) => state.data.planRuntimeStatus);

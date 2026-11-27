@@ -1621,14 +1621,18 @@ def build_coaching_messages(
             "- Ask one short follow-up only when the request is genuinely ambiguous or lacks information needed to answer."
         )
 
+    runtime_context_section = ""
     if runtime_context_blocks:
-        system_prompt += (
-            "\n\n## Runtime Context\n"
+        runtime_context_section = (
+            "## Runtime Context\n"
             "Use this only as background. The final user message is the learner's actual request: answer it first, "
             "and do not treat these notes as a second request.\n\n"
             + "\n\n".join(runtime_context_blocks)
         )
-        messages[0]["content"] = system_prompt
+        if len(messages) == 1:
+            # Single-turn call with no prior history: append to messages[0].
+            system_prompt += "\n\n" + runtime_context_section
+            messages[0]["content"] = system_prompt
 
     # The system prompt carries the same material under Runtime Context, but
     # learners explicitly attach a file/resource to *this* request. Put the
@@ -1636,9 +1640,13 @@ def build_coaching_messages(
     # models cannot treat it as unrelated background.
     attached_material = _attached_material_grounding(coaching_context, current_file, message)
     user_message = message
+    if len(messages) > 1 and runtime_context_section:
+        # Multi-turn KV-cache preservation: keep messages[0] + prior history
+        # byte-stable and append per-turn dynamic runtime context to the latest turn.
+        user_message = f"{user_message}\n\n{runtime_context_section}"
     if attached_material:
         user_message = (
-            f"{message}\n\n## Attached material for this request\n"
+            f"{user_message}\n\n## Attached material for this request\n"
             "This is the source of truth for the answer; quote or use it before general recall.\n\n"
             f"{attached_material}"
         )

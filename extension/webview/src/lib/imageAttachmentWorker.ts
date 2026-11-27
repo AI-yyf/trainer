@@ -1,5 +1,9 @@
-import { IMAGE_ATTACHMENT_LIMITS as LIMITS, imageMimeType, imageHeaderDimensions,
-  type ImageAttachmentErrorCode } from "../../../../shared/src/imageAttachmentPolicy";
+import {
+  IMAGE_ATTACHMENT_LIMITS as LIMITS,
+  imageHeaderDimensions,
+  imageMimeType,
+  type ImageAttachmentErrorCode
+} from "../../../../shared/src/imageAttachmentPolicy";
 import type { MessageAttachment } from "./types";
 
 export interface ImageAttachmentWorkerRequest { files: File[]; remainingBytes: number }

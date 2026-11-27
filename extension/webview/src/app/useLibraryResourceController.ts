@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type MutableRefObject } from "react";
+import { useCallback,useEffect,useMemo,useRef,type MutableRefObject } from "react";
 
 import { trainerCommands } from "../../../../shared/src/commands";
 import { sanitizeErrorSurfaceText } from "../../../../shared/src/errorSurfaceSanitizer";
@@ -54,9 +54,9 @@ import {
   captureTargetKind,
   describeSidecarFailure,
   exportDownloadName,
-  requireBrowserPreviewAdapter,
   parseResourceOperationStatus,
   readBrowserFiles,
+  requireBrowserPreviewAdapter,
   triggerLocalDownload,
   waitForCapturedResource,
   waitForOrganizedResource,

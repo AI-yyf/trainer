@@ -1,349 +1,98 @@
-import { SystemState } from "../templates/SystemState";
 import {
-  executeLearningPrimaryAction,
-  resolveLearningPrimaryAction,
-  type LearningFacts,
-} from "../lib/learningActionResolver";
-import { readTrainingCardList, readTrainingCardText, resolveBoundTrainingCardFacts } from "../lib/boundTrainingCardFacts";
-import { CommandPalette } from "../templates/CommandPalette";
-import {
-  Suspense,
   forwardRef,
-  lazy,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
+  lazy
 } from "react";
 import { reviewConceptLabel } from "../lib/reviewLabel";
-import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
+import { SystemState } from "../templates/SystemState";
 
-import { resourceRecordIsAcknowledgedUpload } from "../../../../shared/src/resourceWorkbenchGovernance";
-import { trainerCommands } from "../../../../shared/src/commands";
+import {
+  sanitizeErrorSurfaceText
+} from "../../../../shared/src/errorSurfaceSanitizer";
+import type { ResourceCaptureReceipt,ResourceVersionCheckResult } from "../../../../shared/src/models";
 import type { TrainerOperationMessage } from "../../../../shared/src/protocol";
-import type { ResourceCaptureReceipt, ResourceVersionCheckResult, TrainingPlanBinding } from "../../../../shared/src/models";
-import { isComposerLanguage } from "../../../../shared/src/types";
-import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
-import { analyzeSendIntent, shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
-import { deriveTrainerCapabilityVerdict } from "../../../../shared/src/capabilityVerdict";
 import {
-  selectScopedSettingsLastTest,
-  scopedSettingsCapabilityTruth,
-} from "../../../../shared/src/settingsCapabilityGovernance";
-import {
-  hasSavedProviderProfiles,
-  describeProviderImageInputState,
   describeProviderSendState,
-  providerErrorHint,
-  PROVIDER_TEST_FRESHNESS_WINDOW_MS,
+  providerErrorHint
 } from "../../../../shared/src/providerStatus";
+import { analyzeSendIntent,shouldAttachCurrentFile } from "../../../../shared/src/sendIntelligence";
 import {
-  filterTrainerSkills,
-  mergeSkillCatalog,
-  normalizeTrainerCustomSkill,
-  normalizeTrainerCustomSkills,
-  parseTrainerSkillShare,
-  resolveTrainerSkillText,
-  serializeTrainerSkillShare,
-  trainerSkillCatalog,
-  trainerSkillSectionLabel,
-  trainerSkillTriggerToken,
-  TRAINER_CUSTOM_SKILL_LIMIT,
-  type TrainerCustomSkill,
-  type TrainerSkillCatalogItem,
-  type TrainerSkillContext,
-  type TrainerSkillSection,
-} from "../../../../shared/src/skillCatalog";
-import {
-  matchesSavedCoachDefaults,
-  sameCoachDefaults,
-} from "../../../../shared/src/coachDefaults";
-import {
-  evaluateProviderModelPolicy,
-  filterProviderModelOptions,
-  type ProviderModelPolicyReason,
-} from "../../../../shared/src/providerModelPolicy";
-import {
-  buildTrainingCoachBridge,
-  composeTrainingCoachBridgeDraft,
-} from "../../../../shared/src/trainingCoachBridge";
-import {
-  deriveTrainingExecutionState,
-  isTrainingPrimerLike as isSharedTrainingPrimerLike,
-  normalizeTrainingStatus as normalizeSharedTrainingStatus,
-  normalizeTrainingSubmode as normalizeSharedTrainingSubmode,
-} from "../../../../shared/src/trainingExecutionGovernance";
-import { localizeTrainingNextHopLabel } from "../../../../shared/src/trainingHandoffGovernance";
-import {
-  type SidebarControlCommandId,
-  filterSidebarControlCommands,
-  findSidebarControlCommand,
   sidebarControlCommandLabel,
+  type SidebarControlCommandId
 } from "../../../../shared/src/sidebarCommands";
 import {
-  deriveCoachOrientation,
-} from "../../../../shared/src/coachOrientationGovernance";
-import { isOperationReliabilityInFlight } from "../../../../shared/src/operationReliabilityGovernance";
+  type TrainerSkillCatalogItem,
+  type TrainerSkillSection
+} from "../../../../shared/src/skillCatalog";
 import {
-  buildRecoveredPlanResumeTurn,
-  derivePlanOrientation,
-  formalPlanIsLiveRuntimeIdentity,
-  liveEvidenceBinding,
-  liveFormalPlanCadence,
-  liveFormalPlanFrozen,
-  liveFormalPlanStages,
-  liveFormalPlanSummary,
-  liveFormalPlanTitle,
-  formalTaskIsLiveRuntimeIdentity,
-  leftoverTaskGuideFocusIsNotLive,
-  leftoverCoachTurnChromeIsNotLive,
-  leftoverCoachConversationIsNotLive,
-  leftoverSuggestedActionsIsNotLive,
-  leftoverMintingSuggestedActionsAreNotLive,
-  leftoverFirstLookHeadlineIsNotLive,
-  leftoverEvaluationHeadlineIsNotLive,
-  leftoverStreamingCheckpointIsNotLive,
-  leftoverTransferSkillIsNotLive,
-  leftoverTrainingFocusChromeIsNotLive,
-  leftoverTrainingHandoffChromeIsNotLive,
-  independentTrainingSelectionIsLive,
-  leftoverResourceSelectedDetailIsNotLive,
-  leftoverResourceSandboxPreviewIsNotLive,
-  leftoverResourceSandboxStateIsNotLive,
-  leftoverResourceLibraryListIsNotLive,
-  leftoverSettingsProfileRhythmIsNotLive,
-  leftoverSettingsLearnerProjectOnboardingIsNotLive,
-  streakAdaptsWithoutInventingLiveObjects,
-  pressureAdaptsWithoutInventingLiveObjects,
-  preferRecoveredCoachTaskChrome,
-  preferRecoveredCoachTurnChrome,
-  preferRecoveredTransferSkill,
-  preferRecoveredTrainingFocusChrome,
-  preferRecoveredTrainingHandoffChrome,
-  formalCardIsLiveRuntimeIdentity,
-  liveTrainingFormalSummary,
-  liveTrainingSourceFallback,
-  liveTrainingFocusFallback,
-  liveTrainingTargetSkill,
-  liveTrainingTitleFallback,
-  liveTrainingNextChallengeTitle,
-  liveTrainingWhyNow,
-  liveTrainingCoachSummary,
-  lockRecoveredPlanVerifyItems,
-  preferRecoveredPlanRuntimeFacts,
-  scopeEvidenceQueueToRuntimeStep,
-  recoveredPlanResumeMessage,
-  resolveLivePlanStageChrome,
-  type PlanOrientationAction,
-  type RecoveredPlanResumeTurn,
-} from "../../../../shared/src/planOrientationGovernance";
+  isTrainingPrimerLike as isSharedTrainingPrimerLike,
+  normalizeTrainingStatus as normalizeSharedTrainingStatus,
+  normalizeTrainingSubmode as normalizeSharedTrainingSubmode
+} from "../../../../shared/src/trainingExecutionGovernance";
+import { isComposerLanguage } from "../../../../shared/src/types";
 import {
-  deriveResourcesOrientation,
-  resolveResourcesBindingIds,
-  type ResourcesOrientationAction,
-} from "../../../../shared/src/resourcesOrientationGovernance";
-import {
-  sanitizeErrorSurfaceText,
-  waitingComposerEnqueueFailureText,
-} from "../../../../shared/src/errorSurfaceSanitizer";
-import { readWorkspaceTrustStateFromCapabilitySummary } from "../../../../shared/src/workspaceTrustState";
-import {
-  deriveOnboardingSteps,
-  resolveEffectiveTrustState,
-} from "../../../../shared/src/onboarding";
-import {
-  blockedComposerPresenceMessage,
-  blockedComposerSetupMessage,
-  providerCoachBanner,
-  providerRecoveryLocale,
-  providerRecoverySummary,
-  providerRecoveryStatusLabel,
-  providerSetupSummary,
-} from "./providerRecoveryCopy";
-import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
-import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
-import { UtilityOverlay } from "../templates/UtilityOverlay";
-import { templateCopy } from "../templates/templateCopy";
-import { buildComposerProviderMenuItems, composerModelPolicyHint, compactComposerModelLabel, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
-import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
-import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
-import { getSurfaceScrollElement, useSurfaceScroll } from "./useSurfaceScroll";
-import { useCoachHistory } from "./useCoachHistory";
-import { useMenuState } from "./useMenuState";
-import { useComposerModelQuery } from "./useComposerModelQuery";
-import { useComposerHistoryNavigation } from "./useComposerHistoryNavigation";
-import { useCoachConversationController } from "./useCoachConversationController";
-import {
-  useLearningPlanController,
-  type PlanComposerDraftReplacement,
-  type PlanComposerMode,
-} from "./useLearningPlanController";
-import { useOperationStatusController } from "./useOperationStatusController";
-import { useProviderConnectionController } from "./useProviderConnectionController";
-import { useTrainingCardController } from "./useTrainingCardController";
-import { useShallow } from "zustand/react/shallow";
-import { coachReplyTitle, coachReplyMarkdown } from "../lib/shareUtils";
-import { formatTokenCount } from "../lib/formatUtils";
-import {
-  planRuntimeStatusFromRecovery,
-  selectStreamingCheckpointForScope,
-  streamingCheckpointToOrientation,
-} from "../../../../shared/src/workspaceRecoveryGovernance";
-import {
-  type CoachArtifactBlockData,
-  type CoachMessageAction,
-  CoachConversationView,
-  CoachMessageBubble,
-} from "../components/coach";
-import { AppShell } from "../templates/AppShell";
-import { ActivityHeader } from "../templates/ActivityHeader";
-import { appendDockAnchor, composerDockDraftScope, dockSendNavigation, docksComposer, normalizeDockSendPreference, resolveDockContextAnchor } from "../lib/composerDock";
-import { useComposerDockAnchor } from "./useComposerDockAnchor";
-import { PLAN_COPY } from "../lib/i18n/segments/planInlineText";
-import {
-  attestationUndeliveredMessage,
-  detectAttestationUndelivered,
-  detectTrainerResourceFailure,
-  trainerResourceFailureMessage,
-  detectTrainingVerificationTargetMismatch,
-  detectOperationScopeChanged,
-  detectPlanRevisionConflict,
-  livePlanTaskGateFailureMessage,
-  parseLivePlanTaskGateMarker,
-  planRevisionConflictMessage,
-  operationScopeChangedMessage,
-  trainingVerificationTargetMismatchMessage,
-  operationStatusMessageText,
-  providerRecoveryMessage,
-  recoverableFailureMessage,
-  resolveOperationMessageSurface,
-  type OperationMessageSurface,
-} from "../lib/operationMessageGovernance";
-import { resolveTurnNextStepRequiresConfirmation } from "../lib/nextStepConfirmation";
-import { CoachComposer, ComposerIconButton, DockReturnToSurfaceBar } from "../components/composer";
-import { UserFeedbackDisclosure, type UserFeedbackKind } from "../components/common/UserFeedbackDisclosure";
-import { WorkbenchSurfaceButton } from "../components/common/WorkbenchSurfaceButton";
-import { WorkspaceAdmissionPanel, OnboardingWizard } from "../components/firstlook";
-import type {
-  ResourceCaptureInput,
-  ResourceCaptureFocusOption,
-  ResourceMutationOutcome,
-  ResourceOrganizeInput,
-  ResourceSearchRequest,
-} from "../components/resources/ResourcesWorkbenchView";
-import {
-  parseLibraryFolderTree,
-  type LibraryFolderHostAnswer,
-  type LibraryFolderListResult,
-} from "../lib/libraryFolders";
-import {
-  applyTrainingCardGrade,
-  applyTrainingCardSkip,
-  interpretTrainingComposerCardCommand,
-} from "../lib/i18n/segments/trainingCardActions";
-import type {
-  TrainingReviewItem,
-  TrainingSummaryCard,
-} from "../components/training/TrainingWorkbenchView";
-import {
-  CheckMarkIcon,
-  ChevronRightIcon,
-  ContextLayersIcon,
-  FolderIcon,
-  LinkIcon,
-  RefreshIcon,
-  ResourcesIcon,
-  UploadIcon,
-  WarningIcon,
+  CheckMarkIcon
 } from "../components/icons";
-import { StatusPill } from "../components/StatusPill";
-import { applyWorkbenchTheme } from "../lib/theme";
-import { I18nProvider } from "../lib/i18n/context";
-import { resolveCopy as resolveWorkbenchCopy, type Copy } from "../lib/i18n/copy";
-import { resolvePlanComposerCopy } from "../lib/i18n/planComposerCopy";
-import { resolveResourceComposerCopy } from "../lib/i18n/resourceComposerCopy";
-import { resolvePlanViewCopy } from "../lib/i18n/planViewCopy";
-import { resolveTextDirection, type TextDirection } from "../lib/i18n/direction";
-import {
-  classifyProviderThinkingSupport,
-  describeProviderThinking,
-  normalizeProviderThinkingConfig,
-  synthesizeProviderThinkingDescriptor,
-  thinkingProtocolSupportsWire,
-} from "../../../../shared/src/providerThinking";
+import type { PlanReviewItem } from "../components/plan/CoachPlanView";
 import type {
-  ProviderThinkingConfig,
-  ProviderThinkingDescriptor,
-} from "../../../../shared/src/providerThinking";
+  ResourceOrganizeInput
+} from "../components/resources/ResourcesWorkbenchView";
 import type {
-  ActiveWorkbenchView,
-  BootstrapData,
-  BrowserUploadResourceInput as BrowserUploadResourceInputType,
-  CoachAnswerMode,
-  CoachDefaults,
-  CoachSessionSummary,
-  ComposerLanguage,
-  ConversationMessage,
-  DebugVisibleTrainingFacts,
-  EvaluationCheck,
-  HostMessage,
-  HostProviderTestSummary,
-  MessageAttachment,
-  PlanStage,
-  ProviderConfigView,
-  ResourceComposerIntent,
-  ResourceTrainingHandoffResult,
-  SidebarView,
-  SuggestedAction,
-  TeachingStyle,
-  ThemePreference,
-  TrainingCardCandidate,
-  TrainingLearningFamily,
-  WorkspaceTrainingState,
-} from "../lib/types";
+  SettingsActionFeedback
+} from "../components/settings/CoachSettingsView";
+import { formatReviewDueLabel } from "../components/settings/useCoachSettingsViewState";
 import {
-  normalizeSidebarView,
-  normalizeTeachingStyle,
-} from "../lib/types";
-import {
-  announceReady,
-  getInjectedBootstrapState,
-  inVsCodeWebview,
-  getWorkbenchSurface,
-  persistBrowserPreviewProviderConfig,
-  postDebugVisibleFacts,
-  postMessage,
-  requestCollapseToSidebar,
-  subscribeToHostMessages,
-  requestNativeSkillDraft,
-} from "../lib/vscode";
-import {
-  buildGenericImageReviewPrompt,
-  buildScratchPaperVerificationPrompt,
-  buildTrainingFeedbackPrompt,
-  type TrainingFeedbackPromptInput,
-} from "../lib/universalLearningPrompts";
-import {
-  appUiAltCopy,
-  appUiCopy,
-  COACH_STARTER_PROMPTS,
   PLAN_DRAFT_REPLACEMENT_COPY,
   SCENARIO_TEXT,
   TRAINING_CARD_STATUS_TEXT,
   TRAINING_HANDOFF_STATUS_TEXT,
+  appUiCopy
 } from "../lib/i18n/appUiCopy";
-import { isBrowserPreviewFixtureMode } from "../lib/browserPreviewMode";
-import { useTrainingCommands, useTrainingAttemptLifecycle } from "./useTrainingCommands";
-import { type TrainingRestoreContext, useWorkbenchState } from "./useWorkbenchState";
-import { formatReviewDueLabel, learnerSignalLabel } from "../components/settings/useCoachSettingsViewState";
-import { ProviderConnectionContext } from "./providerConnectionContext";
-import type { PlanReviewItem } from "../components/plan/CoachPlanView";
+import { type Copy } from "../lib/i18n/copy";
+import { type TextDirection } from "../lib/i18n/direction";
+import {
+  attestationUndeliveredMessage,
+  detectAttestationUndelivered,
+  detectOperationScopeChanged,
+  detectPlanRevisionConflict,
+  detectTrainerResourceFailure,
+  detectTrainingVerificationTargetMismatch,
+  livePlanTaskGateFailureMessage,
+  operationScopeChangedMessage,
+  parseLivePlanTaskGateMarker,
+  planRevisionConflictMessage,
+  providerRecoveryMessage,
+  recoverableFailureMessage,
+  trainerResourceFailureMessage,
+  trainingVerificationTargetMismatchMessage
+} from "../lib/operationMessageGovernance";
 import type {
-  SettingsActionFeedback,
-  SettingsSectionStatus,
-} from "../components/settings/CoachSettingsView";
+  ActiveWorkbenchView,
+  BrowserUploadResourceInput as BrowserUploadResourceInputType,
+  CoachAnswerMode,
+  ComposerLanguage,
+  ConversationMessage,
+  HostMessage,
+  HostProviderTestSummary,
+  PlanStage,
+  ProviderConfigView,
+  ResourceTrainingHandoffResult,
+  SidebarView,
+  TeachingStyle,
+  ThemePreference,
+  TrainingCardCandidate,
+  TrainingLearningFamily,
+  WorkspaceTrainingState
+} from "../lib/types";
+import { coachViewLabel,planViewLabel,resourcesViewLabel,settingsViewLabel,trainingViewLabel } from "../lib/viewLabels";
+import {
+  announceReady,
+  inVsCodeWebview,
+  postMessage
+} from "../lib/vscode";
+import {
+  providerRecoverySummary
+} from "./providerRecoveryCopy";
+import { useWorkbenchState,type TrainingRestoreContext } from "./useWorkbenchState";
 
 // ContextMenu type imported from useMenuState
 
@@ -730,7 +479,7 @@ export {
   type BrowserPreviewAdapter,
   type BrowserPreviewResourceSearchRequest,
   type PreviewProviderActionResult,
-  type PreviewProviderDraftInput,
+  type PreviewProviderDraftInput
 } from "../lib/browserPreviewAdapter";
 export const CoachPlanView = lazy(async () => {
   const module = await import("../components/plan/CoachPlanView");

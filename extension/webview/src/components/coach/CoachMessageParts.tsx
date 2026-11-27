@@ -1,26 +1,24 @@
 import {
   sanitizeErrorSurface,
-  sanitizeErrorSurfaceJson,
   sanitizeErrorSurfaceText,
 } from "../../../../../shared/src/errorSurfaceSanitizer";
 import { isDocxPreviewPath } from "../../../../../shared/src/previewAssets";
 import {
-  describeTrainerStopReason,
   type CitationPart,
-  type TrainerMessagePart,
+  type TrainerMessagePart
 } from "../../../../../shared/src/protocol";
-import type { ComposerLanguage, ResourceRecord } from "../../lib/types";
 import { resolveCopy } from "../../lib/i18n/copy";
 import { statusNextStepPartIndex } from "../../lib/nextStepConfirmation";
+import type { ComposerLanguage,ResourceRecord } from "../../lib/types";
 import { postMessage } from "../../lib/vscode";
 
-import { MermaidBlock } from "./MermaidBlock";
 import { coachMessagePartsCopy } from "../../lib/i18n/segments/coachMessagePartsCopy";
+import { DocxPreview } from "../preview/DocxPreview";
+import { MermaidBlock } from "./MermaidBlock";
 import { MessageRichContent } from "./MessageRichContent";
 import { RichCodeBlock } from "./RichCodeBlock";
-import { hasCoachToolResultFailure, resolveCoachToolResultCopy } from "./coachToolResultCopy";
+import { hasCoachToolResultFailure,resolveCoachToolResultCopy } from "./coachToolResultCopy";
 import { StructuredTable } from "./parts/StructuredTable";
-import { DocxPreview } from "../preview/DocxPreview";
 
 export interface CoachMessagePartsProps {
   parts: TrainerMessagePart[];
@@ -46,9 +44,6 @@ function copy(
   return coachMessagePartsCopy(language, key);
 }
 
-function renderSafeJson(value: unknown, language: ComposerLanguage): string {
-  return sanitizeErrorSurfaceJson(value, language);
-}
 
 function inferCodeLanguage(path: string | undefined, fallback?: string): string | undefined {
   const normalizedFallback = fallback?.trim();
@@ -121,10 +116,6 @@ function coachVisibleStatusHeading(
   }
 }
 
-function humanizeToolName(name: string): string {
-  const normalized = name.replace(/_/g, " ").trim();
-  return normalized.length > 0 ? normalized : name;
-}
 
 function citationStartLine(part: CitationPart): number | undefined {
   const raw = part.referenceOrigin === "research_brief" ? part.location?.line_start
@@ -149,21 +140,6 @@ function openCitationResource(part: CitationPart): void {
 }
 
 
-function freshnessLabel(
-  freshness: string | undefined,
-  language: ComposerLanguage,
-): string | undefined {
-  switch (freshness) {
-    case "fresh":
-      return copy(language, "最新");
-    case "stale":
-      return copy(language, "可能过期");
-    case "unknown":
-      return copy(language, "时效未知");
-    default:
-      return freshness;
-  }
-}
 
 function compactSourceLabel(source: string | undefined): string | undefined {
   const normalized = source?.trim();

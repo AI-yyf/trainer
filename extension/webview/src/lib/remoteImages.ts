@@ -11,8 +11,8 @@
  * resources and the sidecar on loopback.
  */
 
-import type { ComposerLanguage } from "./types";
 import { messageRichContentCopy } from "./i18n/segments/messageRichContentCopy";
+import type { ComposerLanguage } from "./types";
 
 const LOCAL_IMAGE_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 /** `webview.asWebviewUri()` addresses: the extension's own files, served by VS Code. */

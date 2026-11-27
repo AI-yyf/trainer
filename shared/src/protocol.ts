@@ -17,7 +17,6 @@ import type {
   ProjectAdaptationGuide,
   ProjectIdea,
   ProjectSourceSuggestion,
-  ResourceRecord,
   TaskSpec,
   TeachingDecision,
   ToneDecision,

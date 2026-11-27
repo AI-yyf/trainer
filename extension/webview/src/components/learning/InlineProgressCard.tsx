@@ -1,5 +1,5 @@
+import type { LearningProgressAchievement,LearningProgressRow } from "../../lib/learningSummary";
 import type { ComposerLanguage } from "../../lib/types";
-import type { LearningProgressAchievement, LearningProgressRow } from "../../lib/learningSummary";
 
 const COPY: Record<ComposerLanguage, { title: string; evidence: string; open: string }> = {
   "zh-CN": { title: "掌握进度", evidence: "已验证 {n} 次", open: "查看详情" },

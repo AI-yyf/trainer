@@ -1,21 +1,21 @@
-import type { LearningActivity, ResourceVersionCheckResult } from "../../../../shared/src/models";
-import type { ResearchBriefView, ResearchCitationPin, ResearchPreparation } from "../../../../shared/src/researchBrief";
-import type { WebviewSyncEnvelope, WebviewSyncAck, WebviewSyncStatus, WebviewOperationIdentity, WebviewOperationPhase, WebviewSyncCursor } from "../../../../shared/src/webviewSync";
 import type { TrainerCommandCatalogItem } from "../../../../shared/src/commands";
 import type { CompanionInstallState } from "../../../../shared/src/companionInstallState";
-import type { TrainerMessagePart, TrainerStreamingState } from "../../../../shared/src/protocol";
-import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
-import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
-import type { GoalSession } from "../../../../shared/src/models";
-import type { ComposerLanguage as SharedComposerLanguage } from "../../../../shared/src/types";
+import type { GoalSession,LearningActivity,ResourceVersionCheckResult } from "../../../../shared/src/models";
+import type { TrainerMessagePart,TrainerStreamingState } from "../../../../shared/src/protocol";
 import type {
   ProviderCapabilityEvidence,
   ProviderCapabilityVerificationState,
   ProviderProbeUsage,
 } from "../../../../shared/src/providerTest";
-
-export type { ProviderCapabilityEvidence, ProviderProbeUsage } from "../../../../shared/src/providerTest";
 import type { ProviderThinkingConfig } from "../../../../shared/src/providerThinking";
+import type { ResearchBriefView,ResearchCitationPin,ResearchPreparation } from "../../../../shared/src/researchBrief";
+import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
+import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
+import type { ComposerLanguage as SharedComposerLanguage } from "../../../../shared/src/types";
+import type { WebviewOperationIdentity,WebviewOperationPhase,WebviewSyncAck,WebviewSyncCursor,WebviewSyncEnvelope,WebviewSyncStatus } from "../../../../shared/src/webviewSync";
+
+export type { ProjectSourceSuggestion,ProviderProtocol } from '../../../../shared/src/models';
+export type { ProviderCapabilityEvidence,ProviderProbeUsage } from "../../../../shared/src/providerTest";
 
 export type ThemePreference = "system" | "light" | "dark";
 
@@ -53,12 +53,11 @@ export function normalizeTeachingStyle(value: string | null | undefined): Teachi
 }
 
 import type {
-  FirstLookSummary as SharedFirstLookSummary,
-  ProviderProtocol,
   ProjectSourceSuggestion,
+  ProviderProtocol,
+  FirstLookSummary as SharedFirstLookSummary,
   WorkspaceUnderstandingSnapshot as SharedWorkspaceUnderstandingSnapshot,
 } from '../../../../shared/src/models';
-export type { ProviderProtocol, ProjectSourceSuggestion } from '../../../../shared/src/models';
 export type FirstLookSummary = SharedFirstLookSummary;
 export type WorkspaceUnderstandingSnapshot = SharedWorkspaceUnderstandingSnapshot;
 

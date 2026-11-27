@@ -1,6 +1,6 @@
-import { useEffect, useRef, type MutableRefObject, type RefObject } from "react";
+import { useEffect,useRef,type MutableRefObject,type RefObject } from "react";
 import type { ActiveWorkbenchView } from "../lib/types";
-import { getSurfaceScrollElement, resolveCoachBottomScrollTop } from "./useSurfaceScroll";
+import { getSurfaceScrollElement,resolveCoachBottomScrollTop } from "./useSurfaceScroll";
 import { useWorkbenchState } from "./useWorkbenchState";
 
 /** Auto-follow owns live turns; saved reading positions belong to useSurfaceScroll. */

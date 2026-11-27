@@ -1,4 +1,4 @@
-import type { ActiveWorkbenchView, LearningSection } from "./types";
+import type { ActiveWorkbenchView,LearningSection } from "./types";
 
 /**
  * Navigation is a product map; routes remain the compatibility contract.

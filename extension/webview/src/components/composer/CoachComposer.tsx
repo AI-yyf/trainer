@@ -1,8 +1,8 @@
 import {
-  useEffect,
-  useRef,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ClipboardEvent,
   type DragEvent,
@@ -11,12 +11,12 @@ import {
   type ReactNode,
 } from "react";
 
-import type { ComposerLanguage, MessageAttachment } from "../../lib/types";
+import { composerAddCopy,composerLocaleCopy } from "../../lib/i18n/segments/coachInlineText";
+import type { ComposerLanguage,MessageAttachment } from "../../lib/types";
 import { useImageAttachmentStaging } from "../../lib/useImageAttachmentStaging";
 import { SystemState } from "../../templates/SystemState";
-import { AttachmentIcon, CheckMarkIcon, CloseIcon, PlusIcon, SendIcon, SquareIcon } from "../icons";
+import { AttachmentIcon,CheckMarkIcon,CloseIcon,PlusIcon,SendIcon,SquareIcon } from "../icons";
 import { ComposerIconButton } from "./ComposerIconButton";
-import { composerAddCopy, composerLocaleCopy, MAX_STAGED_ATTACHMENTS } from "../../lib/i18n/segments/coachInlineText";
 
 export interface ComposerActionItem {
   id: string;

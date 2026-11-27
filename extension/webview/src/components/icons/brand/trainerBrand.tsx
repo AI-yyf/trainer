@@ -6,7 +6,7 @@
  * Bar), extension/media/trainer.svg and media/trainer-icon.png — change all
  * of them together if the mark is ever re-introduced as a component.
  */
-import { TrainerIconBase, type TrainerIconProps } from "../TrainerIconBase";
+import { TrainerIconBase,type TrainerIconProps } from "../TrainerIconBase";
 
 /** §四十五: Evidence icon — a shield-check suggesting verified truth. */
 export function EvidenceIcon({ active, ...props }: TrainerIconProps & { active?: boolean }) {

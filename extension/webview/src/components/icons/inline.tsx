@@ -18,7 +18,7 @@
  * module directly; the ../icons barrel still owns the old-grammar names for
  * not-yet-migrated surfaces.
  */
-import { TrainerIconBase, type TrainerIconProps } from "./TrainerIconBase";
+import { TrainerIconBase,type TrainerIconProps } from "./TrainerIconBase";
 
 type InlineIconProps = Omit<TrainerIconProps, "active"> & { active?: boolean };
 

@@ -1,4 +1,4 @@
-import { REMOTE_IMAGE_ATTRIBUTE, classifyImageUrl, createRemoteImagePlaceholder } from "./remoteImages";
+import { REMOTE_IMAGE_ATTRIBUTE,classifyImageUrl,createRemoteImagePlaceholder } from "./remoteImages";
 
 const SAFE_TAGS = new Set([
   "a",

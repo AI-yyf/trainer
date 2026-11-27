@@ -370,5 +370,5 @@ export {
   providerConnectionNameLabel,
   providerFailureCopy,
   providerModelCardCopy,
-  sidecarRestartCopy,
+  sidecarRestartCopy
 };

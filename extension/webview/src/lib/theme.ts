@@ -1,4 +1,4 @@
-import { workbenchTokens, type WorkbenchThemeName } from "../../../../shared/src/tokens";
+import { workbenchTokens,type WorkbenchThemeName } from "../../../../shared/src/tokens";
 
 /**
  * Trainer follows the host theme unless the learner explicitly chooses Light

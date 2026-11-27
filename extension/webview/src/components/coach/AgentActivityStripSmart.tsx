@@ -1,8 +1,8 @@
 import { describeTrainerStopReason } from "../../../../../shared/src/protocol";
 import type { AgentToolActivity } from "../../app/useWorkbenchState";
-import type { ComposerLanguage } from "../../lib/types";
 import { agentActivityStripCopy } from "../../lib/i18n/segments/agentActivityStripCopy";
-import { currentTrainerStage, trainerStageLabel } from "../../lib/trainerStage";
+import { currentTrainerStage,trainerStageLabel } from "../../lib/trainerStage";
+import type { ComposerLanguage } from "../../lib/types";
 import {
   hasCoachToolResultFailure,
   resolveCoachToolResultCopy,

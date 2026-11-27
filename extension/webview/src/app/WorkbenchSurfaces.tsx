@@ -1,7 +1,7 @@
-import { memo, Profiler, useEffect, useState, type ReactNode } from "react";
+import { memo,Profiler,useEffect,useState,type ReactNode } from "react";
 import type { ActiveWorkbenchView } from "../lib/types";
 import { primaryDestinationForRoute } from "../lib/workbenchDestinations";
-import { recordSurfaceRender, surfaceProfiler } from './surfaceRuntimeMetrics';
+import { recordSurfaceRender,surfaceProfiler } from './surfaceRuntimeMetrics';
 
 const SurfaceContent = memo(function SurfaceContent({ view, hidden, render }: {
   view: ActiveWorkbenchView;

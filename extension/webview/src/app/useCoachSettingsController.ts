@@ -38,7 +38,7 @@ import {
   type TrainerCustomSkill,
   type TrainerSkillContext,
 } from "../../../../shared/src/skillCatalog";
-import type { SettingsSectionStatus } from "../components/settings/CoachSettingsView";
+import type { ProviderDraft,SettingsSectionStatus } from "../components/settings/CoachSettingsView";
 import { resolveStarterSubjectFamily } from "../lib/courseTemplates";
 import { appUiCopy } from "../lib/i18n/appUiCopy";
 import type { Copy } from "../lib/i18n/copy";
@@ -71,12 +71,12 @@ import {
   formatContextBundleValue,
   formatSparseCoachDefaultsSavedValue,
   formatSparseWorkspaceControlValue,
-  requireBrowserPreviewAdapter,
   localizeUiViewReferences,
   providerBlockingReason,
   providerHasVerifiedToolsProbe,
   providerModelRuntimeNote,
   providerSettingsLocale,
+  requireBrowserPreviewAdapter,
   type BrowserPreviewAdapter,
   type ComposerDeckKind,
   type LocalCommandSuggestion,
@@ -92,7 +92,6 @@ import {
 } from "./providerRecoveryCopy";
 import { buildProviderSettingsActions } from "./providerSettingsActions";
 import type { ContextMenu } from "./useMenuState";
-import type { ProviderDraft } from "../components/settings/CoachSettingsView";
 import { useWorkbenchState } from "./useWorkbenchState";
 
 type SyncCursorState = ReturnType<typeof useWorkbenchState.getState>["syncCursor"];

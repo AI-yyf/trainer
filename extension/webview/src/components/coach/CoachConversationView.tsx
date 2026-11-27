@@ -1,15 +1,14 @@
-import { Conversation } from "../../templates/Conversation";
 import { memo } from "react";
+import { Conversation } from "../../templates/Conversation";
 
-import type { ConversationMessage, ResourceRecord } from "../../lib/types";
-import type { ComposerLanguage } from "../../lib/types";
 import type { AgentToolActivity } from "../../app/useWorkbenchState";
 import { useWorkbenchState } from "../../app/useWorkbenchState";
-import type { CoachArtifactBlockData } from "./CoachArtifactBlock";
-import { AgentActivityStrip } from "./AgentActivityStripSmart";
-import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
 import { currentTrainerStage } from "../../lib/trainerStage";
-import { CoachMessageBubble, type CoachMessageAction } from "./CoachMessageBubble";
+import type { ComposerLanguage,ConversationMessage,ResourceRecord } from "../../lib/types";
+import { AgentActivityStrip } from "./AgentActivityStripSmart";
+import type { CoachArtifactBlockData } from "./CoachArtifactBlock";
+import { CoachMessageBubble,type CoachMessageAction } from "./CoachMessageBubble";
+import { CoachWorkingIndicator } from "./CoachWorkingIndicator";
 
 export interface StreamingMessageState {
   body: string;

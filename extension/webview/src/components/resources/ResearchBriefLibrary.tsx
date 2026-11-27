@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
-import { RESEARCH_BRIEF_SECTIONS, type ResearchBriefView } from "../../../../../shared/src/researchBrief";
-import type { ComposerLanguage, ResourceRecord } from "../../lib/types";
+import { useEffect,useRef } from "react";
+import { RESEARCH_BRIEF_SECTIONS,type ResearchBriefView } from "../../../../../shared/src/researchBrief";
+import type { ComposerLanguage,ResourceRecord } from "../../lib/types";
 import { CoachMessageParts } from "../coach/CoachMessageParts";
 
 const COPY: Record<ComposerLanguage, readonly string[]> = {

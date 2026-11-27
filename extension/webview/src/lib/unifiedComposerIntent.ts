@@ -1,6 +1,6 @@
+import { learnerActionText,learnerInstructionText,requestsLearningPlanChange } from "../../../../shared/src/learnerInstructions";
 import { preparationRequested } from "../../../../shared/src/researchBrief";
-import { learnerActionText, learnerInstructionText, requestsLearningPlanChange } from "../../../../shared/src/learnerInstructions";
-import type { ActiveWorkbenchView, ResourceComposerIntentMode, ResourceRecord } from "./types";
+import type { ActiveWorkbenchView,ResourceComposerIntentMode,ResourceRecord } from "./types";
 
 export type UnifiedComposerIntent =
   | { kind: "continue" | "review" | "verify" | "hint" | "help" | "blocker" }

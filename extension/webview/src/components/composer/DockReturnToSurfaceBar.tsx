@@ -1,4 +1,4 @@
-import { dockReturnBannerCopy, type ComposerDockSurface } from "../../lib/composerDock";
+import { dockReturnBannerCopy,type ComposerDockSurface } from "../../lib/composerDock";
 
 export interface DockReturnToSurfaceBarProps {
   language: string;

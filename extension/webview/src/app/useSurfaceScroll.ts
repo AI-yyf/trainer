@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, type RefObject } from "react";
+import { useLayoutEffect,useRef,type RefObject } from "react";
 import type { ActiveWorkbenchView } from "../lib/types";
-import { getPersistedSurfaceScrollPositions, useWorkbenchState } from "./useWorkbenchState";
+import { getPersistedSurfaceScrollPositions,useWorkbenchState } from "./useWorkbenchState";
 
 const READING_SURFACES: Record<ActiveWorkbenchView, string> = {
   coach: ".coach-conversation-view__list",

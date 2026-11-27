@@ -1,4 +1,4 @@
-import type { ResourceRecord, SandboxState } from "../../lib/types";
+import type { ResourceRecord,SandboxState } from "../../lib/types";
 
 /**
  * Pure library path/folder vocabulary for Resources. This module owns path
@@ -118,7 +118,6 @@ export function toSandboxNodePaths(
   return nodes.flatMap((node) => {
     const path = typeof node.path === "string" ? node.path : undefined;
     const relativePath = typeof node.relativePath === "string" ? node.relativePath : undefined;
-    const name = typeof node.name === "string" ? node.name : undefined;
     const nodeKind = typeof node.nodeKind === "string" ? node.nodeKind : undefined;
     const type = typeof node.type === "string" ? node.type : undefined;
     const isDirectory = nodeKind === "directory" || type === "folder";

@@ -1,7 +1,7 @@
 /** §十五: coach message bubble chrome copy in eight languages (no zh/en binary). */
 
-import type { ComposerLanguage } from "../../types";
 import type { CoachMessageAction } from "../../../components/coach/CoachMessageBubble";
+import type { ComposerLanguage } from "../../types";
 
 /**
  * Chrome copy on a message bubble: the running line, the support-attachment

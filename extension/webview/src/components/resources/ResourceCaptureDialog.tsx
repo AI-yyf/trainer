@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
 
-import type { ComposerLanguage } from "../../lib/types";
-import type { LibraryFolderNode } from "../../lib/libraryFolders";
 import {
   captureKindIsArtifact,
   detectCaptureSourceKind,
   type CaptureSourceKind,
 } from "../../lib/captureSourceKind";
+import type { LibraryFolderNode } from "../../lib/libraryFolders";
+import type { ComposerLanguage } from "../../lib/types";
 
 /**
  * One capture entry for the library, in the shape of the "add to knowledge

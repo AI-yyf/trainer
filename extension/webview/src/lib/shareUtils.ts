@@ -3,7 +3,7 @@
  * Pure functions — no React or state dependencies.
  */
 
-import type { ComposerLanguage, ConversationMessage } from "./types";
+import type { ComposerLanguage,ConversationMessage } from "./types";
 
 /** §十五: share/export copy in eight languages (no zh/en binary). */
 const SHARE_TEXT: Record<ComposerLanguage, { titleFallback: string; artifactsHeading: string; referencesHeading: string }> = {

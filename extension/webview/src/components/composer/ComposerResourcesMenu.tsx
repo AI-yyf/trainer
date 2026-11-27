@@ -1,6 +1,6 @@
-import type { ComposerLanguage, ResourceRecord } from "../../lib/types";
 import type { Copy } from "../../lib/i18n/copyTypes";
-import { FolderIcon, LinkIcon, UploadIcon } from "../icons";
+import type { ComposerLanguage,ResourceRecord } from "../../lib/types";
+import { FolderIcon,LinkIcon,UploadIcon } from "../icons";
 
 export type ComposerUploadPayloadMode = "files" | "folder" | "url";
 

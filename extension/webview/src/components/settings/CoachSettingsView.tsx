@@ -1,18 +1,13 @@
-import { SettingsIndex } from "../../templates/SettingsIndex";
-import { SettingsDetail } from "../../templates/SettingsDetail";
-import { SystemState } from "../../templates/SystemState";
-import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";
-import {
-  providerModelTokenLimitsKey,
-  readProviderModelTokenLimit,
-  resolveProviderModelTokenState,
-  withProviderModelTokenLimit,
-} from "../../../../../shared/src/providerModelTokenLimits";
 import { trainerCommands } from "../../../../../shared/src/commands";
-import { postMessage as postWebviewMessage } from "../../lib/vscode";
-import { settingsText } from "./settingsText";
-import { useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
+import {
+  resolveProviderModelTokenState
+} from "../../../../../shared/src/providerModelTokenLimits";
+import { normalizeProviderProtocol } from "../../../../../shared/src/providerProtocols";
 import { useProviderConnection } from "../../app/providerConnectionContext";
+import { postMessage as postWebviewMessage } from "../../lib/vscode";
+import { SettingsDetail } from "../../templates/SettingsDetail";
+import { SettingsIndex } from "../../templates/SettingsIndex";
+import { SystemState } from "../../templates/SystemState";
 import {
   settingsPhrase,
   type CoachSettingsLabels,
@@ -22,25 +17,27 @@ import {
   type SettingsActionFeedback,
   type SettingsSectionStatus,
 } from "./coachSettingsHelpers";
-import { useCoachSettingsSheetController } from "./useCoachSettingsSheetController";
+import { AdvancedSettingsSection } from "./sections/AdvancedSettingsSection";
 import {
   ConnectionSettingsLead,
   ConnectionSettingsSectionBody,
 } from "./sections/ConnectionSettingsSection";
-import { WorkspaceSettingsSection } from "./sections/WorkspaceSettingsSection";
+import { SkillsSettingsSection } from "./sections/SkillsSettingsSection";
 import {
   PreferencesSettingsSection,
   TeachingSettingsSection,
 } from "./sections/TeachingAndPreferencesSection";
-import { SkillsSettingsSection } from "./sections/SkillsSettingsSection";
-import { AdvancedSettingsSection } from "./sections/AdvancedSettingsSection";
+import { WorkspaceSettingsSection } from "./sections/WorkspaceSettingsSection";
+import { settingsText } from "./settingsText";
+import { useCoachSettingsSheetController } from "./useCoachSettingsSheetController";
+import { useCoachSettingsHostFacts } from "./useCoachSettingsViewState";
 
 export type {
   CoachSettingsLabels,
   CoachSettingsViewProps,
   ProviderDraft,
   SettingsActionFeedback,
-  SettingsSectionStatus,
+  SettingsSectionStatus
 };
 
 /**

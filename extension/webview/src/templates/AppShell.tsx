@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import type { ActiveWorkbenchView, ComposerLanguage } from "../lib/types";
+import { HistoryIcon,LearningNavIcon,SettingsIcon } from "../components/icons";
+import type { ActiveWorkbenchView,ComposerLanguage } from "../lib/types";
 import { viewLabels } from "../lib/viewLabels";
-import { PRIMARY_DESTINATIONS, primaryDestinationForRoute } from "../lib/workbenchDestinations";
-import { HistoryIcon, LearningNavIcon, SettingsIcon } from "../components/icons";
+import { PRIMARY_DESTINATIONS,primaryDestinationForRoute } from "../lib/workbenchDestinations";
 
 const NAV_LABEL: Record<ComposerLanguage, string> = {
   "zh-CN": "主导航", "en-US": "Primary navigation", "es-ES": "Navegación principal", "fr-FR": "Navigation principale",

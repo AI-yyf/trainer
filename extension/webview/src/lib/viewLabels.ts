@@ -3,7 +3,7 @@
  * Pure data + helpers — no React dependencies.
  */
 
-import type { ActiveWorkbenchView, ComposerLanguage } from "./types";
+import type { ActiveWorkbenchView,ComposerLanguage } from "./types";
 
 export type ViewLabelKey =
   | "coach"

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy,Suspense } from "react";
 
 import { isDocxPreviewPath as isDocxPreviewPathShared } from "../../../../../shared/src/previewAssets";
 import type { DocxPreviewContentProps } from "./DocxPreviewContent";

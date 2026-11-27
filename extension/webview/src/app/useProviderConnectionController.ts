@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
+import { useCallback,useEffect,useMemo,useRef,useState } from "react";
 
 import { trainerCommands } from "../../../../shared/src/commands";
 import { providerModelTokenLimitsKey } from "../../../../shared/src/providerModelTokenLimits";
 import { normalizeProviderProtocol } from "../../../../shared/src/providerProtocols";
 import type { ProviderDraft } from "../components/settings/CoachSettingsView";
-import { providerDraftStringArrayKey, providerRequestDefaultsKey } from "../lib/formatUtils";
-import type { ProviderConfigView, ProviderEndpointSpeedTestResult, HostMessage } from "../lib/types";
+import { providerDraftStringArrayKey,providerRequestDefaultsKey } from "../lib/formatUtils";
+import type { HostMessage,ProviderConfigView,ProviderEndpointSpeedTestResult } from "../lib/types";
 import { postMessage } from "../lib/vscode";
 
 /**

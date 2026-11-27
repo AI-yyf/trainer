@@ -1,5 +1,7 @@
-import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
 import { trainerCommands } from "../../../../shared/src/commands";
+import { waitingComposerEnqueueFailureText } from "../../../../shared/src/errorSurfaceSanitizer";
+import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
+import { SUPPORTED_LANGUAGES } from "../../../../shared/src/types";
 import {
   runBrowserPreviewAction,
   type BrowserPreviewBootstrap,
@@ -21,7 +23,6 @@ import {
   generateBrowserPreviewSkillDraft,
   isBrowserPreviewFixtureMode,
   listBrowserPreviewDraftModels,
-  mapSandboxPreview,
   refreshBrowserPreviewProviderModels,
   refreshBrowserPreviewProviderProfiles,
   registerBrowserPreviewStream,
@@ -37,14 +38,14 @@ import {
   switchBrowserPreviewProviderProfile,
   testBrowserPreviewProvider,
   uploadBrowserPreviewResources,
-  useBrowserPreviewProviderTemplate,
+  useBrowserPreviewProviderTemplate
 } from "./browserSidecar";
-import { mockBootstrapData } from "./mockData";
 import {
   guidedTrainingPreviewScenarios,
   resolveGuidedTrainingPreviewScenarioData,
   type GuidedTrainingPreviewScenario,
 } from "./guidedTrainingScenarioPacks";
+import { mockBootstrapData } from "./mockData";
 import type {
   BootstrapData,
   ComposerLanguage,
@@ -54,9 +55,7 @@ import type {
   SessionMessageRequest,
   WebviewAction,
 } from "./types";
-import { waitingComposerEnqueueFailureText } from "../../../../shared/src/errorSurfaceSanitizer";
-import { stripProviderSnapshotSecrets } from "../../../../shared/src/hostLastTestGovernance";
-import { sanitizeVisibleData, sanitizeVisibleText } from "./visibleText";
+import { sanitizeVisibleData,sanitizeVisibleText } from "./visibleText";
 
 type BrowserPreviewState = PersistedWorkbenchState & {
   connectionState?: "connected" | "starting" | "offline";
@@ -453,87 +452,6 @@ function handleBrowserPreviewStreamCancel(action: WebviewAction): boolean {
   return true;
 }
 
-function previewTrainingSuccessMessage(
-  commandId: string,
-  language: ComposerLanguage,
-  detail?: string,
-): string {
-  const suffix = detail ? ` ${detail}` : "";
-  switch (commandId) {
-    case trainerCommands.trainingGenerateCard:
-      return previewText(
-        language,
-        `A real training card is ready.${suffix}`,
-        `真实训练卡已准备好。${suffix}`,
-      );
-    case trainerCommands.trainingCardStatusTransition:
-      return previewText(
-        language,
-        `The real training card status updated.${suffix}`,
-        `真实训练卡状态已更新。${suffix}`,
-      );
-    case trainerCommands.trainingFlashcardAnswer:
-      return previewText(
-        language,
-        `The real flashcard answer was recorded.${suffix}`,
-        `真实闪卡答案已记录。${suffix}`,
-      );
-    case trainerCommands.trainingTheoryDrillAnswer:
-      return previewText(
-        language,
-        `The real theory-drill answer was recorded.${suffix}`,
-        `真实理论练习答案已记录。${suffix}`,
-      );
-    case trainerCommands.trainingPracticeReturn:
-      return previewText(
-        language,
-        `The real practice return was recorded.${suffix}`,
-        `真实练习返回已记录。${suffix}`,
-      );
-    case trainerCommands.trainingReflect:
-      return previewText(
-        language,
-        `The real reflection was recorded.${suffix}`,
-        `真实反思已记录。${suffix}`,
-      );
-    case trainerCommands.trainingReturn:
-      return previewText(
-        language,
-        `The real training return completed.${suffix}`,
-        `真实训练回流已完成。${suffix}`,
-      );
-    case trainerCommands.trainingReviewQueueAction:
-      return previewText(
-        language,
-        `The real review queue action was applied.${suffix}`,
-        `真实复习队列动作已应用。${suffix}`,
-      );
-    case trainerCommands.trainingReviewArtifactAction:
-      return previewText(
-        language,
-        `The real review artifact action was applied.${suffix}`,
-        `真实复习产物动作已应用。${suffix}`,
-      );
-    case trainerCommands.trainingScenarioLabAction:
-      return previewText(
-        language,
-        `The real scenario-lab action was applied.${suffix}`,
-        `真实场景实验动作已应用。${suffix}`,
-      );
-    case trainerCommands.trainingDependencySkillMapAction:
-      return previewText(
-        language,
-        `The real dependency-skill-map action was applied.${suffix}`,
-        `真实依赖技能图动作已应用。${suffix}`,
-      );
-    default:
-      return previewText(
-        language,
-        `The training step was applied in the real sidecar.${suffix}`,
-        `训练步骤已在真实侧车中应用。${suffix}`,
-      );
-  }
-}
 
 async function refreshLiveBrowserPreviewBootstrap(): Promise<BootstrapData> {
   const { sessionId, message } = await fetchBrowserPreviewBootstrap(livePreviewSessionId, true);

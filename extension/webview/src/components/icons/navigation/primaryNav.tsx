@@ -2,7 +2,7 @@
  * The three primary destinations share one 20-box grammar so the top nav can
  * carry an optical 18px glyph without mixing the 16-box coach chrome.
  */
-import { TrainerIconBase, type TrainerIconProps } from "../TrainerIconBase";
+import { TrainerIconBase,type TrainerIconProps } from "../TrainerIconBase";
 
 type PrimaryNavIconProps = Omit<TrainerIconProps, "active"> & { active?: boolean };
 

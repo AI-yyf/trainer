@@ -1,4 +1,4 @@
-import type { Break, Parent, Root, Text } from "mdast";
+import type { Break,Parent,Root,Text } from "mdast";
 
 /**
  * Chat replies use single newlines as intentional line breaks, while CommonMark
