@@ -1102,7 +1102,8 @@ def lookup_sandbox_operation(
                 if disk_text != str(expected_content):
                     log.pop(key, None)
                     return None
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in harness: %s", exc)
             log.pop(key, None)
             return None
     # Touch on hit for true LRU ordering and enforce bound.

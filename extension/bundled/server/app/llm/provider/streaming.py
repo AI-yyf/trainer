@@ -33,7 +33,8 @@ def extract_non_sse_json_stream_payload(stream: object) -> dict[str, Any] | None
         return None
     try:
         payload = response.json()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in streaming: %s", exc)
         return None
     return payload if isinstance(payload, dict) else None
 

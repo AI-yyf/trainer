@@ -394,7 +394,8 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         workspace_id = credential.workspace_id
         try:
             library_count = len(runtime.repository.list_resources(workspace_id))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in browser: %s", exc)
             library_count = 0
         return {
             "workspace_id": workspace_id,

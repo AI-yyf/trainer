@@ -1474,7 +1474,8 @@ class CoachingReplyMixin:
                             retry_response,
                             api_key=self._api_key,
                         )
-                    except Exception:  # noqa: BLE001 - fall through to the honest error
+                    except Exception as exc:  # noqa: BLE001 - fall through to the honest error
+                        logger.debug("Suppressed exception in coaching_reply_mixin: %s", exc)
                         retry_text = ""
                     if retry_text.strip():
                         raw_content = retry_text
@@ -1959,7 +1960,8 @@ async def _provider_service_coaching_reply_stream(
                         api_key=self._api_key,
                         allow_local_empty_fallback=True,
                     )
-                except Exception:  # noqa: BLE001 - fall through to the honest error
+                except Exception as exc:  # noqa: BLE001 - fall through to the honest error
+                    logger.debug("Suppressed exception in coaching_reply_mixin: %s", exc)
                     retry_text = ""
                 if retry_text.strip():
                     raw_content = retry_text

@@ -488,7 +488,8 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
             return "", ""
         try:
             plan = runtime.repository.get_latest_plan(context)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in resources: %s", exc)
             return "", ""
         if plan is None:
             return "", ""

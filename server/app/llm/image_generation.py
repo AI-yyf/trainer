@@ -377,7 +377,8 @@ async def _try_provider_photorealistic_image(
             if resp.status_code >= 400:
                 return None
             data = resp.json()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in image_generation: %s", exc)
         return None
     items = data.get("data") if isinstance(data, dict) else None
     if not isinstance(items, list) or not items:
@@ -390,7 +391,8 @@ async def _try_provider_photorealistic_image(
         return None
     try:
         raw = base64.b64decode(b64, validate=True)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in image_generation: %s", exc)
         return None
     if not raw:
         return None

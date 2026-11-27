@@ -51,7 +51,8 @@ class ModelCatalogMixin:
                 ensure_ascii=True,
                 sort_keys=True,
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in model_catalog: %s", exc)
             provider_fingerprint = repr(provider)
         api_key_fingerprint = hashlib.sha256(
             (api_key.strip() if isinstance(api_key, str) else "").encode("utf-8")
@@ -620,7 +621,8 @@ class ModelCatalogMixin:
             return None
         try:
             iterator = auto()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in model_catalog: %s", exc)
             return None
         if not hasattr(iterator, "__iter__"):
             return None
@@ -651,7 +653,8 @@ class ModelCatalogMixin:
                 catalog_endpoint_types=catalog_claims,
             )
             return list(gateway_fingerprint_diagnostics(fingerprint))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in model_catalog: %s", exc)
             return []
 
     def list_models(

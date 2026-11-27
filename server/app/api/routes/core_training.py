@@ -450,7 +450,8 @@ def _register_training_card_routes(
     ) -> StreamingResponse:
         try:
             raw_payload = await http_request.json()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in core_training: %s", exc)
             raw_payload = {}
         stream_payload = raw_payload if isinstance(raw_payload, dict) else {}
         training_provider_service = runtime.overlay_last_test_on_service(

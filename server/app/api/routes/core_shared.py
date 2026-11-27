@@ -126,7 +126,8 @@ def _record_coach_turn_event(
             audit_note=f"Coach turn recorded ({fingerprint})",
             idempotency_key=f"coach_turn:{workspace_id}:{session_id}:{request_id or fingerprint}",
         )
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in core_shared: %s", exc)
         return
 
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import logging
 import os
 import re
 import socket
 import ssl
+import threading
 from typing import TypedDict, cast
 
 from ..core.models import (
@@ -55,8 +57,10 @@ _LOCAL_PROVIDER_HOST_RE = re.compile(
 # Scheme resolution probes each host once per sidecar process; a relay's TLS
 # support does not change mid-session, and every request path
 # (test/models/turn) re-normalizes the base URL.
+_PROVIDER_SCHEME_CACHE_MAX = 256
+_PROVIDER_SCHEME_CACHE_LOCK = threading.RLock()
 _PROVIDER_SCHEME_CACHE: dict[str, str] = {}
-
+_PROVIDER_SCHEME_INFLIGHT: set[str] = set()
 
 
 def looks_like_schemeless_provider_host(value: str) -> bool:
@@ -88,13 +92,7 @@ def _probe_provider_url_scheme(host: str, port: int) -> str | None:
         return None
 
 
-def resolve_provider_url_scheme(value: str) -> str:
-    """Pick http/https for a scheme-less service address by probing.
-
-    Local and private hosts are http without probing; public hosts get a TLS
-    handshake probe on their port so http-only relays (no 443) still work
-    instead of failing later with an opaque request error.
-    """
+def _parse_provider_host_and_port(value: str) -> tuple[str, int | None]:
     authority = value.split("/", 1)[0]
     host = authority.split(":", 1)[0].lower().strip("[]")
     port_part = authority.split(":", 1)[1] if ":" in authority else ""
@@ -102,26 +100,82 @@ def resolve_provider_url_scheme(value: str) -> str:
         explicit_port = int(port_part) if port_part else None
     except ValueError:
         explicit_port = None
+    return host, explicit_port
+
+
+def _probe_and_cache_provider_scheme(host: str, explicit_port: int | None, cache_key: str) -> str:
+    ports = [explicit_port] if explicit_port else [443, 80]
+    resolved = "http" if explicit_port == 80 else "https"
+    try:
+        for port in ports:
+            probed = _probe_provider_url_scheme(host, port)
+            if probed is not None:
+                resolved = probed
+                break
+        with _PROVIDER_SCHEME_CACHE_LOCK:
+            if len(_PROVIDER_SCHEME_CACHE) >= _PROVIDER_SCHEME_CACHE_MAX:
+                oldest_key = next(iter(_PROVIDER_SCHEME_CACHE), None)
+                if oldest_key is not None:
+                    _PROVIDER_SCHEME_CACHE.pop(oldest_key, None)
+            _PROVIDER_SCHEME_CACHE[cache_key] = resolved
+    finally:
+        with _PROVIDER_SCHEME_CACHE_LOCK:
+            _PROVIDER_SCHEME_INFLIGHT.discard(cache_key)
+    return resolved
+
+
+def resolve_provider_url_scheme(value: str) -> str:
+    """Pick http/https for a scheme-less service address without blocking an active event loop.
+
+    Local and private hosts are http without probing. Public hosts hit a
+    thread-safe bounded cache first; on a running asyncio event loop, a cache
+    miss schedules the TCP/TLS probe on a background worker thread instead of
+    stalling the event loop for 0.8s.
+    """
+    host, explicit_port = _parse_provider_host_and_port(value)
     if _LOCAL_PROVIDER_HOST_RE.match(host):
         return "http"
     cache_key = f"{host}:{explicit_port or 0}"
-    cached = _PROVIDER_SCHEME_CACHE.get(cache_key)
+    with _PROVIDER_SCHEME_CACHE_LOCK:
+        cached = _PROVIDER_SCHEME_CACHE.get(cache_key)
     if cached:
         return cached
-    ports = [explicit_port] if explicit_port else [443, 80]
-    resolved = "https"
-    for port in ports:
-        probed = _probe_provider_url_scheme(host, port)
-        if probed is not None:
-            resolved = probed
-            break
-    _PROVIDER_SCHEME_CACHE[cache_key] = resolved
-    return resolved
+    try:
+        running_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+    if running_loop is not None:
+        should_schedule = False
+        with _PROVIDER_SCHEME_CACHE_LOCK:
+            if cache_key not in _PROVIDER_SCHEME_INFLIGHT:
+                _PROVIDER_SCHEME_INFLIGHT.add(cache_key)
+                should_schedule = True
+        if should_schedule:
+            running_loop.run_in_executor(
+                None, _probe_and_cache_provider_scheme, host, explicit_port, cache_key
+            )
+        return "http" if explicit_port == 80 else "https"
+    return _probe_and_cache_provider_scheme(host, explicit_port, cache_key)
+
+
+async def resolve_provider_url_scheme_async(value: str) -> str:
+    """Await scheme probing off the event loop via a worker thread."""
+    host, explicit_port = _parse_provider_host_and_port(value)
+    if _LOCAL_PROVIDER_HOST_RE.match(host):
+        return "http"
+    cache_key = f"{host}:{explicit_port or 0}"
+    with _PROVIDER_SCHEME_CACHE_LOCK:
+        cached = _PROVIDER_SCHEME_CACHE.get(cache_key)
+    if cached:
+        return cached
+    return await asyncio.to_thread(_probe_and_cache_provider_scheme, host, explicit_port, cache_key)
 
 
 def reset_provider_scheme_cache() -> None:
     """Clear memoized scheme resolutions (test isolation)."""
-    _PROVIDER_SCHEME_CACHE.clear()
+    with _PROVIDER_SCHEME_CACHE_LOCK:
+        _PROVIDER_SCHEME_CACHE.clear()
+        _PROVIDER_SCHEME_INFLIGHT.clear()
 
 
 def provider_recovery_resumed_summary_text(response_language: str | None) -> str:

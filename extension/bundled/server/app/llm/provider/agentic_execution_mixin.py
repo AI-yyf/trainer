@@ -599,7 +599,8 @@ class AgenticExecutionMixin:
                         coach_context=coach_context,
                         history=history,
                     )
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Suppressed exception in agentic_execution_mixin: %s", exc)
                     plain_reply = ""
                 plain_failure = self.consume_last_reply_failure()
                 plain_override = self.consume_last_reply_override()
@@ -651,7 +652,8 @@ class AgenticExecutionMixin:
                     coach_context=coach_context,
                     history=history,
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in agentic_execution_mixin: %s", exc)
                 plain_reply = ""
             plain_failure = self.consume_last_reply_failure()
             plain_override = self.consume_last_reply_override()
@@ -1228,7 +1230,8 @@ class AgenticExecutionMixin:
                                             "delta": chunk,
                                             "safe_to_stream": True,
                                         }
-                            except Exception:
+                            except Exception as exc:
+                                logger.debug("Suppressed exception in agentic_execution_mixin: %s", exc)
                                 plain_chunks = []
                             plain_failure = self.consume_last_reply_failure()
                             plain_text = "".join(plain_chunks).strip()

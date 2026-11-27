@@ -471,7 +471,8 @@ class McpStdioClient:
                 )
         except (asyncio.CancelledError, GeneratorExit):
             raise
-        except Exception:  # pragma: no cover - defensive
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Suppressed exception in mcp_client: %s", exc)
             return
 
     def _dispatch(self, message: dict[str, Any]) -> None:
@@ -920,7 +921,8 @@ def _gate_mcp_tool_call(
     if runtime is not None:
         try:
             authority = runtime.workspace_authority(context.workspace_id)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in mcp_client: %s", exc)
             authority = None
     target = "mcp://{server}/{tool}".format(server=server_name, tool=tool_name)
     if operation == OperationType.READ:

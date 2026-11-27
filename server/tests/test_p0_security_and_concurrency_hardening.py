@@ -254,3 +254,35 @@ def test_p2_multiturn_kv_cache_prefix_stays_byte_stable() -> None:
     assert "## Runtime Context" not in turn_a[0]["content"]
     assert turn_a[-1]["content"].startswith("How does cancellation work?")
     assert "## Runtime Context" in turn_a[-1]["content"]
+
+
+def test_p2_provider_scheme_probe_never_blocks_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.router_support import (
+        reset_provider_scheme_cache,
+        resolve_provider_url_scheme,
+        resolve_provider_url_scheme_async,
+    )
+
+    reset_provider_scheme_cache()
+    probe_threads: list[int] = []
+    loop_thread_id = threading.get_ident()
+
+    def _fake_probe(host: str, port: int) -> str | None:
+        probe_threads.append(threading.get_ident())
+        return "http" if port == 8080 else "https"
+
+    monkeypatch.setattr("app.api.router_support._probe_provider_url_scheme", _fake_probe)
+
+    async def _run() -> tuple[str, str]:
+        nonlocal loop_thread_id
+        loop_thread_id = threading.get_ident()
+        immediate = resolve_provider_url_scheme("relay.example.com:8080")
+        await asyncio.sleep(0.05)
+        cached = await resolve_provider_url_scheme_async("relay.example.com:8080")
+        return immediate, cached
+
+    immediate_scheme, cached_scheme = asyncio.run(_run())
+    assert immediate_scheme == "https"
+    assert cached_scheme == "http"
+    assert probe_threads and all(tid != loop_thread_id for tid in probe_threads)
+    reset_provider_scheme_cache()
