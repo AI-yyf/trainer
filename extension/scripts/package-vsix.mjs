@@ -90,8 +90,10 @@ export function extractVsixTargetPlatform(manifestXml) {
  */
 export const DEVELOPMENT_ONLY_VSIX_ENTRY_PATTERNS = [
   /^extension\/webview\/dist\/vscode-preview\.html$/,
+  /^extension\/webview\/dist\/browserSidecar-test\.js$/,
   /^extension\/webview\/dist\/assets\/preview-[^/]+\.js$/,
   /^extension\/webview\/dist\/assets\/browserPreviewHarness-[^/]+\.js$/,
+  /^extension\/webview\/dist\/assets\/browserSidecar-[^/]+\.js$/,
   // Local evidence and scratch output (CI keyring notes, probe reports).
   /^extension\/output\//,
 ];

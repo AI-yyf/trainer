@@ -29,7 +29,7 @@ import type {
   ProviderConfigView,
 } from "../lib/types";
 import { postMessage } from "../lib/vscode";
-import { loadBrowserPreviewModule, type SettingsActionState } from "./appHelpers";
+import { requireBrowserPreviewAdapter, type SettingsActionState } from "./appHelpers";
 import type { ProviderDraft } from "../components/settings/CoachSettingsView";
 import { useWorkbenchState } from "./useWorkbenchState";
 
@@ -306,7 +306,7 @@ export function useWorkspaceAdmissionFlow({
   const onboardingListModels = useMemo(() => {
     if (isBrowserPreview) {
       return async (baseUrl: string, apiKey: string): Promise<string[]> => {
-        const browserPreview = await loadBrowserPreviewModule();
+        const browserPreview = await requireBrowserPreviewAdapter();
         return browserPreview.listBrowserPreviewDraftModels({ baseUrl }, apiKey);
       };
     }

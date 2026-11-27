@@ -6,19 +6,38 @@ import {
   type BrowserPreviewPatch,
 } from "./browserPreviewActions";
 import {
+  registerBrowserPreviewAdapter,
+  type BrowserPreviewAdapter,
+} from "./browserPreviewAdapter";
+import {
   attachBrowserPreviewStreamReader,
   attestBrowserPreviewWorkspaceTrust,
   browserPreviewProviderRequestOverride,
+  browserUploadLimit,
   cancelBrowserPreviewStream,
+  clearBrowserPreviewProvider,
   ensureBrowserPreviewSidecar,
   fetchBrowserPreviewBootstrap,
+  generateBrowserPreviewSkillDraft,
   isBrowserPreviewFixtureMode,
+  listBrowserPreviewDraftModels,
   mapSandboxPreview,
+  refreshBrowserPreviewProviderModels,
+  refreshBrowserPreviewProviderProfiles,
   registerBrowserPreviewStream,
   releaseBrowserPreviewStream,
+  saveBrowserPreviewCoachSettings,
+  saveBrowserPreviewProvider,
+  saveBrowserPreviewProviderProfile,
+  saveBrowserPreviewResearchBrief,
   searchBrowserPreviewResources,
   sendBrowserPreviewMessage,
   streamBrowserPreviewMessage,
+  switchBrowserPreviewProviderModel,
+  switchBrowserPreviewProviderProfile,
+  testBrowserPreviewProvider,
+  uploadBrowserPreviewResources,
+  useBrowserPreviewProviderTemplate,
 } from "./browserSidecar";
 import { mockBootstrapData } from "./mockData";
 import {
@@ -5596,7 +5615,33 @@ function toPreviewPersistedState(state: BrowserPreviewState): PersistedWorkbench
   };
 }
 
+export function createBrowserPreviewSidecarAdapter(): BrowserPreviewAdapter {
+  return {
+    browserUploadLimit,
+    clearBrowserPreviewProvider,
+    ensureBrowserPreviewSidecar,
+    fetchBrowserPreviewBootstrap,
+    generateBrowserPreviewSkillDraft,
+    listBrowserPreviewDraftModels,
+    refreshBrowserPreviewProviderModels,
+    refreshBrowserPreviewProviderProfiles,
+    saveBrowserPreviewCoachSettings,
+    saveBrowserPreviewProvider,
+    saveBrowserPreviewProviderProfile,
+    saveBrowserPreviewResearchBrief,
+    searchBrowserPreviewResources,
+    sendBrowserPreviewMessage,
+    streamBrowserPreviewMessage,
+    switchBrowserPreviewProviderModel,
+    switchBrowserPreviewProviderProfile,
+    testBrowserPreviewProvider,
+    uploadBrowserPreviewResources,
+    useBrowserPreviewProviderTemplate,
+  };
+}
+
 function configureBrowserPreviewEnvironment(state: BrowserPreviewState): void {
+  registerBrowserPreviewAdapter(createBrowserPreviewSidecarAdapter());
   const previewStorageKey = `trainer:webview:preview:${window.location.search || "default"}`;
   window.__TRAINER_BROWSER_PREVIEW__ = true;
   window.__TRAINER_PREVIEW_STORAGE_KEY__ = previewStorageKey;

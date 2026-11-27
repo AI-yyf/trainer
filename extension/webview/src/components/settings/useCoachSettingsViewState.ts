@@ -18,6 +18,7 @@ import {
   type OperationMessageSurface,
 } from "../../lib/operationMessageGovernance";
 import { appUiCopy } from "../../lib/i18n/appUiCopy";
+import { requireBrowserPreviewAdapter } from "../../lib/browserPreviewAdapter";
 import { inVsCodeWebview, postMessage, requestNativeSkillDraft } from "../../lib/vscode";
 import type {
   CoachDefaults,
@@ -50,15 +51,6 @@ import { useWorkbenchState } from "../../app/useWorkbenchState";
  * App-local state (preview session, settings action state, the debounced
  * coach-settings persist).
  */
-
-type BrowserPreviewModule = typeof import("../../lib/browserSidecar");
-
-let browserPreviewModulePromise: Promise<BrowserPreviewModule> | undefined;
-
-async function loadBrowserPreviewModule(): Promise<BrowserPreviewModule> {
-  browserPreviewModulePromise ??= import("../../lib/browserSidecar");
-  return browserPreviewModulePromise;
-}
 
 /** Same environment check App performs before taking a preview-only branch. */
 function inBrowserPreviewEnvironment(): boolean {
@@ -272,7 +264,7 @@ export function useCoachSettingsViewState({
       return requestNativeSkillDraft;
     }
     return async (description: string) => {
-      const browserPreview = await loadBrowserPreviewModule();
+      const browserPreview = await requireBrowserPreviewAdapter();
       return browserPreview.generateBrowserPreviewSkillDraft(description);
     };
   }, [isBrowserPreview]);

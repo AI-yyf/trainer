@@ -1,8 +1,8 @@
 import {
   DEFAULT_ANSWER_MODE,
   DEFAULT_TEACHING_STYLE,
-  loadBrowserPreviewModule,
-  type BrowserPreviewModule,
+  requireBrowserPreviewAdapter,
+  type BrowserPreviewAdapter,
   type SettingsActionState,
 } from "./appHelpers";
 import { useWorkbenchState } from "./useWorkbenchState";
@@ -19,7 +19,7 @@ import type {
 import { trainerCommands } from "../../../../shared/src/commands";
 
 type ProviderSavePayload = Parameters<
-  BrowserPreviewModule["saveBrowserPreviewProviderProfile"]
+  BrowserPreviewAdapter["saveBrowserPreviewProviderProfile"]
 >[0];
 
 export interface ProviderSettingsActionsDeps {
@@ -71,13 +71,13 @@ export function buildProviderSettingsActions(deps: ProviderSettingsActionsDeps) 
   const previewFailure = () => recoverableFailureMessage("provider", language);
 
   const runPreviewAction = async (
-    action: (browserPreview: BrowserPreviewModule) => Promise<{
+    action: (browserPreview: BrowserPreviewAdapter) => Promise<{
       sessionId: string;
       messages: HostMessage[];
     }>,
   ) => {
     try {
-      const browserPreview = await loadBrowserPreviewModule();
+      const browserPreview = await requireBrowserPreviewAdapter();
       const result = await action(browserPreview);
       setPreviewSessionId(result.sessionId);
       applyPreviewHostMessages(result.messages, true);

@@ -724,7 +724,14 @@ export interface UtilityComposerModeOption<TMode extends string> {
 export type SettingsFeedbackState = Partial<Record<SettingsFeedbackSlot, SettingsActionFeedback>>;
 export const DEFAULT_ANSWER_MODE: CoachAnswerMode = "auto";
 export const DEFAULT_TEACHING_STYLE: TeachingStyle = "auto";
-export type BrowserPreviewModule = typeof import("../lib/browserSidecar");
+export {
+  getBrowserPreviewAdapter,
+  requireBrowserPreviewAdapter,
+  type BrowserPreviewAdapter,
+  type BrowserPreviewResourceSearchRequest,
+  type PreviewProviderActionResult,
+  type PreviewProviderDraftInput,
+} from "../lib/browserPreviewAdapter";
 export const CoachPlanView = lazy(async () => {
   const module = await import("../components/plan/CoachPlanView");
   return { default: module.CoachPlanView };
@@ -742,7 +749,6 @@ export const TrainingWorkbenchView = lazy(async () => {
   return { default: module.TrainingWorkbenchView };
 });
 
-export let browserPreviewModulePromise: Promise<BrowserPreviewModule> | undefined;
 let bootstrapRequestSent = false;
 
 export function resetBootstrapRequestSent(): void {
@@ -789,11 +795,6 @@ export function readBrowserPreviewLocationOverrides(): {
           ? "training"
           : undefined,
   };
-}
-
-export async function loadBrowserPreviewModule(): Promise<BrowserPreviewModule> {
-  browserPreviewModulePromise ??= import("../lib/browserSidecar");
-  return browserPreviewModulePromise;
 }
 
 export function requestBootstrapOnce(force = false): void {

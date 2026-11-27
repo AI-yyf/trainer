@@ -44,7 +44,8 @@ export function syncBrowserSidepanelBundle({ repoRoot = defaultRepoRoot } = {}) 
       (name) =>
         !name.startsWith("browserPreview") &&
         !name.startsWith("browserSidecar") &&
-        !name.startsWith("preview-"),
+        !name.startsWith("preview-") &&
+        !name.startsWith("main-"),
     )
     .sort();
 

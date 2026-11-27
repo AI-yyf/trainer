@@ -33,7 +33,7 @@ import type {
   ProviderConfigView,
 } from "../lib/types";
 import { postMessage } from "../lib/vscode";
-import { loadBrowserPreviewModule, providerSettingsLocale } from "./appHelpers";
+import { requireBrowserPreviewAdapter, providerSettingsLocale } from "./appHelpers";
 import { useComposerModelQuery } from "./useComposerModelQuery";
 import type { ContextMenu } from "./useMenuState";
 import { useWorkbenchState } from "./useWorkbenchState";
@@ -251,7 +251,7 @@ export function useComposerProviderController({
     }
 
     if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
+      void requireBrowserPreviewAdapter()
         .then((browserPreview) =>
           browserPreview.refreshBrowserPreviewProviderModels(previewSessionId),
         )
@@ -326,7 +326,7 @@ export function useComposerProviderController({
       setComposerModelQuery("");
 
       if (isBrowserPreview) {
-        void loadBrowserPreviewModule()
+        void requireBrowserPreviewAdapter()
           .then((browserPreview) =>
             browserPreview.switchBrowserPreviewProviderModel(modelPolicy.model, previewSessionId),
           )
@@ -383,7 +383,7 @@ export function useComposerProviderController({
       setComposerModelQuery("");
 
       if (isBrowserPreview) {
-        void loadBrowserPreviewModule()
+        void requireBrowserPreviewAdapter()
           .then(async (browserPreview) => {
             const switched = await browserPreview.switchBrowserPreviewProviderProfile(
               normalizedProfileId,

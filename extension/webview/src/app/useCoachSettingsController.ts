@@ -71,13 +71,13 @@ import {
   formatContextBundleValue,
   formatSparseCoachDefaultsSavedValue,
   formatSparseWorkspaceControlValue,
-  loadBrowserPreviewModule,
+  requireBrowserPreviewAdapter,
   localizeUiViewReferences,
   providerBlockingReason,
   providerHasVerifiedToolsProbe,
   providerModelRuntimeNote,
   providerSettingsLocale,
-  type BrowserPreviewModule,
+  type BrowserPreviewAdapter,
   type ComposerDeckKind,
   type LocalCommandSuggestion,
   type LocalSkillSuggestion,
@@ -99,7 +99,7 @@ type SyncCursorState = ReturnType<typeof useWorkbenchState.getState>["syncCursor
 type WorkbenchLayoutState = ReturnType<typeof useWorkbenchState.getState>["layout"];
 
 type ProviderSavePayload = Parameters<
-  BrowserPreviewModule["saveBrowserPreviewProviderProfile"]
+  BrowserPreviewAdapter["saveBrowserPreviewProviderProfile"]
 >[0];
 
 export interface UseCoachSettingsStateParams {
@@ -1064,7 +1064,7 @@ export function useCoachSettingsController({
       });
 
       if (isBrowserPreview) {
-        void loadBrowserPreviewModule()
+        void requireBrowserPreviewAdapter()
           .then((browserPreview) =>
             browserPreview.saveBrowserPreviewCoachSettings(payload, previewSessionId),
           )
@@ -1263,7 +1263,7 @@ export function useCoachSettingsController({
         targets: ["provider"],
       });
       if (isBrowserPreview) {
-        void loadBrowserPreviewModule()
+        void requireBrowserPreviewAdapter()
           .then((browserPreview) =>
             browserPreview.useBrowserPreviewProviderTemplate(templateLabel, previewSessionId),
           )
@@ -1307,7 +1307,7 @@ export function useCoachSettingsController({
       targets: ["provider"],
     });
     if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
+      void requireBrowserPreviewAdapter()
         .then((browserPreview) =>
           browserPreview.saveBrowserPreviewProvider(providerSavePayload, previewSessionId),
         )

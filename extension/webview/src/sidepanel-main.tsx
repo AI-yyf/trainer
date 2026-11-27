@@ -1,3 +1,8 @@
 import { installChromeSidePanelTransport } from "./lib/chromeSidePanelTransport";
+import { mountWorkbenchApp, renderStartupFailure } from "./bootstrapWorkbench";
 
-void installChromeSidePanelTransport().then(() => import("./main"));
+void installChromeSidePanelTransport()
+  .then(() => mountWorkbenchApp())
+  .catch((error) => {
+    renderStartupFailure(error);
+  });

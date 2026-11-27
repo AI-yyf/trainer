@@ -54,7 +54,7 @@ import {
   captureTargetKind,
   describeSidecarFailure,
   exportDownloadName,
-  loadBrowserPreviewModule,
+  requireBrowserPreviewAdapter,
   parseResourceOperationStatus,
   readBrowserFiles,
   triggerLocalDownload,
@@ -443,7 +443,7 @@ export function useLibraryResourceController({
       if (!isBrowserPreview) {
         return;
       }
-      const browserPreview = await loadBrowserPreviewModule();
+      const browserPreview = await requireBrowserPreviewAdapter();
       const result = await browserPreview.searchBrowserPreviewResources(
         { query, requestId, mode: resourceSearchMode },
         previewSessionId,
@@ -538,7 +538,7 @@ export function useLibraryResourceController({
       const supportedFiles = files.filter(browserFileSupported);
       const unsupportedCount = files.length - supportedFiles.length;
       try {
-        const browserPreview = await loadBrowserPreviewModule();
+        const browserPreview = await requireBrowserPreviewAdapter();
         const uploadLimit = browserPreview.browserUploadLimit();
         const truncated = supportedFiles.length > uploadLimit;
         const limitedFiles = supportedFiles.slice(0, uploadLimit);
@@ -666,7 +666,7 @@ export function useLibraryResourceController({
     const pathTitle = parsedUrl.pathname.split("/").filter(Boolean).pop();
     const title = pathTitle || parsedUrl.hostname || rawSource;
     try {
-      const browserPreview = await loadBrowserPreviewModule();
+      const browserPreview = await requireBrowserPreviewAdapter();
       const result = await browserPreview.uploadBrowserPreviewResources(
         [
           {
@@ -721,7 +721,7 @@ export function useLibraryResourceController({
   );
 
   const refreshPreviewResources = useCallback(async () => {
-    const browserPreview = await loadBrowserPreviewModule();
+    const browserPreview = await requireBrowserPreviewAdapter();
     const { sessionId, message } = await browserPreview.fetchBrowserPreviewBootstrap(
       previewSessionId,
       true,
@@ -830,7 +830,7 @@ export function useLibraryResourceController({
         : {};
       if (isBrowserPreview && !browserPreviewFixture) {
         try {
-          const browserPreview = await loadBrowserPreviewModule();
+          const browserPreview = await requireBrowserPreviewAdapter();
           const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
           const response = await fetch(`${baseUrl}/resources/capture`, {
             method: "POST",
@@ -1044,7 +1044,7 @@ export function useLibraryResourceController({
       body: Record<string, unknown>,
     ): Promise<ResourceMutationOutcome> => {
       try {
-        const browserPreview = await loadBrowserPreviewModule();
+        const browserPreview = await requireBrowserPreviewAdapter();
         const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
         const response = await fetch(`${baseUrl}${endpoint}`, {
           method,
@@ -1079,7 +1079,7 @@ export function useLibraryResourceController({
         return { ok: false, folders: [], message: "" };
       }
       try {
-        const browserPreview = await loadBrowserPreviewModule();
+        const browserPreview = await requireBrowserPreviewAdapter();
         const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
         const response = await fetch(
           `${baseUrl}/library/groups?session_id=${encodeURIComponent(previewSessionId ?? "")}`,
@@ -1220,7 +1220,7 @@ export function useLibraryResourceController({
     ): Promise<ResourceMutationOutcome> => {
       if (isBrowserPreview && !browserPreviewFixture) {
         try {
-          const browserPreview = await loadBrowserPreviewModule();
+          const browserPreview = await requireBrowserPreviewAdapter();
           const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
           const response = await fetch(`${baseUrl}/resource/organize`, {
             method: "POST",
@@ -1322,7 +1322,7 @@ export function useLibraryResourceController({
       const name = resource?.title?.trim() || resourceId;
       if (isBrowserPreview && !browserPreviewFixture) {
         try {
-          const browserPreview = await loadBrowserPreviewModule();
+          const browserPreview = await requireBrowserPreviewAdapter();
           const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
           const formatParam = format === "pdf" ? "&format=pdf" : "";
           const response = await fetch(
