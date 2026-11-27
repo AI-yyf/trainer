@@ -3,20 +3,13 @@ import { BROWSER_CAPTURE } from '../core/constants';
 /**
  * Forwards browser-captured coach drafts into the workbench.
  *
- * Background poller for `GET /browser/pending-drafts`: it only runs while a
- * workbench surface is visible and only touches the sidecar when there is
- * something to fetch — an empty queue produces no `postMessage` and no ack.
+ * Primary transport is the real-time SSE workspace event stream (`eventStream.ts`
+ * calling `pushDraftsPayload`); the interval timer remains only as an offline /
+ * fallback safety net and skips every tick while SSE is actively connected.
  *
  * Delivery is receipt-confirmed: a draft is acknowledged with `POST
  * /browser/pending-drafts/ack` only after the workbench has applied the
- * prefill and answered with the matching receipt (`DraftReceiptChannel`). A
- * draft whose receipt never arrives stays queued server-side and the next
- * tick retries it; the webview applies each draft id at most once, so a retry
- * can confirm but never re-stamp an already-applied prefill.
- *
- * The queue is workspace-scoped end to end: every read states the runtime
- * workspace id and drafts whose workspace does not match are dropped rather
- * than shown — a capture from project A must never reach project B's coach.
+ * prefill and answered with the matching receipt (`DraftReceiptChannel`).
  */
 
 export interface PendingBrowserDraft {
@@ -44,6 +37,8 @@ export interface BrowserDraftPollerOptions {
   fetchPendingDrafts: (port: number, workspaceId: string) => Promise<unknown>;
   /** POST /browser/pending-drafts/ack {workspace_id, ids} */
   acknowledgeDrafts: (port: number, workspaceId: string, ids: string[]) => Promise<void>;
+  /** When true (e.g. live SSE stream is active), periodic timer ticks stay silent. */
+  shouldSkipTimerPoll?: () => boolean;
   intervalMs?: number;
   onError?: (message: string) => void;
   setIntervalFn?: (handler: () => void, intervalMs: number) => ReturnType<typeof setInterval>;
@@ -86,14 +81,6 @@ function asTrimmedText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-/**
- * Delivery receipts for forwarded prefills.
- *
- * `waitForReceipt` resolves `true` on the matching `notify` and `false` on
- * timeout, so the caller can turn a timeout into an ordinary failed delivery
- * without an unhandled rejection. A receipt that arrives after its wait
- * already timed out is simply dropped; the next delivery attempt re-waits.
- */
 export class DraftReceiptChannel {
   private readonly waiters = new Map<string, () => void>();
 
@@ -132,11 +119,9 @@ export class BrowserDraftPoller {
   private timer?: ReturnType<typeof setInterval>;
   private inFlight = false;
   private disposed = false;
-  /** Consecutive failed passes; drives the error backoff. */
+  private queuedPush?: { hasPayload: true; payload: unknown };
   private consecutiveFailures = 0;
-  /** Wall clock until which polls are skipped after repeated failures. */
   private backoffUntil = 0;
-  /** The last error text reported; identical repeats stay silent. */
   private lastReportedError?: string;
 
   constructor(options: BrowserDraftPollerOptions) {
@@ -154,6 +139,9 @@ export class BrowserDraftPoller {
     }
     const schedule = this.options.setIntervalFn ?? setInterval;
     this.timer = schedule(() => {
+      if (this.options.shouldSkipTimerPoll?.() === true) {
+        return;
+      }
       void this.pollOnce();
     }, this.intervalMs);
     this.timer.unref?.();
@@ -170,95 +158,70 @@ export class BrowserDraftPoller {
 
   dispose(): void {
     this.disposed = true;
+    this.queuedPush = undefined;
     this.stop();
   }
 
   /**
-   * One poll pass. Safe to call directly (tests do); overlapping ticks are
-   * dropped rather than queued so a slow sidecar cannot pile up requests.
-   *
-   * Repeated failures back off geometrically (interval → 2× → 4× … capped at
-   * one minute) so a stale pairing or a dead port cannot flood the log with a
-   * 401 per second; a different error message is always reported immediately,
-   * and one clean pass resets the backoff.
+   * Deliver a draft snapshot pushed directly from the sidecar's SSE stream,
+   * bypassing any HTTP poll request. If a delivery is currently in flight, the
+   * latest pushed snapshot is queued and drained right after it settles.
    */
+  async pushDraftsPayload(payload: unknown): Promise<BrowserDraftPollResult> {
+    if (this.disposed) {
+      return { state: 'idle', forwarded: 0, acknowledged: 0 };
+    }
+    if (this.inFlight) {
+      this.queuedPush = { hasPayload: true, payload };
+      return { state: 'idle', forwarded: 0, acknowledged: 0 };
+    }
+    return this.runPass({ pushedPayload: payload });
+  }
+
   async pollOnce(): Promise<BrowserDraftPollResult> {
     if (this.disposed || this.inFlight) {
       return { state: 'idle', forwarded: 0, acknowledged: 0 };
     }
+    return this.runPass();
+  }
+
+  private async runPass(input?: { pushedPayload?: unknown }): Promise<BrowserDraftPollResult> {
+    const isPush = input !== undefined && Object.prototype.hasOwnProperty.call(input, 'pushedPayload');
     if (!this.options.isWorkbenchVisible()) {
       return { state: 'hidden', forwarded: 0, acknowledged: 0 };
     }
     const workspaceId = this.options.getWorkspaceId().trim();
     if (!workspaceId) {
-      // Without a workspace there is no honest read to make: fetching
-      // unscoped could pull another project's captures into this coach.
       return { state: 'unscoped', forwarded: 0, acknowledged: 0 };
     }
     const port = this.options.getSidecarPort();
     if (port === undefined) {
       return { state: 'no-sidecar', forwarded: 0, acknowledged: 0 };
     }
-    if (Date.now() < this.backoffUntil) {
+    if (!isPush && Date.now() < this.backoffUntil) {
       return { state: 'idle', forwarded: 0, acknowledged: 0 };
     }
 
     this.inFlight = true;
     try {
-      const fetched = parsePendingDrafts(
-        await this.options.fetchPendingDrafts(port, workspaceId),
-      );
-      const foreign = fetched.filter(
-        (draft) => draft.workspaceId && draft.workspaceId !== workspaceId,
-      );
-      if (foreign.length > 0) {
-        // The sidecar filters by workspace; a foreign draft here would be an
-        // isolation breach. Never show it, never ack it — report it.
-        this.reportError(
-          `${foreign.length} queued draft(s) belong to another workspace and stay queued`,
-        );
-      }
-      const drafts = fetched.filter(
-        (draft) => !draft.workspaceId || draft.workspaceId === workspaceId,
-      );
-      if (drafts.length === 0) {
-        this.resetBackoff();
-        return { state: 'empty', forwarded: 0, acknowledged: 0 };
-      }
-
-      const forwardedIds: string[] = [];
-      for (const draft of drafts) {
-        try {
-          await this.options.forwardDraft(draft);
-          forwardedIds.push(draft.id);
-        } catch (error) {
-          // Leave the failed draft unacknowledged: the sidecar keeps it and the
-          // next tick retries it.
-          this.enterBackoff();
-          this.reportError(error);
+      const rawPayload = isPush
+        ? input.pushedPayload
+        : await this.options.fetchPendingDrafts(port, workspaceId);
+      const result = await this.deliverPayload(port, workspaceId, rawPayload);
+      while (!this.disposed && this.queuedPush?.hasPayload) {
+        const next = this.queuedPush.payload;
+        this.queuedPush = undefined;
+        if (!this.options.isWorkbenchVisible()) {
+          break;
         }
-      }
-
-      let acknowledged = 0;
-      if (forwardedIds.length > 0) {
-        try {
-          await this.options.acknowledgeDrafts(port, workspaceId, forwardedIds);
-          acknowledged = forwardedIds.length;
-        } catch (error) {
-          this.enterBackoff();
-          this.reportError(error);
+        const latestWorkspace = this.options.getWorkspaceId().trim();
+        const latestPort = this.options.getSidecarPort();
+        if (!latestWorkspace || latestPort === undefined) {
+          break;
         }
+        await this.deliverPayload(latestPort, latestWorkspace, next);
       }
-
-      if (forwardedIds.length > 0 && acknowledged === forwardedIds.length) {
-        this.resetBackoff();
-      }
-
-      return {
-        state: forwardedIds.length > 0 ? 'forwarded' : 'empty',
-        forwarded: forwardedIds.length,
-        acknowledged,
-      };
+      return result;
     } catch (error) {
       this.enterBackoff();
       const message = error instanceof Error ? error.message : String(error);
@@ -267,6 +230,61 @@ export class BrowserDraftPoller {
     } finally {
       this.inFlight = false;
     }
+  }
+
+  private async deliverPayload(
+    port: number,
+    workspaceId: string,
+    rawPayload: unknown,
+  ): Promise<BrowserDraftPollResult> {
+    const fetched = parsePendingDrafts(rawPayload);
+    const foreign = fetched.filter(
+      (draft) => draft.workspaceId && draft.workspaceId !== workspaceId,
+    );
+    if (foreign.length > 0) {
+      this.reportError(
+        `${foreign.length} queued draft(s) belong to another workspace and stay queued`,
+      );
+    }
+    const drafts = fetched.filter(
+      (draft) => !draft.workspaceId || draft.workspaceId === workspaceId,
+    );
+    if (drafts.length === 0) {
+      this.resetBackoff();
+      return { state: 'empty', forwarded: 0, acknowledged: 0 };
+    }
+
+    const forwardedIds: string[] = [];
+    for (const draft of drafts) {
+      try {
+        await this.options.forwardDraft(draft);
+        forwardedIds.push(draft.id);
+      } catch (error) {
+        this.enterBackoff();
+        this.reportError(error);
+      }
+    }
+
+    let acknowledged = 0;
+    if (forwardedIds.length > 0) {
+      try {
+        await this.options.acknowledgeDrafts(port, workspaceId, forwardedIds);
+        acknowledged = forwardedIds.length;
+      } catch (error) {
+        this.enterBackoff();
+        this.reportError(error);
+      }
+    }
+
+    if (forwardedIds.length > 0 && acknowledged === forwardedIds.length) {
+      this.resetBackoff();
+    }
+
+    return {
+      state: forwardedIds.length > 0 ? 'forwarded' : 'empty',
+      forwarded: forwardedIds.length,
+      acknowledged,
+    };
   }
 
   private resetBackoff(): void {
@@ -286,8 +304,6 @@ export class BrowserDraftPoller {
 
   private reportError(error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
-    // A failing poll loop runs every few seconds; repeating the identical
-    // failure text each tick is log noise, not new information.
     if (message === this.lastReportedError) {
       return;
     }

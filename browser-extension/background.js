@@ -933,6 +933,62 @@ function resetAutoPairCache() {
 }
 
 /**
+ * Redeem a pre-seeded single-use handshake credential written into the
+ * unpacked bundle directory by VS Code (`bootstrap-pair.json`). Once redeemed,
+ * the sidecar trusts this extension's origin so all future connections are
+ * zero-code via `/browser/auto-pair`.
+ */
+async function redeemBootstrapSeed(candidateUrls) {
+  if (typeof TrainerCapture.readBootstrapPairSeed !== 'function') {
+    return null;
+  }
+  const seed = await TrainerCapture.readBootstrapPairSeed();
+  if (!seed) {
+    return null;
+  }
+  const urls = [
+    ...new Set(
+      [
+        seed.baseUrl,
+        ...(Array.isArray(candidateUrls) ? candidateUrls : [])
+      ].filter(Boolean)
+    )
+  ];
+  for (const baseUrl of urls) {
+    const paired = await TrainerCapture.pairSidecar(baseUrl, seed.code);
+    if (paired.ok) {
+      await TrainerCapture.markBootstrapSeedConsumed(seed.code);
+      const workspaceId = paired.workspaceId || seed.workspaceId;
+      const workspaceName = paired.workspaceName || seed.workspaceName;
+      const saved = await TrainerCapture.saveAuth(
+        paired.baseUrl,
+        paired.credential,
+        workspaceId,
+        Date.now()
+      );
+      if (workspaceName) {
+        await TrainerCapture.saveWorkspaceName(workspaceName);
+      }
+      await TrainerCapture.saveStatusCache(null);
+      await chrome.storage.local.set({
+        [TrainerCapture.STORAGE_KEYS.autoPairDisabled]: false
+      });
+      await recordConnection('ok');
+      await rememberPairingNeededUrl('');
+      return {
+        ok: true,
+        auth: Object.assign({}, saved, { workspaceName: workspaceName || '' })
+      };
+    }
+    if (paired.reason === 'rejected' && paired.status !== 404) {
+      await TrainerCapture.markBootstrapSeedConsumed(seed.code);
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
  * Zero-code connection: discover the loopback sidecar and let it mint a
  * workspace-bound credential. The popup asks for a pair code only when the
  * sidecar answers that it has not authorised this extension yet — once per
@@ -984,6 +1040,12 @@ async function ensureAutoPair(options) {
     // two-window setup does not stay pinned to the first sidecar.
     if (existing.credential && existing.baseUrl && !force) {
       return { ok: true, auth: existing };
+    }
+    if (!existing.credential) {
+      const fastSeeded = await redeemBootstrapSeed([]);
+      if (fastSeeded && fastSeeded.ok) {
+        return fastSeeded;
+      }
     }
     const discovered = await TrainerCapture.discoverSidecar({
       storedBaseUrl: existing.baseUrl || lastPairingNeededUrl
@@ -1067,6 +1129,14 @@ async function ensureAutoPair(options) {
     if (existing.credential && existing.baseUrl) {
       return { ok: true, auth: existing };
     }
+    const seeded = await redeemBootstrapSeed([
+      pairingNeededUrl,
+      ...candidateUrls,
+      ...discoveredUrls
+    ]);
+    if (seeded && seeded.ok) {
+      return seeded;
+    }
     await recordConnection('offline');
     if (pairingNeededUrl) {
       await rememberPairingNeededUrl(pairingNeededUrl);
@@ -1096,7 +1166,10 @@ async function ensureAutoPair(options) {
  * so every later connection is zero-code.
  */
 async function pairWithCode(rawCode) {
-  if (!TrainerCapture.isValidPairCode(rawCode)) {
+  const secret = TrainerCapture.normalizePairSecret
+    ? TrainerCapture.normalizePairSecret(rawCode)
+    : TrainerCapture.normalizePairCode(rawCode);
+  if (!secret) {
     return { ok: false, reason: 'invalid_code', message: dict().pairInvalidCode };
   }
   const auth = await TrainerCapture.loadAuth();
@@ -1119,7 +1192,7 @@ async function pairWithCode(rawCode) {
     ].filter(Boolean))
   ];
   for (const baseUrl of candidateUrls) {
-    const paired = await TrainerCapture.pairSidecar(baseUrl, rawCode);
+    const paired = await TrainerCapture.pairSidecar(baseUrl, secret);
     if (paired.ok) {
       const saved = await TrainerCapture.saveAuth(
         paired.baseUrl,
@@ -1707,8 +1780,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onInstalled.addListener(() => {
   void ensureMenus();
   void ensureAlarm();
-  void flushQueue({ notify: true });
-  void updateBadge();
+  void ensureAutoPair({ force: true })
+    .then(() => flushQueue({ notify: true }))
+    .then(() => updateBadge());
 });
 
 chrome.runtime.onStartup.addListener(() => {
@@ -1716,8 +1790,9 @@ chrome.runtime.onStartup.addListener(() => {
   void ensureAlarm();
   // Connect (or re-connect) as soon as the browser starts; a queued capture
   // should not wait for the first alarm tick when Trainer is already open.
-  void flushQueue({ notify: true });
-  void updateBadge();
+  void ensureAutoPair({ force: true })
+    .then(() => flushQueue({ notify: true }))
+    .then(() => updateBadge());
 });
 
 // Cold-start safety: a service worker can spin up long after profile startup,

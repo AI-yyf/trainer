@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { ComposerLanguage } from '../../../shared/src/types';
-import { BROWSER_CAPTURE } from '../core/constants';
+import { BROWSER_CAPTURE, SIDECAR_DEFAULTS } from '../core/constants';
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
 import { getRuntimeWorkspaceContext } from './workspaceContext';
@@ -21,14 +21,18 @@ import {
 import {
   CaptureBundleSourceError,
   captureInstallGuide,
-  readCaptureBundleMarker,
-  resolveInstalledCaptureDir,
   installCaptureBundle,
   openCaptureFolder,
+  readCaptureBundleMarker,
   resolveCaptureInstallDir,
+  resolveInstalledCaptureDir,
+  resolveManagedBrowserProfileDir,
+  writeBootstrapPairSeed,
+  type BootstrapPairSeed,
 } from '../browserCapture/installBundle';
 import {
   detectChromiumBrowsers,
+  launchBrowserWithExtension,
   openBrowserExtensionsPage,
   type ChromiumBrowser,
 } from '../browserCapture/browserLauncher';
@@ -37,7 +41,6 @@ import {
   shouldPromptCaptureOnboarding,
 } from '../browserCapture/onboarding';
 
-/** Host-side copy for the current VS Code UI locale (en-US fallback). */
 function resolveHostLanguage(): ComposerLanguage {
   return resolveBrowserCaptureCopyLanguage(vscode.env?.language);
 }
@@ -48,11 +51,6 @@ function hostCopy(
   return (key, params) => browserCaptureHostCopy(language, key, params);
 }
 
-/**
- * Fallback sessions keep the pairing ledger per command context when the host
- * runtime has not been wired (older activation paths, isolated tests). The
- * extension host always installs its runtime on `CommandContext.browserCapture`.
- */
 const fallbackSessions = new WeakMap<object, BrowserPairingSession>();
 
 export function resolveBrowserCapturePairingSession(context: CommandContext): BrowserPairingSession {
@@ -81,18 +79,12 @@ export function resolveBrowserCapturePairingSession(context: CommandContext): Br
   return session;
 }
 
-/**
- * `trainer.browserCapture.install`: copy the VSIX-bundled capture extension
- * into the managed `~/.trainer/browser-capture` directory, open that directory
- * in the OS file manager, and hand the user the three-step Load unpacked guide.
- */
 interface PreparedCaptureBundle {
   targetDir: string;
   fileCount: number;
   version?: string;
 }
 
-/** Stage the bundled capture extension into the per-user install dir. */
 function prepareCaptureBundle(context: CommandContext): PreparedCaptureBundle {
   const bundleDir = vscode.Uri.joinPath(
     context.extensionContext.extensionUri,
@@ -103,6 +95,169 @@ function prepareCaptureBundle(context: CommandContext): PreparedCaptureBundle {
   }
   const targetDir = resolveCaptureInstallDir({ homeDir: os.homedir() });
   return installCaptureBundle({ sourceDir: bundleDir, targetDir });
+}
+
+/**
+ * Mint a single-use cryptographic handshake token on the running Sidecar and
+ * write `bootstrap-pair.json` into `~/.trainer/browser-capture` so the browser
+ * extension pairs automatically on load with zero 6-digit code entry.
+ */
+export async function seedBootstrapHandshake(
+  context: CommandContext,
+  targetDir: string,
+): Promise<BootstrapPairSeed | undefined> {
+  try {
+    const status = await context.sidecarManager.ensureRunning();
+    if (status.lifecycle !== 'ready' || !status.port) {
+      return undefined;
+    }
+    const runtimeWorkspace = getRuntimeWorkspaceContext(context);
+    const workspaceId = runtimeWorkspace.workspaceId.trim();
+    if (!workspaceId) {
+      return undefined;
+    }
+    const issue = await resolveBrowserCapturePairingSession(context).issueBootstrapToken();
+    const hostState = context.getHostState();
+    const workspaceName =
+      hostState.bootstrap?.workspaceName?.trim() ||
+      path.basename(hostState.workspace?.workspaceFolder || workspaceId) ||
+      workspaceId;
+    const seed: BootstrapPairSeed = {
+      schemaVersion: 1,
+      code: issue.code,
+      baseUrl: `http://${SIDECAR_DEFAULTS.host}:${status.port}`,
+      workspaceId,
+      workspaceName,
+      issuedAt: Date.now(),
+      expiresAt: issue.expiresAt,
+    };
+    writeBootstrapPairSeed(targetDir, seed);
+    context.outputChannel.appendLine(
+      `[browser-capture] pre-seeded single-use handshake in ${path.join(targetDir, BROWSER_CAPTURE.bootstrapPairFileName)}`,
+    );
+    return seed;
+  } catch (error) {
+    context.outputChannel.appendLine(
+      `[browser-capture] bootstrap handshake pre-seed skipped: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return undefined;
+  }
+}
+
+async function pickDetectedBrowser(
+  detected: ChromiumBrowser[],
+  placeHolder: string,
+  preferredBrowserId?: string,
+): Promise<ChromiumBrowser | 'cancelled' | undefined> {
+  if (detected.length === 0) {
+    return undefined;
+  }
+  if (preferredBrowserId) {
+    const matched = detected.find((item) => item.id === preferredBrowserId);
+    if (matched) {
+      return matched;
+    }
+  }
+  if (detected.length === 1) {
+    return detected[0];
+  }
+  const picked = await vscode.window.showQuickPick(
+    detected.map((browser) => ({
+      label: `$(${browser.id === 'edge' ? 'edge' : 'browser'}) ${browser.label}`,
+      description: browser.extensionsUrl,
+      browser,
+    })),
+    { placeHolder },
+  );
+  return picked ? picked.browser : 'cancelled';
+}
+
+/**
+ * `trainer.browserCapture.launch`: One-click launch an adapted Chromium browser
+ * profile (`~/.trainer/browser-profile`) with the shared Trainer Side Panel
+ * extension pre-loaded (`--load-extension`) and pre-paired (`bootstrap-pair.json`).
+ */
+export async function launchBrowserCaptureCommand(
+  context: CommandContext,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  const language = resolveHostLanguage();
+  const copy = hostCopy(language);
+  const detected = detectChromiumBrowsers();
+  if (detected.length === 0) {
+    void vscode.window.showInformationMessage(copy('noChromiumBrowserFound'));
+    return { ok: false, message: copy('noChromiumBrowserFound') };
+  }
+  const record =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const preferredBrowserId =
+    typeof record.browserId === 'string' ? record.browserId.trim() : undefined;
+  const initialUrl =
+    typeof record.initialUrl === 'string' && /^https?:\/\//i.test(record.initialUrl.trim())
+      ? record.initialUrl.trim()
+      : undefined;
+
+  const selected = await pickDetectedBrowser(
+    detected,
+    copy('pickLaunchBrowserPlaceholder'),
+    preferredBrowserId,
+  );
+  if (!selected) {
+    return { ok: false, message: copy('noChromiumBrowserFound') };
+  }
+  if (selected === 'cancelled') {
+    return { ok: true, cancelled: true, message: 'cancelled' };
+  }
+
+  let installed: PreparedCaptureBundle;
+  try {
+    installed = prepareCaptureBundle(context);
+  } catch (error) {
+    const reason =
+      error instanceof CaptureBundleSourceError
+        ? copy('installBundleMissing')
+        : error instanceof Error
+          ? error.message
+          : String(error);
+    context.outputChannel.appendLine(`[browser-capture] launch stage failed: ${reason}`);
+    return { ok: false, message: copy('installFailed', { reason }) };
+  }
+
+  const seed = await seedBootstrapHandshake(context, installed.targetDir);
+  const profileDir = resolveManagedBrowserProfileDir({ homeDir: os.homedir() });
+  const launched = launchBrowserWithExtension(selected, {
+    extensionDir: installed.targetDir,
+    profileDir,
+    initialUrl,
+  });
+  if (!launched.spawned) {
+    const message = copy('browserOpenFailed', {
+      browser: selected.label,
+      reason: `${launched.command} ${launched.args.join(' ')}`,
+    });
+    context.outputChannel.appendLine(`[browser-capture] ${message}`);
+    void vscode.window.showWarningMessage(message);
+    return { ok: false, message };
+  }
+
+  const doneMessage = copy('launchBrowserDone', { browser: selected.label });
+  context.outputChannel.appendLine(
+    `[browser-capture] launched ${selected.label} with --load-extension=${installed.targetDir} (profile=${profileDir}, handshakeSeeded=${Boolean(seed)})`,
+  );
+  void vscode.window.showInformationMessage(doneMessage);
+  return {
+    ok: true,
+    message: doneMessage,
+    data: {
+      browser: selected.id,
+      targetDir: installed.targetDir,
+      profileDir,
+      version: installed.version,
+      handshakeSeeded: Boolean(seed),
+    },
+  };
 }
 
 export async function installBrowserCaptureCommand(
@@ -124,15 +279,15 @@ export async function installBrowserCaptureCommand(
     return { ok: false, message: copy('installFailed', { reason }) };
   }
 
+  const seed = await seedBootstrapHandshake(context, installed.targetDir);
   const opened = openCaptureFolder(installed.targetDir);
+  await vscode.env.clipboard.writeText(installed.targetDir).then(() => undefined, () => undefined);
   context.outputChannel.appendLine(
-    `[browser-capture] installed ${installed.fileCount} files to ${installed.targetDir} (folder opener: ${opened.command}, spawned: ${opened.spawned})`,
+    `[browser-capture] installed ${installed.fileCount} files to ${installed.targetDir} (folder opener: ${opened.command}, spawned: ${opened.spawned}, handshakeSeeded: ${Boolean(seed)})`,
   );
 
   let guide = captureInstallGuide({ targetDir: installed.targetDir, version: installed.version, language });
   if (!opened.spawned) {
-    // Headless hosts without open/explorer/xdg-open: the path on the bar is the
-    // degraded fallback, said in the user's language.
     guide = `${guide}\n${copy('installFolderFallback', { dir: installed.targetDir })}`;
   }
   const copyPathLabel = copy('copyFolderPath');
@@ -149,19 +304,15 @@ export async function installBrowserCaptureCommand(
   return {
     ok: true,
     message: copy('installSucceeded', { label, dir: installed.targetDir }),
-    data: { targetDir: installed.targetDir, version: installed.version, fileCount: installed.fileCount },
+    data: {
+      targetDir: installed.targetDir,
+      version: installed.version,
+      fileCount: installed.fileCount,
+      handshakeSeeded: Boolean(seed),
+    },
   };
 }
 
-/**
- * Owner-directed per-browser install (T-0050): detect the installed
- * Chromium-family browsers, let the user pick one, stage the bundle, and open
- * THAT browser's own extensions page with the install path already on the
- * clipboard. Branded browsers refuse silent installs, so the remaining
- * developer-mode steps are stated in one message — this is the closest a
- * non-store install can get to one click; the store publish later turns it
- * into a literal one-click.
- */
 export async function installBrowserCaptureForBrowserCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
@@ -172,11 +323,8 @@ export async function installBrowserCaptureForBrowserCommand(
     void vscode.window.showInformationMessage(copy('noChromiumBrowserFound'));
     return { ok: false, message: copy('noChromiumBrowserFound') };
   }
-  const pick = await vscode.window.showQuickPick(
-    detected.map((browser) => ({ label: `$(${browser.id === 'edge' ? 'edge' : 'browser'}) ${browser.label}`, browser })),
-    { placeHolder: copy('pickBrowserPlaceholder') },
-  );
-  if (!pick) {
+  const selected = await pickDetectedBrowser(detected, copy('pickBrowserPlaceholder'));
+  if (!selected || selected === 'cancelled') {
     return { ok: false, message: 'cancelled' };
   }
   let installed: PreparedCaptureBundle;
@@ -192,13 +340,15 @@ export async function installBrowserCaptureForBrowserCommand(
     context.outputChannel.appendLine(`[browser-capture] install failed: ${reason}`);
     return { ok: false, message: copy('installFailed', { reason }) };
   }
-  const opened = openBrowserExtensionsPage(pick.browser);
+  const seed = await seedBootstrapHandshake(context, installed.targetDir);
+  const opened = openBrowserExtensionsPage(selected);
+  const folderOpened = openCaptureFolder(installed.targetDir);
   await vscode.env.clipboard.writeText(installed.targetDir).then(() => undefined, () => undefined);
   context.outputChannel.appendLine(
-    `[browser-capture] per-browser install: ${installed.fileCount} files to ${installed.targetDir}; opened ${pick.browser.label} extensions page (spawned: ${opened.spawned})`,
+    `[browser-capture] per-browser install: ${installed.fileCount} files to ${installed.targetDir}; opened ${selected.label} extensions page (spawned: ${opened.spawned}, folderSpawned: ${folderOpened.spawned}, handshakeSeeded: ${Boolean(seed)})`,
   );
   const doneMessage = copy('installForBrowserDone', {
-    browser: pick.browser.label,
+    browser: selected.label,
     dir: installed.targetDir,
   });
   const openFolderLabel = copy('copyFolderPath');
@@ -206,6 +356,7 @@ export async function installBrowserCaptureForBrowserCommand(
     .showInformationMessage(doneMessage, openFolderLabel)
     .then((choice) => {
       if (choice === openFolderLabel) {
+        void vscode.env.clipboard.writeText(installed.targetDir);
         openCaptureFolder(installed.targetDir);
       }
     });
@@ -217,17 +368,12 @@ export async function installBrowserCaptureForBrowserCommand(
       targetDir: installed.targetDir,
       version: installed.version,
       fileCount: installed.fileCount,
-      browser: pick.browser.id,
+      browser: selected.id,
+      handshakeSeeded: Boolean(seed),
     },
   };
 }
 
-/**
- * First-run onboarding (owner direction): on the first activation after
- * install, offer the browser capture setup once. The flag is written before
- * the prompt renders so a dropped notification can never become a nag; the
- * picker stays reachable from the command palette and the Settings card.
- */
 export async function maybePromptCaptureOnboarding(context: CommandContext): Promise<void> {
   const language = resolveHostLanguage();
   const copy = hostCopy(language);
@@ -237,21 +383,21 @@ export async function maybePromptCaptureOnboarding(context: CommandContext): Pro
   const prepared = fs.existsSync(
     path.join(resolveInstalledCaptureDir(os.homedir()), 'manifest.json'),
   );
-  // Pairing state needs the sidecar; checking it here would couple first-run
-  // to service readiness (§5.1 UI never waits on network). The prompted flag
-  // keeps this exactly-once either way, and an already-paired user pays at
-  // most one dismiss.
   if (!shouldPromptCaptureOnboarding({ prompted, prepared, paired: false })) {
     return;
   }
   await context.extensionContext.globalState.update(CAPTURE_ONBOARDING_PROMPTED_FLAG, true);
+  const launchLabel = copy('onboardingLaunch');
   const installLabel = copy('onboardingInstall');
   const choice = await vscode.window.showInformationMessage(
     copy('onboardingPrompt'),
+    launchLabel,
     installLabel,
     copy('onboardingNotNow'),
   );
-  if (choice === installLabel) {
+  if (choice === launchLabel) {
+    await launchBrowserCaptureCommand(context);
+  } else if (choice === installLabel) {
     await installBrowserCaptureForBrowserCommand(context);
   }
 }
@@ -264,17 +410,11 @@ export interface BrowserCaptureInstallStatus {
   installDir: string;
 }
 
-/**
- * Real install/pair state for the Settings card (T-0024). "Loaded in the
- * browser" is intentionally unknowable from the host — the card treats the
- * pairing state as the actionable signal instead of inventing a step we
- * cannot observe.
- */
 export async function browserCaptureInstallStatus(
   context: CommandContext,
 ): Promise<BrowserCaptureInstallStatus> {
   const installDir = resolveInstalledCaptureDir(os.homedir());
-  const marker = readCaptureBundleMarker(path.join(installDir, BROWSER_CAPTURE.versionFileName));
+  const marker = readCaptureBundleMarker(installDir);
   const prepared = fs.existsSync(path.join(installDir, 'manifest.json'));
   const status = context.sidecarManager.getStatus();
   let paired = false;
@@ -282,13 +422,27 @@ export async function browserCaptureInstallStatus(
   if (status.lifecycle === 'ready' && status.port) {
     try {
       const workspaceId = getRuntimeWorkspaceContext(context).workspaceId;
-      const summary = await context.sidecarClient.getJson<{
-        library_count?: number;
-      }>(status.port, `/browser/status?workspace_id=${encodeURIComponent(workspaceId)}`);
-      capturedCount = typeof summary.library_count === 'number' ? summary.library_count : null;
-      paired = true;
+      const revision = await context.sidecarClient.getJson<{
+        count?: number;
+      }>(
+        status.port,
+        `${BROWSER_CAPTURE.libraryRevisionPath}?workspace_id=${encodeURIComponent(workspaceId)}`,
+      );
+      capturedCount = typeof revision.count === 'number' ? revision.count : null;
+      if (context.sidecarClient.openEventStream) {
+        for await (const frame of context.sidecarClient.openEventStream(
+          status.port,
+          `${BROWSER_CAPTURE.eventsStreamPath}?workspace_id=${encodeURIComponent(workspaceId)}&once=true`,
+          { connectTimeoutMs: 2_000 },
+        )) {
+          if (frame.event === 'snapshot') {
+            const parsed = JSON.parse(frame.data) as { paired_credentials?: number };
+            paired = Number(parsed.paired_credentials ?? 0) > 0;
+            break;
+          }
+        }
+      }
     } catch (error) {
-      // 401/absent pairing both land here: the card shows "not paired".
       context.outputChannel.appendLine(
         `[browser-capture] status probe failed: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -297,9 +451,6 @@ export async function browserCaptureInstallStatus(
   return { prepared, paired, capturedCount, version: marker?.version, installDir };
 }
 
-/**
- * `trainer.browserCapture.status`: JSON payload for the Settings card.
- */
 export async function browserCaptureStatusCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
@@ -316,13 +467,6 @@ export async function browserCaptureStatusCommand(
   return { ok: true, data: status, message: '' };
 }
 
-/**
- * `trainer.browserCapture.openExtensionsPage`: open the correct native
- * extensions page in a detected Chromium browser. Branded browsers do not
- * allow silent unpacked installs, so this removes the URL-typing and
- * browser-choosing steps while keeping the user in control of the actual
- * "Load unpacked" confirmation.
- */
 export async function openBrowserExtensionsPageCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
@@ -333,26 +477,18 @@ export async function openBrowserExtensionsPageCommand(
     return { ok: false, message: copy('noChromiumBrowserFound') };
   }
 
-  let browser: ChromiumBrowser = browsers[0];
-  if (browsers.length > 1) {
-    const picked = await vscode.window.showQuickPick(
-      browsers.map((candidate) => ({
-        label: candidate.label,
-        description: candidate.extensionsUrl,
-        browser: candidate,
-      })),
-      { placeHolder: copy('openExtensionsPage') },
-    );
-    if (!picked) {
-      return { ok: true, cancelled: true };
-    }
-    browser = picked.browser;
+  const selected = await pickDetectedBrowser(browsers, copy('openExtensionsPage'));
+  if (!selected) {
+    return { ok: false, message: copy('noChromiumBrowserFound') };
+  }
+  if (selected === 'cancelled') {
+    return { ok: true, cancelled: true };
   }
 
-  const opened = openBrowserExtensionsPage(browser);
+  const opened = openBrowserExtensionsPage(selected);
   if (!opened.spawned) {
     const message = copy('browserOpenFailed', {
-      browser: browser.label,
+      browser: selected.label,
       reason: `${opened.command} ${opened.args.join(' ')}`,
     });
     context.outputChannel.appendLine(`[browser-capture] ${message}`);
@@ -360,21 +496,15 @@ export async function openBrowserExtensionsPageCommand(
     return { ok: false, message };
   }
   context.outputChannel.appendLine(
-    `[browser-capture] opened ${browser.label} extensions page (${browser.extensionsUrl})`,
+    `[browser-capture] opened ${selected.label} extensions page (${selected.extensionsUrl})`,
   );
   return {
     ok: true,
-    message: `${browser.label} · ${browser.extensionsUrl}`,
-    data: { browserId: browser.id, extensionsUrl: browser.extensionsUrl },
+    message: `${selected.label} · ${selected.extensionsUrl}`,
+    data: { browserId: selected.id, extensionsUrl: selected.extensionsUrl },
   };
 }
 
-/**
- * `trainer.browserCapture.pairingCode`: mint a 6-digit, 10-minute, single-use
- * code, register it with the sidecar (`POST /browser/pair-code`) and show it on
- * an information bar with a copy action. The browser redeems it itself via
- * `POST /browser/pair {code}`.
- */
 export async function browserCapturePairingCodeCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {
@@ -418,10 +548,6 @@ export async function browserCapturePairingCodeCommand(
   };
 }
 
-/**
- * `trainer.browserCapture.revokePairing`: `DELETE /browser/pair`, then drop the
- * local ledger entry so the host stops offering the revoked code.
- */
 export async function revokeBrowserCapturePairingCommand(
   context: CommandContext,
 ): Promise<CommandExecutionResult> {

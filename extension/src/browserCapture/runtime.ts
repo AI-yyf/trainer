@@ -11,6 +11,10 @@ import {
   DraftReceiptChannel,
   type PendingBrowserDraft,
 } from './draftPoller';
+import {
+  BrowserWorkspaceEventStream,
+  type OpenWorkspaceEventStreamFn,
+} from './eventStream';
 import { resolveBrowserCaptureCopyLanguage } from './hostCopy';
 import { BrowserLibraryPoller } from './libraryPoller';
 import {
@@ -19,38 +23,22 @@ import {
   type TrainerLibraryDeepLink,
 } from './deepLink';
 
-/**
- * One long-lived browser-capture runtime per extension host: the pairing
- * ledger, the draft poller and the deep-link entry all share the same sidecar
- * client and workbench facade.
- */
-
 export interface BrowserCaptureWorkbench extends Pick<WorkbenchHost, 'show' | 'postMessage'> {
   isVisible?: () => boolean;
 }
 
 export interface BrowserCaptureRuntimeDeps {
-  sidecarClient: Pick<SidecarHttpClient, 'getJson' | 'postJson' | 'deleteJson'>;
-  /** Sidecar lifecycle without side effects: polling must never start it. */
+  sidecarClient: Pick<SidecarHttpClient, 'getJson' | 'postJson' | 'deleteJson'> & {
+    openEventStream?: OpenWorkspaceEventStreamFn;
+  };
   getSidecarStatus: () => Pick<SidecarStatus, 'lifecycle' | 'port'>;
-  /** User-initiated commands (pairing/revoke) may start the sidecar. */
   ensureSidecarPort: () => Promise<number>;
-  /**
-   * The runtime workspace id: pairing binds it and the draft queue is polled
-   * and acknowledged strictly scoped to it.
-   */
   getWorkspaceId: () => string;
   workbench: BrowserCaptureWorkbench;
   outputChannel: Pick<vscode.OutputChannel, 'appendLine'>;
-  /** Overrides the VS Code UI locale used for host-side copy (test seam). */
   hostLanguage?: string;
   intervalMs?: number;
-  /** How long a forwarded draft waits for its applied receipt (test seam). */
   receiptTimeoutMs?: number;
-  /**
-   * Fetch a fresh /memory/summary and push it to the workbench. The library
-   * poller calls this only when the sidecar's resource-id set changes.
-   */
   refreshLibrary?: () => Promise<void>;
 }
 
@@ -58,10 +46,7 @@ export interface BrowserCaptureRuntime {
   pairing: BrowserPairingSession;
   drafts: BrowserDraftPoller;
   library: BrowserLibraryPoller;
-  /**
-   * Applied receipt for `ui/coachDraftPrefill` (from the workbench webview):
-   * resolves the delivery wait of the draft with this id.
-   */
+  events: BrowserWorkspaceEventStream;
   notifyDraftApplied(draftId: string): void;
   uriHandler: vscode.UriHandler;
   handleDeepLink(uri: { path?: string; query?: string; toString(): string }): Promise<{
@@ -71,14 +56,9 @@ export interface BrowserCaptureRuntime {
   dispose(): void;
 }
 
-/** Sidecar-backed pairing transport shared by the runtime and command fallback. */
 export function createSidecarPairingTransport(deps: {
   sidecarClient: Pick<SidecarHttpClient, 'postJson' | 'deleteJson'>;
   ensureSidecarPort: () => Promise<number>;
-  /**
-   * Binds the pairing code to the workspace the host is working in, so the
-   * credential (and every capture it makes) belongs to exactly that workspace.
-   */
   workspaceId?: () => string;
 }): BrowserPairingTransport {
   return {
@@ -97,7 +77,6 @@ export function createSidecarPairingTransport(deps: {
   };
 }
 
-/** VS Code UI locale, when the extension host exposes one. */
 function readVscodeUiLanguage(): string | undefined {
   try {
     const language = vscode.env?.language;
@@ -123,14 +102,20 @@ export function createBrowserCaptureRuntime(
   const pairing = new BrowserPairingSession({ transport });
   const receipts = new DraftReceiptChannel();
   const receiptTimeoutMs = deps.receiptTimeoutMs ?? BROWSER_CAPTURE.draftReceiptTimeoutMs;
+  const resolveReadyPort = (): number | undefined => {
+    const status = deps.getSidecarStatus();
+    return status.lifecycle === 'ready' ? status.port : undefined;
+  };
+  const isWorkbenchVisible = (): boolean => deps.workbench.isVisible?.() === true;
+
+  let eventsRef: BrowserWorkspaceEventStream | undefined;
+
   const drafts = new BrowserDraftPoller({
     intervalMs: deps.intervalMs,
     getWorkspaceId: () => deps.getWorkspaceId(),
-    getSidecarPort: () => {
-      const status = deps.getSidecarStatus();
-      return status.lifecycle === 'ready' ? status.port : undefined;
-    },
-    isWorkbenchVisible: () => deps.workbench.isVisible?.() === true,
+    getSidecarPort: resolveReadyPort,
+    isWorkbenchVisible,
+    shouldSkipTimerPoll: () => eventsRef?.connected === true,
     fetchPendingDrafts: (port, workspaceId) =>
       sidecarClient.getJson(
         port,
@@ -142,9 +127,6 @@ export function createBrowserCaptureRuntime(
         ids,
       }),
     forwardDraft: async (draft: PendingBrowserDraft) => {
-      // Register the receipt wait before posting: a retried draft (posted
-      // again after a lost receipt) may be answered before postMessage even
-      // returns, and that answer still confirms this delivery.
       const receipt = receipts.waitForReceipt(draft.id, receiptTimeoutMs);
       await workbench.postMessage({
         type: COACH_DRAFT_PREFILL_MESSAGE,
@@ -161,12 +143,10 @@ export function createBrowserCaptureRuntime(
   });
 
   const library = new BrowserLibraryPoller({
-    getSidecarPort: () => {
-      const status = deps.getSidecarStatus();
-      return status.lifecycle === 'ready' ? status.port : undefined;
-    },
-    isWorkbenchVisible: () => deps.workbench.isVisible?.() === true,
+    getSidecarPort: resolveReadyPort,
+    isWorkbenchVisible,
     getWorkspaceId: () => deps.getWorkspaceId(),
+    shouldSkipTimerPoll: () => eventsRef?.connected === true,
     fetchLibraryRevision: (port, workspaceId) =>
       sidecarClient.getJson(
         port,
@@ -181,6 +161,23 @@ export function createBrowserCaptureRuntime(
     onError: (message) => log(`library refresh skipped: ${message}`),
   });
 
+  const events = new BrowserWorkspaceEventStream({
+    openEventStream: sidecarClient.openEventStream
+      ? (port, path, options) => sidecarClient.openEventStream!(port, path, options)
+      : undefined,
+    getSidecarPort: resolveReadyPort,
+    isWorkbenchVisible,
+    getWorkspaceId: () => deps.getWorkspaceId(),
+    onDraftsPayload: async (payload) => {
+      await drafts.pushDraftsPayload(payload);
+    },
+    onLibraryPayload: async (payload) => {
+      await library.pushLibraryPayload(payload);
+    },
+    onError: (message) => log(`event stream reconnecting: ${message}`),
+  });
+  eventsRef = events;
+
   const deepLinkWorkbench = {
     show: () => workbench.show(),
     postMessage: (message: unknown) => workbench.postMessage(message),
@@ -192,11 +189,13 @@ export function createBrowserCaptureRuntime(
     pairing,
     drafts,
     library,
+    events,
     notifyDraftApplied: (draftId: string) => receipts.notify(draftId),
     uriHandler,
     handleDeepLink: (uri) =>
       handleTrainerDeepLink({ workbench: deepLinkWorkbench, outputChannel, language }, uri),
     dispose: () => {
+      events.dispose();
       drafts.dispose();
       library.dispose();
     },

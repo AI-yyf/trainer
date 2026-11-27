@@ -34,12 +34,15 @@ polling for gets an error, never another project's captures.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import json
 import logging
 import secrets
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential, BrowserPairingError
@@ -465,20 +468,7 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             workspace_id=workspace_id or None,
         )
 
-    @router.get("/browser/library-revision")
-    def library_revision(
-        workspace_id: str | None = None,
-        session_id: str | None = None,
-    ) -> dict[str, object]:
-        """Host poll: a cheap fingerprint of the workspace library.
-
-        Browser captures land in the sidecar without a coaching turn, so the
-        host has no event to react to. Polling the resource-id set is cheap and
-        lets the host fetch /memory/summary only when the library actually
-        changed; the webview then receives one fresh snapshot.
-        """
-
-        scope = host_workspace_scope(workspace_id, session_id)
+    def compute_library_revision(scope: str, requested_workspace_id: str) -> dict[str, object]:
         resources = runtime.repository.list_resources(scope)
         resource_ids = sorted({str(resource.id) for resource in resources})
         revision = (
@@ -488,17 +478,27 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         )
         return {
             "workspace_id": scope,
-            "requested_workspace_id": str(workspace_id or "").strip(),
+            "requested_workspace_id": requested_workspace_id,
             "count": len(resource_ids),
             "revision": revision,
         }
+
+    @router.get("/browser/library-revision")
+    def library_revision(
+        workspace_id: str | None = None,
+        session_id: str | None = None,
+    ) -> dict[str, object]:
+        """Host fingerprint of the workspace library."""
+
+        scope = host_workspace_scope(workspace_id, session_id)
+        return compute_library_revision(scope, str(workspace_id or "").strip())
 
     @router.get("/browser/pending-drafts")
     def list_pending_drafts(
         workspace_id: str | None = None,
         session_id: str | None = None,
     ) -> dict[str, object]:
-        """Host poll: only the drafts captured for the polling workspace."""
+        """Host read: only the drafts captured for the polling workspace."""
 
         scope = host_workspace_scope(workspace_id, session_id)
         return {"workspace_id": scope, "drafts": _browser_bridge(runtime).pending_drafts(scope)}
@@ -516,6 +516,91 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         ids = [str(item) for item in raw_ids] if isinstance(raw_ids, list) else []
         removed = _browser_bridge(runtime).ack_drafts(scope, ids)
         return {"ok": True, "workspace_id": scope, "removed": removed}
+
+    @router.get("/browser/events/stream")
+    async def browser_events_stream(
+        request: Request,
+        workspace_id: str | None = None,
+        session_id: str | None = None,
+        once: bool = False,
+        max_events: int | None = None,
+    ) -> StreamingResponse:
+        """Real-time host SSE push for queued drafts, library captures and pairing changes."""
+
+        if not _loopback_request(request):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "loopback_only",
+                    "message": "Workspace event streaming is only available on the local machine.",
+                },
+            )
+        requested = str(workspace_id or "").strip()
+        scope = host_workspace_scope(workspace_id, session_id)
+        bridge = _browser_bridge(runtime)
+
+        def matches_workspace(raw_event_workspace: str) -> bool:
+            candidate = str(raw_event_workspace or "").strip()
+            if not candidate:
+                return False
+            if candidate == "*" or candidate in {scope, requested}:
+                return True
+            try:
+                return current_workspace_id(workspace_id=candidate) == scope
+            except HTTPException:
+                return False
+
+        async def event_generator():
+            loop = asyncio.get_running_loop()
+            with bridge.subscribe_events(loop) as queue:
+                snapshot_payload = {
+                    "type": "snapshot",
+                    "workspace_id": scope,
+                    "requested_workspace_id": requested,
+                    "drafts": bridge.pending_drafts(scope),
+                    "library": compute_library_revision(scope, requested),
+                    "paired_credentials": bridge.credential_count(),
+                }
+                yield f"event: snapshot\ndata: {json.dumps(snapshot_payload, ensure_ascii=False)}\n\n"
+                if once:
+                    return
+                emitted = 0
+                event_limit = max_events if isinstance(max_events, int) and max_events > 0 else None
+                while event_limit is None or emitted < event_limit:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=20.0)
+                    except TimeoutError:
+                        if await request.is_disconnected():
+                            break
+                        yield ": keepalive\n\n"
+                        continue
+                    if not matches_workspace(str(event.get("workspace_id") or "")):
+                        continue
+                    raw_seq = event.get("seq")
+                    frame_payload = {
+                        "type": "workspace_event",
+                        "kind": str(event.get("kind") or "updated"),
+                        "seq": raw_seq if isinstance(raw_seq, int) else 0,
+                        "workspace_id": scope,
+                        "requested_workspace_id": requested,
+                        "drafts": bridge.pending_drafts(scope),
+                        "library": compute_library_revision(scope, requested),
+                        "paired_credentials": bridge.credential_count(),
+                    }
+                    yield f"event: workspace_event\ndata: {json.dumps(frame_payload, ensure_ascii=False)}\n\n"
+                    emitted += 1
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return router
 

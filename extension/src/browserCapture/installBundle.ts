@@ -22,10 +22,39 @@ export interface CaptureBundleMarker {
   fileCount?: number;
 }
 
+export interface BootstrapPairSeed {
+  schemaVersion: 1;
+  code: string;
+  baseUrl: string;
+  workspaceId: string;
+  workspaceName?: string;
+  issuedAt: number;
+  expiresAt: number;
+}
+
 const BUNDLE_JUNK_PATTERNS = [/^\.DS_Store$/, /^\._/, /\.map$/, /\.zip$/, /\.tmp$/, /~$/];
 
 export function resolveInstalledCaptureDir(homeDir: string): string {
   return path.join(homeDir, BROWSER_CAPTURE.installedRelativeDir);
+}
+
+export function resolveManagedBrowserProfileDir({
+  homeDir = os.homedir(),
+  env = process.env,
+}: {
+  homeDir?: string;
+  env?: NodeJS.ProcessEnv;
+} = {}): string {
+  const configured = String(env.TRAINER_BROWSER_PROFILE_DIR ?? '').trim();
+  if (!configured) {
+    return path.join(homeDir, BROWSER_CAPTURE.browserProfileRelativeDir);
+  }
+  if (!path.isAbsolute(configured)) {
+    throw new Error(
+      'TRAINER_BROWSER_PROFILE_DIR must be an absolute directory so the managed browser profile cannot land in an ambiguous location.',
+    );
+  }
+  return path.resolve(configured);
 }
 
 /**
@@ -208,4 +237,50 @@ export function captureInstallGuide(steps: {
     browserCaptureHostCopy(language, 'installStepLoadUnpacked', { dir: steps.targetDir }),
     browserCaptureHostCopy(language, 'installStepPair'),
   ].join('\n');
+}
+
+
+/**
+ * Write a pre-seeded single-use handshake file (`bootstrap-pair.json`) into
+ * the managed runtime unpack directory (`~/.trainer/browser-capture`).
+ * Never called on repository source trees.
+ */
+export function writeBootstrapPairSeed(targetDir: string, seed: BootstrapPairSeed): string {
+  fs.mkdirSync(targetDir, { recursive: true });
+  const seedPath = path.join(targetDir, BROWSER_CAPTURE.bootstrapPairFileName);
+  const serialized = `${JSON.stringify(seed, null, 2)}\n`;
+  fs.writeFileSync(seedPath, serialized, { encoding: 'utf8', mode: 0o600 });
+  return seedPath;
+}
+
+export function readBootstrapPairSeedFile(targetDir: string): BootstrapPairSeed | undefined {
+  const seedPath = path.join(targetDir, BROWSER_CAPTURE.bootstrapPairFileName);
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const record = parsed as Record<string, unknown>;
+    const code = typeof record.code === 'string' ? record.code.trim() : '';
+    const baseUrl = typeof record.baseUrl === 'string' ? record.baseUrl.trim() : '';
+    const workspaceId = typeof record.workspaceId === 'string' ? record.workspaceId.trim() : '';
+    const issuedAt = Number(record.issuedAt ?? 0);
+    const expiresAt = Number(record.expiresAt ?? 0);
+    if (!code || !baseUrl || !Number.isFinite(expiresAt) || expiresAt <= 0) {
+      return undefined;
+    }
+    return {
+      schemaVersion: 1,
+      code,
+      baseUrl,
+      workspaceId,
+      ...(typeof record.workspaceName === 'string' && record.workspaceName.trim()
+        ? { workspaceName: record.workspaceName.trim() }
+        : {}),
+      issuedAt: Number.isFinite(issuedAt) ? issuedAt : 0,
+      expiresAt,
+    };
+  } catch {
+    return undefined;
+  }
 }

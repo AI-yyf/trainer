@@ -101,6 +101,7 @@ import {
 import { restartSidecarCommand, stopSidecarCommand } from './sidecarCommands';
 import {
   browserCapturePairingCodeCommand,
+  launchBrowserCaptureCommand,
   installBrowserCaptureCommand,
   installBrowserCaptureForBrowserCommand,
   maybePromptCaptureOnboarding,
@@ -504,6 +505,7 @@ export function buildCommandRegistrations(context: CommandContext): CommandRegis
     { commandId: COMMAND_IDS.getResearchStatus, register: getResearchStatusHandler(httpClient, getState) },
     // Browser capture lane: VSIX-bundled extension install, pairing code
     // issuance, and revocation of the browser-side credential.
+    { commandId: COMMAND_IDS.browserCaptureLaunch, register: (ctx, payload) => launchBrowserCaptureCommand(ctx, payload) },
     { commandId: COMMAND_IDS.browserCaptureInstall, register: (ctx) => installBrowserCaptureCommand(ctx) },
     { commandId: COMMAND_IDS.browserCaptureInstallForBrowser, register: (ctx) => installBrowserCaptureForBrowserCommand(ctx) },
     {

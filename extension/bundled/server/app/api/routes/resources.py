@@ -167,6 +167,11 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
         inline_resource_root_resolver=runtime.resource_service._inline_resource_root,
     )
 
+    def notify_browser_library_changed(workspace_id: str, resource_id: str = "") -> None:
+        service = getattr(runtime, "browser_bridge", None)
+        if isinstance(service, BrowserBridgeService):
+            service.notify_library_changed(workspace_id, resource_id=resource_id)
+
     def library_language(workspace_id: str, text: str | None = None) -> str | None:
         """The workspace's effective response language for library copy."""
 
@@ -970,6 +975,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
         # Event-driven library organizer: one debounced local sweep for this
         # arrival — never a recurring timer.
         runtime.request_organizer_sweep()
+        notify_browser_library_changed(workspace_id, record.id)
         return record
 
     @router.post("/resource/digest")
@@ -1821,6 +1827,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
                 },
             )
         refresh_workspace_sessions(workspace_id)
+        notify_browser_library_changed(workspace_id, indexed.id)
         return _capture_response(
             indexed,
             deduped=False,
@@ -1963,6 +1970,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         refresh_workspace_sessions(workspace_id)
+        notify_browser_library_changed(workspace_id, organized.id)
         return organized
 
     @router.get("/resource/export")
@@ -2086,6 +2094,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
                 )
 
         refresh_workspace_sessions(workspace_id)
+        notify_browser_library_changed(workspace_id, resource_id)
         return deletion
 
     @router.post("/resource/organization/cancel")
@@ -2143,6 +2152,7 @@ def build_resources_router(runtime: TrainerRuntime, deps: RouterDeps) -> tuple[A
                 workspace_id,
                 exc_info=True,
             )
+        notify_browser_library_changed(workspace_id, resource_id)
         return restoration
 
     @router.get("/generated-images/{image_id}")

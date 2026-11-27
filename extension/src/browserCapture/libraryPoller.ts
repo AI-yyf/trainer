@@ -1,39 +1,28 @@
 import { BROWSER_CAPTURE } from '../core/constants';
 
 /**
- * Library freshness poller for browser captures.
+ * Library freshness subscriber for browser captures.
  *
- * A capture writes to the sidecar without starting a coaching turn, so the
- * workbench snapshot the webview already holds does not know about it. While a
- * workbench surface is visible, poll a cheap library fingerprint and fetch a
- * fresh /memory/summary only when the resource-id set changes. The first
- * visible read refreshes too, so a capture made while the workbench was hidden
- * is never swallowed; subsequent unchanged reads are no-ops.
- *
- * The poller is workspace-scoped end to end: a response stamped with another
- * workspace is reported and ignored, never merged into this workbench.
+ * Primary transport is the real-time SSE workspace event stream (`eventStream.ts`
+ * calling `pushLibraryPayload`); the interval timer remains only as an offline /
+ * fallback safety net and skips every tick while SSE is actively connected.
  */
 
 export interface BrowserLibraryRevision {
-  /** Resolved workspace/context id returned by the sidecar. */
   workspaceId: string;
-  /** Raw workspace id the host asked for (survives path -> context alias). */
   requestedWorkspaceId: string;
   count: number;
   revision: string;
 }
 
 export interface BrowserLibraryPollerOptions {
-  /** Resolves the sidecar port, or undefined when the sidecar is not running. */
   getSidecarPort: () => number | undefined;
-  /** True while the sidebar or editor workbench surface is visible. */
   isWorkbenchVisible: () => boolean;
-  /** Runtime workspace id this poller may read the library for. */
   getWorkspaceId: () => string;
-  /** GET /browser/library-revision?workspace_id=... */
   fetchLibraryRevision: (port: number, workspaceId: string) => Promise<unknown>;
-  /** Fetch a fresh snapshot and push it to the workbench. */
   refreshLibrary: (revision: BrowserLibraryRevision) => Promise<void>;
+  /** When true (e.g. live SSE stream is active), periodic timer ticks stay silent. */
+  shouldSkipTimerPoll?: () => boolean;
   intervalMs?: number;
   onError?: (message: string) => void;
   setIntervalFn?: (handler: () => void, intervalMs: number) => ReturnType<typeof setInterval>;
@@ -82,6 +71,7 @@ export class BrowserLibraryPoller {
   private timer?: ReturnType<typeof setInterval>;
   private inFlight = false;
   private disposed = false;
+  private queuedPush?: { hasPayload: true; payload: unknown };
   private hasBaseline = false;
   private lastRevision = '';
   private consecutiveFailures = 0;
@@ -103,6 +93,9 @@ export class BrowserLibraryPoller {
     }
     const schedule = this.options.setIntervalFn ?? setInterval;
     this.timer = schedule(() => {
+      if (this.options.shouldSkipTimerPoll?.() === true) {
+        return;
+      }
       void this.pollOnce();
     }, this.intervalMs);
     this.timer.unref?.();
@@ -119,17 +112,34 @@ export class BrowserLibraryPoller {
 
   dispose(): void {
     this.disposed = true;
+    this.queuedPush = undefined;
     this.stop();
   }
 
   /**
-   * One poll pass. Safe to call directly (tests do); overlapping ticks are
-   * dropped rather than queued so a slow summary cannot pile up requests.
+   * Apply a library revision pushed directly from the sidecar's SSE stream,
+   * refreshing `/memory/summary` only when the resource-id revision changed.
    */
+  async pushLibraryPayload(payload: unknown): Promise<BrowserLibraryPollResult> {
+    if (this.disposed) {
+      return { state: 'idle' };
+    }
+    if (this.inFlight) {
+      this.queuedPush = { hasPayload: true, payload };
+      return { state: 'idle' };
+    }
+    return this.runPass({ pushedPayload: payload });
+  }
+
   async pollOnce(): Promise<BrowserLibraryPollResult> {
     if (this.disposed || this.inFlight) {
       return { state: 'idle' };
     }
+    return this.runPass();
+  }
+
+  private async runPass(input?: { pushedPayload?: unknown }): Promise<BrowserLibraryPollResult> {
+    const isPush = input !== undefined && Object.prototype.hasOwnProperty.call(input, 'pushedPayload');
     if (!this.options.isWorkbenchVisible()) {
       return { state: 'hidden' };
     }
@@ -141,58 +151,29 @@ export class BrowserLibraryPoller {
     if (port === undefined) {
       return { state: 'no-sidecar' };
     }
-    if (Date.now() < this.backoffUntil) {
+    if (!isPush && Date.now() < this.backoffUntil) {
       return { state: 'idle' };
     }
 
     this.inFlight = true;
     try {
-      const revision = parseBrowserLibraryRevision(
-        await this.options.fetchLibraryRevision(port, workspaceId),
-      );
-      if (!revision.workspaceId) {
-        this.enterBackoff();
-        this.reportError('library revision response has no workspace stamp');
-        return { state: 'error', error: 'missing workspace stamp' };
+      const rawPayload = isPush
+        ? input.pushedPayload
+        : await this.options.fetchLibraryRevision(port, workspaceId);
+      const result = await this.applyRevisionPayload(workspaceId, rawPayload);
+      while (!this.disposed && this.queuedPush?.hasPayload) {
+        const next = this.queuedPush.payload;
+        this.queuedPush = undefined;
+        if (!this.options.isWorkbenchVisible()) {
+          break;
+        }
+        const latestWorkspace = this.options.getWorkspaceId().trim();
+        if (!latestWorkspace) {
+          break;
+        }
+        await this.applyRevisionPayload(latestWorkspace, next);
       }
-      const stampedWorkspace = revision.requestedWorkspaceId || revision.workspaceId;
-      if (stampedWorkspace !== workspaceId) {
-        this.reportError(
-          `library revision belongs to ${stampedWorkspace}, not ${workspaceId}`,
-        );
-        return {
-          state: 'unscoped',
-          workspaceId: revision.workspaceId,
-          count: revision.count,
-          revision: revision.revision,
-        };
-      }
-
-      // The first visible poll refreshes too: a capture may have landed while
-      // the workbench was hidden, and baselining that revision would swallow
-      // it. Only commit the revision after the refresh succeeds, so a failed
-      // summary is retried on the next tick instead of being lost.
-      const changed = !this.hasBaseline || revision.revision !== this.lastRevision;
-      if (!changed) {
-        this.resetBackoff();
-        return {
-          state: 'unchanged',
-          workspaceId,
-          count: revision.count,
-          revision: revision.revision,
-        };
-      }
-
-      await this.options.refreshLibrary(revision);
-      this.hasBaseline = true;
-      this.lastRevision = revision.revision;
-      this.resetBackoff();
-      return {
-        state: 'changed',
-        workspaceId,
-        count: revision.count,
-        revision: revision.revision,
-      };
+      return result;
     } catch (error) {
       this.enterBackoff();
       this.reportError(error);
@@ -203,6 +184,52 @@ export class BrowserLibraryPoller {
     } finally {
       this.inFlight = false;
     }
+  }
+
+  private async applyRevisionPayload(
+    workspaceId: string,
+    rawPayload: unknown,
+  ): Promise<BrowserLibraryPollResult> {
+    const revision = parseBrowserLibraryRevision(rawPayload);
+    if (!revision.workspaceId) {
+      this.enterBackoff();
+      this.reportError('library revision response has no workspace stamp');
+      return { state: 'error', error: 'missing workspace stamp' };
+    }
+    const stampedWorkspace = revision.requestedWorkspaceId || revision.workspaceId;
+    if (stampedWorkspace !== workspaceId) {
+      this.reportError(
+        `library revision belongs to ${stampedWorkspace}, not ${workspaceId}`,
+      );
+      return {
+        state: 'unscoped',
+        workspaceId: revision.workspaceId,
+        count: revision.count,
+        revision: revision.revision,
+      };
+    }
+
+    const changed = !this.hasBaseline || revision.revision !== this.lastRevision;
+    if (!changed) {
+      this.resetBackoff();
+      return {
+        state: 'unchanged',
+        workspaceId,
+        count: revision.count,
+        revision: revision.revision,
+      };
+    }
+
+    await this.options.refreshLibrary(revision);
+    this.hasBaseline = true;
+    this.lastRevision = revision.revision;
+    this.resetBackoff();
+    return {
+      state: 'changed',
+      workspaceId,
+      count: revision.count,
+      revision: revision.revision,
+    };
   }
 
   private enterBackoff(): void {

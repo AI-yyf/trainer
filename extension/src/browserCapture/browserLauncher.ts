@@ -243,3 +243,67 @@ export function openBrowserExtensionsPage(
     return { ...launch, spawned: false };
   }
 }
+
+
+export interface LaunchBrowserWithExtensionOptions {
+  extensionDir: string;
+  profileDir: string;
+  initialUrl?: string;
+}
+
+/**
+ * Build the cross-platform process command to launch an isolated Trainer
+ * browser profile with the unpacked Trainer extension pre-loaded via
+ * `--load-extension` and `--disable-extensions-except`.
+ *
+ * On macOS `open -n -a <App> --args ...` spawns a dedicated instance bound to
+ * `profileDir` even when the user's primary browser profile is already running.
+ */
+export function resolveBrowserWithExtensionLaunch(
+  browser: ChromiumBrowser,
+  options: LaunchBrowserWithExtensionOptions,
+): { command: string; args: string[] } {
+  const chromiumArgs = [
+    `--user-data-dir=${options.profileDir}`,
+    `--disable-extensions-except=${options.extensionDir}`,
+    `--load-extension=${options.extensionDir}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+  ];
+  const initialUrl = String(options.initialUrl ?? '').trim();
+  if (initialUrl) {
+    chromiumArgs.push(initialUrl);
+  }
+  if (browser.launchKind === 'mac-app') {
+    return {
+      command: 'open',
+      args: ['-n', '-a', browser.launchTarget, '--args', ...chromiumArgs],
+    };
+  }
+  return {
+    command: browser.launchTarget,
+    args: chromiumArgs,
+  };
+}
+
+export function launchBrowserWithExtension(
+  browser: ChromiumBrowser,
+  options: LaunchBrowserWithExtensionOptions,
+  {
+    spawnFn = spawn,
+    mkdirSyncFn = fs.mkdirSync,
+  }: {
+    spawnFn?: typeof spawn;
+    mkdirSyncFn?: typeof fs.mkdirSync;
+  } = {},
+): { command: string; args: string[]; profileDir: string; spawned: boolean } {
+  const launch = resolveBrowserWithExtensionLaunch(browser, options);
+  try {
+    mkdirSyncFn(options.profileDir, { recursive: true });
+    const child = spawnFn(launch.command, launch.args, { detached: true, stdio: 'ignore' });
+    child.unref?.();
+    return { ...launch, profileDir: options.profileDir, spawned: true };
+  } catch {
+    return { ...launch, profileDir: options.profileDir, spawned: false };
+  }
+}

@@ -445,6 +445,7 @@ export async function activate(
   };
   workbench.setDraftPrefillReceiptHandler(handleDraftPrefillReceipt);
   editorPanel.setDraftPrefillReceiptHandler(handleDraftPrefillReceipt);
+  browserCapture.events.start();
   browserCapture.drafts.start();
   browserCapture.library.start();
   extensionContext.subscriptions.push(
@@ -460,6 +461,7 @@ export async function activate(
     // Visibility/refresh must never re-initialize the runtime: the Trainer
     // Engine keeps session, memory, and the provider session alive behind the
     // panel. A refresh only re-derives host state and pushes a patch.
+    browserCapture.events.wake();
     await syncExtensionState(commandContext);
   });
 
@@ -481,6 +483,7 @@ export async function activate(
       void syncExtensionState(commandContext);
     }),
     sidecarManager.onDidChangeStatus((status) => {
+      browserCapture.events.wake();
       if (status.lifecycle === 'ready') {
         void rehydrateWorkbenchRuntime(commandContext, {
           ensureSidecar: false,
@@ -574,6 +577,7 @@ export async function activate(
         ),
       };
       syncProviderLastTestScope();
+      browserCapture.events.wake();
 
       void (async () => {
         await persistWorkspaceSessionId(

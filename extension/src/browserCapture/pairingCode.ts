@@ -18,6 +18,7 @@ import { BROWSER_CAPTURE } from '../core/constants';
  */
 
 export const PAIRING_CODE_LENGTH = 6;
+export const BOOTSTRAP_PAIR_PREFIX = 'trbp-';
 
 export type BrowserPairingState = 'idle' | 'active' | 'expired' | 'consumed' | 'revoked';
 
@@ -54,8 +55,22 @@ export function generatePairingCode(randomBytes: (size: number) => Buffer = cryp
   return String(randomBytes(4).readUInt32BE(0) % ceiling).padStart(PAIRING_CODE_LENGTH, '0');
 }
 
+export function generateBootstrapPairToken(
+  randomBytes: (size: number) => Buffer = crypto.randomBytes,
+): string {
+  return `${BOOTSTRAP_PAIR_PREFIX}${randomBytes(16).toString('hex')}`;
+}
+
 export function isPairingCodeShape(code: string | undefined): boolean {
   return typeof code === 'string' && /^[0-9]{6}$/.test(code);
+}
+
+export function isBootstrapPairTokenShape(token: string | undefined): boolean {
+  return typeof token === 'string' && /^trbp-[0-9a-f]{24,64}$/.test(token);
+}
+
+export function isPairingSecretShape(secret: string | undefined): boolean {
+  return isPairingCodeShape(secret) || isBootstrapPairTokenShape(secret);
 }
 
 interface PairingLedgerEntry {
@@ -67,6 +82,7 @@ export interface BrowserPairingSessionOptions {
   transport: BrowserPairingTransport;
   now?: () => number;
   generateCode?: () => string;
+  generateBootstrapToken?: () => string;
   ttlMs?: number;
 }
 
@@ -74,6 +90,7 @@ export class BrowserPairingSession {
   private readonly transport: BrowserPairingTransport;
   private readonly now: () => number;
   private readonly generateCode: () => string;
+  private readonly generateBootstrapToken: () => string;
   private readonly ttlMs: number;
   private entry?: PairingLedgerEntry;
   private consumedAt?: number;
@@ -83,6 +100,8 @@ export class BrowserPairingSession {
     this.transport = options.transport;
     this.now = options.now ?? (() => Date.now());
     this.generateCode = options.generateCode ?? (() => generatePairingCode());
+    this.generateBootstrapToken =
+      options.generateBootstrapToken ?? (() => generateBootstrapPairToken());
     this.ttlMs = options.ttlMs ?? BROWSER_CAPTURE.pairingCodeTtlMs;
   }
 
@@ -106,7 +125,7 @@ export class BrowserPairingSession {
 
   /** Single-use check: a code is valid exactly once, before its expiry. */
   isCodeActive(code: string | undefined, at: number = this.now()): boolean {
-    return isPairingCodeShape(code) && this.state(at) === 'active' && this.entry?.code === code;
+    return isPairingSecretShape(code) && this.state(at) === 'active' && this.entry?.code === code;
   }
 
   /**
@@ -130,6 +149,18 @@ export class BrowserPairingSession {
    * forgets in-memory codes.
    */
   async issuePairingCode(): Promise<BrowserPairingIssue> {
+    return this.issueWithGenerator(this.generateCode);
+  }
+
+  /**
+   * Mint and register a high-entropy single-use bootstrap handshake token for
+   * pre-seeding into `~/.trainer/browser-capture/bootstrap-pair.json`.
+   */
+  async issueBootstrapToken(): Promise<BrowserPairingIssue> {
+    return this.issueWithGenerator(this.generateBootstrapToken);
+  }
+
+  private async issueWithGenerator(generator: () => string): Promise<BrowserPairingIssue> {
     const at = this.now();
     const previousRegistration = this.entry;
     this.entry = undefined;
@@ -139,7 +170,7 @@ export class BrowserPairingSession {
       await this.safeRevokeRegistration();
     }
 
-    const code = this.generateCode();
+    const code = generator();
     const expiresAt = at + this.ttlMs;
     await this.transport.registerPairingCode({
       code,

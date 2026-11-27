@@ -76,8 +76,11 @@
     targetDir: 'trainerCapture.targetDir',
     connection: 'trainerCapture.connection',
     statusCache: 'trainerCapture.statusCache',
-    notice: 'trainerCapture.notice'
+    notice: 'trainerCapture.notice',
+    consumedBootstrapCode: 'trainerCapture.consumedBootstrapCode'
   };
+
+  const BOOTSTRAP_PAIR_FILE = 'bootstrap-pair.json';
 
   const CAPTURE_KINDS = ['web', 'pdf', 'github_repo'];
 
@@ -165,7 +168,8 @@
       connectHeading: '连接 Trainer',
       pairCodeLabel: '配对码',
       pairCodePlaceholder: '6 位配对码',
-      pairCodeHint: '在 VS Code 打开命令面板，执行「Trainer: Show Browser Pairing Code」，把显示的 6 位码粘贴到这里。只需这一次，之后会自动连接。',
+      autoReconnectAction: '一键自动连接',
+      pairCodeHint: '在 VS Code 的 Trainer 设置中点击「一键启动适配浏览器」或「安装浏览器扩展」，即可通过预置单次握手自动连接，无需输入配对码。',
       pairAction: '配对',
       pairInvalidCode: '配对码应为 6 位数字。',
       pairCodeRejected: '配对码不正确或已过期。',
@@ -368,7 +372,8 @@
       connectHeading: 'Connect to Trainer',
       pairCodeLabel: 'Pairing code',
       pairCodePlaceholder: '6-digit code',
-      pairCodeHint: 'Open the Command Palette in VS Code and run "Trainer: Show Browser Pairing Code", then paste the 6-digit code here. You only do this once; afterwards Trainer connects on its own.',
+      autoReconnectAction: 'Connect automatically',
+      pairCodeHint: 'In VS Code Trainer Settings, click Launch Trainer Browser or Install Browser Extension to connect automatically via a pre-seeded handshake — no code needed.',
       pairAction: 'Pair',
       pairInvalidCode: 'The pairing code must be 6 digits.',
       pairCodeRejected: 'That pairing code is wrong or has expired.',
@@ -519,7 +524,8 @@
       connectHeading: 'Conectar con Trainer',
       pairCodeLabel: 'Código de emparejamiento',
       pairCodePlaceholder: 'Código de 6 dígitos',
-      pairCodeHint: 'Ejecuta «Trainer: Show Browser Pairing Code» en VS Code y pega aquí el código de 6 dígitos.',
+      autoReconnectAction: 'Conectar automáticamente',
+      pairCodeHint: 'En Ajustes de Trainer en VS Code, pulsa Abrir navegador adaptado o Instalar extensión para conectar automáticamente sin código.',
       pairAction: 'Emparejar',
       pairInvalidCode: 'El código de emparejamiento debe tener 6 dígitos.',
       pairCodeRejected: 'Ese código de emparejamiento es incorrecto o ha caducado.',
@@ -670,7 +676,8 @@
       connectHeading: 'Connexion à Trainer',
       pairCodeLabel: 'Code d’association',
       pairCodePlaceholder: 'Code à 6 chiffres',
-      pairCodeHint: 'Exécutez « Trainer: Show Browser Pairing Code » dans VS Code, puis collez le code à 6 chiffres ici.',
+      autoReconnectAction: 'Connecter automatiquement',
+      pairCodeHint: 'Dans les réglages Trainer de VS Code, cliquez sur Lancer le navigateur adapté ou Installer l’extension pour une connexion automatique sans code.',
       pairAction: 'Associer',
       pairInvalidCode: 'Le code d’association doit comporter 6 chiffres.',
       pairCodeRejected: 'Ce code d’association est incorrect ou a expiré.',
@@ -821,7 +828,8 @@
       connectHeading: 'Mit Trainer verbinden',
       pairCodeLabel: 'Kopplungscode',
       pairCodePlaceholder: '6-stelliger Code',
-      pairCodeHint: 'Führe „Trainer: Show Browser Pairing Code“ in VS Code aus und füge den 6-stelligen Code hier ein.',
+      autoReconnectAction: 'Automatisch verbinden',
+      pairCodeHint: 'Klicke in den VS-Code-Einstellungen von Trainer auf Trainer-Browser starten oder Erweiterung installieren – die Verbindung erfolgt automatisch ohne Code.',
       pairAction: 'Koppeln',
       pairInvalidCode: 'Der Kopplungscode muss aus 6 Ziffern bestehen.',
       pairCodeRejected: 'Dieser Kopplungscode ist falsch oder abgelaufen.',
@@ -972,7 +980,8 @@
       connectHeading: 'Trainer に接続',
       pairCodeLabel: 'ペアリングコード',
       pairCodePlaceholder: '6 桁のコード',
-      pairCodeHint: 'VS Code で「Trainer: Show Browser Pairing Code」を実行し、6 桁のコードをここに貼り付けてください。',
+      autoReconnectAction: '自動で接続する',
+      pairCodeHint: 'VS Code の Trainer 設定で「専用ブラウザーを起動」または「拡張機能をインストール」をクリックすると、事前ハンドシェイクによりコード不要で自動接続されます。',
       pairAction: 'ペアリング',
       pairInvalidCode: 'ペアリングコードは 6 桁の数字です。',
       pairCodeRejected: 'そのペアリングコードは正しくないか、有効期限が切れています。',
@@ -1123,7 +1132,8 @@
       connectHeading: 'Trainer 연결',
       pairCodeLabel: '페어링 코드',
       pairCodePlaceholder: '6자리 코드',
-      pairCodeHint: 'VS Code에서 "Trainer: Show Browser Pairing Code"를 실행한 뒤 6자리 코드를 여기에 붙여넣으세요.',
+      autoReconnectAction: '자동으로 연결',
+      pairCodeHint: 'VS Code의 Trainer 설정에서 전용 브라우저 실행 또는 확장 프로그램 설치를 클릭하면 사전 핸드셰이크로 코드 없이 자동 연결됩니다.',
       pairAction: '페어링',
       pairInvalidCode: '페어링 코드는 6자리 숫자여야 합니다.',
       pairCodeRejected: '페어링 코드가 잘못되었거나 만료되었습니다.',
@@ -1274,7 +1284,8 @@
       connectHeading: 'Conectar ao Trainer',
       pairCodeLabel: 'Código de emparelhamento',
       pairCodePlaceholder: 'Código de 6 dígitos',
-      pairCodeHint: 'Execute "Trainer: Show Browser Pairing Code" no VS Code e cole o código de 6 dígitos aqui.',
+      autoReconnectAction: 'Conectar automaticamente',
+      pairCodeHint: 'Nas Configurações do Trainer no VS Code, clique em Iniciar navegador adaptado ou Instalar extensão para conectar automaticamente sem código.',
       pairAction: 'Emparelhar',
       pairInvalidCode: 'O código de emparelhamento deve ter 6 dígitos.',
       pairCodeRejected: 'Esse código de emparelhamento está incorreto ou expirou.',
@@ -1823,6 +1834,42 @@
 
   function isValidPairCode(value) {
     return normalizePairCode(value).length === 6;
+  }
+
+  function isValidBootstrapToken(value) {
+    return /^trbp-[0-9a-f]{24,64}$/.test(String(value || '').trim());
+  }
+
+  function normalizePairSecret(value) {
+    const trimmed = String(value || '').trim();
+    const lowered = trimmed.toLowerCase();
+    if (isValidBootstrapToken(lowered)) {
+      return lowered;
+    }
+    return normalizePairCode(trimmed);
+  }
+
+  function parseBootstrapPairSeed(raw, nowMs) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return null;
+    }
+    const code = normalizePairSecret(raw.code);
+    if (!code) {
+      return null;
+    }
+    const baseUrl = normalizeBaseUrl(raw.baseUrl || raw.base_url || '');
+    const expiresAt = Number(raw.expiresAt !== undefined ? raw.expiresAt : raw.expires_at);
+    const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+    if (Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= now) {
+      return null;
+    }
+    return {
+      code,
+      baseUrl,
+      workspaceId: String(raw.workspaceId || raw.workspace_id || '').trim(),
+      workspaceName: String(raw.workspaceName || raw.workspace_name || '').trim(),
+      expiresAt: Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : 0
+    };
   }
 
   // ------------------------------------------------------------------ queue --
@@ -2374,7 +2421,7 @@
 
   async function pairSidecar(baseUrl, code) {
     const dict = activeCopy();
-    const normalized = normalizePairCode(code);
+    const normalized = normalizePairSecret(code);
     if (!normalized) {
       return { ok: false, reason: 'invalid_code', message: dict.pairInvalidCode };
     }
@@ -2785,6 +2832,47 @@
     await chrome.storage.local.set({ [STORAGE_KEYS.notice]: '' });
   }
 
+  async function readBootstrapPairSeed() {
+    try {
+      if (
+        typeof chrome === 'undefined' ||
+        !chrome.runtime ||
+        typeof chrome.runtime.getURL !== 'function'
+      ) {
+        return null;
+      }
+      const response = await fetch(chrome.runtime.getURL(BOOTSTRAP_PAIR_FILE), {
+        cache: 'no-store'
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const parsed = parseBootstrapPairSeed(await response.json(), Date.now());
+      if (!parsed) {
+        return null;
+      }
+      const stored = await chrome.storage.local.get({
+        [STORAGE_KEYS.consumedBootstrapCode]: ''
+      });
+      if (String(stored[STORAGE_KEYS.consumedBootstrapCode] || '').trim() === parsed.code) {
+        return null;
+      }
+      return parsed;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function markBootstrapSeedConsumed(code) {
+    const normalized = normalizePairSecret(code);
+    if (!normalized) {
+      return;
+    }
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.consumedBootstrapCode]: normalized
+    });
+  }
+
 
   global.TrainerCapture = {
     // pure
@@ -2818,8 +2906,12 @@
     createClientId,
     createClientCaptureId,
     createCoachDraftId,
+    BOOTSTRAP_PAIR_FILE,
     normalizePairCode,
     isValidPairCode,
+    isValidBootstrapToken,
+    normalizePairSecret,
+    parseBootstrapPairSeed,
     supportsDownload,
     isDownloadTarget,
     normalizeTargetDir,
@@ -2889,7 +2981,9 @@
     saveStatusCache,
     loadNotice,
     saveNotice,
-    clearNotice
+    clearNotice,
+    readBootstrapPairSeed,
+    markBootstrapSeedConsumed
   };
 })(typeof self !== 'undefined' ? self : globalThis);
 

@@ -203,6 +203,154 @@ export class SidecarHttpClient {
     });
   }
 
+  /**
+   * Open a long-lived GET Server-Sent Events stream (such as `/browser/events/stream`).
+   * Unlike `fetchSSE` (which bounds a single POST turn), `connectTimeoutMs` only bounds
+   * the initial response header handshake; once connected, the stream stays open until
+   * `signal` aborts or the sidecar closes the socket.
+   */
+  async *openEventStream(
+    port: number,
+    path: string,
+    options?: { signal?: AbortSignal; connectTimeoutMs?: number },
+  ): AsyncGenerator<SSEMessage> {
+    const connectTimeoutMs = Math.max(
+      1_000,
+      Math.min(options?.connectTimeoutMs ?? 10_000, SIDECAR_DEFAULTS.maxRequestTimeoutMs),
+    );
+    const signal = options?.signal;
+    if (signal?.aborted) {
+      throw new SidecarRequestAbortedError();
+    }
+    let activeResponse: http.IncomingMessage | undefined;
+    let connectTimer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    let aborted = false;
+    let removeAbortListener: (() => void) | undefined;
+    const timeoutError = (): Error =>
+      new Error(`Sidecar event stream connect timed out after ${connectTimeoutMs}ms: GET ${path}`);
+
+    const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+      let settled = false;
+      const fail = (error: Error): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (connectTimer) {
+          clearTimeout(connectTimer);
+          connectTimer = undefined;
+        }
+        reject(error);
+      };
+      const succeed = (incoming: http.IncomingMessage): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (connectTimer) {
+          clearTimeout(connectTimer);
+          connectTimer = undefined;
+        }
+        resolve(incoming);
+      };
+      const request = http.request(
+        {
+          method: 'GET',
+          host: SIDECAR_DEFAULTS.host,
+          port,
+          path,
+          headers: {
+            accept: 'text/event-stream',
+            'cache-control': 'no-cache',
+            ...this.trainerAdmissionHeaders(),
+          },
+        },
+        (incoming) => {
+          activeResponse = incoming;
+          request.setTimeout(0);
+          succeed(incoming);
+        },
+      );
+
+      const abortForSignal = (): void => {
+        if (aborted) {
+          return;
+        }
+        aborted = true;
+        const error = new SidecarRequestAbortedError();
+        fail(error);
+        activeResponse?.destroy(error);
+        request.destroy(error);
+      };
+
+      const abortForConnectTimeout = (): void => {
+        if (timedOut || activeResponse) {
+          return;
+        }
+        timedOut = true;
+        const error = timeoutError();
+        fail(error);
+        request.destroy(error);
+      };
+
+      request.on('error', (error) => {
+        fail(timedOut ? timeoutError() : error);
+      });
+      if (signal) {
+        signal.addEventListener('abort', abortForSignal, { once: true });
+        removeAbortListener = () => signal.removeEventListener('abort', abortForSignal);
+      }
+      connectTimer = setTimeout(abortForConnectTimeout, connectTimeoutMs);
+      request.end();
+    });
+
+    try {
+      if ((response.statusCode ?? 500) >= 400) {
+        const errorBody = await this.readResponseBody(response);
+        const statusCode = response.statusCode ?? 500;
+        const parsedError = parseSafeSidecarError(errorBody);
+        throw new SidecarHttpError(
+          statusCode,
+          parsedError.detail
+            ? `SSE stream failed (${statusCode}): ${parsedError.detail}`
+            : `SSE stream failed (${statusCode}): ${path}`,
+          parsedError,
+        );
+      }
+
+      let buffer = '';
+      const decoder = new TextDecoder('utf-8');
+      for await (const chunk of response) {
+        buffer += decoder.decode(chunk, { stream: true });
+        for (const eventBlock of takeCompleteSseBlocks(() => {
+          const match = /\r?\n\r?\n/.exec(buffer);
+          if (!match || match.index === undefined) {
+            return undefined;
+          }
+          const block = buffer.slice(0, match.index);
+          buffer = buffer.slice(match.index + match[0].length);
+          return block;
+        })) {
+          const event = parseSseEventBlock(eventBlock);
+          if (event) {
+            yield event;
+          }
+        }
+      }
+    } catch (error) {
+      throw aborted ? new SidecarRequestAbortedError() : timedOut ? timeoutError() : error;
+    } finally {
+      if (connectTimer) {
+        clearTimeout(connectTimer);
+      }
+      removeAbortListener?.();
+      if (activeResponse && !activeResponse.complete) {
+        activeResponse.destroy();
+      }
+    }
+  }
+
   async probeHealth(
     port: number,
     path = SIDECAR_DEFAULTS.healthPath,

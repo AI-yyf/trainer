@@ -64,8 +64,13 @@
       -->
       <section id="pair-panel" class="panel" hidden>
         <h1 class="card-title" data-copy="connectHeading"></h1>
-        <label class="sectionlabel" for="pair-code" data-copy="pairCodeLabel"></label>
-        <form id="pair-form" class="row">
+        <button id="pair-auto" class="row row--action" type="button">
+          <span class="row__title" data-copy="autoReconnectAction">Connect automatically</span>
+          <svg class="icon icon--xs" aria-hidden="true"><use href="#icon-plug"></use></svg>
+        </button>
+        <p id="pair-feedback" class="feedback" role="status" aria-live="polite"></p>
+        <p class="feedback" data-copy="pairCodeHint"></p>
+        <form id="pair-form" class="row" hidden>
           <input
             id="pair-code"
             class="pair-code"
@@ -81,8 +86,6 @@
             <span class="visually-hidden" data-copy="pairAction">Pair</span>
           </button>
         </form>
-        <p id="pair-feedback" class="feedback" role="status" aria-live="polite"></p>
-        <p class="feedback" data-copy="pairCodeHint"></p>
       </section>
 
       <section id="capture-panel" class="panel" hidden>

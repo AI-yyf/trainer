@@ -37,6 +37,7 @@ pipeline itself lives in ``app.resources.capture``.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -56,6 +57,8 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 PAIR_CODE_LENGTH = 6
+BOOTSTRAP_PAIR_PREFIX = "trbp-"
+_BOOTSTRAP_PAIR_RE = re.compile(r"^trbp-[0-9a-f]{24,64}$")
 AUTO_PAIR_ID = "auto"
 # T-0037: /browser/pair is token-exempt and the code is 6 digits, so failed
 # exchanges must be capped or a local loopback process can brute-force the
@@ -90,7 +93,16 @@ _DRAFT_QUESTION_LIMIT = 500
 _SOURCE_KINDS = frozenset({"web", "pdf", "github_repo"})
 # Workspace and client id are joined with NUL: repository paths never contain
 # it, so ("ws-a", "1") and ("ws-a\01", "") cannot collide.
+_MAX_SUBSCRIBER_QUEUE = 64
 _DRAFT_DEDUPE_SEPARATOR = "\u0000"
+
+
+def is_valid_pair_secret(value: object) -> bool:
+    """True for either a classic 6-digit code or a pre-seeded bootstrap token."""
+    candidate = str(value or "").strip()
+    if candidate.isdigit() and len(candidate) == PAIR_CODE_LENGTH:
+        return True
+    return bool(_BOOTSTRAP_PAIR_RE.match(candidate))
 
 
 class BrowserPairingError(RuntimeError):
@@ -224,6 +236,8 @@ class BrowserBridgeService:
         self._acked_draft_client_ids: list[str] = []
         self._host_focus_workspace_id = ""
         self._host_focus_at = ""
+        self._event_seq = 0
+        self._subscribers: set[tuple[asyncio.AbstractEventLoop, asyncio.Queue[dict[str, object]]]] = set()
         self._load_state()
         with self._lock:
             self._sync_security_state_locked(force=True)
@@ -510,10 +524,10 @@ class BrowserBridgeService:
         expires_in: int | float | None = None,
     ) -> PairCodeRegistration:
         normalized_code = str(code or "").strip()
-        if not normalized_code.isdigit() or len(normalized_code) != PAIR_CODE_LENGTH:
+        if not is_valid_pair_secret(normalized_code):
             raise BrowserPairingError(
                 "invalid_pair_code",
-                f"A pairing code must be exactly {PAIR_CODE_LENGTH} digits.",
+                f"A pairing code must be {PAIR_CODE_LENGTH} digits or a valid bootstrap token.",
                 status_code=422,
             )
         normalized_workspace = str(workspace_id or "").strip()
@@ -628,6 +642,7 @@ class BrowserBridgeService:
             if trusted_origin:
                 self._trust_extension_origin_locked(trusted_origin)
             self._write_state_locked()
+        self._publish_event(credential.workspace_id, "pairing_changed", paired=True)
         return credential, token
 
     # ------------------------------------------------ trusted extension origins
@@ -752,6 +767,7 @@ class BrowserBridgeService:
             }
             self._prune_auto_credentials_locked(normalized_workspace)
             self._write_state_locked()
+        self._publish_event(credential.workspace_id, "pairing_changed", paired=True)
         return credential, token
 
     def _prune_auto_credentials_locked(self, workspace_id: str) -> None:
@@ -815,13 +831,19 @@ class BrowserBridgeService:
         if not normalized:
             return False
         token_hash = _hashed(normalized)
+        revoked_workspace = ""
         with self._lock:
             self._sync_security_state_locked()
-            removed = self._credentials.pop(token_hash, None) is not None
+            popped = self._credentials.pop(token_hash, None)
+            removed = popped is not None
+            if popped is not None:
+                revoked_workspace = str(popped.get("workspace_id") or "").strip()
             if removed:
                 self._remember_revoked_token_hashes_locked([token_hash])
                 self._write_state_locked()
-            return removed
+        if removed:
+            self._publish_event(revoked_workspace or "*", "pairing_changed", paired=False)
+        return removed
 
     def revoke_registered_pairing(self) -> dict[str, object]:
         """Host-side revocation (``DELETE /browser/pair`` without a Bearer token).
@@ -845,13 +867,17 @@ class BrowserBridgeService:
             self._remember_revoked_token_hashes_locked(removed)
             self._remember_revoked_extension_origins_locked(self._trusted_extension_origins)
             self._trusted_extension_origins = []
-            if removed or had_pending_code or had_trusted_origins:
+            changed = bool(removed or had_pending_code or had_trusted_origins)
+            if changed:
                 self._write_state_locked()
-            return {
+            result: dict[str, object] = {
                 "revoked": True,
                 "had_registration": had_pending_code or bool(removed) or had_trusted_origins,
                 "credentials_revoked": len(removed),
             }
+        if changed:
+            self._publish_event("*", "pairing_changed", paired=False)
+        return result
 
     def credential_count(self) -> int:
         with self._lock:
@@ -965,7 +991,9 @@ class BrowserBridgeService:
             )
             self._pending_drafts.append(draft)
             self._write_state_locked()
-            return {"ok": True, "draft_id": draft.id, "duplicate": False}
+            draft_id = draft.id
+        self._publish_event(normalized_workspace, "draft_queued", draft_id=draft_id)
+        return {"ok": True, "draft_id": draft_id, "duplicate": False}
 
     def pending_drafts(self, workspace_id: str) -> list[dict[str, str]]:
         normalized_workspace = str(workspace_id or "").strip()
@@ -1004,7 +1032,72 @@ class BrowserBridgeService:
             self._pending_drafts = remaining
             if removed:
                 self._write_state_locked()
-            return removed
+        if removed:
+            self._publish_event(normalized_workspace, "draft_acked", removed=removed)
+        return removed
+
+    # ---------------------------------------------------- workspace event push
+
+    @staticmethod
+    def _enqueue_subscriber_event(
+        queue: asyncio.Queue[dict[str, object]],
+        event: dict[str, object],
+    ) -> None:
+        if queue.full():
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
+
+    @contextmanager
+    def subscribe_events(
+        self,
+        loop: asyncio.AbstractEventLoop | None = None,
+    ) -> Iterator[asyncio.Queue[dict[str, object]]]:
+        resolved_loop = loop or asyncio.get_running_loop()
+        queue: asyncio.Queue[dict[str, object]] = asyncio.Queue(maxsize=_MAX_SUBSCRIBER_QUEUE)
+        entry = (resolved_loop, queue)
+        with self._lock:
+            self._subscribers.add(entry)
+        try:
+            yield queue
+        finally:
+            with self._lock:
+                self._subscribers.discard(entry)
+
+    def _publish_event(
+        self,
+        workspace_id: str,
+        kind: str,
+        **extra: object,
+    ) -> dict[str, object]:
+        with self._lock:
+            self._event_seq += 1
+            event: dict[str, object] = {
+                "seq": self._event_seq,
+                "workspace_id": str(workspace_id or "").strip(),
+                "kind": kind,
+                "at": _utc_now_iso(),
+                **extra,
+            }
+            subscribers = list(self._subscribers)
+        for loop, queue in subscribers:
+            try:
+                loop.call_soon_threadsafe(self._enqueue_subscriber_event, queue, event)
+            except RuntimeError:
+                # Loop already closed during shutdown; subscription cleanup handles removal.
+                continue
+        return event
+
+    def notify_library_changed(self, workspace_id: str, *, resource_id: str = "") -> None:
+        normalized = str(workspace_id or "").strip()
+        if not normalized:
+            return
+        self._publish_event(normalized, "library_changed", resource_id=str(resource_id or "").strip())
 
 
 _DRAFT_TEMPLATES: dict[str, dict[str, str]] = {
@@ -1131,9 +1224,11 @@ def build_coach_draft_text(
 
 
 __all__ = [
+    "BOOTSTRAP_PAIR_PREFIX",
     "BrowserBridgeService",
     "BrowserCredential",
     "BrowserPairingError",
     "PairCodeRegistration",
     "build_coach_draft_text",
+    "is_valid_pair_secret",
 ]

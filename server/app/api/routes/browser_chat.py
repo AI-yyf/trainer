@@ -118,8 +118,10 @@ def _redacted_workspace_provider(runtime: TrainerRuntime, workspace_id: str) -> 
     if not (config is not None and model and has_key):
         return {"configured": False, "api_key_configured": False}
     caps_obj = getattr(config, "capabilities", None)
-    if hasattr(caps_obj, "model_dump"):
-        caps = caps_obj.model_dump()
+    model_dump_fn = getattr(caps_obj, "model_dump", None)
+    if callable(model_dump_fn):
+        dumped = model_dump_fn()
+        caps = dict(dumped) if isinstance(dumped, dict) else {}
     elif isinstance(caps_obj, dict):
         caps = dict(caps_obj)
     else:

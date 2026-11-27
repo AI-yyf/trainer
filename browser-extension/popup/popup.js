@@ -30,6 +30,7 @@ const elements = {
   captureDownload: document.getElementById('capture-download'),
   downloadFeedback: document.getElementById('download-feedback'),
   pairPanel: document.getElementById('pair-panel'),
+  pairAuto: document.getElementById('pair-auto'),
   pairForm: document.getElementById('pair-form'),
   pairCode: document.getElementById('pair-code'),
   pairSubmit: document.getElementById('pair-submit'),
@@ -350,6 +351,23 @@ elements.captureDownload.addEventListener('click', () => {
 elements.revoke.addEventListener('click', () => {
   void disconnectAndRepair();
 });
+
+if (elements.pairAuto) {
+  elements.pairAuto.addEventListener('click', () => {
+    void (async () => {
+      elements.pairAuto.disabled = true;
+      setFeedback(elements.pairFeedback, t('autoConnecting'), '');
+      const result = await send({ type: 'trainer:auto-pair' });
+      elements.pairAuto.disabled = false;
+      if (result && result.ok) {
+        setFeedback(elements.pairFeedback, t('pairSuccess'), '');
+        renderState(result.state || (await send({ type: 'trainer:state' })));
+      } else {
+        setFeedback(elements.pairFeedback, (result && result.message) || t('pairCodeHint'), 'warn');
+      }
+    })();
+  });
+}
 
 elements.pairForm.addEventListener('submit', (event) => {
   void pairWithCode(event);

@@ -372,6 +372,7 @@ function learningSurfaceAlignmentCopy(language: ComposerLanguage): {
 function browserCaptureSettingsCopy(language: ComposerLanguage): {
   title: string;
   body: string;
+  launch: string;
   install: string;
   open: string;
   hint: string;
@@ -379,67 +380,75 @@ function browserCaptureSettingsCopy(language: ComposerLanguage): {
   switch (language) {
     case "zh-CN":
       return {
-        title: "浏览器采集",
-        body: "把网页、PDF 和选中文本一键采集到资料库。支持 Chrome、Edge、Brave、Arc、Opera、Vivaldi 等所有 Chromium 浏览器。",
-        install: "安装浏览器扩展",
+        title: "浏览器伴随侧边栏与采集",
+        body: "在浏览器侧边栏直接复用完整的 Trainer 对话、学习计划、训练与网页/PDF 采集能力。支持 Chrome、Edge、Brave、Arc、Opera、Vivaldi 等 Chromium 浏览器。",
+        launch: "一键启动适配浏览器",
+        install: "安装到常用浏览器",
         open: "打开扩展页",
-        hint: "安装只需一次：在浏览器扩展页开启开发者模式，选择“加载已解压的扩展程序”，指向 Trainer 打开的文件夹。Trainer 更新会刷新该文件夹；在扩展页点一次“重新加载”即可。打开扩展会自动连接，无需配对码。",
+        hint: "点击“一键启动适配浏览器”可直接拉起预装好扩展的专属浏览器窗口；若安装到常用浏览器，只需在扩展页开启开发者模式并拖入自动打开的目录。单次握手凭据已自动预置，全程无需输入配对码。",
       };
     case "es-ES":
       return {
-        title: "Captura del navegador",
-        body: "Guarda páginas, PDF y texto seleccionado en tu biblioteca con un clic. Compatible con Chrome, Edge, Brave, Arc, Opera y Vivaldi.",
-        install: "Instalar extensión",
+        title: "Panel lateral y captura del navegador",
+        body: "Usa la barra lateral completa de Trainer (chat, plan, práctica y captura de páginas o PDF) directamente en Chrome, Edge, Brave, Arc, Opera o Vivaldi.",
+        launch: "Iniciar navegador adaptado",
+        install: "Instalar en tu navegador",
         open: "Abrir página de extensiones",
-        hint: "La instalación se hace una sola vez: activa el modo desarrollador, elige «Cargar descomprimida» y selecciona la carpeta que abre Trainer. Las actualizaciones refrescan esa carpeta; pulsa «Recargar» una vez en la página de extensiones. La extensión se conecta sola, sin código.",
+        hint: "«Iniciar navegador adaptado» abre una ventana con la extensión ya cargada; para tu perfil habitual, activa el modo desarrollador y arrastra la carpeta abierta. La conexión es automática y sin código.",
       };
     case "fr-FR":
       return {
-        title: "Capture navigateur",
-        body: "Enregistrez pages, PDF et texte sélectionné dans votre bibliothèque en un clic. Compatible avec Chrome, Edge, Brave, Arc, Opera et Vivaldi.",
-        install: "Installer l’extension",
+        title: "Panneau latéral et capture navigateur",
+        body: "Retrouvez toute la barre latérale Trainer (discussion, plan, entraînement et capture web/PDF) directement dans Chrome, Edge, Brave, Arc, Opera ou Vivaldi.",
+        launch: "Lancer le navigateur adapté",
+        install: "Installer dans le navigateur",
         open: "Ouvrir la page des extensions",
-        hint: "L’installation se fait une seule fois : activez le mode développeur, choisissez « Charger l’extension non empaquetée » et sélectionnez le dossier ouvert par Trainer. Les mises à jour rafraîchissent ce dossier ; cliquez une fois sur « Recharger » dans la page des extensions. L’extension se connecte seule, sans code.",
+        hint: "« Lancer le navigateur adapté » ouvre une fenêtre avec l’extension préchargée ; pour votre profil habituel, activez le mode développeur et glissez le dossier ouvert. Connexion automatique sans code.",
       };
     case "de-DE":
       return {
-        title: "Browser-Erfassung",
-        body: "Speichere Webseiten, PDFs und markierten Text mit einem Klick in deiner Bibliothek. Unterstützt Chrome, Edge, Brave, Arc, Opera und Vivaldi.",
-        install: "Browser-Erweiterung installieren",
+        title: "Browser-Seitenleiste und Erfassung",
+        body: "Nutze die komplette Trainer-Seitenleiste (Chat, Lernplan, Training sowie Webseiten- und PDF-Erfassung) direkt in Chrome, Edge, Brave, Arc, Opera oder Vivaldi.",
+        launch: "Trainer-Browser starten",
+        install: "Im Browser installieren",
         open: "Erweiterungsseite öffnen",
-        hint: "Die Installation ist einmalig: Entwicklermodus aktivieren, „Entpackte Erweiterung laden“ wählen und den von Trainer geöffneten Ordner auswählen. Trainer-Updates erneuern diesen Ordner; klicke auf der Erweiterungsseite einmal auf „Neu laden“. Die Erweiterung verbindet sich automatisch, ohne Code.",
+        hint: "„Trainer-Browser starten“ öffnet sofort ein Fenster mit geladener Erweiterung; für dein Hauptprofil aktiviere den Entwicklermodus und ziehe den geöffneten Ordner hinein. Automatische Verbindung ohne Code.",
       };
     case "ja-JP":
       return {
-        title: "ブラウザー取り込み",
-        body: "Web ページ、PDF、選択したテキストをワンクリックでライブラリへ保存します。Chrome、Edge、Brave、Arc、Opera、Vivaldi に対応しています。",
-        install: "ブラウザー拡張機能をインストール",
+        title: "ブラウザーサイドパネルと取り込み",
+        body: "Chrome、Edge、Brave、Arc、Opera、Vivaldi のサイドパネルで Trainer の対話・学習プラン・トレーニング・Web/PDF 取り込みをそのまま利用できます。",
+        launch: "専用ブラウザーを起動",
+        install: "通常ブラウザーに導入",
         open: "拡張機能ページを開く",
-        hint: "インストールは一度だけです。拡張機能ページでデベロッパーモードをオンにし、「パッケージ化されていない拡張機能を読み込む」で Trainer が開いたフォルダーを選びます。Trainer の更新時にフォルダーが更新されるので、拡張機能ページで一度「再読み込み」してください。拡張機能を開くと自動で接続し、コードは不要です。",
+        hint: "「専用ブラウザーを起動」で拡張機能組み込み済みのウィンドウを即座に開けます。既存のブラウザーに導入する場合はデベロッパーモードをオンにして開いたフォルダーをドロップするだけです（コード不要で自動接続）。",
       };
     case "ko-KR":
       return {
-        title: "브라우저 캡처",
-        body: "웹 페이지, PDF, 선택한 텍스트를 클릭 한 번으로 자료실에 저장합니다. Chrome, Edge, Brave, Arc, Opera, Vivaldi를 지원합니다.",
-        install: "브라우저 확장 프로그램 설치",
+        title: "브라우저 사이드 패널 및 캡처",
+        body: "Chrome, Edge, Brave, Arc, Opera, Vivaldi 사이드 패널에서 Trainer 대화, 학습 계획, 훈련, 웹/PDF 캡처를 그대로 사용합니다.",
+        launch: "전용 브라우저 실행",
+        install: "기존 브라우저에 설치",
         open: "확장 프로그램 페이지 열기",
-        hint: "설치는 한 번만 하면 됩니다. 확장 프로그램 페이지에서 개발자 모드를 켜고 '압축해제된 확장 프로그램을 로드'를 선택한 뒤 Trainer가 연 폴더를 지정하세요. Trainer 업데이트 시 폴더가 갱신되며, 확장 프로그램 페이지에서 한 번 '새로고침'하면 됩니다. 확장 프로그램을 열면 자동으로 연결되며 코드가 필요 없습니다.",
+        hint: "'전용 브라우저 실행'을 누르면 확장이 미리 로드된 브라우저가 바로 열립니다. 기존 프로필에 설치하려면 개발자 모드를 켜고 열린 폴더를 끌어놓으세요. 사전 핸드셰이크로 코드 없이 자동 연결됩니다.",
       };
     case "pt-BR":
       return {
-        title: "Captura do navegador",
-        body: "Salve páginas, PDFs e texto selecionado na sua biblioteca com um clique. Compatível com Chrome, Edge, Brave, Arc, Opera e Vivaldi.",
-        install: "Instalar extensão do navegador",
+        title: "Painel lateral e captura no navegador",
+        body: "Use toda a barra lateral do Trainer (chat, plano, prática e captura de páginas/PDF) diretamente no Chrome, Edge, Brave, Arc, Opera ou Vivaldi.",
+        launch: "Iniciar navegador adaptado",
+        install: "Instalar no navegador",
         open: "Abrir página de extensões",
-        hint: "A instalação é feita uma única vez: ative o modo desenvolvedor, escolha “Carregar sem compactação” e selecione a pasta aberta pelo Trainer. As atualizações renovam essa pasta; clique uma vez em “Recarregar” na página de extensões. A extensão se conecta sozinha, sem código.",
+        hint: "“Iniciar navegador adaptado” abre uma janela já com a extensão carregada; no seu perfil habitual, ative o modo desenvolvedor e arraste a pasta aberta. Conexão automática e sem código.",
       };
     default:
       return {
-        title: "Browser capture",
-        body: "Save web pages, PDFs and selected text to your library in one click. Works with Chrome, Edge, Brave, Arc, Opera and Vivaldi.",
-        install: "Install browser extension",
+        title: "Browser side panel and capture",
+        body: "Use the full Trainer sidebar — chat, learning plan, practice, and web/PDF capture — directly inside Chrome, Edge, Brave, Arc, Opera, or Vivaldi.",
+        launch: "Launch Trainer browser",
+        install: "Install to browser",
         open: "Open extensions page",
-        hint: "Install once: turn on Developer mode, choose “Load unpacked” and select the folder Trainer opens. Trainer updates refresh that folder; click Reload once on the extensions page. Opening the extension connects automatically — no code.",
+        hint: "Click “Launch Trainer browser” to open a ready-to-use browser window with the extension pre-loaded, or install once to your regular profile via Developer mode. A pre-seeded handshake connects automatically with zero pairing code.",
       };
   }
 }
@@ -7402,10 +7411,24 @@ function CoachSettingsViewSheet({
                 <button
                   type="button"
                   className="button"
+                  data-browser-capture-action="launch"
                   onClick={() =>
                     postWebviewMessage({
                       type: "command/execute",
-                      payload: { commandId: trainerCommands.installBrowserCapture },
+                      payload: { commandId: trainerCommands.launchBrowserCapture },
+                    })
+                  }
+                >
+                  {browserCaptureCopy.launch}
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  data-browser-capture-action="install"
+                  onClick={() =>
+                    postWebviewMessage({
+                      type: "command/execute",
+                      payload: { commandId: trainerCommands.installBrowserCaptureForBrowser },
                     })
                   }
                 >
@@ -7414,6 +7437,7 @@ function CoachSettingsViewSheet({
                 <button
                   type="button"
                   className="toolbar-button"
+                  data-browser-capture-action="open-extensions"
                   onClick={() =>
                     postWebviewMessage({
                       type: "command/execute",

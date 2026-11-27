@@ -151,6 +151,7 @@ export const COMMAND_IDS = {
   reviewQueueAction: trainerCommands.reviewQueueAction,
   scenarioLabAction: trainerCommands.scenarioLabAction,
   // Browser capture lane (install bundle, pairing, revoke)
+  browserCaptureLaunch: 'trainer.browserCapture.launch',
   browserCaptureInstall: 'trainer.browserCapture.install',
   browserCaptureInstallForBrowser: 'trainer.browserCapture.installForBrowser',
   browserCaptureOpenExtensionsPage: 'trainer.browserCapture.openExtensionsPage',
@@ -197,6 +198,10 @@ export const BROWSER_CAPTURE = {
   versionFileName: 'trainer-browser-capture.json',
   /** Managed install location (relative to the user's home directory). */
   installedRelativeDir: path.join('.trainer', 'browser-capture'),
+  /** Pre-seeded single-use handshake file written into the managed install directory. */
+  bootstrapPairFileName: 'bootstrap-pair.json',
+  /** Managed browser profile directory for one-click launch (`--load-extension`). */
+  browserProfileRelativeDir: path.join('.trainer', 'browser-profile'),
   /** Pairing codes are displayed on an information bar; 10 minutes is the whole window. */
   pairingCodeTtlMs: 10 * 60 * 1_000,
   /** Draft forwarding cadence while a workbench surface is visible. */
@@ -215,6 +220,9 @@ export const BROWSER_CAPTURE = {
   pendingDraftsPath: '/browser/pending-drafts',
   pendingDraftsAckPath: '/browser/pending-drafts/ack',
   libraryRevisionPath: '/browser/library-revision',
+  eventsStreamPath: '/browser/events/stream',
+  eventsReconnectBaseMs: 1_000,
+  eventsReconnectMaxMs: 30_000,
 } as const;
 
 export const SIDECAR_DEFAULTS = {

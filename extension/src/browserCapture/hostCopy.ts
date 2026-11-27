@@ -42,7 +42,10 @@ export type BrowserCaptureHostCopyKey =
   | 'onboardingInstall'
   | 'onboardingNotNow'
   | 'pickBrowserPlaceholder'
-  | 'installForBrowserDone';
+  | 'installForBrowserDone'
+  | 'onboardingLaunch'
+  | 'pickLaunchBrowserPlaceholder'
+  | 'launchBrowserDone';
 
 type BrowserCaptureHostCopyTable = Record<BrowserCaptureHostCopyKey, string>;
 
@@ -79,7 +82,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: '安装到浏览器…',
     onboardingNotNow: '暂不',
     pickBrowserPlaceholder: '选择要安装 Trainer 采集扩展的浏览器',
-    installForBrowserDone: '已打开 {browser} 的扩展页，安装路径已复制到剪贴板（{dir}）。在扩展页开启“开发者模式”，点“加载已解压的扩展程序”并粘贴该路径，然后回到 Trainer 设置完成配对。',
+    installForBrowserDone: '已打开 {browser} 的扩展页并打开安装目录（路径已复制：{dir}）。开启“开发者模式”后直接拖入或选择该目录，扩展将凭预置单次握手自动连接，无需配对码。',
+    onboardingLaunch: '一键启动适配浏览器',
+    pickLaunchBrowserPlaceholder: '选择要拉起 Trainer 侧边栏扩展的浏览器',
+    launchBrowserDone: '已拉起 {browser} 并预装 Trainer 侧边栏扩展（单次握手已自动就绪，无需配对码）。点击工具栏中的 Trainer 图标即可打开完整学习侧边栏。',
   },
   'en-US': {
     installReady: '{label} is ready.',
@@ -118,7 +124,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: 'Install to browser…',
     onboardingNotNow: 'Not now',
     pickBrowserPlaceholder: 'Pick the browser to install the Trainer capture extension into',
-    installForBrowserDone: 'Opened the {browser} extensions page; the install path is on your clipboard ({dir}). Turn on Developer mode there, choose Load unpacked, paste the path, then finish pairing in Trainer Settings.',
+    installForBrowserDone: 'Opened the {browser} extensions page and install folder (path copied: {dir}). Turn on Developer mode and select or drag that folder — it connects automatically with zero pairing code.',
+    onboardingLaunch: 'Launch Trainer browser',
+    pickLaunchBrowserPlaceholder: 'Choose a browser to launch with the Trainer extension pre-loaded',
+    launchBrowserDone: 'Launched {browser} with the Trainer Side Panel extension pre-loaded and pre-paired (no pairing code needed). Click the Trainer toolbar icon to open the sidebar.',
   },
   'es-ES': {
     installReady: '{label} está listo.',
@@ -160,7 +169,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: 'Instalar en el navegador…',
     onboardingNotNow: 'Ahora no',
     pickBrowserPlaceholder: 'Elige el navegador donde instalar la extensión de captura de Trainer',
-    installForBrowserDone: 'Se abrió la página de extensiones de {browser}; la ruta de instalación está en tu portapapeles ({dir}). Activa el modo desarrollador, elige «Cargar descomprimida», pega la ruta y completa el emparejamiento en Ajustes de Trainer.',
+    installForBrowserDone: 'Se abrió la página de extensiones de {browser} y la carpeta ({dir}). Activa el modo desarrollador y selecciona o arrastra esa carpeta: se conectará automáticamente sin código.',
+    onboardingLaunch: 'Iniciar navegador adaptado',
+    pickLaunchBrowserPlaceholder: 'Elige el navegador para iniciar con la extensión Trainer precargada',
+    launchBrowserDone: 'Se inició {browser} con la extensión lateral de Trainer precargada y conectada automáticamente (sin código).',
   },
   'fr-FR': {
     installReady: '{label} est prêt.',
@@ -202,7 +214,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: 'Installer dans le navigateur…',
     onboardingNotNow: 'Plus tard',
     pickBrowserPlaceholder: 'Choisissez le navigateur où installer l’extension de capture Trainer',
-    installForBrowserDone: 'La page d’extensions de {browser} est ouverte ; le chemin d’installation est dans le presse-papiers ({dir}). Activez le mode développeur, choisissez « Charger l’extension non empaquetée », collez le chemin, puis terminez l’appairage dans Trainer.',
+    installForBrowserDone: 'La page d’extensions de {browser} et le dossier ({dir}) sont ouverts. Activez le mode développeur et sélectionnez ou glissez ce dossier : la connexion est automatique, sans code.',
+    onboardingLaunch: 'Lancer le navigateur adapté',
+    pickLaunchBrowserPlaceholder: 'Choisissez le navigateur à lancer avec l’extension Trainer préchargée',
+    launchBrowserDone: '{browser} a été lancé avec le panneau latéral Trainer préchargé et connecté automatiquement (sans code).',
   },
   'de-DE': {
     installReady: '{label} ist bereit.',
@@ -244,7 +259,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: 'Im Browser installieren…',
     onboardingNotNow: 'Später',
     pickBrowserPlaceholder: 'Browser wählen, in dem die Trainer-Erfassungserweiterung installiert wird',
-    installForBrowserDone: 'Die Erweiterungsseite von {browser} ist geöffnet; der Installationspfad liegt in der Zwischenablage ({dir}). Aktiviere dort den Entwicklermodus, wähle „Entpackte Erweiterung laden“, füge den Pfad ein und schließe die Kopplung in den Trainer-Einstellungen ab.',
+    installForBrowserDone: 'Die Erweiterungsseite von {browser} und der Ordner ({dir}) sind geöffnet. Aktiviere den Entwicklermodus und wähle oder ziehe diesen Ordner hinein – die Verbindung erfolgt automatisch ohne Code.',
+    onboardingLaunch: 'Trainer-Browser starten',
+    pickLaunchBrowserPlaceholder: 'Browser wählen, der mit vorinstallierter Trainer-Erweiterung gestartet wird',
+    launchBrowserDone: '{browser} wurde mit vorinstallierter Trainer-Seitenleiste gestartet und automatisch ohne Code verbunden.',
   },
   'ja-JP': {
     installReady: '{label} の準備ができました。',
@@ -287,7 +305,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: 'ブラウザにインストール…',
     onboardingNotNow: '今はしない',
     pickBrowserPlaceholder: 'Trainer 収集拡張機能をインストールするブラウザを選択',
-    installForBrowserDone: '{browser} の拡張機能ページを開き、インストール先パスをクリップボードにコピーしました（{dir}）。ページでデベロッパーモードをオンにし、「パッケージ化されていない拡張機能を読み込む」でパスを貼り付けて、Trainer の設定でペアリングを完了してください。',
+    installForBrowserDone: '{browser} の拡張機能ページとフォルダー（{dir}）を開きました。デベロッパーモードをオンにしてそのフォルダーを選択またはドラッグすると、コード不要で自動接続されます。',
+    onboardingLaunch: '専用ブラウザーを起動',
+    pickLaunchBrowserPlaceholder: 'Trainer 拡張機能を事前読み込みして起動するブラウザーを選択',
+    launchBrowserDone: 'Trainer サイドパネル拡張機能を組み込んで {browser} を起動しました（コード不要で自動接続済み）。',
   },
   'ko-KR': {
     installReady: '{label}이(가) 준비되었습니다.',
@@ -326,7 +347,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: '브라우저에 설치…',
     onboardingNotNow: '나중에',
     pickBrowserPlaceholder: 'Trainer 수집 확장을 설치할 브라우저 선택',
-    installForBrowserDone: '{browser} 확장 페이지를 열었고 설치 경로가 클립보드에 복사되었습니다({dir}). 페이지에서 개발자 모드를 켜고 [압축해제된 확장 로드]로 경로를 붙여넣은 뒤 Trainer 설정에서 페어링을 마치세요.',
+    installForBrowserDone: '{browser} 확장 페이지와 설치 폴더({dir})를 열었습니다. 개발자 모드를 켜고 해당 폴더를 선택하거나 끌어놓으면 코드 없이 자동 연결됩니다.',
+    onboardingLaunch: '전용 브라우저 실행',
+    pickLaunchBrowserPlaceholder: 'Trainer 확장 프로그램을 미리 로드하여 실행할 브라우저 선택',
+    launchBrowserDone: 'Trainer 사이드 패널 확장이 사전 로드된 상태로 {browser}을(를) 실행했습니다(코드 없이 자동 연결됨).',
   },
   'pt-BR': {
     installReady: '{label} está pronto.',
@@ -370,7 +394,10 @@ export const browserCaptureHostCopyTable: Record<ComposerLanguage, BrowserCaptur
     onboardingInstall: 'Instalar no navegador…',
     onboardingNotNow: 'Agora não',
     pickBrowserPlaceholder: 'Escolha o navegador onde instalar a extensão de captura do Trainer',
-    installForBrowserDone: 'A página de extensões do {browser} foi aberta; o caminho de instalação está na sua área de transferência ({dir}). Ative o modo desenvolvedor, escolha “Carregar sem empacotamento”, cole o caminho e conclua o pareamento nas Configurações do Trainer.',
+    installForBrowserDone: 'A página de extensões do {browser} e a pasta ({dir}) foram abertas. Ative o modo desenvolvedor e selecione ou arraste essa pasta: a conexão é automática e sem código.',
+    onboardingLaunch: 'Iniciar navegador adaptado',
+    pickLaunchBrowserPlaceholder: 'Escolha o navegador para iniciar com a extensão Trainer pré-carregada',
+    launchBrowserDone: 'O {browser} foi iniciado com o painel lateral do Trainer pré-carregado e conectado automaticamente (sem código).',
   },
 };
 

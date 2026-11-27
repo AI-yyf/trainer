@@ -311,6 +311,10 @@
         "title": "Trainer: Get Remote Support State"
       },
       {
+        "command": "trainer.browserCapture.launch",
+        "title": "Trainer: Launch Browser with Trainer Extension"
+      },
+      {
         "command": "trainer.browserCapture.install",
         "title": "Trainer: Install Browser Capture Extension"
       },
