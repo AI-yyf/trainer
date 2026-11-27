@@ -181,7 +181,7 @@ import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transf
 import { CoachHistoryDrawer } from "../components/coach/CoachHistoryDrawer";
 import { UtilityOverlay } from "../templates/UtilityOverlay";
 import { templateCopy } from "../templates/templateCopy";
-import { buildComposerProviderMenuItems, composerModelPolicyHint, compactComposerModelLabel, type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
+import { type ComposerProviderMenuItem } from "../lib/composerModelHelpers";
 import { viewLabels, resourcesViewLabel, coachViewLabel, planViewLabel, trainingViewLabel, settingsViewLabel } from "../lib/viewLabels";
 import { WorkbenchSurfaces } from "./WorkbenchSurfaces";
 import { useSurfaceScroll } from "./useSurfaceScroll";
@@ -191,14 +191,15 @@ import { useComposerQueue } from "./useComposerQueue";
 import { canConverseBeforeAdmission } from "../../../../shared/src/conversationAdmission";
 import { useCoachHistory } from "./useCoachHistory";
 import { useMenuState } from "./useMenuState";
-import { useComposerModelQuery } from "./useComposerModelQuery";
 import { useComposerHistoryNavigation } from "./useComposerHistoryNavigation";
 import { useCoachConversationController } from "./useCoachConversationController";
+import { useComposerProviderController } from "./useComposerProviderController";
 import {
   useLearningPlanController,
   type PlanComposerDraftReplacement,
   type PlanComposerMode,
 } from "./useLearningPlanController";
+import { useLibraryResourceController } from "./useLibraryResourceController";
 import { useOperationStatusController } from "./useOperationStatusController";
 import { useProviderConnectionController } from "./useProviderConnectionController";
 import { useTrainingCardController } from "./useTrainingCardController";
@@ -831,12 +832,9 @@ export function App() {
   const viewContentRef = useRef<HTMLElement | null>(null);
   const uploadFilesInputRef = useRef<HTMLInputElement | null>(null);
   const uploadFolderInputRef = useRef<HTMLInputElement | null>(null);
-  const resourceOperationResolversRef = useRef(new Map<string, PendingResourceOperation>());
-  const resourceOperationSequenceRef = useRef(0);
-  const resourceTrainingHandoffResolversRef = useRef(
-    new Map<string, PendingResourceTrainingHandoff>(),
+  const applyHostMessageRef = useRef<(message: HostMessage, isProviderActionOverride?: boolean) => void>(
+    () => undefined,
   );
-  const resourceTrainingHandoffSequenceRef = useRef(0);
   const coachAutoScrollPinnedRef = useRef(true);
   const pinCoachScrollToBottom = useCallback(() => {
     coachAutoScrollPinnedRef.current = true;
@@ -982,209 +980,48 @@ export function App() {
     }
   }, [setOperationMessage, settingsScopeKey]);
   const handleResourceSelectionChange = setSelectedResourceContextIds;
-  const resolveResourceOperationStatus = useCallback((message: HostMessage): HostMessage => {
-    const status = parseResourceOperationStatus(message, localizedResourceOperationFallback);
-    if (!status || message.type !== "operation/status") {
-      return message;
-    }
-    const operation = resourceOperationResolversRef.current.get(status.requestId);
-    if (operation?.kind === status.kind) {
-      // The settling text travels with the operation: a caller that needs the
-      // concrete outcome (an exported filename) reads it without a second wait.
-      operation.statusMessage = status.message;
-      if (message.payload.resourceCapture) operation.onCapture?.(message.payload.resourceCapture);
-      if (message.payload.resourceVersionResults) operation.onVersionResults?.(message.payload.resourceVersionResults);
-      resourceOperationResolversRef.current.delete(status.requestId);
-      window.clearTimeout(operation.timeoutId);
-      if (message.payload.tone === "error") {
-        operation.reject(new Error(status.message));
-      } else {
-        operation.resolve();
-      }
-    }
-    return {
-      ...message,
-      payload: { ...message.payload, message: status.message },
-    };
-  }, [localizedResourceOperationFallback]);
-  const requestResourceMutation = useCallback(
-    (kind: ResourceMutationOperationKind, resourceIds: string[]): Promise<void> => {
-      const requestId = `resource-operation-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
-      return new Promise<void>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          if (!operation || operation.kind !== kind) {
-            return;
-          }
-          resourceOperationResolversRef.current.delete(requestId);
-          operation.reject(new Error("Resource operation timed out."));
-        }, RESOURCE_OPERATION_TIMEOUT_MS);
-        resourceOperationResolversRef.current.set(requestId, { kind, resolve, reject, timeoutId });
-        try {
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId:
-                kind === "delete" ? trainerCommands.deleteResource : trainerCommands.restoreResource,
-              payload: { resourceIds, __trainerResourceOperationId: requestId },
-            },
-          });
-        } catch (error) {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          resourceOperationResolversRef.current.delete(requestId);
-          if (operation) {
-            window.clearTimeout(operation.timeoutId);
-            operation.reject(error);
-          } else {
-            reject(error);
-          }
-        }
-      });
-    },
-    [],
-  );
-  const requestResourceIndex = useCallback((): Promise<void> => {
-    const requestId = `resource-operation-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
-    return new Promise<void>((resolve, reject) => {
-      const timeoutId = window.setTimeout(() => {
-        const operation = resourceOperationResolversRef.current.get(requestId);
-        if (!operation || operation.kind !== "index") {
-          return;
-        }
-        resourceOperationResolversRef.current.delete(requestId);
-        operation.reject(new Error("Resource indexing timed out."));
-      }, RESOURCE_OPERATION_TIMEOUT_MS);
-      resourceOperationResolversRef.current.set(requestId, {
-        kind: "index",
-        resolve,
-        reject,
-        timeoutId,
-      });
-      try {
-        postMessage({
-          type: "command/execute",
-          payload: {
-            commandId: trainerCommands.indexResources,
-            payload: { __trainerResourceOperationId: requestId },
-          },
-        });
-      } catch (error) {
-        const operation = resourceOperationResolversRef.current.get(requestId);
-        resourceOperationResolversRef.current.delete(requestId);
-        if (operation) {
-          window.clearTimeout(operation.timeoutId);
-          operation.reject(error);
-        } else {
-          reject(error);
-        }
-      }
-    });
-  }, []);
-  const requestCoachReplyUpload = useCallback(
-    (message: ConversationMessage): Promise<void> => {
-      const requestId = `resource-operation-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
-      return new Promise<void>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          if (!operation || operation.kind !== "upload") {
-            return;
-          }
-          resourceOperationResolversRef.current.delete(requestId);
-          operation.reject(new Error("Resource upload timed out."));
-        }, RESOURCE_OPERATION_TIMEOUT_MS);
-        resourceOperationResolversRef.current.set(requestId, {
-          kind: "upload",
-          resolve,
-          reject,
-          timeoutId,
-        });
-        try {
-          const replyDoc = coachReplyMarkdown(message, layout.composerLanguage);
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.uploadResource,
-              payload: {
-                uploads: [
-                  {
-                    kind: "markdown",
-                    name: replyDoc.title,
-                    source: "coach-reply",
-                    content: replyDoc.markdown,
-                    contentEncoding: "utf-8",
-                    tags: ["coach-reply"],
-                    sourceType: "file",
-                  },
-                ],
-                __trainerResourceOperationId: requestId,
-              },
-            },
-          });
-        } catch (error) {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          resourceOperationResolversRef.current.delete(requestId);
-          if (operation) {
-            window.clearTimeout(operation.timeoutId);
-            operation.reject(error);
-          } else {
-            reject(error);
-          }
-        }
-      });
-    },
-    [layout.composerLanguage],
-  );
-  // Keep manual saving for ordinary analysis replies and recoverable failures.
-  const requestCoachResearchBrief = useCallback(
-    (message: ConversationMessage): Promise<void> => {
-      const requestId = `resource-operation-${Date.now().toString(36)}-${++resourceOperationSequenceRef.current}`;
-      return new Promise<void>((resolve, reject) => {
-        // Drafting runs a provider completion server-side; allow the same
-        // generous window as a training-card handoff.
-        const timeoutMs = 135_000;
-        const timeoutId = window.setTimeout(() => {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          if (!operation || operation.kind !== "save-research-brief") {
-            return;
-          }
-          resourceOperationResolversRef.current.delete(requestId);
-          operation.reject(new Error("Research brief timed out."));
-        }, timeoutMs);
-        resourceOperationResolversRef.current.set(requestId, {
-          kind: "save-research-brief",
-          resolve,
-          reject,
-          timeoutId,
-        });
-        try {
-          const conversation = useWorkbenchState.getState().data.conversation;
-          const researchGoal = goalTitleFromConversation(conversation, message.id);
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.saveResearchBrief,
-              payload: {
-                researchGoal: researchGoal.slice(0, 300),
-                reply: message.body.slice(0, 12000),
-                resourceIds: researchBriefResourceIds(message),
-                __trainerResourceOperationId: requestId,
-              },
-            },
-          });
-        } catch (error) {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          resourceOperationResolversRef.current.delete(requestId);
-          if (operation) {
-            window.clearTimeout(operation.timeoutId);
-            operation.reject(error);
-          } else {
-            reject(error);
-          }
-        }
-      });
-    },
-    [],
-  );
+  const {
+    resolveResourceOperationStatus,
+    resolveResourceTrainingHandoffMessage,
+    resolveLibraryFolderOperation,
+    resolveLibraryMigrationOperation,
+    requestResourceMutation,
+    requestResourceIndex,
+    requestCoachReplyUpload,
+    requestCoachResearchBrief,
+    requestResourceSearch,
+    requestBrowserPreviewResourceSearch,
+    requestResourceTrainingHandoff,
+    handleBrowserUploads,
+    handleBrowserUrlImport,
+    resourceCaptureFocusOptions,
+    refreshPreviewResources,
+    beginResourceOperationStatusWait,
+    captureResourceIntoLibrary,
+    requestLibraryMigration,
+    listLibraryFolders,
+    createLibraryFolder,
+    renameLibraryFolder,
+    deleteLibraryFolder,
+    revealLibraryPath,
+    organizeLibraryResource,
+    exportLibraryResource,
+  } = useLibraryResourceController({
+    resources: data.resources,
+    planStages: data.plan?.stages,
+    workspaceId: data.memory.workspace?.workspaceId,
+    composerLanguage: layout.composerLanguage,
+    resourceSearchMode: layout.resourceSearchMode,
+    localizedResourceOperationFallback,
+    isBrowserPreview,
+    browserPreviewFixture,
+    previewSessionId,
+    setPreviewSessionId,
+    setActiveView,
+    setOperationMessage,
+    applyRawHostMessage,
+    applyHostMessageRef,
+  });
   const handleCoachMessageAction = useCallback(
     async (action: CoachMessageAction, message: ConversationMessage) => {
       if (action === "open-research-brief") {
@@ -1399,118 +1236,7 @@ export function App() {
       streaming.isStreaming,
     ],
   );
-  const requestResourceSearch = useCallback(
-    ({ query, requestId }: ResourceSearchRequest): Promise<void> => {
-      return new Promise<void>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          if (!operation || operation.kind !== "search") {
-            return;
-          }
-          resourceOperationResolversRef.current.delete(requestId);
-          operation.reject(new Error("Resource search timed out."));
-        }, RESOURCE_OPERATION_TIMEOUT_MS);
-        resourceOperationResolversRef.current.set(requestId, {
-          kind: "search",
-          resolve,
-          reject,
-          timeoutId,
-        });
-        try {
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.searchResources,
-              payload: { query, requestId, mode: layout.resourceSearchMode },
-            },
-          });
-        } catch (error) {
-          const operation = resourceOperationResolversRef.current.get(requestId);
-          resourceOperationResolversRef.current.delete(requestId);
-          if (operation) {
-            window.clearTimeout(operation.timeoutId);
-            operation.reject(error);
-          } else {
-            reject(error);
-          }
-        }
-      });
-    },
-    [layout.resourceSearchMode],
-  );
-  const requestBrowserPreviewResourceSearch = useCallback(
-    async ({ query, requestId }: ResourceSearchRequest): Promise<void> => {
-      if (!isBrowserPreview) {
-        return;
-      }
-      const browserPreview = await loadBrowserPreviewModule();
-      const result = await browserPreview.searchBrowserPreviewResources(
-        { query, requestId, mode: layout.resourceSearchMode },
-        previewSessionId,
-      );
-      setPreviewSessionId(result.sessionId);
-      applyRawHostMessage(result.message);
-    },
-    [
-      applyRawHostMessage,
-      isBrowserPreview,
-      layout.resourceSearchMode,
-      previewSessionId,
-    ],
-  );
-  const requestResourceTrainingHandoff = useCallback(
-    (resourceId: string, cardType: "flash" | "practice" = "flash", prompt?: string,
-      linkedPractice?: { expectedResourceVersion: ResourceVersionPin; planBinding: TrainingPlanBinding; filePractice: boolean },
-    ): Promise<ResourceTrainingHandoffResult> => {
-      const requestId = `resource-training-${Date.now().toString(36)}-${++resourceTrainingHandoffSequenceRef.current}`;
-      const scope = useWorkbenchState.getState();
-      return new Promise<ResourceTrainingHandoffResult>((resolve) => {
-        const timeoutId = window.setTimeout(() => {
-          const handoff = resourceTrainingHandoffResolversRef.current.get(requestId);
-          if (!handoff) {
-            return;
-          }
-          resourceTrainingHandoffResolversRef.current.delete(requestId);
-          handoff.resolve({ requestId, resourceId, outcome: "failed" });
-        }, cardType === "practice" ? 135_000 : RESOURCE_TRAINING_HANDOFF_TIMEOUT_MS);
-        resourceTrainingHandoffResolversRef.current.set(requestId, { resourceId, resolve, timeoutId });
-        try {
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.trainingGenerateCard,
-              payload: {
-                source: linkedPractice?.filePractice ? "formal_plan_step" : "resource_knowledge",
-                cardType,
-                submode: cardType,
-                resourceId,
-                ...(linkedPractice ? { planBinding: linkedPractice.planBinding,
-                  expectedResourceVersion: linkedPractice.expectedResourceVersion } : {}),
-                ...(prompt?.trim() ? { prompt, contextHint: prompt } : {}),
-                __trainerResourceTrainingHandoffId: requestId,
-              },
-            },
-          });
-        } catch {
-          const handoff = resourceTrainingHandoffResolversRef.current.get(requestId);
-          resourceTrainingHandoffResolversRef.current.delete(requestId);
-          if (handoff) {
-            window.clearTimeout(handoff.timeoutId);
-          }
-          resolve({ requestId, resourceId, outcome: "failed" });
-        }
-      }).then((result) => {
-        const current = useWorkbenchState.getState();
-        if (result.outcome === "ready" && scope.layout.activeView === current.layout.activeView &&
-          scope.syncCursor.workspaceId === current.syncCursor.workspaceId &&
-          scope.syncCursor.sessionId === current.syncCursor.sessionId) {
-          setActiveView("training");
-        }
-        return result;
-      });
-    },
-    [setActiveView],
-  );
+
   const submitUserFeedback = useCallback(
     (kind: UserFeedbackKind) => {
       if (userFeedbackState.busy || userFeedbackState.submittedKind || isBrowserPreview) return;
@@ -1541,70 +1267,9 @@ export function App() {
     [activeView, data.memory.workspace, data.plan?.id, isBrowserPreview, layout.composerLanguage, postMessage, userFeedbackState.busy, userFeedbackState.submittedKind],
   );
 
-  useEffect(() => {
-    return () => {
-      window.clearTimeout(userFeedbackTimeoutRef.current);
-      for (const operation of resourceOperationResolversRef.current.values()) {
-        window.clearTimeout(operation.timeoutId);
-        operation.reject(new Error("Resource operation was interrupted."));
-      }
-      resourceOperationResolversRef.current.clear();
-      for (const handoff of resourceTrainingHandoffResolversRef.current.values()) {
-        window.clearTimeout(handoff.timeoutId);
-        handoff.resolve({
-          requestId: "",
-          resourceId: handoff.resourceId,
-          outcome: "failed",
-        });
-      }
-      resourceTrainingHandoffResolversRef.current.clear();
-    };
+  useEffect(() => () => {
+    window.clearTimeout(userFeedbackTimeoutRef.current);
   }, []);
-  // ---------------------------------------------------------- library folders
-  // The host answers a folder request (list / create / rename / delete) with a
-  // `library/folders` message carrying the request's operationId — the same
-  // correlation pattern as `training/resourceHandoff`. A request that never
-  // gets an answer inside its bounded window resolves as unconfirmed, so the
-  // view never invents a folder write.
-  const libraryFolderOperations = useHostOperationResolver<LibraryFolderHostAnswer>({
-    ok: false, message: "", unconfirmed: true,
-  });
-  const resolveLibraryFolderOperation = useCallback(
-    (payload: { operationId?: string; ok: boolean; folders?: unknown; message?: string }) => {
-      const operationId = String(payload.operationId ?? "").trim();
-      if (!operationId) {
-        return;
-      }
-      libraryFolderOperations.resolve(operationId, {
-        ok: payload.ok,
-        message: typeof payload.message === "string" ? payload.message.trim() : "",
-        folders: payload.folders,
-      });
-    },
-    [libraryFolderOperations],
-  );
-  // ------------------------------------------------------ library migration
-  // The Markdown-only migration answers with a `library/migration` message
-  // carrying the request's operationId — the same correlation pattern as the
-  // folder space. A request that never gets an answer inside its bounded
-  // window resolves as unconfirmed: the library is left as it was.
-  const libraryMigrationOperations = useHostOperationResolver<LibraryMigrationHostAnswer>({
-    ok: false, message: "", unconfirmed: true,
-  });
-  const resolveLibraryMigrationOperation = useCallback(
-    (payload: { operationId?: string; ok: boolean; message?: string; summary?: LibraryMigrationSummary }) => {
-      const operationId = String(payload.operationId ?? "").trim();
-      if (!operationId) {
-        return;
-      }
-      libraryMigrationOperations.resolve(operationId, {
-        ok: payload.ok,
-        message: typeof payload.message === "string" ? payload.message.trim() : "",
-        summary: payload.summary,
-      });
-    },
-    [libraryMigrationOperations],
-  );
   const applySessionListRef = useRef<((payload: unknown) => void) | undefined>(undefined);
   const applyHostMessage = useCallback(
     (message: HostMessage, isProviderActionOverride = false) => {
@@ -1626,12 +1291,7 @@ export function App() {
         return;
       }
       if (message.type === "training/resourceHandoff") {
-        const handoff = resourceTrainingHandoffResolversRef.current.get(message.payload.requestId);
-        if (handoff?.resourceId === message.payload.resourceId) {
-          resourceTrainingHandoffResolversRef.current.delete(message.payload.requestId);
-          window.clearTimeout(handoff.timeoutId);
-          handoff.resolve(message.payload);
-        }
+        resolveResourceTrainingHandoffMessage(message.payload);
         return;
       }
       // Folder space answers (list/create/rename/delete) settle their request.
@@ -1771,8 +1431,10 @@ export function App() {
       requestCoachComposerFocus,
       requestProviderApiKeyFocus,
       resolveLibraryFolderOperation,
-      resolveTrainingPersistenceAck,
+      resolveLibraryMigrationOperation,
       resolveResourceOperationStatus,
+      resolveResourceTrainingHandoffMessage,
+      resolveTrainingPersistenceAck,
       settingsActionState,
     ],
   );
@@ -2244,161 +1906,37 @@ export function App() {
       appUiCopy(layout.composerLanguage, "已连接到扩展宿主。"),
     [layout.composerLanguage],
   );
-  const composerHasSavedProfiles = useMemo(
-    () => hasSavedProviderProfiles(data.providerConfig),
-    [data.providerConfig.profileCount, data.providerConfig.providerProfiles],
-  );
-  const composerProviderProfileLabel = useMemo(
-    () =>
-      data.providerConfig.configured ? data.providerConfig.profileLabel?.trim() || undefined : undefined,
-    [data.providerConfig.configured, data.providerConfig.profileLabel],
-  );
-
-  const composerProviderCopy = providerSettingsLocale(layout.composerLanguage);
-  const composerModelButtonLabel = useMemo(() => {
-    if (!data.providerConfig.configured) {
-      return composerHasSavedProfiles
-        ? composerProviderCopy.menu.chooseModel
-        : composerProviderCopy.menu.model;
-    }
-
-    const resolvedModel = data.providerConfig.resolvedModel?.trim();
-    if (resolvedModel) {
-      return resolvedModel;
-    }
-
-    const configuredModel = data.providerConfig.model.trim();
-    if (configuredModel) {
-      return configuredModel;
-    }
-
-    if (composerProviderProfileLabel) {
-      return composerProviderProfileLabel;
-    }
-
-    return composerProviderCopy.menu.model;
-  }, [
+  const {
     composerHasSavedProfiles,
     composerProviderCopy,
-    composerProviderProfileLabel,
-    data.providerConfig.configured,
-    data.providerConfig.model,
-    data.providerConfig.resolvedModel,
-  ]);
-  const composerModelButtonDisplayLabel =
-    composerModelActionDensity === "compact"
-      ? compactComposerModelLabel(
-          composerModelButtonLabel,
-          composerProviderProfileLabel ?? data.providerConfig.name,
-          layout.composerLanguage,
-        )
-      : composerModelButtonLabel;
-  const composerActiveModelPolicy = useMemo(() => {
-    const resolvedModel = data.providerConfig.resolvedModel?.trim() ?? "";
-    const configuredModel = data.providerConfig.model.trim();
-    return evaluateProviderModelPolicy(
-      data.providerConfig.configured ? resolvedModel || configuredModel : "",
-      {
-        allowedModels: data.providerConfig.allowedModels,
-        deniedModels: data.providerConfig.deniedModels,
-      },
-    );
-  }, [
-    data.providerConfig.allowedModels,
-    data.providerConfig.configured,
-    data.providerConfig.deniedModels,
-    data.providerConfig.model,
-    data.providerConfig.resolvedModel,
-  ]);
-  const composerActiveModelPolicyHint = composerModelPolicyHint(
-    layout.composerLanguage,
-    composerActiveModelPolicy.reason,
-  );
-  const composerModelButtonTitle = !data.providerConfig.configured
-    ? composerProviderCopy.menu.manageModels
-    : composerActiveModelPolicyHint ??
-      (composerProviderProfileLabel && composerProviderProfileLabel !== composerModelButtonLabel
-        ? composerProviderCopy.menu.switchModelWithConnection
-            .replace("{model}", composerModelButtonLabel)
-            .replace("{connection}", composerProviderProfileLabel)
-        : composerProviderCopy.menu.switchModel.replace("{model}", composerModelButtonLabel));
-  // §四十八: menu item construction lives in lib/composerModelHelpers.
-  const composerProviderMenuItems = useMemo(
-    () => buildComposerProviderMenuItems(data.providerConfig, layout.composerLanguage),
-    [data.providerConfig, layout.composerLanguage],
-  );
-
-  // §四十八: model search state + filtering live in useComposerModelQuery.
-  const {
-    query: composerModelQuery,
-    setQuery: setComposerModelQuery,
-    filtered: filteredComposerProviderMenuItems,
-  } = useComposerModelQuery(composerProviderMenuItems);
-
-  const composerThinkingDescriptor = useMemo<ProviderThinkingDescriptor | undefined>(() => {
-    const provider = data.providerConfig;
-    if (!provider.configured) {
-      return undefined;
-    }
-    const lastTest = provider.lastTestResult as
-      | {
-          capabilityEvidence?: Array<{
-            name?: unknown;
-            state?: unknown;
-            observed?: unknown;
-          }>;
-        }
-      | undefined;
-    const model = provider.resolvedModel ?? provider.model;
-    const context = {
-      protocol: provider.protocol,
-      model,
-      providerName: provider.name,
-      baseUrl: provider.baseUrl,
-      capabilityEvidence: lastTest?.capabilityEvidence,
-      modelCapabilities: model ? provider.modelCapabilities?.[model] : undefined,
-      profileCapabilities: provider.capabilities,
-    };
-    if (!thinkingProtocolSupportsWire(provider.protocol)) {
-      return undefined;
-    }
-    // Smart adaptation (P0 model experience): the protocol defaults mark
-    // `thinking:false` for every model (providerProtocols.ts:254) — that is
-    // absence of evidence, not a verdict. The control therefore renders
-    // whenever the protocol can carry a thinking field: "自动" emits nothing
-    // until the learner picks a mode, and a gateway that dislikes the choice
-    // is absorbed by the sidecar's negotiated replay (provider/thinking.py).
-    // Only an explicit probe verdict of "unsupported" hides it — a declared
-    // or verified model always shows it and restores the last choice. The
-    // control never gates sending.
-    const support = classifyProviderThinkingSupport(context);
-    if (support === "unsupported") {
-      return undefined;
-    }
-    const storedThinking = normalizeProviderThinkingConfig(
-      provider.thinkingConfig,
-      provider.protocol,
-    );
-    const descriptor =
-      describeProviderThinking(context, provider.requestDefaults) ??
-      synthesizeProviderThinkingDescriptor(context, storedThinking ?? { mode: "auto" });
-    if (!descriptor) {
-      return undefined;
-    }
-    return storedThinking ? { ...descriptor, config: storedThinking } : descriptor;
-  }, [
-    data.providerConfig.baseUrl,
-    data.providerConfig.capabilities,
-    data.providerConfig.configured,
-    data.providerConfig.lastTestResult,
-    data.providerConfig.model,
-    data.providerConfig.modelCapabilities,
-    data.providerConfig.name,
-    data.providerConfig.protocol,
-    data.providerConfig.requestDefaults,
-    data.providerConfig.resolvedModel,
-    data.providerConfig.thinkingConfig,
-  ]);
+    composerModelButtonLabel,
+    composerModelButtonDisplayLabel,
+    composerActiveModelPolicy,
+    composerActiveModelPolicyHint,
+    composerModelButtonTitle,
+    composerProviderMenuItems,
+    composerModelQuery,
+    setComposerModelQuery,
+    filteredComposerProviderMenuItems,
+    composerThinkingDescriptor,
+    openComposerModelSettings,
+    toggleComposerModelMenu,
+    refreshComposerProviderModels,
+    setComposerThinking,
+    switchComposerProviderModel,
+    switchComposerProviderModelForProfile,
+  } = useComposerProviderController({
+    providerConfig: data.providerConfig,
+    composerLanguage: layout.composerLanguage,
+    composerModelActionDensity,
+    isBrowserPreview,
+    previewSessionId,
+    setPreviewSessionId,
+    applyPreviewHostMessages,
+    setActiveView,
+    setOpenMenu,
+    setOperationMessage,
+  });
 
   // R3②: context usage used to re-tally the entire conversation plus the
   // full streamed content character-by-character on every stream chunk
@@ -2641,7 +2179,6 @@ export function App() {
   // `requestBootstrapOnce` again after the bootstrap guard re-armed, which
   // re-posted `request/bootstrap` and produced a continuous
   // POST /memory/settings + GET /memory/summary loop against the sidecar.
-  const applyHostMessageRef = useRef(applyHostMessage);
   useEffect(() => {
     applyHostMessageRef.current = applyHostMessage;
   }, [applyHostMessage]);
@@ -6225,842 +5762,6 @@ export function App() {
     });
   };
 
-  const handleBrowserUploads = async (files: File[]) => {
-    const importingFolder = browserUploadLooksLikeFolder(files);
-    const supportedFiles = files.filter(browserFileSupported);
-    const unsupportedCount = files.length - supportedFiles.length;
-    try {
-      const browserPreview = await loadBrowserPreviewModule();
-      const uploadLimit = browserPreview.browserUploadLimit();
-      const truncated = supportedFiles.length > uploadLimit;
-      const limitedFiles = supportedFiles.slice(0, uploadLimit);
-      if (limitedFiles.length === 0) {
-        setOperationMessage({
-          tone: "error",
-          message:
-            appUiCopy(layout.composerLanguage, "没有找到可导入的支持文件。"),
-        }, "resources");
-        return;
-      }
-
-      const uploads = await readBrowserFiles(limitedFiles);
-      const {
-        sessionId,
-        patch,
-        uploadedCount,
-        indexedCount,
-        failedIndexCount,
-        failedUploadCount,
-        truncated: uploadTruncated,
-      } = await browserPreview.uploadBrowserPreviewResources(uploads, previewSessionId);
-      setPreviewSessionId(sessionId);
-      useWorkbenchState.getState().patchData(patch);
-      const limitedCount = uploads.length;
-      const finalTruncated = truncated || uploadTruncated;
-      const skippedText =
-        unsupportedCount > 0
-          ? appUiCopy(layout.composerLanguage, "跳过 {n} 个不支持的文件。")
-              .replace("{n}", String(unsupportedCount))
-              .replace("{s}", unsupportedCount === 1 ? "" : "s")
-          : "";
-      const truncationText = finalTruncated
-        ? appUiCopy(layout.composerLanguage, "仅导入前 {n} 个支持文件。")
-            .replace("{n}", String(limitedCount))
-            .replace("{s}", limitedCount === 1 ? "" : "s")
-        : "";
-      const indexingText =
-        failedIndexCount > 0
-          ? appUiCopy(layout.composerLanguage, "其中 {i} 个已完成索引，{f} 个上传成功但索引未完成。")
-              .replace("{i}", String(indexedCount))
-              .replace("{f}", String(failedIndexCount))
-              .replace("{s}", failedIndexCount === 1 ? "" : "s")
-          : appUiCopy(layout.composerLanguage, "已完成 {i} 个文件的索引并刷新资料状态。")
-              .replace("{i}", String(indexedCount))
-              .replace("{s}", indexedCount === 1 ? "" : "s");
-      const uploadFailureText =
-        failedUploadCount > 0
-          ? appUiCopy(layout.composerLanguage, "其中 {n} 个没有导入成功，其他资料已经可以使用。")
-              .replace("{n}", String(failedUploadCount))
-              .replace("{s}", failedUploadCount === 1 ? "" : "s")
-          : "";
-      const importedLead = appUiCopy(
-        layout.composerLanguage,
-        importingFolder ? "已导入文件夹中的资料。" : "已导入资料。",
-      );
-      const uploadedText = appUiCopy(layout.composerLanguage, "共上传 {n} 个支持文件。")
-        .replace("{n}", String(uploadedCount))
-        .replace("{s}", uploadedCount === 1 ? "" : "s");
-      setOperationMessage({
-        tone: failedUploadCount > 0 || failedIndexCount > 0 ? "info" : "success",
-        message: [
-          importedLead,
-          uploadedCount > 0 ? uploadedText : "",
-          truncationText,
-          skippedText,
-          uploadFailureText,
-          indexingText,
-        ]
-          .filter(Boolean)
-          .map((fragment) => ` ${fragment}`)
-          .join("")
-          .trim(),
-      }, "resources");
-    } catch {
-      setOperationMessage({
-        tone: "error",
-        message: recoverableFailureMessage("upload", layout.composerLanguage),
-      }, "resources");
-    }
-  };
-
-  const handleBrowserUrlImport = async () => {
-    if (!isBrowserPreview || browserPreviewFixture) {
-      return;
-    }
-
-    const rawSource = window.prompt(
-      appUiCopy(layout.composerLanguage, "\u7c98\u8d34\u8981\u5bfc\u5165\u7684\u7f51\u9875 URL"),
-    )?.trim();
-    if (!rawSource) {
-      return;
-    }
-
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(rawSource);
-      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-        throw new Error("unsupported protocol");
-      }
-    } catch {
-      setOperationMessage({
-        tone: "error",
-        message:
-          appUiCopy(layout.composerLanguage, "\u8bf7\u8f93\u5165\u6709\u6548\u7684 http \u6216 https URL\u3002"),
-      }, "resources");
-      return;
-    }
-
-    const pathTitle = parsedUrl.pathname.split("/").filter(Boolean).pop();
-    const title = pathTitle || parsedUrl.hostname || rawSource;
-    try {
-      const browserPreview = await loadBrowserPreviewModule();
-      const result = await browserPreview.uploadBrowserPreviewResources(
-        [
-          {
-            name: title,
-            kind: "url",
-            content: "",
-            source: rawSource,
-            tags: [],
-          },
-        ],
-        previewSessionId,
-      );
-      setPreviewSessionId(result.sessionId);
-      useWorkbenchState.getState().patchData(result.patch);
-      setOperationMessage({
-        tone: result.failedIndexCount > 0 || result.failedUploadCount > 0 ? "info" : "success",
-        message:
-          result.failedIndexCount > 0 || result.failedUploadCount > 0
-            ? appUiCopy(layout.composerLanguage, "网页已导入，但索引未完全完成。已上传 {n} 项。").replace(
-                "{n}",
-                String(result.uploadedCount),
-              )
-            : appUiCopy(layout.composerLanguage, "网页已导入并完成索引。"),
-      }, "resources");
-    } catch {
-      setOperationMessage({
-        tone: "error",
-        message: recoverableFailureMessage("upload", layout.composerLanguage),
-      }, "resources");
-    }
-  };
-
-  // ------------------------------------------------------------------ capture
-  // In-library "add by URL" rides the same capture pipeline as the browser
-  // extension: in a live browser preview the webview can call the sidecar
-  // directly; inside VS Code it posts the capture command on the existing
-  // webview → host → sidecar message chain.
-  const resourceCaptureFocusOptions = useMemo<ResourceCaptureFocusOption[]>(
-    () =>
-      (data.plan?.stages ?? [])
-        .filter((stage) => stage.id.trim() && stage.title.trim())
-        .map((stage) => ({ id: stage.id, label: stage.title })),
-    [data.plan?.stages],
-  );
-
-  const refreshPreviewResources = useCallback(async () => {
-    const browserPreview = await loadBrowserPreviewModule();
-    const { sessionId, message } = await browserPreview.fetchBrowserPreviewBootstrap(
-      previewSessionId,
-      true,
-    );
-    setPreviewSessionId(sessionId);
-    applyHostMessage(message);
-  }, [applyHostMessage, previewSessionId]);
-
-  /**
-   * One correlated wait for a host resource command's `operation/status`.
-   * The host answers with `[[trainer-resource-operation:<kind>:<id>]] …`;
-   * success resolves, failure rejects with the (already localized) reason,
-   * and a quiet window resolves so the caller's own confirmation loop keeps
-   * owning honest "unconfirmed" reporting.
-   */
-  const beginResourceOperationStatusWait = useCallback(
-    (kind: "capture" | "organize" | "export" | "link-learning" | "check-versions", timeoutMs: number) => {
-      const requestId = `resource-${kind}-${Date.now().toString(36)}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`;
-      const operation: {
-        statusMessage: string;
-        capture?: NonNullable<Extract<HostMessage, { type: "operation/status" }>["payload"]["resourceCapture"]>;
-        versionResults?: ResourceVersionCheckResult[];
-      } = {
-        statusMessage: "",
-      };
-      let timedOut = false;
-      const done = new Promise<void>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-          timedOut = true;
-          resourceOperationResolversRef.current.delete(requestId);
-          resolve();
-        }, timeoutMs);
-        const settle = (settledMessage?: string) => {
-          // resolveResourceOperationStatus may have already recorded the status
-          // text it settled with; never clobber it with an empty fallback.
-          if (settledMessage) {
-            operation.statusMessage = settledMessage;
-          }
-          resourceOperationResolversRef.current.delete(requestId);
-          window.clearTimeout(timeoutId);
-        };
-        resourceOperationResolversRef.current.set(requestId, {
-          kind,
-          onCapture: (result) => { operation.capture = result; },
-          onVersionResults: (results) => { operation.versionResults = results; },
-          resolve: () => {
-            settle();
-            resolve();
-          },
-          reject: (reason) => {
-            settle(reason instanceof Error ? reason.message : String(reason ?? ""));
-            reject(reason);
-          },
-          timeoutId,
-        });
-      });
-      const settle = () => {
-        const pending = resourceOperationResolversRef.current.get(requestId);
-        if (pending?.kind === kind) {
-          resourceOperationResolversRef.current.delete(requestId);
-          window.clearTimeout(pending.timeoutId);
-        }
-      };
-      // The status text the host settled with (empty when none arrived).
-      const statusMessage = (): string => operation.statusMessage;
-      // True only when the window expired without a host verdict — callers
-      // must not treat that as success evidence for an older record.
-      const hasTimedOut = (): boolean => timedOut;
-      return {
-        requestId, done, settle, statusMessage, hasTimedOut,
-        capture: () => operation.capture, versionResults: () => operation.versionResults,
-      };
-    },
-    [],
-  );
-
-  const captureResourceIntoLibrary = useCallback(
-    async (input: ResourceCaptureInput): Promise<ResourceMutationOutcome> => {
-      const url = input.url.trim();
-      const title = input.title?.trim() || undefined;
-      const download = input.download === true;
-      const targetDir = download ? input.targetDir?.trim() || undefined : undefined;
-      const clientCaptureId = input.browserSource
-        ? ["composer-capture", input.browserSource.id, input.focusId, input.planBinding?.revision].filter(Boolean).join("-")
-        : "library-capture-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-      const sourceFields = input.browserSource ? {
-        capture_mode: input.browserSource.selection ? "selection" : "link",
-        selection: input.browserSource.selection || undefined,
-      } : {};
-      const bindingFields = input.planBinding
-        ? { bind_plan_id: input.planBinding.planId, bind_plan_revision: input.planBinding.revision }
-        : {};
-      if (isBrowserPreview && !browserPreviewFixture) {
-        try {
-          const browserPreview = await loadBrowserPreviewModule();
-          const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
-          const response = await fetch(`${baseUrl}/resources/capture`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              url,
-              kind: input.kind ?? captureTargetKind(url),
-              ...sourceFields,
-              ...bindingFields,
-              ...(title ? { title } : {}),
-              ...(input.focusId ? { bind_focus_id: input.focusId } : {}),
-              ...(download ? { download: true } : {}),
-              ...(targetDir ? { target_dir: targetDir } : {}),
-              client_capture_id: clientCaptureId,
-              session_id: previewSessionId,
-            }),
-          });
-          if (!response.ok) {
-            const detail = await response
-              .json()
-              .then((body: unknown) => describeSidecarFailure(body))
-              .catch(() => "");
-            return { ok: false, message: detail || sanitizeErrorSurfaceText(`HTTP ${response.status}`, layout.composerLanguage) };
-          }
-          const payload = (await response.json()) as {
-            name?: unknown;
-            resource_id?: unknown;
-            version_id?: unknown;
-            content_hash?: unknown;
-            deduped?: unknown;
-            warnings?: string[];
-            saved_path?: unknown;
-          };
-          const name = typeof payload.name === "string" && payload.name.trim()
-            ? payload.name.trim()
-            : url;
-          await refreshPreviewResources().catch(() => undefined);
-          return {
-            ok: true,
-            message: name,
-            deduped: payload.deduped === true,
-            focusBinding: payload.warnings?.find((warning) => warning.startsWith("focus_binding:"))?.slice("focus_binding:".length),
-            resourceId: typeof payload.resource_id === "string" ? payload.resource_id : undefined,
-            versionId: typeof payload.version_id === "string" ? payload.version_id : undefined,
-            contentHash: typeof payload.content_hash === "string" ? payload.content_hash : undefined,
-            // The capture contract's `saved_path` is only reported when the
-            // pipeline actually downloaded the original bytes.
-            savedPath:
-              typeof payload.saved_path === "string" && payload.saved_path.trim()
-                ? payload.saved_path.trim()
-                : undefined,
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            message: error instanceof Error ? error.message : String(error),
-          };
-        }
-      }
-
-      // Inside VS Code the host owns sidecar access: post the capture command
-      // and settle through EITHER the correlated operation status (fast,
-      // specific failure or success) OR the refreshed library snapshot. A
-      // status that names a failure surfaces its reason; a capture that never
-      // lands is reported as unconfirmed — never as a silent "added".
-      const beforeIds = new Set(
-        useWorkbenchState.getState().data.resources.map((resource) => resource.id),
-      );
-      const captureWait = beginResourceOperationStatusWait(
-        "capture",
-        CAPTURE_CONFIRMATION_TIMEOUT_MS,
-      );
-      postMessage({
-        type: "command/execute",
-        payload: {
-          commandId: "trainer.resource.capture",
-          payload: {
-            url,
-            kind: input.kind ?? captureTargetKind(url),
-            ...sourceFields,
-            ...bindingFields,
-            ...(title ? { title } : {}),
-            ...(input.focusId ? { bind_focus_id: input.focusId } : {}),
-            ...(download ? { download: true } : {}),
-            ...(targetDir ? { target_dir: targetDir } : {}),
-            client_capture_id: clientCaptureId,
-            workspace_id: data.memory.workspace?.workspaceId || undefined,
-            __trainerResourceOperationId: captureWait.requestId,
-          },
-        },
-      });
-      if (input.browserSource) {
-        try {
-          await captureWait.done;
-          const receipt = captureWait.capture();
-          return receipt
-            ? { ok: true, message: receipt.title ?? url, ...receipt }
-            : { ok: false, unconfirmed: true, message: "" };
-        } catch (error) {
-          return { ok: false, message: error instanceof Error ? error.message : String(error) };
-        } finally {
-          captureWait.settle();
-        }
-      }
-      let landed: Awaited<ReturnType<typeof waitForCapturedResource>>;
-      let operationRejected: unknown;
-      try {
-        landed = await Promise.race([
-          waitForCapturedResource(url, beforeIds),
-          captureWait.done.then(() => undefined),
-        ]);
-        captureWait.settle();
-        // The host applies the snapshot patch before its success status, but
-        // give the record one short extra window to arrive.
-        landed ??= await waitForCapturedResource(url, new Set(beforeIds), 10_000);
-      } catch (error) {
-        captureWait.settle();
-        const reason = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          message: reason.replace("[[trainer-resource-failure]]", "").trim(),
-        };
-      }
-      if (!landed) {
-        return { ok: false, unconfirmed: true, message: "" };
-      }
-      if (landed.deduped) {
-        // A pre-existing record for this URL is not evidence that THIS
-        // operation finished (T-0010): before treating it as a deduped
-        // success, wait for the correlated host verdict. A failure rejects
-        // here; a verdict timeout keeps the result unconfirmed instead of
-        // dressing an old path up as this download.
-        if (!captureWait.hasTimedOut()) {
-          try {
-            await captureWait.done;
-          } catch (error) {
-            operationRejected = error;
-          }
-          if (operationRejected) {
-            const reason =
-              operationRejected instanceof Error
-                ? operationRejected.message
-                : String(operationRejected ?? "");
-            return {
-              ok: false,
-              message: reason.replace("[[trainer-resource-failure]]", "").trim(),
-            };
-          }
-          // The remembered download path may have landed with the status
-          // patch; re-read the record once for the freshest savedPath.
-          const refreshed = await waitForCapturedResource(url, new Set(), 2_000);
-          if (refreshed && refreshed.resourceId === landed.resourceId) {
-            landed = refreshed;
-          }
-        }
-      }
-      return {
-        ok: true,
-        message: landed.title,
-        deduped: landed.deduped,
-        resourceId: landed.resourceId,
-        savedPath: landed.savedPath,
-      };
-    },
-    [
-      beginResourceOperationStatusWait,
-      browserPreviewFixture,
-      data.memory.workspace?.workspaceId,
-      isBrowserPreview,
-      postMessage,
-      previewSessionId,
-      refreshPreviewResources,
-    ],
-  );
-
-  // ------------------------------------------------------- library migration
-  // The Markdown-only migration always goes through the host command: the
-  // destructive pass needs the host's trust and confirmation, so the browser
-  // preview never runs it.
-  const requestLibraryMigration = useCallback(
-    async (request: { dryRun: boolean; confirm: boolean }): Promise<LibraryMigrationHostAnswer> => {
-      const operationId = `library-migration-${Date.now().toString(36)}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`;
-      return libraryMigrationOperations.request({
-        operationId,
-        timeoutMs: LIBRARY_MIGRATION_TIMEOUT_MS,
-        send: () => {
-          postMessage({
-            type: "command/execute",
-            payload: {
-              commandId: trainerCommands.markdownOnlyMigration,
-              payload: { ...request, operationId },
-            },
-          });
-        },
-      });
-    },
-    [libraryMigrationOperations, postMessage],
-  );
-
-  // ------------------------------------------------------------ library folders
-  // One gateway for the folder space: the live preview lane calls the sidecar
-  // directly, the VS Code lane posts the command on the existing
-  // webview → host → sidecar chain and waits for the correlated
-  // `library/folders` answer.
-  const requestLibraryFolderOperation = useCallback(
-    (commandId: string, payload: Record<string, unknown>): Promise<LibraryFolderHostAnswer> => {
-      const operationId = `library-folders-${Date.now().toString(36)}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`;
-      return libraryFolderOperations.request({
-        operationId,
-        timeoutMs: LIBRARY_FOLDER_OPERATION_TIMEOUT_MS,
-        send: () => {
-          postMessage({
-            type: "command/execute",
-            payload: { commandId, payload: { ...payload, operationId } },
-          });
-        },
-      });
-    },
-    [libraryFolderOperations, postMessage],
-  );
-
-  const mutatePreviewLibraryFolder = useCallback(
-    async (
-      method: "POST" | "DELETE",
-      endpoint: string,
-      body: Record<string, unknown>,
-    ): Promise<ResourceMutationOutcome> => {
-      try {
-        const browserPreview = await loadBrowserPreviewModule();
-        const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
-        const response = await fetch(`${baseUrl}${endpoint}`, {
-          method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, session_id: previewSessionId }),
-        });
-        if (!response.ok) {
-          const detail = await response
-            .json()
-            .then((payload: unknown) => describeSidecarFailure(payload))
-            .catch(() => "");
-          return { ok: false, message: detail || sanitizeErrorSurfaceText(`HTTP ${response.status}`, layout.composerLanguage) };
-        }
-        return { ok: true, message: "" };
-      } catch (error) {
-        return {
-          ok: false,
-          message: error instanceof Error ? error.message : String(error),
-        };
-      }
-    },
-    [previewSessionId],
-  );
-
-  const listLibraryFolders = useCallback(async (): Promise<LibraryFolderListResult> => {
-    if (isBrowserPreview && !browserPreviewFixture) {
-      if (!previewSessionId?.trim()) {
-        return { ok: false, folders: [], message: "" };
-      }
-      try {
-        const browserPreview = await loadBrowserPreviewModule();
-        const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
-        const response = await fetch(
-          `${baseUrl}/library/groups?session_id=${encodeURIComponent(previewSessionId ?? "")}`,
-        );
-        if (!response.ok) {
-          const detail = await response
-            .json()
-            .then((payload: unknown) => describeSidecarFailure(payload))
-            .catch(() => "");
-          return { ok: false, folders: [], message: detail || sanitizeErrorSurfaceText(`HTTP ${response.status}`, layout.composerLanguage) };
-        }
-        const payload = await response.json().catch(() => undefined);
-        return { ok: true, folders: parseLibraryFolderTree(payload), message: "" };
-      } catch (error) {
-        return {
-          ok: false,
-          folders: [],
-          message: error instanceof Error ? error.message : String(error),
-        };
-      }
-    }
-    const answer = await requestLibraryFolderOperation("trainer.library.folders.list", {
-      workspace_id: data.memory.workspace?.workspaceId || undefined,
-    });
-    if (answer.unconfirmed) {
-      return { ok: false, folders: [], message: "" };
-    }
-    return {
-      ok: answer.ok,
-      folders: parseLibraryFolderTree(answer.folders),
-      message: answer.message,
-    };
-  }, [
-    browserPreviewFixture,
-    data.memory.workspace?.workspaceId,
-    isBrowserPreview,
-    previewSessionId,
-    requestLibraryFolderOperation,
-  ]);
-
-  const createLibraryFolder = useCallback(
-    async (path: string): Promise<ResourceMutationOutcome> => {
-      const folderPath = path.trim();
-      if (isBrowserPreview && !browserPreviewFixture) {
-        return mutatePreviewLibraryFolder("POST", "/library/groups", { path: folderPath });
-      }
-      const answer = await requestLibraryFolderOperation("trainer.library.folders.create", {
-        path: folderPath,
-        workspace_id: data.memory.workspace?.workspaceId || undefined,
-      });
-      return {
-        ok: answer.ok,
-        message: answer.message,
-        ...(answer.unconfirmed ? { unconfirmed: true } : {}),
-      };
-    },
-    [
-      browserPreviewFixture,
-      data.memory.workspace?.workspaceId,
-      isBrowserPreview,
-      mutatePreviewLibraryFolder,
-      requestLibraryFolderOperation,
-    ],
-  );
-
-  const renameLibraryFolder = useCallback(
-    async (path: string, nextPath: string): Promise<ResourceMutationOutcome> => {
-      const folderPath = path.trim();
-      const nextFolderPath = nextPath.trim();
-      if (isBrowserPreview && !browserPreviewFixture) {
-        return mutatePreviewLibraryFolder("POST", "/library/groups/rename", {
-          path: folderPath,
-          new_path: nextFolderPath,
-        });
-      }
-      const answer = await requestLibraryFolderOperation("trainer.library.folders.rename", {
-        path: folderPath,
-        new_path: nextFolderPath,
-        workspace_id: data.memory.workspace?.workspaceId || undefined,
-      });
-      return {
-        ok: answer.ok,
-        message: answer.message,
-        ...(answer.unconfirmed ? { unconfirmed: true } : {}),
-      };
-    },
-    [
-      browserPreviewFixture,
-      data.memory.workspace?.workspaceId,
-      isBrowserPreview,
-      mutatePreviewLibraryFolder,
-      requestLibraryFolderOperation,
-    ],
-  );
-
-  const deleteLibraryFolder = useCallback(
-    async (path: string): Promise<ResourceMutationOutcome> => {
-      const folderPath = path.trim();
-      if (isBrowserPreview && !browserPreviewFixture) {
-        return mutatePreviewLibraryFolder("DELETE", "/library/groups", { path: folderPath });
-      }
-      const answer = await requestLibraryFolderOperation("trainer.library.folders.delete", {
-        path: folderPath,
-        workspace_id: data.memory.workspace?.workspaceId || undefined,
-      });
-      return {
-        ok: answer.ok,
-        message: answer.message,
-        ...(answer.unconfirmed ? { unconfirmed: true } : {}),
-      };
-    },
-    [
-      browserPreviewFixture,
-      data.memory.workspace?.workspaceId,
-      isBrowserPreview,
-      mutatePreviewLibraryFolder,
-      requestLibraryFolderOperation,
-    ],
-  );
-
-  const revealLibraryPath = useCallback(
-    (path: string) => {
-      postMessage({
-        type: "command/execute",
-        payload: { commandId: trainerCommands.revealSandboxPath, payload: { path } },
-      });
-    },
-    [postMessage],
-  );
-
-  const organizeLibraryResource = useCallback(
-    async (
-      resourceId: string,
-      request: ResourceOrganizeInput,
-    ): Promise<ResourceMutationOutcome> => {
-      if (isBrowserPreview && !browserPreviewFixture) {
-        try {
-          const browserPreview = await loadBrowserPreviewModule();
-          const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
-          const response = await fetch(`${baseUrl}/resource/organize`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              session_id: previewSessionId,
-              resource_id: resourceId,
-              action: request.action,
-              ...(request.title !== undefined ? { title: request.title } : {}),
-              ...(request.tags !== undefined ? { tags: request.tags } : {}),
-              ...(request.group !== undefined ? { group: request.group } : {}),
-            }),
-          });
-          if (!response.ok) {
-            const detail = await response
-              .json()
-              .then((body: unknown) => describeSidecarFailure(body))
-              .catch(() => "");
-            return { ok: false, message: detail || sanitizeErrorSurfaceText(`HTTP ${response.status}`, layout.composerLanguage) };
-          }
-          await refreshPreviewResources().catch(() => undefined);
-          return {
-            ok: true,
-            // The view owns the localized "updated" copy; this lane only
-            // reports that the write really happened.
-            message: "",
-            resourceId,
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            message: error instanceof Error ? error.message : String(error),
-          };
-        }
-      }
-
-      const before = useWorkbenchState
-        .getState()
-        .data.resources.find((item) => item.id === resourceId);
-      const beforeCollectionPath = (before?.collectionPath ?? "").trim();
-      const organizeWait = beginResourceOperationStatusWait(
-        "organize",
-        ORGANIZE_CONFIRMATION_TIMEOUT_MS,
-      );
-      postMessage({
-        type: "command/execute",
-        payload: {
-          commandId: "trainer.resource.organize",
-          payload: {
-            resource_id: resourceId,
-            action: request.action,
-            ...(request.title !== undefined ? { title: request.title } : {}),
-            ...(request.tags !== undefined ? { tags: request.tags } : {}),
-            ...(request.group !== undefined ? { group: request.group } : {}),
-            workspace_id: data.memory.workspace?.workspaceId || undefined,
-            __trainerResourceOperationId: organizeWait.requestId,
-          },
-        },
-      });
-      let confirmed: boolean;
-      try {
-        confirmed = await Promise.race([
-          waitForOrganizedResource(resourceId, request, beforeCollectionPath),
-          organizeWait.done.then(() => true),
-        ]);
-        organizeWait.settle();
-      } catch (error) {
-        organizeWait.settle();
-        const reason = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          message: reason.replace("[[trainer-resource-failure]]", "").trim(),
-        };
-      }
-      if (!confirmed) {
-        return { ok: false, unconfirmed: true, message: "" };
-      }
-      return { ok: true, message: "", resourceId };
-    },
-    [
-      beginResourceOperationStatusWait,
-      browserPreviewFixture,
-      isBrowserPreview,
-      postMessage,
-      previewSessionId,
-      refreshPreviewResources,
-    ],
-  );
-
-  const exportLibraryResource = useCallback(
-    async (
-      resourceId: string,
-      format: "markdown" | "pdf" = "markdown",
-    ): Promise<ResourceMutationOutcome> => {
-      const resource = data.resources.find((item) => item.id === resourceId);
-      const name = resource?.title?.trim() || resourceId;
-      if (isBrowserPreview && !browserPreviewFixture) {
-        try {
-          const browserPreview = await loadBrowserPreviewModule();
-          const baseUrl = await browserPreview.ensureBrowserPreviewSidecar();
-          const formatParam = format === "pdf" ? "&format=pdf" : "";
-          const response = await fetch(
-            `${baseUrl}/resource/export?session_id=${encodeURIComponent(
-              previewSessionId ?? "",
-            )}&resource_id=${encodeURIComponent(resourceId)}${formatParam}`,
-          );
-          if (!response.ok) {
-            const detail = await response
-              .json()
-              .then((body: unknown) => describeSidecarFailure(body))
-              .catch(() => "");
-            return { ok: false, message: detail || sanitizeErrorSurfaceText(`HTTP ${response.status}`, layout.composerLanguage) };
-          }
-          const blob = await response.blob();
-          const fallbackName =
-            format === "pdf" ? `${name.replace(/\.md$/i, "")}.pdf` : name;
-          const downloadName = exportDownloadName(response.headers) ?? fallbackName;
-          triggerLocalDownload(blob, downloadName);
-          return { ok: true, message: downloadName, resourceId };
-        } catch (error) {
-          return {
-            ok: false,
-            message: error instanceof Error ? error.message : String(error),
-          };
-        }
-      }
-
-      // Inside VS Code the host owns the OS save flow. The correlated
-      // operation status reports the real outcome — the chosen filename on
-      // success, the concrete reason on failure; a quiet window keeps the
-      // honest "requested" statement.
-      const exportWait = beginResourceOperationStatusWait("export", 120_000);
-      postMessage({
-        type: "command/execute",
-        payload: {
-          commandId: "trainer.resource.export",
-          payload: {
-            resource_id: resourceId,
-            format,
-            workspace_id: data.memory.workspace?.workspaceId || undefined,
-            __trainerResourceOperationId: exportWait.requestId,
-          },
-        },
-      });
-      try {
-        await exportWait.done;
-        const landedMessage = exportWait.statusMessage()
-          .replace("[[trainer-resource-failure]]", "")
-          .trim();
-        exportWait.settle();
-        // The host's status text is the finished sentence (it names the saved
-        // file); the reader shows it verbatim instead of re-wrapping it.
-        return { ok: true, requested: true, message: landedMessage, resourceId };
-      } catch (error) {
-        exportWait.settle();
-        const reason = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          message: reason.replace("[[trainer-resource-failure]]", "").trim(),
-        };
-      }
-    },
-    [
-      beginResourceOperationStatusWait,
-      browserPreviewFixture,
-      data.resources,
-      isBrowserPreview,
-      postMessage,
-      previewSessionId,
-    ],
-  );
 
   const persistCoachSettings = useCallback(
     (overrides?: Partial<{
@@ -8245,78 +6946,7 @@ export function App() {
     });
   };
 
-  const openComposerModelSettings = useCallback(() => {
-    setOpenMenu(undefined);
-    setComposerModelQuery("");
-    useWorkbenchState.getState().requestSettingsCategory("connection");
-    setActiveView("settings");
-  }, [setActiveView]);
 
-  const toggleComposerModelMenu = useCallback(() => {
-    if (!data.providerConfig.configured && !composerHasSavedProfiles) {
-      openComposerModelSettings();
-      return;
-    }
-
-    setOpenMenu((current) => (current === "model" ? undefined : "model"));
-  }, [composerHasSavedProfiles, data.providerConfig.configured, openComposerModelSettings]);
-
-  const refreshComposerProviderModels = useCallback(() => {
-    if (!data.providerConfig.configured) {
-      setOperationMessage({
-        tone: "info",
-        message:
-          appUiCopy(layout.composerLanguage, "先保存连接，再更新模型列表。"),
-      });
-      return;
-    }
-
-    if (
-      !data.providerConfig.apiKeyConfigured &&
-      !providerBaseUrlIsLocalService(data.providerConfig.baseUrl)
-    ) {
-      setOperationMessage({
-        tone: "info",
-        message:
-          appUiCopy(layout.composerLanguage, "先填写访问密钥，再更新模型列表。"),
-      });
-      return;
-    }
-
-    if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
-        .then((browserPreview) =>
-          browserPreview.refreshBrowserPreviewProviderModels(previewSessionId),
-        )
-        .then(({ sessionId, messages }) => {
-          setPreviewSessionId(sessionId);
-          applyPreviewHostMessages(messages, true);
-        })
-        .catch(() => {
-          setOperationMessage({
-            tone: "error",
-            message: recoverableFailureMessage("provider", layout.composerLanguage),
-          });
-        });
-      return;
-    }
-
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId: trainerCommands.refreshProviderModels,
-      },
-    });
-  }, [
-    applyPreviewHostMessages,
-    data.providerConfig.apiKeyConfigured,
-    data.providerConfig.baseUrl,
-    data.providerConfig.configured,
-    isBrowserPreview,
-    layout.composerLanguage,
-    previewSessionId,
-    setOperationMessage,
-  ]);
 
   const handleNewChatStart = useCallback(() => {
     clearOptimisticTurns();
@@ -8344,146 +6974,7 @@ export function App() {
   });
   applySessionListRef.current = (payload: unknown) => applySessionList(payload);
 
-  const setComposerThinking = useCallback(
-    (thinking: ProviderThinkingConfig) => {
-      if (isBrowserPreview) {
-        setOperationMessage({
-          tone: "info",
-          message:
-            appUiCopy(layout.composerLanguage, "预览模式不会保存思考强度。"),
-        });
-        return;
-      }
-      postMessage({
-        type: "command/execute",
-        payload: {
-          commandId: trainerCommands.setProviderThinking,
-          payload: { thinking },
-        },
-      });
-    },
-    [isBrowserPreview, layout.composerLanguage, setOperationMessage],
-  );
 
-  const switchComposerProviderModel = useCallback((model: string) => {
-    const modelPolicy = evaluateProviderModelPolicy(model, {
-      allowedModels: data.providerConfig.allowedModels,
-      deniedModels: data.providerConfig.deniedModels,
-    });
-    if (!modelPolicy.allowed) {
-      setOperationMessage({
-        tone: "info",
-        message:
-          composerModelPolicyHint(layout.composerLanguage, modelPolicy.reason) ??
-          (appUiCopy(layout.composerLanguage, "\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u53ef\u4ee5\u4f7f\u7528\u7684\u6a21\u578b\u3002")),
-      });
-      return;
-    }
-
-    setOpenMenu(undefined);
-    setComposerModelQuery("");
-
-    if (isBrowserPreview) {
-      void loadBrowserPreviewModule()
-        .then((browserPreview) =>
-          browserPreview.switchBrowserPreviewProviderModel(modelPolicy.model, previewSessionId),
-        )
-        .then(({ sessionId, messages }) => {
-          setPreviewSessionId(sessionId);
-          applyPreviewHostMessages(messages, true);
-        })
-        .catch(() => {
-          setOperationMessage({
-            tone: "error",
-            message: recoverableFailureMessage("provider", layout.composerLanguage),
-          });
-        });
-      return;
-    }
-
-    postMessage({
-      type: "command/execute",
-      payload: {
-        commandId: trainerCommands.switchProviderModel,
-        payload: {
-          model: modelPolicy.model,
-          reason: "composer_model_switch",
-        },
-      },
-    });
-  }, [
-    applyPreviewHostMessages,
-    data.providerConfig.allowedModels,
-    data.providerConfig.deniedModels,
-    isBrowserPreview,
-    layout.composerLanguage,
-    previewSessionId,
-    setOperationMessage,
-  ]);
-
-  const switchComposerProviderModelForProfile = useCallback(
-    (profileId: string, model: string) => {
-      const normalizedProfileId = profileId.trim();
-      if (
-        !normalizedProfileId ||
-        normalizedProfileId === data.providerConfig.profileId?.trim()
-      ) {
-        switchComposerProviderModel(model);
-        return;
-      }
-
-      setOpenMenu(undefined);
-      setComposerModelQuery("");
-
-      if (isBrowserPreview) {
-        void loadBrowserPreviewModule()
-          .then(async (browserPreview) => {
-            const switched = await browserPreview.switchBrowserPreviewProviderProfile(
-              normalizedProfileId,
-              previewSessionId,
-            );
-            // The preview module reads the persisted provider record, so the
-            // profile switch has to land before the model half is selected;
-            // otherwise the model is applied to the old provider.
-            applyPreviewHostMessages(switched.messages, true);
-            setPreviewSessionId(switched.sessionId);
-            return browserPreview.switchBrowserPreviewProviderModel(model, switched.sessionId);
-          })
-          .then(({ sessionId, messages }) => {
-            setPreviewSessionId(sessionId);
-            applyPreviewHostMessages(messages, true);
-          })
-          .catch(() => {
-            setOperationMessage({
-              tone: "error",
-              message: recoverableFailureMessage("provider", layout.composerLanguage),
-            });
-          });
-        return;
-      }
-
-      postMessage({
-        type: "command/execute",
-        payload: {
-          commandId: trainerCommands.switchProviderModel,
-          payload: {
-            profileId: normalizedProfileId,
-            model,
-            reason: "composer_model_switch",
-          },
-        },
-      });
-    },
-    [
-      applyPreviewHostMessages,
-      data.providerConfig.profileId,
-      isBrowserPreview,
-      layout.composerLanguage,
-      previewSessionId,
-      setOperationMessage,
-      switchComposerProviderModel,
-    ],
-  );
 
   handleSubmitRef.current = handleSubmit;
 

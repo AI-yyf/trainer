@@ -442,8 +442,27 @@ let liveActiveView: ActiveWorkbenchView = "coach";
 // theme, draft flush) quietly rewrites persistence back to the old view.
 liveActiveView = initialUi.activeView;
 
+// Scroll offsets are persisted across reloads and view switches without
+// replacing `state.layout` in Zustand, preventing whole-workbench App()
+// re-renders on scroll or pane unmount.
+const persistedSurfaceScrollPositions: Record<string, number> = {
+  ...(initialUi.surfaceScrollPositions ?? {}),
+};
+
+export function getPersistedSurfaceScrollPositions(): Readonly<Record<string, number>> {
+  return persistedSurfaceScrollPositions;
+}
+
+function withPersistedSurfaceScroll(next: PersistedWorkbenchState): PersistedWorkbenchState {
+  return {
+    ...next,
+    activeView: liveActiveView,
+    surfaceScrollPositions: { ...persistedSurfaceScrollPositions },
+  };
+}
+
 function persistLayout(next: PersistedWorkbenchState): PersistedWorkbenchState {
-  setPersistedState({ ...next, activeView: liveActiveView });
+  setPersistedState(withPersistedSurfaceScroll(next));
   return next;
 }
 
@@ -463,12 +482,12 @@ function flushComposerDraftPersist(): void {
   composerDraftPersistTimer = undefined;
   const getLayout = pendingComposerDraftLayout;
   pendingComposerDraftLayout = undefined;
-  if (getLayout) setPersistedState({ ...getLayout(), activeView: liveActiveView });
+  if (getLayout) setPersistedState(withPersistedSurfaceScroll(getLayout()));
 }
 
 function scheduleComposerDraftPersist(getLayout: () => PersistedWorkbenchState): void {
   if (typeof window === "undefined") {
-    setPersistedState({ ...getLayout(), activeView: liveActiveView });
+    setPersistedState(withPersistedSurfaceScroll(getLayout()));
     return;
   }
   pendingComposerDraftLayout = getLayout;
@@ -645,48 +664,6 @@ function finishSafeStreamContent(
 function visibleCompletionText(value: unknown): string | undefined {
   const normalized = sanitizeVisibleText(value).trim();
   return normalized || undefined;
-}
-
-function buildStreamCompletionMessage(
-  language: ComposerLanguage,
-  payload: {
-    tokens: number;
-    agentic?: boolean;
-    summary?: string;
-    nextStep?: string;
-    toolCount?: number;
-  },
-): string {
-  const summary = payload.summary?.trim();
-  const nextStep = payload.nextStep?.trim();
-  if (summary && nextStep) {
-    return localizeUi(
-      language,
-      `${summary} Next: ${nextStep}`,
-      `本轮收口：${summary} 下一步：${nextStep}`,
-    );
-  }
-  if (summary) {
-    return localizeUi(language, `Coach loop closed: ${summary}`, `本轮教练收口：${summary}`);
-  }
-  if (nextStep) {
-    return localizeUi(language, `Next step: ${nextStep}`, `下一步：${nextStep}`);
-  }
-  if (payload.agentic) {
-    const toolCount = typeof payload.toolCount === "number" ? payload.toolCount : 0;
-    return toolCount > 0
-      ? localizeUi(
-          language,
-          `Coach loop completed after ${toolCount} tool step${toolCount === 1 ? "" : "s"}.`,
-          `教练回合已完成，共执行 ${toolCount} 个工具步骤。`,
-        )
-      : localizeUi(language, "Coach loop completed.", "教练回合已完成。");
-  }
-  return localizeUi(
-    language,
-    `Stream completed (${payload.tokens} tokens)`,
-    `流式回复已完成（${payload.tokens} tokens）。`,
-  );
 }
 
 function workspaceChromeAllowsLeftoverFill(
@@ -1222,9 +1199,13 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         goalStartedAt: startedAt,
       };
     }),
-  rememberSurfaceScroll: (key, position) => set((state) => ({
-    layout: persistLayout({ ...state.layout, surfaceScrollPositions: { ...state.layout.surfaceScrollPositions, [key]: position } }),
-  })),
+  rememberSurfaceScroll: (key, position) => {
+    if (persistedSurfaceScrollPositions[key] === position) {
+      return;
+    }
+    persistedSurfaceScrollPositions[key] = position;
+    setPersistedState(withPersistedSurfaceScroll(get().layout));
+  },
   setActivityDraft: (key, draft) =>
     set((state) => ({
       layout: persistLayout({

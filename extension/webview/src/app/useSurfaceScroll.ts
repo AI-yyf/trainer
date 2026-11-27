@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
 import type { ActiveWorkbenchView } from "../lib/types";
-import { useWorkbenchState } from "./useWorkbenchState";
+import { getPersistedSurfaceScrollPositions, useWorkbenchState } from "./useWorkbenchState";
 
 const READING_SURFACES: Record<ActiveWorkbenchView, string> = {
   coach: ".coach-conversation-view__list",
@@ -37,13 +37,13 @@ export function resolveCoachBottomScrollTop(container: HTMLElement): number {
 
 /** Preserve reading positions by real workspace/session identity, including reload. */
 export function useSurfaceScroll(containerRef: RefObject<HTMLElement>, activeView: ActiveWorkbenchView, scope: string) {
-  const positions = useRef(new Map(Object.entries(useWorkbenchState.getState().layout.surfaceScrollPositions ?? {})));
+  const positions = useRef(new Map(Object.entries(getPersistedSurfaceScrollPositions())));
   const restoringSavedPosition = useRef(false);
   useLayoutEffect(() => {
     const root = containerRef.current;
     if (!root) return;
     const key = `${scope}\u0000${activeView}`;
-    const saved = positions.current.get(key);
+    const saved = positions.current.get(key) ?? getPersistedSurfaceScrollPositions()[key];
     restoringSavedPosition.current = saved !== undefined;
     let pane: HTMLElement | null = null;
     let restoring = true;

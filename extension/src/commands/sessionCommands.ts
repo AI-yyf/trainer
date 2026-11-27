@@ -2219,22 +2219,6 @@ export async function sendStreamMessageCommand(
     // verify streaming is a diagnostic, and the first real send is the live
     // confirmation. Runtime stream failures surface honestly through the
     // request-failure attribution instead of a pre-flight re-test demand.
-    if (streamPayload.attachments?.length) {
-      const imageGuard = providerImageInputGuard(
-        context,
-        providerConfig,
-        apiKey,
-        streamPayload.responseLanguage,
-      );
-      if (imageGuard.blocked) {
-        return {
-          ok: false,
-          message:
-            imageGuard.message ??
-            'This provider connection cannot send images to the model yet.',
-        };
-      }
-    }
 
     if (streamGenerations.get(context) !== streamGeneration) {
       return { ok: true, message: 'Stream invalidated.' };
@@ -2307,9 +2291,10 @@ export async function sendStreamMessageCommand(
       request_id: streamPayload.requestId?.trim() || `coach-${messageId}`,
       plan_runtime_recovery: streamPayload.planRuntimeRecovery,
       stream: true,
-      // F3: slim complete frames (revision + dirty keys only); the host
-      // refetches the authoritative snapshot via GET /snapshot on merge.
-      fields: 'slim',
+      // Deliver the turn-locked authoritative snapshot directly in the complete
+      // SSE frame so completion settles in one round-trip without re-hydrating
+      // a second /snapshot?fields=full outside the session lock.
+      fields: 'full',
       // Mid-session host re-attest (never JSON-omit undefined).
       remote_name: context.getHostState().workspace.remoteName ?? '',
       workspace_trusted: Boolean(context.getHostState().workspace.trusted),

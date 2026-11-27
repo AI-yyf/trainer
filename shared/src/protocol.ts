@@ -1159,6 +1159,16 @@ export function buildTrainerStreamingErrorMessage(
   );
 }
 
+export function isNominalTrainerStopReason(stopReason: string | undefined): boolean {
+  const normalized = stopReason?.trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "completed" ||
+    normalized === "stop" ||
+    normalized === "coach_finalize"
+  );
+}
+
 export function deriveTrainerStreamingOperationMessage(
   language: ComposerLanguage,
   value: unknown,
@@ -1191,22 +1201,29 @@ export function deriveTrainerStreamingOperationMessage(
   if (!hasRecoverableTrainerStreamingCompletion(state)) {
     return undefined;
   }
-  const stopReason = describeTrainerStopReason(state.completionStopReason, language);
-  // A plain successful reply is its own confirmation. A top banner repeating
-  // "reply completed" is redundant chrome (Coach audit 2026-11-07); keep the
-  // notice only when it carries real information: summary/next step, token
-  // counts, or a non-nominal stop reason. Tool steps are already inspectable
-  // inside the reply's own work-trail disclosure.
-  const carriesCompletionDetail =
-    Boolean(state.completionSummary?.trim()) ||
-    Boolean(state.completionNextStep?.trim()) ||
-    typeof options?.completionTokens === "number" ||
-    Boolean(stopReason);
+  const hasReliability =
+    state.reliabilityPhase !== undefined || state.reliabilityOutcome !== undefined;
+  const looksSuccessful = hasReliability
+    ? operationReliabilityLooksSuccessful({
+        phase: state.reliabilityPhase,
+        outcome: state.reliabilityOutcome,
+        stopReason: state.completionStopReason,
+      })
+    : true;
   const reliabilityLooksFailed =
-    state.reliabilityOutcome === "failure" || state.reliabilityPhase === "failed";
-  if (!carriesCompletionDetail && !reliabilityLooksFailed) {
+    state.reliabilityOutcome === "failure" ||
+    state.reliabilityPhase === "failed" ||
+    !looksSuccessful;
+  const nominalStop = isNominalTrainerStopReason(state.completionStopReason);
+  // A successful nominal reply (including normal agentic coach_finalize) is its
+  // own confirmation in the conversation thread; summary, next step, and tool
+  // trail render inline inside the reply card. Surface a top banner only when
+  // reliability failed or the turn stopped for a non-nominal reason (e.g.
+  // max_steps, no_progress, local_guided_training, language_corruption_recovered).
+  if (!reliabilityLooksFailed && nominalStop) {
     return undefined;
   }
+  const stopReason = describeTrainerStopReason(state.completionStopReason, language);
   const message = buildTrainerStreamingCompletionMessage(language, {
     tokens: options?.completionTokens,
     agentic: state.agentic,
@@ -1214,27 +1231,14 @@ export function deriveTrainerStreamingOperationMessage(
     nextStep: state.completionNextStep,
     toolCount: state.toolCount,
   });
-  const hasReliability =
-    state.reliabilityPhase !== undefined || state.reliabilityOutcome !== undefined;
-  if (hasReliability) {
-    const looksSuccessful = operationReliabilityLooksSuccessful({
-      phase: state.reliabilityPhase,
-      outcome: state.reliabilityOutcome,
-      stopReason: state.completionStopReason,
-    });
-    if (
-      state.reliabilityOutcome === "failure" ||
-      state.reliabilityPhase === "failed" ||
-      !looksSuccessful
-    ) {
-      return {
-        tone: "error",
-        message: stopReason ? `${message} (${stopReason})` : message,
-      };
-    }
+  if (reliabilityLooksFailed) {
+    return {
+      tone: "error",
+      message: stopReason ? `${message} (${stopReason})` : message,
+    };
   }
   return {
-    tone: "success",
+    tone: "info",
     message: stopReason ? `${message} (${stopReason})` : message,
   };
 }
