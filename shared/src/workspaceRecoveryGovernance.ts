@@ -623,3 +623,82 @@ export function selectResourcesForScope(
     return Boolean(record) && trainingRecordMatchesWorkspace(record, scope.workspaceId);
   });
 }
+
+export type WorkspaceProjectionRecord = {
+  workspaceId: string;
+  workspaceEpoch: number;
+  stateSeq: number;
+  hasLivePlan: boolean;
+  activePlanId?: string;
+  activePlanTitle: string;
+  activeStepId?: string;
+  selectedCardId?: string;
+  completedCardIds: string[];
+  pendingEvidenceIds: string[];
+  adoptedEvidenceIds: string[];
+  rejectedEvidenceIds: string[];
+  resourceIds: string[];
+  recoveredWithoutLivePlan: boolean;
+  hasPlanAuthority: boolean;
+  hasCardAuthority: boolean;
+};
+
+function cleanIdList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of value) {
+    const cleaned = text(item);
+    if (cleaned && !out.includes(cleaned)) {
+      out.push(cleaned);
+    }
+  }
+  return out;
+}
+
+function asNonNegativeInt(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : fallback;
+}
+
+export function normalizeWorkspaceProjection(value: unknown): WorkspaceProjectionRecord | undefined {
+  const record = asRecord(value);
+  if (!record) {
+    return undefined;
+  }
+  const workspaceId = text(record.workspaceId ?? record.workspace_id);
+  if (!workspaceId) {
+    return undefined;
+  }
+  const activePlanId = text(record.activePlanId ?? record.active_plan_id) || undefined;
+  const recoveredWithoutLivePlan =
+    record.recoveredWithoutLivePlan === true || record.recovered_without_live_plan === true;
+  const rawHasLivePlan = record.hasLivePlan ?? record.has_live_plan;
+  const hasLivePlan =
+    typeof rawHasLivePlan === "boolean"
+      ? rawHasLivePlan
+      : Boolean(activePlanId) && !recoveredWithoutLivePlan;
+  return {
+    workspaceId,
+    workspaceEpoch: asNonNegativeInt(record.workspaceEpoch ?? record.workspace_epoch),
+    stateSeq: asNonNegativeInt(record.stateSeq ?? record.state_seq),
+    hasLivePlan,
+    activePlanId,
+    activePlanTitle: text(record.activePlanTitle ?? record.active_plan_title),
+    activeStepId: text(record.activeStepId ?? record.active_step_id) || undefined,
+    selectedCardId: text(record.selectedCardId ?? record.selected_card_id) || undefined,
+    completedCardIds: cleanIdList(record.completedCardIds ?? record.completed_card_ids),
+    pendingEvidenceIds: cleanIdList(record.pendingEvidenceIds ?? record.pending_evidence_ids),
+    adoptedEvidenceIds: cleanIdList(record.adoptedEvidenceIds ?? record.adopted_evidence_ids),
+    rejectedEvidenceIds: cleanIdList(record.rejectedEvidenceIds ?? record.rejected_evidence_ids),
+    resourceIds: cleanIdList(record.resourceIds ?? record.resource_ids),
+    recoveredWithoutLivePlan,
+    hasPlanAuthority:
+      record.hasPlanAuthority === true || record.has_plan_authority === true,
+    hasCardAuthority:
+      record.hasCardAuthority === true || record.has_card_authority === true,
+  };
+}
+

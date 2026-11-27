@@ -9,48 +9,6 @@ type TrainingCardCopyOptions = {
   maxItems?: number;
 };
 
-const TRAINING_SCENARIO_PACK_LABELS: Record<
-  string,
-  { zh: string; en: string } & Partial<Record<ComposerLanguage, string>>
-> = {
-  remote_workspace: {
-    zh: "远程边界",
-    en: "Remote boundary",
-    "zh-CN": "远程边界",
-    "en-US": "Remote boundary",
-    "es-ES": "Límite remoto",
-    "fr-FR": "Frontière distante",
-    "de-DE": "Remote-Grenze",
-    "ja-JP": "リモート境界",
-    "ko-KR": "원격 경계",
-    "pt-BR": "Limite remoto",
-  },
-  debug_loop: {
-    zh: "调试闭环",
-    en: "Minimal debug loop",
-    "zh-CN": "调试闭环",
-    "en-US": "Minimal debug loop",
-    "es-ES": "Ciclo mínimo de depuración",
-    "fr-FR": "Boucle de débogage minimale",
-    "de-DE": "Minimale Debug-Schleife",
-    "ja-JP": "最小デバッグ循環",
-    "ko-KR": "최소 디버그 루프",
-    "pt-BR": "Ciclo mínimo de depuração",
-  },
-  function_guidance: {
-    zh: "函数契约恢复",
-    en: "Function contract recovery",
-    "zh-CN": "函数契约恢复",
-    "en-US": "Function contract recovery",
-    "es-ES": "Recuperación del contrato de función",
-    "fr-FR": "Reprise du contrat de fonction",
-    "de-DE": "Funktionsvertrag wiederherstellen",
-    "ja-JP": "関数契約の回復",
-    "ko-KR": "함수 계약 복구",
-    "pt-BR": "Recuperação do contrato da função",
-  },
-};
-
 const COPY_TRANSLATIONS: Array<{ zh: string; en: string }> = [
   {
     zh: "改登录失败的提示",
@@ -248,44 +206,6 @@ export function compactTrainingCardText(
 ): string | undefined {
   return compactNarrowSidebarText(language, value, {
     maxLength: options?.maxLength ?? 88,
-  });
-}
-
-export function summarizeTrainingCardLead(
-  language: TrainingCardCopyLanguage,
-  value?: string,
-  options?: TrainingCardCopyOptions,
-): string | undefined {
-  return summarizeNarrowSidebarLead(language, value, {
-    maxLength: options?.maxLength ?? 96,
-  });
-}
-
-export function summarizeTrainingScenarioPack(
-  language: TrainingCardCopyLanguage,
-  scenarioPack?: string,
-): string | undefined {
-  const normalized = compact(scenarioPack);
-  if (!normalized) {
-    return undefined;
-  }
-
-  const knownLabel = TRAINING_SCENARIO_PACK_LABELS[normalized];
-  if (knownLabel) {
-    return knownLabel[language] ?? knownLabel["en-US"];
-  }
-
-  return undefined;
-}
-
-export function compactTrainingCardList(
-  language: TrainingCardCopyLanguage,
-  values: readonly string[] | undefined,
-  options?: TrainingCardCopyOptions,
-): string[] {
-  return compactNarrowSidebarList(language, values, {
-    maxItems: options?.maxItems ?? 3,
-    maxLength: options?.maxLength ?? 72,
   });
 }
 

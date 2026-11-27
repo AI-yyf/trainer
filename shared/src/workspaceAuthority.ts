@@ -21,29 +21,6 @@ export const PERMISSION_LEVELS: PermissionLevel[] = [
   "destructive",
 ];
 
-export const PERMISSION_LEVEL_LABELS: Record<
-  PermissionLevel,
-  Record<WorkspaceAuthoritySurfaceLanguage, string>
-> = {
-  inspect: { "zh-CN": "查看", "en-US": "Inspect", "es-ES": "Inspeccionar", "fr-FR": "Inspecter", "de-DE": "Inspizieren", "ja-JP": "検査", "ko-KR": "검사", "pt-BR": "Inspecionar" },
-  annotate: { "zh-CN": "批注", "en-US": "Annotate", "es-ES": "Anotar", "fr-FR": "Annoter", "de-DE": "Annotieren", "ja-JP": "注釈", "ko-KR": "주석", "pt-BR": "Anotar" },
-  reorganize: { "zh-CN": "整理", "en-US": "Reorganize", "es-ES": "Reorganizar", "fr-FR": "Réorganiser", "de-DE": "Neuorganisieren", "ja-JP": "整理", "ko-KR": "재구성", "pt-BR": "Reorganizar" },
-  generate: { "zh-CN": "生成", "en-US": "Generate", "es-ES": "Generar", "fr-FR": "Générer", "de-DE": "Generieren", "ja-JP": "生成", "ko-KR": "생성", "pt-BR": "Gerar" },
-  apply: { "zh-CN": "修改", "en-US": "Apply", "es-ES": "Aplicar", "fr-FR": "Appliquer", "de-DE": "Anwenden", "ja-JP": "適用", "ko-KR": "적용", "pt-BR": "Aplicar" },
-  destructive: { "zh-CN": "删除", "en-US": "Destructive", "es-ES": "Destructivo", "fr-FR": "Destructeur", "de-DE": "Destruktiv", "ja-JP": "破壊的", "ko-KR": "파괴적", "pt-BR": "Destrutivo" },
-};
-
-export const PERMISSION_LEVEL_ORDER: Record<PermissionLevel, number> = {
-  inspect: 0,
-  annotate: 1,
-  reorganize: 2,
-  generate: 3,
-  apply: 4,
-  destructive: 5,
-};
-
-export const DEFAULT_ENABLED_PERMISSIONS: PermissionLevel[] = ["inspect", "annotate"];
-
 const LOCALIZED_PERMISSION_LEVEL_LABELS: Record<
   PermissionLevel,
   Record<WorkspaceAuthoritySurfaceLanguage, string>
@@ -54,72 +31,6 @@ const LOCALIZED_PERMISSION_LEVEL_LABELS: Record<
   generate: { "zh-CN": "生成", "en-US": "Generate", "es-ES": "Generar", "fr-FR": "Générer", "de-DE": "Erzeugen", "ja-JP": "生成", "ko-KR": "생성", "pt-BR": "Gerar" },
   apply: { "zh-CN": "修改", "en-US": "Apply", "es-ES": "Aplicar", "fr-FR": "Appliquer", "de-DE": "Ändern", "ja-JP": "適用", "ko-KR": "적용", "pt-BR": "Aplicar" },
   destructive: { "zh-CN": "高风险", "en-US": "Destructive", "es-ES": "Destructivo", "fr-FR": "Destructif", "de-DE": "Destruktiv", "ja-JP": "破壊的", "ko-KR": "파괴적", "pt-BR": "Destrutivo" },
-};
-
-const LOCALIZED_PERMISSION_LEVEL_DESCRIPTIONS: Record<
-  PermissionLevel,
-  Record<WorkspaceAuthoritySurfaceLanguage, string>
-> = {
-  inspect: {
-    "zh-CN": "读取、列表、搜索、索引、预览、摘要",
-    "en-US": "Read, list, search, index, preview, summarize",
-    "es-ES": "Leer, listar, buscar, indexar, previsualizar, resumir",
-    "fr-FR": "Lire, lister, rechercher, indexer, prévisualiser, résumer",
-    "de-DE": "Lesen, auflisten, suchen, indizieren, Vorschau, zusammenfassen",
-    "ja-JP": "読む、一覧、検索、索引、プレビュー、要約",
-    "ko-KR": "읽기, 목록, 검색, 색인, 미리 보기, 요약",
-    "pt-BR": "Ler, listar, buscar, indexar, visualizar, resumir",
-  },
-  annotate: {
-    "zh-CN": "写笔记、计划、证据，不改源码",
-    "en-US": "Write notes, plans, evidence - no source code changes",
-    "es-ES": "Escribir notas, planes y evidencia, sin cambiar el código fuente",
-    "fr-FR": "Écrire des notes, plans et preuves, sans modifier le code source",
-    "de-DE": "Notizen, Pläne und Nachweise schreiben, ohne Quellcode zu ändern",
-    "ja-JP": "メモ、計画、証拠を書く。ソースコードは変更しない",
-    "ko-KR": "메모, 계획, 근거를 남기되 소스 코드는 바꾸지 않음",
-    "pt-BR": "Escrever notas, planos e evidências, sem alterar o código-fonte",
-  },
-  reorganize: {
-    "zh-CN": "新建目录、移动、重命名，在根目录内重组",
-    "en-US": "Create folders, move, rename, and reorganize within the root",
-    "es-ES": "Crear carpetas, mover, renombrar y reorganizar dentro de la raíz",
-    "fr-FR": "Créer des dossiers, déplacer, renommer et réorganiser dans la racine",
-    "de-DE": "Ordner anlegen, verschieben, umbenennen und innerhalb des Wurzelpfads neu ordnen",
-    "ja-JP": "フォルダ作成、移動、名前変更。ルート内で再整理",
-    "ko-KR": "폴더 생성, 이동, 이름 변경, 루트 안에서 재구성",
-    "pt-BR": "Criar pastas, mover, renomear e reorganizar dentro da raiz",
-  },
-  generate: {
-    "zh-CN": "生成新文件、卡片、摘要、脚本",
-    "en-US": "Generate new files, cards, summaries, scripts",
-    "es-ES": "Generar nuevos archivos, tarjetas, resúmenes y scripts",
-    "fr-FR": "Générer de nouveaux fichiers, cartes, résumés et scripts",
-    "de-DE": "Neue Dateien, Karten, Zusammenfassungen und Skripte erzeugen",
-    "ja-JP": "新しいファイル、カード、要約、スクリプトを生成",
-    "ko-KR": "새 파일, 카드, 요약, 스크립트 생성",
-    "pt-BR": "Gerar novos arquivos, cartões, resumos e scripts",
-  },
-  apply: {
-    "zh-CN": "修改已有文件",
-    "en-US": "Modify existing files",
-    "es-ES": "Modificar archivos existentes",
-    "fr-FR": "Modifier les fichiers existants",
-    "de-DE": "Vorhandene Dateien ändern",
-    "ja-JP": "既存ファイルを修正",
-    "ko-KR": "기존 파일 수정",
-    "pt-BR": "Modificar arquivos existentes",
-  },
-  destructive: {
-    "zh-CN": "删除、覆盖、批量移动，仅走 trash/review 路径",
-    "en-US": "Delete, overwrite, or bulk move only through the trash/review path",
-    "es-ES": "Eliminar, sobrescribir o mover en masa solo por la ruta de trash/review",
-    "fr-FR": "Supprimer, écraser ou déplacer en masse uniquement via le chemin trash/review",
-    "de-DE": "Löschen, überschreiben oder massenhaft verschieben nur über den Trash-/Review-Pfad",
-    "ja-JP": "削除、上書き、一括移動は trash/review 経路のみ",
-    "ko-KR": "삭제, 덮어쓰기, 대량 이동은 trash/review 경로로만 허용",
-    "pt-BR": "Excluir, sobrescrever ou mover em massa apenas pela rota trash/review",
-  },
 };
 
 type WorkspaceAuthorityPhraseKey =
@@ -320,109 +231,6 @@ export function getPermissionLabel(
   language: WorkspaceAuthoritySurfaceLanguage,
 ): string {
   return LOCALIZED_PERMISSION_LEVEL_LABELS[level][language];
-}
-
-export function getPermissionDescription(
-  level: PermissionLevel,
-  language: WorkspaceAuthoritySurfaceLanguage,
-): string {
-  return LOCALIZED_PERMISSION_LEVEL_DESCRIPTIONS[level][language];
-
-  const descriptions: Record<
-    PermissionLevel,
-    Record<WorkspaceAuthoritySurfaceLanguage, string>
-  > = {
-    inspect: {
-      "zh-CN": "读取、列表、搜索、索引、预览、摘要",
-      "en-US": "Read, list, search, index, preview, summarize",
-      "es-ES": "Leer, listar, buscar, indexar, previsualizar, resumir",
-      "fr-FR": "Lire, lister, rechercher, indexer, prévisualiser, résumer",
-      "de-DE": "Lesen, auflisten, suchen, indexieren, Vorschau, zusammenfassen",
-      "ja-JP": "読み取り、一覧、搜索、インデックス、プレビュー、要約",
-      "ko-KR": "읽기, 목록, 검색, 인덱싱, 미리보기, 요약",
-      "pt-BR": "Ler, listar, buscar, indexar, visualizar, resumir",
-    },
-    annotate: {
-      "zh-CN": "写笔记、计划、证据，不改源码",
-      "en-US": "Write notes, plans, evidence — no source code changes",
-      "es-ES": "Escribir notas, planes, evidencia — sin cambios en código fuente",
-      "fr-FR": "Écrire des notes, plans, preuves — sans modification du code source",
-      "de-DE": "Notizen, Pläne, Beweise schreiben — keine Quellcode-Änderungen",
-      "ja-JP": "メモ、計画、証拠を書く、ソースコードは変更しない",
-      "ko-KR": "메모, 계획, 증거 작성 — 소스 코드 변경 없음",
-      "pt-BR": "Escrever notas, planos, evidências — sem alterações no código-fonte",
-    },
-    reorganize: {
-      "zh-CN": "新建目录、移动、重命名，在 root 内重组资料",
-      "en-US": "mkdir/move/rename — reorganize within root",
-      "es-ES": "mkdir/mover/renombrar — reorganizar dentro de root",
-      "fr-FR": "mkdir/déplacer/renommer — réorganiser dans root",
-      "de-DE": "mkdir/verschieben/umbenennen — innerhalb root neuorganisieren",
-      "ja-JP": "mkdir/移動/名前変更 — root 内で再整理",
-      "ko-KR": "mkdir/이동/이름 변경 — root 내에서 재구성",
-      "pt-BR": "mkdir/mover/renomear — reorganizar dentro do root",
-    },
-    generate: {
-      "zh-CN": "生成新文件、卡片、总结、脚本",
-      "en-US": "Generate new files, cards, summaries, scripts",
-      "es-ES": "Generar nuevos archivos, tarjetas, resúmenes, scripts",
-      "fr-FR": "Générer de nouveaux fichiers, cartes, résumés, scripts",
-      "de-DE": "Neue Dateien, Karten, Zusammenfassungen, Skripte generieren",
-      "ja-JP": "新しいファイル、カード、まとめ、スクリプトを生成",
-      "ko-KR": "새 파일, 카드, 요약, 스크립트 생성",
-      "pt-BR": "Gerar novos arquivos, cartões, resumos, scripts",
-    },
-    apply: {
-      "zh-CN": "修改已有文件",
-      "en-US": "Modify existing files",
-      "es-ES": "Modificar archivos existentes",
-      "fr-FR": "Modifier les fichiers existants",
-      "de-DE": "Vorhandene Dateien ändern",
-      "ja-JP": "既存のファイルを修正",
-      "ko-KR": "기존 파일 수정",
-      "pt-BR": "Modificar arquivos existentes",
-    },
-    destructive: {
-      "zh-CN": "删除、覆盖、批量移动 — 仅通过 trash / review 路径",
-      "en-US": "Delete, overwrite, bulk move — via trash/review only",
-      "es-ES": "Eliminar, sobrescribir, mover en masa — solo vía trash/review",
-      "fr-FR": "Supprimer, écraser, déplacer en masse — via trash/review uniquement",
-      "de-DE": "Löschen, überschreiben, Massenverschieben — nur über trash/review",
-      "ja-JP": "削除、上書き、一括移動 — trash/review 経由のみ",
-      "ko-KR": "삭제, 덮어쓰기, 대량 이동 — trash/review 경로만",
-      "pt-BR": "Excluir, sobrescrever, mover em massa — apenas via trash/review",
-    },
-  };
-  return descriptions[level][language];
-}
-
-export function getDefaultPermissionLevel(): PermissionLevel {
-  return "annotate";
-}
-
-export function isPermissionLevelEnabled(
-  enabled: PermissionLevel[],
-  level: PermissionLevel,
-): boolean {
-  return enabled.includes(level);
-}
-
-export function enablePermissionLevel(
-  enabled: PermissionLevel[],
-  level: PermissionLevel,
-): PermissionLevel[] {
-  if (enabled.includes(level)) return enabled;
-  return [...enabled, level].sort(
-    (a, b) => PERMISSION_LEVEL_ORDER[a] - PERMISSION_LEVEL_ORDER[b],
-  );
-}
-
-export function disablePermissionLevel(
-  enabled: PermissionLevel[],
-  level: PermissionLevel,
-): PermissionLevel[] {
-  if (level === "destructive") return enabled.filter((p) => p !== level);
-  return enabled.filter((p) => p !== level && p !== "destructive");
 }
 
 export interface WorkspaceAuthoritySurfaceInput {
@@ -825,16 +633,4 @@ export function describeWorkspaceAuthoritySummary(
     nextSafeAction,
     summaryText,
   };
-}
-
-/**
- * Returns the effective enabled permissions, falling back to defaults.
- * Reference: docs/open-source-fit-and-provider-strategy.md \u00a77.8
- */
-export function getEffectiveEnabledPermissions(
-  input: WorkspaceAuthoritySurfaceInput | null | undefined,
-): PermissionLevel[] {
-  return input?.enabledPermissions && input.enabledPermissions.length > 0
-    ? input.enabledPermissions
-    : DEFAULT_ENABLED_PERMISSIONS;
 }

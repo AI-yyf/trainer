@@ -1,27 +1,5 @@
 import type { StageMaterialItem } from './stageMaterials';
-import type {
-  AffectState,
-  CoachingState,
-  CoachingScenario,
-  EvaluationReport,
-  GlobalPlan,
-  GlobalPlanProjectLink,
-  ImplementationGuide,
-  LearnerSignal,
-  LearnerState,
-  LearningPlan,
-  MemorySnapshot,
-  PlanRuntimeStatus,
-  PrincipleNote,
-  ProviderConfig,
-  ProjectAdaptationGuide,
-  ProjectIdea,
-  ProjectSourceSuggestion,
-  TaskSpec,
-  TeachingDecision,
-  ToneDecision,
-  UserProfile,
-} from "./models";
+import type { AffectState, CoachingState, EvaluationReport, GlobalPlan, GlobalPlanProjectLink, ImplementationGuide, LearnerState, LearningPlan, MemorySnapshot, PlanRuntimeStatus, PrincipleNote, ProviderConfig, ProjectAdaptationGuide, ProjectIdea, ProjectSourceSuggestion, TaskSpec, TeachingDecision, ToneDecision, UserProfile } from "./models";
 import type { ComposerLanguage } from "./types";
 import { providerQuotaRecovery } from "./providerStatus";
 import {
@@ -86,38 +64,6 @@ export type NextStepHint = {
   verification?: string[];
 };
 
-export type AgentCheckpointSummary = {
-  checkpointId: string;
-  sessionId: string;
-  createdAt?: string;
-  nextStep?: string;
-};
-
-export type AgentMeta = {
-  agentic?: boolean;
-  summary?: string;
-  nextStep?: string;
-  stopReason?: string;
-  decision?: string;
-  blocker?: string;
-  teachingNote?: string;
-  confidence?: string;
-  evidence?: string[];
-  resumeThread?: string;
-  fellBack?: boolean;
-  toolEvents?: Array<Record<string, unknown>>;
-  steps?: Array<Record<string, unknown>>;
-  attachmentsPresent?: boolean;
-  imageAttachmentCount?: number;
-  attachmentsDeliveredToModel?: boolean;
-  attachmentsDeliveryPath?: string;
-  attachmentsDeliveryReason?: string;
-  coachVisibleStatus?: CoachVisibleStatusPart;
-  nextStepHint?: NextStepHint;
-  checkpointId?: string;
-  recoveryAvailable?: boolean;
-};
-
 /**
  * Research compatibility surface
  *
@@ -133,10 +79,6 @@ export type AgentRole = "researcher" | "editor" | "critic" | "synthesizer";
 export type ThemeStatus = "planning" | "active" | "paused" | "completed";
 
 export type ThreadDepth = "shallow" | "medium" | "deep";
-
-export type ArtifactKind = "note" | "draft" | "summary" | "report" | "outline" | "bibliography";
-
-export type ApprovalStatus = "pending" | "approved" | "rejected";
 
 /**
  * Kept for compatibility with older research scheduling payloads.
@@ -224,19 +166,6 @@ export type ResearchProject = {
   updated_at: string;
 };
 
-export type ResearchScheduleStatus = {
-  theme_id: string;
-  theme_title: string;
-  status: ThemeStatus;
-  duration_weeks: number;
-  progress_percentage: number;
-  time_elapsed_percentage: number;
-  next_checkpoint: ResearchCheckpoint | null;
-  overdue_checkpoints: ResearchCheckpoint[];
-  threads_count: number;
-  artifacts_count: number;
-};
-
 // End research compatibility surface
 
 export type WorkbenchSuggestedAction = {
@@ -295,13 +224,6 @@ export type TreeNode = {
   command?: string;
 };
 
-export type SessionStartRequest = {
-  profile?: Partial<UserProfile>;
-  workspaceId: string;
-  workspaceName: string;
-  workspacePath?: string;
-};
-
 export type SessionMessageRequest = {
   sessionId?: string;
   message: string;
@@ -335,108 +257,6 @@ export type SessionMessageRequest = {
       resources?: boolean;
     };
   };
-};
-
-export type SessionMessageResponse = {
-  sessionId: string;
-  reply: ChatMessage;
-  snapshot: WorkbenchSnapshot;
-  agentMeta?: AgentMeta;
-  agent?: AgentMeta;
-  coachTurn?: {
-    scenario: CoachArtifactKind | CoachingScenario;
-    learner_signal?: LearnerSignal;
-    summary: string;
-    next_step: string;
-    encouragement?: string;
-    teaching_mode?: "coach" | "practice" | "review" | "principle" | "plan";
-    emotional_tone?: "steady" | "supportive" | "challenging";
-    review_rhythm?: string;
-    teaching_observation?: string;
-    intervention_strategy?: string;
-    teaching_goal?: string;
-    resume_thread?: string;
-    support_strategy?: string;
-    decision_reason?: string;
-    tone?: "steady" | "encouraging" | "concise_rescue" | "reflective";
-    verbosity_bias?: "short" | "medium" | "expanded";
-    active_stage?: string;
-    active_task?: string;
-    due_review_count?: number;
-    review_queue_summary?: string;
-    failing_checks?: string[];
-    artifact_kinds?: CoachArtifactKind[];
-    suggested_action_types?: CoachActionType[];
-    background_mode?: "embedded";
-  };
-  learnerState?: LearnerState;
-  affectState?: AffectState;
-  teachingDecision?: TeachingDecision;
-  toneDecision?: ToneDecision;
-  suggestedActions: Array<{
-    id: string;
-    label: string;
-    action: CoachActionType;
-    rationale?: string;
-    artifactKind?: CoachArtifactKind;
-    prompt?: string;
-    focusArea?: string;
-  }>;
-  artifacts?: Array<{
-    kind: CoachArtifactKind;
-    title: string;
-    summary?: string;
-    content?: string;
-    bullets?: string[];
-    teaser?: string;
-    recommendedAction?: CoachActionType;
-    rationale?: string;
-    focusArea?: string;
-    verification?: string[];
-    metadata?: Record<string, unknown>;
-  }>;
-  pedagogy?: {
-    implementationGuide?: ImplementationGuide;
-    projectIdeas?: ProjectIdea[];
-    projectAdaptationGuide?: ProjectAdaptationGuide;
-    principleNotes?: PrincipleNote;
-  };
-};
-
-export type PlanGenerateRequest = {
-  profile: UserProfile;
-  goals: string[];
-  constraints: string[];
-  resourceIds?: string[];
-};
-
-export type PlanUpdateRequest = {
-  planId: string;
-  instructions: string;
-  freeze?: boolean;
-  expectedRevision?: number;
-  /** Explicit compatibility marker for pre-revision/migration callers. */
-  legacy?: boolean;
-  migration?: boolean;
-};
-
-export type TaskSpecifyRequest = {
-  sessionId?: string;
-  naturalLanguageGoal: string;
-};
-
-export type TaskNextRequest = {
-  sessionId?: string;
-  focusArea?: string;
-};
-
-export type EvaluateCurrentFileRequest = {
-  verificationPython?: string;
-  sessionId?: string;
-  taskSpecId?: string;
-  filePath: string;
-  languageId: string;
-  content: string;
 };
 
 export type ProviderTestRequest = {

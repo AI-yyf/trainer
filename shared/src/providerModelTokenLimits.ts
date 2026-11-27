@@ -171,30 +171,6 @@ export function resolveProviderModelTokenState(
   };
 }
 
-export function applyProviderModelSelection<
-  T extends {
-    model?: string;
-    contextWindowTokens?: number;
-    maxOutputTokens?: number;
-    modelTokenLimits?: Record<string, ProviderModelTokenLimit>;
-  },
->(existing: T, model: string | undefined): T {
-  const normalizedModel = model?.trim() || existing.model?.trim();
-  const tokenState = resolveProviderModelTokenState(existing, normalizedModel, {
-    hasContextWindowTokens: false,
-    hasMaxOutputTokens: false,
-    hasModelTokenLimits: false,
-  });
-
-  return {
-    ...existing,
-    ...(normalizedModel ? { model: normalizedModel } : {}),
-    contextWindowTokens: tokenState.contextWindowTokens,
-    maxOutputTokens: tokenState.maxOutputTokens,
-    modelTokenLimits: tokenState.modelTokenLimits,
-  };
-}
-
 export function applyProviderModelCatalog<
   T extends {
     model?: string;

@@ -2391,12 +2391,21 @@ export async function sendStreamMessageCommand(
               if (targetSessionId) {
                 snapshotParams.set('session_id', targetSessionId);
               }
-              const full = await context.sidecarClient.getJson<{ snapshot?: unknown }>(
+              const full = await context.sidecarClient.getJson<{
+                snapshot?: unknown;
+                workspace_projection?: unknown;
+              }>(
                 statusForSnapshot.port,
                 `/snapshot?${snapshotParams.toString()}`,
               );
               if (full && full.snapshot) {
-                effectiveResponse = { ...responseRecord, snapshot: full.snapshot };
+                effectiveResponse = {
+                  ...responseRecord,
+                  snapshot: full.snapshot,
+                  ...(full.workspace_projection !== undefined
+                    ? { workspace_projection: full.workspace_projection }
+                    : {}),
+                };
               }
             }
           } catch (error) {
@@ -4783,7 +4792,12 @@ export async function activateCoachSessionCommand(
   }
   const resolvedSessionId =
     asNonEmptyString(asTrainingRecord(activateResponse)?.session_id) ?? requestedSessionId;
-  const snapshot = asTrainingRecord(activateResponse)?.snapshot;
+  const activateRecord = asTrainingRecord(activateResponse);
+  const snapshot = activateRecord?.snapshot;
+  const snapshotWithProjection =
+    snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && activateRecord?.workspace_projection !== undefined
+      ? { ...(snapshot as Record<string, unknown>), workspace_projection: activateRecord.workspace_projection }
+      : snapshot;
   const snapshotMessages = Array.isArray(asTrainingRecord(snapshot)?.messages)
     ? (asTrainingRecord(snapshot)?.messages as unknown[])
     : undefined;
@@ -4796,7 +4810,7 @@ export async function activateCoachSessionCommand(
     // session's transcript actually replaces the visible one. When activating an
     // empty session, explicitly clear conversation so the previous thread cannot
     // leak across sessions.
-    const merged = mergeMemorySummary(context.getHostState().bootstrap, snapshot);
+    const merged = mergeMemorySummary(context.getHostState().bootstrap, snapshotWithProjection);
     await context.patchWorkbenchData(
       snapshotMessages && snapshotMessages.length === 0
         ? { ...merged, conversation: [] }

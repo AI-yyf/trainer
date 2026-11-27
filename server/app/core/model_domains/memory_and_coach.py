@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -798,6 +799,10 @@ class WorkbenchSnapshot(BaseModel):
     next_review_due: str | None = None
     plan_runtime_status: dict[str, Any] | None = None
     coach_orientation: dict[str, Any] | None = Field(default=None, alias="coachOrientation")
+    workspace_projection: dict[str, Any] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("workspace_projection", "workspaceProjection"),
+    )
     suggested_actions: list["SuggestedAction"] = Field(default_factory=list, alias="suggestedActions")
 
 

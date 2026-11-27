@@ -71,7 +71,3 @@ export function deriveCompanionInstallState(
   }
   return 'not_installed';
 }
-
-export function isCompanionReady(state: CompanionInstallState): boolean {
-  return state === 'ready' || state === 'upgrade_available';
-}

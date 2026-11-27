@@ -10,6 +10,7 @@ requiring heuristic ``leftover_*`` scrubbers.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -41,7 +42,6 @@ logger = logging.getLogger(__name__)
 
 _PLAN_AUTHORITY_EVENTS = frozenset(
     {
-        EVENT_BASELINE_IMPORTED,
         EVENT_WORKSPACE_RESET,
         EVENT_SANDBOX_WORKSPACE_CLEARED,
         EVENT_PLAN_GENERATED,
@@ -54,7 +54,6 @@ _PLAN_AUTHORITY_EVENTS = frozenset(
 
 _CARD_AUTHORITY_EVENTS = frozenset(
     {
-        EVENT_BASELINE_IMPORTED,
         EVENT_WORKSPACE_RESET,
         EVENT_SANDBOX_WORKSPACE_CLEARED,
         EVENT_PLAN_CLEARED,
@@ -256,6 +255,10 @@ def project_workspace_state(
             rejected_evidence = _clean_id_list(payload.get("rejected_evidence_ids"))
             resources = _clean_id_list(payload.get("resource_ids"))
             recovered_without_live_plan = bool(payload.get("recovered_without_live_plan")) and not active_plan_id
+            if active_plan_id is not None or recovered_without_live_plan:
+                has_plan_authority = True
+            if selected_card_id is not None or recovered_without_live_plan:
+                has_card_authority = True
 
         elif kind in {EVENT_WORKSPACE_RESET, EVENT_SANDBOX_WORKSPACE_CLEARED}:
             active_plan_id = None
@@ -510,3 +513,51 @@ def apply_projected_workspace_state(
         _apply_card_projection_to_snapshot(snapshot_dict, projected.selected_card_id)
 
     return snapshot_dict
+
+
+def resolve_and_apply_workspace_projection(
+    event_ledger: Any,
+    workspace_id: str,
+    snapshot_dict: dict[str, Any],
+    *,
+    primary_read: bool | None = None,
+    apply_overlay: bool = True,
+) -> dict[str, Any] | None:
+    """Hydrate legacy baseline if needed, optionally enforce primary-read overlay, and return dict."""
+    if event_ledger is None or not workspace_id:
+        return None
+    projected = event_ledger.project_workspace_state(workspace_id)
+    if not projected.has_plan_authority and not projected.has_card_authority:
+        baseline_payload = bootstrap_baseline_event_from_snapshot(snapshot_dict)
+        if (
+            baseline_payload.get("active_plan_id")
+            or baseline_payload.get("selected_card_id")
+            or baseline_payload.get("pending_evidence_ids")
+            or baseline_payload.get("resource_ids")
+            or baseline_payload.get("recovered_without_live_plan")
+        ):
+            event_ledger.record_event(
+                EVENT_BASELINE_IMPORTED,
+                actor="system",
+                scope="workspace",
+                project_id=workspace_id,
+                workspace_id=workspace_id,
+                payload_ref=baseline_payload,
+                idempotency_key=f"baseline_imported:{workspace_id}:{projected.workspace_epoch}",
+            )
+            projected = event_ledger.project_workspace_state(workspace_id)
+    if apply_overlay:
+        effective_primary = (
+            os.environ.get("TRAINER_EVENT_LOG_PRIMARY_READ", "1").strip() != "0"
+            if primary_read is None
+            else primary_read
+        )
+        apply_projected_workspace_state(
+            snapshot_dict,
+            projected,
+            primary_read=effective_primary,
+        )
+    projection_dict = projected.to_dict()
+    snapshot_dict["workspace_projection"] = projection_dict
+    return projection_dict
+

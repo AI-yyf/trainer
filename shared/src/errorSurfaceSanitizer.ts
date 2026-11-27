@@ -776,50 +776,6 @@ export function sanitizeErrorSurfaceJson(value: unknown, language?: string): str
   }
 }
 
-export function describeSafeStructuredValue(
-  value: unknown,
-  language?: string,
-  emptyLabel = "",
-): string {
-  if (value === undefined || value === null) {
-    return emptyLabel;
-  }
-  if (typeof value === "string") {
-    return sanitizeErrorSurfaceText(value, language) || emptyLabel;
-  }
-  const record = asRecord(value);
-  if (record) {
-    const lines: string[] = [];
-    for (const [key, entry] of Object.entries(record)) {
-      if (/^(?:api[_-]?key|access[_-]?token|authorization|client[_-]?secret|secret|password|token)$/i.test(key)) {
-        continue;
-      }
-      if (typeof entry === "string" && entry.trim()) {
-        const text = sanitizeErrorSurfaceText(entry, language);
-        if (text) {
-          lines.push(`${key}: ${text}`);
-        }
-        continue;
-      }
-      if (typeof entry === "number" && Number.isFinite(entry)) {
-        lines.push(`${key}: ${entry}`);
-        continue;
-      }
-      if (typeof entry === "boolean") {
-        lines.push(`${key}: ${entry}`);
-      }
-    }
-    if (lines.length > 0) {
-      return lines.join(" · ");
-    }
-  }
-  const surface = sanitizeErrorSurface(value, { language });
-  if (surface.kind === "safe" && !looksLikeJsonBody(inspectText(value))) {
-    return surface.message || emptyLabel;
-  }
-  return compact(`${surface.message} ${surface.next}`) || emptyLabel;
-}
-
 const SECRET_FIELD_KEY =
   /^(?:api[_-]?key|access[_-]?token|authorization|client[_-]?secret|secret|password|token)$/i;
 const TOOL_ERROR_FIELD_KEY =

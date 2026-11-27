@@ -442,3 +442,80 @@ def test_step3_primary_read_opt_out_env_preserves_legacy_non_reset_read(
     apply_projected_workspace_state(snap_optout, projected, primary_read=False)
     assert snap_optout["plan"] == {"id": "plan-mismatched"}
     assert snap_optout["memory"]["workspace"]["selected_card_id"] == "card-stale"
+
+
+def test_step4_session_start_activate_and_memory_summary_carry_authoritative_projection(
+    tmp_path: Path,
+) -> None:
+    app = create_app(Settings(data_dir=tmp_path))
+    runtime = app.state.runtime
+    ws = "ws-step4-parity"
+
+    with TestClient(app) as client:
+        start_res = client.post(
+            "/session/start",
+            json={"workspace_id": ws, "workspace_name": "Step 4 Demo"},
+        )
+        assert start_res.status_code == 200
+        start_body = start_res.json()
+        session_id = start_body["session_id"]
+        assert start_body["workspaceProjection"]["workspace_id"] == ws
+        assert start_body["workspace_projection"]["workspace_id"] == ws
+
+        plan = LearningPlan(
+            id="plan-step4-live",
+            title="Step 4 Projection Plan",
+            summary="End-to-end projection",
+            current_stage_id="stage-s4",
+            current_step="Wire host projection",
+            stages=[
+                PlanStage(
+                    id="stage-s4",
+                    title="Stage S4",
+                    goal="Wire host projection",
+                    status="active",
+                    outcomes=["projection"],
+                )
+            ],
+        )
+        runtime.repository.save_plan(ws, plan)
+        runtime.memory_service.bind_explicit_generated_plan(ws, plan)
+        card = TrainingCardCandidateSnapshot(
+            card_id="card-step4-live",
+            card_type="practice",
+            title="Step 4 Card",
+            status="candidate",
+            review_state="saved",
+            focus_area="projection",
+            target_skill="projection",
+        )
+        runtime.memory_service.upsert_card(ws, card)
+        runtime.memory_service.persist_active_card_selection(
+            ws,
+            ActiveCardSelectionResult(
+                selected_card_id=card.card_id,
+                selected_card=card,
+                candidate_count=1,
+                eligible_count=1,
+            ),
+        )
+
+        summary_res = client.get("/memory/summary", params={"workspace_id": ws, "session_id": session_id})
+        assert summary_res.status_code == 200
+        summary_proj = summary_res.json()["workspace_projection"]
+        assert summary_proj["has_live_plan"] is True
+        assert summary_proj["active_plan_id"] == "plan-step4-live"
+        assert summary_proj["selected_card_id"] == "card-step4-live"
+        assert summary_proj["has_plan_authority"] is True
+        assert summary_proj["has_card_authority"] is True
+
+        activate_res = client.post(
+            "/session/activate",
+            json={"session_id": session_id, "workspace_id": ws},
+        )
+        assert activate_res.status_code == 200
+        activate_body = activate_res.json()
+        assert activate_body["workspace_projection"]["active_plan_id"] == "plan-step4-live"
+        assert activate_body["workspace_projection"]["selected_card_id"] == "card-step4-live"
+        assert activate_body["snapshot"]["workspace_projection"]["state_seq"] == summary_proj["state_seq"]
+

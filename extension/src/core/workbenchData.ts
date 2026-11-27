@@ -54,6 +54,7 @@ import {
   normalizePlanRuntimeRecovery,
   normalizePlanRuntimeResumeState,
   normalizeProviderCapabilityRecovery,
+  normalizeWorkspaceProjection,
   recoverStreamingCheckpointAfterRestart,
   selectPlanRuntimeForScope,
   planRuntimeStatusFromRecovery,
@@ -668,8 +669,18 @@ export function mergeSessionMessage(
     (!workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId) && current.sessionHistoryRestored === true);
   patch.sessionHistoryRestored = preserveHistory;
   patch.liveResourceFocus = current.liveResourceFocus === true;
+  const projectedPatch = applyAuthoritativeWorkspaceProjection(
+    current,
+    patch,
+    record?.workspace_projection ??
+      record?.workspaceProjection ??
+      snapshot?.workspace_projection ??
+      snapshot?.workspaceProjection,
+    incomingWorkspaceId,
+    currentWorkspaceId,
+  );
   return { sessionId, patch: applyLeftoverBoundPlanFiveViewOmit(current,
-    applyLeftoverNotLiveTaskGuideFocus(patch, preserveHistory)) };
+    applyLeftoverNotLiveTaskGuideFocus(projectedPatch, preserveHistory)) };
 }
 
 export function mergePlanResult(
@@ -1191,8 +1202,124 @@ export function mergeMemorySummary(
   // A live library focus survives snapshot refreshes; it is content the
   // learner opened, not plan chrome.
   mapped.liveResourceFocus = current.liveResourceFocus === true;
+  const projectedMapped = applyAuthoritativeWorkspaceProjection(
+    current,
+    mapped,
+    snapshot?.workspace_projection ?? snapshot?.workspaceProjection,
+    incomingWorkspaceId,
+    currentWorkspaceId,
+  );
   return applyLeftoverBoundPlanFiveViewOmit(current,
-    applyLeftoverNotLiveTaskGuideFocus(mapped, preserveHistory));
+    applyLeftoverNotLiveTaskGuideFocus(projectedMapped, preserveHistory));
+}
+
+function clearProjectedCardSelectionChrome(patch: Partial<BootstrapData>): Partial<BootstrapData> {
+  const next: Partial<BootstrapData> = { ...patch };
+  if (next.workspaceTrainingState) {
+    next.workspaceTrainingState = {
+      ...next.workspaceTrainingState,
+      selectedCardId: undefined,
+      selectedCardTitle: undefined,
+      selectedCardStatus: undefined,
+      latestTrainingSubmode: undefined,
+      latestTrainingHandoff: undefined,
+      latestTrainingNextHop: undefined,
+      activeTrainingCardRouting: undefined,
+    };
+  }
+  if (next.memory?.workspace?.liveTrainingSelection) {
+    next.memory = {
+      ...next.memory,
+      workspace: {
+        ...next.memory.workspace,
+        liveTrainingSelection: undefined,
+      },
+    };
+  }
+  return next;
+}
+
+function applyAuthoritativeWorkspaceProjection(
+  current: BootstrapData,
+  patch: Partial<BootstrapData>,
+  rawProjection: unknown,
+  incomingWorkspaceId?: string,
+  currentWorkspaceId?: string,
+): Partial<BootstrapData> {
+  const workspaceChanged = workspaceIdsChanged(incomingWorkspaceId, currentWorkspaceId);
+  const normalized = normalizeWorkspaceProjection(rawProjection);
+  if (!normalized) {
+    if (workspaceChanged) {
+      return { ...patch, workspaceProjection: undefined };
+    }
+    if (current.workspaceProjection !== undefined) {
+      return { ...patch, workspaceProjection: current.workspaceProjection };
+    }
+    return patch;
+  }
+  if (incomingWorkspaceId && normalized.workspaceId !== incomingWorkspaceId) {
+    return workspaceChanged ? { ...patch, workspaceProjection: undefined } : patch;
+  }
+  let next: Partial<BootstrapData> = {
+    ...patch,
+    workspaceProjection: normalized,
+  };
+  if (normalized.stateSeq <= 0) {
+    return next;
+  }
+  const epochAdvanced = Boolean(
+    current.workspaceProjection &&
+      current.workspaceProjection.workspaceId === normalized.workspaceId &&
+      normalized.workspaceEpoch > current.workspaceProjection.workspaceEpoch,
+  );
+  if (epochAdvanced) {
+    next.stageMaterials = {};
+    if (next.task && next.task.id === current.task.id) {
+      next.task = emptyLiveTask();
+    }
+  }
+  if (normalized.hasPlanAuthority || normalized.recoveredWithoutLivePlan || epochAdvanced) {
+    if (!normalized.hasLivePlan) {
+      next.plan = emptyLivePlan();
+      next.stageMaterials = {};
+      if (normalized.recoveredWithoutLivePlan) {
+        next.planRuntimeStatus = {
+          reviewPoints: [],
+          ...(next.planRuntimeStatus ?? {}),
+          recovered: true,
+        };
+        next = clearProjectedCardSelectionChrome(next);
+      }
+    } else if (
+      normalized.activePlanId &&
+      next.plan?.id &&
+      next.plan.id !== normalized.activePlanId
+    ) {
+      next.plan = emptyLivePlan();
+      next.stageMaterials = {};
+    }
+  }
+  if ((normalized.hasCardAuthority || epochAdvanced) && !normalized.recoveredWithoutLivePlan) {
+    if (!normalized.selectedCardId) {
+      next = clearProjectedCardSelectionChrome(next);
+    } else if (next.workspaceTrainingState) {
+      const cardChanged = Boolean(
+        next.workspaceTrainingState.selectedCardId &&
+          next.workspaceTrainingState.selectedCardId !== normalized.selectedCardId,
+      );
+      next.workspaceTrainingState = {
+        ...next.workspaceTrainingState,
+        selectedCardId: normalized.selectedCardId,
+        ...(cardChanged
+          ? {
+              latestTrainingHandoff: undefined,
+              latestTrainingNextHop: undefined,
+            }
+          : {}),
+      };
+    }
+  }
+  return next;
 }
 
 const EMPTY_WORKSPACE_TRANSFER_ID = '__trainer_empty_workspace__';
@@ -1208,6 +1335,7 @@ export function resetWorkbenchAfterRuntimeDataChange(
   return {
     ...reset,
     runtimeDataGeneration: randomUUID(),
+    workspaceProjection: undefined,
     globalPlan: undefined,
     projectPlanLink: undefined,
     stageMaterials: undefined,
@@ -1427,7 +1555,14 @@ export function mergeSessionMessageSnapshot(
     streamedReplyText,
   );
   const record = asRecord(payload) ?? {};
-  const snapshot = asRecord(record.snapshot) ?? record;
+  const rawSnapshot = asRecord(record.snapshot) ?? record;
+  const topProjection = record.workspace_projection ?? record.workspaceProjection;
+  const snapshot =
+    topProjection !== undefined &&
+    rawSnapshot.workspace_projection === undefined &&
+    rawSnapshot.workspaceProjection === undefined
+      ? { ...rawSnapshot, workspace_projection: topProjection }
+      : rawSnapshot;
   const stamped = mergeWorkspaceStampedSnapshot(current, snapshot, incomingWorkspaceId);
   return {
     sessionId,
@@ -1435,6 +1570,9 @@ export function mergeSessionMessageSnapshot(
       ...patch,
       plan: stamped.plan,
       task: stamped.task,
+      ...(stamped.workspaceProjection !== undefined
+        ? { workspaceProjection: stamped.workspaceProjection }
+        : {}),
     },
   };
 }

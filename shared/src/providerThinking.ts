@@ -158,18 +158,6 @@ export function classifyProviderThinkingSupport(
 }
 
 /**
- * True when a connection probe has actually assessed thinking for this
- * connection+model (any verdict). "Unknown → 探测过再显示": the control only
- * appears once a probe has run, so a fresh manual model never silently carries
- * invented wire fields.
- */
-export function providerThinkingProbeObserved(
-  context: ProviderThinkingNormalizationContext,
-): boolean {
-  return Boolean(thinkingEvidenceEntry(context));
-}
-
-/**
  * Whether a thinking config may be written to the wire for this context.
  *
  * An explicitly unsupported model never emits. Supported and unknown models

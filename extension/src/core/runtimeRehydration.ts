@@ -424,7 +424,11 @@ async function restoreStoredSession(
     return context.getSessionId();
   }
   try {
-    const payload = await context.sidecarClient.postJson<{ session_id?: string; snapshot?: unknown }>(
+    const payload = await context.sidecarClient.postJson<{
+      session_id?: string;
+      snapshot?: unknown;
+      workspace_projection?: unknown;
+    }>(
       port,
       '/session/activate',
       { session_id: sessionId, workspace_id: workspaceIdAtStart },
@@ -451,8 +455,12 @@ async function restoreStoredSession(
     // memory refresh below remains the authoritative transcript source.
     if (payload?.snapshot && typeof payload.snapshot === 'object') {
       try {
+        const snapshotWithProjection =
+          payload.workspace_projection !== undefined
+            ? { ...(payload.snapshot as Record<string, unknown>), workspace_projection: payload.workspace_projection }
+            : payload.snapshot;
         await context.patchWorkbenchData(
-          mergeMemorySummary(context.getHostState().bootstrap, payload.snapshot),
+          mergeMemorySummary(context.getHostState().bootstrap, snapshotWithProjection),
         );
       } catch (error) {
         context.outputChannel.appendLine(

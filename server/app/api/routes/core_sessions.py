@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -12,7 +11,6 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError
 
-from ...core.event_ledger import EVENT_BASELINE_IMPORTED
 from ...core.models import (
     AgentCheckpointAccessRequest,
     ChatMessage,
@@ -22,10 +20,7 @@ from ...core.models import (
     TurnRequest,
     UserProfile,
 )
-from ...core.workspace_state_projector import (
-    apply_projected_workspace_state,
-    bootstrap_baseline_event_from_snapshot,
-)
+from ...core.workspace_state_projector import resolve_and_apply_workspace_projection
 from ...llm.provider_service import ProviderService
 from ...resources.research_brief import preparation_requested
 from .. import coach_support
@@ -1003,36 +998,13 @@ def _register_snapshot_and_session_lifecycle_routes(
             "unchanged": False,
             "snapshot": snapshot_dict,
         }
-        if runtime.event_ledger is not None:
-            projected = runtime.event_ledger.project_workspace_state(resolved_workspace_id)
-            if not projected.has_plan_authority and not projected.has_card_authority:
-                baseline_payload = bootstrap_baseline_event_from_snapshot(snapshot_dict)
-                if (
-                    baseline_payload.get("active_plan_id")
-                    or baseline_payload.get("selected_card_id")
-                    or baseline_payload.get("pending_evidence_ids")
-                    or baseline_payload.get("resource_ids")
-                    or baseline_payload.get("recovered_without_live_plan")
-                ):
-                    runtime.event_ledger.record_event(
-                        EVENT_BASELINE_IMPORTED,
-                        actor="system",
-                        scope="workspace",
-                        project_id=resolved_workspace_id,
-                        workspace_id=resolved_workspace_id,
-                        payload_ref=baseline_payload,
-                        idempotency_key=(
-                            f"baseline_imported:{resolved_workspace_id}:{projected.workspace_epoch}"
-                        ),
-                    )
-                    projected = runtime.event_ledger.project_workspace_state(resolved_workspace_id)
-            primary_read = os.environ.get("TRAINER_EVENT_LOG_PRIMARY_READ", "1").strip() != "0"
-            apply_projected_workspace_state(
-                snapshot_dict,
-                projected,
-                primary_read=primary_read,
-            )
-            response["workspace_projection"] = projected.to_dict()
+        projection_dict = resolve_and_apply_workspace_projection(
+            runtime.event_ledger,
+            resolved_workspace_id,
+            snapshot_dict,
+        )
+        if projection_dict is not None:
+            response["workspace_projection"] = projection_dict
         return response
 
     @router.get("/health")
@@ -1188,6 +1160,10 @@ def _register_snapshot_and_session_lifecycle_routes(
                 runtime.save_session_state(restored.session_id)
                 snapshot_payload = restored.snapshot.model_dump(by_alias=True)
                 snapshot_payload["session_id"] = restored.session_id
+                if runtime.event_ledger is not None:
+                    projection_dict = runtime.event_ledger.project_workspace_state(workspace_id).to_dict()
+                    snapshot_payload["workspaceProjection"] = projection_dict
+                    snapshot_payload["workspace_projection"] = projection_dict
                 return snapshot_payload
 
         state = runtime.start_session(workspace_id, request.workspace_name)
@@ -1227,6 +1203,10 @@ def _register_snapshot_and_session_lifecycle_routes(
         runtime.save_session_state(state.session_id)
         snapshot_payload = state.snapshot.model_dump(by_alias=True)
         snapshot_payload["session_id"] = state.session_id
+        if runtime.event_ledger is not None:
+            projection_dict = runtime.event_ledger.project_workspace_state(workspace_id).to_dict()
+            snapshot_payload["workspaceProjection"] = projection_dict
+            snapshot_payload["workspace_projection"] = projection_dict
         return snapshot_payload
 
     @router.post("/session/message", response_model=None)
@@ -1457,10 +1437,17 @@ def _register_snapshot_and_session_lifecycle_routes(
             session_id=resolved_session_id,
             workspace_id=resolved_workspace_id,
         )
+        snapshot_dict = snapshot.model_dump(mode="json")
+        projection_dict = resolve_and_apply_workspace_projection(
+            runtime.event_ledger,
+            resolved_workspace_id,
+            snapshot_dict,
+        )
         return {
             "session_id": resolved_session_id,
             "workspace_id": resolved_workspace_id,
-            "snapshot": snapshot.model_dump(mode="json"),
+            "snapshot": snapshot_dict,
+            **({"workspace_projection": projection_dict} if projection_dict is not None else {}),
         }
 
     return session_message

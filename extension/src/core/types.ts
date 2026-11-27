@@ -20,6 +20,7 @@ import type {
   PlanRuntimeRecoveryRecord,
   ProviderCapabilityRecoveryRecord,
   StreamingCheckpointRecord,
+  WorkspaceProjectionRecord,
 } from '../../../shared/src/workspaceRecoveryGovernance';
 import type {
   ProviderCapabilityEvidence,
@@ -1640,6 +1641,7 @@ export interface BootstrapData {
   coachFocus?: CoachFocusView;
   coachOrientation?: CoachOrientationView;
   planRuntimeStatus?: PlanRuntimeStatusView;
+  workspaceProjection?: WorkspaceProjectionRecord;
   nextStepHint?: NextStepHintView;
   reviewQueueSummary: string;
   nextReviewDue?: string;

@@ -245,6 +245,27 @@ def fork_course_manifest(
         manifest, workspace_id=workspace_id, repository=runtime.repository
     )
     revision = save_plan_advancing_revision(runtime.repository, workspace_id, plan)
+    event_ledger = getattr(runtime, "event_ledger", None)
+    if event_ledger is not None:
+        from ..core.event_ledger import EVENT_PLAN_GENERATED
+
+        canonical_ws = workspace_id
+        memory_service = getattr(runtime, "memory_service", None)
+        canonicalize = getattr(memory_service, "_canonical_workspace_id", None)
+        if callable(canonicalize):
+            canonical_ws = str(canonicalize(workspace_id) or workspace_id)
+        event_ledger.record_event(
+            EVENT_PLAN_GENERATED,
+            actor="learner",
+            scope="plan",
+            project_id=canonical_ws,
+            workspace_id=canonical_ws,
+            payload_ref={
+                "plan_id": plan.id,
+                "title": plan.title,
+                "current_step_id": str(plan.current_stage_id or ""),
+            },
+        )
     card, status, reason = _first_card(
         manifest,
         plan,

@@ -423,113 +423,6 @@ export type ReviewQueueActionSnapshot = {
   outcome: "queued" | "completed" | "needs_more_practice" | "deferred" | "dismissed";
 };
 
-export type ReviewArtifactSnapshot = {
-  id?: string;
-  title?: string;
-  focusArea?: string;
-  source?: string;
-  status?: string;
-  summary?: string;
-  rootCause?: string;
-  guardrail?: string;
-  nextSelfImplementationRule?: string;
-  recommendedRecoveryMode?: string;
-  recommendedActions?: string[];
-  verifiedResult?: string;
-  blockedReason?: string;
-  blocker?: string;
-  abandonReason?: string;
-  partialProgress?: string;
-  scenario?: string;
-  lastAction?: string;
-  updatedAt?: string;
-};
-
-export type ReviewArtifactHistoryEntry = {
-  entryId?: string;
-  id?: string;
-  reviewArtifactId?: string;
-  action: "created" | "updated" | "reviewed" | "resolved" | "reopened" | "archived" | "restore_history";
-  version?: number;
-  createdAt?: string;
-  beforeSnapshot?: Record<string, unknown>;
-  afterSnapshot?: Record<string, unknown>;
-};
-
-export type DependencySkillItemSnapshot = {
-  key?: string;
-  label?: string;
-  scenario?: string;
-  gaps?: string[];
-  nextActions?: string[];
-  acceptedAnswers?: string[];
-  canonicalAnswer?: string;
-  relatedApi?: string;
-  whyNow?: string;
-  projectFirstCut?: string;
-  prioritySummary?: string;
-  suggestedScenarioLab?: string;
-};
-
-export type DependencySkillMapSnapshot = {
-  dependencyKey?: string;
-  dependencyName?: string;
-  projectFirstCut?: string;
-  prioritySummary?: string;
-  suggestedScenarioLab?: string;
-};
-
-export type DependencySkillMapHistoryEntry = {
-  entryId?: string;
-  id?: string;
-  dependencyKey?: string;
-  action?: "created" | "updated" | "restore_history";
-  version?: number;
-  createdAt?: string;
-  beforeSnapshot?: Record<string, unknown>;
-  afterSnapshot?: Record<string, unknown>;
-};
-
-export type ScenarioLab = {
-  id?: string;
-  title?: string;
-  focusArea?: string;
-  status?: string;
-  scenario?: string;
-  whyNow?: string;
-  learnerDeliverables?: string[];
-  verificationSteps?: string[];
-  successSignal?: string;
-  reviewOutcome?: string;
-  migrateBackGuidance?: string[];
-  dependencyKeys?: string[];
-  relatedApis?: string[];
-  lastAction?: string;
-  updatedAt?: string;
-};
-
-export type ScenarioLabHistoryEntry = {
-  entryId?: string;
-  id?: string;
-  scenarioLabId?: string;
-  action?: string;
-  version?: number;
-  createdAt?: string;
-  beforeSnapshot?: Record<string, unknown>;
-  afterSnapshot?: Record<string, unknown>;
-};
-
-export type TheoryDrillHistoryEntry = {
-  entryId?: string;
-  id?: string;
-  theoryDrillId?: string;
-  action?: string;
-  version?: number;
-  createdAt?: string;
-  beforeSnapshot?: Record<string, unknown>;
-  afterSnapshot?: Record<string, unknown>;
-};
-
 export type LearnerSignal = "steady" | "blocked" | "uncertain" | "curious";
 
 export type CoachingScenario =
@@ -817,22 +710,6 @@ export type PrincipleNote = {
   relatedChecks?: string[];
   sourceAssetTitle?: string;
 };
-
-export type TrainingSubmode =
-  | "practice"
-  | "flash"
-  | "review"
-  | "review_queue"
-  | "learn_primer"
-  | "learn-primer"
-  | "scenario"
-  | "transfer";
-
-export type FlashcardRecoveryMode =
-  | "flashcards"
-  | "scenario_lab_or_project"
-  | "transfer"
-  | "review";
 export interface TrainingPlanBinding {
   planId: string;
   stageId: string;

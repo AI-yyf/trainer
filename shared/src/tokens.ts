@@ -34,6 +34,4 @@ export const workbenchTokens = {
     lineHeight: "1.5",
   },
 } as const;
-
-export type WorkbenchTokens = typeof workbenchTokens;
 export type WorkbenchThemeName = "light" | "dark";

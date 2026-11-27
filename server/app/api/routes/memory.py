@@ -49,7 +49,13 @@ def build_memory_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
     def memory_summary(session_id: str | None = None, workspace_id: str | None = None) -> WorkbenchSnapshot:
         if session_id is None and workspace_id:
             runtime.restore_latest_session_for_workspace(workspace_id)
-        return current_snapshot(session_id=session_id, workspace_id=workspace_id)
+        resolved_workspace_id = current_workspace_id(session_id=session_id, workspace_id=workspace_id)
+        snapshot = current_snapshot(session_id=session_id, workspace_id=resolved_workspace_id)
+        if runtime.event_ledger is not None:
+            snapshot.workspace_projection = runtime.event_ledger.project_workspace_state(
+                resolved_workspace_id
+            ).to_dict()
+        return snapshot
 
     @router.get("/memory/global", response_model=GlobalMemory)
     def memory_global() -> GlobalMemory:

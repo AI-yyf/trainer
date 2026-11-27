@@ -7187,3 +7187,135 @@ test('applyDerivedHostState keeps saved connections through a host re-derive', (
   assert.equal(rederived.providerConfig.providerDashboard, dashboard);
   assert.equal(rederived.providerConfig.providerProfiles.length, 3);
 });
+
+test('Event-Log Step 4: workspace_projection structurally enforces plan/card authority and epoch bumps across host merges', () => {
+  const base = createDefaultBootstrapData(
+    createWorkspaceSnapshot(),
+    createProvider(),
+    createSidecarStatus(),
+  );
+  const seeded = {
+    ...base,
+    plan: {
+      id: 'plan-epoch-0',
+      title: 'Pre-Reset Plan',
+      frozen: false,
+      cadence: '4h/w',
+      summary: 'Old summary',
+      stages: [{ id: 's1', title: 'S1', objective: 'Obj', status: 'active' }],
+    },
+    task: {
+      id: 'task-epoch-0',
+      title: 'Pre-Reset Task',
+      description: 'Old task',
+      constraints: [],
+      acceptanceCriteria: [],
+      nextActionLabel: 'Eval',
+    },
+    stageMaterials: { s1: [{ id: 'm1', planStageId: 's1', kind: 'note', title: 'Note', summary: 'S', content: 'C' }] },
+    memory: {
+      ...base.memory,
+      workspace: {
+        ...base.memory.workspace,
+        workspaceId: 'ws-proj-1',
+        liveTrainingSelection: { workspaceId: 'ws-proj-1', cardId: 'card-epoch-0' },
+      },
+    },
+    workspaceTrainingState: {
+      workspaceId: 'ws-proj-1',
+      selectedCardId: 'card-epoch-0',
+      selectedCardTitle: 'Old Card',
+      selectedCardStatus: 'active',
+      latestTrainingHandoff: { cardId: 'card-epoch-0', cardTitle: 'Old Card', handoffStatus: 'active' },
+    },
+    workspaceProjection: {
+      workspaceId: 'ws-proj-1',
+      workspaceEpoch: 0,
+      stateSeq: 2,
+      hasLivePlan: true,
+      activePlanId: 'plan-epoch-0',
+      activePlanTitle: 'Pre-Reset Plan',
+      selectedCardId: 'card-epoch-0',
+      completedCardIds: [],
+      pendingEvidenceIds: [],
+      adoptedEvidenceIds: [],
+      rejectedEvidenceIds: [],
+      resourceIds: [],
+      recoveredWithoutLivePlan: false,
+      hasPlanAuthority: true,
+      hasCardAuthority: true,
+    },
+  };
+
+  // 1. Card skipped on server: partial summary without explicit selected_card_id still clears stale fallback via card authority
+  const afterSkipPatch = mergeMemorySummarySnapshot(
+    seeded,
+    {
+      context_id: 'ws-proj-1',
+      memory: { workspace: { workspace_id: 'ws-proj-1' } },
+      workspace_projection: {
+        workspace_id: 'ws-proj-1',
+        workspace_epoch: 0,
+        state_seq: 3,
+        has_live_plan: true,
+        active_plan_id: 'plan-epoch-0',
+        active_plan_title: 'Pre-Reset Plan',
+        selected_card_id: null,
+        completed_card_ids: [],
+        pending_evidence_ids: [],
+        adopted_evidence_ids: [],
+        rejected_evidence_ids: [],
+        resource_ids: [],
+        recovered_without_live_plan: false,
+        has_plan_authority: true,
+        has_card_authority: true,
+      },
+    },
+    'ws-proj-1',
+  );
+  assert.equal(afterSkipPatch.workspaceProjection?.stateSeq, 3);
+  assert.equal(afterSkipPatch.workspaceTrainingState?.selectedCardId, undefined);
+  assert.equal(afterSkipPatch.workspaceTrainingState?.latestTrainingHandoff, undefined);
+  assert.equal(afterSkipPatch.memory?.workspace?.liveTrainingSelection, undefined);
+  assert.equal(afterSkipPatch.plan?.id, 'plan-epoch-0');
+
+  // 2. Slim SSE /snapshot completion after workspace reset (epoch 0 -> 1): clears fallback plan, task, stageMaterials, and card
+  const { patch: afterResetPatch } = mergeSessionMessageSnapshot(
+    seeded,
+    {
+      session_id: 'session-proj-1',
+      reply: { id: 'msg-r1', role: 'assistant', content: 'Workspace reset acknowledged.' },
+      snapshot: {
+        context_id: 'ws-proj-1',
+        memory: { workspace: { workspace_id: 'ws-proj-1' } },
+      },
+      workspace_projection: {
+        workspace_id: 'ws-proj-1',
+        workspace_epoch: 1,
+        state_seq: 4,
+        has_live_plan: false,
+        active_plan_id: null,
+        active_plan_title: '',
+        selected_card_id: null,
+        completed_card_ids: [],
+        pending_evidence_ids: [],
+        adopted_evidence_ids: [],
+        rejected_evidence_ids: [],
+        resource_ids: [],
+        recovered_without_live_plan: true,
+        has_plan_authority: true,
+        has_card_authority: true,
+      },
+    },
+    'continue after reset',
+    'ws-proj-1',
+  );
+  assert.equal(afterResetPatch.workspaceProjection?.workspaceEpoch, 1);
+  assert.equal(afterResetPatch.workspaceProjection?.recoveredWithoutLivePlan, true);
+  assert.equal(afterResetPatch.plan?.id, '');
+  assert.equal(afterResetPatch.task?.id, '');
+  assert.deepEqual(afterResetPatch.stageMaterials, {});
+  assert.equal(afterResetPatch.planRuntimeStatus?.recovered, true);
+  assert.equal(afterResetPatch.workspaceTrainingState?.selectedCardId, undefined);
+});
+

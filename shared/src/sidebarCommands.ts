@@ -87,10 +87,6 @@ export function normalizeSidebarCommandInput(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export function listSidebarControlCommands(): SidebarControlCommandDefinition[] {
-  return definitions.map((definition) => ({ ...definition, aliases: [...definition.aliases] }));
-}
-
 export function findSidebarControlCommand(
   value: string,
 ): SidebarControlCommandDefinition | undefined {

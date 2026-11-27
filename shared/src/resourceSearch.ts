@@ -55,52 +55,6 @@ export function resourceSearchModeRequest(mode: ResourceSearchMode): ResourceSea
   }
 }
 
-export function resourceSearchModeLabel(
-  mode: ResourceSearchMode,
-  language: "en" | "zh" = "en",
-): string {
-  if (language === "zh") {
-    switch (mode) {
-      case "trusted":
-        return "可信且已索引";
-      case "lexical":
-      default:
-        return "全文检索";
-    }
-  }
-
-  switch (mode) {
-    case "trusted":
-      return "Trusted and indexed";
-    case "lexical":
-    default:
-      return "Full-text search";
-  }
-}
-
-export function resourceSearchModeHint(
-  mode: ResourceSearchMode,
-  language: "en" | "zh" = "en",
-): string {
-  if (language === "zh") {
-    switch (mode) {
-      case "trusted":
-        return "只搜索已索引且标记为可信的资料。";
-      case "lexical":
-      default:
-        return "在已索引资料中执行全文检索，并使用可用的元数据排序。";
-    }
-  }
-
-  switch (mode) {
-    case "trusted":
-      return "Search only material that is indexed and marked trusted.";
-    case "lexical":
-    default:
-      return "Search indexed resource text and use available metadata for ranking.";
-  }
-}
-
 export function summarizeSearchHitTeachingSignal(hit: unknown): SearchHitTeachingSummary | undefined {
   const record = asRecord(hit);
   if (!record) {
@@ -230,22 +184,6 @@ export function formatSearchHitTeachingSummary(
       : "";
 
   return `${prefix}${evidence}${matchSummaryText}${reasonText}`;
-}
-
-export function formatResourceSearchStatusSummary(
-  params: {
-    hitCount: number;
-    mode: ResourceSearchMode;
-    topHit?: unknown;
-  },
-  language: "en" | "zh" = "en",
-): string {
-  const countLabel =
-    language === "zh"
-      ? `全文检索命中 ${params.hitCount} 条 · ${resourceSearchModeLabel(params.mode, "zh")}`
-      : `${params.hitCount} full-text hits · ${resourceSearchModeLabel(params.mode, "en")}`;
-  const topHitSummary = params.topHit ? formatSearchHitTeachingSummary(params.topHit, language) : undefined;
-  return topHitSummary ? `${countLabel} · ${topHitSummary}` : countLabel;
 }
 
 function asRecord(value: unknown): UnknownRecord | undefined {

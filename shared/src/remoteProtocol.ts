@@ -16,9 +16,6 @@ export type WorkspaceUriDto = {
   fragment: string;
 };
 
-/** Alias kept for callers that use the acronym-style DTO spelling. */
-export type WorkspaceUriDTO = WorkspaceUriDto;
-
 export type WorkspaceFileType = "file" | "directory" | "unknown";
 
 export type WorkspaceGatewayCapability =
@@ -31,18 +28,6 @@ export type WorkspaceGatewayCapability =
   | "diagnostics"
   | "environment"
   | "verify";
-
-export const WORKSPACE_GATEWAY_CAPABILITIES: readonly WorkspaceGatewayCapability[] = [
-  "stat",
-  "read",
-  "list",
-  "find",
-  "search",
-  "hash",
-  "diagnostics",
-  "environment",
-  "verify",
-];
 
 export type WorkspaceGatewayCapabilities = {
   kind: WorkspaceGatewayKind;
@@ -58,39 +43,6 @@ export type WorkspaceGatewayCapabilities = {
   remoteName?: string;
 };
 
-export type WorkspaceGatewayCapabilitiesDTO = WorkspaceGatewayCapabilities;
-
-const ALL_WORKSPACE_GATEWAY_CAPABILITIES: Omit<WorkspaceGatewayCapabilities, "kind"> = {
-  stat: true,
-  read: true,
-  list: true,
-  find: true,
-  search: true,
-  hash: true,
-  diagnostics: true,
-  environment: true,
-  verify: true,
-};
-
-/** Return a fresh capability object so callers cannot mutate the defaults. */
-export function createWorkspaceGatewayCapabilities(
-  kind: WorkspaceGatewayKind = "local",
-  remoteName?: string,
-): WorkspaceGatewayCapabilities {
-  return {
-    kind,
-    ...ALL_WORKSPACE_GATEWAY_CAPABILITIES,
-    ...(remoteName ? { remoteName } : {}),
-  };
-}
-
-export const LOCAL_WORKSPACE_GATEWAY_CAPABILITIES =
-  createWorkspaceGatewayCapabilities("local");
-export const REMOTE_WORKSPACE_GATEWAY_CAPABILITIES =
-  createWorkspaceGatewayCapabilities("remote");
-export const LOCAL_WORKSPACE_CAPABILITIES = LOCAL_WORKSPACE_GATEWAY_CAPABILITIES;
-export const REMOTE_WORKSPACE_CAPABILITIES = REMOTE_WORKSPACE_GATEWAY_CAPABILITIES;
-
 export type WorkspaceStatDto = {
   uri: WorkspaceUriDto;
   type: WorkspaceFileType;
@@ -98,8 +50,6 @@ export type WorkspaceStatDto = {
   ctime: number;
   mtime: number;
 };
-
-export type WorkspaceStatDTO = WorkspaceStatDto;
 
 export type WorkspaceReadEncoding = "utf8" | "base64";
 
@@ -112,8 +62,6 @@ export type WorkspaceReadDto = {
   binary: boolean;
 };
 
-export type WorkspaceReadDTO = WorkspaceReadDto;
-
 export type WorkspaceListEntryDto = {
   name: string;
   uri: WorkspaceUriDto;
@@ -125,8 +73,6 @@ export type WorkspaceListDto = {
   entries: WorkspaceListEntryDto[];
 };
 
-export type WorkspaceListDTO = WorkspaceListDto;
-
 export type WorkspaceFindOptions = {
   include: string;
   exclude?: string;
@@ -137,8 +83,6 @@ export type WorkspaceFindOptions = {
 export type WorkspaceFindDto = {
   uris: WorkspaceUriDto[];
 };
-
-export type WorkspaceFindDTO = WorkspaceFindDto;
 
 export type WorkspaceSearchOptions = WorkspaceFindOptions & {
   query: string;
@@ -160,8 +104,6 @@ export type WorkspaceSearchDto = {
   filesScanned: number;
 };
 
-export type WorkspaceSearchDTO = WorkspaceSearchDto;
-
 export type WorkspaceHashAlgorithm = "sha256";
 
 export type WorkspaceHashDto = {
@@ -170,8 +112,6 @@ export type WorkspaceHashDto = {
   hash: string;
   size: number;
 };
-
-export type WorkspaceHashDTO = WorkspaceHashDto;
 
 export type WorkspaceDiagnosticSeverity =
   | "error"
@@ -198,8 +138,6 @@ export type WorkspaceDiagnosticsDto = {
   diagnostics: WorkspaceDiagnosticDto[];
 };
 
-export type WorkspaceDiagnosticsDTO = WorkspaceDiagnosticsDto;
-
 export type WorkspaceEnvironmentDto = {
   kind: WorkspaceGatewayKind;
   isRemote: boolean;
@@ -209,8 +147,6 @@ export type WorkspaceEnvironmentDto = {
   workspaceTrusted: boolean;
   platform: "darwin" | "win32" | "linux" | "unknown";
 };
-
-export type WorkspaceEnvironmentDTO = WorkspaceEnvironmentDto;
 
 export type WorkspaceVerificationRequest = {
   requestId: string;
@@ -277,8 +213,6 @@ export type WorkspaceGatewayRequest =
   | WorkspaceEnvironmentRequest
   | WorkspaceVerificationRequest;
 
-export type WorkspaceGatewayRequestDTO = WorkspaceGatewayRequest;
-
 export type WorkspaceGatewayResult =
   | WorkspaceStatDto
   | WorkspaceReadDto
@@ -302,9 +236,6 @@ export type WorkspaceGatewayResponse<T extends WorkspaceGatewayResult = Workspac
   result?: T;
   error?: WorkspaceGatewayError;
 };
-
-export type WorkspaceGatewayResponseDTO<T extends WorkspaceGatewayResult = WorkspaceGatewayResult> =
-  WorkspaceGatewayResponse<T>;
 
 export type WorkspaceGatewayVerificationResult = {
   ok: boolean;
@@ -411,21 +342,6 @@ export type RemoteProcessState =
   | "timed_out"
   | "spawn_failed"
   | "connection_lost";
-
-export type RemoteVerificationStartRequest = {
-  spec: RemoteProcessSpec;
-};
-
-export type RemoteVerificationStatusRequest = {
-  session_id: string;
-  /** Client-side read offsets for incremental stdout/stderr streaming. */
-  stdout_offset?: number;
-  stderr_offset?: number;
-};
-
-export type RemoteVerificationCancelRequest = {
-  session_id: string;
-};
 
 export type RemoteVerificationSessionRef = {
   session_id: string;

@@ -118,22 +118,6 @@ export interface ProviderImageInputState {
   detail?: string;
 }
 
-const hardBlockingCategories = new Set([
-  'quota_exhausted',
-  'invalid_key_or_permission',
-  'invalid_api_key',
-  'authentication_failed',
-  'model_unsupported',
-  'model_not_supported',
-  'model_not_found',
-  'language_corruption',
-  'malformed_response',
-  'empty_response',
-  'reasoning_leak',
-  'reasoning_budget_exhausted',
-  'truncated_or_empty',
-]);
-
 type ProviderStatusPhraseKey =
   | 'quota_exhausted'
   | 'invalid_key_or_permission'
@@ -559,10 +543,6 @@ function missingProviderReason(
   }
 }
 
-export function isCoachProviderBlockingCategory(category: string | undefined | null): boolean {
-  return Boolean(category && hardBlockingCategories.has(category));
-}
-
 export function providerTransportIsConfigured(
   provider:
     | {
@@ -592,7 +572,6 @@ function providerHasVisionCapability(
   return providerCapabilityIsVerified(provider, 'vision');
 }
 
-
 function providerSupportsImageProtocol(
   provider: Pick<ProviderStatusLike, 'protocol'> | undefined,
 ): boolean {
@@ -601,15 +580,6 @@ function providerSupportsImageProtocol(
   }
   const protocol = normalizeProviderProtocol(provider.protocol);
   return Boolean(protocol);
-}
-
-export function providerSupportsImageInput(
-  provider: Pick<ProviderStatusLike, 'capabilities' | 'protocol' | 'lastTestResult'> | undefined,
-): boolean {
-  return (
-    providerHasVisionCapability(provider) &&
-    providerSupportsImageProtocol(provider)
-  );
 }
 
 function providerSurfacePrefersChinese(language: string | undefined): boolean {
@@ -765,7 +735,6 @@ export function providerErrorHint(
   return undefined;
 }
 
-
 /**
  * LM Studio / Ollama / llama.cpp style servers listen on loopback and accept
  * unauthenticated requests. For those connections the stored-key gate should
@@ -870,184 +839,6 @@ export function describeProviderSendState(
     blocked: false,
     status: 'ready',
     ...(warning ? { warning } : {}),
-  };
-}
-
-export type ProviderRequestFailureOwner =
-  | 'local_runtime'
-  | 'authentication'
-  | 'billing'
-  | 'model'
-  | 'rate_limit'
-  | 'upstream'
-  | 'network'
-  | 'workspace'
-  | 'request';
-
-export type ProviderRequestFailureRecovery =
-  | 'retry'
-  | 'switch_model'
-  | 'edit_key'
-  | 'restore_quota'
-  | 'check_connection'
-  | 'start_sidecar'
-  | 'trust_workspace';
-
-export interface ProviderRequestFailureAttribution {
-  /** Normalized error category (same vocabulary as errorCategory fields). */
-  category: string;
-  /** Who owns the failure — drives the explanation copy. */
-  owner: ProviderRequestFailureOwner;
-  /** Localized explanation of what actually happened. */
-  explanation: string;
-  /** Localized, executable recovery actions in priority order. */
-  recoveryActions: Array<{ kind: ProviderRequestFailureRecovery; label: string }>;
-  retryable: boolean;
-}
-
-const REQUEST_FAILURE_OWNER_PHRASE: Record<
-  ProviderRequestFailureOwner,
-  ProviderStatusPhraseKey
-> = {
-  local_runtime: 'sidecar_unavailable',
-  authentication: 'invalid_key_or_permission',
-  billing: 'quota_exhausted',
-  model: 'model_not_found',
-  rate_limit: 'rate_limit',
-  upstream: 'upstream_unavailable',
-  network: 'network',
-  workspace: 'workspace_trust',
-  request: 'generic_check_hint',
-};
-
-
-function providerRequestFailureActions(
-  owner: ProviderRequestFailureOwner,
-  language: ProviderSurfaceLanguage,
-): Array<{ kind: ProviderRequestFailureRecovery; label: string }> {
-  switch (owner) {
-    case 'local_runtime':
-      return [
-        { kind: 'start_sidecar', label: providerStatusPhrase(language, 'recover_start_sidecar') },
-        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
-      ];
-    case 'authentication':
-      return [
-        { kind: 'edit_key', label: providerStatusPhrase(language, 'recover_edit_key') },
-        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
-      ];
-    case 'billing':
-      return [
-        { kind: 'restore_quota', label: providerStatusPhrase(language, 'recover_restore_quota') },
-        { kind: 'switch_model', label: providerStatusPhrase(language, 'recover_switch_model') },
-      ];
-    case 'model':
-      return [
-        { kind: 'switch_model', label: providerStatusPhrase(language, 'recover_switch_model') },
-        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
-      ];
-    case 'rate_limit':
-    case 'upstream':
-      return [{ kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') }];
-    case 'network':
-      return [
-        { kind: 'check_connection', label: providerStatusPhrase(language, 'recover_check_connection') },
-        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
-      ];
-    case 'workspace':
-      return [
-        { kind: 'trust_workspace', label: providerStatusPhrase(language, 'workspace_trust') },
-      ];
-    default:
-      return [
-        { kind: 'check_connection', label: providerStatusPhrase(language, 'recover_check_connection') },
-        { kind: 'retry', label: providerStatusPhrase(language, 'recover_retry') },
-      ];
-  }
-}
-
-/**
- * Attributes a *real* request failure (the send already happened) to an owner
- * with a localized explanation and executable recovery actions. Error
- * ownership: sidecar down = local runtime, 401 = authentication, 402 = billing
- * / quota, 404 = model id, 429 = rate limit, timeout = upstream, 5xx =
- * upstream, connect-class = network.
- */
-export function describeProviderRequestFailure(
-  input: {
-    errorCategory?: string | undefined;
-    statusCode?: number | undefined;
-    detail?: string | undefined;
-  },
-  language: ProviderSurfaceLanguage,
-): ProviderRequestFailureAttribution {
-  const rawCategory = input.errorCategory?.trim() ?? '';
-  const statusCode = typeof input.statusCode === 'number' ? input.statusCode : undefined;
-  let category = rawCategory || 'unknown';
-  let owner: ProviderRequestFailureOwner = 'request';
-  let retryable = true;
-
-  if (rawCategory === 'workspace_trust') {
-    owner = 'workspace';
-    retryable = false;
-  } else if (
-    rawCategory === 'sidecar_unavailable' ||
-    rawCategory === 'sidecar_request_failed'
-  ) {
-    owner = 'local_runtime';
-  } else if (
-    rawCategory === 'quota_exhausted' ||
-    rawCategory === 'insufficient_quota' ||
-    statusCode === 402
-  ) {
-    category = rawCategory || 'quota_exhausted';
-    owner = 'billing';
-    retryable = false;
-  } else if (
-    rawCategory === 'invalid_key_or_permission' ||
-    rawCategory === 'invalid_api_key' ||
-    rawCategory === 'authentication_failed' ||
-    statusCode === 401 ||
-    statusCode === 403
-  ) {
-    category = rawCategory || 'authentication_failed';
-    owner = 'authentication';
-    retryable = false;
-  } else if (
-    rawCategory === 'model_not_found' ||
-    rawCategory === 'model_unsupported' ||
-    rawCategory === 'model_not_supported' ||
-    statusCode === 404
-  ) {
-    category = rawCategory || 'model_not_found';
-    owner = 'model';
-    retryable = false;
-  } else if (rawCategory === 'rate_limit' || statusCode === 429) {
-    category = rawCategory || 'rate_limit';
-    owner = 'rate_limit';
-  } else if (rawCategory === 'timeout') {
-    owner = 'upstream';
-  } else if (
-    rawCategory === 'upstream_unavailable' ||
-    (statusCode !== undefined && statusCode >= 500)
-  ) {
-    owner = 'upstream';
-  } else if (
-    rawCategory === 'network' ||
-    rawCategory === 'network_error'
-  ) {
-    owner = 'network';
-  } else if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
-    owner = 'request';
-    retryable = false;
-  }
-
-  return {
-    category,
-    owner,
-    explanation: providerStatusPhrase(language, REQUEST_FAILURE_OWNER_PHRASE[owner]),
-    recoveryActions: providerRequestFailureActions(owner, language),
-    retryable,
   };
 }
 
@@ -1746,7 +1537,6 @@ const capabilityKeyByName: Record<string, ProviderCapabilityLabel> = {
   'structured output': 'structuredOutput',
 };
 
-
 function asText(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
@@ -2218,14 +2008,4 @@ export function endpointLatencyTier(
     return "ok";
   }
   return "slow";
-}
-
-export function pickFastestEndpoint(
-  results: ProviderEndpointSpeedTestResult[],
-): ProviderEndpointSpeedTestResult | null {
-  const reachable = results.filter((item) => item.latencyMs !== null);
-  if (reachable.length === 0) {
-    return null;
-  }
-  return reachable.reduce((best, item) => (item.latencyMs! < best.latencyMs! ? item : best));
 }
