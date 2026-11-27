@@ -488,6 +488,8 @@ class EventLedgerEntry(BaseModel):
     after_state_ref: dict[str, Any] = Field(default_factory=dict)
     reversibility: EventReversibility = "irreversible"
     audit_note: str = ""
+    workspace_epoch: int = 0
+    seq: int = 0
 
 
 class WorkspaceAuthoritySummary(BaseModel):

@@ -127,6 +127,15 @@ EVENT_COACH_TURN_RECORDED = "coach_turn_recorded"
 EVENT_TRAINING_EVIDENCE_RECORDED = "training_evidence_recorded"
 EVENT_TRAINING_EVIDENCE_SUPERSEDED = "training_evidence_superseded"
 
+# Workspace epoch & baseline lifecycle (3) — Event-Log Evolution Step 1
+EVENT_WORKSPACE_RESET = "workspace_reset"
+EVENT_PLAN_CLEARED = "plan_cleared"
+EVENT_BASELINE_IMPORTED = "baseline_imported"
+
+_EPOCH_BUMP_EVENT_TYPES: frozenset[str] = frozenset(
+    {EVENT_WORKSPACE_RESET, EVENT_SANDBOX_WORKSPACE_CLEARED}
+)
+
 _T = TypeVar("_T")
 
 ALL_EVENT_TYPES: frozenset[str] = frozenset({
@@ -185,6 +194,9 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVENT_GOAL_STARTED,
     EVENT_GOAL_ACTIVITY_RECORDED,
     EVENT_GOAL_COMPLETED,
+    EVENT_WORKSPACE_RESET,
+    EVENT_PLAN_CLEARED,
+    EVENT_BASELINE_IMPORTED,
 })
 
 
@@ -208,6 +220,8 @@ class EventLedgerService:
         self._store = store
         self._idempotent: dict[tuple[str, str], EventLedgerEntry] = {}
         self._reversals: set[str] = set()
+        self._workspace_seq: dict[str, int] = {}
+        self._workspace_epoch: dict[str, int] = {}
         self._lock = threading.Lock()
         # Persistent reads query SQLite directly so rolled-back transactions
         # never leave stale in-memory ledger entries behind.
@@ -262,7 +276,17 @@ class EventLedgerService:
             }
             if self._store is None:
                 self._counter += 1
-                entry = EventLedgerEntry(event_id=f"evt-{self._counter:06d}", **fields)
+                cur_epoch = self._workspace_epoch.get(workspace, 0)
+                next_epoch = cur_epoch + 1 if event_type in _EPOCH_BUMP_EVENT_TYPES else cur_epoch
+                next_seq = self._workspace_seq.get(workspace, 0) + 1
+                self._workspace_epoch[workspace] = next_epoch
+                self._workspace_seq[workspace] = next_seq
+                entry = EventLedgerEntry(
+                    event_id=f"evt-{self._counter:06d}",
+                    workspace_epoch=next_epoch,
+                    seq=next_seq,
+                    **fields,
+                )
                 created = True
             else:
                 entry = EventLedgerEntry(event_id=f"evt-{uuid4().hex}", **fields)
@@ -409,6 +433,41 @@ class EventLedgerService:
             entry.event_id, workspace_id=workspace_id, actor=actor, reason=reason
         )
 
+    def current_workspace_coords(self, workspace_id: str) -> tuple[int, int]:
+        """Return ``(workspace_epoch, latest_seq)`` for ``workspace_id``."""
+        if self._store is not None:
+            return self._store.current_workspace_coords(workspace_id)
+        with self._lock:
+            return (
+                self._workspace_epoch.get(workspace_id, 0),
+                self._workspace_seq.get(workspace_id, 0),
+            )
+
+    def effective_workspace_entries(
+        self,
+        workspace_id: str,
+        *,
+        current_epoch_only: bool = True,
+    ) -> list[EventLedgerEntry]:
+        """Return chronological effective entries scoped to ``workspace_id``."""
+        epoch, _ = self.current_workspace_coords(workspace_id)
+        if self._store is not None:
+            return self._store.query(
+                workspace_id=workspace_id,
+                min_epoch=epoch if current_epoch_only else None,
+                effective=True,
+            )
+        with self._lock:
+            reversed_ids = set(self._reversals)
+            return [
+                entry
+                for entry in self._entries
+                if entry.event_id not in reversed_ids
+                and entry.event_type != EVENT_EVENT_REVERSED
+                and entry.project_id == workspace_id
+                and (not current_epoch_only or entry.workspace_epoch == epoch)
+            ]
+
     def effective_entries(self, *, project_id: str | None = None) -> list[EventLedgerEntry]:
         """Entries with reversed events (and reversal bookkeeping) removed."""
         if self._store is not None:
@@ -517,3 +576,5 @@ class EventLedgerService:
             self._counter = 0
             self._idempotent.clear()
             self._reversals.clear()
+            self._workspace_seq.clear()
+            self._workspace_epoch.clear()

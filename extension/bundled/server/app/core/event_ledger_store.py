@@ -23,6 +23,8 @@ from typing import Any, cast
 
 from .models import EventLedgerEntry, EventReversibility, utc_now_iso
 
+_EPOCH_BUMP_EVENT_TYPES = frozenset({"workspace_reset", "sandbox_workspace_cleared"})
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS event_ledger (
     event_id TEXT PRIMARY KEY,
@@ -39,7 +41,9 @@ CREATE TABLE IF NOT EXISTS event_ledger (
     reversibility TEXT NOT NULL DEFAULT 'irreversible',
     audit_note TEXT NOT NULL DEFAULT '',
     idempotency_key TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    workspace_epoch INTEGER NOT NULL DEFAULT 0,
+    seq INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_event_ledger_workspace_time
     ON event_ledger(workspace_id, occurred_at);
@@ -57,8 +61,9 @@ _INSERT_SQL = """
 INSERT INTO event_ledger (
     event_id, workspace_id, event_type, occurred_at, actor, scope, project_id,
     source_chain_json, payload_ref_json, before_state_ref_json,
-    after_state_ref_json, reversibility, audit_note, idempotency_key, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    after_state_ref_json, reversibility, audit_note, idempotency_key, created_at,
+    workspace_epoch, seq
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(workspace_id, idempotency_key) WHERE idempotency_key <> '' DO NOTHING
 """
 
@@ -90,6 +95,7 @@ def _json_list(text: Any) -> list[str]:
 
 
 def entry_from_row(row: sqlite3.Row) -> EventLedgerEntry:
+    keys = set(row.keys())
     return EventLedgerEntry(
         event_id=str(row["event_id"]),
         event_type=str(row["event_type"]),
@@ -103,6 +109,8 @@ def entry_from_row(row: sqlite3.Row) -> EventLedgerEntry:
         after_state_ref=_json_object(row["after_state_ref_json"]),
         reversibility=cast(EventReversibility, str(row["reversibility"])),
         audit_note=str(row["audit_note"]),
+        workspace_epoch=int(row["workspace_epoch"]) if "workspace_epoch" in keys and row["workspace_epoch"] is not None else 0,
+        seq=int(row["seq"]) if "seq" in keys and row["seq"] is not None else 0,
     )
 
 
@@ -118,6 +126,14 @@ class EventLedgerStore:
         connection = sqlite3.connect(self._path, timeout=5.0)
         try:
             connection.executescript(_SCHEMA)
+            cols = {str(r[1]) for r in connection.execute("PRAGMA table_info(event_ledger)").fetchall()}
+            if "workspace_epoch" not in cols:
+                connection.execute("ALTER TABLE event_ledger ADD COLUMN workspace_epoch INTEGER NOT NULL DEFAULT 0")
+            if "seq" not in cols:
+                connection.execute("ALTER TABLE event_ledger ADD COLUMN seq INTEGER NOT NULL DEFAULT 0")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_event_ledger_workspace_seq ON event_ledger(workspace_id, seq)"
+            )
             connection.commit()
         finally:
             connection.close()
@@ -147,24 +163,41 @@ class EventLedgerStore:
             nullcontext(transaction) if transaction is not None else closing(self._connect())
         )
         with connection_scope as connection:
+            coord_row = connection.execute(
+                "SELECT COALESCE(MAX(workspace_epoch), 0), COALESCE(MAX(seq), 0) FROM event_ledger WHERE workspace_id = ?",
+                (workspace,),
+            ).fetchone()
+            current_epoch = int(coord_row[0]) if coord_row is not None else 0
+            next_seq = (int(coord_row[1]) if coord_row is not None else 0) + 1
+            assigned_epoch = (
+                entry.workspace_epoch
+                if entry.workspace_epoch > current_epoch
+                else (current_epoch + 1 if entry.event_type in _EPOCH_BUMP_EVENT_TYPES else current_epoch)
+            )
+            assigned_seq = entry.seq if entry.seq >= next_seq else next_seq
+            persisted_entry = entry.model_copy(
+                update={"workspace_epoch": assigned_epoch, "seq": assigned_seq}
+            )
             cursor = connection.execute(
                 _INSERT_SQL,
                 (
-                    entry.event_id,
+                    persisted_entry.event_id,
                     workspace,
-                    entry.event_type,
-                    entry.occurred_at,
-                    entry.actor,
-                    entry.scope,
-                    entry.project_id,
-                    _json_text(entry.source_chain),
-                    _json_text(entry.payload_ref),
-                    _json_text(entry.before_state_ref),
-                    _json_text(entry.after_state_ref),
-                    entry.reversibility,
-                    entry.audit_note,
+                    persisted_entry.event_type,
+                    persisted_entry.occurred_at,
+                    persisted_entry.actor,
+                    persisted_entry.scope,
+                    persisted_entry.project_id,
+                    _json_text(persisted_entry.source_chain),
+                    _json_text(persisted_entry.payload_ref),
+                    _json_text(persisted_entry.before_state_ref),
+                    _json_text(persisted_entry.after_state_ref),
+                    persisted_entry.reversibility,
+                    persisted_entry.audit_note,
                     key,
                     utc_now_iso(),
+                    assigned_epoch,
+                    assigned_seq,
                 ),
             )
             created = cursor.rowcount > 0
@@ -180,7 +213,7 @@ class EventLedgerStore:
                 return entry_from_row(row), False
             if transaction is None:
                 connection.commit()
-        return entry, True
+        return persisted_entry, True
 
     def load_recent(self, *, limit: int = 2000) -> list[EventLedgerEntry]:
         """Return up to ``limit`` most recent entries in chronological order."""
@@ -216,20 +249,33 @@ class EventLedgerStore:
             ).fetchone()
         return entry_from_row(row) if row is not None else None
 
+    def current_workspace_coords(self, workspace_id: str) -> tuple[int, int]:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(workspace_epoch), 0), COALESCE(MAX(seq), 0) FROM event_ledger WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchone()
+        if row is None:
+            return 0, 0
+        return int(row[0]), int(row[1])
+
     def query(
         self,
         *,
+        workspace_id: str | None = None,
         event_type: str | None = None,
         event_types: Collection[str] | None = None,
         project_id: str | None = None,
         scope: str | None = None,
         actor: str | None = None,
+        min_epoch: int | None = None,
         limit: int | None = None,
         offset: int = 0,
         effective: bool = False,
         newest_first: bool = False,
     ) -> list[EventLedgerEntry]:
         filters = [
+            ("workspace_id", workspace_id),
             ("event_type", event_type),
             ("project_id", project_id),
             ("scope", scope),
@@ -237,6 +283,9 @@ class EventLedgerStore:
         ]
         clauses = [f"entry.{name} = ?" for name, value in filters if value is not None]
         args: list[Any] = [value for _, value in filters if value is not None]
+        if min_epoch is not None:
+            clauses.append("entry.workspace_epoch >= ?")
+            args.append(int(min_epoch))
         if event_types is not None:
             types = tuple(event_types)
             if not types:
@@ -254,11 +303,18 @@ class EventLedgerStore:
                 )""",
             ])
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
-        order = (
-            "ORDER BY entry.occurred_at DESC, entry.rowid DESC"
-            if newest_first
-            else "ORDER BY entry.occurred_at, entry.rowid"
-        )
+        if workspace_id is not None:
+            order = (
+                "ORDER BY entry.seq DESC, entry.rowid DESC"
+                if newest_first
+                else "ORDER BY entry.seq ASC, entry.rowid ASC"
+            )
+        else:
+            order = (
+                "ORDER BY entry.occurred_at DESC, entry.rowid DESC"
+                if newest_first
+                else "ORDER BY entry.occurred_at, entry.rowid"
+            )
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 "SELECT entry.* FROM event_ledger AS entry"
