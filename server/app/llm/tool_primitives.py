@@ -524,7 +524,8 @@ def _workspace_project_root(context: ToolContext) -> Path | None:
         return None
     try:
         return Path(str(raw)).resolve()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in tool_primitives: %s", exc)
         return None
 
 
@@ -747,7 +748,8 @@ async def _handle_library_read(context: ToolContext, args: dict[str, Any]) -> di
         root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
         try:
             limit = max(1, min(int(args.get("limit", 40)), 100))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in tool_primitives: %s", exc)
             limit = 40
         result = _grep_library_root(
             root,
@@ -958,6 +960,7 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
                 ),
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in tool_primitives: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         index_info = await _auto_index_library_path(context, relative)
         return {
@@ -990,6 +993,7 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
                 SandboxMkdirRequest(workspace_id=context.workspace_id, path=relative),
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in tool_primitives: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         return {
             "ok": True,
@@ -1022,6 +1026,7 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
                 ),
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in tool_primitives: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         index_info = await _auto_index_library_path(context, dst_rel)
         return {
@@ -1057,6 +1062,7 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
                 ),
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in tool_primitives: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
         trashed_rel = None
@@ -1108,6 +1114,7 @@ async def _handle_library_write(context: ToolContext, args: dict[str, Any]) -> d
                 ),
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in tool_primitives: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         index_target = restore_path or raw_path
         index_info = await _auto_index_library_path(context, index_target)
@@ -1250,7 +1257,8 @@ def _macos_sandbox_exec_usable() -> bool:
             timeout=2.0,
         )
         _MACOS_SANDBOX_USABLE = probe.returncode == 0
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in tool_primitives: %s", exc)
         _MACOS_SANDBOX_USABLE = False
     return _MACOS_SANDBOX_USABLE
 
@@ -1273,7 +1281,8 @@ def _linux_bwrap_bin() -> str | None:
             timeout=2.0,
         )
         _LINUX_BWRAP_BIN = bwrap if probe.returncode == 0 else None
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in tool_primitives: %s", exc)
         _LINUX_BWRAP_BIN = None
     return _LINUX_BWRAP_BIN
 
@@ -1676,7 +1685,8 @@ def _validate_library_exec_command(
             continue
         try:
             candidate = Path(token).resolve()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in tool_primitives: %s", exc)
             return f"Invalid absolute path {token!r} in library_exec."
         if (
             resolved_project_root is not None
@@ -1731,7 +1741,8 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
                 _MAX_EXEC_TIMEOUT_SECONDS,
             ),
         )
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in tool_primitives: %s", exc)
         timeout = _DEFAULT_EXEC_TIMEOUT_SECONDS
 
     from .harness import invalidate_sandbox_operations, truncate_tool_payload

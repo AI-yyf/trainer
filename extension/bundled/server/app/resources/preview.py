@@ -12,6 +12,7 @@ import csv
 import html as html_escape
 import io
 import json
+import logging
 import posixpath
 import re
 import stat
@@ -29,6 +30,8 @@ from enum import StrEnum
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class PreviewTier(StrEnum):
@@ -393,7 +396,8 @@ def _read_file_content(file_path: str, max_bytes: int = 1024 * 1024) -> str | No
             return None
         with path.open("r", encoding="utf-8", errors="ignore") as handle:
             return handle.read(max_bytes)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
 
@@ -414,6 +418,7 @@ def _get_file_metadata(file_path: str) -> dict[str, Any]:
             "is_binary": _is_binary_file(path),
         }
     except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {"error": str(exc)}
 
 
@@ -446,7 +451,8 @@ def _is_binary_file(path: Path) -> bool:
         with open(path, "rb") as fh:
             chunk = fh.read(8192)
             return b"\x00" in chunk
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return True
 
 
@@ -552,7 +558,8 @@ def _render_with_shiki(code: str, language: str | None) -> str | None:
         shiki_lang = lang_map.get(language, language)
         highlighter = shiki_highlighter(theme="github-dark", langs=[shiki_lang])
         return highlighter.code_to_html(code, lang=shiki_lang)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
 
@@ -576,7 +583,8 @@ def _convert_with_markitdown(file_path: str) -> str | None:
         converter = MarkItDown()
         result = converter.convert(file_path)
         return result.text_content
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
 
@@ -602,7 +610,8 @@ def _convert_pdf_to_markdown(file_path: str) -> str | None:
         if not page_texts:
             return None
         return "\n\n".join(page_texts)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return _convert_pdf_bytes_to_markdown(file_path)
 
 
@@ -611,7 +620,8 @@ def _convert_pdf_bytes_to_markdown(file_path: str) -> str | None:
     path = Path(file_path)
     try:
         data = path.read_bytes()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
     page_texts: list[str] = []
@@ -693,7 +703,8 @@ def _decode_pdf_literal_string(raw: bytes) -> str:
                 index += 1
             try:
                 text.append(chr(int("".join(octal_digits), 8)))
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in preview: %s", exc)
                 continue
         elif escaped in {ord("\n"), ord("\r")}:
             if escaped == ord("\r") and index < length and raw[index] == ord("\n"):
@@ -743,7 +754,8 @@ def _convert_openxml_to_markdown(file_path: str) -> str | None:
                     continue
                 try:
                     root = ET.fromstring(xml_data)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Suppressed exception in preview: %s", exc)
                     continue
                 for element in root.iter():
                     if _xml_local_name(element.tag) != "p":
@@ -759,7 +771,8 @@ def _convert_openxml_to_markdown(file_path: str) -> str | None:
             if not paragraphs:
                 return None
             return "\n\n".join(paragraphs)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     return None
 
@@ -786,7 +799,8 @@ def _convert_rtf_to_markdown(file_path: str) -> str | None:
         return None
     try:
         raw = Path(file_path).read_text(encoding="latin-1", errors="ignore")
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     start = raw.lower().find("\\pard")
     if start != -1:
@@ -815,7 +829,8 @@ def _convert_eml_to_markdown(file_path: str) -> str | None:
     try:
         with path.open("rb") as handle:
             message = BytesParser(policy=policy.default).parse(handle)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
     subject = _normalize_preview_text(str(message.get("subject", "") or ""))
@@ -853,23 +868,27 @@ def _extract_email_body_text(message: Any) -> str | None:
 
     try:
         body_part = message.get_body(preferencelist=("plain",))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         body_part = None
     if body_part is not None:
         try:
             plain_body = str(body_part.get_content() or "")
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in preview: %s", exc)
             plain_body = None
 
     if not plain_body:
         try:
             html_part = message.get_body(preferencelist=("html",))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in preview: %s", exc)
             html_part = None
         if html_part is not None:
             try:
                 html_body = str(html_part.get_content() or "")
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in preview: %s", exc)
                 html_body = None
 
     if plain_body:
@@ -882,7 +901,8 @@ def _extract_email_body_text(message: Any) -> str | None:
 
     try:
         payload = message.get_content()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         payload = None
     if isinstance(payload, str) and payload.strip():
         return payload
@@ -919,14 +939,16 @@ def _epub_preview_data(file_path: str) -> dict[str, Any]:
             if opf_path is None:
                 return {}
             return _epub_preview_data_from_archive(path, archive, opf_path)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
 
 
 def _epub_opf_path(archive: zipfile.ZipFile) -> str | None:
     try:
         container_root = ET.fromstring(archive.read("META-INF/container.xml"))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     for element in container_root.iter():
         if _xml_local_name(element.tag) != "rootfile":
@@ -940,7 +962,8 @@ def _epub_opf_path(archive: zipfile.ZipFile) -> str | None:
 def _epub_preview_data_from_archive(path: Path, archive: zipfile.ZipFile, opf_path: str) -> dict[str, Any]:
     try:
         opf_root = ET.fromstring(archive.read(opf_path))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
     manifest: dict[str, tuple[str, str]] = {}
     spine: list[str] = []
@@ -972,7 +995,8 @@ def _epub_preview_data_from_archive(path: Path, archive: zipfile.ZipFile, opf_pa
         chapter_path = posixpath.normpath(posixpath.join(opf_dir, href))
         try:
             chapter_content = archive.read(chapter_path).decode("utf-8", errors="ignore")
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in preview: %s", exc)
             continue
         outline = _extract_html_outline(chapter_content)
         chapter_title = ""
@@ -1032,11 +1056,13 @@ def _odf_content_root(file_path: str) -> ET.Element | None:
     try:
         with zipfile.ZipFile(file_path) as archive:
             content = archive.read("content.xml")
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     try:
         return ET.fromstring(content)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
 
@@ -1145,7 +1171,8 @@ def _odf_int_attr(element: ET.Element, local_name: str) -> int:
     value = _odf_attr_value(element, local_name)
     try:
         return int(value)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return 0
 
 
@@ -1190,7 +1217,8 @@ def _convert_zip_archive_to_markdown(path: Path) -> str | None:
             if len(entries) > 30:
                 lines.append(f"- ... {len(entries) - 30} more entries")
             return "\n".join(lines)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
 
@@ -1198,7 +1226,8 @@ def _zip_text_entry_snippet(archive: zipfile.ZipFile, name: str) -> str | None:
     try:
         with archive.open(name) as handle:
             data = handle.read(2048)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     text = data.decode("utf-8", errors="ignore").strip()
     if not text:
@@ -1232,7 +1261,8 @@ def _convert_tar_archive_to_markdown(path: Path) -> str | None:
             if len(members) > 30:
                 lines.append(f"- ... {len(members) - 30} more entries")
             return "\n".join(lines)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
 
 
@@ -1242,7 +1272,8 @@ def _tar_text_entry_snippet(archive: tarfile.TarFile, member: tarfile.TarInfo) -
         if extracted is None:
             return None
         data = extracted.read(2048)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     text = data.decode("utf-8", errors="ignore").strip()
     if not text:
@@ -1422,7 +1453,8 @@ def _structured_eml_preview(file_path: str, *, max_bytes: int) -> dict[str, Any]
     try:
         with Path(file_path).open("rb") as handle:
             message = BytesParser(policy=policy.default).parse(handle)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
     subject = _normalize_preview_text(str(message.get("subject", "") or ""))
     sender = _normalize_preview_text(str(message.get("from", "") or ""))
@@ -1476,7 +1508,8 @@ def _structured_json_preview(file_path: str, content: str, *, max_bytes: int) ->
     parsed: Any
     try:
         parsed = json.loads(content)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return _structured_text_preview(file_path, content, max_bytes=max_bytes)
     return _structured_serialized_preview(
         parsed,
@@ -1498,7 +1531,8 @@ def _structured_text_preview(file_path: str, content: str, *, max_bytes: int) ->
     if suffix == ".toml":
         try:
             parsed = tomllib.loads(content)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in preview: %s", exc)
             parsed = None
         if parsed is not None:
             return _structured_serialized_preview(
@@ -1517,7 +1551,8 @@ def _structured_text_preview(file_path: str, content: str, *, max_bytes: int) ->
             import yaml  # type: ignore[import-not-found]
 
             parsed = yaml.safe_load(content)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in preview: %s", exc)
             parsed = None
         if parsed is not None:
             return _structured_serialized_preview(
@@ -1569,7 +1604,8 @@ def _structured_markup_preview(file_path: str, content: str, *, max_bytes: int) 
 def _structured_xml_preview(file_path: str, content: str, *, max_bytes: int) -> dict[str, Any]:
     try:
         root = ET.fromstring(content)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return _structured_markup_preview(file_path, content, max_bytes=max_bytes)
     lines: list[str] = []
     _append_xml_outline(lines, root, depth=0, max_items=24)
@@ -1610,7 +1646,8 @@ def _structured_serialized_preview(
     else:
         try:
             content = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in preview: %s", exc)
             content = str(value)
         truncated = len(content) > max_bytes
         if truncated:
@@ -1671,7 +1708,8 @@ def _extract_html_outline(content: str) -> dict[str, Any] | None:
     try:
         parser.feed(content)
         parser.close()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     if not parser.title and not parser.items:
         return None
@@ -1743,7 +1781,8 @@ def _normalize_preview_text(value: str) -> str:
 def _structured_table_markdown(content: str, *, delimiter: str) -> str | None:
     try:
         reader = csv.reader(io.StringIO(content), delimiter=delimiter)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     rows: list[list[str]] = []
     header: list[str] | None = None
@@ -1777,7 +1816,8 @@ def _structured_table_preview(file_path: str, content: str | None, *, delimiter:
         return {}
     try:
         reader = csv.reader(io.StringIO(content), delimiter=delimiter)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
     header: list[str] | None = None
     sample_rows: list[list[str]] = []
@@ -1816,7 +1856,8 @@ def _structured_notebook_preview(file_path: str, content: str | None) -> dict[st
         return {}
     try:
         notebook = json.loads(content)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
     if not isinstance(notebook, dict):
         return {}
@@ -1890,11 +1931,13 @@ def _structured_openxml_document_preview(file_path: str) -> dict[str, Any]:
     try:
         with zipfile.ZipFile(path) as archive:
             xml_data = archive.read("word/document.xml")
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
     try:
         root = ET.fromstring(xml_data)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
 
     paragraphs: list[str] = []
@@ -1943,7 +1986,8 @@ def _structured_pdf_preview(file_path: str, content: str | None, *, max_bytes: i
         document = fitz.open(file_path)
         page_count = len(document)
         document.close()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         page_count = None
     result: dict[str, Any] = {
         "kind": "document",
@@ -1965,7 +2009,8 @@ def _structured_pdf_preview(file_path: str, content: str | None, *, max_bytes: i
 def _count_pdf_pages_from_bytes(path: Path) -> int | None:
     try:
         data = path.read_bytes()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None
     matches = re.findall(rb"/Type\s*/Page\b", data)
     if not matches:
@@ -2075,7 +2120,8 @@ def _openxml_presentation_preview(file_path: str) -> tuple[str | None, dict[str,
                     continue
                 try:
                     root = ET.fromstring(slide_xml)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Suppressed exception in preview: %s", exc)
                     continue
                 paragraphs: list[str] = []
                 for element in root.iter():
@@ -2115,7 +2161,8 @@ def _openxml_presentation_preview(file_path: str) -> tuple[str | None, dict[str,
                 "slides": slide_summaries,
                 "truncated": len(slide_paths) > len(slide_summaries),
             }
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None, {}
 
 
@@ -2188,7 +2235,8 @@ def _xlsx_preview_summary(file_path: str) -> tuple[str | None, dict[str, Any]]:
                         "truncated": row_count - 1 > len(data_rows),
                     }
                 )
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return None, {}
 
     if not sections or not structured_sheets:
@@ -2242,7 +2290,8 @@ def _xlsx_all_sheets(archive: zipfile.ZipFile) -> list[tuple[str, str]]:
     try:
         workbook_root = ET.fromstring(archive.read("xl/workbook.xml"))
         rels_root = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return []
     rel_namespace = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
     rels = {
@@ -2314,7 +2363,8 @@ def _xlsx_collect_sheet_preview(
                 if row_count >= scan_limit:
                     break
                 elem.clear()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return 0, 0, [], set()
     return row_count, max_column, sample_row_maps, needed_shared_string_indices
 
@@ -2338,7 +2388,8 @@ def _xlsx_load_shared_strings(archive: zipfile.ZipFile, needed_indices: set[int]
             return result
     except KeyError:
         return {}
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in preview: %s", exc)
         return {}
 
 

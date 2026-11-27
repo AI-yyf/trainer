@@ -217,6 +217,7 @@ async def _build_singleflight_waiter_stream(
     except asyncio.CancelledError:
         raise
     except Exception as exc:
+        logger.debug("Suppressed exception in core_streaming: %s", exc)
         failure_payload = core.domain.attach_operation_reliability(
             {},
             phase="acked",
@@ -1749,6 +1750,7 @@ def _register_session_message_stream_route(
                     yield abort_frame
                 return
             except Exception as exc:
+                logger.debug("Suppressed exception in core_streaming: %s", exc)
                 async for abort_frame in _emit_abort_fail_closed(
                     core,
                     st,
@@ -2097,6 +2099,7 @@ def _register_turn_stream_route(
                     yield abort_frame
                 return
             except Exception as exc:
+                logger.debug("Suppressed exception in core_streaming: %s", exc)
                 async for abort_frame in _emit_abort_fail_closed(
                     core,
                     st,

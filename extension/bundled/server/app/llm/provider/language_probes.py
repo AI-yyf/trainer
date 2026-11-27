@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from ...core.models import ProviderConfig
@@ -16,6 +17,8 @@ from .text import (
     _mixed_script_reply_corruption_detail,
     _prefers_chinese,
 )
+
+logger = logging.getLogger(__name__)
 
 _LANGUAGE_PROBE_VARIANTS = (
     (
@@ -75,7 +78,8 @@ class LanguageProbeMixin:
                     provider,
                 )
                 response = client.chat.completions.create(**request_payload)
-            except Exception:  # pragma: no cover - network dependent
+            except Exception as exc:  # pragma: no cover - network dependent
+                logger.debug("Suppressed exception in language_probes: %s", exc)
                 return {"ok": False}
             content = response.choices[0].message.content if response.choices else None
             preview = _compact_visible_text(content)
@@ -141,6 +145,7 @@ class LanguageProbeMixin:
                     )
                     response = client.chat.completions.create(**request_payload)
                 except Exception as exc:  # pragma: no cover - network dependent
+                    logger.debug("Suppressed exception in language_probes: %s", exc)
                     return {
                         "ok": False,
                         "category": "language_probe_inconclusive",
@@ -339,7 +344,8 @@ class LanguageProbeMixin:
                     provider,
                 )
                 response = client.chat.completions.create(**request_payload)
-            except Exception:  # pragma: no cover - network dependent
+            except Exception as exc:  # pragma: no cover - network dependent
+                logger.debug("Suppressed exception in language_probes: %s", exc)
                 return {"ok": False}
             content = response.choices[0].message.content if response.choices else None
             preview = _compact_visible_text(content)
@@ -410,6 +416,7 @@ class LanguageProbeMixin:
                     )
                     response = client.chat.completions.create(**request_payload)
                 except Exception as exc:  # pragma: no cover - network dependent
+                    logger.debug("Suppressed exception in language_probes: %s", exc)
                     return {
                         "ok": False,
                         "category": "language_probe_inconclusive",

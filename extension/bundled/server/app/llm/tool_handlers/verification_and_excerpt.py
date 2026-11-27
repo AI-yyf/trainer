@@ -317,7 +317,8 @@ async def _handle_verify_practice_current_file(
 
     try:
         max_evidence = max(1, min(int(args.get("max_evidence", 8) or 8), 20))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         max_evidence = 8
 
     payload = {
@@ -500,7 +501,8 @@ def _verify_practice_with_pack(
 
     try:
         max_evidence = max(1, min(int(args.get("max_evidence", 8) or 8), 20))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         max_evidence = 8
 
     card_config = current_file.get("card_config")
@@ -711,6 +713,7 @@ async def _resolve_excerpt_resource(context: ToolContext, args: dict[str, Any]) 
         if inspect.isawaitable(response):
             response = await response
     except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         return None, f"search_failed: {exc.__class__.__name__}"
     hits = getattr(response, "hits", None)
     if hits is None and isinstance(response, dict):
@@ -745,13 +748,15 @@ def _canonical_excerpt_fallback(
         return None
     try:
         text = reader(context.workspace_id, str(getattr(record, "id", "") or ""))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         return None
     if not isinstance(text, str) or not text.strip():
         return None
     try:
         max_chars = max(200, min(int(args.get("chars", 1600) or 1600), 4000))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         max_chars = 1600
     anchor = str(args.get("anchor_id") or "").strip()
     excerpt = text.strip()
@@ -821,7 +826,8 @@ def _repository_resource(context: ToolContext, resource_id: str) -> Any | None:
         return None
     try:
         returned = lister(context.workspace_id)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         return None
     if not isinstance(returned, list):
         return None
@@ -975,7 +981,8 @@ def _current_resource_version(context: ToolContext, resource: Any) -> dict[str, 
         return {}
     try:
         payload = current_version(context.workspace_id, str(getattr(resource, "id", "") or ""))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         return {}
     return payload if isinstance(payload, dict) else {}
 
@@ -1039,7 +1046,8 @@ async def _handle_read_resource_excerpt(context: ToolContext, args: dict[str, An
         selected = list(chunks[:3])
     try:
         max_chars = max(200, min(int(args.get("chars", 1600) or 1600), 4000))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         max_chars = 1600
     per_excerpt = max(200, max_chars // max(1, len(selected)))
     resource_display = _resource_display(record)
@@ -1309,6 +1317,7 @@ def _persist_practice_verification_result(
             verified_by_evaluator=False,
         )
     except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         return {
             "persisted_training_evidence": False,
             "training_evidence_error": exc.__class__.__name__,
@@ -1365,7 +1374,8 @@ def _training_card_context_for_persistence(
     if memory_service is not None and not (card_id and card_title and focus_area):
         try:
             snapshot = memory_service.snapshot(context.workspace_id)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
             snapshot = None
         routing = getattr(snapshot, "active_training_card_routing", None) if snapshot is not None else None
         selected = getattr(routing, "selected_card", None) if routing is not None else None
@@ -1419,7 +1429,8 @@ async def _handle_read_workspace_file(context: ToolContext, args: dict[str, Any]
         return {"ok": False, "error": "missing_path", "detail": "read_workspace_file requires a path."}
     try:
         max_chars = max(64, min(int(args.get("max_chars", 4000)), 16000))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
         max_chars = 4000
 
     start_line_raw = args.get("start_line")
@@ -1430,6 +1441,7 @@ async def _handle_read_workspace_file(context: ToolContext, args: dict[str, Any]
         try:
             text = target.read_text(encoding="utf-8", errors="replace")
         except Exception as exc:
+            logger.debug("Suppressed exception in verification_and_excerpt: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         sliced_info = _slice_text_by_lines(
             text,

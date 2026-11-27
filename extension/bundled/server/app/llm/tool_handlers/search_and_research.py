@@ -52,7 +52,8 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
     limit_raw = args.get("limit", 5)
     try:
         limit = max(1, min(int(limit_raw), 12))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         limit = 5
     if not query:
         return {"ok": False, "error": "missing_query", "detail": "search_resources requires a non-empty query."}
@@ -110,6 +111,7 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
         if inspect.isawaitable(search_result):
             search_result = await search_result
     except Exception as exc:  # pragma: no cover - exercised in integration
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
 
     normalized = _normalize_search_response(search_result, fallback_query=query)
@@ -121,7 +123,8 @@ async def _handle_search_resources(context: ToolContext, args: dict[str, Any]) -
     if callable(cache_reader):
         try:
             cache_stats = cache_reader()
-        except Exception:  # pragma: no cover - defensive
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Suppressed exception in search_and_research: %s", exc)
             cache_stats = None
     verification_ready_count = sum(1 for hit in normalized["hits"] if _is_verification_ready_hit(hit))
     verification_warning = mode == "verify" and verification_ready_count == 0 and bool(normalized["hits"])
@@ -190,7 +193,8 @@ def _resolve_project_resource(
                 if str(getattr(item, "kind", "")) == "code"
                 and Path(str(getattr(item, "source", "") or "")).is_dir()
             ]
-        except Exception:  # pragma: no cover - repository variants
+        except Exception as exc:  # pragma: no cover - repository variants
+            logger.debug("Suppressed exception in search_and_research: %s", exc)
             candidates = []
     candidates.reverse()  # newest first
     requested_id = str(args.get("resource_id") or "").strip()
@@ -347,7 +351,8 @@ async def _handle_analyze_project_impact(context: ToolContext, args: dict[str, A
     depth_raw = args.get("depth", 2)
     try:
         depth = max(1, min(int(depth_raw), 3))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         depth = 2
     try:
         from ...project.callgraph import build_call_graph, compute_change_impact
@@ -537,6 +542,7 @@ async def _handle_search_learning_materials(
         if inspect.isawaitable(result):
             result = await result
     except Exception as exc:  # pragma: no cover - integration guard
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     if not isinstance(result, dict):
         return {
@@ -1108,7 +1114,8 @@ def _resource_model_payload(resource: Any) -> dict[str, Any]:
     if is_dataclass(resource) and not isinstance(resource, type):
         try:
             payload = asdict(cast(Any, resource))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in search_and_research: %s", exc)
             return {}
         return payload if isinstance(payload, dict) else {}
     return dict(resource) if isinstance(resource, dict) else {}
@@ -1121,7 +1128,8 @@ def _resource_provenance(resource_service: Any, resource: Any) -> dict[str, Any]
         return {}
     try:
         registered = registry.get(resource_id)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         return {}
     metadata = getattr(registered, "metadata", None)
     provenance = metadata.get("source_provenance") if isinstance(metadata, dict) else None
@@ -1168,6 +1176,7 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
             "source": {"requested_url": url, "capture_kind": capture_kind},
         }
     except Exception as exc:
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         return {
             "ok": False,
             "error": "resource_capture_failed",
@@ -1190,6 +1199,7 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
         if inspect.isawaitable(uploaded):
             uploaded = await uploaded
     except Exception as exc:
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         return {
             "ok": False,
             "error": "resource_upload_failed",
@@ -1210,6 +1220,7 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
         if inspect.isawaitable(indexed):
             indexed = await indexed
     except Exception as exc:
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         uploaded_payload = _resource_model_payload(uploaded)
         return {
             "ok": False,
@@ -1242,6 +1253,7 @@ async def _handle_import_resource_url(context: ToolContext, args: dict[str, Any]
             elif postprocessed is not None:
                 indexed = postprocessed
         except Exception as exc:
+            logger.debug("Suppressed exception in search_and_research: %s", exc)
             payload = _resource_model_payload(indexed)
             return {
                 "ok": False,
@@ -1470,7 +1482,8 @@ def _is_verification_ready_hit(hit: dict[str, Any]) -> bool:
     index_state = str(hit.get("index_state") or "").strip().lower()
     try:
         trust_score = float(hit.get("trust_score") or 0.0)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in search_and_research: %s", exc)
         trust_score = 0.0
     if trust_state in {"blocked", "rejected", "untrusted"}:
         return False

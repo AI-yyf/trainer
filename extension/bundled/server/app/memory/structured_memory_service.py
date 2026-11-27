@@ -952,7 +952,8 @@ class StructuredMemoryService:
                 service._active_training_card_routing = ActiveCardSelectionResult.model_validate(
                     active_training_card_routing
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in structured_memory_service: %s", exc)
                 service._active_training_card_routing = None
         service._evidence_items = cls._restore_index(
             payload.get("evidence_items"),
@@ -973,7 +974,8 @@ class StructuredMemoryService:
         if isinstance(flash_deck_payload, dict):
             try:
                 service._flash_deck = FlashDeckSnapshot.model_validate(flash_deck_payload)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in structured_memory_service: %s", exc)
                 service._flash_deck = None
         service._recent_flash_attempts = cls._restore_list(
             payload.get("recent_flash_attempts"),
@@ -983,7 +985,8 @@ class StructuredMemoryService:
         if isinstance(theory_drill_payload, dict):
             try:
                 service._theory_drill = TheoryDrillSnapshot.model_validate(theory_drill_payload)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in structured_memory_service: %s", exc)
                 service._theory_drill = None
         service._theory_drill_history = cls._restore_list(
             payload.get("theory_drill_history"),
@@ -993,7 +996,8 @@ class StructuredMemoryService:
         if isinstance(scenario_lab_payload, dict):
             try:
                 service._scenario_lab = ScenarioLab.model_validate(scenario_lab_payload)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in structured_memory_service: %s", exc)
                 service._scenario_lab = None
         service._scenario_lab_history = cls._restore_list(
             payload.get("scenario_lab_history"),
@@ -1007,7 +1011,8 @@ class StructuredMemoryService:
         if isinstance(review_artifact_payload, dict):
             try:
                 service._review_artifact = ReviewArtifactSnapshot.model_validate(review_artifact_payload)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in structured_memory_service: %s", exc)
                 service._review_artifact = None
         service._review_artifact_history = cls._restore_list(
             payload.get("review_artifact_history"),
@@ -1084,7 +1089,8 @@ class StructuredMemoryService:
                 }
             try:
                 restored.append(model(**normalized))
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in structured_memory_service: %s", exc)
                 continue
         return restored
 

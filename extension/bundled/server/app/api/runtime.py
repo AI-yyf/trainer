@@ -203,7 +203,8 @@ def _provider_service_cache_key(
             ensure_ascii=True,
             sort_keys=True,
         )
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in runtime: %s", exc)
         serialized = repr(provider_config)
     return "::".join([serialized, api_key_fingerprint])
 
@@ -273,7 +274,8 @@ def _provider_capability_cache_key(
             "protocol": normalize_provider_protocol(getattr(provider_config, "protocol", None)),
         }
         serialized = json.dumps(payload, ensure_ascii=True, sort_keys=True)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in runtime: %s", exc)
         serialized = repr(provider_config)
     return "::".join([serialized, api_key_fingerprint])
 
@@ -291,7 +293,8 @@ def _provider_capability_transport_markers(
         full_payload = provider_config.model_dump(mode="json", by_alias=True, exclude_none=True)
         base_url = str(full_payload.get("baseUrl") or "").strip().rstrip("/")
         model = str(full_payload.get("model") or "").strip()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in runtime: %s", exc)
         base_url = str(getattr(provider_config, "base_url", "") or "").strip().rstrip("/")
         model = str(getattr(provider_config, "model", "") or "").strip()
     return (base_url, model, api_key_fingerprint)
@@ -317,7 +320,8 @@ def _capability_cache_key_matches_transport(
         return False
     try:
         parsed = json.loads(payload_part)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in runtime: %s", exc)
         return False
     if not isinstance(parsed, dict):
         return False
@@ -2038,7 +2042,8 @@ class TrainerRuntime:
         """Reload persisted capability truth into the process cache at boot."""
         try:
             rows = self.repository.list_provider_capabilities()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in runtime: %s", exc)
             return
         for cache_key, states in rows:
             # White-pixel marker probes proved image acceptance, not visual
@@ -2125,7 +2130,8 @@ class TrainerRuntime:
             return
         try:
             snapshot = self.memory_service.snapshot(workspace)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in runtime: %s", exc)
             return
         record = None
         raw_workspace = getattr(snapshot, "workspace", None)

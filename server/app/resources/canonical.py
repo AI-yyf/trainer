@@ -1141,7 +1141,8 @@ def _parse_pdf(
                         continue
                     try:
                         extracted = document.extract_image(xref)
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug("Suppressed exception in canonical: %s", exc)
                         warnings.append(f"Page {page_number}: an embedded image could not be extracted.")
                         continue
                     data = extracted.get("image")
@@ -1199,7 +1200,8 @@ def _parse_pdf(
                             f"OCR covered the first {ocr_limit} pages of {document.page_count}; "
                             "later pages remain untranscribed."
                         )
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in canonical: %s", exc)
         pages = []
     if not pages:
         pages = _pdf_text_from_bytes(raw)
@@ -1414,11 +1416,13 @@ def _epub_table_markdown(table: Any) -> str:
 def _pdf_text_from_bytes(raw: bytes) -> list[str]:
     try:
         from .preview import _extract_pdf_stream_texts  # type: ignore[attr-defined]
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in canonical: %s", exc)
         return []
     try:
         texts = _extract_pdf_stream_texts(raw)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in canonical: %s", exc)
         return []
     return [text for text in texts if text.strip()]
 
@@ -1469,7 +1473,8 @@ def html_to_markdown(raw: str, source_url: str = "") -> tuple[str, list[str]]:
         )
         if isinstance(extracted, str):
             markdown = extracted.strip()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in canonical: %s", exc)
         markdown = ""
     if markdown and "\n" not in markdown and len(markdown) > 120:
         # One long line means blocks were concatenated; the built-in extractor

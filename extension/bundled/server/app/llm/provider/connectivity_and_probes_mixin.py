@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys as _sys
 from typing import TYPE_CHECKING, Any, Callable, cast
 from urllib.parse import quote
@@ -91,6 +92,8 @@ from .thinking import (
     repair_chat_parameters,
     thinking_rejection_policy,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class _ProviderHttpxProxy:
@@ -321,6 +324,7 @@ class ConnectivityAndProbesMixin:
                 response_language=response_language,
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
             return ProviderTestResponse(
                 ok=False,
@@ -408,6 +412,7 @@ class ConnectivityAndProbesMixin:
                 response_language=response_language,
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
             return ProviderTestResponse(
                 ok=False,
@@ -509,6 +514,7 @@ class ConnectivityAndProbesMixin:
                 response_language=response_language,
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
             return ProviderTestResponse(
                 ok=False,
@@ -812,7 +818,8 @@ class ConnectivityAndProbesMixin:
                     return False, "Vision probe was rejected by the provider."
                 response = response.json()
             assessment = normalize_provider_response(effective_protocol, response, api_key=api_key)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None, "Vision capability probe could not complete safely."
         visible = assessment.content.strip()
         # Think-text / hidden reasoning must never count as vision-ready.
@@ -833,7 +840,8 @@ class ConnectivityAndProbesMixin:
     ) -> tuple[bool | None, str]:
         try:
             protocol, response = self._tool_probe_response(provider, api_key)
-        except Exception:  # noqa: BLE001 - failures are deliberately reduced to capability truth.
+        except Exception as exc:  # noqa: BLE001 - failures are deliberately reduced to capability truth.
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None, "Tool-call capability probe could not complete safely."
         assessment = assess_provider_tool_call_probe(
             protocol,
@@ -854,7 +862,8 @@ class ConnectivityAndProbesMixin:
                         protocol, retry_response = self._tool_probe_response(
                             provider, api_key, max_tokens=retry_budget
                         )
-                    except Exception:  # noqa: BLE001 - reduced to capability truth.
+                    except Exception as exc:  # noqa: BLE001 - reduced to capability truth.
+                        logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
                         return assessment.observed, assessment.diagnostic
                     assessment = assess_provider_tool_call_probe(
                         protocol,
@@ -964,7 +973,8 @@ class ConnectivityAndProbesMixin:
             else:
                 return None, "Thinking probe is unsupported for this provider protocol."
             assessment = normalize_provider_response(effective_protocol, response, api_key=api_key)
-        except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+        except Exception as exc:  # noqa: BLE001 - capability probes must not leak upstream details.
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None, "Thinking capability probe could not complete safely."
         if assessment.has_visible_text and assessment.content.strip() == "THINKING_OK":
             return True, "Thinking probe returned the expected visible token."
@@ -1031,7 +1041,8 @@ class ConnectivityAndProbesMixin:
             if reasoning_filter.flush().strip():
                 observed = True
             return observed, reasoning_limited
-        except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+        except Exception as exc:  # noqa: BLE001 - capability probes must not leak upstream details.
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None
         finally:
             if stream is not None:
@@ -1149,7 +1160,8 @@ class ConnectivityAndProbesMixin:
                             "after a larger output budget."
                         )
                     )
-        except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+        except Exception as exc:  # noqa: BLE001 - capability probes must not leak upstream details.
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None, "Streaming capability probe could not complete safely."
         return None, (
             "Streaming probe returned no visible incremental content within its output "
@@ -1172,7 +1184,8 @@ class ConnectivityAndProbesMixin:
                 response = client.embeddings.create(model=embedding_model, input="ok")
             finally:
                 self._close_sync_client(client)
-        except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+        except Exception as exc:  # noqa: BLE001 - capability probes must not leak upstream details.
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None, "Embeddings capability probe could not complete safely."
         data = getattr(response, "data", None)
         if data is None and isinstance(response, dict):
@@ -1238,7 +1251,8 @@ class ConnectivityAndProbesMixin:
                     content = str(getattr(message, "content", "") or "")
             finally:
                 self._close_sync_client(client)
-        except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+        except Exception as exc:  # noqa: BLE001 - capability probes must not leak upstream details.
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None, "Structured output capability probe could not complete safely."
         try:
             parsed = json.loads(content)
@@ -1255,7 +1269,8 @@ class ConnectivityAndProbesMixin:
     ) -> tuple[bool | None, str]:
         try:
             result = self.list_models(provider, api_key, skip_cache=True)
-        except Exception:  # noqa: BLE001 - capability probes must not leak upstream details.
+        except Exception as exc:  # noqa: BLE001 - capability probes must not leak upstream details.
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             return None, "Model listing capability probe could not complete safely."
         ids = [
             str(item).strip()
@@ -1836,6 +1851,7 @@ class ConnectivityAndProbesMixin:
                     probeUsage=_probe_usage_payload(latest_probe_response),
                 )
             except Exception as chat_exc:
+                logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", chat_exc)
                 category, retryable, status_code, provider_reachable, model_supported = self._classify_error(chat_exc)
                 if category in {"model_unsupported", "model_not_found"}:
                     return ProviderTestResponse(
@@ -1891,6 +1907,7 @@ class ConnectivityAndProbesMixin:
                     model_supported=model_supported,
                 )
         except Exception as exc:  # pragma: no cover - network dependent
+            logger.debug("Suppressed exception in connectivity_and_probes_mixin: %s", exc)
             category, retryable, status_code, provider_reachable, model_supported = self._classify_error(exc)
             return ProviderTestResponse(
                 ok=False,

@@ -513,7 +513,8 @@ def resource_write_explicitly_requested(extra: dict[str, Any] | None, *, mode: s
     if callable(model_dump):
         try:
             intent = model_dump()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in registry_core: %s", exc)
             intent = None
     if not isinstance(intent, dict):
         return False
@@ -568,7 +569,8 @@ def _resolve_workspace_root(context: ToolContext) -> Path | None:
     workspace_path = None
     try:
         workspace_path = runtime.resolve_workspace_path(context.workspace_id)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in registry_core: %s", exc)
         workspace_path = None
     if workspace_path is None:
         return None
@@ -577,7 +579,8 @@ def _resolve_workspace_root(context: ToolContext) -> Path | None:
         return None
     try:
         root = Path(raw).expanduser().resolve()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in registry_core: %s", exc)
         return None
     if not root.exists() or not root.is_dir():
         return None
@@ -589,13 +592,15 @@ def _safe_path_under(root: Path | None, candidate: str) -> Path | None:
         return None
     try:
         target = Path(candidate).expanduser()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in registry_core: %s", exc)
         return None
     if not target.is_absolute() and root is not None:
         target = root / target
     try:
         target = target.resolve()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in registry_core: %s", exc)
         return None
     if root is None:
         return target
@@ -739,7 +744,8 @@ def _leftover_training_persist_identity(
             leftover_plan, leftover_runtime, leftover_task_title = cast(
                 "tuple[Any, dict[str, Any], str]", leftover_ctx(context.workspace_id)
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in registry_core: %s", exc)
             leftover_plan, leftover_runtime, leftover_task_title = None, {}, ""
         else:
             return (
@@ -776,6 +782,7 @@ def _leftover_training_persist_identity(
             context.workspace_id,
         ) or {}
         leftover_task_title = str(task.get("title") or "").strip()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in registry_core: %s", exc)
         return leftover_plan, leftover_runtime, leftover_task_title
     return leftover_plan, leftover_runtime, leftover_task_title

@@ -134,7 +134,8 @@ async def _handle_web_search(context: ToolContext, args: dict[str, Any]) -> dict
         }
     try:
         limit = max(1, min(int(args.get("limit", 5)), 8))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         limit = 5
     fetch_excerpts = args.get("fetch_excerpts", True) is not False
 
@@ -154,6 +155,7 @@ async def _handle_web_search(context: ToolContext, args: dict[str, Any]) -> dict
             "query": query,
         }
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {
             "ok": False,
             "error": exc.__class__.__name__,
@@ -234,7 +236,8 @@ async def _handle_fetch_web_page(context: ToolContext, args: dict[str, Any]) -> 
         }
     try:
         max_chars = max(500, min(int(args.get("max_chars", 6000)), 12000))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         max_chars = 6000
 
     from ...network_fetch import ControlledFetchError
@@ -266,9 +269,11 @@ async def _handle_fetch_web_page(context: ToolContext, args: dict[str, Any]) -> 
                 "content_type": content_type,
                 "content": extracted,
             }
-        except Exception:
+        except Exception as inner_exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", inner_exc)
             return {"ok": False, "error": exc.code, "detail": exc.detail, "url": url}
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc), "url": url}
 
     content = str(page.get("content") or "").strip()
@@ -327,7 +332,8 @@ def _walk_workspace_files(
                 continue
             try:
                 stat = full_file.stat()
-            except Exception:
+            except Exception as exc:
+                logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
                 continue
             total_seen += 1
             if len(collected) < limit:
@@ -351,11 +357,13 @@ async def _handle_list_workspace_files(context: ToolContext, args: dict[str, Any
     if raw_max_depth is not None:
         try:
             max_depth = max(1, min(int(raw_max_depth), 12))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             max_depth = None
     try:
         limit = max(1, min(int(args.get("limit", 120)), 400))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         limit = 120
     root = _resolve_workspace_root(context)
     if pattern_raw.startswith("/") or directory_raw.startswith("/"):
@@ -384,6 +392,7 @@ async def _handle_list_workspace_files(context: ToolContext, args: dict[str, Any
                 limit=limit,
             )
         except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         return {
             "ok": True,
@@ -439,6 +448,7 @@ async def _import_single_workspace_item(
             source = "workspace_disk"
             relative = str(target.relative_to(root)).replace("\\", "/") if root is not None else relative
         except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc), "path": relative}
     if text is None:
         record = _snapshot_file_record(context, path_raw)
@@ -602,6 +612,7 @@ async def _handle_recall_memory(context: ToolContext, args: dict[str, Any]) -> d
     try:
         snapshot = snapshot_callable(context.workspace_id)
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     payload = _summarize_memory_snapshot(snapshot)
     focus = str(args.get("focus") or "").strip()
@@ -617,7 +628,8 @@ def _summarize_memory_snapshot(snapshot: Any) -> dict[str, Any]:
     if hasattr(snapshot, "model_dump"):
         try:
             data = snapshot.model_dump(mode="json")
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             data = {}
     elif isinstance(snapshot, dict):
         data = dict(snapshot)
@@ -681,6 +693,7 @@ async def _handle_record_learning_note(context: ToolContext, args: dict[str, Any
                     persist_fn(context.workspace_id)
                 return {"ok": True, "kind": kind, "note": note}
             except Exception as exc:
+                logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
                 return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
         return {
             "ok": False,
@@ -701,8 +714,10 @@ async def _handle_record_learning_note(context: ToolContext, args: dict[str, Any
             if inspect.isawaitable(record_result):
                 await record_result
         except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     return {"ok": True, "kind": kind, "note": note}
 
@@ -717,6 +732,7 @@ async def _handle_inspect_plan(context: ToolContext, _: dict[str, Any]) -> dict[
         try:
             plan = repository.get_latest_plan(context.workspace_id)
         except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     if plan is None:
         return {"ok": True, "plan": None, "summary": "no plan exists for this workspace yet"}
@@ -885,6 +901,7 @@ async def _handle_inspect_learning_truth(
                 else:
                     result["active_goal"] = None
             except Exception as exc:
+                logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
                 result["active_goal_error"] = str(exc)
         if hasattr(repository, "get_latest_plan"):
             try:
@@ -900,6 +917,7 @@ async def _handle_inspect_learning_truth(
                         "stages": sanitized_stages,
                     }
             except Exception as exc:
+                logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
                 result["plan_error"] = str(exc)
 
     if section in {"all", "evidence", "progress", "mastery"}:
@@ -917,6 +935,7 @@ async def _handle_inspect_learning_truth(
                                 is_zh=is_zh,
                             )
             except Exception as exc:
+                logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
                 result["learner_state_error"] = str(exc)
         if memory_service is not None:
             try:
@@ -937,6 +956,7 @@ async def _handle_inspect_learning_truth(
                 ]
                 result["verified_evidence_count"] = len(result["evidence_records"])
             except Exception as exc:
+                logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
                 result["evidence_error"] = str(exc)
 
     if section in {"all", "review", "practice"} and memory_service is not None:
@@ -976,6 +996,7 @@ async def _handle_inspect_learning_truth(
                 ][:5]
                 result["active_practice_cards"] = active_cards
         except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             result["memory_error"] = str(exc)
 
     return result
@@ -1184,6 +1205,7 @@ async def _handle_save_lecture_note(
         if library_service is not None and library_download is not None:
             library_service.remember_download(context.workspace_id, indexed, library_download)
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
 
     saved_path = (
@@ -1254,6 +1276,7 @@ async def _handle_save_formal_plan(context: ToolContext, args: dict[str, Any]) -
     try:
         existing = repository.get_latest_plan(context.workspace_id)
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     leftover_plan, leftover_runtime, _leftover_task = _leftover_training_persist_identity(context)
     from ...memory.workspace_recovery import (
@@ -1380,6 +1403,7 @@ async def _handle_save_formal_plan(context: ToolContext, args: dict[str, Any]) -
             session_state.snapshot.plan = plan.model_copy(deep=True)
             runtime.save_session_state(session_state.session_id)
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     return {
         "ok": True,
@@ -1438,6 +1462,7 @@ async def _handle_specify_task(context: ToolContext, args: dict[str, Any]) -> di
         task = task.model_copy(update={"metadata": meta})
         _persist_minted_task_on_sessions(context, task, live_plan)
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     return {
         "ok": True,
@@ -1480,7 +1505,8 @@ async def _handle_next_task(context: ToolContext, args: dict[str, Any]) -> dict[
     if memory_service is not None:
         try:
             memory = memory_service.snapshot(context.workspace_id)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
             memory = None
     try:
         task = planner_service.next_task(
@@ -1495,6 +1521,7 @@ async def _handle_next_task(context: ToolContext, args: dict[str, Any]) -> dict[
         task = task.model_copy(update={"metadata": meta})
         _persist_minted_task_on_sessions(context, task, live_plan)
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     return {
         "ok": True,
@@ -1531,6 +1558,7 @@ async def _handle_run_diagnostics(context: ToolContext, args: dict[str, Any]) ->
     try:
         text = target.read_text(encoding="utf-8", errors="replace")
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     suffix = target.suffix.lower()
     language = next((lang for lang, exts in _LANGUAGE_HINTS.items() if suffix in exts), None)
@@ -1583,7 +1611,8 @@ async def _handle_search_academic_papers(
         }
     try:
         limit = max(1, min(int(args.get("limit", 5)), 8))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         limit = 5
     include_github = args.get("include_github", False) is True
 
@@ -1593,6 +1622,7 @@ async def _handle_search_academic_papers(
     try:
         results = await asyncio.to_thread(client._search_arxiv, query, limit=limit)
     except Exception as exc:
+        logger.debug("Suppressed exception in workspace_memory_and_plan: %s", exc)
         return {
             "ok": False,
             "error": exc.__class__.__name__,

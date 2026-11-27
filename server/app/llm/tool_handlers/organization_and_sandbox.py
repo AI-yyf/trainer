@@ -64,6 +64,7 @@ async def _handle_list_resources(context: ToolContext, args: dict[str, Any]) -> 
     try:
         resources = list(cast("Iterable[Any]", list_resources(context.workspace_id)) or [])
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": "resource_list_failed", "detail": str(exc)}
 
     query = str(args.get("query") or "").strip().casefold()
@@ -126,6 +127,7 @@ async def _handle_delete_resource(context: ToolContext, args: dict[str, Any]) ->
     except PermissionError as exc:
         return {"ok": False, "error": "resource_delete_blocked", "detail": str(exc)}
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": "resource_delete_failed", "detail": str(exc)}
     payload = result if isinstance(result, dict) else {}
     removed = bool(payload.get("removed"))
@@ -165,6 +167,7 @@ async def _handle_restore_resource(context: ToolContext, args: dict[str, Any]) -
     except KeyError:
         return {"ok": False, "error": "resource_not_found", "detail": "That resource is not in the library Trash."}
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": "resource_restore_failed", "detail": str(exc)}
     payload = result if isinstance(result, dict) else {}
     restored = payload.get("resource")
@@ -206,6 +209,7 @@ async def _handle_refresh_resource_index(context: ToolContext, args: dict[str, A
     except KeyError:
         return {"ok": False, "error": "resource_not_found", "detail": "That resource is not in this workspace."}
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": "resource_index_failed", "detail": str(exc)}
     payload = _resource_model_payload(indexed)
     succeeded = (
@@ -439,7 +443,8 @@ def _resource_for_workspace(runtime: Any, workspace_id: str, resource_id: str) -
         for resource in cast("Iterable[Any]", list_resources(workspace_id)):
             if str(getattr(resource, "id", "") or "") == resource_id:
                 return resource
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return None
     return None
 
@@ -469,11 +474,13 @@ def _match_resource_by_sandbox_path(
         try:
             sandbox_root = Path(sandbox_service.ensure_operation_root(workspace_id)).resolve()
             wanted_absolute = _normalize_sandbox_path_key(str((sandbox_root / source_relative).resolve()))
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
             sandbox_root = None
     try:
         resources = cast("Iterable[Any] | None", list_resources(workspace_id))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return None
     matches: list[Any] = []
     for resource in resources or []:
@@ -607,7 +614,8 @@ def _latest_trash_relative_path(sandbox_service: Any, workspace_id: str, origina
             return None
         selected = max(candidates, key=lambda item: item.stat().st_mtime_ns)
         return selected.relative_to(root).as_posix()
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return None
 
 
@@ -969,6 +977,7 @@ async def _handle_organize_resources(context: ToolContext, args: dict[str, Any])
         # can act on the leftover proposal instead of silently empty-pending.
         # Cancel latch after consume must beat restore: no resurrected pending for a
         # second confirm to silently commit.
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         _clear_resource_organization_in_flight(runtime, context.workspace_id)
         cancelled = _take_resource_organization_cancel_requested(
             runtime, context.workspace_id
@@ -1078,7 +1087,8 @@ def _reindex_matching_sandbox_resource(context: ToolContext, relative_path: str)
                 enable_network=False,
             ),
         )
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"resource_id": resource_id, "reindexed": False}
     postprocess = getattr(runtime, "postprocess_indexed_resource", None)
     if callable(postprocess):
@@ -1104,7 +1114,8 @@ async def _handle_list_sandbox(context: ToolContext, args: dict[str, Any]) -> di
         return {"ok": False, "error": "service_unavailable", "detail": "The managed sandbox is not configured."}
     try:
         limit = max(1, min(int(args.get("limit", 80)), 200))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         limit = 80
     runtime = context.runtime
     repository = getattr(runtime, "repository", None)
@@ -1112,7 +1123,8 @@ async def _handle_list_sandbox(context: ToolContext, args: dict[str, Any]) -> di
     if repository is not None and hasattr(repository, "list_resources"):
         try:
             resources = list(repository.list_resources(context.workspace_id) or [])
-        except Exception:
+        except Exception as exc:
+            logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
             resources = []
     try:
         state = sandbox_service.list_state(
@@ -1123,6 +1135,7 @@ async def _handle_list_sandbox(context: ToolContext, args: dict[str, Any]) -> di
             ),
         )
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     items: list[dict[str, Any]] = []
     _flatten_sandbox_nodes(getattr(state, "nodes", None) or [], limit=limit, items=items)
@@ -1185,7 +1198,8 @@ async def _handle_read_sandbox_file(context: ToolContext, args: dict[str, Any]) 
         return {"ok": False, "error": "invalid_path", "detail": str(exc)}
     try:
         max_chars = max(64, min(int(args.get("max_chars", 8000)), 32000))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         max_chars = 8000
     start_line_raw = args.get("start_line")
     end_line_raw = args.get("end_line")
@@ -1195,6 +1209,7 @@ async def _handle_read_sandbox_file(context: ToolContext, args: dict[str, Any]) 
             SandboxPreviewRequest(workspace_id=context.workspace_id, path=relative),
         )
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     if start_line_raw is not None or end_line_raw is not None:
         root = Path(sandbox_service.ensure_operation_root(context.workspace_id)).resolve()
@@ -1246,6 +1261,7 @@ async def _handle_write_sandbox_file(context: ToolContext, args: dict[str, Any])
             ),
         )
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc)}
     reindexed = _reindex_matching_sandbox_resource(context, relative)
     payload = _sandbox_preview_payload(preview, max_chars=4000)
@@ -1336,6 +1352,7 @@ async def _handle_index_sandbox_file(context: ToolContext, args: dict[str, Any])
             if repository is not None and hasattr(repository, "save_resource"):
                 repository.save_resource(context.workspace_id, indexed)
     except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         return {"ok": False, "error": exc.__class__.__name__, "detail": str(exc), "path": relative}
     payload = _resource_model_payload(indexed)
     return {
@@ -1359,7 +1376,8 @@ async def _handle_inspect_current_file(context: ToolContext, args: dict[str, Any
         }
     try:
         max_chars = max(64, min(int(args.get("max_chars", 8000)), 32000))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Suppressed exception in organization_and_sandbox: %s", exc)
         max_chars = 8000
 
     content = current_file.get("content_excerpt") or current_file.get("content") or ""
