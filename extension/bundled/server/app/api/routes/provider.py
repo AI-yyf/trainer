@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, datetime
 from typing import cast
@@ -23,6 +24,8 @@ from ..runtime import (
     _provider_capability_transport_markers,
 )
 from ._deps import RouterDeps
+
+logger = logging.getLogger(__name__)
 
 
 def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter:
@@ -774,8 +777,8 @@ def build_provider_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRoute
                             runtime.provider_capability_cache[cache_key] = invalidated
                             try:
                                 runtime.repository.save_provider_capability(cache_key, invalidated)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.warning("Failed to persist invalidated provider capability cache: %s", exc)
             return unknown_protocol_response
         if provider_protocol is None:
             provider_protocol = "openai_chat_completions_compatible"

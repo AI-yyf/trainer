@@ -1450,8 +1450,8 @@ class ResourceService:
         try:
             self.analyze_canonical(workspace_id, [resource.id])
             self.materialize_canonical(workspace_id, [resource.id])
-        except Exception:  # noqa: BLE001 - conversion failure is reported below
-            pass
+        except Exception as exc:
+            logger.debug("On-demand canonical conversion failed for %s: %s", resource.id, exc)
         refreshed = self._require_workspace_resource(workspace_id, resource.id)
         resolved = self._canonical_export_target(workspace_id, refreshed)
         if resolved is not None:

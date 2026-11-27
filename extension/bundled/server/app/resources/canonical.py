@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import html as html_module
 import json
+import logging
 import posixpath
 import re
 import zipfile
@@ -26,6 +27,8 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .ocr import ocr_image_bytes
+
+logger = logging.getLogger(__name__)
 
 CANONICAL_PARSER_VERSION = "1"
 
@@ -1477,8 +1480,8 @@ def html_to_markdown(raw: str, source_url: str = "") -> tuple[str, list[str]]:
         try:
             converter.feed(cleaned)
             converter.close()
-        except Exception:
-            pass
+        except (AssertionError, ValueError, RuntimeError) as exc:
+            logger.debug("Canonical HTML extractor stopped early: %s", exc)
         markdown = converter.markdown().strip()
         if markdown:
             warnings.append(

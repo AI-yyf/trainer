@@ -203,7 +203,7 @@ class SemanticMemory:
     def __del__(self) -> None:  # pragma: no cover - best-effort cleanup
         try:
             self.close()
-        except Exception:
+        except (OSError, RuntimeError, AttributeError):
             pass
 
 

@@ -558,8 +558,8 @@ class McpStdioClient:
                     await task
                 except asyncio.CancelledError:
                     pass
-                except Exception:  # noqa: BLE001 - cleanup must not raise
-                    pass
+                except Exception as exc:
+                    logger.debug("MCP background task cleanup raised: %s", exc)
         self._reader_task = None
         self._stderr_task = None
 

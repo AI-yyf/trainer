@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 from typing import Any
@@ -31,6 +32,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from ..runtime import TrainerRuntime
 from ._deps import RouterDeps
 from .browser import _require_browser_credential
+
+logger = logging.getLogger(__name__)
 
 # Kept as documentation of the invariant the allowlist enforces: these never
 # travel on the browser lane, whatever a caller puts in the body.
@@ -557,8 +560,10 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
                     upstream_task.cancel()
                     try:
                         await upstream_task
-                    except BaseException:
+                    except asyncio.CancelledError:
                         pass
+                    except Exception as exc:
+                        logger.debug("Browser chat upstream task cleanup failed: %s", exc)
 
         return StreamingResponse(
             body_stream(),

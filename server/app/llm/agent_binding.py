@@ -84,6 +84,8 @@ from .provider_service import (
 from .tools import ToolDefinition, ToolRegistry
 from .vision_payload import openai_responses_input_image_parts
 
+logger = logging.getLogger(__name__)
+
 logger = logging.getLogger("trainer.llm.agent_binding")
 
 
@@ -653,8 +655,8 @@ def _serialize_responses_reasoning_item(item: Any) -> dict[str, Any] | None:
             dumped = model_dump(exclude_none=True)
             if isinstance(dumped, dict):
                 return dumped
-        except Exception:
-            pass
+        except (AttributeError, TypeError, ValueError) as exc:
+            logger.debug("Binding item model_dump fallback triggered: %s", exc)
     item_id = _get_field(item, "id", None)
     summary = _get_field(item, "summary", None)
     encrypted = _get_field(item, "encrypted_content", None)

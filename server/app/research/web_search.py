@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import base64
+import logging
 import re
 import urllib.parse
 from html import unescape
 from typing import Any
 
 from app.network_fetch import ControlledFetchError, fetch_url
+
+logger = logging.getLogger(__name__)
 
 
 class WebSearchClient:
@@ -40,8 +43,8 @@ class WebSearchClient:
                     return sitemap_results
             except ControlledFetchError as exc:
                 failures.append(exc)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Sitemap search fallback failed for %r: %s", query, exc)
         for searcher in (self._search_brave, self._search_duckduckgo, self._search_bing):
             try:
                 results = self._apply_site_constraint(

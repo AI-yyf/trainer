@@ -16,7 +16,11 @@ from ..core.models import GoalActivity, GoalSession, LearningPlan, utc_now_iso
 
 if TYPE_CHECKING:
     from ..core.event_ledger import EventLedgerService
+import logging
+
 from ..db.repository import TrainerRepository
+
+logger = logging.getLogger(__name__)
 
 _ZH_GOAL_INTENT = re.compile(
     r"^(?:请)?(?:我(?:真的|真心|一直|很|想|打算)?(?:要|想|希望|打算)|(?:请)?帮我|我想要)\s*"
@@ -504,8 +508,8 @@ class GoalService:
                 audit_note=f"Goal {goal_id}: {event_type}",
                 idempotency_key=idempotency_key,
             )
-        except Exception:  # noqa: BLE001 - ledger must never break goal mutations
-            pass
+        except Exception as exc:
+            logger.debug("Goal audit ledger append skipped (%s): %s", goal_id, exc)
 
     def recompute_goal_from_ledger(
         self,

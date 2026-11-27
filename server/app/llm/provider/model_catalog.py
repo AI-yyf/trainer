@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from collections.abc import Callable, Iterator
 from time import monotonic
 from typing import TYPE_CHECKING, Any, cast
@@ -20,6 +21,8 @@ from ..provider_gateway import (
 from .capability import _allows_keyless_local_provider
 from .redaction import redact_provider_error
 from .service_support import extract_model_token_limit as _extract_model_token_limit
+
+logger = logging.getLogger(__name__)
 
 _NATIVE_MODEL_DISCOVERY_MAX_PAGES = 20
 _NATIVE_MODEL_DISCOVERY_MAX_MODELS = 2000
@@ -551,8 +554,8 @@ class ModelCatalogMixin:
             if callable(close):
                 try:
                     close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Model catalog sync client close raised: %s", exc)
 
         protocol = self._configured_protocol(provider)
         listing_note = (

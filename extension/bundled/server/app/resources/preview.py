@@ -638,7 +638,7 @@ def _extract_pdf_stream_texts(data: bytes) -> list[str]:
         candidates = [stream]
         try:
             candidates.append(zlib.decompress(stream))
-        except Exception:
+        except zlib.error:
             pass
         for candidate in candidates:
             text = _extract_pdf_literal_text(candidate)
