@@ -384,7 +384,6 @@ export class SidecarHttpClient {
       throw new SidecarRequestAbortedError();
     }
     let activeResponse: http.IncomingMessage | undefined;
-    let activeRequest: http.ClientRequest | undefined;
     let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
     let timedOut = false;
     let aborted = false;
@@ -430,7 +429,6 @@ export class SidecarHttpClient {
           succeed(incoming);
         },
       );
-      activeRequest = request;
 
       const abortForSignal = (): void => {
         if (aborted) {
@@ -519,7 +517,6 @@ export class SidecarHttpClient {
       if (activeResponse && !activeResponse.complete) {
         activeResponse.destroy();
       }
-      activeRequest = undefined;
     }
   }
 

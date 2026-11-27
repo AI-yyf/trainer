@@ -11,10 +11,9 @@ import type {
   CommandExecutionResult,
   ProviderConfig,
   ProviderCredentialMode,
-  ProviderLastTestResult,
 } from '../core/types';
 import { defaultProviderCredentialMode, normalizeProviderRequestDefaults } from '../core/providerDefaults';
-import { recordModelCatalogRequest, recordProviderHttpRequest } from '../core/runtimeMetrics';
+import { recordModelCatalogRequest } from '../core/runtimeMetrics';
 import { toOperationStatus } from '../core/workbenchData';
 import { resolveProviderApiKeyRef, sameProviderVendorHost } from '../provider/providerConfigStore';
 import { applyDerivedHostState } from '../core/workbenchData';
@@ -38,7 +37,6 @@ import {
   filterProviderModelOptions,
   type ProviderModelPolicyEvaluation,
 } from '../../../shared/src/providerModelPolicy';
-import { normalizeProviderCapabilityTruth } from '../../../shared/src/providerTest';
 import {
   providerBaseUrlIsLocalService,
   providerTransportIsConfigured,
@@ -51,9 +49,8 @@ import {
 } from './providerHostCopy';
 import { normalizeProviderThinkingConfig, updateProviderThinking } from '../../../shared/src/providerThinking';
 import type { ProviderThinkingConfig } from '../../../shared/src/providerThinking';
-import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
-import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
+import type { ComposerLanguage } from '../../../shared/src/types';
 
 type SaveProviderPayload = {
   name?: string;
@@ -2048,9 +2045,6 @@ export async function switchProviderModelCommand(
       hasMaxOutputTokens: false,
       hasModelTokenLimits: false,
     });
-    const selectedModelIsLive = availableModels.some(
-      (entry) => entry.toLowerCase() === model.toLowerCase(),
-    );
     const nextConfig: ProviderConfig = {
       ...committedBaseConfig,
       model,

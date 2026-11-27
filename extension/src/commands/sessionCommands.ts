@@ -20,7 +20,6 @@ import type {
   MessageAttachmentPayload,
   ProviderConfig,
   SessionMessagePayload,
-  SidecarStatus,
   StreamMessagePayload,
 } from '../core/types';
 import {
@@ -1457,30 +1456,6 @@ async function markProviderReplyUnusable(
     statusCode: failure.statusCode,
     responseLanguage,
   });
-}
-
-async function failCoachReplyProof(
-  context: CommandContext,
-  providerConfig: ProviderConfig | undefined,
-  error: unknown,
-  responseLanguage: ComposerLanguage,
-): Promise<CommandExecutionResult> {
-  const classified = classifyProviderFailure(normalizeErrorText(error));
-  const failure: ProviderFailureMeta = {
-    ...classified,
-    category: classified.category ?? 'unknown',
-    detail: friendlyStreamFailureMessage(classified, responseLanguage),
-  };
-
-  try {
-    await markProviderReplyUnusable(context, providerConfig, failure, responseLanguage);
-  } catch {
-    context.outputChannel.appendLine(
-      `[provider] Could not save the provider failure state (${failure.category ?? 'unknown'}).`,
-    );
-  }
-
-  return { ok: false, message: failure.detail };
 }
 
 function isRetryableTimeoutFailure(error: unknown): boolean {
@@ -3806,47 +3781,6 @@ function globalPlanCreateOverrides(payload: unknown): Record<string, string | st
     ...(summary ? { summary } : {}),
     ...(goals && goals.length > 0 ? { goals } : {}),
   };
-}
-
-function shouldPreferNonStreamingCoachTruth(
-  payload: StreamMessagePayload,
-): boolean {
-  const intent = payload.intent ?? 'coach';
-  if (intent !== 'coach') {
-    return false;
-  }
-  const text = payload.text.trim();
-  if (!text) {
-    return false;
-  }
-  const lowered = text.toLowerCase();
-  const asksPromise =
-    lowered.includes('first viewport promise') || text.includes('首屏承诺');
-  const asksBoundary =
-    lowered.includes('must not become') ||
-    text.includes('绝不能变成') ||
-    text.includes('不能变成') ||
-    text.includes('不能成为') ||
-    text.includes('不应该变成');
-  const mentionsView = [
-    'coach view',
-    'coach 视图',
-    '对话视图',
-    'plan view',
-    'plan 视图',
-    '计划视图',
-    'resources view',
-    'resources 视图',
-    '资料视图',
-    '资源视图',
-    'training view',
-    'training 视图',
-    '训练视图',
-    'settings view',
-    'settings 视图',
-    '设置视图',
-  ].some((marker) => lowered.includes(marker.toLowerCase()));
-  return asksPromise && asksBoundary && mentionsView;
 }
 
 function extractTextPayload(payload: unknown): string | undefined {

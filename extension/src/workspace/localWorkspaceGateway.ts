@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 import type {
   RemoteProcessSpec,
-  RemoteSearchMatch,
   RemoteSearchRequest,
   RemoteVerificationResult,
   RemoteVerificationSessionRef,
@@ -11,7 +10,6 @@ import type {
 } from '../../../shared/src/remoteProtocol';
 import {
   detectRemoteWorkspaceTypeFromContext,
-  type RemoteWorkspaceType,
 } from '../../../shared/src/remoteWorkspace';
 import type {
   WorkspaceDiagnosticDto,
@@ -28,12 +26,10 @@ import type {
   WorkspaceSearchDto,
   WorkspaceSearchOptions,
   WorkspaceStatDto,
-  WorkspaceUriDto,
 } from '../../../shared/src/remoteProtocol';
 import {
   toWorkspaceUri,
   toWorkspaceUriDto,
-  workspaceUriToString,
   type WorkspaceUriInput,
 } from './remoteUri';
 import {
@@ -57,8 +53,6 @@ const MAX_SEARCH_PREVIEW_CHARS = 400;
 const DEFAULT_FIND_RESULTS = 100;
 const DEFAULT_READ_CHARS = 80_000;
 const DEFAULT_EXCLUDE = '{**/node_modules/**,**/.git/**,**/dist/**,**/.venv/**,**/__pycache__/**}';
-
-type WorkspaceFileType = 'file' | 'directory' | 'unknown';
 
 export class LocalWorkspaceGateway extends WorkspaceProtocolGatewayBase implements WorkspaceGateway {
   get protocolCapabilities(): ProtocolWorkspaceGatewayCapabilities {

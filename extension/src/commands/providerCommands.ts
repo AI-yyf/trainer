@@ -56,7 +56,7 @@ import { normalizeProviderThinkingConfig } from '../../../shared/src/providerThi
 import { normalizeProviderCapabilityTruth } from '../../../shared/src/providerTest';
 import { stripHostLastTestSecrets } from '../../../shared/src/hostLastTestGovernance';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
-import { isComposerLanguage, type ComposerLanguage } from '../../../shared/src/types';
+import type { ComposerLanguage } from '../../../shared/src/types';
 
 const capabilityOrder: Array<keyof CapabilityFlags> = [
   'chat',

@@ -96,8 +96,6 @@ import type {
   ProjectSourceSuggestion,
   ResourceDetailRecordView,
   ResourceRecordView,
-  SandboxPreviewView,
-  SandboxStateView,
   SidecarStatus,
   SubPlanView,
   SuggestedActionView,
@@ -108,9 +106,7 @@ import type {
   TrainerProjectsListView,
   ToneDecisionView,
   UserProfileView,
-  WorkspaceAuthorityView,
   WorkspaceSnapshot,
-  EvidenceQueueView,
   EvidenceItemView,
   ProviderTestOutcomeSummary,
 } from './types';

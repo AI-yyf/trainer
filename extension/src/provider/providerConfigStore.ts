@@ -223,7 +223,6 @@ export class ProviderConfigStore implements vscode.Disposable {
   readonly onDidChange = this.emitter.event;
 
   private readonly fileStore: TrainerFileStore;
-  private migratedLegacyState = false;
 
   constructor(
     private readonly extensionContext: vscode.ExtensionContext,
@@ -485,10 +484,6 @@ export class ProviderConfigStore implements vscode.Disposable {
   async clear(): Promise<void> {
     const previousStored = this.getStoredConfig();
     const previousEffective = this.getConfig();
-    const profileSource = previousEffective ?? previousStored;
-    const targetProfileId = profileSource
-      ? this.resolveKnownProfileId(profileSource, previousEffective)
-      : undefined;
     await this.extensionContext.globalState.update(STORAGE_KEYS.providerConfig, undefined);
     this.mirrorConfigToFile(undefined);
     await this.syncWorkspaceProviderOverride(undefined);

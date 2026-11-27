@@ -2,7 +2,10 @@ name: Trainer Cross-Platform Verify
 
 on:
   push:
-  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       run_vsix_host_e2e:

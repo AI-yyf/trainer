@@ -38,7 +38,9 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import secrets
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -46,7 +48,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ...browser_bridge import BrowserBridgeService, BrowserCredential, BrowserPairingError
-from ...browser_bridge.service import normalize_extension_origin
+from ...browser_bridge.service import BOOTSTRAP_PAIR_PREFIX, normalize_extension_origin
 from ...core.event_ledger import EVENT_BROWSER_SOURCE_RECEIVED
 from ...resources.library import LibraryService
 from ..runtime import TrainerRuntime
@@ -66,6 +68,39 @@ def _browser_bridge(runtime: TrainerRuntime) -> BrowserBridgeService:
             },
         )
     return service
+
+
+def _bootstrap_pair_file_path() -> Path:
+    override = str(os.environ.get("TRAINER_BOOTSTRAP_PAIR_FILE") or "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".trainer" / "browser-capture" / "bootstrap-pair.json"
+
+
+def _cleanup_bootstrap_pair_file(redeemed_code: str) -> bool:
+    """Remove the plaintext bootstrap-pair.json seed file once a trbp-* token is redeemed."""
+    normalized = str(redeemed_code or "").strip()
+    if not normalized.lower().startswith(BOOTSTRAP_PAIR_PREFIX):
+        return False
+    path = _bootstrap_pair_file_path()
+    try:
+        if not path.is_file():
+            return False
+        try:
+            parsed = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict):
+            seed_code = str(
+                parsed.get("code") or parsed.get("pairing_code") or parsed.get("token") or ""
+            ).strip()
+            if seed_code and seed_code != normalized:
+                return False
+        path.unlink(missing_ok=True)
+        return True
+    except OSError as exc:
+        logger.debug("Could not remove bootstrap-pair.json after redemption: %s", exc)
+        return False
 
 
 def _bearer_token(request: Request) -> str:
@@ -253,10 +288,11 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
             )
 
         body = payload if isinstance(payload, dict) else {}
+        raw_code = str(body.get("code") or body.get("pairing_code") or "")
         bridge = _browser_bridge(runtime)
         try:
             credential, token = bridge.exchange_pair_code(
-                str(body.get("code") or body.get("pairing_code") or ""),
+                raw_code,
                 origin=str(request.headers.get("origin") or ""),
             )
         except BrowserPairingError as exc:
@@ -264,6 +300,7 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
                 status_code=exc.status_code,
                 detail={"code": exc.code, "message": exc.detail},
             ) from exc
+        _cleanup_bootstrap_pair_file(raw_code)
         # The raw token is returned exactly once (only its hash is persisted).
         return credential.as_payload(credential=token)
 

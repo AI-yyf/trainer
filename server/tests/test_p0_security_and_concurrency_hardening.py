@@ -286,3 +286,87 @@ def test_p2_provider_scheme_probe_never_blocks_event_loop(monkeypatch: pytest.Mo
     assert cached_scheme == "http"
     assert probe_threads and all(tid != loop_thread_id for tid in probe_threads)
     reset_provider_scheme_cache()
+
+
+def test_wave1_anthropic_prompt_caching_markers_and_retry_payload() -> None:
+    from app.llm.agent_binding_helpers import (
+        ANTHROPIC_VISIBLE_REPLY_RETRY_HINT,
+        _anthropic_visible_retry_payload,
+        _format_anthropic_payload,
+    )
+
+    messages = [
+        {"role": "system", "content": "Static Trainer coaching system prompt."},
+        {"role": "user", "content": "First question"},
+        {
+            "role": "assistant",
+            "content": "First answer",
+            "_provider_reasoning": {
+                "anthropic_blocks": [{"type": "thinking", "thinking": "internal", "signature": "sig1"}]
+            },
+        },
+        {"role": "user", "content": "Second question"},
+    ]
+    payload = _format_anthropic_payload(messages, None, model="claude-3-7-sonnet")
+
+    assert isinstance(payload["system"], list)
+    assert payload["system"] == [
+        {
+            "type": "text",
+            "text": "Static Trainer coaching system prompt.",
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+    assert len(payload["messages"]) == 3
+    prev_assistant_blocks = payload["messages"][-2]["content"]
+    assert prev_assistant_blocks[0]["type"] == "thinking"
+    assert "cache_control" not in prev_assistant_blocks[0]
+    assert prev_assistant_blocks[-1]["type"] == "text"
+    assert prev_assistant_blocks[-1]["cache_control"] == {"type": "ephemeral"}
+    assert "cache_control" not in payload["messages"][-1]["content"][-1]
+
+    retried = _anthropic_visible_retry_payload(payload)
+    assert isinstance(retried["system"], list)
+    assert retried["system"][0]["cache_control"] == {"type": "ephemeral"}
+    assert retried["system"][-1]["text"] == ANTHROPIC_VISIBLE_REPLY_RETRY_HINT
+
+
+def test_wave1_bootstrap_pair_file_auto_deleted_after_trbp_redemption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.api.routes.browser import build_browser_router
+    from app.browser_bridge import BrowserBridgeService
+
+    seed_file = tmp_path / "bootstrap-pair.json"
+    bootstrap_code = "trbp-" + "a" * 32
+    seed_file.write_text(json.dumps({"code": bootstrap_code, "port": 8000}), encoding="utf-8")
+    monkeypatch.setenv("TRAINER_BOOTSTRAP_PAIR_FILE", str(seed_file))
+
+    bridge = BrowserBridgeService(tmp_path / "bridge.db")
+    bridge.register_pair_code(
+        code=bootstrap_code,
+        workspace_id="ws-seed",
+        workspace_name="Seed Workspace",
+    )
+    runtime = types.SimpleNamespace(browser_bridge=bridge, sessions={}, event_ledger=None)
+    deps = types.SimpleNamespace(
+        current_workspace_id=lambda **_kwargs: "ws-seed",
+        effective_response_language=lambda *_args, **_kwargs: "zh-CN",
+    )
+    app = FastAPI()
+    app.include_router(build_browser_router(runtime, deps))  # type: ignore[arg-type]
+
+    client = TestClient(app)
+    resp = client.post(
+        "/browser/pair",
+        json={"code": bootstrap_code},
+        headers={"origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"},
+    )
+    assert resp.status_code == 200
+    assert not seed_file.exists()

@@ -2376,28 +2376,6 @@ export async function searchResourcesCommand(
   };
 }
 
-function resolveSandboxRootPath(context: CommandContext): string | undefined {
-  const sandboxState = context.getHostState().bootstrap.memory.sandboxState;
-  return asString(
-    sandboxState?.sandboxRootPath ??
-      sandboxState?.rootPath,
-  );
-}
-
-function isPathWithinRoot(targetPath: string, rootPath: string): boolean {
-  // Windows drive/UNC values are opaque identifiers, but containment inside
-  // them is defined by win32 path rules — apply those rules on every host so
-  // governed sandbox checks hold when Windows-style sandbox paths reach a
-  // POSIX host (path.relative would otherwise report a cross-root climb).
-  if (looksLikeWindowsAbsolutePath(targetPath) || looksLikeWindowsAbsolutePath(rootPath)) {
-    const targetLower = path.win32.normalize(targetPath).toLowerCase();
-    const rootLower = path.win32.normalize(rootPath).toLowerCase();
-    return targetLower === rootLower || targetLower.startsWith(`${rootLower}\\`);
-  }
-  const relative = path.relative(path.resolve(rootPath), path.resolve(targetPath));
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
 export async function createSandboxDirectoryCommand(
   context: CommandContext,
   payload?: unknown,
@@ -3456,31 +3434,6 @@ function normalizeResourceDetailRecord(value: unknown): ResourceDetailRecordView
     tags: asStringArray(record.tags),
     warnings: asStringArray(record.warnings),
   };
-}
-
-function stripCanonicalFrontMatter(markdown: string): string {
-  return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n)*/, '');
-}
-
-/**
- * Canonical Markdown keeps extracted images on relative paths
- * (`assets/<resource-id>/image.png`). The webview cannot resolve those against
- * the markdown file, so rewrite local image targets to webview URIs.
- */
-function rewriteCanonicalAssetUris(
-  markdown: string,
-  markdownPath: string,
-  resolveUri: (filePath: string) => string | undefined,
-): string {
-  const baseDirectory = path.dirname(markdownPath);
-  return markdown.replace(
-    /(!\[[^\]]*\]\()(?![a-z][a-z0-9+.-]*:|\/\/)([^)\s]+)(\))/gi,
-    (match, prefix: string, target: string, suffix: string) => {
-      const absolute = path.resolve(baseDirectory, target);
-      const uri = resolveUri(absolute);
-      return uri ? `${prefix}${uri}${suffix}` : match;
-    },
-  );
 }
 
 function normalizeSandboxPreview(value: unknown): Record<string, unknown> & { path: string } {

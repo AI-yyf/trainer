@@ -859,6 +859,24 @@ def _parse_gemini_response(payload: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _apply_anthropic_history_cache_breakpoint(
+    anthropic_messages: list[dict[str, Any]],
+) -> None:
+    """Mark the last stable history message before the latest user turn for prompt caching."""
+    if len(anthropic_messages) < 2:
+        return
+    target_message = anthropic_messages[-2]
+    content = target_message.get("content")
+    if not isinstance(content, list):
+        return
+    for block in reversed(content):
+        if not isinstance(block, dict):
+            continue
+        if str(block.get("type") or "") in {"text", "tool_result", "tool_use", "image"}:
+            block["cache_control"] = {"type": "ephemeral"}
+            return
+
+
 def _format_anthropic_payload(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None,
@@ -874,13 +892,20 @@ def _format_anthropic_payload(
         attachments=attachments,
         vision_enabled=vision_enabled,
     )
+    _apply_anthropic_history_cache_breakpoint(anthropic_messages)
     payload: dict[str, Any] = {
         "model": model,
         "max_tokens": max_tokens,
         "messages": anthropic_messages,
     }
     if system_text:
-        payload["system"] = system_text
+        payload["system"] = [
+            {
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
     if tools:
         payload["tools"] = tools
     if stream:
@@ -1086,7 +1111,20 @@ def _format_anthropic_tools(tools: list[dict[str, Any]] | None) -> list[dict[str
 def _anthropic_visible_retry_payload(payload: dict[str, Any]) -> dict[str, Any]:
     retry_payload = dict(payload)
     retry_payload.pop("stream", None)
-    system_text = str(retry_payload.get("system") or "").strip()
+    raw_system = retry_payload.get("system")
+    if isinstance(raw_system, list):
+        blocks = [dict(block) if isinstance(block, dict) else block for block in raw_system]
+        if any(
+            isinstance(block, dict)
+            and ANTHROPIC_VISIBLE_REPLY_RETRY_HINT in str(block.get("text") or "")
+            for block in blocks
+        ):
+            retry_payload["system"] = blocks
+            return retry_payload
+        blocks.append({"type": "text", "text": ANTHROPIC_VISIBLE_REPLY_RETRY_HINT})
+        retry_payload["system"] = blocks
+        return retry_payload
+    system_text = str(raw_system or "").strip()
     if ANTHROPIC_VISIBLE_REPLY_RETRY_HINT in system_text:
         return retry_payload
     retry_payload["system"] = (

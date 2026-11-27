@@ -1,6 +1,5 @@
 import type { CommandContext } from '../core/commandContext';
 import type { CommandExecutionResult } from '../core/types';
-import { COMMAND_IDS } from '../core/constants';
 import { getRuntimeWorkspaceId } from './workspaceContext';
 
 /**

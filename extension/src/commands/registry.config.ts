@@ -104,7 +104,6 @@ import {
   launchBrowserCaptureCommand,
   installBrowserCaptureCommand,
   installBrowserCaptureForBrowserCommand,
-  maybePromptCaptureOnboarding,
   browserCaptureStatusCommand,
   openBrowserExtensionsPageCommand,
   revokeBrowserCapturePairingCommand,

@@ -4,7 +4,6 @@ import { registerCommands } from './commands';
 import { maybePromptCaptureOnboarding } from './commands/browserCaptureCommands';
 import { createBrowserCaptureRuntime } from './browserCapture/runtime';
 import { evaluatePublishedFileCommand } from './commands/evaluationCommands';
-import { primeProviderModelsState } from './commands/providerWebviewCommands';
 import { invalidateActiveTrainerStreams } from './commands/sessionCommands';
 import { getRuntimeWorkspaceContext } from './commands/workspaceContext';
 import { COMMAND_IDS, CONTEXT_KEYS, OUTPUT_CHANNEL_NAME, STORAGE_KEYS } from './core/constants';

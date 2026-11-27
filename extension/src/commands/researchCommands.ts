@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
 
-import { COMMAND_IDS, SIDECAR_DEFAULTS } from '../core/constants';
+import { SIDECAR_DEFAULTS } from '../core/constants';
 import type { CommandExecutionResult, TrainerHostState } from '../core/types';
 import type { SidecarHttpClient } from '../core/httpClient';
 import type { WorkbenchHost } from '../core/commandContext';
-import type { CommandRegistry } from '../core/commandRegistry';
 import { sanitizeErrorSurfaceText } from '../../../shared/src/errorSurfaceSanitizer';
 
 function getPort(state: TrainerHostState): number {

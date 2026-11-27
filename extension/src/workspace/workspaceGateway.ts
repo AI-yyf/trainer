@@ -15,7 +15,6 @@ import type {
   RemoteVerificationResult,
 } from '../../../shared/src/remoteProtocol';
 import type {
-  WorkspaceDiagnosticDto,
   WorkspaceDiagnosticsDto,
   WorkspaceEnvironmentDto,
   WorkspaceFindDto,
@@ -34,7 +33,6 @@ import type {
   WorkspaceSearchDto,
   WorkspaceSearchOptions,
   WorkspaceStatDto,
-  WorkspaceUriDto,
 } from '../../../shared/src/remoteProtocol';
 import type { RemoteWorkspaceType } from '../../../shared/src/remoteWorkspace';
 import type { WorkspaceUriInput } from './remoteUri';

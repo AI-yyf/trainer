@@ -347,11 +347,6 @@ async function resolveVerificationPython(context: CommandContext, resource: vsco
   return selected;
 }
 
-function normalizeFsPath(value: string): string {
-  const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
-  return /^(?:[a-z]:|\/\/)/i.test(normalized) ? normalized.toLowerCase() : normalized;
-}
-
 function isAbsoluteFsPath(value: string): boolean {
   return /^(?:[a-zA-Z]:[\\/]|\/|\\\\)/.test(value);
 }
