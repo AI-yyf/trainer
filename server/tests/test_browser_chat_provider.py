@@ -164,3 +164,45 @@ def test_workspace_provider_memory_only_records_what_the_host_named(tmp_path: Pa
     # The same cached service every request-scoped lane uses, not a second copy.
     assert remembered is runtime.provider_service_for(provider, "sk-test")
     assert runtime.workspace_provider_service("workspace-browser-other") is None
+
+
+def test_browser_bootstrap_exposes_redacted_workspace_provider_without_secrets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = "workspace-browser-redacted-summary"
+    with build_client(tmp_path, configure_provider=False) as client:
+        _script_reply(monkeypatch)
+        credential = _pair_browser(client, workspace_id)
+        headers = {"Authorization": f"Bearer {credential}"}
+
+        initial = client.get("/browser/chat/bootstrap", headers=headers)
+        assert initial.status_code == 200
+        initial_body = initial.json()
+        assert initial_body["workspace_provider"]["configured"] is False
+        assert "api_key" not in initial_body["workspace_provider"]
+
+        host = client.post(
+            "/session/message",
+            json={
+                "workspace_id": workspace_id,
+                "message": "你好",
+                "provider": _host_provider(),
+                "api_key": "sk-secret-never-leak",
+            },
+        )
+        assert host.status_code == 200, host.text
+
+        refreshed = client.get("/browser/chat/bootstrap", headers=headers)
+        assert refreshed.status_code == 200
+        wp = refreshed.json()["workspace_provider"]
+        assert wp["configured"] is True
+        assert wp["model"] == "glm-4.6"
+        assert wp["api_key_configured"] is True
+        assert "sk-secret-never-leak" not in refreshed.text
+        assert "baseUrl" not in wp
+        assert "api_key" not in wp
+
+        new_sess = client.post("/browser/chat/session/new", headers=headers, json={})
+        assert new_sess.status_code == 200
+        assert new_sess.json()["workspace_provider"]["configured"] is True

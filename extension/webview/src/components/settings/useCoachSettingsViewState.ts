@@ -18,7 +18,7 @@ import {
   type OperationMessageSurface,
 } from "../../lib/operationMessageGovernance";
 import { appUiCopy } from "../../lib/i18n/appUiCopy";
-import { postMessage, requestNativeSkillDraft } from "../../lib/vscode";
+import { inVsCodeWebview, postMessage, requestNativeSkillDraft } from "../../lib/vscode";
 import type {
   CoachDefaults,
   ComposerLanguage,
@@ -64,7 +64,7 @@ async function loadBrowserPreviewModule(): Promise<BrowserPreviewModule> {
 function inBrowserPreviewEnvironment(): boolean {
   return (
     typeof window !== "undefined" &&
-    (window.__TRAINER_BROWSER_PREVIEW__ === true || !window.acquireVsCodeApi)
+    (window.__TRAINER_BROWSER_PREVIEW__ === true || !inVsCodeWebview())
   );
 }
 

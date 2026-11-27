@@ -1489,6 +1489,40 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 // -------------------------------------------------------------- messages ----
 
+async function extractTabSelectionOnDemand(tabId, expectedUrl) {
+  if (!chrome.scripting || typeof chrome.scripting.executeScript !== 'function') {
+    return undefined;
+  }
+  try {
+    const injections = await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [0] },
+      func: (targetUrl) => {
+        if (window.location.href !== targetUrl) {
+          return null;
+        }
+        const selection = window.getSelection();
+        const text = selection ? selection.toString() : '';
+        const common =
+          text && selection && selection.rangeCount === 1
+            ? selection.getRangeAt(0).commonAncestorContainer
+            : null;
+        const element = common instanceof Element ? common : common ? common.parentElement : null;
+        const anchorElement = element && typeof element.closest === 'function' ? element.closest('[id]') : null;
+        const anchor = anchorElement && anchorElement.id ? String(anchorElement.id) : '';
+        return {
+          selection: text,
+          anchor: anchor && anchor.length <= 200 ? anchor : undefined,
+        };
+      },
+      args: [expectedUrl],
+    });
+    return injections && injections[0] ? injections[0].result || undefined : undefined;
+  } catch (_error) {
+    // Restricted pages (PDF viewer, chrome://, Web Store) forbid script injection; URL still stages cleanly.
+    return undefined;
+  }
+}
+
 const MESSAGE_HANDLERS = {
   'trainer:state': async () => buildState(),
   'trainer:auto-pair': async () => {
@@ -1521,11 +1555,9 @@ const MESSAGE_HANDLERS = {
     if (!tab?.active || tab.url !== url) {
       return { status: 'failed', message: copy.askPanelPageChanged };
     }
-    // Restricted pages such as the PDF viewer can still stage their URL.
-    const context = await chrome.tabs.sendMessage(tabId, {
-      type: 'trainer:read-selection',
-      url
-    }, { frameId: 0 }).catch(() => undefined);
+    // On-demand webpage selection extraction via chrome.scripting.executeScript
+    // (zero persistent content-script overhead on regular web pages).
+    const context = await extractTabSelectionOnDemand(tabId, url);
     const current = await chrome.tabs.get(tabId).catch(() => undefined);
     if (!current?.active || current.url !== url) {
       return { status: 'failed', message: copy.askPanelPageChanged };
@@ -1543,6 +1575,35 @@ const MESSAGE_HANDLERS = {
       },
       tab
     );
+  },
+  'trainer:extract-tab-context': async (message) => {
+    const { tabId, url } = message || {};
+    const copy = dict();
+    if (!Number.isInteger(tabId) || typeof url !== 'string' || !TrainerCapture.httpUrlOnly(url)) {
+      return { ok: false, status: 'failed', message: copy.captureNoUrl };
+    }
+    const tab = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (!tab?.active || tab.url !== url) {
+      return { ok: false, status: 'failed', message: copy.askPanelPageChanged };
+    }
+    const context = await extractTabSelectionOnDemand(tabId, url);
+    const current = await chrome.tabs.get(tabId).catch(() => undefined);
+    if (!current?.active || current.url !== url) {
+      return { ok: false, status: 'failed', message: copy.askPanelPageChanged };
+    }
+    const source = new URL(url);
+    if (!source.hash && typeof context?.anchor === 'string' && context.anchor) {
+      source.hash = encodeURIComponent(context.anchor);
+    }
+    return {
+      ok: true,
+      status: 'ok',
+      pageContext: {
+        url: source.href,
+        title: String(current.title || source.href),
+        selection: typeof context?.selection === 'string' ? context.selection : '',
+      },
+    };
   },
   'trainer:open-ask-panel': async () => {
     // The side panel keeps the popup capture-only; this entry is opened from

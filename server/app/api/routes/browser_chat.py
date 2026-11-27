@@ -100,6 +100,40 @@ _TRAINING_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
+
+_RESOURCE_SEARCH_FIELDS = ("session_id", "query", "top_k", "trust_state", "index_state")
+
+
+def _redacted_workspace_provider(runtime: TrainerRuntime, workspace_id: str) -> dict[str, Any]:
+    """Secret-free provider readiness summary for the paired workspace.
+
+    Never exposes API keys, key refs, or raw endpoint URLs — only whether the
+    workspace has a usable host-configured model and its capability flags so the
+    shared React sidebar can gate composer & tool UI accurately.
+    """
+    service = runtime.workspace_provider_service(workspace_id) or getattr(runtime, "provider_service", None)
+    config = getattr(service, "_config", None) if service is not None else None
+    has_key = bool(getattr(service, "has_api_key", False))
+    model = str(getattr(config, "model", "") or "").strip() if config is not None else ""
+    if not (config is not None and model and has_key):
+        return {"configured": False, "api_key_configured": False}
+    caps_obj = getattr(config, "capabilities", None)
+    if hasattr(caps_obj, "model_dump"):
+        caps = caps_obj.model_dump()
+    elif isinstance(caps_obj, dict):
+        caps = dict(caps_obj)
+    else:
+        caps = {}
+    return {
+        "configured": True,
+        "name": str(getattr(config, "name", "") or "Trainer Host"),
+        "model": model,
+        "protocol": str(getattr(config, "protocol", "") or "openai_chat_completions_compatible"),
+        "api_key_configured": True,
+        "capabilities": caps,
+    }
+
+
 class _InvalidPayload(ValueError):
     """A browser-lane body that is too large or too deeply nested."""
 
@@ -304,10 +338,63 @@ def build_browser_chat_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIR
         }
         if session_id:
             payload["session_id"] = session_id
-        return await proxy_json(
+        upstream = await proxy_json(
             request,
             method="POST",
             path="/session/start",
+            workspace_id=credential.workspace_id,
+            payload=payload,
+        )
+        if upstream.status_code == 200:
+            try:
+                data = json.loads(bytes(upstream.body).decode("utf-8"))
+                if isinstance(data, dict):
+                    data["workspace_provider"] = _redacted_workspace_provider(
+                        runtime,
+                        credential.workspace_id,
+                    )
+                    return JSONResponse(data, status_code=200)
+            except ValueError:
+                pass
+        return upstream
+
+    @router.post("/session/new")
+    async def browser_chat_new_session(request: Request) -> JSONResponse:
+        credential = _require_browser_credential(runtime, request)
+        upstream = await proxy_json(
+            request,
+            method="POST",
+            path="/session/start",
+            workspace_id=credential.workspace_id,
+            payload={
+                "workspace_id": credential.workspace_id,
+                "workspace_name": credential.workspace_name or credential.workspace_id,
+                "force_new_session": True,
+                "new_session": True,
+            },
+        )
+        if upstream.status_code == 200:
+            try:
+                data = json.loads(bytes(upstream.body).decode("utf-8"))
+                if isinstance(data, dict):
+                    data["workspace_provider"] = _redacted_workspace_provider(
+                        runtime,
+                        credential.workspace_id,
+                    )
+                    return JSONResponse(data, status_code=200)
+            except ValueError:
+                pass
+        return upstream
+
+    @router.post("/resource/search")
+    async def browser_chat_resource_search(request: Request) -> JSONResponse:
+        credential = _require_browser_credential(runtime, request)
+        body = await _read_json_object(request)
+        payload = _browser_payload(credential.workspace_id, body, _RESOURCE_SEARCH_FIELDS)
+        return await proxy_json(
+            request,
+            method="POST",
+            path="/resource/search",
             workspace_id=credential.workspace_id,
             payload=payload,
         )

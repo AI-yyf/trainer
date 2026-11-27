@@ -15,6 +15,21 @@ import type {
   WebviewAction,
 } from "./types";
 import { COACH_DRAFT_APPLIED_LIMIT, normalizeSidebarView, normalizeTeachingStyle } from "./types";
+import {
+  isBrowserSidePanelSurface,
+  registerWorkbenchHostTransport,
+  resolveWorkbenchHostTransport,
+  type WorkbenchHostSurface,
+  type WorkbenchHostTransport,
+} from "./hostTransport";
+
+export {
+  isBrowserSidePanelSurface,
+  registerWorkbenchHostTransport,
+  resolveWorkbenchHostTransport,
+  type WorkbenchHostSurface,
+  type WorkbenchHostTransport,
+};
 
 interface VsCodeApi {
   getState(): PersistedWorkbenchState | undefined;
@@ -388,8 +403,6 @@ const hostMessageSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-const STORAGE_KEY = "trainer:webview";
-const PREVIEW_HOST_MESSAGE_EVENT = "trainer:host-message";
 const DEFAULT_COACH_DEFAULTS: CoachDefaults = {
   memoryScope: "project",
   workingSetMode: "balanced",
@@ -402,29 +415,6 @@ const DEFAULT_COACH_DEFAULTS: CoachDefaults = {
   },
 };
 
-let vscodeApi =
-  typeof window !== "undefined" ? window.acquireVsCodeApi?.() : undefined;
-
-function getVsCodeApi(): VsCodeApi | undefined {
-  // Browser Preview installs its compatible API after the sidecar module graph
-  // has loaded. Keep the VS Code singleton semantics while allowing that late
-  // bridge to be captured before the first user action.
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-  if (!vscodeApi && typeof window.acquireVsCodeApi === "function") {
-    vscodeApi = window.acquireVsCodeApi();
-  }
-  return vscodeApi;
-}
-
-function getStorageKey(): string {
-  if (window.__TRAINER_BROWSER_PREVIEW__ && window.__TRAINER_PREVIEW_STORAGE_KEY__) {
-    return window.__TRAINER_PREVIEW_STORAGE_KEY__;
-  }
-  return STORAGE_KEY;
-}
-
 export function getInjectedBootstrapState<T>(): T | undefined {
   return window.__TRAINER_BOOTSTRAP__ as T | undefined;
 }
@@ -432,33 +422,13 @@ export function getInjectedBootstrapState<T>(): T | undefined {
 export function getPersistedState():
   | PersistedWorkbenchState
   | undefined {
-  const api = getVsCodeApi();
-  if (api) {
-    const state = api.getState();
-    return state ? normalizePersistedState(state) : undefined;
-  }
-
-  const raw = window.localStorage.getItem(getStorageKey());
-  if (!raw) {
-    return undefined;
-  }
-
-  try {
-    return normalizePersistedState(JSON.parse(raw) as PersistedWorkbenchState);
-  } catch {
-    return undefined;
-  }
+  const state = resolveWorkbenchHostTransport().getState();
+  return state ? normalizePersistedState(state) : undefined;
 }
 
 export function setPersistedState(state: PersistedWorkbenchState): void {
   const normalizedState = normalizePersistedState(state);
-  const api = getVsCodeApi();
-  if (api) {
-    api.setState(normalizedState);
-    return;
-  }
-
-  window.localStorage.setItem(getStorageKey(), JSON.stringify(normalizedState));
+  resolveWorkbenchHostTransport().setState(normalizedState);
 }
 
 export function persistBrowserPreviewProviderConfig(providerConfig: unknown): void {
@@ -488,13 +458,9 @@ let operationRequestSequence = 0;
 export function adoptHostSyncScope(scope: WebviewSyncCursor): void { hostSyncScope = scope; }
 
 export function postMessage(action: WebviewAction): WebviewOperationIdentity | undefined {
-  const api = getVsCodeApi();
-  if (api) {
+  const transport = resolveWorkbenchHostTransport();
+  if (transport.isNativeHost) {
     const scope = hostSyncScope;
-    // Flow-control messages never carry an operation identity: the ACK
-    // handshake, bootstrap requests, live-follow toggles and the draft
-    // delivery receipt are answered by dedicated host handling, not by the
-    // scoped command lifecycle.
     const tracked =
       scope &&
       action.type !== "state/ack" &&
@@ -513,24 +479,20 @@ export function postMessage(action: WebviewAction): WebviewOperationIdentity | u
         requestId: `webview-${Date.now()}-${++operationRequestSequence}`,
         ...(typeof target === "string" ? { targetId: target } : {}),
       };
-      api.postMessage({ ...action, operation });
+      transport.postMessage({ ...action, operation });
       return operation;
-    } else api.postMessage(action);
+    } else transport.postMessage(action);
     return action.operation;
   }
 
-  window.dispatchEvent(
-    new CustomEvent("trainer:webview-action", {
-      detail: action,
-    }),
-  );
+  transport.postMessage(action);
   return action.operation;
 }
 
 export function announceReady(): void {
-  const api = getVsCodeApi();
-  if (api) {
-    api.postMessage({ type: "webview/ready" });
+  const transport = resolveWorkbenchHostTransport();
+  if (transport.isNativeHost) {
+    transport.postMessage({ type: "webview/ready" });
   }
 }
 
@@ -539,9 +501,9 @@ export function reportWebviewError(error: {
   message: string;
   stack?: string;
 }): void {
-  const api = getVsCodeApi();
-  if (api) {
-    api.postMessage({
+  const transport = resolveWorkbenchHostTransport();
+  if (transport.isNativeHost) {
+    transport.postMessage({
       type: "debug/error",
       payload: error,
     });
@@ -549,9 +511,9 @@ export function reportWebviewError(error: {
 }
 
 export function postDebugVisibleFacts(payload: DebugVisibleWorkbenchFacts): void {
-  const api = getVsCodeApi();
-  if (api) {
-    api.postMessage({
+  const transport = resolveWorkbenchHostTransport();
+  if (transport.isNativeHost) {
+    transport.postMessage({
       type: "debug/visibleFacts",
       payload,
     });
@@ -561,15 +523,12 @@ export function postDebugVisibleFacts(payload: DebugVisibleWorkbenchFacts): void
 export function subscribeToHostMessages(
   listener: (message: HostMessage) => void,
 ): () => void {
-  const previewBridgeEnabled = window.__TRAINER_BROWSER_PREVIEW__ === true;
   const deliver = (value: unknown) => {
     const parsed = hostMessageSchema.safeParse(value);
     if (!parsed.success) {
       return;
     }
     const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
-    // The preview's own bootstrap follows the host's, so a preview-side mock
-    // action reads the same live state the webview is showing.
     if (parsed.data.type === "bootstrap" && parsed.data.payload) {
       window.__TRAINER_BOOTSTRAP__ = parsed.data.payload;
     }
@@ -582,26 +541,8 @@ export function subscribeToHostMessages(
       ...(operationPhase.success ? { operationPhase: operationPhase.data } : {}),
     } as HostMessage);
   };
-  const handler = (event: MessageEvent<unknown>) => {
-    deliver(event.data);
-  };
-  const previewHandler = (event: Event) => {
-    deliver((event as CustomEvent<unknown>).detail);
-  };
 
-  window.addEventListener("message", handler);
-  if (previewBridgeEnabled) {
-    window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__ = deliver;
-    window.addEventListener(PREVIEW_HOST_MESSAGE_EVENT, previewHandler);
-  }
-
-  return () => {
-    window.removeEventListener("message", handler);
-    if (previewBridgeEnabled) {
-      delete window.__TRAINER_PREVIEW_APPLY_HOST_MESSAGE__;
-      window.removeEventListener(PREVIEW_HOST_MESSAGE_EVENT, previewHandler);
-    }
-  };
+  return resolveWorkbenchHostTransport().subscribe(deliver);
 }
 
 export function requestNativeSkillDraft(description: string): Promise<{
@@ -633,7 +574,7 @@ export function requestNativeSkillDraft(description: string): Promise<{
 }
 
 export function inVsCodeWebview(): boolean {
-  return Boolean(getVsCodeApi());
+  return resolveWorkbenchHostTransport().isNativeHost;
 }
 
 /**
@@ -743,7 +684,7 @@ export function requestProjectStructure(
  * so the shell can swap the expand control for a "back to sidebar" control.
  */
 export function getWorkbenchSurface(): "sidebar" | "editor" {
-  return window.__TRAINER_SURFACE__ === "editor" ? "editor" : "sidebar";
+  return resolveWorkbenchHostTransport().surface === "editor" ? "editor" : "sidebar";
 }
 
 /** Editor-panel surface only: ask the host to collapse back into the sidebar. */

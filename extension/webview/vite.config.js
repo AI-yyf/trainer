@@ -29,7 +29,7 @@ export default defineConfig(function (_a) {
             sourcemap: false,
             emptyOutDir: true,
             rollupOptions: {
-                input: __assign({ main: resolve(rootDir, "index.html"), preview: resolve(rootDir, "vscode-preview.html") }, (process.env.TRAINER_WEBVIEW_INCLUDE_TEST_ENTRY !== "0"
+                input: __assign({ main: resolve(rootDir, "index.html"), sidepanel: resolve(rootDir, "sidepanel.html"), preview: resolve(rootDir, "vscode-preview.html") }, (process.env.TRAINER_WEBVIEW_INCLUDE_TEST_ENTRY !== "0"
                     ? { browserSidecarTest: resolve(rootDir, "src/browserSidecar.test-entry.ts") }
                     : {})),
                 output: {

@@ -27,6 +27,7 @@ const IGNORED_DIRECTORIES = new Set([
   "dist",
   "node_modules",
   "out",
+  "sidepanel",
   "venv",
 ]);
 

@@ -25,6 +25,7 @@ const INCLUDE_ROOTS = [
   'manifest.json',
   'background.js',
   'shared.js',
+  'pdf-float.js',
   'popup',
   'sidepanel',
   'icons',

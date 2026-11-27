@@ -226,21 +226,19 @@ async function main() {
     await panel.goto(`chrome-extension://${id}/sidepanel/sidepanel.html`);
     const worker = context.serviceWorkers()[0];
     await worker.evaluate(() => {
-      const originalSend = chrome.tabs.sendMessage.bind(chrome.tabs);
+      const originalExecute = chrome.scripting.executeScript.bind(chrome.scripting);
       globalThis.trainerSelectionReads = [];
-      chrome.tabs.sendMessage = (tab, message, ...args) => {
-        if (message.type === 'trainer:read-selection') {
-          globalThis.trainerSelectionReads.push(message.url);
+      chrome.scripting.executeScript = (injection, ...args) => {
+        if (Array.isArray(injection?.args) && typeof injection.args[0] === 'string') {
+          globalThis.trainerSelectionReads.push(injection.args[0]);
         }
-        return originalSend(tab, message, ...args);
+        return originalExecute(injection, ...args);
       };
     });
     await article.bringToFront();
-    // The side panel is the full conversation client now; the short "Ask
-    // Trainer" form must be gone.
-    await panel.locator('.chat-shell').waitFor({ timeout: 10_000 });
-    await panel.locator('#conversation').waitFor();
-    await panel.locator('#message-input').waitFor();
+    // The side panel mounts the shared VS Code React workbench directly.
+    await panel.locator('#root[data-trainer-app-ready="true"]').waitFor({ timeout: 15_000 });
+    await panel.locator('#coach-composer').waitFor({ timeout: 10_000 });
     if (await panel.locator('#ask-question, #ask-send').count()) {
       throw new Error('The removed short Ask form is still rendered in the side panel.');
     }

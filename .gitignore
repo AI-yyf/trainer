@@ -15,6 +15,9 @@ extension/.sidecar-build/
 # Staged browser capture extension copied out of browser-extension/ for VSIX
 # packaging (npm run bundle:browser-capture); a build artifact, never source.
 extension/browser-capture/
+# Compiled shared webview bundle synced into browser-extension/sidepanel/ by
+# scripts/sync-browser-sidepanel.mjs during `npm run build`.
+browser-extension/sidepanel/
 *.tsbuildinfo
 
 # VS Code local test harness

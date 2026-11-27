@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "0.3.0",
+  "version": "1.6.4",
   "description": "__MSG_appDescription__",
   "default_locale": "en",
   "permissions": [
     "tabs",
+    "scripting",
+    "activeTab",
     "contextMenus",
     "storage",
     "alarms",
@@ -25,11 +27,11 @@
   "content_scripts": [
     {
       "matches": [
-        "http://*/*",
-        "https://*/*"
+        "http://*/*.pdf*",
+        "https://*/*.pdf*"
       ],
       "js": [
-        "shared.js"
+        "pdf-float.js"
       ],
       "run_at": "document_idle",
       "all_frames": false

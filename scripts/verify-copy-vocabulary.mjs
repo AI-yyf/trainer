@@ -11,7 +11,7 @@ const SCAN_TARGETS = [
   "extension/webview/src/components/training",
   "extension/webview/src/components/settings/settingsText.ts",
   "extension/webview/src/templates/templateCopy.ts",
-  "browser-extension/sidepanel/sidepanel.js",
+  "extension/webview/src/lib/chromeSidePanelTransport.ts",
 ];
 
 const BANNED_TERMS = [
@@ -43,7 +43,7 @@ const COPY_TABLE_PATHS = [
   "extension/webview/src/templates/templateCopy.ts",
   "extension/src/commands/hostCommandCopy.ts",
   "extension/src/commands/providerHostCopy.ts",
-  "browser-extension/sidepanel/sidepanel.js",
+  "extension/webview/src/lib/chromeSidePanelTransport.ts",
 ];
 
 const CODE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs"]);

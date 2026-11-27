@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: {
         main: resolve(rootDir, "index.html"),
+        sidepanel: resolve(rootDir, "sidepanel.html"),
         preview: resolve(rootDir, "vscode-preview.html"),
         ...(process.env.TRAINER_WEBVIEW_INCLUDE_TEST_ENTRY !== "0"
           ? { browserSidecarTest: resolve(rootDir, "src/browserSidecar.test-entry.ts") }

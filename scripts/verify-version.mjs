@@ -11,7 +11,7 @@ export function verifyProductVersion({ repoRoot = root, ref = process.env.GITHUB
   if (!/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(product.version)) {
     errors.push("Extension product version is not a valid release version.");
   }
-  for (const name of ["package.json", "package-lock.json", "extension/package-lock.json"]) {
+  for (const name of ["package.json", "package-lock.json", "extension/package-lock.json", "browser-extension/manifest.json"]) {
     const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, name), "utf8"));
     if (manifest.version !== product.version) errors.push(`${name} version differs from extension/package.json.`);
     if (manifest.packages?.[""] && manifest.packages[""].version !== product.version) {

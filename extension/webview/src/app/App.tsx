@@ -238,6 +238,7 @@ import {
 import {
   getInjectedBootstrapState,
   getWorkbenchSurface,
+  isBrowserSidePanelSurface,
   persistBrowserPreviewProviderConfig,
   postDebugVisibleFacts,
   postMessage,
@@ -793,7 +794,7 @@ export function App() {
   // panel; only the sidebar offers "open in editor", and only the panel offers
   // "back to sidebar".
   const editorPanelSurface = getWorkbenchSurface() === "editor";
-  const canOpenInEditor = !editorPanelSurface && !isBrowserPreview;
+  const canOpenInEditor = !editorPanelSurface && !isBrowserPreview && !isBrowserSidePanelSurface();
   const openViewInEditor = useCallback((view: "plan" | "resources") => {
     postMessage({
       type: "command/execute",

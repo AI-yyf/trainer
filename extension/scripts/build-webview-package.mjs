@@ -37,7 +37,7 @@ export function buildWebviewPackage({
     if (testBundle) {
       fs.writeFileSync(path.join(distDir, "browserSidecar-test.js"), testBundle);
     }
-    return { distDir, stagingDir, entries: ["index.html", "vscode-preview.html"] };
+    return { distDir, stagingDir, entries: ["index.html", "sidepanel.html", "vscode-preview.html"] };
   } catch (error) {
     fs.rmSync(stagingDir, { recursive: true, force: true });
     throw error;
@@ -67,7 +67,7 @@ function removeTestOnlyEntries(stagingDir) {
 }
 
 function assertBuildEntries(stagingDir) {
-  for (const entry of ["index.html", "vscode-preview.html"]) {
+  for (const entry of ["index.html", "sidepanel.html", "vscode-preview.html"]) {
     const entryPath = path.join(stagingDir, entry);
     if (!fs.existsSync(entryPath)) {
       throw new Error(`Deterministic webview build did not produce ${entry}.`);

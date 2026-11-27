@@ -310,6 +310,7 @@ import {
 import {
   announceReady,
   getInjectedBootstrapState,
+  inVsCodeWebview,
   getWorkbenchSurface,
   persistBrowserPreviewProviderConfig,
   postDebugVisibleFacts,
@@ -752,7 +753,7 @@ export let lastBootstrapRequestAt = 0;
 export function inBrowserPreviewEnvironment(): boolean {
   return (
     typeof window !== "undefined" &&
-    (window.__TRAINER_BROWSER_PREVIEW__ === true || !window.acquireVsCodeApi)
+    (window.__TRAINER_BROWSER_PREVIEW__ === true || !inVsCodeWebview())
   );
 }
 
