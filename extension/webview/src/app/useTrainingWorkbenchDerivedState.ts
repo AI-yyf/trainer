@@ -138,7 +138,10 @@ export function useTrainingWorkbenchDerivedState(ctx: WorkbenchCtxAfterE3) {
       return restoredCard;
     }
 
-    const selectedCardId = trainingState?.selectedCardId?.trim();
+    const projection = data.workspaceProjection;
+    const selectedCardId = projection?.hasCardAuthority
+      ? projection.selectedCardId?.trim()
+      : trainingState?.selectedCardId?.trim();
     const routeSelectedCardId = rawTrainingRouteCard?.cardId?.trim();
 
     // Leftover stored cards / title / current_step must not count as live selectedCardId.
@@ -170,7 +173,7 @@ export function useTrainingWorkbenchDerivedState(ctx: WorkbenchCtxAfterE3) {
     }
 
     return restoredCard;
-  }, [restoredTrainingCardCandidate, shouldPrioritizeReviewArtifact, trainingState]);
+  }, [data.workspaceProjection, restoredTrainingCardCandidate, shouldPrioritizeReviewArtifact, trainingState]);
   const trainingRestoreForeground = Boolean(
     trainingRestoreContext?.target &&
       restoredTrainingCardCandidate?.cardId &&
@@ -196,11 +199,14 @@ export function useTrainingWorkbenchDerivedState(ctx: WorkbenchCtxAfterE3) {
       rawTrainingRouteCard?.type ??
       selectedTrainingCardCandidate?.type ??
       "practice");
+  const authoritativeSelectedCardId = data.workspaceProjection?.hasCardAuthority
+    ? data.workspaceProjection.selectedCardId
+    : trainingState?.selectedCardId;
   const activeTrainingCardId = reviewArtifactForeground || trainingRestoreForeground
     ? selectedTrainingCardCandidate?.cardId
-    : (trainingState?.selectedCardId ??
+    : (authoritativeSelectedCardId ??
       (rawTrainingRouteCard?.cardId &&
-      rawTrainingRouteCard.cardId === trainingState?.selectedCardId
+      rawTrainingRouteCard.cardId === authoritativeSelectedCardId
         ? rawTrainingRouteCard.cardId
         : undefined));
   // Authored facts are only safe to show when the route card is the active

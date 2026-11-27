@@ -1221,42 +1221,17 @@ def _gate_record_list_fields(
     return copy
 
 
-def _gate_training_card_payload(
+def _gate_payload_fields(
     item: dict[str, Any],
     leftover: set[str],
     recovered: str,
+    text_keys: tuple[str, ...],
+    list_keys: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    gated = _gate_record_title_fields(
-        item,
-        leftover,
-        recovered,
-        _TRAINING_CARD_LIVE_TEXT_KEYS,
-    )
-    return _gate_record_list_fields(
-        gated,
-        leftover,
-        recovered,
-        _TRAINING_CARD_LIVE_LIST_KEYS,
-    )
-
-
-def _gate_scenario_lab_payload(
-    item: dict[str, Any],
-    leftover: set[str],
-    recovered: str,
-) -> dict[str, Any]:
-    gated = _gate_record_title_fields(
-        item,
-        leftover,
-        recovered,
-        _SCENARIO_LAB_LIVE_TEXT_KEYS,
-    )
-    return _gate_record_list_fields(
-        gated,
-        leftover,
-        recovered,
-        _SCENARIO_LAB_LIVE_LIST_KEYS,
-    )
+    gated = _gate_record_title_fields(item, leftover, recovered, text_keys)
+    if not list_keys:
+        return gated
+    return _gate_record_list_fields(gated, leftover, recovered, list_keys)
 
 
 def _gate_flash_deck_payload(
@@ -1264,37 +1239,18 @@ def _gate_flash_deck_payload(
     leftover: set[str],
     recovered: str,
 ) -> dict[str, Any]:
-    gated = _gate_record_title_fields(
-        item,
-        leftover,
-        recovered,
-        ("title", "focus_area"),
-    )
+    gated = _gate_record_title_fields(item, leftover, recovered, ("title", "focus_area"))
     gated["cards"] = [
-        _gate_training_card_payload(card, leftover, recovered)
+        _gate_payload_fields(
+            card,
+            leftover,
+            recovered,
+            _TRAINING_CARD_LIVE_TEXT_KEYS,
+            _TRAINING_CARD_LIVE_LIST_KEYS,
+        )
         for card in item.get("cards") or []
         if isinstance(card, dict)
     ]
-    return gated
-
-
-def _gate_theory_drill_question(
-    item: dict[str, Any],
-    leftover: set[str],
-    recovered: str,
-) -> dict[str, Any]:
-    gated = _gate_record_title_fields(
-        item,
-        leftover,
-        recovered,
-        _THEORY_DRILL_QUESTION_LIVE_TEXT_KEYS,
-    )
-    if isinstance(gated.get("choices"), list):
-        gated["choices"] = _gate_embedded_texts(
-            [str(choice) for choice in gated["choices"]],
-            leftover,
-            recovered,
-        )
     return gated
 
 
@@ -1303,24 +1259,26 @@ def _gate_theory_drill_payload(
     leftover: set[str],
     recovered: str,
 ) -> dict[str, Any]:
-    gated = _gate_record_title_fields(
-        item,
-        leftover,
-        recovered,
-        _THEORY_DRILL_LIVE_TEXT_KEYS,
-    )
+    gated = _gate_record_title_fields(item, leftover, recovered, _THEORY_DRILL_LIVE_TEXT_KEYS)
     gated["questions"] = [
-        _gate_theory_drill_question(question, leftover, recovered)
+        _gate_payload_fields(
+            question,
+            leftover,
+            recovered,
+            _THEORY_DRILL_QUESTION_LIVE_TEXT_KEYS,
+            ("choices",),
+        )
         for question in item.get("questions") or []
         if isinstance(question, dict)
     ]
     return gated
 
 
-def _gate_theory_drill_history(
+def _gate_snapshot_history(
     entries: list[dict[str, Any]],
     leftover: set[str],
     recovered: str,
+    gate_payload: Any,
 ) -> list[dict[str, Any]]:
     gated: list[dict[str, Any]] = []
     for item in entries:
@@ -1335,66 +1293,7 @@ def _gate_theory_drill_history(
         for key in ("before_snapshot", "after_snapshot"):
             snap = copy.get(key)
             if isinstance(snap, dict):
-                copy[key] = _gate_theory_drill_payload(snap, leftover, recovered)
-        gated.append(copy)
-    return gated
-
-
-def _gate_scenario_lab_history(
-    entries: list[dict[str, Any]],
-    leftover: set[str],
-    recovered: str,
-) -> list[dict[str, Any]]:
-    gated: list[dict[str, Any]] = []
-    for item in entries:
-        copy = dict(item)
-        if "note" in copy:
-            copy["note"] = _replace_leftover_live_text(
-                copy.get("note"),
-                leftover,
-                recovered,
-                embedded=True,
-            )
-        for key in ("before_snapshot", "after_snapshot"):
-            snap = copy.get(key)
-            if isinstance(snap, dict):
-                copy[key] = _gate_scenario_lab_payload(snap, leftover, recovered)
-        gated.append(copy)
-    return gated
-
-
-def _gate_review_artifact_payload(
-    item: dict[str, Any],
-    leftover: set[str],
-    recovered: str,
-) -> dict[str, Any]:
-    return _gate_record_title_fields(
-        item,
-        leftover,
-        recovered,
-        _REVIEW_ARTIFACT_LIVE_TEXT_KEYS,
-    )
-
-
-def _gate_review_artifact_history(
-    entries: list[dict[str, Any]],
-    leftover: set[str],
-    recovered: str,
-) -> list[dict[str, Any]]:
-    gated: list[dict[str, Any]] = []
-    for item in entries:
-        copy = dict(item)
-        if "note" in copy:
-            copy["note"] = _replace_leftover_live_text(
-                copy.get("note"),
-                leftover,
-                recovered,
-                embedded=True,
-            )
-        for key in ("before_snapshot", "after_snapshot"):
-            snap = copy.get(key)
-            if isinstance(snap, dict):
-                copy[key] = _gate_review_artifact_payload(snap, leftover, recovered)
+                copy[key] = gate_payload(snap, leftover, recovered)
         gated.append(copy)
     return gated
 
@@ -1514,14 +1413,6 @@ def live_memory_snapshot_overlay(
             "theory_drill": drill,
             "theory_drill_history": drill_history,
         }
-    if recovered_step:
-        live_next_hop = workspace_payload.get("latest_training_next_hop")
-        if isinstance(live_next_hop, dict):
-            workspace_payload["latest_training_next_hop"] = {
-                **live_next_hop,
-                "title": recovered_step,
-                "card_title": recovered_step,
-            }
     gated_workspace = dict(workspace_payload)
     for key, value in list(gated_workspace.items()):
         if key in {PLAN_RUNTIME_KEY, "latestPlanRuntime"}:
@@ -1660,38 +1551,55 @@ def live_memory_snapshot_overlay(
             for item in asset_items
         ],
         "training_cards": [
-            _gate_training_card_payload(item, leftover, recovered_step)
+            _gate_payload_fields(
+                item,
+                leftover,
+                recovered_step,
+                _TRAINING_CARD_LIVE_TEXT_KEYS,
+                _TRAINING_CARD_LIVE_LIST_KEYS,
+            )
             for item in card_items
         ],
         "review_artifact": {
             **artifact,
             **(
-                _gate_review_artifact_payload(
+                _gate_payload_fields(
                     artifact,
                     leftover,
                     recovered_step,
+                    _REVIEW_ARTIFACT_LIVE_TEXT_KEYS,
                 )
                 if artifact
                 else {}
             ),
         },
-        "review_artifact_history": _gate_review_artifact_history(
+        "review_artifact_history": _gate_snapshot_history(
             history_items,
             leftover,
             recovered_step,
+            lambda snap, lo, rec: _gate_payload_fields(snap, lo, rec, _REVIEW_ARTIFACT_LIVE_TEXT_KEYS),
         ),
         "scenario_lab": {
             **lab,
             **(
-                _gate_scenario_lab_payload(lab, leftover, recovered_step)
+                _gate_payload_fields(
+                    lab,
+                    leftover,
+                    recovered_step,
+                    _SCENARIO_LAB_LIVE_TEXT_KEYS,
+                    _SCENARIO_LAB_LIVE_LIST_KEYS,
+                )
                 if lab
                 else {}
             ),
         },
-        "scenario_lab_history": _gate_scenario_lab_history(
+        "scenario_lab_history": _gate_snapshot_history(
             lab_history,
             leftover,
             recovered_step,
+            lambda snap, lo, rec: _gate_payload_fields(
+                snap, lo, rec, _SCENARIO_LAB_LIVE_TEXT_KEYS, _SCENARIO_LAB_LIVE_LIST_KEYS
+            ),
         ),
         "flash_deck": {
             **deck,
@@ -1709,10 +1617,11 @@ def live_memory_snapshot_overlay(
                 else {}
             ),
         },
-        "theory_drill_history": _gate_theory_drill_history(
+        "theory_drill_history": _gate_snapshot_history(
             drill_history,
             leftover,
             recovered_step,
+            _gate_theory_drill_payload,
         ),
     }
 

@@ -685,6 +685,33 @@ def _model_payload(value: Any) -> dict[str, Any] | None:
     return None
 
 
+def _finalize_scoped_record(
+    cleaned: dict[str, Any],
+    payload: dict[str, Any] | None,
+    workspace_id: str,
+    *,
+    adopt_scope: bool,
+) -> dict[str, Any] | None:
+    if "workspace_id" not in cleaned:
+        cleaned["workspace_id"] = _text(
+            (payload or {}).get("workspace_id") or (payload or {}).get("workspaceId")
+        )
+    if adopt_scope and workspace_id:
+        cleaned["workspace_id"] = workspace_id
+    record = stamp_workspace_scope(cleaned, workspace_id)
+    if record is None:
+        return None
+    if workspace_id and not is_current_for_workspace(record, workspace_id):
+        return None
+    return record
+
+
+def _select_scoped(normalizer: Any, value: Any, workspace_id: str) -> dict[str, Any] | None:
+    """Consume-time: unscoped leftover is not current for another workspace."""
+    record = normalizer(value, "")
+    return record if record is not None and is_current_for_workspace(record, workspace_id) else None
+
+
 def normalize_latest_current_task(
     value: Any,
     workspace_id: str = "",
@@ -703,9 +730,7 @@ def normalize_latest_current_task(
     if adopt_scope and workspace_id:
         cleaned["workspace_id"] = workspace_id
     record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
+    if record is None or (workspace_id and not is_current_for_workspace(record, workspace_id)):
         return None
     return record
 
@@ -737,20 +762,13 @@ def normalize_latest_affect_state(
     elif existing_scope:
         body["workspace_id"] = existing_scope
     record = stamp_workspace_scope(body, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
+    if record is None or (workspace_id and not is_current_for_workspace(record, workspace_id)):
         return None
     return record
 
 
 def select_latest_current_task(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_current_task(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_current_task, value, workspace_id)
 
 
 def apply_current_task_scope(workspace: dict[str, Any] | None, workspace_id: str) -> dict[str, Any]:
@@ -765,22 +783,14 @@ def apply_current_task_scope(workspace: dict[str, Any] | None, workspace_id: str
         workspace_id,
     )
     payload[CURRENT_TASK_KEY] = scoped
-    if "latestCurrentTask" in payload:
-        payload["latestCurrentTask"] = scoped
-    if "current_task" in payload:
-        payload["current_task"] = scoped
-    if "currentTask" in payload:
-        payload["currentTask"] = scoped
+    for alias in ("latestCurrentTask", "current_task", "currentTask"):
+        if alias in payload:
+            payload[alias] = scoped
     return payload
 
 
 def select_latest_affect_state(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_affect_state(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_affect_state, value, workspace_id)
 
 
 def normalize_latest_tone_decision(
@@ -802,30 +812,21 @@ def normalize_latest_tone_decision(
     has_avoid = isinstance(avoid_overwhelm, bool)
     if not tone and not verbosity_bias and not has_acknowledge and not has_avoid:
         return None
-    cleaned = {
-        "tone": tone,
-        "verbosity_bias": verbosity_bias,
-        "acknowledge_progress": bool(acknowledge_progress) if has_acknowledge else False,
-        "avoid_overwhelm": bool(avoid_overwhelm) if has_avoid else False,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {
+            "tone": tone,
+            "verbosity_bias": verbosity_bias,
+            "acknowledge_progress": bool(acknowledge_progress) if has_acknowledge else False,
+            "avoid_overwhelm": bool(avoid_overwhelm) if has_avoid else False,
+        },
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_tone_decision(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_tone_decision(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_tone_decision, value, workspace_id)
 
 
 def apply_affect_tone_scope(workspace: dict[str, Any] | None, workspace_id: str) -> dict[str, Any]:
@@ -879,57 +880,35 @@ def normalize_latest_coaching_focus(
     )
     if not summary and not next_step and not focus_area and not teaching_goal:
         return None
-    cleaned = {
-        "summary": summary,
-        "next_step": next_step,
-        "focus_area": focus_area,
-        "teaching_goal": teaching_goal,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {
+            "summary": summary,
+            "next_step": next_step,
+            "focus_area": focus_area,
+            "teaching_goal": teaching_goal,
+        },
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_coaching_focus(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_coaching_focus(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_coaching_focus, value, workspace_id)
 
 
 def apply_coaching_focus_scope(workspace: dict[str, Any] | None, workspace_id: str) -> dict[str, Any]:
     """Drop recovered coaching/focus chrome that does not belong to this workspace."""
 
     payload = dict(workspace) if isinstance(workspace, dict) else {}
-    scoped = select_latest_coaching_focus(
-        payload.get(COACHING_FOCUS_KEY) or payload.get("latestCoachingFocus"),
-        workspace_id,
-    )
-    payload[COACHING_FOCUS_KEY] = scoped
-    payload[COACH_FOCUS_KEY] = select_latest_coach_focus(
-        payload.get(COACH_FOCUS_KEY) or payload.get("latestCoachFocus"),
-        workspace_id,
-    )
-    payload[COACH_TURN_KEY] = select_latest_coach_turn(
-        payload.get(COACH_TURN_KEY) or payload.get("latestCoachTurn"),
-        workspace_id,
-    )
-    payload[NEXT_STEP_HINT_KEY] = select_latest_next_step_hint(
-        payload.get(NEXT_STEP_HINT_KEY) or payload.get("latestNextStepHint"),
-        workspace_id,
-    )
-    payload[COACHING_ADAPTATION_KEY] = select_latest_coaching_adaptation(
-        payload.get(COACHING_ADAPTATION_KEY) or payload.get("latestCoachingAdaptation"),
-        workspace_id,
-    )
+    for key, alias, selector in (
+        (COACHING_FOCUS_KEY, "latestCoachingFocus", select_latest_coaching_focus),
+        (COACH_FOCUS_KEY, "latestCoachFocus", select_latest_coach_focus),
+        (COACH_TURN_KEY, "latestCoachTurn", select_latest_coach_turn),
+        (NEXT_STEP_HINT_KEY, "latestNextStepHint", select_latest_next_step_hint),
+        (COACHING_ADAPTATION_KEY, "latestCoachingAdaptation", select_latest_coaching_adaptation),
+    ):
+        payload[key] = selector(payload.get(key) or payload.get(alias), workspace_id)
     return payload
 
 
@@ -945,53 +924,32 @@ def normalize_latest_coach_focus(
     if payload is None:
         return None
     current_focus = _text(payload.get("current_focus") or payload.get("currentFocus"))
-    recommended = _text(
-        payload.get("first_turn_priority")
-        or payload.get("firstTurnPriority")
-        or payload.get("next_step")
-        or payload.get("nextStep")
-    )
-    summary = _text(
-        payload.get("continuity_summary")
-        or payload.get("continuitySummary")
-        or payload.get("strategy_preference_summary")
-        or payload.get("strategyPreferenceSummary")
-    )
     next_step = _text(payload.get("next_step") or payload.get("nextStep"))
     first_turn_priority = _text(
         payload.get("first_turn_priority") or payload.get("firstTurnPriority")
     )
-    if not current_focus and not recommended and not summary:
+    continuity_summary = _text(payload.get("continuity_summary") or payload.get("continuitySummary"))
+    strategy_summary = _text(
+        payload.get("strategy_preference_summary") or payload.get("strategyPreferenceSummary")
+    )
+    if not current_focus and not (first_turn_priority or next_step) and not (continuity_summary or strategy_summary):
         return None
-    cleaned = {
-        "current_focus": current_focus,
-        "next_step": next_step,
-        "first_turn_priority": first_turn_priority,
-        "continuity_summary": _text(
-            payload.get("continuity_summary") or payload.get("continuitySummary")
-        ),
-        "strategy_preference_summary": _text(
-            payload.get("strategy_preference_summary") or payload.get("strategyPreferenceSummary")
-        ),
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {
+            "current_focus": current_focus,
+            "next_step": next_step,
+            "first_turn_priority": first_turn_priority,
+            "continuity_summary": continuity_summary,
+            "strategy_preference_summary": strategy_summary,
+        },
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_coach_focus(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_coach_focus(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_coach_focus, value, workspace_id)
 
 
 def normalize_latest_coach_turn(
@@ -1010,29 +968,16 @@ def normalize_latest_coach_turn(
     teaching_goal = _text(payload.get("teaching_goal") or payload.get("teachingGoal"))
     if not summary and not next_step and not teaching_goal:
         return None
-    cleaned = {
-        "summary": summary,
-        "next_step": next_step,
-        "teaching_goal": teaching_goal,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {"summary": summary, "next_step": next_step, "teaching_goal": teaching_goal},
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_coach_turn(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_coach_turn(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_coach_turn, value, workspace_id)
 
 
 def normalize_latest_next_step_hint(
@@ -1055,29 +1000,16 @@ def normalize_latest_next_step_hint(
     )
     if not title and not summary and not recommended_action:
         return None
-    cleaned = {
-        "title": title,
-        "summary": summary,
-        "recommended_action": recommended_action,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {"title": title, "summary": summary, "recommended_action": recommended_action},
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_next_step_hint(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_next_step_hint(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_next_step_hint, value, workspace_id)
 
 
 def normalize_latest_coaching_adaptation(
@@ -1092,35 +1024,23 @@ def normalize_latest_coaching_adaptation(
     if payload is None:
         return None
     summary = _text(payload.get("summary"))
-    evidence = [
-        item
-        for item in (payload.get("evidence") or [])
-        if _text(item)
-    ] if isinstance(payload.get("evidence"), list) else []
+    evidence = (
+        [item for item in (payload.get("evidence") or []) if _text(item)]
+        if isinstance(payload.get("evidence"), list)
+        else []
+    )
     if not summary and not evidence:
         return None
-    cleaned = {
-        "summary": summary,
-        "evidence": evidence,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {"summary": summary, "evidence": evidence},
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_coaching_adaptation(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_coaching_adaptation(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_coaching_adaptation, value, workspace_id)
 
 
 def normalize_latest_evaluation(
@@ -1148,29 +1068,16 @@ def normalize_latest_evaluation(
     headline = _text(payload.get("headline"))
     if not summary and not next_step and not headline:
         return None
-    cleaned = {
-        "summary": summary,
-        "next_step": next_step,
-        "headline": headline,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {"summary": summary, "next_step": next_step, "headline": headline},
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_evaluation(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_evaluation(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_evaluation, value, workspace_id)
 
 
 def normalize_latest_learner_state(
@@ -1185,35 +1092,23 @@ def normalize_latest_learner_state(
     if payload is None:
         return None
     active_focus = _text(payload.get("active_focus") or payload.get("activeFocus"))
-    evidence = [
-        item
-        for item in (payload.get("evidence") or [])
-        if isinstance(item, str) and item.strip()
-    ] if isinstance(payload.get("evidence"), list) else []
+    evidence = (
+        [item for item in (payload.get("evidence") or []) if isinstance(item, str) and item.strip()]
+        if isinstance(payload.get("evidence"), list)
+        else []
+    )
     if not active_focus and not evidence:
         return None
-    cleaned = {
-        "active_focus": active_focus,
-        "evidence": evidence,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {"active_focus": active_focus, "evidence": evidence},
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_learner_state(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_learner_state(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_learner_state, value, workspace_id)
 
 
 def normalize_latest_teaching_decision(
@@ -1234,49 +1129,34 @@ def normalize_latest_teaching_decision(
     focus_area = _text(payload.get("focus_area") or payload.get("focusArea"))
     if not reason and not primary_goal and not teaching_strategy and not closing_move:
         return None
-    cleaned = {
-        "reason": reason,
-        "primary_goal": primary_goal,
-        "teaching_strategy": teaching_strategy,
-        "closing_move": closing_move,
-        "focus_area": focus_area,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {
+            "reason": reason,
+            "primary_goal": primary_goal,
+            "teaching_strategy": teaching_strategy,
+            "closing_move": closing_move,
+            "focus_area": focus_area,
+        },
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_teaching_decision(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_teaching_decision(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_teaching_decision, value, workspace_id)
 
 
 def apply_evaluation_chrome_scope(workspace: dict[str, Any] | None, workspace_id: str) -> dict[str, Any]:
     """Drop recovered evaluation / learner / teaching chrome that does not belong here."""
 
     payload = dict(workspace) if isinstance(workspace, dict) else {}
-    payload[EVALUATION_KEY] = select_latest_evaluation(
-        payload.get(EVALUATION_KEY) or payload.get("latestEvaluation"),
-        workspace_id,
-    )
-    payload[LEARNER_STATE_KEY] = select_latest_learner_state(
-        payload.get(LEARNER_STATE_KEY) or payload.get("latestLearnerState"),
-        workspace_id,
-    )
-    payload[TEACHING_DECISION_KEY] = select_latest_teaching_decision(
-        payload.get(TEACHING_DECISION_KEY) or payload.get("latestTeachingDecision"),
-        workspace_id,
-    )
+    for key, alias, selector in (
+        (EVALUATION_KEY, "latestEvaluation", select_latest_evaluation),
+        (LEARNER_STATE_KEY, "latestLearnerState", select_latest_learner_state),
+        (TEACHING_DECISION_KEY, "latestTeachingDecision", select_latest_teaching_decision),
+    ):
+        payload[key] = selector(payload.get(key) or payload.get(alias), workspace_id)
     return payload
 
 
@@ -1297,28 +1177,16 @@ def normalize_latest_adaptation_guide(
     )
     if not target_outcome and not first_migration_step:
         return None
-    cleaned = {
-        "target_outcome": target_outcome,
-        "first_migration_step": first_migration_step,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {"target_outcome": target_outcome, "first_migration_step": first_migration_step},
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_adaptation_guide(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_adaptation_guide(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_adaptation_guide, value, workspace_id)
 
 
 def normalize_latest_principle_notes(
@@ -1343,29 +1211,20 @@ def normalize_latest_principle_notes(
     )
     if not current_principle and not why_it_matters and not apply_now:
         return None
-    cleaned = {
-        "current_principle": current_principle,
-        "why_it_matters": why_it_matters,
-        "apply_now": apply_now,
-        "workspace_id": _text(payload.get("workspace_id") or payload.get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {
+            "current_principle": current_principle,
+            "why_it_matters": why_it_matters,
+            "apply_now": apply_now,
+        },
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_principle_notes(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_principle_notes(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_principle_notes, value, workspace_id)
 
 
 def normalize_latest_project_sources(
@@ -1392,43 +1251,27 @@ def normalize_latest_project_sources(
         sources.append({"title": title, "fit_reason": fit_reason})
     if not sources:
         return None
-    cleaned = {
-        "sources": sources,
-        "workspace_id": _text((payload or {}).get("workspace_id") or (payload or {}).get("workspaceId")),
-    }
-    if adopt_scope and workspace_id:
-        cleaned["workspace_id"] = workspace_id
-    record = stamp_workspace_scope(cleaned, workspace_id)
-    if record is None:
-        return None
-    if workspace_id and not is_current_for_workspace(record, workspace_id):
-        return None
-    return record
+    return _finalize_scoped_record(
+        {"sources": sources},
+        payload,
+        workspace_id,
+        adopt_scope=adopt_scope,
+    )
 
 
 def select_latest_project_sources(value: Any, workspace_id: str) -> dict[str, Any] | None:
-    """Consume-time: unscoped leftover is not current for another workspace."""
-
-    record = normalize_latest_project_sources(value, "")
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
+    return _select_scoped(normalize_latest_project_sources, value, workspace_id)
 
 
 def apply_teaching_artifact_scope(workspace: dict[str, Any] | None, workspace_id: str) -> dict[str, Any]:
     """Drop recovered adaptation / sources / principle chrome that does not belong here."""
 
     payload = dict(workspace) if isinstance(workspace, dict) else {}
-    payload[ADAPTATION_GUIDE_KEY] = select_latest_adaptation_guide(
-        payload.get(ADAPTATION_GUIDE_KEY) or payload.get("latestAdaptationGuide"),
-        workspace_id,
-    )
-    payload[PROJECT_SOURCES_KEY] = select_latest_project_sources(
-        payload.get(PROJECT_SOURCES_KEY) or payload.get("latestProjectSources"),
-        workspace_id,
-    )
-    payload[PRINCIPLE_NOTES_KEY] = select_latest_principle_notes(
-        payload.get(PRINCIPLE_NOTES_KEY) or payload.get("latestPrincipleNotes"),
-        workspace_id,
-    )
+    for key, alias, selector in (
+        (ADAPTATION_GUIDE_KEY, "latestAdaptationGuide", select_latest_adaptation_guide),
+        (PROJECT_SOURCES_KEY, "latestProjectSources", select_latest_project_sources),
+        (PRINCIPLE_NOTES_KEY, "latestPrincipleNotes", select_latest_principle_notes),
+    ):
+        payload[key] = selector(payload.get(key) or payload.get(alias), workspace_id)
     return payload
+

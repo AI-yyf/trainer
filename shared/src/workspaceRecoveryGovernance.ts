@@ -702,3 +702,59 @@ export function normalizeWorkspaceProjection(value: unknown): WorkspaceProjectio
   };
 }
 
+export type ResolvedProjectionAuthority = {
+  hasProjection: boolean;
+  recoveredWithoutLivePlan: boolean;
+  formalPlanLiveOverride?: boolean;
+  authoritativeSelectedCardId?: string;
+  authoritativeCardLiveOverride?: boolean;
+};
+
+export function resolveProjectionAuthority(input: {
+  projection?: WorkspaceProjectionRecord;
+  planId?: string;
+  selectedCardId?: string;
+}): ResolvedProjectionAuthority {
+  const projection = input.projection;
+  if (!projection) {
+    return {
+      hasProjection: false,
+      recoveredWithoutLivePlan: false,
+    };
+  }
+  const normalizedPlanId = text(input.planId);
+  const normalizedSelectedCardId = text(input.selectedCardId);
+  const projectedPlanId = text(projection.activePlanId);
+  const projectedCardId = text(projection.selectedCardId);
+
+  let formalPlanLiveOverride: boolean | undefined;
+  if (projection.recoveredWithoutLivePlan) {
+    formalPlanLiveOverride = false;
+  } else if (projection.hasPlanAuthority) {
+    if (!projection.hasLivePlan || !projectedPlanId) {
+      formalPlanLiveOverride = false;
+    } else {
+      formalPlanLiveOverride = !normalizedPlanId || normalizedPlanId === projectedPlanId;
+    }
+  }
+
+  let authoritativeCardLiveOverride: boolean | undefined;
+  let authoritativeSelectedCardId: string | undefined;
+  if (projection.hasCardAuthority) {
+    if (!projectedCardId) {
+      authoritativeCardLiveOverride = false;
+    } else {
+      authoritativeSelectedCardId = projectedCardId;
+      authoritativeCardLiveOverride =
+        !normalizedSelectedCardId || normalizedSelectedCardId === projectedCardId;
+    }
+  }
+
+  return {
+    hasProjection: true,
+    recoveredWithoutLivePlan: projection.recoveredWithoutLivePlan,
+    formalPlanLiveOverride,
+    authoritativeSelectedCardId,
+    authoritativeCardLiveOverride,
+  };
+}

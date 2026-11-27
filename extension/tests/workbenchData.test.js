@@ -7319,3 +7319,70 @@ test('Event-Log Step 4: workspace_projection structurally enforces plan/card aut
   assert.equal(afterResetPatch.workspaceTrainingState?.selectedCardId, undefined);
 });
 
+test('Event-Log Step 5: resolveProjectionAuthority drives Webview plan/card liveness without second-order heuristics', () => {
+  const {
+    normalizeWorkspaceProjection,
+    resolveProjectionAuthority,
+  } = require('../dist/shared/src/workspaceRecoveryGovernance');
+
+  // 1. No projection -> defer cleanly to legacy fallback
+  assert.deepEqual(resolveProjectionAuthority({ planId: 'plan-1', selectedCardId: 'card-1' }), {
+    hasProjection: false,
+    recoveredWithoutLivePlan: false,
+  });
+
+  // 2. Authoritative live plan + live card match
+  const liveProj = normalizeWorkspaceProjection({
+    workspace_id: 'ws-5',
+    workspace_epoch: 0,
+    state_seq: 5,
+    has_live_plan: true,
+    active_plan_id: 'plan-live',
+    active_plan_title: 'Live Plan',
+    selected_card_id: 'card-live',
+    has_plan_authority: true,
+    has_card_authority: true,
+    recovered_without_live_plan: false,
+  });
+  const liveMatch = resolveProjectionAuthority({
+    projection: liveProj,
+    planId: 'plan-live',
+    selectedCardId: 'card-live',
+  });
+  assert.equal(liveMatch.formalPlanLiveOverride, true);
+  assert.equal(liveMatch.authoritativeCardLiveOverride, true);
+  assert.equal(liveMatch.authoritativeSelectedCardId, 'card-live');
+
+  // 3. Stale leftover plan/card mismatched against authoritative projection -> blocked
+  const mismatch = resolveProjectionAuthority({
+    projection: liveProj,
+    planId: 'plan-stale',
+    selectedCardId: 'card-stale',
+  });
+  assert.equal(mismatch.formalPlanLiveOverride, false);
+  assert.equal(mismatch.authoritativeCardLiveOverride, false);
+
+  // 4. Post-reset or card-cleared projection -> plan & card strictly non-live
+  const resetProj = normalizeWorkspaceProjection({
+    workspace_id: 'ws-5',
+    workspace_epoch: 1,
+    state_seq: 6,
+    has_live_plan: false,
+    active_plan_id: null,
+    selected_card_id: null,
+    has_plan_authority: true,
+    has_card_authority: true,
+    recovered_without_live_plan: true,
+  });
+  const afterReset = resolveProjectionAuthority({
+    projection: resetProj,
+    planId: 'plan-live',
+    selectedCardId: 'card-live',
+  });
+  assert.equal(afterReset.recoveredWithoutLivePlan, true);
+  assert.equal(afterReset.formalPlanLiveOverride, false);
+  assert.equal(afterReset.authoritativeCardLiveOverride, false);
+  assert.equal(afterReset.authoritativeSelectedCardId, undefined);
+});
+
+

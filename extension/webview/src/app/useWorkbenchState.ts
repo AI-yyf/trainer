@@ -26,7 +26,11 @@ import {
   type TrainerToolActivity,
 } from "../../../../shared/src/protocol";
 import { isCurrentStreamEvent } from "../../../../shared/src/streamEventScope";
-import { formalPlanIdentityIsLive } from "../../../../shared/src/workspaceRecoveryGovernance";
+import {
+  formalPlanIdentityIsLive,
+  normalizeWorkspaceProjection,
+  resolveProjectionAuthority,
+} from "../../../../shared/src/workspaceRecoveryGovernance";
 import { composerDockDraftScope } from "../lib/composerDock";
 import { appUiCopy } from "../lib/i18n/appUiCopy";
 import { createNeutralBootstrapData } from "../lib/neutralBootstrap";
@@ -170,14 +174,24 @@ function normalizeBootstrapData(
   const memoryEvidence = Array.isArray(source.memory?.memoryEvidence)
     ? source.memory.memoryEvidence.filter((item): item is string => typeof item === "string")
     : fallbackMemoryEvidence;
+  const hasProjectionField = Object.prototype.hasOwnProperty.call(source, "workspaceProjection");
+  const workspaceProjection = hasProjectionField
+    ? normalizeWorkspaceProjection(source.workspaceProjection)
+    : fallback.workspaceProjection;
+  const projectionAuthority = resolveProjectionAuthority({
+    projection: workspaceProjection,
+    planId: source.plan?.id ?? fallback.plan.id,
+  });
   const hasFormalPlan =
-    source.plan === null
-      ? false
-      : source.plan !== undefined
-        ? formalPlanIdentityIsLive(source.plan)
-        : typeof source.hasFormalPlan === "boolean"
-          ? source.hasFormalPlan
-          : fallback.hasFormalPlan;
+    projectionAuthority.formalPlanLiveOverride !== undefined
+      ? projectionAuthority.formalPlanLiveOverride
+      : source.plan === null
+        ? false
+        : source.plan !== undefined
+          ? formalPlanIdentityIsLive(source.plan)
+          : typeof source.hasFormalPlan === "boolean"
+            ? source.hasFormalPlan
+            : fallback.hasFormalPlan;
 
   // Single ProviderFacts owner: `providerConfig` is the one record; the
   // connection summary below is a projection of it, never merged beside it, so
@@ -194,6 +208,7 @@ function normalizeBootstrapData(
   return {
     ...fallback,
     ...source,
+    workspaceProjection,
     workspaceTrainingState:
       source.workspaceTrainingState ?? fallback.workspaceTrainingState,
     connection: {
@@ -1510,7 +1525,15 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
         const previousWorkspaceId = state.data.memory.workspace?.workspaceId;
         const incomingWorkspaceId = nextData.memory.workspace?.workspaceId;
         const effectiveWorkspaceId = incomingWorkspaceId ?? previousWorkspaceId;
-        const workspaceChanged = workspaceIdentityChanged(effectiveWorkspaceId, previousWorkspaceId);
+        const previousEpoch = state.data.workspaceProjection?.workspaceEpoch ?? 0;
+        const incomingEpoch = nextData.workspaceProjection?.workspaceEpoch ?? previousEpoch;
+        const workspaceEpochBumped = Boolean(
+          nextData.workspaceProjection &&
+            state.data.workspaceProjection &&
+            incomingEpoch > previousEpoch,
+        );
+        const workspaceChanged =
+          workspaceIdentityChanged(effectiveWorkspaceId, previousWorkspaceId) || workspaceEpochBumped;
         const scopedPendingComposerLanguage = workspaceChanged
           ? undefined
           : state.pendingComposerLanguage;
@@ -1624,11 +1647,13 @@ export const useWorkbenchState = create<WorkbenchStore>((set, get) => ({
           ),
           latestOperationRequests: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.latestOperationRequests,
           operations: versionedState && versionedState.generation !== state.syncCursor.generation ? {} : state.operations,
-          // A patch that selects a different card retires the restore intent:
-          // the restored card is history once the live state names another.
+          // A patch that bumps workspace epoch or selects a different card
+          // retires stale restore intents.
+          resourceRestoreContext: workspaceEpochBumped ? undefined : state.resourceRestoreContext,
           trainingRestoreContext:
-            state.trainingRestoreContext &&
-            nextData.workspaceTrainingState?.selectedCardId !== state.data.workspaceTrainingState?.selectedCardId
+            workspaceEpochBumped ||
+            (state.trainingRestoreContext &&
+              nextData.workspaceTrainingState?.selectedCardId !== state.data.workspaceTrainingState?.selectedCardId)
               ? undefined
               : state.trainingRestoreContext,
           syncCursor: versionedState ? appliedWebviewSyncCursor(versionedState) : state.syncCursor,

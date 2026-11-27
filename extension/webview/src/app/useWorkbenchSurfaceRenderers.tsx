@@ -551,7 +551,9 @@ export function useWorkbenchSurfaceRenderers(ctx: WorkbenchCtxAfterK3) {
     // Quiet leftover sentence stays on the Training pane. Do not invent a card.
     const leftoverTrainingActivityNotLive =
       leftoverTrainingHandoffChromeNotLive ||
-      (Boolean(recoveredRuntime) && !String(trainingState?.selectedCardId ?? "").trim());
+      (data.workspaceProjection?.hasCardAuthority
+        ? !String(data.workspaceProjection.selectedCardId ?? "").trim()
+        : Boolean(recoveredRuntime) && !String(trainingState?.selectedCardId ?? "").trim());
     const blockerValue = isTraining
       ? leftoverTrainingActivityNotLive
         ? undefined

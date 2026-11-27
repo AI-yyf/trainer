@@ -13,6 +13,7 @@ import type { ResourceSearchMode } from "../../../../shared/src/resourceSearch";
 import type { TrainerCustomSkill } from "../../../../shared/src/skillCatalog";
 import type { ComposerLanguage as SharedComposerLanguage } from "../../../../shared/src/types";
 import type { WebviewOperationIdentity,WebviewOperationPhase,WebviewSyncAck,WebviewSyncCursor,WebviewSyncEnvelope,WebviewSyncStatus } from "../../../../shared/src/webviewSync";
+import type { WorkspaceProjectionRecord } from "../../../../shared/src/workspaceRecoveryGovernance";
 
 export type { ProjectSourceSuggestion,ProviderProtocol } from '../../../../shared/src/models';
 export type { ProviderCapabilityEvidence,ProviderProbeUsage } from "../../../../shared/src/providerTest";
@@ -1900,6 +1901,7 @@ export interface BootstrapData {
   coachFocus?: CoachFocusView;
   coachOrientation?: CoachOrientationView;
   planRuntimeStatus?: PlanRuntimeStatus;
+  workspaceProjection?: WorkspaceProjectionRecord;
   nextStepHint?: NextStepHint;
   reviewQueueSummary: string;
   nextReviewDue?: string;

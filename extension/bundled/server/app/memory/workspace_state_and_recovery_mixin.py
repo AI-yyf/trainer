@@ -30,9 +30,6 @@ from .proactive_budget import (
 )
 from .review_intervention import (
     REVIEW_INTERVENTION_KEY,
-    ReviewInterventionBudget,
-    derive_review_budget,
-    merge_review_engagement,
     merge_review_offer,
     merge_review_refusal,
 )
@@ -515,27 +512,6 @@ class WorkspaceStateAndRecoveryMixin:
         self._persist_structured(workspace_id)
         return updated
 
-    def review_intervention_budget(
-        self,
-        workspace_id: str,
-        *,
-        due_count: int | None = None,
-        session_id: str = "",
-        message: str = "",
-        now: datetime | None = None,
-    ) -> ReviewInterventionBudget:
-        """Read the current intervention budget for this workspace."""
-        structured = self._structured_for(workspace_id)
-        workspace = dict(structured._workspace)
-        if due_count is None:
-            due_count = len(self.snapshot(workspace_id).due_reviews)
-        return derive_review_budget(
-            workspace,
-            due_count=due_count,
-            now=now or utc_now(),
-            session_id=session_id,
-            message=message,
-        )
 
     def mark_workspace_active(self, workspace_id: str, *, now: datetime | None = None) -> None:
         structured = self._structured_for(workspace_id)
@@ -611,25 +587,6 @@ class WorkspaceStateAndRecoveryMixin:
         )
         self._persist_structured(workspace_id)
 
-    def record_review_engagement(
-        self,
-        workspace_id: str,
-        *,
-        session_id: str = "",
-        now: datetime | None = None,
-    ) -> None:
-        moment = now or utc_now()
-        structured = self._structured_for(workspace_id)
-        state = merge_review_engagement(
-            structured._workspace.get(REVIEW_INTERVENTION_KEY),
-            now=moment,
-            session_id=session_id,
-        )
-        structured.update_workspace(
-            review_intervention=state,
-            last_active_at=moment.isoformat(),
-        )
-        self._persist_structured(workspace_id)
 
     def persist_turn_context_pressure(
         self,

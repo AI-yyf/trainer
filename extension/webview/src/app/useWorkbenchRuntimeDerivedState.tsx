@@ -54,7 +54,8 @@ import {
 } from "../../../../shared/src/resourcesOrientationGovernance";
 import { normalizeTransferSkillStateRecord } from "../../../../shared/src/transferSkillGovernance";
 import {
-  planRuntimeStatusFromRecovery
+  planRuntimeStatusFromRecovery,
+  resolveProjectionAuthority,
 } from "../../../../shared/src/workspaceRecoveryGovernance";
 import type { PlanReviewItem } from "../components/plan/CoachPlanView";
 import { formatReviewDueLabel } from "../components/settings/useCoachSettingsViewState";
@@ -130,7 +131,14 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
       data.plan.stages[0]
     : undefined;
   const planRuntimeStatus = data.planRuntimeStatus;
+  const workspaceProjection = data.workspaceProjection;
+  const projectionAuthority = resolveProjectionAuthority({
+    projection: workspaceProjection,
+    planId: data.plan.id,
+    selectedCardId: data.workspaceTrainingState?.selectedCardId,
+  });
   const recoveredRuntime =
+    projectionAuthority.recoveredWithoutLivePlan ||
     planRuntimeStatus?.recovered === true ||
     Boolean(
       planRuntimeStatusFromRecovery(
@@ -151,11 +159,14 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
     recovered: recoveredRuntime,
     runtimeCurrentStep: leftoverChromeIdentity.runtimeCurrentStep,
   });
-  const independentTrainingSelectionLive = independentTrainingSelectionIsLive({
-    workspaceId: data.memory.workspace?.workspaceId,
-    selectedCardId: data.workspaceTrainingState?.selectedCardId,
-    selection: data.memory.workspace?.liveTrainingSelection,
-  });
+  const independentTrainingSelectionLive =
+    projectionAuthority.authoritativeCardLiveOverride !== undefined
+      ? projectionAuthority.authoritativeCardLiveOverride
+      : independentTrainingSelectionIsLive({
+          workspaceId: data.memory.workspace?.workspaceId,
+          selectedCardId: data.workspaceTrainingState?.selectedCardId,
+          selection: data.memory.workspace?.liveTrainingSelection,
+        });
   const explicitTrainingRestoreLive = Boolean(
     trainingRestoreContext?.target &&
       restoredTrainingCard(
@@ -163,9 +174,12 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
         trainingRestoreContext,
       ),
   );
-  const leftoverTrainingHandoffChromeNotLive = leftoverTrainingHandoffChromeIsNotLive(
-    leftoverChromeIdentity,
-  ) && !independentTrainingSelectionLive && !explicitTrainingRestoreLive;
+  const leftoverTrainingHandoffChromeNotLive =
+    projectionAuthority.authoritativeCardLiveOverride === false
+      ? !explicitTrainingRestoreLive
+      : leftoverTrainingHandoffChromeIsNotLive(leftoverChromeIdentity) &&
+        !independentTrainingSelectionLive &&
+        !explicitTrainingRestoreLive;
   const leftoverResourceSelectedDetailNotLive = leftoverResourceSelectedDetailIsNotLive(
     leftoverChromeIdentity,
   );
@@ -463,7 +477,10 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
       recoveredRuntime,
     ],
   );
-  const formalPlanLive = formalPlanIsLiveRuntimeIdentity(formalPlanIdentity);
+  const formalPlanLive =
+    projectionAuthority.formalPlanLiveOverride !== undefined
+      ? projectionAuthority.formalPlanLiveOverride
+      : formalPlanIsLiveRuntimeIdentity(formalPlanIdentity);
   const livePlanFrozen = liveFormalPlanFrozen({
     ...formalPlanIdentity,
     frozen: data.plan.frozen,
@@ -499,7 +516,9 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
         data.coachFocus?.streakBlocksLiveObjectMint === true,
       livePlan: formalPlanLive,
       liveTask,
-      liveCard: Boolean(data.workspaceTrainingState?.selectedCardId?.trim()),
+      liveCard:
+        projectionAuthority.authoritativeCardLiveOverride ??
+        Boolean(data.workspaceTrainingState?.selectedCardId?.trim()),
     }) ||
     pressureAdaptsWithoutInventingLiveObjects({
       timeBudget: data.memory.coachingAdaptation?.timeBudget,
@@ -509,7 +528,9 @@ export function useWorkbenchRuntimeDerivedState(ctx: WorkbenchCtxAfterE2) {
         data.coachFocus?.pressureBlocksLiveObjectMint === true,
       livePlan: formalPlanLive,
       liveTask,
-      liveCard: Boolean(data.workspaceTrainingState?.selectedCardId?.trim()),
+      liveCard:
+        projectionAuthority.authoritativeCardLiveOverride ??
+        Boolean(data.workspaceTrainingState?.selectedCardId?.trim()),
     }) ||
     data.memory.coachingAdaptation?.closedLoopReturnBlocksTaskMint === true ||
     data.coachFocus?.closedLoopReturnBlocksTaskMint === true;
