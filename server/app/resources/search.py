@@ -146,7 +146,8 @@ class SearchIndex:
         raise RuntimeError("SearchIndex requires an explicit database path or path resolver")
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._resolved_db_path()))
+        conn = sqlite3.connect(str(self._resolved_db_path()), timeout=5.0)
+        conn.execute("PRAGMA busy_timeout = 5000")
         conn.row_factory = sqlite3.Row
         return conn
 

@@ -463,6 +463,12 @@ def _resolve_agent_loop_enabled(
     composer = request.resource_composer_intent
     if composer is not None and composer.mode == "analyze":
         return False
+    if getattr(request, "use_agent_loop", None) is False:
+        return False
+    if isinstance(payload, dict) and (
+        payload.get("use_agent_loop") is False or payload.get("useAgentLoop") is False
+    ):
+        return False
     config = getattr(coaching_service, "_config", None)
     capabilities = getattr(config, "capabilities", None) if config is not None else None
     supports_tools = getattr(coaching_service, "supports_executable_tools", None)

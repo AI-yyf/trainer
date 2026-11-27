@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from copy import deepcopy
@@ -345,7 +346,7 @@ class SessionState:
 
 
 class BoundedSessionDict(dict[str, SessionState]):
-    """Touch-on-hit LRU resident session map that persists cold victims on eviction."""
+    """Thread-safe bounded LRU session dictionary preventing unbounded RAM growth."""
 
     def __init__(
         self,
@@ -356,6 +357,7 @@ class BoundedSessionDict(dict[str, SessionState]):
         is_locked: Callable[[str], bool] | None = None,
     ) -> None:
         super().__init__()
+        self._lock = threading.RLock()
         self.max_entries = max(4, int(max_entries))
         self._on_evict = on_evict
         self._is_locked = is_locked
@@ -365,40 +367,72 @@ class BoundedSessionDict(dict[str, SessionState]):
             self._evict_overflow(protected_key=None)
 
     def _touch(self, key: str) -> SessionState:
-        value = super().pop(key)
-        super().__setitem__(key, value)
-        return value
+        with self._lock:
+            value = super().pop(key)
+            super().__setitem__(key, value)
+            return value
 
     def get(self, key: str, default: Any = None) -> Any:
-        if super().__contains__(key):
-            return self._touch(key)
-        return default
+        with self._lock:
+            if super().__contains__(key):
+                return self._touch(key)
+            return default
 
     def __getitem__(self, key: str) -> SessionState:
-        if super().__contains__(key):
-            return self._touch(key)
-        return super().__getitem__(key)
+        with self._lock:
+            if super().__contains__(key):
+                return self._touch(key)
+            return super().__getitem__(key)
 
     def __setitem__(self, key: str, value: SessionState) -> None:
-        if super().__contains__(key):
-            super().pop(key)
-        super().__setitem__(key, value)
-        self._evict_overflow(protected_key=key)
+        with self._lock:
+            if super().__contains__(key):
+                super().pop(key)
+            super().__setitem__(key, value)
+            self._evict_overflow(protected_key=key)
+
+    def __delitem__(self, key: str) -> None:
+        with self._lock:
+            super().__delitem__(key)
+
+    def __contains__(self, key: object) -> bool:
+        with self._lock:
+            return super().__contains__(key)
+
+    def __len__(self) -> int:
+        with self._lock:
+            return super().__len__()
+
+    def pop(self, key: str, *args: Any) -> Any:
+        with self._lock:
+            return super().pop(key, *args)
+
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        with self._lock:
+            if super().__contains__(key):
+                return self._touch(key)
+            super().__setitem__(key, default)
+            self._evict_overflow(protected_key=key)
+            return default
+
+    def clear(self) -> None:
+        with self._lock:
+            super().clear()
 
     def _evict_overflow(self, *, protected_key: str | None) -> None:
-        if len(self) <= self.max_entries:
-            return
-        for candidate_key in list(super().keys()):
-            if len(self) <= self.max_entries:
-                break
-            if candidate_key == protected_key:
-                continue
-            if self._is_locked is not None and self._is_locked(candidate_key):
-                continue
-            victim = super().pop(candidate_key, None)
-            if victim is not None and self._on_evict is not None:
-                self._on_evict(victim)
-
+        with self._lock:
+            if super().__len__() <= self.max_entries:
+                return
+            for candidate_key in list(super().keys()):
+                if super().__len__() <= self.max_entries:
+                    break
+                if candidate_key == protected_key:
+                    continue
+                if self._is_locked is not None and self._is_locked(candidate_key):
+                    continue
+                victim = super().pop(candidate_key, None)
+                if victim is not None and self._on_evict is not None:
+                    self._on_evict(victim)
 
 @dataclass
 class TrainerRuntime:

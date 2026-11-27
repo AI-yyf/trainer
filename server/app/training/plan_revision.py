@@ -76,7 +76,7 @@ class PlanRevisionStore:
 
     def _ensure_schema(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self._path)
+        connection = sqlite3.connect(self._path, timeout=5.0)
         try:
             connection.executescript(_SCHEMA)
             connection.commit()
@@ -84,8 +84,9 @@ class PlanRevisionStore:
             connection.close()
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._path)
+        connection = sqlite3.connect(self._path, timeout=5.0)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA busy_timeout = 5000")
         return connection
 
     def current_revision(self, workspace_id: str, plan_id: str) -> int:

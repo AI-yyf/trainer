@@ -88,9 +88,24 @@ class TrainerRepository(RepositoryAssetsAndTransferMixin):
         self._write_generation_lock = threading.Lock()
         self._local = threading.local()
         self._connections_lock = threading.Lock()
-        self._open_connections: list[sqlite3.Connection] = []
+        self._open_connections: list[tuple[int, sqlite3.Connection]] = []
         self.connection_open_count = 0
         self._initialize()
+
+    def _reap_dead_thread_connections(self) -> None:
+        alive_ids = {t.ident for t in threading.enumerate() if t.ident is not None}
+        stale: list[sqlite3.Connection] = []
+        with self._connections_lock:
+            kept: list[tuple[int, sqlite3.Connection]] = []
+            for tid, conn in self._open_connections:
+                if tid in alive_ids:
+                    kept.append((tid, conn))
+                else:
+                    stale.append(conn)
+            self._open_connections = kept
+        for conn in stale:
+            with suppress(sqlite3.Error):
+                conn.close()
 
     def _get_thread_connection(self) -> sqlite3.Connection:
         target_path = str(self.database_path)
@@ -105,6 +120,7 @@ class TrainerRepository(RepositoryAssetsAndTransferMixin):
         elif cached_conn is not None:
             self._discard_thread_connection(cached_conn)
 
+        self._reap_dead_thread_connections()
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         # check_same_thread=False allows deterministic cross-thread close() on shutdown
         # while threading.local() strictly confines active query execution to one thread.
@@ -123,8 +139,9 @@ class TrainerRepository(RepositoryAssetsAndTransferMixin):
         self._local.connection = connection
         self._local.database_path = target_path
         self._local.depth = 0
+        tid = threading.get_ident()
         with self._connections_lock:
-            self._open_connections.append(connection)
+            self._open_connections.append((tid, connection))
             self.connection_open_count += 1
         return connection
 
@@ -136,8 +153,9 @@ class TrainerRepository(RepositoryAssetsAndTransferMixin):
             self._local.depth = 0
         if conn is not None:
             with self._connections_lock:
-                with suppress(ValueError):
-                    self._open_connections.remove(conn)
+                self._open_connections = [
+                    (tid, item) for tid, item in self._open_connections if item is not conn
+                ]
             with suppress(sqlite3.Error):
                 conn.close()
 
@@ -147,7 +165,7 @@ class TrainerRepository(RepositoryAssetsAndTransferMixin):
         self._local.database_path = None
         self._local.depth = 0
         with self._connections_lock:
-            conns = list(self._open_connections)
+            conns = [conn for _, conn in self._open_connections]
             self._open_connections.clear()
         for conn in conns:
             with suppress(sqlite3.Error):
@@ -158,9 +176,17 @@ class TrainerRepository(RepositoryAssetsAndTransferMixin):
         connection = self._get_thread_connection()
         depth = int(getattr(self._local, "depth", 0))
         if depth > 0:
+            sp_name = f"sp_nested_{depth}"
+            connection.execute(f"SAVEPOINT {sp_name}")
             self._local.depth = depth + 1
             try:
                 yield connection
+                connection.execute(f"RELEASE SAVEPOINT {sp_name}")
+            except BaseException:
+                with suppress(sqlite3.Error):
+                    connection.execute(f"ROLLBACK TO SAVEPOINT {sp_name}")
+                    connection.execute(f"RELEASE SAVEPOINT {sp_name}")
+                raise
             finally:
                 self._local.depth = depth
             return
@@ -178,7 +204,7 @@ class TrainerRepository(RepositoryAssetsAndTransferMixin):
             with suppress(sqlite3.Error):
                 connection.rollback()
             raise
-        except Exception:
+        except BaseException:
             with suppress(sqlite3.Error):
                 connection.rollback()
             raise

@@ -34,6 +34,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -289,6 +290,21 @@ _STRIPPED_SUBPROCESS_ENV_KEYS: frozenset[str] = frozenset(
     }
 )
 
+_ALLOWED_SUBPROCESS_ENV_KEYS: frozenset[str] = frozenset(
+    {
+        "PATH",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TERM",
+        "TZ",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+    }
+)
+
 _MAX_EXEC_TIMEOUT_SECONDS = 30.0
 _DEFAULT_EXEC_TIMEOUT_SECONDS = 15.0
 _MAX_EXEC_OUTPUT_BYTES = 30_000
@@ -421,6 +437,15 @@ def _audit(event: str, args: tuple) -> None:
         raise PermissionError(f"Network access ({event}) is blocked inside library_exec; use web_fetch instead.")
     elif event in ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.fork"):
         raise PermissionError(f"Nested process spawning ({event}) is blocked inside library_exec Python scripts.")
+    elif event in ("ctypes.dlopen", "ctypes.dlsym"):
+        raise PermissionError(f"Direct native library loading ({event}) is blocked inside library_exec.")
+    elif event == "sqlite3.connect":
+        raw_db = args[0] if args else None
+        if isinstance(raw_db, str) and raw_db.strip() in {":memory:", ""}:
+            return
+        target = _resolve_arg(raw_db)
+        if target is None or not _under(_LIB_ROOT, target):
+            raise PermissionError(f"Sandbox blocked sqlite3.connect outside <LibraryRoot>: {raw_db}")
 
 sys.addaudithook(_audit)
 '''
@@ -1184,13 +1209,26 @@ def _extract_candidate_absolute_paths(cleaned: str) -> tuple[list[str], str | No
 
 
 def _ensure_python_audit_guard_dir(library_root: Path) -> Path:
-    guard_dir = library_root / ".trainer-exec-guard"
     tmp_dir = library_root / ".trainer-tmp"
-    guard_dir.mkdir(parents=True, exist_ok=True)
     tmp_dir.mkdir(parents=True, exist_ok=True)
+    uid_tag = str(os.getuid()) if hasattr(os, "getuid") else "user"
+    guard_dir = Path(tempfile.gettempdir()).resolve() / f"trainer-exec-guard-{uid_tag}"
+    guard_dir.mkdir(parents=True, exist_ok=True)
     site_file = guard_dir / "sitecustomize.py"
-    if not site_file.exists() or site_file.read_text(encoding="utf-8", errors="ignore") != _PYTHON_AUDIT_SITECUSTOMIZE:
+    needs_write = (
+        not site_file.exists()
+        or site_file.read_text(encoding="utf-8", errors="ignore") != _PYTHON_AUDIT_SITECUSTOMIZE
+    )
+    if needs_write:
+        with contextlib.suppress(OSError):
+            os.chmod(guard_dir, 0o700)
+        if site_file.exists():
+            with contextlib.suppress(OSError):
+                os.chmod(site_file, 0o600)
         site_file.write_text(_PYTHON_AUDIT_SITECUSTOMIZE, encoding="utf-8")
+    with contextlib.suppress(OSError):
+        os.chmod(site_file, 0o444)
+        os.chmod(guard_dir, 0o555)
     return guard_dir
 
 
@@ -1303,6 +1341,7 @@ def _build_macos_seatbelt_profile(library_root: Path, project_root: Path | None)
         "(version 1)",
         "(allow default)",
         "(deny network*)",
+        "(deny appleevent-send)",
         "(deny file-write*)",
         f'(allow file-write* (subpath "{lib_escaped}") (literal "/dev/null") (literal "/dev/dtracehelper"))',
     ]
@@ -1313,17 +1352,12 @@ def _build_macos_seatbelt_profile(library_root: Path, project_root: Path | None)
             emitted_rules.add(rule)
             lines.append(rule)
 
-    if project_root is not None and project_root.resolve() != resolved_lib:
-        resolved_proj = project_root.resolve()
-        if not _is_within_root(resolved_lib, resolved_proj) and not _is_within_root(
-            resolved_proj, resolved_lib
-        ):
-            proj_escaped = _sbpl_escape(resolved_proj)
-            _emit_rule(f'(deny file-read* (subpath "{proj_escaped}"))')
-
+    # Default-deny reads across real host home directories, then explicitly re-allow
+    # <LibraryRoot> and the active Python runtime prefix (if located under host home).
     for host_home in _resolve_real_host_homes():
         if _lexical_norm_path(host_home) == _lexical_norm_path(resolved_lib):
             continue
+        _emit_rule(f'(deny file-read* (subpath "{_sbpl_escape_str(host_home)}"))')
         for rel_sub in _SENSITIVE_HOST_HOME_SUBPATHS:
             cand_sub = _lexical_norm_path(host_home / rel_sub)
             if _is_within_lexical(cand_sub, resolved_lib) or _is_within_lexical(
@@ -1338,6 +1372,24 @@ def _build_macos_seatbelt_profile(library_root: Path, project_root: Path | None)
             ):
                 continue
             _emit_rule(f'(deny file-read* (literal "{_sbpl_escape_str(cand_lit)}"))')
+
+    _emit_rule(f'(allow file-read* (subpath "{lib_escaped}"))')
+    for runtime_root_raw in {sys.prefix, sys.base_prefix}:
+        if not runtime_root_raw:
+            continue
+        runtime_root = _lexical_norm_path(runtime_root_raw)
+        if any(_is_within_lexical(h, runtime_root) for h in _resolve_real_host_homes()):
+            _emit_rule(f'(allow file-read* (subpath "{_sbpl_escape_str(runtime_root)}"))')
+
+    # Keep <ProjectRoot> denied LAST so last-rule-wins SBPL always isolates it.
+    if project_root is not None and project_root.resolve() != resolved_lib:
+        resolved_proj = project_root.resolve()
+        if not _is_within_root(resolved_lib, resolved_proj) and not _is_within_root(
+            resolved_proj, resolved_lib
+        ):
+            proj_escaped = _sbpl_escape(resolved_proj)
+            _emit_rule(f'(deny file-read* (subpath "{proj_escaped}"))')
+
     return "\n".join(lines)
 
 
@@ -1442,6 +1494,36 @@ def _build_sandboxed_exec_argv(
         argv = [
             bwrap,
             "--unshare-net",
+            "--unshare-pid",
+            "--unshare-ipc",
+            "--clearenv",
+            "--setenv",
+            "HOME",
+            str(resolved_lib),
+            "--setenv",
+            "PWD",
+            str(resolved_lib),
+            "--setenv",
+            "TMPDIR",
+            str(resolved_lib / ".trainer-tmp"),
+            "--setenv",
+            "TRAINER_LIBRARY_ROOT",
+            str(resolved_lib),
+            "--setenv",
+            "PYTHONIOENCODING",
+            "utf-8",
+            "--setenv",
+            "PYTHONNOUSERSITE",
+            "1",
+            "--setenv",
+            "LANG",
+            "en_US.UTF-8",
+            "--setenv",
+            "LC_ALL",
+            "en_US.UTF-8",
+            "--setenv",
+            "PATH",
+            "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
             "--die-with-parent",
             "--ro-bind",
             "/",
@@ -1504,7 +1586,7 @@ def _terminate_process_group(proc: asyncio.subprocess.Process) -> None:
     if proc.returncode is not None:
         return
     if proc.pid:
-        with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+        with contextlib.suppress(ProcessLookupError, PermissionError, OSError, AttributeError):
             os.killpg(proc.pid, signal.SIGKILL)
             return
     with contextlib.suppress(ProcessLookupError, OSError):
@@ -1522,7 +1604,8 @@ def _build_library_exec_env(
     for key, value in os.environ.items():
         upper_key = key.upper()
         if (
-            key in _STRIPPED_SUBPROCESS_ENV_KEYS
+            upper_key not in _ALLOWED_SUBPROCESS_ENV_KEYS
+            or key in _STRIPPED_SUBPROCESS_ENV_KEYS
             or upper_key in _STRIPPED_SUBPROCESS_ENV_KEYS
             or upper_key.startswith(("_MEI", "PYINSTALLER_"))
         ):
@@ -1755,7 +1838,7 @@ async def _handle_library_exec(context: ToolContext, args: dict[str, Any]) -> di
                         info = await _auto_index_library_path(context, rel)
                         if info.get("auto_indexed"):
                             auto_indexed_paths.append(rel)
-                except OSError:
+                except (OSError, ValueError):
                     continue
                 if len(auto_indexed_paths) >= 12:
                     break

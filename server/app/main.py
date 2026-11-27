@@ -189,6 +189,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
         await drain_background_tail_tasks(timeout=3.0)
         await aclose_runtime_mcp_sessions(runtime)
         runtime.resource_service.close()
+        runtime.repository.close()
 
     app = FastAPI(title="Trainer Sidecar", version="0.1.0", lifespan=lifespan)
 
@@ -271,7 +272,7 @@ def create_app(settings_override: Settings | AppSettings | None = None) -> FastA
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"^(http://(127\.0\.0\.1|localhost):\d+|chrome-extension://[a-p]{32})$",
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

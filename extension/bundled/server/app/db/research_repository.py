@@ -146,9 +146,10 @@ class ResearchRepository:
 
     @contextmanager
     def _connect(self):
-        connection = sqlite3.connect(self.database_path)
+        connection = sqlite3.connect(self.database_path, timeout=5.0)
         connection.execute("PRAGMA foreign_keys = ON")
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA busy_timeout = 5000")
         try:
             yield connection
             connection.commit()

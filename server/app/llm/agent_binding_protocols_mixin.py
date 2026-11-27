@@ -145,6 +145,7 @@ class AgentBindingProtocolsMixin:
             "temperature": self._temperature,
             "max_tokens": self._max_tokens,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         kwargs.update(_openai_tool_payload(tools))
         kwargs = self._provider_service._apply_request_defaults(kwargs)  # noqa: SLF001
@@ -163,6 +164,18 @@ class AgentBindingProtocolsMixin:
                 chosen_model = candidate
                 break
             except Exception as exc:  # noqa: BLE001
+                err_lower = str(exc).lower()
+                if "stream_options" in kwargs and "stream_options" in err_lower:
+                    fallback_kwargs = {k: v for k, v in kwargs.items() if k != "stream_options"}
+                    try:
+                        stream = await self._create_openai_negotiated(
+                            client,
+                            {"model": candidate, **fallback_kwargs},
+                        )
+                        chosen_model = candidate
+                        break
+                    except Exception as retry_exc:  # noqa: BLE001
+                        exc = retry_exc
                 last_error = exc
                 if not self._provider_service._is_model_not_supported_error(exc):  # noqa: SLF001
                     raise

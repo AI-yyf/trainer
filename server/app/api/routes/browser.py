@@ -243,6 +243,14 @@ def build_browser_router(runtime: TrainerRuntime, deps: RouterDeps) -> APIRouter
         The redeeming browser extension's origin is remembered, which is what
         lets the same extension pair without a code next time.
         """
+        if not _loopback_request(request):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "loopback_only",
+                    "message": "Browser pairing is only accepted from local loopback clients.",
+                },
+            )
 
         body = payload if isinstance(payload, dict) else {}
         bridge = _browser_bridge(runtime)
