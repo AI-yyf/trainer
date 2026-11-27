@@ -814,39 +814,6 @@ def live_training_card_title(
     return title
 
 
-def live_training_focus_fallback(
-    *,
-    plan: Any | None = None,
-    task: Any | None = None,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    task_title: str = "",
-    card_title: str = "",
-    fallback: str = "",
-) -> str:
-    """live_current_task_focus fallback uses recovered current_step, not leftover formal card title."""
-
-    live = live_task_focus_area(
-        plan=plan,
-        task=task,
-        runtime=runtime,
-        existing=existing,
-        task_title=task_title,
-        fallback="",
-    )
-    if live:
-        return live
-    title = live_training_card_title(
-        plan=plan,
-        task=task,
-        runtime=runtime,
-        existing=existing,
-        task_title=task_title,
-        card_title=card_title,
-    )
-    return title or _text(fallback)
-
-
 def live_training_why_this_card(
     *,
     plan: Any | None = None,

@@ -231,3 +231,53 @@ def test_shadow_diff_matches_workspace_recovery_across_live_and_recovered_scenar
     )
     projected_cold = project_workspace_state("ws-cold", ledger_cold.effective_workspace_entries("ws-cold"))
     assert shadow_diff_with_workspace_recovery(projected_cold, legacy_live_snapshot) == {}
+
+
+def test_step2_event_ledger_project_and_apply_projected_state_on_snapshot(tmp_path: Path) -> None:
+    from app.core.workspace_state_projector import apply_projected_workspace_state
+
+    store = EventLedgerStore(tmp_path / "step2.db")
+    ledger = EventLedgerService(store)
+
+    ledger.record_event(
+        EVENT_PLAN_GENERATED,
+        workspace_id="ws-s2",
+        project_id="ws-s2",
+        payload_ref={"plan_id": "plan-old", "title": "Old Plan", "current_step_id": "step-1"},
+    )
+    ledger.record_event(
+        EVENT_ACTIVE_CARD_SELECTED,
+        workspace_id="ws-s2",
+        project_id="ws-s2",
+        payload_ref={"card_id": "card-live"},
+    )
+
+    projected_live = ledger.project_workspace_state("ws-s2")
+    assert projected_live.to_dict()["has_live_plan"] is True
+    assert projected_live.to_dict()["active_plan_id"] == "plan-old"
+    assert projected_live.to_dict()["selected_card_id"] == "card-live"
+
+    live_snap = {"plan": {"id": "plan-old"}, "selected_card_id": "stale-card"}
+    apply_projected_workspace_state(live_snap, projected_live, primary_read=True)
+    assert live_snap["selected_card_id"] == "card-live"
+
+    ledger.record_event(
+        EVENT_WORKSPACE_RESET,
+        workspace_id="ws-s2",
+        project_id="ws-s2",
+    )
+    projected_reset = ledger.project_workspace_state("ws-s2")
+    assert projected_reset.workspace_epoch == 1
+    assert projected_reset.recovered_without_live_plan is True
+
+    stale_snap = {
+        "plan": {"id": "plan-old"},
+        "selected_card_id": "card-live",
+        "plan_runtime_status": {"recovered": False},
+    }
+    apply_projected_workspace_state(stale_snap, projected_reset, primary_read=False)
+    assert stale_snap["plan"] is None
+    assert stale_snap["selected_card_id"] is None
+    assert stale_snap["plan_runtime_status"]["recovered"] is True
+    assert stale_snap["plan_runtime_status"]["workspace_epoch"] == 1
+    assert stale_snap["plan_runtime_status"]["state_seq"] == 3

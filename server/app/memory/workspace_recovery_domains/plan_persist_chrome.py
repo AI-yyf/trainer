@@ -289,70 +289,6 @@ def leftover_task_guide_focus_is_not_live(
     return _recovered_overlay_empty_step(runtime, existing, current_step)
 
 
-def prefer_recovered_coach_task_chrome(
-    *,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    current_step: str = "",
-    task_title: str = "",
-    idea_summary: str = "",
-    scope_boundary: str = "",
-    guide_current_step: str = "",
-    teaching_goal: str = "",
-    success_signal: str = "",
-    fallback_step: str = "",
-    current_focus: str = "",
-    active_task: str = "",
-    next_step: str = "",
-    active_stage: str = "",
-) -> dict[str, str]:
-    """Omit leftover task/guide/focus titles when recovered overlay is leftover-not-live."""
-
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    recovered_step = (
-        _text(current_step)
-        or _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    recovered = bool(runtime or existing)
-
-    def omit_leftover(value: str) -> str:
-        candidate = _text(value)
-        if not candidate:
-            return ""
-        if recovered and not recovered_step:
-            return ""
-        if recovered and candidate != recovered_step:
-            return ""
-        return candidate
-
-    if leftover_task_guide_focus_is_not_live(
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-    ):
-        return {"live_task_title": ""}
-    live_task = formal_task_is_live_runtime_identity(
-        recovered=recovered,
-        runtime_current_step=recovered_step,
-        task_title=task_title,
-    )
-    return {
-        "live_task_title": _text(task_title) if live_task else "",
-        "idea_summary": omit_leftover(idea_summary),
-        "scope_boundary": omit_leftover(scope_boundary),
-        "current_step": omit_leftover(guide_current_step),
-        "teaching_goal": omit_leftover(teaching_goal),
-        "success_signal": omit_leftover(success_signal),
-        "fallback_step": omit_leftover(fallback_step),
-        "current_focus": omit_leftover(current_focus),
-        "active_task": omit_leftover(active_task),
-        "next_step": omit_leftover(next_step),
-        "active_stage": omit_leftover(active_stage),
-    }
-
-
 def leftover_coach_turn_chrome_is_not_live(
     *,
     runtime: dict[str, Any] | None = None,
@@ -968,51 +904,6 @@ def leftover_resource_selected_detail_is_not_live(
     return bool(runtime or existing)
 
 
-def prefer_recovered_resource_selected_detail(
-    *,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    current_step: str = "",
-    plan: Any | None = None,
-    title: str = "",
-    summary: str = "",
-    match_summary: str = "",
-) -> dict[str, str]:
-    """Omit leftover selected-resource title/preview/detail when leftover-not-live."""
-
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    recovered_step = (
-        _text(current_step)
-        or _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    recovered = bool(runtime or existing)
-
-    def omit_leftover(value: str) -> str:
-        candidate = _text(value)
-        if not candidate:
-            return ""
-        if recovered and not recovered_step:
-            return ""
-        if recovered and candidate != recovered_step:
-            return ""
-        return candidate
-
-    if leftover_resource_selected_detail_is_not_live(
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-        plan=plan,
-    ):
-        return {}
-    return {
-        "title": omit_leftover(title),
-        "summary": omit_leftover(summary),
-        "match_summary": omit_leftover(match_summary),
-    }
-
-
 def leftover_resource_sandbox_preview_is_not_live(
     *,
     runtime: dict[str, Any] | None = None,
@@ -1149,76 +1040,6 @@ def leftover_settings_learner_project_onboarding_is_not_live(
         existing=existing,
         current_step=current_step,
     )
-
-
-def prefer_recovered_settings_profile_rhythm(
-    *,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    current_step: str = "",
-    preferred_rhythm: str = "",
-    preferred_learning_mode: str = "",
-    memory_scope: str = "",
-    review_cadence: str = "",
-    working_set_mode: str = "",
-    review_reminder_mode: str = "",
-) -> dict[str, str]:
-    """Omit leftover preferredRhythm and coachDefaults cadence/memory scope when leftover-not-live."""
-
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    recovered_step = (
-        _text(current_step)
-        or _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    if leftover_settings_profile_rhythm_is_not_live(
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-    ):
-        return {}
-    return {
-        "preferred_rhythm": _text(preferred_rhythm),
-        "preferred_learning_mode": _text(preferred_learning_mode),
-        "memory_scope": _text(memory_scope),
-        "review_cadence": _text(review_cadence),
-        "working_set_mode": _text(working_set_mode),
-        "review_reminder_mode": _text(review_reminder_mode),
-    }
-
-
-def prefer_recovered_settings_learner_project_onboarding(
-    *,
-    runtime: dict[str, Any] | None = None,
-    existing: dict[str, Any] | None = None,
-    current_step: str = "",
-    learner_name: str = "",
-    target_project: str = "",
-    onboarding_request: str = "",
-    project_context: str = "",
-) -> dict[str, str]:
-    """Omit leftover learner/project/onboarding titles when leftover-not-live."""
-
-    runtime = runtime if isinstance(runtime, dict) else {}
-    existing = existing if isinstance(existing, dict) else {}
-    recovered_step = (
-        _text(current_step)
-        or _text(runtime.get("current_step"))
-        or _text(existing.get("current_step"))
-    )
-    if leftover_settings_learner_project_onboarding_is_not_live(
-        runtime=runtime,
-        existing=existing,
-        current_step=recovered_step,
-    ):
-        return {}
-    return {
-        "learner_name": _text(learner_name),
-        "target_project": _text(target_project),
-        "onboarding_request": _text(onboarding_request),
-        "project_context": _text(project_context),
-    }
 
 
 def leftover_formal_training_labels(

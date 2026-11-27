@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,7 @@ from ...core.models import (
     TurnRequest,
     UserProfile,
 )
+from ...core.workspace_state_projector import apply_projected_workspace_state
 from ...llm.provider_service import ProviderService
 from ...resources.research_brief import preparation_requested
 from .. import coach_support
@@ -991,11 +993,22 @@ def _register_snapshot_and_session_lifecycle_routes(
             return {"snapshot_revision": revision, "unchanged": True}
         snapshot = core.domain.current_snapshot(session_id=session_id, workspace_id=resolved_workspace_id)
         snapshot.snapshot_revision = max(revision, snapshot.snapshot_revision)
-        return {
+        snapshot_dict = snapshot.model_dump(mode="json", by_alias=False)
+        response: dict[str, object] = {
             "snapshot_revision": snapshot.snapshot_revision,
             "unchanged": False,
-            "snapshot": snapshot.model_dump(mode="json", by_alias=False),
+            "snapshot": snapshot_dict,
         }
+        if runtime.event_ledger is not None:
+            projected = runtime.event_ledger.project_workspace_state(resolved_workspace_id)
+            primary_read = os.environ.get("TRAINER_EVENT_LOG_PRIMARY_READ", "").strip() == "1"
+            apply_projected_workspace_state(
+                snapshot_dict,
+                projected,
+                primary_read=primary_read,
+            )
+            response["workspace_projection"] = projected.to_dict()
+        return response
 
     @router.get("/health")
     def health(request: Request) -> dict[str, object]:

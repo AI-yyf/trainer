@@ -9,6 +9,7 @@ requiring heuristic ``leftover_*`` scrubbers.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -36,6 +37,8 @@ from .event_ledger import (
 )
 from .models import EventLedgerEntry
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class ProjectedWorkspaceState:
@@ -58,6 +61,24 @@ class ProjectedWorkspaceState:
     @property
     def has_live_plan(self) -> bool:
         return bool(self.active_plan_id) and not self.recovered_without_live_plan
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "workspace_id": self.workspace_id,
+            "workspace_epoch": self.workspace_epoch,
+            "state_seq": self.state_seq,
+            "has_live_plan": self.has_live_plan,
+            "active_plan_id": self.active_plan_id,
+            "active_plan_title": self.active_plan_title,
+            "active_step_id": self.active_step_id,
+            "selected_card_id": self.selected_card_id,
+            "completed_card_ids": list(self.completed_card_ids),
+            "pending_evidence_ids": list(self.pending_evidence_ids),
+            "adopted_evidence_ids": list(self.adopted_evidence_ids),
+            "rejected_evidence_ids": list(self.rejected_evidence_ids),
+            "resource_ids": list(self.resource_ids),
+            "recovered_without_live_plan": self.recovered_without_live_plan,
+        }
 
 
 def _clean_id(value: Any) -> str | None:
@@ -327,3 +348,49 @@ def shadow_diff_with_workspace_recovery(
         "recovered_without_live_plan": (projected.recovered_without_live_plan, legacy_recovered),
     }
     return {field: (a, b) for field, (a, b) in pairs.items() if a != b}
+
+
+def apply_projected_workspace_state(
+    snapshot_dict: dict[str, Any],
+    projected: ProjectedWorkspaceState,
+    *,
+    primary_read: bool = False,
+) -> dict[str, Any]:
+    """Overlay authoritative event-log projection onto a ``/snapshot`` dict.
+
+    - When the workspace has recorded events (``state_seq > 0``), computes
+      shadow-diff against legacy ``workspace_recovery`` fields and logs any
+      divergence for observability.
+    - When ``primary_read=True`` or the current ``workspace_epoch`` has an
+      explicit reset/clear (``recovered_without_live_plan=True``), enforces
+      the projected live-plan/card boundary structurally so pre-reset state
+      cannot leak through.
+    """
+    if projected.state_seq <= 0:
+        return snapshot_dict
+
+    diff = shadow_diff_with_workspace_recovery(projected, snapshot_dict)
+    if diff:
+        logger.debug(
+            "workspace_projection shadow diff workspace=%s epoch=%d seq=%d fields=%s",
+            projected.workspace_id,
+            projected.workspace_epoch,
+            projected.state_seq,
+            sorted(diff.keys()),
+        )
+
+    if primary_read or projected.recovered_without_live_plan:
+        if not projected.has_live_plan:
+            snapshot_dict["plan"] = None
+            if projected.recovered_without_live_plan:
+                snapshot_dict["selected_card_id"] = None
+                existing_status = snapshot_dict.get("plan_runtime_status")
+                status_map = dict(existing_status) if isinstance(existing_status, Mapping) else {}
+                status_map["recovered"] = True
+                status_map["workspace_epoch"] = projected.workspace_epoch
+                status_map["state_seq"] = projected.state_seq
+                snapshot_dict["plan_runtime_status"] = status_map
+        elif primary_read and projected.selected_card_id is not None:
+            snapshot_dict["selected_card_id"] = projected.selected_card_id
+
+    return snapshot_dict

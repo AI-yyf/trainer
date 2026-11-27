@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     import sqlite3
 
     from .event_ledger_store import EventLedgerStore
+    from .workspace_state_projector import ProjectedWorkspaceState
 
 # ---------------------------------------------------------------------------
 # §13.21 Event type constants — 39 canonical event types
@@ -442,6 +443,13 @@ class EventLedgerService:
                 self._workspace_epoch.get(workspace_id, 0),
                 self._workspace_seq.get(workspace_id, 0),
             )
+
+    def project_workspace_state(self, workspace_id: str) -> ProjectedWorkspaceState:
+        """Fold effective current-epoch events for ``workspace_id`` into a pure projection."""
+        from .workspace_state_projector import project_workspace_state as _project
+
+        entries = self.effective_workspace_entries(workspace_id, current_epoch_only=True)
+        return _project(workspace_id, entries)
 
     def effective_workspace_entries(
         self,

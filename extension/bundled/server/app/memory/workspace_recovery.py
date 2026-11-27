@@ -368,19 +368,7 @@ from .workspace_recovery_domains.plan_persist_chrome import (
     normalize_plan_runtime_recovery as normalize_plan_runtime_recovery,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
-    prefer_recovered_coach_task_chrome as prefer_recovered_coach_task_chrome,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
     prefer_recovered_coach_turn_chrome as prefer_recovered_coach_turn_chrome,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    prefer_recovered_resource_selected_detail as prefer_recovered_resource_selected_detail,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    prefer_recovered_settings_learner_project_onboarding as prefer_recovered_settings_learner_project_onboarding,
-)
-from .workspace_recovery_domains.plan_persist_chrome import (
-    prefer_recovered_settings_profile_rhythm as prefer_recovered_settings_profile_rhythm,
 )
 from .workspace_recovery_domains.plan_persist_chrome import (
     prefer_recovered_training_focus_chrome as prefer_recovered_training_focus_chrome,
@@ -452,15 +440,6 @@ from .workspace_recovery_domains.runtime_recovery import (
     evidence_item_workspace_id as evidence_item_workspace_id,
 )
 from .workspace_recovery_domains.runtime_recovery import (
-    formal_plan_identity_is_live as formal_plan_identity_is_live,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    is_authoritative_provider_capability_success as is_authoritative_provider_capability_success,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    is_completed_streaming_checkpoint as is_completed_streaming_checkpoint,
-)
-from .workspace_recovery_domains.runtime_recovery import (
     is_current_for_provider as is_current_for_provider,
 )
 from .workspace_recovery_domains.runtime_recovery import (
@@ -507,9 +486,6 @@ from .workspace_recovery_domains.runtime_recovery import (
 )
 from .workspace_recovery_domains.runtime_recovery import (
     scope_evidence_queue_to_runtime_step as scope_evidence_queue_to_runtime_step,
-)
-from .workspace_recovery_domains.runtime_recovery import (
-    select_formal_plan_for_scope as select_formal_plan_for_scope,
 )
 from .workspace_recovery_domains.runtime_recovery import (
     select_plan_runtime_for_pressure as select_plan_runtime_for_pressure,
@@ -663,9 +639,6 @@ from .workspace_recovery_domains.snapshot_and_overlay import (
 )
 from .workspace_recovery_domains.snapshot_and_overlay import (
     live_training_card_title as live_training_card_title,
-)
-from .workspace_recovery_domains.snapshot_and_overlay import (
-    live_training_focus_fallback as live_training_focus_fallback,
 )
 from .workspace_recovery_domains.snapshot_and_overlay import (
     live_training_lane_copy as live_training_lane_copy,

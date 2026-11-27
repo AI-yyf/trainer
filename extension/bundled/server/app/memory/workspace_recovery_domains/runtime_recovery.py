@@ -420,11 +420,6 @@ def normalize_provider_capability_recovery(value: Any) -> dict[str, Any] | None:
     }
 
 
-def is_authoritative_provider_capability_success(value: Any) -> bool:
-    record = normalize_provider_capability_recovery(value)
-    return bool(record and record.get("ok") is True)
-
-
 def normalize_streaming_checkpoint(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
@@ -508,11 +503,6 @@ def recover_streaming_checkpoint_after_restart(value: Any) -> dict[str, Any] | N
     record["revision"] = int(record.get("revision") or 1) + 1
     record["updated_at"] = utc_now_iso()
     return record
-
-
-def is_completed_streaming_checkpoint(value: Any) -> bool:
-    record = normalize_streaming_checkpoint(value)
-    return bool(record and record.get("phase") == "completed")
 
 
 def is_interrupted_streaming_checkpoint(value: Any) -> bool:
@@ -713,28 +703,6 @@ def normalize_formal_plan_identity(value: Any) -> dict[str, str] | None:
     if not any(fields[key] for key in ("workspace_id", "id", "title", "summary", "current_step")):
         return None
     return fields
-
-
-def formal_plan_identity_is_live(value: Any) -> bool:
-    """Workspace stamp alone is not a live formal plan."""
-
-    record = normalize_formal_plan_identity(value)
-    if record is None:
-        return False
-    stages = []
-    if isinstance(value, dict):
-        stages = value.get("stages") or value.get("phases") or []
-    else:
-        stages = getattr(value, "stages", None) or getattr(value, "phases", None) or []
-    stage_count = len(stages) if isinstance(stages, list) else 0
-    return bool(record.get("id") or record.get("title") or record.get("summary") or record.get("current_step") or stage_count)
-
-
-def select_formal_plan_for_scope(value: Any, workspace_id: str) -> dict[str, str] | None:
-    record = normalize_formal_plan_identity(value)
-    if record is None:
-        return None
-    return record if is_current_for_workspace(record, workspace_id) else None
 
 
 def select_resources_for_scope(value: Any, workspace_id: str) -> list[Any]:
